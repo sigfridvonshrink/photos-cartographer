@@ -33,6 +33,8 @@ These scripts help organize and maintain the main photo library and should be ru
     2. **Updating Phase (`--update-files`)**: Applies GPS coordinates to files based on the JSON and interpolation.
     3. **Cleaning Phase (`--clean-json`)**: Removes orphaned directory entries from `gps_coords.json`.
     *Note: All write operations require the `--execute` flag; by default, the script runs in dry-run mode.*
+-   **`photos-gps-tagger`**: Scans for images missing GPS metadata and applies coordinates from a central `gps_coords.json` file. It features intelligent chronological interpolation/extrapolation between "native" GPS points.
+    *Note: This script should be executed from the root of your digiKam albums directory.*
 
 ### 3. `immich/` (Immich Backend)
 These scripts manage the integration with Immich and should be run on the **Immich backend server**.
