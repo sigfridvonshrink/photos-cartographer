@@ -13,15 +13,25 @@ The workflow revolves around a "standardized" file naming convention using the `
 
 The scripts are organized based on where they are intended to run and the type of tasks they perform.
 
+### General Operation
+
+Most scripts in this repository follow a set of common principles:
+
+-   **Dry-Run by Default**: Destructive or "write" operations typically require an explicit `--execute` flag. Without it, the scripts will only preview what they would do.
+-   **Parallel Processing**: Orchestrator scripts and some standalone tools support a `-j` or `--jobs` flag to control the number of parallel workers (defaulting to the system's CPU count).
+-   **Logging & Progress**: Scripts provide real-time progress updates, often including ETA and status summaries.
+-   **Idempotency**: Conversion and tagging scripts are designed to be idempotent, skipping files that have already been processed unless an `--overwrite` flag is used.
+
 ### 1. `convert/` (Compute Node)
 These scripts are computationally expensive and are designed to run on a **compute node** with high CPU resources.
 *Note: Scripts utilizing AI models (e.g., rotation detection) benefit significantly from a GPU.*
 
 -   **`photos-ai-check-rotation`**: Uses a deep learning model (EfficientNet) to detect the correct "upright" orientation of images and logs results to a CSV.
--   **`photos-jxl2final`**: A Python orchestrator that performs batch conversions of JXL files to other formats (e.g., AVIF, JPEG) in parallel.
+-   **`photos-jxl2final`**: A Python orchestrator that performs batch conversions of JXL files to other formats (e.g., AVIF, JPEG) in parallel. Supports `--execute`, `--dry-run`, and `-j`.
 -   **`photos-jxl2jpg`**: A Bash script that stages JXL files locally and converts them to JPEG using `cjpegli` and `magick`.
 -   **`photos-tiff2avif`**: A Bash script that converts TIFF files to AVIF using `avifenc`, ensuring proper color profile handling and metadata transfer.
--   **`photos-tiff2final`**: A Python orchestrator for batch converting TIFF files to JXL and AVIF.
+-   **`photos-tiff2final`**: A Python orchestrator for batch converting TIFF files to JXL, AVIF, and JPEG. Supports `--execute`, `--dry-run`, and `-j`.
+-   **`photos-tiff2jpg`**: A Bash script that stages TIFF files locally and converts them to JPEG using `cjpegli` and `magick`, preserving metadata and handling ICC profiles.
 -   **`photos-tiff2jxl`**: A Bash script that stages TIFF files locally and converts them to JXL using `cjxl`.
 
 ### 2. `storage/` (Photo Storage Machine)
@@ -29,25 +39,18 @@ These scripts help organize and maintain the main photo library and should be ru
 
 -   **`photos-gps-tagger`**: Scans the current folder and all subfolders for images missing GPS metadata and applies coordinates from a central `gps_coords.json` file. It features intelligent chronological interpolation/extrapolation between "native" GPS points.
     The script operates in three main phases:
-    1. **Scanning Phase (`--generate-json`)**: Scans for specified files and updates `gps_coords.json`.
-    2. **Updating Phase (`--update-files`)**: Applies GPS coordinates to files based on the JSON and interpolation.
-    3. **Cleaning Phase (`--clean-json`)**: Removes orphaned directory entries from `gps_coords.json`.
-    *Note: All write operations require the `--execute` flag; by default, the script runs in dry-run mode.*
--   **`photos-gps-tagger`**: Scans for images missing GPS metadata and applies coordinates from a central `gps_coords.json` file. It features intelligent chronological interpolation/extrapolation between "native" GPS points.
-    *Note: This script should be executed from the root of your digiKam albums directory.*
+    1.  **Scanning Phase (`--generate-json`)**: Scans for specified files and updates `gps_coords.json`.
+    2.  **Updating Phase (`--update-files`)**: Applies GPS coordinates to files based on the JSON and interpolation.
+    3.  **Cleaning Phase (`--clean-json`)**: Removes orphaned directory entries from `gps_coords.json`.
+    *Note: All write operations require the `--execute` flag; by default, the script runs in dry-run mode. This script should be executed from the root of your digiKam albums directory.*
 
 ### 3. `immich/` (Immich Backend)
 These scripts manage the integration with Immich and should be run on the **Immich backend server**.
 
--   **`photos-sync-visibility`**: Performs a bidirectional sync between the Immich "locked" (archive/timeline) status and the digiKam "Pick Label Accepted" tag. It uses a local SQLite database (`sync_state.db`) to track historical state changes.
+-   **`photos-sync-visibility`**: Performs a bidirectional sync between the Immich "locked" (archive/timeline) status and the digiKam "Pick Label Accepted" tag. It uses a local SQLite database (`sync_state.db`) to track historical state changes. Supports `--execute`, `--dry-run`, and `--config`.
 
----
-
-## Configuration
-
-The scripts in the `immich/` directory require a `photos-cfg.json` file.
-
-### `photos-cfg.json` Structure
+#### `photos-cfg.json`
+Scripts in the `immich/` directory require a configuration file with the following structure:
 ```json
 {
   "database": {
