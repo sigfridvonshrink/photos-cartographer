@@ -27,6 +27,12 @@ These scripts are computationally expensive and are designed to run on a **compu
 ### 2. `storage/` (Photo Storage Machine)
 These scripts help organize and maintain the main photo library and should be run on the **storage machine** with direct/local access to the photo albums.
 
+-   **`photos-gps-tagger`**: Scans the current folder and all subfolders for images missing GPS metadata and applies coordinates from a central `gps_coords.json` file. It features intelligent chronological interpolation/extrapolation between "native" GPS points.
+    The script operates in three main phases:
+    1. **Scanning Phase (`--generate-json`)**: Scans for specified files and updates `gps_coords.json`.
+    2. **Updating Phase (`--update-files`)**: Applies GPS coordinates to files based on the JSON and interpolation.
+    3. **Cleaning Phase (`--clean-json`)**: Removes orphaned directory entries from `gps_coords.json`.
+    *Note: All write operations require the `--execute` flag; by default, the script runs in dry-run mode.*
 -   **`photos-gps-tagger`**: Scans for images missing GPS metadata and applies coordinates from a central `gps_coords.json` file. It features intelligent chronological interpolation/extrapolation between "native" GPS points.
     *Note: This script should be executed from the root of your digiKam albums directory.*
 
