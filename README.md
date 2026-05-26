@@ -17,7 +17,10 @@ The scripts are organized based on where they are intended to run and the type o
 
 Most scripts in this repository follow a set of common principles:
 
--   **Dry-Run by Default**: Destructive or "write" operations typically require an explicit `--execute` flag. Without it, the scripts will only preview what they would do.
+-   **Required Execution Mode**: Scripts that modify the photo archive require an explicit execution mode flag:
+    -   `--execute`: Actually perform the changes.
+    -   `--dry-run`: Preview what the script would do without modifying any files.
+    *Running these scripts without one of these flags (or without any arguments) will display the help text.*
 -   **Parallel Processing**: Orchestrator scripts and some standalone tools support a `-j` or `--jobs` flag to control the number of parallel workers (defaulting to the system's CPU count).
 -   **Logging & Progress**: Scripts provide real-time progress updates, often including ETA and status summaries.
 -   **Idempotency**: Conversion and tagging scripts are designed to be idempotent, skipping files that have already been processed unless an `--overwrite` flag is used.
