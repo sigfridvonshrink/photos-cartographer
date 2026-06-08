@@ -1177,7 +1177,8 @@ class PlanExecutor:
                         "destination_folders": destination_folders,
                         "diagnostics": {
                             "duplicates_or_conflicts": plan.blockers,  # We can augment this as we extract actual conflict data later
-                            "warnings": plan.warnings
+                            "warnings": plan.warnings,
+                            "quarantine_footprint": plan.summary.get("quarantine_footprint"),
                         },
                         "depends_on": {
                             "effective_config": {
@@ -1311,11 +1312,27 @@ class WorkspacePrepWorkflow:
         # 0. Inventory & Symlink check
         for f in os.listdir(self.workspace_root):
             path = os.path.join(self.workspace_root, f)
-            if os.path.isfile(path) and not f.startswith('.'):
+            if f.startswith('.'):
+                continue
+            if os.path.isfile(path):
                 if os.path.islink(path):
                     blockers.append(f"Forbidden symlink detected: {f}")
                 else:
                     files.append(f)
+            elif os.path.isdir(path) and f not in self.managed_folders:
+                # A dumped folder tree at the workspace root (prep Section 7.2): walk it
+                # and inventory its files so Stage 1 can flatten them into 0-source.
+                for root, _dirs, filenames in os.walk(path):
+                    _dirs[:] = [dd for dd in _dirs if not dd.startswith('.')]
+                    for fname in filenames:
+                        if fname.startswith('.'):
+                            continue
+                        fpath = os.path.join(root, fname)
+                        rel_path = os.path.relpath(fpath, self.workspace_root)
+                        if os.path.islink(fpath):
+                            blockers.append(f"Forbidden symlink detected: {rel_path}")
+                        else:
+                            files.append(rel_path)
         for d in self.managed_folders:
             folder_path = os.path.join(self.workspace_root, d)
             if os.path.isdir(folder_path):
@@ -1615,6 +1632,19 @@ class WorkspacePrepWorkflow:
 
         db_files = [f for f in all_db_files if not f['relative_path'].startswith('5-photos-by-dest/')]
         by_dest_files = [f for f in all_db_files if f['relative_path'].startswith('5-photos-by-dest/')]
+
+        # Band-misplacement guard (prep Section 6.1 / 6.2.4): photos and videos live in
+        # separate bands. A video under the photo bands (4-photos-by-date / 5-photos-by-dest),
+        # or an image/raw under the video band (3-videos-by-date), is a hand-introduced break
+        # prep never creates itself — hard-block, do not proceed.
+        for f in all_db_files:
+            top = f['relative_path'].split('/')[0]
+            mc = f.get('media_class')
+            if top in ('4-photos-by-date', '5-photos-by-dest') and mc == 'video':
+                blockers.append(f"Band misplacement: video under {top}: {f['relative_path']}")
+            elif top == '3-videos-by-date' and mc in ('image', 'raw'):
+                blockers.append(f"Band misplacement: {mc} under 3-videos-by-date: {f['relative_path']}")
+
         self.coordinator.finish_phase()
         self.coordinator.start_phase("planning - building duplicate groups")
 
@@ -1642,8 +1672,10 @@ class WorkspacePrepWorkflow:
 
         for f in db_files:
             rel_path = current_paths[f['relative_path']]
-            dirname = os.path.dirname(rel_path)
-            if not dirname:
+            # Consolidate into 0-source any mutable-side file that is not already inside a
+            # managed folder: loose files at the workspace root AND files inside a dumped
+            # folder tree (prep Section 7.2). Dumped trees are flattened to 0-source/<basename>.
+            if rel_path.split('/')[0] not in self.managed_folders:
                 dest_base = os.path.join("0-source", os.path.basename(rel_path))
                 dest = dest_base
                 # To properly avoid collisions case-insensitively with BOTH current_paths AND existing 0-source files
@@ -1993,6 +2025,8 @@ class WorkspacePrepWorkflow:
             ))
 
         no_op_count = len(files) - len(media_mutated_originals)
+        from photos_utils import quarantine_footprint
+        qf = quarantine_footprint(self.workspace_root)
         # Record passive file state dependencies for idempotency and staleness protection
         workspace_file_preconditions = []
         for f in all_db_files:
@@ -2027,6 +2061,7 @@ class WorkspacePrepWorkflow:
             "no_op_files": no_op_count,
             "operations_planned": len(operations),
             "recognized_moves": len(carried_forward),
+            "quarantine_footprint": qf,
             "blockers_found": len(blockers),
             "metadata_plan_status": metadata_plan_status,
             "execution_config": execution_config,
@@ -2063,6 +2098,88 @@ class WorkspacePrepWorkflow:
             }
         )
 
+def _parse_plan_id_time(plan_id: str):
+    """The quarantine <plan_id> dir name starts with the run's UTC timestamp."""
+    ts = plan_id.split('-', 1)[0]
+    try:
+        return datetime.strptime(ts, "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def _quarantine_dir_footprint(dpath: str):
+    files_n = 0
+    bytes_n = 0
+    for root, _d, fnames in os.walk(dpath):
+        for fn in fnames:
+            if fn == "manifest.json":
+                continue
+            try:
+                bytes_n += os.path.getsize(os.path.join(root, fn))
+                files_n += 1
+            except OSError:
+                pass
+    return files_n, bytes_n
+
+
+def prune_quarantine(workspace_root, plan_ids=None, older_than_days=None, do_delete=False, prune_all=False):
+    """Delete recoverable quarantine — the ONLY operation that ever removes quarantine
+    content (prep Section 15.3). Default is a non-destructive dry-run; `do_delete`
+    (--yes) actually deletes. Selectable by exact plan-id and/or age; deleting with no
+    selector requires `prune_all` (--all). Runs under the workspace lock and only ever
+    touches `.photos-ingest-quarantine/`."""
+    import shutil
+    from datetime import timedelta
+    from photos_utils import quarantine_dir
+    base = quarantine_dir(workspace_root)
+    if not os.path.isdir(base):
+        print("No quarantine directory; nothing to prune.")
+        return
+
+    all_dirs = [e.name for e in os.scandir(base) if e.is_dir()]
+    has_selector = bool(plan_ids) or older_than_days is not None
+    selected = set()
+    if plan_ids:
+        for pid in plan_ids:
+            if pid in all_dirs:
+                selected.add(pid)
+            else:
+                print(f"Warning: plan-id not found in quarantine: {pid}", file=sys.stderr)
+    if older_than_days is not None:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=older_than_days)
+        for d in all_dirs:
+            t = _parse_plan_id_time(d)
+            if t is not None and t < cutoff:
+                selected.add(d)
+    if not has_selector:
+        selected = set(all_dirs)
+
+    if do_delete and not has_selector and not prune_all:
+        raise RuntimeError("Refusing to delete all quarantine without a selector. "
+                           "Pass --plan-id / --older-than-days, or --all to confirm.")
+
+    lock = WorkspaceLock(workspace_root)
+    if not lock.acquire():
+        raise RuntimeError(f"Could not acquire workspace lock at {lock.lock_path}. Is another instance running?")
+    try:
+        total_files = 0
+        total_bytes = 0
+        for d in sorted(selected):
+            files_n, bytes_n = _quarantine_dir_footprint(os.path.join(base, d))
+            total_files += files_n
+            total_bytes += bytes_n
+            print(f"{'Removing' if do_delete else 'Would remove'} {d}: {files_n} files, {bytes_n} bytes")
+            if do_delete:
+                safe = RootGuard.resolve_and_check_path(base, d)  # containment within quarantine
+                shutil.rmtree(safe)
+        print(f"{'Removed' if do_delete else 'Would remove'} total: "
+              f"{len(selected)} plan(s), {total_files} files, {total_bytes} bytes")
+        if not do_delete:
+            print("(dry-run; pass --yes to delete)")
+    finally:
+        lock.release()
+
+
 def main():
     import argparse
 
@@ -2089,6 +2206,12 @@ def main():
     exec_parser = subparsers.add_parser("execute", help="Execute a previously generated prep plan")
     exec_parser.add_argument("--plan", required=True, help="Execute a previously generated plan from FILE.")
 
+    prune_parser = subparsers.add_parser("prune-quarantine", help="Delete recoverable quarantine (dry-run by default).")
+    prune_parser.add_argument("--plan-id", action="append", dest="plan_ids", help="Quarantine <plan_id> directory to prune (repeatable).")
+    prune_parser.add_argument("--older-than-days", type=int, help="Prune quarantine directories older than N days.")
+    prune_parser.add_argument("--all", action="store_true", dest="prune_all", help="Confirm deleting ALL quarantine when no selector is given.")
+    prune_parser.add_argument("--yes", action="store_true", help="Actually delete (default is a dry-run that only lists).")
+
     args = parser.parse_args()
     CONFIG["jobs"] = getattr(args, "jobs", 4)
 
@@ -2102,6 +2225,11 @@ def main():
             workflow = WorkspacePrepWorkflow(workspace_root, cache)
             plan = workflow.plan()
             cache.close()
+
+            _qf = plan.summary.get("quarantine_footprint", {}) or {}
+            print(f"Quarantine footprint: {_qf.get('total_files', 0)} files, "
+                  f"{_qf.get('total_bytes', 0)} bytes across {_qf.get('plan_id_dirs', 0)} plan(s).",
+                  file=sys.stderr)
 
             if getattr(args, "output", None):
                 os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
@@ -2141,6 +2269,15 @@ def main():
             except Exception as e:
                 print(f"Execution failed: {e}", file=sys.stderr)
                 sys.exit(1)
+
+        elif args.command == "prune-quarantine":
+            prune_quarantine(
+                workspace_root,
+                plan_ids=getattr(args, "plan_ids", None),
+                older_than_days=getattr(args, "older_than_days", None),
+                do_delete=getattr(args, "yes", False),
+                prune_all=getattr(args, "prune_all", False),
+            )
 
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
