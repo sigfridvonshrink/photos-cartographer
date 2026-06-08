@@ -768,6 +768,10 @@ class PlanExecutor:
         self.coordinator = ProgressCoordinator()
 
     def execute(self, plan: Plan, journal_path: str = None):
+        # Read the authoritative workspace config (zfs block, etc.) from photos-00-config.json
+        # before applying the plan. (Config-staleness rejection against the plan is Phase 4.)
+        from photos_utils import load_or_seed_config
+        load_or_seed_config(self.workspace_root)
         # Per-run journal under the control directory (retained, not overwritten),
         # unless a caller supplies an explicit path.
         if journal_path is None:
@@ -1297,6 +1301,11 @@ class WorkspacePrepWorkflow:
         files = []
         self._all_physical_lower_for_plan = None
         media_mutated_originals = set()
+
+        # Seed photos-00-config.json on first run, then read it as authoritative, before
+        # any config-dependent value is used or fingerprinted (shared contract Section 4 / prep Section 3).
+        from photos_utils import load_or_seed_config
+        self._config_fingerprint = load_or_seed_config(self.workspace_root)
 
         self.coordinator.start_phase("planning - scanning inventory")
         # 0. Inventory & Symlink check
@@ -1942,7 +1951,7 @@ class WorkspacePrepWorkflow:
             created_at=datetime.now(timezone.utc).isoformat(),
             workspace_root=self.workspace_root,
             digikam_root=None,
-            config_fingerprint=OperationPlanner._hash_dict({k: v for k, v in CONFIG.items() if k != "jobs"}),
+            config_fingerprint=Fingerprint(algorithm="sha256", value=self._config_fingerprint),
             instruction_fingerprints={},
             locks_required=["workspace"],
             summary={
