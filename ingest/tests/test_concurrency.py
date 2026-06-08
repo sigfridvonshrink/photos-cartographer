@@ -5,14 +5,11 @@ import json
 import sqlite3
 import sys
 import subprocess
-from importlib.machinery import SourceFileLoader
 from unittest.mock import patch, MagicMock
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-# Dynamically import the extensionless script
-prep = SourceFileLoader("photos_1_prep", "ingest/photos-1-prep").load_module()
-utils = SourceFileLoader("photos_utils", "ingest/photos_utils.py").load_module()
+# photos_1_prep and photos_utils are loaded once by conftest.py into sys.modules
+import photos_1_prep as prep
+import photos_utils as utils
 
 @pytest.fixture
 def workspace(tmp_path):
@@ -98,6 +95,11 @@ def test_deterministic_plan_with_jobs(mock_read, mock_popen, workspace):
             "absolute_path",
             "duration_seconds",
             "progress",
+            # jobs count is a concurrency knob recorded in the plan summary
+            # (execution_config / performance_and_cache); it legitimately varies
+            # between the jobs=1 and jobs=4 runs and is asserted separately above.
+            "jobs_requested",
+            "jobs_semantic",
         }
 
         def stable_dict_sort_key(d):
