@@ -5,46 +5,67 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this repo is
 
 A suite of scripts for managing, converting, and synchronizing a high-quality photo library
-between **digiKam** (management/storage) and **Immich** (display/sharing). It has two layers:
+between **digiKam** (management/storage) and **Immich** (display/sharing). Top-level layout:
 
-1. **Operational scripts** (`convert/`, `storage/`, `immich/`, `archive/`) — standalone tools
-   organized by *where they run*. See `README.md` for per-script descriptions, the `__std.jpg` /
-   `__std.jxl` naming convention, dependencies, and the `immich/photos-cfg.json` shape.
-2. **`reengineer/`** — the **active development area**: a ground-up rewrite of the ingestion/calibration
-   pipeline around a safe plan/validate/execute architecture. New work happens here.
+- **`ingest/`** — the **active development area**: a safe plan/validate/execute ingestion + GPS/time
+  calibration pipeline. New work happens here. Each folder has its own `README.md`.
+- **`convert/`** — compute-node image-conversion tools (RAW/TIFF → `__std.jpg` / `__std.jxl`).
+- **`develop/`** — `photos-developer`, the development-workspace manager (RAW/JPEG → `__std.tif`
+  masters). Kept and active; slated for later improvement.
+- **`immich/`** — Immich-backend integration (timeline-visibility sync, hardlinked "TV" folder).
+- **`archive/`** — reference-only, *not* active. Includes `archive/reengineer/` (the phase-gated specs
+  and the monolithic `photos-ingest` prototype that `ingest/` was split out of) and `archive/storage/`
+  (former storage-machine tools, including the superseded `photos-gps-tagger`).
+
+See `README.md` for the `__std` naming convention and dependencies, and each folder's `README.md` for
+per-script detail.
 
 The headline capability of the pipeline is **automatic camera-clock correction**: it infers a camera's
 clock offset by matching its already-geotagged frames against GPX tracks, then geotags the un-tagged
-majority by interpolating along the track. See `reengineer/workflows/README.md`.
+majority by interpolating along the track. See `ingest/workflows/README.md`.
 
 ## Commands
 
-Scripts are **executable Python files with no `.py` extension** (`photos-ingest`, `photos-1-prep`,
-`storage/photos-developer`). Tests load them via `importlib.machinery.SourceFileLoader`, not normal import.
+The active script is an **executable Python file with no `.py` extension** (`ingest/photos-1-prep`).
+Tests load it via `importlib.machinery.SourceFileLoader`, not normal import. `ingest/photos_utils.py`
+must sit beside it — the script adds its own directory to `sys.path` and imports `photos_utils`.
+
+Tests **MUST be run from the repo root** — several reference paths like `ingest/photos-1-prep`
+relative to the root. `pytest.ini` sets `testpaths=ingest/tests develop/tests` and ignores `archive/`.
 
 ```bash
-# Run the test suite — MUST be run from the repo root.
-# Some tests hardcode paths like 'reengineer/photos-ingest', so a different CWD breaks collection.
-python3 -m pytest reengineer/tests/ -q
+# Run a single test file / test (each file passes cleanly on its own)
+python3 -m pytest ingest/tests/test_workspace_prep.py -q
+python3 -m pytest ingest/tests/test_workspace_prep.py::test_name -q
 
-# A single test file / test
-python3 -m pytest reengineer/tests/test_phase5_planner.py -q
-python3 -m pytest reengineer/tests/test_phase5_planner.py::test_name -q
+# Whole suite, one file per process (avoids the cross-file isolation issue below)
+for f in ingest/tests/test_*.py develop/tests/test_*.py; do python3 -m pytest "$f" -q || break; done
+```
+
+**Known issue — combined-run test isolation (inherited from the prototype).** Running every test file
+in one `pytest` session (a bare `python3 -m pytest`) currently produces failures in `test_concurrency`,
+because several test files load the script via `SourceFileLoader` and *replace* `sys.modules["photos_1_prep"]`.
+After pytest imports all test modules during collection, a test's captured module reference can diverge
+from the one `@patch("photos_1_prep....")` targets, so the patch misses and real hashing runs. This is
+**pre-existing on `main`** (the same files fail there in a combined run) and each file still passes in
+isolation. Fix it by giving each test file a unique module name (and matching patch targets) during the
+upcoming `photos-1-prep` rework.
 ```
 
 There is no build step, no linter config, and no dependency manifest; deps are system tools
 (`exiftool`, `magick`, `cjxl`, `avifenc`, `ffmpeg`) plus pip packages listed in `README.md`.
 
-### CLI contracts
+### CLI contract
 
-- `photos-1-prep` (new split-out prep script): subcommands `plan` / `dry-run` / `execute`.
-- `photos-ingest` (monolithic prototype, being split): subcommands `prep` / `calibrate` /
-  `refresh-library` / `merge`, each with `--plan` / `--execute-plan`.
+- `ingest/photos-1-prep` (prep phase): subcommands `plan` / `dry-run` / `execute`.
+- The future `photos-2-time-gps` (calibration phase) is reserved by the shared contract but not yet
+  implemented. The archived `archive/reengineer/photos-ingest` monolith (`prep` / `calibrate` /
+  `refresh-library` / `merge`) is reference only — do not extend it.
 
 ## Architecture & non-negotiable rules
 
-The whole design exists to safely mutate **irreplaceable originals**. These rules come from
-`reengineer/00_master_roadmap.md` and `01_architecture_and_cli_contract.md` and override convenience:
+The whole design exists to safely mutate **irreplaceable originals**. These rules are specified in
+`ingest/workflows/` (and elaborated historically in `archive/reengineer/`) and override convenience:
 
 - **No mutation outside a plan.** Every move/rename/quarantine/metadata-write/DB-mutation is a planned
   operation with a plan ID, op ID, explicit preconditions, expected result, and journal entry. Planning
@@ -56,15 +77,15 @@ The whole design exists to safely mutate **irreplaceable originals**. These rule
 - **No clobber.** No operation ever overwrites existing media. Destinations are reserved/validated first.
 - **Quarantine, not delete.** Duplicates are moved to a recoverable quarantine; permanent purge would be
   a separate explicit command.
-- **Existing `photos-ingest` is a prototype, not a patch target.** Mine it for parsing/grouping/naming
-  logic, but do not bolt fixes onto its destructive in-place mutation model — build the plan/validate/
-  execute path instead.
+- **The archived `photos-ingest` monolith is a prototype, not a patch target.** Mine
+  `archive/reengineer/photos-ingest` for parsing/grouping/naming logic, but do not extend its destructive
+  in-place mutation model — work in `ingest/photos-1-prep` on the plan/validate/execute path instead.
 - **Idempotent & resumable.** Reruns act on the diff; a crash mid-run is recoverable (prep re-plans from
   the filesystem as truth; calibration resumes its plan and skips applied ops).
 
 ### Pipeline layout (shared contract)
 
-Defined in `reengineer/workflows/10_photos-shared-contract.md`:
+Defined in `ingest/workflows/10_photos-shared-contract.md`:
 
 - The pipeline is two phases: **prep** (`photos-1-prep`) → **time/GPS calibration**
   (`photos-2-time-gps`, reserved/in progress).
@@ -80,18 +101,20 @@ Defined in `reengineer/workflows/10_photos-shared-contract.md`:
 
 ### Module structure
 
-- `reengineer/photos_utils.py` — shared config template + utilities imported by the scripts.
-- `reengineer/photos-ingest` — original monolith (~3.7k lines); component boundaries it targets are in
-  `01_architecture_and_cli_contract.md` §3 (`RootGuard`, `InventoryScanner`, `OperationPlanner`,
-  `PlanValidator`, `PlanExecutor`, `JournalWriter`, etc.).
-- `reengineer/photos-1-prep` — prep workflow split out of the monolith; owns *only* filesystem prep,
-  no-clobber moves, dedup/quarantine, SQLite/hash cache, and the handoff manifest. It must not plan or
-  apply GPS/time fixes.
+- `ingest/photos_utils.py` — shared config template (`CONFIG`) + utilities; must sit beside
+  `photos-1-prep` (the script inserts its own directory into `sys.path` to import it).
+- `ingest/photos-1-prep` — the prep workflow; owns *only* filesystem prep, no-clobber moves,
+  dedup/quarantine, SQLite/hash cache, and the handoff manifest. It must not plan or apply GPS/time fixes.
+- `ingest/tests/` — `test_prep_split`, `test_idempotency_cache`, `test_exif_metadata`,
+  `test_workspace_prep`, `test_concurrency` (named for what they test, not the old phase numbers).
+- `ingest/workflows/` — the authoritative specs (see below).
+- `archive/reengineer/` — the original monolith and historical phase specs, kept for reference only.
 
-## Specs are phase-gated
+## Specs are the source of truth
 
-`reengineer/` is driven by numbered specification documents (`00_master_roadmap.md` → `07_*`, plus
-`06_*` and `08_*` sub-phases) and the authoritative `reengineer/workflows/*.md`. Implementation is
-**review-gated**: each phase is specified, implemented, tested, and approved before the next. When
-changing pipeline behavior, find and update the governing spec — the markdown is the source of truth,
-not just the code.
+The pipeline is **specification-driven**: behavior is defined by `ingest/workflows/*.md` — the two
+per-phase workflows plus `10_photos-shared-contract.md`. When changing pipeline behavior, update the
+governing spec; the markdown is authoritative, not just the code. The current task is to make
+`photos-1-prep` fully conform to these (updated) workflow specs, so expect to reconcile differences
+between the script and the spec rather than treat the existing code as ground truth. The deeper history
+of how the design was reached lives in the phase-gated documents under `archive/reengineer/`.

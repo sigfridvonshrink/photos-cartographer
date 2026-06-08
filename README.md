@@ -25,57 +25,33 @@ Most scripts in this repository follow a set of common principles:
 -   **Logging & Progress**: Scripts provide real-time progress updates, often including ETA and status summaries.
 -   **Idempotency**: Conversion and tagging scripts are designed to be idempotent, skipping files that have already been processed unless an `--overwrite` flag is used.
 
-### 1. `convert/` (Compute Node)
-These scripts are computationally expensive and are designed to run on a **compute node** with high CPU resources.
-*Note: Scripts utilizing AI models (e.g., rotation detection) benefit significantly from a GPU.*
+### 1. `ingest/` (active pipeline)
+The **active** part of the project: a safety-first ingestion and GPS/time-calibration pipeline. It takes
+an unorganized dump of photos, leaves a clean deduplicated date-organized working set, then resolves each
+photo to real UTC, automatically corrects a wrong camera clock against your GPX tracks, and geotags
+everything from the track — all **plan → validate → execute**, with nothing deleted and nothing mutated
+without a validated plan. Behavior is defined by the specifications in `ingest/workflows/`.
 
--   **`photos-ai-check-rotation`**: Uses a deep learning model (EfficientNet) to detect the correct "upright" orientation of images and logs results to a CSV.
--   **`photos-jxl2final`**: A Python orchestrator that performs batch conversions of JXL files to other formats (e.g., AVIF, JPEG) in parallel. Supports `--execute`, `--dry-run`, and `-j`.
--   **`photos-jxl2jpg`**: A Bash script that stages JXL files locally and converts them to JPEG using `cjpegli` and `magick`.
--   **`photos-tiff2avif`**: A Bash script that converts TIFF files to AVIF using `avifenc`, ensuring proper color profile handling and metadata transfer.
--   **`photos-tiff2final`**: A Python orchestrator for batch converting TIFF files to JXL, AVIF, and JPEG. Supports `--execute`, `--dry-run`, and `-j`.
--   **`photos-tiff2jpg`**: A Bash script that stages TIFF files locally and converts them to JPEG using `cjpegli` and `magick`, preserving metadata and handling ICC profiles.
--   **`photos-tiff2jxl`**: A Bash script that stages TIFF files locally and converts them to JXL using `cjxl`.
+See **[`ingest/README.md`](ingest/README.md)** for details.
 
-### 2. `storage/` (Photo Storage Machine)
-These scripts help organize and maintain the main photo library and should be run on the **storage machine** with direct/local access to the photo albums.
+### 2. `convert/` (Compute Node)
+Computationally expensive image-conversion tools, designed to run on a **compute node** with high CPU
+resources (AI rotation detection benefits from a GPU). They produce the `__std` display/storage masters
+from RAW/TIFF originals.
 
--   **`photos-gps-tagger`**: Scans the current folder and all subfolders for images missing GPS metadata and applies coordinates from a central `gps_coords.json` file. It features intelligent chronological interpolation/extrapolation between "native" GPS points. New folders discovered during scanning will attempt to auto-geocode a location estimate using OpenStreetMap Nominatim based on the directory path.
-    The script operates in three main phases:
-    1.  **Scanning Phase (`--generate-json`)**: Scans for specified files and updates `gps_coords.json`, performing auto-geocoding for new entries.
-    2.  **Updating Phase (`--update-files`)**: Applies GPS coordinates to files based on the JSON and interpolation.
-    3.  **Cleaning Phase (`--clean-json`)**: Removes orphaned directory entries from `gps_coords.json`.
-    *Note: All write operations require the `--execute` flag; by default, the script runs in dry-run mode. This script should be executed from the root of your digiKam albums directory.*
+See **[`convert/README.md`](convert/README.md)** for the full script list.
 
-### 3. `immich/` (Immich Backend)
-These scripts manage the integration with Immich and should be run on the **Immich backend server**.
+### 3. `develop/` (development workspace)
+`photos-developer` manages the photo **development workspace** — preparing, auditing, and safely tearing
+down the staging area where RAW/JPEG originals become finalized `__std.tif` display masters.
 
--   **`photos-sync-tv-folder`**: Syncs files from a source folder to a replica folder using hardlinks based on Immich timeline visibility. It ensures that only assets visible on the Immich timeline are present in the target "TV" folder, facilitating display on devices with limited library management. Supports `--execute` and `--config`.
--   **`photos-sync-visibility`**: Performs a bidirectional sync between the Immich "locked" (archive/timeline) status and the digiKam "Pick Label Accepted" tag. It uses a local SQLite database (`sync_state.db`) to track historical state changes. Supports `--execute`, `--dry-run`, and `--config`.
+See **[`develop/README.md`](develop/README.md)** for details.
 
-#### `photos-cfg.json`
-Scripts in the `immich/` directory require a configuration file with the following structure:
-```json
-{
-  "database": {
-    "host": "localhost",
-    "port": 3306,
-    "user": "digikam",
-    "password": "yourpassword",
-    "name": "digikam"
-  },
-  "sync_db_path": "sync_state.db",
-  "immich": {
-    "url": "http://your-immich-host:2283/api",
-    "api_key": "YOUR_IMMICH_API_KEY",
-    "email": "your-email@example.com",
-    "password": "your-immich-password",
-    "pin_code": "1234",
-    "path_tv_from": "/srv/immich-pics/ext",
-    "path_tv_to": "/srv/immich-pics/tv"
-  }
-}
-```
+### 4. `immich/` (Immich Backend)
+Scripts that integrate the digiKam library with Immich (timeline-visibility sync and the hardlinked "TV"
+folder), meant to run on the **Immich backend server**.
+
+See **[`immich/README.md`](immich/README.md)** for details and the `photos-cfg.json` shape.
 
 ---
 
@@ -98,4 +74,10 @@ Scripts in the `immich/` directory require a configuration file with the followi
 ---
 
 ## Archive
-The `archive/` directory contains legacy scripts (such as the original `dk2im` conversion tools) kept for historical reference. These are not part of the active workflow.
+The `archive/` directory holds material kept for reference but not part of the active workflow:
+
+-   Legacy scripts such as the original `dk2im` conversion tools.
+-   `archive/reengineer/` — the phase-gated reengineering specs and the monolithic `photos-ingest`
+    prototype (plus its calibration/merge tests) that the `ingest/` pipeline was split out of.
+-   `archive/storage/` — the former storage-machine tools, including `photos-gps-tagger`, whose
+    track-based geotagging is superseded by the `ingest/` calibration phase.
