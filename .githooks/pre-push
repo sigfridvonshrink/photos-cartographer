@@ -3,8 +3,8 @@
 # Enable for your clone with:  git config core.hooksPath .githooks
 # Bypass for a single push with: git push --no-verify
 
-echo "pre-push: running test suite..."
-if ! python3 -m pytest -q; then
+echo "pre-push: running test suite (fast subset; slow real-fixture tests run in CI)..."
+if ! python3 -m pytest -q -m "not slow"; then
     echo
     echo "pre-push: tests FAILED — push aborted."
     echo "          (override with 'git push --no-verify')"

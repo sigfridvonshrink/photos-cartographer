@@ -8,6 +8,7 @@ import sys
 import json
 import hashlib
 import subprocess
+import select
 import fcntl
 from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Optional, Any
@@ -490,7 +491,45 @@ import concurrent.futures
 class ContentHasher:
     @staticmethod
     def hash_image(filepath: str) -> Dict[str, Any]:
-        return {"status": "failed", "strategy": "image-content-hash-v1", "value": None, "error": "ImageMagick disabled"}
+        """EXIF-invariant pixel-content hash via ImageMagick's signature (`identify %#`).
+
+        Used for both `image` and `raw`: it hashes normalized pixels, so it survives
+        the EXIF writes calibration later makes (the content hash is the cross-phase
+        identity spine). The result is bound to the ImageMagick version so a magick
+        upgrade restales the cache rather than silently mixing signatures.
+        """
+        from photos_utils import get_imagemagick_version, get_identify_command
+        engine_version = get_imagemagick_version()
+        identify_cmd = get_identify_command()
+        if not identify_cmd:
+            return {"status": "failed", "strategy": "image-content-hash-v1", "value": None,
+                    "error": "ImageMagick not found", "engine_version": engine_version}
+        cmd = identify_cmd + ["-format", "%#", "-colorspace", "sRGB", "-depth", "8", filepath]
+        last_error = "ImageMagick failed"
+        for _attempt in range(2):
+            try:
+                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+                stdout_data = ""
+                while True:
+                    reads, _, _ = select.select([proc.stdout], [], [], 10.0)
+                    if not reads:
+                        proc.kill()
+                        raise subprocess.TimeoutExpired(cmd, 10.0)
+                    chunk = proc.stdout.read(1024)
+                    if not chunk:
+                        break
+                    stdout_data += chunk
+                proc.wait()
+                if proc.returncode == 0 and stdout_data.strip():
+                    return {"status": "valid", "strategy": "image-content-hash-v1",
+                            "value": stdout_data.strip(), "engine_version": engine_version}
+                last_error = f"ImageMagick exited {proc.returncode}"
+            except subprocess.TimeoutExpired:
+                last_error = "ImageMagick timed out"
+            except Exception as e:
+                last_error = str(e)
+        return {"status": "failed", "strategy": "image-content-hash-v1", "value": None,
+                "error": last_error, "engine_version": engine_version}
 
     @staticmethod
     def hash_video(filepath: str) -> Dict[str, Any]:
@@ -1291,8 +1330,9 @@ class WorkspacePrepWorkflow:
         existing_cache = self.cache.get_all_files()
         existing_metadata = self.cache.get_all_metadata()
 
-        from photos_utils import MetadataReader, ProgressCoordinator, get_exiftool_version, FIELD_SET_VERSION, EXTRACTION_OPTIONS_FINGERPRINT, METADATA_SCHEMA_VERSION, CAMERA_GROUP_KEY_VERSION
+        from photos_utils import MetadataReader, ProgressCoordinator, get_exiftool_version, get_imagemagick_version, FIELD_SET_VERSION, EXTRACTION_OPTIONS_FINGERPRINT, METADATA_SCHEMA_VERSION, CAMERA_GROUP_KEY_VERSION
         current_exiftool_version = get_exiftool_version()
+        current_magick_version = get_imagemagick_version()
         current_field_set_version = FIELD_SET_VERSION
         current_extraction_options_fingerprint = EXTRACTION_OPTIONS_FINGERPRINT
 
@@ -1370,6 +1410,22 @@ class WorkspacePrepWorkflow:
             from photos_utils import is_metadata_cache_fresh
             md_fresh = is_metadata_cache_fresh(file_record, cached_md, current_metadata_context)
 
+            # Content-hash (pixel signature) freshness: an image/raw content hash is
+            # bound to the ImageMagick version that produced it. If magick changed,
+            # the cached signature is stale and must be recomputed.
+            content_hash_fresh = True
+            if media_class in ('image', 'raw') and cached and cached.get('content_hash'):
+                try:
+                    _ch = json.loads(cached['content_hash'])
+                    _ev = _ch.get('engine_version')
+                    # Only the version-bound pixel signature can be restaled by an engine
+                    # change; a record with no recorded engine_version (legacy/mocked) is
+                    # judged solely by size/mtime, not falsely restaled.
+                    if _ch.get('status') == 'valid' and _ev is not None and _ev != current_magick_version:
+                        content_hash_fresh = False
+                except Exception:
+                    content_hash_fresh = False
+
             result = {
                 "relative_path": rel_path,
                 "warnings": [],
@@ -1379,7 +1435,7 @@ class WorkspacePrepWorkflow:
                 "cache_reused": False
             }
 
-            if cached and cached['size'] == stat.st_size and cached['mtime_ns'] == stat.st_mtime_ns and md_fresh:
+            if cached and cached['size'] == stat.st_size and cached['mtime_ns'] == stat.st_mtime_ns and md_fresh and content_hash_fresh:
                 # Do not mutate the original cached dict here in the worker thread
                 new_cached = dict(cached)
                 new_cached['last_seen_ns'] = int(datetime.now(timezone.utc).timestamp() * 1e9)
@@ -1756,7 +1812,7 @@ class WorkspacePrepWorkflow:
                         target_folder = "3-videos-by-date"
                     else:
                         target_folder = "4-photos-by-date"
-                    prefix = dt.strftime("%Y%m%d_%H%M%S")
+                    prefix = dt.strftime(CONFIG["filename_timestamp_format"])
                 except ValueError:
                     pass
 
@@ -1814,7 +1870,8 @@ class WorkspacePrepWorkflow:
             from photos_utils import is_metadata_cache_fresh
             md_fresh = is_metadata_cache_fresh(file_record, cached_md, current_metadata_context)
 
-            if cached and cached["size"] == f["size"] and cached["mtime_ns"] == f["mtime_ns"] and md_fresh:
+            if (cached and cached["size"] == f["size"] and cached["mtime_ns"] == f["mtime_ns"]
+                    and md_fresh and cached.get("content_hash") == f.get("content_hash")):
                 continue
 
             cache_upserts.append({
