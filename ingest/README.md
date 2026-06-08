@@ -39,16 +39,15 @@ and the code is expected to follow them. When changing behavior, update the gove
 
 ## Running the tests
 
-From the **repository root** (some tests reference `ingest/photos-1-prep` relative to the root). Each
-test file passes on its own; run them per file:
+From the **repository root** (some tests reference `ingest/photos-1-prep` relative to the root):
 
 ```bash
-python3 -m pytest ingest/tests/test_workspace_prep.py -q
+python3 -m pytest -q
 ```
 
-> Note: a single combined `pytest` session currently fails in `test_concurrency` due to a pre-existing
-> cross-file module-isolation issue carried over from the prototype (see `CLAUDE.md` → Commands). Run
-> test files individually until that is addressed in the `photos-1-prep` rework.
+`tests/conftest.py` loads the extensionless `photos-1-prep` script and `photos_utils` once into
+`sys.modules` so every test file shares a single module instance; tests `import photos_1_prep` rather
+than re-loading it.
 
 ## History
 
