@@ -4,8 +4,8 @@ import sys
 import importlib.machinery
 from unittest import mock
 
-loader = importlib.machinery.SourceFileLoader('photos_1_prep', 'ingest/photos-1-prep')
-photos_1_prep = loader.load_module()
+# photos_1_prep is loaded once by conftest.py into sys.modules
+import photos_1_prep
 
 def test_photos_1_prep_exists():
     assert os.path.exists('ingest/photos-1-prep')
