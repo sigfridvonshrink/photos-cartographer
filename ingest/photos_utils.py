@@ -35,7 +35,8 @@ CONFIG = {
         "write_corrected_offset_tags": True,
         "write_corrected_filename_times": True,
         "manual_segment_template_count": 2
-    }
+    },
+    "filename_timestamp_format": "%Y-%m-%d--%H-%M-%S"
 }
 
 def selected_gpx_root() -> str:
@@ -55,6 +56,46 @@ def get_exiftool_version() -> str:
         return subprocess.check_output(["exiftool", "-ver"], text=True).strip()
     except Exception:
         return "unknown"
+
+_IMAGEMAGICK_VERSION = None
+def get_imagemagick_version() -> str:
+    """Resolve the ImageMagick version string once per process.
+
+    The content (pixel) hash is bound to this value: a magick upgrade restales
+    image/raw content hashes so they are recomputed rather than silently mixing
+    signatures from different engine versions.
+    """
+    global _IMAGEMAGICK_VERSION
+    if _IMAGEMAGICK_VERSION is not None:
+        return _IMAGEMAGICK_VERSION
+    import subprocess, shutil
+    tool = "magick" if shutil.which("magick") else ("identify" if shutil.which("identify") else None)
+    if tool:
+        try:
+            out = subprocess.check_output([tool, "--version"], text=True, stderr=subprocess.DEVNULL)
+            first = out.splitlines()[0].strip() if out else ""
+            if first:
+                _IMAGEMAGICK_VERSION = first
+                return _IMAGEMAGICK_VERSION
+        except Exception:
+            pass
+    _IMAGEMAGICK_VERSION = "unknown"
+    return _IMAGEMAGICK_VERSION
+
+_IDENTIFY_COMMAND = None
+def get_identify_command() -> list:
+    """Return the argv prefix for ImageMagick's identify (cached), or [] if unavailable."""
+    global _IDENTIFY_COMMAND
+    if _IDENTIFY_COMMAND is not None:
+        return _IDENTIFY_COMMAND
+    import shutil
+    if shutil.which("magick"):
+        _IDENTIFY_COMMAND = ["magick", "identify"]
+    elif shutil.which("identify"):
+        _IDENTIFY_COMMAND = ["identify"]
+    else:
+        _IDENTIFY_COMMAND = []
+    return _IDENTIFY_COMMAND
 
 import concurrent.futures
 import subprocess
