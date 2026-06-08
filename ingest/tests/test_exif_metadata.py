@@ -2,11 +2,10 @@ import pytest
 import os
 import json
 import sqlite3
-from importlib.machinery import SourceFileLoader
 from unittest.mock import patch, MagicMock
 
-# Dynamically import the extensionless script
-prep = SourceFileLoader("photos_1_prep", "ingest/photos-1-prep").load_module()
+# photos_1_prep is loaded once by conftest.py into sys.modules
+import photos_1_prep as prep
 
 @pytest.fixture
 def workspace(tmp_path):

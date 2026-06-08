@@ -34,23 +34,19 @@ Tests **MUST be run from the repo root** — several reference paths like `inges
 relative to the root. `pytest.ini` sets `testpaths=ingest/tests develop/tests` and ignores `archive/`.
 
 ```bash
-# Run a single test file / test (each file passes cleanly on its own)
+# Whole suite
+python3 -m pytest -q
+
+# A single test file / test
 python3 -m pytest ingest/tests/test_workspace_prep.py -q
 python3 -m pytest ingest/tests/test_workspace_prep.py::test_name -q
-
-# Whole suite, one file per process (avoids the cross-file isolation issue below)
-for f in ingest/tests/test_*.py develop/tests/test_*.py; do python3 -m pytest "$f" -q || break; done
 ```
 
-**Known issue — combined-run test isolation (inherited from the prototype).** Running every test file
-in one `pytest` session (a bare `python3 -m pytest`) currently produces failures in `test_concurrency`,
-because several test files load the script via `SourceFileLoader` and *replace* `sys.modules["photos_1_prep"]`.
-After pytest imports all test modules during collection, a test's captured module reference can diverge
-from the one `@patch("photos_1_prep....")` targets, so the patch misses and real hashing runs. This is
-**pre-existing on `main`** (the same files fail there in a combined run) and each file still passes in
-isolation. Fix it by giving each test file a unique module name (and matching patch targets) during the
-upcoming `photos-1-prep` rework.
-```
+`ingest/tests/conftest.py` loads the extensionless `photos-1-prep` script and `photos_utils` **once**
+into `sys.modules` so every test file shares one module instance (and restores the global `CONFIG`
+between tests). Test files therefore `import photos_1_prep` rather than each re-loading the script —
+without that, a combined `pytest` session breaks because `@patch("photos_1_prep....")` and a test's
+captured module reference can resolve to different objects.
 
 There is no build step, no linter config, and no dependency manifest; deps are system tools
 (`exiftool`, `magick`, `cjxl`, `avifenc`, `ffmpeg`) plus pip packages listed in `README.md`.

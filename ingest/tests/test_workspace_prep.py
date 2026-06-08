@@ -9,13 +9,8 @@ import importlib.util
 from unittest import mock
 from pathlib import Path
 
-# Dynamically load the single script file without a .py extension
-script_path = os.path.join(os.path.dirname(__file__), '..', 'photos-1-prep')
-loader = importlib.machinery.SourceFileLoader('photos_1_prep', script_path)
-spec = importlib.util.spec_from_loader('photos_1_prep', loader)
-photos_ingest = importlib.util.module_from_spec(spec)
-sys.modules['photos_1_prep'] = photos_ingest
-loader.exec_module(photos_ingest)
+# photos_1_prep is loaded once by conftest.py into sys.modules
+import photos_1_prep as photos_ingest
 
 def setup_workspace(tmp_path: Path):
     ws = tmp_path / "workspace"
