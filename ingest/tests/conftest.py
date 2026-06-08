@@ -2,6 +2,7 @@ import os
 import sys
 import copy
 import importlib.machinery
+import importlib.util
 
 import pytest
 
@@ -23,9 +24,11 @@ if _INGEST_DIR not in sys.path:
 def _load_once(module_name, filename):
     if module_name not in sys.modules:
         path = os.path.join(_INGEST_DIR, filename)
-        sys.modules[module_name] = importlib.machinery.SourceFileLoader(
-            module_name, path
-        ).load_module()
+        loader = importlib.machinery.SourceFileLoader(module_name, path)
+        spec = importlib.util.spec_from_loader(module_name, loader)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        loader.exec_module(module)
     return sys.modules[module_name]
 
 
