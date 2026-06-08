@@ -51,6 +51,13 @@ captured module reference can resolve to different objects.
 There is no build step, no linter config, and no dependency manifest; deps are system tools
 (`exiftool`, `magick`, `cjxl`, `avifenc`, `ffmpeg`) plus pip packages listed in `README.md`.
 
+### Continuous integration
+
+- **GitHub Actions** (`.github/workflows/tests.yml`) runs `python3 -m pytest -q` on every push to `main`
+  and on every pull request.
+- **Local `pre-push` hook** (`.githooks/pre-push`) runs the suite before a push and aborts on failure.
+  Enable it per clone with `git config core.hooksPath .githooks`; bypass once with `git push --no-verify`.
+
 ### CLI contract
 
 - `ingest/photos-1-prep` (prep phase): subcommands `plan` / `dry-run` / `execute`.
