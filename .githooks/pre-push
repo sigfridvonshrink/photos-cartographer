@@ -1,0 +1,14 @@
+#!/bin/sh
+# Run the test suite before pushing; abort the push if it fails.
+# Enable for your clone with:  git config core.hooksPath .githooks
+# Bypass for a single push with: git push --no-verify
+
+echo "pre-push: running test suite..."
+if ! python3 -m pytest -q; then
+    echo
+    echo "pre-push: tests FAILED — push aborted."
+    echo "          (override with 'git push --no-verify')"
+    exit 1
+fi
+echo "pre-push: tests passed."
+exit 0
