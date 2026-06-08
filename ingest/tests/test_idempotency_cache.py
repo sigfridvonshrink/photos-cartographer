@@ -10,7 +10,7 @@ import photos_1_prep as photos_ingest
 def setup_workspace(tmp_path: Path):
     ws = tmp_path / "workspace"
     ws.mkdir()
-    (ws / ".photos-1-prep-root").touch()
+    (ws / ".photos-ingest").mkdir(exist_ok=True); (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
 
     (ws / "0-source").mkdir()
     (ws / "1-missing-metadata").mkdir()
@@ -93,7 +93,7 @@ def test_prep_idempotency_and_by_dest_accounting(mock_meta, tmp_path):
     assert len(plan1.operations) == 3, f"Expected 3 operations, got {len(plan1.operations)}"
 
     executor = photos_ingest.PlanExecutor(str(ws))
-    journal_path = str(ws / "journal.json")
+    journal_path = str(ws / ".journal.json")
     executor.execute(plan1, journal_path)
 
     # SECOND RUN (IDEMPOTENT)
@@ -135,10 +135,10 @@ def test_handoff_manifest_generated(mock_meta, tmp_path):
     plan1 = workflow.plan()
 
     executor = photos_ingest.PlanExecutor(str(ws))
-    journal_path = str(ws / "journal.json")
+    journal_path = str(ws / ".journal.json")
     executor.execute(plan1, journal_path)
 
-    manifest_path = ws / ".photos-ingest" / "photos-1-prep-handoff.json"
+    manifest_path = ws / ".photos-ingest" / "photos-11-handoff.json"
     assert manifest_path.exists()
 
     data = json.loads(manifest_path.read_text())
@@ -187,7 +187,7 @@ def test_stale_cache_upsert_fails(mock_meta, tmp_path):
     (ws / "5-photos-by-dest" / "vacation" / "img1.jpg").write_text("modified_after_plan")
 
     executor = photos_ingest.PlanExecutor(str(ws))
-    journal_path = str(ws / "journal.json")
+    journal_path = str(ws / ".journal.json")
 
     import pytest
     with pytest.raises(ValueError, match="Stale plan: dependency changed after planning|Stale plan: cache-upsert target changed after planning"):
@@ -198,7 +198,7 @@ def test_stale_cache_upsert_fails(mock_meta, tmp_path):
     assert (ws / "0-source" / "dup_img.jpg").exists()
     assert not (ws / "1-missing-metadata" / "UNKN_new_img.jpg").exists()
     assert not (ws / ".photos-ingest-quarantine" / plan1.plan_id).exists()
-    assert not (ws / ".photos-ingest" / "photos-1-prep-handoff.json").exists()
+    assert not (ws / ".photos-ingest" / "photos-11-handoff.json").exists()
 
     # Assert cache row was not updated
     cache_verify = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
@@ -223,10 +223,10 @@ def test_cache_fingerprint_changes(mock_meta, tmp_path):
     plan1 = workflow.plan()
 
     executor = photos_ingest.PlanExecutor(str(ws))
-    journal_path = str(ws / "journal.json")
+    journal_path = str(ws / ".journal.json")
     executor.execute(plan1, journal_path)
 
-    manifest_path = ws / ".photos-ingest" / "photos-1-prep-handoff.json"
+    manifest_path = ws / ".photos-ingest" / "photos-11-handoff.json"
     data1 = json.loads(manifest_path.read_text())
     fp1 = data1["cache_fingerprint"]
 
@@ -282,7 +282,7 @@ def test_db_upsert_absolute_path_rejected(mock_meta, tmp_path):
                     fx["data"]["relative_path"] = "/tmp/malicious.jpg"
 
     executor = photos_ingest.PlanExecutor(str(ws))
-    journal_path = str(ws / "journal.json")
+    journal_path = str(ws / ".journal.json")
 
     import pytest
     with pytest.raises(ValueError, match="Path must be relative"):
@@ -307,7 +307,7 @@ def test_stale_already_cached_file_aborts(mock_meta, tmp_path):
     workflow = photos_ingest.WorkspacePrepWorkflow(str(ws), cache)
     plan1 = workflow.plan()
     executor = photos_ingest.PlanExecutor(str(ws))
-    journal_path = str(ws / "journal.json")
+    journal_path = str(ws / ".journal.json")
     executor.execute(plan1, journal_path)
 
     # SECOND RUN: generate a plan that reuses the cache
@@ -337,7 +337,7 @@ def test_stale_already_cached_file_aborts(mock_meta, tmp_path):
 def test_stale_ghost_prune_reappeared_file_aborts_before_cache_remove(mock_meta, tmp_path):
     ws = tmp_path / "workspace"
     ws.mkdir()
-    (ws / ".photos-ingest-root").touch()
+    (ws / ".photos-ingest").mkdir(exist_ok=True); (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
     (ws / "4-photos-by-date").mkdir(parents=True, exist_ok=True)
 
     # Create cache row for a missing file
@@ -379,7 +379,7 @@ def test_stale_ghost_prune_reappeared_file_aborts_before_cache_remove(mock_meta,
 
     # Try executing the stale plan
     executor = photos_ingest.PlanExecutor(str(ws))
-    journal_path = str(ws / "journal.json")
+    journal_path = str(ws / ".journal.json")
 
     import pytest
     with pytest.raises(ValueError, match="Stale plan: ghost-prune target reappeared after planning: 4-photos-by-date/reappeared.jpg"):
@@ -393,4 +393,4 @@ def test_stale_ghost_prune_reappeared_file_aborts_before_cache_remove(mock_meta,
     assert (ws / "4-photos-by-date" / "reappeared.jpg").exists()
 
     # Assert no handoff manifest generated
-    assert not (ws / ".photos-ingest" / "photos-1-prep-handoff.json").exists()
+    assert not (ws / ".photos-ingest" / "photos-11-handoff.json").exists()
