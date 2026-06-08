@@ -43,6 +43,40 @@ def selected_gpx_root() -> str:
     root = CONFIG.get("gpx_root") or ""
     return os.path.realpath(os.path.abspath(root)) if root else ""
 
+# --- Workspace control directory layout (shared contract Section 5) ----------
+# Every pipeline control/artifact file lives under CONTROL_DIR; the media scan
+# skips it wholesale. These helpers are the single source of truth for the names
+# and locations so the writers and the scanner can never disagree.
+CONTROL_DIR = ".photos-ingest"
+QUARANTINE_DIR = ".photos-ingest-quarantine"
+
+def control_dir(ws: str) -> str:
+    return os.path.join(ws, CONTROL_DIR)
+
+def guard_path(ws: str) -> str:
+    return os.path.join(ws, CONTROL_DIR, "photos-00-workspace-guard")
+
+def config_path(ws: str) -> str:
+    # Location only in this phase; the seed/read lifecycle lands in the next phase.
+    return os.path.join(ws, CONTROL_DIR, "photos-00-config.json")
+
+def db_path(ws: str) -> str:
+    return os.path.join(ws, CONTROL_DIR, "photos-00-ingest.db")
+
+def handoff_path(ws: str) -> str:
+    return os.path.join(ws, CONTROL_DIR, "photos-11-handoff.json")
+
+def journal_path(ws: str, run_id: str) -> str:
+    return os.path.join(ws, CONTROL_DIR, f"journal-{run_id}.json")
+
+def lock_path(ws: str) -> str:
+    return os.path.join(ws, CONTROL_DIR, "photos-00-workspace.lock")
+
+def ensure_control_dir(ws: str) -> str:
+    d = control_dir(ws)
+    os.makedirs(d, exist_ok=True)
+    return d
+
 FIELD_SET_VERSION = 1
 METADATA_SCHEMA_VERSION = 1
 CAMERA_GROUP_KEY_VERSION = 1
@@ -431,25 +465,6 @@ class MetadataReader:
 
         # Sort results by key deterministically
         return {k: results[k] for k in sorted(results.keys())}, failed_folders
-
-WORKSPACE_CONTROL_FILENAMES = {
-    ".photos-ingest-root",
-    ".photos-1-prep-root",
-    "journal.json",
-    "calibration.json",
-    ".photos-ingest-journal.json",
-    "photos-1-prep-handoff.json"
-}
-
-def is_workspace_control_file(path_or_name: str) -> bool:
-    """Returns True if the given path or filename is a workflow/control artifact."""
-    import os
-    basename = os.path.basename(path_or_name)
-    if basename in WORKSPACE_CONTROL_FILENAMES:
-        return True
-    if basename.startswith('.photos_ingest.db'):
-        return True
-    return False
 
 
 def is_metadata_cache_fresh(file_record: dict, metadata_record: dict, current_metadata_context: dict) -> bool:
