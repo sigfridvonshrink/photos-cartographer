@@ -77,6 +77,52 @@ def ensure_control_dir(ws: str) -> str:
     os.makedirs(d, exist_ok=True)
     return d
 
+def _atomic_write_text(path: str, text: str) -> None:
+    import tempfile
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".tmp-", suffix=".json")
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(text)
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+def load_or_seed_config(workspace_root: str) -> str:
+    """Seed `photos-00-config.json` from the in-code CONFIG template on first run,
+    then read it as the authoritative config for this workspace.
+
+    Per the shared contract (Section 4), the on-disk file — not the in-code dict —
+    governs all processing once it exists; prep is its sole writer (seeds once). The
+    user changes configuration by hand-editing the JSON. Returns the whole-file
+    SHA-256 (the config fingerprint). `jobs` is a runtime override and is never
+    persisted to the file.
+    """
+    ensure_control_dir(workspace_root)
+    path = config_path(workspace_root)
+    if not os.path.exists(path):
+        seed = {k: v for k, v in CONFIG.items() if k != "jobs"}
+        _atomic_write_text(path, json.dumps(seed, indent=2, sort_keys=True))
+    with open(path, "rb") as f:
+        raw = f.read()
+    sha = hashlib.sha256(raw).hexdigest()
+    try:
+        loaded = json.loads(raw.decode("utf-8"))
+    except Exception as e:
+        raise ValueError(f"Workspace config {path} is not valid JSON: {e}")
+    if not isinstance(loaded, dict):
+        raise ValueError(f"Workspace config {path} must be a JSON object.")
+    # Make the file authoritative; preserve the runtime jobs override.
+    jobs = CONFIG.get("jobs")
+    CONFIG.clear()
+    CONFIG.update(loaded)
+    if jobs is not None:
+        CONFIG["jobs"] = jobs
+    return sha
+
 FIELD_SET_VERSION = 1
 METADATA_SCHEMA_VERSION = 1
 CAMERA_GROUP_KEY_VERSION = 1
