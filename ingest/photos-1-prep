@@ -1347,6 +1347,43 @@ class WorkspacePrepWorkflow:
         existing_cache = self.cache.get_all_files()
         existing_metadata = self.cache.get_all_metadata()
 
+        # --- Move-aware cache identity (prep Section 10.1 / 10.2) ------------------
+        # Recognize a file the user moved from by-date into 5-photos-by-dest (or
+        # re-sorted between destinations inside by-dest) by a cache-only stat match,
+        # and carry its cached hash + metadata forward to the new path instead of
+        # re-hashing / re-extracting it. By-dest is read-only, so there is no
+        # filesystem operation: the old (now-missing) row is dropped by ghost-prune
+        # and the carried row is upserted at the new path.
+        import collections as _collections
+        _present = set(files)
+        _missing_rows = {p: r for p, r in existing_cache.items() if p not in _present}
+        _new_by_dest = [f for f in files
+                        if f.startswith('5-photos-by-dest/') and f not in existing_cache]
+        _src_idx = _collections.defaultdict(list)
+        for _p, _r in _missing_rows.items():
+            _src_idx[(_r['size'], _r['mtime_ns'], os.path.basename(_p).lower())].append(_p)
+        _tgt_idx = _collections.defaultdict(list)
+        _tgt_stat = {}
+        for _f in _new_by_dest:
+            _st = os.stat(os.path.join(self.workspace_root, _f))
+            _tgt_stat[_f] = _st
+            _tgt_idx[(_st.st_size, _st.st_mtime_ns, os.path.basename(_f).lower())].append(_f)
+        carried_forward = {}  # new_by_dest_path -> {"source": old_path, "db_file": carried_db}
+        for _key, _tgts in _tgt_idx.items():
+            _srcs = _src_idx.get(_key, [])
+            if len(_tgts) == 1 and len(_srcs) == 1:  # bijective unique match only
+                _old_path, _new_path = _srcs[0], _tgts[0]
+                _old_row = existing_cache[_old_path]
+                _old_md = existing_metadata.get(_old_path)
+                _st = _tgt_stat[_new_path]
+                _carried = dict(_old_row,
+                                relative_path=_new_path,
+                                absolute_path=os.path.join(self.workspace_root, _new_path),
+                                size=_st.st_size, mtime_ns=_st.st_mtime_ns, inode=_st.st_ino,
+                                last_seen_ns=int(datetime.now(timezone.utc).timestamp() * 1e9))
+                _carried["metadata"] = _old_md
+                carried_forward[_new_path] = {"source": _old_path, "db_file": _carried}
+
         from photos_utils import MetadataReader, ProgressCoordinator, get_exiftool_version, get_imagemagick_version, FIELD_SET_VERSION, EXTRACTION_OPTIONS_FINGERPRINT, METADATA_SCHEMA_VERSION, CAMERA_GROUP_KEY_VERSION
         current_exiftool_version = get_exiftool_version()
         current_magick_version = get_imagemagick_version()
@@ -1364,6 +1401,10 @@ class WorkspacePrepWorkflow:
 
         folders_to_scan = set()
         for f in files:
+            if f in carried_forward:
+                # Carried-forward move: identity comes from the cache, no re-extract.
+                self.coordinator.increment("metadata_hits")
+                continue
             cached = existing_cache.get(f)
             cached_md = existing_metadata.get(f)
             stat = os.stat(os.path.join(self.workspace_root, f))
@@ -1400,6 +1441,17 @@ class WorkspacePrepWorkflow:
         }
 
         def process_file(rel_path: str):
+            if rel_path in carried_forward:
+                # Recognized move into by-dest: carry the cached identity forward; do
+                # not re-read the file beyond the stat already taken during recognition.
+                return {
+                    "relative_path": rel_path,
+                    "warnings": [],
+                    "blockers": [],
+                    "metadata_plan_status": "carried_forward",
+                    "db_file": carried_forward[rel_path]["db_file"],
+                    "cache_reused": True,
+                }
             abs_path = os.path.join(self.workspace_root, rel_path)
             stat = os.stat(abs_path)
             ext = os.path.splitext(rel_path)[1].lower().lstrip('.')
@@ -1870,6 +1922,11 @@ class WorkspacePrepWorkflow:
             if original_rel in media_mutated_originals:
                 continue
 
+            # Recognized moves are persisted by their own carried upsert below (the old
+            # row is dropped by ghost-prune), not by the unchanged-state reconciliation.
+            if original_rel in carried_forward:
+                continue
+
             if planned_rel != original_rel:
                 continue
 
@@ -1898,6 +1955,17 @@ class WorkspacePrepWorkflow:
                     "size": f["size"],
                     "mtime_ns": f["mtime_ns"]
                 }
+            })
+
+        # Persist recognized moves: upsert the carried row at the new by-dest path
+        # (the file exists there, so the executor's upsert precondition holds). The old
+        # row's removal is handled by ghost-prune (its path is now missing).
+        for _new_path, _cf in carried_forward.items():
+            _cdb = _cf["db_file"]
+            cache_upserts.append({
+                "action": "upsert",
+                "data": _cdb,
+                "preconditions": {"size": _cdb["size"], "mtime_ns": _cdb["mtime_ns"]},
             })
 
         if cache_upserts:
@@ -1958,6 +2026,7 @@ class WorkspacePrepWorkflow:
             "message": "Prep Plan generated",
             "no_op_files": no_op_count,
             "operations_planned": len(operations),
+            "recognized_moves": len(carried_forward),
             "blockers_found": len(blockers),
             "metadata_plan_status": metadata_plan_status,
             "execution_config": execution_config,
