@@ -77,6 +77,42 @@ def ensure_control_dir(ws: str) -> str:
     os.makedirs(d, exist_ok=True)
     return d
 
+def quarantine_dir(ws: str) -> str:
+    return os.path.join(ws, QUARANTINE_DIR)
+
+def quarantine_footprint(ws: str) -> dict:
+    """Summarize the recoverable quarantine tree. Quarantine is never auto-deleted,
+    so every run surfaces how much has accumulated (files, bytes, distinct <plan_id>
+    directories, and the oldest/newest plan id present). Plan-id directory names sort
+    chronologically (the %Y%m%dT%H%M%SZ-<hex> prefix), so oldest/newest = min/max name.
+    """
+    base = quarantine_dir(ws)
+    total_files = 0
+    total_bytes = 0
+    plan_ids = []
+    if os.path.isdir(base):
+        for entry in os.scandir(base):
+            if not entry.is_dir():
+                continue
+            plan_ids.append(entry.name)
+            for root, _dirs, fnames in os.walk(entry.path):
+                for fn in fnames:
+                    if fn == "manifest.json":
+                        continue
+                    try:
+                        total_bytes += os.path.getsize(os.path.join(root, fn))
+                        total_files += 1
+                    except OSError:
+                        pass
+    plan_ids.sort()
+    return {
+        "total_files": total_files,
+        "total_bytes": total_bytes,
+        "plan_id_dirs": len(plan_ids),
+        "oldest_plan_id": plan_ids[0] if plan_ids else None,
+        "newest_plan_id": plan_ids[-1] if plan_ids else None,
+    }
+
 def _atomic_write_text(path: str, text: str) -> None:
     import tempfile
     fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".tmp-", suffix=".json")
