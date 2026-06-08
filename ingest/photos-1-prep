@@ -151,10 +151,11 @@ class WorkspaceCache:
     """
     SQLite accelerator cache for inventory, metadata, and hashes.
     """
-    def __init__(self, workspace_root: str, db_name: str = ".photos_ingest.db", in_memory: bool = False, read_only: bool = False):
+    def __init__(self, workspace_root: str, db_name: str = None, in_memory: bool = False, read_only: bool = False):
+        from photos_utils import db_path as _db_path
         self.in_memory = in_memory
         self.read_only = read_only
-        self.db_path = os.path.join(workspace_root, db_name)
+        self.db_path = os.path.join(workspace_root, db_name) if db_name else _db_path(workspace_root)
 
         if in_memory:
             self.conn = sqlite3.connect(":memory:", check_same_thread=False)
@@ -168,6 +169,8 @@ class WorkspaceCache:
                 else:
                     self.conn = sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True, check_same_thread=False)
             else:
+                from photos_utils import ensure_control_dir
+                ensure_control_dir(workspace_root)
                 self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
                 self._init_db()
 
@@ -350,7 +353,9 @@ class WorkspaceCache:
 
 class WorkspaceLock:
     def __init__(self, workspace_root: str):
-        self.lock_path = os.path.join(workspace_root, ".photos-ingest.lock")
+        from photos_utils import lock_path, ensure_control_dir
+        ensure_control_dir(workspace_root)
+        self.lock_path = lock_path(workspace_root)
         self._lock_fd = None
 
     def acquire(self) -> bool:
@@ -375,9 +380,10 @@ class WorkspaceLock:
 class RootGuard:
     @staticmethod
     def check_sentinel(workspace_root: str):
-        accepted = ['.photos-ingest-root', '.photos-1-prep-root']
-        if not any(os.path.exists(os.path.join(workspace_root, name)) for name in accepted):
-            raise RuntimeError("Sentinel file missing: expected one of " + ", ".join(accepted) + f" in {workspace_root}. Are you in the correct workspace root?")
+        from photos_utils import guard_path
+        guard = guard_path(workspace_root)
+        if not os.path.exists(guard):
+            raise RuntimeError(f"Workspace guard missing: expected {guard}. Are you in the correct workspace root?")
 
     @staticmethod
     def resolve_and_check_path(base_dir: str, target_path: str, must_be_relative: bool = True) -> str:
@@ -425,17 +431,15 @@ class InventoryScanner:
     @classmethod
     def scan_workspace(cls, root_dir: str) -> Dict[str, InventoryRecord]:
         inventory = {}
-        from photos_utils import is_workspace_control_file
         for root, dirs, files in os.walk(root_dir):
-            if '.photos-ingest-quarantine' in dirs:
-                dirs.remove('.photos-ingest-quarantine')
-            if '.photos-ingest-backups' in dirs:
-                dirs.remove('.photos-ingest-backups')
-            if '.git' in dirs:
-                dirs.remove('.git')
+            # Skip every dot-directory wholesale: .photos-ingest/, .photos-ingest-quarantine/,
+            # .photos-ingest-backups/, .git/, and the default gpx_root (.photos-ingest/gpx/).
+            # Nothing pipeline-related lives outside a dot path, so this one rule replaces the
+            # old per-filename allow-list (shared contract Section 5 / prep Section 3).
+            dirs[:] = [d for d in dirs if not d.startswith('.')]
 
             for filename in files:
-                if is_workspace_control_file(filename):
+                if filename.startswith('.'):
                     continue
 
                 # Ignore __std.* for logical inventory semantics across both workspace and library
@@ -763,7 +767,12 @@ class PlanExecutor:
         from photos_utils import ProgressCoordinator
         self.coordinator = ProgressCoordinator()
 
-    def execute(self, plan: Plan, journal_path: str):
+    def execute(self, plan: Plan, journal_path: str = None):
+        # Per-run journal under the control directory (retained, not overwritten),
+        # unless a caller supplies an explicit path.
+        if journal_path is None:
+            from photos_utils import journal_path as _journal_path
+            journal_path = _journal_path(self.workspace_root, plan.plan_id)
         # 0. Acquire workspace lock
         lock = WorkspaceLock(self.workspace_root)
         if "workspace" in plan.locks_required and not lock.acquire():
@@ -1192,7 +1201,8 @@ class PlanExecutor:
 
                     # Write out atomically
                     import tempfile
-                    target_handoff_path = os.path.join(self.workspace_root, ".photos-ingest", "photos-1-prep-handoff.json")
+                    from photos_utils import handoff_path
+                    target_handoff_path = handoff_path(self.workspace_root)
                     target_dir = os.path.dirname(target_handoff_path)
                     os.makedirs(target_dir, exist_ok=True)
                     fd, temp_path = tempfile.mkstemp(dir=target_dir, prefix=".tmp-", suffix=".json", text=True)
@@ -1288,13 +1298,11 @@ class WorkspacePrepWorkflow:
         self._all_physical_lower_for_plan = None
         media_mutated_originals = set()
 
-        from photos_utils import is_workspace_control_file
-
         self.coordinator.start_phase("planning - scanning inventory")
         # 0. Inventory & Symlink check
         for f in os.listdir(self.workspace_root):
             path = os.path.join(self.workspace_root, f)
-            if os.path.isfile(path) and not f.startswith('.') and not is_workspace_control_file(f):
+            if os.path.isfile(path) and not f.startswith('.'):
                 if os.path.islink(path):
                     blockers.append(f"Forbidden symlink detected: {f}")
                 else:
@@ -2049,10 +2057,9 @@ def main():
             plan = Plan.from_dict(plan_data)
 
             executor = PlanExecutor(workspace_root)
-            journal_path = os.path.join(workspace_root, ".photos-ingest-journal.json")
 
             try:
-                executor.execute(plan, journal_path)
+                executor.execute(plan)
             except Exception as e:
                 print(f"Execution failed: {e}", file=sys.stderr)
                 sys.exit(1)

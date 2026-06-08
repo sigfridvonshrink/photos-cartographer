@@ -100,7 +100,7 @@ def test_by_dest_duplicate_does_not_mutate_behavior():
     with tempfile.TemporaryDirectory() as tmp_dir:
         ws = Path(tmp_dir) / 'workspace'
         ws.mkdir()
-        (ws / '.photos-1-prep-root').touch()
+        (ws / '.photos-ingest').mkdir(exist_ok=True); (ws / '.photos-ingest' / 'photos-00-workspace-guard').touch()
         (ws / '5-photos-by-dest').mkdir()
         (ws / '0-source').mkdir()
 
@@ -134,7 +134,7 @@ def test_by_dest_duplicate_does_not_mutate_behavior():
 def test_by_dest_duplicate_does_not_mutate_behavior_with_hashes(mock_hash_image, mock_hash_file, tmp_path):
     ws = tmp_path / "workspace"
     ws.mkdir()
-    (ws / ".photos-1-prep-root").touch()
+    (ws / ".photos-ingest").mkdir(exist_ok=True); (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
 
     by_dest = ws / "5-photos-by-dest"
     source = ws / "0-source"
@@ -169,7 +169,7 @@ def test_by_dest_duplicate_does_not_mutate_behavior_with_hashes(mock_hash_image,
 def test_by_dest_uppercase_extension_does_not_rename(tmp_path):
     ws = tmp_path / "workspace"
     ws.mkdir()
-    (ws / ".photos-1-prep-root").touch()
+    (ws / ".photos-ingest").mkdir(exist_ok=True); (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
 
     by_dest = ws / "5-photos-by-dest"
     by_dest.mkdir()

@@ -20,7 +20,8 @@ def workspace(tmp_path):
     os.makedirs(os.path.join(root, "3-videos-by-date"))
     os.makedirs(os.path.join(root, "4-photos-by-date"))
     os.makedirs(os.path.join(root, "5-photos-by-dest"))
-    with open(os.path.join(root, ".photos-1-prep-root"), "w") as f:
+    os.makedirs(os.path.join(root, ".photos-ingest"), exist_ok=True)
+    with open(os.path.join(root, ".photos-ingest", "photos-00-workspace-guard"), "w") as f:
         f.write("")
 
     # Create some dummy files
@@ -231,7 +232,7 @@ def test_quiet_plan_executor_execution(mock_validate, mock_popen, workspace):
         assert 'completed_items' not in op_res
         assert 'current_phase' not in op_res
 
-    handoff_path = os.path.join(workspace, ".photos-ingest", "photos-1-prep-handoff.json")
+    handoff_path = os.path.join(workspace, ".photos-ingest", "photos-11-handoff.json")
     assert os.path.exists(handoff_path)
 
     with open(handoff_path, 'r') as f:
@@ -261,7 +262,8 @@ def test_cli_jobs_argparse(workspace):
     assert res.returncode != 0
 
     # Ensure it accepts valid jobs and produces output plan
-    with open(os.path.join(workspace, ".photos-1-prep-root"), "w") as f: f.write("")
+    os.makedirs(os.path.join(workspace, ".photos-ingest"), exist_ok=True)
+    with open(os.path.join(workspace, ".photos-ingest", "photos-00-workspace-guard"), "w") as f: f.write("")
 
     # Create dummy exiftool to pass the Popen check
     exiftool_path = os.path.join(workspace, "exiftool")
@@ -357,7 +359,7 @@ def test_exiftool_pool_failure_blocks_handoff(mock_read_metadata, mock_popen, wo
 
     assert "blocker" in str(excinfo.value).lower() or "metadata" in str(excinfo.value).lower()
 
-    handoff_path = os.path.join(workspace, ".photos-ingest", "photos-1-prep-handoff.json")
+    handoff_path = os.path.join(workspace, ".photos-ingest", "photos-11-handoff.json")
     assert not os.path.exists(handoff_path)
 
 @patch("subprocess.Popen")
@@ -442,7 +444,7 @@ def test_stale_dependency_under_concurrency_blocks_execution(mock_read_metadata_
     with pytest.raises(ValueError, match="Stale plan: dependency changed"):
         executor.execute(plan, journal_path)
 
-    handoff_path = os.path.join(workspace, ".photos-ingest", "photos-1-prep-handoff.json")
+    handoff_path = os.path.join(workspace, ".photos-ingest", "photos-11-handoff.json")
     assert not os.path.exists(handoff_path)
     assert not os.path.exists(journal_path)
 
@@ -505,7 +507,7 @@ def test_progress_summary_fields(mock_read_metadata_concurrently, mock_hash_imag
     assert pc["db_renames_applied"] >= 0
 
     # Ensure it didn't leak into handoff
-    handoff_path = os.path.join(workspace, ".photos-ingest", "photos-1-prep-handoff.json")
+    handoff_path = os.path.join(workspace, ".photos-ingest", "photos-11-handoff.json")
     with open(handoff_path, 'r') as f:
         import json
         handoff_data = json.load(f)

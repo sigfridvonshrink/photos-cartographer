@@ -11,7 +11,7 @@ import photos_1_prep as prep
 def workspace(tmp_path):
     root = tmp_path / "workspace"
     root.mkdir()
-    (root / ".photos-1-prep-root").touch()
+    (root / ".photos-ingest").mkdir(exist_ok=True); (root / ".photos-ingest" / "photos-00-workspace-guard").touch()
 
     # Create required folders
     (root / "0-source").mkdir()
@@ -135,7 +135,7 @@ def test_handoff_manifest_enrichment(workspace, monkeypatch):
     journal_path = str(workspace / ".photos-ingest-journal.json")
     executor.execute(plan, journal_path)
 
-    handoff_path = workspace / ".photos-ingest" / "photos-1-prep-handoff.json"
+    handoff_path = workspace / ".photos-ingest" / "photos-11-handoff.json"
     assert handoff_path.exists()
 
     with open(handoff_path) as f:
@@ -245,7 +245,7 @@ def test_non_media_is_not_applicable(workspace, monkeypatch):
 
 def test_schema_migration(workspace):
     import sqlite3
-    db_path = workspace / ".photos_ingest.db"
+    db_path = workspace / ".photos-ingest/photos-00-ingest.db"
     conn = sqlite3.connect(str(db_path))
     conn.execute('''
         CREATE TABLE file_cache (
