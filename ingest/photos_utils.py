@@ -1,0 +1,542 @@
+import os
+import json
+import hashlib
+
+CONFIG = {
+    "zfs": {
+        "enabled": True,
+        "snapshots_required": False, # If true, failure to snapshot aborts execution
+        "snapshot_commands": {
+            "workspace": "zfs snapshot tank/photos-work@photos-ingest-{plan_id}",
+            "library": "zfs snapshot tank/photos-final@photos-ingest-{plan_id}"
+        }
+    },
+    "gpx_root": "",
+    "gpx_direct_match_max_seconds": 60.0,
+    "gpx_interpolation_max_gap_seconds": 120.0,
+    "gpx_interpolation_max_distance_meters": 1000.0,
+    "gpx_interpolation_max_speed_kmh": 150.0,
+    "photo_anchor_interpolation_max_gap_seconds": 1800.0,
+    "photo_anchor_extrapolation_max_seconds": 300.0,
+    "camera_time_and_timezone_policy": {
+        "enabled": False,
+        "default_folder_timezone": "",
+        "device_groups": {
+            "phones": [],
+            "fixed_clock_cameras": []
+        },
+        "single_anchor_auto_apply": False,
+        "multi_anchor_auto_apply": True,
+        "phone_gpx_agreement_tolerance_seconds": 60,
+        "phone_gpx_conflict_threshold_seconds": 300,
+        "dst_conflict_tolerance_seconds": 120,
+        "phone_gpx_max_distance_meters": 250,
+        "write_corrected_metadata_times": True,
+        "write_corrected_offset_tags": True,
+        "write_corrected_filename_times": True,
+        "manual_segment_template_count": 2
+    }
+}
+
+def selected_gpx_root() -> str:
+    root = CONFIG.get("gpx_root") or ""
+    return os.path.realpath(os.path.abspath(root)) if root else ""
+
+FIELD_SET_VERSION = 1
+METADATA_SCHEMA_VERSION = 1
+CAMERA_GROUP_KEY_VERSION = 1
+
+EXIFTOOL_METADATA_OPTIONS = ["-json", "-n", "-a"]
+EXTRACTION_OPTIONS_FINGERPRINT = hashlib.sha256(json.dumps(EXIFTOOL_METADATA_OPTIONS).encode('utf-8')).hexdigest()
+
+def get_exiftool_version() -> str:
+    import subprocess
+    try:
+        return subprocess.check_output(["exiftool", "-ver"], text=True).strip()
+    except Exception:
+        return "unknown"
+
+import concurrent.futures
+import subprocess
+from typing import Dict, List, Any, Optional
+
+
+class ProcessCrashedError(Exception):
+    pass
+
+class PersistentExifToolWorker:
+    def __init__(self):
+        self.closed = False
+        self._start_process()
+
+    def _start_process(self):
+        self.process = subprocess.Popen(
+            ['exiftool', '-stay_open', 'True', '-@', '-'],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            bufsize=1
+        )
+
+    def restart(self):
+        self.close()
+        self._start_process()
+        self.closed = False
+
+    def close(self):
+        if not self.closed:
+            try:
+                self.process.stdin.write("-stay_open\nFalse\n")
+                self.process.stdin.flush()
+                self.process.stdin.close()
+            except Exception:
+                pass
+            try:
+                self.process.wait(timeout=2)
+            except Exception:
+                self.process.kill()
+            self.closed = True
+
+    def read_metadata(self, folder_path: str) -> Dict[str, Any]:
+        if self.closed:
+            raise ProcessCrashedError("Worker closed")
+        try:
+            # EXIFTOOL_METADATA_OPTIONS is ["-json", "-n", "-a"]
+            # We send them via stdin to the stay_open process
+            for opt in EXIFTOOL_METADATA_OPTIONS:
+                self.process.stdin.write(f"{opt}\n")
+            self.process.stdin.write(f"{folder_path}\n-execute\n")
+            self.process.stdin.flush()
+        except OSError as e:
+            raise ProcessCrashedError(f"Failed to write to exiftool: {e}")
+
+        output = []
+        while True:
+            try:
+                line = self.process.stdout.readline()
+            except OSError as e:
+                raise ProcessCrashedError(f"Failed to read from exiftool: {e}")
+
+            if not line:
+                raise ProcessCrashedError("Unexpected EOF from exiftool process.")
+            if line.strip() == "{ready}":
+                break
+            output.append(line)
+
+        full_out = "".join(output).strip()
+        if not full_out:
+            return {}
+
+        try:
+            data = json.loads(full_out)
+            results = {}
+            if isinstance(data, list):
+                for item in data:
+                    src = item.get("SourceFile")
+                    if src:
+                        results[src] = MetadataReader._parse_exiftool_item(item)
+            elif isinstance(data, dict):
+                 src = data.get("SourceFile")
+                 if src:
+                     results[src] = MetadataReader._parse_exiftool_item(data)
+            return results
+        except json.JSONDecodeError:
+            pass
+        return {}
+
+
+import threading
+import queue
+
+class ExifToolWorkerPool:
+    def __init__(self, size=4):
+        self.size = size
+        self.workers = queue.Queue()
+        self._all_workers = []
+        self._lock = threading.Lock()
+
+    def __enter__(self):
+        with self._lock:
+            for _ in range(self.size):
+                worker = PersistentExifToolWorker()
+                self._all_workers.append(worker)
+                self.workers.put(worker)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.shutdown()
+
+    def shutdown(self):
+        with self._lock:
+            for worker in self._all_workers:
+                worker.close()
+            # Empty the queue so we don't hold references
+            while not self.workers.empty():
+                try:
+                    self.workers.get_nowait()
+                except queue.Empty:
+                    break
+
+    def acquire(self, timeout=30.0) -> PersistentExifToolWorker:
+        return self.workers.get(timeout=timeout)
+
+    def release(self, worker: PersistentExifToolWorker):
+        if not worker.closed:
+            self.workers.put(worker)
+
+    def replace_or_restart(self, worker: PersistentExifToolWorker) -> PersistentExifToolWorker:
+        try:
+            worker.restart()
+            return worker
+        except Exception:
+            # If we cannot restart it, force close/kill it
+            try:
+                worker.close()
+            except Exception:
+                try:
+                    if hasattr(worker, 'process') and worker.process:
+                        worker.process.kill()
+                except Exception:
+                    pass
+
+            with self._lock:
+                if worker in self._all_workers:
+                    self._all_workers.remove(worker)
+
+            # The replacement worker should only be added to _all_workers after it is successfully created.
+            new_worker = PersistentExifToolWorker()
+            with self._lock:
+                self._all_workers.append(new_worker)
+            return new_worker
+
+    def execute(self, folder_path: str, progress_coordinator=None) -> Dict[str, Any]:
+        try:
+            worker = self.acquire()
+        except queue.Empty:
+            return {"error": "extraction_failed"} # Worker queue blocked forever
+
+        try:
+            result = worker.read_metadata(folder_path)
+            return result
+        except ProcessCrashedError as e:
+            if progress_coordinator:
+                progress_coordinator.increment("worker_crashes")
+            worker = self.replace_or_restart(worker)
+            return {"error": "extraction_failed"}
+        except Exception as e:
+            worker = self.replace_or_restart(worker)
+            return {"error": "extraction_failed"}
+        finally:
+            if worker:
+                self.release(worker)
+
+class MetadataReader:
+    @staticmethod
+    def read_metadata(folder_path: str) -> Dict[str, Any]:
+        """
+        Reads metadata for a given folder in batch using exiftool -json.
+        """
+        cmd = ["exiftool"] + EXIFTOOL_METADATA_OPTIONS + [folder_path]
+        try:
+            res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            if not res.stdout.strip():
+                return {}
+            data = json.loads(res.stdout)
+            results = {}
+            for item in data:
+                src = item.get("SourceFile")
+                if src:
+                    results[src] = MetadataReader._parse_exiftool_item(item)
+            return results
+        except subprocess.CalledProcessError as e:
+            if e.stdout.strip():
+                try:
+                    data = json.loads(e.stdout)
+                    results = {}
+                    for item in data:
+                        src = item.get("SourceFile")
+                        if src:
+                            results[src] = MetadataReader._parse_exiftool_item(item)
+                    return results
+                except json.JSONDecodeError:
+                    pass
+            print(f"Warning: exiftool failed on {folder_path}: {e.stderr}")
+            return {}
+
+    @staticmethod
+    def _parse_exiftool_item(item: Dict[str, Any]) -> Dict[str, Any]:
+        parsed = {
+            # Core timestamp fields
+            "DateTimeOriginal": item.get("DateTimeOriginal"),
+            "CreateDate": item.get("CreateDate"),
+            "ModifyDate": item.get("ModifyDate"),
+
+            # Timestamp sub-seconds and offsets
+            "SubSecTimeOriginal": item.get("SubSecTimeOriginal"),
+            "SubSecCreateDate": item.get("SubSecCreateDate"),
+            "SubSecModifyDate": item.get("SubSecModifyDate"),
+            "OffsetTime": item.get("OffsetTime"),
+            "OffsetTimeOriginal": item.get("OffsetTimeOriginal"),
+            "OffsetTimeDigitized": item.get("OffsetTimeDigitized"),
+            "TimeZone": item.get("TimeZone"),
+
+            # XMP / QuickTime timestamps
+            "XMP:CreateDate": item.get("XMP:CreateDate"),
+            "XMP:ModifyDate": item.get("XMP:ModifyDate"),
+            "DateCreated": item.get("DateCreated"),
+            "QuickTime:CreateDate": item.get("QuickTime:CreateDate"),
+            "QuickTime:ModifyDate": item.get("QuickTime:ModifyDate"),
+            "TrackCreateDate": item.get("TrackCreateDate"),
+            "TrackModifyDate": item.get("TrackModifyDate"),
+            "MediaCreateDate": item.get("MediaCreateDate"),
+            "MediaModifyDate": item.get("MediaModifyDate"),
+
+            # Camera identity fields
+            "Make": item.get("Make"),
+            "Model": item.get("Model"),
+            "UniqueCameraModel": item.get("UniqueCameraModel"),
+            "BodySerialNumber": item.get("BodySerialNumber"),
+            "CameraSerialNumber": item.get("CameraSerialNumber"),
+            "InternalSerialNumber": item.get("InternalSerialNumber"),
+            "SerialNumber": item.get("SerialNumber"),
+            "OwnerName": item.get("OwnerName"),
+            "LensModel": item.get("LensModel"),
+            "LensSerialNumber": item.get("LensSerialNumber"),
+
+            # GPS fields
+            "GPSLatitude": item.get("GPSLatitude"),
+            "GPSLatitudeRef": item.get("GPSLatitudeRef"),
+            "GPSLongitude": item.get("GPSLongitude"),
+            "GPSLongitudeRef": item.get("GPSLongitudeRef"),
+            "GPSAltitude": item.get("GPSAltitude"),
+            "GPSAltitudeRef": item.get("GPSAltitudeRef"),
+            "GPSDateStamp": item.get("GPSDateStamp"),
+            "GPSTimeStamp": item.get("GPSTimeStamp"),
+            "GPSDateTime": item.get("GPSDateTime"),
+            "GPSProcessingMethod": item.get("GPSProcessingMethod"),
+
+            # Dimensions
+            "ImageWidth": item.get("ImageWidth"),
+            "ImageHeight": item.get("ImageHeight"),
+            "Orientation": item.get("Orientation"),
+            "Rotation": item.get("Rotation"),
+            "Duration": item.get("Duration"),
+
+            # Full raw payload (needed by spec for preservation)
+            "raw_payload": json.dumps(item)
+        }
+
+        # Build group_key for camera identity grouping based on standard elements
+        ident_parts = []
+        for k in ["BodySerialNumber", "CameraSerialNumber", "InternalSerialNumber", "SerialNumber", "Make", "Model", "OwnerName"]:
+            v = parsed.get(k)
+            if v is not None:
+                ident_parts.append(str(v).strip())
+        parsed["camera_group_key"] = "|".join(ident_parts) if ident_parts else "unknown"
+
+        # Passive boolean helper checks
+
+        # Determine extraction_status for extracted_ok vs extracted_empty
+        if parsed.get("DateTimeOriginal") or parsed.get("CreateDate") or parsed.get("ModifyDate") or parsed.get("Make") or parsed.get("Model"):
+            parsed["extraction_status"] = "extracted_ok"
+        else:
+            parsed["extraction_status"] = "extracted_empty"
+
+        parsed["has_native_gps"] = bool(parsed.get("GPSLatitude") is not None and parsed.get("GPSLongitude") is not None)
+        parsed["has_timestamp"] = bool(parsed.get("DateTimeOriginal") or parsed.get("CreateDate") or parsed.get("ModifyDate"))
+
+        # Timestamp provenance
+        if parsed.get("DateTimeOriginal"):
+            parsed["selected_source_naive_timestamp"] = parsed.get("DateTimeOriginal")
+            parsed["selected_source_timestamp_tag"] = "DateTimeOriginal"
+        elif parsed.get("CreateDate"):
+            parsed["selected_source_naive_timestamp"] = parsed.get("CreateDate")
+            parsed["selected_source_timestamp_tag"] = "CreateDate"
+        elif parsed.get("ModifyDate"):
+            parsed["selected_source_naive_timestamp"] = parsed.get("ModifyDate")
+            parsed["selected_source_timestamp_tag"] = "ModifyDate"
+        else:
+            parsed["selected_source_naive_timestamp"] = None
+            parsed["selected_source_timestamp_tag"] = None
+
+        return parsed
+
+    @classmethod
+    def read_metadata_concurrently(cls, folders: List[str], max_workers: int = 4, progress_coordinator=None) -> tuple[Dict[str, Any], set[str]]:
+        results = {}
+        failed_folders = set()
+        with ExifToolWorkerPool(size=max_workers) as pool:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                future_to_folder = {executor.submit(pool.execute, f, progress_coordinator): f for f in folders}
+                for future in concurrent.futures.as_completed(future_to_folder):
+                    folder = future_to_folder[future]
+                    try:
+                        data = future.result()
+                        if "error" in data:
+                            failed_folders.add(folder)
+                        else:
+                            results.update(data)
+                    except ProcessCrashedError:
+                        if progress_coordinator:
+                            progress_coordinator.increment("worker_crashes")
+                        failed_folders.add(folder)
+                    except Exception as exc:
+                        failed_folders.add(folder)
+                        print(f"Folder {folder} generated an exception: {exc}")
+                    if progress_coordinator:
+                        progress_coordinator.increment("metadata_extracted")
+                        progress_coordinator.increment_completed()
+
+        # Sort results by key deterministically
+        return {k: results[k] for k in sorted(results.keys())}, failed_folders
+
+WORKSPACE_CONTROL_FILENAMES = {
+    ".photos-ingest-root",
+    ".photos-1-prep-root",
+    "journal.json",
+    "calibration.json",
+    ".photos-ingest-journal.json",
+    "photos-1-prep-handoff.json"
+}
+
+def is_workspace_control_file(path_or_name: str) -> bool:
+    """Returns True if the given path or filename is a workflow/control artifact."""
+    import os
+    basename = os.path.basename(path_or_name)
+    if basename in WORKSPACE_CONTROL_FILENAMES:
+        return True
+    if basename.startswith('.photos_ingest.db'):
+        return True
+    return False
+
+
+def is_metadata_cache_fresh(file_record: dict, metadata_record: dict, current_metadata_context: dict) -> bool:
+    if not metadata_record:
+        return False
+
+    # Check if relative_path matches (if available in both)
+    if metadata_record.get('relative_path') and file_record.get('relative_path'):
+        if metadata_record['relative_path'] != file_record['relative_path']:
+            return False
+
+    if metadata_record.get('size') != file_record.get('size'):
+        return False
+    if metadata_record.get('mtime_ns') != file_record.get('mtime_ns'):
+        return False
+
+    # Check content_hash if available in file_record
+    file_hash = file_record.get('content_hash')
+    if file_hash:
+        if metadata_record.get('content_hash') != file_hash:
+            return False
+
+    # Check context dependencies
+    if metadata_record.get('extractor') != current_metadata_context.get('extractor'):
+        return False
+    if metadata_record.get('extractor_version') != current_metadata_context.get('extractor_version'):
+        return False
+    if metadata_record.get('field_set_version') != current_metadata_context.get('field_set_version'):
+        return False
+    if metadata_record.get('extraction_options_fingerprint') != current_metadata_context.get('extraction_options_fingerprint'):
+        return False
+    if metadata_record.get('metadata_schema_version') != current_metadata_context.get('metadata_schema_version'):
+        return False
+    if metadata_record.get('camera_group_key_version') != current_metadata_context.get('camera_group_key_version'):
+        return False
+
+    return True
+
+
+
+import sys
+import threading
+import time
+
+class ProgressCoordinator:
+    def __init__(self, quiet=None):
+        self.is_tty = sys.stderr.isatty()
+        if quiet is None:
+            self.quiet = not self.is_tty
+        else:
+            self.quiet = quiet
+            if quiet:
+                self.is_tty = False
+        self.counters = {}
+        self._lock = threading.Lock()
+        self.current_phase = ""
+        self.total_items = 0
+        self.completed_items = 0
+        self.start_time = time.time()
+        self.last_print_time = 0
+
+    def start_phase(self, phase_name: str, total_items: int = 0):
+        with self._lock:
+            self.current_phase = phase_name
+            self.total_items = total_items
+            self.completed_items = 0
+            self.start_time = time.time()
+            if not self.quiet:
+                if self.is_tty:
+                    print(f"\r\033[KStarting {phase_name}...", end="", file=sys.stderr)
+                else:
+                    print(f"Starting {phase_name}...", file=sys.stderr)
+
+    def increment(self, counter_name: str, amount: int = 1):
+        with self._lock:
+            self.counters[counter_name] = self.counters.get(counter_name, 0) + amount
+
+    def increment_completed(self, amount: int = 1):
+        with self._lock:
+            self.completed_items += amount
+            self._render_progress()
+
+    def _render_progress(self):
+        if self.quiet:
+            return
+
+        now = time.time()
+        if self.is_tty:
+            if now - self.last_print_time > 0.1:
+                self.last_print_time = now
+                pct = ""
+                if self.total_items > 0:
+                    pct = f" ({self.completed_items / self.total_items * 100:.1f}%)"
+                print(f"\r\033[K{self.current_phase}: {self.completed_items}/{self.total_items}{pct} ...", end="", file=sys.stderr)
+                sys.stderr.flush()
+        else:
+            if now - self.last_print_time > 10.0:
+                self.last_print_time = now
+                pct = ""
+                if self.total_items > 0:
+                    pct = f" ({self.completed_items / self.total_items * 100:.1f}%)"
+                print(f"{self.current_phase}: {self.completed_items}/{self.total_items}{pct} ...", file=sys.stderr)
+
+    def finish_phase(self):
+        with self._lock:
+            if not self.quiet:
+                elapsed = time.time() - self.start_time
+                if self.is_tty:
+                    print(f"\r\033[KFinished {self.current_phase} in {elapsed:.2f}s", file=sys.stderr)
+                else:
+                    print(f"Finished {self.current_phase} in {elapsed:.2f}s", file=sys.stderr)
+
+    def print_summary(self, plan_summary=None):
+        if self.quiet:
+            return
+        print("\n--- Performance Summary ---", file=sys.stderr)
+        if plan_summary and "performance_and_cache" in plan_summary:
+            pc = plan_summary["performance_and_cache"]
+            fields = [
+                "jobs_requested", "progress_mode", "worker_crashes", "worker_restarts",
+                "metadata_extracted", "metadata_reused", "metadata_failed",
+                "hashes_computed", "hashes_reused", "hashes_failed",
+                "db_effects_seen", "db_upserts_applied", "db_removes_applied", "db_renames_applied",
+                "dependency_validation_status", "handoff_written_after_successful_validation"
+            ]
+            for f in fields:
+                print(f"  {f}: {pc.get(f, 0 if 'applied' in f or 'failed' in f or 'crashes' in f or 'reused' in f or 'computed' in f or 'restarts' in f or 'seen' in f or 'extracted' in f else False)}", file=sys.stderr)
+        else:
+            for k, v in sorted(self.counters.items()):
+                print(f"  {k}: {v}", file=sys.stderr)
+        print("---------------------------", file=sys.stderr)
