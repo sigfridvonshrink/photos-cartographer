@@ -1,0 +1,2008 @@
+#!/usr/bin/env python3
+"""
+photos-1-prep: prep-only workspace organization, cache update, and handoff generation
+"""
+
+import os
+import sys
+import json
+import hashlib
+import subprocess
+import fcntl
+from dataclasses import dataclass, field, asdict
+from typing import Dict, List, Optional, Any
+from datetime import datetime, timezone
+import uuid
+import sqlite3
+import threading
+
+# ==============================================================================
+# CONFIGURATION BLOCK
+# ==============================================================================
+sys.path.insert(0, os.path.dirname(__file__))
+from photos_utils import CONFIG
+
+
+
+def empty_cache_freshness_counts() -> dict:
+    return {
+        "total_files": 0,
+        "metadata_reused_from_cache": 0,
+        "metadata_extracted_ok": 0,
+        "metadata_extracted_empty": 0,
+        "metadata_extraction_failed": 0,
+        "metadata_not_applicable": 0,
+        "metadata_missing": 0,
+    }
+
+STATUS_TO_CACHE_FRESHNESS_KEY = {
+    "reused_from_cache": "metadata_reused_from_cache",
+    "extracted_ok": "metadata_extracted_ok",
+    "extracted_empty": "metadata_extracted_empty",
+    "extraction_failed": "metadata_extraction_failed",
+    "not_applicable": "metadata_not_applicable",
+}
+
+PREP_ALLOWED_OPERATION_TYPES = {
+    "mkdir",
+    "move_no_clobber",
+    "rename_no_clobber",
+    "quarantine_move",
+    "db_upsert",
+    "db_remove",
+}
+
+# ==============================================================================
+# SCHEMAS & DATA MODELS
+
+# ==============================================================================
+
+@dataclass
+class InventoryRecord:
+    inventory_id: str
+    root_kind: str  # "workspace" | "digikam"
+    stage: str      # "source" | "photos_by_dest" | "library" | "other"
+    absolute_path: str
+    relative_path: str
+    filename: str
+    extension: str
+    media_class: str # "raw" | "image" | "video" | "other"
+    size: int
+    mtime_ns: int
+    device: int
+    inode: int
+
+@dataclass
+class Fingerprint:
+    algorithm: str
+    value: str
+
+@dataclass
+class Operation:
+    operation_id: str
+    type: str  # "mkdir" | "move_no_clobber" | "rename_no_clobber" | "quarantine_move" | "db_upsert" | "db_remove"
+    reason: str
+    source: Optional[str] = None
+    destination: Optional[str] = None
+    preconditions: Dict[str, Any] = field(default_factory=dict)
+    verification: Dict[str, Any] = field(default_factory=dict)
+    database_effects_after_verification: List[Dict[str, Any]] = field(default_factory=list)
+    details: Dict[str, Any] = field(default_factory=dict)
+
+@dataclass
+class Plan:
+    plan_version: int
+    plan_id: str
+    command: str
+    created_at: str
+    workspace_root: str
+    digikam_root: Optional[str]
+    config_fingerprint: Fingerprint
+    instruction_fingerprints: Dict[str, Fingerprint] # key: file path (relative to workspace), value: fingerprint
+    locks_required: List[str]
+    summary: Dict[str, Any]
+    blockers: List[str]
+    warnings: List[str]
+    operations: List[Operation]
+    workspace_file_preconditions: List[Dict[str, Any]] = field(default_factory=list)
+    metadata_dependencies: Dict[str, Any] = field(default_factory=dict)
+
+    def to_json(self) -> str:
+        return json.dumps(asdict(self), indent=2)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'Plan':
+        data['config_fingerprint'] = Fingerprint(**data['config_fingerprint'])
+        data['instruction_fingerprints'] = {
+            k: Fingerprint(**v) for k, v in data.get('instruction_fingerprints', {}).items()
+        }
+        data['operations'] = [Operation(**op) for op in data.get('operations', [])]
+        return cls(**data)
+
+@dataclass
+class JournalOperationResult:
+    operation_id: str
+    status: str # "success" | "skipped" | "failed" | "recovered"
+    started_at: str
+    finished_at: str
+    details: Dict[str, Any]
+
+@dataclass
+class Journal:
+    journal_version: int
+    plan_id: str
+    started_at: str
+    finished_at: Optional[str] = None
+    status: str = "started" # "started" | "success" | "failed_recovered" | "failed_intervention_required" | "aborted_before_mutation"
+    snapshots: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    operations: List[JournalOperationResult] = field(default_factory=list)
+    details: Dict[str, Any] = field(default_factory=dict)
+
+    def to_json(self) -> str:
+        return json.dumps(asdict(self), indent=2)
+
+
+# ==============================================================================
+# CORE COMPONENTS
+# ==============================================================================
+
+class WorkspaceCache:
+    """
+    SQLite accelerator cache for inventory, metadata, and hashes.
+    """
+    def __init__(self, workspace_root: str, db_name: str = ".photos_ingest.db", in_memory: bool = False, read_only: bool = False):
+        self.in_memory = in_memory
+        self.read_only = read_only
+        self.db_path = os.path.join(workspace_root, db_name)
+
+        if in_memory:
+            self.conn = sqlite3.connect(":memory:", check_same_thread=False)
+            self._init_db()
+        else:
+            if read_only:
+                if not os.path.exists(self.db_path):
+                    # Connect to in-memory as a dummy fallback if it doesn't exist to prevent creating a file
+                    self.conn = sqlite3.connect(":memory:", check_same_thread=False)
+                    self._init_db()
+                else:
+                    self.conn = sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True, check_same_thread=False)
+            else:
+                self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
+                self._init_db()
+
+        self.conn.row_factory = sqlite3.Row
+        self._lock = threading.Lock()
+
+    def _init_db(self):
+        with self.conn:
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS file_cache (
+                    relative_path TEXT PRIMARY KEY,
+                    absolute_path TEXT,
+                    size INTEGER,
+                    mtime_ns INTEGER,
+                    inode INTEGER,
+                    media_class TEXT,
+                    hash TEXT,
+                    content_hash TEXT,
+                    last_seen_ns INTEGER
+                )
+            """)
+            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_hash ON file_cache(hash)")
+            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_content_hash ON file_cache(content_hash)")
+
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS metadata_cache (
+                    relative_path TEXT PRIMARY KEY,
+                    size INTEGER,
+                    mtime_ns INTEGER,
+                    content_hash TEXT,
+                    extractor TEXT,
+                    extractor_version TEXT,
+                    field_set_version INTEGER,
+                    extraction_options_fingerprint TEXT,
+                    metadata_schema_version INTEGER,
+                    camera_group_key_version INTEGER,
+                    camera_group_key TEXT,
+                    has_native_gps INTEGER,
+                    has_timestamp INTEGER,
+                    parsed_json TEXT,
+                    raw_payload TEXT,
+                    extraction_status TEXT,
+                    extraction_error TEXT,
+                    FOREIGN KEY(relative_path) REFERENCES file_cache(relative_path) ON DELETE CASCADE
+                )
+            """)
+
+            # Perform idempotent migration for existing databases missing phase 8C columns
+            cur = self.conn.cursor()
+            cur.execute("PRAGMA table_info(metadata_cache)")
+            columns = {row[1] for row in cur.fetchall()}
+
+            missing_columns = []
+            if "metadata_schema_version" not in columns:
+                missing_columns.append("metadata_schema_version INTEGER")
+            if "camera_group_key_version" not in columns:
+                missing_columns.append("camera_group_key_version INTEGER")
+            if "extraction_status" not in columns:
+                missing_columns.append("extraction_status TEXT")
+            if "extraction_error" not in columns:
+                missing_columns.append("extraction_error TEXT")
+
+            for col in missing_columns:
+                self.conn.execute(f"ALTER TABLE metadata_cache ADD COLUMN {col}")
+
+    def get_file(self, relative_path: str) -> Optional[sqlite3.Row]:
+        with self._lock:
+            cur = self.conn.cursor()
+            cur.execute("SELECT * FROM file_cache WHERE relative_path = ?", (relative_path,))
+            return cur.fetchone()
+
+    def get_metadata(self, relative_path: str) -> Optional[sqlite3.Row]:
+        with self._lock:
+            cur = self.conn.cursor()
+            cur.execute("SELECT * FROM metadata_cache WHERE relative_path = ?", (relative_path,))
+            return cur.fetchone()
+
+    def get_all_files(self) -> Dict[str, dict]:
+        with self._lock:
+            cur = self.conn.cursor()
+            cur.execute("SELECT * FROM file_cache")
+            return {row['relative_path']: dict(row) for row in cur.fetchall()}
+
+    def get_all_metadata(self) -> Dict[str, dict]:
+        with self._lock:
+            cur = self.conn.cursor()
+            cur.execute("SELECT * FROM metadata_cache")
+            return {row['relative_path']: dict(row) for row in cur.fetchall()}
+
+    def remove_file(self, relative_path: str):
+        with self._lock, self.conn:
+            self.conn.execute("DELETE FROM file_cache WHERE relative_path = ?", (relative_path,))
+            self.conn.execute("DELETE FROM metadata_cache WHERE relative_path = ?", (relative_path,))
+
+    def rename_file(self, old_rel_path: str, new_rel_path: str, new_abs_path: str):
+        # Retained for executor rename support and shared index tests
+        with self._lock, self.conn:
+            self.conn.execute("UPDATE file_cache SET relative_path = ?, absolute_path = ? WHERE relative_path = ?", (new_rel_path, new_abs_path, old_rel_path))
+            self.conn.execute("UPDATE metadata_cache SET relative_path = ? WHERE relative_path = ?", (new_rel_path, old_rel_path))
+
+    def upsert_file(self, data: Dict[str, Any]):
+        with self._lock, self.conn:
+            self.conn.execute("""
+                INSERT INTO file_cache (
+                    relative_path, absolute_path, size, mtime_ns, inode, media_class,
+                    hash, content_hash, last_seen_ns
+                ) VALUES (
+                    :relative_path, :absolute_path, :size, :mtime_ns, :inode, :media_class,
+                    :hash, :content_hash, :last_seen_ns
+                )
+                ON CONFLICT(relative_path) DO UPDATE SET
+                    absolute_path = excluded.absolute_path,
+                    size = excluded.size,
+                    mtime_ns = excluded.mtime_ns,
+                    inode = excluded.inode,
+                    media_class = excluded.media_class,
+                    hash = excluded.hash,
+                    content_hash = excluded.content_hash,
+                    last_seen_ns = excluded.last_seen_ns
+            """, data)
+
+            # Conditionally upsert metadata if metadata keys are provided
+            if 'metadata' in data and data['metadata']:
+                md = data['metadata']
+                md_row = {
+                    "relative_path": data["relative_path"],
+                    "size": data["size"],
+                    "mtime_ns": data["mtime_ns"],
+                    "content_hash": data.get("content_hash"),
+                    "extractor": md.get("extractor", "exiftool"),
+                    "extractor_version": md.get("extractor_version", "unknown"),
+                    "field_set_version": md.get("field_set_version", 1),
+                    "extraction_options_fingerprint": md.get("extraction_options_fingerprint", "unknown"),
+                    "metadata_schema_version": md.get("metadata_schema_version", 1),
+                    "camera_group_key_version": md.get("camera_group_key_version", 1),
+                    "camera_group_key": md.get("camera_group_key", "unknown"),
+                    "has_native_gps": 1 if md.get("has_native_gps") else 0,
+                    "has_timestamp": 1 if md.get("has_timestamp") else 0,
+                    "parsed_json": md.get("parsed_json", "{}"),
+                    "raw_payload": md.get("raw_payload", "{}"),
+                    "extraction_status": md.get("extraction_status", "extracted_ok"),
+                    "extraction_error": md.get("extraction_error", None)
+                }
+                self.conn.execute("""
+                    INSERT INTO metadata_cache (
+                        relative_path, size, mtime_ns, content_hash, extractor,
+                        extractor_version, field_set_version, extraction_options_fingerprint,
+                        metadata_schema_version, camera_group_key_version,
+                        camera_group_key, has_native_gps, has_timestamp, parsed_json, raw_payload,
+                        extraction_status, extraction_error
+                    ) VALUES (
+                        :relative_path, :size, :mtime_ns, :content_hash, :extractor,
+                        :extractor_version, :field_set_version, :extraction_options_fingerprint,
+                        :metadata_schema_version, :camera_group_key_version,
+                        :camera_group_key, :has_native_gps, :has_timestamp, :parsed_json, :raw_payload,
+                        :extraction_status, :extraction_error
+                    )
+                    ON CONFLICT(relative_path) DO UPDATE SET
+                        size = excluded.size,
+                        mtime_ns = excluded.mtime_ns,
+                        content_hash = excluded.content_hash,
+                        extractor = excluded.extractor,
+                        extractor_version = excluded.extractor_version,
+                        field_set_version = excluded.field_set_version,
+                        extraction_options_fingerprint = excluded.extraction_options_fingerprint,
+                        metadata_schema_version = excluded.metadata_schema_version,
+                        camera_group_key_version = excluded.camera_group_key_version,
+                        camera_group_key = excluded.camera_group_key,
+                        has_native_gps = excluded.has_native_gps,
+                        has_timestamp = excluded.has_timestamp,
+                        parsed_json = excluded.parsed_json,
+                        raw_payload = excluded.raw_payload,
+                        extraction_status = excluded.extraction_status,
+                        extraction_error = excluded.extraction_error
+                """, md_row)
+
+    def close(self):
+        self.conn.close()
+
+
+class WorkspaceLock:
+    def __init__(self, workspace_root: str):
+        self.lock_path = os.path.join(workspace_root, ".photos-ingest.lock")
+        self._lock_fd = None
+
+    def acquire(self) -> bool:
+        """Acquires a non-blocking exclusive lock using fcntl.flock."""
+        try:
+            self._lock_fd = open(self.lock_path, 'a')
+            fcntl.flock(self._lock_fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return True
+        except (IOError, OSError):
+            if self._lock_fd:
+                self._lock_fd.close()
+                self._lock_fd = None
+            return False
+
+    def release(self):
+        """Releases the lock. Does NOT delete the file to avoid inode race conditions."""
+        if self._lock_fd:
+            fcntl.flock(self._lock_fd.fileno(), fcntl.LOCK_UN)
+            self._lock_fd.close()
+            self._lock_fd = None
+
+class RootGuard:
+    @staticmethod
+    def check_sentinel(workspace_root: str):
+        accepted = ['.photos-ingest-root', '.photos-1-prep-root']
+        if not any(os.path.exists(os.path.join(workspace_root, name)) for name in accepted):
+            raise RuntimeError("Sentinel file missing: expected one of " + ", ".join(accepted) + f" in {workspace_root}. Are you in the correct workspace root?")
+
+    @staticmethod
+    def resolve_and_check_path(base_dir: str, target_path: str, must_be_relative: bool = True) -> str:
+        """
+        Resolves a path safely.
+        Rejects absolute paths if expected to be relative.
+        Rejects .. traversal.
+        Rejects symlink escapes.
+        Proves containment within base_dir.
+        """
+        if must_be_relative and os.path.isabs(target_path):
+            raise ValueError(f"Path must be relative, but absolute path provided: {target_path}")
+
+        # Check for .. traversal explicitly in the raw string
+        if ".." in target_path.split(os.sep):
+            raise ValueError(f"Directory traversal (..) not allowed in path: {target_path}")
+
+        full_path = os.path.join(base_dir, target_path)
+        resolved_path = os.path.realpath(full_path)
+        resolved_base = os.path.realpath(base_dir)
+
+        try:
+            common = os.path.commonpath([resolved_base, resolved_path])
+        except ValueError:
+            raise ValueError(f"Path validation failed: {target_path} is not on the same mount as {base_dir}")
+
+        if common != resolved_base:
+            raise ValueError(f"Path escape detected: {target_path} resolves outside {base_dir}")
+
+        return resolved_path
+
+    @staticmethod
+    def check_case_insensitive_conflict(existing_paths: set, new_path: str) -> None:
+        """
+        Checks for case-insensitive conflicts against a set of known lowercased paths.
+        Raises ValueError if a conflict is detected.
+        (Retained for phase 2 safety core testing support).
+        """
+        lower_new = new_path.lower()
+        if lower_new in existing_paths:
+            raise ValueError(f"Case-insensitive path conflict detected for: {new_path}")
+        existing_paths.add(lower_new)
+
+class InventoryScanner:
+    @classmethod
+    def scan_workspace(cls, root_dir: str) -> Dict[str, InventoryRecord]:
+        inventory = {}
+        from photos_utils import is_workspace_control_file
+        for root, dirs, files in os.walk(root_dir):
+            if '.photos-ingest-quarantine' in dirs:
+                dirs.remove('.photos-ingest-quarantine')
+            if '.photos-ingest-backups' in dirs:
+                dirs.remove('.photos-ingest-backups')
+            if '.git' in dirs:
+                dirs.remove('.git')
+
+            for filename in files:
+                if is_workspace_control_file(filename):
+                    continue
+
+                # Ignore __std.* for logical inventory semantics across both workspace and library
+                if filename.startswith('__std.'):
+                    continue
+
+                rel_path = os.path.relpath(os.path.join(root, filename), root_dir)
+                try:
+                    record = cls.scan_file(root_dir, rel_path, "workspace", "scan")
+                    inventory[rel_path] = record
+                except FileNotFoundError:
+                    pass
+        return inventory
+
+    @staticmethod
+    def scan_file(root_dir: str, rel_path: str, root_kind: str, stage: str) -> InventoryRecord:
+        """
+        Captures the immutable file state of a single file.
+        """
+        abs_path = os.path.join(root_dir, rel_path)
+        stat = os.stat(abs_path)
+
+        filename = os.path.basename(abs_path)
+        ext = os.path.splitext(filename)[1].lower().lstrip('.')
+
+        # Simple media class detection for prep organization
+        media_class = "other"
+        if ext in ['jpg', 'jpeg', 'png', 'heic', 'tiff']:
+            media_class = "image"
+        elif ext in ['cr2', 'cr3', 'nef', 'arw', 'dng']:
+            media_class = "raw"
+        elif ext in ['mp4', 'mov', 'avi', 'mkv']:
+            media_class = "video"
+
+        return InventoryRecord(
+            inventory_id=f"inv-{uuid.uuid4().hex[:8]}",
+            root_kind=root_kind,
+            stage=stage,
+            absolute_path=abs_path,
+            relative_path=rel_path,
+            filename=filename,
+            extension=ext,
+            media_class=media_class,
+            size=stat.st_size,
+            mtime_ns=stat.st_mtime_ns,
+            device=stat.st_dev,
+            inode=stat.st_ino
+        )
+
+
+import concurrent.futures
+
+class ContentHasher:
+    @staticmethod
+    def hash_image(filepath: str) -> Dict[str, Any]:
+        return {"status": "failed", "strategy": "image-content-hash-v1", "value": None, "error": "ImageMagick disabled"}
+
+    @staticmethod
+    def hash_video(filepath: str) -> Dict[str, Any]:
+        cmd = ["ffmpeg", "-i", filepath, "-c", "copy", "-f", "md5", "-"]
+        try:
+            res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            for line in res.stdout.splitlines():
+                if line.startswith("MD5="):
+                    return {"status": "valid", "strategy": "video-md5-v1", "value": line.split("=")[1].strip()}
+            return {"status": "failed", "strategy": "video-md5-v1", "value": None, "error": "No MD5 output"}
+        except subprocess.CalledProcessError as e:
+            print(f"Warning: ffmpeg failed on {filepath}: {e.stderr}")
+            return {"status": "failed", "strategy": "video-md5-v1", "value": None, "error": str(e)}
+
+    @staticmethod
+    def hash_file(filepath: str) -> Dict[str, Any]:
+        h = hashlib.sha256()
+        try:
+            with open(filepath, 'rb') as f:
+                while chunk := f.read(8192):
+                    h.update(chunk)
+            return {"status": "valid", "strategy": "sha256-v1", "value": h.hexdigest()}
+        except Exception as e:
+            return {"status": "failed", "strategy": "sha256-v1", "value": None, "error": str(e)}
+
+# ==============================================================================
+# PLAN & EXECUTE LIFECYCLE
+# ==============================================================================
+
+class OperationPlanner:
+    @staticmethod
+    def _hash_file(filepath: str) -> Fingerprint:
+        h = hashlib.sha256()
+        with open(filepath, 'rb') as f:
+            while chunk := f.read(8192):
+                h.update(chunk)
+        return Fingerprint(algorithm="sha256", value=h.hexdigest())
+
+    @staticmethod
+    def _hash_dict(d: dict) -> Fingerprint:
+        s = json.dumps(d, sort_keys=True).encode('utf-8')
+        return Fingerprint(algorithm="sha256", value=hashlib.sha256(s).hexdigest())
+
+    @staticmethod
+    def compute_index_fingerprint(rows: list) -> str:
+        canonical_rows = sorted(rows, key=lambda r: r["relative_path"])
+        return OperationPlanner._hash_dict(canonical_rows).value
+
+    @classmethod
+    def create_dummy_plan(cls, command: str, workspace_root: str, instruction_file: Optional[str] = None, effective_config: Optional[Dict[str, Any]] = None) -> Plan:
+        """
+        Creates a dummy plan for testing the safety core.
+        (Retained strictly for test_phase2_safety_core.py compatibility).
+        """
+        instruction_fingerprints = {}
+        if instruction_file and os.path.exists(instruction_file):
+            rel_path = os.path.relpath(instruction_file, workspace_root)
+            instruction_fingerprints[rel_path] = cls._hash_file(instruction_file)
+
+        return Plan(
+            plan_version=1,
+            plan_id=f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:6]}",
+            command=command,
+            created_at=datetime.now(timezone.utc).isoformat(),
+            workspace_root=workspace_root,
+            digikam_root=None,
+            config_fingerprint=cls._hash_dict(effective_config if effective_config is not None else CONFIG),
+            instruction_fingerprints=instruction_fingerprints,
+            locks_required=["workspace"],
+            summary={"message": "Dummy plan for testing"},
+            blockers=[],
+            warnings=[],
+            operations=[]
+        )
+
+class PlanValidator:
+    @staticmethod
+    def validate_plan_preflight(plan: Plan, current_workspace: str):
+        """
+        Validates the plan just before execution.
+        Checks instruction fingerprints and destination clobbering.
+        """
+        if plan.command != 'prep':
+            raise ValueError(f"Plan command '{plan.command}' is not supported by photos-1-prep. Only 'prep' plans are allowed.")
+        for op in plan.operations:
+            if op.type not in PREP_ALLOWED_OPERATION_TYPES:
+                raise ValueError(f"Operation type '{op.type}' is not allowed in photos-1-prep.")
+            if op.type in ['move_no_clobber', 'rename_no_clobber', 'quarantine_move']:
+                if op.source and op.source.startswith('5-photos-by-dest/'):
+                    raise ValueError(f"Operation {op.type} forbidden on source in 5-photos-by-dest: {op.source}")
+                if op.destination and op.destination.startswith('5-photos-by-dest/'):
+                    raise ValueError(f"Operation {op.type} forbidden on destination in 5-photos-by-dest: {op.destination}")
+
+        if plan.blockers:
+            raise ValueError(f"Plan contains blockers and cannot be executed: {', '.join(plan.blockers)}")
+
+        # Prevalidate metadata dependencies
+        if getattr(plan, "metadata_dependencies", None):
+            from photos_utils import (
+                get_exiftool_version,
+                FIELD_SET_VERSION,
+                METADATA_SCHEMA_VERSION,
+                CAMERA_GROUP_KEY_VERSION,
+                EXTRACTION_OPTIONS_FINGERPRINT
+            )
+            current_md_deps = {
+                "extractor": "exiftool",
+                "extractor_version": get_exiftool_version(),
+                "field_set_version": FIELD_SET_VERSION,
+                "extraction_options_fingerprint": EXTRACTION_OPTIONS_FINGERPRINT,
+                "metadata_schema_version": METADATA_SCHEMA_VERSION,
+                "camera_group_key_version": CAMERA_GROUP_KEY_VERSION
+            }
+            if plan.metadata_dependencies != current_md_deps:
+                raise ValueError(f"Stale plan: metadata dependencies changed since planning. Expected: {plan.metadata_dependencies}, Current: {current_md_deps}")
+
+        # RootGuard is already in photos-1-prep
+        import os
+
+        # Prevalidate all implicit file dependencies
+        for precond in getattr(plan, 'workspace_file_preconditions', []):
+            rel_path = precond.get("relative_path")
+            if not rel_path:
+                raise ValueError("Stale plan: missing relative_path in workspace_file_preconditions")
+            abs_path = RootGuard.resolve_and_check_path(current_workspace, rel_path)
+            if not os.path.exists(abs_path):
+                raise ValueError(f"Stale plan: dependency missing or changed after planning: {rel_path}")
+            stat = os.stat(abs_path)
+            if stat.st_size != precond.get("size") or stat.st_mtime_ns != precond.get("mtime_ns"):
+                raise ValueError(f"Stale plan: dependency changed after planning: {rel_path}")
+
+        # Prevalidate all db_remove ghost-prune effects before any mutation
+        for op in plan.operations:
+            if op.type == "db_remove":
+                for fx in op.database_effects_after_verification:
+                    if fx.get("action") == "remove" and fx.get("preconditions", {}).get("must_be_missing") is True:
+                        rel_path = fx.get("relative_path")
+                        if not rel_path:
+                            raise ValueError("Stale plan: ghost-prune target missing relative_path")
+                        abs_path = RootGuard.resolve_and_check_path(current_workspace, rel_path)
+                        if os.path.exists(abs_path):
+                            raise ValueError(f"Stale plan: ghost-prune target reappeared after planning: {rel_path}")
+
+        # Prevalidate all db_upsert effects before any mutation
+        for op in plan.operations:
+            if op.type == "db_upsert":
+                for fx in op.database_effects_after_verification:
+                    if fx.get("action") == "upsert":
+                        data = fx.get("data", {})
+                        rel_path = data.get("relative_path")
+                        if not rel_path:
+                            raise ValueError("Stale plan: cache-upsert target missing relative_path")
+
+                        abs_path = RootGuard.resolve_and_check_path(current_workspace, rel_path)
+                        if not os.path.exists(abs_path):
+                            raise ValueError(f"Stale plan: cache-upsert target missing or changed after planning: {rel_path}")
+
+                        stat = os.stat(abs_path)
+                        precond = fx.get("preconditions")
+                        if precond:
+                            if stat.st_size != precond.get("size") or stat.st_mtime_ns != precond.get("mtime_ns"):
+                                raise ValueError(f"Stale plan: cache-upsert target changed after planning: {rel_path}")
+
+        # 1. Check instruction fingerprints
+        for rel_path, expected_fp in plan.instruction_fingerprints.items():
+            try:
+                abs_path = RootGuard.resolve_and_check_path(current_workspace, rel_path)
+            except ValueError as e:
+                raise ValueError(f"Invalid instruction file path {rel_path}: {e}")
+
+            if not os.path.exists(abs_path):
+                raise ValueError(f"Instruction file {rel_path} is missing. Plan is stale.")
+
+            current_fp = OperationPlanner._hash_file(abs_path)
+            if current_fp.value != expected_fp.value:
+                raise ValueError(f"Instruction file {rel_path} has changed since plan generation. Plan is stale.")
+
+
+        # 2. Reserve and check destinations
+        # We simulate the plan sequentially to detect clobbers correctly without false positives from temporary renaming states.
+        virtual_fs = set()
+        for root, dirs, files in os.walk(current_workspace):
+            for file in files:
+                virtual_fs.add(os.path.join(root, file).lower())
+
+        for op in plan.operations:
+            if op.source and op.destination:
+                resolved_src = RootGuard.resolve_and_check_path(current_workspace, op.source)
+                resolved_dest = RootGuard.resolve_and_check_path(current_workspace, op.destination)
+
+                if resolved_dest.lower() in virtual_fs and resolved_src.lower() != resolved_dest.lower():
+                    # Destination exists and it's not a case-only rename of itself
+                    raise ValueError(f"Destination case-insensitive clobber risk: {op.destination}")
+
+                virtual_fs.discard(resolved_src.lower())
+                virtual_fs.add(resolved_dest.lower())
+
+            elif op.destination:
+                resolved_dest = RootGuard.resolve_and_check_path(current_workspace, op.destination)
+                if resolved_dest.lower() in virtual_fs:
+                    raise ValueError(f"Destination case-insensitive clobber risk: {op.destination}")
+                virtual_fs.add(resolved_dest.lower())
+
+# 3. Check preconditions (e.g. source file hasn't changed)
+        # Only check original files on disk. Intermediate files created by the plan won't exist yet!
+        created_in_plan = set()
+        checked_sources = set()
+        for op in plan.operations:
+            if op.destination:
+                created_in_plan.add(op.destination)
+
+            if op.source and op.preconditions and op.source not in checked_sources and op.source not in created_in_plan:
+                resolved_source = RootGuard.resolve_and_check_path(current_workspace, op.source)
+                if not os.path.exists(resolved_source):
+                    raise ValueError(f"Precondition failed: source {op.source} is missing.")
+
+                stat = os.stat(resolved_source)
+                expected_size = op.preconditions.get('size')
+                expected_mtime = op.preconditions.get('mtime_ns')
+
+                if expected_size is not None and stat.st_size != expected_size:
+                    raise ValueError(f"Precondition failed: size changed for {op.source}.")
+                if expected_mtime is not None and stat.st_mtime_ns != expected_mtime:
+                    raise ValueError(f"Precondition failed: mtime changed for {op.source}.")
+
+                checked_sources.add(op.source)
+
+class PlanExecutor:
+    def __init__(self, workspace_root: str):
+        self.workspace_root = workspace_root
+        from photos_utils import ProgressCoordinator
+        self.coordinator = ProgressCoordinator()
+
+    def execute(self, plan: Plan, journal_path: str):
+        # 0. Acquire workspace lock
+        lock = WorkspaceLock(self.workspace_root)
+        if "workspace" in plan.locks_required and not lock.acquire():
+            raise RuntimeError(f"Could not acquire workspace lock at {lock.lock_path}. Is another instance running?")
+
+        cache = None
+        try:
+            # 1. Preflight validation
+            self.coordinator.start_phase("executing - preflight validation")
+            try:
+                PlanValidator.validate_plan_preflight(plan, self.workspace_root)
+                if plan.summary and "performance_and_cache" in plan.summary:
+                    plan.summary["performance_and_cache"]["dependency_validation_status"] = "success"
+                self.coordinator.finish_phase()
+            except ValueError as e:
+                print(f"Preflight validation failed: {e}")
+                raise
+
+            # 2. Start Journal
+            journal = JournalWriter(journal_path)
+            journal.start_journal(plan.plan_id)
+
+            # 3. ZFS Hook (Optional)
+            if CONFIG["zfs"].get("enabled", False):
+                snapshots_req = CONFIG["zfs"].get("snapshots_required", False)
+                cmd_template = CONFIG["zfs"]["snapshot_commands"].get("workspace")
+                if cmd_template:
+                    cmd = cmd_template.format(plan_id=plan.plan_id)
+                    try:
+                        res = subprocess.run(cmd.split(), capture_output=True, text=True, check=True)
+                        journal.add_snapshot(
+                            "workspace",
+                            command=cmd,
+                            exit_code=res.returncode,
+                            stdout=res.stdout,
+                            stderr=res.stderr,
+                            required=snapshots_req,
+                            snapshot_name=None
+                        )
+                    except Exception as e:
+                        returncode = getattr(e, 'returncode', -1)
+                        stdout = getattr(e, 'stdout', '')
+                        stderr = getattr(e, 'stderr', str(e))
+                        journal.add_snapshot(
+                            "workspace",
+                            command=cmd,
+                            exit_code=returncode,
+                            stdout=stdout,
+                            stderr=stderr,
+                            required=snapshots_req,
+                            snapshot_name=None
+                        )
+                        if snapshots_req:
+                            journal.finish_journal("aborted_before_mutation")
+                            raise RuntimeError(f"ZFS snapshot failed and is required: {stderr}")
+                        else:
+                            print(f"Warning: ZFS snapshot failed: {stderr}")
+
+            # 4. Execute Operations
+            if plan.command != 'prep':
+                raise ValueError(f"Plan command '{plan.command}' is not supported by photos-1-prep. Only 'prep' plans are allowed.")
+
+            self.coordinator.start_phase("executing - applying operations", len(plan.operations))
+
+            for op in plan.operations:
+                if op.type not in PREP_ALLOWED_OPERATION_TYPES:
+                    raise ValueError(f"Operation type '{op.type}' is not allowed in photos-1-prep.")
+                if op.type in ['move_no_clobber', 'rename_no_clobber', 'quarantine_move']:
+                    if op.source and op.source.startswith('5-photos-by-dest/'):
+                        raise ValueError(f"Operation {op.type} forbidden on source in 5-photos-by-dest: {op.source}")
+                    if op.destination and op.destination.startswith('5-photos-by-dest/'):
+                        raise ValueError(f"Operation {op.type} forbidden on destination in 5-photos-by-dest: {op.destination}")
+
+                op_started = datetime.now(timezone.utc).isoformat()
+                status = "success"
+                details = {}
+
+                try:
+                    # Media operations: mutate filesystem
+                    if op.type == "mkdir":
+                        if op.destination:
+                            abs_dest = RootGuard.resolve_and_check_path(self.workspace_root, op.destination)
+                            os.makedirs(abs_dest, exist_ok=True)
+                    elif op.type in ["move_no_clobber", "rename_no_clobber", "quarantine_move"]:
+                        if op.source and op.destination:
+                            abs_src = RootGuard.resolve_and_check_path(self.workspace_root, op.source)
+                            abs_dest = RootGuard.resolve_and_check_path(self.workspace_root, op.destination)
+
+                            if not os.path.exists(abs_src):
+                                raise FileNotFoundError(f"Source missing: {abs_src}")
+
+                            if op.preconditions:
+                                stat = os.stat(abs_src)
+                                expected_size = op.preconditions.get('size')
+                                expected_mtime = op.preconditions.get('mtime_ns')
+
+                                if expected_size is not None and stat.st_size != expected_size:
+                                    raise ValueError(f"Precondition failed: size changed for {op.source}.")
+                                if expected_mtime is not None and stat.st_mtime_ns != expected_mtime:
+                                    raise ValueError(f"Precondition failed: mtime changed for {op.source}.")
+
+                            if os.path.exists(abs_dest):
+                                raise FileExistsError(f"Destination exists: {abs_dest}")
+
+                            os.makedirs(os.path.dirname(abs_dest), exist_ok=True)
+                            os.rename(abs_src, abs_dest)
+
+# Write quarantine manifest
+                            if op.type == "quarantine_move":
+                                plan_id = op.verification.get("plan_id", "unknown_plan")
+                                manifest_dir = os.path.join(self.workspace_root, ".photos-ingest-quarantine", plan_id)
+                                os.makedirs(manifest_dir, exist_ok=True)
+                                manifest_path = os.path.join(manifest_dir, "manifest.json")
+
+                                manifest_entry = op.verification.copy()
+                                manifest_entry["operation_id"] = op.operation_id
+
+                                # Read existing manifest if it exists
+                                existing_manifest = []
+                                if os.path.exists(manifest_path):
+                                    with open(manifest_path, 'r') as mf:
+                                        try:
+                                            existing_manifest = json.load(mf)
+                                        except json.JSONDecodeError:
+                                            pass
+
+                                existing_manifest.append(manifest_entry)
+
+                                with open(manifest_path, 'w') as mf:
+                                    json.dump(existing_manifest, mf, indent=2)
+
+                        # Apply DB effects
+                        if op.database_effects_after_verification:
+                            self.coordinator.increment("db_effects_seen", len(op.database_effects_after_verification))
+                            if cache is None:
+                                cache = WorkspaceCache(self.workspace_root)
+                            for fx in op.database_effects_after_verification:
+                                if fx.get("action") == "upsert":
+                                    cache.upsert_file(fx["data"])
+                                    self.coordinator.increment("db_upserts_applied")
+                                elif fx.get("action") == "remove":
+                                    cache.remove_file(fx["relative_path"])
+                                    self.coordinator.increment("db_removes_applied")
+                                elif fx.get("action") == "rename":
+                                    old = fx["old_path"]
+                                    new = fx["new_path"]
+                                    cache.rename_file(old, new, os.path.join(self.workspace_root, new))
+                                    self.coordinator.increment("db_renames_applied")
+
+                    # Cache-only operations: update SQLite state without mutating media files
+                    elif op.type == "db_remove":
+                        if op.database_effects_after_verification:
+                            self.coordinator.increment("db_effects_seen", len(op.database_effects_after_verification))
+                            if cache is None:
+                                cache = WorkspaceCache(self.workspace_root)
+                            for fx in op.database_effects_after_verification:
+                                if fx.get("action") == "remove":
+                                    if fx.get("preconditions", {}).get("must_be_missing") is True:
+                                        rel_path = fx["relative_path"]
+                                        abs_path = RootGuard.resolve_and_check_path(self.workspace_root, rel_path)
+                                        if os.path.exists(abs_path):
+                                            raise RuntimeError(f"Stale plan: ghost-prune target reappeared before cache remove: {rel_path}")
+                                    cache.remove_file(fx["relative_path"])
+                                    self.coordinator.increment("db_removes_applied")
+
+                    elif op.type == "db_upsert":
+                        if op.database_effects_after_verification:
+                            self.coordinator.increment("db_effects_seen", len(op.database_effects_after_verification))
+                            if cache is None:
+                                cache = WorkspaceCache(self.workspace_root)
+                            for fx in op.database_effects_after_verification:
+                                if fx.get("action") == "upsert":
+                                    rel_path = fx["data"].get("relative_path")
+                                    abs_path = RootGuard.resolve_and_check_path(self.workspace_root, rel_path)
+                                    if not os.path.exists(abs_path):
+                                        raise RuntimeError("Stale plan: file size or mtime changed before cache upsert")
+                                    stat = os.stat(abs_path)
+                                    if fx.get("preconditions"):
+                                        if stat.st_size != fx["preconditions"].get("size") or stat.st_mtime_ns != fx["preconditions"].get("mtime_ns"):
+                                            raise RuntimeError("Stale plan: file size or mtime changed before cache upsert")
+                                    cache.upsert_file(fx["data"])
+                                    self.coordinator.increment("db_upserts_applied")
+
+                    else:
+                        raise NotImplementedError(f"Operation primitive {op.type} not yet fully implemented")
+                except Exception as e:
+                    status = "failed"
+                    details["error"] = str(e)
+
+                op_finished = datetime.now(timezone.utc).isoformat()
+                journal.add_operation_result(JournalOperationResult(
+                    operation_id=op.operation_id,
+                    status=status,
+                    started_at=op_started,
+                    finished_at=op_finished,
+                    details=details
+                ))
+                self.coordinator.increment_completed()
+
+                # Abort further execution on first failure to prevent cascading issues
+                if status in ["failed", "failed_recovered", "failed_intervention_required"]:
+                    break
+            self.coordinator.finish_phase()
+
+# 5. Finish Journal
+            if any(r.status in ["failed", "failed_recovered", "failed_intervention_required"] for r in journal.journal.operations):
+                # If operations were skipped due to an abort, or failed mid-flight
+                journal.journal.details = getattr(journal.journal, 'details', {})
+                journal.save()
+                journal.finish_journal("failed_intervention_required")
+                failed_ops = [r for r in journal.journal.operations if r.status in ["failed", "failed_intervention_required", "failed_recovered"]]
+                raise RuntimeError(f"Execution failed; intervention required. See journal. Failed ops: {failed_ops}")
+            else:
+                journal.finish_journal("success")
+
+                # Update summary with db effects
+                if plan.summary and "performance_and_cache" in plan.summary:
+                    plan.summary["performance_and_cache"]["db_upserts_applied"] = self.coordinator.counters.get("db_upserts_applied", 0)
+                    plan.summary["performance_and_cache"]["db_removes_applied"] = self.coordinator.counters.get("db_removes_applied", 0)
+                    plan.summary["performance_and_cache"]["db_renames_applied"] = self.coordinator.counters.get("db_renames_applied", 0)
+
+                # Generate handoff manifest ONLY if success
+                if plan.command == "prep":
+                    self.coordinator.start_phase("executing - generating handoff manifest")
+                    if cache is None:
+                        cache = WorkspaceCache(self.workspace_root)
+
+                    # Abort handoff if blockers exist from plan validation or execution issues indicating invalid dependencies
+                    if plan.blockers:
+                        raise RuntimeError("Cannot generate handoff manifest: plan execution completed but metadata dependencies are invalid due to plan blockers.")
+
+
+                    # 1. Gather files and metadata
+                    all_files = cache.get_all_files()
+                    all_metadata = cache.get_all_metadata()
+                    final_files = []
+                    camera_groups_acc = {}
+                    dest_folders_acc = {}
+
+                    for rel_path, record in all_files.items():
+                        # Standardise the hash status based on cache records
+                        h_status = "not_applicable"
+                        if record.get('content_hash'):
+                            try:
+                                ch_dict = json.loads(record['content_hash'])
+                                h_status = ch_dict.get('status', 'unknown_hash')
+                            except Exception:
+                                h_status = "unknown_hash"
+                        elif record.get('hash'):
+                            try:
+                                h_dict = json.loads(record['hash'])
+                                h_status = h_dict.get('status', 'unknown_hash')
+                            except Exception:
+                                h_status = "unknown_hash"
+
+                        if record['media_class'] not in ['image', 'video', 'raw']:
+                            h_status = "not_applicable"
+
+                        folder_class = rel_path.split('/')[0] if '/' in rel_path else "root"
+
+                        md_record = all_metadata.get(rel_path)
+
+                        # Accumulate Destination Folders
+                        if folder_class == "5-photos-by-dest":
+                            dest_folder = os.path.dirname(rel_path)
+                            if dest_folder not in dest_folders_acc:
+                                dest_folders_acc[dest_folder] = {
+                                    "path": dest_folder,
+                                    "scanned_files": 0,
+                                    "camera_groups": set(),
+                                    "has_native_gps": 0,
+                                    "missing_gps": 0,
+                                    "has_gps_processing_method": 0,
+                                    "timestamps": [],
+                                    "cache_freshness": empty_cache_freshness_counts()
+                                }
+                            df = dest_folders_acc[dest_folder]
+                            df["scanned_files"] += 1
+                            if md_record:
+                                cg_key = md_record.get("camera_group_key")
+                                if cg_key and cg_key != "unknown":
+                                    df["camera_groups"].add(cg_key)
+
+                                plan_status = plan.summary.get("metadata_plan_status", {}).get(rel_path, md_record.get("extraction_status", "metadata_missing"))
+                                df["cache_freshness"]["total_files"] += 1
+                                df["cache_freshness"][STATUS_TO_CACHE_FRESHNESS_KEY.get(plan_status, "metadata_missing")] += 1
+
+                                if md_record.get("has_native_gps"):
+                                    df["has_native_gps"] += 1
+                                else:
+                                    df["missing_gps"] += 1
+
+                                try:
+                                    parsed = json.loads(md_record.get("parsed_json", "{}"))
+                                    if parsed.get("GPSProcessingMethod"):
+                                        df["has_gps_processing_method"] += 1
+
+                                    ts = parsed.get("selected_source_naive_timestamp") or parsed.get("DateTimeOriginal") or parsed.get("CreateDate") or parsed.get("ModifyDate")
+                                    if ts:
+                                        df["timestamps"].append(ts)
+                                except Exception:
+                                    pass
+
+                        # Accumulate Camera Groups
+                        if md_record and record['media_class'] in ['image', 'raw', 'video']:
+                            cg_key = md_record.get("camera_group_key", "unknown")
+                            if cg_key not in camera_groups_acc:
+                                camera_groups_acc[cg_key] = {
+                                    "group_key": cg_key,
+                                    "files": [],
+                                    "file_count": 0,
+                                    "has_native_gps": 0,
+                                    "missing_gps": 0,
+                                    "missing_timestamps": 0,
+                                    "timestamps": [],
+                                    "cache_freshness": empty_cache_freshness_counts()
+                                }
+                            cg = camera_groups_acc[cg_key]
+                            cg["files"].append(rel_path)
+                            cg["file_count"] += 1
+
+                            plan_status = plan.summary.get("metadata_plan_status", {}).get(rel_path, md_record.get("extraction_status", "metadata_missing"))
+                            cg["cache_freshness"]["total_files"] += 1
+                            cg["cache_freshness"][STATUS_TO_CACHE_FRESHNESS_KEY.get(plan_status, "metadata_missing")] += 1
+                            if md_record.get("has_native_gps"):
+                                cg["has_native_gps"] += 1
+                            else:
+                                cg["missing_gps"] += 1
+
+                            if not md_record.get("has_timestamp"):
+                                cg["missing_timestamps"] += 1
+                            else:
+                                try:
+                                    parsed = json.loads(md_record.get("parsed_json", "{}"))
+                                    ts = parsed.get("DateTimeOriginal") or parsed.get("CreateDate") or parsed.get("ModifyDate")
+                                    if ts:
+                                        cg["timestamps"].append(ts)
+                                except Exception:
+                                    pass
+
+                        filtered_record = {k: v for k, v in record.items() if k not in ["last_seen_ns", "absolute_path"]}
+                        if md_record:
+                            filtered_md = {k: v for k, v in md_record.items() if k not in ["relative_path", "raw_payload"]}
+                            filtered_record["metadata_status"] = filtered_md
+
+                        final_files.append({
+                            **filtered_record,
+                            "hash_status": h_status,
+                            "folder_class": folder_class
+                        })
+
+                    # Format accumulated summaries
+                    camera_groups = []
+                    for k in sorted(camera_groups_acc.keys()):
+                        cg = camera_groups_acc[k]
+                        timestamps = sorted(cg.pop("timestamps"))
+                        cg["earliest_timestamp"] = timestamps[0] if timestamps else None
+                        cg["latest_timestamp"] = timestamps[-1] if timestamps else None
+                        if "files" in cg:
+                            cg["files"] = sorted(cg["files"])
+                        camera_groups.append(cg)
+
+                    destination_folders = []
+                    for k in sorted(dest_folders_acc.keys()):
+                        df = dest_folders_acc[k]
+                        timestamps = sorted(df.pop("timestamps"))
+                        df["earliest_timestamp"] = timestamps[0] if timestamps else None
+                        df["latest_timestamp"] = timestamps[-1] if timestamps else None
+                        df["camera_groups"] = sorted(list(df["camera_groups"]))
+                        destination_folders.append(df)
+
+                    # Ensure deterministic sorting
+                    final_files.sort(key=lambda x: x["relative_path"])
+
+                    cache_fingerprint = OperationPlanner.compute_index_fingerprint(final_files)
+
+                    # 2. Re-hash journal
+                    journal_hash = OperationPlanner._hash_file(journal_path).value
+
+                    # 3. Create handoff payload
+                    md_deps = plan.metadata_dependencies if hasattr(plan, "metadata_dependencies") and isinstance(plan.metadata_dependencies, dict) else getattr(plan, "metadata_dependencies", {})
+                    handoff = {
+                        "schema_version": 1,
+                        "tool": "photos-1-prep",
+                        "plan_id": plan.plan_id,
+                        "cache_fingerprint": cache_fingerprint,
+                        "hash_algorithm": "sha256",
+                        "folders_scanned": [
+                            {"name": "0-source", "mutable": True},
+                            {"name": "1-missing-metadata", "mutable": True},
+                            {"name": "2-redundant-jpgs", "mutable": True},
+                            {"name": "3-videos-by-date", "mutable": True},
+                            {"name": "4-photos-by-date", "mutable": True},
+                            {"name": "5-photos-by-dest", "mutable": False}
+                        ],
+                        "files": final_files,
+                        "camera_groups": camera_groups,
+                        "destination_folders": destination_folders,
+                        "diagnostics": {
+                            "duplicates_or_conflicts": plan.blockers,  # We can augment this as we extract actual conflict data later
+                            "warnings": plan.warnings
+                        },
+                        "depends_on": {
+                            "effective_config": {
+                                "fingerprint": plan.config_fingerprint.value,
+                                "includes_cli_overrides": True
+                            },
+                            "execution_journal": {
+                                "path": os.path.relpath(journal_path, self.workspace_root),
+                                "sha256": journal_hash,
+                                "status": "success"
+                            },
+                            "final_workspace_inventory": {
+                                "content_fingerprint": cache_fingerprint
+                            },
+                            "metadata_extractor": {
+                                "name": md_deps.get("extractor", "exiftool"),
+                                "version": md_deps.get("extractor_version", "unknown"),
+                                "field_set_version": md_deps.get("field_set_version", 1),
+                                "extraction_options_fingerprint": md_deps.get("extraction_options_fingerprint", "unknown"),
+                                "metadata_schema_version": md_deps.get("metadata_schema_version", 1),
+                                "camera_group_key_version": md_deps.get("camera_group_key_version", 1)
+                            }
+                        }
+                    }
+
+                    # Write out atomically
+                    import tempfile
+                    target_handoff_path = os.path.join(self.workspace_root, ".photos-ingest", "photos-1-prep-handoff.json")
+                    target_dir = os.path.dirname(target_handoff_path)
+                    os.makedirs(target_dir, exist_ok=True)
+                    fd, temp_path = tempfile.mkstemp(dir=target_dir, prefix=".tmp-", suffix=".json", text=True)
+                    try:
+                        with os.fdopen(fd, 'w') as tf:
+                            json.dump(handoff, tf, indent=2)
+                        os.replace(temp_path, target_handoff_path)
+
+                        if plan.summary and "performance_and_cache" in plan.summary:
+                            plan.summary["performance_and_cache"]["handoff_written_after_successful_validation"] = True
+
+                        self.coordinator.finish_phase()
+                    except Exception as e:
+                        if os.path.exists(temp_path):
+                            try:
+                                os.remove(temp_path)
+                            except Exception:
+                                pass
+                        raise RuntimeError(f"Failed to write handoff manifest: {e}")
+
+            self.coordinator.print_summary(plan_summary=plan.summary)
+        finally:
+            if cache is not None:
+                cache.close()
+            lock.release()
+
+class JournalWriter:
+    def __init__(self, journal_path: str):
+        self.journal_path = journal_path
+        self.journal: Optional[Journal] = None
+
+    def start_journal(self, plan_id: str):
+        self.journal = Journal(
+            journal_version=1,
+            plan_id=plan_id,
+            started_at=datetime.now(timezone.utc).isoformat(),
+            status="started"
+        )
+        self.save()
+
+    def add_snapshot(self, key: str, command: str, exit_code: int, stdout: str, stderr: str, required: bool, snapshot_name: Optional[str] = None):
+        if self.journal:
+            self.journal.snapshots[key] = {
+                "command": command,
+                "exit_code": exit_code,
+                "stdout": stdout,
+                "stderr": stderr,
+                "required": required,
+                "snapshot_name": snapshot_name
+            }
+            self.save()
+
+    def add_operation_result(self, result: JournalOperationResult):
+        if self.journal:
+            self.journal.operations.append(result)
+            self.save()
+
+    def finish_journal(self, status: str):
+        if self.journal:
+            self.journal.status = status
+            self.journal.finished_at = datetime.now(timezone.utc).isoformat()
+            self.save()
+
+    def save(self):
+        if self.journal:
+            with open(self.journal_path, 'w') as f:
+                f.write(self.journal.to_json())
+
+
+class WorkspacePrepWorkflow:
+    def __init__(self, workspace_root: str, cache: WorkspaceCache):
+        self.workspace_root = workspace_root
+        self.cache = cache
+        self.managed_folders = ["0-source", "1-missing-metadata", "2-redundant-jpgs", "3-videos-by-date", "4-photos-by-date", "5-photos-by-dest"]
+        from photos_utils import ProgressCoordinator
+        self.coordinator = ProgressCoordinator()
+
+    def _allocate_suffix(self, base: str, ext: str, index: set, start_idx: int = 1) -> str:
+        idx = start_idx
+        while True:
+            suffix = f"-{idx:03d}"
+            name = f"{base}{suffix}.{ext}" if ext else f"{base}{suffix}"
+            if name.lower() not in index:
+                index.add(name.lower())
+                return name
+            idx += 1
+
+    def plan(self) -> Plan:
+        operations = []
+        blockers = []
+        warnings = []
+        files = []
+        self._all_physical_lower_for_plan = None
+        media_mutated_originals = set()
+
+        from photos_utils import is_workspace_control_file
+
+        self.coordinator.start_phase("planning - scanning inventory")
+        # 0. Inventory & Symlink check
+        for f in os.listdir(self.workspace_root):
+            path = os.path.join(self.workspace_root, f)
+            if os.path.isfile(path) and not f.startswith('.') and not is_workspace_control_file(f):
+                if os.path.islink(path):
+                    blockers.append(f"Forbidden symlink detected: {f}")
+                else:
+                    files.append(f)
+        for d in self.managed_folders:
+            folder_path = os.path.join(self.workspace_root, d)
+            if os.path.isdir(folder_path):
+                for root, _, filenames in os.walk(folder_path):
+                    for fname in filenames:
+                        if not fname.startswith('.'):
+                            path = os.path.join(root, fname)
+                            rel_path = os.path.relpath(path, self.workspace_root)
+                            if os.path.islink(path):
+                                blockers.append(f"Forbidden symlink detected: {rel_path}")
+                            else:
+                                files.append(rel_path)
+        files.sort()
+        self.coordinator.increment("files_scanned", len(files))
+        self.coordinator.finish_phase()
+
+        self.coordinator.start_phase("planning - checking cache freshness")
+
+# Detect forbidden sidecars and block if needed
+        forbidden_sidecars = []
+        for rel_path in files:
+            ext = os.path.splitext(rel_path)[1].lower()
+            if ext in ['.xmp', '.dop', '.pp3']:
+                forbidden_sidecars.append(rel_path)
+
+        if forbidden_sidecars:
+            blockers.append(f"Forbidden sidecar files detected: {', '.join(forbidden_sidecars)}")
+
+        existing_cache = self.cache.get_all_files()
+        existing_metadata = self.cache.get_all_metadata()
+
+        from photos_utils import MetadataReader, ProgressCoordinator, get_exiftool_version, FIELD_SET_VERSION, EXTRACTION_OPTIONS_FINGERPRINT, METADATA_SCHEMA_VERSION, CAMERA_GROUP_KEY_VERSION
+        current_exiftool_version = get_exiftool_version()
+        current_field_set_version = FIELD_SET_VERSION
+        current_extraction_options_fingerprint = EXTRACTION_OPTIONS_FINGERPRINT
+
+        current_metadata_context = {
+            "extractor": "exiftool",
+            "extractor_version": current_exiftool_version,
+            "field_set_version": current_field_set_version,
+            "extraction_options_fingerprint": current_extraction_options_fingerprint,
+            "metadata_schema_version": METADATA_SCHEMA_VERSION,
+            "camera_group_key_version": CAMERA_GROUP_KEY_VERSION,
+        }
+
+        folders_to_scan = set()
+        for f in files:
+            cached = existing_cache.get(f)
+            cached_md = existing_metadata.get(f)
+            stat = os.stat(os.path.join(self.workspace_root, f))
+            file_record = {
+                'relative_path': f,
+                'size': stat.st_size,
+                'mtime_ns': stat.st_mtime_ns,
+            }
+            if cached and cached.get('content_hash'):
+                file_record['content_hash'] = cached.get('content_hash')
+
+            from photos_utils import is_metadata_cache_fresh
+
+            if not cached or not is_metadata_cache_fresh(file_record, cached_md, current_metadata_context):
+                folders_to_scan.add(os.path.dirname(os.path.join(self.workspace_root, f)))
+                self.coordinator.increment("metadata_misses")
+            else:
+                self.coordinator.increment("metadata_hits")
+
+        self.coordinator.finish_phase()
+
+        metadata_results = {}
+        failed_metadata_folders = set()
+        if folders_to_scan:
+            self.coordinator.start_phase("planning - extracting metadata", len(folders_to_scan))
+            metadata_results, failed_metadata_folders = MetadataReader.read_metadata_concurrently(list(folders_to_scan), max_workers=CONFIG.get("jobs", 4), progress_coordinator=self.coordinator)
+            self.coordinator.finish_phase()
+
+        metadata_plan_status = {}
+
+        execution_config = {
+            "jobs_requested": CONFIG.get("jobs", 4),
+            "jobs_semantic": False
+        }
+
+        def process_file(rel_path: str):
+            abs_path = os.path.join(self.workspace_root, rel_path)
+            stat = os.stat(abs_path)
+            ext = os.path.splitext(rel_path)[1].lower().lstrip('.')
+
+            cached = existing_cache.get(rel_path)
+            cached_md = existing_metadata.get(rel_path)
+
+            file_record = {
+                'relative_path': rel_path,
+                'size': stat.st_size,
+                'mtime_ns': stat.st_mtime_ns,
+            }
+            if cached and cached.get('content_hash'):
+                file_record['content_hash'] = cached.get('content_hash')
+
+            media_class = "other"
+            if ext in ['jpg', 'jpeg', 'png', 'heic', 'tiff']:
+                media_class = "image"
+            elif ext in ['cr2', 'cr3', 'nef', 'arw', 'dng']:
+                media_class = "raw"
+            elif ext in ['mp4', 'mov', 'avi', 'mkv']:
+                media_class = "video"
+
+            # Check metadata freshness
+            from photos_utils import is_metadata_cache_fresh
+            md_fresh = is_metadata_cache_fresh(file_record, cached_md, current_metadata_context)
+
+            result = {
+                "relative_path": rel_path,
+                "warnings": [],
+                "blockers": [],
+                "metadata_plan_status": None,
+                "db_file": None,
+                "cache_reused": False
+            }
+
+            if cached and cached['size'] == stat.st_size and cached['mtime_ns'] == stat.st_mtime_ns and md_fresh:
+                # Do not mutate the original cached dict here in the worker thread
+                new_cached = dict(cached)
+                new_cached['last_seen_ns'] = int(datetime.now(timezone.utc).timestamp() * 1e9)
+                new_cached['metadata'] = cached_md
+
+                if media_class == "other":
+                    result["metadata_plan_status"] = "not_applicable"
+                else:
+                    result["metadata_plan_status"] = "reused_from_cache"
+
+                result["cache_reused"] = True
+                result["db_file"] = new_cached
+                return result
+
+            file_hash_res = ContentHasher.hash_file(abs_path)
+            content_hash_res = None
+            if media_class in ['image', 'raw']:
+                content_hash_res = ContentHasher.hash_image(abs_path)
+            elif media_class == 'video':
+                content_hash_res = ContentHasher.hash_video(abs_path)
+
+            parent_folder = os.path.dirname(abs_path)
+
+            if parent_folder in failed_metadata_folders:
+                meta = {}
+                meta["extraction_status"] = "extraction_failed"
+                meta["extraction_error"] = "folder_metadata_extraction_failed"
+                result["metadata_plan_status"] = "extraction_failed"
+                result["blockers"].append(
+                    f"Metadata tool execution failed completely for {rel_path}"
+                )
+            elif abs_path in metadata_results:
+                meta = metadata_results[abs_path]
+                if meta.get("extraction_status"):
+                    result["metadata_plan_status"] = meta["extraction_status"]
+                else:
+                    result["metadata_plan_status"] = "extracted_ok"
+            else:
+                meta = {}
+                if media_class == "other":
+                    meta["extraction_status"] = "not_applicable"
+                    result["metadata_plan_status"] = "not_applicable"
+                else:
+                    meta["extraction_status"] = "extraction_failed"
+                    meta["extraction_error"] = "missing_from_exiftool_batch_result"
+                    result["metadata_plan_status"] = "extraction_failed"
+                    result["warnings"].append(f"Metadata extraction failed or returned empty for {rel_path}")
+
+            md_record = None
+            if meta.get("extraction_status") == "extraction_failed":
+                if cached_md and is_metadata_cache_fresh(file_record, cached_md, current_metadata_context):
+                    md_record = cached_md
+                else:
+                    md_record = None
+                    result["blockers"].append(f"Metadata extraction failed and no valid cache exists for {rel_path}")
+            else:
+                md_record = {
+                    "extractor": "exiftool",
+                    "extractor_version": current_exiftool_version,
+                    "field_set_version": current_field_set_version,
+                    "extraction_options_fingerprint": current_extraction_options_fingerprint,
+                    "metadata_schema_version": METADATA_SCHEMA_VERSION,
+                    "camera_group_key_version": CAMERA_GROUP_KEY_VERSION,
+                    "camera_group_key": meta.get("camera_group_key", "unknown"),
+                    "has_native_gps": meta.get("has_native_gps", False),
+                    "has_timestamp": meta.get("has_timestamp", False),
+                    "extraction_status": meta.get("extraction_status", "extracted_ok"),
+                    "extraction_error": meta.get("extraction_error", None),
+                    "parsed_json": json.dumps({k:v for k,v in meta.items() if k != "raw_payload"}),
+                    "raw_payload": meta.get("raw_payload", "{}")
+                }
+
+            result["db_file"] = {
+                "relative_path": rel_path,
+                "absolute_path": abs_path,
+                "size": stat.st_size,
+                "mtime_ns": stat.st_mtime_ns,
+                "inode": stat.st_ino,
+                "media_class": media_class,
+                "hash": json.dumps(file_hash_res) if file_hash_res else None,
+                "content_hash": json.dumps(content_hash_res) if content_hash_res else None,
+                "last_seen_ns": int(datetime.now(timezone.utc).timestamp() * 1e9),
+                "metadata": md_record
+            }
+            return result
+
+        self.coordinator.start_phase("planning - hashing files", len(files))
+
+        worker_results = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=CONFIG.get('jobs', 4)) as executor:
+            future_to_file = {executor.submit(process_file, f): f for f in files}
+            for future in concurrent.futures.as_completed(future_to_file):
+                worker_results.append(future.result())
+                self.coordinator.increment_completed()
+
+        # 1. Collect and sort all worker results by workspace-relative path
+        worker_results.sort(key=lambda x: x['relative_path'])
+
+        # 2. Build metadata_plan_status, warnings and db_files sequentially and deterministically on the main thread
+        all_db_files = []
+        for res in worker_results:
+            rel_path = res["relative_path"]
+            metadata_plan_status[rel_path] = res["metadata_plan_status"]
+            warnings.extend(res["warnings"])
+            if "blockers" in res and res["blockers"]:
+                blockers.extend(res["blockers"])
+            all_db_files.append(res["db_file"])
+
+        db_files = [f for f in all_db_files if not f['relative_path'].startswith('5-photos-by-dest/')]
+        by_dest_files = [f for f in all_db_files if f['relative_path'].startswith('5-photos-by-dest/')]
+        self.coordinator.finish_phase()
+        self.coordinator.start_phase("planning - building duplicate groups")
+
+        ghost_prunes = []
+        for row in self.cache.get_all_files().values():
+            if not os.path.exists(os.path.join(self.workspace_root, row['relative_path'])):
+                ghost_prunes.append({
+                    "action": "remove",
+                    "relative_path": row['relative_path'],
+                    "preconditions": {
+                        "must_be_missing": True
+                    }
+                })
+
+
+
+
+
+        current_paths = {f['relative_path']: f['relative_path'] for f in db_files}
+        by_dest_paths = {f['relative_path'].lower(): f['relative_path'] for f in by_dest_files}
+
+        global_destinations = set()
+        for p in by_dest_paths.keys():
+            global_destinations.add(p)
+
+        for f in db_files:
+            rel_path = current_paths[f['relative_path']]
+            dirname = os.path.dirname(rel_path)
+            if not dirname:
+                dest_base = os.path.join("0-source", os.path.basename(rel_path))
+                dest = dest_base
+                # To properly avoid collisions case-insensitively with BOTH current_paths AND existing 0-source files
+                while dest.lower() in [v.lower() for k,v in current_paths.items() if k != f['relative_path']] or dest.lower() in global_destinations:
+                    name, ext = os.path.splitext(os.path.basename(dest))
+                    dest = os.path.join("0-source", self._allocate_suffix(name, ext.lstrip('.'), global_destinations))
+
+                global_destinations.add(dest.lower())
+                if rel_path != dest:
+                    media_mutated_originals.add(f["relative_path"])
+
+                    operations.append(Operation(
+
+                        operation_id=f"op-{uuid.uuid4().hex[:8]}",
+
+                        type="move_no_clobber",
+
+                        reason="Consolidate to 0-source",
+                        source=rel_path,
+                        destination=dest,
+                        preconditions={"size": f["size"], "mtime_ns": f["mtime_ns"]},
+                        verification={},
+                        database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(f, relative_path=dest, absolute_path=os.path.join(self.workspace_root, dest))}]
+                    ))
+                    current_paths[f['relative_path']] = dest
+
+        for f in db_files:
+            rel_path = current_paths[f['relative_path']]
+            basename = os.path.basename(rel_path)
+            name, ext = os.path.splitext(basename)
+            if ext and ext != ext.lower():
+                new_ext = ext.lower()
+                final_name = f"{name}{new_ext}"
+                final_rel = os.path.join(os.path.dirname(rel_path), final_name)
+
+                if final_rel.lower() in [v.lower() for k, v in current_paths.items() if k != f['relative_path']] or final_rel.lower() in global_destinations:
+                    final_name = self._allocate_suffix(name, new_ext.lstrip('.'), global_destinations)
+                    final_rel = os.path.join(os.path.dirname(rel_path), final_name)
+
+# Generate a deterministic temp name strictly through allocation
+                # Create a specific start name
+                temp_name_base = f"{name}.__photos_ingest_tmp_extnorm__"
+                temp_name = f"{temp_name_base}{new_ext}"
+                idx = 1
+
+                # Full physical inventory check for case-insensitive collisions (re-evaluate every plan())
+                try:
+                    all_physical_lower = getattr(self, "_all_physical_lower_for_plan", None)
+                    if all_physical_lower is None:
+                        raise AttributeError
+                except AttributeError:
+                    all_physical_lower = set()
+                    for root, _, filenames in os.walk(self.workspace_root):
+                        for fn in filenames:
+                            all_physical_lower.add(os.path.relpath(os.path.join(root, fn), self.workspace_root).lower())
+                    self._all_physical_lower_for_plan = all_physical_lower
+
+                while True:
+                    temp_rel = os.path.join(os.path.dirname(rel_path), temp_name)
+                    temp_rel_lower = temp_rel.lower()
+
+                    if temp_rel_lower not in [v.lower() for k, v in current_paths.items() if k != f['relative_path']] and temp_rel_lower not in global_destinations and temp_rel_lower not in all_physical_lower and not os.path.exists(os.path.join(self.workspace_root, temp_rel)):
+                        break
+                    temp_name = f"{temp_name_base}-{idx:03d}{new_ext}"
+                    idx += 1
+                self._all_physical_lower_for_plan.add(temp_rel.lower())
+
+                global_destinations.add(temp_rel.lower())
+                global_destinations.add(final_rel.lower())
+
+                if rel_path != final_rel:
+                    media_mutated_originals.add(f["relative_path"])
+
+                    operations.append(Operation(
+
+                        operation_id=f"op-{uuid.uuid4().hex[:8]}",
+
+                        type="rename_no_clobber",
+                        reason="Normalize extension case (temp)",
+                        source=rel_path,
+                        destination=temp_rel,
+                        preconditions={"size": f["size"], "mtime_ns": f["mtime_ns"]},
+                        verification={},
+                        database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(f, relative_path=temp_rel, absolute_path=os.path.join(self.workspace_root, temp_rel))}]
+                    ))
+                    media_mutated_originals.add(f["relative_path"])
+
+                    operations.append(Operation(
+
+                        operation_id=f"op-{uuid.uuid4().hex[:8]}",
+
+                        type="rename_no_clobber",
+                        reason="Normalize extension case",
+                        source=temp_rel,
+                        destination=final_rel,
+                        preconditions={},
+                        verification={},
+                        database_effects_after_verification=[{"action": "remove", "relative_path": temp_rel}, {"action": "upsert", "data": dict(f, relative_path=final_rel, absolute_path=os.path.join(self.workspace_root, final_rel))}]
+                    ))
+                    current_paths[f['relative_path']] = final_rel
+
+        base_groups = {}
+        for f in db_files:
+            rel_path = current_paths[f['relative_path']]
+            basename = os.path.basename(rel_path)
+            name, _ = os.path.splitext(basename)
+            folder = os.path.dirname(rel_path)
+            base_groups.setdefault((folder, name), []).append(f)
+
+        paired_jpgs = set()
+        # print("BASE GROUPS:", list(base_groups.keys()))
+        for (folder, name), group in base_groups.items():
+            has_raw = any(f['media_class'] == 'raw' for f in group)
+            has_jpg = any(f['media_class'] == 'image' and f['relative_path'].lower().endswith('.jpg') for f in group)
+            if has_raw and has_jpg:
+                for f in group:
+                    if f['media_class'] == 'image':
+                        rel_path = current_paths[f['relative_path']]
+                        paired_jpgs.add(f['relative_path'])
+                        if rel_path.startswith("0-source/"):
+                            dest = os.path.join("2-redundant-jpgs", os.path.basename(rel_path))
+                            media_mutated_originals.add(f["relative_path"])
+
+                            operations.append(Operation(
+
+                                operation_id=f"op-{uuid.uuid4().hex[:8]}",
+
+                                type="move_no_clobber",
+
+                                reason="Separate redundant JPG",
+                                source=rel_path,
+                                destination=dest,
+                                preconditions={"size": f["size"], "mtime_ns": f["mtime_ns"]},
+                                verification={},
+                                database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(f, relative_path=dest, absolute_path=os.path.join(self.workspace_root, dest))}]
+                            ))
+                            current_paths[f['relative_path']] = dest
+
+
+        content_groups = {}
+        for f in db_files + by_dest_files:
+            if f['relative_path'] in paired_jpgs:
+                continue
+
+            ch_str = f['content_hash'] or f['hash']
+            if not ch_str:
+                if f['relative_path'].startswith('5-photos-by-dest/'):
+                    pass
+                else:
+                    blockers.append(f"Hash failure for {f['relative_path']}")
+                continue
+
+            ch_dict = json.loads(ch_str)
+            if ch_dict.get("status") != "valid":
+                if f['relative_path'].startswith('5-photos-by-dest/'):
+                    pass
+                else:
+                    blockers.append(f"Hash failure for {f['relative_path']}: {ch_dict.get('error')}")
+                continue
+
+            content_groups.setdefault((ch_str, f['media_class']), []).append(f)
+
+        quarantined = set()
+        plan_id_for_quarantine = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:6]}"
+
+        for (ch_str, mc), group in content_groups.items():
+            if len(group) > 1:
+                def priority(item):
+                    p = current_paths.get(item['relative_path'], item['relative_path'])
+                    if p.startswith('5-'): return 0
+                    if p.startswith('4-'): return 1
+                    if p.startswith('3-'): return 2
+                    if p.startswith('2-'): return 3
+                    if p.startswith('1-'): return 4
+                    if p.startswith('0-'): return 5
+                    return 6
+
+                group.sort(key=priority)
+                retained = group[0]
+
+                for dup in group[1:]:
+                    rel_path = current_paths.get(dup['relative_path'], dup['relative_path'])
+                    if rel_path.startswith('5-photos-by-dest/'):
+                        # Never mutate by-dest
+                        continue
+
+                    quarantine_dest = os.path.join(".photos-ingest-quarantine", plan_id_for_quarantine, rel_path)
+                    manifest_payload = {
+                        "original_path": rel_path,
+                        "quarantine_path": quarantine_dest,
+                        "retained_counterpart": current_paths.get(retained['relative_path'], retained['relative_path']),
+                        "duplicate_evidence": json.loads(ch_str),
+                        "plan_id": plan_id_for_quarantine,
+                    }
+                    media_mutated_originals.add(dup["relative_path"])
+
+                    operations.append(Operation(
+
+                        operation_id=f"op-{uuid.uuid4().hex[:8]}",
+
+                        type="quarantine_move",
+                        reason=f"Duplicate of {current_paths.get(retained['relative_path'], retained['relative_path'])}",
+                        source=rel_path,
+                        destination=quarantine_dest,
+                        preconditions={"size": dup["size"], "mtime_ns": dup["mtime_ns"]},
+                        verification=manifest_payload,
+                        database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(dup, relative_path=quarantine_dest, absolute_path=os.path.join(self.workspace_root, quarantine_dest))}]
+                    ))
+                    quarantined.add(dup['relative_path'])
+                    current_paths[dup['relative_path']] = quarantine_dest
+
+        global_index = set()
+        for f in db_files:
+            if f['relative_path'] in quarantined: continue
+            rel_path = current_paths[f['relative_path']]
+            if any(rel_path.startswith(prefix) for prefix in ["4-", "3-", "1-", "5-", "2-"]):
+                global_index.add(os.path.basename(rel_path).lower())
+                continue
+
+            md_parsed = {}
+            if f.get('metadata') and f['metadata'].get('parsed_json'):
+                try:
+                    md_parsed = json.loads(f['metadata']['parsed_json'])
+                except Exception:
+                    pass
+
+            dt_str = md_parsed.get('DateTimeOriginal') or md_parsed.get('CreateDate') or md_parsed.get('ModifyDate')
+            target_folder = "1-missing-metadata"
+            prefix = "UNKN"
+
+            if dt_str:
+                try:
+                    dt = datetime.strptime(dt_str[:19], "%Y:%m:%d %H:%M:%S")
+                    if f['media_class'] == 'video':
+                        target_folder = "3-videos-by-date"
+                    else:
+                        target_folder = "4-photos-by-date"
+                    prefix = dt.strftime("%Y%m%d_%H%M%S")
+                except ValueError:
+                    pass
+
+            base, ext = os.path.splitext(os.path.basename(rel_path))
+            ext = ext.lstrip('.')
+            if prefix == "UNKN":
+                prefix = f"UNKN_{base}"
+
+            final_name = self._allocate_suffix(prefix, ext, global_index)
+            dest = os.path.join(target_folder, final_name)
+
+            media_mutated_originals.add(f["relative_path"])
+
+
+            operations.append(Operation(
+
+
+                operation_id=f"op-{uuid.uuid4().hex[:8]}",
+
+
+                type="move_no_clobber",
+
+
+                reason="Chronological Organization",
+                source=rel_path,
+                destination=dest,
+                preconditions={"size": f["size"], "mtime_ns": f["mtime_ns"]},
+                verification={},
+                database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(f, relative_path=dest, absolute_path=os.path.join(self.workspace_root, dest))}]
+            ))
+            current_paths[f['relative_path']] = dest
+
+        cache_upserts = []
+        for f in all_db_files:
+            original_rel = f["relative_path"]
+            planned_rel = current_paths.get(original_rel, original_rel)
+
+            if original_rel in media_mutated_originals:
+                continue
+
+            if planned_rel != original_rel:
+                continue
+
+            cached = existing_cache.get(planned_rel)
+            cached_md = existing_metadata.get(planned_rel)
+
+            file_record = {
+                'relative_path': planned_rel,
+                'size': f['size'],
+                'mtime_ns': f['mtime_ns']
+            }
+            if cached and cached.get('content_hash'):
+                file_record['content_hash'] = cached.get('content_hash')
+
+            from photos_utils import is_metadata_cache_fresh
+            md_fresh = is_metadata_cache_fresh(file_record, cached_md, current_metadata_context)
+
+            if cached and cached["size"] == f["size"] and cached["mtime_ns"] == f["mtime_ns"] and md_fresh:
+                continue
+
+            cache_upserts.append({
+                "action": "upsert",
+                "data": dict(f, relative_path=planned_rel, absolute_path=os.path.join(self.workspace_root, planned_rel)),
+                "preconditions": {
+                    "size": f["size"],
+                    "mtime_ns": f["mtime_ns"]
+                }
+            })
+
+        if cache_upserts:
+            operations.append(Operation(
+                operation_id=f"op-{uuid.uuid4().hex[:8]}",
+                type="db_upsert",
+                reason="Cache unchanged state",
+                source=None,
+                destination=None,
+                preconditions={},
+                verification={},
+                database_effects_after_verification=cache_upserts
+            ))
+
+        if ghost_prunes:
+            operations.append(Operation(
+                operation_id=f"op-{uuid.uuid4().hex[:8]}",
+                type="db_remove",
+                reason="Prune ghosts",
+                source=None,
+                destination=None,
+                preconditions={},
+                verification={},
+                database_effects_after_verification=ghost_prunes
+            ))
+
+        no_op_count = len(files) - len(media_mutated_originals)
+        # Record passive file state dependencies for idempotency and staleness protection
+        workspace_file_preconditions = []
+        for f in all_db_files:
+            if f["relative_path"] not in media_mutated_originals:
+                workspace_file_preconditions.append({
+                    "relative_path": f["relative_path"],
+                    "size": f["size"],
+                    "mtime_ns": f["mtime_ns"],
+                    "role": "by_dest_read_only" if f["relative_path"].startswith("5-photos-by-dest/") else "no_op_prepared"
+                })
+
+        from photos_utils import (
+            get_exiftool_version,
+            FIELD_SET_VERSION,
+            METADATA_SCHEMA_VERSION,
+            CAMERA_GROUP_KEY_VERSION,
+            EXTRACTION_OPTIONS_FINGERPRINT
+        )
+
+        return Plan(
+            plan_version=1,
+            plan_id=plan_id_for_quarantine,
+            command="prep",
+            created_at=datetime.now(timezone.utc).isoformat(),
+            workspace_root=self.workspace_root,
+            digikam_root=None,
+            config_fingerprint=OperationPlanner._hash_dict({k: v for k, v in CONFIG.items() if k != "jobs"}),
+            instruction_fingerprints={},
+            locks_required=["workspace"],
+            summary={
+            "message": "Prep Plan generated",
+            "no_op_files": no_op_count,
+            "operations_planned": len(operations),
+            "blockers_found": len(blockers),
+            "metadata_plan_status": metadata_plan_status,
+            "execution_config": execution_config,
+            "performance_and_cache": {
+                "jobs_requested": execution_config.get("jobs_requested", 1),
+                "progress_mode": "quiet" if getattr(self.coordinator, "quiet", False) else getattr(self.coordinator, "get_progress_mode", lambda: "plain")(),
+                "worker_crashes": self.coordinator.counters.get("worker_crashes", 0),
+                "worker_restarts": self.coordinator.counters.get("worker_restarts", 0),
+                "metadata_extracted": self.coordinator.counters.get("metadata_extracted", 0),
+                "metadata_reused": self.coordinator.counters.get("metadata_hits", 0),
+                "metadata_failed": len(failed_metadata_folders) + sum(1 for b in blockers if "Metadata" in b),
+                "hashes_computed": self.coordinator.counters.get("hashes_computed", 0),
+                "hashes_reused": self.coordinator.counters.get("hashes_reused", 0),
+                "hashes_failed": self.coordinator.counters.get("hashes_failed", 0),
+                "db_effects_seen": len([fx for op in operations for fx in (op.database_effects_after_verification or [])]),
+                "db_upserts_applied": 0,
+                "db_removes_applied": 0,
+                "db_renames_applied": 0,
+                "dependency_validation_status": "pending",
+                "handoff_written_after_successful_validation": False
+            }
+        },
+            blockers=blockers,
+            warnings=warnings,
+            operations=operations,
+            workspace_file_preconditions=workspace_file_preconditions,
+            metadata_dependencies={
+                "extractor": "exiftool",
+                "extractor_version": get_exiftool_version(),
+                "field_set_version": FIELD_SET_VERSION,
+                "extraction_options_fingerprint": EXTRACTION_OPTIONS_FINGERPRINT,
+                "metadata_schema_version": METADATA_SCHEMA_VERSION,
+                "camera_group_key_version": CAMERA_GROUP_KEY_VERSION
+            }
+        )
+
+def main():
+    import argparse
+
+    def positive_int(value):
+        try:
+            parsed = int(value)
+        except ValueError:
+            raise argparse.ArgumentTypeError("jobs must be a positive integer")
+        if parsed < 1:
+            raise argparse.ArgumentTypeError("jobs must be a positive integer")
+        return parsed
+
+    parser = argparse.ArgumentParser(description="photos-1-prep: prep-only workspace organization, cache update, and handoff generation")
+    parser.add_argument("-j", "--jobs", type=positive_int, default=4, help="Number of parallel jobs for processing.")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    # prep command
+    prep_parser = subparsers.add_parser("plan", help="Generate a prep-only workspace organization plan")
+    prep_parser.add_argument("--output", help="Save the generated plan to FILE (e.g., plans/prep.plan.json).")
+
+    dry_parser = subparsers.add_parser("dry-run", help="Dry-run a previously generated prep plan")
+    dry_parser.add_argument("--plan", required=True, help="Execute a previously generated plan from FILE.")
+
+    exec_parser = subparsers.add_parser("execute", help="Execute a previously generated prep plan")
+    exec_parser.add_argument("--plan", required=True, help="Execute a previously generated plan from FILE.")
+
+    args = parser.parse_args()
+    CONFIG["jobs"] = getattr(args, "jobs", 4)
+
+    workspace_root = os.getcwd()
+
+    RootGuard.check_sentinel(workspace_root)
+
+    try:
+        if args.command == "plan":
+            cache = WorkspaceCache(workspace_root, read_only=True)
+            workflow = WorkspacePrepWorkflow(workspace_root, cache)
+            plan = workflow.plan()
+            cache.close()
+
+            if getattr(args, "output", None):
+                os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
+                with open(args.output, "w") as f:
+                    f.write(plan.to_json())
+                print(f"Plan saved to {args.output}")
+            else:
+                print(plan.to_json())
+
+        elif args.command == "dry-run":
+            with open(args.plan, "r") as f:
+                plan_data = json.load(f)
+            plan = Plan.from_dict(plan_data)
+
+            # Use an in-memory database for dry-run
+            cache = WorkspaceCache(workspace_root, in_memory=True)
+            executor = PlanExecutor(workspace_root)
+
+            try:
+                PlanValidator.validate_plan_preflight(plan, workspace_root)
+            except ValueError as e:
+                print(f"Preflight validation failed: {e}", file=sys.stderr)
+                sys.exit(1)
+
+            for op in plan.operations:
+                print(f"Would execute: {op.type} - {op.reason}")
+
+        elif args.command == "execute":
+            with open(args.plan, "r") as f:
+                plan_data = json.load(f)
+            plan = Plan.from_dict(plan_data)
+
+            executor = PlanExecutor(workspace_root)
+            journal_path = os.path.join(workspace_root, ".photos-ingest-journal.json")
+
+            try:
+                executor.execute(plan, journal_path)
+            except Exception as e:
+                print(f"Execution failed: {e}", file=sys.stderr)
+                sys.exit(1)
+
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+if __name__ == '__main__':
+    main()
