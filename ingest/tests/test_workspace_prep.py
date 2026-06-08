@@ -15,7 +15,7 @@ import photos_1_prep as photos_ingest
 def setup_workspace(tmp_path: Path):
     ws = tmp_path / "workspace"
     ws.mkdir()
-    (ws / ".photos-1-prep-root").touch()
+    (ws / ".photos-ingest").mkdir(exist_ok=True); (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
 
     # Root file collision
     (ws / "IMG_1234.JPG").write_text("image1234_data")
@@ -100,7 +100,7 @@ def test_prep_workflow_plan_and_execute(mock_meta, mock_hash_img, mock_hash_file
 
     # Run execute
     executor = photos_ingest.PlanExecutor(str(ws))
-    journal_path = str(ws / "journal.json")
+    journal_path = str(ws / ".journal.json")
     executor.execute(plan, journal_path)
 
     # PR ACCEPTANCE TEST: root-to-"0-source" collision where neither file is overwritten
@@ -146,7 +146,7 @@ def test_prep_workflow_plan_and_execute(mock_meta, mock_hash_img, mock_hash_file
         assert "value" in manifest_data[0]["duplicate_evidence"]
 
 # PR ACCEPTANCE TEST: check the cache after execution
-    cache_conn = sqlite3.connect(executor.workspace_root + "/.photos_ingest.db")
+    cache_conn = sqlite3.connect(executor.workspace_root + "/.photos-ingest/photos-00-ingest.db")
     cur = cache_conn.cursor()
     cur.execute("SELECT relative_path FROM file_cache")
     db_paths = [r[0] for r in cur.fetchall()]
@@ -200,7 +200,7 @@ def test_source_changed_after_plan_abort(mock_meta, mock_hash_img, mock_hash_fil
     (ws / "IMG_1234.JPG").write_text("modified_data_size_change")
 
     executor = photos_ingest.PlanExecutor(str(ws))
-    journal_path = str(ws / "journal.json")
+    journal_path = str(ws / ".journal.json")
 
     import pytest
     with pytest.raises(ValueError, match="Precondition failed: size changed"):
@@ -224,7 +224,7 @@ def test_sidecar_blocking(tmp_path, monkeypatch):
     assert "Forbidden sidecar files detected" in plan.blockers[0]
 
     executor = photos_ingest.PlanExecutor(str(ws))
-    journal_path = str(ws / "journal.json")
+    journal_path = str(ws / ".journal.json")
 
     import pytest
     with pytest.raises(ValueError, match="Plan contains blockers and cannot be executed"):
@@ -293,7 +293,7 @@ def test_deterministic_temp_names_with_existing(tmp_path, monkeypatch):
     # Minimal fixture explicitly constructed to trigger the suffix logic precisely
     ws = tmp_path / "workspace"
     ws.mkdir()
-    (ws / ".photos-1-prep-root").touch()
+    (ws / ".photos-ingest").mkdir(exist_ok=True); (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
 
     src_dir = ws / "0-source"
     src_dir.mkdir()
@@ -356,8 +356,8 @@ def test_source_changed_after_plan_abort_no_db(tmp_path, monkeypatch):
     )
 
     executor = photos_ingest.PlanExecutor(str(ws))
-    journal_path = str(ws / "journal.json")
-    db_path = str(ws / ".photos_ingest.db")
+    journal_path = str(ws / ".journal.json")
+    db_path = str(ws / ".photos-ingest/photos-00-ingest.db")
 
     assert not os.path.exists(db_path)
 

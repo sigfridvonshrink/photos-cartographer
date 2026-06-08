@@ -41,7 +41,7 @@ def _make_ws(tmp_path):
     for d in ("0-source", "1-missing-metadata", "2-redundant-jpgs",
               "3-videos-by-date", "4-photos-by-date", "5-photos-by-dest"):
         (ws / d).mkdir()
-    (ws / ".photos-1-prep-root").touch()
+    (ws / ".photos-ingest").mkdir(exist_ok=True); (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
     return ws
 
 
@@ -228,7 +228,7 @@ def test_content_hash_restaled_on_imagemagick_version_change(tmp_path, monkeypat
     monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "im-OLD")
     cache = prep.WorkspaceCache(str(ws), in_memory=False)
     plan1 = prep.WorkspacePrepWorkflow(str(ws), cache).plan()
-    prep.PlanExecutor(str(ws)).execute(plan1, str(ws / "journal.json"))
+    prep.PlanExecutor(str(ws)).execute(plan1, str(ws / ".journal.json"))
 
     # Same workspace, newer magick -> the image content hash is stale and recomputed.
     # Planning is non-mutating, so execute plan2 to persist the recompute before reading the cache.
@@ -237,7 +237,7 @@ def test_content_hash_restaled_on_imagemagick_version_change(tmp_path, monkeypat
     plan2 = prep.WorkspacePrepWorkflow(str(ws), cache2).plan()
     assert any(op.type == "db_upsert" for op in plan2.operations), \
         "version change should restale the content hash and plan a db_upsert"
-    prep.PlanExecutor(str(ws)).execute(plan2, str(ws / "journal2.json"))
+    prep.PlanExecutor(str(ws)).execute(plan2, str(ws / ".journal2.json"))
 
     cache3 = prep.WorkspaceCache(str(ws), in_memory=False)
     rows = cache3.get_all_files()
