@@ -41,16 +41,16 @@ def test_by_dest_read_only():
     assert 'class WorkspacePrepWorkflow:' in dir(photos_1_prep) or hasattr(photos_1_prep, 'WorkspacePrepWorkflow')
 
 
-def test_execute_rejects_forbidden_operation_types():
+def test_execute_rejects_forbidden_operation_types(tmp_path):
     # If we pass an invalid op.type, execution should raise ValueError
-    executor = photos_1_prep.PlanExecutor("dummy_ws")
+    executor = photos_1_prep.PlanExecutor(str(tmp_path))
 
     plan = photos_1_prep.Plan(
         plan_version=1,
         plan_id="test",
         command="prep",
         created_at="now",
-        workspace_root="dummy_ws",
+        workspace_root=str(tmp_path),
         digikam_root=None,
         config_fingerprint=photos_1_prep.Fingerprint("sha256", "val"),
         instruction_fingerprints={},
@@ -68,18 +68,18 @@ def test_execute_rejects_forbidden_operation_types():
     )
 
     with pytest.raises(ValueError, match="Operation type 'metadata_write' is not allowed in photos-1-prep"):
-        executor.execute(plan, "dummy_journal")
+        executor.execute(plan, str(tmp_path / "j.json"))
 
-def test_execute_rejects_non_prep_plans():
+def test_execute_rejects_non_prep_plans(tmp_path):
     # If we pass an invalid op.type, execution should raise ValueError
-    executor = photos_1_prep.PlanExecutor("dummy_ws")
+    executor = photos_1_prep.PlanExecutor(str(tmp_path))
 
     plan = photos_1_prep.Plan(
         plan_version=1,
         plan_id="test",
         command="calibrate",
         created_at="now",
-        workspace_root="dummy_ws",
+        workspace_root=str(tmp_path),
         digikam_root=None,
         config_fingerprint=photos_1_prep.Fingerprint("sha256", "val"),
         instruction_fingerprints={},
@@ -91,7 +91,7 @@ def test_execute_rejects_non_prep_plans():
     )
 
     with pytest.raises(ValueError, match="Plan command 'calibrate' is not supported by photos-1-prep"):
-        executor.execute(plan, "dummy_journal")
+        executor.execute(plan, str(tmp_path / "j.json"))
 
 
 def test_by_dest_duplicate_does_not_mutate_behavior():
@@ -184,15 +184,15 @@ def test_by_dest_uppercase_extension_does_not_rename(tmp_path):
         assert not (op.source or "").startswith("5-photos-by-dest/")
         assert not (op.destination or "").startswith("5-photos-by-dest/")
 
-def test_dry_run_rejects_metadata_write():
-    executor = photos_1_prep.PlanExecutor("dummy_ws")
+def test_dry_run_rejects_metadata_write(tmp_path):
+    executor = photos_1_prep.PlanExecutor(str(tmp_path))
 
     plan = photos_1_prep.Plan(
         plan_version=1,
         plan_id="test",
         command="prep",
         created_at="now",
-        workspace_root="dummy_ws",
+        workspace_root=str(tmp_path),
         digikam_root=None,
         config_fingerprint=photos_1_prep.Fingerprint("sha256", "val"),
         instruction_fingerprints={},
@@ -209,4 +209,4 @@ def test_dry_run_rejects_metadata_write():
         ]
     )
     with pytest.raises(ValueError, match="Operation type 'metadata_write' is not allowed in photos-1-prep"):
-        photos_1_prep.PlanValidator.validate_plan_preflight(plan, "dummy_ws")
+        photos_1_prep.PlanValidator.validate_plan_preflight(plan, str(tmp_path))
