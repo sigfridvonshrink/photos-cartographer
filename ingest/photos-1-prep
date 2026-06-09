@@ -708,6 +708,121 @@ class ContentHasher:
         except Exception as e:
             return {"status": "failed", "strategy": "sha256-v1", "value": None, "error": str(e)}
 
+PREP_LOG_SCHEMA_VERSION = 1
+
+
+def build_prep_log(prior_photos, operations, cache_files, quarantine_evidence, is_init, run_id):
+    """Build the per-photo, content-fingerprint-keyed prep transformation log (prep Section 16.1).
+
+    Pure and derived — it introduces no new authority, only consolidating records prep already
+    produced: this run's validated plan operations, the final cache rows (for the fingerprint and
+    current location), and the run's quarantine evidence — merged onto `prior_photos` (the prior
+    log's `photos`, carried forward). Each NEW step is stamped with `run_id` so it is attributable
+    to the run that caused it (§16.1 item 2); carried-forward steps keep their original run, so a
+    no-op run leaves the log unchanged (§16.1 item 6). Returns (photos_dict, warnings)."""
+    warnings = []
+
+    def _step(action, **kw):
+        return {"phase": "prep", "action": action, "run": run_id, **kw}
+
+    # 1. Replay this run's move/rename ops in order into per-origin journeys (the same chain the
+    #    planner's current_paths builds). Strays / structural / cache ops carry no media journey.
+    journeys = {}          # origin path -> {"steps": [...], "current": path}
+    path_origin = {}       # a file's current path -> its origin key
+    pending_extnorm = {}   # origin -> original basename (first half of the two-step ext-norm)
+    for op in operations:
+        if op.type not in ("move_no_clobber", "rename_no_clobber"):
+            continue
+        src, dst, reason = op.source, op.destination, (op.reason or "")
+        if not src or not dst or "stray" in reason:    # non-media -> 1-strays is never logged
+            continue
+        origin = path_origin.get(src, src)
+        j = journeys.setdefault(origin, {"steps": [], "current": src})
+        if "Normalize extension case (temp)" in reason:
+            pending_extnorm.setdefault(origin, os.path.basename(src))   # collapse the two-step
+        elif "Normalize extension case" in reason:
+            frm = pending_extnorm.pop(origin, os.path.basename(src))
+            j["steps"].append(_step("extension_normalized", **{"from": frm, "to": os.path.basename(dst)}))
+        elif "Initialize: move base dump into sources" in reason:
+            j["steps"].append(_step("consolidated_into_sources", to=dst))
+        elif "Separate redundant JPG" in reason:
+            j["steps"].append(_step("redundant_jpeg_separated", to=dst))
+        elif "Chronological Organization" in reason:
+            j["steps"].append(_step("organized", to=dst.split('/', 1)[0] + "/"))
+            j["steps"].append(_step("provisional_rename", to=os.path.basename(dst)))
+        path_origin[dst] = origin
+        j["current"] = dst
+
+    def _fp(row):
+        ch = row.get("content_hash")
+        if not ch:
+            return None
+        try:
+            return json.loads(ch).get("value")
+        except Exception:
+            return None
+
+    # 2. Index the final cache rows by fingerprint -> current path (media only).
+    fp_to_current = {}
+    for rel, row in cache_files.items():
+        if row.get("media_class") in ("image", "raw", "video"):
+            fp = _fp(row)
+            if fp:
+                fp_to_current[fp] = rel
+
+    # 3. This run's journey steps, keyed by the fingerprint of each journey's final cache row.
+    run_steps_by_fp = {}
+    for origin, j in journeys.items():
+        row = cache_files.get(j["current"])
+        if not row:                                    # ended outside the cache (e.g. quarantined)
+            continue
+        fp = _fp(row)
+        if fp:
+            run_steps_by_fp.setdefault(fp, []).extend(j["steps"])
+
+    # 4. Quarantined duplicates, keyed by content fingerprint (same content as the retained file).
+    quarantined_by_fp = {}
+    for ev in (quarantine_evidence or []):
+        fp = ev.get("content_hash")
+        if not fp:
+            continue
+        quarantined_by_fp.setdefault(fp, []).append({
+            "origin": ev.get("original_path"),
+            "quarantine_path": ev.get("quarantine_path"),
+            "retained_counterpart": ev.get("retained_counterpart"),
+        })
+
+    # 5. Merge onto the prior log carried forward.
+    _bands = {folder_name(r) for r in ("missing_metadata", "redundant_jpgs", "videos_by_date", "photos_by_date")}
+    photos = {}
+    for fp in set(prior_photos) | set(run_steps_by_fp) | set(fp_to_current) | set(quarantined_by_fp):
+        prior = prior_photos.get(fp)
+        run_steps = run_steps_by_fp.get(fp, [])
+        quar = quarantined_by_fp.get(fp)
+        current = fp_to_current.get(fp) or (prior.get("final_path") if prior else None)
+        if not (prior or run_steps or quar):
+            # No prep transformation recorded for this content. In a prep-organized band that
+            # means lost history (warn + partial, §13.3a); by-dest/user-curated media is skipped.
+            top = current.split('/', 1)[0] if current else ""
+            if top in _bands:
+                photos[fp] = {"content_sha256": fp, "final_path": current, "journey": [],
+                              "partial": True, "note": "prep history incomplete (no retained journey)"}
+                warnings.append(f"prep-log: incomplete history for {current}")
+            continue
+        if prior:
+            journey = list(prior.get("journey", [])) + run_steps
+            if not run_steps and current and current != prior.get("final_path"):
+                # Recognized by-date -> by-dest move (carried-forward identity, no plan op).
+                journey.append({"phase": "user", "action": "moved_to_by_dest", "to": current, "run": run_id})
+            entry = {**prior, "final_path": current or prior.get("final_path"), "journey": journey}
+        else:
+            entry = {"content_sha256": fp, "final_path": current, "journey": run_steps}
+        if quar:
+            entry["deduplicated"] = {"retained": entry.get("final_path"), "quarantined": quar}
+        photos[fp] = entry
+    return photos, warnings
+
+
 # ==============================================================================
 # PLAN & EXECUTE LIFECYCLE
 # ==============================================================================
@@ -1491,6 +1606,44 @@ class PlanExecutor:
                             except Exception:
                                 pass
                         raise RuntimeError(f"Failed to write handoff manifest: {e}")
+
+                    # End-of-prep transformation log (prep Section 16.1 / shared Section 13.3): a
+                    # per-photo, content-fingerprint-keyed, human-readable record of everything prep
+                    # did — complete and self-sufficient even if no later phase runs. Derived from
+                    # this run's plan + quarantine evidence, merged onto the prior log carried forward
+                    # (incremental, §16.1 item 6), written atomically at this same success gate.
+                    from photos_utils import prep_log_path
+                    plp = prep_log_path(self.workspace_root)
+                    prior_photos = {}
+                    if os.path.exists(plp):
+                        try:
+                            with open(plp) as pf:
+                                prior_photos = (json.load(pf) or {}).get("photos", {}) or {}
+                        except Exception:
+                            prior_photos = {}
+                    log_photos, log_warnings = build_prep_log(
+                        prior_photos, plan.operations, cache.get_all_files(),
+                        quarantine_evidence, self._was_uninitialized, plan.plan_id)
+                    # No per-run metadata at the top level: the log must be byte-identical on a
+                    # no-op run (§16.1 item 6). Run attribution lives per-step (the "run" field).
+                    log_obj = {"schema_version": PREP_LOG_SCHEMA_VERSION, "tool": "photos-1-prep",
+                               "photos": log_photos}
+                    lfd, ltmp = tempfile.mkstemp(dir=target_dir, prefix=".tmp-prep-log-", suffix=".json", text=True)
+                    try:
+                        with os.fdopen(lfd, 'w') as lf:
+                            json.dump(log_obj, lf, indent=2, sort_keys=True)
+                        os.replace(ltmp, plp)
+                        if plan.summary and "performance_and_cache" in plan.summary:
+                            plan.summary["performance_and_cache"]["prep_log_written"] = True
+                        for _w in log_warnings:
+                            print(f"  Warning: {_w}", file=sys.stderr)
+                    except Exception as e:
+                        if os.path.exists(ltmp):
+                            try:
+                                os.remove(ltmp)
+                            except Exception:
+                                pass
+                        raise RuntimeError(f"Failed to write prep log: {e}")
 
                 # End-of-prep DB backup snapshot (shared contract Section 13.4a): a transactionally
                 # consistent image of the live cache, captured at the same success gate as the
