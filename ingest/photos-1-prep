@@ -9,6 +9,7 @@ import json
 import hashlib
 import subprocess
 import select
+import socket
 import fcntl
 from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Optional, Any
@@ -361,18 +362,47 @@ class WorkspaceLock:
         ensure_control_dir(workspace_root)
         self.lock_path = lock_path(workspace_root)
         self._lock_fd = None
+        self.owner = None  # on a failed acquire, the identity of the current holder (if readable)
 
     def acquire(self) -> bool:
-        """Acquires a non-blocking exclusive lock using fcntl.flock."""
+        """Acquire a non-blocking exclusive flock and record this run's owner identity.
+
+        Opened O_RDWR|O_CREAT (no truncate) so a *failed* acquire never clobbers the
+        current holder's identity; only a successful acquire rewrites it. fcntl.flock is
+        auto-released by the kernel if this process dies, so a crash never wedges the
+        workspace and no stale-lock takeover code is needed.
+        """
         try:
-            self._lock_fd = open(self.lock_path, 'a')
-            fcntl.flock(self._lock_fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-            return True
-        except (IOError, OSError):
-            if self._lock_fd:
-                self._lock_fd.close()
-                self._lock_fd = None
+            fd = os.open(self.lock_path, os.O_RDWR | os.O_CREAT, 0o644)
+            self._lock_fd = os.fdopen(fd, 'r+')
+        except OSError:
+            self._lock_fd = None
             return False
+        try:
+            fcntl.flock(self._lock_fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except (IOError, OSError):
+            self.owner = self.read_owner()  # who holds it, for the caller's message
+            self._lock_fd.close()
+            self._lock_fd = None
+            return False
+        identity = {
+            "pid": os.getpid(),
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "host": socket.gethostname(),
+        }
+        self._lock_fd.seek(0)
+        self._lock_fd.truncate(0)
+        self._lock_fd.write(json.dumps(identity))
+        self._lock_fd.flush()
+        return True
+
+    def read_owner(self):
+        """Best-effort read of the lock file's recorded owner identity (or None)."""
+        try:
+            with open(self.lock_path, 'r') as f:
+                return json.loads(f.read() or "null")
+        except Exception:
+            return None
 
     def release(self):
         """Releases the lock. Does NOT delete the file to avoid inode race conditions."""
@@ -791,11 +821,8 @@ class PlanExecutor:
         if journal_path is None:
             from photos_utils import journal_path as _journal_path
             journal_path = _journal_path(self.workspace_root, plan.plan_id)
-        # 0. Acquire workspace lock
-        lock = WorkspaceLock(self.workspace_root)
-        if "workspace" in plan.locks_required and not lock.acquire():
-            raise RuntimeError(f"Could not acquire workspace lock at {lock.lock_path}. Is another instance running?")
-
+        # The workspace lock is held for the whole run by main() (shared contract Section 2);
+        # execute() does not acquire it (callers that bypass main() — e.g. tests — run lock-free).
         cache = None
         try:
             # 1. Preflight validation
@@ -1246,7 +1273,6 @@ class PlanExecutor:
         finally:
             if cache is not None:
                 cache.close()
-            lock.release()
 
 class JournalWriter:
     def __init__(self, journal_path: str):
@@ -2172,26 +2198,21 @@ def prune_quarantine(workspace_root, plan_ids=None, older_than_days=None, do_del
         raise RuntimeError("Refusing to delete all quarantine without a selector. "
                            "Pass --plan-id / --older-than-days, or --all to confirm.")
 
-    lock = WorkspaceLock(workspace_root)
-    if not lock.acquire():
-        raise RuntimeError(f"Could not acquire workspace lock at {lock.lock_path}. Is another instance running?")
-    try:
-        total_files = 0
-        total_bytes = 0
-        for d in sorted(selected):
-            files_n, bytes_n = _quarantine_dir_footprint(os.path.join(base, d))
-            total_files += files_n
-            total_bytes += bytes_n
-            print(f"{'Removing' if do_delete else 'Would remove'} {d}: {files_n} files, {bytes_n} bytes")
-            if do_delete:
-                safe = RootGuard.resolve_and_check_path(base, d)  # containment within quarantine
-                shutil.rmtree(safe)
-        print(f"{'Removed' if do_delete else 'Would remove'} total: "
-              f"{len(selected)} plan(s), {total_files} files, {total_bytes} bytes")
-        if not do_delete:
-            print("(dry-run; pass --yes to delete)")
-    finally:
-        lock.release()
+    # The workspace lock is held for the whole run by main() (shared contract Section 2).
+    total_files = 0
+    total_bytes = 0
+    for d in sorted(selected):
+        files_n, bytes_n = _quarantine_dir_footprint(os.path.join(base, d))
+        total_files += files_n
+        total_bytes += bytes_n
+        print(f"{'Removing' if do_delete else 'Would remove'} {d}: {files_n} files, {bytes_n} bytes")
+        if do_delete:
+            safe = RootGuard.resolve_and_check_path(base, d)  # containment within quarantine
+            shutil.rmtree(safe)
+    print(f"{'Removed' if do_delete else 'Would remove'} total: "
+          f"{len(selected)} plan(s), {total_files} files, {total_bytes} bytes")
+    if not do_delete:
+        print("(dry-run; pass --yes to delete)")
 
 
 def main():
@@ -2232,6 +2253,16 @@ def main():
     workspace_root = os.getcwd()
 
     RootGuard.check_sentinel(workspace_root)
+
+    # Whole-run workspace lock (shared contract Section 2): acquired once here, before any
+    # scan/plan/dry-run/execute, held for the entire run, released on exit. Fail-fast.
+    run_lock = WorkspaceLock(workspace_root)
+    if not run_lock.acquire():
+        owner = run_lock.read_owner() or {}
+        detail = f" (pid {owner.get('pid')}, since {owner.get('started_at')})" if owner else ""
+        print(f"Workspace is locked by an in-progress run{detail}; try again when it finishes.", file=sys.stderr)
+        sys.exit(1)
+    print(f"Lock acquired: {run_lock.lock_path}", file=sys.stderr)
 
     try:
         if args.command == "plan":
@@ -2296,6 +2327,9 @@ def main():
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
+    finally:
+        run_lock.release()
+        print("Lock released.", file=sys.stderr)
 
 if __name__ == '__main__':
     main()
