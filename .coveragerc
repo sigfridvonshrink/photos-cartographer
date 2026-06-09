@@ -1,0 +1,12 @@
+# Coverage config for the prep suite. The metadata/hash pools run in worker threads, so
+# concurrency=thread is required to trace them. Measurement targets the two prep source
+# files (the extensionless script + photos_utils).
+[run]
+branch = true
+concurrency = thread
+
+[report]
+include =
+    */ingest/photos-1-prep
+    */ingest/photos_utils.py
+show_missing = true
