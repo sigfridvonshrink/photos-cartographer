@@ -1848,11 +1848,16 @@ class WorkspacePrepWorkflow:
                 result["db_file"] = new_cached
                 return result
 
-            file_hash_res = ContentHasher.hash_file(abs_path)
+            # Non-media (other-class) is never fingerprinted (prep Section 9): it is moved inert to
+            # 1-strays and never enters a content-equality decision. Media is identified by its
+            # decoded-content fingerprint (image/raw -> identify, video -> ffmpeg stream MD5).
+            file_hash_res = None
             content_hash_res = None
             if media_class in ['image', 'raw']:
+                file_hash_res = ContentHasher.hash_file(abs_path)
                 content_hash_res = ContentHasher.hash_image(abs_path)
             elif media_class == 'video':
+                file_hash_res = ContentHasher.hash_file(abs_path)
                 content_hash_res = ContentHasher.hash_video(abs_path)
 
             parent_folder = os.path.dirname(abs_path)
@@ -2135,6 +2140,11 @@ class WorkspacePrepWorkflow:
         for f in db_files + by_dest_files:
             if f['relative_path'] in paired_jpgs:
                 continue
+            # Non-media (other-class) is never fingerprinted and never content-deduplicated; it is
+            # routed to 1-strays below. The absence of a fingerprint on `other` is never a blocker
+            # (prep Section 9 / 3.2).
+            if f['media_class'] == 'other':
+                continue
 
             ch_str = f['content_hash'] or f['hash']
             if not ch_str:
@@ -2201,19 +2211,41 @@ class WorkspacePrepWorkflow:
         # newly-organized file never collides with an existing one regardless of iteration order.
         global_index = set()
         to_organize = []
+        strays_to_move = []
         _managed = set(managed_folder_names(CONFIG))
         _sources = folder_name('sources')
+        _sources_prefix = _sources + '/'
         for f in db_files:
             if f['relative_path'] in quarantined: continue
-            # Non-media (other-class) files are never date-organized; they remain where
-            # prep left them (prep Section 7.2 / 18) — typically residual in 0-sources.
-            if f['media_class'] == 'other': continue
             rel_path = current_paths[f['relative_path']]
+            # Non-media (other-class): never date-organized. Move it out of the 0-sources inbox
+            # into 1-strays/<plan-id>/<rel> (structure preserved), inert and untracked (prep
+            # Section 3.2 / 7.6), so 0-sources is left empty. Other-class outside the inbox (it
+            # should not occur) is left untouched.
+            if f['media_class'] == 'other':
+                if rel_path.startswith(_sources_prefix):
+                    strays_to_move.append((f, rel_path))
+                continue
             top = rel_path.split('/', 1)[0]
             if top != _sources and top in _managed:   # already organized into a band
                 global_index.add(os.path.basename(rel_path).lower())
             else:
                 to_organize.append((f, rel_path))
+
+        for f, rel_path in strays_to_move:
+            rel_under = rel_path[len(_sources_prefix):]
+            dest = os.path.join(folder_name('strays'), plan_id_for_quarantine, rel_under)
+            media_mutated_originals.add(f["relative_path"])
+            operations.append(Operation(
+                operation_id=f"op-{uuid.uuid4().hex[:8]}",
+                type="move_no_clobber",
+                reason="Move non-media stray out of sources",
+                source=rel_path,
+                destination=dest,
+                preconditions={"size": f["size"], "mtime_ns": f["mtime_ns"]},
+                verification={},
+                database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}]))
+            current_paths[f['relative_path']] = dest
 
         # Pass 2: allocate names for the files still in 0-sources against the fully-seeded index.
         for f, rel_path in to_organize:
@@ -2585,7 +2617,7 @@ def main():
     # photos-00-workspace-guard exists. An uninitialized workspace (no guard) is the deliberate
     # entry point — prep initializes it (plan/execute detect this via guard-absence and create the
     # structure, move the base dump into 0-sources, and write the guard last). So prep does NOT
-    # hard-require the sentinel here. (The sealed/terminal-workspace guard is added in Phase B2.)
+    # hard-require the sentinel here. A SEALED workspace is refused below (after the lock).
 
     # Whole-run workspace lock (shared contract Section 2): acquired once here, before any
     # scan/plan/dry-run/execute, held for the entire run, released on exit. Fail-fast.
@@ -2598,6 +2630,22 @@ def main():
     print(f"Lock acquired: {run_lock.lock_path}", file=sys.stderr)
 
     try:
+        # Sealed/terminal-workspace guard (prep Section 6.2 item 1 / shared 13.7): a successful
+        # merge seals the workspace. Prep then hard-stops and mutates nothing. Applies to the prep
+        # operations (plan/dry-run/execute); prune-quarantine is a separate maintenance command.
+        from photos_utils import is_sealed, folder_name as _folder_name
+        if args.command in ("plan", "dry-run", "execute") and is_sealed(workspace_root):
+            print("Workspace is SEALED (already merged): prep will not run. Nothing was touched.",
+                  file=sys.stderr)
+            _src = os.path.join(workspace_root, _folder_name('sources'))
+            _root_files = [f for f in os.listdir(workspace_root)
+                           if os.path.isfile(os.path.join(workspace_root, f)) and not f.startswith('.')]
+            _src_entries = os.listdir(_src) if os.path.isdir(_src) else []
+            if _root_files or _src_entries:
+                print("  A likely new dump is present (files at the root or in 0-sources). A sealed "
+                      "workspace is final — move new media into a fresh workspace.", file=sys.stderr)
+            sys.exit(2)
+
         if args.command == "plan":
             cache = WorkspaceCache(workspace_root, read_only=True)
             workflow = WorkspacePrepWorkflow(workspace_root, cache)
