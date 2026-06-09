@@ -1,9 +1,12 @@
 """Phase 6 — §5 fingerprint/version coverage + §14.3.7 single-transaction cache.
+Phase D — fingerprint/hash terminology (§9.1): media carries a content fingerprint and no
+byte hash; the handoff/cache use fingerprint terms; the legacy version key migrates cleanly.
 
 Mocked hashing/metadata, fast. photos_1_prep / photos_utils come from conftest.py.
 """
 import json
 import os
+import sqlite3
 
 import photos_1_prep as prep
 import photos_utils as utils
@@ -22,7 +25,7 @@ def _ws(tmp_path):
 
 def _mock(monkeypatch):
     monkeypatch.setattr(
-        prep.ContentHasher, "hash_image",
+        prep.ContentHasher, "fingerprint_image",
         lambda p: {"status": "valid", "strategy": "image-content-hash-v1",
                    "value": "sig-" + os.path.basename(p), "engine_version": "t"},
     )
@@ -57,7 +60,7 @@ def test_cache_meta_records_versions(tmp_path, monkeypatch):
     _run(ws)
     meta = prep.WorkspaceCache(str(ws)).get_all_meta()
     assert meta["cache_schema_version"] == str(prep.CACHE_SCHEMA_VERSION)
-    assert meta["hash_algorithm_version"] == prep.HASH_ALGORITHM_VERSION
+    assert meta["fingerprint_algorithm_version"] == prep.FINGERPRINT_ALGORITHM_VERSION
 
 
 def test_journal_is_version_stamped(tmp_path, monkeypatch):
@@ -71,7 +74,7 @@ def test_journal_is_version_stamped(tmp_path, monkeypatch):
     assert dep["config_fingerprint"] == plan.config_fingerprint.value
     assert dep["plan_schema_version"] == prep.PLAN_SCHEMA_VERSION
     assert dep["cache_schema_version"] == prep.CACHE_SCHEMA_VERSION
-    assert dep["hash_algorithm_version"] == prep.HASH_ALGORITHM_VERSION
+    assert dep["fingerprint_algorithm_version"] == prep.FINGERPRINT_ALGORITHM_VERSION
     assert dep["cli_options_fingerprint"]
 
 
@@ -84,9 +87,55 @@ def test_handoff_depends_on_coverage(tmp_path, monkeypatch):
         dep = json.load(f)["depends_on"]
     assert dep["plan"]["schema_version"] == prep.PLAN_SCHEMA_VERSION
     assert dep["cache"]["schema_version"] == prep.CACHE_SCHEMA_VERSION
-    assert dep["cache"]["hash_algorithm_version"] == prep.HASH_ALGORITHM_VERSION
+    assert dep["cache"]["fingerprint_algorithm_version"] == prep.FINGERPRINT_ALGORITHM_VERSION
     assert dep["cache"]["image_engine"] == "imagemagick"
     assert dep["cli_options"]["fingerprint"]
+
+
+# --- Phase D: fingerprint/hash terminology (§9.1) ---------------------------
+
+def test_media_carries_fingerprint_and_no_byte_hash(tmp_path, monkeypatch):
+    _mock(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    _run(ws)
+    row = next(r for k, r in prep.WorkspaceCache(str(ws)).get_all_files().items()
+               if k.startswith("5-photos-by-date/"))
+    assert row["content_hash"]          # identified by its decoded-content fingerprint
+    assert row["hash"] is None          # media is never byte-hashed (§9.1)
+
+
+def test_handoff_uses_fingerprint_status(tmp_path, monkeypatch):
+    _mock(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    _run(ws)
+    with open(utils.handoff_path(str(ws))) as f:
+        handoff = json.load(f)
+    media = [e for e in handoff["files"] if e["relative_path"].startswith("5-photos-by-date/")]
+    assert media and media[0]["fingerprint_status"] == "valid"
+    assert "hash_status" not in media[0]
+
+
+def test_legacy_version_key_migrates_cleanly(tmp_path, monkeypatch):
+    _mock(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    _run(ws)
+    # Simulate a workspace seeded by an older prep: only the legacy meta key is present.
+    db = str(ws / ".photos-ingest" / "photos-00-ingest.db")
+    conn = sqlite3.connect(db)
+    conn.execute("DELETE FROM meta WHERE key='fingerprint_algorithm_version'")
+    conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('hash_algorithm_version', '1')")
+    conn.commit(); conn.close()
+    # The next run must not error; it re-seeds the new key and the read-fallback still reports "1"
+    # (the rename keeps the same VALUE, so it is not a staleness trigger).
+    _run(ws)
+    meta = prep.WorkspaceCache(str(ws)).get_all_meta()
+    assert meta["fingerprint_algorithm_version"] == "1"          # re-seeded under the new name
+    with open(utils.handoff_path(str(ws))) as f:
+        cache_block = json.load(f)["depends_on"]["cache"]
+    assert cache_block["fingerprint_algorithm_version"] == "1"   # read-fallback resolves it
 
 
 # --- #21 single-transaction cache effects -----------------------------------
