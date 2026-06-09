@@ -5,7 +5,7 @@ between destinations inside by-dest), prep must recognize the move cache-only an
 carry the cached hash + metadata forward without re-hashing/re-extracting, with no
 filesystem operation (by-dest is read-only).
 
-Hashing/metadata are mocked; `hash_image` is a spy so we can assert a recognized
+Hashing/metadata are mocked; `fingerprint_image` is a spy so we can assert a recognized
 move is NOT re-hashed. photos_1_prep / photos_utils come from conftest.py.
 """
 import glob
@@ -34,7 +34,7 @@ def _install_mocks(monkeypatch, hash_calls):
         with open(p, "rb") as f:
             return {"status": "valid", "strategy": "image-content-hash-v1",
                     "value": "sig-" + f.read().hex()[:16], "engine_version": "t"}
-    monkeypatch.setattr(prep.ContentHasher, "hash_image", spy)
+    monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", spy)
 
     def meta(folders, max_workers=4, progress_coordinator=None):
         res = {}

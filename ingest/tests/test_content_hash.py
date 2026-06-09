@@ -1,8 +1,8 @@
 """Un-mocked tests for the real content hash and config-driven naming.
 
-These exercise the actual `ContentHasher.hash_image` (ImageMagick pixel signature),
+These exercise the actual `ContentHasher.fingerprint_image` (ImageMagick pixel signature),
 real EXIF extraction, and the config-driven filename format against the real fixtures
-in ``ingest/tests/fixtures/`` — the coverage that was missing while `hash_image` was a
+in ``ingest/tests/fixtures/`` — the coverage that was missing while `fingerprint_image` was a
 stub and the tests mocked around it.
 
 Most tests use a small real-derived JPEG (`cam_small.jpg`, a downscaled DSC0020.JPG with
@@ -57,12 +57,12 @@ def test_hash_image_valid_on_real_fullsize_jpeg_and_raw():
     # Proves the real full-size JPEG and the real Sony RAW both decode to a stable,
     # version-bound signature. Slow (30 MB RAW decode); CI runs it, pre-push skips it.
     # The full-size JPEG must always decode where magick is present (this catches a
-    # broken hash_image); the RAW part is skipped only if this magick build lacks RAW
+    # broken fingerprint_image); the RAW part is skipped only if this magick build lacks RAW
     # (libraw) support, so a minimal CI image is tolerated rather than reported red.
-    jpg = prep.ContentHasher.hash_image(CAM_JPG)
+    jpg = prep.ContentHasher.fingerprint_image(CAM_JPG)
     assert jpg["status"] == "valid", jpg
     assert jpg["value"] and jpg.get("engine_version")
-    raw = prep.ContentHasher.hash_image(CAM_RAW)
+    raw = prep.ContentHasher.fingerprint_image(CAM_RAW)
     if raw["status"] != "valid":
         pytest.skip(f"ImageMagick lacks RAW decode support here: {raw.get('error')}")
     assert raw["value"]
@@ -72,7 +72,7 @@ def test_hash_image_valid_on_real_fullsize_jpeg_and_raw():
 
 @requires_magick
 def test_hash_image_valid_and_version_bound():
-    r = prep.ContentHasher.hash_image(CAM_SMALL)
+    r = prep.ContentHasher.fingerprint_image(CAM_SMALL)
     assert r["status"] == "valid" and r["value"]
     assert r["strategy"] == "image-content-hash-v1"
     assert r.get("engine_version")
@@ -80,8 +80,8 @@ def test_hash_image_valid_and_version_bound():
 
 @requires_magick
 def test_pixel_signature_distinct_for_different_photos():
-    a = prep.ContentHasher.hash_image(CAM_SMALL)["value"]
-    b = prep.ContentHasher.hash_image(PHONE_JPG)["value"]
+    a = prep.ContentHasher.fingerprint_image(CAM_SMALL)["value"]
+    b = prep.ContentHasher.fingerprint_image(PHONE_JPG)["value"]
     assert a and b and a != b
 
 
@@ -101,17 +101,17 @@ def test_pixel_signature_is_exif_invariant(tmp_path):
          str(variant)],
         check=True, capture_output=True,
     )
-    original = prep.ContentHasher.hash_image(CAM_SMALL)
-    edited = prep.ContentHasher.hash_image(str(variant))
+    original = prep.ContentHasher.fingerprint_image(CAM_SMALL)
+    edited = prep.ContentHasher.fingerprint_image(str(variant))
     assert original["status"] == "valid" and edited["status"] == "valid"
     assert original["value"] == edited["value"], "pixel signature changed after an EXIF-only edit"
 
 
 def test_hash_image_failure_is_recorded_when_magick_absent(monkeypatch):
-    # Simulate ImageMagick missing: hash_image must return a clean failure record
+    # Simulate ImageMagick missing: fingerprint_image must return a clean failure record
     # (which the §6.2/§11.3 blocker path keys on), still version-stamped.
     monkeypatch.setattr(utils, "get_identify_command", lambda: [])
-    r = prep.ContentHasher.hash_image(CAM_SMALL)
+    r = prep.ContentHasher.fingerprint_image(CAM_SMALL)
     assert r["status"] == "failed"
     assert r["value"] is None
     assert "engine_version" in r
@@ -170,7 +170,7 @@ def test_byte_identical_images_dedup_with_real_hasher(tmp_path):
 @requires_exiftool
 def test_raw_jpeg_pair_separates_redundant_jpeg(tmp_path):
     # Uses the real RAW (slow). The JPEG sibling only needs the same basename.
-    if prep.ContentHasher.hash_image(CAM_RAW)["status"] != "valid":
+    if prep.ContentHasher.fingerprint_image(CAM_RAW)["status"] != "valid":
         pytest.skip("ImageMagick lacks RAW decode support here")
     ws = _make_ws(tmp_path)
     shutil.copy(CAM_RAW, ws / "0-sources" / "DSC0020.ARW")
@@ -192,7 +192,7 @@ def test_raw_jpeg_pair_separates_redundant_jpeg(tmp_path):
 def test_filename_format_is_config_driven(tmp_path, monkeypatch):
     ws = _make_ws(tmp_path)
     monkeypatch.setattr(
-        prep.ContentHasher, "hash_image",
+        prep.ContentHasher, "fingerprint_image",
         lambda p: {"status": "valid", "strategy": "image-content-hash-v1",
                    "value": "sig-" + os.path.basename(p), "engine_version": "test"},
     )

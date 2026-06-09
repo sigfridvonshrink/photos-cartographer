@@ -4,7 +4,7 @@ Covers: other-class routing to 1-strays (§3.2/§9), missing-timestamp
 UNKN_ naming + video routing, CreateDate fallback, suffix monotonicity, ghost-prune,
 by-dest hash-failure skip vs mutable blocker, redundant-JPEG 0-sources restriction,
 camera-group-key version staleness, by-dest precondition rejection, fingerprint stability
-across -j, the zfs snapshot success/required-failure paths, and hash_video failure.
+across -j, the zfs snapshot success/required-failure paths, and fingerprint_video failure.
 
 Mocked hashing/metadata, fast. photos_1_prep / photos_utils come from conftest.py.
 """
@@ -41,8 +41,8 @@ def _install(monkeypatch, meta_for=None, hash_for=None):
         with open(p, "rb") as f:
             return {"status": "valid", "strategy": "image-content-hash-v1",
                     "value": "sig-" + f.read().hex()[:16], "engine_version": "t"}
-    monkeypatch.setattr(prep.ContentHasher, "hash_image", hsh)
-    monkeypatch.setattr(prep.ContentHasher, "hash_video",
+    monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", hsh)
+    monkeypatch.setattr(prep.ContentHasher, "fingerprint_video",
                         lambda p: {"status": "valid", "strategy": "video-md5-v1",
                                    "value": "v-" + os.path.basename(p)})
 
@@ -218,8 +218,8 @@ def test_fingerprint_stable_across_jobs(tmp_path, monkeypatch):
 
 
 def test_hash_video_failure_is_graceful(tmp_path):
-    # hash_video on a non-video must not raise; it reports a failure status.
+    # fingerprint_video on a non-video must not raise; it reports a failure status.
     p = tmp_path / "notreally.mp4"
     p.write_bytes(b"this is not a video")
-    res = prep.ContentHasher.hash_video(str(p))
+    res = prep.ContentHasher.fingerprint_video(str(p))
     assert isinstance(res, dict) and res.get("status") == "failed"
