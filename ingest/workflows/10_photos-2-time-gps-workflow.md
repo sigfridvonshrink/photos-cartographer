@@ -1,4 +1,4 @@
-# Time/GPS Calibration Workflow Specification
+# Time/GPS Calibration Workflow Specification (`photos-2-time-gps`)
 
 ## 1. Purpose
 
@@ -7,8 +7,8 @@ This document defines the high-level workflow for the time/GPS calibration phase
 The calibration phase exists to:
 
 1. validate that prep has produced a current by-dest working set;
-2. operate only on files under `5-photos-by-dest`;
-3. require `4-photos-by-date` to contain no photos before calibration can proceed;
+2. operate only on files under `6-photos-by-dest`;
+3. require `5-photos-by-date` to contain no photos before calibration can proceed;
 4. require that destination development (the jpg/tif breakout) has not yet started;
 5. ensure every file can be resolved to real UTC;
 6. persist resolved UTC for every file in SQLite;
@@ -55,7 +55,7 @@ run -> inspect textual output / blockers
 
 Each rerun is idempotent for unchanged inputs (Section 30) and preserves prior user decisions whose logical target is unchanged (Sections 9, 21, 24). The ordered list in Section 34 describes one pass through this loop, not a workflow that runs exactly once.
 
-Calibration is also re-runnable *after* a successful execute — it is not a terminal, run-once phase. Media added later is absorbed by re-running prep (to recognize it) and then calibration, bounded only by calibration's gating preconditions and the rule that development must not have started. The authoritative cross-phase account of this — including why already-processed files are no-ops on rerun and when a rerun legitimately re-enters the decision loop — is in the shared contract (`10_photos-shared-contract.md` Section 10).
+Calibration is also re-runnable *after* a successful execute — it is not a terminal, run-once phase. Media added later is absorbed by re-running prep (to recognize it) and then calibration, bounded only by calibration's gating preconditions and the rule that development must not have started — and by the fact that this freedom lasts only until the workspace is **merged and sealed** (shared contract `10_photos-shared-contract.md` Sections 13.7, 10.1): a sealed workspace accepts no further prep or calibration, and more media then means a fresh workspace. The authoritative cross-phase account of this — including why already-processed files are no-ops on rerun and when a rerun legitimately re-enters the decision loop — is in the shared contract (`10_photos-shared-contract.md` Section 10).
 
 ---
 
@@ -170,7 +170,7 @@ Validation includes:
 3. recomputing GPX folder/file fingerprints where relevant;
 4. validating SQLite cache fingerprints or cache-generation markers;
 5. validating resolved UTC cache fingerprints;
-6. checking media file size/mtime/hash preconditions;
+6. checking media file size/mtime/fingerprint preconditions;
 7. checking metadata field-set/extractor versions;
 8. checking filename-format config fingerprint.
 
@@ -185,32 +185,33 @@ Execution must not proceed from stale dependency state.
 Calibration operates only on files under:
 
 ```text
-5-photos-by-dest/
+6-photos-by-dest/
 ```
 
 The workflow must not calibrate files still in:
 
 ```text
-0-source/
-1-missing-metadata/
-2-redundant-jpgs/
-3-videos-by-date/
-4-photos-by-date/
+0-sources/           (must be EMPTY — gated below)
+1-strays/
+2-missing-metadata/
+3-redundant-jpgs/
+4-videos-by-date/
+5-photos-by-date/    (must contain no photos — gated below)
 ```
 
-These folders are not calibration's concern. Residual content left in `0-source` (including `other`-class non-media files prep does not organize), `1-missing-metadata`, `2-redundant-jpgs`, or `3-videos-by-date` is expected and **does not block** calibration. Only `4-photos-by-date` is gated (below), because a non-empty `4-photos-by-date` means the user has not finished placing photos into by-dest.
+These folders are not calibration's concern for *processing*. Residual content in `1-strays/` (the non-media prep moved out of `0-sources`, prep Section 3.2), `2-missing-metadata`, `3-redundant-jpgs`, or `4-videos-by-date` is expected and **does not block** calibration. Two of these folders are **gated**, however (Section 13): `0-sources/` must be **empty** (prep leaves it empty after every run, so a non-empty `0-sources` means an un-processed dump is waiting and the user should re-run prep), and `5-photos-by-date/` must contain no photos (a non-empty one means the user has not finished placing photos into by-dest).
 
 Before calibration may proceed, the workflow must verify that:
 
 ```text
-4-photos-by-date/
+5-photos-by-date/
 ```
 
 contains no photos.
 
-If `4-photos-by-date/` still contains photos, calibration must block before creating any calibration JSON artifact.
+If `5-photos-by-date/` still contains photos, calibration must block before creating any calibration JSON artifact.
 
-The reason is to push the user to complete prep and place the current batch of files into `5-photos-by-dest` before calibrating that batch. This is a per-run gate, not a once-ever deadline: more files can be added and calibrated in a later cycle (shared contract `10_photos-shared-contract.md` Section 10), but each calibration run requires `4-photos-by-date` to be empty at the time it runs.
+The reason is to push the user to complete prep and place the current batch of files into `6-photos-by-dest` before calibrating that batch. This is a per-run gate, not a once-ever deadline: more files can be added and calibrated in a later cycle (shared contract `10_photos-shared-contract.md` Section 10), but each calibration run requires `5-photos-by-date` to be empty at the time it runs.
 
 The workflow may print a textual message such as:
 
@@ -218,9 +219,9 @@ The workflow may print a textual message such as:
 Calibration cannot proceed.
 
 Reason:
-4-photos-by-date still contains photos.
+5-photos-by-date still contains photos.
 
-Calibration only operates on 5-photos-by-dest.
+Calibration only operates on 6-photos-by-dest.
 Move/place remaining by-date files into by-dest through the prep workflow before calibrating.
 
 No calibration JSON was written.
@@ -230,7 +231,7 @@ No calibration JSON was written.
 
 Breaking a destination's media out into format-specific subfolders (by default `jpg/` and `tif/`, configurable via a `destination_distribution_subfolders` config key) belongs to a *later* development/processing phase that runs only after time and GPS are fixed. Development depends on the corrected timestamps, GPS, and filenames that calibration produces, so it must not run first.
 
-Therefore, before calibration may proceed, the workflow must verify that no such distribution subfolder exists anywhere under `5-photos-by-dest`. The check is strict: the mere existence of a folder whose name matches `destination_distribution_subfolders` triggers the hard-stop, **even if that folder is empty**. The workflow must not attempt to decide whether the folder "really" holds development output — presence alone is the signal. On detecting one, the workflow must hard-stop before creating any calibration JSON artifact: it means development has already begun and would be invalidated by the time/GPS corrections calibration is about to plan.
+Therefore, before calibration may proceed, the workflow must verify that no such distribution subfolder exists anywhere under `6-photos-by-dest`. The check is strict: the mere existence of a folder whose name matches `destination_distribution_subfolders` triggers the hard-stop, **even if that folder is empty**. The workflow must not attempt to decide whether the folder "really" holds development output — presence alone is the signal. On detecting one, the workflow must hard-stop before creating any calibration JSON artifact: it means development has already begun and would be invalidated by the time/GPS corrections calibration is about to plan.
 
 The workflow may print a textual message such as:
 
@@ -238,8 +239,8 @@ The workflow may print a textual message such as:
 Calibration cannot proceed.
 
 Reason:
-A jpg/ or tif/ development subfolder was found under 5-photos-by-dest:
-  5-photos-by-dest/2025/France/Paris/Louvre/jpg
+A jpg/ or tif/ development subfolder was found under 6-photos-by-dest:
+  6-photos-by-dest/2025/France/Paris/Louvre/jpg
 
 This means photo development/processing has already started.
 Time/GPS calibration must run BEFORE development, because it rewrites
@@ -253,9 +254,9 @@ No calibration JSON was written.
 
 ### 7.2 By-dest must contain only photos
 
-`5-photos-by-dest` is the user-curated **staging area** that calibration operates on: the user organizes a dump into destination folders here, calibration corrects time/GPS and finalizes names, and the result is then **merged into** the user's permanent library (e.g. digiKam) elsewhere. The workspace is not the library — it is transient working space for one or more dumps — but by-dest is structured to merge cleanly into the library, so it must contain **only photo files** (`image`/`raw` classes): the photos the user actively moved from by-date. It must not contain `other`-class non-media files, stray sidecars, notes, archives, or any non-media artifact — and it must not contain **videos** (Section 7.3); videos stay in `3-videos-by-date`.
+`6-photos-by-dest` is the user-curated **staging area** that calibration operates on: the user organizes a dump into destination folders here, calibration corrects time/GPS and finalizes names, and the result is then **merged into** the user's permanent library (e.g. digiKam) elsewhere. The workspace is not the library — it is transient working space for one or more dumps — but by-dest is structured to merge cleanly into the library, so it must contain **only photo files** (`image`/`raw` classes): the photos the user actively moved from by-date. It must not contain `other`-class non-media files, stray sidecars, notes, archives, or any non-media artifact — and it must not contain **videos** (Section 7.3); videos stay in `4-videos-by-date`.
 
-Before calibration may proceed, the workflow must verify that under `5-photos-by-dest` (recursively) there is no `other`-class non-media file **and no `video`-class file** — only `image`/`raw` photo files are permitted. Media classes are the project's `image`/`raw`/`video` extensions; `other` is non-media, and `video` belongs in `3-videos-by-date`, not by-dest (Section 7.3). The pipeline's own control artifacts are not affected because they never live under `5-photos-by-dest` — the numbered calibration artifacts are written to `.photos-ingest/` (Section 8.1), and `gpx_root` resolves outside the managed tree (shared contract Section 8). If any non-photo file (non-media or video) is found under by-dest, calibration must hard-stop before creating any calibration JSON artifact and report the offending path(s); it does not silently ignore or skip the file, because its presence means by-dest is not the clean photo-only set that calibration and the later merge into the library assume.
+Before calibration may proceed, the workflow must verify that under `6-photos-by-dest` (recursively) there is no `other`-class non-media file **and no `video`-class file** — only `image`/`raw` photo files are permitted. Media classes are the project's `image`/`raw`/`video` extensions; `other` is non-media, and `video` belongs in `4-videos-by-date`, not by-dest (Section 7.3). The pipeline's own control artifacts are not affected because they never live under `6-photos-by-dest` — the numbered calibration artifacts are written to `.photos-ingest/` (Section 8.1), and `gpx_root` resolves outside the managed tree (shared contract Section 8). If any non-photo file (non-media or video) is found under by-dest, calibration must hard-stop before creating any calibration JSON artifact and report the offending path(s); it does not silently ignore or skip the file, because its presence means by-dest is not the clean photo-only set that calibration and the later merge into the library assume.
 
 The workflow may print a textual message such as:
 
@@ -263,11 +264,11 @@ The workflow may print a textual message such as:
 Calibration cannot proceed.
 
 Reason:
-A non-photo file was found under 5-photos-by-dest:
-  5-photos-by-dest/Japan/Kyoto/notes.txt        (non-media)
-  5-photos-by-dest/Japan/Kyoto/clip.mp4         (video — belongs in 3-videos-by-date)
+A non-photo file was found under 6-photos-by-dest:
+  6-photos-by-dest/Japan/Kyoto/notes.txt        (non-media)
+  6-photos-by-dest/Japan/Kyoto/clip.mp4         (video — belongs in 4-videos-by-date)
 
-5-photos-by-dest must contain only photo files moved in from by-date.
+6-photos-by-dest must contain only photo files moved in from by-date.
 Remove or relocate non-photo files (and any videos) before calibrating.
 
 No calibration JSON was written.
@@ -275,9 +276,9 @@ No calibration JSON was written.
 
 ### 7.3 Videos are not calibrated, and must not be in by-dest
 
-Calibration's target is **photos**. Videos are **semi-foreign** (prep `10_photos-1-prep-workflow.md` Section 2.4): prep date-organizes and naively renames them into `3-videos-by-date` and they **stay there** — they are never sorted into destinations. Videos must **never** appear in `4-photos-by-date` or `5-photos-by-dest`.
+Calibration's target is **photos**. Videos are **semi-foreign** (prep `10_photos-1-prep-workflow.md` Section 2.4): prep date-organizes and naively renames them into `4-videos-by-date` and they **stay there** — they are never sorted into destinations. Videos must **never** appear in `5-photos-by-date` or `6-photos-by-dest`.
 
-This is a hard invariant, not a preference. The by-dest verification that enforces it — rejecting both `other`-class non-media and `video`-class files so only `image`/`raw` photos remain — lives in Section 7.2; a video found under `5-photos-by-dest` is a calibration break there. Likewise, a video found in `4-photos-by-date` is a prep-side break (prep `10_photos-1-prep-workflow.md` Section 6.1).
+This is a hard invariant, not a preference. The by-dest verification that enforces it — rejecting both `other`-class non-media and `video`-class files so only `image`/`raw` photos remain — lives in Section 7.2; a video found under `6-photos-by-dest` is a calibration break there. Likewise, a video found in `5-photos-by-date` is a prep-side break (prep `10_photos-1-prep-workflow.md` Section 6.1).
 
 Because videos never reach by-dest, calibration never plans or applies time/GPS metadata writes or renames for a video, never reasons about them in the camera-group/GPX/pre-state machinery, and they never appear in the per-destination artifacts. If a future need arises to calibrate video time/GPS, it is out of scope for this workflow as specified.
 
@@ -343,7 +344,7 @@ All numbered calibration artifacts are written to the workspace control director
 .photos-ingest/photos-24-execution-summary.json
 ```
 
-They must never be written inside `5-photos-by-dest/` (or any scanned media folder), because that tree is read-only for prep and prep would otherwise inventory the artifacts as ordinary files and fold them into its cache fingerprint.
+They must never be written inside `6-photos-by-dest/` (or any scanned media folder), because that tree is read-only for prep and prep would otherwise inventory the artifacts as ordinary files and fold them into its cache fingerprint.
 
 Placing the artifacts in `.photos-ingest/` is sufficient: prep skips that directory wholesale during its media scan (shared contract `10_photos-shared-contract.md` Section 5), so the artifacts are never inventoried or folded into prep's cache fingerprint. There is no per-file registry to maintain — keeping every control and artifact file inside `.photos-ingest/` is the whole mechanism.
 
@@ -403,6 +404,20 @@ The default posture is therefore conservative. A single high-confidence time-anc
 
 This is what makes the no-op/`complete` artifact path of Sections 20.2 and 25.2 reachable: a `complete` artifact is produced only for sections that are either genuinely no-op or auto-resolved under an enabled policy flag. When auto-apply is disabled, every proposal requires confirmation and resolved UTC is not finalized until the user acts.
 
+### 9.2 Decision and config sanity-validation
+
+Every human-authored value calibration consumes — the workspace config it reads (Section 13) and the decision fields the user fills in the numbered JSON artifacts — must be **sanity-validated before use**, per the shared input-validation discipline (shared contract `10_photos-shared-contract.md` Section 14). This is in addition to the dependency-fingerprint/SHA-256 verification of Sections 3–6: the hash checks detect that an artifact *changed*; validation detects that a value *inside* it is invalid. A decision file can re-hash correctly and still contain a malformed timezone or an out-of-range coordinate, and that must be caught.
+
+Calibration validates at least:
+
+1. **Config it reads** (read-only — calibration never writes config): the `gpx_root` resolves sanely; the `zfs` block's snapshot prefix is a valid snapshot-name component (no whitespace, `/`, or second `@`); `filename_timestamp_format` produces a filesystem-safe, non-empty component; GPX thresholds are non-negative numbers; `camera_time_and_timezone_policy.device_groups` classifications are well-formed and reference permitted classes. (Calibration does not consume `library_root` or the merge/placement config — those are merge's to validate, shared contract Section 14.1. Prep is the sole writer of config and validates it on seeding/read too, prep Section 6.3; calibration re-validates the values it actually consumes.)
+2. **Destination timezone decisions** (Section 18): a user-entered `manual_iana_timezone` must be a real, resolvable IANA zone; `accept_proposed_timezone` must be boolean; a destination cannot end with an empty effective timezone and still be treated as solved.
+3. **Camera-group time decisions** (Sections 10.2, 19): a `manual_real_utc` must parse as a valid UTC datetime; a `manual_offset_seconds` must be a number within sane bounds; `accept_proposal` must be boolean; an accepted anchor must reference an anchor that exists.
+4. **Manual GPS decisions** (Section 24.1): entered coordinates must be in range (latitude −90…90, longitude −180…180) and numerically well-formed; a structurally malformed GPS decision object is a validation error, not a silently-skipped one.
+5. **Decision structure** (Section 9): the user fills *values*, not structure. A decision object whose shape was broken by hand-editing (missing required keys, wrong types, malformed JSON in a section) is a validation blocker located to the exact artifact, destination/group/file, and field.
+
+Behaviour follows the shared discipline (shared contract Section 14.2): a validation failure is a **hard blocker** reported textually and located precisely (which artifact, which destination/group/file, which field); calibration produces no downstream artifact and mutates nothing from an invalid value, exactly as for a stale dependency. An invalid user decision is **preserved and flagged as requiring correction**, never silently deleted, coerced, or repaired (consistent with Section 9) — the user fixes the source and re-runs. Validation runs whenever the value is consumed on a given run, not cached as permanently valid.
+
 ---
 
 ## 10. Per-destination structure
@@ -433,7 +448,7 @@ photos-22-gps-decisions.json
 photos-23-executable-plan.json
 ```
 
-Each artifact should be grouped by destination under `5-photos-by-dest`.
+Each artifact should be grouped by destination under `6-photos-by-dest`.
 
 A global summary section may exist, but decisions must be inspectable per destination.
 
@@ -453,8 +468,8 @@ Therefore camera-group time calibration is represented **once, at group scope**,
     "sony_a6400_serial_123456": {
       "camera_group": "sony_a6400_serial_123456",
       "destinations_present": [
-        "5-photos-by-dest/Belgium/Brussels",
-        "5-photos-by-dest/Japan/Kyoto"
+        "6-photos-by-dest/Belgium/Brussels",
+        "6-photos-by-dest/Japan/Kyoto"
       ],
       "proposal": { "...": "..." },
       "user_decision": { "...": "..." },
@@ -463,7 +478,7 @@ Therefore camera-group time calibration is represented **once, at group scope**,
     }
   },
   "destinations": {
-    "5-photos-by-dest/Belgium/Brussels": {
+    "6-photos-by-dest/Belgium/Brussels": {
       "camera_groups_present": ["sony_a6400_serial_123456"],
       "...": "..."
     }
@@ -493,7 +508,7 @@ photos-22-gps-decisions.json
 photos-23-executable-plan.json
 ```
 
-Each artifact should be grouped by destination under `5-photos-by-dest`.
+Each artifact should be grouped by destination under `6-photos-by-dest`.
 
 Example shape:
 
@@ -505,16 +520,16 @@ Example shape:
     "sony_a6400_serial_123456": { "...": "see Section 10.2" }
   },
   "destinations": {
-    "5-photos-by-dest/Belgium/Brussels": {
+    "6-photos-by-dest/Belgium/Brussels": {
       "destination_id": "...",
-      "destination_path": "5-photos-by-dest/Belgium/Brussels",
+      "destination_path": "6-photos-by-dest/Belgium/Brussels",
       "camera_groups_present": ["sony_a6400_serial_123456"],
       "status": "...",
       "depends_on": {}
     },
-    "5-photos-by-dest/Japan/Kyoto": {
+    "6-photos-by-dest/Japan/Kyoto": {
       "destination_id": "...",
-      "destination_path": "5-photos-by-dest/Japan/Kyoto",
+      "destination_path": "6-photos-by-dest/Japan/Kyoto",
       "camera_groups_present": ["sony_a6400_serial_123456"],
       "status": "...",
       "depends_on": {}
@@ -580,15 +595,21 @@ Execution is allowed only after `photos-23-executable-plan.json` exists, is curr
 
 Calibration may be invoked without assuming upstream prep artifacts are valid.
 
-The workspace lock is acquired at process startup, before preflight (shared contract `10_photos-shared-contract.md` Section 2); if another pipeline run holds it, calibration exits fail-fast without scanning, planning, or writing anything. Otherwise, the first workflow action is always preflight validation.
+The workspace lock is acquired at process startup, before preflight (shared contract `10_photos-shared-contract.md` Section 2); if another pipeline run holds it, calibration exits fail-fast without scanning, planning, or writing anything. Immediately after, calibration applies the same startup guards every script does (shared contract Section 13.7; prep Section 6.2):
+
+- **Sealed workspace → hard-stop, sealed means sealed.** If a **terminal/sealed marker** from a prior successful merge is present (shared contract Section 13.7), calibration **hard-stops immediately, mutating nothing and touching nothing**, and directs the user to a fresh workspace — a merged workspace is done. There is no recovery utility. If files are seen at the **workspace root** or in **`0-sources`**, calibration additionally warns that a likely new dump was detected and that, because this workspace is sealed, the dump must be moved into a **fresh workspace** by hand; it leaves the dump exactly where it is.
+- **Uninitialized → run prep first.** If the workspace has no root sentinel `photos-00-workspace-guard` (it was never initialized, shared contract Section 5; prep Section 3.1), calibration hard-stops with "not an initialized workspace — run prep first" (only prep's init path consumes an as-arrived dump).
+- **Loose file at the workspace root → hard-stop (strict).** On an initialized workspace the base must hold only folders; any loose file at the root blocks (dotfiles included) — dumps belong in `0-sources` (prep Section 6.2 item 2).
+
+Otherwise, the first workflow action is always preflight validation.
 
 The workflow must:
 
 1. load the available `photos-1-prep` handoff and SQLite cache state;
-2. verify that `4-photos-by-date/` contains no photos;
-3. verify that no `destination_distribution_subfolders` (jpg/tif) exist under `5-photos-by-dest` and hard-stop if development has started (Section 7.1);
-4. verify that `5-photos-by-dest` contains only photo files and hard-stop on any non-photo file — `other`-class non-media or `video`-class — found under it (Sections 7.2, 7.3);
-5. identify files under `5-photos-by-dest`;
+2. verify that `5-photos-by-date/` contains no photos, **and that `0-sources/` is empty** — prep leaves `0-sources` empty at the end of every run (prep Sections 7.6, 18), so a non-empty `0-sources` means an un-processed dump is waiting; calibration hard-stops directing the user to re-run prep. (Residuals in `1-strays`, `2-missing-metadata`, `3-redundant-jpgs`, and `4-videos-by-date` are tolerated and do not block.);
+3. verify that no `destination_distribution_subfolders` (jpg/tif) exist under `6-photos-by-dest` and hard-stop if development has started (Section 7.1);
+4. verify that `6-photos-by-dest` contains only photo files and hard-stop on any non-photo file — `other`-class non-media or `video`-class — found under it (Sections 7.2, 7.3);
+5. identify files under `6-photos-by-dest`;
 6. detect by-dest media not yet recorded by prep (and/or handoff by-date files now missing) and hard-stop with the targeted "re-run prep" blocker if found (Section 13.1);
 7. validate whether the prep/cache state for by-dest files is current;
 8. block before producing calibration JSON artifacts if the prep/cache state is stale, missing, incomplete, or unverifiable.
@@ -599,12 +620,14 @@ The workflow must validate that:
 2. the prep handoff exists and re-hashes to the SHA-256 recorded wherever it is depended upon (Section 4);
 3. SQLite schema/cache versions are acceptable;
 4. expected by-dest media files still exist;
-5. size/mtime/hash preconditions are current;
+5. size/mtime/fingerprint preconditions are current;
 6. the metadata field-set version is acceptable;
 7. prep handoff dependencies are still current;
 8. by-dest SQLite records are current.
 
 If validation fails, the workflow prints a textual stale-state report and produces no JSON artifact.
+
+Separately from staleness, every human-authored value calibration consumes — the config it reads and the decision fields it loads — is **sanity-validated before use** (Section 9.2; shared contract `10_photos-shared-contract.md` Section 14). An invalid value (e.g. a non-resolvable timezone, an out-of-range coordinate, a malformed `zfs` snapshot prefix, or a structurally broken decision object) is a hard blocker located to the offending field; calibration produces no downstream artifact and mutates nothing until the user fixes it. Validation detects invalid *content*; the dependency cascade detects *change* — both run.
 
 Example:
 
@@ -625,8 +648,8 @@ This requirement is largely self-enforcing through the validations above: a stal
 
 Detection (cache/handoff vs. filesystem, `stat`-level, no media re-read):
 
-1. one or more media files exist under `5-photos-by-dest` that the handoff/cache does not record at their current by-dest path (unrecorded by-dest media); and/or
-2. one or more photos the handoff records under `4-photos-by-date` are now missing from there (consistent with having been moved into by-dest). (Videos in `3-videos-by-date` are not part of this check — they are never moved into by-dest, Section 7.3.)
+1. one or more media files exist under `6-photos-by-dest` that the handoff/cache does not record at their current by-dest path (unrecorded by-dest media); and/or
+2. one or more photos the handoff records under `5-photos-by-date` are now missing from there (consistent with having been moved into by-dest). (Videos in `4-videos-by-date` are not part of this check — they are never moved into by-dest, Section 7.3.)
 
 When either condition holds, calibration hard-stops before creating any calibration JSON artifact and emits the targeted blocker:
 
@@ -634,11 +657,11 @@ When either condition holds, calibration hard-stops before creating any calibrat
 Calibration cannot proceed.
 
 Reason:
-5-photos-by-dest contains photos that prep has not yet recorded
+6-photos-by-dest contains photos that prep has not yet recorded
 (the handoff predates your most recent move from by-date into by-dest).
 
 Next action:
-Re-run photos-1-prep. It will recognize the moved files (no re-hash,
+Re-run photos-1-prep. It will recognize the moved files (no re-fingerprint,
 no re-read) and refresh the handoff/cache, then calibration can proceed.
 
 No calibration JSON was written.
@@ -650,7 +673,7 @@ Calibration never performs the move recognition itself and never writes to the c
 
 ## 14. Stage 2 — Create in-memory by-dest file objects
 
-After preflight passes, the workflow creates in-memory file objects for files under `5-photos-by-dest` only.
+After preflight passes, the workflow creates in-memory file objects for files under `6-photos-by-dest` only.
 
 Each file object should represent facts such as:
 
@@ -658,7 +681,7 @@ Each file object should represent facts such as:
 2. destination path;
 3. file size;
 4. mtime;
-5. content hash, if available;
+5. content fingerprint, if available;
 6. media type;
 7. camera identity fields;
 8. raw timestamp fields;
@@ -770,7 +793,7 @@ even if no user input is required.
 
 ## 18. Destination civil timezone decision
 
-`photos-21-time-decisions.json` must settle the civil timezone for every destination under `5-photos-by-dest`.
+`photos-21-time-decisions.json` must settle the civil timezone for every destination under `6-photos-by-dest`.
 
 The destination civil timezone is used to:
 
@@ -785,7 +808,7 @@ Example shape:
 
 ```json
 {
-  "destination_path": "5-photos-by-dest/Belgium/Brussels",
+  "destination_path": "6-photos-by-dest/Belgium/Brussels",
   "destination_timezone": {
     "proposed_iana_timezone": "Europe/Brussels",
     "proposal_source": "config_or_native_gps_or_gpx",
@@ -829,7 +852,7 @@ Resolved UTC must not be finalized for files in a destination whose timezone/tim
 
 ### 18.1 Re-evaluation when a file is moved between destinations
 
-A file's destination is an input to its time decision: the destination civil timezone above, and downstream the resolved UTC and the local-time rename. If the user re-sorts a file from one destination to another inside `5-photos-by-dest` (e.g. fixing a mis-sort), prep recognizes the move and updates the handoff to record the new destination (prep `10_photos-1-prep-workflow.md` Section 10.2). On the next calibration run this changes the handoff, which — through the dependency cascade (Section 30; shared contract Section 9) — restales the affected destination's per-file decisions for that file, so calibration **re-evaluates** it under its **new** destination: it applies the new destination's effective timezone, recomputes resolved UTC and the local-time rename accordingly, and never silently carries the old destination's timezone onto a file that now lives elsewhere.
+A file's destination is an input to its time decision: the destination civil timezone above, and downstream the resolved UTC and the local-time rename. If the user re-sorts a file from one destination to another inside `6-photos-by-dest` (e.g. fixing a mis-sort), prep recognizes the move and updates the handoff to record the new destination (prep `10_photos-1-prep-workflow.md` Section 10.2). On the next calibration run this changes the handoff, which — through the dependency cascade (Section 30; shared contract Section 9) — restales the affected destination's per-file decisions for that file, so calibration **re-evaluates** it under its **new** destination: it applies the new destination's effective timezone, recomputes resolved UTC and the local-time rename accordingly, and never silently carries the old destination's timezone onto a file that now lives elsewhere.
 
 Decisions that are genuinely destination-scoped (the timezone of each destination) are unaffected for files that did not move; only the moved file is re-evaluated, and only against its new destination. As always, the mandatory re-prep after the move applies (shared contract Section 10) so calibration sees the move at all.
 
@@ -898,7 +921,7 @@ Example shape:
 ```json
 {
   "proposal_id": "anchor-001",
-  "source_file": "5-photos-by-dest/Belgium/Brussels/DSC01234.ARW",
+  "source_file": "6-photos-by-dest/Belgium/Brussels/DSC01234.ARW",
   "camera_group": "sony_a6400_serial_123456",
   "camera_source_naive_time": "2024:07:03 14:12:08",
   "native_gps": {
@@ -913,7 +936,7 @@ Example shape:
   },
   "proposal": {
     "proposed_real_utc": "2024-07-03T12:12:21Z",
-    "proposed_offset_seconds": -71987,
+    "proposed_offset_seconds": -7187,
     "confidence": "review_required",
     "rank": "recommended"
   },
@@ -1141,7 +1164,7 @@ A **manual GPS override is reversible**: withdrawing it undoes its effect, and c
 
 The mechanism is a **pre-state ledger** in SQLite, archived with the database (shared contract `10_photos-shared-contract.md` Section 13.4):
 
-1. **Capture on first application.** The first time a manual GPS decision causes the executor to write GPS to a file, it captures that file's GPS EXIF *as it was immediately before the write* and pins it in the ledger, keyed by content hash. The captured pre-state is one of:
+1. **Capture on first application.** The first time a manual GPS decision causes the executor to write GPS to a file, it captures that file's GPS EXIF *as it was immediately before the write* and pins it in the ledger, keyed by content fingerprint. The captured pre-state is one of:
    - the **previous GPS coordinates** (and related GPS fields) that were present, or
    - an explicit **"absent" sentinel** meaning the file had no GPS before the override.
    This pinned value is the **true original**: it is written once and never overwritten by subsequent runs of the same or a changed decision, so it always represents the state before the pipeline first touched the file's GPS via a manual decision.
@@ -1152,7 +1175,7 @@ The mechanism is a **pre-state ledger** in SQLite, archived with the database (s
 
 4. **Once restored, the ledger entry is consumed.** After a withdrawal has restored the pre-state of a file that still exists, the override is gone and the file is back to original; a subsequent fresh manual decision on the same file pins the (now original) pre-state again on its first application. (This consume-on-restore applies only to files still present; an entry for a file that has disappeared is kept — item 5.)
 
-5. **A disappeared file's entry is kept for reference.** If a file that has a pre-state ledger entry no longer exists at the next run (deleted, or removed from the workspace), prep/calibration must **not** prune its ledger entry. The pinned pre-state is retained as a historical record — it documents that the pipeline once overrode that file's GPS and what the original was — keyed by the content hash that identified it. A retained entry for an absent file triggers no operation (there is nothing to revert), and it is carried into the archived `photos-00-ingest.db`. Keeping it preserves the "every change is explainable from the record" guarantee (shared contract Section 12) even for files that later left the workspace; the cost (a few stale rows) is accepted in exchange for never silently dropping evidence of a past mutation.
+5. **A disappeared file's entry is kept for reference.** If a file that has a pre-state ledger entry no longer exists at the next run (deleted, or removed from the workspace), prep/calibration must **not** prune its ledger entry. The pinned pre-state is retained as a historical record — it documents that the pipeline once overrode that file's GPS and what the original was — keyed by the content fingerprint that identified it. A retained entry for an absent file triggers no operation (there is nothing to revert), and it is carried into the archived `photos-00-ingest.db`. Keeping it preserves the "every change is explainable from the record" guarantee (shared contract Section 12) even for files that later left the workspace; the cost (a few stale rows) is accepted in exchange for never silently dropping evidence of a past mutation.
 
 6. **The ledger is per-workspace.** The pre-state ledger lives in that workspace's `photos-00-ingest.db` and is meaningful only within it. If a workspace is finalized and torn down and the same photos are later re-imported into a **fresh** workspace, the new workspace starts with no ledger: a manual GPS override there pins whatever GPS the files *now* carry (i.e. the previously-applied value) as that workspace's "original." This is intended and correct — within any one workspace, "original" means the state before that workspace first touched the field. The archived `photos-00-ingest.db` (shared contract Section 13.4) preserves the original ledger as a historical record of the finalized workspace; it is not auto-merged into a new workspace's live ledger. Reversibility is therefore a within-workspace guarantee, not a cross-workspace one — consistent with the workspace being transient and decisions being re-authored per workspace.
 
@@ -1161,7 +1184,7 @@ The mechanism is a **pre-state ledger** in SQLite, archived with the database (s
 - **Manual GPS** (locked or fallback, authored by the user) — reversible via the pinned pre-state as above.
 - **Automated GPS** (GPX interpolation/extrapolation, preserved native GPS) — **not** rolled back. Withdrawing or invalidating an automated decision simply means it is not re-derived; the field is recomputed from current inputs and whatever recomputation yields is written. No pre-state is stored for automated values, and no revert operation is emitted for them. This must be explicit in the plan: a revert operation exists *only* for a withdrawn manual GPS override.
 
-**Time and filename are never reverted.** Resolved UTC and the destination-local filename position the file *within its destination*. They are always **recomputed** to match current decisions, never rolled back to a pre-pipeline value — reverting them would un-position an already-organized file, which is meaningless. Recomputation only rewrites the timestamp metadata and the filename **in place within `5-photos-by-dest`**; it never moves the file to a different destination or anywhere else in the tree — the file stays in the destination folder the user placed it in. So: GPS manual overrides are reversible from stored pre-state; time and naming are recomputed in place within by-dest; automated GPS is overwritten by recomputation.
+**Time and filename are never reverted.** Resolved UTC and the destination-local filename position the file *within its destination*. They are always **recomputed** to match current decisions, never rolled back to a pre-pipeline value — reverting them would un-position an already-organized file, which is meaningless. Recomputation only rewrites the timestamp metadata and the filename **in place within `6-photos-by-dest`**; it never moves the file to a different destination or anywhere else in the tree — the file stays in the destination folder the user placed it in. So: GPS manual overrides are reversible from stored pre-state; time and naming are recomputed in place within by-dest; automated GPS is overwritten by recomputation.
 
 The plan therefore distinguishes three operation origins for a GPS field — *apply manual*, *revert manual to pinned pre-state*, and *recompute automated* — and the transformation log (shared contract Section 13.3) records which applied to each file, including a revert and the pre-state it restored.
 
@@ -1229,7 +1252,7 @@ Example shape:
 
 ```json
 {
-  "destination_path": "5-photos-by-dest/Belgium/Brussels",
+  "destination_path": "6-photos-by-dest/Belgium/Brussels",
   "gps_decisions": {
     "summary": {
       "files_total": 842,
@@ -1461,7 +1484,7 @@ An executable calibration plan may be produced only when:
 8. config dependencies are current;
 9. GPX dependencies are current, where relevant;
 10. prep handoff/cache dependencies are current;
-11. media file size/mtime/hash preconditions are current.
+11. media file size/mtime/fingerprint preconditions are current.
 
 The executable artifact is:
 
@@ -1515,7 +1538,7 @@ It must depend on:
 
 ## 29. Stage 10 — Execution
 
-The entire calibration run — every pass of the convergent rerun loop (Section 2.1), including preflight, planning, and execution — runs under the single workspace-wide lock acquired at process startup and held until exit (shared contract `10_photos-shared-contract.md` Section 2). No two pipeline processes of either phase ever overlap. The execution steps below assume the lock is already held; they do not re-acquire or independently scope it.
+The entire calibration run — every pass of the convergent rerun loop (Section 2.1), including preflight, planning, and execution — runs under the single workspace-wide lock acquired at process startup and held until exit (shared contract `10_photos-shared-contract.md` Section 2). No two pipeline processes of any phase ever overlap. The execution steps below assume the lock is already held; they do not re-acquire or independently scope it.
 
 Execution applies only the already-planned metadata and rename operations.
 
@@ -1527,7 +1550,7 @@ Execution must:
 4. reject stale plans before mutation;
 5. confirm the workspace lock is held (acquired at run start per shared contract Section 2);
 6. take a pre-mutation snapshot where configured, reusing the same ZFS snapshot mechanism prep uses (the `zfs` block in the workspace config `photos-00-config.json`, keyed by plan id), and honoring the same `snapshots_required` semantics (abort if a required snapshot fails);
-7. apply only planned operations;
+7. apply only planned operations, each re-verified no-clobber **at execute time** and performed atomically (Section 29.1a; shared contract `10_photos-shared-contract.md` Section 15): immediately before each rename, confirm the target name is not already occupied (case-insensitively where applicable) rather than trusting the plan's suffix allocation, and apply the rename as a single atomic filesystem operation; metadata writes are applied atomically (write-and-atomic-rename or safe-write mode). An unexpectedly occupied rename target at execute time is a blocker, never a clobber;
 8. journal every metadata write, marker write, file move, or rename;
 9. update SQLite/cache after successful writes;
 10. write `photos-24-execution-summary.json` (contents per Section 29.2);
@@ -1556,8 +1579,8 @@ Re-running a fully-applied plan must be a no-op. Execution must never reapply a 
 
 Execution mutates the photographic files' metadata and names, so each operation must be individually atomic and crash-detectable — a crash, a kill, or an `exiftool` failure mid-operation must never leave a file in a half-written or ambiguous state, and the resume logic of Section 29.1 must be able to tell, per file, whether an operation completed. (Calibration operates on photos only and writes metadata with `exiftool`; videos never reach by-dest and are never touched here, Section 7.3.)
 
-1. **Atomic writes.** A metadata write or rename either fully takes effect or not at all. Metadata writes are performed so that the original file is never left partially overwritten — e.g. write to a temporary copy and atomically rename it into place, or use the tool's safe-write mode — so an interruption leaves either the pre-write file or the fully-written file, never a corrupt intermediate. Renames are single atomic filesystem operations (no-clobber, Section 27).
-2. **Journal intent before, confirmation after.** For each operation the journal records an *intent* record before the mutation and a *confirmation* record after it succeeds (with enough identity — content hash, target field/name, and the resulting value — to verify completion). On resume, an operation with intent-but-no-confirmation is treated as **possibly torn**: execution re-derives the file's actual current state and either completes the operation (if the pre-write state is still present) or marks it done (if the post-write state is already present). Because writes are atomic (point 1), the file is always in exactly one of those two states, never a corrupt third.
+1. **Atomic writes, no-clobber re-checked at execute time.** A metadata write or rename either fully takes effect or not at all. Metadata writes are performed so that the original file is never left partially overwritten — e.g. write to a temporary copy and atomically rename it into place, or use the tool's safe-write mode — so an interruption leaves either the pre-write file or the fully-written file, never a corrupt intermediate. Renames are single atomic filesystem operations and are no-clobber **verified at the moment of execution**: immediately before the rename, execution confirms the planned target name is not already present (case-insensitively where the filesystem is case-insensitive) rather than relying solely on the plan's suffix allocation (Section 27). The planner treats every on-disk and planned name as permanently occupied; the executor independently re-verifies the actual target is free. An unexpectedly occupied target is a blocker, never a clobber (shared contract `10_photos-shared-contract.md` Section 15).
+2. **Journal intent before, confirmation after.** For each operation the journal records an *intent* record before the mutation and a *confirmation* record after it succeeds (with enough identity — content fingerprint, target field/name, and the resulting value — to verify completion). On resume, an operation with intent-but-no-confirmation is treated as **possibly torn**: execution re-derives the file's actual current state and either completes the operation (if the pre-write state is still present) or marks it done (if the post-write state is already present). Because writes are atomic (point 1), the file is always in exactly one of those two states, never a corrupt third.
 3. **Pre-state captured before the overwrite it protects.** For a manual GPS override, the pinned pre-state (Section 24.1) must be committed to the ledger **before** the GPS write that overwrites it is applied. If the capture and the write were ordered the other way, a crash between them could lose the true original. So the ordering is: capture-and-commit pre-state → then write. A crash after capture but before write leaves a pinned pre-state equal to the current file state, which is harmless (a later revert simply restores what is already there).
 4. **Tool failure is fatal to that operation, not silent.** If `exiftool` reports failure for a file, execution records the failure (Section 29.2 item 6), leaves that file at its pre-operation state (point 1 guarantees it is intact), and continues or aborts per policy — it never records the operation as applied. A failed write is never treated as a no-op on the next run.
 
@@ -1602,7 +1625,7 @@ Example shape:
   },
   "resume": { "newly_applied": 0, "already_satisfied_skipped": 0 },
   "failures": [],
-  "destinations": { "5-photos-by-dest/Belgium/Brussels": { "...": "..." } },
+  "destinations": { "6-photos-by-dest/Belgium/Brussels": { "...": "..." } },
   "run_metadata": { "started_at": "...", "finished_at": "...", "jobs": 1 }
 }
 ```
@@ -1620,15 +1643,30 @@ The workflow should recalculate only the affected downstream artifacts when upst
 Examples:
 
 ```text
-4-photos-by-date contains photos
+Workspace sealed (prior successful merge)
+  -> calibration hard-stops; nothing touched (sealed means sealed, Section 13)
+  -> if files sit at the root or in 0-sources, also warn "likely new dump;
+     this workspace is done; move it to a fresh workspace; left untouched"
+
+Workspace not initialized (no root sentinel)
+  -> calibration hard-stops: "not an initialized workspace — run prep first" (Section 13)
+
+Loose file at the workspace root (initialized workspace)
+  -> calibration hard-stops (strict: any root file, dotfiles included; Section 13)
+
+0-sources not empty (un-processed dump waiting)
+  -> calibration blocked: re-run prep (prep leaves 0-sources empty, Section 13)
+  -> residuals in 1-strays / 2-missing-metadata / 3-redundant-jpgs / 4-videos-by-date are fine
+
+5-photos-by-date contains photos
   -> calibration blocked
   -> no JSON artifact created
 
-jpg/tif development subfolder present under 5-photos-by-dest
+jpg/tif development subfolder present under 6-photos-by-dest
   -> calibration hard-stops (development already started)
   -> no JSON artifact created
 
-Non-media (other-class) file present under 5-photos-by-dest
+Non-media (other-class) file present under 6-photos-by-dest
   -> calibration hard-stops (by-dest must be photo-only, Section 7.2)
   -> offending path(s) reported; no JSON artifact created
 
@@ -1680,9 +1718,16 @@ Filename format config changed
 photos-22-gps-decisions.json changed
   -> photos-23-executable-plan.json stale
 
-Media file size/mtime/hash changed
+Media file size/mtime/fingerprint changed
   -> calibration blocked
   -> prep/cache refresh required
+
+Invalid human-authored value (e.g. manual_iana_timezone not a real zone,
+manual GPS latitude out of range, zfs snapshot prefix contains '/',
+or a hand-edited decision object is structurally broken)
+  -> sanity-validation fails (Section 9.2)
+  -> hard blocker, offending artifact/field located, no downstream artifact
+  -> value preserved and flagged for correction, never silently dropped
 ```
 
 ---
@@ -1693,14 +1738,17 @@ Finalize is a **separate, explicitly-invoked command**, not part of `execute` an
 
 Finalize must:
 
-1. run under the workspace lock (shared contract Section 2) and be **non-destructive** — it reads and bundles; it never mutates the workspace, the artifacts, the SQLite DB, or the library;
+1. run under the workspace lock (shared contract Section 2) and be **non-destructive** — it reads and bundles; it never mutates the workspace, the artifacts, the live SQLite DB, or the library. (Generating `photos-25-complete-log.json` and capturing the `photos-25-calibrate-ingest.db` backup snapshot below are *new-file* writes into `.photos-ingest/`, not mutations of any existing photo, artifact, or the live DB — the snapshot is a read-only copy of the live DB.)
 2. require that calibration has ended successfully (a complete, executed `photos-23-executable-plan.json` with a corresponding `photos-24-execution-summary.json`); it refuses to finalize an incomplete or stale state;
-3. assemble the **archival package** defined in shared contract Section 13 — `photos-00-config.json`, the SQLite database `photos-00-ingest.db`, the JSON artifacts `photos-11-handoff.json`, `photos-21-time-decisions.json`, `photos-22-gps-decisions.json`, `photos-23-executable-plan.json`, `photos-24-execution-summary.json`, and a freshly generated `photos-25-complete-log.json`;
-4. generate the transformation log `photos-25-complete-log.json` (shared contract Section 13.3) by consolidating prep's handoff/journal and calibration's decision artifacts/journal into a per-photo, content-hash-keyed, human-readable JSON record of every transformation between ingestion and successful calibration;
-5. write a self-describing manifest (workspace identity, plan/execution ids, and SHA-256 of each bundled item) so the package's integrity is verifiable later;
+3. assemble the **archival package** defined in shared contract Section 13 — `photos-00-config.json`, the live SQLite database `photos-00-ingest.db`, the per-phase DB backup snapshots present (`photos-15-prep-ingest.db` and the calibration snapshot captured in item 4a), the JSON artifacts `photos-11-handoff.json`, `photos-15-prep-log.json`, `photos-21-time-decisions.json`, `photos-22-gps-decisions.json`, `photos-23-executable-plan.json`, `photos-24-execution-summary.json`, and a freshly generated `photos-25-complete-log.json`;
+4. generate the transformation log `photos-25-complete-log.json` (shared contract Section 13.3) by **carrying prep's end-of-prep audit log (`photos-15-prep-log.json`) forward** as the prep portion of each photo's journey and appending calibration's steps — consolidating prep's handoff/journal and calibration's decision artifacts/journal into a per-photo, content-fingerprint-keyed, human-readable JSON record of every transformation between ingestion and successful calibration. It does not re-derive prep's history or discard the prep log; `photos-25-complete-log.json` is a superset of `photos-15-prep-log.json` (shared contract Section 13.3 item 6);
+4a. capture the end-of-calibration database backup snapshot `photos-25-calibrate-ingest.db` — a consistent, atomic copy of the live `photos-00-ingest.db` taken at finalize (shared contract Section 13.4a). This reads the live DB and writes a new immutable file; it does not mutate the live DB (consistent with item 1);
+5. write a self-describing manifest (workspace identity, plan/execution ids, and SHA-256 of each bundled item, including the DB snapshots) so the package's integrity is verifiable later;
 6. leave the package in a known location the user can move to permanent storage alongside the library.
 
 Finalize creates no new authority and makes no decisions; it is the retention step that makes authored decisions (shared contract Section 12) outlive the transient workspace.
+
+Finalize is followed, when the operator chooses, by the **merge** phase (`photos-3-merge`, spec `10_photos-3-merge-workflow.md`; shared contract Sections 10.4 and 13.5), which **moves** the finalized photos from `6-photos-by-dest` into the permanent library and writes its own log `photos-35-merge-log.json` (copied forward from `photos-25-complete-log.json`, never editing it) recording each file's final library location. Merge is optional and additive: the finalize archival package — the `photos-25` transformation log, the SQLite database and its snapshots, and the job/decision artifacts — is complete and self-sufficient without it, and a workspace that is never merged keeps that full record intact (shared contract Section 13). Merge requires a successfully finalized workspace; calibration and finalize never perform the merge themselves.
 
 ---
 
@@ -1710,17 +1758,22 @@ The workflow should produce user-facing outputs at each blocked or decision poin
 
 Important textual outputs include:
 
-1. by-date-not-empty blocker;
-2. development-already-started (jpg/tif subfolder present) hard-stop;
-3. stale prep/by-dest dependency report;
-4. unknown camera group report;
-5. pasteable config snippets for newly recognised groups;
-6. reason why no JSON artifact was produced, if blocked before time-decision stage;
-7. time-decision summary;
-8. resolved UTC cache summary;
-9. GPS-decision summary;
-10. executable plan summary;
-11. execution summary.
+1. sealed-workspace hard-stop (with new-dump warning if files sit at the root or in `0-sources`, Section 13);
+2. not-initialized hard-stop ("run prep first", Section 13);
+3. loose-root-file hard-stop (strict, Section 13);
+4. `0-sources`-not-empty blocker (re-run prep, Section 13);
+5. by-date-not-empty blocker;
+6. development-already-started (jpg/tif subfolder present) hard-stop;
+7. stale prep/by-dest dependency report;
+8. unknown camera group report;
+9. pasteable config snippets for newly recognised groups;
+10. invalid-value blocker — a config or decision field that failed sanity-validation, naming the artifact and field (Section 9.2);
+11. reason why no JSON artifact was produced, if blocked before time-decision stage;
+12. time-decision summary;
+13. resolved UTC cache summary;
+14. GPS-decision summary;
+15. executable plan summary;
+16. execution summary.
 
 Important JSON artifacts include:
 
@@ -1766,8 +1819,8 @@ The calibration workflow is:
 ```text
 1. Invoke calibration.
 2. Load prep handoff and SQLite cache.
-3. Verify 4-photos-by-date contains no photos and no jpg/tif development subfolders exist under 5-photos-by-dest (hard-stop if development started).
-4. Restrict calibration scope to 5-photos-by-dest.
+3. Verify 5-photos-by-date contains no photos and no jpg/tif development subfolders exist under 6-photos-by-dest (hard-stop if development started).
+4. Restrict calibration scope to 6-photos-by-dest.
 5. Validate by-dest cache/media/prep dependencies.
 6. Load, parse, and fingerprint GPX folder/files if configured or available.
 7. Recognise and classify camera groups.
@@ -1797,7 +1850,9 @@ The artifact rule is:
 No JSON before the first formal decision stage.
 Always produce numbered JSON artifacts at formal decision stages, even when no-op.
 Human decisions go into pre-created empty fields and are preserved across regeneration.
+Human-authored config and decision values are sanity-validated before use; an invalid value blocks.
 Dependencies are flattened, named, and directly verified.
 JSON artifact dependencies are verified by SHA-256 rehashing exact file bytes.
+Renames and metadata writes are no-clobber and atomic — re-verified at execute time, not trusted from the plan.
 Validate upstream -> create artifact -> record dependencies in it -> reject downstream use if dependencies changed.
 ```
