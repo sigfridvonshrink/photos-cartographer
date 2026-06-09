@@ -1,0 +1,68 @@
+"""Phase 10 — config sanity validation (the "validate human-authored input" principle).
+
+validate_config checks types, ranges, paths, and formats — not merely JSON syntax — and
+runs at config load so a malformed config fails loudly before any work. photos_utils comes
+from conftest.py.
+"""
+import copy
+import json
+
+import pytest
+
+import photos_utils as utils
+
+
+def test_default_config_is_valid():
+    utils.validate_config(copy.deepcopy(utils.CONFIG))   # the seed template must pass
+
+
+def _cfg(**overrides):
+    c = copy.deepcopy(utils.CONFIG)
+    for k, v in overrides.items():
+        c[k] = v
+    return c
+
+
+def _pol(**overrides):
+    c = copy.deepcopy(utils.CONFIG)
+    c["camera_time_and_timezone_policy"].update(overrides)
+    return c
+
+
+@pytest.mark.parametrize("cfg, needle", [
+    (_cfg(filename_timestamp_format="%Q"), "filename_timestamp_format"),         # doesn't vary
+    (_cfg(filename_timestamp_format=""), "filename_timestamp_format"),           # empty
+    (_cfg(filename_timestamp_format="%Y/%m/%d"), "illegal path character"),      # has '/'
+    (_cfg(filename_timestamp_format=5), "must be a string"),                     # wrong type
+    (_cfg(gpx_direct_match_max_seconds=-1), "gpx_direct_match_max_seconds"),     # negative
+    (_cfg(gpx_interpolation_max_distance_meters="far"), "must be a number"),     # wrong type
+    (_cfg(gpx_root="a\x00b"), "NUL byte"),                                       # bad path
+    (_cfg(zfs={"snapshot_prefix": "bad name!"}), "snapshot_prefix"),             # illegal zfs prefix
+    (_pol(enabled="yes"), "enabled must be a boolean"),                          # non-bool flag
+    (_pol(default_folder_timezone="Mars/Phobos"), "valid IANA timezone"),        # bad tz
+    (_pol(manual_segment_template_count=1.5), "must be an integer"),             # non-int count
+    (_pol(phone_gpx_max_distance_meters=-5), "phone_gpx_max_distance_meters"),   # negative
+    (_pol(device_groups={"phones": "nope"}), "list of strings"),                # not a list
+    (_pol(device_groups={"phones": [1, 2]}), "list of strings"),                # non-string elems
+])
+def test_validate_config_rejects(cfg, needle):
+    with pytest.raises(ValueError) as ei:
+        utils.validate_config(cfg)
+    assert needle in str(ei.value), str(ei.value)
+
+
+def test_valid_edits_pass():
+    utils.validate_config(_pol(default_folder_timezone="Europe/Brussels"))
+    utils.validate_config(_cfg(gpx_interpolation_max_distance_meters=500.0,
+                               gpx_direct_match_max_seconds=0))
+
+
+def test_load_or_seed_config_rejects_bad_value(tmp_path):
+    ws = tmp_path / "ws"
+    (ws / ".photos-ingest").mkdir(parents=True)
+    bad = copy.deepcopy(utils.CONFIG)
+    bad["gpx_interpolation_max_distance_meters"] = -100
+    with open(utils.config_path(str(ws)), "w") as f:
+        json.dump(bad, f)
+    with pytest.raises(ValueError, match="gpx_interpolation_max_distance_meters"):
+        utils.load_or_seed_config(str(ws))
