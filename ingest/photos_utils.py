@@ -144,6 +144,14 @@ def db_path(ws: str) -> str:
 def handoff_path(ws: str) -> str:
     return os.path.join(ws, CONTROL_DIR, "photos-11-handoff.json")
 
+def prep_log_path(ws: str) -> str:
+    """End-of-prep transformation log (prep §16.1 / shared §13.3)."""
+    return os.path.join(ws, CONTROL_DIR, "photos-15-prep-log.json")
+
+def prep_db_snapshot_path(ws: str) -> str:
+    """End-of-prep DB backup snapshot (shared §13.4a)."""
+    return os.path.join(ws, CONTROL_DIR, "photos-15-prep-ingest.db")
+
 def journal_path(ws: str, run_id: str) -> str:
     return os.path.join(ws, CONTROL_DIR, f"journal-{run_id}.json")
 
@@ -932,6 +940,8 @@ class ProgressCoordinator:
         print(f"  Dependency validation             : {pc.get('dependency_validation_status', 'n/a')}  "
               f"(handoff written after validation: {pc.get('handoff_written_after_successful_validation', False)})",
               file=out)
+        print(f"  End-of-prep audit record          : prep-log {pc.get('prep_log_written', False)}, "
+              f"DB snapshot {pc.get('prep_db_snapshot_written', False)}", file=out)
         print(f"  Quarantine footprint              : {qf.get('total_files', 0)} files, "
               f"{qf.get('total_bytes', 0)} bytes across {qf.get('plan_id_dirs', 0)} plan(s) "
               f"(never auto-deleted)", file=out)
