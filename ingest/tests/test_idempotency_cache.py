@@ -12,22 +12,22 @@ def setup_workspace(tmp_path: Path):
     ws.mkdir()
     (ws / ".photos-ingest").mkdir(exist_ok=True); (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
 
-    (ws / "0-source").mkdir()
-    (ws / "1-missing-metadata").mkdir()
-    (ws / "4-photos-by-date").mkdir()
-    (ws / "5-photos-by-dest").mkdir()
+    (ws / "0-sources").mkdir()
+    (ws / "2-missing-metadata").mkdir()
+    (ws / "5-photos-by-date").mkdir()
+    (ws / "6-photos-by-dest").mkdir()
 
     # Existing files in their correct final locations
-    (ws / "5-photos-by-dest" / "vacation" / "img1.jpg").parent.mkdir(parents=True)
-    (ws / "5-photos-by-dest" / "vacation" / "img1.jpg").write_text("already_dest")
+    (ws / "6-photos-by-dest" / "vacation" / "img1.jpg").parent.mkdir(parents=True)
+    (ws / "6-photos-by-dest" / "vacation" / "img1.jpg").write_text("already_dest")
 
-    (ws / "4-photos-by-date" / "2023-01-01--12-00-00.jpg").write_text("already_date")
+    (ws / "5-photos-by-date" / "2023-01-01--12-00-00.jpg").write_text("already_date")
 
     # Source file that needs prep
-    (ws / "0-source" / "new_img.jpg").write_text("new_source")
+    (ws / "0-sources" / "new_img.jpg").write_text("new_source")
 
     # Source file that duplicates a by-dest file
-    (ws / "0-source" / "dup_img.jpg").write_text("already_dest")
+    (ws / "0-sources" / "dup_img.jpg").write_text("already_dest")
 
     return ws
 
@@ -81,7 +81,7 @@ def test_prep_idempotency_and_by_dest_accounting(mock_meta, tmp_path):
     assert plan1.command == "prep"
     assert len(plan1.blockers) == 0
 
-    # Expect ops: move new_img to 1-missing-metadata, quarantine dup_img, and db_upsert for by-dest files
+    # Expect ops: move new_img to 2-missing-metadata, quarantine dup_img, and db_upsert for by-dest files
     # By-dest and already_date files should NOT generate media ops
 
     ops_types = [op.type for op in plan1.operations]
@@ -107,13 +107,13 @@ def test_prep_idempotency_and_by_dest_accounting(mock_meta, tmp_path):
     assert plan2.summary["operations_planned"] == 0
 
     # Check that cache correctly preserved identity
-    # The new_img should now be in 1-missing-metadata, and its hash should exist in cache
+    # The new_img should now be in 2-missing-metadata, and its hash should exist in cache
     all_files = cache2.get_all_files()
-    assert any(f.startswith("4-photos-by-date/2023-01-01--12-00-00-001") for f in all_files.keys())
+    assert any(f.startswith("5-photos-by-date/2023-01-01--12-00-00-001") for f in all_files.keys())
 
     # Verify that by-dest files were NEVER mutated (still in original place)
-    assert (ws / "5-photos-by-dest" / "vacation" / "img1.jpg").exists()
-    assert (ws / "5-photos-by-dest" / "vacation" / "img1.jpg").read_text() == "already_dest"
+    assert (ws / "6-photos-by-dest" / "vacation" / "img1.jpg").exists()
+    assert (ws / "6-photos-by-dest" / "vacation" / "img1.jpg").read_text() == "already_dest"
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
@@ -161,7 +161,7 @@ def test_handoff_manifest_generated(mock_meta, tmp_path):
     assert len(data["files"]) > 0
 
     # Verify hash_status mappings (by dest should be valid)
-    by_dest_files = [f for f in data["files"] if f["relative_path"].startswith("5-photos-by-dest")]
+    by_dest_files = [f for f in data["files"] if f["relative_path"].startswith("6-photos-by-dest")]
     assert len(by_dest_files) > 0
     assert by_dest_files[0]["hash_status"] == "valid"
 
@@ -184,7 +184,7 @@ def test_stale_cache_upsert_fails(mock_meta, tmp_path):
     plan1 = workflow.plan()
 
     # Modify the by-dest file AFTER the plan is generated but BEFORE execution
-    (ws / "5-photos-by-dest" / "vacation" / "img1.jpg").write_text("modified_after_plan")
+    (ws / "6-photos-by-dest" / "vacation" / "img1.jpg").write_text("modified_after_plan")
 
     executor = photos_ingest.PlanExecutor(str(ws))
     journal_path = str(ws / ".journal.json")
@@ -194,16 +194,16 @@ def test_stale_cache_upsert_fails(mock_meta, tmp_path):
         executor.execute(plan1, journal_path)
 
     # Assert no media mutations occurred
-    assert (ws / "0-source" / "new_img.jpg").exists()
-    assert (ws / "0-source" / "dup_img.jpg").exists()
-    assert not (ws / "1-missing-metadata" / "UNKN_new_img.jpg").exists()
+    assert (ws / "0-sources" / "new_img.jpg").exists()
+    assert (ws / "0-sources" / "dup_img.jpg").exists()
+    assert not (ws / "2-missing-metadata" / "UNKN_new_img.jpg").exists()
     assert not (ws / ".photos-ingest-quarantine" / plan1.plan_id).exists()
     assert not (ws / ".photos-ingest" / "photos-11-handoff.json").exists()
 
     # Assert cache row was not updated
     cache_verify = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
     all_files = cache_verify.get_all_files()
-    assert "5-photos-by-dest/vacation/img1.jpg" not in all_files
+    assert "6-photos-by-dest/vacation/img1.jpg" not in all_files
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
@@ -241,7 +241,7 @@ def test_cache_fingerprint_changes(mock_meta, tmp_path):
     assert fp1 == fp2
 
     # Change a file
-    (ws / "5-photos-by-dest" / "vacation" / "img1.jpg").write_text("modified_data_with_different_size")
+    (ws / "6-photos-by-dest" / "vacation" / "img1.jpg").write_text("modified_data_with_different_size")
 
     cache3 = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
     workflow3 = photos_ingest.WorkspacePrepWorkflow(str(ws), cache3)
@@ -320,35 +320,35 @@ def test_stale_already_cached_file_aborts(mock_meta, tmp_path):
     assert not has_upsert, "Should not generate db_upsert if cache is fresh"
 
     # Modify the by-dest file BEFORE execute
-    (ws / "5-photos-by-dest" / "vacation" / "img1.jpg").write_text("modified_data_staleness_test")
+    (ws / "6-photos-by-dest" / "vacation" / "img1.jpg").write_text("modified_data_staleness_test")
 
     executor2 = photos_ingest.PlanExecutor(str(ws))
     import pytest
     with pytest.raises(ValueError, match="Stale plan: dependency changed after planning"):
         executor2.execute(plan2, journal_path)
 
-    # Assert no media mutations occurred (0-source files remain unmodified if they were there...)
-    # Wait, the first run already moved 0-source files to 1-missing-metadata and quarantine!
+    # Assert no media mutations occurred (0-sources files remain unmodified if they were there...)
+    # Wait, the first run already moved 0-sources files to 2-missing-metadata and quarantine!
     # So we should check that they weren't mutated *again* or something.
     # We can just check that no execution succeeded.
-    assert (ws / "4-photos-by-date" / "2023-01-01--12-00-00-001.jpg").exists()
+    assert (ws / "5-photos-by-date" / "2023-01-01--12-00-00-001.jpg").exists()
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
 def test_stale_ghost_prune_reappeared_file_aborts_before_cache_remove(mock_meta, tmp_path):
     ws = tmp_path / "workspace"
     ws.mkdir()
     (ws / ".photos-ingest").mkdir(exist_ok=True); (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
-    (ws / "4-photos-by-date").mkdir(parents=True, exist_ok=True)
+    (ws / "5-photos-by-date").mkdir(parents=True, exist_ok=True)
 
     # Create cache row for a missing file
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
     cache.upsert_file({
-        "absolute_path": str(ws / "4-photos-by-date" / "reappeared.jpg"),
-        "relative_path": "4-photos-by-date/reappeared.jpg",
+        "absolute_path": str(ws / "5-photos-by-date" / "reappeared.jpg"),
+        "relative_path": "5-photos-by-date/reappeared.jpg",
         "size": 100,
         "mtime_ns": 1000,
         "inode": 12345,
-        "media_class": "4-photos-by-date",
+        "media_class": "5-photos-by-date",
         "hash": "fakehash",
         "content_hash": "fakehash",
         "datetime_original": None,
@@ -359,7 +359,7 @@ def test_stale_ghost_prune_reappeared_file_aborts_before_cache_remove(mock_meta,
     })
 
     # File is strictly missing
-    assert not (ws / "4-photos-by-date" / "reappeared.jpg").exists()
+    assert not (ws / "5-photos-by-date" / "reappeared.jpg").exists()
 
     workflow = photos_ingest.WorkspacePrepWorkflow(str(ws), cache)
     plan = workflow.plan()
@@ -368,29 +368,29 @@ def test_stale_ghost_prune_reappeared_file_aborts_before_cache_remove(mock_meta,
     db_remove_ops = [op for op in plan.operations if op.type == "db_remove"]
     assert len(db_remove_ops) == 1
 
-    remove_fx = [fx for fx in db_remove_ops[0].database_effects_after_verification if fx.get("action") == "remove" and fx.get("relative_path") == "4-photos-by-date/reappeared.jpg"]
+    remove_fx = [fx for fx in db_remove_ops[0].database_effects_after_verification if fx.get("action") == "remove" and fx.get("relative_path") == "5-photos-by-date/reappeared.jpg"]
     assert len(remove_fx) == 1
 
     # Assert precondition must_be_missing == True
     assert remove_fx[0].get("preconditions", {}).get("must_be_missing") is True
 
     # Touch the file to reappear
-    (ws / "4-photos-by-date" / "reappeared.jpg").write_text("reappeared data")
+    (ws / "5-photos-by-date" / "reappeared.jpg").write_text("reappeared data")
 
     # Try executing the stale plan
     executor = photos_ingest.PlanExecutor(str(ws))
     journal_path = str(ws / ".journal.json")
 
     import pytest
-    with pytest.raises(ValueError, match="Stale plan: ghost-prune target reappeared after planning: 4-photos-by-date/reappeared.jpg"):
+    with pytest.raises(ValueError, match="Stale plan: ghost-prune target reappeared after planning: 5-photos-by-date/reappeared.jpg"):
         executor.execute(plan, journal_path)
 
     # Assert cache is intact
     cache_verify = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
-    assert "4-photos-by-date/reappeared.jpg" in cache_verify.get_all_files()
+    assert "5-photos-by-date/reappeared.jpg" in cache_verify.get_all_files()
 
     # Assert file still exists
-    assert (ws / "4-photos-by-date" / "reappeared.jpg").exists()
+    assert (ws / "5-photos-by-date" / "reappeared.jpg").exists()
 
     # Assert no handoff manifest generated
     assert not (ws / ".photos-ingest" / "photos-11-handoff.json").exists()

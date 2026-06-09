@@ -19,8 +19,8 @@ import photos_utils as utils
 def _ws(tmp_path):
     ws = tmp_path / "ws"
     ws.mkdir(parents=True)
-    for d in ("0-source", "1-missing-metadata", "2-redundant-jpgs",
-              "3-videos-by-date", "4-photos-by-date", "5-photos-by-dest"):
+    for d in ("0-sources", "2-missing-metadata", "3-redundant-jpgs",
+              "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"):
         (ws / d).mkdir()
     (ws / ".photos-ingest").mkdir(exist_ok=True)
     (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
@@ -122,7 +122,7 @@ def test_snapshot_taken_with_detected_dataset_and_prefix(tmp_path, monkeypatch):
     prep.CONFIG["zfs"] = {"enabled": True, "snapshots_required": True,
                           "snapshot_prefix": "photos-ingest-", "datasets": {"workspace": "auto"}}
     ws = _ws(tmp_path)
-    (ws / "0-source" / "a.jpg").write_bytes(b"AAAA")
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
     plan = _plan(ws)
     prep.PlanExecutor(str(ws)).execute(plan)
     j = json.load(open(glob.glob(str(ws / ".photos-ingest" / "journal-*.json"))[0]))
@@ -137,8 +137,8 @@ def test_required_snapshot_with_no_dataset_aborts(tmp_path, monkeypatch):
     prep.CONFIG["zfs"] = {"enabled": True, "snapshots_required": True,
                           "snapshot_prefix": "photos-ingest-", "datasets": {"workspace": "auto"}}
     ws = _ws(tmp_path)
-    (ws / "0-source" / "a.jpg").write_bytes(b"AAAA")
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
     plan = _plan(ws)
     with pytest.raises(RuntimeError, match="no dataset found"):
         prep.PlanExecutor(str(ws)).execute(plan)
-    assert os.path.exists(ws / "0-source" / "a.jpg")                  # no mutation
+    assert os.path.exists(ws / "0-sources" / "a.jpg")                  # no mutation
