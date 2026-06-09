@@ -2,6 +2,7 @@ import os
 import json
 import hashlib
 import re
+from datetime import datetime
 
 CONFIG = {
     "zfs": {
@@ -187,19 +188,36 @@ ZFS_SNAPSHOT_NAME_RE = re.compile(r"^[A-Za-z0-9_.:-]*$")
 ZFS_DATASET_RE = re.compile(r"^[A-Za-z0-9_.:/-]+$")
 
 
-def validate_config(cfg: dict):
-    """Validate human-authored config before it is accepted — a general principle: input a
-    human writes is validated, not trusted. Currently validates the `zfs` block. Raises
-    ValueError with a clear message on any violation; missing keys default and unknown keys
-    are ignored. (Hook for broader config/decision validation later.)"""
-    z = cfg.get("zfs")
+def _check_bool(path, v):
+    if not isinstance(v, bool):
+        raise ValueError(f"config: {path} must be a boolean.")
+
+def _check_string(path, v):
+    if not isinstance(v, str):
+        raise ValueError(f"config: {path} must be a string.")
+
+def _check_path(path, v):
+    _check_string(path, v)
+    if "\x00" in v:
+        raise ValueError(f"config: {path} must not contain a NUL byte.")
+
+def _check_number(path, v, minimum=None, integer=False):
+    if integer:
+        if not isinstance(v, int) or isinstance(v, bool):
+            raise ValueError(f"config: {path} must be an integer.")
+    elif not isinstance(v, (int, float)) or isinstance(v, bool):
+        raise ValueError(f"config: {path} must be a number.")
+    if minimum is not None and v < minimum:
+        raise ValueError(f"config: {path} must be >= {minimum}.")
+
+def _validate_zfs(z):
     if z is None:
         return
     if not isinstance(z, dict):
         raise ValueError("config: 'zfs' must be an object.")
     for k in ("enabled", "snapshots_required"):
-        if k in z and not isinstance(z[k], bool):
-            raise ValueError(f"config: zfs.{k} must be a boolean.")
+        if k in z:
+            _check_bool(f"zfs.{k}", z[k])
     prefix = z.get("snapshot_prefix", "")
     if not isinstance(prefix, str) or not ZFS_SNAPSHOT_NAME_RE.match(prefix):
         raise ValueError(f"config: zfs.snapshot_prefix {prefix!r} is not a legal ZFS snapshot "
@@ -212,6 +230,86 @@ def validate_config(cfg: dict):
             continue
         if not isinstance(val, str) or not ZFS_DATASET_RE.match(val):
             raise ValueError(f"config: zfs.datasets.{tgt} {val!r} must be 'auto' or a legal dataset name.")
+
+_GPX_NUMERIC_KEYS = (
+    "gpx_direct_match_max_seconds", "gpx_interpolation_max_gap_seconds",
+    "gpx_interpolation_max_distance_meters", "gpx_interpolation_max_speed_kmh",
+    "photo_anchor_interpolation_max_gap_seconds", "photo_anchor_extrapolation_max_seconds",
+)
+
+def validate_config(cfg: dict):
+    """Validate human-authored config before it is accepted — input a human writes is
+    sanity-validated (types, ranges, paths, formats), not merely parsed as JSON. Raises
+    ValueError with a clear 'config: <path> ...' message on any violation; missing keys
+    default and unknown keys are ignored. The same validate-on-load discipline will extend
+    to calibration decision JSON once that phase exists ([[validate-human-input]])."""
+    if not isinstance(cfg, dict):
+        raise ValueError("config: top level must be a JSON object.")
+
+    _validate_zfs(cfg.get("zfs"))
+
+    if "filename_timestamp_format" in cfg:
+        fmt = cfg["filename_timestamp_format"]
+        _check_string("filename_timestamp_format", fmt)
+        if not fmt:
+            raise ValueError("config: filename_timestamp_format must be a non-empty strftime format.")
+        try:
+            out1 = datetime(2001, 2, 3, 4, 5, 6).strftime(fmt)
+            out2 = datetime(2002, 3, 4, 5, 6, 7).strftime(fmt)
+        except Exception as e:
+            raise ValueError(f"config: filename_timestamp_format {fmt!r} is not a valid strftime format: {e}")
+        if not out1:
+            raise ValueError(f"config: filename_timestamp_format {fmt!r} produced an empty name.")
+        if out1 == out2:
+            # An unrecognized format (e.g. "%Q", a literal) does not encode the timestamp, so
+            # every file would collide. strftime passes unknown directives through, so check it varies.
+            raise ValueError(f"config: filename_timestamp_format {fmt!r} does not vary with the timestamp.")
+        if "/" in out1 or "\x00" in out1:
+            raise ValueError(f"config: filename_timestamp_format {fmt!r} produces an illegal path character.")
+
+    if "gpx_root" in cfg:
+        _check_path("gpx_root", cfg["gpx_root"])
+
+    for k in _GPX_NUMERIC_KEYS:
+        if k in cfg:
+            _check_number(k, cfg[k], minimum=0)
+
+    pol = cfg.get("camera_time_and_timezone_policy")
+    if pol is not None:
+        if not isinstance(pol, dict):
+            raise ValueError("config: camera_time_and_timezone_policy must be an object.")
+        for bk in ("enabled", "single_anchor_auto_apply", "multi_anchor_auto_apply",
+                   "write_corrected_metadata_times", "write_corrected_offset_tags",
+                   "write_corrected_filename_times"):
+            if bk in pol:
+                _check_bool(f"camera_time_and_timezone_policy.{bk}", pol[bk])
+        for nk in ("phone_gpx_agreement_tolerance_seconds", "phone_gpx_conflict_threshold_seconds",
+                   "dst_conflict_tolerance_seconds", "phone_gpx_max_distance_meters"):
+            if nk in pol:
+                _check_number(f"camera_time_and_timezone_policy.{nk}", pol[nk], minimum=0)
+        if "manual_segment_template_count" in pol:
+            _check_number("camera_time_and_timezone_policy.manual_segment_template_count",
+                          pol["manual_segment_template_count"], minimum=0, integer=True)
+        if "default_folder_timezone" in pol:
+            tz = pol["default_folder_timezone"]
+            _check_string("camera_time_and_timezone_policy.default_folder_timezone", tz)
+            if tz:
+                try:
+                    from zoneinfo import ZoneInfo
+                    ZoneInfo(tz)
+                except Exception:
+                    raise ValueError(f"config: camera_time_and_timezone_policy.default_folder_timezone "
+                                     f"{tz!r} is not a valid IANA timezone.")
+        dg = pol.get("device_groups")
+        if dg is not None:
+            if not isinstance(dg, dict):
+                raise ValueError("config: camera_time_and_timezone_policy.device_groups must be an object.")
+            for gk in ("phones", "fixed_clock_cameras"):
+                if gk in dg:
+                    lst = dg[gk]
+                    if not isinstance(lst, list) or not all(isinstance(x, str) for x in lst):
+                        raise ValueError(f"config: camera_time_and_timezone_policy.device_groups.{gk} "
+                                         f"must be a list of strings.")
 
 
 def detect_zfs_dataset(path: str):
