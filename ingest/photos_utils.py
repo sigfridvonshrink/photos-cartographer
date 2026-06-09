@@ -43,6 +43,17 @@ def selected_gpx_root() -> str:
     root = CONFIG.get("gpx_root") or ""
     return os.path.realpath(os.path.abspath(root)) if root else ""
 
+# Media classification by extension (prep Section 6.1) — the single source of truth.
+_MEDIA_CLASS_BY_EXT = {}
+_MEDIA_CLASS_BY_EXT.update({e: "image" for e in ("jpg", "jpeg", "png", "heic", "tiff")})
+_MEDIA_CLASS_BY_EXT.update({e: "raw" for e in ("cr2", "cr3", "nef", "arw", "dng")})
+_MEDIA_CLASS_BY_EXT.update({e: "video" for e in ("mp4", "mov", "avi", "mkv")})
+
+def media_class_for_ext(ext: str) -> str:
+    """Classify a file by extension into image/raw/video/other (case-insensitive,
+    leading dot optional)."""
+    return _MEDIA_CLASS_BY_EXT.get((ext or "").lower().lstrip('.'), "other")
+
 # --- Workspace control directory layout (shared contract Section 5) ----------
 # Every pipeline control/artifact file lives under CONTROL_DIR; the media scan
 # skips it wholesale. These helpers are the single source of truth for the names
@@ -660,8 +671,15 @@ class ProgressCoordinator:
                     print(f"Finished {self.current_phase} in {elapsed:.2f}s", file=sys.stderr)
 
     def print_summary(self, plan_summary=None):
+        # The run summary is a deliverable (prep Section 19), not transient progress, so
+        # it prints even when live progress is quiet/redirected.
+        report = (plan_summary or {}).get("report")
+        if report:
+            self._print_report(report, plan_summary)
+            return
         if self.quiet:
             return
+        # Fallback: the older flat performance list (no structured report present).
         print("\n--- Performance Summary ---", file=sys.stderr)
         if plan_summary and "performance_and_cache" in plan_summary:
             pc = plan_summary["performance_and_cache"]
@@ -678,3 +696,37 @@ class ProgressCoordinator:
             for k, v in sorted(self.counters.items()):
                 print(f"  {k}: {v}", file=sys.stderr)
         print("---------------------------", file=sys.stderr)
+
+    def _print_report(self, r, plan_summary=None):
+        """Render the prep run report (prep Section 19) as labelled categories."""
+        pc = (plan_summary or {}).get("performance_and_cache", {}) or {}
+        qf = r.get("quarantine_footprint", {}) or {}
+        out = sys.stderr
+        print("\n=== Prep run summary ===", file=out)
+        print(f"  Media operations planned/executed : {r.get('media_operations', 0)}  "
+              f"(cache ops: {r.get('cache_operations', 0)})", file=out)
+        print(f"  No-op / already-correct           : {r.get('no_op_already_correct', 0)}", file=out)
+        print(f"  Recognized moves (carried forward): {r.get('recognized_moves', 0)}", file=out)
+        print(f"  By-dest files scanned read-only   : {r.get('by_dest_files_scanned_read_only', 0)}  "
+              f"(mutated: {r.get('by_dest_mutated', 0)})", file=out)
+        print(f"  Duplicates -> quarantine          : {r.get('duplicates_against_mutable', 0)} vs mutable, "
+              f"{r.get('duplicates_against_by_dest', 0)} vs by-dest", file=out)
+        print(f"  Metadata reused/extracted/carried/failed : "
+              f"{r.get('metadata_reused', 0)}/{r.get('metadata_extracted', 0)}/"
+              f"{r.get('metadata_carried_forward', 0)}/{r.get('metadata_failed', 0)}  "
+              f"(extractor {r.get('extractor', '?')} {r.get('extractor_version', '?')}, "
+              f"field-set v{r.get('field_set_version', '?')})", file=out)
+        print(f"  Cache effects applied (upsert/remove/rename): "
+              f"{pc.get('db_upserts_applied', 0)}/{pc.get('db_removes_applied', 0)}/"
+              f"{pc.get('db_renames_applied', 0)}", file=out)
+        print(f"  Camera groups / native-GPS / missing-timestamp : "
+              f"{r.get('camera_groups_found', 0)} / {r.get('native_gps_files', 0)} / "
+              f"{r.get('missing_timestamp_files', 0)}", file=out)
+        print(f"  Blockers / warnings               : {r.get('blockers', 0)} / {r.get('warnings', 0)}", file=out)
+        print(f"  Dependency validation             : {pc.get('dependency_validation_status', 'n/a')}  "
+              f"(handoff written after validation: {pc.get('handoff_written_after_successful_validation', False)})",
+              file=out)
+        print(f"  Quarantine footprint              : {qf.get('total_files', 0)} files, "
+              f"{qf.get('total_bytes', 0)} bytes across {qf.get('plan_id_dirs', 0)} plan(s) "
+              f"(never auto-deleted)", file=out)
+        print("========================", file=out)
