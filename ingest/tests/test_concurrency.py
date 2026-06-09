@@ -389,7 +389,7 @@ def test_failed_folder_mapping(mock_read_metadata_concurrently, mock_popen, work
 
 @patch("subprocess.Popen")
 @patch("photos_1_prep.ContentHasher.hash_file")
-@patch("photos_1_prep.ContentHasher.hash_image")
+@patch("photos_1_prep.ContentHasher.fingerprint_image")
 @patch("photos_utils.MetadataReader.read_metadata_concurrently")
 def test_stale_dependency_under_concurrency_blocks_execution(mock_read_metadata_concurrently, mock_hash_image, mock_hash_file, mock_popen, workspace):
     mock_hash_file.return_value = {"status": "valid", "strategy": "sha256", "value": "dummyhash"}
@@ -450,7 +450,7 @@ def test_stale_dependency_under_concurrency_blocks_execution(mock_read_metadata_
 
 @patch("subprocess.Popen")
 @patch("photos_1_prep.ContentHasher.hash_file")
-@patch("photos_1_prep.ContentHasher.hash_image")
+@patch("photos_1_prep.ContentHasher.fingerprint_image")
 @patch("photos_utils.MetadataReader.read_metadata_concurrently")
 def test_progress_summary_fields(mock_read_metadata_concurrently, mock_hash_image, mock_hash_file, mock_popen, workspace):
     mock_hash_file.return_value = {"status": "valid", "strategy": "sha256", "value": "dummyhash"}

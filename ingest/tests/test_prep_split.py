@@ -130,7 +130,7 @@ def test_by_dest_duplicate_does_not_mutate_behavior():
                 assert op.source == '0-sources/duplicate.jpg'
 
 @mock.patch("photos_1_prep.ContentHasher.hash_file")
-@mock.patch("photos_1_prep.ContentHasher.hash_image")
+@mock.patch("photos_1_prep.ContentHasher.fingerprint_image")
 def test_by_dest_duplicate_does_not_mutate_behavior_with_hashes(mock_hash_image, mock_hash_file, tmp_path):
     ws = tmp_path / "workspace"
     ws.mkdir()

@@ -71,7 +71,7 @@ def mock_read_metadata_concurrently(folders, max_workers=4, progress_coordinator
     return res, set()
 
 @mock.patch('photos_1_prep.ContentHasher.hash_file', side_effect=mock_hash_file)
-@mock.patch('photos_1_prep.ContentHasher.hash_image', side_effect=mock_hash_image)
+@mock.patch('photos_1_prep.ContentHasher.fingerprint_image', side_effect=mock_hash_image)
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
 def test_prep_workflow_plan_and_execute(mock_meta, mock_hash_img, mock_hash_file, tmp_path, monkeypatch):
     import photos_utils as utils
@@ -179,7 +179,7 @@ def test_deterministic_temp_names(tmp_path, monkeypatch):
         assert temp_ops1[i].destination == temp_ops2[i].destination
 
 @mock.patch('photos_1_prep.ContentHasher.hash_file', side_effect=mock_hash_file)
-@mock.patch('photos_1_prep.ContentHasher.hash_image', side_effect=mock_hash_image)
+@mock.patch('photos_1_prep.ContentHasher.fingerprint_image', side_effect=mock_hash_image)
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
 def test_source_changed_after_plan_abort(mock_meta, mock_hash_img, mock_hash_file, tmp_path, monkeypatch):
     import photos_utils as utils
@@ -251,7 +251,7 @@ def test_hash_failure_preservation(tmp_path, monkeypatch):
             return {"status": "failed", "strategy": "sha256-v1", "value": None, "error": str(e)}
 
     with mock.patch('photos_1_prep.ContentHasher.hash_file', side_effect=mock_hash_fail), \
-         mock.patch('photos_1_prep.ContentHasher.hash_image', side_effect=mock_hash_fail), \
+         mock.patch('photos_1_prep.ContentHasher.fingerprint_image', side_effect=mock_hash_fail), \
          mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently):
 
         cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
