@@ -71,6 +71,26 @@ def test_prune_quarantine_dry_run_and_delete(tmp_path, monkeypatch, capsys):
     assert not qd.exists()
 
 
+# --- sealed-workspace guard --------------------------------------------------
+
+def test_sealed_workspace_refuses_and_releases_lock(tmp_path, monkeypatch, capsys):
+    ws = _ws(tmp_path)
+    (ws / ".photos-ingest" / "photos-00-sealed.json").write_text('{"sealed": true}')
+    code = _main(monkeypatch, ws, "plan")
+    out = capsys.readouterr()
+    assert code == 2
+    assert "SEALED" in out.err
+    assert "Lock released" in out.err           # the lock is still released cleanly
+
+
+def test_sealed_workspace_warns_on_new_dump(tmp_path, monkeypatch, capsys):
+    ws = _ws(tmp_path)
+    (ws / ".photos-ingest" / "photos-00-sealed.json").write_text('{"sealed": true}')
+    (ws / "0-sources" / "newdump.jpg").write_bytes(b"img")
+    assert _main(monkeypatch, ws, "plan") == 2
+    assert "new dump" in capsys.readouterr().err.lower()
+
+
 # --- error exits -------------------------------------------------------------
 
 def test_locked_workspace_fails_fast(tmp_path, monkeypatch, capsys):
