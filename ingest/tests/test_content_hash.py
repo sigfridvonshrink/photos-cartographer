@@ -228,7 +228,7 @@ def test_content_hash_restaled_on_imagemagick_version_change(tmp_path, monkeypat
     monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "im-OLD")
     cache = prep.WorkspaceCache(str(ws), in_memory=False)
     plan1 = prep.WorkspacePrepWorkflow(str(ws), cache).plan()
-    prep.PlanExecutor(str(ws)).execute(plan1, str(ws / ".journal.json"))
+    prep.PlanExecutor(str(ws)).execute(plan1, str(ws / ".photos-ingest/journal.json"))
 
     # Same workspace, newer magick -> the image content hash is stale and recomputed.
     # Planning is non-mutating, so execute plan2 to persist the recompute before reading the cache.

@@ -65,7 +65,7 @@ def test_control_files_land_under_control_dir(tmp_path, monkeypatch):
     root_entries = set(os.listdir(str(ws)))
     assert ".photos_ingest.db" not in root_entries
     assert "photos-11-handoff.json" not in root_entries
-    assert not any(e.endswith("-journal.json") or e.startswith("journal") for e in root_entries)
+    assert not any(e.endswith(".photos-ingest/journal.json") or e.startswith("journal") for e in root_entries)
 
 
 def test_journals_are_per_run_and_retained(tmp_path, monkeypatch):

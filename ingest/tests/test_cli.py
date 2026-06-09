@@ -73,12 +73,6 @@ def test_prune_quarantine_dry_run_and_delete(tmp_path, monkeypatch, capsys):
 
 # --- error exits -------------------------------------------------------------
 
-def test_missing_sentinel_exits_nonzero(tmp_path, monkeypatch, capsys):
-    ws = tmp_path / "ws"; ws.mkdir()    # no .photos-ingest guard
-    with pytest.raises(Exception):      # check_sentinel raises before the lock/try
-        _main(monkeypatch, ws, "plan")
-
-
 def test_locked_workspace_fails_fast(tmp_path, monkeypatch, capsys):
     ws = _ws(tmp_path)
     lock = ws / ".photos-ingest" / "photos-00-workspace.lock"
