@@ -125,6 +125,15 @@ def control_dir(ws: str) -> str:
 def guard_path(ws: str) -> str:
     return os.path.join(ws, CONTROL_DIR, "photos-00-workspace-guard")
 
+def sealed_marker_path(ws: str) -> str:
+    """The terminal/seal marker a successful merge writes (prep Section 6.2 / shared 13.7).
+    Its presence seals the workspace: every phase hard-stops and mutates nothing. Prep only
+    READS it (the merge phase — not yet built — writes it)."""
+    return os.path.join(ws, CONTROL_DIR, "photos-00-sealed.json")
+
+def is_sealed(ws: str) -> bool:
+    return os.path.exists(sealed_marker_path(ws))
+
 def config_path(ws: str) -> str:
     # Location only in this phase; the seed/read lifecycle lands in the next phase.
     return os.path.join(ws, CONTROL_DIR, "photos-00-config.json")
