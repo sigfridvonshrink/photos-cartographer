@@ -1492,6 +1492,30 @@ class PlanExecutor:
                                 pass
                         raise RuntimeError(f"Failed to write handoff manifest: {e}")
 
+                # End-of-prep DB backup snapshot (shared contract Section 13.4a): a transactionally
+                # consistent image of the live cache, captured at the same success gate as the
+                # handoff and written no-clobber + atomically — VACUUM INTO a temp name, then atomic
+                # rename. A failed/interrupted capture leaves the prior snapshot intact. This
+                # refreshes prep's OWN snapshot only (never another phase's).
+                if cache is not None:
+                    from photos_utils import prep_db_snapshot_path
+                    snap = prep_db_snapshot_path(self.workspace_root)
+                    snap_tmp = os.path.join(os.path.dirname(snap), f".tmp-snapshot-{uuid.uuid4().hex[:8]}.db")
+                    try:
+                        if os.path.exists(snap_tmp):
+                            os.remove(snap_tmp)
+                        cache.conn.execute("VACUUM INTO ?", (snap_tmp,))
+                        os.replace(snap_tmp, snap)
+                        if plan.summary and "performance_and_cache" in plan.summary:
+                            plan.summary["performance_and_cache"]["prep_db_snapshot_written"] = True
+                    except Exception as e:
+                        if os.path.exists(snap_tmp):
+                            try:
+                                os.remove(snap_tmp)
+                            except Exception:
+                                pass
+                        raise RuntimeError(f"Failed to write DB backup snapshot: {e}")
+
                 # On an INIT run, write the root sentinel LAST — only after every operation and
                 # the handoff have succeeded (prep Section 3.1 / 14.3 step 11). Because it is last,
                 # a crash anywhere earlier leaves the workspace uninitialized and the next run
