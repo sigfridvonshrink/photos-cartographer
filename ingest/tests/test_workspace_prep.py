@@ -17,28 +17,26 @@ def setup_workspace(tmp_path: Path):
     ws.mkdir()
     (ws / ".photos-ingest").mkdir(exist_ok=True); (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
 
-    # Root file collision
-    (ws / "IMG_1234.JPG").write_text("image1234_data")
-
-    # Another file with collision in 0-sources (case-insensitive collision)
+    # Initialized workspace: every dump lives in the 0-sources inbox (never at the root).
     source_dir = ws / "0-sources"
     source_dir.mkdir()
+
+    # Case-collision pair inside the inbox (ext-norm two-step keeps both)
+    (source_dir / "IMG_1234.JPG").write_text("image1234_data")
     (source_dir / "img_1234.jpg").write_text("image1234_different_data")
 
     # RAW/JPG pair in 0-sources
     (source_dir / "PHOTO_555.CR2").write_text("raw_data")
     (source_dir / "PHOTO_555.jpg").write_text("jpg_data")
 
-# Exact duplicate in 5-photos-by-date
+    # Exact duplicate already organized in 5-photos-by-date
     photos_dir = ws / "5-photos-by-date"
     photos_dir.mkdir()
     (photos_dir / "20230101_120000-001.jpg").write_text("duplicate_data")
 
-    # Another duplicate case: RAW and JPG have SAME content but shouldn't quarantine
-    (ws / "RAW_SAME.CR2").write_text("same_hash_content")
-    (ws / "RAW_SAME.jpg").write_text("same_hash_content")
-
-    # Source duplicate in 0-sources
+    # RAW and JPG with SAME content but shouldn't quarantine (in 0-sources)
+    (source_dir / "RAW_SAME.CR2").write_text("same_hash_content")
+    (source_dir / "RAW_SAME.jpg").write_text("same_hash_content")
 
     # Source duplicate in 0-sources
     (source_dir / "dup_image.jpg").write_text("duplicate_data")
@@ -100,7 +98,7 @@ def test_prep_workflow_plan_and_execute(mock_meta, mock_hash_img, mock_hash_file
 
     # Run execute
     executor = photos_ingest.PlanExecutor(str(ws))
-    journal_path = str(ws / ".journal.json")
+    journal_path = str(ws / ".photos-ingest/journal.json")
     executor.execute(plan, journal_path)
 
     # PR ACCEPTANCE TEST: root-to-"0-sources" collision where neither file is overwritten
@@ -123,11 +121,12 @@ def test_prep_workflow_plan_and_execute(mock_meta, mock_hash_img, mock_hash_file
     assert (ws / "3-redundant-jpgs" / "PHOTO_555.jpg").exists()
     assert (ws / "5-photos-by-date" / "2023-02-02--14-00-00-001.cr2").exists()
 
-    # PR ACCEPTANCE TEST: RAW/JPG pair not quarantined if hashes match exactly
-    files_in_dest = list((ws / "2-missing-metadata").iterdir())
-    names_in_dest = [f.name.lower() for f in files_in_dest]
-    assert any("raw_same" in name and name.endswith(".jpg") for name in names_in_dest)
-    assert any("raw_same" in name and name.endswith(".cr2") for name in names_in_dest)
+    # PR ACCEPTANCE TEST: RAW/JPG pair (same content) is NOT quarantined — the jpg is the
+    # redundant sibling (-> 3-redundant-jpgs), the raw is the master (-> 2-missing-metadata).
+    assert any("raw_same" in f.name.lower() and f.name.lower().endswith(".jpg")
+               for f in (ws / "3-redundant-jpgs").iterdir())
+    names_in_mm = [f.name.lower() for f in (ws / "2-missing-metadata").iterdir()]
+    assert any("raw_same" in name and name.endswith(".cr2") for name in names_in_mm)
 
 # PR ACCEPTANCE TEST: quarantine manifest creation and structured evidence
     quarantine_base = ws / ".photos-ingest-quarantine" / plan.plan_id
@@ -197,10 +196,10 @@ def test_source_changed_after_plan_abort(mock_meta, mock_hash_img, mock_hash_fil
     # Modify a file after plan is created
     import time
     time.sleep(0.01)
-    (ws / "IMG_1234.JPG").write_text("modified_data_size_change")
+    (ws / "0-sources" / "IMG_1234.JPG").write_text("modified_data_size_change")
 
     executor = photos_ingest.PlanExecutor(str(ws))
-    journal_path = str(ws / ".journal.json")
+    journal_path = str(ws / ".photos-ingest/journal.json")
 
     import pytest
     with pytest.raises(ValueError, match="Precondition failed: size changed"):
@@ -224,7 +223,7 @@ def test_sidecar_blocking(tmp_path, monkeypatch):
     assert "Forbidden sidecar files detected" in plan.blockers[0]
 
     executor = photos_ingest.PlanExecutor(str(ws))
-    journal_path = str(ws / ".journal.json")
+    journal_path = str(ws / ".photos-ingest/journal.json")
 
     import pytest
     with pytest.raises(ValueError, match="Plan contains blockers and cannot be executed"):
@@ -357,7 +356,7 @@ def test_source_changed_after_plan_abort_no_db(tmp_path, monkeypatch):
     )
 
     executor = photos_ingest.PlanExecutor(str(ws))
-    journal_path = str(ws / ".journal.json")
+    journal_path = str(ws / ".photos-ingest/journal.json")
     db_path = str(ws / ".photos-ingest/photos-00-ingest.db")
 
     assert not os.path.exists(db_path)

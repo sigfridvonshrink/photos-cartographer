@@ -93,7 +93,7 @@ def test_metadata_cache_creation_and_staleness(workspace, monkeypatch):
     # In the test environment, the first plan just generates the operations. We need to execute the plan
     # to move the file physically to the destination (or rename it).
     executor = prep.PlanExecutor(str(workspace))
-    journal_path = str(workspace / ".photos-ingest-journal.json")
+    journal_path = str(workspace / ".photos-ingest/journal.json")
     executor.execute(plan, journal_path)
 
     # Change FIELD_SET_VERSION to simulate stale metadata and expect a refresh
@@ -132,7 +132,7 @@ def test_handoff_manifest_enrichment(workspace, monkeypatch):
     plan = workflow.plan()
 
     executor = prep.PlanExecutor(str(workspace))
-    journal_path = str(workspace / ".photos-ingest-journal.json")
+    journal_path = str(workspace / ".photos-ingest/journal.json")
     executor.execute(plan, journal_path)
 
     handoff_path = workspace / ".photos-ingest" / "photos-11-handoff.json"
@@ -184,7 +184,7 @@ def test_metadata_extractor_version_refreshes(workspace, monkeypatch):
 
     plan = workflow.plan()
     executor = prep.PlanExecutor(str(workspace))
-    journal_path = str(workspace / ".photos-ingest-journal.json")
+    journal_path = str(workspace / ".photos-ingest/journal.json")
     executor.execute(plan, journal_path)
 
     # Change exiftool version
@@ -222,7 +222,7 @@ def test_extraction_failure_is_extraction_failed(workspace, monkeypatch):
 
     import pytest
     executor = prep.PlanExecutor(str(workspace))
-    journal_path = str(workspace / ".photos-ingest-journal.json")
+    journal_path = str(workspace / ".photos-ingest/journal.json")
     with pytest.raises(ValueError, match="Plan contains blockers"):
         executor.execute(plan, journal_path)
 
