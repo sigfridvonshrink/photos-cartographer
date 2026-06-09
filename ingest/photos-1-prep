@@ -926,10 +926,45 @@ class PlanExecutor:
         from photos_utils import ProgressCoordinator
         self.coordinator = ProgressCoordinator()
 
+    def _prune_empty_dirs(self):
+        """Remove directory skeletons left empty by structure-preserving moves: emptied subtrees
+        under the 0-sources inbox, and any non-managed base dump dir left behind by an init move.
+        The managed folders, the control dirs, and the user-curated by-dest tree are never touched
+        (only 0-sources internals + non-managed base dirs are pruned). Empty-dir removal is pure
+        housekeeping — no media is affected."""
+        from photos_utils import managed_folder_names, folder_name, CONTROL_DIR, QUARANTINE_DIR
+        ws = self.workspace_root
+        sources_path = os.path.join(ws, folder_name('sources'))
+        protected_top = set(managed_folder_names()) | {folder_name('strays'), CONTROL_DIR,
+                                                       QUARANTINE_DIR, ".git"}
+        targets = [sources_path]
+        for f in os.listdir(ws):
+            if f in protected_top or f.startswith('.'):
+                continue
+            p = os.path.join(ws, f)
+            if os.path.isdir(p) and not os.path.islink(p):
+                targets.append(p)                      # a non-managed base dir (init-move source)
+        for base in targets:
+            if not os.path.isdir(base):
+                continue
+            for dirpath, _dirs, _files in os.walk(base, topdown=False):
+                if dirpath == sources_path:
+                    continue                           # keep the 0-sources inbox itself
+                try:
+                    if not os.listdir(dirpath):
+                        os.rmdir(dirpath)
+                except OSError:
+                    pass
+
     def execute(self, plan: Plan, journal_path: str = None):
         # A distinct id for this execution run (vs plan.plan_id which identifies the plan);
         # surfaced in the handoff (prep Section 16).
         self.execution_id = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:6]}"
+        # Workspace lifecycle (prep Section 3.1 / 14.3 step 11): if the sentinel is absent this is
+        # an INIT run — the plan creates the structure and moves the base dump into 0-sources, and
+        # the sentinel is written LAST (below, only on full success), so a crash re-enters init.
+        from photos_utils import guard_path as _guard_path
+        self._was_uninitialized = not os.path.exists(_guard_path(self.workspace_root))
         # Read the authoritative workspace config (zfs block, etc.) from photos-00-config.json
         # before applying the plan. (Config-staleness rejection against the plan is Phase 4.)
         from photos_utils import load_or_seed_config
@@ -1176,6 +1211,12 @@ class PlanExecutor:
                 raise RuntimeError(f"Execution failed; intervention required. See journal. Failed ops: {failed_ops}")
             else:
                 journal.finish_journal("success")
+
+                # Housekeeping: structure-preserving moves + organization empty out the dump's
+                # directory skeleton. Prune the empty dirs left under 0-sources and any base dump
+                # dir an init move emptied, so 0-sources is left empty and the base holds only the
+                # managed folders (prep Section 3.1 / 7). Empty-dir removal loses no media.
+                self._prune_empty_dirs()
 
                 # Update summary with db effects
                 if plan.summary and "performance_and_cache" in plan.summary:
@@ -1456,6 +1497,19 @@ class PlanExecutor:
                                 pass
                         raise RuntimeError(f"Failed to write handoff manifest: {e}")
 
+                # On an INIT run, write the root sentinel LAST — only after every operation and
+                # the handoff have succeeded (prep Section 3.1 / 14.3 step 11). Because it is last,
+                # a crash anywhere earlier leaves the workspace uninitialized and the next run
+                # safely re-enters the init path. No-op on an already-initialized workspace.
+                if self._was_uninitialized:
+                    guard = _guard_path(self.workspace_root)
+                    os.makedirs(os.path.dirname(guard), exist_ok=True)
+                    gfd, gtmp = tempfile.mkstemp(dir=os.path.dirname(guard), prefix=".tmp-guard-")
+                    with os.fdopen(gfd, 'w') as gf:
+                        gf.write(json.dumps({"initialized": True, "tool": "photos-1-prep",
+                                             "initialized_by_run": plan.plan_id}))
+                    os.replace(gtmp, guard)
+
             self.coordinator.print_summary(plan_summary=plan.summary)
         finally:
             if cache is not None:
@@ -1540,20 +1594,42 @@ class WorkspacePrepWorkflow:
         from photos_utils import load_or_seed_config
         self._config_fingerprint = load_or_seed_config(self.workspace_root)
 
+        # Workspace lifecycle (prep Section 3.1): INITIALIZED once the root sentinel exists.
+        from photos_utils import guard_path, FOLDER_ROLES
+        self._initializing = not os.path.exists(guard_path(self.workspace_root))
+        if self._initializing:
+            # Plan creation of the full 0-6 structure (idempotent mkdir; the sentinel is written
+            # last by execute, prep Section 14.3 step 11).
+            for _r in FOLDER_ROLES:
+                operations.append(Operation(
+                    operation_id=f"op-{uuid.uuid4().hex[:8]}",
+                    type="mkdir", reason="Initialize workspace structure",
+                    source=None, destination=folder_name(_r),
+                    preconditions={}, verification={}, database_effects_after_verification=[]))
+
         self.coordinator.start_phase("planning - scanning inventory")
-        # 0. Inventory & Symlink check
+        # 0. Inventory, lifecycle guards, symlink check
+        _managed_set = set(self.managed_folders)
+        _strays = folder_name('strays')
+        _sources = folder_name('sources')
         for f in os.listdir(self.workspace_root):
             path = os.path.join(self.workspace_root, f)
-            if f.startswith('.'):
+            is_dir = os.path.isdir(path)
+            # Control/skip dirs (.photos-ingest*, .git, any dotdir), the strays tree, and the
+            # managed folders are never inventoried as base dumps (managed are walked below).
+            if is_dir and (f.startswith('.') or f == _strays or f in _managed_set):
                 continue
-            if os.path.isfile(path):
-                if os.path.islink(path):
-                    blockers.append(f"Forbidden symlink detected: {f}")
-                else:
-                    files.append(f)
-            elif os.path.isdir(path) and f not in self.managed_folders:
-                # A dumped folder tree at the workspace root (prep Section 7.2): walk it
-                # and inventory its files so Stage 1 can flatten them into 0-source.
+            # Everything else at the base is a dump entry.
+            if not self._initializing:
+                # Initialized workspace (prep Section 6.2 item 2): the base holds only the managed
+                # folders + control dirs. Any other root entry — file, dotfile, or non-managed
+                # folder — is a misplaced dump and a hard block; dumps belong in 0-sources/.
+                blockers.append(f"Misplaced entry at workspace root (dumps belong in {_sources}/): {f}")
+                continue
+            # Init run: inventory this base entry so Stage 1 moves it into 0-sources (no flatten).
+            if f.startswith('.'):
+                continue  # dotfiles are excluded from the init move (left in place)
+            if is_dir:
                 for root, _dirs, filenames in os.walk(path):
                     _dirs[:] = [dd for dd in _dirs if not dd.startswith('.')]
                     for fname in filenames:
@@ -1565,6 +1641,10 @@ class WorkspacePrepWorkflow:
                             blockers.append(f"Forbidden symlink detected: {rel_path}")
                         else:
                             files.append(rel_path)
+            elif os.path.islink(path):
+                blockers.append(f"Forbidden symlink detected: {f}")
+            else:
+                files.append(f)
         for d in self.managed_folders:
             folder_path = os.path.join(self.workspace_root, d)
             if os.path.isdir(folder_path):
@@ -1906,17 +1986,18 @@ class WorkspacePrepWorkflow:
 
         for f in db_files:
             rel_path = current_paths[f['relative_path']]
-            # Consolidate into the sources inbox any mutable-side file that is not already
-            # inside a managed folder: loose files at the workspace root AND files inside a
-            # dumped folder tree (prep Section 7.2). (No-flatten is Phase B.)
+            # Init move (prep Section 7.1): move each base-entry file into 0-sources with its
+            # STRUCTURE PRESERVED — no flatten (MyDump/sub/a.jpg -> 0-sources/MyDump/sub/a.jpg).
+            # On an initialized workspace, base entries are hard-blocked at scan, so this fires
+            # only on an init run (no-flatten holds afterward).
             if rel_path.split('/')[0] not in self.managed_folders:
                 _sources = folder_name('sources')
-                dest_base = os.path.join(_sources, os.path.basename(rel_path))
+                dest_base = os.path.join(_sources, rel_path)
                 dest = dest_base
-                # Avoid collisions case-insensitively with BOTH current_paths AND existing sources files
+                # Avoid collisions case-insensitively, suffixing within the preserved subdir
                 while dest.lower() in [v.lower() for k,v in current_paths.items() if k != f['relative_path']] or dest.lower() in global_destinations:
                     name, ext = os.path.splitext(os.path.basename(dest))
-                    dest = os.path.join(_sources, self._allocate_suffix(name, ext.lstrip('.'), global_destinations))
+                    dest = os.path.join(os.path.dirname(dest_base), self._allocate_suffix(name, ext.lstrip('.'), global_destinations))
 
                 global_destinations.add(dest.lower())
                 if rel_path != dest:
@@ -1928,7 +2009,7 @@ class WorkspacePrepWorkflow:
 
                         type="move_no_clobber",
 
-                        reason="Consolidate to sources",
+                        reason="Initialize: move base dump into sources",
                         source=rel_path,
                         destination=dest,
                         preconditions={"size": f["size"], "mtime_ns": f["mtime_ns"]},
@@ -2500,7 +2581,11 @@ def main():
 
     workspace_root = os.getcwd()
 
-    RootGuard.check_sentinel(workspace_root)
+    # Workspace lifecycle (prep Section 3.1): a workspace is INITIALIZED once the root sentinel
+    # photos-00-workspace-guard exists. An uninitialized workspace (no guard) is the deliberate
+    # entry point — prep initializes it (plan/execute detect this via guard-absence and create the
+    # structure, move the base dump into 0-sources, and write the guard last). So prep does NOT
+    # hard-require the sentinel here. (The sealed/terminal-workspace guard is added in Phase B2.)
 
     # Whole-run workspace lock (shared contract Section 2): acquired once here, before any
     # scan/plan/dry-run/execute, held for the entire run, released on exit. Fail-fast.

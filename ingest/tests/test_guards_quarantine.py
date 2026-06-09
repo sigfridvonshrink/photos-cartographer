@@ -86,30 +86,9 @@ def test_band_guard_allows_correct_placement(tmp_path, monkeypatch):
     assert not any("Band misplacement" in b for b in plan.blockers), plan.blockers
 
 
-# --- nested-dump flattening --------------------------------------------------
-
-def test_nested_dump_is_flattened_to_source(tmp_path, monkeypatch):
-    _mock(monkeypatch)
-    ws = _ws(tmp_path)
-    (ws / "MyDump" / "sub").mkdir(parents=True)
-    (ws / "MyDump" / "sub" / "a.jpg").write_bytes(b"img")
-    plan = _plan(ws)
-    cons = [op for op in plan.operations
-            if op.type == "move_no_clobber" and op.source == "MyDump/sub/a.jpg"]
-    assert cons, [op.source for op in plan.operations if op.source]
-    assert cons[0].destination == "0-sources/a.jpg"
-
-
-def test_nested_dump_collision_is_suffixed(tmp_path, monkeypatch):
-    _mock(monkeypatch)
-    ws = _ws(tmp_path)
-    (ws / "0-sources" / "a.jpg").write_bytes(b"existing")
-    (ws / "MyDump").mkdir()
-    (ws / "MyDump" / "a.jpg").write_bytes(b"dumped")    # different content, same basename
-    plan = _plan(ws)
-    cons = [op for op in plan.operations if op.source == "MyDump/a.jpg"]
-    assert cons, plan.operations
-    assert cons[0].destination.startswith("0-sources/a-"), cons[0].destination
+# (nested-dump flattening removed in Phase B: the new model does NOT flatten — an initialized
+# workspace blocks a root dump, and an uninitialized one init-moves it into 0-sources with its
+# structure preserved. Those paths are covered by test_lifecycle.py.)
 
 
 # --- prune-quarantine --------------------------------------------------------
