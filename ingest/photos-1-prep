@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 import uuid
 import sqlite3
 import threading
+import contextlib
 
 # ==============================================================================
 # CONFIGURATION BLOCK
@@ -57,6 +58,13 @@ PREP_ALLOWED_OPERATION_TYPES = {
 # Plan serialization/schema version. A plan whose version differs from this is from a
 # different tool/schema and is rejected at execute time (prep Section 14.3.2).
 PLAN_SCHEMA_VERSION = 1
+
+# SQLite cache schema version and content-hash scheme version, recorded in the cache `meta`
+# table, the journal, and the handoff depends_on so a stale/foreign cache or journal is
+# detectable downstream (prep Section 5). The per-hash engine binding (e.g. ImageMagick
+# version) is carried separately in each content hash's engine_version.
+CACHE_SCHEMA_VERSION = 1
+HASH_ALGORITHM_VERSION = "1"
 
 # ==============================================================================
 # SCHEMAS & DATA MODELS
@@ -143,6 +151,7 @@ class Journal:
     snapshots: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     operations: List[JournalOperationResult] = field(default_factory=list)
     details: Dict[str, Any] = field(default_factory=dict)
+    depends_on: Dict[str, Any] = field(default_factory=dict)  # version/fingerprint stamp (§5)
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=2)
@@ -181,6 +190,7 @@ class WorkspaceCache:
 
         self.conn.row_factory = sqlite3.Row
         self._lock = threading.Lock()
+        self._batch_depth = 0  # >0 while inside transaction(): defer commits to one batch
 
     def _init_db(self):
         with self.conn:
@@ -241,6 +251,27 @@ class WorkspaceCache:
             for col in missing_columns:
                 self.conn.execute(f"ALTER TABLE metadata_cache ADD COLUMN {col}")
 
+            # Cache identity/version row (prep Section 5). Seeded once and kept, so an older
+            # DB retains its recorded version and a future schema bump becomes detectable.
+            self.conn.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)")
+            self.conn.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)",
+                              ("cache_schema_version", str(CACHE_SCHEMA_VERSION)))
+            self.conn.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)",
+                              ("hash_algorithm_version", HASH_ALGORITHM_VERSION))
+
+    def get_meta(self, key: str) -> Optional[str]:
+        with self._lock:
+            cur = self.conn.cursor()
+            cur.execute("SELECT value FROM meta WHERE key = ?", (key,))
+            row = cur.fetchone()
+            return row[0] if row else None
+
+    def get_all_meta(self) -> Dict[str, str]:
+        with self._lock:
+            cur = self.conn.cursor()
+            cur.execute("SELECT key, value FROM meta")
+            return {row[0]: row[1] for row in cur.fetchall()}
+
     def get_file(self, relative_path: str) -> Optional[sqlite3.Row]:
         with self._lock:
             cur = self.conn.cursor()
@@ -265,19 +296,61 @@ class WorkspaceCache:
             cur.execute("SELECT * FROM metadata_cache")
             return {row['relative_path']: dict(row) for row in cur.fetchall()}
 
+    def begin_batch(self):
+        """Defer per-op commits; effects then commit once via commit_batch (§14.3.7)."""
+        self._batch_depth += 1
+
+    def commit_batch(self):
+        if self._batch_depth > 0:
+            self._batch_depth -= 1
+        if self._batch_depth == 0:
+            with self._lock:
+                self.conn.commit()
+
+    def rollback_batch(self):
+        if self._batch_depth > 0:
+            self._batch_depth -= 1
+        if self._batch_depth == 0:
+            with self._lock:
+                self.conn.rollback()
+
+    @contextlib.contextmanager
+    def transaction(self):
+        """Batch post-verification cache effects into one transaction (prep Section 14.3.7).
+        While active, the write methods skip their per-op commit; this commits once on a clean
+        exit and rolls back on exception. Reference-counted, so nesting is safe."""
+        self.begin_batch()
+        try:
+            yield
+        except BaseException:
+            self.rollback_batch()
+            raise
+        else:
+            self.commit_batch()
+
+    @contextlib.contextmanager
+    def _write_ctx(self):
+        """Per-op commit by default; inside transaction() defer to the batch's single commit."""
+        if self._batch_depth > 0:
+            with self._lock:
+                yield
+        else:
+            with self._lock, self.conn:
+                yield
+
     def remove_file(self, relative_path: str):
-        with self._lock, self.conn:
+        with self._write_ctx():
             self.conn.execute("DELETE FROM file_cache WHERE relative_path = ?", (relative_path,))
             self.conn.execute("DELETE FROM metadata_cache WHERE relative_path = ?", (relative_path,))
 
     def rename_file(self, old_rel_path: str, new_rel_path: str, new_abs_path: str):
         # Retained for executor rename support and shared index tests
-        with self._lock, self.conn:
+        with self._write_ctx():
             self.conn.execute("UPDATE file_cache SET relative_path = ?, absolute_path = ? WHERE relative_path = ?", (new_rel_path, new_abs_path, old_rel_path))
             self.conn.execute("UPDATE metadata_cache SET relative_path = ? WHERE relative_path = ?", (new_rel_path, old_rel_path))
 
     def upsert_file(self, data: Dict[str, Any]):
-        with self._lock, self.conn:
+        with self._write_ctx():
             self.conn.execute("""
                 INSERT INTO file_cache (
                     relative_path, absolute_path, size, mtime_ns, inode, media_class,
@@ -834,9 +907,17 @@ class PlanExecutor:
                 print(f"Preflight validation failed: {e}")
                 raise
 
-            # 2. Start Journal
+            # 2. Start Journal (version-stamped so a stale/foreign journal is detectable, §5)
             journal = JournalWriter(journal_path)
-            journal.start_journal(plan.plan_id)
+            journal.start_journal(plan.plan_id, depends_on={
+                "tool": "photos-1-prep",
+                "execution_id": self.execution_id,
+                "plan_schema_version": plan.plan_version,
+                "config_fingerprint": plan.config_fingerprint.value,
+                "cache_schema_version": CACHE_SCHEMA_VERSION,
+                "hash_algorithm_version": HASH_ALGORITHM_VERSION,
+                "cli_options_fingerprint": plan.summary.get("cli_options_fingerprint"),
+            })
 
             # 3. ZFS Hook (Optional)
             if CONFIG["zfs"].get("enabled", False):
@@ -879,6 +960,13 @@ class PlanExecutor:
                 raise ValueError(f"Plan command '{plan.command}' is not supported by photos-1-prep. Only 'prep' plans are allowed.")
 
             self.coordinator.start_phase("executing - applying operations", len(plan.operations))
+
+            # Apply all post-verification cache effects as one transaction (§14.3.7): create the
+            # cache up front and open a batch; commit once after the loop, roll back on failure
+            # (the finally below). The filesystem stays the source of truth either way.
+            if cache is None:
+                cache = WorkspaceCache(self.workspace_root)
+            cache.begin_batch()
 
             for op in plan.operations:
                 if op.type not in PREP_ALLOWED_OPERATION_TYPES:
@@ -1018,6 +1106,8 @@ class PlanExecutor:
                 # Abort further execution on first failure to prevent cascading issues
                 if status in ["failed", "failed_recovered", "failed_intervention_required"]:
                     break
+            # All ops applied + verified -> commit the batched cache effects once.
+            cache.commit_batch()
             self.coordinator.finish_phase()
 
 # 5. Finish Journal
@@ -1228,6 +1318,7 @@ class PlanExecutor:
 
                     # 3. Create handoff payload
                     md_deps = plan.metadata_dependencies if hasattr(plan, "metadata_dependencies") and isinstance(plan.metadata_dependencies, dict) else getattr(plan, "metadata_dependencies", {})
+                    from photos_utils import get_imagemagick_version as _get_imagemagick_version
                     handoff = {
                         "schema_version": 1,
                         "tool": "photos-1-prep",
@@ -1272,6 +1363,19 @@ class PlanExecutor:
                                 "extraction_options_fingerprint": md_deps.get("extraction_options_fingerprint", "unknown"),
                                 "metadata_schema_version": md_deps.get("metadata_schema_version", 1),
                                 "camera_group_key_version": md_deps.get("camera_group_key_version", 1)
+                            },
+                            "plan": {
+                                "schema_version": plan.plan_version
+                            },
+                            "cache": {
+                                "schema_version": int(cache.get_meta("cache_schema_version") or CACHE_SCHEMA_VERSION),
+                                "hash_algorithm_version": cache.get_meta("hash_algorithm_version") or HASH_ALGORITHM_VERSION,
+                                "image_engine": "imagemagick",
+                                "image_engine_version": _get_imagemagick_version()
+                            },
+                            "cli_options": {
+                                "fingerprint": plan.summary.get("cli_options_fingerprint"),
+                                "execution_config": plan.summary.get("execution_config")
                             }
                         }
                     }
@@ -1303,6 +1407,10 @@ class PlanExecutor:
             self.coordinator.print_summary(plan_summary=plan.summary)
         finally:
             if cache is not None:
+                # If the apply phase raised before commit_batch, discard the uncommitted
+                # cache effects (the filesystem is the source of truth; the next run re-plans).
+                if getattr(cache, "_batch_depth", 0) > 0:
+                    cache.rollback_batch()
                 cache.close()
 
 class JournalWriter:
@@ -1310,12 +1418,13 @@ class JournalWriter:
         self.journal_path = journal_path
         self.journal: Optional[Journal] = None
 
-    def start_journal(self, plan_id: str):
+    def start_journal(self, plan_id: str, depends_on: Optional[Dict[str, Any]] = None):
         self.journal = Journal(
             journal_version=1,
             plan_id=plan_id,
             started_at=datetime.now(timezone.utc).isoformat(),
-            status="started"
+            status="started",
+            depends_on=depends_on or {}
         )
         self.save()
 
@@ -1527,6 +1636,11 @@ class WorkspacePrepWorkflow:
             "jobs_requested": CONFIG.get("jobs", 4),
             "jobs_semantic": False
         }
+        # Fingerprint only output-affecting CLI options; the jobs/parallelism knob is
+        # non-semantic, so the fingerprint stays stable across -j values (determinism).
+        cli_options_fingerprint = OperationPlanner._hash_dict(
+            {k: v for k, v in execution_config.items() if k not in ("jobs_requested", "jobs_semantic")}
+        ).value
 
         def process_file(rel_path: str):
             if rel_path in carried_forward:
@@ -2177,6 +2291,7 @@ class WorkspacePrepWorkflow:
             "blockers_found": len(blockers),
             "metadata_plan_status": metadata_plan_status,
             "execution_config": execution_config,
+            "cli_options_fingerprint": cli_options_fingerprint,
             "performance_and_cache": {
                 "jobs_requested": execution_config.get("jobs_requested", 1),
                 "progress_mode": "quiet" if getattr(self.coordinator, "quiet", False) else getattr(self.coordinator, "get_progress_mode", lambda: "plain")(),
