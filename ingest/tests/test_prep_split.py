@@ -36,7 +36,7 @@ def test_prep_plans_contain_no_time_metadata():
         assert 'apply_gpx_placement' not in content
 
 def test_by_dest_read_only():
-    # Make sure we don't have operations targeting 5-photos-by-dest for anything other than reading
+    # Make sure we don't have operations targeting 6-photos-by-dest for anything other than reading
     # Check that WorkspacePrepWorkflow only targets mutables:
     assert 'class WorkspacePrepWorkflow:' in dir(photos_1_prep) or hasattr(photos_1_prep, 'WorkspacePrepWorkflow')
 
@@ -101,15 +101,15 @@ def test_by_dest_duplicate_does_not_mutate_behavior():
         ws = Path(tmp_dir) / 'workspace'
         ws.mkdir()
         (ws / '.photos-ingest').mkdir(exist_ok=True); (ws / '.photos-ingest' / 'photos-00-workspace-guard').touch()
-        (ws / '5-photos-by-dest').mkdir()
-        (ws / '0-source').mkdir()
+        (ws / '6-photos-by-dest').mkdir()
+        (ws / '0-sources').mkdir()
 
-        # Add 5-photos-by-dest file
-        by_dest_file = ws / '5-photos-by-dest' / 'existing.jpg'
+        # Add 6-photos-by-dest file
+        by_dest_file = ws / '6-photos-by-dest' / 'existing.jpg'
         by_dest_file.write_text('dummy content')
 
-        # Add duplicate file in 0-source
-        source_file = ws / '0-source' / 'duplicate.jpg'
+        # Add duplicate file in 0-sources
+        source_file = ws / '0-sources' / 'duplicate.jpg'
         source_file.write_text('dummy content')
 
         import sys
@@ -123,11 +123,11 @@ def test_by_dest_duplicate_does_not_mutate_behavior():
         plan = workflow.plan()
 
         for op in plan.operations:
-            assert not (op.source or '').startswith('5-photos-by-dest/')
-            assert not (op.destination or '').startswith('5-photos-by-dest/')
+            assert not (op.source or '').startswith('6-photos-by-dest/')
+            assert not (op.destination or '').startswith('6-photos-by-dest/')
             # Any operation related to quarantine must target the source file, not by_dest
             if op.type == 'quarantine_move':
-                assert op.source == '0-source/duplicate.jpg'
+                assert op.source == '0-sources/duplicate.jpg'
 
 @mock.patch("photos_1_prep.ContentHasher.hash_file")
 @mock.patch("photos_1_prep.ContentHasher.hash_image")
@@ -136,8 +136,8 @@ def test_by_dest_duplicate_does_not_mutate_behavior_with_hashes(mock_hash_image,
     ws.mkdir()
     (ws / ".photos-ingest").mkdir(exist_ok=True); (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
 
-    by_dest = ws / "5-photos-by-dest"
-    source = ws / "0-source"
+    by_dest = ws / "6-photos-by-dest"
+    source = ws / "0-sources"
     by_dest.mkdir()
     source.mkdir()
 
@@ -158,12 +158,12 @@ def test_by_dest_duplicate_does_not_mutate_behavior_with_hashes(mock_hash_image,
     plan = workflow.plan()
 
     for op in plan.operations:
-        assert not (op.source or "").startswith("5-photos-by-dest/")
-        assert not (op.destination or "").startswith("5-photos-by-dest/")
+        assert not (op.source or "").startswith("6-photos-by-dest/")
+        assert not (op.destination or "").startswith("6-photos-by-dest/")
 
     quarantine_ops = [op for op in plan.operations if op.type == "quarantine_move"]
     for op in quarantine_ops:
-        assert op.source != "5-photos-by-dest/existing.jpg"
+        assert op.source != "6-photos-by-dest/existing.jpg"
 
 
 def test_by_dest_uppercase_extension_does_not_rename(tmp_path):
@@ -171,7 +171,7 @@ def test_by_dest_uppercase_extension_does_not_rename(tmp_path):
     ws.mkdir()
     (ws / ".photos-ingest").mkdir(exist_ok=True); (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
 
-    by_dest = ws / "5-photos-by-dest"
+    by_dest = ws / "6-photos-by-dest"
     by_dest.mkdir()
 
     (by_dest / "EXISTING.JPG").write_text("content")
@@ -181,8 +181,8 @@ def test_by_dest_uppercase_extension_does_not_rename(tmp_path):
     plan = workflow.plan()
 
     for op in plan.operations:
-        assert not (op.source or "").startswith("5-photos-by-dest/")
-        assert not (op.destination or "").startswith("5-photos-by-dest/")
+        assert not (op.source or "").startswith("6-photos-by-dest/")
+        assert not (op.destination or "").startswith("6-photos-by-dest/")
 
 def test_dry_run_rejects_metadata_write(tmp_path):
     executor = photos_1_prep.PlanExecutor(str(tmp_path))

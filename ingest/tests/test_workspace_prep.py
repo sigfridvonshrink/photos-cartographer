@@ -20,17 +20,17 @@ def setup_workspace(tmp_path: Path):
     # Root file collision
     (ws / "IMG_1234.JPG").write_text("image1234_data")
 
-    # Another file with collision in 0-source (case-insensitive collision)
-    source_dir = ws / "0-source"
+    # Another file with collision in 0-sources (case-insensitive collision)
+    source_dir = ws / "0-sources"
     source_dir.mkdir()
     (source_dir / "img_1234.jpg").write_text("image1234_different_data")
 
-    # RAW/JPG pair in 0-source
+    # RAW/JPG pair in 0-sources
     (source_dir / "PHOTO_555.CR2").write_text("raw_data")
     (source_dir / "PHOTO_555.jpg").write_text("jpg_data")
 
-# Exact duplicate in 4-photos-by-date
-    photos_dir = ws / "4-photos-by-date"
+# Exact duplicate in 5-photos-by-date
+    photos_dir = ws / "5-photos-by-date"
     photos_dir.mkdir()
     (photos_dir / "20230101_120000-001.jpg").write_text("duplicate_data")
 
@@ -38,9 +38,9 @@ def setup_workspace(tmp_path: Path):
     (ws / "RAW_SAME.CR2").write_text("same_hash_content")
     (ws / "RAW_SAME.jpg").write_text("same_hash_content")
 
-    # Source duplicate in 0-source
+    # Source duplicate in 0-sources
 
-    # Source duplicate in 0-source
+    # Source duplicate in 0-sources
     (source_dir / "dup_image.jpg").write_text("duplicate_data")
 
     return ws
@@ -103,12 +103,12 @@ def test_prep_workflow_plan_and_execute(mock_meta, mock_hash_img, mock_hash_file
     journal_path = str(ws / ".journal.json")
     executor.execute(plan, journal_path)
 
-    # PR ACCEPTANCE TEST: root-to-"0-source" collision where neither file is overwritten
-    # IMG_1234.JPG moves from root to 0-source. But 0-source/img_1234.jpg exists!
+    # PR ACCEPTANCE TEST: root-to-"0-sources" collision where neither file is overwritten
+    # IMG_1234.JPG moves from root to 0-sources. But 0-sources/img_1234.jpg exists!
     # They should both survive with deterministic suffix naming.
     assert not (ws / "IMG_1234.JPG").exists()
 
-    files_in_dest = list((ws / "1-missing-metadata").iterdir())
+    files_in_dest = list((ws / "2-missing-metadata").iterdir())
     names_in_dest = [f.name.lower() for f in files_in_dest]
 
     count_1234 = sum(1 for name in names_in_dest if "1234" in name and name.endswith(".jpg"))
@@ -119,12 +119,12 @@ def test_prep_workflow_plan_and_execute(mock_meta, mock_hash_img, mock_hash_file
 
     # PR ACCEPTANCE TEST: RAW/JPG not treated as disposable duplicates
     # PHOTO_555.CR2 and PHOTO_555.jpg have the same fake hash, but shouldn't quarantine.
-    # The JPG should be in 2-redundant-jpgs. The RAW should be in 4-photos-by-date.
-    assert (ws / "2-redundant-jpgs" / "PHOTO_555.jpg").exists()
-    assert (ws / "4-photos-by-date" / "2023-02-02--14-00-00-001.cr2").exists()
+    # The JPG should be in 3-redundant-jpgs. The RAW should be in 5-photos-by-date.
+    assert (ws / "3-redundant-jpgs" / "PHOTO_555.jpg").exists()
+    assert (ws / "5-photos-by-date" / "2023-02-02--14-00-00-001.cr2").exists()
 
     # PR ACCEPTANCE TEST: RAW/JPG pair not quarantined if hashes match exactly
-    files_in_dest = list((ws / "1-missing-metadata").iterdir())
+    files_in_dest = list((ws / "2-missing-metadata").iterdir())
     names_in_dest = [f.name.lower() for f in files_in_dest]
     assert any("raw_same" in name and name.endswith(".jpg") for name in names_in_dest)
     assert any("raw_same" in name and name.endswith(".cr2") for name in names_in_dest)
@@ -132,7 +132,7 @@ def test_prep_workflow_plan_and_execute(mock_meta, mock_hash_img, mock_hash_file
 # PR ACCEPTANCE TEST: quarantine manifest creation and structured evidence
     quarantine_base = ws / ".photos-ingest-quarantine" / plan.plan_id
     assert quarantine_base.exists()
-    assert (quarantine_base / "0-source" / "dup_image.jpg").exists()
+    assert (quarantine_base / "0-sources" / "dup_image.jpg").exists()
 
     manifest_file = quarantine_base / "manifest.json"
     assert manifest_file.exists()
@@ -150,12 +150,12 @@ def test_prep_workflow_plan_and_execute(mock_meta, mock_hash_img, mock_hash_file
     cur = cache_conn.cursor()
     cur.execute("SELECT relative_path FROM file_cache")
     db_paths = [r[0] for r in cur.fetchall()]
-    assert any("2-redundant-jpgs" in p for p in db_paths)
-    assert any("4-photos-by-date" in p for p in db_paths)
+    assert any("3-redundant-jpgs" in p for p in db_paths)
+    assert any("5-photos-by-date" in p for p in db_paths)
     assert "IMG_1234.JPG" not in db_paths
 
 # Assert no intermediate paths exist
-    assert not any("0-source/IMG_1234.JPG" in p for p in db_paths)
+    assert not any("0-sources/IMG_1234.JPG" in p for p in db_paths)
     assert not any("__photos_ingest_tmp_extnorm__" in p for p in db_paths)
     cache_conn.close()
 
@@ -214,7 +214,7 @@ def test_sidecar_blocking(tmp_path, monkeypatch):
     photos_ingest.CONFIG["jobs"] = 1
 
     # PR ACCEPTANCE TEST: sidecar blocking
-    (ws / "0-source" / "PHOTO_555.xmp").touch()
+    (ws / "0-sources" / "PHOTO_555.xmp").touch()
 
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
     workflow = photos_ingest.WorkspacePrepWorkflow(str(ws), cache)
@@ -274,10 +274,10 @@ def test_symlink_blocking(tmp_path, monkeypatch):
     photos_ingest.CONFIG["jobs"] = 1
 
     # PR ACCEPTANCE TEST: symlink blocking
-    # Create a symlink in 0-source pointing outside
+    # Create a symlink in 0-sources pointing outside
     outside_file = tmp_path / "outside.txt"
     outside_file.write_text("external")
-    symlink_path = ws / "0-source" / "symlink.txt"
+    symlink_path = ws / "0-sources" / "symlink.txt"
     os.symlink(str(outside_file), str(symlink_path))
 
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=True)
@@ -295,7 +295,7 @@ def test_deterministic_temp_names_with_existing(tmp_path, monkeypatch):
     ws.mkdir()
     (ws / ".photos-ingest").mkdir(exist_ok=True); (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
 
-    src_dir = ws / "0-source"
+    src_dir = ws / "0-sources"
     src_dir.mkdir()
 
     # A single target file requiring extension normalisation

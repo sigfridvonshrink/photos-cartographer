@@ -14,13 +14,13 @@ def workspace(tmp_path):
     (root / ".photos-ingest").mkdir(exist_ok=True); (root / ".photos-ingest" / "photos-00-workspace-guard").touch()
 
     # Create required folders
-    (root / "0-source").mkdir()
-    (root / "1-missing-metadata").mkdir()
-    (root / "2-redundant-jpgs").mkdir()
-    (root / "3-videos-by-date").mkdir()
-    (root / "4-photos-by-date").mkdir()
-    (root / "5-photos-by-dest").mkdir()
-    (root / "5-photos-by-dest" / "vacation").mkdir()
+    (root / "0-sources").mkdir()
+    (root / "2-missing-metadata").mkdir()
+    (root / "3-redundant-jpgs").mkdir()
+    (root / "4-videos-by-date").mkdir()
+    (root / "5-photos-by-date").mkdir()
+    (root / "6-photos-by-dest").mkdir()
+    (root / "6-photos-by-dest" / "vacation").mkdir()
 
     yield root
 
@@ -30,7 +30,7 @@ def create_mock_metadata_reader(monkeypatch):
         # Need to return paths that match any folder passed in exactly
         res = {}
         for folder in folders:
-            if "0-source" in folder:
+            if "0-sources" in folder:
                 res[os.path.join(folder, "photo.jpg")] = {
                     "DateTimeOriginal": "2023:01:01 12:00:00",
                     "Make": "Canon",
@@ -67,7 +67,7 @@ def test_metadata_cache_creation_and_staleness(workspace, monkeypatch):
     create_mock_metadata_reader(monkeypatch)
 
     # Create test file
-    source_file = workspace / "0-source" / "photo.jpg"
+    source_file = workspace / "0-sources" / "photo.jpg"
     source_file.write_text("dummy content")
 
     cache = prep.WorkspaceCache(str(workspace), in_memory=False)
@@ -75,7 +75,7 @@ def test_metadata_cache_creation_and_staleness(workspace, monkeypatch):
 
     plan = workflow.plan()
 
-    # The file is in 0-source, so it gets a move_no_clobber op, which carries the db_upsert
+    # The file is in 0-sources, so it gets a move_no_clobber op, which carries the db_upsert
     move_ops = [op for op in plan.operations if op.type == "move_no_clobber"]
     assert len(move_ops) > 0
     upsert_fx = [fx for fx in move_ops[0].database_effects_after_verification if fx["action"] == "upsert"][0]
@@ -109,7 +109,7 @@ def test_metadata_cache_creation_and_staleness(workspace, monkeypatch):
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_updated)
 
     plan2 = workflow.plan()
-    # The file has been moved (to 4-photos-by-date or 1-missing-metadata), so it will just get a pure db_upsert to update metadata cache.
+    # The file has been moved (to 5-photos-by-date or 2-missing-metadata), so it will just get a pure db_upsert to update metadata cache.
     db_upserts2 = [op for op in plan2.operations if op.type == "db_upsert"]
     assert len(db_upserts2) > 0
     upsert_fx2 = [fx for fx in db_upserts2[0].database_effects_after_verification if fx["action"] == "upsert"][0]
@@ -120,10 +120,10 @@ def test_handoff_manifest_enrichment(workspace, monkeypatch):
     create_mock_metadata_reader(monkeypatch)
 
     # Create test files
-    source_file = workspace / "0-source" / "photo.jpg"
+    source_file = workspace / "0-sources" / "photo.jpg"
     source_file.write_text("dummy")
 
-    dest_file = workspace / "5-photos-by-dest" / "vacation" / "photo2.jpg"
+    dest_file = workspace / "6-photos-by-dest" / "vacation" / "photo2.jpg"
     dest_file.write_text("dummy2")
 
     cache = prep.WorkspaceCache(str(workspace), in_memory=False)
@@ -151,7 +151,7 @@ def test_handoff_manifest_enrichment(workspace, monkeypatch):
     assert len(handoff["camera_groups"]) == 1
     cg = handoff["camera_groups"][0]
 
-    # 0-source gets moved to 1-missing-metadata normally, but here it's got no gps so maybe just 1-missing-metadata
+    # 0-sources gets moved to 2-missing-metadata normally, but here it's got no gps so maybe just 2-missing-metadata
     # Actually wait, why did it go to quarantine? Because it's an exact duplicate of the content_hash returned by the mock.
     # We should look at whatever files are actually in cg["files"], but they are sorted correctly.
     assert len(cg["files"]) == 2
@@ -165,7 +165,7 @@ def test_handoff_manifest_enrichment(workspace, monkeypatch):
 
     assert len(handoff["destination_folders"]) == 1
     df = handoff["destination_folders"][0]
-    assert df["path"] == "5-photos-by-dest/vacation"
+    assert df["path"] == "6-photos-by-dest/vacation"
     assert df["scanned_files"] == 1
     assert "12345|Canon|EOS R5" in df["camera_groups"]
     assert df["cache_freshness"]["total_files"] == 1
@@ -176,7 +176,7 @@ def test_metadata_extractor_version_refreshes(workspace, monkeypatch):
     create_mock_metadata_reader(monkeypatch)
 
     # Create test file
-    source_file = workspace / "0-source" / "photo.jpg"
+    source_file = workspace / "0-sources" / "photo.jpg"
     source_file.write_text("dummy content")
 
     cache = prep.WorkspaceCache(str(workspace), in_memory=False)
@@ -199,7 +199,7 @@ def test_extraction_failure_is_extraction_failed(workspace, monkeypatch):
     import photos_utils as utils
 
     # Create test file
-    source_file = workspace / "0-source" / "photo.jpg"
+    source_file = workspace / "0-sources" / "photo.jpg"
     source_file.write_text("dummy content")
 
     # Mock read_metadata_concurrently to return empty dictionary (simulation of extraction failure)
@@ -214,10 +214,10 @@ def test_extraction_failure_is_extraction_failed(workspace, monkeypatch):
     workflow = prep.WorkspacePrepWorkflow(str(workspace), cache)
 
     plan = workflow.plan()
-    assert plan.summary.get("metadata_plan_status", {}).get("0-source/photo.jpg") == "extraction_failed"
+    assert plan.summary.get("metadata_plan_status", {}).get("0-sources/photo.jpg") == "extraction_failed"
 
     # extraction failure now creates a blocker when there's no valid cache
-    assert "Metadata extraction failed or returned empty for 0-source/photo.jpg" in plan.warnings
+    assert "Metadata extraction failed or returned empty for 0-sources/photo.jpg" in plan.warnings
     assert any("no valid cache exists" in b for b in plan.blockers)
 
     import pytest
@@ -228,7 +228,7 @@ def test_extraction_failure_is_extraction_failed(workspace, monkeypatch):
 
 def test_non_media_is_not_applicable(workspace, monkeypatch):
     import photos_utils as utils
-    source_file = workspace / "0-source" / "document.txt"
+    source_file = workspace / "0-sources" / "document.txt"
     source_file.write_text("dummy content")
 
     def mock_read_metadata_concurrently(folders, max_workers=4, progress_coordinator=None):
@@ -240,7 +240,7 @@ def test_non_media_is_not_applicable(workspace, monkeypatch):
     workflow = prep.WorkspacePrepWorkflow(str(workspace), cache)
 
     plan = workflow.plan()
-    assert plan.summary.get("metadata_plan_status", {}).get("0-source/document.txt") == "not_applicable"
+    assert plan.summary.get("metadata_plan_status", {}).get("0-sources/document.txt") == "not_applicable"
 
 
 def test_schema_migration(workspace):
