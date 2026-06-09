@@ -57,6 +57,30 @@ def test_valid_edits_pass():
                                gpx_direct_match_max_seconds=0))
 
 
+# --- library-merge config (G5.4; deep validation is the merge phase's, shared §4.3/§14.1) ----
+
+def test_merge_block_seeded_and_default_valid():
+    assert utils.CONFIG["merge"]["library_root"] == ""
+    assert utils.CONFIG["merge"]["placement_policy"] and utils.CONFIG["merge"]["collision_policy"]
+    utils.validate_config(_cfg(merge=dict(utils.CONFIG["merge"], library_root="/srv/library")))
+
+
+@pytest.mark.parametrize("merge, needle", [
+    ("nope", "merge must be an object"),
+    ({"library_root": 123}, "merge.library_root must be a string"),
+    ({"library_root": "a\x00b"}, "merge.library_root must not contain a NUL"),
+    ({"placement_policy": 5}, "merge.placement_policy must be a string"),
+])
+def test_merge_block_rejects_bad(merge, needle):
+    with pytest.raises(ValueError) as ei:
+        utils.validate_config({"merge": merge})
+    assert needle in str(ei.value), str(ei.value)
+
+
+def test_config_without_merge_block_still_valid():
+    utils.validate_config({"gpx_root": ""})        # legacy config (no merge key) is accepted
+
+
 def test_load_or_seed_config_rejects_bad_value(tmp_path):
     ws = tmp_path / "ws"
     (ws / ".photos-ingest").mkdir(parents=True)

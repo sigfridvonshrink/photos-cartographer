@@ -63,7 +63,16 @@ CONFIG = {
         "write_corrected_filename_times": True,
         "manual_segment_template_count": 2
     },
-    "filename_timestamp_format": "%Y-%m-%d--%H-%M-%S"
+    "filename_timestamp_format": "%Y-%m-%d--%H-%M-%S",
+    # Library-merge settings (shared contract Section 4.3 item 7). Seeded by prep for
+    # forward-compatibility but CONSUMED by the future merge phase, which does the deep
+    # validation — library_root must be an existing directory outside the managed 0-6 tree, and
+    # the policy values are enum-checked there (merge spec Section 4). Prep only type-validates.
+    "merge": {
+        "library_root": "",                                   # permanent library dir (unset by default)
+        "placement_policy": "preserve_destination_structure", # by-dest -> library subpath mapping
+        "collision_policy": "suffix_incoming"                 # different-content name clash -> rename the incoming file
+    }
 }
 
 def selected_gpx_root() -> str:
@@ -356,6 +365,19 @@ def validate_config(cfg: dict):
 
     if "gpx_root" in cfg:
         _check_path("gpx_root", cfg["gpx_root"])
+
+    mg = cfg.get("merge")
+    if mg is not None:
+        # Prep seeds and type-validates the library-merge block; the merge phase does the deep
+        # validation (library_root is an existing directory outside the managed 0-6 tree, policy
+        # enums) before it consumes them (shared contract Section 14.1 / merge spec Section 4).
+        if not isinstance(mg, dict):
+            raise ValueError("config: merge must be an object.")
+        if "library_root" in mg:
+            _check_path("merge.library_root", mg["library_root"])
+        for k in ("placement_policy", "collision_policy"):
+            if k in mg:
+                _check_string(f"merge.{k}", mg[k])
 
     for k in _GPX_NUMERIC_KEYS:
         if k in cfg:
