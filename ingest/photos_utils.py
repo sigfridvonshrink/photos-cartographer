@@ -555,38 +555,10 @@ class ExifToolWorkerPool:
                 self.release(worker)
 
 class MetadataReader:
-    @staticmethod
-    def read_metadata(folder_path: str) -> Dict[str, Any]:
-        """
-        Reads metadata for a given folder in batch using exiftool -json.
-        """
-        cmd = ["exiftool"] + EXIFTOOL_METADATA_OPTIONS + [folder_path]
-        try:
-            res = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            if not res.stdout.strip():
-                return {}
-            data = json.loads(res.stdout)
-            results = {}
-            for item in data:
-                src = item.get("SourceFile")
-                if src:
-                    results[src] = MetadataReader._parse_exiftool_item(item)
-            return results
-        except subprocess.CalledProcessError as e:
-            if e.stdout.strip():
-                try:
-                    data = json.loads(e.stdout)
-                    results = {}
-                    for item in data:
-                        src = item.get("SourceFile")
-                        if src:
-                            results[src] = MetadataReader._parse_exiftool_item(item)
-                    return results
-                except json.JSONDecodeError:
-                    pass
-            print(f"Warning: exiftool failed on {folder_path}: {e.stderr}")
-            return {}
-
+    # Metadata is read by the persistent-worker pool (PersistentExifToolWorker.read_metadata
+    # via ExifToolWorkerPool, used by read_metadata_concurrently below). An earlier one-shot
+    # MetadataReader.read_metadata predated the concurrent pool and had no remaining caller;
+    # it was removed. _parse_exiftool_item (shared with the live worker) stays.
     @staticmethod
     def _parse_exiftool_item(item: Dict[str, Any]) -> Dict[str, Any]:
         parsed = {
