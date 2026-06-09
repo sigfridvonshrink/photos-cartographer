@@ -61,7 +61,7 @@ def _ws(tmp_path):
 
 def _install(monkeypatch):
     prep.CONFIG["zfs"] = {"enabled": False}
-    monkeypatch.setattr(prep.ContentHasher, "hash_image",
+    monkeypatch.setattr(prep.ContentHasher, "fingerprint_image",
                         lambda p: {"status": "valid", "strategy": "image-content-hash-v1",
                                    "value": "sig-" + os.path.basename(p), "engine_version": "t"})
 
