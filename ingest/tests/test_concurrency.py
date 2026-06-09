@@ -178,7 +178,7 @@ def test_quiet_plan_executor_execution(mock_validate, mock_popen, workspace):
     mock_popen.return_value = MagicMock()
 
     # Generate a dummy plan
-    journal_path = os.path.join(workspace, ".photos-ingest-journal.json")
+    journal_path = os.path.join(workspace, ".photos-ingest/journal.json")
 
     op = prep.Operation(
         type="mkdir",
@@ -351,7 +351,7 @@ def test_exiftool_pool_failure_blocks_handoff(mock_read_metadata, mock_popen, wo
 
     executor = prep.PlanExecutor(workspace)
     executor.coordinator = utils.ProgressCoordinator(quiet=True)
-    journal_path = os.path.join(workspace, ".photos-ingest-journal.json")
+    journal_path = os.path.join(workspace, ".photos-ingest/journal.json")
 
     import pytest
     with pytest.raises(Exception) as excinfo:
@@ -432,7 +432,7 @@ def test_stale_dependency_under_concurrency_blocks_execution(mock_read_metadata_
 
     executor = prep.PlanExecutor(workspace)
     executor.coordinator = utils.ProgressCoordinator(quiet=True)
-    journal_path = os.path.join(workspace, ".photos-ingest-journal.json")
+    journal_path = os.path.join(workspace, ".photos-ingest/journal.json")
 
     # Now make the input file stale by modifying its size/mtime
     import time
@@ -495,7 +495,7 @@ def test_progress_summary_fields(mock_read_metadata_concurrently, mock_hash_imag
 
     executor = prep.PlanExecutor(workspace)
     executor.coordinator = utils.ProgressCoordinator(quiet=True)
-    journal_path = os.path.join(workspace, ".photos-ingest-journal.json")
+    journal_path = os.path.join(workspace, ".photos-ingest/journal.json")
 
     executor.execute(plan, journal_path)
 
