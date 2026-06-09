@@ -14,8 +14,8 @@ import photos_utils as utils
 def _ws(tmp_path):
     ws = tmp_path / "ws"
     ws.mkdir()
-    for d in ("0-source", "1-missing-metadata", "2-redundant-jpgs",
-              "3-videos-by-date", "4-photos-by-date", "5-photos-by-dest"):
+    for d in ("0-sources", "2-missing-metadata", "3-redundant-jpgs",
+              "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"):
         (ws / d).mkdir()
     (ws / ".photos-ingest").mkdir(exist_ok=True)
     (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
@@ -50,8 +50,8 @@ def _plan(ws):
 
 def _seed_quarantine(ws):
     """Force a content duplicate so one copy is quarantined under a <plan_id> dir."""
-    (ws / "0-source" / "dup1.jpg").write_bytes(b"SAME")
-    (ws / "0-source" / "dup2.jpg").write_bytes(b"SAME")
+    (ws / "0-sources" / "dup1.jpg").write_bytes(b"SAME")
+    (ws / "0-sources" / "dup2.jpg").write_bytes(b"SAME")
     prep.PlanExecutor(str(ws)).execute(_plan(ws))
     qbase = utils.quarantine_dir(str(ws))
     pids = [e.name for e in os.scandir(qbase) if e.is_dir()]
@@ -64,7 +64,7 @@ def _seed_quarantine(ws):
 def test_band_guard_blocks_video_under_photo_band(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
-    (ws / "4-photos-by-date" / "x.mp4").write_bytes(b"vid")
+    (ws / "5-photos-by-date" / "x.mp4").write_bytes(b"vid")
     plan = _plan(ws)
     assert any("Band misplacement" in b and "x.mp4" in b for b in plan.blockers), plan.blockers
 
@@ -72,7 +72,7 @@ def test_band_guard_blocks_video_under_photo_band(tmp_path, monkeypatch):
 def test_band_guard_blocks_raw_under_video_band(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
-    (ws / "3-videos-by-date" / "x.arw").write_bytes(b"raw")
+    (ws / "4-videos-by-date" / "x.arw").write_bytes(b"raw")
     plan = _plan(ws)
     assert any("Band misplacement" in b and "x.arw" in b for b in plan.blockers), plan.blockers
 
@@ -80,8 +80,8 @@ def test_band_guard_blocks_raw_under_video_band(tmp_path, monkeypatch):
 def test_band_guard_allows_correct_placement(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
-    (ws / "4-photos-by-date" / "p.jpg").write_bytes(b"img")
-    (ws / "3-videos-by-date" / "v.mp4").write_bytes(b"vid")
+    (ws / "5-photos-by-date" / "p.jpg").write_bytes(b"img")
+    (ws / "4-videos-by-date" / "v.mp4").write_bytes(b"vid")
     plan = _plan(ws)
     assert not any("Band misplacement" in b for b in plan.blockers), plan.blockers
 
@@ -97,19 +97,19 @@ def test_nested_dump_is_flattened_to_source(tmp_path, monkeypatch):
     cons = [op for op in plan.operations
             if op.type == "move_no_clobber" and op.source == "MyDump/sub/a.jpg"]
     assert cons, [op.source for op in plan.operations if op.source]
-    assert cons[0].destination == "0-source/a.jpg"
+    assert cons[0].destination == "0-sources/a.jpg"
 
 
 def test_nested_dump_collision_is_suffixed(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
-    (ws / "0-source" / "a.jpg").write_bytes(b"existing")
+    (ws / "0-sources" / "a.jpg").write_bytes(b"existing")
     (ws / "MyDump").mkdir()
     (ws / "MyDump" / "a.jpg").write_bytes(b"dumped")    # different content, same basename
     plan = _plan(ws)
     cons = [op for op in plan.operations if op.source == "MyDump/a.jpg"]
     assert cons, plan.operations
-    assert cons[0].destination.startswith("0-source/a-"), cons[0].destination
+    assert cons[0].destination.startswith("0-sources/a-"), cons[0].destination
 
 
 # --- prune-quarantine --------------------------------------------------------

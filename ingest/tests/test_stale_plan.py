@@ -17,8 +17,8 @@ import photos_utils as utils
 def _ws(tmp_path):
     ws = tmp_path / "ws"
     ws.mkdir()
-    for d in ("0-source", "1-missing-metadata", "2-redundant-jpgs",
-              "3-videos-by-date", "4-photos-by-date", "5-photos-by-dest"):
+    for d in ("0-sources", "2-missing-metadata", "3-redundant-jpgs",
+              "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"):
         (ws / d).mkdir()
     (ws / ".photos-ingest").mkdir(exist_ok=True)
     (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
@@ -55,7 +55,7 @@ def _build_plan(ws):
 def test_config_change_rejects_plan_at_execute(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
-    (ws / "0-source" / "a.jpg").write_bytes(b"AAAA")
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
     plan = _build_plan(ws)
 
     # Hand-edit the workspace config after planning.
@@ -67,14 +67,14 @@ def test_config_change_rejects_plan_at_execute(tmp_path, monkeypatch):
 
     with pytest.raises(ValueError, match="config changed"):
         prep.PlanExecutor(str(ws)).execute(plan)
-    # No mutation: the source is still in 0-source.
-    assert os.path.exists(ws / "0-source" / "a.jpg")
+    # No mutation: the source is still in 0-sources.
+    assert os.path.exists(ws / "0-sources" / "a.jpg")
 
 
 def test_plan_version_mismatch_rejected(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
-    (ws / "0-source" / "a.jpg").write_bytes(b"AAAA")
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
     plan = _build_plan(ws)
     plan.plan_version = 99
     with pytest.raises(ValueError, match="plan_version"):
@@ -84,7 +84,7 @@ def test_plan_version_mismatch_rejected(tmp_path, monkeypatch):
 def test_unchanged_config_executes(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
-    (ws / "0-source" / "a.jpg").write_bytes(b"AAAA")
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
     plan = _build_plan(ws)
     prep.PlanExecutor(str(ws)).execute(plan)  # same config it was built from -> passes
-    assert list(os.scandir(ws / "4-photos-by-date")), "the file should have been organized"
+    assert list(os.scandir(ws / "5-photos-by-date")), "the file should have been organized"
