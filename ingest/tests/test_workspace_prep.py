@@ -326,6 +326,7 @@ def test_source_changed_after_plan_abort_no_db(tmp_path, monkeypatch):
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
 
     ws = setup_workspace(tmp_path)
+    cfg_sha = utils.load_or_seed_config(str(ws))
 
     # Hand build a plan and verify executor fails it without making a DB
     plan = photos_ingest.Plan(
@@ -335,7 +336,7 @@ def test_source_changed_after_plan_abort_no_db(tmp_path, monkeypatch):
         created_at="now",
         workspace_root=str(ws),
         digikam_root=None,
-        config_fingerprint="dummy",
+        config_fingerprint=photos_ingest.Fingerprint("sha256", cfg_sha),
         instruction_fingerprints={},
         locks_required=["workspace"],
         summary={},
