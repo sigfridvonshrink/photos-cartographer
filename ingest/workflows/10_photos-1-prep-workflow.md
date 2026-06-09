@@ -4,22 +4,24 @@
 
 This document defines the complete, self-contained workflow for the preparation phase implemented by `photos-1-prep`.
 
-The prep phase exists to take an unorganized workspace and leave it in a clean, deduplicated, date-organized state so the user can then move photos into the correct destination folders under `5-photos-by-dest`, after which the time/GPS calibration phase (`photos-2-time-gps`, see `10_photos-2-time-gps-workflow.md`) takes over.
+The prep phase exists to take an unorganized workspace and leave it in a clean, deduplicated, date-organized state so the user can then move photos into the correct destination folders under `6-photos-by-dest`, after which the time/GPS calibration phase (`photos-2-time-gps`, see `10_photos-2-time-gps-workflow.md`) takes over.
 
 The prep phase:
 
-1. seeds the workspace configuration (`photos-00-config.json`) on first run if absent, then reads it as authoritative;
-2. inventories the workspace safely and blocks on unsafe inputs;
-3. consolidates loose files into a single staging folder;
-4. normalizes file extensions;
-5. separates redundant JPEGs that have a RAW sibling;
-6. detects content duplicates and quarantines them recoverably;
-7. organizes timestamped media into by-date folders, and untimestamped media into a missing-metadata folder;
-8. maintains a SQLite hash/metadata cache so repeated runs are cheap and idempotent;
-9. passively caches the EXIF/QuickTime/XMP facts the calibration phase will need, without making any time/GPS decision;
-10. writes a dependency-fingerprinted handoff manifest for the calibration phase.
+1. **initializes** the workspace on first run — creating the `0`–`6` folder structure and control directory, moving any as-arrived base dump into `0-sources/`, and writing the root sentinel last (Sections 3.1, 7.1);
+2. seeds the workspace configuration (`photos-00-config.json`) on first run if absent, then reads it as authoritative;
+3. inventories the workspace safely and blocks on unsafe inputs (a sealed workspace, or a loose file at the root of an initialized workspace, Section 6.2);
+4. takes each dump from `0-sources/` (the one inbox) without flattening it, resolving destination-name collisions in memory at planning (Section 7.2);
+5. normalizes file extensions;
+6. separates redundant JPEGs that have a RAW sibling;
+7. detects content duplicates and quarantines them recoverably;
+8. organizes timestamped media into by-date folders, untimestamped media into a missing-metadata folder, and **non-media into the strays folder `1-strays/`** — leaving `0-sources/` empty (Sections 7.6, 18, 3.2);
+9. maintains a SQLite fingerprint/metadata cache so repeated runs are cheap and idempotent;
+10. passively caches the EXIF/QuickTime/XMP facts the calibration phase will need, without making any time/GPS decision;
+11. writes a dependency-fingerprinted handoff manifest for the calibration phase;
+12. writes a complete, human-readable end-of-prep audit log (`photos-15-prep-log.json`) recording every transformation each photo underwent in prep — a self-sufficient record even if no later phase ever runs.
 
-The prep phase ends when timestamped photos are in `4-photos-by-date` and videos in `3-videos-by-date`. Only the photos are then moved by the user into `5-photos-by-dest`; videos stay in `3-videos-by-date` and never enter by-dest (Section 2.4).
+The prep phase ends when timestamped photos are in `5-photos-by-date` and videos in `4-videos-by-date`. Only the photos are then moved by the user into `6-photos-by-dest`; videos stay in `4-videos-by-date` and never enter by-dest (Section 2.4).
 
 This is a workflow specification, not a script implementation specification. It describes *what* the prep phase does and the invariants it must uphold, not the staged build or class layout that implements it; those details live in the prep implementation/build notes and are out of scope here.
 
@@ -31,21 +33,21 @@ Cross-phase facts shared with calibration — the workspace lock, the pre-mutati
 
 ### 2.1 Prep is prep-only
 
-`photos-1-prep` owns filesystem organization, deduplication, cache/hash maintenance, passive metadata acceleration, and handoff generation. It must not plan, infer, write, or apply any time or GPS correction. The full prohibition list is in Section 20.
+`photos-1-prep` owns filesystem organization, deduplication, cache/fingerprint maintenance, passive metadata acceleration, and handoff generation. It must not plan, infer, write, or apply any time or GPS correction. The full prohibition list is in Section 20.
 
-### 2.2 `5-photos-by-dest` is read-only for media
+### 2.2 `6-photos-by-dest` is read-only for media
 
-`photos-1-prep` scans and accounts for `5-photos-by-dest` but must never move, rename, quarantine, delete, touch, or metadata-write any file inside it (Section 11).
+`photos-1-prep` scans and accounts for `6-photos-by-dest` but must never move, rename, quarantine, delete, touch, or metadata-write any file inside it (Section 11).
 
 ### 2.3 The end of prep is the start of calibration
 
-Prep leaves organized media in `3-videos-by-date` and `4-photos-by-date`. The user then moves the **photos** from `4-photos-by-date` into destination folders under `5-photos-by-dest`; videos remain in `3-videos-by-date` and are never moved into by-dest (Section 2.4). Calibration (`10`) requires that `4-photos-by-date` contain no photos, that `5-photos-by-dest` be photo-only (no non-media files and no videos), and that no `jpg`/`tif` development subfolders exist under `5-photos-by-dest` before it will run. Prep itself does not perform that move and does not enforce the calibration preconditions; it only produces the by-date working set and the handoff. Crucially, when the user does move files into by-dest, the next prep run must recognize the move rather than rescan (Section 10.1); this re-prep is mandatory before calibrating the moved files, and applies every time new media enters by-dest — including after a prior successful calibration. The full cross-phase cycle is in the shared contract (`10_photos-shared-contract.md` Section 10).
+Prep leaves organized media in `4-videos-by-date` and `5-photos-by-date`. The user then moves the **photos** from `5-photos-by-date` into destination folders under `6-photos-by-dest`; videos remain in `4-videos-by-date` and are never moved into by-dest (Section 2.4). Calibration (`10_photos-2-time-gps-workflow.md`) requires that `5-photos-by-date` contain no photos, that `6-photos-by-dest` be photo-only (no non-media files and no videos), and that no `jpg`/`tif` development subfolders exist under `6-photos-by-dest` before it will run. Prep itself does not perform that move and does not enforce the calibration preconditions; it only produces the by-date working set and the handoff. Crucially, when the user does move files into by-dest, the next prep run must recognize the move rather than rescan (Section 10.1); this re-prep is mandatory before calibrating the moved files, and applies every time new media enters by-dest — including after a prior successful calibration. The full cross-phase cycle is in the shared contract (`10_photos-shared-contract.md` Section 10).
 
 ### 2.4 Videos are semi-foreign
 
-The pipeline's main target is **photos**. Videos are handled as **semi-foreign**: prep inventories, deduplicates, and date-organizes them into `3-videos-by-date`, and names them by date with the same convention as photos — but that is the extent of their special treatment. Videos are renamed naively (by their own timestamp) and otherwise left alone; in particular they are **not** time/GPS-calibrated downstream (calibration `10_photos-2-time-gps-workflow.md` Section 7.3). They are organized so they aren't lost or scattered, not because the pipeline aims to correct them.
+The pipeline's main target is **photos**. Videos are handled as **semi-foreign**: prep inventories, deduplicates, and date-organizes them into `4-videos-by-date`, and names them by date with the same convention as photos — but that is the extent of their special treatment. Videos are renamed naively (by their own timestamp) and otherwise left alone; in particular they are **not** time/GPS-calibrated downstream (calibration `10_photos-2-time-gps-workflow.md` Section 7.3). They are organized so they aren't lost or scattered, not because the pipeline aims to correct them.
 
-Videos live **only** in `3-videos-by-date`. They must **never** appear in `4-photos-by-date` or `5-photos-by-dest`, and the user does not sort them into destinations. This is a hard invariant: a `video`-class file found in `4-photos-by-date` is a prep-side break (Section 6.1), and a video found under `5-photos-by-dest` is a calibration break (calibration Section 7.3). By-date and by-dest are photo-only (`image`/`raw`); the video band is separate and stays separate.
+Videos live **only** in `4-videos-by-date`. They must **never** appear in `5-photos-by-date` or `6-photos-by-dest`, and the user does not sort them into destinations. This is a hard invariant: a `video`-class file found in `5-photos-by-date` is a prep-side break (Section 6.1), and a video found under `6-photos-by-dest` is a calibration break (calibration Section 7.3). By-date and by-dest are photo-only (`image`/`raw`); the video band is separate and stays separate.
 
 ---
 
@@ -54,37 +56,57 @@ Videos live **only** in `3-videos-by-date`. They must **never** appear in `4-pho
 Prep manages a fixed set of numbered folders under the workspace root, plus control directories.
 
 ```text
-0-source/            staging for incoming/loose files            (mutable)
-1-missing-metadata/  media with no usable timestamp              (mutable)
-2-redundant-jpgs/    JPEGs that have a RAW sibling               (mutable)
-3-videos-by-date/    timestamped videos, renamed by date         (mutable)
-4-photos-by-date/    timestamped photos, renamed by date         (mutable)
-5-photos-by-dest/    user-curated destinations                   (READ-ONLY)
+0-sources/           dump arrives here; emptied by prep after each run   (mutable)
+1-strays/<plan-id>/  non-media set aside per run, structure preserved    (mutable)
+2-missing-metadata/  media with no usable timestamp                      (mutable)
+3-redundant-jpgs/    JPEGs that have a RAW sibling                       (mutable)
+4-videos-by-date/    timestamped videos, renamed by date                 (mutable)
+5-photos-by-date/    timestamped photos, renamed by date                 (mutable)
+6-photos-by-dest/    user-curated destinations                           (READ-ONLY)
 ```
 
-Control / non-media paths (never treated as managed media). All pipeline control and artifact files live inside `.photos-ingest/`:
+### 3.1 Workspace initialization (the base-is-folders-only invariant)
+
+A workspace is **initialized** when its root sentinel `photos-00-workspace-guard` exists (inside `.photos-ingest/`, shared contract `10_photos-shared-contract.md` Section 5). The sentinel is the authoritative "this is a workspace" signal, and it is created **last** — only after the full `0`–`6` folder structure and the control directory exist (Section 7.1). Prep behaves differently depending on whether it is present:
+
+1. **Uninitialized** (no sentinel — a brand-new empty folder, or a folder that already holds an "as-arrived" dump). This is the deliberately comfortable entry point: you may drop a dump into a bare folder without pre-creating anything. Prep's first action is to **initialize**: it creates any missing part of the `0`–`6` structure and the control directory, and moves every base entry that is **not** part of that managed structure — loose files *and* whole folder trees, **structure preserved, no flattening** — into `0-sources/`. The move **excludes the managed folders themselves** (`0-sources/` and its `1`–`6` siblings) and the skipped control/dot directories (`.photos-ingest/`, `.photos-ingest-quarantine/`, `.git`, dotfiles/dotdirs), so it never moves a structure folder into `0-sources`. The sentinel `photos-00-workspace-guard` is written **last** (Section 7.1). Because it is written last, a crash partway through init leaves no sentinel, so the next run simply re-enters the init path harmlessly — the already-created `0`–`6` folders are recognized and left in place (not re-moved), the dump already in `0-sources/` stays put, any missing structure is created, and only genuinely new base entries (if any) are consolidated. There is no half-initialized trap. (The numbered folder names `0-sources`…`6-photos-by-dest` are reserved for the managed structure; a same-named folder in an as-arrived dump is treated as the managed folder, not moved beneath itself.)
+2. **Initialized** (sentinel present). Prep operates normally: new dumps live in **`0-sources/`** and prep distributes them. After initialization the **base of the workspace contains only folders, never loose files** — an invariant every script relies on (the control directory `.photos-ingest/` and the numbered folders are folders; the sentinel lives *inside* `.photos-ingest/`, not at the root). A loose file appearing at the root is a misplaced dump and a hard block (Section 6.2): once a workspace exists, the one and only inbox is `0-sources/`, never the root.
+
+So "drop files in the folder" is the happy path **exactly once** — the uninitialized first run — and a hard error every time after. This asymmetry is intentional and is stated for the operator: the first gesture *bootstraps* an empty folder; afterwards the workspace has an inbox (`0-sources/`) and that is the only place a dump belongs. The post-init root-file block message says exactly this and points to `0-sources/`.
+
+### 3.2 The strays folder (`1-strays/`)
+
+`1-strays/` holds **non-media (`other`-class) files** — anything the pipeline never fingerprints, organizes, or reasons about (Section 6.1, Section 9). On each run that finds such files in `0-sources`, prep **moves them out into a per-run subfolder `1-strays/<plan-id>/`, preserving their relative path under `0-sources`** (a file at `0-sources/trip/notes.txt` moves to `1-strays/<plan-id>/trip/notes.txt`). Each prep run uses its own `<plan-id>` subfolder, so successive runs never collide and nothing is ever overwritten — within a run paths are unique, across runs the `<plan-id>` differs. Strays are **inert**: prep journals the move and does nothing else with them — they are not fingerprinted, not recorded in the SQLite cache, not in any phase log, and not part of the archival package. `1-strays/` is excluded from prep's processing scan (like `.photos-ingest/` and the quarantine tree), so already-parked strays are never re-swept. Moving non-media into `1-strays/` is what lets prep leave **`0-sources/` empty** at the end of every run, ready for the next dump (Section 7.6, Section 18).
+
+Control / non-media paths (never treated as managed media). All pipeline control and artifact files live inside `.photos-ingest/`. The **authoritative, complete listing** is the shared contract (`10_photos-shared-contract.md` Section 5.1); the layout below mirrors it (prep itself only writes the `0X`/`1X` entries — the `2X`/`3X` artifacts are produced by calibration and merge but live here too):
 
 ```text
 .photos-ingest/                          all pipeline control & artifact files live here
   photos-00-config.json                  workspace config (seeded by prep)
-  photos-00-workspace-guard              workspace guard / sentinel
-  photos-00-ingest.db                    SQLite identity/metadata cache + derived caches (archived)
+  photos-00-workspace-guard              workspace guard / sentinel (also carries the terminal/sealed marker after merge)
+  photos-00-ingest.db                    SQLite identity/metadata cache + derived caches (live working DB; archived)
+  photos-15-prep-ingest.db               prep-phase artifact: DB backup snapshot, end of prep
   journal-*.json                         execution journals
   photos-11-handoff.json                 prep-phase artifact: handoff manifest
+  photos-15-prep-log.json                prep-phase artifact: end-of-prep audit log
   photos-21-time-decisions.json          calibration-phase artifact
   photos-22-gps-decisions.json           calibration-phase artifact
   photos-23-executable-plan.json         calibration-phase artifact
   photos-24-execution-summary.json       calibration-phase artifact
   photos-25-complete-log.json            calibration-phase artifact: transformation log (at finalize)
+  photos-25-calibrate-ingest.db          calibration-phase artifact: DB backup snapshot, end of calibration
+  photos-31-merge-summary.json           merge-phase artifact: library-merge summary
+  photos-35-merge-log.json               merge-phase artifact: full transformation log (prep+calibrate+merge)
+  photos-35-merge-ingest.db              merge-phase artifact: DB backup snapshot, end of merge
   gpx/                                    default gpx_root (calibration GPX tracks; not prep media)
 .photos-ingest-quarantine/<plan_id>      recoverable duplicate quarantine
 ```
 
-Because every control and artifact file lives under `.photos-ingest/`, prep skips that directory **wholesale** during its media scan — there is no per-file ignore list to maintain. The scanner must skip `.git`, `.photos-ingest/`, and `.photos-ingest-quarantine/` as whole subtrees, plus dotfiles. Nothing pipeline-related ever sits among managed media, so a control file can never be mistaken for a photo. GPX track files are calibration's alone and live under `gpx_root` (default `.photos-ingest/gpx/`, shared contract `10_photos-shared-contract.md` Section 8), inside the skipped control directory; should `gpx_root` be misconfigured to resolve inside the managed `0`–`5` tree, prep must skip that subtree too so GPX files are never organized. Prep is otherwise GPX-unaware — it does not read, parse, or fingerprint GPX.
+Because every control and artifact file lives under `.photos-ingest/`, prep skips that directory **wholesale** during its media scan — there is no per-file ignore list to maintain. The scanner must skip `.git`, `.photos-ingest/`, and `.photos-ingest-quarantine/` as whole subtrees, plus dotfiles, **and the strays folder `1-strays/` in its entirety** (all `<plan-id>` subfolders, Section 3.2) — its contents are already-parked non-media that the pipeline never re-processes. Prep *writes* to `1-strays/` (it moves new strays in) but never *scans* it, exactly as with the quarantine tree. Nothing pipeline-related ever sits among managed media, so a control file can never be mistaken for a photo. GPX track files are calibration's alone and live under `gpx_root` (default `.photos-ingest/gpx/`, shared contract `10_photos-shared-contract.md` Section 8), inside the skipped control directory; should `gpx_root` be misconfigured to resolve inside the managed `0`–`6` tree, prep must skip that subtree too so GPX files are never organized. Prep is otherwise GPX-unaware — it does not read, parse, or fingerprint GPX.
 
 The mutable/immutable status of each folder is recorded in the handoff manifest (Section 16).
 
-The SQLite database (`photos-00-ingest.db`) is not throwaway scratch: besides serving as the hash/metadata cache that makes runs cheap and idempotent, it is part of the durable record of what the pipeline knows about the archive, and it is bundled into the archival package on finalize (shared contract `10_photos-shared-contract.md` Section 13.4). Prep is the sole writer of its cache/identity content (hashes, metadata, move-aware history) through the controlled single-writer path (Section 14.3); calibration writes only its own derived regions of the database (the resolved-UTC cache and the manual-GPS pre-state ledger, calibration Section 24.1), which are disjoint from prep's. The two never write the same rows.
+The SQLite database (`photos-00-ingest.db`) is not throwaway scratch: besides serving as the fingerprint/metadata cache that makes runs cheap and idempotent, it is part of the durable record of what the pipeline knows about the archive, and it is bundled into the archival package on finalize (shared contract `10_photos-shared-contract.md` Section 13.4). Prep is the sole writer of its cache/identity content (fingerprints, metadata, move-aware history) through the controlled single-writer path (Section 14.3); calibration writes only its own derived regions of the database (the resolved-UTC cache and the manual-GPS pre-state ledger, calibration Section 24.1), which are disjoint from prep's; and merge writes only the library-file fingerprint cache and per-file library-destination rows (shared contract `10_photos-shared-contract.md` Section 13.4). The three writers' regions are disjoint — no two phases ever write the same rows.
 
 The workspace configuration, `photos-00-config.json`, is defined authoritatively in the shared contract (`10_photos-shared-contract.md` Section 4). Prep seeds it: on a run, if the file is absent prep creates it in `.photos-ingest/` from the in-code default template (`photos_utils.CONFIG`); if present, prep reads it as-is and treats the workspace copy as authoritative for all processing in that workspace. Prep is the sole writer of the file (it only seeds it once); the user changes configuration by hand-editing the JSON, and calibration reads it but never writes it. Its field-scoped fingerprints feed dependency staleness (so a config edit invalidates only the artifacts that depend on the changed area), and its whole-file SHA-256 is recorded for integrity and archived in the package. Seeding happens at the start of the run, before any config-dependent fingerprint is computed, so that all fingerprints (and the handoff's recorded config hash) are derived from the on-disk `photos-00-config.json`, never from the in-code defaults directly — on a first run the freshly seeded file is the thing fingerprinted.
 
@@ -108,10 +130,11 @@ Invariants that hold at every gate:
 1. planning is non-mutating — it touches no media, no SQLite, no manifest;
 2. dry-run reports the exact serialized plan that would execute;
 3. execution revalidates the plan before any mutation and rejects stale plans;
-4. all media operations are no-clobber;
+4. all media operations are no-clobber — planned no-clobber *and* re-verified no-clobber at execute time, performed atomically (Section 14.3; shared contract `10_photos-shared-contract.md` Section 15);
 5. all media mutations are journaled;
-6. `5-photos-by-dest` is never a mutation source or target;
-7. no downstream artifact is created from stale upstream inputs (Section 5).
+6. `6-photos-by-dest` is never a mutation source or target;
+7. no downstream artifact is created from stale upstream inputs (Section 5);
+8. all human-authored config is sanity-validated before use (Section 6.3; shared contract Section 14).
 
 Execution never re-derives organization decisions. It applies only the operations already recorded in the plan, after validation.
 
@@ -131,14 +154,16 @@ For prep, the cascade is:
 workspace config (photos-00-config.json) / CLI options
   -> workspace inventory snapshot
   -> SQLite/cache precondition state
-  -> hash + metadata freshness decisions
+  -> fingerprint + metadata freshness decisions
   -> prep plan
   -> execution journal
   -> updated SQLite cache
-  -> photos-1-prep handoff manifest
+  -> photos-1-prep handoff manifest (photos-11-handoff.json)
+  -> end-of-prep audit log (photos-15-prep-log.json)
+  -> end-of-prep DB backup snapshot (photos-15-prep-ingest.db)
 ```
 
-Durable artifacts (plan, journal, SQLite cache, handoff) must carry a `depends_on` block (or equivalent) recording the upstream fingerprints they relied on. Intermediate items (inventory snapshot, freshness maps) are internal pipeline state of a single run, not independently revalidated artifacts.
+Durable artifacts (plan, journal, SQLite cache, handoff, prep audit log) must carry a `depends_on` block (or equivalent) recording the upstream fingerprints they relied on. Intermediate items (inventory snapshot, freshness maps) are internal pipeline state of a single run, not independently revalidated artifacts.
 
 At minimum the recorded fingerprints include:
 
@@ -146,7 +171,7 @@ At minimum the recorded fingerprints include:
 2. CLI-options fingerprint where options affect planning;
 3. per-file preconditions (size, mtime) for files involved in operations;
 4. SQLite schema/cache version;
-5. hash algorithm/version;
+5. content-fingerprint algorithm/version;
 6. metadata extractor name + version, field-set version, extraction-options fingerprint, metadata-schema version, camera-group-key version;
 7. by-dest read-only preconditions for any by-dest file that influenced a decision;
 8. final workspace/cache fingerprint (handoff only).
@@ -168,20 +193,36 @@ video : mp4 mov avi mkv
 other : everything else
 ```
 
-`other` files are carried in the cache as `not_applicable` for metadata and are not date-organized.
+`other` files are carried in the cache as `not_applicable` for metadata, are **not fingerprinted** (Section 9), and are not date-organized. Prep **moves them out of `0-sources` into `1-strays/<plan-id>/`** (structure preserved) and ignores them thereafter — never deduplicated, organized, or blocking (Sections 3.2, 7.6, 18).
 
-Photos (`image`/`raw`) and videos are organized into **separate bands** that never mix: photos into `4-photos-by-date` (then by-dest), videos into `3-videos-by-date` (and nowhere else). A `video`-class file found under `4-photos-by-date` or `5-photos-by-dest`, or an `image`/`raw` file found under `3-videos-by-date`, is a misplacement the pipeline must not tolerate: prep treats a video under `4-photos-by-date` as a hard break (it reports the offending path and does not proceed), and a video under `5-photos-by-dest` is a calibration-side break (calibration `10_photos-2-time-gps-workflow.md` Section 7.3). Prep's own routing never places a video into the photo band; this guard catches a video that arrived there by other means (e.g. a hand-move).
+Photos (`image`/`raw`) and videos are organized into **separate bands** that never mix: photos into `5-photos-by-date` (then by-dest), videos into `4-videos-by-date` (and nowhere else). A `video`-class file found under `5-photos-by-date` or `6-photos-by-dest`, or an `image`/`raw` file found under `4-videos-by-date`, is a misplacement the pipeline must not tolerate: prep treats a video under `5-photos-by-date` as a hard break (it reports the offending path and does not proceed), and a video under `6-photos-by-dest` is a calibration-side break (calibration `10_photos-2-time-gps-workflow.md` Section 7.3). Prep's own routing never places a video into the photo band; this guard catches a video that arrived there by other means (e.g. a hand-move).
 
 ### 6.2 Hard input guards (block before any operation)
 
 Planning must block, producing no executable plan, if it finds:
 
-1. a symlink among managed files (forbidden);
-2. a forbidden sidecar (`.xmp`, `.dop`, `.pp3`) — editing sidecars are not part of this pipeline;
-3. a content hash failure for any non-by-dest media file whose content equality a decision depends on (Section 11.3);
-4. a band misplacement — a `video`-class file under `4-photos-by-date` or `5-photos-by-dest`, or an `image`/`raw` file under `3-videos-by-date` (Section 6.1). Prep never creates such a placement itself; this guard catches one introduced by hand.
+1. a **sealed (terminal) workspace** — a terminal/sealed marker written by a prior successful merge (shared contract `10_photos-shared-contract.md` Section 13.7). A merged workspace is **done**: prep **hard-stops immediately, mutating nothing, and never touches anything**, directing the user to start a fresh workspace. There is no recovery utility and no sweeping — if a new dump was dropped into a sealed workspace (files at the workspace root **or** in `0-sources/`), prep additionally reports that a likely new dump was detected and that, because this workspace is sealed, the dump must be moved into a **fresh** workspace by hand; prep leaves it exactly where it is. This check runs at startup, right after the lock is acquired — on an initialized workspace, alongside verifying the sentinel (shared contract Section 2); an uninitialized workspace carries no seal marker and enters the init path instead (Section 7.1), so this guard never fires there. The check precedes any scan or plan;
+2. a **loose file at the workspace root of an initialized workspace** — once a workspace is initialized (sentinel present, Section 3.1), the base must contain only folders; a loose file at the root is a misplaced dump. Prep hard-stops with a message that dumps belong in `0-sources/` (move it there or remove it, then re-run). The check is **strict**: any loose file at the root blocks, dotfiles included — nothing but the numbered folders and `.photos-ingest/` belongs at the base. (This guard does **not** apply on an *uninitialized* workspace, where root files are the expected first dump and trigger initialization instead, Section 3.1.);
+3. a symlink among managed files (forbidden);
+4. a forbidden sidecar (`.xmp`, `.dop`, `.pp3`) — editing sidecars are not part of this pipeline;
+5. a content fingerprint failure for any non-by-dest **media** file whose content equality a decision depends on (Section 11.3);
+6. a band misplacement — a `video`-class file under `5-photos-by-date` or `6-photos-by-dest`, or an `image`/`raw` file under `4-videos-by-date` (Section 6.1). Prep never creates such a placement itself; this guard catches one introduced by hand.
 
 Blockers are reported textually; the workflow does not silently skip them.
+
+### 6.3 Config sanity-validation (block before any operation)
+
+Prep seeds and then reads `photos-00-config.json` (Section 3), and every human-authored value in it must be sanity-validated before it is used, per the shared input-validation discipline (shared contract `10_photos-shared-contract.md` Section 14). This is separate from, and in addition to, the dependency cascade (Section 5): fingerprints detect that a value *changed*; validation detects that a value is *invalid*. A config value can match its fingerprint and still be meaningless or unsafe.
+
+Prep validates at least the config it actually consumes:
+
+1. **Workspace and control paths** must resolve to sane, syntactically valid paths; required paths must be non-empty.
+2. **`gpx_root`** must be a syntactically valid path; the defensive skip of Section 3 / shared contract Section 8.2 handles a misconfiguration that resolves inside the managed tree, but a path that is malformed (illegal characters, not a path at all) is a validation blocker.
+3. **The `zfs` block** (when snapshots are configured): the dataset/pool name and any snapshot-name prefix must be valid snapshot-name components — in particular a prefix must not contain whitespace, `/`, a second `@`, or other characters that would make the resulting `dataset@prefix-<plan_id>` snapshot name invalid. An invalid prefix is rejected before planning, so a snapshot that `snapshots_required` would demand can never fail at execute time for a name-syntax reason prep could have caught.
+4. **`filename_timestamp_format`** must produce a non-empty, filesystem-safe component containing no path separators or illegal filename characters (the by-date provisional names depend on it, Section 8).
+5. **Numeric/threshold and enumerated config** prep reads (e.g. job count, any classification lists it consults) must be of the right type and within sane ranges.
+
+A validation failure is a hard blocker: prep reports it textually, naming the offending config field so the user can fix the JSON and re-run, and produces no executable plan and no mutation — exactly as for a hard input guard above. Validation never silently coerces or "repairs" a value.
 
 ---
 
@@ -193,15 +234,22 @@ Planning derives operations in a fixed, deterministic order. Each stage updates 
 mkdir, move_no_clobber, rename_no_clobber, quarantine_move, db_upsert, db_remove
 ```
 
-### 7.1 Stage 0 — Inventory and guards
+### 7.1 Stage 0 — Initialize if needed; inventory; guards
 
-Scan the workspace root (top-level loose files) and every managed folder. Apply the guards of Section 6.2. Split the inventory into **mutable-side files** (everything outside `5-photos-by-dest`) and **read-only by-dest files**.
+First, determine whether the workspace is **initialized** — root sentinel `photos-00-workspace-guard` present (Section 3.1):
 
-### 7.2 Stage 1 — Consolidate loose files into `0-source`
+- **Uninitialized** (no sentinel): prep plans **initialization** — create any missing part of the `0`–`6` structure and the control directory `.photos-ingest/`, and move every base entry that is **not** part of the managed structure (loose files *and* whole folder trees, **structure preserved — no flattening**) into `0-sources/`. The move **excludes** the numbered folders themselves and the skipped control/dot directories, so a re-entry after a crashed init never moves an already-created `0`–`6` folder beneath `0-sources/`. The sentinel is **not** written now; it is written **last**, only on successful completion of the run (Section 14.3), so a crash before then leaves the workspace uninitialized and the next run re-enters this path harmlessly — the dump already in `0-sources/` and the already-created structure are recognized and left in place (Section 3.1).
+- **Initialized** (sentinel present): the structure already exists and the dump lives in `0-sources/`. The root-file guard (Section 6.2 item 2) blocks any loose file at the base, and the seal guard (Section 6.2 item 1) blocks a sealed workspace.
 
-**How media enters the workspace (the "dump").** The user adds material by dumping folders and files into the **base of the workspace** and/or directly into `0-source/`. "Dump" means exactly this: drop arbitrary files and folder trees in either location, in any structure. The user is not expected to pre-organize, rename, or sort them. A single workspace may receive one or many dumps over time (shared contract `10_photos-shared-contract.md` Section 10).
+Then scan `0-sources/` and every managed folder, apply the guards of Section 6.2, and split the inventory into **mutable-side files** (everything outside `6-photos-by-dest`) and **read-only by-dest files**.
 
-Stage 1 consolidates that material: any media file sitting loose at the workspace root — or anywhere outside the managed `0`–`5` folders and the skipped control/quarantine directories — is moved into `0-source/` (no-clobber, case-insensitive collision-safe), flattening dumped folder trees as needed. Files already inside a managed folder are left where they are at this stage. Non-media (`other`-class) files dumped in are not organized (Section 6.1) and remain where prep leaves them; they never block prep.
+### 7.2 Stage 1 — The dump in `0-sources` (no flattening)
+
+**`0-sources/` is the one and only inbox.** On an initialized workspace you place a dump — arbitrary files and whole folder trees, in any structure — into `0-sources/`; on an uninitialized workspace prep moves the as-arrived base dump into `0-sources/` during initialization (Stage 0). Either way the dump then sits in `0-sources/` and prep processes it from there. You are not expected to pre-organize, rename, or sort anything. A single workspace may receive one or many dumps over time (shared contract `10_photos-shared-contract.md` Section 10).
+
+**Prep does not flatten `0-sources`.** Dumped folder trees are left as they are on disk; prep does not lift files up into the top level of `0-sources/`. The job flattening used to do — guaranteeing no destination-name collisions — is instead handled **in memory during planning**: prep computes each file's by-date destination name and resolves any collision with the deterministic `-NNN` suffix allocator (Section 8), treating every on-disk and planned name as occupied. So the *organized outputs* — by-date photos and videos — are always uniquely named (logically "flattened") without ever physically flattening `0-sources`. Files already inside a managed folder are left where they are at this stage; non-media files are routed to `1-strays/` at Stage 5 (Section 7.6).
+
+> **Caution — protect your originals *during* the dump; a clobber at copy time is invisible to the pipeline.** Every operation the pipeline performs is no-clobber and atomic (Section 14.3; shared contract `10_photos-shared-contract.md` Section 15), and prep preserves every distinct file it finds — photos and videos are organized under uniquely-allocated by-date names (Section 8), non-media is moved into `1-strays/` (Section 3.2), and nothing is overwritten. **That protection begins only at the first prep invocation.** It cannot cover a file overwritten *while you are dumping*, before prep has run: if your own copy/move command overwrites a same-named file in the same destination folder as you stage files — e.g. `cp a/IMG_1234.jpg 0-sources/` then `cp b/IMG_1234.jpg 0-sources/`, where the second silently replaces the first — that file is gone at the filesystem level and the pipeline has **no record it ever existed**: nothing to detect, nothing to recover. The pipeline cannot see a collision that happened before it was invoked. To stay safe, dump each source into its **own subfolder** under `0-sources/` (prep keeps the subfolder structure on disk and gives same-named files from different subtrees distinct by-date names — it won't conflate them), or use a non-overwriting copy (`cp -n`, `rsync --ignore-existing`, or a tool that refuses to overwrite) and verify file counts before running prep. The dump is the one step where avoiding a clobber is in your hands, not the pipeline's.
 
 ### 7.3 Stage 2 — Normalize extension case
 
@@ -209,27 +257,27 @@ A file whose extension is not lowercase (e.g. `.JPG`, `.ARW`) is renamed to the 
 
 ### 7.4 Stage 3 — Separate redundant JPEGs
 
-Files are grouped by `(folder, basename-without-extension)`. If a group contains both a RAW and a `.jpg`, the JPEG is considered redundant (the RAW is the master). A redundant JPEG that is in `0-source` is moved to `2-redundant-jpgs/`. Paired JPEGs are excluded from the content-dedup stage so a RAW+JPEG pair is never treated as a duplicate of itself.
+Files are grouped by `(folder, basename-without-extension)`. If a group contains both a RAW and a `.jpg`, the JPEG is considered redundant (the RAW is the master). A redundant JPEG that is in `0-sources` is moved to `3-redundant-jpgs/`. Paired JPEGs are excluded from the content-dedup stage so a RAW+JPEG pair is never treated as a duplicate of itself.
 
 ### 7.5 Stage 4 — Content deduplication and quarantine
 
-Remaining files (mutable-side **and** by-dest, excluding paired JPEGs) are grouped by `(content_hash, media_class)`. Within a group of more than one file:
+Remaining files (mutable-side **and** by-dest, excluding paired JPEGs **and excluding `other`-class files, which are not fingerprinted, Section 9**) are grouped by `(content_fingerprint, media_class)`. Within a group of more than one file:
 
 1. one file is **retained**, chosen by folder priority — by-dest wins, then the more-organized folder:
 
 ```text
-5-photos-by-dest  >  4-photos-by-date  >  3-videos-by-date
-                  >  2-redundant-jpgs  >  1-missing-metadata  >  0-source
+6-photos-by-dest  >  5-photos-by-date  >  4-videos-by-date
+                  >  3-redundant-jpgs  >  2-missing-metadata  >  0-sources
 ```
 
 2. every other copy on the mutable side is moved to `.photos-ingest-quarantine/<plan_id>/<original-path>` via `quarantine_move`;
 3. a by-dest copy is **never** quarantined (it can only ever be the retained file);
 4. quarantine is recoverable: each quarantined file gets a manifest entry recording its original path, quarantine path, the retained counterpart, and the duplicate evidence (Section 15);
-5. files with unknown/invalid hashes are not grouped as duplicates (Section 11.3).
+5. files with unknown/invalid fingerprints are not grouped as duplicates (Section 11.3).
 
 ### 7.6 Stage 5 — Chronological organization
 
-Every mutable-side file still in `0-source` (not already routed to `1`–`5` and not quarantined) is organized by its source timestamp. The timestamp is read passively from cached metadata in priority order:
+Every mutable-side file still in `0-sources` after Stages 2–4 (not already routed and not quarantined) is handled by its class and timestamp. The timestamp is read passively from cached metadata in priority order:
 
 ```text
 DateTimeOriginal -> CreateDate -> ModifyDate
@@ -238,14 +286,17 @@ DateTimeOriginal -> CreateDate -> ModifyDate
 Routing:
 
 ```text
-valid timestamp + video  -> 3-videos-by-date/
-valid timestamp + photo  -> 4-photos-by-date/
-no valid timestamp       -> 1-missing-metadata/
+valid timestamp + video    -> 4-videos-by-date/
+valid timestamp + photo    -> 5-photos-by-date/
+media, no valid timestamp  -> 2-missing-metadata/
+non-media (other-class)    -> 1-strays/<plan-id>/   (structure preserved, inert; Section 3.2)
 ```
+
+After Stage 5, **`0-sources/` is empty** — every file it held has been organized into a by-date band, set aside in `2-missing-metadata`, quarantined as a duplicate, or moved to `1-strays/`. Leaving `0-sources/` empty at the end of every run is a deliberate end-state (Section 18): it is the clean inbox the next dump arrives into, and it is what calibration's "`0-sources` empty" gate checks (calibration `10_photos-2-time-gps-workflow.md` Section 13).
 
 The timestamp used here is the raw camera-naive value, used only for organization and ordering. Prep does **not** correct it, resolve a timezone, or convert to UTC — that is calibration's job.
 
-**How files leave `1-missing-metadata`.** Prep cannot invent a timestamp, so a file with no usable one lands in `1-missing-metadata` and stays there until **the user supplies the missing metadata** (e.g. sets `DateTimeOriginal` in the file). Resolving these is the user's responsibility, not the pipeline's. Once the user has fixed a file, they move it back to the workspace base or `0-source` — at which point it is simply an **additional dump** (Section 7.2): the next prep run re-inventories it, and because its size/mtime changed (the metadata edit) it is re-hashed and re-extracted, now has a valid timestamp, and is routed normally to `4-photos-by-date` (or `3-videos-by-date`). Prep provides no special "re-import from missing-metadata" path; the file just flows through the ordinary pipeline as any dumped file does. A file left in `1-missing-metadata` is residual and never blocks calibration (calibration `10_photos-2-time-gps-workflow.md` Section 7).
+**How files leave `2-missing-metadata`.** Prep cannot invent a timestamp, so a media file with no usable one lands in `2-missing-metadata` and stays there until **the user supplies the missing metadata** (e.g. sets `DateTimeOriginal` in the file). Resolving these is the user's responsibility, not the pipeline's. Once the user has fixed a file, they move it back into `0-sources` — at which point it is simply an **additional dump** (Section 7.2): the next prep run re-inventories it, and because its size/mtime changed (the metadata edit) it is re-extracted, now has a valid timestamp, and is routed normally to `5-photos-by-date` (or `4-videos-by-date`). (It must go into `0-sources`, not the workspace root — a root file is blocked on an initialized workspace, Section 6.2 item 2.) Prep provides no special "re-import from missing-metadata" path; the file just flows through the ordinary pipeline as any dumped file does. A file left in `2-missing-metadata` is residual and never blocks calibration (calibration `10_photos-2-time-gps-workflow.md` Section 7).
 
 ### 7.7 Stage 6 — Cache reconciliation
 
@@ -258,29 +309,42 @@ For files that were not mutated and whose cache record is stale (changed size/mt
 Date-organized names follow the project standard and are derived from the source-naive timestamp:
 
 ```text
-3-videos-by-date / 4-photos-by-date :  YYYY-MM-DD--HH-MM-SS-NNN.ext
-1-missing-metadata                  :  UNKN_<original-base>-NNN.ext
+4-videos-by-date / 5-photos-by-date :  YYYY-MM-DD--HH-MM-SS-NNN.ext
+2-missing-metadata                  :  UNKN_<original-base>-NNN.ext
 ```
 
 `-NNN` is a zero-padded differentiating suffix (`-001`, `-002`, …) allocated deterministically against a per-run, case-insensitive, monotonic index (only grows, from the current highest), so two files never collide and ordering is stable. Extensions are normalized to lowercase (Section 7.3). The timestamp shape and the differentiating-suffix convention are defined once in the shared contract (`10_photos-shared-contract.md` Section 7); prep reads the same shared `filename_timestamp_format` key as calibration.
 
-The timestamp component (`YYYY-MM-DD--HH-MM-SS`) is the raw camera-naive value, used here only for organization and ordering. It shares the same textual format as the final filename calibration assigns later (`10` Section 26 / shared contract Section 7.3), but the value is **provisional**: calibration recomputes it from corrected, destination-local civil time and rewrites the name. Prep does not correct, timezone-resolve, or UTC-convert the timestamp.
+The timestamp component (`YYYY-MM-DD--HH-MM-SS`) is the raw camera-naive value, used here only for organization and ordering. It shares the same textual format as the final filename calibration assigns later (`10_photos-2-time-gps-workflow.md` Section 26 / shared contract Section 7.3), but the value is **provisional**: calibration recomputes it from corrected, destination-local civil time and rewrites the name. Prep does not correct, timezone-resolve, or UTC-convert the timestamp.
 
 > Both prep and calibration use the same `filename_timestamp_format` (shared contract `10_photos-shared-contract.md` Section 7). A pre-existing file whose name does not match the convention is treated as an ordinary dump and re-ingested — prep never parses meaning from a non-conforming filename; the timestamp comes from metadata.
 
 ---
 
-## 9. Hashing and cache reuse
+## 9. Content fingerprinting and cache reuse
 
-Hashes back the duplicate and content-uniqueness checks and are persisted in SQLite.
+Content fingerprints back the duplicate and content-uniqueness checks, are persisted in SQLite, and serve as the **identity spine** the later phases rely on (shared contract `10_photos-shared-contract.md` Section 13.3 item 2).
 
-1. if a path exists in the cache with unchanged size and mtime (and fresh metadata context), reuse the cached content hash;
-2. if a file is absent from the cache, hash it and store the result;
-3. if size or mtime changed, treat the cached hash as stale and recompute;
-4. if prep moves or case-normalizes a file without changing content, carry the known hash forward to the new workspace-relative path (Section 10);
-5. a hash failure never implies equality;
-6. an unknown hash blocks any decision that depends on content equality;
-7. the hash algorithm is recorded in the cache and handoff.
+**The media content fingerprint is over decoded *content*, computed by an external tool — not a byte hash.** Each fingerprinted media file's content fingerprint is derived from its **decoded content**, not its raw file bytes, and the tool differs by class:
+
+1. **Photos** (`image`/`raw`): the fingerprint is computed with **ImageMagick `identify`** over the normalized decoded image (pixels). This is essential because calibration rewrites photos' EXIF/metadata in place (time, GPS, the `GPSProcessingMethod` marker) and renames them: a file-byte hash would change on every such write, so it could not serve as a stable identity. An `identify` pixel fingerprint is **invariant under in-place metadata writes and renames** — the decoded pixels do not change.
+2. **Videos** (`video`): the fingerprint is the **`ffmpeg` stream MD5** over the decoded media streams. Videos are date-organized and renamed but not otherwise mutated (Section 2.4); a content fingerprint still gives them a stable identity for de-duplication and move-aware recognition, on the same footing as photos.
+
+A single decoded-content fingerprint is therefore what keys the transformation log (shared contract `10_photos-shared-contract.md` Section 13.3 item 2), the manual-GPS pre-state ledger (calibration `10_photos-2-time-gps-workflow.md` Section 24.1, photos only), content de-duplication (Section 7.5), and merge's collision / already-present checks (`10_photos-3-merge-workflow.md` Section 7) — *across* the renames, moves, and (for photos) metadata writes the pipeline performs. The fingerprint tool/identity and its version (ImageMagick `identify` for photos, `ffmpeg` stream MD5 for videos) are part of the recorded content-fingerprint algorithm/version (Section 5 item 5; Section 12.1), so a tool change is detectable rather than silently shifting identities.
+
+**`other`-class files are not fingerprinted at all.** Non-media (`other`-class) files get **no content fingerprint** — there is nothing meaningful to decode and they are never content-deduplicated or organized. They are moved out of `0-sources` into `1-strays/<plan-id>/` and ignored thereafter (Sections 3.2, 6.1, 7.6). This is by design, not a fingerprint failure: the absence of a fingerprint on an `other` file is normal and never a blocker, unlike a *media* fingerprint **failure** (Section 11.3).
+
+**Byte-level (whole-file) SHA-256 is reserved for artifacts.** The only place a hash is taken over raw file bytes is the pipeline's **artifacts** — the numbered JSON files and `photos-00-config.json` (calibration Section 4 / shared contract Section 4.1) — where detecting a byte change *is* the point. Media is never identified by a byte hash.
+
+Reuse rules (apply to the fingerprinted media classes — photos and videos; `other` is not fingerprinted):
+
+1. if a path exists in the cache with unchanged size and mtime (and fresh metadata context), reuse the cached content fingerprint;
+2. if a fingerprinted media file is absent from the cache, compute its decoded-content fingerprint (ImageMagick `identify` / `ffmpeg` stream MD5) and store the result;
+3. if size or mtime changed, treat the cached fingerprint as stale and recompute — a metadata-only edit (including the pipeline's own EXIF writes) changes size/mtime and forces a recompute, but a photo's `identify` fingerprint (or a video's `ffmpeg` stream MD5) recomputes to the **same** value, so identity is preserved while the cache freshness is refreshed;
+4. if prep moves or case-normalizes a file without changing content, carry the known fingerprint forward to the new workspace-relative path (Section 10);
+5. a fingerprint failure on a media file never implies equality;
+6. an unknown or failed fingerprint on a *media* file blocks any decision that depends on content equality (Section 11.3); an `other` file's absence of a fingerprint is not such a case (it is intentionally unfingerprinted and never enters a content-equality decision);
+7. the fingerprint algorithm — including the tool identity/version (ImageMagick `identify` for photos, `ffmpeg` stream MD5 for videos) — is recorded in the cache and handoff.
 
 ---
 
@@ -288,18 +352,18 @@ Hashes back the duplicate and content-uniqueness checks and are persisted in SQL
 
 The cache must distinguish: same content at a new path because of a move; same path with changed content; different path and different content; duplicate content already in by-dest; duplicate content already quarantined.
 
-Each planned move/rename carries enough to update the cache row without rehashing after the move: source path, destination path, source size, source mtime, source hash if known, the post-move expected path, the post-move cache action, and the dependency facts proving the carried-forward hash is still valid. Cache updates are derived from the validated plan and applied during execution, never speculatively during planning.
+Each planned move/rename carries enough to update the cache row without re-fingerprinting after the move: source path, destination path, source size, source mtime, source fingerprint if known, the post-move expected path, the post-move cache action, and the dependency facts proving the carried-forward fingerprint is still valid. Cache updates are derived from the validated plan and applied during execution, never speculatively during planning.
 
 ### 10.1 Recognizing manual moves from by-date into by-dest
 
-After prep organizes media into `3-videos-by-date`/`4-photos-by-date`, the user moves **photos** from `4-photos-by-date` into destination folders under `5-photos-by-dest` (videos are not moved; Section 2.4). On the next prep run those photos appear at a new by-dest path and are absent from their old by-date path. Prep must recognize this as a move and must **not** re-hash or re-extract metadata for the moved file.
+After prep organizes media into `4-videos-by-date`/`5-photos-by-date`, the user moves **photos** from `5-photos-by-date` into destination folders under `6-photos-by-dest` (videos are not moved; Section 2.4). On the next prep run those photos appear at a new by-dest path and are absent from their old by-date path. Prep must recognize this as a move and must **not** re-fingerprint or re-extract metadata for the moved file.
 
 Detection is cache-only — no file re-read beyond `stat`:
 
-1. a previously cached mutable-side file (typically under `4-photos-by-date`/`3-videos-by-date`) is now missing from its cached path; and
+1. a previously cached mutable-side file (typically under `5-photos-by-date`/`4-videos-by-date`) is now missing from its cached path; and
 2. a by-dest file that was not previously cached now exists whose `stat` (size and `mtime_ns`) and basename match that missing file.
 
-On a unique match, prep treats it as a move: it carries the cached content hash and metadata record forward to the new by-dest path (move-aware identity), drops the stale old cache row, and records the new by-dest row from the carried-forward facts. Because `5-photos-by-dest` is read-only, prep performs **no** filesystem operation — it only fixes its cache and the handoff manifest to reflect the new location.
+On a unique match, prep treats it as a move: it carries the cached content fingerprint and metadata record forward to the new by-dest path (move-aware identity), drops the stale old cache row, and records the new by-dest row from the carried-forward facts. Because `6-photos-by-dest` is read-only, prep performs **no** filesystem operation — it only fixes its cache and the handoff manifest to reflect the new location.
 
 Safety:
 
@@ -307,11 +371,11 @@ Safety:
 2. carried-forward identity never overrides a content change — if the by-dest file's size/mtime differ from the cached source, it is rescanned;
 3. move recognition only updates prep's own cache/handoff; it never mutates by-dest media.
 
-This makes the round trip cheap: after the user sorts the by-date working set into by-dest, re-running prep does not re-hash or re-read the moved files — it simply fixes the handoff.
+This makes the round trip cheap: after the user sorts the by-date working set into by-dest, re-running prep does not re-fingerprint or re-read the moved files — it simply fixes the handoff.
 
 ### 10.2 Recognizing moves between destinations (re-sort within by-dest)
 
-The user may also move an already-placed file from one destination to another inside `5-photos-by-dest` (e.g. correcting a mis-sort: `Belgium/Brussels` → `Belgium/Bruges`). Prep must recognize this the same cache-only way: a previously cached by-dest file is now missing from its cached by-dest path, and an uncached by-dest file with matching `stat` and basename now exists at a different by-dest path. On a unique match, prep carries the cached identity forward to the new by-dest path, drops the old row, and updates the handoff to record the new destination — performing **no** filesystem operation (by-dest is read-only).
+The user may also move an already-placed file from one destination to another inside `6-photos-by-dest` (e.g. correcting a mis-sort: `Belgium/Brussels` → `Belgium/Bruges`). Prep must recognize this the same cache-only way: a previously cached by-dest file is now missing from its cached by-dest path, and an uncached by-dest file with matching `stat` and basename now exists at a different by-dest path. On a unique match, prep carries the cached identity forward to the new by-dest path, drops the old row, and updates the handoff to record the new destination — performing **no** filesystem operation (by-dest is read-only).
 
 This matters because a file's **destination is a calibration input**: the destination civil timezone is destination-scoped (calibration `10_photos-2-time-gps-workflow.md` Section 18). When prep moves a file's recorded destination, the handoff changes, which (via the dependency cascade) restales the affected destination decisions so calibration **re-evaluates** the moved file under its new destination rather than silently keeping the old destination's timezone (calibration Section 18.1). As with all by-dest moves, the mandatory re-prep after the move applies (shared contract `10_photos-shared-contract.md` Section 10), and the same ambiguity safety as Section 10.1 holds (ambiguous matches are treated as new files and rescanned).
 
@@ -321,15 +385,15 @@ This matters because a file's **destination is a calibration input**: the destin
 
 ### 11.1 Content duplicate against by-dest
 
-If a mutable-side file has the same content hash as a *different* by-dest file (i.e. not the same file recognized as moved per Section 10.1), it is classified as a duplicate against existing by-dest content. The by-dest file is the retained copy; only the mutable-side file is acted on (quarantined). The relationship is recorded in the summary, journal, and handoff.
+If a mutable-side file has the same content fingerprint as a *different* by-dest file (i.e. not the same file recognized as moved per Section 10.1), it is classified as a duplicate against existing by-dest content. The by-dest file is the retained copy; only the mutable-side file is acted on (quarantined). The relationship is recorded in the summary, journal, and handoff.
 
 ### 11.2 Path conflict against by-dest
 
 If a planned destination path would collide with an existing by-dest path (including case-insensitively), prep must not clobber it: it allocates a safe alternative name where the operation class allows, otherwise it blocks. The by-dest file is never touched.
 
-### 11.3 Unknown hashes
+### 11.3 Unknown fingerprints
 
-If either side of a potential duplicate has an unknown hash (hash failure), prep must not classify it as a content duplicate and must not remove or quarantine based on equality. For a mutable-side file this is a blocker; for a by-dest file it is skipped (by-dest is read-only and never quarantined regardless).
+This rule concerns **media** files (photos and videos), which are fingerprinted; `other`-class files are intentionally unfingerprinted (Section 9) and never enter a content-equality decision, so they are out of scope here. If either side of a potential duplicate is a **media** file with an unknown fingerprint (a fingerprint *failure* — the decode/fingerprint could not be computed), prep must not classify it as a content duplicate and must not remove or quarantine based on equality. For a mutable-side media file this is a blocker; for a by-dest file it is skipped (by-dest is read-only and never quarantined regardless).
 
 By-dest inventory facts that influenced any decision are recorded in the plan dependencies, so execution rejects the plan if by-dest state changed in a way that affects uniqueness decisions.
 
@@ -337,7 +401,7 @@ By-dest inventory facts that influenced any decision are recorded in the plan de
 
 ## 12. Passive metadata acceleration
 
-Because prep already opens every file for hashing and organization, it caches the EXIF/QuickTime/XMP facts the calibration phase will need, so calibration can avoid re-reading unchanged files. This is strictly passive: prep stores facts, makes no time/GPS decision, and corrects nothing.
+Because prep already opens every file for fingerprinting and organization, it caches the EXIF/QuickTime/XMP facts the calibration phase will need, so calibration can avoid re-reading unchanged files. This is strictly passive: prep stores facts, makes no time/GPS decision, and corrects nothing.
 
 Cached per file (raw values plus clearly-labelled parsed helpers):
 
@@ -349,7 +413,7 @@ Cached per file (raw values plus clearly-labelled parsed helpers):
 
 ### 12.1 Metadata freshness
 
-A cached metadata record is reusable only when all freshness inputs still match: path (or move-aware identity, Section 10.1), size, mtime, content hash if available, extractor name, extractor version, field-set version, extraction-options fingerprint, metadata-schema version, and camera-group-key version. Changing the field set or extractor in a future release makes existing records detectably stale without being confused with content changes.
+A cached metadata record is reusable only when all freshness inputs still match: path (or move-aware identity, Section 10.1), size, mtime, content fingerprint if available, extractor name, extractor version, field-set version, extraction-options fingerprint, metadata-schema version, and camera-group-key version. Changing the field set or extractor in a future release makes existing records detectably stale without being confused with content changes.
 
 ### 12.2 Passive grouping facts
 
@@ -366,17 +430,17 @@ Prep upholds the shared idempotency principle — change only what needs changin
 3. not re-normalize already-normalized extensions;
 4. not re-quarantine already-quarantined duplicates;
 5. produce the same destination names for the same unchanged input state;
-6. reuse cached hashes and metadata for unchanged files;
-7. recognize files the user moved from by-date into by-dest and carry their cache identity forward without re-hashing or re-extracting (Section 10.1);
+6. reuse cached fingerprints and metadata for unchanged files;
+7. recognize files the user moved from by-date into by-dest and carry their cache identity forward without re-fingerprinting or re-extracting (Section 10.1);
 8. report `no_op` / `already_correct` facts rather than treating prior work as error.
 
-When new files appear in a mutable folder after a previous run, a new plan acts only on the files that require action; existing by-date/by-dest files are still scanned for uniqueness/cache freshness but are not moved or rehashed unnecessarily.
+When new files appear in a mutable folder after a previous run, a new plan acts only on the files that require action; existing by-date/by-dest files are still scanned for uniqueness/cache freshness but are not moved or re-fingerprinted unnecessarily.
 
 ---
 
 ## 14. Plan / dry-run / execute lifecycle
 
-The whole prep run — `plan`, `dry-run`, and `execute` alike — runs under the single workspace-wide lock acquired at process startup and held until exit (shared contract `10_photos-shared-contract.md` Section 2). Planning and dry-run are non-mutating but still run inside the lock, so no two pipeline processes (of either phase) ever overlap. The steps below therefore assume the lock is already held; they do not re-acquire or independently scope it.
+The whole prep run — `plan`, `dry-run`, and `execute` alike — runs under the single workspace-wide lock acquired at process startup and held until exit (shared contract `10_photos-shared-contract.md` Section 2). Planning and dry-run are non-mutating but still run inside the lock, so no two pipeline processes (of any phase) ever overlap. The steps below therefore assume the lock is already held; they do not re-acquire or independently scope it.
 
 ### 14.1 Plan
 
@@ -390,17 +454,20 @@ The whole prep run — `plan`, `dry-run`, and `execute` alike — runs under the
 
 `execute` applies the validated plan. It must:
 
-1. confirm the workspace lock is held and the root sentinel verified (both established at run start per shared contract Section 2);
+1. confirm the workspace lock is held (shared contract `10_photos-shared-contract.md` Section 2). On an **initialized** workspace, confirm the root sentinel `photos-00-workspace-guard`; on an **uninitialized** workspace this is an **init run** (Section 7.1) — there is no sentinel yet, the planned operations include creating the control directory and the full `0`–`6` structure and moving the base dump into `0-sources/`, and the sentinel is written at the very end (step 11);
 2. revalidate every recorded dependency and per-file precondition; reject the plan before any mutation if stale, missing, or unverifiable, or if the plan was produced by a different tool/version/schema;
 3. take a pre-mutation snapshot where configured (the `zfs` block in config), honoring `snapshots_required`;
-4. apply only the planned operations, each no-clobber;
+4. apply only the planned operations, each verified no-clobber **at execute time** and performed atomically (shared contract `10_photos-shared-contract.md` Section 15): immediately before each move/rename/quarantine, confirm the specific target path does not already exist (case-insensitively where the filesystem is case-insensitive) rather than trusting the plan's collision analysis, and perform the operation as a single atomic filesystem action. If a target unexpectedly exists at execute time, the operation is a blocker (or is re-checked against the plan's recorded safe-alternative allocation where the operation class permits) — never a clobber;
 5. journal every operation (move, rename, quarantine, cache write) with its result;
 6. write the quarantine manifest for any quarantined file;
 7. update SQLite/cache from the validated plan and journal in a single controlled writer/transaction after verification;
 8. write the handoff manifest only on overall success (Section 16);
-9. emit the summary (the workspace lock is released at process exit per shared contract Section 2, not as a step of `execute`).
+9. write the end-of-prep audit log `photos-15-prep-log.json` on overall success (Section 16.1);
+10. capture the end-of-prep database backup snapshot `photos-15-prep-ingest.db` on overall success — a consistent, atomic copy of the live `photos-00-ingest.db` (shared contract `10_photos-shared-contract.md` Section 13.4a);
+11. on an **init run** (the workspace was uninitialized at start), write the root sentinel `photos-00-workspace-guard` as the **last** durable step, only after every operation above has succeeded (Section 3.1). Because the sentinel is written last, a crash anywhere earlier leaves the workspace uninitialized — the dump is already in `0-sources/` and the next run safely re-enters the init path. On an already-initialized workspace this step is a no-op (the sentinel exists);
+12. emit the summary (the workspace lock is released at process exit per shared contract Section 2, not as a step of `execute`).
 
-Execution must not patch or recompute a stale plan, and SQLite writes must never come from uncontrolled worker threads.
+Execution must not patch or recompute a stale plan, and SQLite writes must never come from uncontrolled worker threads. The execute-time no-clobber check is a second, independent line of defence on top of the planner's collision analysis (Section 8): planning treats every on-disk and planned name as permanently occupied, and execution still re-verifies the actual target is free at the instant it acts. Neither replaces the other.
 
 ### 14.4 Execution idempotency and resume
 
@@ -411,7 +478,7 @@ Prep execution must be safe to re-run after a crash or partial application. Prep
 **The filesystem is the source of truth; the cache is reconciled to it.** The one genuinely hazardous interval is a crash *between* a filesystem mutation and its corresponding cache write, leaving SQLite and the filesystem disagreeing (e.g. a move applied on disk whose `db_upsert` never committed, or a `db_remove` that committed before the file was actually moved). On the next run, inventory treats the filesystem as authoritative:
 
 1. a cached row whose file is not where the cache says — but is explained by a completed on-disk move — is reconciled via the move-aware identity and ghost-prune rules (Sections 7.7, 10, 10.1), not trusted blindly;
-2. where stat/identity cannot prove the cached hash still valid, the affected file is re-stat'd/re-hashed rather than relying on a possibly-stale cache row;
+2. where stat/identity cannot prove the cached fingerprint still valid, the affected file is re-stat'd/re-fingerprinted rather than relying on a possibly-stale cache row;
 3. the controlled single-writer cache update (Section 14.3 step 7) commits only after the corresponding filesystem effect is verified, so a fresh run converges the cache back to filesystem truth.
 
 **The journal supports reconciliation and observability, not blind replay.** Every mutation is journaled (Section 14.3 step 5), and the journal records what the interrupted run had done, which aids reconciliation and auditing. But prep does not replay the journal to "continue" the old plan — recovery is re-plan-from-current-state, with the journal as evidence, not as a script to resume.
@@ -424,7 +491,7 @@ A successful prep run still writes the handoff manifest only as the final step (
 
 ## 15. Quarantine model
 
-Duplicate removal is recoverable, never destructive. Each duplicate is moved (not deleted) under `.photos-ingest-quarantine/<plan_id>/` preserving its original relative path, and a manifest records, per item: original path, quarantine path, retained counterpart, duplicate evidence (the content hash), and the plan id. The quarantine directory is excluded from scanning, so re-running prep neither re-organizes nor re-quarantines already-quarantined files.
+Duplicate removal is recoverable, never destructive. Each duplicate is moved (not deleted) under `.photos-ingest-quarantine/<plan_id>/` preserving its original relative path, and a manifest records, per item: original path, quarantine path, retained counterpart, duplicate evidence (the content fingerprint), and the plan id. The quarantine directory is excluded from scanning, so re-running prep neither re-organizes nor re-quarantines already-quarantined files.
 
 ### 15.1 Retention
 
@@ -432,9 +499,9 @@ Quarantine is the recoverable safety net for de-duplication, so prep **never del
 
 ### 15.2 Recovery (manual restore)
 
-A user may recover a quarantined file at any time by moving it out of `.photos-ingest-quarantine/` back into a managed folder (typically `0-source/`). Prep does not provide a dedicated "un-quarantine" operation and does not track such a move as a special case; the restored file is simply re-evaluated as a normal newly-seen file on the next run:
+A user may recover a quarantined file at any time by moving it out of `.photos-ingest-quarantine/` back into a managed folder (typically `0-sources/`). Prep does not provide a dedicated "un-quarantine" operation and does not track such a move as a special case; the restored file is simply re-evaluated as a normal newly-seen file on the next run:
 
-1. it is inventoried, hashed, and metadata-extracted like any other new mutable-side file;
+1. it is inventoried, fingerprinted, and metadata-extracted like any other new mutable-side file;
 2. it flows through the ordinary pipeline (extension normalization, redundant-JPEG separation, content de-duplication, chronological organization);
 3. if its content still duplicates a retained copy (mutable-side or by-dest), de-duplication will quarantine it again — into the **current** run's `<plan_id>` directory, not the original one. This is safe and predictable: restoring a still-duplicate file simply re-quarantines it;
 4. if the previously retained counterpart no longer exists (the user deleted or moved it), the restored file is no longer a duplicate and is organized normally.
@@ -446,7 +513,7 @@ Prep does not attempt to reconcile the old quarantine manifest entry with the re
 Because quarantine is never auto-deleted, prep makes its growth visible and provides an explicit, opt-in way to reclaim the space:
 
 1. **Reporting (every run):** the user-visible summary reports the current quarantine footprint — total quarantined files, total size, number of distinct `<plan_id>` directories, and the oldest/newest plan id present — so the user always knows quarantine is accumulating and by how much (Section 19).
-2. **Explicit prune command:** prep exposes a `prune-quarantine` command that deletes quarantined files. It is the only operation that removes quarantine contents, it is never invoked implicitly by `plan`/`dry-run`/`execute`, and it acts only within `.photos-ingest-quarantine/`. It supports at least selecting by `<plan_id>` and/or by age, defaults to a non-destructive dry-run that lists what would be removed, and requires explicit confirmation (or an explicit `--yes`/equivalent) before deleting. It never touches live managed folders or `5-photos-by-dest`, and it runs under the same workspace lock as every other pipeline operation (shared contract `10_photos-shared-contract.md` Section 2).
+2. **Explicit prune command:** prep exposes a `prune-quarantine` command that deletes quarantined files. It is the only operation that removes quarantine contents, it is never invoked implicitly by `plan`/`dry-run`/`execute`, and it acts only within `.photos-ingest-quarantine/`. It supports at least selecting by `<plan_id>` and/or by age, defaults to a non-destructive dry-run that lists what would be removed, and requires explicit confirmation (or an explicit `--yes`/equivalent) before deleting. It never touches live managed folders or `6-photos-by-dest`, and it runs under the same workspace lock as every other pipeline operation (shared contract `10_photos-shared-contract.md` Section 2).
 
 Pruning is the user's decision, not the pipeline's: prep surfaces the cost and offers the tool, but the recoverable copies stay until the user chooses to discard them.
 
@@ -464,30 +531,51 @@ It is written only after the validated plan executed, the journal is complete, t
 
 1. schema version and tool name (`photos-1-prep`);
 2. plan id (and execution id where applicable);
-3. cache fingerprint and hash algorithm;
+3. cache fingerprint and content-fingerprint algorithm;
 4. folders scanned with mutability flags;
-5. a sorted file list with workspace-relative path, size, mtime, hash status, folder class, and per-file metadata status;
+5. a sorted file list with workspace-relative path, size, mtime, fingerprint status, folder class, and per-file metadata status;
 6. camera groups and by-dest destination-folder facts (Section 12.2);
 7. metadata field-set/extractor versions and per-file metadata cache status;
 8. duplicates/conflicts/blockers and warnings;
 9. a `depends_on` block recording the upstream fingerprints used to create it.
 
-The manifest must be deterministic for a given workspace state (sorted lists, no reliance on unordered iteration), with run-metadata timestamps separated from fingerprints. The manifest is the contract consumed by `photos-2-time-gps` (`10` Section 13), which treats it as a first-class SHA-256 dependency — re-hashing its exact bytes before use (`10` Section 4) — so prep must write it deterministically and never edit it in place. It lives in `.photos-ingest/`, which prep skips wholesale, so prep never inventories or fingerprints it as media (shared contract `10_photos-shared-contract.md` Section 5). When the only change since the last run is the user moving photos (from by-date into by-dest, or re-sorting between destinations within by-dest), the handoff is updated to reflect the new locations using carried-forward cache identity (Sections 10.1, 10.2), without re-reading the moved files.
+The manifest must be deterministic for a given workspace state (sorted lists, no reliance on unordered iteration), with run-metadata timestamps separated from fingerprints. The manifest is the contract consumed by `photos-2-time-gps` (`10_photos-2-time-gps-workflow.md` Section 13), which treats it as a first-class SHA-256 dependency — re-hashing its exact bytes before use (`10_photos-2-time-gps-workflow.md` Section 4) — so prep must write it deterministically and never edit it in place. It lives in `.photos-ingest/`, which prep skips wholesale, so prep never inventories or fingerprints it as media (shared contract `10_photos-shared-contract.md` Section 5). When the only change since the last run is the user moving photos (from by-date into by-dest, or re-sorting between destinations within by-dest), the handoff is updated to reflect the new locations using carried-forward cache identity (Sections 10.1, 10.2), without re-reading the moved files.
+
+### 16.1 End-of-prep audit log (`photos-15-prep-log.json`)
+
+The handoff is prep's machine-readable *contract* for calibration; it is not, on its own, a human-readable per-photo audit record. To uphold the shared guarantee that **every phase leaves a complete, self-sufficient audit record at its end** (shared contract `10_photos-shared-contract.md` Section 13.0), a successful prep run also writes a human-readable transformation log at:
+
+```text
+.photos-ingest/photos-15-prep-log.json
+```
+
+This is prep's realization of the cumulative transformation log (shared contract Section 13.3). It records, per photo and keyed by content fingerprint, the ordered chain of everything prep did to that file — and it is **complete and stands on its own**: if calibration and merge never run, `photos-15-prep-log.json` is still a full, honest account of every transformation the files underwent in prep, exactly as if the later phases did not exist.
+
+It must:
+
+1. be **per-photo, content-fingerprint-keyed, human-readable JSON** in the same shape and discipline as the consolidated log (shared contract Section 13.3 items 2 and 5): pretty-printed, stably ordered, descriptive field names, human-legible values;
+2. record, for each file, the ordered prep `journey` — at least: extension normalization (from/to), the initial consolidation into `0-sources` (only on the workspace's first/initializing run, Section 7.1), redundant-JPEG separation, content de-duplication / quarantine (with the retained counterpart and duplicate evidence), chronological organization into `4-videos-by-date`/`5-photos-by-date`/`2-missing-metadata`, and the provisional date-rename — each step attributable to the run that caused it;
+3. record duplicates that were quarantined (origin path, quarantine path, retained counterpart, content fingerprint) so the recoverable-set-aside is auditable, not just the retained file;
+4. be **derived from the validated plan and journal** of the run (and prior retained journals, shared contract Section 13.3a), introducing no new authority — it consolidates records prep already produced;
+5. be written **only after a successful run** (the same gate as the handoff, Section 14.3 step 8), be **deterministic** for a given workspace state, and live in `.photos-ingest/` (skipped wholesale, never inventoried as media);
+6. be **maintained incrementally across prep runs** like the handoff: re-prep that only recognizes a by-date→by-dest move (Sections 10.1, 10.2) updates the affected entries' locations from carried-forward identity without re-deriving unmoved files; a no-op prep run leaves it unchanged.
+
+`photos-15-prep-log.json` is **carried forward, not discarded**: calibration's finalize consumes it (with the prep journals) as the prep portion of each photo's journey when it produces `photos-25-complete-log.json` (shared contract Section 13.3 item 6), appending calibration's steps rather than re-deriving prep's. Where both files exist, `photos-25-complete-log.json` is the authoritative full record and `photos-15-prep-log.json` remains as prep's standalone phase record. Prep fails (or warns and writes a clearly-partial log) if retained history is insufficient to reconstruct the prep journey (shared contract Section 13.3a) — it must not emit a log that looks complete but reflects only the last run.
 
 ---
 
 ## 17. Concurrency, determinism, and observability
 
-Expensive work (hashing, metadata extraction) may run concurrently under `-j` / `--jobs`, but concurrency must never change semantic results:
+Expensive work (fingerprinting, metadata extraction) may run concurrently under `-j` / `--jobs`, but concurrency must never change semantic results:
 
 1. filesystem traversal and stat collection are single-threaded and deterministic, fixing the candidate list before any concurrent work;
 2. candidate lists are sorted before submission and worker results aggregated deterministically;
 3. two safe job counts produce the same semantic plan and the same dependency fingerprints for the same workspace;
 4. SQLite writes go through a single controlled writer / collect-then-write transaction, never from worker threads;
-5. external tools (`exiftool`, `magick`) use persistent-worker patterns rather than per-file spawning, with safe restart on crash; partial/failed worker output is never persisted as a valid cache record and becomes a clear blocker;
+5. external tools (`exiftool` for metadata, ImageMagick `identify` for the photo content fingerprint, `ffmpeg` for the video stream-MD5 fingerprint — Section 9) use persistent-worker patterns rather than per-file spawning, with safe restart on crash; partial/failed worker output is never persisted as a valid cache record and becomes a clear blocker;
 6. job count is run metadata, not a semantic dependency, unless it genuinely changes planned behaviour.
 
-Long-running execution is visible: phase-level log lines (lock, validate, scan, hash, extract, dedup, apply, cache update, handoff, release) and live aggregate progress for concurrent hashing/metadata, with in-place updates on a TTY and periodic plain lines when output is redirected. Progress output is never the only record of a mutation — the journal is durable; progress is transient and never a dependency.
+Long-running execution is visible: phase-level log lines (lock, validate, scan, fingerprint, extract, dedup, apply, cache update, handoff, release) and live aggregate progress for concurrent fingerprinting/metadata, with in-place updates on a TTY and periodic plain lines when output is redirected. Progress output is never the only record of a mutation — the journal is durable; progress is transient and never a dependency.
 
 ---
 
@@ -496,20 +584,27 @@ Long-running execution is visible: phase-level log lines (lock, validate, scan, 
 A successful prep run leaves:
 
 ```text
-4-photos-by-date/    timestamped photos, date-named, deduplicated
-3-videos-by-date/    timestamped videos, date-named, deduplicated
-2-redundant-jpgs/    JPEGs whose RAW master is retained
-1-missing-metadata/  media with no usable timestamp
-0-source/            empty (or only files still pending, incl. other-class non-media)
-5-photos-by-dest/    unchanged (read-only)
+6-photos-by-dest/    unchanged (read-only)
+5-photos-by-date/    timestamped photos, date-named, deduplicated
+4-videos-by-date/    timestamped videos, date-named, deduplicated
+3-redundant-jpgs/    JPEGs whose RAW master is retained
+2-missing-metadata/  media with no usable timestamp
+1-strays/<plan-id>/  non-media moved out of 0-sources this run (and prior runs' subfolders)
+0-sources/           EMPTY — every file organized, set aside, quarantined, or moved to strays
+workspace root       only folders (no loose files) — the base-is-folders-only invariant (Section 3.1)
+.photos-ingest/photos-00-workspace-guard written last on an init run (Section 14.3 step 11)
 .photos-ingest/photos-11-handoff.json   written
+.photos-ingest/photos-15-prep-log.json  written (complete end-of-prep audit log)
+.photos-ingest/photos-15-prep-ingest.db written (end-of-prep DB backup snapshot)
 ```
 
-Residual `other`-class non-media files legitimately remain in `0-source` — prep does not organize them — and this is an expected, non-blocking end state; calibration tolerates such residuals (calibration `10` Section 7).
+`0-sources/` is left **empty** at the end of every successful run: media is organized into the by-date bands (or `2-missing-metadata`), duplicates are quarantined, and non-media is moved to `1-strays/<plan-id>/` (Section 7.6). This empty inbox is exactly what calibration's "`0-sources` empty" gate checks (calibration `10_photos-2-time-gps-workflow.md` Section 13). Non-media files are **not** left in `0-sources`; they are the strays in `1-strays/`, which the pipeline never processes again (Section 3.2).
 
-The user then reviews `4-photos-by-date` and moves the **photos** into the appropriate destination folders under `5-photos-by-dest` (videos stay in `3-videos-by-date` and are never moved into by-dest, Section 2.4). The user moves **only photos** into by-dest: calibration requires `5-photos-by-dest` to contain photo files exclusively and hard-stops on any non-photo file — non-media or video — found there (calibration `10` Sections 7.2, 7.3). Once the move is complete — `4-photos-by-date` empty, by-dest photo-only, and no `jpg`/`tif` development subfolders present under `5-photos-by-dest` — the calibration phase (`10`) may run.
+At this point the workspace already holds a **complete, self-sufficient audit record of everything prep did**: the human-readable `photos-15-prep-log.json` (Section 16.1), a point-in-time backup image of the database as of the end of prep (`photos-15-prep-ingest.db`, shared contract `10_photos-shared-contract.md` Section 13.4a), the live SQLite database, and the handoff/summary. This record stands on its own — if the user never calibrates or merges, it remains a full, honest account of the prep phase, exactly as if the later phases did not exist (shared contract Section 13.0).
 
-Re-running prep after the user's move must **not** re-hash or re-read the moved files: prep recognizes them as moved (Section 10.1), carries their cached hash/metadata forward to the new by-dest path, and simply updates the cache and handoff. by-dest media is never touched. Prep neither performs the move nor enforces the calibration preconditions.
+The user then reviews `5-photos-by-date` and moves the **photos** into the appropriate destination folders under `6-photos-by-dest` (videos stay in `4-videos-by-date` and are never moved into by-dest, Section 2.4). The user moves **only photos** into by-dest: calibration requires `6-photos-by-dest` to contain photo files exclusively and hard-stops on any non-photo file — non-media or video — found there (calibration `10_photos-2-time-gps-workflow.md` Sections 7.2, 7.3). Once the move is complete — `5-photos-by-date` empty, by-dest photo-only, and no `jpg`/`tif` development subfolders present under `6-photos-by-dest` — the calibration phase (`10_photos-2-time-gps-workflow.md`) may run.
+
+Re-running prep after the user's move must **not** re-fingerprint or re-read the moved files: prep recognizes them as moved (Section 10.1), carries their cached fingerprint/metadata forward to the new by-dest path, and simply updates the cache and handoff. by-dest media is never touched. Prep neither performs the move nor enforces the calibration preconditions.
 
 ---
 
@@ -523,12 +618,13 @@ Prep produces a textual summary that lets a reviewer confirm safety and progress
 4. by-dest files scanned read-only (and confirmation by-dest was not mutated);
 5. files recognized as moved from by-date into by-dest (cache carried forward, not rescanned);
 6. duplicates against mutable folders vs. against read-only by-dest;
-7. cache records reused, hashes recomputed, hashes carried forward after moves, cache records updated;
+7. cache records reused, fingerprints recomputed, fingerprints carried forward after moves, cache records updated;
 8. metadata records reused/extracted/failed, field-set and extractor versions;
 9. camera groups found; native-GPS and missing/ambiguous-timestamp counts;
-10. blockers (symlinks, forbidden sidecars, hash failures, stale dependencies) and warnings;
+10. blockers (sealed workspace, loose root file, symlinks, forbidden sidecars, fingerprint failures, stale dependencies) and warnings (including, on a sealed workspace, a detected likely-new-dump);
 11. confirmation that durable artifacts were written only after dependency validation;
-12. the current quarantine footprint — total quarantined files, total size, number of distinct `<plan_id>` directories, and oldest/newest plan id present — since quarantine is never auto-deleted and grows across runs (Section 15.3).
+12. the current quarantine footprint — total quarantined files, total size, number of distinct `<plan_id>` directories, and oldest/newest plan id present — since quarantine is never auto-deleted and grows across runs (Section 15.3);
+13. confirmation that the end-of-prep audit log `photos-15-prep-log.json` was written (a complete, self-sufficient record of the prep phase, Section 16.1), and that the end-of-prep database backup snapshot `photos-15-prep-ingest.db` was captured (shared contract `10_photos-shared-contract.md` Section 13.4a).
 
 ---
 
@@ -554,37 +650,63 @@ Passive extraction and caching of fields the calibration phase will need (Sectio
 ## 21. Idempotency and staleness examples
 
 ```text
+Uninitialized folder with an as-arrived dump (no sentinel)
+  -> prep initializes: base files/trees moved into 0-sources (no flatten),
+     0-6 structure + control dir created, dump organized, sentinel written LAST
+  -> base ends with only folders; 0-sources empty
+
+Crash during init (before the sentinel is written)
+  -> next run sees no sentinel -> re-enters init harmlessly
+     (dump already in 0-sources; structure re-created; continues)
+
 Second run, unchanged workspace
   -> no media operations
   -> cache hits reported, handoff unchanged
 
-New file added to 0-source
-  -> only the new file is hashed/extracted and organized
+New dump added to 0-sources (initialized workspace)
+  -> only the new files are fingerprinted/extracted and organized
+  -> non-media moved to 1-strays/<plan-id>/; 0-sources left empty again
   -> existing files scanned for uniqueness/cache only
 
-User restored a file out of quarantine into 0-source
+Loose file appears at the workspace root (initialized workspace)
+  -> hard block (Section 6.2 item 2): dumps belong in 0-sources
+  -> strict: any root file blocks, dotfiles included
+
+Sealed workspace (prior successful merge)
+  -> hard stop, nothing touched (Section 6.2 item 1)
+  -> if files are seen at the root or in 0-sources, also warn: likely new dump,
+     this workspace is done -> move it into a FRESH workspace by hand
+
+User restored a file out of quarantine into 0-sources
   -> re-evaluated as a normal new file (no special "un-quarantine" path)
   -> if it still duplicates a retained copy, re-quarantined under the
      current plan_id; otherwise organized normally
   -> old quarantine manifest entry left as historical record
 
-User moved a file from 4-photos-by-date into 5-photos-by-dest
+User moved a file from 5-photos-by-date into 6-photos-by-dest
   -> recognized as a move (matching size/mtime/basename)
-  -> cached hash/metadata carried forward, no rescan
+  -> cached fingerprint/metadata carried forward, no rescan
   -> old cache row dropped, handoff updated; by-dest untouched
 
 File size/mtime changed
-  -> cached hash + metadata stale -> recompute
+  -> cached fingerprint + metadata stale -> recompute
+     (a metadata-only edit recomputes to the SAME fingerprint)
 
 Config changed
   -> config fingerprint changes -> plan dependency stale
   -> a previously generated plan is rejected at execute time
 
+Config value invalid (e.g. zfs snapshot prefix contains a '/' or whitespace,
+or gpx_root is malformed)
+  -> config sanity-validation fails (Section 6.3)
+  -> hard blocker, offending field named, no executable plan produced
+
 By-dest file changed before execute (affecting a uniqueness decision)
   -> recorded by-dest precondition stale -> plan rejected before mutation
 
-Hash failure on a mutable-side media file
+Fingerprint failure on a mutable-side media file
   -> equality-based duplicate decision blocked -> reported blocker
+  -> (an other-class file has no fingerprint by design — not a failure)
 
 Symlink or .xmp/.dop/.pp3 sidecar present
   -> hard block, no executable plan produced
@@ -599,32 +721,48 @@ This section restates the rules established above as a single reference. On any 
 The prep workflow is:
 
 ```text
-1. Inventory the workspace; block on symlinks and forbidden sidecars.
-2. Reuse cache for unchanged files; recognize by-date -> by-dest moves;
-   hash + extract metadata only for genuinely new/changed files.
-3. Consolidate loose files into 0-source.
-4. Normalize extension case (lowercase, collision-safe).
-5. Separate redundant JPEGs (RAW master retained) into 2-redundant-jpgs.
-6. Deduplicate by content hash; quarantine extra copies recoverably;
+1. Initialize if needed (uninitialized -> move base dump into 0-sources, no flatten;
+   create 0-6 structure + control dir; sentinel written LAST on success).
+2. Inventory; block on a sealed workspace, a loose root file (initialized), symlinks,
+   forbidden sidecars.
+3. Reuse cache for unchanged files; recognize by-date -> by-dest moves;
+   fingerprint + extract metadata only for genuinely new/changed media.
+4. Take the dump from 0-sources (no flattening; collisions resolved in memory).
+5. Normalize extension case (lowercase, collision-safe).
+6. Separate redundant JPEGs (RAW master retained) into 3-redundant-jpgs.
+7. Deduplicate by content fingerprint; quarantine extra copies recoverably;
    by-dest is always the retained copy and is never mutated.
-7. Organize by source-naive timestamp:
-   videos -> 3-videos-by-date, photos -> 4-photos-by-date,
-   untimestamped -> 1-missing-metadata.
-8. Reconcile the SQLite cache (move carry-forward, upserts, ghost prune).
-9. Execute only the validated plan: lock, snapshot, no-clobber ops, journal,
-   controlled cache update.
-10. Write the dependency-fingerprinted handoff manifest on success.
+8. Organize by source-naive timestamp:
+   videos -> 4-videos-by-date, photos -> 5-photos-by-date,
+   untimestamped media -> 2-missing-metadata, non-media -> 1-strays/<plan-id>/.
+   0-sources is left EMPTY.
+9. Reconcile the SQLite cache (move carry-forward, upserts, ghost prune).
+10. Execute only the validated plan: lock, snapshot, no-clobber ops
+    (re-verified and atomic at execute time), journal, controlled cache update.
+11. Write the dependency-fingerprinted handoff manifest, the complete
+    end-of-prep audit log (photos-15-prep-log.json), the end-of-prep
+    DB backup snapshot (photos-15-prep-ingest.db), and — on an init run —
+    the root sentinel LAST, all on success.
 ```
 
 The most important rules are:
 
 ```text
 Plan, validate, execute, journal — never re-decide at execution time.
-5-photos-by-dest is read-only; by-dest always wins a duplicate tie.
+0-sources is the one inbox; after init the base holds only folders (a root file blocks).
+The sentinel is written last, so a crashed init is safely re-runnable.
+0-sources is left empty every run; non-media goes to 1-strays (inert, never re-processed).
+6-photos-by-dest is read-only; by-dest always wins a duplicate tie.
 A file moved into by-dest is recognized, not rescanned — just fix the handoff.
-All media operations are no-clobber; duplicate removal is recoverable quarantine.
+Media is identified by a decoded-content fingerprint (ImageMagick identify / ffmpeg
+  stream MD5), invariant under metadata writes; byte SHA-256 is for artifacts only.
+All media operations are no-clobber — planned and re-verified atomic at execute time;
+  duplicate removal is recoverable quarantine.
+A sealed workspace is done: prep refuses and never touches it.
+All human-authored config is sanity-validated before use; an invalid value blocks.
 Prep caches time/GPS-relevant facts passively but makes no time/GPS decision.
+Prep leaves a complete, self-sufficient end-of-prep audit log — whole even if no later phase runs.
 No durable artifact is created from stale upstream inputs.
 ```
 
-Prep ends with media organized into by-date, ready for the user to place into `5-photos-by-dest` before calibration (`10_photos-2-time-gps-workflow.md`) begins.
+Prep ends with media organized into by-date, ready for the user to place into `6-photos-by-dest` before calibration (`10_photos-2-time-gps-workflow.md`) begins.
