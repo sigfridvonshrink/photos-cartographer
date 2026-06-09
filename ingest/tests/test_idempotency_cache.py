@@ -93,7 +93,7 @@ def test_prep_idempotency_and_by_dest_accounting(mock_meta, tmp_path):
     assert len(plan1.operations) == 3, f"Expected 3 operations, got {len(plan1.operations)}"
 
     executor = photos_ingest.PlanExecutor(str(ws))
-    journal_path = str(ws / ".journal.json")
+    journal_path = str(ws / ".photos-ingest/journal.json")
     executor.execute(plan1, journal_path)
 
     # SECOND RUN (IDEMPOTENT)
@@ -135,7 +135,7 @@ def test_handoff_manifest_generated(mock_meta, tmp_path):
     plan1 = workflow.plan()
 
     executor = photos_ingest.PlanExecutor(str(ws))
-    journal_path = str(ws / ".journal.json")
+    journal_path = str(ws / ".photos-ingest/journal.json")
     executor.execute(plan1, journal_path)
 
     manifest_path = ws / ".photos-ingest" / "photos-11-handoff.json"
@@ -187,7 +187,7 @@ def test_stale_cache_upsert_fails(mock_meta, tmp_path):
     (ws / "6-photos-by-dest" / "vacation" / "img1.jpg").write_text("modified_after_plan")
 
     executor = photos_ingest.PlanExecutor(str(ws))
-    journal_path = str(ws / ".journal.json")
+    journal_path = str(ws / ".photos-ingest/journal.json")
 
     import pytest
     with pytest.raises(ValueError, match="Stale plan: dependency changed after planning|Stale plan: cache-upsert target changed after planning"):
@@ -223,7 +223,7 @@ def test_cache_fingerprint_changes(mock_meta, tmp_path):
     plan1 = workflow.plan()
 
     executor = photos_ingest.PlanExecutor(str(ws))
-    journal_path = str(ws / ".journal.json")
+    journal_path = str(ws / ".photos-ingest/journal.json")
     executor.execute(plan1, journal_path)
 
     manifest_path = ws / ".photos-ingest" / "photos-11-handoff.json"
@@ -282,7 +282,7 @@ def test_db_upsert_absolute_path_rejected(mock_meta, tmp_path):
                     fx["data"]["relative_path"] = "/tmp/malicious.jpg"
 
     executor = photos_ingest.PlanExecutor(str(ws))
-    journal_path = str(ws / ".journal.json")
+    journal_path = str(ws / ".photos-ingest/journal.json")
 
     import pytest
     with pytest.raises(ValueError, match="Path must be relative"):
@@ -307,7 +307,7 @@ def test_stale_already_cached_file_aborts(mock_meta, tmp_path):
     workflow = photos_ingest.WorkspacePrepWorkflow(str(ws), cache)
     plan1 = workflow.plan()
     executor = photos_ingest.PlanExecutor(str(ws))
-    journal_path = str(ws / ".journal.json")
+    journal_path = str(ws / ".photos-ingest/journal.json")
     executor.execute(plan1, journal_path)
 
     # SECOND RUN: generate a plan that reuses the cache
@@ -379,7 +379,7 @@ def test_stale_ghost_prune_reappeared_file_aborts_before_cache_remove(mock_meta,
 
     # Try executing the stale plan
     executor = photos_ingest.PlanExecutor(str(ws))
-    journal_path = str(ws / ".journal.json")
+    journal_path = str(ws / ".photos-ingest/journal.json")
 
     import pytest
     with pytest.raises(ValueError, match="Stale plan: ghost-prune target reappeared after planning: 5-photos-by-date/reappeared.jpg"):
