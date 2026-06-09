@@ -69,7 +69,7 @@ def test_prep_idempotency_and_by_dest_accounting(mock_meta, tmp_path):
             v = hashlib.sha256(f.read()).hexdigest()
         return {"status": "valid", "strategy": "sha256-v1", "value": v}
 
-    photos_ingest.ContentHasher.hash_image = mock_hash_image
+    photos_ingest.ContentHasher.fingerprint_image = mock_hash_image
     photos_ingest.CONFIG["jobs"] = 1
 
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
@@ -127,7 +127,7 @@ def test_handoff_manifest_generated(mock_meta, tmp_path):
             v = hashlib.sha256(f.read()).hexdigest()
         return {"status": "valid", "strategy": "sha256-v1", "value": v}
 
-    photos_ingest.ContentHasher.hash_image = mock_hash_image
+    photos_ingest.ContentHasher.fingerprint_image = mock_hash_image
     photos_ingest.CONFIG["jobs"] = 1
 
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
@@ -160,10 +160,10 @@ def test_handoff_manifest_generated(mock_meta, tmp_path):
     # Check that duplicates and configs were written accurately
     assert len(data["files"]) > 0
 
-    # Verify hash_status mappings (by dest should be valid)
+    # Verify fingerprint_status mappings (by dest should be valid)
     by_dest_files = [f for f in data["files"] if f["relative_path"].startswith("6-photos-by-dest")]
     assert len(by_dest_files) > 0
-    assert by_dest_files[0]["hash_status"] == "valid"
+    assert by_dest_files[0]["fingerprint_status"] == "valid"
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
@@ -176,7 +176,7 @@ def test_stale_cache_upsert_fails(mock_meta, tmp_path):
             v = hashlib.sha256(f.read()).hexdigest()
         return {"status": "valid", "strategy": "sha256-v1", "value": v}
 
-    photos_ingest.ContentHasher.hash_image = mock_hash_image
+    photos_ingest.ContentHasher.fingerprint_image = mock_hash_image
     photos_ingest.CONFIG["jobs"] = 1
 
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
@@ -215,7 +215,7 @@ def test_cache_fingerprint_changes(mock_meta, tmp_path):
             v = hashlib.sha256(f.read()).hexdigest()
         return {"status": "valid", "strategy": "sha256-v1", "value": v}
 
-    photos_ingest.ContentHasher.hash_image = mock_hash_image
+    photos_ingest.ContentHasher.fingerprint_image = mock_hash_image
     photos_ingest.CONFIG["jobs"] = 1
 
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
@@ -267,7 +267,7 @@ def test_db_upsert_absolute_path_rejected(mock_meta, tmp_path):
             v = hashlib.sha256(f.read()).hexdigest()
         return {"status": "valid", "strategy": "sha256-v1", "value": v}
 
-    photos_ingest.ContentHasher.hash_image = mock_hash_image
+    photos_ingest.ContentHasher.fingerprint_image = mock_hash_image
     photos_ingest.CONFIG["jobs"] = 1
 
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
@@ -299,7 +299,7 @@ def test_stale_already_cached_file_aborts(mock_meta, tmp_path):
             v = hashlib.sha256(f.read()).hexdigest()
         return {"status": "valid", "strategy": "sha256-v1", "value": v}
 
-    photos_ingest.ContentHasher.hash_image = mock_hash_image
+    photos_ingest.ContentHasher.fingerprint_image = mock_hash_image
     photos_ingest.CONFIG["jobs"] = 1
 
     # FIRST RUN: Populate cache
