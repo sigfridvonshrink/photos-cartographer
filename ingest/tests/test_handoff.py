@@ -14,8 +14,8 @@ import photos_utils as utils
 def _ws(tmp_path):
     ws = tmp_path / "ws"
     ws.mkdir()
-    for d in ("0-source", "1-missing-metadata", "2-redundant-jpgs",
-              "3-videos-by-date", "4-photos-by-date", "5-photos-by-dest"):
+    for d in ("0-sources", "2-missing-metadata", "3-redundant-jpgs",
+              "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"):
         (ws / d).mkdir()
     (ws / ".photos-ingest").mkdir(exist_ok=True)
     (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
@@ -61,7 +61,7 @@ def _handoff(ws):
 def test_execution_id_present_and_distinct(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
-    (ws / "0-source" / "a.jpg").write_bytes(b"AAAA")
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
     plan = _run(ws)
     h = _handoff(ws)
     assert h["execution_id"]
@@ -71,8 +71,8 @@ def test_execution_id_present_and_distinct(tmp_path, monkeypatch):
 def test_real_duplicate_evidence_against_mutable(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
-    (ws / "0-source" / "x.jpg").write_bytes(b"SAME")
-    (ws / "0-source" / "y.jpg").write_bytes(b"SAME")   # exact duplicate -> one quarantined
+    (ws / "0-sources" / "x.jpg").write_bytes(b"SAME")
+    (ws / "0-sources" / "y.jpg").write_bytes(b"SAME")   # exact duplicate -> one quarantined
     _run(ws)
     diag = _handoff(ws)["diagnostics"]
     dups = diag["duplicates_or_conflicts"]
@@ -86,22 +86,22 @@ def test_real_duplicate_evidence_against_mutable(tmp_path, monkeypatch):
 def test_conflict_attributed_to_by_dest_folder(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
-    (ws / "5-photos-by-dest" / "Trip").mkdir(parents=True)
-    (ws / "5-photos-by-dest" / "Trip" / "keep.jpg").write_bytes(b"SAME")  # retained
-    (ws / "0-source" / "dup.jpg").write_bytes(b"SAME")                   # mutable duplicate
+    (ws / "6-photos-by-dest" / "Trip").mkdir(parents=True)
+    (ws / "6-photos-by-dest" / "Trip" / "keep.jpg").write_bytes(b"SAME")  # retained
+    (ws / "0-sources" / "dup.jpg").write_bytes(b"SAME")                   # mutable duplicate
     _run(ws)
     h = _handoff(ws)
     dups = h["diagnostics"]["duplicates_or_conflicts"]
     assert any(e["against"] == "by-dest" for e in dups)
-    trip = [df for df in h["destination_folders"] if df["path"] == "5-photos-by-dest/Trip"][0]
+    trip = [df for df in h["destination_folders"] if df["path"] == "6-photos-by-dest/Trip"][0]
     assert len(trip["conflicts_or_duplicates"]) == 1
-    assert trip["conflicts_or_duplicates"][0]["original_path"] == "0-source/dup.jpg"
+    assert trip["conflicts_or_duplicates"][0]["original_path"] == "0-sources/dup.jpg"
 
 
 def test_grouping_facts_identity_and_device_class(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
-    (ws / "0-source" / "a.jpg").write_bytes(b"AAAA")
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
     # Classify the group as a phone *before* plan() seeds the config (so the fingerprint matches).
     prep.CONFIG["camera_time_and_timezone_policy"]["device_groups"]["phones"] = ["test-cam"]
     _run(ws)
@@ -115,7 +115,7 @@ def test_grouping_facts_identity_and_device_class(tmp_path, monkeypatch):
 def test_unknown_device_class_when_not_configured(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
-    (ws / "0-source" / "a.jpg").write_bytes(b"AAAA")
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
     _run(ws)
     g = [cg for cg in _handoff(ws)["camera_groups"] if cg["group_key"] == "test-cam"][0]
     assert g["device_class"] == "unknown"

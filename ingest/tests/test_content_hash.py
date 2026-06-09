@@ -38,8 +38,8 @@ requires_exiftool = pytest.mark.skipif(
 def _make_ws(tmp_path):
     ws = tmp_path / "workspace"
     ws.mkdir()
-    for d in ("0-source", "1-missing-metadata", "2-redundant-jpgs",
-              "3-videos-by-date", "4-photos-by-date", "5-photos-by-dest"):
+    for d in ("0-sources", "2-missing-metadata", "3-redundant-jpgs",
+              "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"):
         (ws / d).mkdir()
     (ws / ".photos-ingest").mkdir(exist_ok=True); (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
     return ws
@@ -123,7 +123,7 @@ def test_hash_image_failure_is_recorded_when_magick_absent(monkeypatch):
 @requires_exiftool
 def test_real_jpeg_organizes_with_spec_filename_and_no_blocker(tmp_path):
     ws = _make_ws(tmp_path)
-    shutil.copy(CAM_SMALL, ws / "0-source" / "cam.jpg")
+    shutil.copy(CAM_SMALL, ws / "0-sources" / "cam.jpg")
     prep.CONFIG["jobs"] = 1
     cache = prep.WorkspaceCache(str(ws), in_memory=True)
     plan = prep.WorkspacePrepWorkflow(str(ws), cache).plan()
@@ -132,7 +132,7 @@ def test_real_jpeg_organizes_with_spec_filename_and_no_blocker(tmp_path):
     assert plan.blockers == [], plan.blockers
     # DateTimeOriginal 2026:05:15 11:32:29 -> spec-shaped by-date name.
     assert any(
-        d.startswith("4-photos-by-date/2026-05-15--11-32-29") and d.endswith(".jpg")
+        d.startswith("5-photos-by-date/2026-05-15--11-32-29") and d.endswith(".jpg")
         for d in _dests(plan)
     ), _dests(plan)
 
@@ -143,7 +143,7 @@ def test_unreadable_image_blocks_with_hash_failure(tmp_path):
     # Negative path: a file that magick cannot decode must surface a §6.2/§11.3
     # hash-failure blocker, not silently pass.
     ws = _make_ws(tmp_path)
-    (ws / "0-source" / "broken.jpg").write_bytes(b"this is not a real jpeg")
+    (ws / "0-sources" / "broken.jpg").write_bytes(b"this is not a real jpeg")
     prep.CONFIG["jobs"] = 1
     cache = prep.WorkspaceCache(str(ws), in_memory=True)
     plan = prep.WorkspacePrepWorkflow(str(ws), cache).plan()
@@ -155,8 +155,8 @@ def test_unreadable_image_blocks_with_hash_failure(tmp_path):
 @requires_exiftool
 def test_byte_identical_images_dedup_with_real_hasher(tmp_path):
     ws = _make_ws(tmp_path)
-    shutil.copy(CAM_SMALL, ws / "0-source" / "a.jpg")
-    shutil.copy(CAM_SMALL, ws / "0-source" / "b.jpg")  # identical pixels & bytes
+    shutil.copy(CAM_SMALL, ws / "0-sources" / "a.jpg")
+    shutil.copy(CAM_SMALL, ws / "0-sources" / "b.jpg")  # identical pixels & bytes
     prep.CONFIG["jobs"] = 1
     cache = prep.WorkspaceCache(str(ws), in_memory=True)
     plan = prep.WorkspacePrepWorkflow(str(ws), cache).plan()
@@ -173,16 +173,16 @@ def test_raw_jpeg_pair_separates_redundant_jpeg(tmp_path):
     if prep.ContentHasher.hash_image(CAM_RAW)["status"] != "valid":
         pytest.skip("ImageMagick lacks RAW decode support here")
     ws = _make_ws(tmp_path)
-    shutil.copy(CAM_RAW, ws / "0-source" / "DSC0020.ARW")
-    shutil.copy(CAM_SMALL, ws / "0-source" / "DSC0020.JPG")
+    shutil.copy(CAM_RAW, ws / "0-sources" / "DSC0020.ARW")
+    shutil.copy(CAM_SMALL, ws / "0-sources" / "DSC0020.JPG")
     prep.CONFIG["jobs"] = 1
     cache = prep.WorkspaceCache(str(ws), in_memory=True)
     plan = prep.WorkspacePrepWorkflow(str(ws), cache).plan()
     assert plan.blockers == [], plan.blockers
     dests = _dests(plan)
-    assert any(d.startswith("2-redundant-jpgs/") for d in dests), dests  # JPEG sibling is redundant
+    assert any(d.startswith("3-redundant-jpgs/") for d in dests), dests  # JPEG sibling is redundant
     assert any(
-        d.startswith("4-photos-by-date/2026-05-15--11-32-29") and d.endswith(".arw")
+        d.startswith("5-photos-by-date/2026-05-15--11-32-29") and d.endswith(".arw")
         for d in dests
     ), dests  # RAW retained + organized
 
@@ -208,13 +208,13 @@ def test_filename_format_is_config_driven(tmp_path, monkeypatch):
         return res, set()
 
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", fake_meta)
-    (ws / "0-source" / "x.jpg").write_text("xdata")
+    (ws / "0-sources" / "x.jpg").write_text("xdata")
     prep.CONFIG["jobs"] = 1
     prep.CONFIG["filename_timestamp_format"] = "%Y%m%d__%H%M%S"  # custom shape (conftest restores CONFIG)
 
     cache = prep.WorkspaceCache(str(ws), in_memory=True)
     plan = prep.WorkspacePrepWorkflow(str(ws), cache).plan()
-    assert any("4-photos-by-date/20230304__050607" in d for d in _dests(plan)), _dests(plan)
+    assert any("5-photos-by-date/20230304__050607" in d for d in _dests(plan)), _dests(plan)
 
 
 @requires_magick
@@ -222,7 +222,7 @@ def test_content_hash_restaled_on_imagemagick_version_change(tmp_path, monkeypat
     # A cached image content hash recorded under one ImageMagick version must be
     # recomputed when the current version differs (version-binding).
     ws = _make_ws(tmp_path)
-    shutil.copy(CAM_SMALL, ws / "0-source" / "cam.jpg")
+    shutil.copy(CAM_SMALL, ws / "0-sources" / "cam.jpg")
     prep.CONFIG["jobs"] = 1
 
     monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "im-OLD")

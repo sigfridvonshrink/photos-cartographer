@@ -18,8 +18,8 @@ import photos_utils as utils
 def _ws(tmp_path):
     ws = tmp_path / "ws"
     ws.mkdir()
-    for d in ("0-source", "1-missing-metadata", "2-redundant-jpgs",
-              "3-videos-by-date", "4-photos-by-date", "5-photos-by-dest"):
+    for d in ("0-sources", "2-missing-metadata", "3-redundant-jpgs",
+              "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"):
         (ws / d).mkdir()
     (ws / ".photos-ingest").mkdir(exist_ok=True)
     (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
@@ -49,7 +49,7 @@ def _mock(monkeypatch):
 def test_control_files_land_under_control_dir(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
-    (ws / "0-source" / "a.jpg").write_text("aaa")
+    (ws / "0-sources" / "a.jpg").write_text("aaa")
     prep.CONFIG["jobs"] = 1
 
     cache = prep.WorkspaceCache(str(ws))
@@ -71,7 +71,7 @@ def test_control_files_land_under_control_dir(tmp_path, monkeypatch):
 def test_journals_are_per_run_and_retained(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
-    (ws / "0-source" / "a.jpg").write_text("aaa")
+    (ws / "0-sources" / "a.jpg").write_text("aaa")
     prep.CONFIG["jobs"] = 1
 
     p1 = prep.WorkspacePrepWorkflow(str(ws), prep.WorkspaceCache(str(ws))).plan()
@@ -89,7 +89,7 @@ def test_media_inside_control_dir_is_not_inventoried(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
     (ws / ".photos-ingest" / "sneaky.jpg").write_text("x")  # must be skipped wholesale
-    (ws / "0-source" / "real.jpg").write_text("aaa")
+    (ws / "0-sources" / "real.jpg").write_text("aaa")
     prep.CONFIG["jobs"] = 1
 
     plan = prep.WorkspacePrepWorkflow(str(ws), prep.WorkspaceCache(str(ws), in_memory=True)).plan()

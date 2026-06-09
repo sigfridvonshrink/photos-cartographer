@@ -25,7 +25,7 @@ import errno
 # CONFIGURATION BLOCK
 # ==============================================================================
 sys.path.insert(0, os.path.dirname(__file__))
-from photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS
+from photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority
 
 
 # --- Atomic no-clobber move (prep Section 4 / 14.3.4) -------------------------
@@ -773,10 +773,10 @@ class PlanValidator:
             if op.type not in PREP_ALLOWED_OPERATION_TYPES:
                 raise ValueError(f"Operation type '{op.type}' is not allowed in photos-1-prep.")
             if op.type in ['move_no_clobber', 'rename_no_clobber', 'quarantine_move']:
-                if op.source and op.source.startswith('5-photos-by-dest/'):
-                    raise ValueError(f"Operation {op.type} forbidden on source in 5-photos-by-dest: {op.source}")
-                if op.destination and op.destination.startswith('5-photos-by-dest/'):
-                    raise ValueError(f"Operation {op.type} forbidden on destination in 5-photos-by-dest: {op.destination}")
+                if op.source and op.source.startswith(folder_name('photos_by_dest') + '/'):
+                    raise ValueError(f"Operation {op.type} forbidden on source in {folder_name('photos_by_dest')}: {op.source}")
+                if op.destination and op.destination.startswith(folder_name('photos_by_dest') + '/'):
+                    raise ValueError(f"Operation {op.type} forbidden on destination in {folder_name('photos_by_dest')}: {op.destination}")
 
         if plan.blockers:
             raise ValueError(f"Plan contains blockers and cannot be executed: {', '.join(plan.blockers)}")
@@ -1029,10 +1029,10 @@ class PlanExecutor:
                 if op.type not in PREP_ALLOWED_OPERATION_TYPES:
                     raise ValueError(f"Operation type '{op.type}' is not allowed in photos-1-prep.")
                 if op.type in ['move_no_clobber', 'rename_no_clobber', 'quarantine_move']:
-                    if op.source and op.source.startswith('5-photos-by-dest/'):
-                        raise ValueError(f"Operation {op.type} forbidden on source in 5-photos-by-dest: {op.source}")
-                    if op.destination and op.destination.startswith('5-photos-by-dest/'):
-                        raise ValueError(f"Operation {op.type} forbidden on destination in 5-photos-by-dest: {op.destination}")
+                    if op.source and op.source.startswith(folder_name('photos_by_dest') + '/'):
+                        raise ValueError(f"Operation {op.type} forbidden on source in {folder_name('photos_by_dest')}: {op.source}")
+                    if op.destination and op.destination.startswith(folder_name('photos_by_dest') + '/'):
+                        raise ValueError(f"Operation {op.type} forbidden on destination in {folder_name('photos_by_dest')}: {op.destination}")
 
                 op_started = datetime.now(timezone.utc).isoformat()
                 status = "success"
@@ -1225,7 +1225,7 @@ class PlanExecutor:
                         md_record = all_metadata.get(rel_path)
 
                         # Accumulate Destination Folders
-                        if folder_class == "5-photos-by-dest":
+                        if folder_class == folder_name('photos_by_dest'):
                             dest_folder = os.path.dirname(rel_path)
                             if dest_folder not in dest_folders_acc:
                                 dest_folders_acc[dest_folder] = {
@@ -1332,7 +1332,7 @@ class PlanExecutor:
                                 "content_hash": ev.get("value"),
                                 "hash_strategy": ev.get("strategy"),
                                 "quarantine_path": v.get("quarantine_path"),
-                                "against": "by-dest" if str(retained).startswith("5-photos-by-dest/") else "mutable",
+                                "against": "by-dest" if str(retained).startswith(folder_name('photos_by_dest') + "/") else "mutable",
                             })
 
                     # Format accumulated summaries
@@ -1383,12 +1383,8 @@ class PlanExecutor:
                         "cache_fingerprint": cache_fingerprint,
                         "hash_algorithm": "sha256",
                         "folders_scanned": [
-                            {"name": "0-source", "mutable": True},
-                            {"name": "1-missing-metadata", "mutable": True},
-                            {"name": "2-redundant-jpgs", "mutable": True},
-                            {"name": "3-videos-by-date", "mutable": True},
-                            {"name": "4-photos-by-date", "mutable": True},
-                            {"name": "5-photos-by-dest", "mutable": False}
+                            {"name": n, "mutable": n != folder_name('photos_by_dest')}
+                            for n in managed_folder_names(CONFIG)
                         ],
                         "files": final_files,
                         "camera_groups": camera_groups,
@@ -1517,7 +1513,7 @@ class WorkspacePrepWorkflow:
     def __init__(self, workspace_root: str, cache: WorkspaceCache):
         self.workspace_root = workspace_root
         self.cache = cache
-        self.managed_folders = ["0-source", "1-missing-metadata", "2-redundant-jpgs", "3-videos-by-date", "4-photos-by-date", "5-photos-by-dest"]
+        self.managed_folders = managed_folder_names(CONFIG)
         from photos_utils import ProgressCoordinator
         self.coordinator = ProgressCoordinator()
 
@@ -1611,7 +1607,7 @@ class WorkspacePrepWorkflow:
         _present = set(files)
         _missing_rows = {p: r for p, r in existing_cache.items() if p not in _present}
         _new_by_dest = [f for f in files
-                        if f.startswith('5-photos-by-dest/') and f not in existing_cache]
+                        if f.startswith(folder_name('photos_by_dest') + '/') and f not in existing_cache]
         _src_idx = _collections.defaultdict(list)
         for _p, _r in _missing_rows.items():
             _src_idx[(_r['size'], _r['mtime_ns'], os.path.basename(_p).lower())].append(_p)
@@ -1866,20 +1862,22 @@ class WorkspacePrepWorkflow:
                 blockers.extend(res["blockers"])
             all_db_files.append(res["db_file"])
 
-        db_files = [f for f in all_db_files if not f['relative_path'].startswith('5-photos-by-dest/')]
-        by_dest_files = [f for f in all_db_files if f['relative_path'].startswith('5-photos-by-dest/')]
+        db_files = [f for f in all_db_files if not f['relative_path'].startswith(folder_name('photos_by_dest') + '/')]
+        by_dest_files = [f for f in all_db_files if f['relative_path'].startswith(folder_name('photos_by_dest') + '/')]
 
         # Band-misplacement guard (prep Section 6.1 / 6.2.4): photos and videos live in
         # separate bands. A video under the photo bands (4-photos-by-date / 5-photos-by-dest),
         # or an image/raw under the video band (3-videos-by-date), is a hand-introduced break
         # prep never creates itself — hard-block, do not proceed.
+        _photo_bands = (folder_name('photos_by_date'), folder_name('photos_by_dest'))
+        _video_band = folder_name('videos_by_date')
         for f in all_db_files:
             top = f['relative_path'].split('/')[0]
             mc = f.get('media_class')
-            if top in ('4-photos-by-date', '5-photos-by-dest') and mc == 'video':
+            if top in _photo_bands and mc == 'video':
                 blockers.append(f"Band misplacement: video under {top}: {f['relative_path']}")
-            elif top == '3-videos-by-date' and mc in ('image', 'raw'):
-                blockers.append(f"Band misplacement: {mc} under 3-videos-by-date: {f['relative_path']}")
+            elif top == _video_band and mc in ('image', 'raw'):
+                blockers.append(f"Band misplacement: {mc} under {_video_band}: {f['relative_path']}")
 
         self.coordinator.finish_phase()
         self.coordinator.start_phase("planning - building duplicate groups")
@@ -1908,16 +1906,17 @@ class WorkspacePrepWorkflow:
 
         for f in db_files:
             rel_path = current_paths[f['relative_path']]
-            # Consolidate into 0-source any mutable-side file that is not already inside a
-            # managed folder: loose files at the workspace root AND files inside a dumped
-            # folder tree (prep Section 7.2). Dumped trees are flattened to 0-source/<basename>.
+            # Consolidate into the sources inbox any mutable-side file that is not already
+            # inside a managed folder: loose files at the workspace root AND files inside a
+            # dumped folder tree (prep Section 7.2). (No-flatten is Phase B.)
             if rel_path.split('/')[0] not in self.managed_folders:
-                dest_base = os.path.join("0-source", os.path.basename(rel_path))
+                _sources = folder_name('sources')
+                dest_base = os.path.join(_sources, os.path.basename(rel_path))
                 dest = dest_base
-                # To properly avoid collisions case-insensitively with BOTH current_paths AND existing 0-source files
+                # Avoid collisions case-insensitively with BOTH current_paths AND existing sources files
                 while dest.lower() in [v.lower() for k,v in current_paths.items() if k != f['relative_path']] or dest.lower() in global_destinations:
                     name, ext = os.path.splitext(os.path.basename(dest))
-                    dest = os.path.join("0-source", self._allocate_suffix(name, ext.lstrip('.'), global_destinations))
+                    dest = os.path.join(_sources, self._allocate_suffix(name, ext.lstrip('.'), global_destinations))
 
                 global_destinations.add(dest.lower())
                 if rel_path != dest:
@@ -1929,7 +1928,7 @@ class WorkspacePrepWorkflow:
 
                         type="move_no_clobber",
 
-                        reason="Consolidate to 0-source",
+                        reason="Consolidate to sources",
                         source=rel_path,
                         destination=dest,
                         preconditions={"size": f["size"], "mtime_ns": f["mtime_ns"]},
@@ -2031,8 +2030,8 @@ class WorkspacePrepWorkflow:
                     if f['media_class'] == 'image':
                         rel_path = current_paths[f['relative_path']]
                         paired_jpgs.add(f['relative_path'])
-                        if rel_path.startswith("0-source/"):
-                            dest = os.path.join("2-redundant-jpgs", os.path.basename(rel_path))
+                        if rel_path.startswith(folder_name('sources') + "/"):
+                            dest = os.path.join(folder_name('redundant_jpgs'), os.path.basename(rel_path))
                             media_mutated_originals.add(f["relative_path"])
 
                             operations.append(Operation(
@@ -2058,7 +2057,7 @@ class WorkspacePrepWorkflow:
 
             ch_str = f['content_hash'] or f['hash']
             if not ch_str:
-                if f['relative_path'].startswith('5-photos-by-dest/'):
+                if f['relative_path'].startswith(folder_name('photos_by_dest') + '/'):
                     pass
                 else:
                     blockers.append(f"Hash failure for {f['relative_path']}")
@@ -2066,7 +2065,7 @@ class WorkspacePrepWorkflow:
 
             ch_dict = json.loads(ch_str)
             if ch_dict.get("status") != "valid":
-                if f['relative_path'].startswith('5-photos-by-dest/'):
+                if f['relative_path'].startswith(folder_name('photos_by_dest') + '/'):
                     pass
                 else:
                     blockers.append(f"Hash failure for {f['relative_path']}: {ch_dict.get('error')}")
@@ -2081,20 +2080,14 @@ class WorkspacePrepWorkflow:
             if len(group) > 1:
                 def priority(item):
                     p = current_paths.get(item['relative_path'], item['relative_path'])
-                    if p.startswith('5-'): return 0
-                    if p.startswith('4-'): return 1
-                    if p.startswith('3-'): return 2
-                    if p.startswith('2-'): return 3
-                    if p.startswith('1-'): return 4
-                    if p.startswith('0-'): return 5
-                    return 6
+                    return dedup_priority(p)
 
                 group.sort(key=priority)
                 retained = group[0]
 
                 for dup in group[1:]:
                     rel_path = current_paths.get(dup['relative_path'], dup['relative_path'])
-                    if rel_path.startswith('5-photos-by-dest/'):
+                    if rel_path.startswith(folder_name('photos_by_dest') + '/'):
                         # Never mutate by-dest
                         continue
 
@@ -2127,18 +2120,21 @@ class WorkspacePrepWorkflow:
         # newly-organized file never collides with an existing one regardless of iteration order.
         global_index = set()
         to_organize = []
+        _managed = set(managed_folder_names(CONFIG))
+        _sources = folder_name('sources')
         for f in db_files:
             if f['relative_path'] in quarantined: continue
             # Non-media (other-class) files are never date-organized; they remain where
-            # prep left them (prep Section 7.2 / 18) — typically residual in 0-source.
+            # prep left them (prep Section 7.2 / 18) — typically residual in 0-sources.
             if f['media_class'] == 'other': continue
             rel_path = current_paths[f['relative_path']]
-            if any(rel_path.startswith(prefix) for prefix in ["4-", "3-", "1-", "5-", "2-"]):
+            top = rel_path.split('/', 1)[0]
+            if top != _sources and top in _managed:   # already organized into a band
                 global_index.add(os.path.basename(rel_path).lower())
             else:
                 to_organize.append((f, rel_path))
 
-        # Pass 2: allocate names for the files still in 0-source against the fully-seeded index.
+        # Pass 2: allocate names for the files still in 0-sources against the fully-seeded index.
         for f, rel_path in to_organize:
             md_parsed = {}
             if f.get('metadata') and f['metadata'].get('parsed_json'):
@@ -2148,16 +2144,16 @@ class WorkspacePrepWorkflow:
                     pass
 
             dt_str = md_parsed.get('DateTimeOriginal') or md_parsed.get('CreateDate') or md_parsed.get('ModifyDate')
-            target_folder = "1-missing-metadata"
+            target_folder = folder_name('missing_metadata')
             prefix = "UNKN"
 
             if dt_str:
                 try:
                     dt = datetime.strptime(dt_str[:19], "%Y:%m:%d %H:%M:%S")
                     if f['media_class'] == 'video':
-                        target_folder = "3-videos-by-date"
+                        target_folder = folder_name('videos_by_date')
                     else:
-                        target_folder = "4-photos-by-date"
+                        target_folder = folder_name('photos_by_date')
                     prefix = dt.strftime(CONFIG["filename_timestamp_format"])
                 except ValueError:
                     pass
@@ -2278,7 +2274,7 @@ class WorkspacePrepWorkflow:
         _media_op_types = {"mkdir", "move_no_clobber", "rename_no_clobber", "quarantine_move"}
         _q_ops = [op for op in operations if op.type == "quarantine_move"]
         _dup_by_dest = sum(1 for op in _q_ops
-                           if str((op.verification or {}).get("retained_counterpart", "")).startswith("5-photos-by-dest/"))
+                           if str((op.verification or {}).get("retained_counterpart", "")).startswith(folder_name('photos_by_dest') + "/"))
         _md_counts = _collections.Counter(metadata_plan_status.values())
         _cg_keys = set()
         _native_gps = 0
@@ -2325,7 +2321,7 @@ class WorkspacePrepWorkflow:
                     "relative_path": f["relative_path"],
                     "size": f["size"],
                     "mtime_ns": f["mtime_ns"],
-                    "role": "by_dest_read_only" if f["relative_path"].startswith("5-photos-by-dest/") else "no_op_prepared"
+                    "role": "by_dest_read_only" if f["relative_path"].startswith(folder_name('photos_by_dest') + "/") else "no_op_prepared"
                 })
 
         from photos_utils import (

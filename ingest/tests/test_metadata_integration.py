@@ -22,8 +22,8 @@ FIX = os.path.join(os.path.dirname(__file__), "fixtures", "cam_small.jpg")
 def _ws(tmp_path):
     ws = tmp_path / "ws"
     ws.mkdir()
-    for d in ("0-source", "1-missing-metadata", "2-redundant-jpgs",
-              "3-videos-by-date", "4-photos-by-date", "5-photos-by-dest"):
+    for d in ("0-sources", "2-missing-metadata", "3-redundant-jpgs",
+              "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"):
         (ws / d).mkdir()
     (ws / ".photos-ingest").mkdir()
     (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
@@ -35,7 +35,7 @@ def test_real_exiftool_and_magick_end_to_end(tmp_path):
     prep.CONFIG["zfs"] = {"enabled": False}     # no snapshot shell-out
     prep.CONFIG["jobs"] = 2
     ws = _ws(tmp_path)
-    shutil.copy(FIX, ws / "0-source" / "photo.jpg")
+    shutil.copy(FIX, ws / "0-sources" / "photo.jpg")
 
     cache = prep.WorkspaceCache(str(ws))
     plan = prep.WorkspacePrepWorkflow(str(ws), cache).plan()   # real exiftool + real magick
@@ -43,7 +43,7 @@ def test_real_exiftool_and_magick_end_to_end(tmp_path):
     assert not plan.blockers, plan.blockers
     prep.PlanExecutor(str(ws)).execute(plan)
 
-    organized = glob.glob(str(ws / "4-photos-by-date" / "*.jpg"))
+    organized = glob.glob(str(ws / "5-photos-by-date" / "*.jpg"))
     assert len(organized) == 1, organized
     rel = os.path.relpath(organized[0], str(ws))
     # the spec naming derives from the real DateTimeOriginal (2026:05:15 11:32:29)
