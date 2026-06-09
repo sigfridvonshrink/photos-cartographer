@@ -1,6 +1,6 @@
 """Audit backfill — spec paths that lacked direct coverage.
 
-Covers: other-class organization (regression for the §7.2/§18 fix), missing-timestamp
+Covers: other-class routing to 1-strays (§3.2/§9), missing-timestamp
 UNKN_ naming + video routing, CreateDate fallback, suffix monotonicity, ghost-prune,
 by-dest hash-failure skip vs mutable blocker, redundant-JPEG 0-sources restriction,
 camera-group-key version staleness, by-dest precondition rejection, fingerprint stability
@@ -80,15 +80,18 @@ def _moves(plan):
 
 # --- organization / routing --------------------------------------------------
 
-def test_other_class_file_stays_in_source(tmp_path, monkeypatch):
+def test_other_class_moves_to_strays(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
     (ws / "0-sources" / "notes.txt").write_bytes(b"hello")
     plan = _plan(ws)
-    assert not plan.blockers, plan.blockers                       # never blocks (§7.2)
-    assert not any(op.source == "0-sources/notes.txt" for op in plan.operations)  # not organized
+    assert not plan.blockers, plan.blockers                       # never blocks (§3.2/§9)
+    stray = [op for op in plan.operations if op.source == "0-sources/notes.txt"]
+    assert stray and stray[0].destination.startswith("1-strays/") \
+        and stray[0].destination.endswith("/notes.txt"), stray    # moved to 1-strays/<id>/notes.txt
     _run(ws)
-    assert os.path.exists(ws / "0-sources" / "notes.txt")          # stays put (§18)
+    assert not os.path.exists(ws / "0-sources" / "notes.txt")      # out of the inbox (§7.6)
+    assert glob.glob(str(ws / "1-strays" / "*" / "notes.txt"))     # landed in strays
 
 
 def test_missing_timestamp_routes_to_missing_metadata_with_unkn_name(tmp_path, monkeypatch):
