@@ -18,12 +18,59 @@ import uuid
 import sqlite3
 import threading
 import contextlib
+import ctypes
+import errno
 
 # ==============================================================================
 # CONFIGURATION BLOCK
 # ==============================================================================
 sys.path.insert(0, os.path.dirname(__file__))
 from photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS
+
+
+# --- Atomic no-clobber move (prep Section 4 / 14.3.4) -------------------------
+# No-clobber is enforced at plan time (the clobber simulation) AND here at execution
+# time, atomically, so a destination that appears between validation and the move (or a
+# clobber planning somehow missed) can never overwrite an irreplaceable original.
+_RENAMEAT2 = None            # cached libc.renameat2, or False if unavailable
+_AT_FDCWD = -100
+_RENAME_NOREPLACE = 1
+
+def _get_renameat2():
+    global _RENAMEAT2
+    if _RENAMEAT2 is None:
+        try:
+            libc = ctypes.CDLL(None, use_errno=True)
+            fn = libc.renameat2
+            fn.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+            fn.restype = ctypes.c_int
+            _RENAMEAT2 = fn
+        except (OSError, AttributeError):
+            _RENAMEAT2 = False
+    return _RENAMEAT2
+
+def _move_link_unlink(src: str, dest: str):
+    """Portable same-filesystem no-clobber move: hardlink (fails if dest exists, never
+    overwrites) then unlink the source. Fallback when renameat2 is unavailable."""
+    os.link(src, dest)   # raises FileExistsError if dest exists
+    os.unlink(src)
+
+def _move_no_clobber(src: str, dest: str):
+    """Atomically move src -> dest, failing (FileExistsError) instead of overwriting an
+    existing destination. Race-free: Linux renameat2(RENAME_NOREPLACE) is a single syscall;
+    elsewhere we fall back to an atomic hardlink+unlink."""
+    fn = _get_renameat2()
+    if fn:
+        res = fn(_AT_FDCWD, os.fsencode(src), _AT_FDCWD, os.fsencode(dest), _RENAME_NOREPLACE)
+        if res == 0:
+            return
+        eno = ctypes.get_errno()
+        if eno == errno.EEXIST:
+            raise FileExistsError(f"Destination exists: {dest}")
+        if eno not in (errno.ENOSYS, errno.EINVAL, errno.ENOTSUP):
+            raise OSError(eno, os.strerror(eno), dest)
+        # renameat2 not supported on this kernel/fs — fall through to the fallback.
+    _move_link_unlink(src, dest)
 
 
 
@@ -1015,11 +1062,10 @@ class PlanExecutor:
                                 if expected_mtime is not None and stat.st_mtime_ns != expected_mtime:
                                     raise ValueError(f"Precondition failed: mtime changed for {op.source}.")
 
-                            if os.path.exists(abs_dest):
-                                raise FileExistsError(f"Destination exists: {abs_dest}")
-
+                            # Atomic, race-free no-clobber: fails (FileExistsError) rather than
+                            # overwriting if the destination exists at the moment of the move.
                             os.makedirs(os.path.dirname(abs_dest), exist_ok=True)
-                            os.rename(abs_src, abs_dest)
+                            _move_no_clobber(abs_src, abs_dest)
 
 # Write quarantine manifest
                             if op.type == "quarantine_move":
