@@ -2067,14 +2067,23 @@ class WorkspacePrepWorkflow:
                     quarantined.add(dup['relative_path'])
                     current_paths[dup['relative_path']] = quarantine_dest
 
+        # Pass 1: seed the per-run suffix index with EVERY already-organized name first, so a
+        # newly-organized file never collides with an existing one regardless of iteration order.
         global_index = set()
+        to_organize = []
         for f in db_files:
             if f['relative_path'] in quarantined: continue
+            # Non-media (other-class) files are never date-organized; they remain where
+            # prep left them (prep Section 7.2 / 18) — typically residual in 0-source.
+            if f['media_class'] == 'other': continue
             rel_path = current_paths[f['relative_path']]
             if any(rel_path.startswith(prefix) for prefix in ["4-", "3-", "1-", "5-", "2-"]):
                 global_index.add(os.path.basename(rel_path).lower())
-                continue
+            else:
+                to_organize.append((f, rel_path))
 
+        # Pass 2: allocate names for the files still in 0-source against the fully-seeded index.
+        for f, rel_path in to_organize:
             md_parsed = {}
             if f.get('metadata') and f['metadata'].get('parsed_json'):
                 try:
