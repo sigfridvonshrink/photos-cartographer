@@ -33,7 +33,7 @@ def _install(monkeypatch):
         with open(p, "rb") as f:
             return {"status": "valid", "strategy": "image-content-hash-v1",
                     "value": "sig-" + f.read().hex()[:16], "engine_version": "t"}
-    monkeypatch.setattr(prep.ContentHasher, "hash_image", hsh)
+    monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", hsh)
 
     def meta(folders, max_workers=4, progress_coordinator=None):
         res = {}
@@ -85,16 +85,16 @@ def test_stray_moved_structure_preserved(tmp_path, monkeypatch):
 
 
 def test_stray_not_fingerprinted_and_not_cached(tmp_path, monkeypatch):
-    # If hash_image were called on the stray it would raise (so we'd notice).
+    # If fingerprint_image were called on the stray it would raise (so we'd notice).
     _install(monkeypatch)
     boom = {"n": 0}
-    orig = prep.ContentHasher.hash_image
+    orig = prep.ContentHasher.fingerprint_image
 
     def spy(p):
         if p.endswith("notes.txt"):
             boom["n"] += 1
         return orig(p)
-    monkeypatch.setattr(prep.ContentHasher, "hash_image", spy)
+    monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", spy)
 
     ws = _ws(tmp_path)
     (ws / "0-sources" / "notes.txt").write_bytes(b"hello")

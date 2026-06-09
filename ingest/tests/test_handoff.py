@@ -27,7 +27,7 @@ def _mock(monkeypatch):
         with open(p, "rb") as f:
             return {"status": "valid", "strategy": "image-content-hash-v1",
                     "value": "sig-" + f.read().hex()[:16], "engine_version": "t"}
-    monkeypatch.setattr(prep.ContentHasher, "hash_image", spy)
+    monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", spy)
 
     def meta(folders, max_workers=4, progress_coordinator=None):
         res = {}

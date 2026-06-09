@@ -111,7 +111,7 @@ PLAN_SCHEMA_VERSION = 1
 # detectable downstream (prep Section 5). The per-hash engine binding (e.g. ImageMagick
 # version) is carried separately in each content hash's engine_version.
 CACHE_SCHEMA_VERSION = 1
-HASH_ALGORITHM_VERSION = "1"
+FINGERPRINT_ALGORITHM_VERSION = "1"
 
 # ==============================================================================
 # SCHEMAS & DATA MODELS
@@ -304,7 +304,7 @@ class WorkspaceCache:
             self.conn.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)",
                               ("cache_schema_version", str(CACHE_SCHEMA_VERSION)))
             self.conn.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)",
-                              ("hash_algorithm_version", HASH_ALGORITHM_VERSION))
+                              ("fingerprint_algorithm_version", FINGERPRINT_ALGORITHM_VERSION))
 
     def get_meta(self, key: str) -> Optional[str]:
         with self._lock:
@@ -643,7 +643,7 @@ import concurrent.futures
 
 class ContentHasher:
     @staticmethod
-    def hash_image(filepath: str) -> Dict[str, Any]:
+    def fingerprint_image(filepath: str) -> Dict[str, Any]:
         """EXIF-invariant pixel-content hash via ImageMagick's signature (`identify %#`).
 
         Used for both `image` and `raw`: it hashes normalized pixels, so it survives
@@ -685,7 +685,7 @@ class ContentHasher:
                 "error": last_error, "engine_version": engine_version}
 
     @staticmethod
-    def hash_video(filepath: str) -> Dict[str, Any]:
+    def fingerprint_video(filepath: str) -> Dict[str, Any]:
         cmd = ["ffmpeg", "-i", filepath, "-c", "copy", "-f", "md5", "-"]
         try:
             res = subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -997,7 +997,7 @@ class PlanExecutor:
                 "plan_schema_version": plan.plan_version,
                 "config_fingerprint": plan.config_fingerprint.value,
                 "cache_schema_version": CACHE_SCHEMA_VERSION,
-                "hash_algorithm_version": HASH_ALGORITHM_VERSION,
+                "fingerprint_algorithm_version": FINGERPRINT_ALGORITHM_VERSION,
                 "cli_options_fingerprint": plan.summary.get("cli_options_fingerprint"),
             })
 
@@ -1243,23 +1243,18 @@ class PlanExecutor:
                     dest_folders_acc = {}
 
                     for rel_path, record in all_files.items():
-                        # Standardise the hash status based on cache records
-                        h_status = "not_applicable"
+                        # The per-file status reports the media content FINGERPRINT (media is never
+                        # byte-hashed). Non-media has no fingerprint and is not applicable.
+                        fp_status = "not_applicable"
                         if record.get('content_hash'):
                             try:
                                 ch_dict = json.loads(record['content_hash'])
-                                h_status = ch_dict.get('status', 'unknown_hash')
+                                fp_status = ch_dict.get('status', 'unknown_fingerprint')
                             except Exception:
-                                h_status = "unknown_hash"
-                        elif record.get('hash'):
-                            try:
-                                h_dict = json.loads(record['hash'])
-                                h_status = h_dict.get('status', 'unknown_hash')
-                            except Exception:
-                                h_status = "unknown_hash"
+                                fp_status = "unknown_fingerprint"
 
                         if record['media_class'] not in ['image', 'video', 'raw']:
-                            h_status = "not_applicable"
+                            fp_status = "not_applicable"
 
                         folder_class = rel_path.split('/')[0] if '/' in rel_path else "root"
 
@@ -1356,7 +1351,7 @@ class PlanExecutor:
 
                         final_files.append({
                             **filtered_record,
-                            "hash_status": h_status,
+                            "fingerprint_status": fp_status,
                             "folder_class": folder_class
                         })
 
@@ -1462,7 +1457,7 @@ class PlanExecutor:
                             },
                             "cache": {
                                 "schema_version": int(cache.get_meta("cache_schema_version") or CACHE_SCHEMA_VERSION),
-                                "hash_algorithm_version": cache.get_meta("hash_algorithm_version") or HASH_ALGORITHM_VERSION,
+                                "fingerprint_algorithm_version": cache.get_meta("fingerprint_algorithm_version") or cache.get_meta("hash_algorithm_version") or FINGERPRINT_ALGORITHM_VERSION,
                                 "image_engine": "imagemagick",
                                 "image_engine_version": _get_imagemagick_version()
                             },
@@ -1848,17 +1843,17 @@ class WorkspacePrepWorkflow:
                 result["db_file"] = new_cached
                 return result
 
-            # Non-media (other-class) is never fingerprinted (prep Section 9): it is moved inert to
-            # 1-strays and never enters a content-equality decision. Media is identified by its
-            # decoded-content fingerprint (image/raw -> identify, video -> ffmpeg stream MD5).
+            # Media is identified ONLY by its decoded-content fingerprint (image/raw -> identify,
+            # video -> ffmpeg stream MD5). It is never byte-hashed: a whole-file SHA-256 is reserved
+            # for artifacts and would change under the EXIF/GPS rewrites a fingerprint must survive
+            # (shared contract Section 9.1). Non-media (other-class) is not fingerprinted at all
+            # (prep Section 9) — it is moved inert to 1-strays and never enters a content decision.
             file_hash_res = None
             content_hash_res = None
             if media_class in ['image', 'raw']:
-                file_hash_res = ContentHasher.hash_file(abs_path)
-                content_hash_res = ContentHasher.hash_image(abs_path)
+                content_hash_res = ContentHasher.fingerprint_image(abs_path)
             elif media_class == 'video':
-                file_hash_res = ContentHasher.hash_file(abs_path)
-                content_hash_res = ContentHasher.hash_video(abs_path)
+                content_hash_res = ContentHasher.fingerprint_video(abs_path)
 
             parent_folder = os.path.dirname(abs_path)
 
@@ -2146,7 +2141,7 @@ class WorkspacePrepWorkflow:
             if f['media_class'] == 'other':
                 continue
 
-            ch_str = f['content_hash'] or f['hash']
+            ch_str = f['content_hash']           # media identity == the content fingerprint
             if not ch_str:
                 if f['relative_path'].startswith(folder_name('photos_by_dest') + '/'):
                     pass
