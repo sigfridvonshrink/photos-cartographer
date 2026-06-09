@@ -227,6 +227,18 @@ Move/place remaining by-date files into by-dest through the prep workflow before
 No calibration JSON was written.
 ```
 
+### 7.0a Assumption: each destination is time-coherent for a camera
+
+Calibration assumes that **a single destination folder does not span a change in a camera's clock error** — every photo from one camera within one destination shares one true clock offset. Clock corrections therefore vary **between** destinations, never **within** one.
+
+This is a deliberate assumption about how the user organizes media, and it is *why* the camera clock offset is inferred and applied per **(camera group, destination)** rather than once per camera (Section 10.2):
+
+- A camera's clock **drifts**, and is sometimes **reset**, between trips. Different destinations correspond to different trips/time-windows, so the same camera's true offset can differ from one destination to the next. A single global per-camera offset would be wrong the moment the clock moved between two destinations.
+- Each destination's offset is anchored only from that camera group's native-GPS frames *in that destination* (Section 19), so each trip is corrected on its own evidence.
+- A **nested subfolder is a separate destination** (Section 10.1) with its own offset cell — there is no roll-up. If you keep a single coherent shoot in one destination (the natural way to organize), this assumption holds automatically; if you deliberately split one shoot across nested destinations, each is corrected independently.
+
+The cost of correctness is softened by **downward inheritance**: a (camera group, destination) with no native-GPS frame of its own does not start blank — it inherits the **nearest ancestor destination's** effective offset for that group as a *proposal to confirm*, recursively down the tree (Section 10.2 rule 4). So anchoring once at a trip's root seeds all its sub-destinations as confirmable defaults; you confirm or override at each level, and a manual offset at any folder re-roots what its descendants inherit. Only a cell with neither its own GPS frames nor any ancestor offset starts from a blank manual field. Inheritance flows parent→child only (never sibling→sibling) and is always confirmable, so it stays within "corrections between destinations, never within."
+
 ### 7.1 Development must not have started
 
 Breaking a destination's media out into format-specific subfolders (by default `jpg/` and `tif/`, configurable via a `destination_distribution_subfolders` config key) belongs to a *later* development/processing phase that runs only after time and GPS are fixed. Development depends on the corrected timestamps, GPS, and filenames that calibration produces, so it must not run first.
@@ -379,7 +391,7 @@ If a user decision can no longer be safely applied because its upstream context 
 This applies to:
 
 1. destination timezone decisions;
-2. camera-group time offset decisions;
+2. **(camera group, destination)** time offset decisions — the logical target is the pair, so a user-filled offset for a group in one destination is preserved independently of the same group's decision in another destination (Section 10.2);
 3. GPX/native-GPS time-anchor acceptance;
 4. manual time segment decisions;
 5. destination/folder GPS fallback decisions;
@@ -452,35 +464,44 @@ Each artifact should be grouped by destination under `6-photos-by-dest`.
 
 A global summary section may exist, but decisions must be inspectable per destination.
 
-### 10.2 Destination-scoped vs. camera-group-scoped decisions
+### 10.2 Destination-scoped vs. group-scoped decisions
 
-Grouping by destination is the default, but not every decision is destination-scoped. Two scopes coexist:
+Two scopes coexist, but the split is **not** "timezone is per-folder, clock offset is per-camera." It is:
 
-1. **Destination-scoped decisions** belong to a folder: the destination civil timezone (Section 18), folder/destination GPS fallback, and anything else that is a property of *where* files sit. These live inside the per-destination sections.
-2. **Camera-group-scoped decisions** belong to a *camera*, not a folder: a camera clock offset / time-anchor calibration (Section 19) is a property of the device's clock and applies to every file from that group regardless of which destination it landed in. A single camera group can appear in multiple destinations (Section 16), so representing its offset separately inside each destination section would duplicate one logical decision and invite inconsistent edits.
+1. **Group-scoped facts** belong to a *camera* and are the same wherever that camera's files land: the camera-group **identity** (`camera_group_key`) and its **classification as a camera or a smartphone** (config-driven, Section 16). The classification decides *how* a group's time is solved at all — a smartphone carries reliable timezone/offset metadata and is solved per file from that metadata; a camera with a wrong, timezone-less clock needs a clock-offset decision. These facts live in config and in camera-group recognition (Section 16); they are not per-destination.
+2. **Destination-scoped decisions** belong to a *destination folder*: the destination civil timezone (Section 18), folder/destination GPS fallback, **and the camera clock offset / time-anchor calibration** (Section 19). The offset is destination-scoped because a camera's clock error is **not** constant across the user's shoots: clocks drift, and are sometimes reset, *between* trips — and destinations are trips. A single global per-camera offset applied to every destination would be wrong the moment the clock drifted between two of them. So the offset is decided **per (camera group, destination)**: the same camera appearing in two destinations gets two independently-inferred offsets, each anchored only from that group's native-GPS frames *in that destination* (Section 19). This is the core assumption stated in Section 7: corrections are made **between destinations, never within one**.
 
-Therefore camera-group time calibration is represented **once, at group scope**, in a top-level section of `photos-21-time-decisions.json` keyed by `camera_group_key`:
+Therefore the time-anchor decision lives **inside each per-destination section**, sub-keyed by the camera group(s) present in that destination — there is no separate top-level group-scoped offset block:
 
 ```json
 {
   "artifact_type": "time_decisions",
-  "camera_group_time_decisions": {
-    "sony_a6400_serial_123456": {
-      "camera_group": "sony_a6400_serial_123456",
-      "destinations_present": [
-        "6-photos-by-dest/Belgium/Brussels",
-        "6-photos-by-dest/Japan/Kyoto"
-      ],
-      "proposal": { "...": "..." },
-      "user_decision": { "...": "..." },
-      "effective_time_anchor": "",
-      "requires_user_input": true
-    }
-  },
   "destinations": {
     "6-photos-by-dest/Belgium/Brussels": {
-      "camera_groups_present": ["sony_a6400_serial_123456"],
-      "...": "..."
+      "destination_timezone": { "...": "Section 18" },
+      "camera_group_time_decisions": {
+        "sony_a6400_serial_123456": {
+          "camera_group": "sony_a6400_serial_123456",
+          "camera_group_class": "camera",
+          "proposal": { "...": "anchored from Brussels' native-GPS frames" },
+          "user_decision": { "...": "..." },
+          "effective_time_anchor": "",
+          "requires_user_input": true
+        }
+      }
+    },
+    "6-photos-by-dest/Japan/Kyoto": {
+      "destination_timezone": { "...": "Section 18" },
+      "camera_group_time_decisions": {
+        "sony_a6400_serial_123456": {
+          "camera_group": "sony_a6400_serial_123456",
+          "camera_group_class": "camera",
+          "proposal": { "...": "anchored independently from Kyoto's native-GPS frames" },
+          "user_decision": { "...": "..." },
+          "effective_time_anchor": "",
+          "requires_user_input": true
+        }
+      }
     }
   }
 }
@@ -488,22 +509,49 @@ Therefore camera-group time calibration is represented **once, at group scope**,
 
 The rules are:
 
-1. there is exactly **one** editable decision per camera group, in `camera_group_time_decisions`; the user fills it once and it applies to every destination the group touches;
-2. each per-destination section **references** the group key(s) present (e.g. `camera_groups_present`) but does **not** carry its own editable copy of the group's offset decision. It may surface the group decision's *effect* read-only for inspection, but the editable field exists only at group scope;
-3. there is no "accepted in one destination, not another" state to reconcile, because the decision exists in only one place. The group offset is either decided or not, uniformly across its destinations;
-4. `destinations_present` records every destination the group appears in, so the cross-destination span of a group-scoped decision is explicit and auditable;
-5. resolved UTC for a file uses its camera group's effective time anchor (group scope) together with its destination's effective timezone (destination scope). A file is fully solvable only when **both** the group-scoped time decision and its destination-scoped timezone are complete.
+1. there is exactly **one** editable clock-offset decision per **(camera group, destination)** — inside that destination's section, keyed by `camera_group_key`. The same camera group appearing in N destinations has N independent decisions, not one shared one;
+2. each cell's offset is inferred only from that group's native-GPS frames **in that destination** (Section 19). The same camera in two destinations is anchored twice, independently — never is one destination's offset carried onto another;
+3. a **destination is the immediate containing folder, and a nested subfolder is a separate destination** (Section 10.1): there is **no upward roll-up** — a parent's offset is never computed by aggregating its children, and `.../Louvre` and `.../Louvre/Napoleon's Apartments` are distinct cells each with its own effective offset. (Downward inheritance is the opposite direction and *is* offered — rule 4.);
+4. a cell without its own native-GPS evidence **does not start from a blank field — it inherits, downward, as a confirmable proposal**. The proposed offset for a (camera group, destination) cell is chosen in priority order:
+   - **(a) self-anchored** — if that group has native-GPS frame(s) *in this destination* that produce a GPX anchor (Section 19), that anchor is the proposal;
+   - **(b) inherited** — otherwise, the cell takes the **effective offset of the nearest ancestor destination** that has one for the same group, surfaced as a **proposal to confirm**, labelled with the ancestor path it came from;
+   - **(c) manual-required** — otherwise (no self-anchor and no ancestor offset for this group), a blank manual field.
 
-All other artifacts remain destination-grouped as before; this group-scoped section is specific to camera-group time calibration in `photos-21-time-decisions.json`.
+   Inheritance is **recursive down the destination tree**: a destination's *effective* offset — however it was reached, whether self-anchored, inherited-and-confirmed, or manually set — is the basis propagated to its **immediate children** as their inherited proposal, and onward to grandchildren, and so on. A **manual offset set at a folder resets the chain at that point**: that manual value becomes the folder's effective offset and therefore the basis its descendants inherit, replacing whatever would have flowed down from further up. Inherited proposals are **confirmable, never silently applied**: as a non-anchor proposal class they require user confirmation by default (Section 9.1 item 2), so propagation is the user accepting a sensible default at each level, not a hidden cross-destination borrow. This is what lets one anchor at a trip's root seed all its sub-destinations without re-anchoring each leaf, while still honoring "corrections between destinations, never within" (Section 7) — every level is confirmable and any level can diverge;
+5. camera-group **identity and classification** (camera vs smartphone) remain group-scoped config (Section 16). A cell may surface `camera_group_class` read-only to explain why it needs (camera) or does not need (smartphone solved from its own metadata) a clock-offset decision; the editable offset itself is per (group, destination);
+6. resolved UTC for a file uses its **(camera group, destination) effective offset** together with its **destination effective timezone** — both destination-scoped. A file is fully solvable only when **both** are complete.
+
+An **inherited** proposal (rule 4b) looks like a self-anchored one but names its source ancestor instead of a GPX match — e.g. a child `…/Kyoto/Kinkaku-ji` that has no native-GPS frame of its own, inheriting the confirmed offset of its parent `…/Kyoto`:
+
+```json
+{
+  "camera_group": "sony_a6400_serial_123456",
+  "camera_group_class": "camera",
+  "proposal": {
+    "proposed_offset_seconds": -7187,
+    "proposal_source": "inherited",
+    "inherited_from": "6-photos-by-dest/Japan/Kyoto",
+    "confidence": "review_required",
+    "rank": "inherited_from_ancestor"
+  },
+  "user_decision": { "accept_proposal": false, "manual_offset_seconds": "" },
+  "effective_time_anchor": "",
+  "requires_user_input": true
+}
+```
+
+If the user instead types a `manual_offset_seconds` here, that becomes this folder's effective offset and the basis any deeper sub-destinations inherit (the reset of rule 4).
+
+All numbered calibration JSON artifacts are destination-grouped (Section 10.3); the time decisions are no exception — they sit inside their destination's section like everything else.
 
 ### 10.3 Per-destination grouping (default)
 
-Except for the camera-group-scoped time decisions of Section 10.2, all numbered calibration JSON artifacts cover destinations separately.
+All numbered calibration JSON artifacts cover destinations separately — including the time decisions, which (since Section 10.2) now sit inside each destination's section rather than in a separate top-level block.
 
 This applies to:
 
 ```text
-photos-21-time-decisions.json   (destination sections + the group-scoped block)
+photos-21-time-decisions.json   (destination sections; each carries its timezone + per-group time decisions)
 photos-22-gps-decisions.json
 photos-23-executable-plan.json
 ```
@@ -516,21 +564,22 @@ Example shape:
 {
   "artifact_type": "time_decisions",
   "artifact_name": "photos-21-time-decisions.json",
-  "camera_group_time_decisions": {
-    "sony_a6400_serial_123456": { "...": "see Section 10.2" }
-  },
   "destinations": {
     "6-photos-by-dest/Belgium/Brussels": {
       "destination_id": "...",
       "destination_path": "6-photos-by-dest/Belgium/Brussels",
+      "destination_timezone": { "...": "Section 18" },
       "camera_groups_present": ["sony_a6400_serial_123456"],
+      "camera_group_time_decisions": { "sony_a6400_serial_123456": { "...": "see Section 10.2" } },
       "status": "...",
       "depends_on": {}
     },
     "6-photos-by-dest/Japan/Kyoto": {
       "destination_id": "...",
       "destination_path": "6-photos-by-dest/Japan/Kyoto",
+      "destination_timezone": { "...": "Section 18" },
       "camera_groups_present": ["sony_a6400_serial_123456"],
+      "camera_group_time_decisions": { "sony_a6400_serial_123456": { "...": "independent offset; see Section 10.2" } },
       "status": "...",
       "depends_on": {}
     }
@@ -765,19 +814,21 @@ For each destination, the workflow determines:
 3. camera groups present;
 4. source-naive timestamp range;
 5. whether each file can be mapped to real UTC;
-6. which camera groups need manual time decisions;
-7. whether GPX/native-GPS time-anchor proposals are available;
+6. for each camera group present, whether **this destination's** clock-offset decision for that group is needed and whether it can be auto-anchored or needs manual input (Section 10.2) — a *camera* group needs a per-(group, destination) offset; a *smartphone* group is solved per file from its own metadata and needs no offset cell;
+7. whether GPX/native-GPS time-anchor proposals are available **for that (group, destination)** — i.e. whether that group has native-GPS frames *in this destination* to anchor from;
 8. whether blockers remain.
 
-For each camera group, the workflow determines whether time can be solved from:
+For each camera group **present in the destination**, the workflow determines whether that destination's time can be solved from:
 
 1. trustworthy native UTC timestamps;
-2. mobile-device timestamps with reliable timezone/offset metadata;
+2. mobile-device timestamps with reliable timezone/offset metadata (smartphone groups; no per-destination offset needed);
 3. existing user calibration rules;
-4. manual fixed UTC offset;
+4. a manual fixed UTC offset for this (group, destination);
 5. manual time segments;
-6. GPX/native-GPS time-anchor proposals;
+6. GPX/native-GPS time-anchor proposals anchored from that group's native-GPS frames in this destination (Section 19);
 7. other explicitly supported calibration evidence.
+
+A camera group present in a destination with **no** anchorable native-GPS frame *in that destination* is not self-solved there; that (group, destination) cell instead **inherits the nearest ancestor destination's effective offset for the group as a confirmable proposal** (Section 10.2 rule 4), recursively down the tree, and falls to a blank manual field only if no ancestor has an offset either.
 
 Once this analysis is complete, the workflow has reached the formal time-decision stage.
 
@@ -852,9 +903,9 @@ Resolved UTC must not be finalized for files in a destination whose timezone/tim
 
 ### 18.1 Re-evaluation when a file is moved between destinations
 
-A file's destination is an input to its time decision: the destination civil timezone above, and downstream the resolved UTC and the local-time rename. If the user re-sorts a file from one destination to another inside `6-photos-by-dest` (e.g. fixing a mis-sort), prep recognizes the move and updates the handoff to record the new destination (prep `10_photos-1-prep-workflow.md` Section 10.2). On the next calibration run this changes the handoff, which — through the dependency cascade (Section 30; shared contract Section 9) — restales the affected destination's per-file decisions for that file, so calibration **re-evaluates** it under its **new** destination: it applies the new destination's effective timezone, recomputes resolved UTC and the local-time rename accordingly, and never silently carries the old destination's timezone onto a file that now lives elsewhere.
+A file's destination is an input to its time decision: the destination civil timezone, **the clock offset that applies to it (now per (camera group, destination), Section 10.2)**, and downstream the resolved UTC and the local-time rename. If the user re-sorts a file from one destination to another inside `6-photos-by-dest` (e.g. fixing a mis-sort), prep recognizes the move and updates the handoff to record the new destination (prep `10_photos-1-prep-workflow.md` Section 10.2). On the next calibration run this changes the handoff, which — through the dependency cascade (Section 30; shared contract Section 9) — restales the affected destinations' per-file decisions for that file, so calibration **re-evaluates** it under its **new** destination: it applies the new destination's effective timezone **and the new destination's (group) clock offset**, recomputes resolved UTC and the local-time rename accordingly, and never silently carries the old destination's timezone or offset onto a file that now lives elsewhere. Because the offset is anchored from each destination's own native-GPS frames, moving a file may also change the *anchoring evidence* in both the source and target destinations — both cells are re-evaluated.
 
-Decisions that are genuinely destination-scoped (the timezone of each destination) are unaffected for files that did not move; only the moved file is re-evaluated, and only against its new destination. As always, the mandatory re-prep after the move applies (shared contract Section 10) so calibration sees the move at all.
+Decisions that are genuinely destination-scoped (each destination's timezone and its per-group offset) are unaffected for files that did not move; only the moved file is re-evaluated, and only against its new destination. As always, the mandatory re-prep after the move applies (shared contract Section 10) so calibration sees the move at all.
 
 ---
 
@@ -865,12 +916,12 @@ This stage is part of time calibration, not GPS interpolation.
 It is used when:
 
 1. GPX data is available;
-2. a camera group has at least one file with native GPS;
+2. a camera group has at least one file with native GPS **in a given destination**;
 3. that native GPS position matches a GPX point or a short GPX segment under configured thresholds.
 
 The purpose is to propose a real UTC timestamp for a photo whose camera clock may be wrong.
 
-This can produce a proposed camera-time calibration for the whole camera group. Because the offset is a property of the camera's clock and not of any one folder, the resulting decision is **camera-group-scoped**: it is recorded once in the `camera_group_time_decisions` block keyed by `camera_group_key` (Section 10.2), not duplicated into each destination the group appears in. The user accepts or overrides it once, and it applies uniformly to every file from that group across all its destinations.
+This produces a proposed camera-time calibration for that **(camera group, destination)** — not for the whole camera group. Because the camera's clock error varies between destinations (it drifts, and may be reset, between trips, Section 10.2), the offset is anchored **only from that group's native-GPS frames in that destination** and the resulting decision is **destination-scoped**: it is recorded inside that destination's section, keyed by `camera_group_key` (Section 10.2), not shared across the destinations the group appears in. The user accepts or overrides it per destination. The same camera appearing in two destinations yields two independent proposals, each anchored from its own destination's frames. A (camera group, destination) with **no** native-GPS frame of its own produces no self-anchor here; instead of a blank field it inherits its nearest ancestor destination's effective offset for that group as a confirmable proposal (Section 10.2 rule 4).
 
 ### 19.1 Matching cases
 
@@ -893,7 +944,7 @@ These thresholds are config-driven and several already have homes in the workspa
 
 ### 19.2 Ranking, not averaging
 
-If multiple native-GPS/GPX time-anchor candidates exist for the same camera group, the workflow must not average them.
+If multiple native-GPS/GPX time-anchor candidates exist for the same **(camera group, destination)**, the workflow must not average them.
 
 Instead, it should:
 
@@ -922,6 +973,7 @@ Example shape:
 {
   "proposal_id": "anchor-001",
   "source_file": "6-photos-by-dest/Belgium/Brussels/DSC01234.ARW",
+  "destination": "6-photos-by-dest/Belgium/Brussels",
   "camera_group": "sony_a6400_serial_123456",
   "camera_source_naive_time": "2024:07:03 14:12:08",
   "native_gps": {
@@ -950,7 +1002,7 @@ Example shape:
 }
 ```
 
-The user fills existing fields only.
+The proposal is anchored only from native-GPS frames of this `camera_group` within this `destination`, and its accepted/effective offset is recorded in that destination's `camera_group_time_decisions[camera_group]` cell (Section 10.2) — it does not affect the same group in any other destination. The user fills existing fields only.
 
 ---
 
@@ -964,7 +1016,7 @@ photos-21-time-decisions.json
 
 This artifact exists even if no user input is required.
 
-It is grouped by destination, plus the top-level `camera_group_time_decisions` block holding camera-group-scoped decisions (Section 10.2).
+It is grouped by destination; each destination section carries its timezone decision and one time decision per camera group present (per (group, destination), Section 10.2). There is no separate top-level group-scoped block.
 
 ### 20.1 If user time decisions are required
 
@@ -983,11 +1035,11 @@ The artifact should indicate:
 It should include only the sections needed to solve time, such as:
 
 1. destination timezone decisions (per-destination scope);
-2. camera groups requiring time calibration (group scope, in `camera_group_time_decisions`, Section 10.2);
-3. GPX/native-GPS time-anchor proposals (group scope — the resulting decision is recorded against the camera group, Section 19);
-4. manual fixed-offset fields (group scope);
-5. manual segment templates (group scope);
-6. explicit accept/reject fields for proposed time anchors (group scope);
+2. camera groups requiring time calibration, **per (group, destination)** inside each destination section (Section 10.2);
+3. GPX/native-GPS time-anchor proposals (recorded against the camera group **within its destination**, Section 19);
+4. manual fixed-offset fields (per (group, destination), used when a cell has no anchorable native-GPS frame);
+5. manual segment templates (per (group, destination));
+6. explicit accept/reject fields for proposed time anchors (per (group, destination));
 7. blockers preventing resolved UTC computation.
 
 The user should not have to create JSON structure manually. Required sections should already exist and be fillable.
@@ -1048,10 +1100,11 @@ file_id / workspace_path
 destination_path
 destination_timezone
 camera_group
+time_decision_scope        (the (camera_group, destination_path) pair this file's offset came from)
 source_naive_time
 source_time_provenance
 time_rule_used
-utc_offset_used
+utc_offset_used            (the effective offset for this file's (camera_group, destination))
 resolved_utc
 resolved_utc_status
 resolved_utc_provenance

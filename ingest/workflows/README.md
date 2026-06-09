@@ -61,7 +61,9 @@ useless until the two are aligned. So the pipeline:
 2. matches each against your tracks (nearest point, or interpolation along a short segment under
    configurable distance/time thresholds), across the whole GPX folder,
 3. derives the **camera clock offset** from those matches — ranked by confidence, **not averaged** —
-   and proposes it for the whole camera group,
+   and proposes it **per (camera, destination)**: the same camera gets an independently-inferred offset
+   in each destination it shot in, because a clock drifts (and gets reset) between trips, and a
+   destination *is* a trip,
 4. after you confirm (or auto-applies, per policy), resolves every frame to UTC and geotags the
    **un-logged majority** by interpolating along the track.
 
@@ -189,6 +191,14 @@ This is **built for my own workflow** and open-sourced in case it fits yours. It
 - **GPS tracks** (GPX) from a logger. You dump **all** your track files into a single GPX folder
   (`gpx_root`) and calibration ingests the whole set, matching each photo against the right point
   across all tracks — no per-shoot sorting. No tracks at all, no geotag-from-track.
+- **One destination = one coherent shoot, time-wise.** The clock correction is figured out and applied
+  **per (camera, destination folder)**, not once per camera — because a camera's clock drifts (and gets
+  reset) between trips, so its true offset differs from one destination to the next. The assumption that
+  makes this work: you keep a single shoot in one destination, so a destination never spans a change in a
+  camera's clock error. Corrections happen *between* destinations, never *within* one. (A nested subfolder
+  is its own destination and gets its own correction; a destination where a camera shot nothing geotagged
+  doesn't start blank — it inherits its parent destination's offset as a proposal to confirm, recursively
+  down nested folders, and a manual offset you set at any folder re-roots what its sub-folders inherit.)
 - **A specific workspace layout** — numbered working folders (`0-sources`, `1-strays`,
   `2-missing-metadata`, `3-redundant-jpgs`, `4-videos-by-date`, `5-photos-by-date`, `6-photos-by-dest`).
   You drop dumps into **`0-sources`** (the one inbox); prep organizes the media out and moves any
