@@ -4,7 +4,31 @@ import hashlib
 import re
 from datetime import datetime
 
+# --- Managed media folders (prep Section 3). The NAMES are config (single source of truth,
+# seeded into photos-00-config.json); the ROLES, their dedup-retention order, which role is
+# the inbox / read-only by-dest / strays, and photo-vs-video band membership are pipeline
+# logic and stay in code here. Reference folders by role, never by literal name. ---
+FOLDER_ROLES = ["sources", "strays", "missing_metadata", "redundant_jpgs",
+                "videos_by_date", "photos_by_date", "photos_by_dest"]
+DEFAULT_FOLDERS = {
+    "sources": "0-sources",
+    "strays": "1-strays",
+    "missing_metadata": "2-missing-metadata",
+    "redundant_jpgs": "3-redundant-jpgs",
+    "videos_by_date": "4-videos-by-date",
+    "photos_by_date": "5-photos-by-date",
+    "photos_by_dest": "6-photos-by-dest",
+}
+# Dedup retention priority — highest-retained first (lower index wins a duplicate tie).
+# `strays` is absent: non-media is never content-deduplicated.
+FOLDER_DEDUP_PRIORITY = ["photos_by_dest", "photos_by_date", "videos_by_date",
+                         "redundant_jpgs", "missing_metadata", "sources"]
+# Roles prep scans/organizes: everything except `strays` (which prep writes but never scans).
+_MANAGED_ROLES = ["sources", "missing_metadata", "redundant_jpgs",
+                  "videos_by_date", "photos_by_date", "photos_by_dest"]
+
 CONFIG = {
+    "folders": dict(DEFAULT_FOLDERS),
     "zfs": {
         "enabled": False,                # opt-in; the dataset is auto-detected from the workspace
         "snapshots_required": False,     # if true, failure to snapshot aborts execution
@@ -56,6 +80,30 @@ def media_class_for_ext(ext: str) -> str:
     """Classify a file by extension into image/raw/video/other (case-insensitive,
     leading dot optional)."""
     return _MEDIA_CLASS_BY_EXT.get((ext or "").lower().lstrip('.'), "other")
+
+
+def _folders(cfg=None):
+    return ((cfg or CONFIG).get("folders") or DEFAULT_FOLDERS)
+
+def folder_name(role, cfg=None) -> str:
+    """The configured folder name for a role (e.g. 'photos_by_dest' -> '6-photos-by-dest')."""
+    return _folders(cfg)[role]
+
+def folder_role(name, cfg=None):
+    """Reverse lookup: a folder name (or a path's top component) -> its role, or None."""
+    for r, n in _folders(cfg).items():
+        if n == name:
+            return r
+    return None
+
+def managed_folder_names(cfg=None) -> list:
+    """The managed folders prep scans/organizes (every role except `strays`), in order."""
+    return [folder_name(r, cfg) for r in _MANAGED_ROLES]
+
+def dedup_priority(path, cfg=None) -> int:
+    """Dedup retention priority of `path` by its top folder component (lower = retained)."""
+    role = folder_role(path.split('/', 1)[0], cfg)
+    return FOLDER_DEDUP_PRIORITY.index(role) if role in FOLDER_DEDUP_PRIORITY else len(FOLDER_DEDUP_PRIORITY)
 
 # Camera-identity fields that compose the camera_group_key (order matters: it defines
 # the key string). The handoff surfaces the same fields as a group's contributing identity.
@@ -247,6 +295,28 @@ def validate_config(cfg: dict):
         raise ValueError("config: top level must be a JSON object.")
 
     _validate_zfs(cfg.get("zfs"))
+
+    fol = cfg.get("folders")
+    if fol is not None:
+        if not isinstance(fol, dict):
+            raise ValueError("config: folders must be an object.")
+        missing = [r for r in FOLDER_ROLES if r not in fol]
+        if missing:
+            raise ValueError(f"config: folders is missing role(s): {', '.join(missing)}.")
+        seen = {}
+        for role in FOLDER_ROLES:
+            name = fol[role]
+            if not isinstance(name, str) or not name:
+                raise ValueError(f"config: folders.{role} must be a non-empty string.")
+            if "/" in name or "\x00" in name or name.startswith("."):
+                raise ValueError(f"config: folders.{role} {name!r} must be a single path "
+                                 f"component (no '/', no NUL, no leading '.').")
+            if name in (CONTROL_DIR, QUARANTINE_DIR):
+                raise ValueError(f"config: folders.{role} {name!r} collides with a control directory.")
+            if name in seen:
+                raise ValueError(f"config: folders.{role} and folders.{seen[name]} both name "
+                                 f"{name!r} (folder names must be unique).")
+            seen[name] = role
 
     if "filename_timestamp_format" in cfg:
         fmt = cfg["filename_timestamp_format"]

@@ -20,8 +20,8 @@ import photos_utils as utils
 def _ws(tmp_path):
     ws = tmp_path / "ws"
     ws.mkdir()
-    for d in ("0-source", "1-missing-metadata", "2-redundant-jpgs",
-              "3-videos-by-date", "4-photos-by-date", "5-photos-by-dest"):
+    for d in ("0-sources", "2-missing-metadata", "3-redundant-jpgs",
+              "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"):
         (ws / d).mkdir()
     (ws / ".photos-ingest").mkdir(exist_ok=True)
     (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
@@ -90,19 +90,19 @@ def test_handwritten_config_is_authoritative(tmp_path, monkeypatch):
     cfg["filename_timestamp_format"] = "%Y%m%d__%H%M%S"
     with open(utils.config_path(str(ws)), "w") as f:
         json.dump(cfg, f)
-    (ws / "0-source" / "a.jpg").write_text("aaa")
+    (ws / "0-sources" / "a.jpg").write_text("aaa")
 
     plan = _plan(ws)
     dests = [op.destination for op in plan.operations if op.destination]
     # DateTimeOriginal 2023:01:02 03:04:05 under the custom format.
-    assert any("4-photos-by-date/20230102__030405" in d for d in dests), dests
+    assert any("5-photos-by-date/20230102__030405" in d for d in dests), dests
 
 
 def test_config_fingerprint_is_file_sha_and_in_handoff(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
     prep.CONFIG["jobs"] = 1
-    (ws / "0-source" / "a.jpg").write_text("aaa")
+    (ws / "0-sources" / "a.jpg").write_text("aaa")
 
     cache = prep.WorkspaceCache(str(ws))
     plan = prep.WorkspacePrepWorkflow(str(ws), cache).plan()
