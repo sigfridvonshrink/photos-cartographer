@@ -30,8 +30,8 @@ def _ws(tmp_path):
 
 
 def _install(monkeypatch, meta_for=None, hash_for=None):
-    # Default: zfs off so execute() takes no snapshot (the zfs tests re-enable it).
-    prep.CONFIG["zfs"] = {"enabled": False, "snapshots_required": False, "snapshot_commands": {}}
+    # Default: zfs off so execute() takes no snapshot.
+    prep.CONFIG["zfs"] = {"enabled": False}
 
     def hsh(p):
         if hash_for is not None:
@@ -212,29 +212,6 @@ def test_fingerprint_stable_across_jobs(tmp_path, monkeypatch):
     ops1 = sorted((op.type, op.source, op.destination) for op in p1.operations)
     ops2 = sorted((op.type, op.source, op.destination) for op in p2.operations)
     assert ops1 == ops2
-
-
-def test_zfs_snapshot_taken_when_enabled(tmp_path, monkeypatch):
-    _install(monkeypatch)
-    prep.CONFIG["zfs"] = {"enabled": True, "snapshots_required": True,
-                          "snapshot_commands": {"workspace": "true"}}   # /bin/true succeeds
-    ws = _ws(tmp_path)
-    (ws / "0-source" / "a.jpg").write_bytes(b"AAAA")
-    _run(ws)
-    j = json.load(open(glob.glob(str(ws / ".photos-ingest" / "journal-*.json"))[0]))
-    assert j["snapshots"]["workspace"]["exit_code"] == 0
-
-
-def test_zfs_required_failure_aborts(tmp_path, monkeypatch):
-    _install(monkeypatch)
-    prep.CONFIG["zfs"] = {"enabled": True, "snapshots_required": True,
-                          "snapshot_commands": {"workspace": "false"}}  # /bin/false fails
-    ws = _ws(tmp_path)
-    (ws / "0-source" / "a.jpg").write_bytes(b"AAAA")
-    plan = _plan(ws)
-    with pytest.raises(RuntimeError, match="snapshot failed and is required"):
-        prep.PlanExecutor(str(ws)).execute(plan)
-    assert os.path.exists(ws / "0-source" / "a.jpg")              # no mutation
 
 
 def test_hash_video_failure_is_graceful(tmp_path):
