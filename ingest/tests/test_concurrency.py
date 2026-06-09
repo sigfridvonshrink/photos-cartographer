@@ -14,19 +14,19 @@ import photos_utils as utils
 @pytest.fixture
 def workspace(tmp_path):
     root = str(tmp_path)
-    os.makedirs(os.path.join(root, "0-source"))
-    os.makedirs(os.path.join(root, "1-missing-metadata"))
-    os.makedirs(os.path.join(root, "2-redundant-jpgs"))
-    os.makedirs(os.path.join(root, "3-videos-by-date"))
-    os.makedirs(os.path.join(root, "4-photos-by-date"))
-    os.makedirs(os.path.join(root, "5-photos-by-dest"))
+    os.makedirs(os.path.join(root, "0-sources"))
+    os.makedirs(os.path.join(root, "2-missing-metadata"))
+    os.makedirs(os.path.join(root, "3-redundant-jpgs"))
+    os.makedirs(os.path.join(root, "4-videos-by-date"))
+    os.makedirs(os.path.join(root, "5-photos-by-date"))
+    os.makedirs(os.path.join(root, "6-photos-by-dest"))
     os.makedirs(os.path.join(root, ".photos-ingest"), exist_ok=True)
     with open(os.path.join(root, ".photos-ingest", "photos-00-workspace-guard"), "w") as f:
         f.write("")
 
     # Create some dummy files
     for i in range(10):
-        with open(os.path.join(root, "0-source", f"file{i}.jpg"), "w") as f:
+        with open(os.path.join(root, "0-sources", f"file{i}.jpg"), "w") as f:
             f.write(f"content{i}")
 
     return root
@@ -183,7 +183,7 @@ def test_quiet_plan_executor_execution(mock_validate, mock_popen, workspace):
     op = prep.Operation(
         type="mkdir",
         reason="testing",
-        destination="1-missing-metadata/generated-by-execute-test",
+        destination="2-missing-metadata/generated-by-execute-test",
         source="",
         operation_id="test_op_id",
         preconditions={},
@@ -217,7 +217,7 @@ def test_quiet_plan_executor_execution(mock_validate, mock_popen, workspace):
 
     # Assert execution succeeds and generated files
     assert os.path.exists(journal_path)
-    assert os.path.isdir(os.path.join(workspace, "1-missing-metadata", "generated-by-execute-test"))
+    assert os.path.isdir(os.path.join(workspace, "2-missing-metadata", "generated-by-execute-test"))
 
     with open(journal_path, 'r') as f:
         journal_data = json.load(f)
@@ -368,20 +368,20 @@ def test_failed_folder_mapping(mock_read_metadata_concurrently, mock_popen, work
     mock_popen.return_value = MagicMock()
 
     # Simulate a folder-level failure where all files in the folder are missing metadata
-    mock_read_metadata_concurrently.return_value = ({}, {os.path.join(workspace, "0-source")})
+    mock_read_metadata_concurrently.return_value = ({}, {os.path.join(workspace, "0-sources")})
 
     cache = prep.WorkspaceCache(workspace)
     workflow = prep.WorkspacePrepWorkflow(workspace, cache)
 
     # Make sure we have a file to process
-    src_dir = os.path.join(workspace, "0-source")
+    src_dir = os.path.join(workspace, "0-sources")
     os.makedirs(src_dir, exist_ok=True)
     with open(os.path.join(src_dir, "file0.jpg"), "w") as f: f.write("dummy")
 
     plan = workflow.plan()
 
     assert plan.blockers
-    assert any("0-source/file0.jpg" in b for b in plan.blockers)
+    assert any("0-sources/file0.jpg" in b for b in plan.blockers)
     assert any("Metadata tool execution failed" in b for b in plan.blockers)
 
 
@@ -415,8 +415,8 @@ def test_stale_dependency_under_concurrency_blocks_execution(mock_read_metadata_
     mock_read_metadata_concurrently.side_effect = _mock_read_concurrently
 
     # We should have one file triggering a metadata fetch
-    os.makedirs(os.path.join(workspace, "1-missing-metadata"), exist_ok=True)
-    file_path = os.path.join(workspace, "1-missing-metadata", "dummy.jpg")
+    os.makedirs(os.path.join(workspace, "2-missing-metadata"), exist_ok=True)
+    file_path = os.path.join(workspace, "2-missing-metadata", "dummy.jpg")
     with open(file_path, "w") as f:
         f.write("dummy")
 
@@ -476,8 +476,8 @@ def test_progress_summary_fields(mock_read_metadata_concurrently, mock_hash_imag
     mock_read_metadata_concurrently.side_effect = _mock_read_concurrently
 
     # We should have one file triggering a metadata fetch
-    os.makedirs(os.path.join(workspace, "0-source"), exist_ok=True)
-    file_path = os.path.join(workspace, "0-source", "dummy.jpg")
+    os.makedirs(os.path.join(workspace, "0-sources"), exist_ok=True)
+    file_path = os.path.join(workspace, "0-sources", "dummy.jpg")
     with open(file_path, "w") as f:
         f.write("dummy")
 

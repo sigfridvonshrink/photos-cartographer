@@ -51,8 +51,8 @@ def test_move_link_unlink_fallback_parity(tmp_path):
 def _ws(tmp_path):
     ws = tmp_path / "ws"
     ws.mkdir()
-    for d in ("0-source", "1-missing-metadata", "2-redundant-jpgs",
-              "3-videos-by-date", "4-photos-by-date", "5-photos-by-dest"):
+    for d in ("0-sources", "2-missing-metadata", "3-redundant-jpgs",
+              "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"):
         (ws / d).mkdir()
     (ws / ".photos-ingest").mkdir(exist_ok=True)
     (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
@@ -82,13 +82,13 @@ def test_execute_time_no_clobber_preserves_existing(tmp_path, monkeypatch):
     _install(monkeypatch)
     prep.CONFIG["jobs"] = 1
     ws = _ws(tmp_path)
-    (ws / "0-source" / "a.jpg").write_bytes(b"ORIGINAL")
+    (ws / "0-sources" / "a.jpg").write_bytes(b"ORIGINAL")
     cache = prep.WorkspaceCache(str(ws))
     plan = prep.WorkspacePrepWorkflow(str(ws), cache).plan()
     cache.close()
 
     org = [op for op in plan.operations
-           if op.type == "move_no_clobber" and op.source == "0-source/a.jpg"][0]
+           if op.type == "move_no_clobber" and op.source == "0-sources/a.jpg"][0]
     dest_abs = ws / org.destination
     dest_abs.parent.mkdir(parents=True, exist_ok=True)
     dest_abs.write_bytes(b"SENTINEL")                       # squatter at the planned dest
@@ -100,4 +100,4 @@ def test_execute_time_no_clobber_preserves_existing(tmp_path, monkeypatch):
         prep.PlanExecutor(str(ws)).execute(plan)
 
     assert dest_abs.read_bytes() == b"SENTINEL"            # NOT overwritten
-    assert (ws / "0-source" / "a.jpg").read_bytes() == b"ORIGINAL"   # source not moved
+    assert (ws / "0-sources" / "a.jpg").read_bytes() == b"ORIGINAL"   # source not moved

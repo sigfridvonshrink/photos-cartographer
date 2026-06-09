@@ -13,8 +13,8 @@ import photos_utils as utils
 def _ws(tmp_path):
     ws = tmp_path / "ws"
     ws.mkdir()
-    for d in ("0-source", "1-missing-metadata", "2-redundant-jpgs",
-              "3-videos-by-date", "4-photos-by-date", "5-photos-by-dest"):
+    for d in ("0-sources", "2-missing-metadata", "3-redundant-jpgs",
+              "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"):
         (ws / d).mkdir()
     (ws / ".photos-ingest").mkdir(exist_ok=True)
     (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
@@ -59,9 +59,9 @@ def test_media_class_for_ext():
 def test_report_has_expected_counts(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
-    (ws / "0-source" / "new.jpg").write_bytes(b"NEW")
-    (ws / "0-source" / "dupA.jpg").write_bytes(b"SAME")
-    (ws / "0-source" / "dupB.jpg").write_bytes(b"SAME")   # one of the pair is quarantined
+    (ws / "0-sources" / "new.jpg").write_bytes(b"NEW")
+    (ws / "0-sources" / "dupA.jpg").write_bytes(b"SAME")
+    (ws / "0-sources" / "dupB.jpg").write_bytes(b"SAME")   # one of the pair is quarantined
     r = _plan(ws).summary["report"]
     assert r["media_operations"] >= 1
     assert r["duplicates_against_mutable"] == 1
@@ -74,8 +74,8 @@ def test_report_has_expected_counts(tmp_path, monkeypatch):
 def test_duplicate_split_against_by_dest(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
-    (ws / "5-photos-by-dest" / "keep.jpg").write_bytes(b"SAME")   # retained by-dest copy
-    (ws / "0-source" / "dup.jpg").write_bytes(b"SAME")           # mutable duplicate
+    (ws / "6-photos-by-dest" / "keep.jpg").write_bytes(b"SAME")   # retained by-dest copy
+    (ws / "0-sources" / "dup.jpg").write_bytes(b"SAME")           # mutable duplicate
     r = _plan(ws).summary["report"]
     assert r["duplicates_against_by_dest"] == 1
     assert r["duplicates_against_mutable"] == 0
@@ -86,14 +86,14 @@ def test_duplicate_split_against_by_dest(tmp_path, monkeypatch):
 def test_recognized_move_counted_in_report(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
-    (ws / "0-source" / "a.jpg").write_bytes(b"AAAA")
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
     cache = prep.WorkspaceCache(str(ws))
     p1 = prep.WorkspacePrepWorkflow(str(ws), cache).plan()
     cache.close()
     prep.PlanExecutor(str(ws)).execute(p1)
-    org = glob.glob(str(ws / "4-photos-by-date" / "*.jpg"))[0]
-    (ws / "5-photos-by-dest" / "T").mkdir(parents=True)
-    os.rename(org, ws / "5-photos-by-dest" / "T" / os.path.basename(org))
+    org = glob.glob(str(ws / "5-photos-by-date" / "*.jpg"))[0]
+    (ws / "6-photos-by-dest" / "T").mkdir(parents=True)
+    os.rename(org, ws / "6-photos-by-dest" / "T" / os.path.basename(org))
     p2 = prep.WorkspacePrepWorkflow(str(ws), prep.WorkspaceCache(str(ws))).plan()
     assert p2.summary["report"]["recognized_moves"] == 1
 

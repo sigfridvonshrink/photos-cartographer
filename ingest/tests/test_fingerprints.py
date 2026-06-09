@@ -12,8 +12,8 @@ import photos_utils as utils
 def _ws(tmp_path):
     ws = tmp_path / "ws"
     ws.mkdir()
-    for d in ("0-source", "1-missing-metadata", "2-redundant-jpgs",
-              "3-videos-by-date", "4-photos-by-date", "5-photos-by-dest"):
+    for d in ("0-sources", "2-missing-metadata", "3-redundant-jpgs",
+              "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"):
         (ws / d).mkdir()
     (ws / ".photos-ingest").mkdir(exist_ok=True)
     (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
@@ -53,7 +53,7 @@ def _run(ws):
 def test_cache_meta_records_versions(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
-    (ws / "0-source" / "a.jpg").write_bytes(b"AAAA")
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
     _run(ws)
     meta = prep.WorkspaceCache(str(ws)).get_all_meta()
     assert meta["cache_schema_version"] == str(prep.CACHE_SCHEMA_VERSION)
@@ -63,7 +63,7 @@ def test_cache_meta_records_versions(tmp_path, monkeypatch):
 def test_journal_is_version_stamped(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
-    (ws / "0-source" / "a.jpg").write_bytes(b"AAAA")
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
     plan = _run(ws)
     with open(utils.journal_path(str(ws), plan.plan_id)) as f:
         dep = json.load(f)["depends_on"]
@@ -78,7 +78,7 @@ def test_journal_is_version_stamped(tmp_path, monkeypatch):
 def test_handoff_depends_on_coverage(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
-    (ws / "0-source" / "a.jpg").write_bytes(b"AAAA")
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
     _run(ws)
     with open(utils.handoff_path(str(ws))) as f:
         dep = json.load(f)["depends_on"]
@@ -127,7 +127,7 @@ def test_default_writes_still_commit_per_op(tmp_path):
 def test_execute_run_lands_all_cache_rows(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
-    (ws / "0-source" / "a.jpg").write_bytes(b"AAAA")
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
     _run(ws)
     rows = prep.WorkspaceCache(str(ws)).get_all_files()
-    assert any(k.startswith("4-photos-by-date/") for k in rows), rows  # organized + cached
+    assert any(k.startswith("5-photos-by-date/") for k in rows), rows  # organized + cached
