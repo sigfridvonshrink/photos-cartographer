@@ -54,6 +54,13 @@ def media_class_for_ext(ext: str) -> str:
     leading dot optional)."""
     return _MEDIA_CLASS_BY_EXT.get((ext or "").lower().lstrip('.'), "other")
 
+# Camera-identity fields that compose the camera_group_key (order matters: it defines
+# the key string). The handoff surfaces the same fields as a group's contributing identity.
+CAMERA_IDENTITY_FIELDS = [
+    "BodySerialNumber", "CameraSerialNumber", "InternalSerialNumber",
+    "SerialNumber", "Make", "Model", "OwnerName",
+]
+
 # --- Workspace control directory layout (shared contract Section 5) ----------
 # Every pipeline control/artifact file lives under CONTROL_DIR; the media scan
 # skips it wholesale. These helpers are the single source of truth for the names
@@ -497,7 +504,7 @@ class MetadataReader:
 
         # Build group_key for camera identity grouping based on standard elements
         ident_parts = []
-        for k in ["BodySerialNumber", "CameraSerialNumber", "InternalSerialNumber", "SerialNumber", "Make", "Model", "OwnerName"]:
+        for k in CAMERA_IDENTITY_FIELDS:
             v = parsed.get(k)
             if v is not None:
                 ident_parts.append(str(v).strip())
