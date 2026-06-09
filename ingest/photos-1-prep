@@ -53,6 +53,10 @@ PREP_ALLOWED_OPERATION_TYPES = {
     "db_remove",
 }
 
+# Plan serialization/schema version. A plan whose version differs from this is from a
+# different tool/schema and is rejected at execute time (prep Section 14.3.2).
+PLAN_SCHEMA_VERSION = 1
+
 # ==============================================================================
 # SCHEMAS & DATA MODELS
 
@@ -594,7 +598,7 @@ class OperationPlanner:
             instruction_fingerprints[rel_path] = cls._hash_file(instruction_file)
 
         return Plan(
-            plan_version=1,
+            plan_version=PLAN_SCHEMA_VERSION,
             plan_id=f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:6]}",
             command=command,
             created_at=datetime.now(timezone.utc).isoformat(),
@@ -616,6 +620,8 @@ class PlanValidator:
         Validates the plan just before execution.
         Checks instruction fingerprints and destination clobbering.
         """
+        if plan.plan_version != PLAN_SCHEMA_VERSION:
+            raise ValueError(f"Stale plan: plan_version {plan.plan_version} is not the supported schema {PLAN_SCHEMA_VERSION}; regenerate the plan.")
         if plan.command != 'prep':
             raise ValueError(f"Plan command '{plan.command}' is not supported by photos-1-prep. Only 'prep' plans are allowed.")
         for op in plan.operations:
@@ -650,9 +656,17 @@ class PlanValidator:
             if plan.metadata_dependencies != current_md_deps:
                 raise ValueError(f"Stale plan: metadata dependencies changed since planning. Expected: {plan.metadata_dependencies}, Current: {current_md_deps}")
 
-        # RootGuard is already in photos-1-prep
-        import os
+        # Config staleness: the workspace config must be byte-identical to what the plan
+        # was built against (prep Section 21). load_or_seed_config and _hash_file both
+        # sha256 the raw file bytes, so this compares like-for-like.
+        from photos_utils import config_path
+        cfg = config_path(current_workspace)
+        if not os.path.exists(cfg):
+            raise ValueError("Stale plan: workspace config photos-00-config.json is missing; regenerate the plan.")
+        if OperationPlanner._hash_file(cfg).value != plan.config_fingerprint.value:
+            raise ValueError("Stale plan: workspace config changed since planning; regenerate the plan.")
 
+        # RootGuard is already in photos-1-prep
         # Prevalidate all implicit file dependencies
         for precond in getattr(plan, 'workspace_file_preconditions', []):
             rel_path = precond.get("relative_path")
@@ -2047,7 +2061,7 @@ class WorkspacePrepWorkflow:
         )
 
         return Plan(
-            plan_version=1,
+            plan_version=PLAN_SCHEMA_VERSION,
             plan_id=plan_id_for_quarantine,
             command="prep",
             created_at=datetime.now(timezone.utc).isoformat(),
