@@ -1,14 +1,16 @@
 import os
 import json
 import hashlib
+import re
 
 CONFIG = {
     "zfs": {
-        "enabled": True,
-        "snapshots_required": False, # If true, failure to snapshot aborts execution
-        "snapshot_commands": {
-            "workspace": "zfs snapshot tank/photos-work@photos-ingest-{plan_id}",
-            "library": "zfs snapshot tank/photos-final@photos-ingest-{plan_id}"
+        "enabled": False,                # opt-in; the dataset is auto-detected from the workspace
+        "snapshots_required": False,     # if true, failure to snapshot aborts execution
+        "snapshot_prefix": "photos-ingest-",   # prepended to the plan id: <dataset>@<prefix><plan_id>
+        "datasets": {
+            "workspace": "auto",         # "auto" = detect from the workspace path; or an explicit dataset
+            "library": "auto"            # reserved for the future finalize/merge step (not used by prep)
         }
     },
     "gpx_root": "",
@@ -169,6 +171,7 @@ def load_or_seed_config(workspace_root: str) -> str:
         raise ValueError(f"Workspace config {path} is not valid JSON: {e}")
     if not isinstance(loaded, dict):
         raise ValueError(f"Workspace config {path} must be a JSON object.")
+    validate_config(loaded)  # human-authored input is validated before it is accepted
     # Make the file authoritative; preserve the runtime jobs override.
     jobs = CONFIG.get("jobs")
     CONFIG.clear()
@@ -176,6 +179,53 @@ def load_or_seed_config(workspace_root: str) -> str:
     if jobs is not None:
         CONFIG["jobs"] = jobs
     return sha
+
+
+# ZFS naming charsets. A snapshot is <dataset>@<snapshot_prefix><plan_id>; the suffix
+# (prefix + plan id) and the dataset name use these conservative legal charsets.
+ZFS_SNAPSHOT_NAME_RE = re.compile(r"^[A-Za-z0-9_.:-]*$")
+ZFS_DATASET_RE = re.compile(r"^[A-Za-z0-9_.:/-]+$")
+
+
+def validate_config(cfg: dict):
+    """Validate human-authored config before it is accepted — a general principle: input a
+    human writes is validated, not trusted. Currently validates the `zfs` block. Raises
+    ValueError with a clear message on any violation; missing keys default and unknown keys
+    are ignored. (Hook for broader config/decision validation later.)"""
+    z = cfg.get("zfs")
+    if z is None:
+        return
+    if not isinstance(z, dict):
+        raise ValueError("config: 'zfs' must be an object.")
+    for k in ("enabled", "snapshots_required"):
+        if k in z and not isinstance(z[k], bool):
+            raise ValueError(f"config: zfs.{k} must be a boolean.")
+    prefix = z.get("snapshot_prefix", "")
+    if not isinstance(prefix, str) or not ZFS_SNAPSHOT_NAME_RE.match(prefix):
+        raise ValueError(f"config: zfs.snapshot_prefix {prefix!r} is not a legal ZFS snapshot "
+                         f"name (allowed characters: letters, digits, and _ . : -).")
+    datasets = z.get("datasets", {})
+    if not isinstance(datasets, dict):
+        raise ValueError("config: zfs.datasets must be an object.")
+    for tgt, val in datasets.items():
+        if val == "auto":
+            continue
+        if not isinstance(val, str) or not ZFS_DATASET_RE.match(val):
+            raise ValueError(f"config: zfs.datasets.{tgt} {val!r} must be 'auto' or a legal dataset name.")
+
+
+def detect_zfs_dataset(path: str):
+    """Return the name of the ZFS dataset backing `path`, or None. Resolves to a real
+    absolute path first, so a bare '.' (which `zfs list` rejects) becomes a valid argument."""
+    import subprocess
+    abspath = os.path.realpath(os.path.abspath(path))
+    try:
+        res = subprocess.run(["zfs", "list", "-H", "-o", "name", abspath],
+                             capture_output=True, text=True, check=True)
+        name = res.stdout.strip()
+        return name or None
+    except Exception:
+        return None
 
 FIELD_SET_VERSION = 1
 METADATA_SCHEMA_VERSION = 1
