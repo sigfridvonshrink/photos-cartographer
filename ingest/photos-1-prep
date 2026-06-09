@@ -22,7 +22,7 @@ import threading
 # CONFIGURATION BLOCK
 # ==============================================================================
 sys.path.insert(0, os.path.dirname(__file__))
-from photos_utils import CONFIG
+from photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS
 
 
 
@@ -807,6 +807,9 @@ class PlanExecutor:
         self.coordinator = ProgressCoordinator()
 
     def execute(self, plan: Plan, journal_path: str = None):
+        # A distinct id for this execution run (vs plan.plan_id which identifies the plan);
+        # surfaced in the handoff (prep Section 16).
+        self.execution_id = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:6]}"
         # Read the authoritative workspace config (zfs block, etc.) from photos-00-config.json
         # before applying the plan. (Config-staleness rejection against the plan is Phase 4.)
         from photos_utils import load_or_seed_config
@@ -1128,11 +1131,21 @@ class PlanExecutor:
                                     "missing_gps": 0,
                                     "missing_timestamps": 0,
                                     "timestamps": [],
+                                    "identity": {},
                                     "cache_freshness": empty_cache_freshness_counts()
                                 }
                             cg = camera_groups_acc[cg_key]
                             cg["files"].append(rel_path)
                             cg["file_count"] += 1
+                            try:
+                                cg_parsed = json.loads(md_record.get("parsed_json", "{}"))
+                            except Exception:
+                                cg_parsed = {}
+                            # The identity fields are identical across a group by construction
+                            # (they compose the key), so capture them once from any member.
+                            if not cg["identity"]:
+                                cg["identity"] = {f: cg_parsed[f] for f in CAMERA_IDENTITY_FIELDS
+                                                  if cg_parsed.get(f) is not None}
 
                             plan_status = plan.summary.get("metadata_plan_status", {}).get(rel_path, md_record.get("extraction_status", "metadata_missing"))
                             cg["cache_freshness"]["total_files"] += 1
@@ -1145,13 +1158,9 @@ class PlanExecutor:
                             if not md_record.get("has_timestamp"):
                                 cg["missing_timestamps"] += 1
                             else:
-                                try:
-                                    parsed = json.loads(md_record.get("parsed_json", "{}"))
-                                    ts = parsed.get("DateTimeOriginal") or parsed.get("CreateDate") or parsed.get("ModifyDate")
-                                    if ts:
-                                        cg["timestamps"].append(ts)
-                                except Exception:
-                                    pass
+                                ts = cg_parsed.get("DateTimeOriginal") or cg_parsed.get("CreateDate") or cg_parsed.get("ModifyDate")
+                                if ts:
+                                    cg["timestamps"].append(ts)
 
                         filtered_record = {k: v for k, v in record.items() if k not in ["last_seen_ns", "absolute_path"]}
                         if md_record:
@@ -1164,7 +1173,26 @@ class PlanExecutor:
                             "folder_class": folder_class
                         })
 
+                    # Real duplicate/conflict evidence from the quarantine ops (prep Section 12.2/16).
+                    quarantine_evidence = []
+                    for op in plan.operations:
+                        if op.type == "quarantine_move":
+                            v = op.verification or {}
+                            ev = v.get("duplicate_evidence") or {}
+                            retained = v.get("retained_counterpart", "") or ""
+                            quarantine_evidence.append({
+                                "original_path": v.get("original_path"),
+                                "retained_counterpart": retained,
+                                "content_hash": ev.get("value"),
+                                "hash_strategy": ev.get("strategy"),
+                                "quarantine_path": v.get("quarantine_path"),
+                                "against": "by-dest" if str(retained).startswith("5-photos-by-dest/") else "mutable",
+                            })
+
                     # Format accumulated summaries
+                    _device_groups = CONFIG.get("camera_time_and_timezone_policy", {}).get("device_groups", {}) or {}
+                    _phones = _device_groups.get("phones", []) or []
+                    _fixed = _device_groups.get("fixed_clock_cameras", []) or []
                     camera_groups = []
                     for k in sorted(camera_groups_acc.keys()):
                         cg = camera_groups_acc[k]
@@ -1173,6 +1201,8 @@ class PlanExecutor:
                         cg["latest_timestamp"] = timestamps[-1] if timestamps else None
                         if "files" in cg:
                             cg["files"] = sorted(cg["files"])
+                        cg["contributing_identity_fields"] = cg.pop("identity", {})
+                        cg["device_class"] = "phone" if k in _phones else ("fixed_clock" if k in _fixed else "unknown")
                         camera_groups.append(cg)
 
                     destination_folders = []
@@ -1182,6 +1212,10 @@ class PlanExecutor:
                         df["earliest_timestamp"] = timestamps[0] if timestamps else None
                         df["latest_timestamp"] = timestamps[-1] if timestamps else None
                         df["camera_groups"] = sorted(list(df["camera_groups"]))
+                        df["conflicts_or_duplicates"] = [
+                            e for e in quarantine_evidence
+                            if str(e["retained_counterpart"]).startswith(k + "/")
+                        ]
                         destination_folders.append(df)
 
                     # Ensure deterministic sorting
@@ -1198,6 +1232,7 @@ class PlanExecutor:
                         "schema_version": 1,
                         "tool": "photos-1-prep",
                         "plan_id": plan.plan_id,
+                        "execution_id": self.execution_id,
                         "cache_fingerprint": cache_fingerprint,
                         "hash_algorithm": "sha256",
                         "folders_scanned": [
@@ -1212,7 +1247,8 @@ class PlanExecutor:
                         "camera_groups": camera_groups,
                         "destination_folders": destination_folders,
                         "diagnostics": {
-                            "duplicates_or_conflicts": plan.blockers,  # We can augment this as we extract actual conflict data later
+                            "duplicates_or_conflicts": quarantine_evidence,
+                            "blockers": plan.blockers,
                             "warnings": plan.warnings,
                             "quarantine_footprint": plan.summary.get("quarantine_footprint"),
                         },
