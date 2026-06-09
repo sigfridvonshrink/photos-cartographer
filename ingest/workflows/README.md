@@ -1,23 +1,32 @@
 # Photos pipeline — geotag and time-correct a shoot from your GPS track
 
-*Engineered for safety: non-destructive, idempotent, and resumable — nothing is deleted, nothing is
-mutated without a validated plan.*
+*Engineered for safety: non-destructive, idempotent, and resumable — no photo is ever lost or
+overwritten, and nothing is mutated without a validated plan.*
 
 If you shoot with a **GPS logger running** (in my case UltraGPSLogger on my mobile) and want your photos
 to end up correctly geotagged afterwards — including the frames the camera never tagged itself —
 this is for you. Drop all your track files into one folder and the pipeline matches each photo
 against the right point across the whole set; you don't sort tracks per shoot.
 
-It does two things, carefully:
+It does three things, carefully:
 
 1. **Prep** — takes an unorganized dump of files and leaves a clean, deduplicated,
    date-organized working set, without ever destroying an original.
 2. **Time/GPS calibration** — resolves each photo to real UTC, **automatically figures out and
    corrects a wrong camera clock** by matching your geotagged frames against the GPX track, then
    geotags everything from the track and renames by corrected local time.
+3. **Library merge** — once a shoot is calibrated and **finalized**, **moves** the staging tree into your
+   permanent library (the merged files leave the workspace; anything that can't be merged stays put for
+   you to deal with),
+   **renaming the incoming file (never a file already in your library)** if a name would clash, recording
+   exactly where every photo ended up, then re-sealing the complete archive and marking the workspace
+   done — after a merge that workspace is **sealed**, and new photos go to a fresh one. (Sealed means
+   sealed: every script then refuses to touch that workspace. If you dump new files into a sealed
+   workspace by mistake, the scripts notice the likely new dump, tell you to start fresh, and leave your
+   files **untouched** for you to move by hand — there's no automatic sweeping of a finished workspace.)
 
-It is built around one assumption: **your photos are irreplaceable, so nothing is deleted and
-nothing is mutated without a validated plan.**
+It is built around one assumption: **your photos are irreplaceable, so no photo is ever lost or
+overwritten, and nothing is mutated without a validated plan.**
 
 ---
 
@@ -69,31 +78,54 @@ The clock correction is the *core mechanism*; the safety and reproducibility aro
 
 - **Plan → validate → execute.** Planning never mutates. Execution applies only a plan that
   re-validated against current state; stale plans are rejected before any change.
-- **No-clobber everywhere.** No operation overwrites the photographic content of an existing file.
+- **No-clobber everywhere — and re-checked at the last moment.** No operation overwrites the
+  photographic content of an existing file. The safety doesn't rest on the plan being right: just
+  before each move, rename, or library placement, the executor *re-verifies* the exact target is free,
+  and the operation is atomic — so an interrupted run leaves either the old file or the new one, never a
+  half-written one.
+- **Everything you typed is sanity-checked.** Before anything runs, the values you authored — config
+  paths, the ZFS snapshot prefix, timezones, coordinates, the filename format, and the decisions in the
+  JSON files — are validated. A bad value (a malformed path, a typo'd timezone, an out-of-range
+  coordinate) is reported as a specific, located error and blocks the run, rather than being silently
+  coerced or half-applied.
 - **Recoverable, not destructive.** Duplicates are *quarantined*, never deleted, and never
   auto-removed; you prune them explicitly when you choose.
 - **Resumable.** A crash mid-run is recoverable — prep re-plans from the filesystem (which is treated
-  as truth), calibration resumes its plan and skips already-applied operations.
-- **Read-only destinations.** Prep treats your curated `5-photos-by-dest` staging tree as read-only —
+  as truth), calibration resumes its plan and skips already-applied operations, and merge finishes moving
+  the files it hadn't yet placed (and never loses one — a file leaves the workspace only once its verified
+  copy is in the library).
+- **Read-only destinations.** Prep treats your curated `6-photos-by-dest` staging tree as read-only —
   it's scanned but never mutated; calibration writes only the corrected metadata/renames you've approved.
+  And when a finalized shoot is merged into your permanent library, **library files are never renamed or
+  overwritten** — on a name clash it's the incoming file that gets renamed, never the file already in your
+  library.
 - **Optional snapshots.** If you're on ZFS you can enable pre-mutation snapshots for clean-slate
   rollback — but they are **strictly optional**; the safety above does not depend on them.
 
-The full design is specified in three documents:
+One boundary is worth stating plainly: this no-clobber guarantee begins at the **first prep run**. It
+cannot protect a file you overwrite *while dumping* — if your own copy command clobbers a same-named file
+in the drop folder (`0-sources/`) before prep ever sees it, that loss is outside the pipeline's view. Dump
+each source into its own subfolder or use a non-overwriting copy, and prep then preserves everything (prep
+`10_photos-1-prep-workflow.md` Section 7.2).
+
+The full design is specified in four documents:
 
 - `10_photos-1-prep-workflow.md` — the prep phase
 - `10_photos-2-time-gps-workflow.md` — the time/GPS calibration phase
-- `10_photos-shared-contract.md` — facts both phases share (lock, config, registry, formats, GPX root,
-  the end-to-end operator loop)
+- `10_photos-3-merge-workflow.md` — the library-merge phase
+- `10_photos-shared-contract.md` — facts the phases share (lock, config, formats, GPX root, the
+  input-validation discipline, the execute-time no-clobber/atomicity rule, the archival package, the
+  end-to-end operator loop, and the workspace lifecycle: initialization, the strays folder, and the
+  sealed terminal state)
 
 ---
 
 ## It works with you, not against you
 
-Safe doesn't mean rigid. Both phases are **idempotent** — they track what they've already done, so every
+Safe doesn't mean rigid. All three phases are **idempotent** — they track what they've already done, so every
 run changes only what actually needs changing:
 
-- **Add a dump later and it does the diff.** Re-running reuses everything already hashed, organized, and
+- **Add a dump later and it does the diff.** Re-running reuses everything already fingerprinted, organized, and
   calibrated; only the genuinely new files get processed. A run over unchanged state is a no-op.
 - **Your decisions stick.** Set a timezone or accept a clock offset once — reruns preserve it; you never
   re-answer a settled question.
@@ -123,12 +155,23 @@ reversed from a saved pre-state; automated GPS is just recomputed; time and file
 since they place the file in the folder structure.) Withdrawing a choice removes its effect, not just its
 re-assertion.
 
-And the decisions are **kept**. When a dump is done, an explicit finalize step bundles an *archival
-package* — the config, the SQLite database, all the decision JSONs, and a freshly generated **full
-transformation log** (`photos-25-complete-log.json`): a per-photo, human-readable JSON record of every
-change each photo underwent from dump to finished calibration, and why. It lands in one known place you
-keep alongside your library — not scattered across per-file sidecars, and not (as with most tools)
-applied and forgotten. Years later you can open one folder and see exactly what you did, and why.
+And the decisions are **kept** — and the record is whole at the end of *every* phase, not just at the
+finish. By the end of **prep** you already have a complete, human-readable audit log of everything prep
+did (`photos-15-prep-log.json`), plus a point-in-time backup image of the SQLite database as of the end of
+prep — a full account even if you never calibrate. By the end of **calibration**, an explicit finalize
+step bundles an *archival package* — the config, the live SQLite database (and the per-phase DB backup
+images), all the decision JSONs, and a consolidated **full transformation log**
+(`photos-25-complete-log.json`): a per-photo record of every change each photo underwent from dump to
+finished calibration, and why (the prep log carried forward and extended, not regenerated). That package
+is **complete on its own** — if you finalize but never merge, you still have the full human-readable audit
+log, the database images, and the job reports, exactly as if the merge phase didn't exist. And by the end
+of **merge**, the same log is **additionally extended** with where each photo finally landed in your
+library, and a final database image is captured — so a single entry traces the whole journey, dump →
+corrected → its exact path in your library. Each phase only *adds* to a record that was already whole, and
+each phase leaves its own retained database snapshot, so you keep a full image of what the pipeline knew at
+every step; nothing earlier is ever lost or rewritten. It lands in one known place you keep alongside your
+library — not scattered across per-file sidecars, and not (as with most tools) applied and forgotten. Years
+later you can open one folder and see exactly what you did, and why.
 
 ---
 
@@ -136,16 +179,34 @@ applied and forgotten. Years later you can open one folder and see exactly what 
 
 This is **built for my own workflow** and open-sourced in case it fits yours. It is opinionated:
 
-- **Linux.** Built and run on Linux; that's where I use it. It's plain Python plus `exiftool` (metadata),
-  ImageMagick (pixel dumping), and `ffmpeg` (video), so it may well work elsewhere, but I don't test on
-  Windows or macOS and make no promises there.
+- **Linux.** Built and run on Linux; that's where I use it. It's plain Python plus `exiftool` (metadata
+  read/write), ImageMagick `identify` (the per-image **content fingerprint**), and `ffmpeg` (the per-video
+  **stream-MD5 fingerprint**). Both fingerprints are taken over *decoded content*, not file bytes, so a
+  photo or video keeps the same identity even when the pipeline rewrites a photo's EXIF or renames a file;
+  non-media files aren't fingerprinted at all (they're set aside as *strays*, below). Whole-file SHA-256 is
+  used only for the pipeline's own JSON/config artifacts, never to identify a photo. It may well work
+  elsewhere, but I don't test on Windows or macOS and make no promises there.
 - **GPS tracks** (GPX) from a logger. You dump **all** your track files into a single GPX folder
   (`gpx_root`) and calibration ingests the whole set, matching each photo against the right point
   across all tracks — no per-shoot sorting. No tracks at all, no geotag-from-track.
-- **A specific workspace layout** — numbered working folders (`0-source` … `5-photos-by-dest`). The
-  workspace is transient working space for one or more dumps, *not* your library: `5-photos-by-dest` is a
-  staging area where a dump is organized and calibrated, then **merged into** your permanent library
-  elsewhere. It's structured to merge in cleanly (e.g. into digiKam), but workspace ≠ library.
+- **A specific workspace layout** — numbered working folders (`0-sources`, `1-strays`,
+  `2-missing-metadata`, `3-redundant-jpgs`, `4-videos-by-date`, `5-photos-by-date`, `6-photos-by-dest`).
+  You drop dumps into **`0-sources`** (the one inbox); prep organizes the media out and moves any
+  non-media into **`1-strays`** (a per-run subfolder, structure preserved, never processed again), leaving
+  `0-sources` empty. The workspace is transient working space for one or more dumps, *not* your library:
+  `6-photos-by-dest` is a staging area where a dump is organized and calibrated, then — by the merge
+  phase — **merged into** your permanent library at a configured `library_root` elsewhere. It's structured
+  to merge in cleanly (e.g. into digiKam), but workspace ≠ library, and the merge never renames or
+  overwrites anything already in the library. A workspace is **single-use through to merge**: once its
+  batch is merged, the workspace is sealed (its archive and database images are kept) and more photos go
+  to a fresh workspace.
+- **First run is forgiving; after that, use the inbox.** You don't have to set anything up before your
+  first dump — drop files straight into a new empty folder and the first prep run *initializes* it
+  (creating the numbered folders and moving your dump into `0-sources` for you), writing an
+  "initialized" marker last so a crash mid-setup just re-runs cleanly. That convenience is a **one-time**
+  thing: once a workspace exists, the inbox is `0-sources`, and a loose file dropped at the workspace root
+  is treated as a misplaced dump and **blocks** until you move it (strictly — even a stray `.DS_Store`).
+  The asymmetry is deliberate: bootstrap once, then there's an inbox and you use it.
 - **`exiftool`** for metadata read/write.
 - **Config lives in the workspace.** Prep seeds a `photos-00-config.json` in the workspace on first run;
   after that it's authoritative and you change settings by hand-editing it. It's hashed and archived with
