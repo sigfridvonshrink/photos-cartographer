@@ -504,7 +504,7 @@ Illustrative per-photo shape (not normative):
     { "phase": "prep", "action": "provisional_rename", "to": "2024-07-03--14-12-08.arw" },
     { "phase": "user", "action": "moved_to_by_dest", "to": "6-photos-by-dest/Belgium/Brussels/…" },
     { "phase": "calibrate", "action": "clock_offset_applied",
-      "offset_seconds": -7187, "because": "camera_group_time_decisions.sony_a6400_serial_123456 (accepted anchor anchor-001)" },
+      "offset_seconds": -7187, "because": "destinations.'Belgium/Brussels'.camera_group_time_decisions.sony_a6400_serial_123456 (accepted anchor anchor-001)" },
     { "phase": "calibrate", "action": "resolved_utc", "value": "2024-07-03T12:12:21Z" },
     { "phase": "calibrate", "action": "timezone_resolved",
       "value": "Europe/Brussels", "because": "destinations.Belgium/Brussels.user_decision" },
