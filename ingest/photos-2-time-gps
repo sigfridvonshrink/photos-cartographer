@@ -18,6 +18,7 @@ import hashlib
 import json
 import math
 import os
+import sqlite3
 import sys
 import xml.etree.ElementTree as ET
 import zoneinfo
@@ -28,7 +29,7 @@ from photos_utils import (
     CONFIG, CONTROL_DIR, config_path, handoff_path, guard_path, is_sealed,
     validate_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
     selected_gpx_root, CAMERA_IDENTITY_FIELDS, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION,
-    json_dependency, write_json_artifact,
+    json_dependency, write_json_artifact, db_path, ensure_control_dir,
     WorkspaceLock,
 )
 
@@ -297,9 +298,124 @@ def infer_anchor_proposal(frames, gpx, cfg):
     }
 
 
+# ============================================================================
+# Stage 7 — resolved UTC per file (calibration §22). Pure computation + the
+# calibration-owned SQLite cache and its deterministic fingerprint (§22.1).
+# ============================================================================
+
+def _parse_iso_offset(s):
+    """A UTC offset like '+02:00' / '-05:30' as seconds, or None if malformed."""
+    if not isinstance(s, str) or len(s) < 6 or s[0] not in "+-":
+        return None
+    try:
+        hh, mm = s[1:].split(":")[:2]
+        secs = int(hh) * 3600 + int(mm) * 60
+    except (ValueError, IndexError):
+        return None
+    return -secs if s[0] == "-" else secs
+
+
+def _local_to_utc(naive, tz):
+    """Interpret a naive local datetime as wall time in IANA `tz` -> aware UTC (DST-correct)."""
+    return naive.replace(tzinfo=zoneinfo.ZoneInfo(tz)).astimezone(timezone.utc)
+
+
+def compute_resolved_utc(files, groups, artifact):
+    """Resolve every by-dest photo to real UTC from the completed time decisions (§22). Camera
+    groups use their (group, destination) effective offset (absolute camera->UTC correction);
+    smartphones use their own EXIF offset, else the destination timezone. Returns per-file rows
+    (the §22 fields), path-sorted and deterministic."""
+    dests = artifact.get("destinations") or {}
+    rows = []
+    for f in sorted(files, key=lambda x: x["relative_path"]):
+        dest, key = f["destination"], f["camera_group_key"]
+        d = dests.get(dest, {})
+        tz = (d.get("destination_timezone") or {}).get("effective_iana_timezone") or ""
+        cls = (groups.get(key) or {}).get("camera_group_class")
+        naive = _parse_camera_naive(f.get("source_naive_time"))
+        resolved, status, rule, offset_used, prov = None, "unresolved", "missing_timestamp", None, None
+        if naive is not None:
+            if cls == "camera":
+                eff = ((d.get("camera_group_time_decisions") or {}).get(key) or {}).get("effective_time_anchor")
+                if isinstance(eff, dict) and "offset_seconds" in eff:
+                    offset_used = eff["offset_seconds"]
+                    resolved = naive + timedelta(seconds=offset_used)
+                    status, rule, prov = "valid", "camera_group_offset", eff.get("source")
+                else:
+                    status, rule = "unresolved", "offset_missing"
+            else:                                       # smartphone (unknown groups were hard-stopped)
+                native_off = _parse_iso_offset((f.get("raw_times") or {}).get("OffsetTimeOriginal"))
+                if native_off is not None:
+                    offset_used, resolved = native_off, naive - timedelta(seconds=native_off)
+                    status, rule = "valid", "smartphone_native_offset"
+                elif tz:
+                    resolved = _local_to_utc(naive, tz)
+                    status, rule, prov = "valid", "destination_timezone", tz
+                else:
+                    status, rule = "unresolved", "timezone_missing"
+        rows.append({
+            "relative_path": f["relative_path"], "destination_path": dest, "destination_timezone": tz,
+            "camera_group": key, "time_decision_scope": f"{key}|{dest}",
+            "source_naive_time": f.get("source_naive_time"), "source_time_provenance": f.get("source_time_tag"),
+            "time_rule_used": rule, "utc_offset_used": offset_used,
+            "resolved_utc": (resolved.strftime("%Y-%m-%dT%H:%M:%SZ") if resolved is not None else None),
+            "resolved_utc_status": status, "resolved_utc_provenance": prov,
+        })
+    return rows
+
+
+def resolved_utc_fingerprint(rows, input_fingerprints):
+    """§22.1: a SHA-256 over the path-sorted per-file resolved facts plus the input fingerprints
+    that produced them — stable across unchanged-input reruns, re-verifiable downstream like a JSON
+    artifact's SHA-256."""
+    parts = []
+    for r in sorted(rows, key=lambda x: x["relative_path"]):
+        parts.append("|".join(str(r.get(k)) for k in
+                     ("relative_path", "resolved_utc", "resolved_utc_status",
+                      "time_rule_used", "utc_offset_used", "source_time_provenance")))
+    parts.append("INPUTS|" + "|".join(f"{k}={input_fingerprints[k]}" for k in sorted(input_fingerprints)))
+    return sha256_text("\n".join(parts))
+
+
+class CalibrationCache:
+    """Calibration's own region of the shared photos-00-ingest.db (shared contract §13.4) — the
+    resolved-UTC cache here, the manual-GPS pre-state ledger later. Disjoint from prep's tables."""
+
+    COLUMNS = ["relative_path", "destination_path", "destination_timezone", "camera_group",
+               "time_decision_scope", "source_naive_time", "source_time_provenance", "time_rule_used",
+               "utc_offset_used", "resolved_utc", "resolved_utc_status", "resolved_utc_provenance"]
+
+    def __init__(self, ws):
+        ensure_control_dir(ws)
+        self.conn = sqlite3.connect(db_path(ws))
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS resolved_utc_cache ("
+            "relative_path TEXT PRIMARY KEY, destination_path TEXT, destination_timezone TEXT, "
+            "camera_group TEXT, time_decision_scope TEXT, source_naive_time TEXT, "
+            "source_time_provenance TEXT, time_rule_used TEXT, utc_offset_used INTEGER, "
+            "resolved_utc TEXT, resolved_utc_status TEXT, resolved_utc_provenance TEXT)")
+        self.conn.commit()
+
+    def replace_all(self, rows):
+        with self.conn:
+            self.conn.execute("DELETE FROM resolved_utc_cache")
+            self.conn.executemany(
+                f"INSERT INTO resolved_utc_cache ({','.join(self.COLUMNS)}) "
+                f"VALUES ({','.join('?' * len(self.COLUMNS))})",
+                [[r.get(c) for c in self.COLUMNS] for r in rows])
+
+    def get_rows(self):
+        cur = self.conn.execute(
+            f"SELECT {','.join(self.COLUMNS)} FROM resolved_utc_cache ORDER BY relative_path")
+        return [dict(zip(self.COLUMNS, row)) for row in cur.fetchall()]
+
+    def close(self):
+        self.conn.close()
+
+
 class CalibrationWorkflow:
-    """Stages 1–6: validate the workspace, build the in-memory model (by-dest files, GPX index,
-    classified camera groups), then produce photos-21-time-decisions.json — the first artifact."""
+    """Stages 1–7: validate the workspace, build the model, produce photos-21-time-decisions.json,
+    and (when decisions are complete) compute & persist resolved UTC per file."""
 
     def __init__(self, workspace_root: str):
         self.workspace_root = workspace_root
@@ -823,6 +939,27 @@ def main():
                       "Edit the user_decision fields and re-run.")
             else:
                 print(f"Wrote {TIME_DECISIONS_ARTIFACT}: status=complete — all time decisions resolved.")
+
+                # Stage 7: time decisions are complete -> compute & persist resolved UTC per file
+                # (§22) and report the deterministic cache fingerprint downstream stages depend on.
+                rows = compute_resolved_utc(files, groups, artifact)
+                input_fps = {
+                    "camera_time_policy_fingerprint": artifact["depends_on"]["camera_time_policy_fingerprint"],
+                    "camera_group_key_version": CAMERA_GROUP_KEY_VERSION,
+                    "photos_21_sha256": sha256_file(tdp),
+                    "prep_cache_fingerprint": (wf.handoff or {}).get("cache_fingerprint"),
+                    "metadata_field_set_version": FIELD_SET_VERSION,
+                    "gpx_fingerprint": gpx.fingerprint,
+                }
+                cache = CalibrationCache(workspace_root)
+                try:
+                    cache.replace_all(rows)
+                finally:
+                    cache.close()
+                fp = resolved_utc_fingerprint(rows, input_fps)
+                n_valid = sum(1 for r in rows if r["resolved_utc_status"] == "valid")
+                print(f"Resolved UTC for {n_valid}/{len(rows)} photo(s) "
+                      f"(resolved_utc_cache_fingerprint {fp[:12]}).")
     finally:
         run_lock.release()
 
