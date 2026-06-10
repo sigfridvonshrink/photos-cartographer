@@ -1279,6 +1279,15 @@ class WorkspacePrepWorkflow:
                 return name
             idx += 1
 
+    def _flag_dir_symlinks(self, root, dir_names, blockers):
+        """Flag any subdirectory symlink encountered during a walk as a forbidden escape. os.walk does
+        not descend into them (followlinks=False), so without this they would be silently ignored
+        rather than blocked — the spec forbids symlinks among managed files (prep §9)."""
+        for dd in dir_names:
+            p = os.path.join(root, dd)
+            if os.path.islink(p):
+                blockers.append(f"Forbidden symlink detected: {os.path.relpath(p, self.workspace_root)}")
+
     def plan(self) -> Plan:
         operations = []
         blockers = []
@@ -1317,6 +1326,16 @@ class WorkspacePrepWorkflow:
             # managed folders are never inventoried as base dumps (managed are walked below).
             if is_dir and (f.startswith('.') or f == _strays or f in _managed_set):
                 continue
+            # A symlink surviving the skip above is a forbidden dump entry — flag it BEFORE the
+            # isdir-gated walk. os.path.isdir() FOLLOWS a directory symlink, so testing isdir first
+            # (the old order) let os.walk(path) traverse the link's external target and inventory
+            # (and plan a move for) files outside the workspace — a pipeline escape the spec forbids.
+            # Checking islink first blocks it cleanly at plan time. (Dot-symlinks are ignored like
+            # any dotfile: left in place, never followed.)
+            if os.path.islink(path):
+                if not f.startswith('.'):
+                    blockers.append(f"Forbidden symlink detected: {f}")
+                continue
             # Everything else at the base is a dump entry.
             if not self._initializing:
                 # Initialized workspace (prep Section 6.2 item 2): the base holds only the managed
@@ -1329,6 +1348,7 @@ class WorkspacePrepWorkflow:
                 continue  # dotfiles are excluded from the init move (left in place)
             if is_dir:
                 for root, _dirs, filenames in os.walk(path):
+                    self._flag_dir_symlinks(root, _dirs, blockers)   # nested dir symlinks are forbidden too
                     _dirs[:] = [dd for dd in _dirs if not dd.startswith('.')]
                     for fname in filenames:
                         if fname.startswith('.'):
@@ -1339,14 +1359,18 @@ class WorkspacePrepWorkflow:
                             blockers.append(f"Forbidden symlink detected: {rel_path}")
                         else:
                             files.append(rel_path)
-            elif os.path.islink(path):
-                blockers.append(f"Forbidden symlink detected: {f}")
             else:
                 files.append(f)
         for d in self.managed_folders:
             folder_path = os.path.join(self.workspace_root, d)
+            # A managed folder that is itself a symlink would let os.walk traverse its external
+            # target (the same escape as a root dump symlink) — block it before walking.
+            if os.path.islink(folder_path):
+                blockers.append(f"Forbidden symlink detected: {d}")
+                continue
             if os.path.isdir(folder_path):
-                for root, _, filenames in os.walk(folder_path):
+                for root, _dirs, filenames in os.walk(folder_path):
+                    self._flag_dir_symlinks(root, _dirs, blockers)   # nested dir symlinks are forbidden too
                     for fname in filenames:
                         if not fname.startswith('.'):
                             path = os.path.join(root, fname)
