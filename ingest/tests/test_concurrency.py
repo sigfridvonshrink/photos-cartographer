@@ -15,6 +15,7 @@ import photos_utils as utils
 def workspace(tmp_path):
     root = str(tmp_path)
     os.makedirs(os.path.join(root, "0-sources"))
+    os.makedirs(os.path.join(root, "1-strays"))
     os.makedirs(os.path.join(root, "2-missing-metadata"))
     os.makedirs(os.path.join(root, "3-redundant-jpgs"))
     os.makedirs(os.path.join(root, "4-videos-by-date"))
