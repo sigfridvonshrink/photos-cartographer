@@ -363,6 +363,30 @@ def test_nested_directory_symlink_in_managed_folder_blocked(tmp_path, monkeypatc
     assert any("Forbidden symlink detected" in b and "nested" in b for b in plan.blockers), plan.blockers
 
 
+def test_gpx_root_inside_managed_tree_is_skipped(tmp_path, monkeypatch):
+    """Defensive GPX skip (shared contract §8.2): a gpx_root misconfigured to resolve inside a managed
+    folder must be skipped during scanning so the GPX tracks are never organized / swept to strays —
+    while ordinary media in the same managed folder is still organized."""
+    import photos_utils as utils
+    monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
+    monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image",
+                        lambda p: {"status": "valid", "value": "sig-" + os.path.basename(p),
+                                   "strategy": "image-content-hash-v1", "engine_version": "t"})
+    photos_ingest.CONFIG["jobs"] = 1
+    ws = _empty_initialized_ws(tmp_path)
+    gpx_dir = ws / "0-sources" / "gpx_tracks"; gpx_dir.mkdir()
+    (gpx_dir / "track1.gpx").write_text("<gpx/>")
+    (ws / "0-sources" / "photo.jpg").write_bytes(b"P")            # normal media — still organized
+    monkeypatch.setitem(photos_ingest.CONFIG, "gpx_root", str(gpx_dir))   # misconfigured inside 0-6
+
+    cache = photos_ingest.WorkspaceCache(str(ws), in_memory=True)
+    plan = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
+    cache.close()
+    assert not any(op.source and "track1.gpx" in (op.source or "") for op in plan.operations), \
+        "the misconfigured-in-tree gpx_root subtree must be skipped, not organized"
+    assert any(op.source and op.source.endswith("photo.jpg") for op in plan.operations)
+
+
 def test_deterministic_temp_names_with_existing(tmp_path, monkeypatch):
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)

@@ -25,7 +25,7 @@ import errno
 # CONFIGURATION BLOCK
 # ==============================================================================
 sys.path.insert(0, os.path.dirname(__file__))
-from photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority
+from photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, selected_gpx_root
 from photos_utils import (_move_no_clobber, _move_link_unlink, _get_renameat2,
                           WorkspaceCache, WorkspaceLock, ContentHasher,
                           CACHE_SCHEMA_VERSION, FINGERPRINT_ALGORITHM_VERSION)
@@ -1319,6 +1319,12 @@ class WorkspacePrepWorkflow:
         _managed_set = set(self.managed_folders)
         _strays = folder_name('strays')
         _sources = folder_name('sources')
+        # Defensive GPX skip (shared contract §8.2 / prep §3): gpx_root resolves OUTSIDE the managed
+        # 0-6 tree by design (default `.photos-ingest/gpx/`, already skipped as a dotdir). But should
+        # it be MISCONFIGURED to resolve inside a managed folder, prep must skip that subtree so the
+        # GPX tracks are never organized/swept to 1-strays. Resolved to a realpath so a relative or
+        # symlinked gpx_root matches; empty/outside-the-tree resolves to a no-op.
+        _gpx_skip = selected_gpx_root()
         for f in os.listdir(self.workspace_root):
             path = os.path.join(self.workspace_root, f)
             is_dir = os.path.isdir(path)
@@ -1368,9 +1374,15 @@ class WorkspacePrepWorkflow:
             if os.path.islink(folder_path):
                 blockers.append(f"Forbidden symlink detected: {d}")
                 continue
+            # gpx_root misconfigured to BE this managed folder — skip it wholesale (§8.2).
+            if _gpx_skip and os.path.realpath(folder_path) == _gpx_skip:
+                continue
             if os.path.isdir(folder_path):
                 for root, _dirs, filenames in os.walk(folder_path):
                     self._flag_dir_symlinks(root, _dirs, blockers)   # nested dir symlinks are forbidden too
+                    if _gpx_skip:                                    # prune a gpx_root subtree nested here (§8.2)
+                        _dirs[:] = [dd for dd in _dirs
+                                    if os.path.realpath(os.path.join(root, dd)) != _gpx_skip]
                     for fname in filenames:
                         if not fname.startswith('.'):
                             path = os.path.join(root, fname)
