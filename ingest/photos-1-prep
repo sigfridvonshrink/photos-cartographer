@@ -25,7 +25,7 @@ import errno
 # CONFIGURATION BLOCK
 # ==============================================================================
 sys.path.insert(0, os.path.dirname(__file__))
-from photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority
+from photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, selected_gpx_root
 from photos_utils import (_move_no_clobber, _move_link_unlink, _get_renameat2,
                           WorkspaceCache, WorkspaceLock, ContentHasher,
                           CACHE_SCHEMA_VERSION, FINGERPRINT_ALGORITHM_VERSION)
@@ -71,21 +71,6 @@ PLAN_SCHEMA_VERSION = 1
 # SCHEMAS & DATA MODELS
 
 # ==============================================================================
-
-@dataclass
-class InventoryRecord:
-    inventory_id: str
-    root_kind: str  # "workspace" | "digikam"
-    stage: str      # "source" | "photos_by_dest" | "library" | "other"
-    absolute_path: str
-    relative_path: str
-    filename: str
-    extension: str
-    media_class: str # "raw" | "image" | "video" | "other"
-    size: int
-    mtime_ns: int
-    device: int
-    inode: int
 
 @dataclass
 class Fingerprint:
@@ -167,13 +152,6 @@ class Journal:
 
 class RootGuard:
     @staticmethod
-    def check_sentinel(workspace_root: str):
-        from photos_utils import guard_path
-        guard = guard_path(workspace_root)
-        if not os.path.exists(guard):
-            raise RuntimeError(f"Workspace guard missing: expected {guard}. Are you in the correct workspace root?")
-
-    @staticmethod
     def resolve_and_check_path(base_dir: str, target_path: str, must_be_relative: bool = True) -> str:
         """
         Resolves a path safely.
@@ -202,75 +180,6 @@ class RootGuard:
             raise ValueError(f"Path escape detected: {target_path} resolves outside {base_dir}")
 
         return resolved_path
-
-    @staticmethod
-    def check_case_insensitive_conflict(existing_paths: set, new_path: str) -> None:
-        """
-        Checks for case-insensitive conflicts against a set of known lowercased paths.
-        Raises ValueError if a conflict is detected.
-        (Retained for phase 2 safety core testing support).
-        """
-        lower_new = new_path.lower()
-        if lower_new in existing_paths:
-            raise ValueError(f"Case-insensitive path conflict detected for: {new_path}")
-        existing_paths.add(lower_new)
-
-class InventoryScanner:
-    @classmethod
-    def scan_workspace(cls, root_dir: str) -> Dict[str, InventoryRecord]:
-        inventory = {}
-        for root, dirs, files in os.walk(root_dir):
-            # Skip every dot-directory wholesale: .photos-ingest/, .photos-ingest-quarantine/,
-            # .photos-ingest-backups/, .git/, and the default gpx_root (.photos-ingest/gpx/).
-            # Nothing pipeline-related lives outside a dot path, so this one rule replaces the
-            # old per-filename allow-list (shared contract Section 5 / prep Section 3).
-            dirs[:] = [d for d in dirs if not d.startswith('.')]
-
-            for filename in files:
-                if filename.startswith('.'):
-                    continue
-
-                # Ignore __std.* for logical inventory semantics across both workspace and library
-                if filename.startswith('__std.'):
-                    continue
-
-                rel_path = os.path.relpath(os.path.join(root, filename), root_dir)
-                try:
-                    record = cls.scan_file(root_dir, rel_path, "workspace", "scan")
-                    inventory[rel_path] = record
-                except FileNotFoundError:
-                    pass
-        return inventory
-
-    @staticmethod
-    def scan_file(root_dir: str, rel_path: str, root_kind: str, stage: str) -> InventoryRecord:
-        """
-        Captures the immutable file state of a single file.
-        """
-        abs_path = os.path.join(root_dir, rel_path)
-        stat = os.stat(abs_path)
-
-        filename = os.path.basename(abs_path)
-        ext = os.path.splitext(filename)[1].lower().lstrip('.')
-
-        # Simple media class detection for prep organization
-        from photos_utils import media_class_for_ext
-        media_class = media_class_for_ext(ext)
-
-        return InventoryRecord(
-            inventory_id=f"inv-{uuid.uuid4().hex[:8]}",
-            root_kind=root_kind,
-            stage=stage,
-            absolute_path=abs_path,
-            relative_path=rel_path,
-            filename=filename,
-            extension=ext,
-            media_class=media_class,
-            size=stat.st_size,
-            mtime_ns=stat.st_mtime_ns,
-            device=stat.st_dev,
-            inode=stat.st_ino
-        )
 
 
 import concurrent.futures
@@ -416,32 +325,6 @@ class OperationPlanner:
         canonical_rows = sorted(rows, key=lambda r: r["relative_path"])
         return OperationPlanner._hash_dict(canonical_rows).value
 
-    @classmethod
-    def create_dummy_plan(cls, command: str, workspace_root: str, instruction_file: Optional[str] = None, effective_config: Optional[Dict[str, Any]] = None) -> Plan:
-        """
-        Creates a dummy plan for testing the safety core.
-        (Retained strictly for test_phase2_safety_core.py compatibility).
-        """
-        instruction_fingerprints = {}
-        if instruction_file and os.path.exists(instruction_file):
-            rel_path = os.path.relpath(instruction_file, workspace_root)
-            instruction_fingerprints[rel_path] = cls._hash_file(instruction_file)
-
-        return Plan(
-            plan_version=PLAN_SCHEMA_VERSION,
-            plan_id=f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:6]}",
-            command=command,
-            created_at=datetime.now(timezone.utc).isoformat(),
-            workspace_root=workspace_root,
-            digikam_root=None,
-            config_fingerprint=cls._hash_dict(effective_config if effective_config is not None else CONFIG),
-            instruction_fingerprints=instruction_fingerprints,
-            locks_required=["workspace"],
-            summary={"message": "Dummy plan for testing"},
-            blockers=[],
-            warnings=[],
-            operations=[]
-        )
 
 class PlanValidator:
     @staticmethod
@@ -1319,6 +1202,12 @@ class WorkspacePrepWorkflow:
         _managed_set = set(self.managed_folders)
         _strays = folder_name('strays')
         _sources = folder_name('sources')
+        # Defensive GPX skip (shared contract §8.2 / prep §3): gpx_root resolves OUTSIDE the managed
+        # 0-6 tree by design (default `.photos-ingest/gpx/`, already skipped as a dotdir). But should
+        # it be MISCONFIGURED to resolve inside a managed folder, prep must skip that subtree so the
+        # GPX tracks are never organized/swept to 1-strays. Resolved to a realpath so a relative or
+        # symlinked gpx_root matches; empty/outside-the-tree resolves to a no-op.
+        _gpx_skip = selected_gpx_root()
         for f in os.listdir(self.workspace_root):
             path = os.path.join(self.workspace_root, f)
             is_dir = os.path.isdir(path)
@@ -1368,9 +1257,15 @@ class WorkspacePrepWorkflow:
             if os.path.islink(folder_path):
                 blockers.append(f"Forbidden symlink detected: {d}")
                 continue
+            # gpx_root misconfigured to BE this managed folder — skip it wholesale (§8.2).
+            if _gpx_skip and os.path.realpath(folder_path) == _gpx_skip:
+                continue
             if os.path.isdir(folder_path):
                 for root, _dirs, filenames in os.walk(folder_path):
                     self._flag_dir_symlinks(root, _dirs, blockers)   # nested dir symlinks are forbidden too
+                    if _gpx_skip:                                    # prune a gpx_root subtree nested here (§8.2)
+                        _dirs[:] = [dd for dd in _dirs
+                                    if os.path.realpath(os.path.join(root, dd)) != _gpx_skip]
                     for fname in filenames:
                         if not fname.startswith('.'):
                             path = os.path.join(root, fname)
