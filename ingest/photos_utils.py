@@ -2,7 +2,13 @@ import os
 import json
 import hashlib
 import re
-from datetime import datetime
+from datetime import datetime, timezone
+import sqlite3
+import ctypes
+import errno
+import fcntl
+import contextlib
+import socket
 
 # --- Managed media folders (prep Section 3). The NAMES are config (single source of truth,
 # seeded into photos-00-config.json); the ROLES, their dedup-retention order, which role is
@@ -968,3 +974,384 @@ class ProgressCoordinator:
               f"{qf.get('total_bytes', 0)} bytes across {qf.get('plan_id_dirs', 0)} plan(s) "
               f"(never auto-deleted)", file=out)
         print("========================", file=out)
+
+
+# ============================================================================
+# Shared workspace infrastructure (extracted from photos-1-prep so calibration
+# can import it too). The DB and lock are phase-neutral: prep and calibration
+# share one photos-00-ingest.db and one whole-run lock (shared contract §2/§13.4).
+# ============================================================================
+
+# SQLite cache schema version and content-hash scheme version, recorded in the cache `meta`
+# table, the journal, and the handoff depends_on so a stale/foreign cache or journal is
+# detectable downstream (prep Section 5). The per-hash engine binding (e.g. ImageMagick
+# version) is carried separately in each content hash's engine_version.
+CACHE_SCHEMA_VERSION = 1
+FINGERPRINT_ALGORITHM_VERSION = "1"
+
+# --- Atomic no-clobber move (prep Section 4 / 14.3.4) -------------------------
+# No-clobber is enforced at plan time (the clobber simulation) AND here at execution
+# time, atomically, so a destination that appears between validation and the move (or a
+# clobber planning somehow missed) can never overwrite an irreplaceable original.
+_RENAMEAT2 = None            # cached libc.renameat2, or False if unavailable
+_AT_FDCWD = -100
+_RENAME_NOREPLACE = 1
+
+def _get_renameat2():
+    global _RENAMEAT2
+    if _RENAMEAT2 is None:
+        try:
+            libc = ctypes.CDLL(None, use_errno=True)
+            fn = libc.renameat2
+            fn.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+            fn.restype = ctypes.c_int
+            _RENAMEAT2 = fn
+        except (OSError, AttributeError):
+            _RENAMEAT2 = False
+    return _RENAMEAT2
+
+def _move_link_unlink(src: str, dest: str):
+    """Portable same-filesystem no-clobber move: hardlink (fails if dest exists, never
+    overwrites) then unlink the source. Fallback when renameat2 is unavailable."""
+    os.link(src, dest)   # raises FileExistsError if dest exists
+    os.unlink(src)
+
+def _move_no_clobber(src: str, dest: str):
+    """Atomically move src -> dest, failing (FileExistsError) instead of overwriting an
+    existing destination. Race-free: Linux renameat2(RENAME_NOREPLACE) is a single syscall;
+    elsewhere we fall back to an atomic hardlink+unlink."""
+    fn = _get_renameat2()
+    if fn:
+        res = fn(_AT_FDCWD, os.fsencode(src), _AT_FDCWD, os.fsencode(dest), _RENAME_NOREPLACE)
+        if res == 0:
+            return
+        eno = ctypes.get_errno()
+        if eno == errno.EEXIST:
+            raise FileExistsError(f"Destination exists: {dest}")
+        if eno not in (errno.ENOSYS, errno.EINVAL, errno.ENOTSUP):
+            raise OSError(eno, os.strerror(eno), dest)
+        # renameat2 not supported on this kernel/fs — fall through to the fallback.
+    _move_link_unlink(src, dest)
+
+class WorkspaceCache:
+    """
+    SQLite accelerator cache for inventory, metadata, and hashes.
+    """
+    def __init__(self, workspace_root: str, db_name: str = None, in_memory: bool = False, read_only: bool = False):
+        from photos_utils import db_path as _db_path
+        self.in_memory = in_memory
+        self.read_only = read_only
+        self.db_path = os.path.join(workspace_root, db_name) if db_name else _db_path(workspace_root)
+
+        if in_memory:
+            self.conn = sqlite3.connect(":memory:", check_same_thread=False)
+            self._init_db()
+        else:
+            if read_only:
+                if not os.path.exists(self.db_path):
+                    # Connect to in-memory as a dummy fallback if it doesn't exist to prevent creating a file
+                    self.conn = sqlite3.connect(":memory:", check_same_thread=False)
+                    self._init_db()
+                else:
+                    self.conn = sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True, check_same_thread=False)
+            else:
+                from photos_utils import ensure_control_dir
+                ensure_control_dir(workspace_root)
+                self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
+                self._init_db()
+
+        self.conn.row_factory = sqlite3.Row
+        self._lock = threading.Lock()
+        self._batch_depth = 0  # >0 while inside transaction(): defer commits to one batch
+
+    def _init_db(self):
+        with self.conn:
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS file_cache (
+                    relative_path TEXT PRIMARY KEY,
+                    absolute_path TEXT,
+                    size INTEGER,
+                    mtime_ns INTEGER,
+                    inode INTEGER,
+                    media_class TEXT,
+                    hash TEXT,
+                    content_hash TEXT,
+                    last_seen_ns INTEGER
+                )
+            """)
+            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_hash ON file_cache(hash)")
+            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_content_hash ON file_cache(content_hash)")
+
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS metadata_cache (
+                    relative_path TEXT PRIMARY KEY,
+                    size INTEGER,
+                    mtime_ns INTEGER,
+                    content_hash TEXT,
+                    extractor TEXT,
+                    extractor_version TEXT,
+                    field_set_version INTEGER,
+                    extraction_options_fingerprint TEXT,
+                    metadata_schema_version INTEGER,
+                    camera_group_key_version INTEGER,
+                    camera_group_key TEXT,
+                    has_native_gps INTEGER,
+                    has_timestamp INTEGER,
+                    parsed_json TEXT,
+                    raw_payload TEXT,
+                    extraction_status TEXT,
+                    extraction_error TEXT,
+                    FOREIGN KEY(relative_path) REFERENCES file_cache(relative_path) ON DELETE CASCADE
+                )
+            """)
+
+            # Perform idempotent migration for existing databases missing phase 8C columns
+            cur = self.conn.cursor()
+            cur.execute("PRAGMA table_info(metadata_cache)")
+            columns = {row[1] for row in cur.fetchall()}
+
+            missing_columns = []
+            if "metadata_schema_version" not in columns:
+                missing_columns.append("metadata_schema_version INTEGER")
+            if "camera_group_key_version" not in columns:
+                missing_columns.append("camera_group_key_version INTEGER")
+            if "extraction_status" not in columns:
+                missing_columns.append("extraction_status TEXT")
+            if "extraction_error" not in columns:
+                missing_columns.append("extraction_error TEXT")
+
+            for col in missing_columns:
+                self.conn.execute(f"ALTER TABLE metadata_cache ADD COLUMN {col}")
+
+            # Cache identity/version row (prep Section 5). Seeded once and kept, so an older
+            # DB retains its recorded version and a future schema bump becomes detectable.
+            self.conn.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)")
+            self.conn.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)",
+                              ("cache_schema_version", str(CACHE_SCHEMA_VERSION)))
+            self.conn.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)",
+                              ("fingerprint_algorithm_version", FINGERPRINT_ALGORITHM_VERSION))
+
+    def get_meta(self, key: str) -> Optional[str]:
+        with self._lock:
+            cur = self.conn.cursor()
+            cur.execute("SELECT value FROM meta WHERE key = ?", (key,))
+            row = cur.fetchone()
+            return row[0] if row else None
+
+    def get_all_meta(self) -> Dict[str, str]:
+        with self._lock:
+            cur = self.conn.cursor()
+            cur.execute("SELECT key, value FROM meta")
+            return {row[0]: row[1] for row in cur.fetchall()}
+
+    def get_file(self, relative_path: str) -> Optional[sqlite3.Row]:
+        with self._lock:
+            cur = self.conn.cursor()
+            cur.execute("SELECT * FROM file_cache WHERE relative_path = ?", (relative_path,))
+            return cur.fetchone()
+
+    def get_metadata(self, relative_path: str) -> Optional[sqlite3.Row]:
+        with self._lock:
+            cur = self.conn.cursor()
+            cur.execute("SELECT * FROM metadata_cache WHERE relative_path = ?", (relative_path,))
+            return cur.fetchone()
+
+    def get_all_files(self) -> Dict[str, dict]:
+        with self._lock:
+            cur = self.conn.cursor()
+            cur.execute("SELECT * FROM file_cache")
+            return {row['relative_path']: dict(row) for row in cur.fetchall()}
+
+    def get_all_metadata(self) -> Dict[str, dict]:
+        with self._lock:
+            cur = self.conn.cursor()
+            cur.execute("SELECT * FROM metadata_cache")
+            return {row['relative_path']: dict(row) for row in cur.fetchall()}
+
+    def begin_batch(self):
+        """Defer per-op commits; effects then commit once via commit_batch (§14.3.7)."""
+        self._batch_depth += 1
+
+    def commit_batch(self):
+        if self._batch_depth > 0:
+            self._batch_depth -= 1
+        if self._batch_depth == 0:
+            with self._lock:
+                self.conn.commit()
+
+    def rollback_batch(self):
+        if self._batch_depth > 0:
+            self._batch_depth -= 1
+        if self._batch_depth == 0:
+            with self._lock:
+                self.conn.rollback()
+
+    @contextlib.contextmanager
+    def transaction(self):
+        """Batch post-verification cache effects into one transaction (prep Section 14.3.7).
+        While active, the write methods skip their per-op commit; this commits once on a clean
+        exit and rolls back on exception. Reference-counted, so nesting is safe."""
+        self.begin_batch()
+        try:
+            yield
+        except BaseException:
+            self.rollback_batch()
+            raise
+        else:
+            self.commit_batch()
+
+    @contextlib.contextmanager
+    def _write_ctx(self):
+        """Per-op commit by default; inside transaction() defer to the batch's single commit."""
+        if self._batch_depth > 0:
+            with self._lock:
+                yield
+        else:
+            with self._lock, self.conn:
+                yield
+
+    def remove_file(self, relative_path: str):
+        with self._write_ctx():
+            self.conn.execute("DELETE FROM file_cache WHERE relative_path = ?", (relative_path,))
+            self.conn.execute("DELETE FROM metadata_cache WHERE relative_path = ?", (relative_path,))
+
+    def rename_file(self, old_rel_path: str, new_rel_path: str, new_abs_path: str):
+        # Retained for executor rename support and shared index tests
+        with self._write_ctx():
+            self.conn.execute("UPDATE file_cache SET relative_path = ?, absolute_path = ? WHERE relative_path = ?", (new_rel_path, new_abs_path, old_rel_path))
+            self.conn.execute("UPDATE metadata_cache SET relative_path = ? WHERE relative_path = ?", (new_rel_path, old_rel_path))
+
+    def upsert_file(self, data: Dict[str, Any]):
+        with self._write_ctx():
+            self.conn.execute("""
+                INSERT INTO file_cache (
+                    relative_path, absolute_path, size, mtime_ns, inode, media_class,
+                    hash, content_hash, last_seen_ns
+                ) VALUES (
+                    :relative_path, :absolute_path, :size, :mtime_ns, :inode, :media_class,
+                    :hash, :content_hash, :last_seen_ns
+                )
+                ON CONFLICT(relative_path) DO UPDATE SET
+                    absolute_path = excluded.absolute_path,
+                    size = excluded.size,
+                    mtime_ns = excluded.mtime_ns,
+                    inode = excluded.inode,
+                    media_class = excluded.media_class,
+                    hash = excluded.hash,
+                    content_hash = excluded.content_hash,
+                    last_seen_ns = excluded.last_seen_ns
+            """, data)
+
+            # Conditionally upsert metadata if metadata keys are provided
+            if 'metadata' in data and data['metadata']:
+                md = data['metadata']
+                md_row = {
+                    "relative_path": data["relative_path"],
+                    "size": data["size"],
+                    "mtime_ns": data["mtime_ns"],
+                    "content_hash": data.get("content_hash"),
+                    "extractor": md.get("extractor", "exiftool"),
+                    "extractor_version": md.get("extractor_version", "unknown"),
+                    "field_set_version": md.get("field_set_version", 1),
+                    "extraction_options_fingerprint": md.get("extraction_options_fingerprint", "unknown"),
+                    "metadata_schema_version": md.get("metadata_schema_version", 1),
+                    "camera_group_key_version": md.get("camera_group_key_version", 1),
+                    "camera_group_key": md.get("camera_group_key", "unknown"),
+                    "has_native_gps": 1 if md.get("has_native_gps") else 0,
+                    "has_timestamp": 1 if md.get("has_timestamp") else 0,
+                    "parsed_json": md.get("parsed_json", "{}"),
+                    "raw_payload": md.get("raw_payload", "{}"),
+                    "extraction_status": md.get("extraction_status", "extracted_ok"),
+                    "extraction_error": md.get("extraction_error", None)
+                }
+                self.conn.execute("""
+                    INSERT INTO metadata_cache (
+                        relative_path, size, mtime_ns, content_hash, extractor,
+                        extractor_version, field_set_version, extraction_options_fingerprint,
+                        metadata_schema_version, camera_group_key_version,
+                        camera_group_key, has_native_gps, has_timestamp, parsed_json, raw_payload,
+                        extraction_status, extraction_error
+                    ) VALUES (
+                        :relative_path, :size, :mtime_ns, :content_hash, :extractor,
+                        :extractor_version, :field_set_version, :extraction_options_fingerprint,
+                        :metadata_schema_version, :camera_group_key_version,
+                        :camera_group_key, :has_native_gps, :has_timestamp, :parsed_json, :raw_payload,
+                        :extraction_status, :extraction_error
+                    )
+                    ON CONFLICT(relative_path) DO UPDATE SET
+                        size = excluded.size,
+                        mtime_ns = excluded.mtime_ns,
+                        content_hash = excluded.content_hash,
+                        extractor = excluded.extractor,
+                        extractor_version = excluded.extractor_version,
+                        field_set_version = excluded.field_set_version,
+                        extraction_options_fingerprint = excluded.extraction_options_fingerprint,
+                        metadata_schema_version = excluded.metadata_schema_version,
+                        camera_group_key_version = excluded.camera_group_key_version,
+                        camera_group_key = excluded.camera_group_key,
+                        has_native_gps = excluded.has_native_gps,
+                        has_timestamp = excluded.has_timestamp,
+                        parsed_json = excluded.parsed_json,
+                        raw_payload = excluded.raw_payload,
+                        extraction_status = excluded.extraction_status,
+                        extraction_error = excluded.extraction_error
+                """, md_row)
+
+    def close(self):
+        self.conn.close()
+
+
+class WorkspaceLock:
+    def __init__(self, workspace_root: str):
+        from photos_utils import lock_path, ensure_control_dir
+        ensure_control_dir(workspace_root)
+        self.lock_path = lock_path(workspace_root)
+        self._lock_fd = None
+        self.owner = None  # on a failed acquire, the identity of the current holder (if readable)
+
+    def acquire(self) -> bool:
+        """Acquire a non-blocking exclusive flock and record this run's owner identity.
+
+        Opened O_RDWR|O_CREAT (no truncate) so a *failed* acquire never clobbers the
+        current holder's identity; only a successful acquire rewrites it. fcntl.flock is
+        auto-released by the kernel if this process dies, so a crash never wedges the
+        workspace and no stale-lock takeover code is needed.
+        """
+        try:
+            fd = os.open(self.lock_path, os.O_RDWR | os.O_CREAT, 0o644)
+            self._lock_fd = os.fdopen(fd, 'r+')
+        except OSError:
+            self._lock_fd = None
+            return False
+        try:
+            fcntl.flock(self._lock_fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except (IOError, OSError):
+            self.owner = self.read_owner()  # who holds it, for the caller's message
+            self._lock_fd.close()
+            self._lock_fd = None
+            return False
+        identity = {
+            "pid": os.getpid(),
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "host": socket.gethostname(),
+        }
+        self._lock_fd.seek(0)
+        self._lock_fd.truncate(0)
+        self._lock_fd.write(json.dumps(identity))
+        self._lock_fd.flush()
+        return True
+
+    def read_owner(self):
+        """Best-effort read of the lock file's recorded owner identity (or None)."""
+        try:
+            with open(self.lock_path, 'r') as f:
+                return json.loads(f.read() or "null")
+        except Exception:
+            return None
+
+    def release(self):
+        """Releases the lock. Does NOT delete the file to avoid inode race conditions."""
+        if self._lock_fd:
+            fcntl.flock(self._lock_fd.fileno(), fcntl.LOCK_UN)
+            self._lock_fd.close()
+            self._lock_fd = None
