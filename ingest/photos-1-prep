@@ -26,7 +26,7 @@ import errno
 # CONFIGURATION BLOCK
 # ==============================================================================
 sys.path.insert(0, os.path.dirname(__file__))
-from photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, selected_gpx_root
+from photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, selected_gpx_root, missing_managed_folders
 from photos_utils import (_move_no_clobber, _move_link_unlink, _get_renameat2,
                           WorkspaceCache, WorkspaceLock, ContentHasher,
                           CACHE_SCHEMA_VERSION, FINGERPRINT_ALGORITHM_VERSION)
@@ -1215,6 +1215,18 @@ class WorkspacePrepWorkflow:
                     type="mkdir", reason="Initialize workspace structure",
                     source=None, destination=folder_name(_r),
                     preconditions={}, verification={}, database_effects_after_verification=[]))
+        else:
+            # Activated workspace (guard present): the full 0-6 structure must already exist. A managed
+            # folder that is missing or no longer a directory means the root is non-conforming — almost
+            # always an inadvertent user deletion, which may have taken irreplaceable media with it — so
+            # HARD STOP rather than silently recreating it and masking the loss.
+            _missing = missing_managed_folders(self.workspace_root)
+            if _missing:
+                blockers.append(
+                    "Workspace is non-conforming: missing managed folder(s): "
+                    f"{', '.join(_missing)}. They were likely removed inadvertently; restore them (or "
+                    "move the remaining media into a fresh workspace) before running — prep will not "
+                    "recreate them.")
 
         self.coordinator.start_phase("planning - scanning inventory")
         # 0. Inventory, lifecycle guards, symlink check

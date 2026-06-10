@@ -53,3 +53,16 @@ def test_validate_config_rejects_bad_folders(bad, needle):
 
 def test_validate_config_accepts_default_folders():
     utils.validate_config(copy.deepcopy(utils.CONFIG))
+
+
+def test_missing_managed_folders_detects_absent_and_nondir(tmp_path):
+    """All seven 0-6 must exist as directories; absent OR replaced-by-a-file is non-conforming,
+    reported in canonical 0-6 order."""
+    for d in ("0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
+              "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"):
+        (tmp_path / d).mkdir()
+    assert utils.missing_managed_folders(str(tmp_path)) == []          # complete -> none
+    (tmp_path / "4-videos-by-date").rmdir()                            # absent
+    (tmp_path / "2-missing-metadata").rmdir()
+    (tmp_path / "2-missing-metadata").write_text("not a dir")          # replaced by a file
+    assert utils.missing_managed_folders(str(tmp_path)) == ["2-missing-metadata", "4-videos-by-date"]

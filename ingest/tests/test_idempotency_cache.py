@@ -13,6 +13,9 @@ def setup_workspace(tmp_path: Path):
     (ws / ".photos-ingest").mkdir(exist_ok=True); (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
 
     (ws / "0-sources").mkdir()
+    (ws / "1-strays").mkdir()
+    (ws / "3-redundant-jpgs").mkdir()
+    (ws / "4-videos-by-date").mkdir()
     (ws / "2-missing-metadata").mkdir()
     (ws / "5-photos-by-date").mkdir()
     (ws / "6-photos-by-dest").mkdir()
@@ -338,7 +341,9 @@ def test_stale_ghost_prune_reappeared_file_aborts_before_cache_remove(mock_meta,
     ws = tmp_path / "workspace"
     ws.mkdir()
     (ws / ".photos-ingest").mkdir(exist_ok=True); (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
-    (ws / "5-photos-by-date").mkdir(parents=True, exist_ok=True)
+    for _d in ("0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
+               "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"):
+        (ws / _d).mkdir(parents=True, exist_ok=True)
 
     # Create cache row for a missing file
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)

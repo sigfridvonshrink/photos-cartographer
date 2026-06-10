@@ -15,6 +15,7 @@ def workspace(tmp_path):
 
     # Create required folders
     (root / "0-sources").mkdir()
+    (root / "1-strays").mkdir()
     (root / "2-missing-metadata").mkdir()
     (root / "3-redundant-jpgs").mkdir()
     (root / "4-videos-by-date").mkdir()
