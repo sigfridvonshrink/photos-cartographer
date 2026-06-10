@@ -14,11 +14,13 @@ model, GPX index, camera groups, the time/GPS decision artifacts, execution, and
 The script sits beside `photos_utils.py` and imports the shared infrastructure from it.
 """
 import argparse
+import concurrent.futures
 import hashlib
 import json
 import math
 import os
 import sqlite3
+import subprocess
 import sys
 import xml.etree.ElementTree as ET
 import zoneinfo
@@ -29,13 +31,15 @@ from photos_utils import (
     CONFIG, CONTROL_DIR, config_path, handoff_path, guard_path, is_sealed,
     validate_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
     selected_gpx_root, CAMERA_IDENTITY_FIELDS, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION,
-    json_dependency, write_json_artifact, db_path, ensure_control_dir,
+    json_dependency, verify_json_dependency, write_json_artifact, db_path, ensure_control_dir,
+    journal_path, ContentHasher, _move_no_clobber,
     WorkspaceLock,
 )
 
 TIME_DECISIONS_ARTIFACT = "photos-21-time-decisions.json"
 GPS_DECISIONS_ARTIFACT = "photos-22-gps-decisions.json"
 EXECUTABLE_PLAN_ARTIFACT = "photos-23-executable-plan.json"
+EXECUTION_SUMMARY_ARTIFACT = "photos-24-execution-summary.json"
 
 
 def time_decisions_path(ws):
@@ -48,6 +52,10 @@ def gps_decisions_path(ws):
 
 def executable_plan_path(ws):
     return os.path.join(ws, CONTROL_DIR, EXECUTABLE_PLAN_ARTIFACT)
+
+
+def execution_summary_path(ws):
+    return os.path.join(ws, CONTROL_DIR, EXECUTION_SUMMARY_ARTIFACT)
 
 
 # ============================================================================
@@ -682,11 +690,14 @@ class CalibrationWorkflow:
 
     # --- preflight (calibration spec §7 / §13) -------------------------------
 
-    def preflight(self):
+    def preflight(self, for_execute=False):
         """Return (blockers, warnings, info). A non-empty `blockers` means calibration cannot
         proceed. Textual only — writes no JSON. The lifecycle guards (sealed / uninitialized /
         loose-root-file) hard-stop early; the by-dest scope and re-prep gates are collected so
-        every problem is reported at once."""
+        every problem is reported at once. `for_execute` keeps the lifecycle guards + config/handoff
+        load but SKIPS the planning-phase scope and re-prep gates: execution validates against the
+        plan's own dependency fingerprints + per-op preconditions, and the by-dest filenames it
+        renames would otherwise trip the re-prep gate (§13.1 is a planning concern)."""
         blockers, warnings, info = [], [], {}
         ws = self.workspace_root
 
@@ -738,6 +749,9 @@ class CalibrationWorkflow:
             return blockers, warnings, info
         info["handoff_sha256"] = sha256_file(ho_p)
         self.handoff = handoff          # stashed for the model/group stages (Phase 2)
+
+        if for_execute:                 # execution skips the planning-phase scope/re-prep gates
+            return blockers, warnings, info
 
         sources = folder_name('sources')
         by_date = folder_name('photos_by_date')
@@ -1340,12 +1354,206 @@ class CalibrationWorkflow:
             "planned_operation_fingerprint": planned_op_fp,
         }
 
+    # --- Stage 10: execution (photos-24, §29) --------------------------------
+
+    _META_OP_TYPES = ("metadata_time_write", "metadata_gps_write", "gps_marker_write")
+    _OP_TOTAL_KEY = {"metadata_time_write": "metadata_time_writes", "metadata_gps_write": "metadata_gps_writes",
+                     "gps_marker_write": "gps_marker_writes", "rename_no_clobber": "renames"}
+
+    def _exiftool_write(self, abs_path, tags):
+        """Apply a file's batched tag writes atomically (exiftool -overwrite_original = temp + atomic
+        rename). Returns True on success. The single seam the tests mock to avoid invoking exiftool."""
+        cmd = (["exiftool", "-overwrite_original", "-n"]
+               + [f"-{k}={v}" for k, v in sorted(tags.items())] + [abs_path])
+        try:
+            return subprocess.run(cmd, capture_output=True, text=True).returncode == 0
+        except Exception:
+            return False
+
+    def revalidate_plan(self, plan, gpx):
+        """§29 steps 2-4: recompute every dependency fingerprint and return the stale reasons. A
+        non-empty list means reject the plan before ANY mutation (the user re-runs to replan)."""
+        ws = self.workspace_root
+        dep = plan.get("depends_on") or {}
+        stale = []
+        if plan.get("status") != "ready":
+            stale.append(f"plan status is {plan.get('status')!r}, not 'ready'")
+        for key in ("time_decisions", "gps_decisions", "handoff"):
+            if not (dep.get(key) and verify_json_dependency(dep[key], ws)):
+                stale.append(f"{key} dependency changed or missing")
+        policy = json.dumps(CONFIG.get("camera_time_and_timezone_policy") or {}, sort_keys=True)
+        for k, cur in (("config_fingerprint", sha256_file(config_path(ws))),
+                       ("filename_format_fingerprint", sha256_text(CONFIG["filename_timestamp_format"])),
+                       ("camera_group_fingerprint", sha256_text(policy)),
+                       ("gpx_fingerprint", gpx.fingerprint)):
+            if dep.get(k) != cur:
+                stale.append(f"{k} changed")
+        all_ops = [o for d in plan["destinations"].values() for o in d["operations"]]
+        if dep.get("planned_operation_fingerprint") != sha256_text(json.dumps(all_ops, sort_keys=True)):
+            stale.append("planned operations changed (plan tampered)")
+        return stale
+
+    @staticmethod
+    def _target_occupied(directory, target_name, source_name):
+        """Execute-time no-clobber recheck (§29.1a): is `target_name` already present
+        (case-insensitively) in `directory`, ignoring the source file being renamed away?"""
+        low = target_name.lower()
+        try:
+            return any(e.lower() == low and e != source_name for e in os.listdir(directory))
+        except OSError:
+            return False
+
+    def _apply_file(self, rel, ops, journal, accepted_mismatches):
+        """Apply one file's operations: its metadata writes batched into a single exiftool call, then
+        its rename — with execute-time precondition + no-clobber rechecks and a post-write content-
+        fingerprint verify. Returns a per-file result the caller merges (no shared-state mutation)."""
+        abs_path = os.path.join(self.workspace_root, rel)
+        res = {"relative_path": rel, "applied": [], "skipped": [], "failed": [], "blocker": None, "mismatch": None}
+        if all(journal.get(o["operation_id"]) == "confirmed" for o in ops):
+            res["skipped"] = [o["operation_id"] for o in ops]
+            return res
+        pre = ops[0].get("preconditions") or {}
+        try:
+            st = os.stat(abs_path)
+        except OSError:
+            res["blocker"] = f"{rel}: file is missing at execute time"
+            return res
+        if pre.get("size") is not None and st.st_size != pre["size"]:
+            res["blocker"] = f"{rel}: size changed since planning"
+            return res
+        if pre.get("mtime_ns") is not None and st.st_mtime_ns != pre["mtime_ns"]:
+            res["blocker"] = f"{rel}: mtime changed since planning"
+            return res
+
+        meta_ops = [o for o in ops if o["type"] in self._META_OP_TYPES]
+        if meta_ops and not all(journal.get(o["operation_id"]) == "confirmed" for o in meta_ops):
+            tags = {}
+            for o in meta_ops:
+                tags.update(o.get("writes") or {})
+            if not self._exiftool_write(abs_path, tags):
+                res["failed"] = [o["operation_id"] for o in meta_ops]
+                return res                          # tool failure: leave file as-is, never confirm
+            new_fp = (ContentHasher.fingerprint_image(abs_path) or {}).get("value")
+            if new_fp == pre.get("content_fingerprint") or rel in accepted_mismatches:
+                res["applied"].extend(o["operation_id"] for o in meta_ops)
+            else:
+                res["mismatch"] = {"relative_path": rel, "expected_fingerprint": pre.get("content_fingerprint"),
+                                   "actual_fingerprint": new_fp}
+                return res                          # content altered & not accepted: no confirm, no rename
+
+        for o in [x for x in ops if x["type"] == "rename_no_clobber"]:
+            if journal.get(o["operation_id"]) == "confirmed":
+                continue
+            d = os.path.dirname(abs_path)
+            if self._target_occupied(d, o["to"], o["from"]):
+                res["blocker"] = f"{rel}: rename target {o['to']!r} is occupied at execute time"
+                return res
+            try:
+                _move_no_clobber(abs_path, os.path.join(d, o["to"]))
+                res["applied"].append(o["operation_id"])
+            except Exception as e:
+                res["failed"].append(o["operation_id"])
+                res["blocker"] = f"{rel}: rename failed ({e})"
+        return res
+
+    def execute_plan(self, jobs, now_iso, execution_id):
+        """Stage 10 (§29): apply photos-23 after re-validating every dependency, journaling for
+        idempotent resume, verifying content fingerprints, and writing photos-24. now_iso /
+        execution_id are injected so the fingerprint-bearing body stays reproducible. Returns the
+        summary dict (status 'rejected' with stale reasons if the plan no longer applies)."""
+        ws = self.workspace_root
+        with open(executable_plan_path(ws)) as f:
+            plan = json.load(f)
+        gpx = GPXIndex(selected_gpx_root()).build()
+        stale = self.revalidate_plan(plan, gpx)
+        if stale:
+            return {"status": "rejected", "plan_id": plan.get("plan_id"), "stale": stale}
+
+        jpath = journal_path(ws, plan["plan_id"])
+        journal = {}
+        if os.path.exists(jpath):
+            try:
+                journal = (json.load(open(jpath)) or {}).get("operations", {}) or {}
+            except Exception:
+                journal = {}
+        accepted = self._accepted_mismatches(ws)
+
+        by_file = {}
+        for dd in plan["destinations"].values():
+            for op in dd["operations"]:
+                by_file.setdefault(op["relative_path"], []).append(op)
+
+        results = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, jobs)) as ex:
+            futs = [ex.submit(self._apply_file, rel, ops, journal, accepted)
+                    for rel, ops in sorted(by_file.items())]
+            for fut in concurrent.futures.as_completed(futs):
+                results.append(fut.result())
+
+        for r in results:
+            for oid in r["applied"]:
+                journal[oid] = "confirmed"
+        write_json_artifact(jpath, {"journal_version": 1, "plan_id": plan["plan_id"],
+                                    "operations": journal, "updated_at": now_iso})
+        summary = self._build_summary(plan, results, now_iso, execution_id, jobs)
+        write_json_artifact(execution_summary_path(ws), summary)
+        return summary
+
+    @staticmethod
+    def _accepted_mismatches(ws):
+        """File paths whose prior photos-24 fingerprint mismatch the user marked accept=true."""
+        p = execution_summary_path(ws)
+        if not os.path.exists(p):
+            return set()
+        try:
+            prior = json.load(open(p))
+        except Exception:
+            return set()
+        return {m["relative_path"] for m in (prior.get("fingerprint_mismatches") or [])
+                if (m.get("user_decision") or {}).get("accept_fingerprint_change")}
+
+    def _build_summary(self, plan, results, now_iso, execution_id, jobs):
+        ws = self.workspace_root
+        op_type = {o["operation_id"]: o["type"]
+                   for dd in plan["destinations"].values() for o in dd["operations"]}
+        totals = {v: 0 for v in self._OP_TOTAL_KEY.values()}
+        newly, skipped_n = 0, 0
+        failures, mismatches, blockers = [], [], []
+        for r in sorted(results, key=lambda x: x["relative_path"]):
+            for oid in r["applied"]:
+                key = self._OP_TOTAL_KEY.get(op_type.get(oid))
+                if key:
+                    totals[key] += 1
+                newly += 1
+            skipped_n += len(r["skipped"])
+            failures.extend({"operation_id": oid, "relative_path": r["relative_path"]} for oid in r["failed"])
+            if r["mismatch"]:
+                mismatches.append({**r["mismatch"], "user_decision": {"accept_fingerprint_change": False}})
+            if r["blocker"]:
+                blockers.append(r["blocker"])
+        totals["no_ops"] = sum(len(dd.get("no_ops") or []) for dd in plan["destinations"].values())
+        status = "success" if not (failures or mismatches or blockers) else "partial"
+        return {
+            "artifact_type": "execution_summary", "artifact_name": EXECUTION_SUMMARY_ARTIFACT,
+            "schema_version": 1, "plan_id": plan["plan_id"],
+            "summarizes": {EXECUTABLE_PLAN_ARTIFACT: {"sha256": sha256_file(executable_plan_path(ws))},
+                           "upstream": plan.get("depends_on")},
+            "totals": totals,
+            "resume": {"newly_applied": newly, "already_satisfied_skipped": skipped_n},
+            "failures": failures, "blockers": blockers, "fingerprint_mismatches": mismatches,
+            "status": status,
+            "run_metadata": {"execution_id": execution_id, "finished_at": now_iso, "jobs": jobs},
+        }
+
 
 def main():
     parser = argparse.ArgumentParser(
         description="photos-2-time-gps: time/GPS calibration (Stage 1 — preflight).")
+    parser.add_argument("-j", "--jobs", type=int, default=None,
+                        help="Worker threads for execution (default: config jobs, else 4).")
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("run", help="Run the calibration pass (currently: Stage-1 preflight only).")
+    sub.add_parser("run", help="Plan the calibration pass: produce photos-21/22/23 (no mutation).")
+    sub.add_parser("execute", help="Apply photos-23 to the originals (metadata writes + renames).")
     args = parser.parse_args()
 
     workspace_root = os.getcwd()
@@ -1483,7 +1691,39 @@ def main():
                     n_ops = sum(d["summary"]["operations_total"] for d in plan["destinations"].values())
                     print(f"Wrote {EXECUTABLE_PLAN_ARTIFACT}: status={plan['status']} "
                           f"(plan {plan['plan_id']}, {n_ops} operation(s)). "
-                          "Review it, then run `execute` to apply (not yet implemented).")
+                          "Review it, then run `execute` to apply.")
+
+        elif args.command == "execute":
+            wf = CalibrationWorkflow(workspace_root)
+            blockers, warnings, info = wf.preflight(for_execute=True)
+            for w in warnings:
+                print(f"  Warning: {w}", file=sys.stderr)
+            if blockers:
+                print("\nExecution cannot proceed:", file=sys.stderr)
+                for b in blockers:
+                    print(f"  - {b}", file=sys.stderr)
+                sys.exit(2)
+            if not os.path.exists(executable_plan_path(workspace_root)):
+                print(f"No {EXECUTABLE_PLAN_ARTIFACT} — run `run` first to plan.", file=sys.stderr)
+                sys.exit(2)
+            now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            execution_id = sha256_text(f"{now_iso}|{os.getpid()}")[:12]
+            jobs = args.jobs or CONFIG.get("jobs") or 4
+            summary = wf.execute_plan(jobs, now_iso, execution_id)
+            if summary.get("status") == "rejected":
+                print("\nExecution rejected — the plan is stale; re-run `run` to replan:", file=sys.stderr)
+                for s in summary["stale"]:
+                    print(f"  - {s}", file=sys.stderr)
+                sys.exit(2)
+            t = summary["totals"]
+            print(f"Executed {EXECUTABLE_PLAN_ARTIFACT}: status={summary['status']} "
+                  f"({t['metadata_time_writes']} time, {t['metadata_gps_writes']} gps, "
+                  f"{t['renames']} rename(s); {len(summary['fingerprint_mismatches'])} fingerprint "
+                  f"mismatch(es), {len(summary['failures'])} failure(s)). Wrote {EXECUTION_SUMMARY_ARTIFACT}.")
+            if summary["status"] != "success":
+                print(f"Review {EXECUTION_SUMMARY_ARTIFACT} and re-run `execute` once resolved.",
+                      file=sys.stderr)
+                sys.exit(3)
     finally:
         run_lock.release()
 
