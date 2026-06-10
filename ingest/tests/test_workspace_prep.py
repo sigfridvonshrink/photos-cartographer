@@ -16,6 +16,9 @@ def setup_workspace(tmp_path: Path):
     ws = tmp_path / "workspace"
     ws.mkdir()
     (ws / ".photos-ingest").mkdir(exist_ok=True); (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
+    # An activated workspace must have the full 0-6 structure (the rest are created below).
+    for _d in ("1-strays", "2-missing-metadata", "3-redundant-jpgs", "4-videos-by-date", "6-photos-by-dest"):
+        (ws / _d).mkdir()
 
     # Initialized workspace: every dump lives in the 0-sources inbox (never at the root).
     source_dir = ws / "0-sources"
@@ -465,3 +468,38 @@ def test_source_changed_after_plan_abort_no_db(tmp_path, monkeypatch):
         executor.execute(plan, journal_path)
 
     assert not os.path.exists(db_path)
+
+
+def _mock_for_plan(monkeypatch):
+    import photos_utils as utils
+    monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
+    monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image",
+                        lambda p: {"status": "valid", "value": "s", "strategy": "image-content-hash-v1",
+                                   "engine_version": "t"})
+    photos_ingest.CONFIG["jobs"] = 1
+
+
+def test_missing_managed_folder_on_activated_workspace_hard_stops(tmp_path, monkeypatch):
+    """An activated workspace (guard present) missing managed 0-6 folder(s) is non-conforming — prep
+    hard-stops with a blocker rather than silently recreating them (which could mask lost media)."""
+    _mock_for_plan(monkeypatch)
+    ws = _empty_initialized_ws(tmp_path)
+    import shutil
+    shutil.rmtree(ws / "5-photos-by-date")                            # user deleted a managed folder
+    (ws / "1-strays").rmdir()                                          # ...and another
+    cache = photos_ingest.WorkspaceCache(str(ws), in_memory=True)
+    plan = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
+    cache.close()
+    assert any("non-conforming" in b and "1-strays" in b and "5-photos-by-date" in b
+               for b in plan.blockers), plan.blockers
+
+
+def test_missing_folder_during_init_is_exempt(tmp_path, monkeypatch):
+    """An uninitialized workspace (no guard) is exempt — prep's first run CREATES the 0-6 structure."""
+    _mock_for_plan(monkeypatch)
+    ws = tmp_path / "ws"; ws.mkdir(); (ws / ".photos-ingest").mkdir()   # no guard -> uninitialized
+    cache = photos_ingest.WorkspaceCache(str(ws), in_memory=True)
+    plan = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
+    cache.close()
+    assert not any("non-conforming" in b for b in plan.blockers)
+    assert any(op.type == "mkdir" for op in plan.operations)           # init plans the structure

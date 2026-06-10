@@ -130,6 +130,19 @@ def managed_folder_names(cfg=None) -> list:
     """The managed folders prep scans/organizes (every role except `strays`), in order."""
     return [folder_name(r, cfg) for r in _MANAGED_ROLES]
 
+def missing_managed_folders(ws: str, cfg=None) -> list:
+    """The managed 0-6 folders (all of FOLDER_ROLES, including `1-strays`) that are absent or not a
+    directory — replaced by a file, a broken symlink, etc. — in an ACTIVATED workspace, i.e. the
+    workspace root is non-conforming. Returns their names, in canonical 0-6 order.
+
+    A non-empty result is a hard stop for every phase: the structure was almost certainly damaged
+    inadvertently (a deleted folder may have taken irreplaceable media with it), so a script must
+    refuse rather than silently recreate the folders and mask the loss. The caller gates this on the
+    workspace being activated (the guard sentinel present) — prep's first-run init, which legitimately
+    creates the 0-6, is exempt."""
+    return [folder_name(r, cfg) for r in FOLDER_ROLES
+            if not os.path.isdir(os.path.join(ws, folder_name(r, cfg)))]
+
 def dedup_priority(path, cfg=None) -> int:
     """Dedup retention priority of `path` by its top folder component (lower = retained)."""
     role = folder_role(path.split('/', 1)[0], cfg)

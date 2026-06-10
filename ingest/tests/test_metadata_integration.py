@@ -22,7 +22,7 @@ FIX = os.path.join(os.path.dirname(__file__), "fixtures", "cam_small.jpg")
 def _ws(tmp_path):
     ws = tmp_path / "ws"
     ws.mkdir()
-    for d in ("0-sources", "2-missing-metadata", "3-redundant-jpgs",
+    for d in ("0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
               "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"):
         (ws / d).mkdir()
     (ws / ".photos-ingest").mkdir()

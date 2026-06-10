@@ -197,3 +197,12 @@ def test_preflight_writes_no_json(tmp_path):
     _pf(ws)
     arts = [f for f in os.listdir(ws / ".photos-ingest") if f.startswith("photos-2")]
     assert arts == []                                        # no calibration JSON in preflight
+
+
+def test_missing_managed_folder_blocks(tmp_path):
+    """An activated workspace missing a managed 0-6 folder is non-conforming — hard stop."""
+    import shutil
+    ws = _ws(tmp_path)
+    shutil.rmtree(ws / "4-videos-by-date")
+    blockers, _, _ = _pf(ws)
+    assert any("non-conforming" in b and "4-videos-by-date" in b for b in blockers), blockers

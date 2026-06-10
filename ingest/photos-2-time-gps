@@ -31,6 +31,7 @@ from photos_utils import (
     CONFIG, CONTROL_DIR, config_path, handoff_path, guard_path, is_sealed,
     validate_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
     selected_gpx_root, CAMERA_IDENTITY_FIELDS, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
+    missing_managed_folders,
     json_dependency, verify_json_dependency, write_json_artifact, db_path, ensure_control_dir,
     journal_path, ContentHasher, _move_no_clobber,
     prep_log_path, prep_db_snapshot_path, write_db_snapshot, take_zfs_snapshot,
@@ -847,6 +848,15 @@ class CalibrationWorkflow:
         if not os.path.exists(guard_path(ws)):
             blockers.append("Not an initialized workspace (no photos-00-workspace-guard) — "
                             "run photos-1-prep first.")
+            return blockers, warnings, info
+        # The activated workspace must have its full 0-6 structure. A managed folder that is missing or
+        # no longer a directory means the root is non-conforming — almost always an inadvertent user
+        # deletion (possibly of irreplaceable media) — so HARD STOP; calibration never creates folders.
+        struct_missing = missing_managed_folders(ws)
+        if struct_missing:
+            blockers.append("Workspace is non-conforming: missing managed folder(s): "
+                            f"{', '.join(struct_missing)}. Restore the 0-6 structure (or move the "
+                            "media into a fresh workspace and re-run photos-1-prep) before calibrating.")
             return blockers, warnings, info
         loose = self._root_files()
         if loose:
