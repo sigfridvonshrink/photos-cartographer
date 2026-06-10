@@ -51,7 +51,7 @@ def test_move_link_unlink_fallback_parity(tmp_path):
 def _ws(tmp_path):
     ws = tmp_path / "ws"
     ws.mkdir()
-    for d in ("0-sources", "2-missing-metadata", "3-redundant-jpgs",
+    for d in ("0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
               "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"):
         (ws / d).mkdir()
     (ws / ".photos-ingest").mkdir(exist_ok=True)
@@ -101,3 +101,27 @@ def test_execute_time_no_clobber_preserves_existing(tmp_path, monkeypatch):
 
     assert dest_abs.read_bytes() == b"SENTINEL"            # NOT overwritten
     assert (ws / "0-sources" / "a.jpg").read_bytes() == b"ORIGINAL"   # source not moved
+
+
+# --- RootGuard.resolve_and_check_path (the path-safety primitive) -------------
+
+def test_resolve_rejects_parent_traversal(tmp_path):
+    with pytest.raises(ValueError, match="Directory traversal"):
+        prep.RootGuard.resolve_and_check_path(str(tmp_path), "a/../../etc/passwd")
+
+
+def test_resolve_rejects_absolute_when_relative_required(tmp_path):
+    with pytest.raises(ValueError, match="must be relative"):
+        prep.RootGuard.resolve_and_check_path(str(tmp_path), "/etc/passwd")
+
+
+def test_resolve_rejects_escape_outside_base(tmp_path):
+    # an absolute path that resolves outside base (must_be_relative=False bypasses the abs check)
+    outside = tmp_path.parent / "elsewhere"
+    with pytest.raises(ValueError, match="escape detected|outside"):
+        prep.RootGuard.resolve_and_check_path(str(tmp_path), str(outside), must_be_relative=False)
+
+
+def test_resolve_accepts_contained_relative(tmp_path):
+    got = prep.RootGuard.resolve_and_check_path(str(tmp_path), "sub/x.jpg")
+    assert got == os.path.join(os.path.realpath(str(tmp_path)), "sub", "x.jpg")
