@@ -2,6 +2,8 @@ import os
 import json
 import hashlib
 import re
+import shutil
+import tempfile
 from datetime import datetime, timezone
 import sqlite3
 import ctypes
@@ -1191,13 +1193,14 @@ def _get_renameat2():
 def _move_link_unlink(src: str, dest: str):
     """Portable same-filesystem no-clobber move: hardlink (fails if dest exists, never
     overwrites) then unlink the source. Fallback when renameat2 is unavailable."""
-    os.link(src, dest)   # raises FileExistsError if dest exists
+    os.link(src, dest)   # raises FileExistsError if dest exists; OSError(EXDEV) across filesystems
     os.unlink(src)
 
-def _move_no_clobber(src: str, dest: str):
-    """Atomically move src -> dest, failing (FileExistsError) instead of overwriting an
-    existing destination. Race-free: Linux renameat2(RENAME_NOREPLACE) is a single syscall;
-    elsewhere we fall back to an atomic hardlink+unlink."""
+def _rename_no_clobber_same_fs(src: str, dest: str):
+    """Atomic SAME-filesystem no-clobber rename: renameat2(RENAME_NOREPLACE) as a single race-free
+    syscall, else a portable hardlink+unlink. Raises FileExistsError if dest exists and OSError(EXDEV)
+    if src and dest are on different filesystems — the caller (_move_no_clobber) handles EXDEV. There
+    is deliberately NO cross-fs fallback here, so the cross-fs path can reuse it without recursing."""
     fn = _get_renameat2()
     if fn:
         res = fn(_AT_FDCWD, os.fsencode(src), _AT_FDCWD, os.fsencode(dest), _RENAME_NOREPLACE)
@@ -1207,9 +1210,59 @@ def _move_no_clobber(src: str, dest: str):
         if eno == errno.EEXIST:
             raise FileExistsError(f"Destination exists: {dest}")
         if eno not in (errno.ENOSYS, errno.EINVAL, errno.ENOTSUP):
-            raise OSError(eno, os.strerror(eno), dest)
-        # renameat2 not supported on this kernel/fs — fall through to the fallback.
-    _move_link_unlink(src, dest)
+            raise OSError(eno, os.strerror(eno), dest)   # EXDEV lands here for the caller to handle
+        # renameat2 not supported on this kernel/fs — fall through to the hardlink fallback.
+    _move_link_unlink(src, dest)                         # raises FileExistsError / OSError(EXDEV)
+
+def _move_cross_fs_no_clobber(src: str, dest: str, verify=None):
+    """Cross-filesystem no-clobber move (shared contract §15.3) — the fallback when a plain move
+    cannot cross filesystems (EXDEV). Copy src to a temporary name on the DESTINATION filesystem,
+    verify it, fsync it, atomically rename it into the final target (failing if the target exists —
+    no clobber), then remove the source LAST. A crash leaves the source intact (plus at most a
+    discardable temp), never a half-copied file under the final name and never an overwrite.
+
+    `verify(src, tmp)` runs before the copy is exposed under the final name and must raise to abort;
+    it defaults to a byte-size equality check. (The merge phase, §11, can pass a fingerprint check.)"""
+    dest_dir = os.path.dirname(dest) or "."
+    fd, tmp = tempfile.mkstemp(dir=dest_dir, prefix=".tmp-xdev-", suffix=".part")
+    os.close(fd)
+    try:
+        shutil.copyfile(src, tmp)                       # contents
+        try:
+            shutil.copystat(src, tmp)                   # best-effort mtime/mode
+        except OSError:
+            pass
+        if verify is not None:
+            verify(src, tmp)
+        elif os.path.getsize(tmp) != os.path.getsize(src):
+            raise OSError(errno.EIO, "cross-filesystem copy size mismatch", src)
+        dfd = os.open(tmp, os.O_RDONLY)                 # durable before we expose it under the final name
+        try:
+            os.fsync(dfd)
+        finally:
+            os.close(dfd)
+        _rename_no_clobber_same_fs(tmp, dest)           # tmp & dest share dest's fs -> no recursion
+        tmp = None                                      # consumed by the rename
+    finally:
+        if tmp is not None and os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+    os.unlink(src)                                      # remove the source LAST (crash-safe)
+
+def _move_no_clobber(src: str, dest: str):
+    """Move src -> dest, failing (FileExistsError) instead of overwriting an existing destination.
+    Primary path is an atomic same-filesystem MOVE (_rename_no_clobber_same_fs). Only when that move
+    cannot cross filesystems (EXDEV) does it fall back to the cross-fs copy-then-remove workaround
+    (§15.3) — a same-fs move never touches the fallback."""
+    try:
+        _rename_no_clobber_same_fs(src, dest)
+    except OSError as e:
+        if e.errno == errno.EXDEV:                      # crossing filesystems — use the workaround
+            _move_cross_fs_no_clobber(src, dest)
+        else:
+            raise                                       # incl. FileExistsError (EEXIST): no-clobber
 
 class WorkspaceCache:
     """
