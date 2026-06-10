@@ -3,6 +3,7 @@
 Mocked hashing/metadata (content-based hash so identical files dedup), fast.
 photos_1_prep / photos_utils come from conftest.py.
 """
+import json
 import os
 
 import pytest
@@ -130,3 +131,40 @@ def test_footprint_reports_quarantine(tmp_path, monkeypatch):
     assert qf["total_files"] >= 1
     assert qf["total_bytes"] > 0
     assert qf["oldest_plan_id"] and qf["newest_plan_id"]
+
+
+# --- quarantine manifest: never silently truncate recoverable history (prep §15) -------------
+
+def test_quarantine_manifest_corruption_is_preserved_not_truncated(tmp_path):
+    """A corrupt manifest.json must be preserved under a .corrupt backup (so the prior records stay
+    recoverable), not silently overwritten with a fresh single-entry file."""
+    mdir = tmp_path / ".photos-ingest-quarantine" / "plan-x"
+    mdir.mkdir(parents=True)
+    (mdir / "manifest.json").write_text("{ this is not valid json")          # corrupt
+    prep._append_quarantine_manifest(str(mdir), {"operation_id": "op-2", "original_path": "b.jpg"})
+
+    backups = list(mdir.glob("manifest.json.corrupt-*"))
+    assert len(backups) == 1
+    assert backups[0].read_text() == "{ this is not valid json"               # corrupt bytes kept
+    assert json.loads((mdir / "manifest.json").read_text()) == \
+        [{"operation_id": "op-2", "original_path": "b.jpg"}]                  # fresh, valid manifest
+
+
+def test_quarantine_manifest_appends_preserving_history(tmp_path):
+    """The normal path keeps appending; a valid manifest is never backed up."""
+    mdir = tmp_path / "qd"; mdir.mkdir()
+    prep._append_quarantine_manifest(str(mdir), {"operation_id": "op-1"})
+    prep._append_quarantine_manifest(str(mdir), {"operation_id": "op-2"})
+    entries = json.loads((mdir / "manifest.json").read_text())
+    assert [e["operation_id"] for e in entries] == ["op-1", "op-2"]           # history intact
+    assert not list(mdir.glob("*.corrupt-*"))
+
+
+def test_quarantine_manifest_non_array_is_treated_as_corrupt(tmp_path):
+    """A syntactically-valid manifest that is not a JSON array (e.g. hand-edited to an object) is
+    also preserved rather than crashing the append."""
+    mdir = tmp_path / "qd"; mdir.mkdir()
+    (mdir / "manifest.json").write_text('{"oops": "object not array"}')
+    prep._append_quarantine_manifest(str(mdir), {"operation_id": "op-1"})
+    assert len(list(mdir.glob("manifest.json.corrupt-*"))) == 1
+    assert json.loads((mdir / "manifest.json").read_text()) == [{"operation_id": "op-1"}]
