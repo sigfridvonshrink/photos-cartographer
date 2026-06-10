@@ -17,9 +17,10 @@ MANAGED = ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
            "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"]
 
 
-def _ready_ws(tmp_path, monkeypatch):
+def _ready_ws(tmp_path, monkeypatch, *, zfs=None):
     """A workspace driven through `run` (timezone accepted) so a *ready* photos-23 exists, with real
-    media files. Two native-GPS frames -> auto-resolved offset -> time-only ops + renames."""
+    media files. Two native-GPS frames -> auto-resolved offset -> time-only ops + renames. `zfs` (if
+    given) is baked into the config BEFORE planning so the plan's config fingerprint covers it."""
     ws = tmp_path / "ws"; ws.mkdir()
     for d in MANAGED:
         (ws / d).mkdir()
@@ -36,6 +37,8 @@ def _ready_ws(tmp_path, monkeypatch):
     cfg["camera_time_and_timezone_policy"] = dict(
         cfg["camera_time_and_timezone_policy"], device_groups={"fixed_clock_cameras": [CAM], "phones": []},
         default_folder_timezone="Europe/Brussels", multi_anchor_auto_apply=True)
+    if zfs is not None:
+        cfg["zfs"] = zfs
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
 
     def rec(rel, dto, lat, lon):
@@ -322,3 +325,36 @@ def test_summary_keeps_run_metadata_separate(tmp_path, monkeypatch):
     body = json.dumps({k: v for k, v in s.items() if k != "run_metadata"})
     assert "2024-07-03T00:00:00Z" not in body and "exec-1" not in body
     assert s["summarizes"][cal.EXECUTABLE_PLAN_ARTIFACT]["sha256"]
+
+
+# --- pre-mutation ZFS snapshot (§29 step 6, shared helper) -------------------
+
+def _mock_zfs(monkeypatch, *, fail=False):
+    import subprocess as _sp
+    import types as _t
+    monkeypatch.setattr(utils, "detect_zfs_dataset", lambda p: "pool/ws")
+    def run(*a, **k):
+        if fail:
+            raise _sp.CalledProcessError(1, "zfs", stderr="pool busy")
+        return _t.SimpleNamespace(returncode=0, stdout="", stderr="")
+    monkeypatch.setattr(_sp, "run", run)
+
+
+def test_execute_records_zfs_snapshot(tmp_path, monkeypatch):
+    zfs = {"enabled": True, "snapshots_required": True, "snapshot_prefix": "px-",
+           "datasets": {"workspace": "auto"}}
+    ws, ctl = _ready_ws(tmp_path, monkeypatch, zfs=zfs)
+    _mock_tools(monkeypatch, ws); _mock_zfs(monkeypatch)
+    assert _execute(monkeypatch, ws) == 0
+    s = _summary(ctl)
+    assert s["snapshot"]["ok"] and s["snapshot"]["snapshot_name"] == f"pool/ws@px-calibrate-{s['plan_id']}"
+
+
+def test_execute_aborts_when_required_snapshot_fails(tmp_path, monkeypatch):
+    zfs = {"enabled": True, "snapshots_required": True, "snapshot_prefix": "px-",
+           "datasets": {"workspace": "auto"}}
+    ws, ctl = _ready_ws(tmp_path, monkeypatch, zfs=zfs)
+    _mock_tools(monkeypatch, ws); _mock_zfs(monkeypatch, fail=True)
+    before = sorted(os.listdir(ws / "6-photos-by-dest" / "T"))
+    assert _execute(monkeypatch, ws) == 2                            # required snapshot failed -> rejected
+    assert sorted(os.listdir(ws / "6-photos-by-dest" / "T")) == before   # nothing mutated
