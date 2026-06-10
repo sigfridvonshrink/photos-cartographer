@@ -573,7 +573,10 @@ class CalibrationWorkflow:
             by_dest.setdefault(f["destination"], []).append(f)
 
         destinations = {}
-        for dest in sorted(by_dest):
+        # Process destinations PARENT-FIRST so an ancestor's effective offset is known before its
+        # children can inherit it (§10.2 rule 4). `eff` maps (destination, group) -> resolved offset.
+        eff = {}
+        for dest in sorted(by_dest, key=lambda d: (d.count('/'), d)):
             prior_d = prior_dests.get(dest, {})
             tz_block = self._timezone_decision(dest, prior_d.get("destination_timezone") or {}, blockers)
             present = sorted({f["camera_group_key"] for f in by_dest[dest]})
@@ -584,7 +587,11 @@ class CalibrationWorkflow:
                 if g.get("camera_group_class") != "camera":
                     continue                       # smartphones are solved per-file; no offset cell
                 frames = [f for f in by_dest[dest] if f["camera_group_key"] == key and f.get("native_gps")]
-                cells[key] = self._offset_cell(dest, key, g, prior_cells.get(key) or {}, frames, gpx, blockers)
+                inherited = self._nearest_ancestor_offset(dest, key, eff)   # confirmable basis if no self-anchor
+                cell = self._offset_cell(dest, key, g, prior_cells.get(key) or {}, frames, gpx, blockers, inherited)
+                cells[key] = cell
+                e = cell["effective_time_anchor"]
+                eff[(dest, key)] = e["offset_seconds"] if e else None       # what this cell's children inherit
             destinations[dest] = {
                 "destination_path": dest,
                 "destination_timezone": tz_block,
@@ -635,9 +642,33 @@ class CalibrationWorkflow:
             "stale_user_decision": stale,
         }
 
-    def _offset_cell(self, dest, key, g, prior_cell, frames, gpx, blockers):
-        proposal = infer_anchor_proposal(frames, gpx, CONFIG) or {"proposal_source": "manual_required"}
-        has_prop = proposal.get("proposal_source") == "gpx_self_anchor"
+    def _nearest_ancestor_offset(self, dest, key, eff):
+        """The deepest ancestor destination of `dest` with a RESOLVED effective offset for `key`,
+        as (ancestor_path, offset_seconds), else None (§10.2 rule 4). Walks up the path within
+        6-photos-by-dest; only ancestors already processed parent-first and actually resolved
+        qualify — an unresolved parent yields no inheritance. Flows parent->child only."""
+        root = folder_name('photos_by_dest')
+        d = os.path.dirname(dest)
+        while d == root or d.startswith(root + "/"):
+            off = eff.get((d, key))
+            if off is not None:
+                return d, off
+            if d == root:
+                break
+            d = os.path.dirname(d)
+        return None
+
+    def _offset_cell(self, dest, key, g, prior_cell, frames, gpx, blockers, inherited=None):
+        proposal = infer_anchor_proposal(frames, gpx, CONFIG)
+        if proposal is None and inherited is not None:
+            anc_path, anc_off = inherited
+            proposal = {"proposal_source": "inherited", "proposed_offset_seconds": anc_off,
+                        "inherited_from": anc_path, "confidence": "review_required",
+                        "rank": "inherited_from_ancestor"}
+        elif proposal is None:
+            proposal = {"proposal_source": "manual_required"}
+        is_gpx = proposal.get("proposal_source") == "gpx_self_anchor"
+        has_offset = "proposed_offset_seconds" in proposal
         conflicting = proposal.get("conflicting_count", 0) > 0
         policy = CONFIG.get("camera_time_and_timezone_policy") or {}
 
@@ -658,19 +689,21 @@ class CalibrationWorkflow:
             if dt is None:
                 blockers.append(f"{dest}: camera_group_time_decisions[{key}].user_decision."
                                 f"manual_real_utc {manual_utc!r} is not a valid UTC datetime.")
-            elif has_prop and proposal["anchors"]:
+            elif is_gpx and proposal["anchors"]:
                 # derive the (group,dest) offset from the recommended anchor's camera naive time
+                # (guaranteed parseable — match_frame_to_gpx rejects frames with an unparseable time)
                 naive = _parse_camera_naive(proposal["anchors"][0]["camera_source_naive_time"])
-                if naive is not None:
-                    effective = {"offset_seconds": round((dt.replace(tzinfo=None) - naive).total_seconds()),
-                                 "source": "manual_real_utc"}
+                effective = {"offset_seconds": round((dt.replace(tzinfo=None) - naive).total_seconds()),
+                             "source": "manual_real_utc"}
         elif accept:
-            if has_prop:
-                effective = {"offset_seconds": proposal["proposed_offset_seconds"], "source": "gpx_anchor_accepted"}
+            if has_offset:                         # accept a GPX self-anchor OR an inherited proposal
+                effective = {"offset_seconds": proposal["proposed_offset_seconds"],
+                             "source": "gpx_anchor_accepted" if is_gpx else "inherited_accepted"}
             else:
                 stale = True                       # accepted a proposal that does not exist
-        elif has_prop and not conflicting:
-            # auto-resolution under the config flags (§9.1)
+        elif is_gpx and not conflicting:
+            # auto-resolution under the config flags (§9.1). Inherited proposals are confirmable
+            # only — never auto-applied — so this branch is GPX-self-anchor exclusively.
             n = proposal["anchor_count"]
             if (n >= 2 and policy.get("multi_anchor_auto_apply", True)) or \
                (n == 1 and policy.get("single_anchor_auto_apply", False)):
