@@ -67,99 +67,95 @@ def test_deterministic_plan_with_jobs(mock_read, mock_popen, workspace):
     mock_popen.return_value = mock_process
     mock_read.return_value = {}
 
-    # Mock file hashing to return deterministic data based on file content
-    def fake_hash(path):
-        return {"status": "ok", "strategy": "fake", "value": os.path.basename(path)}
 
-    with patch("photos_1_prep.ContentHasher.hash_file", side_effect=fake_hash):
-        utils.CONFIG["jobs"] = 1
-        cache1 = prep.WorkspaceCache(workspace)
-        workflow1 = prep.WorkspacePrepWorkflow(workspace, cache1)
-        plan1 = workflow1.plan()
+    utils.CONFIG["jobs"] = 1
+    cache1 = prep.WorkspaceCache(workspace)
+    workflow1 = prep.WorkspacePrepWorkflow(workspace, cache1)
+    plan1 = workflow1.plan()
 
-        utils.CONFIG["jobs"] = 4
-        cache4 = prep.WorkspaceCache(workspace)
-        workflow4 = prep.WorkspacePrepWorkflow(workspace, cache4)
-        plan4 = workflow4.plan()
-        assert plan4.summary["execution_config"]["jobs_requested"] == 4
-        assert plan4.summary["execution_config"]["jobs_semantic"] is False
+    utils.CONFIG["jobs"] = 4
+    cache4 = prep.WorkspaceCache(workspace)
+    workflow4 = prep.WorkspacePrepWorkflow(workspace, cache4)
+    plan4 = workflow4.plan()
+    assert plan4.summary["execution_config"]["jobs_requested"] == 4
+    assert plan4.summary["execution_config"]["jobs_semantic"] is False
 
 
-        d1 = json.loads(plan1.to_json())
-        d4 = json.loads(plan4.to_json())
+    d1 = json.loads(plan1.to_json())
+    d4 = json.loads(plan4.to_json())
 
-        VOLATILE_KEYS = {
-            "plan_id",
-            "created_at",
-            "operation_id",
-            "last_seen_ns",
-            "absolute_path",
-            "duration_seconds",
-            "progress",
-            # jobs count is a concurrency knob recorded in the plan summary
-            # (execution_config / performance_and_cache); it legitimately varies
-            # between the jobs=1 and jobs=4 runs and is asserted separately above.
-            "jobs_requested",
-            "jobs_semantic",
-        }
+    VOLATILE_KEYS = {
+        "plan_id",
+        "created_at",
+        "operation_id",
+        "last_seen_ns",
+        "absolute_path",
+        "duration_seconds",
+        "progress",
+        # jobs count is a concurrency knob recorded in the plan summary
+        # (execution_config / performance_and_cache); it legitimately varies
+        # between the jobs=1 and jobs=4 runs and is asserted separately above.
+        "jobs_requested",
+        "jobs_semantic",
+    }
 
-        def stable_dict_sort_key(d):
-            return (
-                str(d.get("type", "")),
-                str(d.get("relative_path", "")),
-                str(d.get("source", "")),
-                str(d.get("src", "")),
-                str(d.get("destination", "")),
-                str(d.get("dest", "")),
-                json.dumps(d, sort_keys=True, default=str),
-            )
+    def stable_dict_sort_key(d):
+        return (
+            str(d.get("type", "")),
+            str(d.get("relative_path", "")),
+            str(d.get("source", "")),
+            str(d.get("src", "")),
+            str(d.get("destination", "")),
+            str(d.get("dest", "")),
+            json.dumps(d, sort_keys=True, default=str),
+        )
 
-        def canonicalize(value):
-            if isinstance(value, dict):
-                # Normalise JSON payloads to avoid string formatting issues
-                if "hash" in value and isinstance(value["hash"], str):
-                    try:
-                        value["hash"] = json.dumps(json.loads(value["hash"]), sort_keys=True)
-                    except: pass
-                if "content_hash" in value and isinstance(value["content_hash"], str):
-                    try:
-                        value["content_hash"] = json.dumps(json.loads(value["content_hash"]), sort_keys=True)
-                    except: pass
-                if "raw_payload" in value and isinstance(value["raw_payload"], str):
-                    try:
-                        value["raw_payload"] = json.dumps(json.loads(value["raw_payload"]), sort_keys=True)
-                    except: pass
-                if "parsed_json" in value and isinstance(value["parsed_json"], str):
-                    try:
-                        value["parsed_json"] = json.dumps(json.loads(value["parsed_json"]), sort_keys=True)
-                    except: pass
-
-                return {
-                    k: canonicalize(v)
-                    for k, v in sorted(value.items())
-                    if k not in VOLATILE_KEYS
-                }
-            if isinstance(value, list):
-                items = [canonicalize(v) for v in value]
-                if all(isinstance(x, dict) for x in items):
-                    return sorted(items, key=stable_dict_sort_key)
-
+    def canonicalize(value):
+        if isinstance(value, dict):
+            # Normalise JSON payloads to avoid string formatting issues
+            if "hash" in value and isinstance(value["hash"], str):
                 try:
-                    return sorted(items)
-                except TypeError:
-                    return items
-            return value
+                    value["hash"] = json.dumps(json.loads(value["hash"]), sort_keys=True)
+                except: pass
+            if "content_hash" in value and isinstance(value["content_hash"], str):
+                try:
+                    value["content_hash"] = json.dumps(json.loads(value["content_hash"]), sort_keys=True)
+                except: pass
+            if "raw_payload" in value and isinstance(value["raw_payload"], str):
+                try:
+                    value["raw_payload"] = json.dumps(json.loads(value["raw_payload"]), sort_keys=True)
+                except: pass
+            if "parsed_json" in value and isinstance(value["parsed_json"], str):
+                try:
+                    value["parsed_json"] = json.dumps(json.loads(value["parsed_json"]), sort_keys=True)
+                except: pass
 
-        d1_canon = canonicalize(d1)
-        d4_canon = canonicalize(d4)
+            return {
+                k: canonicalize(v)
+                for k, v in sorted(value.items())
+                if k not in VOLATILE_KEYS
+            }
+        if isinstance(value, list):
+            items = [canonicalize(v) for v in value]
+            if all(isinstance(x, dict) for x in items):
+                return sorted(items, key=stable_dict_sort_key)
 
-        if d1_canon != d4_canon:
-            print("D1:")
-            print(json.dumps(d1_canon, indent=2))
-            print("D4:")
-            print(json.dumps(d4_canon, indent=2))
+            try:
+                return sorted(items)
+            except TypeError:
+                return items
+        return value
 
-        assert d1_canon == d4_canon
+    d1_canon = canonicalize(d1)
+    d4_canon = canonicalize(d4)
+
+    if d1_canon != d4_canon:
+        print("D1:")
+        print(json.dumps(d1_canon, indent=2))
+        print("D4:")
+        print(json.dumps(d4_canon, indent=2))
+
+    assert d1_canon == d4_canon
 
 
 def test_progress_coordinator():
@@ -388,11 +384,9 @@ def test_failed_folder_mapping(mock_read_metadata_concurrently, mock_popen, work
 
 
 @patch("subprocess.Popen")
-@patch("photos_1_prep.ContentHasher.hash_file")
 @patch("photos_1_prep.ContentHasher.fingerprint_image")
 @patch("photos_utils.MetadataReader.read_metadata_concurrently")
-def test_stale_dependency_under_concurrency_blocks_execution(mock_read_metadata_concurrently, mock_hash_image, mock_hash_file, mock_popen, workspace):
-    mock_hash_file.return_value = {"status": "valid", "strategy": "sha256", "value": "dummyhash"}
+def test_stale_dependency_under_concurrency_blocks_execution(mock_read_metadata_concurrently, mock_hash_image, mock_popen, workspace):
     mock_hash_image.return_value = {"status": "valid", "strategy": "image-content-hash", "value": "dummyhash"}
     mock_popen.return_value = MagicMock()
 
@@ -449,11 +443,9 @@ def test_stale_dependency_under_concurrency_blocks_execution(mock_read_metadata_
     assert not os.path.exists(journal_path)
 
 @patch("subprocess.Popen")
-@patch("photos_1_prep.ContentHasher.hash_file")
 @patch("photos_1_prep.ContentHasher.fingerprint_image")
 @patch("photos_utils.MetadataReader.read_metadata_concurrently")
-def test_progress_summary_fields(mock_read_metadata_concurrently, mock_hash_image, mock_hash_file, mock_popen, workspace):
-    mock_hash_file.return_value = {"status": "valid", "strategy": "sha256", "value": "dummyhash"}
+def test_progress_summary_fields(mock_read_metadata_concurrently, mock_hash_image, mock_popen, workspace):
     mock_hash_image.return_value = {"status": "valid", "strategy": "image-content-hash", "value": "dummyhash"}
     mock_popen.return_value = MagicMock()
 
