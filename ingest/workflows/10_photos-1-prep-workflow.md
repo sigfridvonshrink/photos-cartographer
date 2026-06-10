@@ -10,7 +10,7 @@ The prep phase:
 
 1. **initializes** the workspace on first run — creating the `0`–`6` folder structure and control directory, moving any as-arrived base dump into `0-sources/`, and writing the root sentinel last (Sections 3.1, 7.1);
 2. seeds the workspace configuration (`photos-00-config.json`) on first run if absent, then reads it as authoritative;
-3. inventories the workspace safely and blocks on unsafe inputs (a sealed workspace, or a loose file at the root of an initialized workspace, Section 6.2);
+3. inventories the workspace safely and blocks on unsafe inputs (a sealed workspace; a misplaced root entry — loose file, non-managed folder, or symlink — on an initialized workspace; a missing managed folder; or a symlink anywhere among managed files, including nested directory symlinks, Section 6.2);
 4. takes each dump from `0-sources/` (the one inbox) without flattening it, resolving destination-name collisions in memory at planning (Section 7.2);
 5. normalizes file extensions;
 6. separates redundant JPEGs that have a RAW sibling;
@@ -70,7 +70,7 @@ Prep manages a fixed set of numbered folders under the workspace root, plus cont
 A workspace is **initialized** when its root sentinel `photos-00-workspace-guard` exists (inside `.photos-ingest/`, shared contract `10_photos-shared-contract.md` Section 5). The sentinel is the authoritative "this is a workspace" signal, and it is created **last** — only after the full `0`–`6` folder structure and the control directory exist (Section 7.1). Prep behaves differently depending on whether it is present:
 
 1. **Uninitialized** (no sentinel — a brand-new empty folder, or a folder that already holds an "as-arrived" dump). This is the deliberately comfortable entry point: you may drop a dump into a bare folder without pre-creating anything. Prep's first action is to **initialize**: it creates any missing part of the `0`–`6` structure and the control directory, and moves every base entry that is **not** part of that managed structure — loose files *and* whole folder trees, **structure preserved, no flattening** — into `0-sources/`. The move **excludes the managed folders themselves** (`0-sources/` and its `1`–`6` siblings) and the skipped control/dot directories (`.photos-ingest/`, `.photos-ingest-quarantine/`, `.git`, dotfiles/dotdirs), so it never moves a structure folder into `0-sources`. The sentinel `photos-00-workspace-guard` is written **last** (Section 7.1). Because it is written last, a crash partway through init leaves no sentinel, so the next run simply re-enters the init path harmlessly — the already-created `0`–`6` folders are recognized and left in place (not re-moved), the dump already in `0-sources/` stays put, any missing structure is created, and only genuinely new base entries (if any) are consolidated. There is no half-initialized trap. (The numbered folder names `0-sources`…`6-photos-by-dest` are reserved for the managed structure; a same-named folder in an as-arrived dump is treated as the managed folder, not moved beneath itself.)
-2. **Initialized** (sentinel present). Prep operates normally: new dumps live in **`0-sources/`** and prep distributes them. After initialization the **base of the workspace contains only folders, never loose files** — an invariant every script relies on (the control directory `.photos-ingest/` and the numbered folders are folders; the sentinel lives *inside* `.photos-ingest/`, not at the root). A loose file appearing at the root is a misplaced dump and a hard block (Section 6.2): once a workspace exists, the one and only inbox is `0-sources/`, never the root.
+2. **Initialized** (sentinel present). Prep operates normally: new dumps live in **`0-sources/`** and prep distributes them. After initialization the **base of the workspace contains only the managed folders and the control/dot directories, never loose files or stray folders** — an invariant every script relies on (the control directory `.photos-ingest/` and the numbered folders are folders; the sentinel lives *inside* `.photos-ingest/`, not at the root). Any **misplaced entry at the root** — a loose file, a non-managed folder, or a symlink — is a misplaced dump and a hard block (Section 6.2 item 2): once a workspace exists, the one and only inbox is `0-sources/`, never the root, and a symlink is barred outright rather than followed (it would escape the workspace; Section 6.2 item 3, shared contract Section 5.3). The full `0`–`6` **structure is itself an invariant**: prep created it at init and never removes a folder, so a *missing* managed folder on an initialized workspace is treated as evidence the structure was disturbed out-of-band and is a hard block that tells the operator to restore it — prep does not silently re-create it on a non-init run (Section 6.2 item 7).
 
 So "drop files in the folder" is the happy path **exactly once** — the uninitialized first run — and a hard error every time after. This asymmetry is intentional and is stated for the operator: the first gesture *bootstraps* an empty folder; afterwards the workspace has an inbox (`0-sources/`) and that is the only place a dump belongs. The post-init root-file block message says exactly this and points to `0-sources/`.
 
@@ -202,11 +202,22 @@ Photos (`image`/`raw`) and videos are organized into **separate bands** that nev
 Planning must block, producing no executable plan, if it finds:
 
 1. a **sealed (terminal) workspace** — a terminal/sealed marker written by a prior successful merge (shared contract `10_photos-shared-contract.md` Section 13.7). A merged workspace is **done**: prep **hard-stops immediately, mutating nothing, and never touches anything**, directing the user to start a fresh workspace. There is no recovery utility and no sweeping — if a new dump was dropped into a sealed workspace (files at the workspace root **or** in `0-sources/`), prep additionally reports that a likely new dump was detected and that, because this workspace is sealed, the dump must be moved into a **fresh** workspace by hand; prep leaves it exactly where it is. This check runs at startup, right after the lock is acquired — on an initialized workspace, alongside verifying the sentinel (shared contract Section 2); an uninitialized workspace carries no seal marker and enters the init path instead (Section 7.1), so this guard never fires there. The check precedes any scan or plan;
-2. a **loose file at the workspace root of an initialized workspace** — once a workspace is initialized (sentinel present, Section 3.1), the base must contain only folders; a loose file at the root is a misplaced dump. Prep hard-stops with a message that dumps belong in `0-sources/` (move it there or remove it, then re-run). The check is **strict**: any loose file at the root blocks, dotfiles included — nothing but the numbered folders and `.photos-ingest/` belongs at the base. (This guard does **not** apply on an *uninitialized* workspace, where root files are the expected first dump and trigger initialization instead, Section 3.1.);
-3. a symlink among managed files (forbidden);
+2. a **misplaced entry at the workspace root of an initialized workspace** — once a workspace is initialized (sentinel present, Section 3.1), the base must contain only the managed numbered folders and the control/dot directories (`.photos-ingest/`, `.photos-ingest-quarantine/`, `.git`, dotfiles/dotdirs). Anything else at the root is a misplaced dump and a hard block. This covers **three kinds of root entry, treated identically**:
+   - **a loose file** — the original case: dumps belong in `0-sources/`, not the root;
+   - **a non-managed folder** — a directory at the root whose name is **not** one of the reserved managed names (`0-sources`…`6-photos-by-dest`) and is not a control/dot directory. Prep does **not** treat a stray root folder as an additional inbox to sweep; a dump that arrives as a folder belongs **inside** `0-sources/` (its tree is preserved there, Section 7.2), not loose at the base. (This is the symmetric counterpart to the loose-file rule: after init, the base holds *only* the managed folders, whether the intruder is a file or a folder.);
+   - **a symlink** — any non-dot symlink at the root (whether it points at a file or a directory) is blocked rather than followed. Following a root symlink would let the scan traverse an external target and plan moves for files outside the workspace — a pipeline escape (item 3; shared contract Section 5.3). A symlink is therefore checked **before** the file/folder distinction and blocked outright.
+
+   Prep hard-stops with a message that dumps belong in `0-sources/` (move the entry there or remove it, then re-run). The check is **strict**: any such root entry blocks, dotfiles included — nothing but the numbered folders and the control/dot directories belongs at the base. (This guard does **not** apply on an *uninitialized* workspace, where root files and folders are the expected first dump and trigger initialization instead, Section 3.1; even there, a **symlink** at the base is still barred as an escape rather than consumed into `0-sources/`.);
+3. a **symlink among managed files (forbidden), including nested directory symlinks** — the pipeline never follows or organizes a symlink, because doing so would let a planned move read from or write to a target outside the managed tree (an escape, shared contract `10_photos-shared-contract.md` Section 5.3). The bar is comprehensive and covers every place a symlink can appear:
+   - a **file symlink** anywhere in a dump or a managed folder;
+   - a **nested directory symlink** — a directory symlink encountered *inside* a dump tree (under `0-sources/`, or under an as-arrived base dump on an init run) **or inside any managed folder** (including `6-photos-by-dest`). The traversal does not descend into it (it is not followed), but its mere presence is a hard blocker — it is never silently skipped;
+   - a **managed folder that is itself a symlink** (e.g. `5-photos-by-date` replaced by a link to an external directory) — blocked before the folder is walked, since walking it would traverse the external target;
+   - a **root dump entry that is a symlink** (item 2 above) — the same escape, caught at the base before the directory walk.
+   In every case prep reports the offending path and produces no executable plan. The decoded-content fingerprint and organization machinery only ever operate on real files inside the workspace;
 4. a forbidden sidecar (`.xmp`, `.dop`, `.pp3`) — editing sidecars are not part of this pipeline;
 5. a content fingerprint failure for any non-by-dest **media** file whose content equality a decision depends on (Section 11.3);
 6. a band misplacement — a `video`-class file under `5-photos-by-date` or `6-photos-by-dest`, or an `image`/`raw` file under `4-videos-by-date` (Section 6.1). Prep never creates such a placement itself; this guard catches one introduced by hand.
+7. an **incomplete managed folder structure on an initialized workspace** — on an *initialized* workspace (sentinel present, Section 3.1) the full `0`–`6` structure is an invariant: prep created every folder during init and never removes one. If any of the managed folders (`0-sources`…`6-photos-by-dest`) is **missing** at the start of a run, that is not a state prep can produce — it means the structure was disturbed out-of-band (most likely the user deleted a folder), so something is genuinely wrong with the workspace. Prep must **hard-stop, mutating nothing**, rather than silently tolerating the gap or quietly re-creating the folder: a missing folder may have taken organized media with it, and re-creating it blind would mask a real loss. The block message must (a) name exactly which managed folders are absent, (b) warn the operator plainly that an initialized workspace should always hold all of `0`–`6` and that their absence indicates the structure was deleted or moved, and (c) tell the operator how to restore it — recreate the missing folder(s) by name (an empty folder is sufficient to satisfy the structure check; any media that was inside a deleted folder is the operator's to recover, e.g. from a ZFS snapshot if one was taken, Section 14.4) and re-run. Prep does **not** auto-recreate the structure on a non-init run — folder creation is an *init-only* action (Section 7.1), and silently rebuilding folders on an established workspace would hide the fact that something destructive happened. (This guard is distinct from the *uninitialized* path, where a missing or partial structure is expected and is created by initialization, Section 3.1.) An empty `0-sources/` is normal and is **not** a missing-folder condition — emptiness is the steady end-state (Section 18); this guard is about a folder that does not *exist*.
 
 Blockers are reported textually; the workflow does not silently skip them.
 
@@ -239,7 +250,7 @@ mkdir, move_no_clobber, rename_no_clobber, quarantine_move, db_upsert, db_remove
 First, determine whether the workspace is **initialized** — root sentinel `photos-00-workspace-guard` present (Section 3.1):
 
 - **Uninitialized** (no sentinel): prep plans **initialization** — create any missing part of the `0`–`6` structure and the control directory `.photos-ingest/`, and move every base entry that is **not** part of the managed structure (loose files *and* whole folder trees, **structure preserved — no flattening**) into `0-sources/`. The move **excludes** the numbered folders themselves and the skipped control/dot directories, so a re-entry after a crashed init never moves an already-created `0`–`6` folder beneath `0-sources/`. The sentinel is **not** written now; it is written **last**, only on successful completion of the run (Section 14.3), so a crash before then leaves the workspace uninitialized and the next run re-enters this path harmlessly — the dump already in `0-sources/` and the already-created structure are recognized and left in place (Section 3.1).
-- **Initialized** (sentinel present): the structure already exists and the dump lives in `0-sources/`. The root-file guard (Section 6.2 item 2) blocks any loose file at the base, and the seal guard (Section 6.2 item 1) blocks a sealed workspace.
+- **Initialized** (sentinel present): the structure already exists and the dump lives in `0-sources/`. The root-entry guard (Section 6.2 item 2) blocks any misplaced base entry — a loose file, a non-managed folder, or a symlink; the structure guard (Section 6.2 item 7) blocks a workspace missing any of its `0`–`6` folders; the symlink guard (Section 6.2 item 3) blocks symlinks anywhere among managed files, including nested directory symlinks and a managed folder that is itself a symlink; and the seal guard (Section 6.2 item 1) blocks a sealed workspace.
 
 Then scan `0-sources/` and every managed folder, apply the guards of Section 6.2, and split the inventory into **mutable-side files** (everything outside `6-photos-by-dest`) and **read-only by-dest files**.
 
@@ -672,6 +683,16 @@ Loose file appears at the workspace root (initialized workspace)
   -> hard block (Section 6.2 item 2): dumps belong in 0-sources
   -> strict: any root file blocks, dotfiles included
 
+Non-managed folder or symlink appears at the workspace root (initialized)
+  -> same hard block as a loose root file (Section 6.2 item 2):
+     a stray folder belongs INSIDE 0-sources; a symlink is barred (escape)
+
+A managed 0-6 folder is missing (initialized workspace)
+  -> hard block (Section 6.2 item 7): the 0-6 structure is an invariant
+  -> warns the structure was disturbed (likely deleted) and names the
+     missing folder(s); operator recreates them and re-runs
+  -> prep never silently re-creates folders on a non-init run
+
 Sealed workspace (prior successful merge)
   -> hard stop, nothing touched (Section 6.2 item 1)
   -> if files are seen at the root or in 0-sources, also warn: likely new dump,
@@ -708,8 +729,12 @@ Fingerprint failure on a mutable-side media file
   -> equality-based duplicate decision blocked -> reported blocker
   -> (an other-class file has no fingerprint by design — not a failure)
 
-Symlink or .xmp/.dop/.pp3 sidecar present
+Symlink (incl. nested directory symlink) or .xmp/.dop/.pp3 sidecar present
   -> hard block, no executable plan produced
+  -> the symlink bar is comprehensive: file symlinks, nested directory
+     symlinks inside a dump or managed folder, a managed folder that is
+     itself a symlink, and a root dump symlink are all forbidden escapes
+     (Section 6.2 item 3)
 ```
 
 ---
@@ -723,8 +748,10 @@ The prep workflow is:
 ```text
 1. Initialize if needed (uninitialized -> move base dump into 0-sources, no flatten;
    create 0-6 structure + control dir; sentinel written LAST on success).
-2. Inventory; block on a sealed workspace, a loose root file (initialized), symlinks,
-   forbidden sidecars.
+2. Inventory; block on a sealed workspace; any misplaced root entry (loose
+   file, non-managed folder, or symlink) on an initialized workspace; a
+   missing 0-6 folder (disturbed structure); symlinks anywhere (incl. nested
+   directory symlinks); forbidden sidecars.
 3. Reuse cache for unchanged files; recognize by-date -> by-dest moves;
    fingerprint + extract metadata only for genuinely new/changed media.
 4. Take the dump from 0-sources (no flattening; collisions resolved in memory).
@@ -749,7 +776,10 @@ The most important rules are:
 
 ```text
 Plan, validate, execute, journal — never re-decide at execution time.
-0-sources is the one inbox; after init the base holds only folders (a root file blocks).
+0-sources is the one inbox; after init the base holds only the managed folders
+  (any root file, stray folder, or symlink blocks; a missing 0-6 folder blocks too).
+Symlinks are never followed — file, nested-directory, managed-folder-as-symlink,
+  and root dump symlinks are all forbidden escapes.
 The sentinel is written last, so a crashed init is safely re-runnable.
 0-sources is left empty every run; non-media goes to 1-strays (inert, never re-processed).
 6-photos-by-dest is read-only; by-dest always wins a duplicate tie.
