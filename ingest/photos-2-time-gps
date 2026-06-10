@@ -1,0 +1,225 @@
+#!/usr/bin/env python3
+"""photos-2-time-gps — time/GPS calibration phase.
+
+Calibration takes a prepped, user-curated `6-photos-by-dest/` and: infers each camera's clock
+offset by matching its geotagged frames against GPX tracks, resolves every photo to real UTC,
+places GPS for the un-tagged majority, and renames files to destination-local civil time — all on
+the same plan/validate/execute, fingerprinted-dependency, authored-decisions discipline as prep.
+
+This file currently implements **Stage 1 only** (calibration spec §7 / §13): the lifecycle guards
+and the by-dest preflight gates that must pass before any calibration work. It writes **no JSON
+artifacts** (§8: no JSON before the first formal decision stage). Later phases add the in-memory
+model, GPX index, camera groups, the time/GPS decision artifacts, execution, and finalize.
+
+The script sits beside `photos_utils.py` and imports the shared infrastructure from it.
+"""
+import argparse
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from photos_utils import (
+    CONFIG, config_path, handoff_path, guard_path, is_sealed,
+    validate_config, sha256_file, media_class_for_ext, folder_name,
+    WorkspaceLock,
+)
+
+
+class CalibrationWorkflow:
+    """Stage 1 — validate the workspace is in a state calibration can run against."""
+
+    def __init__(self, workspace_root: str):
+        self.workspace_root = workspace_root
+
+    # --- preflight (calibration spec §7 / §13) -------------------------------
+
+    def preflight(self):
+        """Return (blockers, warnings, info). A non-empty `blockers` means calibration cannot
+        proceed. Textual only — writes no JSON. The lifecycle guards (sealed / uninitialized /
+        loose-root-file) hard-stop early; the by-dest scope and re-prep gates are collected so
+        every problem is reported at once."""
+        blockers, warnings, info = [], [], {}
+        ws = self.workspace_root
+
+        # 1. Lifecycle guards (shared contract §13.7), evaluated under the run lock by main().
+        if is_sealed(ws):
+            blockers.append("Workspace is SEALED (already merged): calibration will not run. "
+                            "Nothing was touched — move new media into a fresh workspace.")
+            if self._root_files() or self._entries(folder_name('sources')):
+                warnings.append("A likely new dump is present (files at the root or in "
+                                f"{folder_name('sources')}/). A sealed workspace is final; move it "
+                                "into a fresh workspace by hand.")
+            return blockers, warnings, info
+        if not os.path.exists(guard_path(ws)):
+            blockers.append("Not an initialized workspace (no photos-00-workspace-guard) — "
+                            "run photos-1-prep first.")
+            return blockers, warnings, info
+        loose = self._root_files()
+        if loose:
+            blockers.append(f"Loose file at the workspace root (dumps belong in "
+                            f"{folder_name('sources')}/): {loose[0]}. The base must hold only folders.")
+            return blockers, warnings, info
+
+        # 2. Config (read-only) + handoff — both must exist; calibration never seeds/writes config.
+        cfg_p = config_path(ws)
+        if not os.path.exists(cfg_p):
+            blockers.append("Workspace config photos-00-config.json is missing — run photos-1-prep first.")
+            return blockers, warnings, info
+        try:
+            with open(cfg_p) as f:
+                cfg = json.load(f)
+            validate_config(cfg)            # sanity-validate human-authored config (§9.2)
+        except ValueError as e:
+            blockers.append(f"Invalid workspace config: {e}")
+            return blockers, warnings, info
+        except Exception as e:
+            blockers.append(f"Workspace config could not be read: {e}")
+            return blockers, warnings, info
+        CONFIG.update(cfg)                  # adopt the seeded config as authoritative for this run
+
+        ho_p = handoff_path(ws)
+        if not os.path.exists(ho_p):
+            blockers.append("Prep handoff photos-11-handoff.json is missing — run photos-1-prep first.")
+            return blockers, warnings, info
+        try:
+            with open(ho_p) as f:
+                handoff = json.load(f)
+        except Exception as e:
+            blockers.append(f"Prep handoff could not be read: {e}")
+            return blockers, warnings, info
+        info["handoff_sha256"] = sha256_file(ho_p)
+
+        sources = folder_name('sources')
+        by_date = folder_name('photos_by_date')
+        by_dest = folder_name('photos_by_dest')
+
+        # 3. Scope gates.
+        if self._entries(sources):
+            blockers.append(f"{sources}/ is not empty — prep leaves it empty after every run; an "
+                            "unprocessed dump is waiting. Re-run photos-1-prep.")
+
+        stray = [rel for rel, mc in self._scan_media(by_date) if mc in ("image", "raw")]
+        if stray:
+            blockers.append(f"{by_date}/ still contains {len(stray)} photo(s) — finish moving them "
+                            f"into {by_dest}/ before calibrating (e.g. {stray[0]}).")
+
+        dev_found, nonphoto = self._scan_by_dest(by_dest)
+        if dev_found:
+            names = ", ".join(sorted(set(CONFIG.get("destination_distribution_subfolders") or [])))
+            blockers.append(f"Development has already started — a distribution subfolder ({names}) "
+                            f"exists under {by_dest}: {dev_found[0]}. Time/GPS calibration must run "
+                            "BEFORE development; roll the breakout back first.")
+        if nonphoto:
+            videos = [p for p, mc in nonphoto if mc == "video"]
+            others = [p for p, mc in nonphoto if mc != "video"]
+            parts = []
+            if others:
+                parts.append(f"{len(others)} non-media file(s) (e.g. {others[0]})")
+            if videos:
+                parts.append(f"{len(videos)} video(s) (e.g. {videos[0]} — belongs in "
+                             f"{folder_name('videos_by_date')}/)")
+            blockers.append(f"{by_dest}/ must contain only photos. Found " + " and ".join(parts) +
+                            ". Remove or relocate them before calibrating.")
+
+        # 4. Re-prep-after-move gate (§13.1): a prep run must follow the latest by-date→by-dest move.
+        self._check_reprep_gate(handoff, by_dest, by_date, blockers)
+
+        info["by_dest_photos"] = sum(1 for _, mc in self._scan_media(by_dest) if mc in ("image", "raw"))
+        return blockers, warnings, info
+
+    # --- filesystem helpers --------------------------------------------------
+
+    def _root_files(self):
+        ws = self.workspace_root
+        return sorted(f for f in os.listdir(ws) if os.path.isfile(os.path.join(ws, f)))
+
+    def _entries(self, rel_folder):
+        d = os.path.join(self.workspace_root, rel_folder)
+        return sorted(os.listdir(d)) if os.path.isdir(d) else []
+
+    def _scan_media(self, rel_folder):
+        """Yield (workspace-relative path, media_class) for non-dot files under rel_folder."""
+        base = os.path.join(self.workspace_root, rel_folder)
+        if not os.path.isdir(base):
+            return
+        for root, _dirs, files in os.walk(base):
+            for f in files:
+                if f.startswith('.'):
+                    continue
+                rel = os.path.relpath(os.path.join(root, f), self.workspace_root)
+                yield rel, media_class_for_ext(os.path.splitext(f)[1])
+
+    def _scan_by_dest(self, by_dest):
+        """Return (dev_subfolders_found, non_photo_files) under 6-photos-by-dest."""
+        dev_names = set(CONFIG.get("destination_distribution_subfolders") or [])
+        base = os.path.join(self.workspace_root, by_dest)
+        dev_found, nonphoto = [], []
+        if not os.path.isdir(base):
+            return dev_found, nonphoto
+        for root, dirs, files in os.walk(base):
+            for d in dirs:
+                if d in dev_names:
+                    dev_found.append(os.path.relpath(os.path.join(root, d), self.workspace_root))
+            for f in files:
+                if f.startswith('.'):
+                    continue
+                mc = media_class_for_ext(os.path.splitext(f)[1])
+                if mc not in ("image", "raw"):
+                    nonphoto.append((os.path.relpath(os.path.join(root, f), self.workspace_root), mc))
+        return sorted(dev_found), nonphoto
+
+    def _check_reprep_gate(self, handoff, by_dest, by_date, blockers):
+        recorded = {f.get("relative_path") for f in (handoff.get("files") or [])}
+        unrecorded = [rel for rel, mc in self._scan_media(by_dest)
+                      if mc in ("image", "raw") and rel not in recorded]
+        missing_bydate = [f["relative_path"] for f in (handoff.get("files") or [])
+                          if (f.get("relative_path") or "").startswith(by_date + "/")
+                          and f.get("media_class") in ("image", "raw")
+                          and not os.path.exists(os.path.join(self.workspace_root, f["relative_path"]))]
+        if unrecorded or missing_bydate:
+            ex = (unrecorded or missing_bydate)[0]
+            blockers.append(
+                f"{by_dest} contains photos prep has not yet recorded (the handoff predates your most "
+                f"recent move from {by_date} into {by_dest}; e.g. {ex}). Re-run photos-1-prep — it "
+                "recognizes the moved files (no re-fingerprint, no re-read) and refreshes the "
+                "handoff/cache, then calibration can proceed.")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="photos-2-time-gps: time/GPS calibration (Stage 1 — preflight).")
+    sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("run", help="Run the calibration pass (currently: Stage-1 preflight only).")
+    args = parser.parse_args()
+
+    workspace_root = os.getcwd()
+
+    # Whole-run workspace lock (shared contract §2): one lock across every phase; fail-fast.
+    run_lock = WorkspaceLock(workspace_root)
+    if not run_lock.acquire():
+        owner = run_lock.read_owner() or {}
+        detail = f" (pid {owner.get('pid')}, since {owner.get('started_at')})" if owner else ""
+        print(f"Workspace is locked by an in-progress run{detail}; try again when it finishes.",
+              file=sys.stderr)
+        sys.exit(1)
+    print(f"Lock acquired: {run_lock.lock_path}", file=sys.stderr)
+    try:
+        if args.command == "run":
+            blockers, warnings, info = CalibrationWorkflow(workspace_root).preflight()
+            for w in warnings:
+                print(f"  Warning: {w}", file=sys.stderr)
+            if blockers:
+                print("\nCalibration cannot proceed:", file=sys.stderr)
+                for b in blockers:
+                    print(f"  - {b}", file=sys.stderr)
+                print("\nNo calibration JSON was written.", file=sys.stderr)
+                sys.exit(2)
+            print(f"Preflight passed — ready for calibration "
+                  f"({info.get('by_dest_photos', 0)} photo(s) under {folder_name('photos_by_dest')}/).")
+    finally:
+        run_lock.release()
+
+
+if __name__ == "__main__":
+    main()
