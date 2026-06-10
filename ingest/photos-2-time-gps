@@ -1590,7 +1590,12 @@ class CalibrationWorkflow:
     def _apply_file(self, rel, ops, journal, accepted_mismatches):
         """Apply one file's operations: its metadata writes batched into a single exiftool call, then
         its rename — with execute-time precondition + no-clobber rechecks and a post-write content-
-        fingerprint verify. Returns a per-file result the caller merges (no shared-state mutation)."""
+        fingerprint verify. Returns a per-file result the caller merges (no shared-state mutation).
+
+        Crash-resumable (§29.1.3): a file already applied by a crashed prior run is detected by its
+        target state — its planned rename target in place (source gone), or its decoded-content
+        fingerprint still matching the plan despite a changed size/mtime (a metadata write only) — and
+        is skipped or re-applied idempotently rather than tripping the size/mtime precondition."""
         abs_path = os.path.join(self.workspace_root, rel)
         res = {"relative_path": rel, "applied": [], "skipped": [], "failed": [], "blocker": None,
                "mismatch": None, "reverted_fps": []}
@@ -1598,21 +1603,32 @@ class CalibrationWorkflow:
             res["skipped"] = [o["operation_id"] for o in ops]
             return res
         pre = ops[0].get("preconditions") or {}
-        try:
-            st = os.stat(abs_path)
-        except OSError:
+        rename_ops = [o for o in ops if o["type"] == "rename_no_clobber"]
+
+        if not os.path.exists(abs_path):
+            # Already-applied resume: the source is gone but the planned rename target is in place, so
+            # a crashed prior run fully applied this file — skip it (don't block on the missing source).
+            if rename_ops and os.path.exists(os.path.join(os.path.dirname(abs_path), rename_ops[-1]["to"])):
+                res["skipped"] = [o["operation_id"] for o in ops]
+                return res
             res["blocker"] = f"{rel}: file is missing at execute time"
             return res
-        if pre.get("size") is not None and st.st_size != pre["size"]:
-            res["blocker"] = f"{rel}: size changed since planning"
-            return res
-        if pre.get("mtime_ns") is not None and st.st_mtime_ns != pre["mtime_ns"]:
-            res["blocker"] = f"{rel}: mtime changed since planning"
-            return res
 
-        # metadata + revert-manual-GPS ops both produce a single batched exiftool tag write
+        st = os.stat(abs_path)
+        if (pre.get("size") is not None and st.st_size != pre["size"]) or \
+           (pre.get("mtime_ns") is not None and st.st_mtime_ns != pre["mtime_ns"]):
+            # The file differs from plan time. If its decoded-content fingerprint still matches, the
+            # change is a metadata write — ours from a crashed prior run, or a benign touch — so the
+            # ops are re-applied idempotently. If the content fingerprint differs, the image itself
+            # changed externally: block (unless the operator already accepted this file's new identity).
+            cur_fp = (ContentHasher.fingerprint_image(abs_path) or {}).get("value")
+            if cur_fp != pre.get("content_fingerprint") and rel not in accepted_mismatches:
+                res["blocker"] = f"{rel}: size/mtime changed and content fingerprint differs since planning"
+                return res
+
+        # metadata + revert-manual-GPS ops both produce a single batched, idempotent exiftool tag write
         write_ops = [o for o in ops if o["type"] in self._META_OP_TYPES or o["type"] == "revert_manual_gps"]
-        if write_ops and not all(journal.get(o["operation_id"]) == "confirmed" for o in write_ops):
+        if write_ops:
             tags = {}
             for o in write_ops:
                 tags.update(o.get("writes") or {})
@@ -1629,9 +1645,7 @@ class CalibrationWorkflow:
                                    "actual_fingerprint": new_fp}
                 return res                          # content altered & not accepted: no confirm, no rename
 
-        for o in [x for x in ops if x["type"] == "rename_no_clobber"]:
-            if journal.get(o["operation_id"]) == "confirmed":
-                continue
+        for o in rename_ops:
             d = os.path.dirname(abs_path)
             if self._target_occupied(d, o["to"], o["from"]):
                 res["blocker"] = f"{rel}: rename target {o['to']!r} is occupied at execute time"
@@ -1701,7 +1715,16 @@ class CalibrationWorkflow:
                 futs = [ex.submit(self._apply_file, rel, ops, journal, accepted)
                         for rel, ops in sorted(by_file.items())]
                 for fut in concurrent.futures.as_completed(futs):
-                    results.append(fut.result())
+                    r = fut.result()
+                    results.append(r)
+                    # Incremental confirmation journal (§29.1a): persist each file's confirmed ops AS
+                    # IT COMPLETES (in this main thread — workers never touch the journal), so a crash
+                    # mid-run leaves a journal that lets the next run skip the already-applied files.
+                    if r["applied"]:
+                        for oid in r["applied"]:
+                            journal[oid] = "confirmed"
+                        write_json_artifact(jpath, {"journal_version": 1, "plan_id": plan["plan_id"],
+                                                    "operations": journal, "updated_at": now_iso})
 
             # Consume-on-restore (§24.1.4): a successfully-reverted present file's pin is removed.
             reverted = 0
@@ -1712,11 +1735,7 @@ class CalibrationWorkflow:
         finally:
             cache.close()
 
-        for r in results:
-            for oid in r["applied"]:
-                journal[oid] = "confirmed"
-        write_json_artifact(jpath, {"journal_version": 1, "plan_id": plan["plan_id"],
-                                    "operations": journal, "updated_at": now_iso})
+        # The journal was persisted incrementally as each file completed (above); nothing more to flush.
         summary = self._build_summary(plan, results, now_iso, execution_id, jobs)
         summary["totals"]["manual_gps_pre_states_captured"] = captured   # reverts counted by _build_summary
         summary["snapshot"] = snapshot                                   # the pre-mutation ZFS record (or None)
