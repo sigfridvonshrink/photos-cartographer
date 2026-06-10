@@ -197,15 +197,22 @@ def prep_db_snapshot_path(ws: str) -> str:
 
 def write_db_snapshot(conn, dest_path: str) -> None:
     """Capture a transactionally-consistent point-in-time image of `conn`'s database to `dest_path`
-    (shared contract §13.4a): VACUUM INTO a temp name, then atomic rename — so an interrupted capture
-    leaves either the prior snapshot or the complete new one, never a corrupt/torn file. Shared by
-    prep (photos-15-prep-ingest.db) and calibration finalize (photos-25-calibrate-ingest.db)."""
+    (shared contract §13.4a): VACUUM INTO a temp name, VERIFY it, then atomic rename — so an
+    interrupted capture leaves either the prior snapshot or the complete new one, never a corrupt/torn
+    file. Shared by prep (photos-15-prep-ingest.db) and calibration finalize (photos-25-calibrate-ingest.db)."""
     import uuid
     tmp = os.path.join(os.path.dirname(dest_path) or ".", f".tmp-snapshot-{uuid.uuid4().hex[:8]}.db")
     try:
         if os.path.exists(tmp):
             os.remove(tmp)
         conn.execute("VACUUM INTO ?", (tmp,))
+        # Verify the temp is a sound SQLite image before exposing it under the final name (§13.4a.2).
+        chk = sqlite3.connect(tmp)
+        try:
+            if (chk.execute("PRAGMA quick_check").fetchone() or [None])[0] != "ok":
+                raise RuntimeError("snapshot failed its integrity check")
+        finally:
+            chk.close()
         os.replace(tmp, dest_path)
     except Exception as e:
         if os.path.exists(tmp):
@@ -681,15 +688,19 @@ class ContentHasher:
     @staticmethod
     def fingerprint_video(filepath: str) -> Dict[str, Any]:
         cmd = ["ffmpeg", "-i", filepath, "-c", "copy", "-f", "md5", "-"]
-        try:
-            res = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            for line in res.stdout.splitlines():
-                if line.startswith("MD5="):
-                    return {"status": "valid", "strategy": "video-md5-v1", "value": line.split("=")[1].strip()}
-            return {"status": "failed", "strategy": "video-md5-v1", "value": None, "error": "No MD5 output"}
-        except subprocess.CalledProcessError as e:
-            print(f"Warning: ffmpeg failed on {filepath}: {e.stderr}")
-            return {"status": "failed", "strategy": "video-md5-v1", "value": None, "error": str(e)}
+        last_error = None
+        for attempt in range(2):                       # safe restart on a transient ffmpeg failure
+            try:
+                res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                for line in res.stdout.splitlines():
+                    if line.startswith("MD5="):
+                        return {"status": "valid", "strategy": "video-md5-v1", "value": line.split("=")[1].strip()}
+                last_error = "No MD5 output"
+            except subprocess.CalledProcessError as e:
+                last_error = str(e)
+                if attempt == 1:
+                    print(f"Warning: ffmpeg failed on {filepath}: {e.stderr}")
+        return {"status": "failed", "strategy": "video-md5-v1", "value": None, "error": last_error}
 
 
 class ProcessCrashedError(Exception):
