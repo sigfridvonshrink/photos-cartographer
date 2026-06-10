@@ -142,20 +142,43 @@ def test_handoff_written_sorted_and_deterministic(tmp_path, monkeypatch):
 
 def test_handoff_content_fingerprint_ignores_run_metadata_and_audit():
     """The content fingerprint is byte-stable across no-op reruns: it excludes run_metadata,
-    diagnostics, the execution-journal pointer, and itself; only real content moves it."""
+    diagnostics, the execution-journal pointer, itself, and the NESTED per-run audit (cache_freshness
+    counts in camera_groups/destination_folders, and conflicts_or_duplicates); only real content moves it."""
     import photos_utils as utils
     base = {"schema_version": 1, "cache_fingerprint": "cf", "files": [{"relative_path": "a"}],
+            "camera_groups": [{"group_key": "g", "cache_freshness": {"metadata_extracted_ok": 1}}],
+            "destination_folders": [{"path": "X", "cache_freshness": {"x": 1},
+                                     "conflicts_or_duplicates": [{"original_path": "d"}]}],
             "depends_on": {"effective_config": {"fingerprint": "c1"},
                            "execution_journal": {"sha256": "j1"}},
             "diagnostics": {"blockers": []},
             "run_metadata": {"plan_id": "p1", "execution_id": "e1"}}
     fp1 = utils.handoff_content_fingerprint(base)
-    volatile_changed = {**base, "run_metadata": {"plan_id": "p2", "execution_id": "e2"},
-                        "diagnostics": {"blockers": ["x"]}, "content_fingerprint": "stale",
-                        "depends_on": {"effective_config": {"fingerprint": "c1"},
-                                       "execution_journal": {"sha256": "j2"}}}
-    assert utils.handoff_content_fingerprint(volatile_changed) == fp1     # no-op rerun -> stable
-    assert utils.handoff_content_fingerprint({**base, "cache_fingerprint": "CF2"}) != fp1   # real change
+    # a no-op re-run: extracted->reused, the quarantine already happened, fresh run ids -> SAME fingerprint
+    noop = {**base, "run_metadata": {"plan_id": "p2", "execution_id": "e2"},
+            "diagnostics": {"blockers": ["x"]}, "content_fingerprint": "stale",
+            "camera_groups": [{"group_key": "g", "cache_freshness": {"metadata_reused_from_cache": 1}}],
+            "destination_folders": [{"path": "X", "cache_freshness": {"x": 9}, "conflicts_or_duplicates": []}],
+            "depends_on": {"effective_config": {"fingerprint": "c1"}, "execution_journal": {"sha256": "j2"}}}
+    assert utils.handoff_content_fingerprint(noop) == fp1                 # no-op rerun -> stable
+    assert utils.handoff_content_fingerprint({**base, "cache_fingerprint": "CF2"}) != fp1   # inventory change
+    assert utils.handoff_content_fingerprint(                            # group IDENTITY change still restales
+        {**base, "camera_groups": [{"group_key": "g2", "cache_freshness": {"metadata_extracted_ok": 1}}]}) != fp1
+
+
+def test_handoff_content_fingerprint_stable_across_real_noop_rerun(tmp_path, monkeypatch):
+    """End-to-end (§16.2): a second prep run that changes nothing organized produces the SAME handoff
+    content_fingerprint, even though run_metadata + cache-freshness counts differ run to run."""
+    _mock(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    (ws / "0-sources" / "b.jpg").write_bytes(b"BBBB")
+    _run(ws)
+    h1 = _handoff(ws)
+    _run(ws)                                                             # re-run: files organized, cache warm
+    h2 = _handoff(ws)
+    assert h2["content_fingerprint"] == h1["content_fingerprint"]        # content fingerprint stable
+    assert h2["run_metadata"]["execution_id"] != h1["run_metadata"]["execution_id"]   # the run DID change
 
 
 def test_handoff_roundtrip_assertion_catches_unstable_fingerprint(tmp_path, monkeypatch):
