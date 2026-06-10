@@ -648,7 +648,115 @@ def get_identify_command() -> list:
 import concurrent.futures
 import select
 import subprocess
+import threading
+import atexit
 from typing import Dict, List, Any, Optional
+
+
+_MAGICK_COMMAND = None
+def get_magick_command() -> list:
+    """Return ['magick'] if ImageMagick v7's `magick` (which supports the persistent `-script -` mode)
+    is available (cached), else []. The legacy v6 `identify` has no script mode, so a magick-less
+    system falls back to per-file `identify` in fingerprint_image."""
+    global _MAGICK_COMMAND
+    if _MAGICK_COMMAND is None:
+        _MAGICK_COMMAND = ["magick"] if shutil.which("magick") else []
+    return _MAGICK_COMMAND
+
+
+class ProcessCrashedError(Exception):
+    pass
+
+
+class PersistentMagickWorker:
+    """A persistent `magick -script -` process — the ImageMagick analog of exiftool's `-stay_open` —
+    reused across files for the content signature instead of spawning `identify` once per file
+    (§17.5). One worker per scanning thread (thread-local); restarted on crash; closed at exit. The
+    `magick -script` signature is byte-identical to `identify -format %#` (verified)."""
+    _instances = []
+    _lock = threading.Lock()
+
+    def __init__(self):
+        self.closed = False
+        self._start()
+        with PersistentMagickWorker._lock:
+            PersistentMagickWorker._instances.append(self)
+
+    def _start(self):
+        self.process = subprocess.Popen(
+            get_magick_command() + ["-limit", "thread", "1", "-script", "-"],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            text=True, bufsize=1)
+
+    def restart(self):
+        self.close(remove=False)
+        self._start()
+        self.closed = False
+
+    def signature(self, filepath: str):
+        """The decoded-content signature (`%#`) of `filepath` over sRGB/8-bit-normalized pixels.
+        Returns the hex string, or None on empty output. Raises ProcessCrashedError if the worker
+        process dies (e.g. on an unreadable image — `magick -script` aborts) so the caller can
+        restart + retry."""
+        if self.closed:
+            raise ProcessCrashedError("Magick worker closed")
+        esc = str(filepath).replace("\\", "\\\\").replace('"', '\\"')
+        cmd = (f'-read "{esc}" -colorspace sRGB -depth 8 -print "%#\\n" '
+               f'-delete 0--1 -print "{{ready}}\\n"\n')
+        try:
+            self.process.stdin.write(cmd)
+            self.process.stdin.flush()
+        except OSError as e:
+            raise ProcessCrashedError(f"Failed to write to magick: {e}")
+        out = []
+        for _ in range(64):          # a real reply is 1-2 lines then {ready}; cap to never hang on a broken process
+            try:
+                line = self.process.stdout.readline()
+            except OSError as e:
+                raise ProcessCrashedError(f"Failed to read from magick: {e}")
+            if not line:
+                raise ProcessCrashedError("Unexpected EOF from magick process.")
+            if line.strip() == "{ready}":
+                return out[0] if out else None
+            if line.strip():
+                out.append(line.strip())
+        raise ProcessCrashedError("magick produced no {ready} sentinel")
+
+    def close(self, remove=True):
+        if not self.closed:
+            try:
+                self.process.stdin.close()
+            except Exception:
+                pass
+            try:
+                self.process.wait(timeout=2)
+            except Exception:
+                self.process.kill()
+            self.closed = True
+        if remove:
+            with PersistentMagickWorker._lock:
+                if self in PersistentMagickWorker._instances:
+                    PersistentMagickWorker._instances.remove(self)
+
+    @classmethod
+    def cleanup_all(cls):
+        with cls._lock:
+            instances = list(cls._instances)
+        for w in instances:
+            w.close()
+
+
+_magick_tls = threading.local()
+
+def _thread_magick_worker():
+    """The calling thread's persistent magick worker, created lazily and reused across files."""
+    w = getattr(_magick_tls, "worker", None)
+    if w is None or w.closed:
+        w = PersistentMagickWorker()
+        _magick_tls.worker = w
+    return w
+
+atexit.register(PersistentMagickWorker.cleanup_all)
 
 
 class ContentHasher:
@@ -668,6 +776,29 @@ class ContentHasher:
         mixing signatures.
         """
         engine_version = get_imagemagick_version()
+        if get_magick_command():
+            # Persistent `magick -script -` worker, one per thread, reused across files (§17.5) —
+            # restarted on crash (an unreadable image aborts the script process).
+            last_error = "ImageMagick failed"
+            for _attempt in range(2):
+                worker = _thread_magick_worker()
+                try:
+                    sig = worker.signature(filepath)
+                    if sig:
+                        return {"status": "valid", "strategy": "image-content-hash-v1",
+                                "value": sig, "engine_version": engine_version}
+                    last_error = "ImageMagick produced no signature"
+                    worker.restart()
+                except ProcessCrashedError as e:
+                    last_error = str(e)
+                    try:
+                        worker.restart()
+                    except Exception:
+                        _magick_tls.worker = None      # drop the dead worker; a fresh one next attempt
+            return {"status": "failed", "strategy": "image-content-hash-v1", "value": None,
+                    "error": last_error, "engine_version": engine_version}
+
+        # Fallback: legacy per-file `identify` (no `magick` script mode on this system).
         identify_cmd = get_identify_command()
         if not identify_cmd:
             return {"status": "failed", "strategy": "image-content-hash-v1", "value": None,
@@ -716,9 +847,6 @@ class ContentHasher:
                     print(f"Warning: ffmpeg failed on {filepath}: {e.stderr}")
         return {"status": "failed", "strategy": "video-md5-v1", "value": None, "error": last_error}
 
-
-class ProcessCrashedError(Exception):
-    pass
 
 class PersistentExifToolWorker:
     def __init__(self):

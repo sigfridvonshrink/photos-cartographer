@@ -1792,6 +1792,8 @@ class CalibrationWorkflow:
                     reverted += 1
         finally:
             cache.close()
+            from photos_utils import PersistentMagickWorker
+            PersistentMagickWorker.cleanup_all()       # close the per-thread magick workers (verify pass)
 
         # The journal was persisted incrementally as each file completed (above); nothing more to flush.
         summary = self._build_summary(plan, results, now_iso, execution_id, jobs)

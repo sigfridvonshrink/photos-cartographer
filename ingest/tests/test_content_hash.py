@@ -110,7 +110,8 @@ def test_pixel_signature_is_exif_invariant(tmp_path):
 def test_hash_image_failure_is_recorded_when_magick_absent(monkeypatch):
     # Simulate ImageMagick missing: fingerprint_image must return a clean failure record
     # (which the §6.2/§11.3 blocker path keys on), still version-stamped.
-    monkeypatch.setattr(utils, "get_identify_command", lambda: [])
+    monkeypatch.setattr(utils, "get_magick_command", lambda: [])      # no persistent worker
+    monkeypatch.setattr(utils, "get_identify_command", lambda: [])    # no legacy fallback either
     r = prep.ContentHasher.fingerprint_image(CAM_SMALL)
     assert r["status"] == "failed"
     assert r["value"] is None
