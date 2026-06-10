@@ -221,3 +221,13 @@ def test_dangling_and_managed_named_root_symlinks_blocked(tmp_path):
     os.symlink(str(tmp_path), str(ws / "5-photos-by-date"))           # a managed folder that is a symlink
     b2, _, _ = _pf(ws)
     assert any("Forbidden symlink at the workspace root" in b for b in b2), b2
+
+
+def test_dot_named_root_symlink_blocked(tmp_path):
+    """A DOT-named root symlink is barred too: the only legitimate dot entries (.photos-ingest*) are
+    real directories, so a dot-named symlink at the root is forbidden, not skipped (§13)."""
+    import os
+    ws = _ws(tmp_path)
+    os.symlink(str(tmp_path), str(ws / ".evil"))
+    blockers, _, _ = _pf(ws)
+    assert any("Forbidden symlink at the workspace root" in b for b in blockers), blockers
