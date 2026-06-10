@@ -972,11 +972,12 @@ class CalibrationWorkflow:
         return sorted(os.listdir(d)) if os.path.isdir(d) else []
 
     def _root_symlinks(self):
-        """Non-dot entries at the workspace root that are symlinks (file, directory, or dangling) —
-        barred outright, never followed (§13)."""
+        """Any entry at the workspace root that is a symlink (file, directory, or dangling) — barred
+        outright, never followed (§13). Dot-named ones included: the only legitimate dot entries
+        (.photos-ingest*) are real directories, never symlinks, so a dot-named symlink is forbidden too."""
         ws = self.workspace_root
         return sorted(f for f in os.listdir(ws)
-                      if not f.startswith('.') and os.path.islink(os.path.join(ws, f)))
+                      if os.path.islink(os.path.join(ws, f)))
 
     def _scan_media(self, rel_folder):
         """Yield (workspace-relative path, media_class) for non-dot files under rel_folder."""
@@ -1734,9 +1735,18 @@ class CalibrationWorkflow:
         # mutation; the record is carried into photos-24 either way.
         snapshot = take_zfs_snapshot(ws, plan["plan_id"], "calibrate")
         if snapshot is not None and snapshot["required"] and not snapshot["ok"]:
+            reason = f"required ZFS pre-mutation snapshot failed: {snapshot['stderr']}"
+            # Nothing was mutated, but §29 step 6 requires the snapshot record be carried into photos-24
+            # either way, so the abort is auditable like any other run.
+            write_json_artifact(execution_summary_path(ws), {
+                "artifact_type": "execution_summary", "artifact_name": EXECUTION_SUMMARY_ARTIFACT,
+                "schema_version": 1, "plan_id": plan.get("plan_id"), "status": "rejected",
+                "snapshot": snapshot, "blockers": [reason], "failures": [], "fingerprint_mismatches": [],
+                "run_metadata": {"execution_id": execution_id, "started_at": now_iso,
+                                 "finished_at": now_iso, "jobs": jobs},
+            })
             return {"status": "rejected", "plan_id": plan.get("plan_id"),
-                    "stale": [f"required ZFS pre-mutation snapshot failed: {snapshot['stderr']}"],
-                    "snapshot": snapshot}
+                    "stale": [reason], "snapshot": snapshot}
 
         jpath = journal_path(ws, plan["plan_id"])
         journal = {}
@@ -1823,8 +1833,9 @@ class CalibrationWorkflow:
                 op_type[o["operation_id"]] = o["type"]
                 op_dest[o["operation_id"]] = dest
         totals = {v: 0 for v in self._OP_TOTAL_KEY.values()}
-        # Per-destination operation counts (§29.2 item 4 — applied per destination + global total).
-        per_dest = {dest: {v: 0 for v in self._OP_TOTAL_KEY.values()} for dest in plan["destinations"]}
+        # Per-destination operation counts (§29.2 item 4 — applied/no-op/skipped per destination + global total).
+        per_dest = {dest: {**{v: 0 for v in self._OP_TOTAL_KEY.values()}, "skipped": 0}
+                    for dest in plan["destinations"]}
         newly, skipped_n = 0, 0
         failures, mismatches, blockers = [], [], []
         for r in sorted(results, key=lambda x: x["relative_path"]):
@@ -1836,6 +1847,10 @@ class CalibrationWorkflow:
                     if d in per_dest:
                         per_dest[d][key] += 1
                 newly += 1
+            for oid in r["skipped"]:                       # already-satisfied ops, attributed per destination
+                d = op_dest.get(oid)
+                if d in per_dest:
+                    per_dest[d]["skipped"] += 1
             skipped_n += len(r["skipped"])
             failures.extend({"operation_id": oid, "relative_path": r["relative_path"]} for oid in r["failed"])
             if r["mismatch"]:

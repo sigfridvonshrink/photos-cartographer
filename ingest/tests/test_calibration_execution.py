@@ -140,6 +140,9 @@ def test_resume_skips_confirmed_ops(tmp_path, monkeypatch):
     assert _execute(monkeypatch, ws) == 0
     s = _summary(ctl)
     assert s["resume"]["newly_applied"] == 0 and s["resume"]["already_satisfied_skipped"] == 4
+    # skips are also broken down per destination (§29.2 item 4) and sum to the global skip count
+    assert s["destinations"]["6-photos-by-dest/T"]["skipped"] == 4
+    assert sum(d["skipped"] for d in s["destinations"].values()) == s["resume"]["already_satisfied_skipped"]
 
 
 # --- reconciliation ----------------------------------------------------------
@@ -368,6 +371,10 @@ def test_execute_aborts_when_required_snapshot_fails(tmp_path, monkeypatch):
     before = sorted(os.listdir(ws / "6-photos-by-dest" / "T"))
     assert _execute(monkeypatch, ws) == 2                            # required snapshot failed -> rejected
     assert sorted(os.listdir(ws / "6-photos-by-dest" / "T")) == before   # nothing mutated
+    # §29 step 6: the snapshot record is carried into photos-24 even on the abort path
+    s = _summary(ctl)
+    assert s["status"] == "rejected" and s["snapshot"]["ok"] is False and s["snapshot"]["required"] is True
+    assert s["blockers"] and "snapshot failed" in s["blockers"][0]
 
 
 def test_resume_after_journal_lost_skips_applied_files(tmp_path, monkeypatch):
