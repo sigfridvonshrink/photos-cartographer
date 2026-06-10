@@ -35,6 +35,7 @@ def _load_once(module_name, filename):
 # Order matters: photos-1-prep does `from photos_utils import ...` at load time.
 _load_once("photos_utils", "photos_utils.py")
 _load_once("photos_1_prep", "photos-1-prep")
+_load_once("photos_2_time_gps", "photos-2-time-gps")   # calibration phase
 
 
 @pytest.fixture(autouse=True)
