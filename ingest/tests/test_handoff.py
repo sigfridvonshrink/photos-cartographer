@@ -156,3 +156,19 @@ def test_handoff_content_fingerprint_ignores_run_metadata_and_audit():
                                        "execution_journal": {"sha256": "j2"}}}
     assert utils.handoff_content_fingerprint(volatile_changed) == fp1     # no-op rerun -> stable
     assert utils.handoff_content_fingerprint({**base, "cache_fingerprint": "CF2"}) != fp1   # real change
+
+
+def test_handoff_roundtrip_assertion_catches_unstable_fingerprint(tmp_path, monkeypatch):
+    """If the just-written handoff would NOT re-read to the same content_fingerprint (a non-round-trip-
+    stable field crept in), prep fails loudly rather than shipping a forever-stale handoff (§16)."""
+    import pytest
+    _mock(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    calls = []
+    def fake_fp(h):                       # compute -> "A" (stored); re-read verify -> "B" (mismatch)
+        calls.append(1)
+        return "A" if len(calls) == 1 else "B"
+    monkeypatch.setattr(utils, "handoff_content_fingerprint", fake_fp)
+    with pytest.raises(RuntimeError, match="round-trip stable"):
+        _run(ws)
