@@ -54,7 +54,10 @@ def _ready_ws(tmp_path, monkeypatch, *, zfs=None):
                                     "field_set_version": 1, "parsed_json": json.dumps(parsed)}}
     files = [rec("6-photos-by-dest/T/a.arw", "2024:07:03 14:00:00", 50.0, 4.0),
              rec("6-photos-by-dest/T/b.arw", "2024:07:03 15:00:00", 51.0, 5.0)]
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"files": files, "cache_fingerprint": "pcf"}))
+    ho = {"run_metadata": {"plan_id": "prep-1", "execution_id": "exec-1"},
+          "files": files, "cache_fingerprint": "pcf"}
+    ho["content_fingerprint"] = utils.handoff_content_fingerprint(ho)
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(ho))
 
     def run():
         monkeypatch.chdir(str(ws))
@@ -327,7 +330,8 @@ def test_summary_keeps_run_metadata_separate(tmp_path, monkeypatch):
     s = wf.execute_plan(1, "2024-07-03T00:00:00Z", "exec-1")
     # the volatile bits (timestamps, execution id, jobs) live ONLY in run_metadata, off the
     # fingerprint-bearing body (summarizes / totals / plan_id), per §29.2.
-    assert s["run_metadata"] == {"execution_id": "exec-1", "finished_at": "2024-07-03T00:00:00Z", "jobs": 1}
+    assert s["run_metadata"] == {"execution_id": "exec-1", "started_at": "2024-07-03T00:00:00Z",
+                                 "finished_at": "2024-07-03T00:00:00Z", "jobs": 1}
     body = json.dumps({k: v for k, v in s.items() if k != "run_metadata"})
     assert "2024-07-03T00:00:00Z" not in body and "exec-1" not in body
     assert s["summarizes"][cal.EXECUTABLE_PLAN_ARTIFACT]["sha256"]
@@ -401,3 +405,37 @@ def test_journal_persisted_incrementally_during_run(tmp_path, monkeypatch):
     assert _execute(monkeypatch, ws) == 0
     # two files, each flushing its confirmed ops -> the journal grew across >1 incremental write
     assert len(flushes) >= 2 and flushes == sorted(flushes) and flushes[-1] > flushes[0]
+
+
+def test_summary_grouped_by_destination(tmp_path, monkeypatch):
+    """photos-24 carries a per-destination operation breakdown (§29.2 item 4) that sums to the global
+    totals."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _mock_tools(monkeypatch, ws)
+    assert _execute(monkeypatch, ws) == 0
+    s = _summary(ctl)
+    assert "destinations" in s
+    d = s["destinations"]["6-photos-by-dest/T"]
+    assert d["metadata_time_writes"] == 2 and d["renames"] == 2
+    assert sum(v["metadata_time_writes"] for v in s["destinations"].values()) == s["totals"]["metadata_time_writes"]
+    assert sum(v["renames"] for v in s["destinations"].values()) == s["totals"]["renames"]
+
+
+def test_noop_reprep_does_not_restale_plan(tmp_path, monkeypatch):
+    """A no-op prep re-run refreshes only the handoff's run_metadata (and its byte layout); calibration
+    depends on the handoff CONTENT fingerprint, so the plan must NOT restale — but a real content change
+    (the inventory) does (§16)."""
+    import photos_utils as u
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _mock_tools(monkeypatch, ws)
+    wf = cal.CalibrationWorkflow(str(ws)); wf.preflight(for_execute=True)
+    plan = json.load(open(ctl / "photos-23-executable-plan.json"))
+    gpx = cal.GPXIndex(cal.selected_gpx_root()).build()
+    assert wf.revalidate_plan(plan, gpx) == []                            # fresh
+    ho = json.load(open(ctl / "photos-11-handoff.json"))
+    ho["run_metadata"] = {"plan_id": "NEW-PLAN", "execution_id": "NEW-EXEC"}   # only run metadata changed
+    u.write_json_artifact(str(ctl / "photos-11-handoff.json"), ho)
+    assert wf.revalidate_plan(plan, gpx) == []                            # still not stale
+    ho["cache_fingerprint"] = "CHANGED-INVENTORY"                         # a real content change
+    u.write_json_artifact(str(ctl / "photos-11-handoff.json"), ho)
+    assert any("handoff" in s for s in wf.revalidate_plan(plan, gpx))     # now stale
