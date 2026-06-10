@@ -1197,7 +1197,7 @@ class CalibrationWorkflow:
             anc_path, anc_tz = inherited
             proposed, source, confidence, inherited_from = anc_tz, "inherited", "review_required", anc_path
         elif default:
-            proposed, source, confidence, inherited_from = default, "config_default_folder_timezone", "high", None
+            proposed, source, confidence, inherited_from = default, "config_default", "high", None
         else:
             proposed, source, confidence, inherited_from = None, "none", "none", None
         ud = prior_tz.get("user_decision") or {}

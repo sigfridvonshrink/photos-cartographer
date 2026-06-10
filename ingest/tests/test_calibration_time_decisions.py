@@ -177,5 +177,5 @@ def test_timezone_proposal_inherits_nearest_resolved_ancestor():
     assert accepted["effective_iana_timezone"] == "Asia/Tokyo"
     # no ancestor tz -> the global default proposal
     top = wf._timezone_decision("6-photos-by-dest/Belgium", {}, blk, None)
-    assert top["proposed_iana_timezone"] == "Europe/Brussels" and top["proposal_source"] == "config_default_folder_timezone"
+    assert top["proposed_iana_timezone"] == "Europe/Brussels" and top["proposal_source"] == "config_default"
     assert "inherited_from" not in top
