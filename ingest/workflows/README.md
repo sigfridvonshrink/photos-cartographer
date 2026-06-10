@@ -199,9 +199,10 @@ This is **built for my own workflow** and open-sourced in case it fits yours. It
   is its own destination and gets its own correction; a destination where a camera shot nothing geotagged
   doesn't start blank — it inherits its parent destination's offset as a proposal to confirm, recursively
   down nested folders, and a manual offset you set at any folder re-roots what its sub-folders inherit.
-  The same downward inheritance applies to a destination's **GPS "folder fallback"** coordinate — a nested
-  folder proposes its nearest parent's fallback for you to confirm — so you set a sensible default once at a
-  trip's root and accept or override it per level.)
+  The same downward inheritance applies to a destination's **GPS "folder fallback"** coordinate and to its
+  **civil timezone** — a nested folder proposes its nearest parent's fallback, and its nearest parent's
+  timezone, for you to confirm — so you set sensible defaults once at a trip's root and accept or override
+  them per level. (All three of these proposals are always confirmable, never auto-applied.))
 - **A specific workspace layout** — numbered working folders (`0-sources`, `1-strays`,
   `2-missing-metadata`, `3-redundant-jpgs`, `4-videos-by-date`, `5-photos-by-date`, `6-photos-by-dest`).
   You drop dumps into **`0-sources`** (the one inbox); prep organizes the media out and moves any
@@ -212,7 +213,9 @@ This is **built for my own workflow** and open-sourced in case it fits yours. It
   to merge in cleanly (e.g. into digiKam), but workspace ≠ library, and the merge never renames or
   overwrites anything already in the library. A workspace is **single-use through to merge**: once its
   batch is merged, the workspace is sealed (its archive and database images are kept) and more photos go
-  to a fresh workspace.
+  to a fresh workspace. (The one thing you can still do to a sealed workspace is **prune its quarantine**
+  to reclaim disk — that only deletes recoverable duplicate copies and touches nothing in your library or
+  the sealed record; every media-changing command refuses a sealed workspace.)
 - **First run is forgiving; after that, use the inbox.** You don't have to set anything up before your
   first dump — drop files straight into a new empty folder and the first prep run *initializes* it
   (creating the numbered folders and moving your dump into `0-sources` for you), writing an
