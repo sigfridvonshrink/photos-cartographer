@@ -286,7 +286,7 @@ Remove or relocate non-photo files (and any videos) before calibrating.
 No calibration JSON was written.
 ```
 
-### 7.3 Videos are not calibrated, and must not be in by-dest
+**Symlinks under by-dest are barred, including nested directory symlinks.** A symlink anywhere under `6-photos-by-dest` — a file symlink, or a **nested directory symlink** — is forbidden for the same escape reason it is forbidden elsewhere in the managed tree (shared contract `10_photos-shared-contract.md` Section 5.3; prep `10_photos-1-prep-workflow.md` Section 6.2 item 3): the pipeline never follows or organizes a link. Because `6-photos-by-dest` is **read-only for prep** yet still **scanned by prep as a managed folder**, prep is the gatekeeper that detects and blocks such a symlink, and the mandatory re-prep after any by-dest change (Section 13.1; shared contract Section 10) means a link that slipped in is caught at the prep run that must precede calibration — calibration consumes prep's handoff, which is built only when prep found no forbidden symlink. Calibration itself bars symlinks at the **workspace root** (Section 13) and never follows a link when reading by-dest; it relies on prep's symlink guard for nested links *inside* by-dest rather than re-walking the tree to re-flag them.
 
 Calibration's target is **photos**. Videos are **semi-foreign** (prep `10_photos-1-prep-workflow.md` Section 2.4): prep date-organizes and naively renames them into `4-videos-by-date` and they **stay there** — they are never sorted into destinations. Videos must **never** appear in `5-photos-by-date` or `6-photos-by-dest`.
 
@@ -394,7 +394,7 @@ This applies to:
 2. **(camera group, destination)** time offset decisions — the logical target is the pair, so a user-filled offset for a group in one destination is preserved independently of the same group's decision in another destination (Section 10.2);
 3. GPX/native-GPS time-anchor acceptance;
 4. manual time segment decisions;
-5. destination/folder GPS fallback decisions;
+5. destination/folder GPS fallback decisions (the per-destination folder fallback, inherited downward as a confirmable proposal, Section 25.3);
 6. file-level manual GPS overrides;
 7. ambiguous GPX interpolation/extrapolation decisions;
 8. any other human-reviewed decision.
@@ -648,7 +648,8 @@ The workspace lock is acquired at process startup, before preflight (shared cont
 
 - **Sealed workspace → hard-stop, sealed means sealed.** If a **terminal/sealed marker** from a prior successful merge is present (shared contract Section 13.7), calibration **hard-stops immediately, mutating nothing and touching nothing**, and directs the user to a fresh workspace — a merged workspace is done. There is no recovery utility. If files are seen at the **workspace root** or in **`0-sources`**, calibration additionally warns that a likely new dump was detected and that, because this workspace is sealed, the dump must be moved into a **fresh workspace** by hand; it leaves the dump exactly where it is.
 - **Uninitialized → run prep first.** If the workspace has no root sentinel `photos-00-workspace-guard` (it was never initialized, shared contract Section 5; prep Section 3.1), calibration hard-stops with "not an initialized workspace — run prep first" (only prep's init path consumes an as-arrived dump).
-- **Loose file at the workspace root → hard-stop (strict).** On an initialized workspace the base must hold only folders; any loose file at the root blocks (dotfiles included) — dumps belong in `0-sources` (prep Section 6.2 item 2).
+- **Misplaced entry at the workspace root → hard-stop (strict).** On an initialized workspace the base must hold only the managed folders and control/dot directories; any misplaced root entry blocks — a **loose file** (dotfiles included), a **non-managed folder** (a stray dump folder belongs *inside* `0-sources`, not loose at the base), or a **symlink** (barred outright rather than followed, since following it would escape the workspace). Dumps belong in `0-sources` (shared contract Section 5.3; prep Section 6.2 items 2–3). Calibration matches prep here so a misplaced dump is caught no matter which phase the operator runs next.
+- **Incomplete managed folder structure → hard-stop.** If any of the managed `0`–`6` folders is missing on an initialized workspace, the structure was disturbed out-of-band; calibration hard-stops and directs the operator to restore it and re-run prep, rather than proceeding against a damaged workspace (shared contract Section 5.3; prep Section 6.2 item 7). Folder creation is prep's init-only job; calibration never creates or repairs the structure.
 
 Otherwise, the first workflow action is always preflight validation.
 
@@ -1144,7 +1145,7 @@ The GPS planning stage consumes:
 3. native GPS facts;
 4. GPX folder/index/fingerprint;
 5. manual GPS overrides;
-6. folder fallback rules;
+6. folder fallback rules — the per-destination folder GPS fallback, inherited downward from the nearest ancestor as a confirmable proposal (Section 25.3);
 7. existing GPS markers;
 8. device class: mobile or fixed-clock camera;
 9. destination-folder context;
@@ -1375,6 +1376,47 @@ This no-op/complete artifact becomes part of the dependency cascade.
 
 Downstream stages must depend on it and validate it.
 
+### 25.3 Per-destination folder GPS fallback (downward inheritance)
+
+The **folder GPS fallback** is a per-destination decision that supplies a single coordinate to place any photo in that destination which has no native GPS, no per-file manual lock, and no usable GPX match. In the resolution order calibration applies, it ranks **after** preserve-native, the per-file manual lock, and GPX interpolation/extrapolation, and **before** accept-unlocated or block (the seven GPS outcomes of Section 23). It is the destination-level analogue of the per-(camera group, destination) clock offset (Section 10.2): a destination-scoped value that a nested subfolder does not have to re-author from scratch.
+
+Its decision cell lives **inside each per-destination section** of `photos-22-gps-decisions.json` (alongside that destination's `gps_decisions` summary), with pre-created human-decision fields exactly like every other decision (Section 9). It carries a machine `proposal`, a `user_decision` the operator fills, and a derived `effective_fallback`:
+
+```json
+{
+  "destination_path": "6-photos-by-dest/Japan/Kyoto/Kinkaku-ji",
+  "folder_fallback": {
+    "proposal": {
+      "proposal_source": "inherited",
+      "proposed_fallback": { "lat": 35.0394, "lon": 135.7292 },
+      "inherited_from": "6-photos-by-dest/Japan/Kyoto"
+    },
+    "user_decision": { "fallback_lat": "", "fallback_lon": "", "accept_proposal": false },
+    "effective_fallback": null,
+    "requires_user_input": false,
+    "stale_user_decision": false
+  },
+  "gps_decisions": { "...": "Section 25" }
+}
+```
+
+The fallback proposal is chosen by **downward inheritance**, mirroring the clock-offset rule of Section 10.2 rule 4 (and reusing the same nearest-ancestor walk):
+
+1. **(a) inherited** — if a **nearest ancestor destination** has a resolved effective fallback, this cell's proposal is that ancestor's fallback, surfaced as a **proposal to confirm** and labelled with the `inherited_from` ancestor path. Inheritance is **recursive down the destination tree**: a destination's *effective* fallback — however it was reached, whether authored here or inherited-and-accepted — is the basis propagated to its immediate children, and onward to grandchildren. A **fallback authored at a folder resets the chain** at that point: that coordinate becomes the folder's effective fallback and therefore the basis its descendants inherit, replacing whatever would have flowed down from further up.
+2. **(b) manual-required** — otherwise (no ancestor has a fallback), the proposal is `manual_required` and the manual coordinate fields start blank.
+
+To compute inheritance correctly, destinations are processed **parent-first**, so an ancestor's effective fallback is known before any child cell that would inherit it is built — the same ordering the clock-offset inheritance uses (Section 10.2). Inheritance flows **parent → child only** (never sibling → sibling).
+
+The cell resolves its `effective_fallback` during validation:
+
+1. if the operator fills `fallback_lat`/`fallback_lon` with an in-range coordinate (latitude −90…90, longitude −180…180, Section 9.2), that authored coordinate is the effective fallback (and re-roots inheritance for descendants);
+2. else if the operator sets `accept_proposal: true` and the proposal is `inherited`, the inherited coordinate becomes the effective fallback;
+3. else the effective fallback is **absent** (`null`).
+
+The fallback is **optional and never blocks**: a destination with no effective fallback is fine — its un-located photos simply fall through to the remaining Section 23 options (accept-unlocated if the operator marked the file so, otherwise a per-file blocker). Accordingly the cell's `requires_user_input` is always `false`; the inherited proposal is a convenience the operator *may* validate, not a gate. An authored coordinate that is out of range is a validation blocker located to the destination's `folder_fallback` (Section 9.2), preserved and flagged rather than silently dropped; accepting a proposal that no longer exists marks the cell `stale_user_decision` rather than failing.
+
+A file placed from the effective folder fallback is a **manual** GPS placement (origin *apply manual*, marker `manual_fallback`), so it is reversible via the pre-state ledger exactly like a per-file manual lock (Section 24.1) — withdrawing the destination's fallback (or moving the file out of a destination that had one) restores the file's pinned pre-state. In the `photos-22` per-destination summary it is counted under `automatic_folder_fallback`; the exact per-file write is re-derived in `photos-23-executable-plan.json` from the resolved inputs (the effective fallback among them), never read from the summary (Section 25).
+
 ---
 
 ## 26. Filename format configuration
@@ -1602,12 +1644,13 @@ Execution must:
 3. validate all non-JSON upstream dependencies;
 4. reject stale plans before mutation;
 5. confirm the workspace lock is held (acquired at run start per shared contract Section 2);
-6. take a pre-mutation snapshot where configured, reusing the same ZFS snapshot mechanism prep uses (the `zfs` block in the workspace config `photos-00-config.json`, keyed by plan id), and honoring the same `snapshots_required` semantics (abort if a required snapshot fails);
-7. apply only planned operations, each re-verified no-clobber **at execute time** and performed atomically (Section 29.1a; shared contract `10_photos-shared-contract.md` Section 15): immediately before each rename, confirm the target name is not already occupied (case-insensitively where applicable) rather than trusting the plan's suffix allocation, and apply the rename as a single atomic filesystem operation; metadata writes are applied atomically (write-and-atomic-rename or safe-write mode). An unexpectedly occupied rename target at execute time is a blocker, never a clobber;
-8. journal every metadata write, marker write, file move, or rename;
-9. update SQLite/cache after successful writes;
-10. write `photos-24-execution-summary.json` (contents per Section 29.2);
-11. produce a final execution summary.
+6. take a pre-mutation snapshot where configured, reusing the **same optional ZFS snapshot mechanism prep uses** (the `zfs` block in the workspace config `photos-00-config.json`, keyed by plan id; shared contract `10_photos-shared-contract.md` Section 3), and honoring the same `snapshots_required` semantics (abort before any mutation if a required snapshot fails, and carry the snapshot record into `photos-24` either way). Snapshots are **strictly optional** — disabled by default and never a prerequisite for the safety model, which rests on the plan/validate/execute discipline, the journal, no-clobber, and the pre-state ledger (shared contract Section 3); they add a clean-slate rollback path for operators on ZFS. The snapshot is **labelled for its phase** (e.g. a `calibrate` label distinct from prep's) so that, even on a dataset shared with prep, calibration's pre-mutation snapshot never collides in name with a prep snapshot for the same plan id;
+7. apply only planned operations, each re-verified no-clobber **at execute time** and performed atomically (Section 29.1a; shared contract `10_photos-shared-contract.md` Section 15): immediately before each rename, confirm the target name is not already occupied (case-insensitively where applicable) rather than trusting the plan's suffix allocation, and apply the rename as a single atomic filesystem operation; metadata writes are applied atomically (write-and-atomic-rename or safe-write mode). Per-file operations may be applied **concurrently** under `-j`/`--jobs` without changing semantic results (Section 29.3). An unexpectedly occupied rename target at execute time is a blocker, never a clobber;
+8. after each file's metadata write, **verify the photo's decoded-content fingerprint is unchanged** before treating the write as applied — the integrity check of Section 29.1a item 5: an `identify` pixel fingerprint must be invariant under an EXIF/GPS write (prep Section 9), so a mismatch means the write altered pixels and the operation is held back (no confirm, no dependent rename) and recorded for review, not silently accepted;
+9. journal every metadata write, marker write, file move, or rename;
+10. update SQLite/cache after successful writes;
+11. write `photos-24-execution-summary.json` (contents per Section 29.2);
+12. produce a final execution summary.
 
 Execution must not recalculate time, GPS, filename, or rename decisions.
 
@@ -1636,10 +1679,14 @@ Execution mutates the photographic files' metadata and names, so each operation 
 2. **Journal intent before, confirmation after.** For each operation the journal records an *intent* record before the mutation and a *confirmation* record after it succeeds (with enough identity — content fingerprint, target field/name, and the resulting value — to verify completion). On resume, an operation with intent-but-no-confirmation is treated as **possibly torn**: execution re-derives the file's actual current state and either completes the operation (if the pre-write state is still present) or marks it done (if the post-write state is already present). Because writes are atomic (point 1), the file is always in exactly one of those two states, never a corrupt third.
 3. **Pre-state captured before the overwrite it protects.** For a manual GPS override, the pinned pre-state (Section 24.1) must be committed to the ledger **before** the GPS write that overwrites it is applied. If the capture and the write were ordered the other way, a crash between them could lose the true original. So the ordering is: capture-and-commit pre-state → then write. A crash after capture but before write leaves a pinned pre-state equal to the current file state, which is harmless (a later revert simply restores what is already there).
 4. **Tool failure is fatal to that operation, not silent.** If `exiftool` reports failure for a file, execution records the failure (Section 29.2 item 6), leaves that file at its pre-operation state (point 1 guarantees it is intact), and continues or aborts per policy — it never records the operation as applied. A failed write is never treated as a no-op on the next run.
+5. **Post-write content-fingerprint verification.** After a file's metadata write succeeds, execution **recomputes the photo's decoded-content fingerprint** (ImageMagick `identify`, prep Section 9) and compares it to the fingerprint recorded for that file in the plan's per-operation preconditions. The fingerprint is the file's identity spine precisely *because* it is invariant under an in-place EXIF/GPS write (prep Section 9; shared contract Section 9.1), so the expected result is that it is **unchanged**:
+   - **unchanged → the write is confirmed.** Only then are the write operation (and any rename that depends on it) eligible to proceed and be journaled as confirmed.
+   - **changed → the operation is held back, not silently accepted.** A changed fingerprint means the metadata write disturbed decoded pixels — something the pipeline's identity model does not expect and must not paper over. Execution does **not** confirm the write, does **not** apply the file's dependent rename (the file keeps its current name), and records a **fingerprint mismatch** for the file in `photos-24-execution-summary.json` (Section 29.2 item 8) carrying the expected and actual fingerprints. The run's status becomes `partial`.
+   This verification is what `photos-24`'s mismatch list and its `accept_fingerprint_change` review field exist for (Section 29.2 item 8): the operator inspects a flagged file, and if the pixel change is understood and acceptable, sets `accept_fingerprint_change: true` for it and re-runs, at which point execution treats that file's post-write fingerprint as the accepted identity and confirms the held-back operation. The verification runs **per file** and is therefore safe to perform inside the concurrent worker pool (Section 29.3) — each file's check touches only that file and contributes an independent result the executor aggregates deterministically.
 
 ### 29.2 The execution summary artifact (`photos-24-execution-summary.json`)
 
-On finishing execution, the workflow writes the terminal artifact `photos-24-execution-summary.json` to `.photos-ingest/` (Section 8.1). It is a record of what execution actually did; unlike `photos-21`–`23` it is never an upstream dependency and is never re-hashed (Section 4), so nothing is built from it.
+On finishing execution, the workflow writes the terminal artifact `photos-24-execution-summary.json` to `.photos-ingest/` (Section 8.1). It is a record of what execution actually did; unlike `photos-21`–`23` it is never an upstream **dependency** and is never re-hashed (Section 4), so nothing is built from it. It does, however, carry **one confirmable review field** — the per-file `accept_fingerprint_change` flag in its `fingerprint_mismatches` list (item 8) — that a *subsequent* execution reads back to learn which flagged pixel changes the operator has accepted (Section 29.1a item 5). This is not a hash dependency (the file is still never re-hashed); it is a small authored-decision surface on the otherwise terminal artifact, in the same spirit as the decision fields of the numbered artifacts (Section 9).
 
 It must record at least:
 
@@ -1650,9 +1697,10 @@ It must record at least:
 5. **Resume/journal facts** — for a re-run after a crash or partial application (Section 29.1): how many planned operations were newly applied versus treated as already-satisfied-and-skipped, so a resumed run is auditable;
 6. **Failures and blockers** — any operation that failed or any blocker encountered during execution, with enough detail to act on;
 7. **Final status** — `success`, `partial`, or `failed`;
-8. **Run metadata** — wall-clock timestamps, job count, and similar, kept **separate** from the fingerprints in item 3.
+8. **Fingerprint mismatches** — the per-file list of post-write content-fingerprint mismatches detected in this run (Section 29.1a item 5): for each, the file path, the expected fingerprint, the actual fingerprint, and a pre-created `user_decision` object with `accept_fingerprint_change` (default `false`). A non-empty list forces status `partial`. On a later run, a file whose entry has `accept_fingerprint_change: true` has its held-back operation confirmed (the accepted post-write fingerprint becomes its identity); entries the operator has not accepted remain held back. This is the only field of `photos-24` that a later run consumes;
+9. **Run metadata** — wall-clock timestamps, job count, and similar, kept **separate** from the fingerprints in item 3.
 
-Although nothing re-hashes it, the artifact follows the same structure and determinism discipline as the other artifacts for consistency: it is grouped by destination (with a global summary), records the SHA-256 of what it summarizes (item 3), and separates run-metadata timestamps from fingerprints (item 8), mirroring the prep handoff's determinism rule (prep `10_photos-1-prep-workflow.md` Section 16).
+Although nothing re-hashes it, the artifact follows the same structure and determinism discipline as the other artifacts for consistency: it is grouped by destination (with a global summary), records the SHA-256 of what it summarizes (item 3), and separates run-metadata timestamps from fingerprints (item 9), mirroring the prep handoff's determinism rule (prep `10_photos-1-prep-workflow.md` Section 16).
 
 Example shape:
 
@@ -1678,10 +1726,32 @@ Example shape:
   },
   "resume": { "newly_applied": 0, "already_satisfied_skipped": 0 },
   "failures": [],
+  "fingerprint_mismatches": [
+    {
+      "relative_path": "6-photos-by-dest/Belgium/Brussels/2024-07-03--14-12-21.arw",
+      "expected_fingerprint": "...",
+      "actual_fingerprint": "...",
+      "user_decision": { "accept_fingerprint_change": false }
+    }
+  ],
   "destinations": { "6-photos-by-dest/Belgium/Brussels": { "...": "..." } },
   "run_metadata": { "started_at": "...", "finished_at": "...", "jobs": 1 }
 }
 ```
+
+### 29.3 Concurrency, determinism, and observability
+
+Execution's per-file work — the `exiftool` metadata/marker writes, the post-write content-fingerprint verification (Section 29.1a item 5), and the no-clobber rename — may run **concurrently** under `-j`/`--jobs`, on the same discipline prep applies to its concurrent fingerprinting and metadata extraction (prep `10_photos-1-prep-workflow.md` Section 17): concurrency is a performance device only and **must never change semantic results**.
+
+1. **The operation set is fixed before any concurrent work.** The plan is loaded, dependency-revalidated, and the optional pre-mutation snapshot taken (Section 29 steps 1–6) single-threaded; the per-file operation batches are then derived deterministically. Only the application of those already-decided per-file batches is parallelized — execution never *decides* anything concurrently (it never recalculates time, GPS, filename, or rename, Section 29).
+2. **Per-file isolation.** Each file's batch (its metadata write, fingerprint verify, and rename) is applied as an independent unit of work that touches only that file; a worker mutates no shared state and returns a per-file result the executor aggregates. Two files never contend, because the no-clobber rename targets were allocated against the whole destination's occupied-name set at plan time (Section 27) and are re-verified free at execute time (Section 29.1a item 1).
+3. **Deterministic aggregation.** Results are merged in a deterministic (path-sorted) order so the journal, the per-destination and global totals, the resume facts, and the `fingerprint_mismatches` list (Section 29.2) are identical regardless of job count or completion order. Two different safe job counts produce the same `photos-24-execution-summary.json` content (modulo run-metadata timestamps and the recorded `jobs` value, which are run metadata, not semantic fingerprints, Section 29.2 item 9).
+4. **Single-writer journal and cache.** The execution journal and the SQLite writes (including the manual-GPS pre-state ledger captures, which are committed **before** the writes they protect, Section 29.1a item 3) go through a single controlled writer, never from worker threads. The pre-state capture pass therefore completes before the concurrent write pass begins, so no worker races the ledger.
+5. **Tool workers, safe restart, no partial persistence.** `exiftool` and the `identify` fingerprint tool are driven so a worker crash is recoverable and partial/failed worker output is never journaled as a confirmed operation or cached as a valid fingerprint — it surfaces as a failure or a held-back mismatch (Section 29.1a items 4–5), not a silent success.
+6. **Observability.** Long-running execution is visible: phase-level log lines (lock, validate, snapshot, apply, verify, journal, cache, summary) and live aggregate progress for the concurrent apply/verify pass, with the journal — not the progress output — as the durable record (mirroring prep Section 17).
+
+Job count is run metadata, not a semantic dependency, unless it genuinely changes planned behaviour (it does not here — it changes only throughput).
+
 
 ---
 
@@ -1706,6 +1776,14 @@ Workspace not initialized (no root sentinel)
 
 Loose file at the workspace root (initialized workspace)
   -> calibration hard-stops (strict: any root file, dotfiles included; Section 13)
+
+Non-managed folder or symlink at the workspace root (initialized)
+  -> calibration hard-stops, same as a loose root file (Section 13):
+     a stray folder belongs inside 0-sources; a symlink is barred (escape)
+
+A managed 0-6 folder is missing (initialized workspace)
+  -> calibration hard-stops: structure disturbed — restore it and re-run prep
+     (calibration never creates folders; Section 13 / prep Section 6.2 item 7)
 
 0-sources not empty (un-processed dump waiting)
   -> calibration blocked: re-run prep (prep leaves 0-sources empty, Section 13)
@@ -1781,6 +1859,16 @@ or a hand-edited decision object is structurally broken)
   -> sanity-validation fails (Section 9.2)
   -> hard blocker, offending artifact/field located, no downstream artifact
   -> value preserved and flagged for correction, never silently dropped
+
+Post-write content fingerprint changed (metadata write disturbed pixels)
+  -> the file's write is held back: not confirmed, dependent rename not applied
+  -> recorded in photos-24 fingerprint_mismatches (Section 29.1a item 5 / 29.2 item 8)
+  -> run status partial; operator sets accept_fingerprint_change=true and re-runs
+     to accept the new identity, else fixes the cause
+
+Required ZFS snapshot configured but cannot be taken
+  -> execution aborts before any mutation (snapshots_required honored, Section 29 step 6)
+  -> with snapshots optional/disabled (the default), execution proceeds normally
 ```
 
 ---
@@ -1813,7 +1901,8 @@ Important textual outputs include:
 
 1. sealed-workspace hard-stop (with new-dump warning if files sit at the root or in `0-sources`, Section 13);
 2. not-initialized hard-stop ("run prep first", Section 13);
-3. loose-root-file hard-stop (strict, Section 13);
+3. misplaced-root-entry hard-stop — loose file, non-managed folder, or symlink at the root (strict, Section 13);
+3a. incomplete-structure hard-stop — a missing managed `0`–`6` folder; restore it and re-run prep (Section 13);
 4. `0-sources`-not-empty blocker (re-run prep, Section 13);
 5. by-date-not-empty blocker;
 6. development-already-started (jpg/tif subfolder present) hard-stop;
@@ -1822,11 +1911,11 @@ Important textual outputs include:
 9. pasteable config snippets for newly recognised groups;
 10. invalid-value blocker — a config or decision field that failed sanity-validation, naming the artifact and field (Section 9.2);
 11. reason why no JSON artifact was produced, if blocked before time-decision stage;
-12. time-decision summary;
+12. time-decision summary (including per-destination clock-offset cells and their inherited/confirmable proposals, Section 10.2);
 13. resolved UTC cache summary;
-14. GPS-decision summary;
+14. GPS-decision summary (including per-destination folder-fallback cells and their inherited/confirmable proposals, Section 25.3);
 15. executable plan summary;
-16. execution summary.
+16. execution summary — counts applied/skipped, the pre-mutation snapshot record (or "none"), and any **post-write fingerprint mismatches** awaiting `accept_fingerprint_change` review (Section 29).
 
 Important JSON artifacts include:
 
@@ -1870,25 +1959,26 @@ This section restates the rules established above as a single ordered reference.
 The calibration workflow is:
 
 ```text
-1. Invoke calibration.
-2. Load prep handoff and SQLite cache.
-3. Verify 5-photos-by-date contains no photos and no jpg/tif development subfolders exist under 6-photos-by-dest (hard-stop if development started).
-4. Restrict calibration scope to 6-photos-by-dest.
-5. Validate by-dest cache/media/prep dependencies.
-6. Load, parse, and fingerprint GPX folder/files if configured or available.
-7. Recognise and classify camera groups.
-8. If unknown groups exist, print config snippets and stop. No JSON artifact yet.
-9. Analyse per-destination time requirements.
-10. Determine/confirm destination civil timezone for every destination.
-11. Generate GPX/native-GPS time-anchor proposals where possible.
-12. Create photos-21-time-decisions.json, grouped by destination, even if no-op.
-13. User completes/accepts time decisions if needed.
-14. Compute and persist resolved UTC per file in SQLite.
-15. Start GPS planning only after resolved UTC exists for every file.
-16. Create photos-22-gps-decisions.json, grouped by destination, even if no-op; summarize automatic/no-op decisions and list file paths only for review/blocker items.
-17. Plan metadata writes and no-clobber destination-local-time renames using configured filename format.
-18. Create photos-23-executable-plan.json, grouped by destination, with flattened dependency list and exact file-level operations.
-19. Execute only after strict dependency validation, including SHA-256 rehashing of named JSON artifacts.
+1. Invoke calibration; take the workspace lock.
+2. Startup guards: hard-stop on a sealed workspace, an uninitialized workspace, a misplaced root entry (loose file, non-managed folder, or symlink), a missing managed 0-6 folder, or a symlink among managed files (Section 13).
+3. Load prep handoff and SQLite cache.
+4. Verify 5-photos-by-date contains no photos and no jpg/tif development subfolders exist under 6-photos-by-dest (hard-stop if development started).
+5. Restrict calibration scope to 6-photos-by-dest (photo-only; symlinks barred — prep is the gatekeeper for nested links there, Section 7.2).
+6. Validate by-dest cache/media/prep dependencies.
+7. Load, parse, and fingerprint GPX folder/files if configured or available.
+8. Recognise and classify camera groups.
+9. If unknown groups exist, print config snippets and stop. No JSON artifact yet.
+10. Analyse per-destination time requirements.
+11. Determine/confirm destination civil timezone for every destination.
+12. Generate GPX/native-GPS time-anchor proposals where possible; a (group, destination) with no self-anchor inherits its nearest ancestor's offset as a confirmable proposal (Section 10.2 rule 4).
+13. Create photos-21-time-decisions.json, grouped by destination, even if no-op.
+14. User completes/accepts time decisions if needed.
+15. Compute and persist resolved UTC per file in SQLite.
+16. Start GPS planning only after resolved UTC exists for every file.
+17. Create photos-22-gps-decisions.json, grouped by destination, even if no-op; summarize automatic/no-op decisions and list file paths only for review/blocker items. Each destination's folder GPS fallback inherits its nearest ancestor's fallback as a confirmable proposal (Section 25.3).
+18. Plan metadata writes and no-clobber destination-local-time renames using configured filename format.
+19. Create photos-23-executable-plan.json, grouped by destination, with flattened dependency list and exact file-level operations.
+20. Execute only after strict dependency validation (SHA-256 rehashing of named JSON artifacts): take the optional pre-mutation snapshot (like prep), apply per-file operations concurrently, verify each photo's content fingerprint is unchanged after the metadata write, journal, and write photos-24 (with any fingerprint mismatches for review).
 ```
 
 The most important workflow rule is:
