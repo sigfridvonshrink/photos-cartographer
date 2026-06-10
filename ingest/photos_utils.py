@@ -70,6 +70,10 @@ CONFIG = {
         "manual_segment_template_count": 2
     },
     "filename_timestamp_format": "%Y-%m-%d--%H-%M-%S",
+    # Format-distribution subfolder names that mark the later development/processing phase
+    # (calibration spec Section 7.1). Their presence anywhere under 6-photos-by-dest hard-stops
+    # calibration (development must not start before time/GPS are fixed). Consumed by calibration.
+    "destination_distribution_subfolders": ["jpg", "tif"],
     # Library-merge settings (shared contract Section 4.3 item 7). Seeded by prep for
     # forward-compatibility but CONSUMED by the future merge phase, which does the deep
     # validation — library_root must be an existing directory outside the managed 0-6 tree, and
@@ -169,6 +173,16 @@ def prep_db_snapshot_path(ws: str) -> str:
 
 def journal_path(ws: str, run_id: str) -> str:
     return os.path.join(ws, CONTROL_DIR, f"journal-{run_id}.json")
+
+def sha256_file(path: str) -> str:
+    """SHA-256 over a file's exact bytes — the byte-hash used to verify JSON-artifact
+    dependencies (the prep handoff and the numbered calibration artifacts are re-hashed from
+    their exact bytes before use, shared contract §9.1 / calibration §4)."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 def lock_path(ws: str) -> str:
     return os.path.join(ws, CONTROL_DIR, "photos-00-workspace.lock")
@@ -371,6 +385,15 @@ def validate_config(cfg: dict):
 
     if "gpx_root" in cfg:
         _check_path("gpx_root", cfg["gpx_root"])
+
+    dds = cfg.get("destination_distribution_subfolders")
+    if dds is not None:
+        if not isinstance(dds, list) or not dds:
+            raise ValueError("config: destination_distribution_subfolders must be a non-empty list.")
+        for i, name in enumerate(dds):
+            if not isinstance(name, str) or not name or "/" in name or "\x00" in name:
+                raise ValueError(f"config: destination_distribution_subfolders[{i}] must be a "
+                                 f"non-empty single path component.")
 
     mg = cfg.get("merge")
     if mg is not None:
