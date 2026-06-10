@@ -34,10 +34,15 @@ from photos_utils import (
 )
 
 TIME_DECISIONS_ARTIFACT = "photos-21-time-decisions.json"
+GPS_DECISIONS_ARTIFACT = "photos-22-gps-decisions.json"
 
 
 def time_decisions_path(ws):
     return os.path.join(ws, CONTROL_DIR, TIME_DECISIONS_ARTIFACT)
+
+
+def gps_decisions_path(ws):
+    return os.path.join(ws, CONTROL_DIR, GPS_DECISIONS_ARTIFACT)
 
 
 # ============================================================================
@@ -490,6 +495,61 @@ def place_gps(target_utc, gpx, cfg):
     return None
 
 
+def _valid_coord(lat, lon):
+    """True iff (lat, lon) is a numeric coordinate in range (calibration §9.2 / §25)."""
+    return (isinstance(lat, (int, float)) and not isinstance(lat, bool) and -90 <= lat <= 90
+            and isinstance(lon, (int, float)) and not isinstance(lon, bool) and -180 <= lon <= 180)
+
+
+# place_gps method -> §25 automatic GPS category.
+_GPS_PLACE_CATEGORY = {"direct_match": "gpx_interpolation", "interpolated": "gpx_interpolation",
+                       "extrapolated": "gpx_extrapolation"}
+
+
+def classify_gps(file, resolved_utc, gpx, cfg, effective_fallback, file_decision):
+    """The §23 seven-option GPS decision for one file, as (category, coord|None). Resolves in
+    priority order: preserve native -> per-file manual lock -> GPX interpolation/extrapolation at the
+    resolved UTC -> the destination's effective folder fallback -> accept-unlocated -> blocked.
+    Authored coordinates are assumed already range-validated by the caller (§9.2)."""
+    fd = file_decision or {}
+    if file.get("has_native_gps"):
+        return "preserve_native", None
+    mlat, mlon = fd.get("manual_lat", ""), fd.get("manual_lon", "")
+    if mlat not in (None, "") and mlon not in (None, ""):
+        return "manual_locked", {"lat": mlat, "lon": mlon}
+    if resolved_utc is not None:
+        p = place_gps(resolved_utc, gpx, cfg)
+        if p is not None:
+            return _GPS_PLACE_CATEGORY[p["method"]], p
+    if effective_fallback is not None:
+        return "manual_fallback", effective_fallback
+    if fd.get("accept_unlocated"):
+        return "no_change", None
+    return "blocked", None
+
+
+def _walk_ancestors(dest):
+    """Yield `dest`'s ancestor destination paths within 6-photos-by-dest, nearest first."""
+    root = folder_name('photos_by_dest')
+    d = os.path.dirname(dest)
+    while d == root or d.startswith(root + "/"):
+        yield d
+        if d == root:
+            break
+        d = os.path.dirname(d)
+
+
+def _nearest_ancestor(dest, eff, key):
+    """The deepest ancestor of `dest` with a RESOLVED value in `eff` for `key`, as (path, value), or
+    None. Shared by the §10.2 clock-offset and the §25 folder-fallback downward inheritance: `eff`
+    maps (destination, key) -> resolved value; only already-processed, resolved ancestors qualify."""
+    for d in _walk_ancestors(dest):
+        v = eff.get((d, key))
+        if v is not None:
+            return d, v
+    return None
+
+
 class CalibrationWorkflow:
     """Stages 1–7: validate the workspace, build the model, produce photos-21-time-decisions.json,
     and (when decisions are complete) compute & persist resolved UTC per file."""
@@ -836,20 +896,10 @@ class CalibrationWorkflow:
         }
 
     def _nearest_ancestor_offset(self, dest, key, eff):
-        """The deepest ancestor destination of `dest` with a RESOLVED effective offset for `key`,
-        as (ancestor_path, offset_seconds), else None (§10.2 rule 4). Walks up the path within
-        6-photos-by-dest; only ancestors already processed parent-first and actually resolved
-        qualify — an unresolved parent yields no inheritance. Flows parent->child only."""
-        root = folder_name('photos_by_dest')
-        d = os.path.dirname(dest)
-        while d == root or d.startswith(root + "/"):
-            off = eff.get((d, key))
-            if off is not None:
-                return d, off
-            if d == root:
-                break
-            d = os.path.dirname(d)
-        return None
+        """The deepest ancestor destination of `dest` with a RESOLVED effective offset for `key`
+        (§10.2 rule 4) — the clock-offset use of the shared `_nearest_ancestor` walk. Only
+        already-processed, resolved ancestors qualify; inheritance flows parent->child only."""
+        return _nearest_ancestor(dest, eff, key)
 
     def _offset_cell(self, dest, key, g, prior_cell, frames, gpx, blockers, inherited=None):
         proposal = infer_anchor_proposal(frames, gpx, CONFIG)
@@ -926,6 +976,150 @@ class CalibrationWorkflow:
             "camera_time_policy_fingerprint": sha256_text(policy),
             "gpx_fingerprint": self._gpx_fingerprint,
             "camera_group_key_version": CAMERA_GROUP_KEY_VERSION,
+        }
+
+    # --- Stage 8: GPS decisions (photos-22, §23/§25) -------------------------
+
+    _SUMMARY_KEYS = ("files_total", "preserve_native_gps", "automatic_gpx_interpolation",
+                     "automatic_gpx_extrapolation", "automatic_folder_fallback", "manual_locked",
+                     "manual_review_required", "blocked", "no_gps_change_needed")
+
+    def build_gps_decisions(self, files, resolved_rows, gpx, prior, resolved_fp):
+        """Build/regenerate photos-22 (§25): the §23 decision per by-dest file, grouped by
+        destination as automatic-category SUMMARIES with file paths only for review/blocker items.
+        Destinations are processed parent-first so a folder_fallback inherits its nearest resolved
+        ancestor's effective fallback (§25, mirroring §10.2). Returns (artifact, blockers)."""
+        blockers = []
+        prior_dests = ((prior or {}).get("destinations")) or {}
+        utc_by_path = {r["relative_path"]: r["resolved_utc"] for r in resolved_rows}
+        by_dest = {}
+        for f in files:
+            by_dest.setdefault(f["destination"], []).append(f)
+
+        destinations = {}
+        fallback_eff = {}                                     # (dest, None) -> effective fallback coord
+        for dest in sorted(by_dest, key=lambda d: (d.count('/'), d)):
+            prior_d = prior_dests.get(dest, {})
+            inherited = _nearest_ancestor(dest, fallback_eff, None)
+            fb_cell = self._folder_fallback_cell(dest, prior_d.get("folder_fallback") or {}, inherited, blockers)
+            eff_fb = fb_cell["effective_fallback"]
+            fallback_eff[(dest, None)] = eff_fb
+
+            prior_reviews = {ri["relative_path"]: ri for ri in
+                             ((prior_d.get("gps_decisions") or {}).get("review_items") or [])}
+            counts = {k: 0 for k in self._SUMMARY_KEYS}
+            review_items, gpx_files = [], set()
+            for f in sorted(by_dest[dest], key=lambda x: x["relative_path"]):
+                rel = f["relative_path"]
+                ru = _parse_utc(utc_by_path.get(rel)) if utc_by_path.get(rel) else None
+                fd = (prior_reviews.get(rel) or {}).get("user_decision") or {}
+                self._validate_review_decision(dest, rel, fd, blockers)
+                cat, coord = classify_gps(f, ru, gpx, CONFIG, eff_fb, fd)
+                counts["files_total"] += 1
+                if cat == "preserve_native":
+                    counts["preserve_native_gps"] += 1
+                elif cat == "gpx_interpolation":
+                    counts["automatic_gpx_interpolation"] += 1; gpx_files.add(coord.get("gpx_file"))
+                elif cat == "gpx_extrapolation":
+                    counts["automatic_gpx_extrapolation"] += 1; gpx_files.add(coord.get("gpx_file"))
+                elif cat == "manual_fallback":
+                    counts["automatic_folder_fallback"] += 1
+                elif cat == "manual_locked":
+                    counts["manual_locked"] += 1
+                    review_items.append(self._review_item(rel, "manual_locked", fd, False))
+                elif cat == "no_change":
+                    counts["no_gps_change_needed"] += 1
+                    review_items.append(self._review_item(rel, "accepted_unlocated", fd, False))
+                else:                                          # blocked
+                    counts["blocked"] += 1
+                    review_items.append(self._review_item(rel, "no_reliable_gps_source", fd, True))
+            counts["manual_review_required"] = sum(1 for ri in review_items if ri["requires_user_input"])
+            destinations[dest] = {
+                "destination_path": dest,
+                "folder_fallback": fb_cell,
+                "gps_decisions": {
+                    "summary": counts,
+                    "automatic_decision_summary": {
+                        "gpx_files_used": sorted(g for g in gpx_files if g),
+                        "max_interpolation_gap_seconds": CONFIG["gpx_interpolation_max_gap_seconds"],
+                        "max_distance_to_track_m": CONFIG["gpx_interpolation_max_distance_meters"],
+                        "confidence": "mixed" if counts["blocked"] else "automatic",
+                        "notes": ["Automatic decisions are summarized here; exact file-level write "
+                                  "operations are listed only in photos-23-executable-plan.json."],
+                    },
+                    "review_items": review_items,
+                },
+            }
+
+        requires = any(ri["requires_user_input"]
+                       for d in destinations.values() for ri in d["gps_decisions"]["review_items"])
+        artifact = {
+            "artifact_type": "gps_decisions",
+            "artifact_name": GPS_DECISIONS_ARTIFACT,
+            "status": "requires_user_input" if requires else "complete",
+            "requires_user_input": requires,
+            "executable": False,
+            "destinations": destinations,
+            "depends_on": self._gps_depends_on(resolved_fp),
+        }
+        if not requires:
+            artifact["decision_mode"] = "no_op_or_auto_resolved"
+        return artifact, blockers
+
+    def _folder_fallback_cell(self, dest, prior_fb, inherited, blockers):
+        ud = prior_fb.get("user_decision") or {}
+        flat, flon = ud.get("fallback_lat", ""), ud.get("fallback_lon", "")
+        accept = bool(ud.get("accept_proposal", False))
+        if inherited is not None:
+            anc_path, anc_coord = inherited
+            proposal = {"proposal_source": "inherited", "proposed_fallback": anc_coord,
+                        "inherited_from": anc_path}
+        else:
+            proposal = {"proposal_source": "manual_required"}
+        effective, stale = None, False
+        if flat not in (None, "") and flon not in (None, ""):
+            if _valid_coord(flat, flon):
+                effective = {"lat": flat, "lon": flon}
+            else:
+                blockers.append(f"{dest}: folder_fallback.user_decision fallback_lat/lon out of range.")
+        elif accept:
+            if proposal["proposal_source"] == "inherited":
+                effective = proposal["proposed_fallback"]
+            else:
+                stale = True                                  # accepted a fallback that does not exist
+        return {
+            "proposal": proposal,
+            "user_decision": {"fallback_lat": flat, "fallback_lon": flon, "accept_proposal": accept},
+            "effective_fallback": effective,
+            "requires_user_input": False,                     # the fallback is optional, never blocks
+            "stale_user_decision": stale,
+        }
+
+    def _validate_review_decision(self, dest, rel, ud, blockers):
+        mlat, mlon = ud.get("manual_lat", ""), ud.get("manual_lon", "")
+        if mlat not in (None, "") and mlon not in (None, "") and not _valid_coord(mlat, mlon):
+            blockers.append(f"{dest}/{os.path.basename(rel)}: review manual_lat/lon out of range.")
+
+    def _review_item(self, rel, reason, ud, requires):
+        return {
+            "relative_path": rel, "reason": reason,
+            "user_decision": {"manual_lat": ud.get("manual_lat", ""), "manual_lon": ud.get("manual_lon", ""),
+                              "accept_unlocated": bool(ud.get("accept_unlocated", False))},
+            "requires_user_input": requires,
+            "stale_user_decision": False,
+        }
+
+    def _gps_depends_on(self, resolved_fp):
+        gps_policy = json.dumps({k: CONFIG[k] for k in (
+            "gpx_direct_match_max_seconds", "gpx_interpolation_max_gap_seconds",
+            "gpx_interpolation_max_distance_meters", "gpx_interpolation_max_speed_kmh",
+            "gpx_extrapolation_max_seconds")}, sort_keys=True)
+        ho = handoff_path(self.workspace_root)
+        return {
+            "resolved_utc_cache_fingerprint": resolved_fp,
+            "gpx_fingerprint": self._gpx_fingerprint,
+            "gps_policy_fingerprint": sha256_text(gps_policy),
+            "handoff": json_dependency("photos-11-handoff.json", self.workspace_root, ho),
         }
 
 
@@ -1037,6 +1231,32 @@ def main():
                 n_valid = sum(1 for r in rows if r["resolved_utc_status"] == "valid")
                 print(f"Resolved UTC for {n_valid}/{len(rows)} photo(s) "
                       f"(resolved_utc_cache_fingerprint {fp[:12]}).")
+
+                # Stage 8: GPS decisions (photos-22). Regenerate from the resolved rows + GPX,
+                # preserving authored GPS decisions; a bad authored coord leaves the artifact as-is.
+                gdp = gps_decisions_path(workspace_root)
+                prior_gps = None
+                if os.path.exists(gdp):
+                    try:
+                        with open(gdp) as f:
+                            prior_gps = json.load(f)
+                    except Exception:
+                        prior_gps = None
+                gps_artifact, gps_blockers = wf.build_gps_decisions(files, rows, gpx, prior_gps, fp)
+                if gps_blockers:
+                    print("\nCalibration cannot proceed: invalid value(s) in "
+                          f"{GPS_DECISIONS_ARTIFACT}:", file=sys.stderr)
+                    for b in gps_blockers:
+                        print(f"  - {b}", file=sys.stderr)
+                    print("\nFix the field(s) and re-run; the artifact was left unchanged.", file=sys.stderr)
+                    sys.exit(2)
+                write_json_artifact(gdp, gps_artifact)
+                tot = {k: sum(d["gps_decisions"]["summary"][k] for d in gps_artifact["destinations"].values())
+                       for k in ("automatic_gpx_interpolation", "automatic_gpx_extrapolation",
+                                 "preserve_native_gps", "blocked")}
+                print(f"Wrote {GPS_DECISIONS_ARTIFACT}: status={gps_artifact['status']} "
+                      f"({tot['preserve_native_gps']} native, {tot['automatic_gpx_interpolation']} interp, "
+                      f"{tot['automatic_gpx_extrapolation']} extrap, {tot['blocked']} blocked).")
     finally:
         run_lock.release()
 
