@@ -155,3 +155,27 @@ def test_depends_on_reverifies(tmp_path, monkeypatch):
     assert utils.verify_json_dependency(dep, str(ws))                 # matches as written
     (ws / ".photos-ingest" / "photos-11-handoff.json").write_text('{"files": []}')
     assert not utils.verify_json_dependency(dep, str(ws))             # change detected
+
+
+def test_timezone_proposal_inherits_nearest_resolved_ancestor():
+    """A destination's timezone proposal prefers the nearest RESOLVED ancestor's timezone (confirmable)
+    over the generic global default; a destination with no ancestor tz falls back to the default."""
+    utils.CONFIG["camera_time_and_timezone_policy"]["default_folder_timezone"] = "Europe/Brussels"
+    wf = cal.CalibrationWorkflow("/tmp/ws")
+    blk = []
+    # parent "Japan" resolved to Asia/Tokyo -> a deeper child inherits it, not the Brussels default
+    eff_tz = {("6-photos-by-dest/Japan", "tz"): "Asia/Tokyo"}
+    inh = cal._nearest_ancestor("6-photos-by-dest/Japan/Kyoto", eff_tz, "tz")
+    child = wf._timezone_decision("6-photos-by-dest/Japan/Kyoto", {}, blk, inh)
+    assert child["proposed_iana_timezone"] == "Asia/Tokyo"
+    assert child["proposal_source"] == "inherited" and child["proposal_confidence"] == "review_required"
+    assert child["inherited_from"] == "6-photos-by-dest/Japan"
+    assert child["requires_user_input"] is True            # inherited is confirmable, never auto-applied
+    # accepting the inherited proposal resolves it
+    accepted = wf._timezone_decision("6-photos-by-dest/Japan/Kyoto",
+                                     {"user_decision": {"accept_proposed_timezone": True}}, blk, inh)
+    assert accepted["effective_iana_timezone"] == "Asia/Tokyo"
+    # no ancestor tz -> the global default proposal
+    top = wf._timezone_decision("6-photos-by-dest/Belgium", {}, blk, None)
+    assert top["proposed_iana_timezone"] == "Europe/Brussels" and top["proposal_source"] == "config_default_folder_timezone"
+    assert "inherited_from" not in top

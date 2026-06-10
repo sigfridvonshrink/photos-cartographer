@@ -87,13 +87,13 @@ def test_nonmanaged_root_folder_blocks(tmp_path):
 
 
 def test_directory_symlink_at_root_blocks(tmp_path):
-    """A directory symlink at the root is a non-managed folder and is blocked (calibration never
-    follows it; it reads the prep handoff, not the live tree)."""
+    """A symlink at the root is barred outright as a forbidden symlink (§13), never followed —
+    checked before the structural/misplaced-folder guards."""
     ws = _ws(tmp_path)
     import os
     os.symlink(str(tmp_path), str(ws / "evil"))
     blockers, _, _ = _pf(ws)
-    assert any("Misplaced folder at the workspace root" in b for b in blockers), blockers
+    assert any("Forbidden symlink at the workspace root" in b for b in blockers), blockers
 
 
 # --- config / handoff --------------------------------------------------------
@@ -206,3 +206,18 @@ def test_missing_managed_folder_blocks(tmp_path):
     shutil.rmtree(ws / "4-videos-by-date")
     blockers, _, _ = _pf(ws)
     assert any("non-conforming" in b and "4-videos-by-date" in b for b in blockers), blockers
+
+
+def test_dangling_and_managed_named_root_symlinks_blocked(tmp_path):
+    """A dangling root symlink (neither file nor dir) and a symlink NAMED like a managed folder (which
+    os.path.isdir would resolve through) are both barred by the lstat-based symlink guard (§13)."""
+    import os
+    ws = _ws(tmp_path)
+    os.symlink(str(tmp_path / "nonexistent"), str(ws / "dangling"))
+    b1, _, _ = _pf(ws)
+    assert any("Forbidden symlink at the workspace root" in b and "dangling" in b for b in b1), b1
+    os.remove(ws / "dangling")
+    os.rmdir(ws / "5-photos-by-date")
+    os.symlink(str(tmp_path), str(ws / "5-photos-by-date"))           # a managed folder that is a symlink
+    b2, _, _ = _pf(ws)
+    assert any("Forbidden symlink at the workspace root" in b for b in b2), b2

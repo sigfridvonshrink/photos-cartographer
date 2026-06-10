@@ -148,7 +148,7 @@ def test_handoff_manifest_generated(mock_meta, tmp_path):
 
     assert data["schema_version"] == 1
     assert data["tool"] == "photos-1-prep"
-    assert data["plan_id"] == plan1.plan_id
+    assert data["run_metadata"]["plan_id"] == plan1.plan_id
     assert "cache_fingerprint" in data
     assert "depends_on" in data
 
