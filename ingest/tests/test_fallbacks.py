@@ -2,6 +2,8 @@
 
 photos_1_prep / photos_utils come from conftest.py.
 """
+import errno
+import os
 import shutil
 import subprocess
 
@@ -37,3 +39,66 @@ def test_get_imagemagick_version_unknown_when_absent(monkeypatch):
     monkeypatch.setattr(utils, "_IMAGEMAGICK_VERSION", None)     # bypass the per-process cache
     monkeypatch.setattr(shutil, "which", lambda name: None)      # neither magick nor identify present
     assert utils.get_imagemagick_version() == "unknown"
+
+
+# --- cross-filesystem move fallback (shared contract §15.3) -------------------
+
+def test_cross_fs_move_copies_then_removes_source(tmp_path):
+    sub = tmp_path / "sub"; sub.mkdir()
+    src = tmp_path / "s"; src.write_bytes(b"PHOTO")
+    dest = sub / "x.jpg"
+    utils._move_cross_fs_no_clobber(str(src), str(dest))
+    assert dest.read_bytes() == b"PHOTO" and not src.exists()
+    assert not list(sub.glob(".tmp-xdev-*"))                    # temp cleaned
+
+
+def test_cross_fs_move_is_no_clobber(tmp_path):
+    src = tmp_path / "s"; src.write_bytes(b"NEW")
+    dest = tmp_path / "x.jpg"; dest.write_bytes(b"KEEP")
+    with pytest.raises(FileExistsError):
+        utils._move_cross_fs_no_clobber(str(src), str(dest))
+    assert dest.read_bytes() == b"KEEP" and src.read_bytes() == b"NEW"   # neither touched
+    assert not list(tmp_path.glob(".tmp-xdev-*"))
+
+
+def test_cross_fs_move_aborts_on_verify_failure(tmp_path):
+    src = tmp_path / "s"; src.write_bytes(b"Z")
+    dest = tmp_path / "x.jpg"
+    def bad_verify(s, t):
+        raise OSError("verify failed")
+    with pytest.raises(OSError):
+        utils._move_cross_fs_no_clobber(str(src), str(dest), verify=bad_verify)
+    assert src.exists() and not dest.exists()                   # source kept, no destination
+    assert not list(tmp_path.glob(".tmp-xdev-*"))
+
+
+def _exdev_seam(monkeypatch):
+    """Make the first same-fs rename (the original src->dest) report EXDEV, then delegate to the real
+    primitive for the cross-fs helper's internal tmp->dest rename."""
+    real = utils._rename_no_clobber_same_fs
+    seen = {"n": 0}
+    def fake(s, d):
+        seen["n"] += 1
+        if seen["n"] == 1:
+            raise OSError(errno.EXDEV, "Invalid cross-device link")
+        return real(s, d)
+    monkeypatch.setattr(utils, "_rename_no_clobber_same_fs", fake)
+    return seen
+
+
+def test_move_no_clobber_falls_back_to_cross_fs_on_exdev(tmp_path, monkeypatch):
+    seen = _exdev_seam(monkeypatch)
+    src = tmp_path / "s"; src.write_bytes(b"XDEV")
+    dest = tmp_path / "d.jpg"
+    utils._move_no_clobber(str(src), str(dest))
+    assert dest.read_bytes() == b"XDEV" and not src.exists() and seen["n"] == 2
+
+
+def test_move_no_clobber_cross_fs_preserves_on_existing_dest(tmp_path, monkeypatch):
+    _exdev_seam(monkeypatch)
+    src = tmp_path / "s"; src.write_bytes(b"NEW")
+    dest = tmp_path / "d.jpg"; dest.write_bytes(b"KEEP")
+    with pytest.raises(FileExistsError):
+        utils._move_no_clobber(str(src), str(dest))
+    assert dest.read_bytes() == b"KEEP" and src.read_bytes() == b"NEW"
+    assert not list(tmp_path.glob(".tmp-xdev-*"))               # temp cleaned on the no-clobber abort
