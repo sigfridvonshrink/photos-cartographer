@@ -119,3 +119,18 @@ def test_unknown_device_class_when_not_configured(tmp_path, monkeypatch):
     _run(ws)
     g = [cg for cg in _handoff(ws)["camera_groups"] if cg["group_key"] == "test-cam"][0]
     assert g["device_class"] == "unknown"
+
+
+def test_handoff_written_sorted_and_deterministic(tmp_path, monkeypatch):
+    """The handoff must be byte-deterministic for a given workspace state (shared contract §4):
+    routed through write_json_artifact (sort_keys), so its SHA-256 — which calibration records as a
+    json_dependency over the exact bytes — does not flip spuriously. The on-disk bytes must equal the
+    canonical sorted form."""
+    _mock(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    (ws / "0-sources" / "b.jpg").write_bytes(b"BBBB")
+    _run(ws)
+    raw = open(utils.handoff_path(str(ws))).read()
+    obj = json.loads(raw)
+    assert raw == json.dumps(obj, indent=2, sort_keys=True)
