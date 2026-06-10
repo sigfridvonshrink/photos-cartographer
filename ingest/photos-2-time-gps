@@ -849,6 +849,14 @@ class CalibrationWorkflow:
             blockers.append("Not an initialized workspace (no photos-00-workspace-guard) — "
                             "run photos-1-prep first.")
             return blockers, warnings, info
+        # A symlink at the workspace root is barred outright (§13) and never followed — including a
+        # dangling link (neither file nor dir) or one named like a managed folder (which os.path.isdir
+        # would otherwise resolve through). Checked before the structural/loose-entry guards below.
+        root_syms = self._root_symlinks()
+        if root_syms:
+            blockers.append(f"Forbidden symlink at the workspace root: {root_syms[0]}. Symlinks are "
+                            "never followed; remove it before calibrating.")
+            return blockers, warnings, info
         # The activated workspace must have its full 0-6 structure. A managed folder that is missing or
         # no longer a directory means the root is non-conforming — almost always an inadvertent user
         # deletion (possibly of irreplaceable media) — so HARD STOP; calibration never creates folders.
@@ -962,6 +970,13 @@ class CalibrationWorkflow:
     def _entries(self, rel_folder):
         d = os.path.join(self.workspace_root, rel_folder)
         return sorted(os.listdir(d)) if os.path.isdir(d) else []
+
+    def _root_symlinks(self):
+        """Non-dot entries at the workspace root that are symlinks (file, directory, or dangling) —
+        barred outright, never followed (§13)."""
+        ws = self.workspace_root
+        return sorted(f for f in os.listdir(ws)
+                      if not f.startswith('.') and os.path.islink(os.path.join(ws, f)))
 
     def _scan_media(self, rel_folder):
         """Yield (workspace-relative path, media_class) for non-dot files under rel_folder."""
@@ -1123,12 +1138,17 @@ class CalibrationWorkflow:
             by_dest.setdefault(f["destination"], []).append(f)
 
         destinations = {}
-        # Process destinations PARENT-FIRST so an ancestor's effective offset is known before its
-        # children can inherit it (§10.2 rule 4). `eff` maps (destination, group) -> resolved offset.
+        # Process destinations PARENT-FIRST so an ancestor's effective offset/timezone is known before
+        # its children can inherit it (§10.2 rule 4). `eff` maps (destination, group) -> resolved
+        # offset; `eff_tz` maps (destination, "tz") -> resolved effective timezone.
         eff = {}
+        eff_tz = {}
         for dest in sorted(by_dest, key=lambda d: (d.count('/'), d)):
             prior_d = prior_dests.get(dest, {})
-            tz_block = self._timezone_decision(dest, prior_d.get("destination_timezone") or {}, blockers)
+            inherited_tz = _nearest_ancestor(dest, eff_tz, "tz")        # confirmable basis if no default
+            tz_block = self._timezone_decision(dest, prior_d.get("destination_timezone") or {},
+                                               blockers, inherited_tz)
+            eff_tz[(dest, "tz")] = tz_block["effective_iana_timezone"] or None   # what children inherit
             present = sorted({f["camera_group_key"] for f in by_dest[dest]})
             prior_cells = prior_d.get("camera_group_time_decisions") or {}
             cells = {}
@@ -1165,8 +1185,20 @@ class CalibrationWorkflow:
             artifact["decision_mode"] = "no_op_or_auto_resolved"
         return artifact, blockers
 
-    def _timezone_decision(self, dest, prior_tz, blockers):
-        proposed = (CONFIG.get("camera_time_and_timezone_policy") or {}).get("default_folder_timezone") or None
+    def _timezone_decision(self, dest, prior_tz, blockers, inherited=None):
+        # Proposal precedence (§18): the nearest RESOLVED ancestor destination's timezone (a more
+        # specific signal than the generic global default — e.g. a Japan/Kyoto leaf inheriting Japan's
+        # Asia/Tokyo over a Europe/Brussels home default) wins; else the config default; else none.
+        # An inherited proposal is confirmable-only (review_required), never auto-applied — and a
+        # timezone never auto-resolves anyway, so the user reviews every destination.
+        default = (CONFIG.get("camera_time_and_timezone_policy") or {}).get("default_folder_timezone") or None
+        if inherited is not None:
+            anc_path, anc_tz = inherited
+            proposed, source, confidence, inherited_from = anc_tz, "inherited", "review_required", anc_path
+        elif default:
+            proposed, source, confidence, inherited_from = default, "config_default_folder_timezone", "high", None
+        else:
+            proposed, source, confidence, inherited_from = None, "none", "none", None
         ud = prior_tz.get("user_decision") or {}
         manual = ud.get("manual_iana_timezone", "") or ""
         accept = bool(ud.get("accept_proposed_timezone", False))
@@ -1182,15 +1214,18 @@ class CalibrationWorkflow:
                 effective = proposed
             else:
                 stale = True                       # accepted a proposal that no longer exists
-        return {
+        block = {
             "proposed_iana_timezone": proposed,
-            "proposal_source": "config_default_folder_timezone" if proposed else "none",
-            "proposal_confidence": "high" if proposed else "none",
+            "proposal_source": source,
+            "proposal_confidence": confidence,
             "user_decision": {"manual_iana_timezone": manual, "accept_proposed_timezone": accept},
             "effective_iana_timezone": effective,
             "requires_user_input": effective == "",
             "stale_user_decision": stale,
         }
+        if inherited_from:
+            block["inherited_from"] = inherited_from
+        return block
 
     def _nearest_ancestor_offset(self, dest, key, eff):
         """The deepest ancestor destination of `dest` with a RESOLVED effective offset for `key`
@@ -1757,9 +1792,14 @@ class CalibrationWorkflow:
 
     def _build_summary(self, plan, results, now_iso, execution_id, jobs):
         ws = self.workspace_root
-        op_type = {o["operation_id"]: o["type"]
-                   for dd in plan["destinations"].values() for o in dd["operations"]}
+        op_type, op_dest = {}, {}
+        for dest, dd in plan["destinations"].items():
+            for o in dd["operations"]:
+                op_type[o["operation_id"]] = o["type"]
+                op_dest[o["operation_id"]] = dest
         totals = {v: 0 for v in self._OP_TOTAL_KEY.values()}
+        # Per-destination operation counts (§29.2 item 4 — applied per destination + global total).
+        per_dest = {dest: {v: 0 for v in self._OP_TOTAL_KEY.values()} for dest in plan["destinations"]}
         newly, skipped_n = 0, 0
         failures, mismatches, blockers = [], [], []
         for r in sorted(results, key=lambda x: x["relative_path"]):
@@ -1767,6 +1807,9 @@ class CalibrationWorkflow:
                 key = self._OP_TOTAL_KEY.get(op_type.get(oid))
                 if key:
                     totals[key] += 1
+                    d = op_dest.get(oid)
+                    if d in per_dest:
+                        per_dest[d][key] += 1
                 newly += 1
             skipped_n += len(r["skipped"])
             failures.extend({"operation_id": oid, "relative_path": r["relative_path"]} for oid in r["failed"])
@@ -1774,6 +1817,8 @@ class CalibrationWorkflow:
                 mismatches.append({**r["mismatch"], "user_decision": {"accept_fingerprint_change": False}})
             if r["blocker"]:
                 blockers.append(r["blocker"])
+        for dest, dd in plan["destinations"].items():
+            per_dest[dest]["no_ops"] = len(dd.get("no_ops") or [])
         totals["no_ops"] = sum(len(dd.get("no_ops") or []) for dd in plan["destinations"].values())
         status = "success" if not (failures or mismatches or blockers) else "partial"
         return {
@@ -1782,10 +1827,11 @@ class CalibrationWorkflow:
             "summarizes": {EXECUTABLE_PLAN_ARTIFACT: {"sha256": sha256_file(executable_plan_path(ws))},
                            "upstream": plan.get("depends_on")},
             "totals": totals,
+            "destinations": {d: per_dest[d] for d in sorted(per_dest)},   # per-destination breakdown
             "resume": {"newly_applied": newly, "already_satisfied_skipped": skipped_n},
             "failures": failures, "blockers": blockers, "fingerprint_mismatches": mismatches,
             "status": status,
-            "run_metadata": {"execution_id": execution_id, "finished_at": now_iso, "jobs": jobs},
+            "run_metadata": {"execution_id": execution_id, "started_at": now_iso, "finished_at": now_iso, "jobs": jobs},
         }
 
     # --- Stage 11: finalize + archive (§31 / shared §13) ---------------------
