@@ -184,6 +184,35 @@ def sha256_file(path: str) -> str:
             h.update(chunk)
     return h.hexdigest()
 
+def sha256_text(text: str) -> str:
+    """SHA-256 over a UTF-8 string — used for field-scoped config fingerprints (a SHA-256 over a
+    canonical serialization of a config sub-block, calibration §4.2)."""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+def json_dependency(name: str, ws: str, abs_path: str) -> dict:
+    """The §4 JSON-artifact dependency entry for a numbered artifact / the prep handoff: its name,
+    workspace-relative path, and the SHA-256 of its exact bytes. Recorded in a downstream
+    artifact's `depends_on` so the dependency can be re-read and re-hashed before use (§6)."""
+    return {"dependency_type": "json_artifact", "artifact_name": name,
+            "artifact_path": os.path.relpath(abs_path, ws), "sha256": sha256_file(abs_path)}
+
+def verify_json_dependency(dep: dict, ws: str) -> bool:
+    """Re-read the named JSON dependency from disk and re-hash its exact bytes, returning True iff
+    it still matches the recorded SHA-256 (§6: no mtime/size/cached shortcuts). A missing file or
+    any mismatch is stale → False."""
+    p = os.path.join(ws, dep.get("artifact_path", ""))
+    try:
+        return os.path.isfile(p) and sha256_file(p) == dep.get("sha256")
+    except OSError:
+        return False
+
+def write_json_artifact(path: str, obj: dict) -> str:
+    """Atomically write a numbered artifact as deterministic, pretty-printed, sorted JSON
+    (temp → atomic rename). Returns its SHA-256. Artifacts must be byte-deterministic for a given
+    workspace state so downstream re-hashing is stable (§4)."""
+    _atomic_write_text(path, json.dumps(obj, indent=2, sort_keys=True))
+    return sha256_file(path)
+
 def lock_path(ws: str) -> str:
     return os.path.join(ws, CONTROL_DIR, "photos-00-workspace.lock")
 
