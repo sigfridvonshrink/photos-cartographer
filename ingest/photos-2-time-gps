@@ -33,7 +33,7 @@ from photos_utils import (
     selected_gpx_root, CAMERA_IDENTITY_FIELDS, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION,
     json_dependency, verify_json_dependency, write_json_artifact, db_path, ensure_control_dir,
     journal_path, ContentHasher, _move_no_clobber,
-    prep_log_path, prep_db_snapshot_path, write_db_snapshot,
+    prep_log_path, prep_db_snapshot_path, write_db_snapshot, take_zfs_snapshot,
     WorkspaceLock,
 )
 
@@ -1629,6 +1629,15 @@ class CalibrationWorkflow:
         if stale:
             return {"status": "rejected", "plan_id": plan.get("plan_id"), "stale": stale}
 
+        # Optional pre-mutation ZFS snapshot (§29 step 6), labelled "calibrate" so it never collides
+        # with prep's "prep-" snapshot. A REQUIRED snapshot that cannot be taken aborts before any
+        # mutation; the record is carried into photos-24 either way.
+        snapshot = take_zfs_snapshot(ws, plan["plan_id"], "calibrate")
+        if snapshot is not None and snapshot["required"] and not snapshot["ok"]:
+            return {"status": "rejected", "plan_id": plan.get("plan_id"),
+                    "stale": [f"required ZFS pre-mutation snapshot failed: {snapshot['stderr']}"],
+                    "snapshot": snapshot}
+
         jpath = journal_path(ws, plan["plan_id"])
         journal = {}
         if os.path.exists(jpath):
@@ -1682,6 +1691,7 @@ class CalibrationWorkflow:
                                     "operations": journal, "updated_at": now_iso})
         summary = self._build_summary(plan, results, now_iso, execution_id, jobs)
         summary["totals"]["manual_gps_pre_states_captured"] = captured   # reverts counted by _build_summary
+        summary["snapshot"] = snapshot                                   # the pre-mutation ZFS record (or None)
         write_json_artifact(execution_summary_path(ws), summary)
         return summary
 

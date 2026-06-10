@@ -523,6 +523,38 @@ def detect_zfs_dataset(path: str):
     except Exception:
         return None
 
+def take_zfs_snapshot(ws: str, snapshot_id: str, label: str):
+    """Take an optional pre-mutation ZFS snapshot of the workspace dataset — shared by prep (§14.3)
+    and calibration execute (§29 step 6). `label` is the phase ("prep" / "calibrate") so the two
+    phases' snapshots never resolve to the same name even on a shared dataset:
+    `<dataset>@<zfs.snapshot_prefix><label>-<snapshot_id>`.
+
+    Returns None when ZFS is disabled; otherwise a record
+    `{required, snapshot_name (None if no dataset was found), command, exit_code, stdout, stderr, ok}`.
+    It NEVER raises — the caller records the result in its own journal/summary and, if `required` and
+    not `ok`, aborts before mutating (keeping the audit record + abort decision in the phase)."""
+    import subprocess
+    zfs = CONFIG.get("zfs") or {}
+    if not zfs.get("enabled", False):
+        return None
+    required = bool(zfs.get("snapshots_required", False))
+    ds_cfg = (zfs.get("datasets") or {}).get("workspace", "auto")
+    dataset = detect_zfs_dataset(ws) if ds_cfg == "auto" else ds_cfg
+    if not dataset:
+        return {"required": required, "snapshot_name": None, "command": None, "exit_code": None,
+                "stdout": "", "stderr": f"ZFS enabled but no dataset found for workspace {ws}", "ok": False}
+    snap = f"{dataset}@{zfs.get('snapshot_prefix', '')}{label}-{snapshot_id}"
+    cmd = ["zfs", "snapshot", snap]
+    try:
+        res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        return {"required": required, "snapshot_name": snap, "command": " ".join(cmd),
+                "exit_code": res.returncode, "stdout": res.stdout, "stderr": res.stderr,
+                "ok": res.returncode == 0}
+    except Exception as e:
+        return {"required": required, "snapshot_name": snap, "command": " ".join(cmd),
+                "exit_code": getattr(e, "returncode", -1), "stdout": getattr(e, "stdout", "") or "",
+                "stderr": getattr(e, "stderr", "") or str(e), "ok": False}
+
 FIELD_SET_VERSION = 1
 METADATA_SCHEMA_VERSION = 1
 CAMERA_GROUP_KEY_VERSION = 1
