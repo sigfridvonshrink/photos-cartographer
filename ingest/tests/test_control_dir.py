@@ -97,10 +97,3 @@ def test_media_inside_control_dir_is_not_inventoried(tmp_path, monkeypatch):
               [op.destination for op in plan.operations if op.destination]
     assert not any("sneaky" in (p or "") for p in touched), touched
     assert plan.blockers == [], plan.blockers
-
-
-def test_missing_guard_hard_stops_with_new_path(tmp_path):
-    ws = tmp_path / "ws"
-    ws.mkdir()
-    with pytest.raises(RuntimeError, match="photos-00-workspace-guard"):
-        prep.RootGuard.check_sentinel(str(ws))

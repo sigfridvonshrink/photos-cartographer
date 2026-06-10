@@ -1333,12 +1333,6 @@ class WorkspaceCache:
             cur.execute("SELECT key, value FROM meta")
             return {row[0]: row[1] for row in cur.fetchall()}
 
-    def get_file(self, relative_path: str) -> Optional[sqlite3.Row]:
-        with self._lock:
-            cur = self.conn.cursor()
-            cur.execute("SELECT * FROM file_cache WHERE relative_path = ?", (relative_path,))
-            return cur.fetchone()
-
     def get_metadata(self, relative_path: str) -> Optional[sqlite3.Row]:
         with self._lock:
             cur = self.conn.cursor()
