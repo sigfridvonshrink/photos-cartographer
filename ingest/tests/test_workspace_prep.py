@@ -314,6 +314,55 @@ def test_directory_symlink_at_root_blocked_during_init(tmp_path, monkeypatch):
     assert (external / "victim.jpg").exists()
 
 
+def _empty_initialized_ws(tmp_path):
+    """An initialized workspace with empty managed folders (no seeded media)."""
+    ws = tmp_path / "ws"; ws.mkdir()
+    (ws / ".photos-ingest").mkdir(); (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
+    for d in ("0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
+              "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"):
+        (ws / d).mkdir()
+    return ws
+
+
+def test_symlinked_managed_folder_blocked(tmp_path, monkeypatch):
+    """A managed folder that is itself a symlink would let the managed-folder walk traverse its
+    external target — the same escape as a root dump symlink. It must be flagged, not walked."""
+    import photos_utils as utils
+    monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
+    monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image",
+                        lambda p: {"status": "valid", "value": "sig", "strategy": "image-content-hash-v1",
+                                   "engine_version": "t"})
+    photos_ingest.CONFIG["jobs"] = 1
+    external = tmp_path / "external"; external.mkdir(); (external / "e.jpg").write_bytes(b"E")
+    ws = _empty_initialized_ws(tmp_path)
+    os.rmdir(ws / "0-sources"); os.symlink(str(external), str(ws / "0-sources"))   # 0-sources is a symlink
+
+    cache = photos_ingest.WorkspaceCache(str(ws), in_memory=True)
+    plan = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
+    cache.close()
+    assert any("Forbidden symlink detected: 0-sources" in b for b in plan.blockers), plan.blockers
+    assert not any(op.source and "e.jpg" in (op.source or "") for op in plan.operations)
+
+
+def test_nested_directory_symlink_in_managed_folder_blocked(tmp_path, monkeypatch):
+    """os.walk does not descend into a subdirectory symlink (so it never escapes), but it must still
+    be FLAGGED as forbidden rather than silently ignored."""
+    import photos_utils as utils
+    monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
+    monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image",
+                        lambda p: {"status": "valid", "value": "sig", "strategy": "image-content-hash-v1",
+                                   "engine_version": "t"})
+    photos_ingest.CONFIG["jobs"] = 1
+    external = tmp_path / "external"; external.mkdir(); (external / "deep.jpg").write_bytes(b"D")
+    ws = _empty_initialized_ws(tmp_path)
+    os.symlink(str(external), str(ws / "0-sources" / "nested"))   # dir symlink INSIDE a managed folder
+
+    cache = photos_ingest.WorkspaceCache(str(ws), in_memory=True)
+    plan = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
+    cache.close()
+    assert any("Forbidden symlink detected" in b and "nested" in b for b in plan.blockers), plan.blockers
+
+
 def test_deterministic_temp_names_with_existing(tmp_path, monkeypatch):
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)

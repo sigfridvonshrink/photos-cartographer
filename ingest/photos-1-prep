@@ -1279,6 +1279,15 @@ class WorkspacePrepWorkflow:
                 return name
             idx += 1
 
+    def _flag_dir_symlinks(self, root, dir_names, blockers):
+        """Flag any subdirectory symlink encountered during a walk as a forbidden escape. os.walk does
+        not descend into them (followlinks=False), so without this they would be silently ignored
+        rather than blocked — the spec forbids symlinks among managed files (prep §9)."""
+        for dd in dir_names:
+            p = os.path.join(root, dd)
+            if os.path.islink(p):
+                blockers.append(f"Forbidden symlink detected: {os.path.relpath(p, self.workspace_root)}")
+
     def plan(self) -> Plan:
         operations = []
         blockers = []
@@ -1339,6 +1348,7 @@ class WorkspacePrepWorkflow:
                 continue  # dotfiles are excluded from the init move (left in place)
             if is_dir:
                 for root, _dirs, filenames in os.walk(path):
+                    self._flag_dir_symlinks(root, _dirs, blockers)   # nested dir symlinks are forbidden too
                     _dirs[:] = [dd for dd in _dirs if not dd.startswith('.')]
                     for fname in filenames:
                         if fname.startswith('.'):
@@ -1353,8 +1363,14 @@ class WorkspacePrepWorkflow:
                 files.append(f)
         for d in self.managed_folders:
             folder_path = os.path.join(self.workspace_root, d)
+            # A managed folder that is itself a symlink would let os.walk traverse its external
+            # target (the same escape as a root dump symlink) — block it before walking.
+            if os.path.islink(folder_path):
+                blockers.append(f"Forbidden symlink detected: {d}")
+                continue
             if os.path.isdir(folder_path):
-                for root, _, filenames in os.walk(folder_path):
+                for root, _dirs, filenames in os.walk(folder_path):
+                    self._flag_dir_symlinks(root, _dirs, blockers)   # nested dir symlinks are forbidden too
                     for fname in filenames:
                         if not fname.startswith('.'):
                             path = os.path.join(root, fname)

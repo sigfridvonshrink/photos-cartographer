@@ -30,7 +30,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from photos_utils import (
     CONFIG, CONTROL_DIR, config_path, handoff_path, guard_path, is_sealed,
     validate_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
-    selected_gpx_root, CAMERA_IDENTITY_FIELDS, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION,
+    selected_gpx_root, CAMERA_IDENTITY_FIELDS, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
     json_dependency, verify_json_dependency, write_json_artifact, db_path, ensure_control_dir,
     journal_path, ContentHasher, _move_no_clobber,
     prep_log_path, prep_db_snapshot_path, write_db_snapshot, take_zfs_snapshot,
@@ -853,6 +853,15 @@ class CalibrationWorkflow:
             blockers.append(f"Loose file at the workspace root (dumps belong in "
                             f"{folder_name('sources')}/): {loose[0]}. The base must hold only folders.")
             return blockers, warnings, info
+        # A misplaced dump drops folders at the root too, not just files. The base must hold ONLY the
+        # managed 0-6 folders (+ dot/control dirs); any other root folder — including a directory
+        # symlink — is a misplaced dump, blocked exactly like a loose file.
+        loose_dirs = self._root_nonmanaged_dirs()
+        if loose_dirs:
+            blockers.append(f"Misplaced folder at the workspace root (dumps belong in "
+                            f"{folder_name('sources')}/): {loose_dirs[0]}. The base must hold only "
+                            "the managed folders.")
+            return blockers, warnings, info
 
         # 2. Config (read-only) + handoff — both must exist; calibration never seeds/writes config.
         cfg_p = config_path(ws)
@@ -930,6 +939,15 @@ class CalibrationWorkflow:
     def _root_files(self):
         ws = self.workspace_root
         return sorted(f for f in os.listdir(ws) if os.path.isfile(os.path.join(ws, f)))
+
+    def _root_nonmanaged_dirs(self):
+        """Root entries that are directories (a directory symlink counts) but are neither one of the
+        managed 0-6 folders nor a dot/control dir — i.e. misplaced dump folders."""
+        ws = self.workspace_root
+        managed = {folder_name(r) for r in FOLDER_ROLES}
+        return sorted(f for f in os.listdir(ws)
+                      if not f.startswith('.') and f not in managed
+                      and os.path.isdir(os.path.join(ws, f)))
 
     def _entries(self, rel_folder):
         d = os.path.join(self.workspace_root, rel_folder)
