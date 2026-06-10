@@ -58,7 +58,7 @@ def test_cache_meta_records_versions(tmp_path, monkeypatch):
     ws = _ws(tmp_path)
     (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
     _run(ws)
-    meta = prep.WorkspaceCache(str(ws)).get_all_meta()
+    meta = dict(prep.WorkspaceCache(str(ws)).conn.execute("SELECT key, value FROM meta").fetchall())
     assert meta["cache_schema_version"] == str(prep.CACHE_SCHEMA_VERSION)
     assert meta["fingerprint_algorithm_version"] == prep.FINGERPRINT_ALGORITHM_VERSION
 
@@ -131,7 +131,7 @@ def test_legacy_version_key_migrates_cleanly(tmp_path, monkeypatch):
     # The next run must not error; it re-seeds the new key and the read-fallback still reports "1"
     # (the rename keeps the same VALUE, so it is not a staleness trigger).
     _run(ws)
-    meta = prep.WorkspaceCache(str(ws)).get_all_meta()
+    meta = dict(prep.WorkspaceCache(str(ws)).conn.execute("SELECT key, value FROM meta").fetchall())
     assert meta["fingerprint_algorithm_version"] == "1"          # re-seeded under the new name
     with open(utils.handoff_path(str(ws))) as f:
         cache_block = json.load(f)["depends_on"]["cache"]

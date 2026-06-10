@@ -129,9 +129,8 @@ def test_by_dest_duplicate_does_not_mutate_behavior():
             if op.type == 'quarantine_move':
                 assert op.source == '0-sources/duplicate.jpg'
 
-@mock.patch("photos_1_prep.ContentHasher.hash_file")
 @mock.patch("photos_1_prep.ContentHasher.fingerprint_image")
-def test_by_dest_duplicate_does_not_mutate_behavior_with_hashes(mock_hash_image, mock_hash_file, tmp_path):
+def test_by_dest_duplicate_does_not_mutate_behavior_with_hashes(mock_hash_image, tmp_path):
     ws = tmp_path / "workspace"
     ws.mkdir()
     (ws / ".photos-ingest").mkdir(exist_ok=True); (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
@@ -150,7 +149,6 @@ def test_by_dest_duplicate_does_not_mutate_behavior_with_hashes(mock_hash_image,
         "value": "same-hash"
     }
 
-    mock_hash_file.return_value = duplicate_hash
     mock_hash_image.return_value = duplicate_hash
 
     cache = photos_1_prep.WorkspaceCache(str(ws), in_memory=True)
