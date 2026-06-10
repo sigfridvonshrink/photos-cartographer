@@ -20,15 +20,23 @@ import math
 import os
 import sys
 import xml.etree.ElementTree as ET
+import zoneinfo
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from photos_utils import (
-    CONFIG, config_path, handoff_path, guard_path, is_sealed,
-    validate_config, sha256_file, media_class_for_ext, folder_name,
-    selected_gpx_root, CAMERA_IDENTITY_FIELDS, FIELD_SET_VERSION,
+    CONFIG, CONTROL_DIR, config_path, handoff_path, guard_path, is_sealed,
+    validate_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
+    selected_gpx_root, CAMERA_IDENTITY_FIELDS, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION,
+    json_dependency, write_json_artifact,
     WorkspaceLock,
 )
+
+TIME_DECISIONS_ARTIFACT = "photos-21-time-decisions.json"
+
+
+def time_decisions_path(ws):
+    return os.path.join(ws, CONTROL_DIR, TIME_DECISIONS_ARTIFACT)
 
 
 # ============================================================================
@@ -146,13 +154,28 @@ class GPXIndex:
             idx += 1
 
 
+def _valid_iana(tz):
+    """True iff `tz` resolves to a real IANA timezone (calibration §9.2)."""
+    try:
+        zoneinfo.ZoneInfo(tz)
+        return True
+    except (zoneinfo.ZoneInfoNotFoundError, ValueError, TypeError):
+        return False
+
+
+def _valid_offset(v):
+    """True iff `v` is a finite number of seconds within +/- one day (calibration §9.2)."""
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and abs(v) <= 86400
+
+
 class CalibrationWorkflow:
-    """Stages 1–4: validate the workspace, then build the in-memory model (by-dest files, GPX
-    index, classified camera groups) calibration reasons over. No JSON artifacts yet."""
+    """Stages 1–6: validate the workspace, build the in-memory model (by-dest files, GPX index,
+    classified camera groups), then produce photos-21-time-decisions.json — the first artifact."""
 
     def __init__(self, workspace_root: str):
         self.workspace_root = workspace_root
         self.handoff = None
+        self._gpx_fingerprint = None
 
     # --- preflight (calibration spec §7 / §13) -------------------------------
 
@@ -363,7 +386,9 @@ class CalibrationWorkflow:
     # --- Stage 3: GPX index (calibration spec §15) ---------------------------
 
     def load_gpx(self):
-        return GPXIndex(selected_gpx_root()).build()
+        idx = GPXIndex(selected_gpx_root()).build()
+        self._gpx_fingerprint = idx.fingerprint
+        return idx
 
     # --- Stage 4: camera-group recognition + classification (§16) ------------
 
@@ -402,6 +427,124 @@ class CalibrationWorkflow:
             g["latest_source_time"] = ts[-1] if ts else None
         unknown = sorted(k for k, g in groups.items() if g["camera_group_class"] == "unknown")
         return groups, unknown
+
+    # --- Stages 5–6: time decisions (photos-21, §17–§21) ---------------------
+
+    def build_time_decisions(self, files, groups, prior):
+        """Build/regenerate the photos-21 content: per-destination civil timezone (§18) + per-
+        (camera group, destination) clock-offset cells (§10.2), through the decision-field /
+        auto-resolution / rerun-preservation engine (§9). 3a's offset proposal is 'manual_required'
+        (the GPX ranking inference is Phase 3b). Returns (artifact, blockers); blockers come from
+        sanity-validating preserved authored values (§9.2) and mean "do not overwrite — fix first"."""
+        blockers = []
+        prior_dests = ((prior or {}).get("destinations")) or {}
+        by_dest = {}
+        for f in files:
+            by_dest.setdefault(f["destination"], []).append(f)
+
+        destinations = {}
+        for dest in sorted(by_dest):
+            prior_d = prior_dests.get(dest, {})
+            tz_block = self._timezone_decision(dest, prior_d.get("destination_timezone") or {}, blockers)
+            present = sorted({f["camera_group_key"] for f in by_dest[dest]})
+            prior_cells = prior_d.get("camera_group_time_decisions") or {}
+            cells = {}
+            for key in present:
+                g = groups.get(key) or {}
+                if g.get("camera_group_class") != "camera":
+                    continue                       # smartphones are solved per-file; no offset cell
+                cells[key] = self._offset_cell(dest, key, g, prior_cells.get(key) or {}, blockers)
+            destinations[dest] = {
+                "destination_path": dest,
+                "destination_timezone": tz_block,
+                "camera_groups_present": present,
+                "camera_group_time_decisions": cells,
+            }
+
+        requires = (any(d["destination_timezone"]["requires_user_input"] for d in destinations.values())
+                    or any(c["requires_user_input"] for d in destinations.values()
+                           for c in d["camera_group_time_decisions"].values()))
+        artifact = {
+            "artifact_type": "time_decisions",
+            "artifact_name": TIME_DECISIONS_ARTIFACT,
+            "status": "requires_user_input" if requires else "complete",
+            "requires_user_input": requires,
+            "executable": False,
+            "destinations": destinations,
+            "depends_on": self._time_depends_on(),
+        }
+        if not requires:
+            artifact["decision_mode"] = "no_op_or_auto_resolved"
+        return artifact, blockers
+
+    def _timezone_decision(self, dest, prior_tz, blockers):
+        proposed = (CONFIG.get("camera_time_and_timezone_policy") or {}).get("default_folder_timezone") or None
+        ud = prior_tz.get("user_decision") or {}
+        manual = ud.get("manual_iana_timezone", "") or ""
+        accept = bool(ud.get("accept_proposed_timezone", False))
+        effective, stale = "", False
+        if manual:
+            if _valid_iana(manual):
+                effective = manual
+            else:
+                blockers.append(f"{dest}: destination_timezone.user_decision.manual_iana_timezone "
+                                f"{manual!r} is not a valid IANA timezone.")
+        elif accept:
+            if proposed:
+                effective = proposed
+            else:
+                stale = True                       # accepted a proposal that no longer exists
+        return {
+            "proposed_iana_timezone": proposed,
+            "proposal_source": "config_default_folder_timezone" if proposed else "none",
+            "proposal_confidence": "high" if proposed else "none",
+            "user_decision": {"manual_iana_timezone": manual, "accept_proposed_timezone": accept},
+            "effective_iana_timezone": effective,
+            "requires_user_input": effective == "",
+            "stale_user_decision": stale,
+        }
+
+    def _offset_cell(self, dest, key, g, prior_cell, blockers):
+        ud = prior_cell.get("user_decision") or {}
+        accept = bool(ud.get("accept_proposal", False))
+        manual_off = ud.get("manual_offset_seconds", "")
+        manual_utc = ud.get("manual_real_utc", "") or ""
+        effective, stale = "", False
+        if manual_off != "" and manual_off is not None:
+            if _valid_offset(manual_off):
+                effective = {"offset_seconds": int(manual_off), "source": "manual"}
+            else:
+                blockers.append(f"{dest}: camera_group_time_decisions[{key}].user_decision."
+                                "manual_offset_seconds must be a number within +/-86400.")
+        elif manual_utc:
+            try:
+                datetime.fromisoformat(manual_utc.replace("Z", "+00:00"))   # parse-checked; used in 3b
+            except ValueError:
+                blockers.append(f"{dest}: camera_group_time_decisions[{key}].user_decision."
+                                f"manual_real_utc {manual_utc!r} is not a valid UTC datetime.")
+        elif accept:
+            stale = True                           # 3a has no machine proposal to accept yet (Phase 3b)
+        return {
+            "camera_group": key,
+            "camera_group_class": g.get("camera_group_class", "camera"),
+            "proposal": {"proposal_source": "manual_required"},
+            "user_decision": {"accept_proposal": accept,
+                              "manual_offset_seconds": manual_off if manual_off is not None else "",
+                              "manual_real_utc": manual_utc},
+            "effective_time_anchor": effective,
+            "requires_user_input": effective == "",
+            "stale_user_decision": stale,
+        }
+
+    def _time_depends_on(self):
+        policy = json.dumps((CONFIG.get("camera_time_and_timezone_policy") or {}), sort_keys=True)
+        ho = handoff_path(self.workspace_root)
+        return {
+            "handoff": json_dependency("photos-11-handoff.json", self.workspace_root, ho),
+            "camera_time_policy_fingerprint": sha256_text(policy),
+            "gpx_fingerprint": self._gpx_fingerprint,
+            "camera_group_key_version": CAMERA_GROUP_KEY_VERSION,
+        }
 
 
 def main():
@@ -460,7 +603,37 @@ def main():
             print(f"Model built: {len(files)} photo(s) across {n_dest} destination(s); "
                   f"{len(groups)} camera group(s) ({cls_summary}); "
                   f"GPX {gpx.status} ({len(gpx.points)} point(s), fp {(gpx.fingerprint or '')[:12]}).")
-            print("Time decisions (photos-21) are the next phase — no JSON written yet.")
+
+            # Stages 5–6: time decisions (photos-21). Regenerate from current inputs while
+            # preserving authored decisions (§9); a sanity-validation failure on a preserved value
+            # is a hard blocker that leaves the user's artifact untouched to be fixed (§9.2).
+            tdp = time_decisions_path(workspace_root)
+            prior = None
+            if os.path.exists(tdp):
+                try:
+                    with open(tdp) as f:
+                        prior = json.load(f)
+                except Exception:
+                    prior = None
+            artifact, td_blockers = wf.build_time_decisions(files, groups, prior)
+            if td_blockers:
+                print("\nCalibration cannot proceed: invalid value(s) in photos-21-time-decisions.json:",
+                      file=sys.stderr)
+                for b in td_blockers:
+                    print(f"  - {b}", file=sys.stderr)
+                print("\nFix the field(s) and re-run; the artifact was left unchanged.", file=sys.stderr)
+                sys.exit(2)
+            write_json_artifact(tdp, artifact)
+            need_tz = sum(1 for d in artifact["destinations"].values()
+                          if d["destination_timezone"]["requires_user_input"])
+            need_off = sum(1 for d in artifact["destinations"].values()
+                           for c in d["camera_group_time_decisions"].values() if c["requires_user_input"])
+            if artifact["requires_user_input"]:
+                print(f"Wrote {TIME_DECISIONS_ARTIFACT}: status={artifact['status']} "
+                      f"({need_tz} timezone + {need_off} clock-offset decision(s) need input). "
+                      "Edit the user_decision fields and re-run.")
+            else:
+                print(f"Wrote {TIME_DECISIONS_ARTIFACT}: status=complete — all time decisions resolved.")
     finally:
         run_lock.release()
 

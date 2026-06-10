@@ -149,7 +149,8 @@ def test_run_known_group_builds_model(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr()
     assert code == 0, out.err
     assert "Model built:" in out.out and "1 camera" in out.out
-    assert not [f for f in os.listdir(ws / ".photos-ingest") if f.startswith("photos-2")]
+    # run now advances into Stage 5-6 and writes the first artifact, photos-21 (Phase 3a).
+    assert os.path.exists(ws / ".photos-ingest" / "photos-21-time-decisions.json")
 
 
 def test_run_unknown_group_prints_snippet_and_exits(tmp_path, monkeypatch, capsys):
