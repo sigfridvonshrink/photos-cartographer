@@ -676,17 +676,6 @@ class ContentHasher:
             print(f"Warning: ffmpeg failed on {filepath}: {e.stderr}")
             return {"status": "failed", "strategy": "video-md5-v1", "value": None, "error": str(e)}
 
-    @staticmethod
-    def hash_file(filepath: str) -> Dict[str, Any]:
-        h = hashlib.sha256()
-        try:
-            with open(filepath, 'rb') as f:
-                while chunk := f.read(8192):
-                    h.update(chunk)
-            return {"status": "valid", "strategy": "sha256-v1", "value": h.hexdigest()}
-        except Exception as e:
-            return {"status": "failed", "strategy": "sha256-v1", "value": None, "error": str(e)}
-
 
 class ProcessCrashedError(Exception):
     pass
@@ -1326,18 +1315,6 @@ class WorkspaceCache:
             cur.execute("SELECT value FROM meta WHERE key = ?", (key,))
             row = cur.fetchone()
             return row[0] if row else None
-
-    def get_all_meta(self) -> Dict[str, str]:
-        with self._lock:
-            cur = self.conn.cursor()
-            cur.execute("SELECT key, value FROM meta")
-            return {row[0]: row[1] for row in cur.fetchall()}
-
-    def get_metadata(self, relative_path: str) -> Optional[sqlite3.Row]:
-        with self._lock:
-            cur = self.conn.cursor()
-            cur.execute("SELECT * FROM metadata_cache WHERE relative_path = ?", (relative_path,))
-            return cur.fetchone()
 
     def get_all_files(self) -> Dict[str, dict]:
         with self._lock:
