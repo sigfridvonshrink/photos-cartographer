@@ -64,8 +64,12 @@ def test_execution_id_present_and_distinct(tmp_path, monkeypatch):
     (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
     plan = _run(ws)
     h = _handoff(ws)
-    assert h["execution_id"]
-    assert h["execution_id"] != h["plan_id"] == plan.plan_id
+    # the per-run ids now live in run_metadata, off the deterministic content (§16)
+    rm = h["run_metadata"]
+    assert rm["execution_id"]
+    assert rm["execution_id"] != rm["plan_id"] == plan.plan_id
+    assert "plan_id" not in h and "execution_id" not in h        # not at the top level
+    assert h["content_fingerprint"]                              # the content fingerprint is present
 
 
 def test_real_duplicate_evidence_against_mutable(tmp_path, monkeypatch):
@@ -134,3 +138,21 @@ def test_handoff_written_sorted_and_deterministic(tmp_path, monkeypatch):
     raw = open(utils.handoff_path(str(ws))).read()
     obj = json.loads(raw)
     assert raw == json.dumps(obj, indent=2, sort_keys=True)
+
+
+def test_handoff_content_fingerprint_ignores_run_metadata_and_audit():
+    """The content fingerprint is byte-stable across no-op reruns: it excludes run_metadata,
+    diagnostics, the execution-journal pointer, and itself; only real content moves it."""
+    import photos_utils as utils
+    base = {"schema_version": 1, "cache_fingerprint": "cf", "files": [{"relative_path": "a"}],
+            "depends_on": {"effective_config": {"fingerprint": "c1"},
+                           "execution_journal": {"sha256": "j1"}},
+            "diagnostics": {"blockers": []},
+            "run_metadata": {"plan_id": "p1", "execution_id": "e1"}}
+    fp1 = utils.handoff_content_fingerprint(base)
+    volatile_changed = {**base, "run_metadata": {"plan_id": "p2", "execution_id": "e2"},
+                        "diagnostics": {"blockers": ["x"]}, "content_fingerprint": "stale",
+                        "depends_on": {"effective_config": {"fingerprint": "c1"},
+                                       "execution_journal": {"sha256": "j2"}}}
+    assert utils.handoff_content_fingerprint(volatile_changed) == fp1     # no-op rerun -> stable
+    assert utils.handoff_content_fingerprint({**base, "cache_fingerprint": "CF2"}) != fp1   # real change

@@ -32,7 +32,7 @@ from photos_utils import (
     validate_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
     selected_gpx_root, CAMERA_IDENTITY_FIELDS, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
     missing_managed_folders,
-    json_dependency, verify_json_dependency, write_json_artifact, db_path, ensure_control_dir,
+    json_dependency, verify_json_dependency, handoff_content_fingerprint, write_json_artifact, db_path, ensure_control_dir,
     journal_path, ContentHasher, _move_no_clobber,
     prep_log_path, prep_db_snapshot_path, write_db_snapshot, take_zfs_snapshot,
     WorkspaceLock,
@@ -1300,11 +1300,33 @@ class CalibrationWorkflow:
             cell["decision_mode"] = decision_mode
         return cell
 
+    def _handoff_dependency(self, ws):
+        """The handoff dependency is its deterministic CONTENT fingerprint (§16), not the volatile
+        file bytes — so a no-op prep re-run (which only refreshes run_metadata) does not restale this
+        plan. Falls back to a plain byte-hash dependency for a legacy handoff with no content_fingerprint."""
+        with open(handoff_path(ws)) as f:
+            ho = json.load(f)
+        if "content_fingerprint" in ho:
+            return {"dependency_type": "handoff_content", "artifact_name": "photos-11-handoff.json",
+                    "artifact_path": os.path.relpath(handoff_path(ws), ws),
+                    "content_fingerprint": handoff_content_fingerprint(ho)}
+        return json_dependency("photos-11-handoff.json", ws, handoff_path(ws))   # legacy
+
+    @staticmethod
+    def _verify_handoff_dependency(dep, ws):
+        if dep.get("dependency_type") != "handoff_content":
+            return verify_json_dependency(dep, ws)                                # legacy byte-hash
+        p = os.path.join(ws, dep.get("artifact_path", ""))
+        try:
+            with open(p) as f:
+                return handoff_content_fingerprint(json.load(f)) == dep.get("content_fingerprint")
+        except Exception:
+            return False
+
     def _time_depends_on(self):
         policy = json.dumps((CONFIG.get("camera_time_and_timezone_policy") or {}), sort_keys=True)
-        ho = handoff_path(self.workspace_root)
         return {
-            "handoff": json_dependency("photos-11-handoff.json", self.workspace_root, ho),
+            "handoff": self._handoff_dependency(self.workspace_root),
             "camera_time_policy_fingerprint": sha256_text(policy),
             "gpx_fingerprint": self._gpx_fingerprint,
             "camera_group_key_version": CAMERA_GROUP_KEY_VERSION,
@@ -1446,12 +1468,11 @@ class CalibrationWorkflow:
             "gpx_direct_match_max_seconds", "gpx_interpolation_max_gap_seconds",
             "gpx_interpolation_max_distance_meters", "gpx_interpolation_max_speed_kmh",
             "gpx_extrapolation_max_seconds")}, sort_keys=True)
-        ho = handoff_path(self.workspace_root)
         return {
             "resolved_utc_cache_fingerprint": resolved_fp,
             "gpx_fingerprint": self._gpx_fingerprint,
             "gps_policy_fingerprint": sha256_text(gps_policy),
-            "handoff": json_dependency("photos-11-handoff.json", self.workspace_root, ho),
+            "handoff": self._handoff_dependency(self.workspace_root),
         }
 
     # --- Stage 9: executable plan (photos-23, §28) ---------------------------
@@ -1563,7 +1584,7 @@ class CalibrationWorkflow:
             "config_fingerprint": sha256_file(config_path(ws)),
             "camera_group_fingerprint": sha256_text(cam),
             "camera_group_key_version": CAMERA_GROUP_KEY_VERSION,
-            "handoff": json_dependency("photos-11-handoff.json", ws, handoff_path(ws)),
+            "handoff": self._handoff_dependency(ws),
             "prep_cache_fingerprint": (self.handoff or {}).get("cache_fingerprint"),
             "gpx_fingerprint": self._gpx_fingerprint,
             "metadata_field_set_version": FIELD_SET_VERSION,
@@ -1597,9 +1618,11 @@ class CalibrationWorkflow:
         stale = []
         if plan.get("status") != "ready":
             stale.append(f"plan status is {plan.get('status')!r}, not 'ready'")
-        for key in ("time_decisions", "gps_decisions", "handoff"):
+        for key in ("time_decisions", "gps_decisions"):
             if not (dep.get(key) and verify_json_dependency(dep[key], ws)):
                 stale.append(f"{key} dependency changed or missing")
+        if not (dep.get("handoff") and self._verify_handoff_dependency(dep["handoff"], ws)):
+            stale.append("handoff dependency changed or missing")   # content fingerprint, not file bytes
         policy = json.dumps(CONFIG.get("camera_time_and_timezone_policy") or {}, sort_keys=True)
         for k, cur in (("config_fingerprint", sha256_file(config_path(ws))),
                        ("filename_format_fingerprint", sha256_text(CONFIG["filename_timestamp_format"])),

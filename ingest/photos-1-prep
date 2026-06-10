@@ -978,8 +978,9 @@ class PlanExecutor:
                     handoff = {
                         "schema_version": 1,
                         "tool": "photos-1-prep",
-                        "plan_id": plan.plan_id,
-                        "execution_id": self.execution_id,
+                        # Per-run identifiers live in run_metadata, separate from the deterministic
+                        # content, so they don't perturb content_fingerprint across no-op re-runs (§16).
+                        "run_metadata": {"plan_id": plan.plan_id, "execution_id": self.execution_id},
                         "cache_fingerprint": cache_fingerprint,
                         "hash_algorithm": "sha256",
                         "folders_scanned": [
@@ -1037,7 +1038,11 @@ class PlanExecutor:
                     # byte-stable for a given workspace state. Calibration records a json_dependency on
                     # this file's exact bytes, so a non-deterministic dump (the old indent-only
                     # json.dump) could flip its SHA-256 and spuriously restale photos-21/22/23.
-                    from photos_utils import handoff_path, write_json_artifact
+                    from photos_utils import handoff_path, write_json_artifact, handoff_content_fingerprint
+                    # The content fingerprint over the deterministic content (excludes run_metadata +
+                    # diagnostics + the journal pointer) — calibration depends on THIS, not the volatile
+                    # file bytes, so a no-op re-run does not restale it (§16).
+                    handoff["content_fingerprint"] = handoff_content_fingerprint(handoff)
                     target_handoff_path = handoff_path(self.workspace_root)
                     os.makedirs(os.path.dirname(target_handoff_path), exist_ok=True)
                     try:

@@ -54,7 +54,10 @@ def _ready_ws(tmp_path, monkeypatch, *, zfs=None):
                                     "field_set_version": 1, "parsed_json": json.dumps(parsed)}}
     files = [rec("6-photos-by-dest/T/a.arw", "2024:07:03 14:00:00", 50.0, 4.0),
              rec("6-photos-by-dest/T/b.arw", "2024:07:03 15:00:00", 51.0, 5.0)]
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"files": files, "cache_fingerprint": "pcf"}))
+    ho = {"run_metadata": {"plan_id": "prep-1", "execution_id": "exec-1"},
+          "files": files, "cache_fingerprint": "pcf"}
+    ho["content_fingerprint"] = utils.handoff_content_fingerprint(ho)
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(ho))
 
     def run():
         monkeypatch.chdir(str(ws))
@@ -416,3 +419,23 @@ def test_summary_grouped_by_destination(tmp_path, monkeypatch):
     assert d["metadata_time_writes"] == 2 and d["renames"] == 2
     assert sum(v["metadata_time_writes"] for v in s["destinations"].values()) == s["totals"]["metadata_time_writes"]
     assert sum(v["renames"] for v in s["destinations"].values()) == s["totals"]["renames"]
+
+
+def test_noop_reprep_does_not_restale_plan(tmp_path, monkeypatch):
+    """A no-op prep re-run refreshes only the handoff's run_metadata (and its byte layout); calibration
+    depends on the handoff CONTENT fingerprint, so the plan must NOT restale — but a real content change
+    (the inventory) does (§16)."""
+    import photos_utils as u
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _mock_tools(monkeypatch, ws)
+    wf = cal.CalibrationWorkflow(str(ws)); wf.preflight(for_execute=True)
+    plan = json.load(open(ctl / "photos-23-executable-plan.json"))
+    gpx = cal.GPXIndex(cal.selected_gpx_root()).build()
+    assert wf.revalidate_plan(plan, gpx) == []                            # fresh
+    ho = json.load(open(ctl / "photos-11-handoff.json"))
+    ho["run_metadata"] = {"plan_id": "NEW-PLAN", "execution_id": "NEW-EXEC"}   # only run metadata changed
+    u.write_json_artifact(str(ctl / "photos-11-handoff.json"), ho)
+    assert wf.revalidate_plan(plan, gpx) == []                            # still not stale
+    ho["cache_fingerprint"] = "CHANGED-INVENTORY"                         # a real content change
+    u.write_json_artifact(str(ctl / "photos-11-handoff.json"), ho)
+    assert any("handoff" in s for s in wf.revalidate_plan(plan, gpx))     # now stale
