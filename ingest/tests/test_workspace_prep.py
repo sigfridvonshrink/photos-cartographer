@@ -314,6 +314,28 @@ def test_directory_symlink_at_root_blocked_during_init(tmp_path, monkeypatch):
     assert (external / "victim.jpg").exists()
 
 
+def test_dot_named_directory_symlink_at_root_blocked(tmp_path, monkeypatch):
+    """A DOT-named directory symlink at the root is forbidden too — it must not slip through the
+    dotdir skip (os.path.isdir follows it, so it would otherwise be treated like the .photos-ingest
+    control dir and silently ignored, leaving a pipeline-escape link in place)."""
+    import photos_utils as utils
+    monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
+    monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image",
+                        lambda p: {"status": "valid", "value": "sig", "strategy": "image-content-hash-v1",
+                                   "engine_version": "t"})
+    photos_ingest.CONFIG["jobs"] = 1
+    external = tmp_path / "external"; external.mkdir()
+    (external / "victim.jpg").write_bytes(b"PRECIOUS")
+    ws = tmp_path / "ws"; ws.mkdir(); (ws / ".photos-ingest").mkdir()
+    os.symlink(str(external), str(ws / ".evil"))                # DOT-named directory symlink at the root
+    cache = photos_ingest.WorkspaceCache(str(ws), in_memory=True)
+    plan = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
+    cache.close()
+    assert any("Forbidden symlink detected: .evil" in b for b in plan.blockers), plan.blockers
+    assert not any(op.source and "evil" in op.source for op in plan.operations)
+    assert (external / "victim.jpg").exists()
+
+
 def _empty_initialized_ws(tmp_path):
     """An initialized workspace with empty managed folders (no seeded media)."""
     ws = tmp_path / "ws"; ws.mkdir()
