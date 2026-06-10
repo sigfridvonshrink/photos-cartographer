@@ -66,6 +66,8 @@ The config is the root of the dependency cascade (Section 9), but staleness stay
 
 So two things are derived from the file: (a) field-scoped fingerprints (filename-format, camera-time/timezone policy, GPX thresholds, camera-group-key version, snapshot policy, …) that drive precise staleness; and (b) one whole-file hash for integrity/provenance.
 
+**The whole-file config fingerprint has a deliberate *second* role beyond integrity: a coarse, conservative staleness trigger.** It is carried in the executable plan's `depends_on` (calibration `10_photos-2-time-gps-workflow.md` Section 28, within the flattened dependency set of Section 5) so that **any** config edit changes it and restales the **plan** — a catch-all guaranteeing no config-driven change is ever silently missed, even one in an area without its own field-scoped fingerprint. This is intentional belt-and-braces *alongside* the field-scoped fingerprints, not a contradiction of surgical staleness: the field-scoped fingerprints keep the **expensive** derived caches from restaling on unrelated edits (resolved UTC is keyed on the time-policy subset, calibration Section 22.1; renames on the filename-format fingerprint), while the **cheap-to-rebuild** plan simply re-plans on any config change. The two triggers therefore have deliberately different scopes: a config edit *outside* the time policy re-plans but does **not** restale already-resolved UTC. What §4.2 rules out is collapsing the *surgical* caches onto the whole-file hash; using that hash as an additional coarse trigger for a cheap artifact is consistent with — indeed protective of — surgical staleness.
+
 ### 4.3 Config areas
 
 Config areas relevant across phases include, at least:
