@@ -218,6 +218,19 @@ def test_cell_no_anchor_is_manual_required(monkeypatch):
     assert cell["proposal"] == {"proposal_source": "manual_required"} and cell["requires_user_input"]
 
 
+def test_cell_accept_with_no_proposal_is_stale(monkeypatch):
+    cell, _ = _cell({"accept_proposal": True}, [], _gpx([]))      # manual_required -> nothing to accept
+    assert cell["stale_user_decision"] is True and cell["requires_user_input"] is True
+
+
+def test_cell_manual_real_utc_invalid_and_nonderivable(monkeypatch):
+    bad, blk = _cell({"manual_real_utc": "not-a-datetime"}, [], _gpx([]))
+    assert blk and bad["effective_time_anchor"] == ""                       # invalid -> located blocker
+    # a parseable manual_real_utc on a non-GPX (manual_required) cell can't derive an offset alone
+    ok, blk2 = _cell({"manual_real_utc": "2024-07-03T11:00:00Z"}, [], _gpx([]))
+    assert not blk2 and ok["effective_time_anchor"] == "" and ok["requires_user_input"] is True
+
+
 def test_config_anchor_thresholds_reject_negative():
     with pytest.raises(ValueError, match="gpx_anchor_max_point_distance_meters"):
         utils.validate_config({"gpx_anchor_max_point_distance_meters": -1})
