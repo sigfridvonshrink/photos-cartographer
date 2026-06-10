@@ -198,7 +198,10 @@ This is **built for my own workflow** and open-sourced in case it fits yours. It
   camera's clock error. Corrections happen *between* destinations, never *within* one. (A nested subfolder
   is its own destination and gets its own correction; a destination where a camera shot nothing geotagged
   doesn't start blank — it inherits its parent destination's offset as a proposal to confirm, recursively
-  down nested folders, and a manual offset you set at any folder re-roots what its sub-folders inherit.)
+  down nested folders, and a manual offset you set at any folder re-roots what its sub-folders inherit.
+  The same downward inheritance applies to a destination's **GPS "folder fallback"** coordinate — a nested
+  folder proposes its nearest parent's fallback for you to confirm — so you set a sensible default once at a
+  trip's root and accept or override it per level.)
 - **A specific workspace layout** — numbered working folders (`0-sources`, `1-strays`,
   `2-missing-metadata`, `3-redundant-jpgs`, `4-videos-by-date`, `5-photos-by-date`, `6-photos-by-dest`).
   You drop dumps into **`0-sources`** (the one inbox); prep organizes the media out and moves any
@@ -214,9 +217,13 @@ This is **built for my own workflow** and open-sourced in case it fits yours. It
   first dump — drop files straight into a new empty folder and the first prep run *initializes* it
   (creating the numbered folders and moving your dump into `0-sources` for you), writing an
   "initialized" marker last so a crash mid-setup just re-runs cleanly. That convenience is a **one-time**
-  thing: once a workspace exists, the inbox is `0-sources`, and a loose file dropped at the workspace root
-  is treated as a misplaced dump and **blocks** until you move it (strictly — even a stray `.DS_Store`).
-  The asymmetry is deliberate: bootstrap once, then there's an inbox and you use it.
+  thing: once a workspace exists, the inbox is `0-sources`, and a misplaced entry at the workspace root —
+  a loose file, a stray folder, or a symlink — is treated as a misplaced dump and **blocks** until you move
+  it (strictly — even a stray `.DS_Store`; a dumped *folder* belongs inside `0-sources`, and a symlink is
+  barred outright rather than followed, since following it would escape the workspace). The full `0`–`6`
+  structure is likewise an invariant: if one of those folders goes missing, the tools stop and tell you to
+  restore it rather than silently rebuild it (a missing folder means something deleted it, possibly with
+  media inside). The asymmetry is deliberate: bootstrap once, then there's an inbox and you use it.
 - **`exiftool`** for metadata read/write.
 - **Config lives in the workspace.** Prep seeds a `photos-00-config.json` in the workspace on first run;
   after that it's authoritative and you change settings by hand-editing it. It's hashed and archived with
