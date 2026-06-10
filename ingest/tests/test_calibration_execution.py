@@ -216,22 +216,27 @@ def _op(oid, typ, rel, **extra):
             "preconditions": extra.pop("pre", {}), **extra}
 
 
-def test_apply_file_precondition_and_resume_branches(tmp_path):
+def test_apply_file_precondition_and_resume_branches(tmp_path, monkeypatch):
     wf = cal.CalibrationWorkflow(str(tmp_path))
-    p = tmp_path / "f.arw"; p.write_bytes(b"data"); st = p.stat()
+    p = tmp_path / "f.arw"; p.write_bytes(b"data")
+    monkeypatch.setattr(cal.CalibrationWorkflow, "_exiftool_write", lambda self, path, t: True)
     # already confirmed -> skipped (no stat, no write)
     r = wf._apply_file("f.arw", [_op("oC", "metadata_time_write", "f.arw")], {"oC": "confirmed"}, set())
     assert r["skipped"] == ["oC"]
-    # missing file -> blocker
+    # missing file (no rename) -> blocker
     r = wf._apply_file("gone.arw", [_op("o", "metadata_time_write", "gone.arw")], {}, set())
     assert "missing at execute time" in r["blocker"]
-    # size changed -> blocker
-    r = wf._apply_file("f.arw", [_op("o", "metadata_time_write", "f.arw", pre={"size": 999})], {}, set())
-    assert "size changed" in r["blocker"]
-    # mtime changed -> blocker
+    # size/mtime changed AND the content fingerprint differs -> external change -> blocker
+    monkeypatch.setattr(cal.ContentHasher, "fingerprint_image", staticmethod(lambda path: {"value": "OTHER"}))
     r = wf._apply_file("f.arw", [_op("o", "metadata_time_write", "f.arw",
-                       pre={"size": st.st_size, "mtime_ns": 1})], {}, set())
-    assert "mtime changed" in r["blocker"]
+                       pre={"size": 999, "content_fingerprint": "FP"})], {}, set())
+    assert "content fingerprint differs" in r["blocker"]
+    # size/mtime changed BUT the content fingerprint still matches -> resume: re-apply, no block
+    monkeypatch.setattr(cal.ContentHasher, "fingerprint_image", staticmethod(lambda path: {"value": "FP"}))
+    r = wf._apply_file("f.arw", [_op("o", "metadata_time_write", "f.arw",
+                       pre={"size": 999, "mtime_ns": 1, "content_fingerprint": "FP"},
+                       writes={"DateTimeOriginal": "x"})], {}, set())
+    assert r["blocker"] is None and r["applied"] == ["o"]
 
 
 def test_apply_file_rename_skip_and_failure(tmp_path, monkeypatch):
@@ -283,16 +288,17 @@ def test_rename_target_occupied_at_execute_blocks(tmp_path, monkeypatch):
     assert (ws / "6-photos-by-dest" / "T" / "a.arw").exists()      # not clobbered/renamed
 
 
-def test_apply_file_rename_confirmed_skips(tmp_path, monkeypatch):
+def test_apply_file_already_renamed_resumes_without_journal(tmp_path):
+    """A crashed prior run that already renamed the file (source gone, planned target present) is
+    detected by state and skipped on resume — even with an empty/lost journal — rather than blocking
+    on the missing source (§29.1.3)."""
     wf = cal.CalibrationWorkflow(str(tmp_path))
-    p = tmp_path / "a.arw"; p.write_bytes(b"x")
-    monkeypatch.setattr(cal.CalibrationWorkflow, "_exiftool_write", lambda self, p, t: True)
-    monkeypatch.setattr(cal.ContentHasher, "fingerprint_image", staticmethod(lambda p: {"value": "fp"}))
-    ops = [_op("oM", "metadata_time_write", "a.arw", pre={"content_fingerprint": "fp"}, writes={"DateTimeOriginal": "x"}),
+    (tmp_path / "b.arw").write_bytes(b"x")                            # already at its planned target
+    ops = [_op("oM", "metadata_time_write", "a.arw", pre={"content_fingerprint": "fp"},
+               writes={"DateTimeOriginal": "x"}),
            _op("oR", "rename_no_clobber", "a.arw", **{"from": "a.arw", "to": "b.arw"})]
-    # metadata unconfirmed but the rename already confirmed -> metadata applies, rename is skipped
-    r = wf._apply_file("a.arw", ops, {"oR": "confirmed"}, set())
-    assert r["applied"] == ["oM"] and (tmp_path / "a.arw").exists()   # rename skipped, file not moved
+    r = wf._apply_file("a.arw", ops, {}, set())                       # journal empty, source gone
+    assert r["skipped"] == ["oM", "oR"] and not r["applied"]
 
 
 def test_corrupt_prior_summary_ignored(tmp_path, monkeypatch):
@@ -358,3 +364,40 @@ def test_execute_aborts_when_required_snapshot_fails(tmp_path, monkeypatch):
     before = sorted(os.listdir(ws / "6-photos-by-dest" / "T"))
     assert _execute(monkeypatch, ws) == 2                            # required snapshot failed -> rejected
     assert sorted(os.listdir(ws / "6-photos-by-dest" / "T")) == before   # nothing mutated
+
+
+def test_resume_after_journal_lost_skips_applied_files(tmp_path, monkeypatch):
+    """Crash-resume (§29.1.3): a full execute renames + writes the files; deleting the journal
+    (simulating a crash before its flush) and re-executing must detect the already-applied files at
+    their targets and SKIP them — not block on the changed/missing source."""
+    import os as _os
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _mock_tools(monkeypatch, ws)
+    assert _execute(monkeypatch, ws) == 0
+    assert _summary(ctl)["status"] == "success"
+    plan = json.load(open(ctl / "photos-23-executable-plan.json"))
+    _os.remove(utils.journal_path(str(ws), plan["plan_id"]))          # journal "lost" to a crash
+
+    assert _execute(monkeypatch, ws) == 0                             # resumes cleanly
+    s = _summary(ctl)
+    assert s["status"] == "success"
+    assert s["resume"]["newly_applied"] == 0                          # nothing re-applied
+    assert not s["blockers"] and not s["failures"]                    # not blocked on the renamed files
+
+
+def test_journal_persisted_incrementally_during_run(tmp_path, monkeypatch):
+    """The journal is flushed per-file as the run proceeds (not only at the end), so a crash mid-run
+    leaves a journal that records the already-applied files."""
+    import photos_utils as _u
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _mock_tools(monkeypatch, ws)
+    flushes = []
+    real = _u.write_json_artifact
+    def spy(path, obj):
+        if "journal_version" in obj:
+            flushes.append(len(obj["operations"]))
+        return real(path, obj)
+    monkeypatch.setattr(cal, "write_json_artifact", spy)
+    assert _execute(monkeypatch, ws) == 0
+    # two files, each flushing its confirmed ops -> the journal grew across >1 incremental write
+    assert len(flushes) >= 2 and flushes == sorted(flushes) and flushes[-1] > flushes[0]
