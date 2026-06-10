@@ -1221,23 +1221,10 @@ class PlanExecutor:
                 # rename. A failed/interrupted capture leaves the prior snapshot intact. This
                 # refreshes prep's OWN snapshot only (never another phase's).
                 if cache is not None:
-                    from photos_utils import prep_db_snapshot_path
-                    snap = prep_db_snapshot_path(self.workspace_root)
-                    snap_tmp = os.path.join(os.path.dirname(snap), f".tmp-snapshot-{uuid.uuid4().hex[:8]}.db")
-                    try:
-                        if os.path.exists(snap_tmp):
-                            os.remove(snap_tmp)
-                        cache.conn.execute("VACUUM INTO ?", (snap_tmp,))
-                        os.replace(snap_tmp, snap)
-                        if plan.summary and "performance_and_cache" in plan.summary:
-                            plan.summary["performance_and_cache"]["prep_db_snapshot_written"] = True
-                    except Exception as e:
-                        if os.path.exists(snap_tmp):
-                            try:
-                                os.remove(snap_tmp)
-                            except Exception:
-                                pass
-                        raise RuntimeError(f"Failed to write DB backup snapshot: {e}")
+                    from photos_utils import prep_db_snapshot_path, write_db_snapshot
+                    write_db_snapshot(cache.conn, prep_db_snapshot_path(self.workspace_root))
+                    if plan.summary and "performance_and_cache" in plan.summary:
+                        plan.summary["performance_and_cache"]["prep_db_snapshot_written"] = True
 
                 # On an INIT run, write the root sentinel LAST — only after every operation and
                 # the handoff have succeeded (prep Section 3.1 / 14.3 step 11). Because it is last,
