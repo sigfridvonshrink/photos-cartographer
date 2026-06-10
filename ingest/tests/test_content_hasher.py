@@ -37,10 +37,3 @@ def test_fingerprint_image_success(monkeypatch):
     res = utils.ContentHasher.fingerprint_image("/img.jpg")
     assert res == {"status": "valid", "strategy": "image-content-hash-v1",
                    "value": "sig-abc123", "engine_version": "magick-test"}
-
-
-def test_hash_file_sha256(tmp_path):
-    p = tmp_path / "a.bin"; p.write_bytes(b"hello")
-    r = utils.ContentHasher.hash_file(str(p))
-    assert r["status"] == "valid" and r["strategy"] == "sha256-v1" and len(r["value"]) == 64
-    assert utils.ContentHasher.hash_file(str(tmp_path / "missing"))["status"] == "failed"

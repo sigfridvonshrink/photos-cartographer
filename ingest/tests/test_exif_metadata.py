@@ -60,7 +60,6 @@ def create_mock_metadata_reader(monkeypatch):
 
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read)
-    monkeypatch.setattr(prep.ContentHasher, "hash_file", lambda *a, **k: {"status": "valid", "strategy": "sha256-v1", "value": "dummyhash"})
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", lambda *a, **k: {"status": "valid", "strategy": "image-content-hash-v1", "value": "dummycontenthash"})
 
 def test_metadata_cache_creation_and_staleness(workspace, monkeypatch):
@@ -86,7 +85,8 @@ def test_metadata_cache_creation_and_staleness(workspace, monkeypatch):
 
     # Simulate execution updates cache
     cache.upsert_file(upsert_fx["data"])
-    md_row = cache.get_metadata(upsert_fx["data"]["relative_path"])
+    md_row = cache.conn.execute("SELECT * FROM metadata_cache WHERE relative_path = ?",
+                                (upsert_fx["data"]["relative_path"],)).fetchone()
     assert md_row is not None
     assert md_row["camera_group_key"] == "12345|Canon|EOS R5"
 
@@ -207,7 +207,6 @@ def test_extraction_failure_is_extraction_failed(workspace, monkeypatch):
         return {}, set()
 
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
-    monkeypatch.setattr(prep.ContentHasher, "hash_file", lambda *a, **k: {"status": "valid", "strategy": "sha256-v1", "value": "dummyhash"})
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", lambda *a, **k: {"status": "valid", "strategy": "image-content-hash-v1", "value": "dummycontenthash"})
 
     cache = prep.WorkspaceCache(str(workspace), in_memory=False)
