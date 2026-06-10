@@ -120,3 +120,19 @@ def test_print_summary_renders_categories(capsys):
     for label in ("Prep run summary", "Media operations", "Recognized moves",
                   "Duplicates", "Camera groups", "Quarantine footprint", "Dependency validation"):
         assert label in err, err
+
+
+def test_progress_coordinator_non_quiet_paths():
+    """Drive the non-quiet progress + summary branches (start/increment/finish + the flat
+    performance summary and the counters fallback) — exercised end-to-end, no crash."""
+    c = utils.ProgressCoordinator(quiet=False)
+    c.is_tty = True                                          # exercise the TTY progress branch
+    c.start_phase("scanning", total_items=2)
+    c.increment("files_scanned", 1)
+    c.increment_completed(2)
+    c.finish_phase()
+    assert c.counters.get("files_scanned") == 1
+    # flat performance summary (has performance_and_cache, no structured report)
+    c.print_summary({"performance_and_cache": {"jobs_requested": 4, "metadata_extracted": 2}})
+    # counters fallback (no performance_and_cache, no report)
+    c.print_summary({})

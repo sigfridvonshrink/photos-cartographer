@@ -102,3 +102,29 @@ def test_move_no_clobber_cross_fs_preserves_on_existing_dest(tmp_path, monkeypat
         utils._move_no_clobber(str(src), str(dest))
     assert dest.read_bytes() == b"KEEP" and src.read_bytes() == b"NEW"
     assert not list(tmp_path.glob(".tmp-xdev-*"))               # temp cleaned on the no-clobber abort
+
+
+def test_rename_same_fs_raises_on_unexpected_errno(tmp_path, monkeypatch):
+    """renameat2 returning a non-zero with an errno outside ENOSYS/EINVAL/ENOTSUP/EEXIST/EXDEV is a
+    real failure surfaced as OSError (not silently fallen back)."""
+    import ctypes
+    def fake_renameat2(*a):
+        ctypes.set_errno(errno.EPERM)
+        return -1
+    monkeypatch.setattr(utils, "_get_renameat2", lambda: fake_renameat2)
+    src = tmp_path / "s"; src.write_bytes(b"X")
+    with pytest.raises(OSError) as ei:
+        utils._rename_no_clobber_same_fs(str(src), str(tmp_path / "d"))
+    assert ei.value.errno == errno.EPERM
+
+
+def test_cross_fs_move_aborts_on_size_mismatch(tmp_path, monkeypatch):
+    """The default verify (byte-size equality) catches a short/torn copy and aborts, keeping src."""
+    src = tmp_path / "s"; src.write_bytes(b"FULL-CONTENT")
+    dest = tmp_path / "d.jpg"
+    monkeypatch.setattr(utils.shutil, "copyfile",
+                        lambda s, d: open(d, "wb").write(b"short"))   # fewer bytes than src
+    with pytest.raises(OSError, match="size mismatch"):
+        utils._move_cross_fs_no_clobber(str(src), str(dest))
+    assert src.exists() and not dest.exists()
+    assert not list(tmp_path.glob(".tmp-xdev-*"))
