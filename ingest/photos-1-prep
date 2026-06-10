@@ -7,6 +7,7 @@ import os
 import sys
 import json
 import hashlib
+import tempfile
 import subprocess
 import select
 import socket
@@ -188,6 +189,48 @@ import concurrent.futures
 # calibration); re-exported below so existing references and tests resolve unchanged.
 
 PREP_LOG_SCHEMA_VERSION = 1
+
+
+def _append_quarantine_manifest(manifest_dir, entry):
+    """Append `entry` to `manifest_dir/manifest.json` — the recoverable quarantine record (prep §15).
+
+    Never silently truncates history: if the existing manifest is unreadable (corrupt JSON, not an
+    array, or unreadable), it is PRESERVED under a `.corrupt-<ts>-<rand>` backup before a fresh one is
+    started, so the prior records can still be recovered by hand. The write is atomic (temp in the
+    same dir → atomic rename, shared §15), so a crash mid-write can never leave the torn manifest that
+    the recovery path otherwise has to clean up after."""
+    os.makedirs(manifest_dir, exist_ok=True)
+    manifest_path = os.path.join(manifest_dir, "manifest.json")
+    existing = []
+    if os.path.exists(manifest_path):
+        try:
+            with open(manifest_path, 'r') as mf:
+                existing = json.load(mf)
+            if not isinstance(existing, list):
+                raise ValueError("manifest is not a JSON array")
+        except (json.JSONDecodeError, ValueError, OSError) as e:
+            backup = (f"{manifest_path}.corrupt-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
+                      f"-{uuid.uuid4().hex[:6]}")
+            try:
+                os.replace(manifest_path, backup)
+                print(f"Warning: quarantine manifest {manifest_path} was unreadable ({e}); preserved "
+                      f"it as {os.path.basename(backup)} and started a fresh manifest.", file=sys.stderr)
+            except OSError:
+                pass
+            existing = []
+    existing.append(entry)
+    fd, tmp = tempfile.mkstemp(dir=manifest_dir, prefix=".tmp-manifest-", suffix=".json")
+    try:
+        with os.fdopen(fd, 'w') as mf:
+            json.dump(existing, mf, indent=2)
+        os.replace(tmp, manifest_path)
+    except Exception:
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+        raise
 
 
 def build_prep_log(prior_photos, operations, cache_files, quarantine_evidence, is_init, run_id):
@@ -643,25 +686,9 @@ class PlanExecutor:
                             if op.type == "quarantine_move":
                                 plan_id = op.verification.get("plan_id", "unknown_plan")
                                 manifest_dir = os.path.join(self.workspace_root, ".photos-ingest-quarantine", plan_id)
-                                os.makedirs(manifest_dir, exist_ok=True)
-                                manifest_path = os.path.join(manifest_dir, "manifest.json")
-
                                 manifest_entry = op.verification.copy()
                                 manifest_entry["operation_id"] = op.operation_id
-
-                                # Read existing manifest if it exists
-                                existing_manifest = []
-                                if os.path.exists(manifest_path):
-                                    with open(manifest_path, 'r') as mf:
-                                        try:
-                                            existing_manifest = json.load(mf)
-                                        except json.JSONDecodeError:
-                                            pass
-
-                                existing_manifest.append(manifest_entry)
-
-                                with open(manifest_path, 'w') as mf:
-                                    json.dump(existing_manifest, mf, indent=2)
+                                _append_quarantine_manifest(manifest_dir, manifest_entry)
 
                         # Apply DB effects
                         if op.database_effects_after_verification:
@@ -1005,28 +1032,20 @@ class PlanExecutor:
                         }
                     }
 
-                    # Write out atomically
-                    import tempfile
-                    from photos_utils import handoff_path
+                    # Write out atomically AND deterministically (shared contract §4): route through
+                    # write_json_artifact (temp → atomic rename, sort_keys) so the handoff bytes are
+                    # byte-stable for a given workspace state. Calibration records a json_dependency on
+                    # this file's exact bytes, so a non-deterministic dump (the old indent-only
+                    # json.dump) could flip its SHA-256 and spuriously restale photos-21/22/23.
+                    from photos_utils import handoff_path, write_json_artifact
                     target_handoff_path = handoff_path(self.workspace_root)
-                    target_dir = os.path.dirname(target_handoff_path)
-                    os.makedirs(target_dir, exist_ok=True)
-                    fd, temp_path = tempfile.mkstemp(dir=target_dir, prefix=".tmp-", suffix=".json", text=True)
+                    os.makedirs(os.path.dirname(target_handoff_path), exist_ok=True)
                     try:
-                        with os.fdopen(fd, 'w') as tf:
-                            json.dump(handoff, tf, indent=2)
-                        os.replace(temp_path, target_handoff_path)
-
+                        write_json_artifact(target_handoff_path, handoff)
                         if plan.summary and "performance_and_cache" in plan.summary:
                             plan.summary["performance_and_cache"]["handoff_written_after_successful_validation"] = True
-
                         self.coordinator.finish_phase()
                     except Exception as e:
-                        if os.path.exists(temp_path):
-                            try:
-                                os.remove(temp_path)
-                            except Exception:
-                                pass
                         raise RuntimeError(f"Failed to write handoff manifest: {e}")
 
                     # End-of-prep transformation log (prep Section 16.1 / shared Section 13.3): a
@@ -1050,7 +1069,7 @@ class PlanExecutor:
                     # no-op run (§16.1 item 6). Run attribution lives per-step (the "run" field).
                     log_obj = {"schema_version": PREP_LOG_SCHEMA_VERSION, "tool": "photos-1-prep",
                                "photos": log_photos}
-                    lfd, ltmp = tempfile.mkstemp(dir=target_dir, prefix=".tmp-prep-log-", suffix=".json", text=True)
+                    lfd, ltmp = tempfile.mkstemp(dir=os.path.dirname(plp), prefix=".tmp-prep-log-", suffix=".json", text=True)
                     try:
                         with os.fdopen(lfd, 'w') as lf:
                             json.dump(log_obj, lf, indent=2, sort_keys=True)
