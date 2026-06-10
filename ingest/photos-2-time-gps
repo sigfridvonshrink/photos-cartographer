@@ -413,6 +413,83 @@ class CalibrationCache:
         self.conn.close()
 
 
+# ============================================================================
+# Stage 8 — GPS placement from the GPX track at a photo's resolved UTC
+# (calibration §23/§25). Pure helpers (no I/O), exhaustively unit-tested.
+# Mined from archive/reengineer/photos-ingest::apply_gpx_placement and
+# archive/storage/photos-gps-tagger (interpolation/extrapolation).
+# ============================================================================
+
+def _interp(a, b, target):
+    """Linear time-fraction interpolation of (lat, lon) between GPX points `a` and `b` at `target`.
+    `target` outside [a.time, b.time] extrapolates the a->b vector (ratio <0 or >1)."""
+    span = (b.time_utc - a.time_utc).total_seconds()
+    if span == 0:
+        return a.lat, a.lon
+    r = (target - a.time_utc).total_seconds() / span
+    return a.lat + r * (b.lat - a.lat), a.lon + r * (b.lon - a.lon)
+
+
+def _extrapolate(other, anchor, target, gpx_file):
+    """Project the `other`->`anchor` velocity vector to `target` (past the track end). A missing or
+    zero-span partner falls back to the anchor's own coordinates."""
+    if other is None or other.time_utc == anchor.time_utc:
+        lat, lon = anchor.lat, anchor.lon
+    else:
+        lat, lon = _interp(other, anchor, target)
+    return {"lat": round(lat, 6), "lon": round(lon, 6), "method": "extrapolated", "gpx_file": gpx_file}
+
+
+def place_gps(target_utc, gpx, cfg):
+    """Place a photo at its resolved UTC against the GPX track (§23 options 4/5), or None when no
+    reliable placement exists (option 6, blocked). Direct match -> interpolation -> velocity
+    extrapolation past an end, each gated by the gpx_* config thresholds."""
+    pts = gpx.points
+    if not pts:
+        return None
+    before = after = None
+    for p in pts:
+        if p.time_utc <= target_utc:
+            before = p
+        elif after is None:
+            after = p
+
+    # 1. direct match: the nearer bracket within the direct-match window.
+    best = None
+    for p in (before, after):
+        if p is not None:
+            d = abs((p.time_utc - target_utc).total_seconds())
+            if best is None or d < best[0]:
+                best = (d, p)
+    if best is not None and best[0] <= cfg["gpx_direct_match_max_seconds"]:
+        p = best[1]
+        return {"lat": p.lat, "lon": p.lon, "method": "direct_match", "gpx_file": p.source_file}
+
+    # 2. interpolation between two brackets, gated by gap / distance / implied speed.
+    if before is not None and after is not None:
+        gap = (after.time_utc - before.time_utc).total_seconds()   # > 0: before <= target < after
+        dist = haversine(before.lat, before.lon, after.lat, after.lon)
+        speed_kmh = dist / gap * 3.6
+        if (gap <= cfg["gpx_interpolation_max_gap_seconds"]
+                and dist <= cfg["gpx_interpolation_max_distance_meters"]
+                and speed_kmh <= cfg["gpx_interpolation_max_speed_kmh"]):
+            lat, lon = _interp(before, after, target_utc)
+            return {"lat": round(lat, 6), "lon": round(lon, 6), "method": "interpolated",
+                    "gpx_file": before.source_file, "gpx_after_file": after.source_file}
+        return None                                  # low-confidence interpolation -> blocked
+
+    # 3. extrapolation past an end, within the extrapolation window, via the endpoint velocity.
+    extrap_max = cfg["gpx_extrapolation_max_seconds"]
+    if before is not None:                           # target after the last point -> project forward
+        if (target_utc - before.time_utc).total_seconds() <= extrap_max:
+            return _extrapolate(pts[-2] if len(pts) >= 2 else None, before, target_utc, before.source_file)
+        return None
+    # after is not None: target before the first point -> project backward
+    if (after.time_utc - target_utc).total_seconds() <= extrap_max:
+        return _extrapolate(pts[1] if len(pts) >= 2 else None, after, target_utc, after.source_file)
+    return None
+
+
 class CalibrationWorkflow:
     """Stages 1–7: validate the workspace, build the model, produce photos-21-time-decisions.json,
     and (when decisions are complete) compute & persist resolved UTC per file."""
