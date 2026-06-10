@@ -118,7 +118,7 @@ photos-23-executable-plan.json
 photos-24-execution-summary.json
 ```
 
-`photos-11-handoff.json` is the contract calibration receives from prep (prep `10_photos-1-prep-workflow.md` Section 16). It is a deterministic JSON file, so it is treated as a first-class hashed dependency exactly like the numbered artifacts: wherever calibration depends on it, the dependency entry names the file and stores its SHA-256, and the file is re-hashed from its exact bytes before use. There is no separate, weaker "handoff fingerprint" path — the handoff is verified by byte-hash like every other JSON dependency, closing what would otherwise be the one exception to this rule. (Prep separates run-metadata timestamps from its internal fingerprints when *building* the handoff, per Section 16; calibration nonetheless hashes the whole file as written, since it depends on the exact bytes prep produced for that run.)
+`photos-11-handoff.json` is the contract calibration receives from prep (prep `10_photos-1-prep-workflow.md` Section 16). It is the **one JSON dependency calibration checks by a recomputed content fingerprint rather than a whole-file byte hash**, and for a specific reason: the handoff deliberately mixes a deterministic description of the post-prep workspace state with per-run audit (the `run_metadata` block, diagnostics, and the `execution_journal` pointer), so its exact bytes change on every prep run even when the organized result did not (prep Section 16.2). Depending on the whole-file SHA-256 would therefore restale calibration on a no-op re-prep, which is wrong. Instead, wherever calibration depends on the handoff, the dependency entry records the handoff's top-level **`content_fingerprint`** (the SHA-256 prep computes over the handoff's deterministic content with `run_metadata`, diagnostics, the journal pointer, and the fingerprint field itself removed, prep Section 16.2), and calibration **recomputes that fingerprint from the handoff** and compares it before use — the same recompute-and-verify discipline it applies to every other dependency fingerprint. The handoff's **whole-file SHA-256 still exists** as its integrity/archival hash (shared contract Section 13), and calibration may record it for identification, but it is **not** the staleness trigger. This keeps the handoff's staleness **surgical** (shared contract Section 4.2): only a change to the deterministic content restales downstream, while a run-only refresh does not. (Among the numbered `photos-2X` artifacts, which carry no per-run audit of this kind, the dependency check remains the whole-file byte hash as before.)
 
 `photos-24-execution-summary.json` is the terminal artifact. It records the SHA-256 of the JSON artifacts it summarizes (which is why it appears in the list above), but nothing downstream depends on it, so it is never itself re-hashed as an upstream dependency.
 
@@ -137,7 +137,7 @@ For example, `photos-23-executable-plan.json` must directly include dependencies
 1. `photos-21-time-decisions.json` and its SHA-256;
 2. `photos-22-gps-decisions.json` and its SHA-256;
 3. resolved UTC cache fingerprint;
-4. `photos-11-handoff.json` and its SHA-256 (re-hashed from file bytes like any JSON dependency, Section 4);
+4. `photos-11-handoff.json` and its **`content_fingerprint`** (recomputed from the handoff's deterministic content, not a whole-file byte hash, Section 4; prep Section 16.2);
 5. prep SQLite cache fingerprint;
 6. config fingerprint;
 7. camera group/config classification fingerprint;
@@ -165,7 +165,8 @@ Before creating or using any downstream artifact, the workflow must validate eve
 
 Validation includes:
 
-1. re-hashing named JSON artifacts from file bytes using SHA-256 (including the upstream `photos-11-handoff.json`, Section 4);
+1. re-hashing named JSON artifacts from file bytes using SHA-256 (the numbered `photos-2X` artifacts);
+1a. recomputing the prep handoff's `content_fingerprint` from `photos-11-handoff.json` and comparing it to the value recorded in the dependency block — the handoff is verified by recomputed content fingerprint, not whole-file byte hash, so a run-only refresh of the handoff does not register as a change (Section 4; prep Section 16.2);
 2. recomputing config fingerprints from the active config;
 3. recomputing GPX folder/file fingerprints where relevant;
 4. validating SQLite cache fingerprints or cache-generation markers;
@@ -288,9 +289,11 @@ No calibration JSON was written.
 
 **Symlinks under by-dest are barred, including nested directory symlinks.** A symlink anywhere under `6-photos-by-dest` — a file symlink, or a **nested directory symlink** — is forbidden for the same escape reason it is forbidden elsewhere in the managed tree (shared contract `10_photos-shared-contract.md` Section 5.3; prep `10_photos-1-prep-workflow.md` Section 6.2 item 3): the pipeline never follows or organizes a link. Because `6-photos-by-dest` is **read-only for prep** yet still **scanned by prep as a managed folder**, prep is the gatekeeper that detects and blocks such a symlink, and the mandatory re-prep after any by-dest change (Section 13.1; shared contract Section 10) means a link that slipped in is caught at the prep run that must precede calibration — calibration consumes prep's handoff, which is built only when prep found no forbidden symlink. Calibration itself bars symlinks at the **workspace root** (Section 13) and never follows a link when reading by-dest; it relies on prep's symlink guard for nested links *inside* by-dest rather than re-walking the tree to re-flag them.
 
+### 7.3 Videos are semi-foreign and never reach by-dest
+
 Calibration's target is **photos**. Videos are **semi-foreign** (prep `10_photos-1-prep-workflow.md` Section 2.4): prep date-organizes and naively renames them into `4-videos-by-date` and they **stay there** — they are never sorted into destinations. Videos must **never** appear in `5-photos-by-date` or `6-photos-by-dest`.
 
-This is a hard invariant, not a preference. The by-dest verification that enforces it — rejecting both `other`-class non-media and `video`-class files so only `image`/`raw` photos remain — lives in Section 7.2; a video found under `6-photos-by-dest` is a calibration break there. Likewise, a video found in `5-photos-by-date` is a prep-side break (prep `10_photos-1-prep-workflow.md` Section 6.1).
+This is a hard invariant, not a preference, and **prep is the primary guard that enforces it**: prep's band-misplacement check hard-blocks a `video`-class file found under **either** `5-photos-by-date` **or** `6-photos-by-dest` (prep `10_photos-1-prep-workflow.md` Section 6.1, Section 6.2 item 6) — prep reports the offending path and produces no plan. Calibration **re-guards** the by-dest case as a **second line of defence**, not as the primary stop: the by-dest verification of Section 7.2 — rejecting both `other`-class non-media and `video`-class files so only `image`/`raw` photos remain — also rejects a video under `6-photos-by-dest`, so even on the (not-expected) path where calibration runs against a by-dest that still holds a video, calibration hard-stops before creating any artifact. In the normal flow the video never survives the mandatory re-prep that precedes calibration, because prep blocks first; the calibration check exists so a video can never be silently calibrated even if prep's guard were somehow bypassed.
 
 Because videos never reach by-dest, calibration never plans or applies time/GPS metadata writes or renames for a video, never reasons about them in the camera-group/GPX/pre-state machinery, and they never appear in the per-destination artifacts. If a future need arises to calibrate video time/GPS, it is out of scope for this workflow as specified.
 
@@ -667,7 +670,7 @@ The workflow must:
 The workflow must validate that:
 
 1. the workspace config `photos-00-config.json` exists and is read as the authoritative configuration (seeded by prep; shared contract `10_photos-shared-contract.md` Section 4), with its field-scoped fingerprints used for staleness and its whole-file SHA-256 available for provenance;
-2. the prep handoff exists and re-hashes to the SHA-256 recorded wherever it is depended upon (Section 4);
+2. the prep handoff exists and its recomputed `content_fingerprint` matches the value recorded wherever it is depended upon (Section 4; prep Section 16.2);
 3. SQLite schema/cache versions are acceptable;
 4. expected by-dest media files still exist;
 5. size/mtime/fingerprint preconditions are current;
@@ -694,7 +697,7 @@ Prep recognizes a user's by-date → by-dest move and folds it into the handoff/
 
 **A prep run must occur after the most recent by-date → by-dest move, before calibration runs.** This is a hard contract requirement, not merely advisory. The intended sequence is *move → re-run prep (move recognition) → calibrate* (shared contract `10_photos-shared-contract.md` Section 10). A handoff that predates the latest move does not describe the by-dest set calibration sees, so calibrating against it is unsafe.
 
-This requirement is largely self-enforcing through the validations above: a stale handoff fails the SHA-256/cache checks, and moved files break the "expected by-dest media files still exist" and "by-dest SQLite records are current" checks. But calibration must detect this specific situation and report it **as a targeted, actionable blocker** rather than as a generic hash mismatch or opaque stale-cache message, because the precise fix (re-run prep) differs from other staleness causes.
+This requirement is largely self-enforcing through the validations above: a stale handoff fails the content-fingerprint/cache checks, and moved files break the "expected by-dest media files still exist" and "by-dest SQLite records are current" checks. But calibration must detect this specific situation and report it **as a targeted, actionable blocker** rather than as a generic hash mismatch or opaque stale-cache message, because the precise fix (re-run prep) differs from other staleness causes.
 
 Detection (cache/handoff vs. filesystem, `stat`-level, no media re-read):
 
@@ -829,7 +832,7 @@ For each camera group **present in the destination**, the workflow determines wh
 6. GPX/native-GPS time-anchor proposals anchored from that group's native-GPS frames in this destination (Section 19);
 7. other explicitly supported calibration evidence.
 
-A camera group present in a destination with **no** anchorable native-GPS frame *in that destination* is not self-solved there; that (group, destination) cell instead **inherits the nearest ancestor destination's effective offset for the group as a confirmable proposal** (Section 10.2 rule 4), recursively down the tree, and falls to a blank manual field only if no ancestor has an offset either.
+A camera group present in a destination with **no** anchorable native-GPS frame *in that destination* is not self-solved there; that (group, destination) cell instead **inherits the nearest ancestor destination's effective offset for the group as a confirmable proposal** (Section 10.2 rule 4), recursively down the tree, and falls to a blank manual field only if no ancestor has an offset either. The destination's **civil timezone** inherits the same way and from the same nearest-ancestor machinery: a destination with no timezone of its own takes its nearest ancestor destination's effective timezone as a confirmable proposal (Section 18), so the timezone and the per-group offset both seed downward from a trip's root and are each confirmed or overridden per level.
 
 Once this analysis is complete, the workflow has reached the formal time-decision stage.
 
@@ -898,13 +901,39 @@ The workflow derives `effective_iana_timezone` during validation.
 
 The user should not directly edit machine proposal fields or generated effective fields.
 
-If destination timezone is unknown or ambiguous, the artifact must contain an empty manual override field and mark the destination as requiring user input.
+If destination timezone is unknown or ambiguous **and no ancestor destination supplies one** (see inheritance below), the artifact must contain an empty manual override field and mark the destination as requiring user input.
 
 Resolved UTC must not be finalized for files in a destination whose timezone/time dependencies are incomplete.
 
+**Downward inheritance of the timezone proposal.** A destination whose timezone cannot be proposed on its own evidence **does not start from a blank field — it inherits, downward, as a confirmable proposal**, reusing the **same nearest-ancestor machinery** as the per-(camera group, destination) clock offset (Section 10.2 rule 4) and the folder GPS fallback (Section 25.3). The `proposed_iana_timezone` for a destination is chosen in priority order:
+
+1. **(a) self-proposed** — a timezone derived for this destination from its own evidence (e.g. the configured `default_folder_timezone`, or a native-GPS/GPX-derived zone where available) is the proposal, with the corresponding `proposal_source`;
+2. **(b) inherited** — otherwise, the destination takes the **effective timezone of the nearest ancestor destination** that has one, surfaced as a **proposal to confirm**, with `proposal_source: "inherited"` and an `inherited_from` field naming the ancestor path;
+3. **(c) manual-required** — otherwise (no self-proposal and no ancestor timezone), the manual field starts blank and the destination requires user input.
+
+Inheritance is **recursive down the destination tree**: a destination's *effective* timezone — however it was reached (self-proposed-and-accepted, inherited-and-confirmed, or manually set) — is the basis propagated to its immediate children, and onward. A **manual timezone set at a folder re-roots the chain** at that point: that zone becomes the folder's effective timezone and therefore the basis its descendants inherit. To compute this, destinations are processed **parent-first** (the same ordering the offset and fallback inheritance use), so an ancestor's effective timezone is known before any child that would inherit it is built; inheritance flows **parent → child only**, never sibling → sibling.
+
+An inherited timezone proposal is **confirmable, never auto-applied**. Like the inherited offset proposal (Section 9.1 item 2, Section 10.2 rule 4), it is a non-anchor proposal class, so it keeps `requires_user_input: true` by default — there is no timezone auto-accept policy. Propagation is therefore the operator accepting a sensible default at each level (a single `accept_proposed_timezone: true`, or a manual override), never a hidden cross-destination borrow: every level is confirmable and any level can diverge. An inherited proposal looks like a self-proposed one but names its source ancestor:
+
+```json
+{
+  "destination_path": "6-photos-by-dest/Belgium/Brussels/Grand-Place",
+  "destination_timezone": {
+    "proposed_iana_timezone": "Europe/Brussels",
+    "proposal_source": "inherited",
+    "inherited_from": "6-photos-by-dest/Belgium/Brussels",
+    "proposal_confidence": "review_required",
+    "user_decision": { "manual_iana_timezone": "", "accept_proposed_timezone": false },
+    "effective_iana_timezone": "",
+    "requires_user_input": true,
+    "stale_user_decision": false
+  }
+}
+```
+
 ### 18.1 Re-evaluation when a file is moved between destinations
 
-A file's destination is an input to its time decision: the destination civil timezone, **the clock offset that applies to it (now per (camera group, destination), Section 10.2)**, and downstream the resolved UTC and the local-time rename. If the user re-sorts a file from one destination to another inside `6-photos-by-dest` (e.g. fixing a mis-sort), prep recognizes the move and updates the handoff to record the new destination (prep `10_photos-1-prep-workflow.md` Section 10.2). On the next calibration run this changes the handoff, which — through the dependency cascade (Section 30; shared contract Section 9) — restales the affected destinations' per-file decisions for that file, so calibration **re-evaluates** it under its **new** destination: it applies the new destination's effective timezone **and the new destination's (group) clock offset**, recomputes resolved UTC and the local-time rename accordingly, and never silently carries the old destination's timezone or offset onto a file that now lives elsewhere. Because the offset is anchored from each destination's own native-GPS frames, moving a file may also change the *anchoring evidence* in both the source and target destinations — both cells are re-evaluated.
+A file's destination is an input to its time decision: the destination civil timezone, **the clock offset that applies to it (now per (camera group, destination), Section 10.2)**, and downstream the resolved UTC and the local-time rename. If the user re-sorts a file from one destination to another inside `6-photos-by-dest` (e.g. fixing a mis-sort), prep recognizes the move and updates the handoff to record the new destination (prep `10_photos-1-prep-workflow.md` Section 10.2). On the next calibration run this changes the handoff, which — through the dependency cascade (Section 30; shared contract Section 9) — restales the affected destinations' per-file decisions for that file, so calibration **re-evaluates** it under its **new** destination: it applies the new destination's effective timezone **and the new destination's (group) clock offset**, recomputes resolved UTC and the local-time rename accordingly, and never silently carries the old destination's timezone or offset onto a file that now lives elsewhere. The new destination's effective timezone may itself be an **inherited** one (proposed from its nearest ancestor and confirmed, Section 18); the moved file simply takes whatever that destination's effective timezone is. Because the offset is anchored from each destination's own native-GPS frames, moving a file may also change the *anchoring evidence* in both the source and target destinations — both cells are re-evaluated.
 
 Decisions that are genuinely destination-scoped (each destination's timezone and its per-group offset) are unaffected for files that did not move; only the moved file is re-evaluated, and only against its new destination. As always, the mandatory re-prep after the move applies (shared contract Section 10) so calibration sees the move at all.
 
@@ -1128,7 +1157,9 @@ If config, camera grouping, `photos-21-time-decisions.json`, prep cache, metadat
 Because the resolved-UTC cache lives in SQLite rather than as a hashable file, it must expose a deterministic fingerprint so downstream JSON artifacts can record and re-verify it the same way they re-hash JSON dependencies. The `resolved_utc_cache_fingerprint` must be a SHA-256 computed over a canonical, deterministically ordered serialization of:
 
 1. every per-file resolved row (`file_id`/workspace path, `resolved_utc`, `resolved_utc_status`, `time_rule_used`, `utc_offset_used`, `source_time_provenance`);
-2. the input fingerprints that produced those rows (config fingerprint, camera-group fingerprint, `photos-21-time-decisions.json` SHA-256, prep cache fingerprint, metadata field-set version, and GPX fingerprint where time anchors used GPX).
+2. the input fingerprints that produced those rows: the **time-policy fingerprint** (a SHA-256 over just the `camera_time_and_timezone_policy` config area — *not* the whole-config hash), the camera-group-key version, `photos-21-time-decisions.json` SHA-256, the prep cache fingerprint, the metadata field-set version, and the GPX fingerprint where time anchors used GPX.
+
+The config input is deliberately the **time-policy subset**, not the whole-config file hash, so resolved-UTC staleness stays **surgical** (shared contract `10_photos-shared-contract.md` Section 4.2): a config edit *outside* the time policy — for example to `library_root`, the GPX matching thresholds, the filename format, or the `zfs` block — must **not** restale already-resolved UTC, because none of those affect how UTC is computed. Only a change to the time policy (or to one of the other listed inputs) restales it. The whole-config SHA-256 still appears as `config_fingerprint` in the artifacts' `depends_on` for end-to-end **integrity and change-detection** (it is the byte hash the dependency cascade re-verifies, shared contract Section 9), but it is **not** the resolved-UTC staleness trigger — the two roles are kept distinct exactly as Section 4.2 prescribes (field-scoped fingerprints drive staleness; the whole-file hash is for integrity, not staleness).
 
 Rows must be ordered by workspace path and all values normalized to text before hashing, so the fingerprint is stable across runs with unchanged inputs. This `resolved_utc_cache_fingerprint` is the value referenced as the "resolved UTC cache fingerprint" dependency in Sections 5, 6, 24, and 28.
 
@@ -1222,6 +1253,8 @@ The mechanism is a **pre-state ledger** in SQLite, archived with the database (s
    - the **previous GPS coordinates** (and related GPS fields) that were present, or
    - an explicit **"absent" sentinel** meaning the file had no GPS before the override.
    This pinned value is the **true original**: it is written once and never overwritten by subsequent runs of the same or a changed decision, so it always represents the state before the pipeline first touched the file's GPS via a manual decision.
+
+   **The "previous coordinates present" pre-state is a completeness case, intentionally unreachable via `apply_manual`.** A manual override (locked or fallback) is only ever *selected* for a file that has **no native GPS**: `classify_gps` returns `preserve_native` for any file that already carries native GPS **before** it ever consults the manual coordinates (Section 23 resolution order; Section 25.3 — preserve-native wins). So an `apply_manual` operation never targets a file whose GPS field was occupied, and the pre-state captured on first application is therefore **always the "absent" sentinel**, never a set of previous coordinates. The crucial corollary: if a file *did* already hold GPS — including the case where a manual coordinate written on an earlier run has since been **re-folded into the file's native EXIF** (e.g. the file was re-imported with that GPS baked in) — it now **reads as native GPS and is preserved, not overridden**, so it is never an `apply_manual` target in the first place. The "previous GPS coordinates were present" branch above is thus kept only for **completeness and robustness** (it keeps the ledger correct should that precedence ever be relaxed); under the current rules the ledger only ever pins, and reverts to, "absent" — withdrawal *clears* the GPS the override added rather than restoring a prior coordinate. Consistent with this, the pinned pre-state is the GPS value **prep recorded in its scan/handoff** (which the executor pins before the write), not a fresh execute-time re-read — for a file with no native GPS the two coincide at "absent."
 
 2. **Withdraw → restore.** If, before a later run, the user **removes** the manual GPS decision, the next run's plan must include an explicit **revert operation** that drives the field back to the pinned pre-state: write the previous coordinates back, or — if the pre-state was "absent" — **clear** the GPS the override added. Withdrawal therefore *undoes*; it does not merely stop re-asserting. ("Tag a file that had no GPS, then withdraw" correctly leaves the file with no GPS, not with the tagged value.)
 
@@ -1621,7 +1654,7 @@ It must depend on:
 3. `photos-22-gps-decisions.json` path and SHA-256;
 4. config fingerprint;
 5. camera group/config classification fingerprint;
-6. `photos-11-handoff.json` path and SHA-256;
+6. `photos-11-handoff.json` path and its `content_fingerprint` (the content-scoped staleness key, not a whole-file byte hash, Section 4; prep Section 16.2);
 7. prep SQLite cache fingerprint;
 8. GPX fingerprint, if relevant;
 9. media file preconditions;
@@ -1747,7 +1780,7 @@ Execution's per-file work — the `exiftool` metadata/marker writes, the post-wr
 2. **Per-file isolation.** Each file's batch (its metadata write, fingerprint verify, and rename) is applied as an independent unit of work that touches only that file; a worker mutates no shared state and returns a per-file result the executor aggregates. Two files never contend, because the no-clobber rename targets were allocated against the whole destination's occupied-name set at plan time (Section 27) and are re-verified free at execute time (Section 29.1a item 1).
 3. **Deterministic aggregation.** Results are merged in a deterministic (path-sorted) order so the journal, the per-destination and global totals, the resume facts, and the `fingerprint_mismatches` list (Section 29.2) are identical regardless of job count or completion order. Two different safe job counts produce the same `photos-24-execution-summary.json` content (modulo run-metadata timestamps and the recorded `jobs` value, which are run metadata, not semantic fingerprints, Section 29.2 item 9).
 4. **Single-writer journal and cache.** The execution journal and the SQLite writes (including the manual-GPS pre-state ledger captures, which are committed **before** the writes they protect, Section 29.1a item 3) go through a single controlled writer, never from worker threads. The pre-state capture pass therefore completes before the concurrent write pass begins, so no worker races the ledger.
-5. **Tool workers, safe restart, no partial persistence.** `exiftool` and the `identify` fingerprint tool are driven so a worker crash is recoverable and partial/failed worker output is never journaled as a confirmed operation or cached as a valid fingerprint — it surfaces as a failure or a held-back mismatch (Section 29.1a items 4–5), not a silent success.
+5. **Tool workers, safe restart, no partial persistence.** `exiftool` runs as a persistent `-stay_open` worker, and the `identify` fingerprint tool can likewise run as a persistent worker via ImageMagick's script/command-stream mode (resetting per-image state between commands), falling back to per-file spawn where that is unavailable (prep `10_photos-1-prep-workflow.md` Section 17 item 5). Either way a worker crash is recoverable and a transient per-file failure is retried, bounded, before becoming a blocker. (Calibration touches photos only, so `ffmpeg`/video is never involved here.) Partial or failed worker output is never journaled as a confirmed operation or cached as a valid fingerprint — it surfaces as a failure or a held-back mismatch (Section 29.1a items 4–5), not a silent success.
 6. **Observability.** Long-running execution is visible: phase-level log lines (lock, validate, snapshot, apply, verify, journal, cache, summary) and live aggregate progress for the concurrent apply/verify pass, with the journal — not the progress output — as the durable record (mirroring prep Section 17).
 
 Job count is run metadata, not a semantic dependency, unless it genuinely changes planned behaviour (it does not here — it changes only throughput).
@@ -1911,7 +1944,7 @@ Important textual outputs include:
 9. pasteable config snippets for newly recognised groups;
 10. invalid-value blocker — a config or decision field that failed sanity-validation, naming the artifact and field (Section 9.2);
 11. reason why no JSON artifact was produced, if blocked before time-decision stage;
-12. time-decision summary (including per-destination clock-offset cells and their inherited/confirmable proposals, Section 10.2);
+12. time-decision summary (including per-destination clock-offset cells and their inherited/confirmable proposals, Section 10.2, and per-destination civil-timezone decisions including timezone proposals inherited from the nearest ancestor destination, Section 18);
 13. resolved UTC cache summary;
 14. GPS-decision summary (including per-destination folder-fallback cells and their inherited/confirmable proposals, Section 25.3);
 15. executable plan summary;
@@ -1969,7 +2002,7 @@ The calibration workflow is:
 8. Recognise and classify camera groups.
 9. If unknown groups exist, print config snippets and stop. No JSON artifact yet.
 10. Analyse per-destination time requirements.
-11. Determine/confirm destination civil timezone for every destination.
+11. Determine/confirm destination civil timezone for every destination; a destination with no timezone of its own inherits its nearest ancestor destination's timezone as a confirmable proposal (Section 18).
 12. Generate GPX/native-GPS time-anchor proposals where possible; a (group, destination) with no self-anchor inherits its nearest ancestor's offset as a confirmable proposal (Section 10.2 rule 4).
 13. Create photos-21-time-decisions.json, grouped by destination, even if no-op.
 14. User completes/accepts time decisions if needed.
