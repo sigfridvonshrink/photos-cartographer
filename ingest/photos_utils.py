@@ -180,6 +180,26 @@ def prep_db_snapshot_path(ws: str) -> str:
     """End-of-prep DB backup snapshot (shared §13.4a)."""
     return os.path.join(ws, CONTROL_DIR, "photos-15-prep-ingest.db")
 
+def write_db_snapshot(conn, dest_path: str) -> None:
+    """Capture a transactionally-consistent point-in-time image of `conn`'s database to `dest_path`
+    (shared contract §13.4a): VACUUM INTO a temp name, then atomic rename — so an interrupted capture
+    leaves either the prior snapshot or the complete new one, never a corrupt/torn file. Shared by
+    prep (photos-15-prep-ingest.db) and calibration finalize (photos-25-calibrate-ingest.db)."""
+    import uuid
+    tmp = os.path.join(os.path.dirname(dest_path) or ".", f".tmp-snapshot-{uuid.uuid4().hex[:8]}.db")
+    try:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        conn.execute("VACUUM INTO ?", (tmp,))
+        os.replace(tmp, dest_path)
+    except Exception as e:
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+        raise RuntimeError(f"Failed to write DB backup snapshot {dest_path}: {e}")
+
 def journal_path(ws: str, run_id: str) -> str:
     return os.path.join(ws, CONTROL_DIR, f"journal-{run_id}.json")
 
