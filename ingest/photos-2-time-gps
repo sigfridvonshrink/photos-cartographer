@@ -412,6 +412,9 @@ class CalibrationCache:
             "camera_group TEXT, time_decision_scope TEXT, source_naive_time TEXT, "
             "source_time_provenance TEXT, time_rule_used TEXT, utc_offset_used INTEGER, "
             "resolved_utc TEXT, resolved_utc_status TEXT, resolved_utc_provenance TEXT)")
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS manual_gps_ledger ("
+            "content_fingerprint TEXT PRIMARY KEY, relative_path TEXT, pre_state TEXT, captured_at TEXT)")
         self.conn.commit()
 
     def replace_all(self, rows):
@@ -426,6 +429,35 @@ class CalibrationCache:
         cur = self.conn.execute(
             f"SELECT {','.join(self.COLUMNS)} FROM resolved_utc_cache ORDER BY relative_path")
         return [dict(zip(self.COLUMNS, row)) for row in cur.fetchall()]
+
+    # --- manual-GPS pre-state ledger (§24.1): reversibility for manual GPS only ----------
+    def ledger_get(self, fp):
+        cur = self.conn.execute(
+            "SELECT content_fingerprint, relative_path, pre_state, captured_at "
+            "FROM manual_gps_ledger WHERE content_fingerprint=?", (fp,))
+        row = cur.fetchone()
+        return None if row is None else {"content_fingerprint": row[0], "relative_path": row[1],
+                                         "pre_state": json.loads(row[2]), "captured_at": row[3]}
+
+    def ledger_pin(self, fp, rel, pre_state, captured_at):
+        """Pin a file's pre-override GPS ONCE — never overwritten (§24.1.1/3), so a later changed
+        manual value still reverts to the true original."""
+        with self.conn:
+            self.conn.execute(
+                "INSERT OR IGNORE INTO manual_gps_ledger "
+                "(content_fingerprint, relative_path, pre_state, captured_at) VALUES (?,?,?,?)",
+                (fp, rel, json.dumps(pre_state, sort_keys=True), captured_at))
+
+    def ledger_consume(self, fp):
+        with self.conn:
+            self.conn.execute("DELETE FROM manual_gps_ledger WHERE content_fingerprint=?", (fp,))
+
+    def ledger_all(self):
+        cur = self.conn.execute(
+            "SELECT content_fingerprint, relative_path, pre_state, captured_at "
+            "FROM manual_gps_ledger ORDER BY content_fingerprint")
+        return [{"content_fingerprint": r[0], "relative_path": r[1],
+                 "pre_state": json.loads(r[2]), "captured_at": r[3]} for r in cur.fetchall()]
 
     def close(self):
         self.conn.close()
@@ -539,6 +571,28 @@ def classify_gps(file, resolved_utc, gpx, cfg, effective_fallback, file_decision
     if fd.get("accept_unlocated"):
         return "no_change", None
     return "blocked", None
+
+
+_MANUAL_GPS_CATEGORIES = ("manual_locked", "manual_fallback")
+
+
+def _handoff_pre_state(native_gps):
+    """A manual GPS override's pre-state from prep's scan (§24.1) — the file's original GPS as the
+    handoff recorded it, NOT a re-read at execute time. `native_gps` is {lat, lon, processing_method}
+    or None. Returns the pinned ledger value: the prior coordinates, or the 'absent' sentinel."""
+    if native_gps and native_gps.get("lat") is not None and native_gps.get("lon") is not None:
+        return {"present": True, "GPSLatitude": native_gps["lat"], "GPSLongitude": native_gps["lon"],
+                "GPSProcessingMethod": native_gps.get("processing_method") or ""}
+    return {"present": False}
+
+
+def _revert_tags(pre_state):
+    """The exiftool tag writes that restore a pinned pre-state: the prior coordinates, or empty
+    values that CLEAR the GPS the override added when prep saw no native GPS (§24.1.2)."""
+    if pre_state.get("present"):
+        return {"GPSLatitude": pre_state["GPSLatitude"], "GPSLongitude": pre_state["GPSLongitude"],
+                "GPSProcessingMethod": pre_state.get("GPSProcessingMethod") or ""}
+    return {"GPSLatitude": "", "GPSLongitude": "", "GPSProcessingMethod": ""}
 
 
 def _walk_ancestors(dest):
@@ -1259,11 +1313,12 @@ class CalibrationWorkflow:
 
     # --- Stage 9: executable plan (photos-23, §28) ---------------------------
 
-    def build_executable_plan(self, files, resolved_rows, time_artifact, gps_artifact, gpx, resolved_fp):
+    def build_executable_plan(self, files, resolved_rows, time_artifact, gps_artifact, gpx,
+                              resolved_fp, ledger_entries=None):
         """Assemble photos-23 (§28): per-destination operations (corrected-time / GPS / marker /
-        rename) for execution to apply, the readiness gate, and the flattened dependency cascade.
-        Automatic GPS is re-derived from inputs, never read from the photos-22 summary. The plan is
-        deterministic (stable plan_id + planned-operation fingerprint). Returns (plan, blockers)."""
+        rename, plus revert-manual-GPS for withdrawn overrides §24.1) for execution to apply, the
+        readiness gate, and the flattened dependency cascade. Automatic GPS is re-derived from
+        inputs, never read from the photos-22 summary. Deterministic. Returns (plan, blockers)."""
         cfg = CONFIG
         fmt = cfg["filename_timestamp_format"]
         utc_by_path = {r["relative_path"]: r for r in resolved_rows}
@@ -1285,6 +1340,7 @@ class CalibrationWorkflow:
             by_dest.setdefault(f["destination"], []).append(f)
 
         destinations, all_ops, media_pre = {}, [], []
+        cat_by_rel = {}                                   # rel -> (category, destination, file) for revert detection
         for dest in sorted(by_dest):
             g_d = g_dests.get(dest, {})
             eff_fb = (g_d.get("folder_fallback") or {}).get("effective_fallback")
@@ -1302,6 +1358,7 @@ class CalibrationWorkflow:
                 ru = (utc_by_path.get(rel) or {}).get("resolved_utc")
                 cat, coord = classify_gps(f, _parse_utc(ru) if ru else None, gpx, cfg,
                                           eff_fb, reviews.get(rel))
+                cat_by_rel[rel] = (cat, dest, f)
                 fops = plan_file_ops(f, ru, tz, cat, coord, renames.get(rel), cfg)
                 if fops:
                     ops.extend(fops)
@@ -1309,16 +1366,34 @@ class CalibrationWorkflow:
                     no_ops.append(rel)
                 media_pre.append({"relative_path": rel, "content_fingerprint": f.get("content_fingerprint"),
                                   "size": f.get("size"), "mtime_ns": f.get("mtime_ns")})
+            destinations[dest] = {"destination_path": dest, "operations": ops, "no_ops": no_ops}
+
+        # Revert-manual-GPS (§24.1): a ledger'd file whose current decision is no longer manual had
+        # its override withdrawn -> restore the pinned pre-state. A vanished file's entry is kept,
+        # never reverted; a still-manual file re-asserts via its apply_manual write (no revert).
+        for entry in (ledger_entries or []):
+            rel = entry["relative_path"]
+            cur = cat_by_rel.get(rel)
+            if cur is None or cur[0] in _MANUAL_GPS_CATEGORIES:
+                continue
+            _cat, dest, f = cur
+            op = _make_op("revert_manual_gps", rel, "revert withdrawn manual GPS",
+                          {"writes": _revert_tags(entry["pre_state"]), "pre_state": entry["pre_state"],
+                           "content_fingerprint": entry["content_fingerprint"]},
+                          {"content_fingerprint": f.get("content_fingerprint"),
+                           "size": f.get("size"), "mtime_ns": f.get("mtime_ns")})
+            destinations[dest]["operations"].append(op)
+
+        for dest, dd in destinations.items():
+            ops = dd["operations"]
             all_ops.extend(ops)
-            destinations[dest] = {
-                "destination_path": dest, "operations": ops, "no_ops": no_ops,
-                "summary": {
-                    "operations_total": len(ops), "no_ops": len(no_ops),
-                    "metadata_time_writes": sum(1 for o in ops if o["type"] == "metadata_time_write"),
-                    "metadata_gps_writes": sum(1 for o in ops if o["type"] == "metadata_gps_write"),
-                    "gps_marker_writes": sum(1 for o in ops if o["type"] == "gps_marker_write"),
-                    "renames": sum(1 for o in ops if o["type"] == "rename_no_clobber"),
-                },
+            dd["summary"] = {
+                "operations_total": len(ops), "no_ops": len(dd["no_ops"]),
+                "metadata_time_writes": sum(1 for o in ops if o["type"] == "metadata_time_write"),
+                "metadata_gps_writes": sum(1 for o in ops if o["type"] == "metadata_gps_write"),
+                "gps_marker_writes": sum(1 for o in ops if o["type"] == "gps_marker_write"),
+                "renames": sum(1 for o in ops if o["type"] == "rename_no_clobber"),
+                "manual_gps_reverts": sum(1 for o in ops if o["type"] == "revert_manual_gps"),
             }
 
         planned_op_fp = sha256_text(json.dumps(all_ops, sort_keys=True))
@@ -1358,7 +1433,8 @@ class CalibrationWorkflow:
 
     _META_OP_TYPES = ("metadata_time_write", "metadata_gps_write", "gps_marker_write")
     _OP_TOTAL_KEY = {"metadata_time_write": "metadata_time_writes", "metadata_gps_write": "metadata_gps_writes",
-                     "gps_marker_write": "gps_marker_writes", "rename_no_clobber": "renames"}
+                     "gps_marker_write": "gps_marker_writes", "rename_no_clobber": "renames",
+                     "revert_manual_gps": "manual_gps_reverts"}
 
     def _exiftool_write(self, abs_path, tags):
         """Apply a file's batched tag writes atomically (exiftool -overwrite_original = temp + atomic
@@ -1408,7 +1484,8 @@ class CalibrationWorkflow:
         its rename — with execute-time precondition + no-clobber rechecks and a post-write content-
         fingerprint verify. Returns a per-file result the caller merges (no shared-state mutation)."""
         abs_path = os.path.join(self.workspace_root, rel)
-        res = {"relative_path": rel, "applied": [], "skipped": [], "failed": [], "blocker": None, "mismatch": None}
+        res = {"relative_path": rel, "applied": [], "skipped": [], "failed": [], "blocker": None,
+               "mismatch": None, "reverted_fps": []}
         if all(journal.get(o["operation_id"]) == "confirmed" for o in ops):
             res["skipped"] = [o["operation_id"] for o in ops]
             return res
@@ -1425,17 +1502,20 @@ class CalibrationWorkflow:
             res["blocker"] = f"{rel}: mtime changed since planning"
             return res
 
-        meta_ops = [o for o in ops if o["type"] in self._META_OP_TYPES]
-        if meta_ops and not all(journal.get(o["operation_id"]) == "confirmed" for o in meta_ops):
+        # metadata + revert-manual-GPS ops both produce a single batched exiftool tag write
+        write_ops = [o for o in ops if o["type"] in self._META_OP_TYPES or o["type"] == "revert_manual_gps"]
+        if write_ops and not all(journal.get(o["operation_id"]) == "confirmed" for o in write_ops):
             tags = {}
-            for o in meta_ops:
+            for o in write_ops:
                 tags.update(o.get("writes") or {})
             if not self._exiftool_write(abs_path, tags):
-                res["failed"] = [o["operation_id"] for o in meta_ops]
+                res["failed"] = [o["operation_id"] for o in write_ops]
                 return res                          # tool failure: leave file as-is, never confirm
             new_fp = (ContentHasher.fingerprint_image(abs_path) or {}).get("value")
             if new_fp == pre.get("content_fingerprint") or rel in accepted_mismatches:
-                res["applied"].extend(o["operation_id"] for o in meta_ops)
+                res["applied"].extend(o["operation_id"] for o in write_ops)
+                res["reverted_fps"] = [o["content_fingerprint"] for o in write_ops
+                                       if o["type"] == "revert_manual_gps"]   # consume on restore
             else:
                 res["mismatch"] = {"relative_path": rel, "expected_fingerprint": pre.get("content_fingerprint"),
                                    "actual_fingerprint": new_fp}
@@ -1483,12 +1563,37 @@ class CalibrationWorkflow:
             for op in dd["operations"]:
                 by_file.setdefault(op["relative_path"], []).append(op)
 
-        results = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, jobs)) as ex:
-            futs = [ex.submit(self._apply_file, rel, ops, journal, accepted)
-                    for rel, ops in sorted(by_file.items())]
-            for fut in concurrent.futures.as_completed(futs):
-                results.append(fut.result())
+        cache = CalibrationCache(ws)
+        try:
+            # Capture-before-write (§24.1 / §29.1a.3): pin each manual GPS override's pre-state —
+            # prep's original GPS, NOT a re-read — once, BEFORE any write, keyed by content fingerprint.
+            captured = 0
+            pre_by_fp = {f.get("content_fingerprint"): (f["relative_path"], _handoff_pre_state(f.get("native_gps")))
+                         for f in self.build_file_model()}
+            for ops in by_file.values():
+                for op in ops:
+                    if op.get("gps_origin") == "apply_manual":
+                        fp = (op.get("preconditions") or {}).get("content_fingerprint")
+                        if fp and cache.ledger_get(fp) is None and fp in pre_by_fp:
+                            rel_fp, pre = pre_by_fp[fp]
+                            cache.ledger_pin(fp, rel_fp, pre, now_iso)
+                            captured += 1
+
+            results = []
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, jobs)) as ex:
+                futs = [ex.submit(self._apply_file, rel, ops, journal, accepted)
+                        for rel, ops in sorted(by_file.items())]
+                for fut in concurrent.futures.as_completed(futs):
+                    results.append(fut.result())
+
+            # Consume-on-restore (§24.1.4): a successfully-reverted present file's pin is removed.
+            reverted = 0
+            for r in results:
+                for fp in r.get("reverted_fps") or []:
+                    cache.ledger_consume(fp)
+                    reverted += 1
+        finally:
+            cache.close()
 
         for r in results:
             for oid in r["applied"]:
@@ -1496,6 +1601,7 @@ class CalibrationWorkflow:
         write_json_artifact(jpath, {"journal_version": 1, "plan_id": plan["plan_id"],
                                     "operations": journal, "updated_at": now_iso})
         summary = self._build_summary(plan, results, now_iso, execution_id, jobs)
+        summary["totals"]["manual_gps_pre_states_captured"] = captured   # reverts counted by _build_summary
         write_json_artifact(execution_summary_path(ws), summary)
         return summary
 
@@ -1651,6 +1757,7 @@ def main():
                 cache = CalibrationCache(workspace_root)
                 try:
                     cache.replace_all(rows)
+                    ledger_entries = cache.ledger_all()    # to plan revert ops for withdrawn overrides
                 finally:
                     cache.close()
                 fp = resolved_utc_fingerprint(rows, input_fps)
@@ -1686,7 +1793,8 @@ def main():
 
                 # Stage 9: assemble photos-23 only when BOTH decision artifacts are complete (§28).
                 if artifact["status"] == "complete" and gps_artifact["status"] == "complete":
-                    plan, _ = wf.build_executable_plan(files, rows, artifact, gps_artifact, gpx, fp)
+                    plan, _ = wf.build_executable_plan(files, rows, artifact, gps_artifact, gpx, fp,
+                                                       ledger_entries)
                     write_json_artifact(executable_plan_path(workspace_root), plan)
                     n_ops = sum(d["summary"]["operations_total"] for d in plan["destinations"].values())
                     print(f"Wrote {EXECUTABLE_PLAN_ARTIFACT}: status={plan['status']} "
