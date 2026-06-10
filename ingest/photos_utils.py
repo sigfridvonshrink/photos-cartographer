@@ -558,8 +558,82 @@ def get_identify_command() -> list:
     return _IDENTIFY_COMMAND
 
 import concurrent.futures
+import select
 import subprocess
 from typing import Dict, List, Any, Optional
+
+
+class ContentHasher:
+    """Content fingerprints — the cross-phase identity spine, shared by prep and calibration.
+
+    `fingerprint_image` is an EXIF-invariant pixel-content hash via ImageMagick's signature
+    (`identify %#`): it survives the EXIF writes calibration later makes, so calibration recomputes
+    it after each metadata write to confirm only metadata (not decoded content) changed."""
+
+    @staticmethod
+    def fingerprint_image(filepath: str) -> Dict[str, Any]:
+        """EXIF-invariant pixel-content hash via ImageMagick's signature (`identify %#`).
+
+        Used for both `image` and `raw`: it hashes normalized pixels, so it survives the EXIF writes
+        calibration later makes (the content hash is the cross-phase identity spine). The result is
+        bound to the ImageMagick version so a magick upgrade restales the cache rather than silently
+        mixing signatures.
+        """
+        engine_version = get_imagemagick_version()
+        identify_cmd = get_identify_command()
+        if not identify_cmd:
+            return {"status": "failed", "strategy": "image-content-hash-v1", "value": None,
+                    "error": "ImageMagick not found", "engine_version": engine_version}
+        cmd = identify_cmd + ["-format", "%#", "-colorspace", "sRGB", "-depth", "8", filepath]
+        last_error = "ImageMagick failed"
+        for _attempt in range(2):
+            try:
+                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+                stdout_data = ""
+                while True:
+                    reads, _, _ = select.select([proc.stdout], [], [], 10.0)
+                    if not reads:
+                        proc.kill()
+                        raise subprocess.TimeoutExpired(cmd, 10.0)
+                    chunk = proc.stdout.read(1024)
+                    if not chunk:
+                        break
+                    stdout_data += chunk
+                proc.wait()
+                if proc.returncode == 0 and stdout_data.strip():
+                    return {"status": "valid", "strategy": "image-content-hash-v1",
+                            "value": stdout_data.strip(), "engine_version": engine_version}
+                last_error = f"ImageMagick exited {proc.returncode}"
+            except subprocess.TimeoutExpired:
+                last_error = "ImageMagick timed out"
+            except Exception as e:
+                last_error = str(e)
+        return {"status": "failed", "strategy": "image-content-hash-v1", "value": None,
+                "error": last_error, "engine_version": engine_version}
+
+    @staticmethod
+    def fingerprint_video(filepath: str) -> Dict[str, Any]:
+        cmd = ["ffmpeg", "-i", filepath, "-c", "copy", "-f", "md5", "-"]
+        try:
+            res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            for line in res.stdout.splitlines():
+                if line.startswith("MD5="):
+                    return {"status": "valid", "strategy": "video-md5-v1", "value": line.split("=")[1].strip()}
+            return {"status": "failed", "strategy": "video-md5-v1", "value": None, "error": "No MD5 output"}
+        except subprocess.CalledProcessError as e:
+            print(f"Warning: ffmpeg failed on {filepath}: {e.stderr}")
+            return {"status": "failed", "strategy": "video-md5-v1", "value": None, "error": str(e)}
+
+    @staticmethod
+    def hash_file(filepath: str) -> Dict[str, Any]:
+        h = hashlib.sha256()
+        try:
+            with open(filepath, 'rb') as f:
+                while chunk := f.read(8192):
+                    h.update(chunk)
+            return {"status": "valid", "strategy": "sha256-v1", "value": h.hexdigest()}
+        except Exception as e:
+            return {"status": "failed", "strategy": "sha256-v1", "value": None, "error": str(e)}
 
 
 class ProcessCrashedError(Exception):
