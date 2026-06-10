@@ -77,6 +77,25 @@ def test_loose_root_file_blocks(tmp_path):
     assert any("Loose file at the workspace root" in b for b in blockers), blockers
 
 
+def test_nonmanaged_root_folder_blocks(tmp_path):
+    """A misplaced dump drops folders at the root too, not just files — the base must hold only the
+    managed 0-6 folders, so a non-managed root folder is blocked like a loose file."""
+    ws = _ws(tmp_path)
+    (ws / "randomdump").mkdir()
+    blockers, _, _ = _pf(ws)
+    assert any("Misplaced folder at the workspace root" in b for b in blockers), blockers
+
+
+def test_directory_symlink_at_root_blocks(tmp_path):
+    """A directory symlink at the root is a non-managed folder and is blocked (calibration never
+    follows it; it reads the prep handoff, not the live tree)."""
+    ws = _ws(tmp_path)
+    import os
+    os.symlink(str(tmp_path), str(ws / "evil"))
+    blockers, _, _ = _pf(ws)
+    assert any("Misplaced folder at the workspace root" in b for b in blockers), blockers
+
+
 # --- config / handoff --------------------------------------------------------
 
 def test_missing_config_blocks(tmp_path):
