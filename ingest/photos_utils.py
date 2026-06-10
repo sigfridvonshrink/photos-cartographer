@@ -49,6 +49,12 @@ CONFIG = {
     "gpx_interpolation_max_gap_seconds": 120.0,
     "gpx_interpolation_max_distance_meters": 1000.0,
     "gpx_interpolation_max_speed_kmh": 150.0,
+    # Position-based thresholds for the calibration time-anchor inference (calibration §19):
+    # how close a native-GPS frame must be to a GPX point/segment to anchor its real time, and how
+    # far supporting anchors' offsets may spread before they conflict. Consumed by calibration.
+    "gpx_anchor_max_point_distance_meters": 30.0,
+    "gpx_anchor_max_segment_distance_meters": 30.0,
+    "gpx_anchor_offset_spread_max_seconds": 120.0,
     "photo_anchor_interpolation_max_gap_seconds": 1800.0,
     "photo_anchor_extrapolation_max_seconds": 300.0,
     "camera_time_and_timezone_policy": {
@@ -357,6 +363,8 @@ def _validate_zfs(z):
 _GPX_NUMERIC_KEYS = (
     "gpx_direct_match_max_seconds", "gpx_interpolation_max_gap_seconds",
     "gpx_interpolation_max_distance_meters", "gpx_interpolation_max_speed_kmh",
+    "gpx_anchor_max_point_distance_meters", "gpx_anchor_max_segment_distance_meters",
+    "gpx_anchor_offset_spread_max_seconds",
     "photo_anchor_interpolation_max_gap_seconds", "photo_anchor_extrapolation_max_seconds",
 )
 

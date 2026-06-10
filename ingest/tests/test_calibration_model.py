@@ -95,6 +95,34 @@ def test_gpx_malformed_warns_not_crashes(tmp_path):
     assert idx.status == "empty" and any("Malformed" in w for w in idx.warnings)
 
 
+def test_gpx_parser_skips_bad_trkpts(tmp_path):
+    # exercise every reject branch in GPXIndex._parse_file (GPS code -> full coverage):
+    # missing lon, missing time, out-of-range coord, non-numeric coord, and a naive-time point;
+    # the one fully-valid trkpt survives.
+    root = tmp_path / "gpx"; root.mkdir()
+    (root / "edge.gpx").write_text(
+        '<gpx xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>'
+        '<trkpt lat="50.0"><time>2024-07-03T12:00:00Z</time></trkpt>'              # no lon
+        '<trkpt lat="50.0" lon="4.0"></trkpt>'                                       # no time
+        '<trkpt lat="200.0" lon="4.0"><time>2024-07-03T12:00:01Z</time></trkpt>'    # lat out of range
+        '<trkpt lat="x" lon="4.0"><time>2024-07-03T12:00:02Z</time></trkpt>'        # non-numeric lat
+        '<trkpt lat="50.0" lon="4.0"><time>2024-07-03 12:00:03</time></trkpt>'      # naive time (no tz)
+        '<trkpt lat="50.0" lon="4.0"><time>2024-07-03T12:00:04+02:00</time></trkpt>'  # valid, tz-aware
+        '</trkseg></trk></gpx>')
+    idx = cal.GPXIndex(str(root)).build()
+    assert idx.status == "usable" and len(idx.points) == 1                          # only the valid one
+    assert idx.points[0].time_utc.hour == 10                                        # 12:00:04+02:00 -> 10:00:04Z
+    assert len(idx.warnings) >= 3                                                   # the rejects warned
+
+
+def test_gpx_unreadable_file_warns_and_skips(tmp_path):
+    # a .gpx that os.walk lists but open() fails on (broken symlink) -> the OSError branch warns.
+    root = tmp_path / "gpx"; root.mkdir()
+    os.symlink(str(tmp_path / "does-not-exist"), str(root / "broken.gpx"))
+    idx = cal.GPXIndex(str(root)).build()
+    assert any("Could not read GPX file" in w for w in idx.warnings) and idx.points == []
+
+
 # --- Stage 4: camera groups + classification ---------------------------------
 
 def test_camera_group_classification(tmp_path, monkeypatch):
