@@ -35,6 +35,7 @@ from photos_utils import (
 
 TIME_DECISIONS_ARTIFACT = "photos-21-time-decisions.json"
 GPS_DECISIONS_ARTIFACT = "photos-22-gps-decisions.json"
+EXECUTABLE_PLAN_ARTIFACT = "photos-23-executable-plan.json"
 
 
 def time_decisions_path(ws):
@@ -43,6 +44,10 @@ def time_decisions_path(ws):
 
 def gps_decisions_path(ws):
     return os.path.join(ws, CONTROL_DIR, GPS_DECISIONS_ARTIFACT)
+
+
+def executable_plan_path(ws):
+    return os.path.join(ws, CONTROL_DIR, EXECUTABLE_PLAN_ARTIFACT)
 
 
 # ============================================================================
@@ -601,9 +606,74 @@ def plan_renames(files, fmt):
     return out
 
 
+# ============================================================================
+# Stage 9 — executable plan operations (calibration §28). Pure op builders so
+# the op list is deterministic and exhaustively unit-testable. Automatic GPS is
+# RE-DERIVED here from inputs (classify_gps/place_gps), never read from the
+# photos-22 summary (§25). Execution (§29, Phase 6c) only applies these ops.
+# ============================================================================
+
+_GPS_OP_ORIGIN = {"gpx_interpolation": "recompute_automated", "gpx_extrapolation": "recompute_automated",
+                  "manual_locked": "apply_manual", "manual_fallback": "apply_manual"}
+_GPS_OP_MARKER = {"gpx_interpolation": "interpolated", "gpx_extrapolation": "interpolated",
+                  "manual_locked": "manual_locked", "manual_fallback": "manual_fallback"}
+
+
+def _local_time_and_offset(resolved_utc, tz):
+    """(DateTimeOriginal 'YYYY:MM:DD HH:MM:SS', OffsetTimeOriginal '+HH:MM') for a resolved UTC in the
+    destination timezone, or (None, None) if unpositionable. The corrected time is destination-local
+    civil time (§26)."""
+    dt = _parse_utc(resolved_utc)
+    if dt is None or not tz:
+        return None, None
+    local = dt.astimezone(zoneinfo.ZoneInfo(tz))
+    z = local.strftime("%z")
+    return local.strftime("%Y:%m:%d %H:%M:%S"), (z[:3] + ":" + z[3:] if z else "")
+
+
+def _make_op(typ, rel, reason, semantic, preconditions):
+    """An executable-plan operation with a deterministic operation_id (SHA-256 over its identity:
+    type + path + semantic fields, NOT the verification preconditions)."""
+    op = {"operation_id": sha256_text(json.dumps([typ, rel, semantic], sort_keys=True))[:16],
+          "type": typ, "relative_path": rel, "reason": reason, "preconditions": preconditions}
+    op.update(semantic)
+    return op
+
+
+def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename, cfg):
+    """The ordered executable operations for one file (§28): corrected-time metadata write, GPS
+    write + provenance marker, and no-clobber rename — each gated by the camera_time policy write
+    flags. Returns [] for a file that needs nothing (a no-op)."""
+    pol = cfg.get("camera_time_and_timezone_policy") or {}
+    rel = file["relative_path"]
+    pre = {"content_fingerprint": file.get("content_fingerprint"),
+           "size": file.get("size"), "mtime_ns": file.get("mtime_ns")}
+    ops = []
+
+    if pol.get("write_corrected_metadata_times", True):
+        dto, off = _local_time_and_offset(resolved_utc, tz)
+        if dto is not None:
+            writes = {"DateTimeOriginal": dto}
+            if pol.get("write_corrected_offset_tags", True) and off:
+                writes["OffsetTimeOriginal"] = off
+            ops.append(_make_op("metadata_time_write", rel, "corrected capture time", {"writes": writes}, pre))
+
+    if gps_category in _GPS_OP_ORIGIN and gps_coord is not None:
+        ops.append(_make_op("metadata_gps_write", rel, f"gps:{gps_category}",
+                            {"writes": {"GPSLatitude": gps_coord["lat"], "GPSLongitude": gps_coord["lon"]},
+                             "gps_origin": _GPS_OP_ORIGIN[gps_category]}, pre))
+        ops.append(_make_op("gps_marker_write", rel, "gps provenance",
+                            {"writes": {"GPSProcessingMethod": _GPS_OP_MARKER[gps_category]}}, pre))
+
+    if pol.get("write_corrected_filename_times", True) and rename and rename.get("rename"):
+        ops.append(_make_op("rename_no_clobber", rel, "destination-local timestamp name",
+                            {"from": rename["current_name"], "to": rename["planned_name"]}, pre))
+    return ops
+
+
 class CalibrationWorkflow:
-    """Stages 1–7: validate the workspace, build the model, produce photos-21-time-decisions.json,
-    and (when decisions are complete) compute & persist resolved UTC per file."""
+    """Stages 1–9: validate the workspace, build the model, produce photos-21/22 decision artifacts,
+    compute resolved UTC, and (when decisions are complete) assemble photos-23-executable-plan.json."""
 
     def __init__(self, workspace_root: str):
         self.workspace_root = workspace_root
@@ -1173,6 +1243,103 @@ class CalibrationWorkflow:
             "handoff": json_dependency("photos-11-handoff.json", self.workspace_root, ho),
         }
 
+    # --- Stage 9: executable plan (photos-23, §28) ---------------------------
+
+    def build_executable_plan(self, files, resolved_rows, time_artifact, gps_artifact, gpx, resolved_fp):
+        """Assemble photos-23 (§28): per-destination operations (corrected-time / GPS / marker /
+        rename) for execution to apply, the readiness gate, and the flattened dependency cascade.
+        Automatic GPS is re-derived from inputs, never read from the photos-22 summary. The plan is
+        deterministic (stable plan_id + planned-operation fingerprint). Returns (plan, blockers)."""
+        cfg = CONFIG
+        fmt = cfg["filename_timestamp_format"]
+        utc_by_path = {r["relative_path"]: r for r in resolved_rows}
+        t_dests = time_artifact.get("destinations") or {}
+        g_dests = gps_artifact.get("destinations") or {}
+
+        blockers = []
+        if time_artifact.get("status") != "complete":
+            blockers.append("photos-21-time-decisions.json is not complete.")
+        if gps_artifact.get("status") != "complete":
+            blockers.append("photos-22-gps-decisions.json is not complete.")
+        for f in files:
+            row = utc_by_path.get(f["relative_path"])
+            if not row or row.get("resolved_utc_status") != "valid":
+                blockers.append(f"{f['relative_path']}: no valid resolved UTC.")
+
+        by_dest = {}
+        for f in files:
+            by_dest.setdefault(f["destination"], []).append(f)
+
+        destinations, all_ops, media_pre = {}, [], []
+        for dest in sorted(by_dest):
+            g_d = g_dests.get(dest, {})
+            eff_fb = (g_d.get("folder_fallback") or {}).get("effective_fallback")
+            reviews = {ri["relative_path"]: (ri.get("user_decision") or {})
+                       for ri in ((g_d.get("gps_decisions") or {}).get("review_items") or [])}
+            tz = ((t_dests.get(dest, {}).get("destination_timezone")) or {}).get("effective_iana_timezone") or ""
+            rename_inputs = [{"relative_path": f["relative_path"],
+                              "resolved_utc": (utc_by_path.get(f["relative_path"]) or {}).get("resolved_utc"),
+                              "destination_timezone": tz} for f in by_dest[dest]]
+            renames = {r["relative_path"]: r for r in plan_renames(rename_inputs, fmt)}
+
+            ops, no_ops = [], []
+            for f in sorted(by_dest[dest], key=lambda x: x["relative_path"]):
+                rel = f["relative_path"]
+                ru = (utc_by_path.get(rel) or {}).get("resolved_utc")
+                cat, coord = classify_gps(f, _parse_utc(ru) if ru else None, gpx, cfg,
+                                          eff_fb, reviews.get(rel))
+                fops = plan_file_ops(f, ru, tz, cat, coord, renames.get(rel), cfg)
+                if fops:
+                    ops.extend(fops)
+                else:
+                    no_ops.append(rel)
+                media_pre.append({"relative_path": rel, "content_fingerprint": f.get("content_fingerprint"),
+                                  "size": f.get("size"), "mtime_ns": f.get("mtime_ns")})
+            all_ops.extend(ops)
+            destinations[dest] = {
+                "destination_path": dest, "operations": ops, "no_ops": no_ops,
+                "summary": {
+                    "operations_total": len(ops), "no_ops": len(no_ops),
+                    "metadata_time_writes": sum(1 for o in ops if o["type"] == "metadata_time_write"),
+                    "metadata_gps_writes": sum(1 for o in ops if o["type"] == "metadata_gps_write"),
+                    "gps_marker_writes": sum(1 for o in ops if o["type"] == "gps_marker_write"),
+                    "renames": sum(1 for o in ops if o["type"] == "rename_no_clobber"),
+                },
+            }
+
+        planned_op_fp = sha256_text(json.dumps(all_ops, sort_keys=True))
+        depends_on = self._exec_depends_on(resolved_fp, media_pre, planned_op_fp)
+        plan = {
+            "artifact_type": "executable_plan",
+            "artifact_name": EXECUTABLE_PLAN_ARTIFACT,
+            "plan_id": sha256_text(json.dumps(depends_on, sort_keys=True))[:16],
+            "status": "blocked" if blockers else "ready",
+            "executable": not blockers,
+            "blockers": blockers,
+            "destinations": destinations,
+            "depends_on": depends_on,
+        }
+        return plan, blockers
+
+    def _exec_depends_on(self, resolved_fp, media_pre, planned_op_fp):
+        ws = self.workspace_root
+        cam = json.dumps(CONFIG.get("camera_time_and_timezone_policy") or {}, sort_keys=True)
+        return {
+            "time_decisions": json_dependency(TIME_DECISIONS_ARTIFACT, ws, time_decisions_path(ws)),
+            "gps_decisions": json_dependency(GPS_DECISIONS_ARTIFACT, ws, gps_decisions_path(ws)),
+            "resolved_utc_cache_fingerprint": resolved_fp,
+            "config_fingerprint": sha256_file(config_path(ws)),
+            "camera_group_fingerprint": sha256_text(cam),
+            "camera_group_key_version": CAMERA_GROUP_KEY_VERSION,
+            "handoff": json_dependency("photos-11-handoff.json", ws, handoff_path(ws)),
+            "prep_cache_fingerprint": (self.handoff or {}).get("cache_fingerprint"),
+            "gpx_fingerprint": self._gpx_fingerprint,
+            "metadata_field_set_version": FIELD_SET_VERSION,
+            "filename_format_fingerprint": sha256_text(CONFIG["filename_timestamp_format"]),
+            "media_preconditions": media_pre,
+            "planned_operation_fingerprint": planned_op_fp,
+        }
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -1308,6 +1475,15 @@ def main():
                 print(f"Wrote {GPS_DECISIONS_ARTIFACT}: status={gps_artifact['status']} "
                       f"({tot['preserve_native_gps']} native, {tot['automatic_gpx_interpolation']} interp, "
                       f"{tot['automatic_gpx_extrapolation']} extrap, {tot['blocked']} blocked).")
+
+                # Stage 9: assemble photos-23 only when BOTH decision artifacts are complete (§28).
+                if artifact["status"] == "complete" and gps_artifact["status"] == "complete":
+                    plan, _ = wf.build_executable_plan(files, rows, artifact, gps_artifact, gpx, fp)
+                    write_json_artifact(executable_plan_path(workspace_root), plan)
+                    n_ops = sum(d["summary"]["operations_total"] for d in plan["destinations"].values())
+                    print(f"Wrote {EXECUTABLE_PLAN_ARTIFACT}: status={plan['status']} "
+                          f"(plan {plan['plan_id']}, {n_ops} operation(s)). "
+                          "Review it, then run `execute` to apply (not yet implemented).")
     finally:
         run_lock.release()
 
