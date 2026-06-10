@@ -327,7 +327,8 @@ def test_summary_keeps_run_metadata_separate(tmp_path, monkeypatch):
     s = wf.execute_plan(1, "2024-07-03T00:00:00Z", "exec-1")
     # the volatile bits (timestamps, execution id, jobs) live ONLY in run_metadata, off the
     # fingerprint-bearing body (summarizes / totals / plan_id), per §29.2.
-    assert s["run_metadata"] == {"execution_id": "exec-1", "finished_at": "2024-07-03T00:00:00Z", "jobs": 1}
+    assert s["run_metadata"] == {"execution_id": "exec-1", "started_at": "2024-07-03T00:00:00Z",
+                                 "finished_at": "2024-07-03T00:00:00Z", "jobs": 1}
     body = json.dumps({k: v for k, v in s.items() if k != "run_metadata"})
     assert "2024-07-03T00:00:00Z" not in body and "exec-1" not in body
     assert s["summarizes"][cal.EXECUTABLE_PLAN_ARTIFACT]["sha256"]
@@ -401,3 +402,17 @@ def test_journal_persisted_incrementally_during_run(tmp_path, monkeypatch):
     assert _execute(monkeypatch, ws) == 0
     # two files, each flushing its confirmed ops -> the journal grew across >1 incremental write
     assert len(flushes) >= 2 and flushes == sorted(flushes) and flushes[-1] > flushes[0]
+
+
+def test_summary_grouped_by_destination(tmp_path, monkeypatch):
+    """photos-24 carries a per-destination operation breakdown (§29.2 item 4) that sums to the global
+    totals."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _mock_tools(monkeypatch, ws)
+    assert _execute(monkeypatch, ws) == 0
+    s = _summary(ctl)
+    assert "destinations" in s
+    d = s["destinations"]["6-photos-by-dest/T"]
+    assert d["metadata_time_writes"] == 2 and d["renames"] == 2
+    assert sum(v["metadata_time_writes"] for v in s["destinations"].values()) == s["totals"]["metadata_time_writes"]
+    assert sum(v["renames"] for v in s["destinations"].values()) == s["totals"]["renames"]

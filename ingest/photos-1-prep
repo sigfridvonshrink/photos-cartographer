@@ -26,7 +26,7 @@ import errno
 # CONFIGURATION BLOCK
 # ==============================================================================
 sys.path.insert(0, os.path.dirname(__file__))
-from photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, selected_gpx_root, missing_managed_folders
+from photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, selected_gpx_root, missing_managed_folders, FOLDER_ROLES
 from photos_utils import (_move_no_clobber, _move_link_unlink, _get_renameat2,
                           WorkspaceCache, WorkspaceLock, ContentHasher,
                           CACHE_SCHEMA_VERSION, FINGERPRINT_ALGORITHM_VERSION)
@@ -983,8 +983,8 @@ class PlanExecutor:
                         "cache_fingerprint": cache_fingerprint,
                         "hash_algorithm": "sha256",
                         "folders_scanned": [
-                            {"name": n, "mutable": n != folder_name('photos_by_dest')}
-                            for n in managed_folder_names(CONFIG)
+                            {"name": folder_name(r), "mutable": folder_name(r) != folder_name('photos_by_dest')}
+                            for r in FOLDER_ROLES        # all managed 0-6, incl. 1-strays (§3)
                         ],
                         "files": final_files,
                         "camera_groups": camera_groups,
@@ -2328,8 +2328,11 @@ def main():
                 print(f"Preflight validation failed: {e}", file=sys.stderr)
                 sys.exit(1)
 
-            for op in plan.operations:
-                print(f"Would execute: {op.type} - {op.reason}")
+            # Dry-run is not a simulation: display the EXACT serialized plan that `execute` would
+            # consume (the real plan JSON, not a virtual-filesystem walk), after validating it.
+            print(f"Dry-run: validated plan {plan.plan_id} ({len(plan.operations)} operation(s)). "
+                  "The exact plan `execute` would consume follows:", file=sys.stderr)
+            print(plan.to_json())
 
         elif args.command == "execute":
             with open(args.plan, "r") as f:
