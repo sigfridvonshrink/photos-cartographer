@@ -325,3 +325,21 @@ def test_schema_migration(workspace):
         }
     }
     cache.upsert_file(data)
+
+
+def test_parse_exiftool_item_timestamp_source_fallback():
+    """selected_source_naive_timestamp prefers DateTimeOriginal, then CreateDate, then ModifyDate,
+    else None (photos_utils Section 8)."""
+    import photos_utils as utils
+    parse = utils.MetadataReader._parse_exiftool_item
+    r = parse({"DateTimeOriginal": "2020:01:01 00:00:00", "CreateDate": "2019:09:09 09:09:09"})
+    assert r["selected_source_timestamp_tag"] == "DateTimeOriginal"
+    assert r["selected_source_naive_timestamp"] == "2020:01:01 00:00:00"
+    r = parse({"CreateDate": "2019:09:09 09:09:09"})                     # no DTO -> CreateDate
+    assert r["selected_source_timestamp_tag"] == "CreateDate"
+    assert r["selected_source_naive_timestamp"] == "2019:09:09 09:09:09"
+    r = parse({"ModifyDate": "2018:08:08 08:08:08"})                     # only ModifyDate
+    assert r["selected_source_timestamp_tag"] == "ModifyDate"
+    assert r["selected_source_naive_timestamp"] == "2018:08:08 08:08:08"
+    r = parse({})                                                        # no timestamp at all
+    assert r["selected_source_naive_timestamp"] is None

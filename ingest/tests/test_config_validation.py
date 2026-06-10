@@ -44,11 +44,28 @@ def _pol(**overrides):
     (_pol(phone_gpx_max_distance_meters=-5), "phone_gpx_max_distance_meters"),   # negative
     (_pol(device_groups={"phones": "nope"}), "list of strings"),                # not a list
     (_pol(device_groups={"phones": [1, 2]}), "list of strings"),                # non-string elems
+    (_cfg(folders="nope"), "folders must be an object"),                        # folders not a dict
+    (_cfg(camera_time_and_timezone_policy="nope"), "must be an object"),        # policy not a dict
+    (_pol(device_groups="nope"), "device_groups must be an object"),           # device_groups not a dict
+    (_cfg(zfs={"datasets": "nope"}), "zfs.datasets must be an object"),         # zfs.datasets not a dict
 ])
 def test_validate_config_rejects(cfg, needle):
     with pytest.raises(ValueError) as ei:
         utils.validate_config(cfg)
     assert needle in str(ei.value), str(ei.value)
+
+
+def test_validate_config_rejects_non_object_top_level():
+    with pytest.raises(ValueError, match="top level must be a JSON object"):
+        utils.validate_config([1, 2, 3])
+
+
+def test_load_or_seed_config_rejects_non_object_file(tmp_path):
+    (tmp_path / ".photos-ingest").mkdir()
+    with open(utils.config_path(str(tmp_path)), "w") as f:
+        json.dump([1, 2, 3], f)                                # valid JSON, but not an object
+    with pytest.raises(ValueError, match="must be a JSON object"):
+        utils.load_or_seed_config(str(tmp_path))
 
 
 def test_valid_edits_pass():
