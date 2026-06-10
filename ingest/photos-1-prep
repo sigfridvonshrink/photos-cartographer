@@ -686,51 +686,20 @@ class PlanExecutor:
                 "cli_options_fingerprint": plan.summary.get("cli_options_fingerprint"),
             })
 
-            # 3. ZFS Hook (Optional) — pre-mutation snapshot of the workspace dataset.
-            if CONFIG["zfs"].get("enabled", False):
-                snapshots_req = CONFIG["zfs"].get("snapshots_required", False)
-                prefix = CONFIG["zfs"].get("snapshot_prefix", "")
-                ds_cfg = CONFIG["zfs"].get("datasets", {}).get("workspace", "auto")
-                from photos_utils import detect_zfs_dataset
-                dataset = detect_zfs_dataset(self.workspace_root) if ds_cfg == "auto" else ds_cfg
-                if not dataset:
-                    msg = f"ZFS enabled but no dataset found for workspace {self.workspace_root}"
-                    if snapshots_req:
+            # 3. ZFS Hook (Optional) — pre-mutation snapshot of the workspace dataset (shared helper,
+            #    labelled "prep" so it never collides with calibration's "calibrate-" snapshot).
+            from photos_utils import take_zfs_snapshot
+            snap = take_zfs_snapshot(self.workspace_root, plan.plan_id, "prep")
+            if snap is not None:
+                if snap["snapshot_name"] is not None:          # a snapshot was attempted -> journal it
+                    journal.add_snapshot("workspace", command=snap["command"], exit_code=snap["exit_code"],
+                                         stdout=snap["stdout"], stderr=snap["stderr"],
+                                         required=snap["required"], snapshot_name=snap["snapshot_name"])
+                if not snap["ok"]:
+                    if snap["required"]:
                         journal.finish_journal("aborted_before_mutation")
-                        raise RuntimeError(f"{msg} and a snapshot is required.")
-                    print(f"Warning: {msg}; skipping snapshot.")
-                else:
-                    snap = f"{dataset}@{prefix}{plan.plan_id}"
-                    cmd = ["zfs", "snapshot", snap]
-                    try:
-                        res = subprocess.run(cmd, capture_output=True, text=True, check=True)
-                        journal.add_snapshot(
-                            "workspace",
-                            command=" ".join(cmd),
-                            exit_code=res.returncode,
-                            stdout=res.stdout,
-                            stderr=res.stderr,
-                            required=snapshots_req,
-                            snapshot_name=snap
-                        )
-                    except Exception as e:
-                        returncode = getattr(e, 'returncode', -1)
-                        stdout = getattr(e, 'stdout', '')
-                        stderr = getattr(e, 'stderr', str(e))
-                        journal.add_snapshot(
-                            "workspace",
-                            command=" ".join(cmd),
-                            exit_code=returncode,
-                            stdout=stdout,
-                            stderr=stderr,
-                            required=snapshots_req,
-                            snapshot_name=snap
-                        )
-                        if snapshots_req:
-                            journal.finish_journal("aborted_before_mutation")
-                            raise RuntimeError(f"ZFS snapshot failed and is required: {stderr}")
-                        else:
-                            print(f"Warning: ZFS snapshot failed: {stderr}")
+                        raise RuntimeError(f"ZFS snapshot required but failed: {snap['stderr']}")
+                    print(f"Warning: {snap['stderr'] or 'ZFS snapshot failed'}; skipping snapshot.")
 
             # 4. Execute Operations
             if plan.command != 'prep':
