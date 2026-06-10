@@ -14,23 +14,145 @@ model, GPX index, camera groups, the time/GPS decision artifacts, execution, and
 The script sits beside `photos_utils.py` and imports the shared infrastructure from it.
 """
 import argparse
+import hashlib
 import json
+import math
 import os
 import sys
+import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from photos_utils import (
     CONFIG, config_path, handoff_path, guard_path, is_sealed,
     validate_config, sha256_file, media_class_for_ext, folder_name,
+    selected_gpx_root, CAMERA_IDENTITY_FIELDS, FIELD_SET_VERSION,
     WorkspaceLock,
 )
 
 
+# ============================================================================
+# Stage 3 — GPX index (calibration spec §15). Mined from the archived monolith
+# (archive/reengineer/photos-ingest); GPX is calibration-only — prep is GPX-unaware
+# (shared contract §8.2). Stdlib xml.etree only; no new dependency.
+# ============================================================================
+
+def haversine(lat1, lon1, lat2, lon2):
+    """Great-circle distance between two lat/lon points, in metres."""
+    R = 6371000.0
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlmb = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2.0) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlmb / 2.0) ** 2
+    return R * (2.0 * math.atan2(math.sqrt(a), math.sqrt(1 - a)))
+
+
+class GPXPoint:
+    __slots__ = ("lat", "lon", "time_utc", "source_file", "point_index")
+
+    def __init__(self, lat, lon, time_utc, source_file, point_index):
+        self.lat = lat
+        self.lon = lon
+        self.time_utc = time_utc          # timezone-aware UTC datetime
+        self.source_file = source_file
+        self.point_index = point_index
+
+
+class GPXIndex:
+    """Deterministically ordered, fingerprinted index of all GPX track points under gpx_root.
+
+    Availability is recorded in `status` (disabled / missing / empty / usable). The `fingerprint`
+    is a SHA-256 over the root, each file's bytes, and each parsed point — it becomes an upstream
+    dependency of the time/GPS artifacts in later phases (§4–§6)."""
+
+    def __init__(self, gpx_root):
+        self.gpx_root = gpx_root
+        self.points = []
+        self.fingerprint = None
+        self.status = "disabled"
+        self.warnings = []
+
+    def build(self):
+        if not self.gpx_root:
+            self.status = "disabled"
+            self.fingerprint = hashlib.sha256(b"gpx-disabled-v1").hexdigest()
+            return self
+        if not os.path.isdir(self.gpx_root):
+            self.status = "missing"
+            self.warnings.append(f"Configured gpx_root does not exist or is not a directory: {self.gpx_root}")
+            self.fingerprint = hashlib.sha256(("gpx-missing|" + self.gpx_root).encode()).hexdigest()
+            return self
+
+        gpx_files = sorted(
+            (os.path.relpath(os.path.join(r, f), self.gpx_root), os.path.join(r, f))
+            for r, _d, files in os.walk(self.gpx_root) for f in files
+            if f.lower().endswith(".gpx"))
+
+        h = hashlib.sha256()
+        h.update(self.gpx_root.encode("utf-8"))
+        h.update(b"gpx-index-v1")
+        for rel, abs_path in gpx_files:
+            h.update(rel.encode("utf-8"))
+            try:
+                with open(abs_path, "rb") as f:
+                    h.update(hashlib.sha256(f.read()).digest())
+            except OSError as e:
+                self.warnings.append(f"Could not read GPX file {rel}: {e}")
+                continue
+            self._parse_file(rel, abs_path)
+
+        self.points.sort(key=lambda p: (p.time_utc, p.source_file, p.point_index))
+        for p in self.points:
+            h.update(p.time_utc.isoformat().encode("utf-8"))
+            h.update(f"{p.lat}|{p.lon}|{p.source_file}|{p.point_index}".encode("utf-8"))
+        self.fingerprint = h.hexdigest()
+        self.status = "usable" if self.points else "empty"
+        return self
+
+    def _parse_file(self, rel, abs_path):
+        try:
+            root = ET.parse(abs_path).getroot()
+        except ET.ParseError as e:
+            self.warnings.append(f"Malformed GPX XML in {rel}: {e}")
+            return
+        idx = 0
+        for elem in root.iter():
+            if not elem.tag.endswith("trkpt"):
+                continue
+            lat_s, lon_s = elem.attrib.get("lat"), elem.attrib.get("lon")
+            time_elem = next((c for c in elem if c.tag.endswith("time")), None)
+            if not lat_s or not lon_s or time_elem is None or not time_elem.text:
+                idx += 1
+                continue
+            try:
+                lat, lon = float(lat_s), float(lon_s)
+                if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+                    self.warnings.append(f"Out-of-range coordinate in {rel} at trkpt {idx}")
+                    idx += 1
+                    continue
+                ts = time_elem.text.strip()
+                if ts.endswith("Z"):
+                    dt = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+                else:
+                    dt = datetime.fromisoformat(ts)
+                    if dt.tzinfo is None:
+                        self.warnings.append(f"GPX time without timezone in {rel} at trkpt {idx}")
+                        idx += 1
+                        continue
+                    dt = dt.astimezone(timezone.utc)
+                self.points.append(GPXPoint(lat, lon, dt, rel, idx))
+            except ValueError as e:
+                self.warnings.append(f"Bad trkpt in {rel} at index {idx}: {e}")
+            idx += 1
+
+
 class CalibrationWorkflow:
-    """Stage 1 — validate the workspace is in a state calibration can run against."""
+    """Stages 1–4: validate the workspace, then build the in-memory model (by-dest files, GPX
+    index, classified camera groups) calibration reasons over. No JSON artifacts yet."""
 
     def __init__(self, workspace_root: str):
         self.workspace_root = workspace_root
+        self.handoff = None
 
     # --- preflight (calibration spec §7 / §13) -------------------------------
 
@@ -89,6 +211,7 @@ class CalibrationWorkflow:
             blockers.append(f"Prep handoff could not be read: {e}")
             return blockers, warnings, info
         info["handoff_sha256"] = sha256_file(ho_p)
+        self.handoff = handoff          # stashed for the model/group stages (Phase 2)
 
         sources = folder_name('sources')
         by_date = folder_name('photos_by_date')
@@ -185,6 +308,101 @@ class CalibrationWorkflow:
                 "recognizes the moved files (no re-fingerprint, no re-read) and refreshes the "
                 "handoff/cache, then calibration can proceed.")
 
+    # --- Stage 2: in-memory by-dest file model (calibration spec §14) --------
+
+    def build_file_model(self):
+        """One object per by-dest photo, built from the handoff's records (+ the EXIF prep already
+        extracted into metadata_status.parsed_json). Calibration never re-reads the file — a stale
+        handoff was already blocked (§13.1)."""
+        by_dest = folder_name('photos_by_dest')
+        files = []
+        for rec in (self.handoff.get("files") or []):
+            if rec.get("folder_class") != by_dest or rec.get("media_class") not in ("image", "raw"):
+                continue
+            md = rec.get("metadata_status") or {}
+            parsed = {}
+            if md.get("parsed_json"):
+                try:
+                    parsed = json.loads(md["parsed_json"])
+                except Exception:
+                    parsed = {}
+            ch = rec.get("content_hash")
+            try:
+                fp = json.loads(ch).get("value") if ch else None
+            except Exception:
+                fp = None
+            rel = rec.get("relative_path")
+            files.append({
+                "relative_path": rel,
+                "destination": os.path.dirname(rel),         # immediate containing folder (§10.1)
+                "size": rec.get("size"),
+                "mtime_ns": rec.get("mtime_ns"),
+                "content_fingerprint": fp,
+                "media_class": rec.get("media_class"),
+                "camera_group_key": md.get("camera_group_key") or parsed.get("camera_group_key") or "unknown",
+                "camera_identity": {k: parsed.get(k) for k in CAMERA_IDENTITY_FIELDS if parsed.get(k) is not None},
+                "source_naive_time": parsed.get("selected_source_naive_timestamp"),
+                "source_time_tag": parsed.get("selected_source_timestamp_tag"),
+                "raw_times": {k: parsed.get(k) for k in
+                              ("DateTimeOriginal", "CreateDate", "ModifyDate",
+                               "OffsetTimeOriginal", "OffsetTime", "TimeZone") if parsed.get(k) is not None},
+                "has_timestamp": bool(md.get("has_timestamp") if md.get("has_timestamp") is not None
+                                      else parsed.get("has_timestamp")),
+                "native_gps": ({"lat": parsed.get("GPSLatitude"), "lon": parsed.get("GPSLongitude"),
+                                "processing_method": parsed.get("GPSProcessingMethod")}
+                               if (md.get("has_native_gps") or parsed.get("has_native_gps")) else None),
+                "has_native_gps": bool(md.get("has_native_gps") if md.get("has_native_gps") is not None
+                                       else parsed.get("has_native_gps")),
+                "metadata_field_set_version": md.get("field_set_version", FIELD_SET_VERSION),
+                "folder_class": rec.get("folder_class"),
+                "planned_filename": None,                    # set during the rename lookahead (Phase 6)
+            })
+        files.sort(key=lambda f: f["relative_path"])
+        return files
+
+    # --- Stage 3: GPX index (calibration spec §15) ---------------------------
+
+    def load_gpx(self):
+        return GPXIndex(selected_gpx_root()).build()
+
+    # --- Stage 4: camera-group recognition + classification (§16) ------------
+
+    def recognize_camera_groups(self, files):
+        """Group the file objects by camera_group_key; classify each via config device_groups.
+        Returns (groups_by_key, unknown_keys). A camera_group_key listed in `phones` is a
+        smartphone (solved per-file); in `fixed_clock_cameras` a camera (needs a per-(group,
+        destination) offset); otherwise it is unknown and must be classified before calibration."""
+        dg = (CONFIG.get("camera_time_and_timezone_policy") or {}).get("device_groups") or {}
+        phones = set(dg.get("phones") or [])
+        fixed = set(dg.get("fixed_clock_cameras") or [])
+        groups = {}
+        for f in files:
+            key = f["camera_group_key"]
+            g = groups.get(key)
+            if g is None:
+                cls = "smartphone" if key in phones else ("camera" if key in fixed else "unknown")
+                g = groups[key] = {
+                    "camera_group_key": key, "camera_group_class": cls,
+                    "contributing_identity_fields": dict(f["camera_identity"]),
+                    "file_count": 0, "destinations": set(),
+                    "has_native_gps": 0, "missing_timestamp": 0, "timestamps": [],
+                }
+            g["file_count"] += 1
+            g["destinations"].add(f["destination"])
+            if f["has_native_gps"]:
+                g["has_native_gps"] += 1
+            if not f["has_timestamp"]:
+                g["missing_timestamp"] += 1
+            elif f["source_naive_time"]:
+                g["timestamps"].append(f["source_naive_time"])
+        for g in groups.values():
+            ts = sorted(g.pop("timestamps"))
+            g["destinations"] = sorted(g["destinations"])
+            g["earliest_source_time"] = ts[0] if ts else None
+            g["latest_source_time"] = ts[-1] if ts else None
+        unknown = sorted(k for k, g in groups.items() if g["camera_group_class"] == "unknown")
+        return groups, unknown
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -206,7 +424,8 @@ def main():
     print(f"Lock acquired: {run_lock.lock_path}", file=sys.stderr)
     try:
         if args.command == "run":
-            blockers, warnings, info = CalibrationWorkflow(workspace_root).preflight()
+            wf = CalibrationWorkflow(workspace_root)
+            blockers, warnings, info = wf.preflight()
             for w in warnings:
                 print(f"  Warning: {w}", file=sys.stderr)
             if blockers:
@@ -215,8 +434,33 @@ def main():
                     print(f"  - {b}", file=sys.stderr)
                 print("\nNo calibration JSON was written.", file=sys.stderr)
                 sys.exit(2)
-            print(f"Preflight passed — ready for calibration "
-                  f"({info.get('by_dest_photos', 0)} photo(s) under {folder_name('photos_by_dest')}/).")
+
+            # Stages 2–4: build the in-memory model calibration reasons over.
+            files = wf.build_file_model()
+            gpx = wf.load_gpx()
+            groups, unknown = wf.recognize_camera_groups(files)
+
+            if unknown:
+                print("\nCalibration cannot proceed: unknown camera group(s). Classify each in "
+                      "photos-00-config.json under camera_time_and_timezone_policy.device_groups — "
+                      "add to \"phones\" (smartphone) or \"fixed_clock_cameras\" (camera):\n",
+                      file=sys.stderr)
+                print('  "fixed_clock_cameras": [', file=sys.stderr)
+                for k in unknown:
+                    print(f'    {json.dumps(k)},', file=sys.stderr)
+                print("  ]\n", file=sys.stderr)
+                print("Then re-run. No calibration JSON was written.", file=sys.stderr)
+                sys.exit(2)
+
+            n_dest = len({f["destination"] for f in files})
+            by_class = {}
+            for g in groups.values():
+                by_class[g["camera_group_class"]] = by_class.get(g["camera_group_class"], 0) + 1
+            cls_summary = ", ".join(f"{n} {c}" for c, n in sorted(by_class.items())) or "none"
+            print(f"Model built: {len(files)} photo(s) across {n_dest} destination(s); "
+                  f"{len(groups)} camera group(s) ({cls_summary}); "
+                  f"GPX {gpx.status} ({len(gpx.points)} point(s), fp {(gpx.fingerprint or '')[:12]}).")
+            print("Time decisions (photos-21) are the next phase — no JSON written yet.")
     finally:
         run_lock.release()
 
