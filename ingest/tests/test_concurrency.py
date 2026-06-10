@@ -240,7 +240,7 @@ def test_quiet_plan_executor_execution(mock_validate, mock_popen, workspace):
     assert 'current_phase' not in handoff_data
     assert 'counters' not in handoff_data
 
-    assert handoff_data['plan_id'] == "test_plan_id"
+    assert handoff_data['run_metadata']['plan_id'] == "test_plan_id"
 
 def test_cli_jobs_argparse(workspace):
     import subprocess
