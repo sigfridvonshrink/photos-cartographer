@@ -57,6 +57,25 @@ def test_valid_edits_pass():
                                gpx_direct_match_max_seconds=0))
 
 
+# --- destination_distribution_subfolders (calibration §7.1 dev-subfolder gate) ----------------
+
+def test_distribution_subfolders_default_valid():
+    assert utils.CONFIG["destination_distribution_subfolders"] == ["jpg", "tif"]
+    utils.validate_config(_cfg(destination_distribution_subfolders=["jpg", "tif", "webp"]))
+
+
+@pytest.mark.parametrize("bad, needle", [
+    ("jpg", "non-empty list"),
+    ([], "non-empty list"),
+    (["a/b"], "single path component"),
+    (["jpg", ""], "single path component"),
+])
+def test_distribution_subfolders_rejects_bad(bad, needle):
+    with pytest.raises(ValueError) as ei:
+        utils.validate_config({"destination_distribution_subfolders": bad})
+    assert needle in str(ei.value), str(ei.value)
+
+
 # --- library-merge config (G5.4; deep validation is the merge phase's, shared §4.3/§14.1) ----
 
 def test_merge_block_seeded_and_default_valid():
