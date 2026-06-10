@@ -38,7 +38,7 @@ requires_exiftool = pytest.mark.skipif(
 def _make_ws(tmp_path):
     ws = tmp_path / "workspace"
     ws.mkdir()
-    for d in ("0-sources", "2-missing-metadata", "3-redundant-jpgs",
+    for d in ("0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
               "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"):
         (ws / d).mkdir()
     (ws / ".photos-ingest").mkdir(exist_ok=True); (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
