@@ -1047,6 +1047,13 @@ class PlanExecutor:
                     os.makedirs(os.path.dirname(target_handoff_path), exist_ok=True)
                     try:
                         write_json_artifact(target_handoff_path, handoff)
+                        # Belt-and-suspenders (§16): the just-written handoff must re-read to the SAME
+                        # content_fingerprint, or calibration's recompute would mismatch — which can only
+                        # happen if a non-round-trip-stable field crept into the handoff. Fail loudly here
+                        # rather than ship a handoff calibration would (silently) treat as forever-stale.
+                        with open(target_handoff_path) as _hf:
+                            if handoff_content_fingerprint(json.load(_hf)) != handoff["content_fingerprint"]:
+                                raise RuntimeError("handoff content_fingerprint is not round-trip stable")
                         if plan.summary and "performance_and_cache" in plan.summary:
                             plan.summary["performance_and_cache"]["handoff_written_after_successful_validation"] = True
                         self.coordinator.finish_phase()
