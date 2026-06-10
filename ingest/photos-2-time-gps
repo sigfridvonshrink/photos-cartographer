@@ -33,6 +33,7 @@ from photos_utils import (
     selected_gpx_root, CAMERA_IDENTITY_FIELDS, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION,
     json_dependency, verify_json_dependency, write_json_artifact, db_path, ensure_control_dir,
     journal_path, ContentHasher, _move_no_clobber,
+    prep_log_path, prep_db_snapshot_path, write_db_snapshot,
     WorkspaceLock,
 )
 
@@ -40,6 +41,9 @@ TIME_DECISIONS_ARTIFACT = "photos-21-time-decisions.json"
 GPS_DECISIONS_ARTIFACT = "photos-22-gps-decisions.json"
 EXECUTABLE_PLAN_ARTIFACT = "photos-23-executable-plan.json"
 EXECUTION_SUMMARY_ARTIFACT = "photos-24-execution-summary.json"
+COMPLETE_LOG_ARTIFACT = "photos-25-complete-log.json"
+CALIBRATE_DB_SNAPSHOT = "photos-25-calibrate-ingest.db"
+ARCHIVE_MANIFEST_ARTIFACT = "photos-25-archive-manifest.json"
 
 
 def time_decisions_path(ws):
@@ -56,6 +60,18 @@ def executable_plan_path(ws):
 
 def execution_summary_path(ws):
     return os.path.join(ws, CONTROL_DIR, EXECUTION_SUMMARY_ARTIFACT)
+
+
+def complete_log_path(ws):
+    return os.path.join(ws, CONTROL_DIR, COMPLETE_LOG_ARTIFACT)
+
+
+def calibrate_db_snapshot_path(ws):
+    return os.path.join(ws, CONTROL_DIR, CALIBRATE_DB_SNAPSHOT)
+
+
+def archive_manifest_path(ws):
+    return os.path.join(ws, CONTROL_DIR, ARCHIVE_MANIFEST_ARTIFACT)
 
 
 # ============================================================================
@@ -731,6 +747,70 @@ def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename, cfg):
         ops.append(_make_op("rename_no_clobber", rel, "destination-local timestamp name",
                             {"from": rename["current_name"], "to": rename["planned_name"]}, pre))
     return ops
+
+
+# ============================================================================
+# Stage 11 — finalize: the photos-25 transformation log (shared contract §13.3).
+# Prep's per-photo log carried forward + calibration steps appended. A derived
+# consolidation of artifacts already written — no new authority.
+# ============================================================================
+
+def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, ledger):
+    """photos-25-complete-log.json's `photos` (§13.3): a deep copy of prep's per-photo, content-
+    fingerprint-keyed journeys with each calibrated photo's `phase:"calibrate"` steps APPENDED — a
+    strict superset of the prep log, derived from photos-21 / the resolved-UTC cache / photos-23 /
+    the ledger. Deterministic, fingerprint-keyed. The prep file itself is never edited."""
+    photos = json.loads(json.dumps(prep_photos or {}))            # deep copy; never touch the prep file
+    row_by_rel = {r["relative_path"]: r for r in resolved_rows}
+    t_dests = (time_artifact or {}).get("destinations") or {}
+    pre_by_fp = {e["content_fingerprint"]: e["pre_state"] for e in (ledger or [])}
+    ops_by_rel = {}
+    for dd in (plan.get("destinations") or {}).values():
+        for op in dd.get("operations") or []:
+            ops_by_rel.setdefault(op["relative_path"], []).append(op)
+
+    for f in sorted(files, key=lambda x: x["relative_path"]):
+        fp = f.get("content_fingerprint")
+        if not fp:
+            continue
+        rel, dest, group = f["relative_path"], f["destination"], f["camera_group_key"]
+        entry = photos.setdefault(fp, {"content_fingerprint": fp, "journey": []})
+        steps = entry.setdefault("journey", [])
+        row = row_by_rel.get(rel) or {}
+        ops = ops_by_rel.get(rel) or []
+
+        if row.get("time_rule_used") == "camera_group_offset" and row.get("utc_offset_used") is not None:
+            steps.append({"phase": "calibrate", "action": "clock_offset_applied",
+                          "offset_seconds": row["utc_offset_used"],
+                          "because": f"photos-21 destinations.{dest}.camera_group_time_decisions.{group}"})
+        if row.get("resolved_utc"):
+            steps.append({"phase": "calibrate", "action": "resolved_utc", "value": row["resolved_utc"]})
+        tz = ((t_dests.get(dest, {}).get("destination_timezone")) or {}).get("effective_iana_timezone")
+        if tz:
+            steps.append({"phase": "calibrate", "action": "timezone_resolved", "value": tz,
+                          "because": f"photos-21 destinations.{dest}.destination_timezone"})
+
+        revert_op = next((o for o in ops if o["type"] == "revert_manual_gps"), None)
+        gps_op = next((o for o in ops if o["type"] == "metadata_gps_write"), None)
+        marker = next((o for o in ops if o["type"] == "gps_marker_write"), None)
+        if revert_op is not None:
+            steps.append({"phase": "calibrate", "action": "gps_reverted",
+                          "pre_state": revert_op.get("pre_state") or pre_by_fp.get(fp)})
+        elif gps_op is not None:
+            w = gps_op.get("writes") or {}
+            step = {"phase": "calibrate", "action": "gps_written", "lat": w.get("GPSLatitude"),
+                    "lon": w.get("GPSLongitude"), "origin": gps_op.get("gps_origin"),
+                    "gps_processing_method": (marker.get("writes") or {}).get("GPSProcessingMethod") if marker else None}
+            if gps_op.get("gps_origin") == "apply_manual" and fp in pre_by_fp:
+                step["pre_state"] = pre_by_fp[fp]
+            steps.append(step)
+        elif f.get("has_native_gps"):
+            steps.append({"phase": "calibrate", "action": "gps_preserved"})
+
+        rename_op = next((o for o in ops if o["type"] == "rename_no_clobber"), None)
+        if rename_op is not None:
+            steps.append({"phase": "calibrate", "action": "final_rename", "to": rename_op["to"]})
+    return photos
 
 
 class CalibrationWorkflow:
@@ -1651,6 +1731,79 @@ class CalibrationWorkflow:
             "run_metadata": {"execution_id": execution_id, "finished_at": now_iso, "jobs": jobs},
         }
 
+    # --- Stage 11: finalize + archive (§31 / shared §13) ---------------------
+
+    _ARCHIVE_ITEMS = ["photos-00-config.json", "photos-11-handoff.json", "photos-15-prep-log.json",
+                      "photos-15-prep-ingest.db", TIME_DECISIONS_ARTIFACT, GPS_DECISIONS_ARTIFACT,
+                      EXECUTABLE_PLAN_ARTIFACT, EXECUTION_SUMMARY_ARTIFACT, COMPLETE_LOG_ARTIFACT,
+                      CALIBRATE_DB_SNAPSHOT, "photos-00-ingest.db"]
+
+    def finalize_package(self, now_iso):
+        """Stage 11 (§31): assemble the durable archival package — the photos-25 transformation log,
+        an end-of-calibration DB snapshot, and a manifest. Non-destructive (only NEW files; never
+        mutates an artifact, photo, or the live DB). Returns blockers (empty = package written)."""
+        ws = self.workspace_root
+        if not os.path.exists(executable_plan_path(ws)):
+            return [f"No {EXECUTABLE_PLAN_ARTIFACT} — run `run` then `execute` first."]
+        if not os.path.exists(execution_summary_path(ws)):
+            return [f"No {EXECUTION_SUMMARY_ARTIFACT} — `execute` the plan first."]
+        plan = json.load(open(executable_plan_path(ws)))
+        summary = json.load(open(execution_summary_path(ws)))
+        blk = []
+        if plan.get("status") != "ready":
+            blk.append(f"{EXECUTABLE_PLAN_ARTIFACT} status is {plan.get('status')!r}, not 'ready'.")
+        if summary.get("status") != "success":
+            blk.append(f"{EXECUTION_SUMMARY_ARTIFACT} status is {summary.get('status')!r}, not 'success' "
+                       "— resolve execution first.")
+        if plan.get("plan_id") != summary.get("plan_id"):
+            blk.append(f"{EXECUTION_SUMMARY_ARTIFACT} does not summarize the current "
+                       f"{EXECUTABLE_PLAN_ARTIFACT} (plan_id mismatch) — re-execute.")
+        if blk:
+            return blk
+
+        files = self.build_file_model()
+        cache = CalibrationCache(ws)
+        try:
+            rows, ledger = cache.get_rows(), cache.ledger_all()
+        finally:
+            cache.close()
+        time_artifact = json.load(open(time_decisions_path(ws)))
+        prep_photos = {}
+        if os.path.exists(prep_log_path(ws)):
+            try:
+                prep_photos = (json.load(open(prep_log_path(ws))) or {}).get("photos", {}) or {}
+            except Exception:
+                prep_photos = {}
+        photos = build_complete_log(prep_photos, files, rows, time_artifact, plan, ledger)
+        write_json_artifact(complete_log_path(ws),
+                            {"schema_version": 1, "tool": "photos-2-time-gps", "photos": photos})
+
+        conn = sqlite3.connect(db_path(ws))
+        try:
+            write_db_snapshot(conn, calibrate_db_snapshot_path(ws))   # §13.4a: consistent, atomic
+        finally:
+            conn.close()
+
+        write_json_artifact(archive_manifest_path(ws), self._archive_manifest(plan, summary, now_iso))
+        return []
+
+    def _archive_manifest(self, plan, summary, now_iso):
+        ws = self.workspace_root
+        contents = {}
+        for name in self._ARCHIVE_ITEMS:
+            p = os.path.join(ws, CONTROL_DIR, name)
+            if os.path.exists(p):
+                contents[name] = {"path": os.path.relpath(p, ws), "sha256": sha256_file(p)}
+        return {
+            "artifact_type": "archive_manifest", "artifact_name": ARCHIVE_MANIFEST_ARTIFACT,
+            "schema_version": 1,
+            "workspace": os.path.basename(os.path.abspath(ws)),
+            "plan_id": plan.get("plan_id"),
+            "execution_id": (summary.get("run_metadata") or {}).get("execution_id"),
+            "contents": contents,
+            "run_metadata": {"generated_at": now_iso},
+        }
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -1660,6 +1813,7 @@ def main():
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("run", help="Plan the calibration pass: produce photos-21/22/23 (no mutation).")
     sub.add_parser("execute", help="Apply photos-23 to the originals (metadata writes + renames).")
+    sub.add_parser("finalize", help="Bundle the durable archival package (photos-25; non-destructive).")
     args = parser.parse_args()
 
     workspace_root = os.getcwd()
@@ -1832,6 +1986,27 @@ def main():
                 print(f"Review {EXECUTION_SUMMARY_ARTIFACT} and re-run `execute` once resolved.",
                       file=sys.stderr)
                 sys.exit(3)
+
+        elif args.command == "finalize":
+            wf = CalibrationWorkflow(workspace_root)
+            blockers, warnings, info = wf.preflight(for_execute=True)
+            for w in warnings:
+                print(f"  Warning: {w}", file=sys.stderr)
+            if blockers:
+                print("\nFinalize cannot proceed:", file=sys.stderr)
+                for b in blockers:
+                    print(f"  - {b}", file=sys.stderr)
+                sys.exit(2)
+            now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            fin_blockers = wf.finalize_package(now_iso)
+            if fin_blockers:
+                print("\nCannot finalize — calibration has not ended successfully:", file=sys.stderr)
+                for b in fin_blockers:
+                    print(f"  - {b}", file=sys.stderr)
+                sys.exit(2)
+            print(f"Finalized: wrote {COMPLETE_LOG_ARTIFACT}, {CALIBRATE_DB_SNAPSHOT}, and "
+                  f"{ARCHIVE_MANIFEST_ARTIFACT} to {CONTROL_DIR}/. The archival package is ready to "
+                  "copy to permanent storage (calibration does not seal or merge).")
     finally:
         run_lock.release()
 
