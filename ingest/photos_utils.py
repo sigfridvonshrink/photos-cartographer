@@ -247,19 +247,33 @@ def json_dependency(name: str, ws: str, abs_path: str) -> dict:
     return {"dependency_type": "json_artifact", "artifact_name": name,
             "artifact_path": os.path.relpath(abs_path, ws), "sha256": sha256_file(abs_path)}
 
+# Per-run audit keys that describe THIS run, not the organized workspace state, and so must NOT enter
+# the handoff content fingerprint — they change run to run even when the result does not (§16.2):
+# the top-level run_metadata/diagnostics/content_fingerprint + the execution-journal pointer, and —
+# nested inside camera_groups / destination_folders — the cache-freshness counts (extracted-vs-reused
+# flips on a no-op re-run) and the conflicts/duplicates (only populated on the run that quarantined).
+_HANDOFF_VOLATILE_KEYS = frozenset({
+    "run_metadata", "content_fingerprint", "diagnostics", "execution_journal",
+    "cache_freshness", "conflicts_or_duplicates",
+})
+
+def _strip_handoff_volatile(obj):
+    if isinstance(obj, dict):
+        return {k: _strip_handoff_volatile(v) for k, v in obj.items() if k not in _HANDOFF_VOLATILE_KEYS}
+    if isinstance(obj, list):
+        return [_strip_handoff_volatile(x) for x in obj]
+    return obj
+
 def handoff_content_fingerprint(handoff: dict) -> str:
-    """SHA-256 over the DETERMINISTIC content of the prep handoff (§16) — the file inventory, camera
-    groups, folder mutability, and the config/extractor/cache fingerprints — EXCLUDING the per-run
-    audit (`run_metadata`, `diagnostics`, the execution-journal pointer) and the `content_fingerprint`
-    field itself. Byte-stable for a given workspace state, so a no-op prep re-run (which only refreshes
-    run metadata) leaves it unchanged and never restales calibration's downstream artifacts. The whole-
-    file SHA-256 remains the archival-integrity hash (§13), not the staleness trigger (§6.5)."""
-    h = json.loads(json.dumps(handoff))                # deep copy; never mutate the caller's dict
-    for k in ("run_metadata", "content_fingerprint", "diagnostics"):
-        h.pop(k, None)
-    if isinstance(h.get("depends_on"), dict):
-        h["depends_on"].pop("execution_journal", None)
-    return hashlib.sha256(json.dumps(h, sort_keys=True).encode("utf-8")).hexdigest()
+    """SHA-256 over the DETERMINISTIC content of the prep handoff (§16.2) — the file inventory, camera-
+    group identity, folder mutability, and the cache/config/extractor fingerprints — with every per-run
+    AUDIT field recursively removed (`run_metadata`, `diagnostics`, the execution-journal pointer, the
+    `content_fingerprint` field itself, and the nested `cache_freshness` / `conflicts_or_duplicates`).
+    Byte-stable for a given workspace state, so a no-op prep re-run (which only refreshes run metadata
+    and freshness counts) leaves it unchanged and never restales calibration's downstream artifacts.
+    The whole-file SHA-256 stays the archival-integrity hash (§13), not the staleness trigger (§4.2)."""
+    return hashlib.sha256(
+        json.dumps(_strip_handoff_volatile(handoff), sort_keys=True).encode("utf-8")).hexdigest()
 
 def verify_json_dependency(dep: dict, ws: str) -> bool:
     """Re-read the named JSON dependency from disk and re-hash its exact bytes, returning True iff
