@@ -550,6 +550,57 @@ def _nearest_ancestor(dest, eff, key):
     return None
 
 
+# ============================================================================
+# Stage 9 — no-clobber timestamp rename planning (calibration §26/§27). Pure,
+# exhaustively unit-tested. Filenames are destination-LOCAL civil time, never
+# raw camera time or UTC; every on-disk + planned name is permanently occupied.
+# ============================================================================
+
+def destination_local_basename(resolved_utc, tz, fmt, ext):
+    """The destination-local timestamp filename '<stamp><ext>' for a file (§26), or None when it can
+    not be positioned (no valid resolved UTC, or no destination timezone). The stamp is resolved UTC
+    converted to the destination civil timezone and formatted with `fmt` (the shared
+    filename_timestamp_format). `ext` is the file's current extension, including the leading dot."""
+    dt = _parse_utc(resolved_utc)
+    if dt is None or not tz:
+        return None
+    return _parse_utc(resolved_utc).astimezone(zoneinfo.ZoneInfo(tz)).strftime(fmt) + (ext or "")
+
+
+def _allocate_name(stem, ext, occupied):
+    """First free '<stem><ext>' / '<stem>-NNN<ext>' not in `occupied` (compared case-insensitively),
+    added to `occupied` and returned — the deterministic no-clobber suffix allocation (§27)."""
+    cand = stem + ext
+    idx = 0
+    while cand.lower() in occupied:
+        idx += 1
+        cand = f"{stem}-{idx:03d}{ext}"
+    occupied.add(cand.lower())
+    return cand
+
+
+def plan_renames(files, fmt):
+    """Plan no-clobber timestamp renames for the files of ONE destination (§27). Returns
+    {relative_path, current_name, planned_name, rename} per file, in relative_path order. EVERY
+    file's current name is seeded as permanently occupied and never freed — a name a file will
+    vacate is still treated as taken, so two files that would trade timestamps both land on distinct
+    suffixed names rather than risking a clobber. A file with no positionable timestamp keeps its
+    name (no rename); the unplaceable case is surfaced as a blocker by the executable-plan stage."""
+    occupied = {os.path.basename(f["relative_path"]).lower() for f in files}
+    out = []
+    for f in sorted(files, key=lambda x: x["relative_path"]):
+        rel = f["relative_path"]
+        name = os.path.basename(rel)
+        ext = os.path.splitext(name)[1]
+        base = destination_local_basename(f.get("resolved_utc"), f.get("destination_timezone"), fmt, ext)
+        if base is None or name.lower() == base.lower():
+            out.append({"relative_path": rel, "current_name": name, "planned_name": name, "rename": False})
+            continue
+        planned = _allocate_name(os.path.splitext(base)[0], ext, occupied)
+        out.append({"relative_path": rel, "current_name": name, "planned_name": planned, "rename": True})
+    return out
+
+
 class CalibrationWorkflow:
     """Stages 1–7: validate the workspace, build the model, produce photos-21-time-decisions.json,
     and (when decisions are complete) compute & persist resolved UTC per file."""
