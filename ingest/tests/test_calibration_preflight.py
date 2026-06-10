@@ -157,11 +157,14 @@ def _main(monkeypatch, ws):
 
 
 def test_main_clean_passes_and_holds_lock(tmp_path, monkeypatch, capsys):
+    # The minimal fixture's handoff records carry no folder_class/metadata, so the by-dest model
+    # is empty here (the rich model path is exercised in test_calibration_model.py). Preflight
+    # passes and main() advances into the Stage 2-4 build, holding the lock throughout.
     code = _main(monkeypatch, _ws(tmp_path))
     out = capsys.readouterr()
     assert code == 0, out.err
     assert "Lock acquired" in out.err
-    assert "Preflight passed" in out.out
+    assert "Model built" in out.out
 
 
 def test_main_blocker_exits_2(tmp_path, monkeypatch, capsys):
