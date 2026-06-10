@@ -21,7 +21,7 @@ import os
 import sys
 import xml.etree.ElementTree as ET
 import zoneinfo
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from photos_utils import (
@@ -166,6 +166,135 @@ def _valid_iana(tz):
 def _valid_offset(v):
     """True iff `v` is a finite number of seconds within +/- one day (calibration §9.2)."""
     return isinstance(v, (int, float)) and not isinstance(v, bool) and abs(v) <= 86400
+
+
+# ============================================================================
+# Stage 5 — GPX/native-GPS time-anchor inference (calibration §19). Pure helpers
+# (plain inputs, no I/O) so the geometry/ranking is exhaustively unit-testable.
+# ============================================================================
+
+def _parse_camera_naive(s):
+    """The camera's naive capture time ('YYYY:MM:DD HH:MM:SS') as a naive datetime, or None."""
+    try:
+        return datetime.strptime((s or "")[:19], "%Y:%m:%d %H:%M:%S")
+    except (ValueError, TypeError):
+        return None
+
+
+def _parse_utc(s):
+    """An ISO-8601 UTC datetime (trailing Z accepted) as an aware datetime, or None."""
+    try:
+        return datetime.fromisoformat((s or "").replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        return None
+
+
+def _equirect_xy(lat, lon, lat0, lon0):
+    """Local equirectangular projection of (lat,lon) to metres about (lat0,lon0)."""
+    R = 6371000.0
+    x = math.radians(lon - lon0) * math.cos(math.radians(lat0)) * R
+    y = math.radians(lat - lat0) * R
+    return x, y
+
+
+def _point_to_segment(plat, plon, alat, alon, blat, blon):
+    """Distance (metres) from point P to segment A-B, and the clamped projection fraction t∈[0,1]
+    (0 at A, 1 at B), in a local plane about A. A zero-length segment yields the distance to A."""
+    bx, by = _equirect_xy(blat, blon, alat, alon)
+    px, py = _equirect_xy(plat, plon, alat, alon)
+    seg2 = bx * bx + by * by
+    if seg2 == 0.0:
+        return math.hypot(px, py), 0.0
+    t = max(0.0, min(1.0, (px * bx + py * by) / seg2))
+    return math.hypot(px - t * bx, py - t * by), t
+
+
+def _candidate(match_type, gpx_time, distance, src, naive, dur):
+    offset = round((gpx_time.replace(tzinfo=None) - naive).total_seconds())
+    return {"match_type": match_type, "gpx_time": gpx_time, "distance_m": round(distance, 2),
+            "gpx_file": src, "offset_seconds": int(offset),
+            "segment_duration_seconds": (round(dur) if dur is not None else None)}
+
+
+def match_frame_to_gpx(frame, gpx, cfg):
+    """Best GPX time-anchor candidate for one native-GPS frame (§19.1), or None. Prefers a close
+    GPX point; else the closest valid short segment (time interpolated by position projection)."""
+    ng = frame.get("native_gps") or {}
+    naive = _parse_camera_naive(frame.get("source_naive_time"))
+    if ng.get("lat") is None or ng.get("lon") is None or naive is None or not gpx.points:
+        return None
+    flat, flon = float(ng["lat"]), float(ng["lon"])
+    pt_max = cfg["gpx_anchor_max_point_distance_meters"]
+    seg_max = cfg["gpx_anchor_max_segment_distance_meters"]
+    gap_max = cfg["gpx_interpolation_max_gap_seconds"]
+
+    best_pt = None
+    for p in gpx.points:
+        d = haversine(flat, flon, p.lat, p.lon)
+        if d <= pt_max and (best_pt is None or d < best_pt[0]):
+            best_pt = (d, p)
+    if best_pt is not None:
+        d, p = best_pt
+        return _candidate("gpx_point_match", p.time_utc, d, p.source_file, naive, None)
+
+    best_seg = None
+    pts = gpx.points
+    for i in range(len(pts) - 1):
+        a, b = pts[i], pts[i + 1]
+        dur = (b.time_utc - a.time_utc).total_seconds()
+        if dur <= 0 or dur > gap_max:
+            continue
+        dist, t = _point_to_segment(flat, flon, a.lat, a.lon, b.lat, b.lon)
+        if dist <= seg_max and (best_seg is None or dist < best_seg[0]):
+            best_seg = (dist, a.time_utc + timedelta(seconds=t * dur), a.source_file, dur)
+    if best_seg is not None:
+        dist, seg_time, src, dur = best_seg
+        return _candidate("gpx_segment_interpolation", seg_time, dist, src, naive, dur)
+    return None
+
+
+def infer_anchor_proposal(frames, gpx, cfg):
+    """Rank (never average) all native-GPS frames' GPX matches for one (camera group, destination)
+    into a single recommended clock-offset proposal (§19.2/§19.3), or None if nothing anchors. The
+    best is point-before-segment, then closest; the rest are supporting/conflicting evidence."""
+    cands = []
+    for f in frames:
+        c = match_frame_to_gpx(f, gpx, cfg)
+        if c:
+            cands.append(dict(c, source_file=f.get("relative_path"), native_gps=f.get("native_gps"),
+                              camera_source_naive_time=f.get("source_naive_time")))
+    if not cands:
+        return None
+    cands.sort(key=lambda c: (0 if c["match_type"] == "gpx_point_match" else 1,
+                              c["distance_m"], c["source_file"] or ""))
+    best = cands[0]
+    spread = cfg["gpx_anchor_offset_spread_max_seconds"]
+    supporting = [c for c in cands[1:] if abs(c["offset_seconds"] - best["offset_seconds"]) <= spread]
+    conflicting = [c for c in cands[1:] if abs(c["offset_seconds"] - best["offset_seconds"]) > spread]
+    if conflicting:
+        confidence = "review_required"
+    elif supporting or best["match_type"] == "gpx_point_match":
+        confidence = "high"
+    else:
+        confidence = "medium"
+    anchors = [{"proposal_id": f"anchor-{i + 1:03d}", "source_file": c["source_file"],
+                "camera_source_naive_time": c["camera_source_naive_time"], "native_gps": c["native_gps"],
+                "gpx_match": {"match_type": c["match_type"], "gpx_file": c["gpx_file"],
+                              "distance_m": c["distance_m"],
+                              "segment_duration_seconds": c["segment_duration_seconds"]},
+                "proposed_offset_seconds": c["offset_seconds"]} for i, c in enumerate(cands)]
+    return {
+        "proposal_source": "gpx_self_anchor",
+        "proposed_offset_seconds": best["offset_seconds"],
+        "proposed_real_utc": best["gpx_time"].strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "confidence": confidence,
+        "rank": "recommended",
+        "recommended_gpx_match": {"match_type": best["match_type"], "gpx_file": best["gpx_file"],
+                                  "distance_m": best["distance_m"],
+                                  "segment_duration_seconds": best["segment_duration_seconds"]},
+        "anchor_count": len(cands), "supporting_count": len(supporting),
+        "conflicting_count": len(conflicting), "anchors": anchors,
+    }
 
 
 class CalibrationWorkflow:
@@ -430,12 +559,13 @@ class CalibrationWorkflow:
 
     # --- Stages 5–6: time decisions (photos-21, §17–§21) ---------------------
 
-    def build_time_decisions(self, files, groups, prior):
+    def build_time_decisions(self, files, groups, prior, gpx):
         """Build/regenerate the photos-21 content: per-destination civil timezone (§18) + per-
         (camera group, destination) clock-offset cells (§10.2), through the decision-field /
-        auto-resolution / rerun-preservation engine (§9). 3a's offset proposal is 'manual_required'
-        (the GPX ranking inference is Phase 3b). Returns (artifact, blockers); blockers come from
-        sanity-validating preserved authored values (§9.2) and mean "do not overwrite — fix first"."""
+        auto-resolution / rerun-preservation engine (§9). The offset cell's proposal is the §19
+        GPX self-anchor when one can be inferred (else manual-required). Returns (artifact,
+        blockers); blockers come from sanity-validating preserved authored values (§9.2) and mean
+        "do not overwrite — fix first"."""
         blockers = []
         prior_dests = ((prior or {}).get("destinations")) or {}
         by_dest = {}
@@ -453,7 +583,8 @@ class CalibrationWorkflow:
                 g = groups.get(key) or {}
                 if g.get("camera_group_class") != "camera":
                     continue                       # smartphones are solved per-file; no offset cell
-                cells[key] = self._offset_cell(dest, key, g, prior_cells.get(key) or {}, blockers)
+                frames = [f for f in by_dest[dest] if f["camera_group_key"] == key and f.get("native_gps")]
+                cells[key] = self._offset_cell(dest, key, g, prior_cells.get(key) or {}, frames, gpx, blockers)
             destinations[dest] = {
                 "destination_path": dest,
                 "destination_timezone": tz_block,
@@ -504,12 +635,18 @@ class CalibrationWorkflow:
             "stale_user_decision": stale,
         }
 
-    def _offset_cell(self, dest, key, g, prior_cell, blockers):
+    def _offset_cell(self, dest, key, g, prior_cell, frames, gpx, blockers):
+        proposal = infer_anchor_proposal(frames, gpx, CONFIG) or {"proposal_source": "manual_required"}
+        has_prop = proposal.get("proposal_source") == "gpx_self_anchor"
+        conflicting = proposal.get("conflicting_count", 0) > 0
+        policy = CONFIG.get("camera_time_and_timezone_policy") or {}
+
         ud = prior_cell.get("user_decision") or {}
         accept = bool(ud.get("accept_proposal", False))
         manual_off = ud.get("manual_offset_seconds", "")
         manual_utc = ud.get("manual_real_utc", "") or ""
-        effective, stale = "", False
+        effective, stale, decision_mode = "", False, None
+
         if manual_off != "" and manual_off is not None:
             if _valid_offset(manual_off):
                 effective = {"offset_seconds": int(manual_off), "source": "manual"}
@@ -517,17 +654,33 @@ class CalibrationWorkflow:
                 blockers.append(f"{dest}: camera_group_time_decisions[{key}].user_decision."
                                 "manual_offset_seconds must be a number within +/-86400.")
         elif manual_utc:
-            try:
-                datetime.fromisoformat(manual_utc.replace("Z", "+00:00"))   # parse-checked; used in 3b
-            except ValueError:
+            dt = _parse_utc(manual_utc)
+            if dt is None:
                 blockers.append(f"{dest}: camera_group_time_decisions[{key}].user_decision."
                                 f"manual_real_utc {manual_utc!r} is not a valid UTC datetime.")
+            elif has_prop and proposal["anchors"]:
+                # derive the (group,dest) offset from the recommended anchor's camera naive time
+                naive = _parse_camera_naive(proposal["anchors"][0]["camera_source_naive_time"])
+                if naive is not None:
+                    effective = {"offset_seconds": round((dt.replace(tzinfo=None) - naive).total_seconds()),
+                                 "source": "manual_real_utc"}
         elif accept:
-            stale = True                           # 3a has no machine proposal to accept yet (Phase 3b)
-        return {
+            if has_prop:
+                effective = {"offset_seconds": proposal["proposed_offset_seconds"], "source": "gpx_anchor_accepted"}
+            else:
+                stale = True                       # accepted a proposal that does not exist
+        elif has_prop and not conflicting:
+            # auto-resolution under the config flags (§9.1)
+            n = proposal["anchor_count"]
+            if (n >= 2 and policy.get("multi_anchor_auto_apply", True)) or \
+               (n == 1 and policy.get("single_anchor_auto_apply", False)):
+                effective = {"offset_seconds": proposal["proposed_offset_seconds"], "source": "gpx_anchor_auto"}
+                decision_mode = "auto_resolved"
+
+        cell = {
             "camera_group": key,
             "camera_group_class": g.get("camera_group_class", "camera"),
-            "proposal": {"proposal_source": "manual_required"},
+            "proposal": proposal,
             "user_decision": {"accept_proposal": accept,
                               "manual_offset_seconds": manual_off if manual_off is not None else "",
                               "manual_real_utc": manual_utc},
@@ -535,6 +688,9 @@ class CalibrationWorkflow:
             "requires_user_input": effective == "",
             "stale_user_decision": stale,
         }
+        if decision_mode:
+            cell["decision_mode"] = decision_mode
+        return cell
 
     def _time_depends_on(self):
         policy = json.dumps((CONFIG.get("camera_time_and_timezone_policy") or {}), sort_keys=True)
@@ -615,7 +771,7 @@ def main():
                         prior = json.load(f)
                 except Exception:
                     prior = None
-            artifact, td_blockers = wf.build_time_decisions(files, groups, prior)
+            artifact, td_blockers = wf.build_time_decisions(files, groups, prior, gpx)
             if td_blockers:
                 print("\nCalibration cannot proceed: invalid value(s) in photos-21-time-decisions.json:",
                       file=sys.stderr)
