@@ -247,6 +247,20 @@ def json_dependency(name: str, ws: str, abs_path: str) -> dict:
     return {"dependency_type": "json_artifact", "artifact_name": name,
             "artifact_path": os.path.relpath(abs_path, ws), "sha256": sha256_file(abs_path)}
 
+def handoff_content_fingerprint(handoff: dict) -> str:
+    """SHA-256 over the DETERMINISTIC content of the prep handoff (§16) — the file inventory, camera
+    groups, folder mutability, and the config/extractor/cache fingerprints — EXCLUDING the per-run
+    audit (`run_metadata`, `diagnostics`, the execution-journal pointer) and the `content_fingerprint`
+    field itself. Byte-stable for a given workspace state, so a no-op prep re-run (which only refreshes
+    run metadata) leaves it unchanged and never restales calibration's downstream artifacts. The whole-
+    file SHA-256 remains the archival-integrity hash (§13), not the staleness trigger (§6.5)."""
+    h = json.loads(json.dumps(handoff))                # deep copy; never mutate the caller's dict
+    for k in ("run_metadata", "content_fingerprint", "diagnostics"):
+        h.pop(k, None)
+    if isinstance(h.get("depends_on"), dict):
+        h["depends_on"].pop("execution_journal", None)
+    return hashlib.sha256(json.dumps(h, sort_keys=True).encode("utf-8")).hexdigest()
+
 def verify_json_dependency(dep: dict, ws: str) -> bool:
     """Re-read the named JSON dependency from disk and re-hash its exact bytes, returning True iff
     it still matches the recorded SHA-256 (§6: no mtime/size/cached shortcuts). A missing file or
