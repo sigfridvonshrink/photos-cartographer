@@ -55,8 +55,11 @@ There is no build step, no linter config, and no dependency manifest; deps are s
 
 - **GitHub Actions** (`.github/workflows/tests.yml`) runs `python3 -m pytest -q` on every push to `main`
   and on every pull request.
-- **Local `pre-push` hook** (`.githooks/pre-push`) runs the suite before a push and aborts on failure.
-  Enable it per clone with `git config core.hooksPath .githooks`; bypass once with `git push --no-verify`.
+- **Local `pre-push` hook** (`.githooks/pre-push`) runs a static guard
+  (`.githooks/check_test_only_functions.py` — fails if any production function is referenced only by
+  tests) and then the suite before a push, aborting on either failure. Enable it per clone with
+  `git config core.hooksPath .githooks`; bypass once with `git push --no-verify`. When the merge phase
+  `ingest/photos-3-merge` lands, add it to `SRC_FILES` in the guard so the same sweep covers it.
 
 ### CLI contract
 

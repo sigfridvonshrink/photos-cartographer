@@ -1,7 +1,16 @@
 #!/bin/sh
-# Run the test suite before pushing; abort the push if it fails.
+# Run static guards + the test suite before pushing; abort the push if anything fails.
 # Enable for your clone with:  git config core.hooksPath .githooks
 # Bypass for a single push with: git push --no-verify
+
+# Cheap static guard first (fail fast): no production function may be referenced only by tests.
+echo "pre-push: checking for test-only production functions..."
+if ! python3 .githooks/check_test_only_functions.py; then
+    echo
+    echo "pre-push: test-only-functions guard FAILED — push aborted."
+    echo "          (override with 'git push --no-verify')"
+    exit 1
+fi
 
 echo "pre-push: running test suite (fast subset; slow real-fixture tests run in CI)..."
 if ! python3 -m pytest -q -m "not slow"; then
