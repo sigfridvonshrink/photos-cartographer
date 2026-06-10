@@ -285,6 +285,35 @@ def test_symlink_blocking(tmp_path, monkeypatch):
 
     assert len(plan.blockers) > 0
     assert any("Forbidden symlink detected" in b for b in plan.blockers)
+
+
+def test_directory_symlink_at_root_blocked_during_init(tmp_path, monkeypatch):
+    """A directory symlink at the root of an UNINITIALIZED workspace must be flagged as a forbidden
+    symlink at PLAN time, never followed. os.path.isdir() follows a directory symlink, so the old
+    isdir-first order let os.walk(path) traverse the external target and inventory (and plan a move
+    for) files outside the workspace — the pipeline escape the spec forbids."""
+    import photos_utils as utils
+    monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
+    monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image",
+                        lambda p: {"status": "valid", "value": "sig", "strategy": "image-content-hash-v1",
+                                   "engine_version": "t"})
+    photos_ingest.CONFIG["jobs"] = 1
+
+    external = tmp_path / "external"; external.mkdir()
+    (external / "victim.jpg").write_bytes(b"PRECIOUS")          # a file the pipeline must NOT touch
+    ws = tmp_path / "ws"; ws.mkdir(); (ws / ".photos-ingest").mkdir()   # uninitialized: no guard sentinel
+    os.symlink(str(external), str(ws / "evil"))                # directory symlink at the root
+
+    cache = photos_ingest.WorkspaceCache(str(ws), in_memory=True)
+    plan = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
+    cache.close()
+
+    assert any("Forbidden symlink detected: evil" in b for b in plan.blockers)
+    # the external target was never walked: no operation references it, and the victim is untouched
+    assert not any(op.source and "evil" in op.source for op in plan.operations)
+    assert (external / "victim.jpg").exists()
+
+
 def test_deterministic_temp_names_with_existing(tmp_path, monkeypatch):
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
