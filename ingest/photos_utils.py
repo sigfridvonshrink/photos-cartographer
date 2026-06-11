@@ -300,6 +300,136 @@ def ensure_control_dir(ws: str) -> str:
     os.makedirs(d, exist_ok=True)
     return d
 
+# --- Library (merge phase) -----------------------------------------------------
+# The permanent library at library_root is final and owned: it carries NONE of the workspace
+# scaffolding (no 0-6 folders, no guard, no lifecycle). Its sole identity is a single dotfile
+# marker in its root; its lock is another dotfile (merge spec §4/§12, shared contract §15.1/§15.2).
+# These names + helpers are consumed by the merge phase (ingest/photos-3-merge, built in later
+# increments); prep/calibration neither read nor write them.
+LIBRARY_MARKER = ".photos-library"
+LIBRARY_LOCK = ".photos-merge.lock"
+
+def library_marker_path(library_root: str) -> str:
+    return os.path.join(library_root, LIBRARY_MARKER)
+
+def is_library(library_root: str) -> bool:
+    """True iff library_root carries the .photos-library marker — the ONLY check that a directory is
+    a library (merge spec §4). No structural inspection of the library beyond this marker."""
+    return os.path.isfile(library_marker_path(library_root))
+
+def write_library_marker(library_root: str) -> str:
+    """Bless library_root as a library by creating the .photos-library marker. No-clobber and
+    idempotent: a no-op success if the marker already exists. Written only by `merge init-library`;
+    plan/dry-run/execute only ever read it. Returns the marker path."""
+    p = library_marker_path(library_root)
+    try:
+        os.close(os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644))
+    except FileExistsError:
+        pass
+    return p
+
+def library_lock_path(library_root: str) -> str:
+    """The library-side lock dotfile (shared contract §15.2): <library_root>/.photos-merge.lock."""
+    return os.path.join(library_root, LIBRARY_LOCK)
+
+def write_sealed_marker(ws: str, run_id: str, library_root: str) -> str:
+    """Write the terminal/sealed marker photos-00-sealed.json on a fully successful merge
+    (merge spec §9.4 / shared contract §13.7). Atomic (write_json_artifact); returns its SHA-256.
+    Afterwards is_sealed(ws) is True and every media-mutating phase hard-stops on this workspace."""
+    ensure_control_dir(ws)
+    return write_json_artifact(sealed_marker_path(ws),
+                               {"sealed": True, "merged_run_id": run_id, "library_root": library_root})
+
+# Shared no-clobber suffix convention (shared contract §7.2): `<base>-NNN[.ext]`, allocated against a
+# case-insensitive occupied-name set. Prep de-collides by-date outputs (gap-fill from 1); merge renames
+# a colliding incoming file (append from max+1, see suffix_root/max_suffix). Single source of truth so
+# the two phases can never drift in how a differentiating suffix is formed.
+_DEDUP_SUFFIX_RE = re.compile(r"-(\d{3,})$")
+
+def allocate_suffix(base: str, ext: str, index: set, start_idx: int = 1) -> str:
+    """Allocate the next free `<base>-NNN[.ext]` name not already in `index` (compared
+    case-insensitively), adding the chosen lower-cased name to `index` so sequential allocations in
+    the same batch never collide. `-{idx:03d}` is the shared convention; `start_idx` lets merge begin
+    past the highest existing suffix (append-only library) rather than gap-fill from 1 like prep."""
+    idx = start_idx
+    while True:
+        suffix = f"-{idx:03d}"
+        name = f"{base}{suffix}.{ext}" if ext else f"{base}{suffix}"
+        if name.lower() not in index:
+            index.add(name.lower())
+            return name
+        idx += 1
+
+def suffix_root(stem: str) -> str:
+    """The root name of an extension-less stem: strip a trailing dedup suffix `-NNN` (3+ digits — the
+    `-{idx:03d}` convention) if present, else return the stem unchanged. The 3+-digit dedup suffix is
+    distinguishable from the 2-digit fields of the `%Y-%m-%d--%H-%M-%S` filename-timestamp format, so a
+    bare timestamp name is never mistaken for a suffixed one."""
+    return _DEDUP_SUFFIX_RE.sub("", stem)
+
+def max_suffix(root: str, names) -> int:
+    """The highest dedup index N among `names` (any iterable of basenames) of the form
+    `<root>-NNN[.ext]` (case-insensitive), or 0 if only the bare `root[.ext]` / none are present.
+    Merge uses max(library_dir, incoming_batch) + 1 as the next suffix for an append-only library."""
+    root_l = root.lower()
+    hi = 0
+    for n in names:
+        stem = n.rsplit(".", 1)[0] if "." in n else n
+        if stem.lower() == root_l:
+            continue
+        m = _DEDUP_SUFFIX_RE.search(stem)
+        if m and stem[:m.start()].lower() == root_l:
+            hi = max(hi, int(m.group(1)))
+    return hi
+
+# Library-merge archival re-seal (merge spec §9.4 step 1 / shared contract §13.6). On a successful
+# merge, the package gains merge's own artifacts; merge re-bundles by recomputing every present
+# artifact's SHA-256 into its OWN photos-35-archive-manifest.json, which supersedes calibration's
+# photos-25 manifest (parallel to the photos-15→25→35 log chain). It reads each artifact and never
+# rewrites another phase's file (shared contract §13.0a). Consumed by ingest/photos-3-merge.
+MERGE_ARCHIVE_MANIFEST = "photos-35-archive-manifest.json"
+CALIBRATE_ARCHIVE_MANIFEST = "photos-25-archive-manifest.json"
+_MERGE_ARCHIVE_ITEMS = [
+    "photos-00-config.json", "photos-11-handoff.json",
+    "photos-15-prep-log.json", "photos-15-prep-ingest.db",
+    "photos-21-time-decisions.json", "photos-22-gps-decisions.json",
+    "photos-23-executable-plan.json", "photos-24-execution-summary.json",
+    "photos-25-complete-log.json", "photos-25-calibrate-ingest.db",
+    CALIBRATE_ARCHIVE_MANIFEST,
+    "photos-31-merge-summary.json", "photos-35-merge-log.json", "photos-35-merge-ingest.db",
+    "photos-00-ingest.db",
+]
+
+def merge_archive_manifest_path(ws: str) -> str:
+    return os.path.join(ws, CONTROL_DIR, MERGE_ARCHIVE_MANIFEST)
+
+def reseal_archival_package(ws: str, *, workspace_name: str, plan_id: str, execution_id: str,
+                            merge_run_id: str, generated_at: str) -> str:
+    """Re-seal the archival package after a successful merge: recompute the SHA-256 of every package
+    artifact present in the control dir (including merge's photos-31/35 artifacts and the live DB) and
+    write merge's own photos-35-archive-manifest.json (supersedes calibration's photos-25 manifest,
+    shared contract §13.6). Reads each artifact; never mutates another phase's file (§13.0a). Returns
+    the manifest's SHA-256."""
+    cd = control_dir(ws)
+    contents = {}
+    for name in _MERGE_ARCHIVE_ITEMS:
+        ap = os.path.join(cd, name)
+        if os.path.isfile(ap):
+            contents[name] = {"path": os.path.relpath(ap, ws), "sha256": sha256_file(ap)}
+    manifest = {
+        "artifact_type": "archive_manifest",
+        "artifact_name": MERGE_ARCHIVE_MANIFEST,
+        "schema_version": 1,
+        "workspace": workspace_name,
+        "plan_id": plan_id,
+        "execution_id": execution_id,
+        "merge_run_id": merge_run_id,
+        "supersedes": CALIBRATE_ARCHIVE_MANIFEST,
+        "contents": contents,
+        "run_metadata": {"generated_at": generated_at},
+    }
+    return write_json_artifact(merge_archive_manifest_path(ws), manifest)
+
 def quarantine_dir(ws: str) -> str:
     return os.path.join(ws, QUARANTINE_DIR)
 
@@ -558,6 +688,43 @@ def validate_config(cfg: dict):
                     if not isinstance(lst, list) or not all(isinstance(x, str) for x in lst):
                         raise ValueError(f"config: camera_time_and_timezone_policy.device_groups.{gk} "
                                          f"must be a list of strings.")
+
+
+# Policy values the merge phase currently supports (merge spec §4 / stage-2 decision: v1 is
+# identity placement + incoming-suffix collision only; any other value is a hard blocker).
+_MERGE_PLACEMENT_POLICIES = {"preserve_destination_structure"}
+_MERGE_COLLISION_POLICIES = {"suffix_incoming"}
+
+def validate_merge_config(cfg: dict, ws: str):
+    """Deep-validate the library-merge config before the merge phase consumes it (merge spec §4;
+    shared contract §14.1). Prep only type-validates merge (validate_config); merge calls THIS, which
+    additionally requires `library_root` to be a non-empty, existing directory resolving OUTSIDE the
+    workspace and its managed 0-6 tree, and the policy values to be supported enums. Raises ValueError
+    located to the offending field. Library *identity* (the .photos-library marker) is a separate
+    preflight check (is_library), not a config concern."""
+    mg = cfg.get("merge")
+    if not isinstance(mg, dict):
+        raise ValueError("config: merge must be an object.")
+    lib = mg.get("library_root")
+    if not isinstance(lib, str) or not lib:
+        raise ValueError("config: merge.library_root must be a non-empty path to the permanent library.")
+    if "\x00" in lib:
+        raise ValueError("config: merge.library_root must not contain a NUL byte.")
+    lib_real = os.path.realpath(os.path.abspath(lib))
+    if not os.path.isdir(lib_real):
+        raise ValueError(f"config: merge.library_root {lib!r} is not an existing directory.")
+    ws_real = os.path.realpath(os.path.abspath(ws))
+    if lib_real == ws_real or lib_real.startswith(ws_real + os.sep):
+        raise ValueError(f"config: merge.library_root {lib!r} must resolve outside the workspace "
+                         f"(it must not be the workspace or any path inside it).")
+    pp = mg.get("placement_policy", "preserve_destination_structure")
+    if pp not in _MERGE_PLACEMENT_POLICIES:
+        raise ValueError(f"config: merge.placement_policy {pp!r} is not supported "
+                         f"(allowed: {', '.join(sorted(_MERGE_PLACEMENT_POLICIES))}).")
+    cp = mg.get("collision_policy", "suffix_incoming")
+    if cp not in _MERGE_COLLISION_POLICIES:
+        raise ValueError(f"config: merge.collision_policy {cp!r} is not supported "
+                         f"(allowed: {', '.join(sorted(_MERGE_COLLISION_POLICIES))}).")
 
 
 def detect_zfs_dataset(path: str):
@@ -1542,6 +1709,22 @@ class WorkspaceCache:
             self.conn.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)",
                               ("fingerprint_algorithm_version", FINGERPRINT_ALGORITHM_VERSION))
 
+            # Library-file fingerprint cache (merge spec §7 / shared contract §13.4). The permanent
+            # library has no database of its own; when merge fingerprints a resident library file to
+            # resolve a collision, it caches the result HERE in the workspace DB, keyed by absolute
+            # library path + size + mtime_ns, so the same unchanged library file is fingerprinted at
+            # most once per run and across re-runs. Consumed by the merge phase only.
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS library_fingerprint_cache (
+                    library_path TEXT PRIMARY KEY,
+                    size INTEGER,
+                    mtime_ns INTEGER,
+                    fingerprint_value TEXT,
+                    fingerprint_strategy TEXT,
+                    engine_version TEXT
+                )
+            """)
+
     def get_meta(self, key: str) -> Optional[str]:
         with self._lock:
             cur = self.conn.cursor()
@@ -1690,26 +1873,56 @@ class WorkspaceCache:
                         extraction_error = excluded.extraction_error
                 """, md_row)
 
+    def cache_library_fingerprint(self, library_path: str, size: int, mtime_ns: int, fp: Dict[str, Any]):
+        """Cache a resident library file's content fingerprint (merge spec §7 / shared contract §13.4),
+        keyed by absolute library path + size + mtime_ns. `fp` is a ContentHasher fingerprint dict
+        (value / strategy / engine_version). Re-keying on (path,size,mtime_ns) means a changed library
+        file naturally misses and is re-fingerprinted."""
+        with self._write_ctx():
+            self.conn.execute("""
+                INSERT INTO library_fingerprint_cache
+                    (library_path, size, mtime_ns, fingerprint_value, fingerprint_strategy, engine_version)
+                VALUES (:library_path, :size, :mtime_ns, :value, :strategy, :engine_version)
+                ON CONFLICT(library_path) DO UPDATE SET
+                    size = excluded.size,
+                    mtime_ns = excluded.mtime_ns,
+                    fingerprint_value = excluded.fingerprint_value,
+                    fingerprint_strategy = excluded.fingerprint_strategy,
+                    engine_version = excluded.engine_version
+            """, {"library_path": library_path, "size": size, "mtime_ns": mtime_ns,
+                  "value": fp.get("value"), "strategy": fp.get("strategy"),
+                  "engine_version": fp.get("engine_version")})
+
+    def get_cached_library_fingerprint(self, library_path: str, size: int, mtime_ns: int):
+        """Return the cached fingerprint dict for a library file iff the cached size + mtime_ns still
+        match the current ones (else None — the file changed, so re-fingerprint). Shape mirrors a
+        ContentHasher result: {status: 'valid', value, strategy, engine_version}."""
+        with self._lock:
+            cur = self.conn.cursor()
+            cur.execute("SELECT size, mtime_ns, fingerprint_value, fingerprint_strategy, engine_version "
+                        "FROM library_fingerprint_cache WHERE library_path = ?", (library_path,))
+            row = cur.fetchone()
+        if row is None or row["size"] != size or row["mtime_ns"] != mtime_ns:
+            return None
+        return {"status": "valid", "value": row["fingerprint_value"],
+                "strategy": row["fingerprint_strategy"], "engine_version": row["engine_version"]}
+
     def close(self):
         self.conn.close()
 
 
-class WorkspaceLock:
-    def __init__(self, workspace_root: str):
-        from photos_utils import lock_path, ensure_control_dir
-        ensure_control_dir(workspace_root)
-        self.lock_path = lock_path(workspace_root)
+class _FlockLock:
+    """Non-blocking exclusive flock keyed to an explicit lock-file path, recording this run's owner
+    identity {pid, started_at, host}. Opened O_RDWR|O_CREAT (no truncate) so a *failed* acquire never
+    clobbers the current holder's identity; only a successful acquire rewrites it. fcntl.flock is
+    auto-released by the kernel if this process dies, so a crash never wedges the lock and no stale-lock
+    takeover code is needed. Base of both WorkspaceLock and the library-side LibraryLock."""
+    def __init__(self, lock_file_path: str):
+        self.lock_path = lock_file_path
         self._lock_fd = None
         self.owner = None  # on a failed acquire, the identity of the current holder (if readable)
 
     def acquire(self) -> bool:
-        """Acquire a non-blocking exclusive flock and record this run's owner identity.
-
-        Opened O_RDWR|O_CREAT (no truncate) so a *failed* acquire never clobbers the
-        current holder's identity; only a successful acquire rewrites it. fcntl.flock is
-        auto-released by the kernel if this process dies, so a crash never wedges the
-        workspace and no stale-lock takeover code is needed.
-        """
         try:
             fd = os.open(self.lock_path, os.O_RDWR | os.O_CREAT, 0o644)
             self._lock_fd = os.fdopen(fd, 'r+')
@@ -1748,3 +1961,24 @@ class WorkspaceLock:
             fcntl.flock(self._lock_fd.fileno(), fcntl.LOCK_UN)
             self._lock_fd.close()
             self._lock_fd = None
+
+
+class LibraryLock(_FlockLock):
+    """The library-side lock (shared contract §15.2 / merge spec §12), keyed to library_root as a
+    `.photos-merge.lock` dotfile in the library root. Serializes merge runs writing the SAME library
+    even when they originate from different workspaces (each with its own WorkspaceLock). Same
+    fail-fast, stale-detectable discipline. The library_root must already exist and be a library (the
+    marker/identity check precedes lock acquisition), so the lock file is never dropped into a
+    non-library directory. Consumed by the merge phase."""
+    def __init__(self, library_root: str):
+        super().__init__(library_lock_path(library_root))
+
+
+class WorkspaceLock(_FlockLock):
+    """The whole-run workspace lock (shared contract §2), keyed to the control dir's
+    photos-00-workspace.lock. Inherits the non-blocking flock + owner-identity discipline from
+    _FlockLock; only the keyed path (and ensuring the control dir exists) differs."""
+    def __init__(self, workspace_root: str):
+        from photos_utils import lock_path, ensure_control_dir
+        ensure_control_dir(workspace_root)
+        super().__init__(lock_path(workspace_root))
