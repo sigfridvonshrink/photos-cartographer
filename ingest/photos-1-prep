@@ -29,7 +29,8 @@ sys.path.insert(0, os.path.dirname(__file__))
 from photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, selected_gpx_root, missing_managed_folders, FOLDER_ROLES
 from photos_utils import (_move_no_clobber, _move_link_unlink, _get_renameat2,
                           WorkspaceCache, WorkspaceLock, ContentHasher,
-                          CACHE_SCHEMA_VERSION, FINGERPRINT_ALGORITHM_VERSION)
+                          CACHE_SCHEMA_VERSION, FINGERPRINT_ALGORITHM_VERSION,
+                          allocate_suffix)
 
 
 
@@ -1184,14 +1185,9 @@ class WorkspacePrepWorkflow:
         self.coordinator = ProgressCoordinator()
 
     def _allocate_suffix(self, base: str, ext: str, index: set, start_idx: int = 1) -> str:
-        idx = start_idx
-        while True:
-            suffix = f"-{idx:03d}"
-            name = f"{base}{suffix}.{ext}" if ext else f"{base}{suffix}"
-            if name.lower() not in index:
-                index.add(name.lower())
-                return name
-            idx += 1
+        # Delegates to the shared no-clobber suffix convention (photos_utils.allocate_suffix) so prep's
+        # by-date de-collision and the merge phase's library-collision rename can never drift.
+        return allocate_suffix(base, ext, index, start_idx)
 
     def _flag_dir_symlinks(self, root, dir_names, blockers):
         """Flag any subdirectory symlink encountered during a walk as a forbidden escape. os.walk does
