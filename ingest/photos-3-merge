@@ -31,7 +31,8 @@ from photos_utils import (
     folder_name, FOLDER_ROLES, missing_managed_folders, handoff_content_fingerprint,
     verify_json_dependency, json_dependency, write_json_artifact, is_library, write_library_marker,
     library_marker_path, allocate_suffix, suffix_root, max_suffix, ContentHasher, WorkspaceCache,
-    journal_path, take_zfs_snapshot, _move_no_clobber, WorkspaceLock, LibraryLock,
+    journal_path, take_zfs_snapshot, _move_no_clobber, write_db_snapshot, reseal_archival_package,
+    write_sealed_marker, WorkspaceLock, LibraryLock,
 )
 
 # Calibration / prep artifacts merge READS (never writes — shared contract §13.0a).
@@ -74,6 +75,18 @@ def merge_plan_path(ws):
 
 def merge_summary_path(ws):
     return _cd(ws, MERGE_SUMMARY_ARTIFACT)
+
+
+def merge_log_path(ws):
+    return _cd(ws, MERGE_LOG_ARTIFACT)
+
+
+def merge_db_snapshot_path(ws):
+    return _cd(ws, MERGE_DB_SNAPSHOT)
+
+
+def complete_log_path(ws):
+    return _cd(ws, COMPLETE_LOG_ARTIFACT)
 
 
 class MergeWorkflow:
@@ -540,8 +553,8 @@ class MergeWorkflow:
         target = rec["library_target"]
         fp = rec["content_fingerprint"]
         disp = rec["disposition"]
-        out = {"by_dest_source": src_rel, "library_path": target, "final_kind": None,
-               "removed": False, "newly": False, "blocker": None}
+        out = {"by_dest_source": src_rel, "library_path": target, "content_fingerprint": fp,
+               "final_kind": None, "removed": False, "newly": False, "blocker": None}
 
         if journal.get(src_rel) == "confirmed":           # already terminal in a prior run
             out["final_kind"] = self._plan_kind(disp)
@@ -673,8 +686,57 @@ class MergeWorkflow:
         summary = self._build_summary(ws, plan, library_root, results, snapshot, status,
                                       now_iso, execution_id, jobs)
         write_json_artifact(merge_summary_path(ws), summary)
-        return {"status": status, "plan_id": plan.get("plan_id"), "summary": summary,
+        finalized = None
+        if status == "success":
+            finalized = self._finalize_terminal(ws, plan, library_root, results, execution_id, now_iso)
+        return {"status": status, "plan_id": plan.get("plan_id"), "summary": summary, "finalized": finalized,
                 "blocked": [r for r in results if r["final_kind"] == "blocked"]}
+
+    def _build_merge_log(self, ws, results):
+        """photos-35-merge-log.json (§9.2): photos-25-complete-log.json copied FORWARD with a per-file
+        `merge` step appended to each merged photo's journey (final library path + renamed flag). Built
+        fresh from photos-25 every run (never from a prior photos-35), so it is deterministic and
+        idempotent under resume; photos-25 itself is never edited (§13.0a)."""
+        base = {}
+        if os.path.exists(complete_log_path(ws)):
+            try:
+                base = json.load(open(complete_log_path(ws)))
+            except Exception:
+                base = {}
+        photos = json.loads(json.dumps(base.get("photos") or {}))      # deep copy; never touch photos-25
+        for r in sorted(results, key=lambda x: x["by_dest_source"]):
+            if r["final_kind"] == "blocked" or not r.get("content_fingerprint"):
+                continue
+            fp = r["content_fingerprint"]
+            entry = photos.setdefault(fp, {"content_fingerprint": fp, "journey": []})
+            entry.setdefault("journey", []).append({
+                "phase": "merge",
+                "action": "already_present" if r["final_kind"] == "already_present" else "placed",
+                "library_path": r["library_path"],
+                "renamed_for_library": r["final_kind"] == "renamed_for_library"})
+        return {"schema_version": 1, "tool": "photos-3-merge", "artifact_name": MERGE_LOG_ARTIFACT,
+                "photos": photos}
+
+    def _finalize_terminal(self, ws, plan, library_root, results, execution_id, now_iso):
+        """Full-success terminal bookkeeping (§9.4 / §10.3 steps 7-10), in order, SEAL LAST. Each step
+        is rebuilt from pristine inputs (never from a prior merge artifact), so a crash before the seal
+        re-runs cleanly. Runs only when status == success (no blockers, by-dest empty of photos)."""
+        # 1. Merge log (copy photos-25 forward + per-file merge step).
+        write_json_artifact(merge_log_path(ws), self._build_merge_log(ws, results))
+        # 2. End-of-merge DB snapshot of the live workspace DB (captures the library-fingerprint cache).
+        cache = WorkspaceCache(ws)
+        try:
+            write_db_snapshot(cache.conn, merge_db_snapshot_path(ws))
+        finally:
+            cache.close()
+        # 3. Re-seal: merge's own photos-35-archive-manifest.json (supersedes the photos-25 manifest).
+        manifest_sha = reseal_archival_package(
+            ws, workspace_name=os.path.basename(os.path.abspath(ws)), plan_id=plan.get("plan_id"),
+            execution_id=execution_id, merge_run_id=execution_id, generated_at=now_iso)
+        # 4. Seal — the LAST write of the run; afterwards every phase hard-stops on this workspace.
+        write_sealed_marker(ws, execution_id, library_root)
+        return {"sealed": True, "merge_log": MERGE_LOG_ARTIFACT, "db_snapshot": MERGE_DB_SNAPSHOT,
+                "archive_manifest": "photos-35-archive-manifest.json", "manifest_sha256": manifest_sha}
 
     def _build_summary(self, ws, plan, library_root, results, snapshot, status, now_iso,
                        execution_id, jobs, extra_failures=None):
@@ -742,8 +804,10 @@ class MergeWorkflow:
                     print(f"  Blocker: {b['blocker']}", file=sys.stderr)
             print("Blocked files were left in by-dest; resolve them and re-run `execute`.", file=sys.stderr)
             return 3
-        print("No library file was renamed or overwritten. (Archive re-seal + workspace seal land in "
-              "Increment 5.)")
+        print(f"Wrote {MERGE_LOG_ARTIFACT} and {MERGE_DB_SNAPSHOT}; re-sealed the archive "
+              f"(photos-35-archive-manifest.json); sealed the workspace (photos-00-sealed.json). "
+              "No library file was renamed or overwritten — the workspace is now terminal; "
+              "process more media in a fresh workspace.")
         return 0
 
     # --- filesystem helpers (mirrors of calibration's; merge is read-only here) ---
