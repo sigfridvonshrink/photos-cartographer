@@ -153,15 +153,29 @@ def test_execute_unfingerprintable_library_blocks_and_keeps_source(tmp_path):
 
 # --- resume (state-derivation, §8.3) -----------------------------------------
 
-def test_execute_resume_skips_fully_moved(tmp_path):
+def test_execute_resume_after_crash_before_seal(tmp_path, monkeypatch):
+    # Full success seals the workspace, so the genuine resume case is a crash AFTER the moves/journal
+    # but BEFORE the seal: the re-run must recognize the already-moved files (state-derivation) and
+    # complete the terminal bookkeeping + seal.
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     assert merge._run_locked_workflow("plan", str(ws)) == 0
-    assert merge._run_locked_workflow("execute", str(ws)) == 0
-    # Re-run: source gone, target present+matches -> already_done, library unchanged.
-    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    real = merge.MergeWorkflow._finalize_terminal
+    calls = []
+
+    def maybe_finalize(self, *a, **k):
+        calls.append(1)
+        return None if len(calls) == 1 else real(self, *a, **k)   # skip seal on the first run only
+    monkeypatch.setattr(merge.MergeWorkflow, "_finalize_terminal", maybe_finalize)
+
+    assert merge._run_locked_workflow("execute", str(ws)) == 0     # moved, but crashed before seal
+    assert os.path.exists(os.path.join(str(lib), "Trip", "a.jpg"))
+    assert not os.path.exists(_src(ws, "Trip", "a.jpg"))
+    assert not utils.is_sealed(str(ws))                            # not sealed yet -> re-runnable
+
+    assert merge._run_locked_workflow("execute", str(ws)) == 0     # resume -> success -> seal
+    assert utils.is_sealed(str(ws))
     s = _summary(ws)
-    assert s["status"] == "success"
-    assert s["resume"]["already_done_skipped"] == 1
+    assert s["resume"]["already_done_skipped"] == 1                # the moved file recognized as done
     assert open(os.path.join(str(lib), "Trip", "a.jpg"), "rb").read() == _fp_bytes("A")
 
 
@@ -249,3 +263,69 @@ def test_execute_rejects_stale_plan(tmp_path):
     open(p24, "w").write(json.dumps({"status": "success", "touched": True}))   # dep changed
     assert merge._run_locked_workflow("execute", str(ws)) == 2
     assert not os.path.exists(os.path.join(str(ws.parent), "ws-lib", "Trip"))  # nothing moved
+
+
+# --- Increment 5: terminal finalization (full-success only) -------------------
+
+def _ctl(ws, name):
+    return os.path.join(str(ws), ".photos-ingest", name)
+
+
+def test_full_success_writes_terminal_artifacts_and_seals(tmp_path):
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    for name in ("photos-31-merge-summary.json", "photos-35-merge-log.json",
+                 "photos-35-merge-ingest.db", "photos-35-archive-manifest.json",
+                 "photos-00-sealed.json"):
+        assert os.path.exists(_ctl(ws, name)), name
+    sealed = json.loads(open(_ctl(ws, "photos-00-sealed.json")).read())
+    assert sealed["sealed"] is True and sealed["library_root"] == str(lib)
+    # The re-seal manifest supersedes calibration's and lists the merge artifacts.
+    manifest = json.loads(open(_ctl(ws, "photos-35-archive-manifest.json")).read())
+    assert manifest["supersedes"] == "photos-25-archive-manifest.json"
+    assert "photos-31-merge-summary.json" in manifest["contents"]
+    assert "photos-35-merge-log.json" in manifest["contents"]
+
+
+def test_merge_log_copies_photos25_forward_and_appends(tmp_path):
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    # Seed photos-25 with a prior calibrate journey for fingerprint A.
+    open(_ctl(ws, "photos-25-complete-log.json"), "w").write(json.dumps(
+        {"schema_version": 1, "tool": "photos-2-time-gps",
+         "photos": {"A": {"content_fingerprint": "A",
+                          "journey": [{"phase": "calibrate", "action": "renamed"}]}}}))
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    log = json.loads(open(_ctl(ws, "photos-35-merge-log.json")).read())
+    assert log["tool"] == "photos-3-merge"
+    journey = log["photos"]["A"]["journey"]
+    assert journey[0]["phase"] == "calibrate"                      # carried forward
+    assert journey[-1] == {"phase": "merge", "action": "placed",
+                           "library_path": os.path.join(str(lib), "Trip", "a.jpg"),
+                           "renamed_for_library": False}
+    # photos-25 itself must be byte-unchanged (never edited).
+    p25 = json.loads(open(_ctl(ws, "photos-25-complete-log.json")).read())
+    assert p25["photos"]["A"]["journey"] == [{"phase": "calibrate", "action": "renamed"}]
+
+
+def test_partial_run_does_not_seal_or_finalize(tmp_path):
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
+                  library_files=[{"fp": "FAIL", "dest": "Trip", "name": "a.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 3          # partial
+    assert not utils.is_sealed(str(ws))                                # re-runnable
+    for name in ("photos-35-merge-log.json", "photos-35-merge-ingest.db",
+                 "photos-35-archive-manifest.json", "photos-00-sealed.json"):
+        assert not os.path.exists(_ctl(ws, name)), name
+    assert os.path.exists(_ctl(ws, "photos-31-merge-summary.json"))     # summary still written
+
+
+def test_sealed_workspace_rerun_hardstops(tmp_path):
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    assert utils.is_sealed(str(ws))
+    before = open(os.path.join(str(lib), "Trip", "a.jpg"), "rb").read()
+    assert merge._run_locked_workflow("execute", str(ws)) == 2          # sealed -> preflight blocker
+    assert open(os.path.join(str(lib), "Trip", "a.jpg"), "rb").read() == before   # untouched
