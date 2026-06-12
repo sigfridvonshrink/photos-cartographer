@@ -1184,10 +1184,13 @@ class WorkspacePrepWorkflow:
         from photos_utils import ProgressCoordinator
         self.coordinator = ProgressCoordinator()
 
-    def _allocate_suffix(self, base: str, ext: str, index: set, start_idx: int = 1) -> str:
+    def _allocate_suffix(self, base: str, ext: str, index: set, start_idx: int = 1,
+                         bare_first: bool = False) -> str:
         # Delegates to the shared no-clobber suffix convention (photos_utils.allocate_suffix) so prep's
         # by-date de-collision and the merge phase's library-collision rename can never drift.
-        return allocate_suffix(base, ext, index, start_idx)
+        # `bare_first` (shared contract §7.2): the by-date timestamp naming takes the bare name first;
+        # the init-move / extension-normalize callers leave it False (they run only on a real collision).
+        return allocate_suffix(base, ext, index, start_idx, bare_first)
 
     def _flag_dir_symlinks(self, root, dir_names, blockers):
         """Flag any subdirectory symlink encountered during a walk as a forbidden escape. os.walk does
@@ -1935,7 +1938,10 @@ class WorkspacePrepWorkflow:
             if prefix == "UNKN":
                 prefix = f"UNKN_{base}"
 
-            final_name = self._allocate_suffix(prefix, ext, global_index)
+            # §7.2: the first file at a given timestamp gets the bare name; the -NNN suffix appears only
+            # on a genuine collision (matches calibration's final naming, so an uncorrected file's
+            # provisional and final names coincide and calibration plans no needless rename — §7.3).
+            final_name = self._allocate_suffix(prefix, ext, global_index, bare_first=True)
             dest = os.path.join(target_folder, final_name)
 
             media_mutated_originals.add(f["relative_path"])

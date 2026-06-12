@@ -340,17 +340,29 @@ def write_sealed_marker(ws: str, run_id: str, library_root: str) -> str:
     return write_json_artifact(sealed_marker_path(ws),
                                {"sealed": True, "merged_run_id": run_id, "library_root": library_root})
 
-# Shared no-clobber suffix convention (shared contract §7.2): `<base>-NNN[.ext]`, allocated against a
-# case-insensitive occupied-name set. Prep de-collides by-date outputs (gap-fill from 1); merge renames
-# a colliding incoming file (append from max+1, see suffix_root/max_suffix). Single source of truth so
-# the two phases can never drift in how a differentiating suffix is formed.
+# Shared no-clobber suffix convention (shared contract §7.2): `<base>[.ext]` for the first free name,
+# then `<base>-NNN[.ext]`, allocated against a case-insensitive occupied-name set. Prep's by-date naming
+# takes the bare name first and suffixes only on a collision (`bare_first=True`, §7.2); merge renames a
+# colliding incoming file (`bare_first=False` — the bare root belongs to the resident library file, so
+# the incoming is ALWAYS suffixed, appended from max+1; see suffix_root/max_suffix). Single source of
+# truth so the phases can never drift in how a differentiating suffix is formed.
 _DEDUP_SUFFIX_RE = re.compile(r"-(\d{3,})$")
 
-def allocate_suffix(base: str, ext: str, index: set, start_idx: int = 1) -> str:
-    """Allocate the next free `<base>-NNN[.ext]` name not already in `index` (compared
-    case-insensitively), adding the chosen lower-cased name to `index` so sequential allocations in
-    the same batch never collide. `-{idx:03d}` is the shared convention; `start_idx` lets merge begin
-    past the highest existing suffix (append-only library) rather than gap-fill from 1 like prep."""
+def allocate_suffix(base: str, ext: str, index: set, start_idx: int = 1, bare_first: bool = False) -> str:
+    """Allocate the next free name not already in `index` (compared case-insensitively), adding the
+    chosen lower-cased name to `index` so sequential allocations in the same batch never collide.
+
+    With `bare_first` (prep's by-date naming, §7.2), the un-suffixed `<base>[.ext]` is tried first and
+    used when free — a lone file gets a bare timestamp name, the `-NNN` suffix appears only on a genuine
+    collision. Without it (the default; merge collision renames and prep's init-move/extension-normalize
+    paths, which are only ever reached once the bare name is already taken), the bare name is skipped and
+    allocation goes straight to `<base>-NNN`. `-{idx:03d}` is the shared form; `start_idx` lets merge
+    begin past the highest existing suffix (append-only library) rather than gap-fill from 1."""
+    if bare_first:
+        bare = f"{base}.{ext}" if ext else base
+        if bare.lower() not in index:
+            index.add(bare.lower())
+            return bare
     idx = start_idx
     while True:
         suffix = f"-{idx:03d}"
