@@ -100,7 +100,7 @@ def test_missing_timestamp_routes_to_missing_metadata_with_unkn_name(tmp_path, m
     (ws / "0-sources" / "pic.jpg").write_bytes(b"img")
     plan = _plan(ws)
     org = [op for op in _moves(plan) if op.source == "0-sources/pic.jpg"]
-    assert org and org[0].destination.startswith("2-missing-metadata/UNKN_pic-"), org[0].destination
+    assert org and org[0].destination == "2-missing-metadata/UNKN_pic.jpg", org[0].destination
 
 
 def test_video_with_timestamp_routes_to_videos_by_date(tmp_path, monkeypatch):
@@ -119,14 +119,31 @@ def test_create_date_used_when_no_datetimeoriginal(tmp_path, monkeypatch):
     assert org and "2019-05-06--07-08-09" in org[0].destination, org[0].destination
 
 
-def test_suffix_allocation_is_monotonic(tmp_path, monkeypatch):
-    # Same timestamp for every file; an already-organized -001 must not be reused.
+def test_bare_timestamp_name_used_when_free(tmp_path, monkeypatch):
+    # §7.2 bare-first: the un-suffixed timestamp name is taken when free, even though a -001 sibling
+    # already exists. This MATCHES calibration's final naming (also bare-first), so an uncorrected file
+    # gets the same provisional and final name and calibration plans no needless rename (§7.3). The
+    # existing -001 is untouched (no clobber).
     _install(monkeypatch, meta_for=lambda f: {"DateTimeOriginal": "2023:01:02 03:04:05"})
     ws = _ws(tmp_path)
     (ws / "5-photos-by-date" / "2023-01-02--03-04-05-001.jpg").write_bytes(b"existing")
     (ws / "0-sources" / "new.jpg").write_bytes(b"new")
     org = [op for op in _moves(_plan(ws)) if op.source == "0-sources/new.jpg"]
-    assert org and org[0].destination == "5-photos-by-date/2023-01-02--03-04-05-002.jpg", org[0].destination
+    assert org and org[0].destination == "5-photos-by-date/2023-01-02--03-04-05.jpg", org[0].destination
+    assert (ws / "5-photos-by-date" / "2023-01-02--03-04-05-001.jpg").exists()       # untouched
+
+
+def test_same_timestamp_collision_suffixes_after_bare(tmp_path, monkeypatch):
+    # Two fresh files at the SAME timestamp: the first takes the bare name, the second collides and
+    # gets -001 (bare-first then the differentiating suffix, §7.2).
+    _install(monkeypatch, meta_for=lambda f: {"DateTimeOriginal": "2023:01:02 03:04:05"})
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAA")
+    (ws / "0-sources" / "b.jpg").write_bytes(b"BBB")
+    dests = {op.destination for op in _moves(_plan(ws))
+             if op.source in ("0-sources/a.jpg", "0-sources/b.jpg")}
+    assert dests == {"5-photos-by-date/2023-01-02--03-04-05.jpg",
+                     "5-photos-by-date/2023-01-02--03-04-05-001.jpg"}, dests
 
 
 # --- dedup / cache -----------------------------------------------------------
