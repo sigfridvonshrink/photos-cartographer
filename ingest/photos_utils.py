@@ -740,11 +740,17 @@ def detect_zfs_dataset(path: str):
     except Exception:
         return None
 
-def take_zfs_snapshot(ws: str, snapshot_id: str, label: str):
-    """Take an optional pre-mutation ZFS snapshot of the workspace dataset — shared by prep (§14.3)
-    and calibration execute (§29 step 6). `label` is the phase ("prep" / "calibrate") so the two
-    phases' snapshots never resolve to the same name even on a shared dataset:
-    `<dataset>@<zfs.snapshot_prefix><label>-<snapshot_id>`.
+def take_zfs_snapshot(ws: str, snapshot_id: str, label: str, *, target_path=None,
+                      dataset_key: str = "workspace"):
+    """Take an optional pre-mutation ZFS snapshot — shared by prep (§14.3, workspace), calibration
+    execute (§29 step 6, workspace), and merge execute (merge spec §10.3 step 3, the LIBRARY volume).
+    `label` is the phase ("prep" / "calibrate" / "merge") so the phases' snapshots never resolve to the
+    same name even on a shared dataset: `<dataset>@<zfs.snapshot_prefix><label>-<snapshot_id>`.
+
+    By default the snapshot targets the workspace dataset (auto-detected from `ws` or pinned via
+    `zfs.datasets.workspace`). Merge passes `target_path=library_root, dataset_key="library"` so the
+    dataset is detected from the library path (or pinned via `zfs.datasets.library`) — its placements
+    land there, not in the workspace tree.
 
     Returns None when ZFS is disabled; otherwise a record
     `{required, snapshot_name (None if no dataset was found), command, exit_code, stdout, stderr, ok}`.
@@ -755,11 +761,12 @@ def take_zfs_snapshot(ws: str, snapshot_id: str, label: str):
     if not zfs.get("enabled", False):
         return None
     required = bool(zfs.get("snapshots_required", False))
-    ds_cfg = (zfs.get("datasets") or {}).get("workspace", "auto")
-    dataset = detect_zfs_dataset(ws) if ds_cfg == "auto" else ds_cfg
+    detect_path = target_path or ws
+    ds_cfg = (zfs.get("datasets") or {}).get(dataset_key, "auto")
+    dataset = detect_zfs_dataset(detect_path) if ds_cfg == "auto" else ds_cfg
     if not dataset:
         return {"required": required, "snapshot_name": None, "command": None, "exit_code": None,
-                "stdout": "", "stderr": f"ZFS enabled but no dataset found for workspace {ws}", "ok": False}
+                "stdout": "", "stderr": f"ZFS enabled but no dataset found for {detect_path}", "ok": False}
     snap = f"{dataset}@{zfs.get('snapshot_prefix', '')}{label}-{snapshot_id}"
     cmd = ["zfs", "snapshot", snap]
     try:
@@ -1598,16 +1605,20 @@ def _move_cross_fs_no_clobber(src: str, dest: str, verify=None):
                 pass
     os.unlink(src)                                      # remove the source LAST (crash-safe)
 
-def _move_no_clobber(src: str, dest: str):
+def _move_no_clobber(src: str, dest: str, verify=None):
     """Move src -> dest, failing (FileExistsError) instead of overwriting an existing destination.
     Primary path is an atomic same-filesystem MOVE (_rename_no_clobber_same_fs). Only when that move
     cannot cross filesystems (EXDEV) does it fall back to the cross-fs copy-then-remove workaround
-    (§15.3) — a same-fs move never touches the fallback."""
+    (§15.3) — a same-fs move never touches the fallback.
+
+    `verify(src, tmp)` applies only to the cross-fs fallback (a same-fs rename is lossless, so there is
+    nothing to verify); it runs against the temp copy before it is exposed under the final name and must
+    raise to abort. The merge phase (§11) passes a content-fingerprint check to catch a torn copy."""
     try:
         _rename_no_clobber_same_fs(src, dest)
     except OSError as e:
         if e.errno == errno.EXDEV:                      # crossing filesystems — use the workaround
-            _move_cross_fs_no_clobber(src, dest)
+            _move_cross_fs_no_clobber(src, dest, verify=verify)
         else:
             raise                                       # incl. FileExistsError (EEXIST): no-clobber
 

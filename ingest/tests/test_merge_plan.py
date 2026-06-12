@@ -250,10 +250,3 @@ def test_dry_run_rejects_stale_plan(tmp_path, monkeypatch):
     p24 = os.path.join(str(ws), ".photos-ingest", "photos-24-execution-summary.json")
     open(p24, "w").write(json.dumps({"status": "success", "touched": True}))
     assert merge._run_locked_workflow("dry-run", str(ws)) == 2
-
-
-def test_execute_still_stubbed(tmp_path, monkeypatch):
-    ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
-    _patch_fp(monkeypatch, fp)
-    assert merge._run_locked_workflow("execute", str(ws)) == 0    # stub returns success, no mutation
-    assert not os.path.exists(os.path.join(str(lib), "Trip", "a.jpg"))
