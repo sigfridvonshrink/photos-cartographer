@@ -17,9 +17,12 @@ increment, ahead of the first mutating command.
 The script sits beside `photos_utils.py` and imports the shared infrastructure from it.
 """
 import argparse
+import concurrent.futures
+import errno
 import json
 import os
 import sys
+from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from photos_utils import (
@@ -28,7 +31,7 @@ from photos_utils import (
     folder_name, FOLDER_ROLES, missing_managed_folders, handoff_content_fingerprint,
     verify_json_dependency, json_dependency, write_json_artifact, is_library, write_library_marker,
     library_marker_path, allocate_suffix, suffix_root, max_suffix, ContentHasher, WorkspaceCache,
-    WorkspaceLock, LibraryLock,
+    journal_path, take_zfs_snapshot, _move_no_clobber, WorkspaceLock, LibraryLock,
 )
 
 # Calibration / prep artifacts merge READS (never writes — shared contract §13.0a).
@@ -509,6 +512,240 @@ class MergeWorkflow:
         print(json.dumps(plan, indent=2, sort_keys=True))
         return 0
 
+    # --- execute: place-then-remove, journal, resume, concurrency (§10.3/§11) ---
+
+    def _verify_fp(self, path, expected_fp):
+        """True iff `path` fingerprints (via the seam) to `expected_fp`. Used to confirm a library copy
+        or a by-dest source is the planned content before removing/finishing a move."""
+        r = self._fingerprint_library_file(path)
+        return r.get("status") == "valid" and r.get("value") == expected_fp
+
+    def _verify_copy(self, tmp_path, expected_fp):
+        """Cross-fs copy-verify hook (§11.2): raise if the temp copy's fingerprint != the planned one
+        (a torn / silently-corrupted copy), aborting the move before it is exposed under the target."""
+        if not self._verify_fp(tmp_path, expected_fp):
+            raise OSError(errno.EIO, f"library copy fingerprint mismatch (torn copy) for {tmp_path}")
+
+    @staticmethod
+    def _plan_kind(disp):
+        return {"placed_new": "placed_new", "renamed_incoming": "renamed_for_library",
+                "already_present": "already_present"}.get(disp, "placed_new")
+
+    def _move_file(self, ws, library_root, rec, journal):
+        """Apply one planned move as the §11 place-then-remove, with state-derivation resume (§8.3) and
+        execute-time no-clobber. Per-file isolated (touches only this file's source, temp, and target);
+        returns a result the executor aggregates — workers never mutate shared state or the journal."""
+        src_rel = rec["by_dest_source"]
+        src_abs = os.path.join(ws, src_rel)
+        target = rec["library_target"]
+        fp = rec["content_fingerprint"]
+        disp = rec["disposition"]
+        out = {"by_dest_source": src_rel, "library_path": target, "final_kind": None,
+               "removed": False, "newly": False, "blocker": None}
+
+        if journal.get(src_rel) == "confirmed":           # already terminal in a prior run
+            out["final_kind"] = self._plan_kind(disp)
+            out["removed"] = True
+            return out
+        if disp == "blocked":                             # plan-time per-item blocker (un-fingerprintable)
+            out["final_kind"] = "blocked"
+            out["blocker"] = rec.get("blocked_reason") or f"{src_rel}: blocked at plan time"
+            return out
+
+        src_present = os.path.exists(src_abs)
+
+        if disp == "already_present":
+            # Library already holds identical content (verified at plan). Re-confirm it still matches,
+            # then remove the source — never delete the only copy if the library file changed.
+            if not src_present:
+                out["final_kind"] = "already_present"
+                out["removed"] = True
+                return out
+            if not self._verify_fp(target, fp):
+                out["final_kind"] = "blocked"
+                out["blocker"] = (f"{src_rel}: library file {target} no longer matches the planned "
+                                  "content (changed since plan); left in by-dest")
+                return out
+            os.unlink(src_abs)
+            out.update({"final_kind": "already_present", "removed": True, "newly": True})
+            return out
+
+        # placed_new / renamed_incoming -> move source into the library target.
+        if not src_present:
+            if os.path.exists(target) and self._verify_fp(target, fp):
+                out["final_kind"] = self._plan_kind(disp)   # already moved by a prior run
+                out["removed"] = True
+                return out
+            out["final_kind"] = "blocked"
+            out["blocker"] = f"{src_rel}: source missing at execute and not present in the library"
+            return out
+        if os.path.exists(target):
+            if self._verify_fp(target, fp):                 # crash between rename and unlink: finish it
+                os.unlink(src_abs)
+                out.update({"final_kind": self._plan_kind(disp), "removed": True, "newly": True})
+                return out
+            out["final_kind"] = "blocked"
+            out["blocker"] = f"{src_rel}: target {target} occupied by different content at execute (re-plan)"
+            return out
+
+        pre = rec.get("preconditions") or {}
+        st = os.stat(src_abs)
+        if (pre.get("size") is not None and st.st_size != pre["size"]) or \
+           (pre.get("mtime_ns") is not None and st.st_mtime_ns != pre["mtime_ns"]):
+            if not self._verify_fp(src_abs, fp):            # size/mtime AND content differ -> changed
+                out["final_kind"] = "blocked"
+                out["blocker"] = (f"{src_rel}: by-dest file changed since plan "
+                                  "(size/mtime + content differ); re-plan")
+                return out
+
+        try:
+            os.makedirs(os.path.dirname(target) or ".", exist_ok=True)   # additive placement (§6)
+            _move_no_clobber(src_abs, target, verify=lambda s, t: self._verify_copy(t, fp))
+            out.update({"final_kind": self._plan_kind(disp), "removed": True, "newly": True})
+        except FileExistsError:                             # target appeared since planning
+            if os.path.exists(target) and self._verify_fp(target, fp):
+                os.unlink(src_abs)                          # identical content -> already in library
+                out.update({"final_kind": "already_present", "removed": True, "newly": True})
+            else:
+                out["final_kind"] = "blocked"
+                out["blocker"] = f"{src_rel}: target occupied by different content at execute (re-plan)"
+        except Exception as e:
+            out["final_kind"] = "blocked"
+            out["blocker"] = f"{src_rel}: move failed ({e})"
+        return out
+
+    def execute_plan(self, ws, library_root, jobs, now_iso, execution_id):
+        """Apply photos-30 after revalidating its dependencies, taking the optional library snapshot,
+        moving each file (concurrent), journaling confirmed completions (single-writer, main thread),
+        and writing photos-31-merge-summary.json. Returns the result dict (status no_plan / rejected /
+        success / partial)."""
+        p = merge_plan_path(ws)
+        if not os.path.exists(p):
+            return {"status": "no_plan"}
+        with open(p) as f:
+            plan = json.load(f)
+        stale = self.revalidate_plan_deps(ws, plan)
+        if stale:
+            return {"status": "rejected", "plan_id": plan.get("plan_id"), "stale": stale}
+
+        # Pre-mutation snapshot of the LIBRARY volume (§10.3 step 3), labelled "merge". A required
+        # snapshot that cannot be taken aborts before any placement; the record goes into the summary.
+        snapshot = take_zfs_snapshot(ws, plan["plan_id"], "merge",
+                                     target_path=library_root, dataset_key="library")
+        if snapshot is not None and snapshot["required"] and not snapshot["ok"]:
+            reason = f"required ZFS pre-mutation snapshot of the library failed: {snapshot['stderr']}"
+            summary = self._build_summary(ws, plan, library_root, [], snapshot, "rejected",
+                                          now_iso, execution_id, jobs, extra_failures=[reason])
+            write_json_artifact(merge_summary_path(ws), summary)
+            return {"status": "rejected", "plan_id": plan.get("plan_id"), "stale": [reason],
+                    "snapshot": snapshot}
+
+        jpath = journal_path(ws, plan["plan_id"])
+        journal = {}
+        if os.path.exists(jpath):
+            try:
+                journal = (json.load(open(jpath)) or {}).get("operations", {}) or {}
+            except Exception:
+                journal = {}
+
+        recs = sorted((f for d in plan.get("destinations", {}).values() for f in d.get("files", [])),
+                      key=lambda r: r["by_dest_source"])
+        results = []
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, jobs)) as ex:
+                futs = [ex.submit(self._move_file, ws, library_root, rec, journal) for rec in recs]
+                for fut in concurrent.futures.as_completed(futs):
+                    r = fut.result()
+                    results.append(r)
+                    # Incremental confirmation journal (§8.3): persist each completion AS IT FINISHES,
+                    # in this main thread (workers never touch the journal), so a crash mid-run lets the
+                    # next run skip the already-moved files.
+                    if r["removed"]:
+                        journal[r["by_dest_source"]] = "confirmed"
+                        write_json_artifact(jpath, {"journal_version": 1, "plan_id": plan["plan_id"],
+                                                    "operations": journal, "updated_at": now_iso})
+        finally:
+            from photos_utils import PersistentMagickWorker
+            PersistentMagickWorker.cleanup_all()      # close the per-thread magick workers (verify pass)
+
+        results.sort(key=lambda r: r["by_dest_source"])
+        status = "success" if not any(r["final_kind"] == "blocked" for r in results) else "partial"
+        summary = self._build_summary(ws, plan, library_root, results, snapshot, status,
+                                      now_iso, execution_id, jobs)
+        write_json_artifact(merge_summary_path(ws), summary)
+        return {"status": status, "plan_id": plan.get("plan_id"), "summary": summary,
+                "blocked": [r for r in results if r["final_kind"] == "blocked"]}
+
+    def _build_summary(self, ws, plan, library_root, results, snapshot, status, now_iso,
+                       execution_id, jobs, extra_failures=None):
+        kinds = {"placed_new": 0, "already_present": 0, "renamed_for_library": 0, "blocked": 0}
+        newly = already_done = 0
+        failures = list(extra_failures or [])
+        dests = {}
+        by_dest = folder_name('photos_by_dest')
+        for r in results:
+            kinds[r["final_kind"]] = kinds.get(r["final_kind"], 0) + 1
+            if r["final_kind"] != "blocked":
+                newly += 1 if r["newly"] else 0
+                already_done += 0 if r["newly"] else 1
+            if r["blocker"]:
+                failures.append(r["blocker"])
+            dest = os.path.dirname(os.path.relpath(r["by_dest_source"], by_dest))
+            dests.setdefault(dest, {"files": []})["files"].append({
+                "by_dest_path": r["by_dest_source"], "library_path": r["library_path"],
+                "renamed_for_library": r["final_kind"] == "renamed_for_library",
+                "already_present": r["final_kind"] == "already_present",
+                "removed_from_by_dest": r["removed"]})
+        for d in dests.values():
+            d["files"].sort(key=lambda f: f["by_dest_path"])
+        removed_total = kinds["placed_new"] + kinds["already_present"] + kinds["renamed_for_library"]
+        return {
+            "artifact_type": "merge_summary", "artifact_name": MERGE_SUMMARY_ARTIFACT,
+            "schema_version": MERGE_PLAN_SCHEMA_VERSION, "merge_run_id": execution_id,
+            "library_root": library_root,
+            "merged": {
+                EXECUTABLE_PLAN_ARTIFACT: {"sha256": sha256_file(executable_plan_path(ws))},
+                EXECUTION_SUMMARY_ARTIFACT: {"sha256": sha256_file(execution_summary_path(ws))},
+                HANDOFF_ARTIFACT: {"sha256": sha256_file(handoff_path(ws))},
+            },
+            "totals": {"placed_new": kinds["placed_new"], "already_present": kinds["already_present"],
+                       "renamed_for_library": kinds["renamed_for_library"],
+                       "removed_from_by_dest": removed_total, "blocked": kinds["blocked"]},
+            "resume": {"newly_moved": newly, "already_done_skipped": already_done},
+            "failures": failures, "destinations": dests, "status": status, "snapshot": snapshot,
+            "run_metadata": {"execution_id": execution_id, "started_at": now_iso,
+                             "finished_at": now_iso, "jobs": jobs},
+        }
+
+    def do_execute(self, ws, library_root, jobs):
+        now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        execution_id = sha256_text(f"{now_iso}|{os.getpid()}")[:12]
+        jobs = jobs or CONFIG.get("jobs") or 4
+        result = self.execute_plan(ws, library_root, jobs, now_iso, execution_id)
+        st = result["status"]
+        if st == "no_plan":
+            print(f"No {MERGE_PLAN_ARTIFACT} — run `plan` first.", file=sys.stderr)
+            return 2
+        if st == "rejected":
+            print("\nExecution rejected — the merge plan is stale; re-run `plan`:", file=sys.stderr)
+            for s in result.get("stale", []):
+                print(f"  - {s}", file=sys.stderr)
+            return 2
+        t = result["summary"]["totals"]
+        print(f"Executed {MERGE_PLAN_ARTIFACT}: status={st} — {t['placed_new']} placed, "
+              f"{t['already_present']} already-present, {t['renamed_for_library']} renamed, "
+              f"{t['blocked']} blocked ({t['removed_from_by_dest']} removed from by-dest). "
+              f"Wrote {MERGE_SUMMARY_ARTIFACT}.")
+        if st != "success":
+            for b in result.get("blocked", []):
+                if b.get("blocker"):
+                    print(f"  Blocker: {b['blocker']}", file=sys.stderr)
+            print("Blocked files were left in by-dest; resolve them and re-run `execute`.", file=sys.stderr)
+            return 3
+        print("No library file was renamed or overwritten. (Archive re-seal + workspace seal land in "
+              "Increment 5.)")
+        return 0
+
     # --- filesystem helpers (mirrors of calibration's; merge is read-only here) ---
 
     def _root_files(self):
@@ -689,9 +926,9 @@ def do_init_library(path_arg, ws):
         lock.release()
 
 
-def _run_locked_workflow(command, ws):
+def _run_locked_workflow(command, ws, jobs=None):
     """plan / dry-run / execute: acquire the workspace lock, validate config + the library marker via
-    preflight, then acquire the library lock, then dispatch. Increment 2 stubs the dispatch."""
+    preflight, then acquire the library lock, then dispatch."""
     run_lock = WorkspaceLock(ws)
     if not run_lock.acquire():
         owner = run_lock.read_owner() or {}
@@ -730,10 +967,7 @@ def _run_locked_workflow(command, ws):
                 return wf.do_plan(ws, library_root)
             if command == "dry-run":
                 return wf.do_dry_run(ws)
-            # execute
-            print("`execute` is not yet implemented (Increment 4 builds the place-then-remove move, "
-                  "journal, resume, and the terminal outputs). No files were merged.", file=sys.stderr)
-            return 0
+            return wf.do_execute(ws, library_root, jobs)
         finally:
             lib_lock.release()
     finally:
@@ -758,7 +992,7 @@ def main():
     ws = os.getcwd()
     if args.command == "init-library":
         sys.exit(do_init_library(args.path, ws))
-    sys.exit(_run_locked_workflow(args.command, ws))
+    sys.exit(_run_locked_workflow(args.command, ws, getattr(args, "jobs", None)))
 
 
 if __name__ == "__main__":
