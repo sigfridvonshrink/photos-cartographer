@@ -1,0 +1,515 @@
+#!/usr/bin/env python3
+"""photos-3-merge — library-merge phase (the terminal pipeline step for a workspace).
+
+Merge takes a calibrated, finalized `6-photos-by-dest/` staging tree and moves it into the user's
+permanent library at `library_root`, never renaming or overwriting a file already in the library;
+on success it re-seals the archival package and seals the workspace. The full behavior is specified
+in `ingest/workflows/10_photos-3-merge-workflow.md` (and the shared contract); this is the workflow
+built on top of the shared primitives in `photos_utils.py`.
+
+This file currently implements **Increment 2** (merge spec §3 / §4 / §12): the script scaffold, the
+preconditions preflight, the one-time `init-library` setup command, and the two-lock acquisition
+flow. It writes **no** merge artifacts and performs **no** placement — `plan`/`dry-run`/`execute`
+are stubbed until later increments. Preflight covers preconditions 0, 0a, 0b, 0c, 1, 1a, 2, 3, 5;
+precondition 4 (on-disk prep-consistency) lands with the finalized-name enumeration in a later
+increment, ahead of the first mutating command.
+
+The script sits beside `photos_utils.py` and imports the shared infrastructure from it.
+"""
+import argparse
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from photos_utils import (
+    CONFIG, CONTROL_DIR, config_path, handoff_path, guard_path, is_sealed,
+    validate_config, validate_merge_config, sha256_file, media_class_for_ext, folder_name,
+    FOLDER_ROLES, missing_managed_folders, handoff_content_fingerprint, verify_json_dependency,
+    write_json_artifact, is_library, write_library_marker, library_marker_path,
+    WorkspaceLock, LibraryLock,
+)
+
+# Calibration / prep artifacts merge READS (never writes — shared contract §13.0a).
+HANDOFF_ARTIFACT = "photos-11-handoff.json"
+EXECUTABLE_PLAN_ARTIFACT = "photos-23-executable-plan.json"
+EXECUTION_SUMMARY_ARTIFACT = "photos-24-execution-summary.json"
+COMPLETE_LOG_ARTIFACT = "photos-25-complete-log.json"
+ARCHIVE_MANIFEST_ARTIFACT = "photos-25-archive-manifest.json"
+# Merge's own terminal artifacts (written in later increments).
+MERGE_SUMMARY_ARTIFACT = "photos-31-merge-summary.json"
+MERGE_LOG_ARTIFACT = "photos-35-merge-log.json"
+MERGE_DB_SNAPSHOT = "photos-35-merge-ingest.db"
+
+
+def _cd(ws, name):
+    return os.path.join(ws, CONTROL_DIR, name)
+
+
+def executable_plan_path(ws):
+    return _cd(ws, EXECUTABLE_PLAN_ARTIFACT)
+
+
+def execution_summary_path(ws):
+    return _cd(ws, EXECUTION_SUMMARY_ARTIFACT)
+
+
+def complete_log_path(ws):
+    return _cd(ws, COMPLETE_LOG_ARTIFACT)
+
+
+def archive_manifest_path(ws):
+    return _cd(ws, ARCHIVE_MANIFEST_ARTIFACT)
+
+
+def merge_summary_path(ws):
+    return _cd(ws, MERGE_SUMMARY_ARTIFACT)
+
+
+class MergeWorkflow:
+    """Library-merge workflow. Increment 2 implements preflight only; the plan builder, execute, and
+    the terminal outputs (summary, merge log, DB snapshot, re-seal, seal) arrive in later increments."""
+
+    def __init__(self, workspace_root: str):
+        self.workspace_root = workspace_root
+        self.handoff = None
+
+    # --- preflight (merge spec §3) -------------------------------------------
+
+    def preflight(self):
+        """Return (blockers, warnings, info). A non-empty `blockers` means merge cannot proceed; it is
+        textual only and writes no JSON. The lifecycle/structural/config/marker/handoff guards
+        hard-stop early (each a prerequisite for the checks after it); the remaining preconditions
+        (0b, 1, 1a, 2, 3) are gathered so every problem is reported at once.
+
+        NOTE: config validation + the `.photos-library` marker identity check happen HERE, under the
+        workspace lock, BEFORE main() acquires the library lock (merge spec §12) — so no
+        `.photos-merge.lock` is ever dropped into a directory that is not a blessed library."""
+        blockers, warnings, info = [], [], {}
+        ws = self.workspace_root
+
+        # 0. Terminal-seal check — sealed means sealed (§3 precond 0; shared contract §13.7).
+        if is_sealed(ws):
+            blockers.append("Workspace is SEALED (a prior merge fully succeeded): merge will not run. "
+                            "Nothing was touched — move any new media into a fresh workspace.")
+            if self._root_files() or self._entries(folder_name('sources')):
+                warnings.append("A likely new dump is present (files at the workspace root or in "
+                                f"{folder_name('sources')}/). A sealed workspace is final; move it into "
+                                "a fresh workspace by hand — merge left it exactly where it is.")
+            return blockers, warnings, info
+
+        # 0a. Initialized, and no misplaced entry at the workspace root (§3 precond 0a; shared §5.3).
+        if not os.path.exists(guard_path(ws)):
+            blockers.append("Not an initialized workspace (no photos-00-workspace-guard) — "
+                            "run photos-1-prep first.")
+            return blockers, warnings, info
+        root_syms = self._root_symlinks()
+        if root_syms:
+            blockers.append(f"Forbidden symlink at the workspace root: {root_syms[0]}. Symlinks are "
+                            "never followed; remove it before merging.")
+            return blockers, warnings, info
+        # 0c. The managed 0-6 structure must be intact (§3 precond 0c) — merge never creates/repairs it.
+        struct_missing = missing_managed_folders(ws)
+        if struct_missing:
+            blockers.append("Workspace is non-conforming: missing managed folder(s): "
+                            f"{', '.join(struct_missing)}. Restore the 0-6 structure (merge never "
+                            "creates or repairs it) before merging.")
+            return blockers, warnings, info
+        loose = self._root_files()
+        if loose:
+            blockers.append(f"Loose file at the workspace root (dumps belong in "
+                            f"{folder_name('sources')}/): {loose[0]}. The base must hold only folders.")
+            return blockers, warnings, info
+        loose_dirs = self._root_nonmanaged_dirs()
+        if loose_dirs:
+            blockers.append(f"Misplaced folder at the workspace root (dumps belong in "
+                            f"{folder_name('sources')}/): {loose_dirs[0]}. The base must hold only "
+                            "the managed folders.")
+            return blockers, warnings, info
+
+        # Config (read-only) — must exist and be valid; merge's data path never writes it.
+        cfg_p = config_path(ws)
+        if not os.path.exists(cfg_p):
+            blockers.append("Workspace config photos-00-config.json is missing — run photos-1-prep first.")
+            return blockers, warnings, info
+        try:
+            with open(cfg_p) as f:
+                cfg = json.load(f)
+            validate_config(cfg)
+        except ValueError as e:
+            blockers.append(f"Invalid workspace config: {e}")
+            return blockers, warnings, info
+        except Exception as e:
+            blockers.append(f"Workspace config could not be read: {e}")
+            return blockers, warnings, info
+        CONFIG.update(cfg)              # adopt the seeded config as authoritative for this run
+
+        # 5. Config valid + library_root is a blessed library (§3 precond 5; merge spec §4). The
+        # deep merge-config validation and the marker check run before the library lock (§12).
+        try:
+            validate_merge_config(cfg, ws)
+        except ValueError as e:
+            blockers.append(str(e))
+            return blockers, warnings, info
+        library_root = cfg["merge"]["library_root"]
+        if not is_library(library_root):
+            blockers.append(f"{library_root} is not a blessed library (the {os.path.basename(library_marker_path(library_root))} "
+                            "marker is absent). Run `photos-3-merge init-library` to bless it first.")
+            return blockers, warnings, info
+        info["library_root"] = library_root
+
+        # Handoff (read-only) — needed for the prep-consistency / currency checks below.
+        ho_p = handoff_path(ws)
+        if not os.path.exists(ho_p):
+            blockers.append("Prep handoff photos-11-handoff.json is missing — run photos-1-prep first.")
+            return blockers, warnings, info
+        try:
+            with open(ho_p) as f:
+                handoff = json.load(f)
+        except Exception as e:
+            blockers.append(f"Prep handoff could not be read: {e}")
+            return blockers, warnings, info
+        info["handoff_sha256"] = sha256_file(ho_p)
+        self.handoff = handoff
+
+        # ---- Gathered preconditions (report every problem at once) ----------
+        # 0b. 0-sources empty (§3 precond 0b).
+        if self._entries(folder_name('sources')):
+            blockers.append(f"{folder_name('sources')}/ is not empty — an unprocessed dump is waiting; "
+                            "merge requires it empty. Re-run photos-1-prep to process it.")
+
+        # 1 + 1a. Calibration ended successfully, and the finalized record is current with by-dest.
+        self._check_calibration_finalized(ws, handoff, blockers)
+
+        # 2. The workspace was finalized (§3 precond 2).
+        if not os.path.exists(complete_log_path(ws)):
+            blockers.append("The workspace has not been finalized (photos-25-complete-log.json is "
+                            "missing). Run the finalize command (`photos-2-time-gps finalize`) first, "
+                            "then merge.")
+        if not os.path.exists(archive_manifest_path(ws)):
+            blockers.append("The archival package is incomplete (photos-25-archive-manifest.json is "
+                            "missing) — run `photos-2-time-gps finalize` before merging.")
+
+        # 3. By-dest is the clean photo-only set (§3 precond 3).
+        self._check_by_dest_clean(blockers, info)
+
+        return blockers, warnings, info
+
+    def _check_calibration_finalized(self, ws, handoff, blockers):
+        """Preconditions 1 and 1a. Calibration must have produced an executed plan (photos-23) with a
+        successful execution summary (photos-24), and the finalized record must still be current with
+        by-dest: the CURRENT handoff's content fingerprint must equal the one photos-23 pinned as a
+        dependency. A no-op re-prep (run-metadata only) does not trip this; only a real by-dest content
+        change does — that one needs re-calibrate + re-finalize, not just re-prep (distinct from §3.4)."""
+        plan_p = executable_plan_path(ws)
+        summ_p = execution_summary_path(ws)
+        plan = None
+        if not os.path.exists(plan_p):
+            blockers.append("Calibration has not produced an executable plan "
+                            "(photos-23-executable-plan.json is missing) — run `photos-2-time-gps run` "
+                            "then `execute` before merging.")
+        else:
+            try:
+                with open(plan_p) as f:
+                    plan = json.load(f)
+            except Exception as e:
+                blockers.append(f"Calibration plan photos-23-executable-plan.json could not be read: {e}")
+        if not os.path.exists(summ_p):
+            blockers.append("Calibration was not executed (photos-24-execution-summary.json is missing) "
+                            "— run `photos-2-time-gps execute` before merging.")
+        else:
+            try:
+                with open(summ_p) as f:
+                    summ = json.load(f)
+                if summ.get("status") != "success":
+                    blockers.append("Calibration execution did not end successfully "
+                                    f"(photos-24 status={summ.get('status')!r}) — resolve it and re-run "
+                                    "`photos-2-time-gps execute` before merging.")
+            except Exception as e:
+                blockers.append(f"Calibration execution summary could not be read: {e}")
+
+        if plan is None:
+            return
+        dep = (plan.get("depends_on") or {}).get("handoff")
+        if not dep:
+            blockers.append("The calibration plan records no handoff dependency — re-calibrate and "
+                            "re-finalize before merging.")
+            return
+        if dep.get("dependency_type") == "handoff_content":
+            ok = handoff_content_fingerprint(handoff) == dep.get("content_fingerprint")
+        else:
+            ok = verify_json_dependency(dep, ws)   # legacy byte-hash handoff dependency
+        if not ok:
+            blockers.append("By-dest has changed since calibration was finalized (the current handoff's "
+                            "content fingerprint no longer matches the one photos-23-executable-plan.json "
+                            "recorded). Re-calibrate and re-finalize before merging — a present but "
+                            "un-calibrated photo must not be merged.")
+
+    def _check_by_dest_clean(self, blockers, info):
+        """Precondition 3. 5-photos-by-date holds no photos; 6-photos-by-dest holds only image/raw
+        (no videos, no non-media), has no jpg/tif development subfolder, and contains no symlinks."""
+        by_date = folder_name('photos_by_date')
+        by_dest = folder_name('photos_by_dest')
+        stray = [rel for rel, mc in self._scan_media(by_date) if mc in ("image", "raw")]
+        if stray:
+            blockers.append(f"{by_date}/ still contains {len(stray)} photo(s) — by-dest must be the "
+                            f"complete set before merging (e.g. {stray[0]}).")
+        dev_found, nonphoto = self._scan_by_dest(by_dest)
+        if dev_found:
+            names = ", ".join(sorted(set(CONFIG.get("destination_distribution_subfolders") or [])))
+            blockers.append(f"A development subfolder ({names}) exists under {by_dest}: {dev_found[0]}. "
+                            "The jpg/tif breakout is a later library-side phase; merge requires the "
+                            "photo-only set.")
+        if nonphoto:
+            videos = [p for p, mc in nonphoto if mc == "video"]
+            others = [p for p, mc in nonphoto if mc != "video"]
+            parts = []
+            if others:
+                parts.append(f"{len(others)} non-media file(s) (e.g. {others[0]})")
+            if videos:
+                parts.append(f"{len(videos)} video(s) (e.g. {videos[0]} — belongs in "
+                             f"{folder_name('videos_by_date')}/)")
+            blockers.append(f"{by_dest}/ must contain only photos. Found " + " and ".join(parts) +
+                            ". Remove or relocate them before merging.")
+        syms = self._by_dest_symlinks(by_dest)
+        if syms:
+            blockers.append(f"Forbidden symlink under {by_dest}: {syms[0]}. Symlinks are never followed "
+                            "into or out of the managed tree; remove it before merging.")
+        info["by_dest_photos"] = sum(1 for _, mc in self._scan_media(by_dest) if mc in ("image", "raw"))
+
+    # --- filesystem helpers (mirrors of calibration's; merge is read-only here) ---
+
+    def _root_files(self):
+        ws = self.workspace_root
+        return sorted(f for f in os.listdir(ws) if os.path.isfile(os.path.join(ws, f)))
+
+    def _root_nonmanaged_dirs(self):
+        ws = self.workspace_root
+        managed = {folder_name(r) for r in FOLDER_ROLES}
+        return sorted(f for f in os.listdir(ws)
+                      if not f.startswith('.') and f not in managed
+                      and os.path.isdir(os.path.join(ws, f)))
+
+    def _root_symlinks(self):
+        ws = self.workspace_root
+        return sorted(f for f in os.listdir(ws) if os.path.islink(os.path.join(ws, f)))
+
+    def _entries(self, rel_folder):
+        d = os.path.join(self.workspace_root, rel_folder)
+        return sorted(os.listdir(d)) if os.path.isdir(d) else []
+
+    def _scan_media(self, rel_folder):
+        base = os.path.join(self.workspace_root, rel_folder)
+        if not os.path.isdir(base):
+            return
+        for root, _dirs, files in os.walk(base):
+            for f in files:
+                if f.startswith('.'):
+                    continue
+                rel = os.path.relpath(os.path.join(root, f), self.workspace_root)
+                yield rel, media_class_for_ext(os.path.splitext(f)[1])
+
+    def _scan_by_dest(self, by_dest):
+        """Return (dev_subfolders_found, non_photo_files) under 6-photos-by-dest."""
+        dev_names = set(CONFIG.get("destination_distribution_subfolders") or [])
+        base = os.path.join(self.workspace_root, by_dest)
+        dev_found, nonphoto = [], []
+        if not os.path.isdir(base):
+            return dev_found, nonphoto
+        for root, dirs, files in os.walk(base):
+            for d in dirs:
+                if d in dev_names:
+                    dev_found.append(os.path.relpath(os.path.join(root, d), self.workspace_root))
+            for f in files:
+                if f.startswith('.'):
+                    continue
+                mc = media_class_for_ext(os.path.splitext(f)[1])
+                if mc not in ("image", "raw"):
+                    nonphoto.append((os.path.relpath(os.path.join(root, f), self.workspace_root), mc))
+        return sorted(dev_found), nonphoto
+
+    def _by_dest_symlinks(self, by_dest):
+        """File or directory symlinks anywhere under 6-photos-by-dest (barred, never followed)."""
+        base = os.path.join(self.workspace_root, by_dest)
+        found = []
+        if not os.path.isdir(base):
+            return found
+        for root, dirs, files in os.walk(base):
+            for n in list(dirs) + files:
+                p = os.path.join(root, n)
+                if os.path.islink(p):
+                    found.append(os.path.relpath(p, self.workspace_root))
+        return sorted(found)
+
+
+def _in_workspace(ws):
+    """A directory is an (initialized) workspace iff it carries the workspace guard sentinel."""
+    return os.path.exists(guard_path(ws))
+
+
+def do_init_library(path_arg, ws):
+    """The one-time `init-library` setup command — the sole creator of the `.photos-library` marker
+    (merge spec §4). Behavior depends on workspace context and whether a path was given:
+
+      in workspace + path  -> bless the resolved path AND record library_root in config (the one
+                              narrow exception to "prep is the config seeder", shared contract §4.1)
+      in workspace, no path -> bless the directory config already names (no config write)
+      no workspace + path  -> bless only; advise running from a workspace to record it in config
+      no workspace, no path -> error (nothing to bless, no config to read)
+
+    Returns a process exit code."""
+    in_ws = _in_workspace(ws)
+
+    if path_arg is None:
+        if not in_ws:
+            print("init-library needs a library path when run outside a workspace "
+                  "(there is no workspace config to read). Pass the library directory, e.g. "
+                  "`photos-3-merge init-library /srv/library`.", file=sys.stderr)
+            return 2
+        cfg_p = config_path(ws)
+        try:
+            with open(cfg_p) as f:
+                cfg = json.load(f)
+        except Exception as e:
+            print(f"Workspace config could not be read: {e}", file=sys.stderr)
+            return 2
+        library_root = ((cfg.get("merge") or {}).get("library_root") or "")
+        if not library_root:
+            print("No merge.library_root is set in photos-00-config.json — pass a path "
+                  "(`photos-3-merge init-library <path>`) or set it in config first.", file=sys.stderr)
+            return 2
+        try:
+            validate_merge_config(cfg, ws)          # validates library_root (existing, outside ws)
+        except ValueError as e:
+            print(str(e), file=sys.stderr)
+            return 2
+        pre = is_library(library_root)
+        marker = write_library_marker(library_root)
+        print(f"Library {'already blessed' if pre else 'blessed'}: {library_root} "
+              f"({os.path.basename(marker)}). Already named in config; no config change.")
+        return 0
+
+    # A path was given: resolve to an absolute path and validate it.
+    resolved = os.path.abspath(os.path.expanduser(path_arg))
+    if not os.path.isdir(resolved):
+        print(f"init-library: {resolved} is not an existing directory.", file=sys.stderr)
+        return 2
+
+    if not in_ws:
+        pre = is_library(resolved)
+        marker = write_library_marker(resolved)
+        print(f"Library {'already blessed' if pre else 'blessed'}: {resolved} "
+              f"({os.path.basename(marker)}). Not run from a workspace, so config was not updated — "
+              "re-run this from a workspace if you also want it recorded in that workspace's "
+              "photos-00-config.json.")
+        return 0
+
+    # In a workspace with an explicit path: bless AND record library_root in config (under the lock).
+    ws_real = os.path.realpath(os.path.abspath(ws))
+    lib_real = os.path.realpath(resolved)
+    if lib_real == ws_real or lib_real.startswith(ws_real + os.sep):
+        print(f"init-library: {resolved} must resolve outside the workspace (it must not be the "
+              "workspace or any path inside it).", file=sys.stderr)
+        return 2
+    lock = WorkspaceLock(ws)
+    if not lock.acquire():
+        owner = lock.read_owner() or {}
+        detail = f" (pid {owner.get('pid')}, since {owner.get('started_at')})" if owner else ""
+        print(f"Workspace is locked by an in-progress run{detail}; try again when it finishes.",
+              file=sys.stderr)
+        return 1
+    try:
+        cfg_p = config_path(ws)
+        try:
+            with open(cfg_p) as f:
+                cfg = json.load(f)
+        except Exception as e:
+            print(f"Workspace config could not be read: {e}", file=sys.stderr)
+            return 2
+        if not isinstance(cfg.get("merge"), dict):
+            cfg["merge"] = dict(CONFIG.get("merge") or {})
+        cfg["merge"]["library_root"] = resolved
+        try:
+            validate_merge_config(cfg, ws)
+        except ValueError as e:
+            print(str(e), file=sys.stderr)
+            return 2
+        pre = is_library(resolved)
+        marker = write_library_marker(resolved)
+        write_json_artifact(cfg_p, cfg)             # the one narrow config write (library_root only)
+        print(f"Library {'already blessed' if pre else 'blessed'} and recorded: {resolved} "
+              f"({os.path.basename(marker)}). Wrote merge.library_root into photos-00-config.json.")
+        return 0
+    finally:
+        lock.release()
+
+
+def _run_locked_workflow(command, ws):
+    """plan / dry-run / execute: acquire the workspace lock, validate config + the library marker via
+    preflight, then acquire the library lock, then dispatch. Increment 2 stubs the dispatch."""
+    run_lock = WorkspaceLock(ws)
+    if not run_lock.acquire():
+        owner = run_lock.read_owner() or {}
+        detail = f" (pid {owner.get('pid')}, since {owner.get('started_at')})" if owner else ""
+        print(f"Workspace is locked by an in-progress run{detail}; try again when it finishes.",
+              file=sys.stderr)
+        return 1
+    print(f"Lock acquired: {run_lock.lock_path}", file=sys.stderr)
+    try:
+        wf = MergeWorkflow(ws)
+        blockers, warnings, info = wf.preflight()
+        for w in warnings:
+            print(f"  Warning: {w}", file=sys.stderr)
+        if blockers:
+            print("\nMerge cannot proceed:", file=sys.stderr)
+            for b in blockers:
+                print(f"  - {b}", file=sys.stderr)
+            print("\nNo files were merged.", file=sys.stderr)
+            return 2
+
+        # Preflight confirmed the .photos-library marker — safe to take the library-side lock now
+        # (§12: workspace lock, then config+marker, then library lock).
+        library_root = info["library_root"]
+        lib_lock = LibraryLock(library_root)
+        if not lib_lock.acquire():
+            owner = lib_lock.read_owner() or {}
+            detail = f" (pid {owner.get('pid')}, since {owner.get('started_at')})" if owner else ""
+            print(f"Library {library_root} is locked by another merge{detail}; try again when it "
+                  "finishes.", file=sys.stderr)
+            return 1
+        print(f"Library lock acquired: {lib_lock.lock_path}", file=sys.stderr)
+        try:
+            print(f"Preflight passed: {info.get('by_dest_photos', 0)} by-dest photo(s) ready to merge "
+                  f"into {library_root}.", file=sys.stderr)
+            print(f"`{command}` is not yet implemented (Increment 2 builds the skeleton, preflight, "
+                  "init-library, and locking only). No files were merged.", file=sys.stderr)
+            return 0
+        finally:
+            lib_lock.release()
+    finally:
+        run_lock.release()
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="photos-3-merge: move a calibrated, finalized by-dest tree into the permanent library.")
+    parser.add_argument("-j", "--jobs", type=int, default=None,
+                        help="Worker threads for execution (default: config jobs, else 4).")
+    sub = parser.add_subparsers(dest="command", required=True)
+    p_init = sub.add_parser("init-library",
+                            help="Bless a directory as the permanent library (writes .photos-library).")
+    p_init.add_argument("path", nargs="?", default=None,
+                        help="Library directory to bless (default: merge.library_root from config).")
+    sub.add_parser("plan", help="Plan the merge: map by-dest photos to library targets (no mutation).")
+    sub.add_parser("dry-run", help="Display the exact placements/collisions the plan would execute.")
+    sub.add_parser("execute", help="Apply the validated plan: move photos into the library.")
+    args = parser.parse_args()
+
+    ws = os.getcwd()
+    if args.command == "init-library":
+        sys.exit(do_init_library(args.path, ws))
+    sys.exit(_run_locked_workflow(args.command, ws))
+
+
+if __name__ == "__main__":
+    main()
