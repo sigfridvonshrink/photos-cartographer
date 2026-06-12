@@ -1,0 +1,251 @@
+"""Increment 4 — execute: the §11 place-then-remove move, journal, state-derivation resume (§8.3),
+concurrency (§10.4), and photos-31-merge-summary.json. execute consumes photos-30; the terminal
+archival steps (merge-log, DB snapshot, re-seal, seal) are Increment 5.
+
+The library-file fingerprint seam is monkeypatched to fingerprint by FILE CONTENT (a "FP=<value>"
+blob), so a faithful temp copy fingerprints to its source's value — letting the cross-fs verify path
+be exercised without ImageMagick. photos_3_merge / photos_utils come from conftest.py.
+"""
+import errno
+import json
+import os
+import shutil
+
+import pytest
+
+import photos_3_merge as merge
+import photos_utils as utils
+
+MANAGED = ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
+           "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"]
+
+
+def _fp_bytes(fp):
+    return b"FP=" + fp.encode()
+
+
+def _parse_fp(path):
+    try:
+        data = open(path, "rb").read()
+    except OSError:
+        return None
+    return data[3:].decode() if data.startswith(b"FP=") else None
+
+
+@pytest.fixture(autouse=True)
+def _content_fingerprint(monkeypatch):
+    """Fingerprint a photo by its content blob (a faithful copy -> same fingerprint as its source)."""
+    def fake(self, abs_path):
+        v = _parse_fp(abs_path)
+        if v and v != "FAIL":
+            return {"status": "valid", "value": v, "strategy": "image-content-hash-v1",
+                    "engine_version": "test"}
+        return {"status": "failed", "value": None, "error": "unreadable", "engine_version": "test"}
+    monkeypatch.setattr(merge.MergeWorkflow, "_fingerprint_library_file", fake)
+
+
+def _ws(tmp_path, photos, library_files=(), name="ws"):
+    """A merge-ready workspace + blessed library. photos: {fp, dest, final_name, pre_name?}.
+    By-dest files hold their FP blob under FINAL names; the handoff carries pre-rename names + a
+    rename op when pre_name != final_name. library_files: {fp, dest, name} ('FAIL' fp -> unreadable)."""
+    ws = tmp_path / name
+    ws.mkdir()
+    lib = tmp_path / (name + "-lib")
+    lib.mkdir()
+    for d in MANAGED:
+        (ws / d).mkdir()
+    ctl = ws / ".photos-ingest"
+    ctl.mkdir()
+    (ctl / "photos-00-workspace-guard").touch()
+    utils.write_library_marker(str(lib))
+
+    ho_files, ops = [], []
+    for p in photos:
+        dest, final = p.get("dest", ""), p["final_name"]
+        pre = p.get("pre_name", final)
+        ddir = (ws / "6-photos-by-dest" / dest) if dest else (ws / "6-photos-by-dest")
+        ddir.mkdir(parents=True, exist_ok=True)
+        (ddir / final).write_bytes(_fp_bytes(p["fp"]))
+        rel_pre = os.path.join("6-photos-by-dest", dest, pre) if dest else os.path.join("6-photos-by-dest", pre)
+        ho_files.append({"relative_path": rel_pre, "folder_class": "6-photos-by-dest",
+                         "media_class": "image", "content_fingerprint": p["fp"]})
+        if pre != final:
+            ops.append({"type": "rename_no_clobber", "to": final,
+                        "preconditions": {"content_fingerprint": p["fp"]}})
+    for lf in library_files:
+        dest = lf.get("dest", "")
+        ldir = (lib / dest) if dest else lib
+        ldir.mkdir(parents=True, exist_ok=True)
+        (ldir / lf["name"]).write_bytes(_fp_bytes(lf["fp"]))
+
+    handoff = {"files": ho_files, "content_fingerprint": "whole", "run_metadata": {"started_at": "t"}}
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(handoff))
+    cfg = {k: v for k, v in utils.CONFIG.items() if k != "jobs"}
+    cfg["merge"] = dict(cfg.get("merge") or {})
+    cfg["merge"]["library_root"] = str(lib)
+    (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
+    (ctl / "photos-23-executable-plan.json").write_text(json.dumps(
+        {"status": "ready", "destinations": {"d": {"operations": ops}},
+         "depends_on": {"handoff": {"dependency_type": "handoff_content",
+                                    "artifact_name": "photos-11-handoff.json",
+                                    "content_fingerprint": utils.handoff_content_fingerprint(handoff)}}}))
+    (ctl / "photos-24-execution-summary.json").write_text(json.dumps({"status": "success"}))
+    (ctl / "photos-25-complete-log.json").write_text(json.dumps({"photos": {}}))
+    (ctl / "photos-25-archive-manifest.json").write_text(json.dumps({"artifact_name": "m"}))
+    return ws, lib
+
+
+def _summary(ws):
+    return json.loads(open(merge.merge_summary_path(str(ws))).read())
+
+
+def _src(ws, dest, name):
+    return os.path.join(str(ws), "6-photos-by-dest", dest, name)
+
+
+# --- the four dispositions ---------------------------------------------------
+
+def test_execute_placed_new_moves_into_library(tmp_path):
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    placed = os.path.join(str(lib), "Trip", "a.jpg")
+    assert open(placed, "rb").read() == _fp_bytes("A")        # in the library
+    assert not os.path.exists(_src(ws, "Trip", "a.jpg"))      # source removed last
+    s = _summary(ws)
+    assert s["status"] == "success"
+    assert s["totals"] == {"placed_new": 1, "already_present": 0, "renamed_for_library": 0,
+                           "removed_from_by_dest": 1, "blocked": 0}
+    assert s["resume"] == {"newly_moved": 1, "already_done_skipped": 0}
+
+
+def test_execute_already_present_removes_source_no_write(tmp_path):
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
+                  library_files=[{"fp": "A", "dest": "Trip", "name": "a.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    assert open(os.path.join(str(lib), "Trip", "a.jpg"), "rb").read() == _fp_bytes("A")  # untouched
+    assert not os.path.exists(_src(ws, "Trip", "a.jpg"))     # source still removed
+    assert _summary(ws)["totals"]["already_present"] == 1
+
+
+def test_execute_renamed_incoming_places_under_safe_name(tmp_path):
+    ws, lib = _ws(tmp_path, [{"fp": "NEW", "dest": "Trip", "final_name": "ts.jpg"}],
+                  library_files=[{"fp": "OLD", "dest": "Trip", "name": "ts.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    assert open(os.path.join(str(lib), "Trip", "ts.jpg"), "rb").read() == _fp_bytes("OLD")    # untouched
+    assert open(os.path.join(str(lib), "Trip", "ts-001.jpg"), "rb").read() == _fp_bytes("NEW")  # incoming
+    assert not os.path.exists(_src(ws, "Trip", "ts.jpg"))
+    assert _summary(ws)["totals"]["renamed_for_library"] == 1
+
+
+def test_execute_unfingerprintable_library_blocks_and_keeps_source(tmp_path):
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
+                  library_files=[{"fp": "FAIL", "dest": "Trip", "name": "a.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 3          # partial
+    assert os.path.exists(_src(ws, "Trip", "a.jpg"))                    # left in by-dest
+    s = _summary(ws)
+    assert s["status"] == "partial"
+    assert s["totals"]["blocked"] == 1 and s["failures"]
+
+
+# --- resume (state-derivation, §8.3) -----------------------------------------
+
+def test_execute_resume_skips_fully_moved(tmp_path):
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    # Re-run: source gone, target present+matches -> already_done, library unchanged.
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    s = _summary(ws)
+    assert s["status"] == "success"
+    assert s["resume"]["already_done_skipped"] == 1
+    assert open(os.path.join(str(lib), "Trip", "a.jpg"), "rb").read() == _fp_bytes("A")
+
+
+def test_execute_resume_finishes_crash_window(tmp_path):
+    # Simulate a crash AFTER the library copy is in place but BEFORE the source was removed: both
+    # present + fingerprints match -> resume finishes the source removal (no duplicate kept).
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    (lib / "Trip").mkdir(parents=True, exist_ok=True)
+    (lib / "Trip" / "a.jpg").write_bytes(_fp_bytes("A"))         # library copy already present
+    assert os.path.exists(_src(ws, "Trip", "a.jpg"))            # source still there
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    assert not os.path.exists(_src(ws, "Trip", "a.jpg"))        # removal completed
+    assert open(os.path.join(str(lib), "Trip", "a.jpg"), "rb").read() == _fp_bytes("A")
+
+
+# --- cross-filesystem path + torn-copy verify (§11.2) ------------------------
+
+def _force_cross_fs(monkeypatch):
+    """Make the by-dest source move look cross-filesystem so _move_no_clobber takes the copy-verify
+    fallback; the tmp->target rename within the library stays same-fs (real)."""
+    real = utils._rename_no_clobber_same_fs
+
+    def patched(src, dest):
+        if "6-photos-by-dest" in src:
+            raise OSError(errno.EXDEV, "simulated cross-fs", src)
+        return real(src, dest)
+    monkeypatch.setattr(utils, "_rename_no_clobber_same_fs", patched)
+
+
+def test_execute_cross_fs_move_verifies_and_completes(tmp_path, monkeypatch):
+    _force_cross_fs(monkeypatch)
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    assert open(os.path.join(str(lib), "Trip", "a.jpg"), "rb").read() == _fp_bytes("A")
+    assert not os.path.exists(_src(ws, "Trip", "a.jpg"))
+
+
+def test_execute_torn_copy_blocks_and_keeps_source(tmp_path, monkeypatch):
+    _force_cross_fs(monkeypatch)
+    monkeypatch.setattr(utils.shutil, "copyfile",
+                        lambda src, dst: open(dst, "wb").write(b"FP=TORN"))   # corrupt the copy
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 3
+    assert os.path.exists(_src(ws, "Trip", "a.jpg"))            # source preserved on a torn copy
+    assert not os.path.exists(os.path.join(str(lib), "Trip", "a.jpg"))   # nothing under the final name
+    assert _summary(ws)["totals"]["blocked"] == 1
+
+
+# --- concurrency determinism + lifecycle errors ------------------------------
+
+def _comparable(s):
+    # Determinism = same counts, status, and per-destination file order/flags regardless of job count.
+    # The absolute library_path differs between the two scratch libraries, so drop it.
+    dests = {d: [(f["by_dest_path"], f["renamed_for_library"], f["already_present"],
+                  f["removed_from_by_dest"]) for f in v["files"]]
+             for d, v in s["destinations"].items()}
+    return {"totals": s["totals"], "resume": s["resume"], "status": s["status"], "dests": dests}
+
+
+def test_execute_jobs_determinism(tmp_path):
+    photos = [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
+              {"fp": "B", "dest": "Trip", "final_name": "b.jpg"},
+              {"fp": "C", "dest": "Spain", "final_name": "c.jpg"}]
+    ws1, _ = _ws(tmp_path, photos, name="w1")
+    ws2, _ = _ws(tmp_path, photos, name="w2")
+    assert merge._run_locked_workflow("plan", str(ws1)) == 0
+    assert merge._run_locked_workflow("plan", str(ws2)) == 0
+    assert merge._run_locked_workflow("execute", str(ws1), jobs=1) == 0
+    assert merge._run_locked_workflow("execute", str(ws2), jobs=4) == 0
+    assert _comparable(_summary(ws1)) == _comparable(_summary(ws2))
+
+
+def test_execute_without_plan_errors(tmp_path):
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    assert merge._run_locked_workflow("execute", str(ws)) == 2     # no photos-30
+
+
+def test_execute_rejects_stale_plan(tmp_path):
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    p24 = os.path.join(str(ws), ".photos-ingest", "photos-24-execution-summary.json")
+    open(p24, "w").write(json.dumps({"status": "success", "touched": True}))   # dep changed
+    assert merge._run_locked_workflow("execute", str(ws)) == 2
+    assert not os.path.exists(os.path.join(str(ws.parent), "ws-lib", "Trip"))  # nothing moved
