@@ -36,6 +36,7 @@ def _load_once(module_name, filename):
 _load_once("photos_utils", "photos_utils.py")
 _load_once("photos_1_prep", "photos-1-prep")
 _load_once("photos_2_time_gps", "photos-2-time-gps")   # calibration phase
+_load_once("photos_3_merge", "photos-3-merge")         # library-merge phase
 
 
 @pytest.fixture(autouse=True)
