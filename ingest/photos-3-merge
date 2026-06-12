@@ -24,9 +24,10 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from photos_utils import (
     CONFIG, CONTROL_DIR, config_path, handoff_path, guard_path, is_sealed,
-    validate_config, validate_merge_config, sha256_file, media_class_for_ext, folder_name,
-    FOLDER_ROLES, missing_managed_folders, handoff_content_fingerprint, verify_json_dependency,
-    write_json_artifact, is_library, write_library_marker, library_marker_path,
+    validate_config, validate_merge_config, sha256_file, sha256_text, media_class_for_ext,
+    folder_name, FOLDER_ROLES, missing_managed_folders, handoff_content_fingerprint,
+    verify_json_dependency, json_dependency, write_json_artifact, is_library, write_library_marker,
+    library_marker_path, allocate_suffix, suffix_root, max_suffix, ContentHasher, WorkspaceCache,
     WorkspaceLock, LibraryLock,
 )
 
@@ -36,10 +37,12 @@ EXECUTABLE_PLAN_ARTIFACT = "photos-23-executable-plan.json"
 EXECUTION_SUMMARY_ARTIFACT = "photos-24-execution-summary.json"
 COMPLETE_LOG_ARTIFACT = "photos-25-complete-log.json"
 ARCHIVE_MANIFEST_ARTIFACT = "photos-25-archive-manifest.json"
-# Merge's own terminal artifacts (written in later increments).
+# Merge's own artifacts. The plan (photos-30) precedes the terminal summary/log (31/35).
+MERGE_PLAN_ARTIFACT = "photos-30-merge-plan.json"
 MERGE_SUMMARY_ARTIFACT = "photos-31-merge-summary.json"
 MERGE_LOG_ARTIFACT = "photos-35-merge-log.json"
 MERGE_DB_SNAPSHOT = "photos-35-merge-ingest.db"
+MERGE_PLAN_SCHEMA_VERSION = 1
 
 
 def _cd(ws, name):
@@ -62,6 +65,10 @@ def archive_manifest_path(ws):
     return _cd(ws, ARCHIVE_MANIFEST_ARTIFACT)
 
 
+def merge_plan_path(ws):
+    return _cd(ws, MERGE_PLAN_ARTIFACT)
+
+
 def merge_summary_path(ws):
     return _cd(ws, MERGE_SUMMARY_ARTIFACT)
 
@@ -73,6 +80,7 @@ class MergeWorkflow:
     def __init__(self, workspace_root: str):
         self.workspace_root = workspace_root
         self.handoff = None
+        self.calib_plan = None      # photos-23 parsed once in preflight; reused by the plan builder
 
     # --- preflight (merge spec §3) -------------------------------------------
 
@@ -179,7 +187,8 @@ class MergeWorkflow:
                             "merge requires it empty. Re-run photos-1-prep to process it.")
 
         # 1 + 1a. Calibration ended successfully, and the finalized record is current with by-dest.
-        self._check_calibration_finalized(ws, handoff, blockers)
+        calib_plan = self._check_calibration_finalized(ws, handoff, blockers)
+        self.calib_plan = calib_plan       # stash for the plan builder (plan/dry-run)
 
         # 2. The workspace was finalized (§3 precond 2).
         if not os.path.exists(complete_log_path(ws)):
@@ -192,6 +201,11 @@ class MergeWorkflow:
 
         # 3. By-dest is the clean photo-only set (§3 precond 3).
         self._check_by_dest_clean(blockers, info)
+
+        # 4. Prep-consistency against the finalized-name set (§3 precond 4) — needs photos-23. Built on
+        # the handoff⨝photos-23 enumeration because calibration renamed by-dest without re-keying it.
+        if calib_plan is not None:
+            self._check_prep_consistency(handoff, calib_plan, info["library_root"], blockers)
 
         return blockers, warnings, info
 
@@ -229,12 +243,12 @@ class MergeWorkflow:
                 blockers.append(f"Calibration execution summary could not be read: {e}")
 
         if plan is None:
-            return
+            return None
         dep = (plan.get("depends_on") or {}).get("handoff")
         if not dep:
             blockers.append("The calibration plan records no handoff dependency — re-calibrate and "
                             "re-finalize before merging.")
-            return
+            return plan
         if dep.get("dependency_type") == "handoff_content":
             ok = handoff_content_fingerprint(handoff) == dep.get("content_fingerprint")
         else:
@@ -244,6 +258,7 @@ class MergeWorkflow:
                             "content fingerprint no longer matches the one photos-23-executable-plan.json "
                             "recorded). Re-calibrate and re-finalize before merging — a present but "
                             "un-calibrated photo must not be merged.")
+        return plan
 
     def _check_by_dest_clean(self, blockers, info):
         """Precondition 3. 5-photos-by-date holds no photos; 6-photos-by-dest holds only image/raw
@@ -276,6 +291,223 @@ class MergeWorkflow:
             blockers.append(f"Forbidden symlink under {by_dest}: {syms[0]}. Symlinks are never followed "
                             "into or out of the managed tree; remove it before merging.")
         info["by_dest_photos"] = sum(1 for _, mc in self._scan_media(by_dest) if mc in ("image", "raw"))
+
+    # --- finalized-name enumeration + prep-consistency (merge spec §3.4 / §10.1) ---
+
+    def enumerate_finalized(self, calib_plan, library_root):
+        """The by-dest photo set to merge, built from the FINALIZED record (not a disk scan): the
+        handoff's by-dest photos joined to photos-23's rename ops by content fingerprint. Each entry
+        carries its final on-disk by-dest path, its library-relative destination, final name, content
+        fingerprint, and library target. Robust to a handoff that carries pre- OR post-rename names —
+        the fingerprint join is name-independent (calibration renamed by-dest without re-keying it)."""
+        by_dest = folder_name('photos_by_dest')
+        final_by_fp = {}
+        for dd in (calib_plan.get("destinations") or {}).values():
+            for op in dd.get("operations") or []:
+                if op.get("type") == "rename_no_clobber":
+                    fp = (op.get("preconditions") or {}).get("content_fingerprint")
+                    if fp:
+                        final_by_fp[fp] = op.get("to")
+        entries = []
+        for rec in (self.handoff.get("files") or []):
+            if rec.get("folder_class") != by_dest or rec.get("media_class") not in ("image", "raw"):
+                continue
+            fp = _record_fingerprint(rec)
+            rel = rec.get("relative_path") or ""
+            ddir = os.path.dirname(rel)                       # 6-photos-by-dest/Belgium/Brussels
+            lib_dest = os.path.relpath(ddir, by_dest)         # Belgium/Brussels (or "." at by-dest root)
+            lib_dest = "" if lib_dest == "." else lib_dest
+            final_name = final_by_fp.get(fp) or os.path.basename(rel)
+            by_dest_relpath = os.path.join(ddir, final_name)  # workspace-relative on-disk path
+            target = (os.path.join(library_root, lib_dest, final_name) if lib_dest
+                      else os.path.join(library_root, final_name))
+            entries.append({"content_fingerprint": fp, "lib_dest": lib_dest, "final_name": final_name,
+                            "by_dest_relpath": by_dest_relpath, "library_target": target})
+        entries.sort(key=lambda e: e["by_dest_relpath"])
+        return entries
+
+    def _check_prep_consistency(self, handoff, calib_plan, library_root, blockers):
+        """Precondition 4: every photo file actually under 6-photos-by-dest must be in the finalized
+        set (matched by its final on-disk name). A disk photo with no finalized record means prep was
+        not re-run after the latest move into by-dest — a 're-run prep' blocker. The converse (a
+        finalized entry whose file is gone) is the already-merged/resume case, not a blocker."""
+        by_dest = folder_name('photos_by_dest')
+        expected = {e["by_dest_relpath"] for e in self.enumerate_finalized(calib_plan, library_root)}
+        unrecorded = sorted(rel for rel, mc in self._scan_media(by_dest)
+                            if mc in ("image", "raw") and rel not in expected)
+        if unrecorded:
+            blockers.append(f"{by_dest} contains {len(unrecorded)} photo(s) the finalized record does "
+                            f"not recognize (e.g. {unrecorded[0]}) — the handoff predates the latest "
+                            "move into by-dest. Re-run photos-1-prep, then merge.")
+
+    # --- plan builder (merge spec §6 mapping, §7 collision, §10.1 plan) -------
+
+    def build_merge_plan(self, ws, calib_plan, library_root, cache):
+        """Map each finalized by-dest photo to its library target and resolve collisions by content
+        fingerprint (append-at-max+1). Non-mutating except populating the library-file fingerprint
+        cache. Returns the serialized plan dict (the photos-30-merge-plan.json body)."""
+        entries = self.enumerate_finalized(calib_plan, library_root)
+        # Per-library-dir occupancy: existing library names + this run's whole incoming batch (+ any
+        # name allocated so far). max_suffix over it gives max(library, incoming) for append-at-max+1.
+        batch_by_dir = {}
+        for e in entries:
+            batch_by_dir.setdefault(e["lib_dest"], []).append(e["final_name"])
+        occ_names, occ_lower = {}, {}
+
+        def _occ(lib_dest):
+            if lib_dest not in occ_names:
+                d = os.path.join(library_root, lib_dest) if lib_dest else library_root
+                existing = list(os.listdir(d)) if os.path.isdir(d) else []
+                names = existing + batch_by_dir.get(lib_dest, [])
+                occ_names[lib_dest] = list(names)
+                occ_lower[lib_dest] = {n.lower() for n in names}
+            return occ_names[lib_dest], occ_lower[lib_dest]
+
+        dests, blockers = {}, []
+        totals = {"placed_new": 0, "already_present": 0, "renamed_for_library": 0, "blocked": 0}
+        for e in entries:
+            src_abs = os.path.join(ws, e["by_dest_relpath"])
+            if not os.path.exists(src_abs):
+                continue                       # finalized entry already moved/absent: resume (Inc 4)
+            st = os.stat(src_abs)
+            rec = {"by_dest_source": e["by_dest_relpath"], "content_fingerprint": e["content_fingerprint"],
+                   "preconditions": {"size": st.st_size, "mtime_ns": st.st_mtime_ns,
+                                     "content_fingerprint": e["content_fingerprint"]}}
+            target = e["library_target"]
+            if not os.path.exists(target):
+                rec.update({"disposition": "placed_new", "library_target": target,
+                            "resolved_name": e["final_name"], "renamed_for_library": False})
+                totals["placed_new"] += 1
+            else:
+                lib_fp, fp_err = self._library_fingerprint(target, cache)
+                if lib_fp is None:
+                    reason = f"library file at {target} could not be fingerprinted: {fp_err}"
+                    rec.update({"disposition": "blocked", "library_target": target,
+                                "resolved_name": e["final_name"], "renamed_for_library": False,
+                                "blocked_reason": reason})
+                    totals["blocked"] += 1
+                    blockers.append(reason + " — left in by-dest.")
+                elif lib_fp == e["content_fingerprint"]:
+                    rec.update({"disposition": "already_present", "library_target": target,
+                                "resolved_name": e["final_name"], "renamed_for_library": False})
+                    totals["already_present"] += 1
+                else:
+                    names, lower = _occ(e["lib_dest"])
+                    stem, dot, ext = e["final_name"].rpartition(".")
+                    root = suffix_root(stem if dot else e["final_name"])
+                    start = max_suffix(root, names) + 1
+                    new_name = allocate_suffix(root, ext if dot else "", lower, start_idx=start)
+                    names.append(new_name)
+                    new_target = (os.path.join(library_root, e["lib_dest"], new_name) if e["lib_dest"]
+                                  else os.path.join(library_root, new_name))
+                    rec.update({"disposition": "renamed_incoming", "library_target": new_target,
+                                "resolved_name": new_name, "renamed_for_library": True,
+                                "renamed_from": e["final_name"],
+                                "library_collision": {"path": target, "fingerprint": lib_fp}})
+                    totals["renamed_for_library"] += 1
+            dests.setdefault(e["lib_dest"], {"files": []})["files"].append(rec)
+
+        for d in dests.values():
+            d["files"].sort(key=lambda r: r["by_dest_source"])
+        depends_on = {
+            "photos-23-executable-plan.json": json_dependency(
+                EXECUTABLE_PLAN_ARTIFACT, ws, executable_plan_path(ws)),
+            "photos-24-execution-summary.json": json_dependency(
+                EXECUTION_SUMMARY_ARTIFACT, ws, execution_summary_path(ws)),
+            "handoff": {"dependency_type": "handoff_content", "artifact_name": HANDOFF_ARTIFACT,
+                        "content_fingerprint": handoff_content_fingerprint(self.handoff)},
+            "config_fingerprint": sha256_file(config_path(ws)),
+        }
+        plan = {
+            "artifact_type": "merge_plan", "artifact_name": MERGE_PLAN_ARTIFACT,
+            "schema_version": MERGE_PLAN_SCHEMA_VERSION, "library_root": library_root,
+            "placement_policy": (CONFIG.get("merge") or {}).get("placement_policy"),
+            "collision_policy": (CONFIG.get("merge") or {}).get("collision_policy"),
+            "depends_on": depends_on, "destinations": dests, "totals": totals, "blockers": blockers,
+        }
+        plan["plan_id"] = sha256_text(json.dumps(
+            {"depends_on": depends_on, "destinations": dests, "library_root": library_root},
+            sort_keys=True))[:16]
+        return plan
+
+    def _library_fingerprint(self, abs_path, cache):
+        """Content fingerprint of a resident library file, cached by path+size/mtime so it is read at
+        most once per run / across re-runs while unchanged (§7). Returns (value, None) on success or
+        (None, reason) if it cannot be fingerprinted."""
+        try:
+            st = os.stat(abs_path)
+        except OSError as e:
+            return None, str(e)
+        hit = cache.get_cached_library_fingerprint(abs_path, st.st_size, st.st_mtime_ns) if cache else None
+        if hit and hit.get("value"):
+            return hit["value"], None
+        fp = self._fingerprint_library_file(abs_path)
+        if fp.get("status") == "valid" and fp.get("value"):
+            if cache:
+                cache.cache_library_fingerprint(abs_path, st.st_size, st.st_mtime_ns, fp)
+            return fp["value"], None
+        return None, fp.get("error") or "fingerprint failed"
+
+    def _fingerprint_library_file(self, abs_path):
+        """The seam tests mock to avoid invoking ImageMagick. Library targets are photos (image/raw),
+        so the EXIF-invariant pixel-content hash applies."""
+        return ContentHasher.fingerprint_image(abs_path)
+
+    def revalidate_plan_deps(self, ws, plan):
+        """Re-check the saved plan's recorded dependencies against current state (non-mutating). A
+        non-empty list means the plan is stale and must be re-planned. Full per-file precondition
+        revalidation + execute-time no-clobber happen in execute (Increment 4)."""
+        stale = []
+        if plan.get("schema_version") != MERGE_PLAN_SCHEMA_VERSION:
+            stale.append(f"plan schema_version {plan.get('schema_version')} is not "
+                         f"{MERGE_PLAN_SCHEMA_VERSION}")
+        dep = plan.get("depends_on") or {}
+        for key in ("photos-23-executable-plan.json", "photos-24-execution-summary.json"):
+            d = dep.get(key)
+            if not (d and verify_json_dependency(d, ws)):
+                stale.append(f"{key} changed or missing")
+        ho = dep.get("handoff")
+        if not (ho and ho.get("dependency_type") == "handoff_content"
+                and handoff_content_fingerprint(self.handoff) == ho.get("content_fingerprint")):
+            stale.append("handoff content fingerprint changed")
+        cfp = dep.get("config_fingerprint")
+        if cfp and cfp != sha256_file(config_path(ws)):
+            stale.append("config changed")
+        return stale
+
+    def do_plan(self, ws, library_root):
+        cache = WorkspaceCache(ws)
+        try:
+            plan = self.build_merge_plan(ws, self.calib_plan, library_root, cache)
+        finally:
+            cache.close()
+        write_json_artifact(merge_plan_path(ws), plan)
+        t = plan["totals"]
+        print(f"Wrote {MERGE_PLAN_ARTIFACT}: plan {plan['plan_id']} — {t['placed_new']} new, "
+              f"{t['already_present']} already-present, {t['renamed_for_library']} renamed, "
+              f"{t['blocked']} blocked. Review it, `dry-run` to display, then `execute`.")
+        for b in plan["blockers"]:
+            print(f"  Blocker: {b}", file=sys.stderr)
+        return 0
+
+    def do_dry_run(self, ws):
+        p = merge_plan_path(ws)
+        if not os.path.exists(p):
+            print(f"No {MERGE_PLAN_ARTIFACT} — run `plan` first.", file=sys.stderr)
+            return 2
+        with open(p) as f:
+            plan = json.load(f)
+        stale = self.revalidate_plan_deps(ws, plan)
+        if stale:
+            print("\nThe saved merge plan is stale — re-run `plan`:", file=sys.stderr)
+            for s in stale:
+                print(f"  - {s}", file=sys.stderr)
+            return 2
+        n = sum(len(d.get("files", [])) for d in (plan.get("destinations") or {}).values())
+        print(f"Dry-run: validated plan {plan.get('plan_id')} ({n} move(s)). The exact plan `execute` "
+              "would consume follows:", file=sys.stderr)
+        print(json.dumps(plan, indent=2, sort_keys=True))
+        return 0
 
     # --- filesystem helpers (mirrors of calibration's; merge is read-only here) ---
 
@@ -340,6 +572,19 @@ class MergeWorkflow:
                 if os.path.islink(p):
                     found.append(os.path.relpath(p, self.workspace_root))
         return sorted(found)
+
+
+def _record_fingerprint(rec):
+    """The content fingerprint of a handoff file record: the prep cache's content_hash JSON `.value`
+    (the cross-phase identity spine). Falls back to a pre-extracted `content_fingerprint` field if
+    present. None if absent/unparseable."""
+    ch = rec.get("content_hash")
+    if ch:
+        try:
+            return json.loads(ch).get("value")
+        except Exception:
+            return None
+    return rec.get("content_fingerprint")
 
 
 def _in_workspace(ws):
@@ -481,8 +726,13 @@ def _run_locked_workflow(command, ws):
         try:
             print(f"Preflight passed: {info.get('by_dest_photos', 0)} by-dest photo(s) ready to merge "
                   f"into {library_root}.", file=sys.stderr)
-            print(f"`{command}` is not yet implemented (Increment 2 builds the skeleton, preflight, "
-                  "init-library, and locking only). No files were merged.", file=sys.stderr)
+            if command == "plan":
+                return wf.do_plan(ws, library_root)
+            if command == "dry-run":
+                return wf.do_dry_run(ws)
+            # execute
+            print("`execute` is not yet implemented (Increment 4 builds the place-then-remove move, "
+                  "journal, resume, and the terminal outputs). No files were merged.", file=sys.stderr)
             return 0
         finally:
             lib_lock.release()

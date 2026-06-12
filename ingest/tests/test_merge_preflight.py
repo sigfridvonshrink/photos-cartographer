@@ -46,8 +46,8 @@ def _make(tmp_path, *, guard=True, config=True, library_in_config=True, bless_li
     for name in sources_files:
         (ws / "0-sources" / name).write_bytes(b"x")
 
-    ho = {"files": [{"relative_path": rel, "media_class": "image", "content_fingerprint": f"fp-{i}"}
-                    for i, rel in enumerate(bydest)],
+    ho = {"files": [{"relative_path": rel, "folder_class": "6-photos-by-dest", "media_class": "image",
+                     "content_fingerprint": f"fp-{i}"} for i, rel in enumerate(bydest)],
           "content_fingerprint": "whole-file-hash", "run_metadata": {"started_at": "t0"}}
     fp = utils.handoff_content_fingerprint(ho)
     if handoff:
