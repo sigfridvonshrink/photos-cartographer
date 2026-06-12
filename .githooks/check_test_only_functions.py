@@ -14,27 +14,16 @@ import os
 import re
 import sys
 
-# NOTE: when the merge phase `ingest/photos-3-merge` is built, add it here so the same guard covers
-# it too (the merge script must not carry test-only production functions either).
-SRC_FILES = ["ingest/photos-1-prep", "ingest/photos-2-time-gps", "ingest/photos_utils.py"]
+SRC_FILES = ["ingest/photos-1-prep", "ingest/photos-2-time-gps", "ingest/photos-3-merge",
+             "ingest/photos_utils.py"]
 TESTS_DIR = "ingest/tests"
 
 # Names that are legitimately definition-only / entry points, not "test-only production code".
 # Add a name here (with a comment justifying it) only if it is a genuine exception.
-ALLOWLIST = {
-    # Merge-phase shared primitives, built ahead of their consumer in photos_utils.py (Increment 1).
-    # They have unit tests but no production caller YET because ingest/photos-3-merge is not written
-    # (Increments 2-5). Remove each from this set as the merge script wires it in (and add
-    # photos-3-merge to SRC_FILES then — see the note above).
-    "is_library",                      # merge preflight: library identity check (the .photos-library marker)
-    "write_library_marker",            # `merge init-library`: bless a directory as a library
-    "write_sealed_marker",             # merge §9.4: seal the workspace terminal on full success
-    "suffix_root", "max_suffix",       # merge §7: append-at-max+1 collision-rename suffix scheme
-    "reseal_archival_package",         # merge §9.4: re-seal the archive (photos-35-archive-manifest.json)
-    "validate_merge_config",           # merge §4: deep-validate library_root + placement/collision policy
-    "cache_library_fingerprint",       # merge §7: cache a resident library file's content fingerprint
-    "get_cached_library_fingerprint",  # merge §7: read that cache (path+size+mtime keyed)
-}
+# (The merge-phase shared primitives that were temporarily allowlisted while ingest/photos-3-merge
+# was being built are now consumed by it — and the script is in SRC_FILES above — so the sweep sees
+# their real callers and no exemption is needed.)
+ALLOWLIST = set()
 
 
 def _defs(path):
