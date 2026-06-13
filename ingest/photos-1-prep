@@ -1335,7 +1335,7 @@ class WorkspacePrepWorkflow:
         existing_metadata = self.cache.get_all_metadata()
 
         # --- Move-aware cache identity (prep Section 10.1 / 10.2) ------------------
-        # Recognize a file the user moved from by-date into 5-photos-by-dest (or
+        # Recognize a file the user moved from by-date into 6-photos-by-dest (or
         # re-sorted between destinations inside by-dest) by a cache-only stat match,
         # and carry its cached hash + metadata forward to the new path instead of
         # re-hashing / re-extracting it. By-dest is read-only, so there is no
@@ -1613,8 +1613,8 @@ class WorkspacePrepWorkflow:
         by_dest_files = [f for f in all_db_files if f['relative_path'].startswith(folder_name('photos_by_dest') + '/')]
 
         # Band-misplacement guard (prep Section 6.1 / 6.2.4): photos and videos live in
-        # separate bands. A video under the photo bands (4-photos-by-date / 5-photos-by-dest),
-        # or an image/raw under the video band (3-videos-by-date), is a hand-introduced break
+        # separate bands. A video under the photo bands (5-photos-by-date / 6-photos-by-dest),
+        # or an image/raw under the video band (4-videos-by-date), is a hand-introduced break
         # prep never creates itself — hard-block, do not proceed.
         _photo_bands = (folder_name('photos_by_date'), folder_name('photos_by_dest'))
         _video_band = folder_name('videos_by_date')
