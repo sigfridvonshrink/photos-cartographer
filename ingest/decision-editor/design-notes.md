@@ -55,9 +55,16 @@ panel.
     and type-to-set fallbacks; "accept" pre-fills it. Wheel-edit only when hovered/focused, with
     `preventDefault` so it never hijacks page scroll. **Real-UTC** entry is the equivalent alternate input.
   - **GPS coordinate / fallback:** a **zoomable map with a fixed centre crosshair** — pan/zoom under it,
-    validate → take `map.getCenter()`. The map also shows the **GPX track**, nearby **anchors**, and a
-    ghost marker of where the track *would* place the photo. The **photo** (embedded-JPEG preview from the
-    server) sits beside the map for context.
+    "use map center" → take `map.getCenter()` into the lat/lon fields. Reference pins (effective /
+    inherited / folder fallback) and a marker for the current decision give context, and the map seeds
+    its view to the current coordinate or the nearest known reference. The **photo** (embedded-JPEG
+    preview from the server) sits above the map for review items.
+    - *Built with vendored Leaflet (`web/vendor/leaflet/`, no CDN/build); map tiles load from
+      OpenStreetMap **at runtime** — the one external dependency, as any web map needs a tile source.*
+    - *The earlier idea of drawing the **GPX track / anchors / ghost marker** is not realised here: a GPS
+      `review_item` is on the list precisely because no reliable GPS source placed it, so the
+      `photos-22` artifact carries no track/anchor/candidate for it. The crosshair pick + photo are the
+      manual-placement aid; the fallback pins are the only positional evidence the artifact provides.*
 - **Validation** mirrors the reference (IANA tz, offset ±86400, ISO-UTC, lat/lon ranges); invalid input is
   blocked client-side so calibration never rejects the save.
 
@@ -67,8 +74,10 @@ panel.
    both views **read-only** (tree for time, worklist for GPS, selection → side-panel detail). No editing.
 1. **Editing:** the shared model + `user_decision` overlay; per-cell controls (tz select, offset
    wheel-spinner, accept toggles); override/inherited badges; client-side validation; dirty state.
-2. **Map + photo:** vendor Leaflet; the side-panel context map (centre-crosshair pick, track/anchors/ghost)
-   and embedded-JPEG photo previews served by `serve`, for GPS cells.
+2. **Map + photo (done):** vendored Leaflet; the side-panel centre-crosshair map picker with reference
+   pins + current-decision marker, and embedded-JPEG photo previews served by `serve` (`/api/photo`,
+   path-safe, workspace-only), for GPS cells. (Track/anchors/ghost dropped — not in the GPS artifact for
+   review items; see §4.)
 3. **Persist + loop:** **Save** (write `user_decision` back, round-tripping the rest) and **Re-run
    calibration** (invoke `photos-2-time-gps run`, reload the authoritative artifacts); the advisory live
    inheritance preview for the time tree.
