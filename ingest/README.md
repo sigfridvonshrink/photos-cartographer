@@ -51,6 +51,7 @@ than re-loading it.
 
 ## History
 
-Earlier monolithic prototypes (`photos-ingest`), the phase-gated reengineering specs, and the original
-calibration/merge tests have been moved to [`../archive/reengineer/`](../archive/reengineer/) for
-reference. New work starts from `photos-1-prep` and the `workflows/` specifications.
+This pipeline was split out of an earlier monolithic `photos-ingest` prototype. That prototype, the
+phase-gated reengineering specs, and the original calibration/merge tests have since been removed — their
+behavior now lives in `photos-1-prep`, `photos-2-time-gps`, and `photos-3-merge`, governed by the
+`workflows/` specifications.
