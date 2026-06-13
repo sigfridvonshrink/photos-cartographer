@@ -327,6 +327,26 @@ def test_partial_run_does_not_seal_or_finalize(tmp_path):
     assert os.path.exists(_ctl(ws, "photos-31-merge-summary.json"))     # summary still written
 
 
+def test_re_plan_after_partial_is_refused(tmp_path):
+    # Re-planning over a partially-applied merge is refused (resume via execute), so an already-moved
+    # file can never be dropped from the merge log a later execute writes. The saved plan is untouched.
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
+                  library_files=[{"fp": "FAIL", "dest": "Trip", "name": "a.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 3          # partial
+    assert _summary(ws)["status"] == "partial"
+    plan_before = open(merge.merge_plan_path(str(ws))).read()
+    assert merge._run_locked_workflow("plan", str(ws)) == 2             # re-plan refused
+    assert open(merge.merge_plan_path(str(ws))).read() == plan_before   # plan untouched
+
+
+def test_re_plan_allowed_when_no_partial(tmp_path):
+    # The guard only fires on a partial-in-flight: a plan with no prior partial summary re-plans fine.
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+
+
 def test_sealed_workspace_rerun_hardstops(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     assert merge._run_locked_workflow("plan", str(ws)) == 0
