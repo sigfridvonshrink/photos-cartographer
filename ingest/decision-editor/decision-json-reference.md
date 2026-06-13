@@ -11,6 +11,9 @@ The editor is narrowly scoped: it helps a human fill in the **decisions** these 
 only hard requirement is that its output **conforms** (so calibration accepts it). It does **not** need
 to understand the wider pipeline.
 
+> **Worked examples:** real, code-generated fixtures of both files in both states (`requires_user_input`
+> and `complete`) live in [`examples/`](examples/) — develop and test against those alongside this doc.
+
 ---
 
 ## 1. The two files
