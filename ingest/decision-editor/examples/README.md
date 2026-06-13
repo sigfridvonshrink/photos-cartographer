@@ -9,27 +9,40 @@ Regenerate with:
 python3 ingest/decision-editor/generate_examples.py
 ```
 
-Structure is documented in `../decision-json-reference.md`.
+The generator self-verifies that **every distinct decision-cell state** appears across the fixtures
+(it fails loudly if one is missing). Structure is documented in `../decision-json-reference.md`.
 
-## The four fixtures
+## The seven fixtures
 
-| File | State | What it exercises |
-|------|-------|-------------------|
-| `photos-21-time-decisions.requires-input.json` | `requires_user_input` | Timezone proposals (`config_default`) unresolved on every destination; one offset **auto-resolved** from a GPX self-anchor; one **inherited** offset awaiting confirmation; one **manual-required** offset. |
-| `photos-21-time-decisions.complete.json` | `complete` | The same after editing: a **manual** timezone (`Asia/Tokyo`), an **inherited** timezone (Kyoto, now that its parent resolved), an **accepted** timezone (`Europe/Brussels`); offsets resolved via GPX auto, **accepted-inherited**, and **manual**. |
-| `photos-22-gps-decisions.requires-input.json` | `requires_user_input` | Per-destination summaries (preserve-native / GPX-interpolation counts); **blocked** files surfaced as `review_items` with `reason: no_reliable_gps_source`. |
-| `photos-22-gps-decisions.complete.json` | `complete` | The same after editing: a **folder fallback** coordinate resolving a previously-blocked file; one review item resolved with **manual coordinates** (`manual_locked`), one with **accept-unlocated** (`accepted_unlocated`). |
+| File | Status | Focus |
+|------|--------|-------|
+| `photos-21-time-decisions.requires-input.json` | `requires_user_input` | A realistic trip, unresolved: `config_default` timezones; a GPX **auto-resolved** offset; an **inherited** offset; a **manual-required** offset. |
+| `photos-21-time-decisions.complete.json` | `complete` | The same after editing: **manual** / **inherited** / **accepted** timezones; offsets resolved via GPX-auto, **accepted-inherited**, and **manual**. |
+| `photos-22-gps-decisions.requires-input.json` | `requires_user_input` | Per-destination summaries; **blocked** files surfaced as `review_items` (`no_reliable_gps_source`). |
+| `photos-22-gps-decisions.complete.json` | `complete` | Every GPS category — preserve-native, interpolation, **extrapolation**, **manual** & **inherited** folder fallback — and the two review resolutions (`manual_locked`, `accepted_unlocated`). |
+| `photos-21-time-decisions.offset-variants.json` | `complete` | The GPX-offset proposal/resolution variants: `confidence` **high** (point) / **medium** (segment) / **review_required** (conflicting anchors); effective sources **gpx_anchor_accepted** (single anchor), **manual_real_utc**, and **manual**. |
+| `photos-21-time-decisions.no-default-timezone.json` | `requires_user_input` | A timezone cell with `proposal_source: "none"` / `proposal_confidence: "none"` (no config default, no resolved ancestor). |
+| `photos-21-time-decisions.stale-decision.json` | `requires_user_input` | `stale_user_decision: true` — an accepted proposal that no longer exists (the inputs changed since the human decided); re-decide. |
 
-The `complete` variant of each is produced exactly as the operator would — take the `requires-input`
-artifact, fill in the `user_decision` fields, and re-run the builder with it as the prior — so the pair
-also illustrates the **edit → re-run** round-trip the editor feeds into.
+The first four are a coherent trip scenario (`Japan` with a GPX-anchored camera, `Japan/Kyoto`,
+`Belgium` + `Belgium/Bruges` inheriting from it, plus a by-dest-**root** destination and a
+**phone-only** destination with no offset cells). The `requires-input`→`complete` pairs are produced
+by the real edit→re-run round-trip, so they also illustrate the loop the editor feeds into.
 
-## Scenario behind the data (synthetic, but the output is real)
+## Decision-cell states covered
 
-Three destinations — `Japan`, `Japan/Kyoto`, `Belgium` — with a fixed-clock camera geotagged against a
-short GPX track in Japan (→ self-anchor, auto-resolved offset; Kyoto inherits it), a second fixed-clock
-camera in Belgium with no GPX (→ manual-required offset), and a smartphone (→ no offset cell). GPS spans
-preserve-native, GPX-interpolation, folder-fallback, and blocked-needs-review.
+- **Timezone proposal source:** `config_default`, `inherited`, `none`.
+- **Offset proposal source:** `gpx_self_anchor` (confidence high/medium/review_required), `inherited`,
+  `manual_required`.
+- **Effective offset source:** `gpx_anchor_auto`, `gpx_anchor_accepted`, `inherited_accepted`,
+  `manual`, `manual_real_utc`.
+- **GPS categories:** preserve-native, GPX interpolation, GPX extrapolation, folder fallback
+  (manual + inherited+accepted); review reasons `no_reliable_gps_source`, `manual_locked`,
+  `accepted_unlocated`.
+- **Cell flags:** `requires_user_input` true/false; `stale_user_decision` true.
+- **Structure:** a by-dest-root destination; a phone-only destination (no offset cells); destination
+  hierarchy with parent→child inheritance of timezone, offset, and fallback.
 
-> These cover the common cases, not every combination. They are illustrative fixtures, not a conformance
-> test suite; the authoritative shape is still the code (`ingest/photos-2-time-gps`).
+> The *inputs* are synthetic (chosen to exercise each state); the *outputs* are authentic. These are
+> illustrative fixtures, not a conformance suite — the authoritative shape is still the code
+> (`ingest/photos-2-time-gps`).

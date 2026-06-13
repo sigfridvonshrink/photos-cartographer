@@ -1,0 +1,313 @@
+{
+  "artifact_name": "photos-21-time-decisions.json",
+  "artifact_type": "time_decisions",
+  "decision_mode": "no_op_or_auto_resolved",
+  "depends_on": {
+    "camera_group_key_version": 1,
+    "camera_time_policy_fingerprint": "1008657c9f24d8aab5567a64e0113328fedff5dd12ce08e6b5d27985d517ba99",
+    "gpx_fingerprint": "example-gpx-fingerprint",
+    "handoff": {
+      "artifact_name": "photos-11-handoff.json",
+      "artifact_path": ".photos-ingest/photos-11-handoff.json",
+      "content_fingerprint": "4a95ea1226cabb898264b4a4018edf3e1881acbbc93050dc9384c94ec08c3ef9",
+      "dependency_type": "handoff_content"
+    }
+  },
+  "destinations": {
+    "6-photos-by-dest/Conflict": {
+      "camera_group_time_decisions": {
+        "CAM|conflict|C": {
+          "camera_group": "CAM|conflict|C",
+          "camera_group_class": "camera",
+          "effective_time_anchor": {
+            "offset_seconds": -7200,
+            "source": "manual"
+          },
+          "proposal": {
+            "anchor_count": 2,
+            "anchors": [
+              {
+                "camera_source_naive_time": "2024:07:03 14:00:00",
+                "gpx_match": {
+                  "distance_m": 0.0,
+                  "gpx_file": "trip-2024-07-03.gpx",
+                  "match_type": "gpx_point_match",
+                  "segment_duration_seconds": null
+                },
+                "native_gps": {
+                  "lat": 54.0,
+                  "lon": 8.0
+                },
+                "proposal_id": "anchor-001",
+                "proposed_offset_seconds": -7200,
+                "source_file": "6-photos-by-dest/Conflict/c1.arw"
+              },
+              {
+                "camera_source_naive_time": "2024:07:03 14:00:00",
+                "gpx_match": {
+                  "distance_m": 0.0,
+                  "gpx_file": "trip-2024-07-03.gpx",
+                  "match_type": "gpx_point_match",
+                  "segment_duration_seconds": null
+                },
+                "native_gps": {
+                  "lat": 55.0,
+                  "lon": 9.0
+                },
+                "proposal_id": "anchor-002",
+                "proposed_offset_seconds": -18000,
+                "source_file": "6-photos-by-dest/Conflict/c2.arw"
+              }
+            ],
+            "confidence": "review_required",
+            "conflicting_count": 1,
+            "proposal_source": "gpx_self_anchor",
+            "proposed_offset_seconds": -7200,
+            "proposed_real_utc": "2024-07-03T12:00:00Z",
+            "rank": "recommended",
+            "recommended_gpx_match": {
+              "distance_m": 0.0,
+              "gpx_file": "trip-2024-07-03.gpx",
+              "match_type": "gpx_point_match",
+              "segment_duration_seconds": null
+            },
+            "supporting_count": 0
+          },
+          "requires_user_input": false,
+          "stale_user_decision": false,
+          "user_decision": {
+            "accept_proposal": false,
+            "manual_offset_seconds": -7200,
+            "manual_real_utc": ""
+          }
+        }
+      },
+      "camera_groups_present": [
+        "CAM|conflict|C"
+      ],
+      "destination_path": "6-photos-by-dest/Conflict",
+      "destination_timezone": {
+        "effective_iana_timezone": "Europe/Brussels",
+        "proposal_confidence": "high",
+        "proposal_source": "config_default",
+        "proposed_iana_timezone": "Europe/Brussels",
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "accept_proposed_timezone": true,
+          "manual_iana_timezone": ""
+        }
+      }
+    },
+    "6-photos-by-dest/ManualUtc": {
+      "camera_group_time_decisions": {
+        "CAM|manual-utc|U": {
+          "camera_group": "CAM|manual-utc|U",
+          "camera_group_class": "camera",
+          "effective_time_anchor": {
+            "offset_seconds": -7200,
+            "source": "manual_real_utc"
+          },
+          "proposal": {
+            "anchor_count": 1,
+            "anchors": [
+              {
+                "camera_source_naive_time": "2024:07:03 14:00:00",
+                "gpx_match": {
+                  "distance_m": 0.0,
+                  "gpx_file": "trip-2024-07-03.gpx",
+                  "match_type": "gpx_point_match",
+                  "segment_duration_seconds": null
+                },
+                "native_gps": {
+                  "lat": 56.0,
+                  "lon": 10.0
+                },
+                "proposal_id": "anchor-001",
+                "proposed_offset_seconds": -7200,
+                "source_file": "6-photos-by-dest/ManualUtc/u.arw"
+              }
+            ],
+            "confidence": "high",
+            "conflicting_count": 0,
+            "proposal_source": "gpx_self_anchor",
+            "proposed_offset_seconds": -7200,
+            "proposed_real_utc": "2024-07-03T12:00:00Z",
+            "rank": "recommended",
+            "recommended_gpx_match": {
+              "distance_m": 0.0,
+              "gpx_file": "trip-2024-07-03.gpx",
+              "match_type": "gpx_point_match",
+              "segment_duration_seconds": null
+            },
+            "supporting_count": 0
+          },
+          "requires_user_input": false,
+          "stale_user_decision": false,
+          "user_decision": {
+            "accept_proposal": false,
+            "manual_offset_seconds": "",
+            "manual_real_utc": "2024-07-03T12:00:00Z"
+          }
+        }
+      },
+      "camera_groups_present": [
+        "CAM|manual-utc|U"
+      ],
+      "destination_path": "6-photos-by-dest/ManualUtc",
+      "destination_timezone": {
+        "effective_iana_timezone": "Europe/Brussels",
+        "proposal_confidence": "high",
+        "proposal_source": "config_default",
+        "proposed_iana_timezone": "Europe/Brussels",
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "accept_proposed_timezone": true,
+          "manual_iana_timezone": ""
+        }
+      }
+    },
+    "6-photos-by-dest/Segment": {
+      "camera_group_time_decisions": {
+        "CAM|segment|G": {
+          "camera_group": "CAM|segment|G",
+          "camera_group_class": "camera",
+          "effective_time_anchor": {
+            "offset_seconds": -7200,
+            "source": "gpx_anchor_accepted"
+          },
+          "proposal": {
+            "anchor_count": 1,
+            "anchors": [
+              {
+                "camera_source_naive_time": "2024:07:03 14:00:15",
+                "gpx_match": {
+                  "distance_m": 11.12,
+                  "gpx_file": "trip-2024-07-03.gpx",
+                  "match_type": "gpx_segment_interpolation",
+                  "segment_duration_seconds": 30
+                },
+                "native_gps": {
+                  "lat": 53.0001,
+                  "lon": 7.0005
+                },
+                "proposal_id": "anchor-001",
+                "proposed_offset_seconds": -7200,
+                "source_file": "6-photos-by-dest/Segment/g.arw"
+              }
+            ],
+            "confidence": "medium",
+            "conflicting_count": 0,
+            "proposal_source": "gpx_self_anchor",
+            "proposed_offset_seconds": -7200,
+            "proposed_real_utc": "2024-07-03T12:00:15Z",
+            "rank": "recommended",
+            "recommended_gpx_match": {
+              "distance_m": 11.12,
+              "gpx_file": "trip-2024-07-03.gpx",
+              "match_type": "gpx_segment_interpolation",
+              "segment_duration_seconds": 30
+            },
+            "supporting_count": 0
+          },
+          "requires_user_input": false,
+          "stale_user_decision": false,
+          "user_decision": {
+            "accept_proposal": true,
+            "manual_offset_seconds": "",
+            "manual_real_utc": ""
+          }
+        }
+      },
+      "camera_groups_present": [
+        "CAM|segment|G"
+      ],
+      "destination_path": "6-photos-by-dest/Segment",
+      "destination_timezone": {
+        "effective_iana_timezone": "Europe/Brussels",
+        "proposal_confidence": "high",
+        "proposal_source": "config_default",
+        "proposed_iana_timezone": "Europe/Brussels",
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "accept_proposed_timezone": true,
+          "manual_iana_timezone": ""
+        }
+      }
+    },
+    "6-photos-by-dest/SinglePoint": {
+      "camera_group_time_decisions": {
+        "CAM|single-point|S": {
+          "camera_group": "CAM|single-point|S",
+          "camera_group_class": "camera",
+          "effective_time_anchor": {
+            "offset_seconds": -7200,
+            "source": "gpx_anchor_accepted"
+          },
+          "proposal": {
+            "anchor_count": 1,
+            "anchors": [
+              {
+                "camera_source_naive_time": "2024:07:03 14:00:00",
+                "gpx_match": {
+                  "distance_m": 0.0,
+                  "gpx_file": "trip-2024-07-03.gpx",
+                  "match_type": "gpx_point_match",
+                  "segment_duration_seconds": null
+                },
+                "native_gps": {
+                  "lat": 52.0,
+                  "lon": 6.0
+                },
+                "proposal_id": "anchor-001",
+                "proposed_offset_seconds": -7200,
+                "source_file": "6-photos-by-dest/SinglePoint/p.arw"
+              }
+            ],
+            "confidence": "high",
+            "conflicting_count": 0,
+            "proposal_source": "gpx_self_anchor",
+            "proposed_offset_seconds": -7200,
+            "proposed_real_utc": "2024-07-03T12:00:00Z",
+            "rank": "recommended",
+            "recommended_gpx_match": {
+              "distance_m": 0.0,
+              "gpx_file": "trip-2024-07-03.gpx",
+              "match_type": "gpx_point_match",
+              "segment_duration_seconds": null
+            },
+            "supporting_count": 0
+          },
+          "requires_user_input": false,
+          "stale_user_decision": false,
+          "user_decision": {
+            "accept_proposal": true,
+            "manual_offset_seconds": "",
+            "manual_real_utc": ""
+          }
+        }
+      },
+      "camera_groups_present": [
+        "CAM|single-point|S"
+      ],
+      "destination_path": "6-photos-by-dest/SinglePoint",
+      "destination_timezone": {
+        "effective_iana_timezone": "Europe/Brussels",
+        "proposal_confidence": "high",
+        "proposal_source": "config_default",
+        "proposed_iana_timezone": "Europe/Brussels",
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "accept_proposed_timezone": true,
+          "manual_iana_timezone": ""
+        }
+      }
+    }
+  },
+  "executable": false,
+  "requires_user_input": false,
+  "status": "complete"
+}
