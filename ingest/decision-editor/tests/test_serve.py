@@ -379,6 +379,35 @@ def test_http_serves_vendored_leaflet():
         assert _get(base + "/vendor/leaflet/images/marker-icon.png")[2] == "image/png"
 
 
+# --------------------------------------------------------------------------- re-run calibration
+
+def test_rerun_missing_script_errors(tmp_path, monkeypatch):
+    monkeypatch.setattr(serve, "CALIBRATE", str(tmp_path / "no-such-script"))
+    r = serve._rerun(str(tmp_path))
+    assert r["ok"] is False and "not found" in r["error"]
+
+
+def test_rerun_surfaces_calibration_blockers(tmp_path):
+    # A bare dir is not an initialized workspace: calibration's preflight blocks (exit 2) and mutates
+    # nothing — which is exactly the failure the editor must surface, so this exercises the real plumbing.
+    r = serve._rerun(str(tmp_path))
+    assert r["ok"] is False and r["returncode"] == 2
+    assert "photos-1-prep" in (r.get("stderr") or "")
+
+
+def test_http_rerun_403_in_demo():
+    with _running(None) as base:
+        status, data = _post_json(base + "/api/rerun", {})
+        assert status == 403 and data["ok"] is False
+
+
+def test_http_rerun_invokes_calibration(tmp_path):
+    ws = _workspace_with_fixtures(tmp_path)
+    with _running(ws) as base:
+        status, data = _post_json(base + "/api/rerun", {})
+    assert status == 200 and data["ok"] is False and data["returncode"] == 2
+
+
 def test_http_post_save_writes_to_workspace(tmp_path):
     ws = _workspace_with_fixtures(tmp_path)
     with _running(ws) as base:

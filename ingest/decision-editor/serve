@@ -17,8 +17,9 @@ fixtures so the app is runnable with nothing set up. The app edits the `user_dec
 saves them back to the workspace (POST /api/save writes only `user_decision`, round-tripping every
 other field; disabled in demo mode). GET /api/photo?path=<workspace-relative> returns an embedded /
 downscaled JPEG preview (exiftool/ImageMagick) for the GPS map picker; it is path-safe (never escapes
-the workspace) and 404s in demo mode. The re-run-calibration action lands in the next phase — see
-design-notes.md.)
+the workspace) and 404s in demo mode. POST /api/rerun invokes `photos-2-time-gps run` against the
+workspace (regenerating the authoritative artifacts from the saved decisions) and returns its exit
+code + output tail; the client reloads on success. See design-notes.md.)
 """
 import argparse
 import errno
@@ -69,6 +70,7 @@ def _machine_ip():
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "web")
 EXAMPLES = os.path.join(HERE, "examples")
+CALIBRATE = os.path.join(os.path.dirname(HERE), "photos-2-time-gps")  # the calibration script (../)
 CONTROL = ".photos-ingest"
 TIME_NAME = "photos-21-time-decisions.json"
 GPS_NAME = "photos-22-gps-decisions.json"
@@ -78,7 +80,8 @@ _CONTENT_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; 
                   ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8",
                   ".svg": "image/svg+xml", ".png": "image/png"}
 
-PREVIEW_MAX_PX = 1600  # longest edge of a generated photo preview
+PREVIEW_MAX_PX = 1600     # longest edge of a generated photo preview
+RERUN_TIMEOUT_S = 3600    # cap on a `photos-2-time-gps run` invoked from the editor
 
 
 def _acquire_editor_lock(workspace):
@@ -226,6 +229,27 @@ def _save(workspace, payload):
     return {"ok": True, "written": written}
 
 
+def _rerun(workspace):
+    """Re-run `photos-2-time-gps run` against the workspace, regenerating the authoritative artifacts
+    from the saved decisions. Calibration takes the workspace as its CWD and owns its own WorkspaceLock
+    (separate from the editor lock), so a concurrent calibration is reported, not forced. Returns the
+    process outcome; the client reloads /api/artifacts on success. Mutates nothing here — `run` only
+    plans (no writes to originals)."""
+    if not os.path.isfile(CALIBRATE):
+        return {"ok": False, "error": f"calibration script not found at {CALIBRATE}"}
+    try:
+        proc = subprocess.run([sys.executable, CALIBRATE, "run"], cwd=workspace,
+                              capture_output=True, text=True, timeout=RERUN_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": f"calibration timed out after {RERUN_TIMEOUT_S}s"}
+    except OSError as e:
+        return {"ok": False, "error": f"could not start calibration: {e}"}
+    # Tail the output so a huge log can't bloat the response; the exit code is the source of truth
+    # (0 = planned, 2 = blockers/unknown groups, 1 = workspace locked — see photos-2-time-gps main()).
+    return {"ok": proc.returncode == 0, "returncode": proc.returncode,
+            "stdout": proc.stdout[-8000:], "stderr": proc.stderr[-8000:]}
+
+
 class Handler(BaseHTTPRequestHandler):
     workspace = None
 
@@ -272,11 +296,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path.split("?", 1)[0]
-        if path != "/api/save":
+        if path not in ("/api/save", "/api/rerun"):
             return self._send(404, {"error": "not found"})
         if self.workspace is None:
             return self._send(403, {"ok": False, "error": "demo mode is read-only — "
-                                    "run `serve <workspace>` to save edits to a real workspace"})
+                                    "run `serve <workspace>` to edit and re-run a real workspace"})
+        if path == "/api/rerun":
+            return self._send(200, _rerun(self.workspace))
         try:
             n = int(self.headers.get("Content-Length") or 0)
             payload = json.loads(self.rfile.read(n) or b"{}")
