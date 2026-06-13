@@ -15,17 +15,22 @@ With a workspace path it reads `<workspace>/.photos-ingest/photos-21-time-decisi
 `…/photos-22-gps-decisions.json`. With no workspace it runs in DEMO mode, loading the `examples/`
 fixtures so the app is runnable with nothing set up. The app edits the `user_decision` fields and
 saves them back to the workspace (POST /api/save writes only `user_decision`, round-tripping every
-other field; disabled in demo mode). The map/photo panel and the re-run-calibration action land in
-later phases — see design-notes.md.)
+other field; disabled in demo mode). GET /api/photo?path=<workspace-relative> returns an embedded /
+downscaled JPEG preview (exiftool/ImageMagick) for the GPS map picker; it is path-safe (never escapes
+the workspace) and 404s in demo mode. The re-run-calibration action lands in the next phase — see
+design-notes.md.)
 """
 import argparse
 import errno
 import json
 import os
+import shutil
 import socket
+import subprocess
 import sys
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlparse
 
 try:
     import fcntl  # POSIX advisory locking (Linux — the pipeline already relies on it)
@@ -71,7 +76,9 @@ EDITOR_LOCK = "photos-00-decision-editor.lock"  # dotfile lives in CONTROL; floc
 
 _CONTENT_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
                   ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8",
-                  ".svg": "image/svg+xml"}
+                  ".svg": "image/svg+xml", ".png": "image/png"}
+
+PREVIEW_MAX_PX = 1600  # longest edge of a generated photo preview
 
 
 def _acquire_editor_lock(workspace):
@@ -112,6 +119,46 @@ def _read_json(path):
         return None
     except (ValueError, OSError) as e:
         return {"_error": f"could not read {os.path.basename(path)}: {e}"}
+
+
+def _safe_workspace_path(workspace, rel):
+    """Resolve a workspace-relative path, refusing anything that escapes the workspace (so a crafted
+    `path=` can never read outside it). Returns the absolute path, or None if it escapes."""
+    full = os.path.abspath(os.path.join(workspace, (rel or "").lstrip("/")))
+    base = os.path.abspath(workspace)
+    if full == base or full.startswith(base + os.sep):
+        return full
+    return None
+
+
+def _photo_preview(workspace, rel):
+    """JPEG bytes of a downscaled preview of the photo at workspace-relative `rel`, or None.
+
+    Prefers an embedded JPEG (exiftool — cheap, no full RAW decode); falls back to an ImageMagick
+    downscale (handles JPEG/TIFF/PNG/most RAW). Best-effort: a missing tool or any failure → None, and
+    the UI shows a placeholder. Used only for the manual-placement context, never to mutate originals."""
+    full = _safe_workspace_path(workspace, rel)
+    if not full or not os.path.isfile(full):
+        return None
+    if shutil.which("exiftool"):
+        for tag in ("-PreviewImage", "-JpgFromRaw"):
+            try:
+                out = subprocess.run(["exiftool", "-b", tag, full], capture_output=True, timeout=20)
+            except (OSError, subprocess.SubprocessError):
+                continue
+            if out.returncode == 0 and out.stdout[:2] == b"\xff\xd8":  # JPEG start-of-image
+                return out.stdout
+    if shutil.which("magick"):
+        try:
+            out = subprocess.run(
+                ["magick", full + "[0]", "-auto-orient",
+                 "-resize", f"{PREVIEW_MAX_PX}x{PREVIEW_MAX_PX}>", "-quality", "82", "jpeg:-"],
+                capture_output=True, timeout=60)
+            if out.returncode == 0 and out.stdout[:2] == b"\xff\xd8":
+                return out.stdout
+        except (OSError, subprocess.SubprocessError):
+            pass
+    return None
 
 
 def _load_artifacts(workspace):
@@ -211,6 +258,14 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.split("?", 1)[0]
         if path == "/api/artifacts":
             return self._send(200, _load_artifacts(self.workspace))
+        if path == "/api/photo":
+            if self.workspace is None:
+                return self._send(404, {"error": "no photo previews in demo mode"})
+            rel = (parse_qs(urlparse(self.path).query).get("path") or [""])[0]
+            data = _photo_preview(self.workspace, rel)
+            if data is None:
+                return self._send(404, {"error": "no preview available"})
+            return self._send(200, data, "image/jpeg")
         if path == "/":
             return self._serve_static("index.html")
         return self._serve_static(path)

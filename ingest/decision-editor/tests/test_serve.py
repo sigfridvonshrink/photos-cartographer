@@ -8,7 +8,9 @@ scripts.
 import copy
 import json
 import os
+import shutil
 import socket
+import subprocess
 import threading
 import urllib.error
 import urllib.request
@@ -19,6 +21,11 @@ import pytest
 import decision_editor_serve as serve
 
 EXAMPLES = serve.EXAMPLES
+HAVE_MAGICK = bool(shutil.which("magick"))
+
+
+def _make_jpeg(path):
+    subprocess.run(["magick", "-size", "64x48", "xc:navy", str(path)], check=True)
 
 
 # --------------------------------------------------------------------------- helpers
@@ -314,6 +321,62 @@ def test_http_post_unknown_route_404():
     with _running(None) as base:
         status, data = _post_json(base + "/api/nope", {})
         assert status == 404
+
+
+# --------------------------------------------------------------------------- photo preview
+
+def test_safe_workspace_path_blocks_escape(tmp_path):
+    ws = str(tmp_path)
+    assert serve._safe_workspace_path(ws, "../../etc/passwd") is None
+    assert serve._safe_workspace_path(ws, "a/../../b") is None
+    inside = serve._safe_workspace_path(ws, "6-photos-by-dest/x.arw")
+    assert inside == os.path.join(os.path.abspath(ws), "6-photos-by-dest/x.arw")
+    # A leading slash is neutralised to workspace-relative (stays inside, never reaches the real root).
+    neutralised = serve._safe_workspace_path(ws, "/etc/passwd")
+    assert neutralised.startswith(os.path.abspath(ws) + os.sep)
+
+
+def test_photo_preview_missing_file_is_none(tmp_path):
+    assert serve._photo_preview(str(tmp_path), "nope.jpg") is None
+
+
+@pytest.mark.skipif(not HAVE_MAGICK, reason="ImageMagick not installed")
+def test_photo_preview_returns_jpeg(tmp_path):
+    sub = tmp_path / "6-photos-by-dest" / "Japan"
+    sub.mkdir(parents=True)
+    _make_jpeg(sub / "pic.jpg")
+    data = serve._photo_preview(str(tmp_path), "6-photos-by-dest/Japan/pic.jpg")
+    assert data and data[:2] == b"\xff\xd8"  # JPEG start-of-image
+
+
+def test_http_photo_404_in_demo():
+    with _running(None) as base:
+        assert _get(base + "/api/photo?path=x.jpg")[0] == 404
+
+
+def test_http_photo_missing_and_escape_404(tmp_path):
+    ws = _workspace_with_fixtures(tmp_path)
+    with _running(ws) as base:
+        assert _get(base + "/api/photo?path=6-photos-by-dest/Japan/nope.jpg")[0] == 404
+        assert _get(base + "/api/photo?path=../../../../etc/passwd")[0] == 404
+
+
+@pytest.mark.skipif(not HAVE_MAGICK, reason="ImageMagick not installed")
+def test_http_photo_serves_jpeg(tmp_path):
+    ws = _workspace_with_fixtures(tmp_path)
+    sub = os.path.join(ws, "6-photos-by-dest", "Japan")
+    os.makedirs(sub)
+    _make_jpeg(os.path.join(sub, "pic.jpg"))
+    with _running(ws) as base:
+        status, body, ctype = _get(base + "/api/photo?path=6-photos-by-dest/Japan/pic.jpg")
+        assert status == 200 and "image/jpeg" in ctype and body[:2] == b"\xff\xd8"
+
+
+def test_http_serves_vendored_leaflet():
+    with _running(None) as base:
+        status, body, ctype = _get(base + "/vendor/leaflet/leaflet.js")
+        assert status == 200 and "javascript" in ctype and b"Leaflet" in body
+        assert _get(base + "/vendor/leaflet/images/marker-icon.png")[2] == "image/png"
 
 
 def test_http_post_save_writes_to_workspace(tmp_path):

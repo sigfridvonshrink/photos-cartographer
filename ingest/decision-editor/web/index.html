@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Decision editor</title>
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -23,6 +24,8 @@
     <section id="list" aria-label="decisions"></section>
     <aside id="panel" aria-label="detail"><div class="empty">Select a decision to inspect it.</div></aside>
   </main>
+  <!-- Leaflet (vendored, classic script) defines global L before the app module runs. -->
+  <script src="vendor/leaflet/leaflet.js"></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>
