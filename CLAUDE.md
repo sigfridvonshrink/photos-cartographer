@@ -95,7 +95,7 @@ The whole design exists to safely mutate **irreplaceable originals**. These rule
 
 ### Pipeline layout (shared contract)
 
-Defined in `ingest/workflows/10_photos-shared-contract.md`:
+Defined in `ingest/workflows/photos-shared-contract.md`:
 
 - The pipeline is two phases: **prep** (`photos-1-prep`) → **time/GPS calibration**
   (`photos-2-time-gps`, reserved/in progress).
@@ -122,7 +122,7 @@ Defined in `ingest/workflows/10_photos-shared-contract.md`:
 ## Specs are the source of truth
 
 The pipeline is **specification-driven**: behavior is defined by `ingest/workflows/*.md` — the two
-per-phase workflows plus `10_photos-shared-contract.md`. When changing pipeline behavior, update the
+per-phase workflows plus `photos-shared-contract.md`. When changing pipeline behavior, update the
 governing spec; the markdown is authoritative, not just the code. The current task is to make
 `photos-1-prep` fully conform to these (updated) workflow specs, so expect to reconcile differences
 between the script and the spec rather than treat the existing code as ground truth.
