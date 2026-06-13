@@ -110,7 +110,9 @@ per-(group,destination) offset inference; destination-timezone + resolved-UTC en
 decision tree + pre-state ledger; the destination-local rename planner; the 21–25 artifacts and
 their convergent-rerun staleness cascade.
 
-**Mine the algorithms** (not the destructive in-place model):
+**Mine the algorithms** (not the destructive in-place model) — historical note: the source files
+below have since been removed; these algorithms now live in `photos-2-time-gps`. Line references are
+kept for provenance only:
 - `archive/reengineer/photos-ingest`: `GPXIndex` (XML parse + deterministic fingerprint, ~`:1712`),
   `haversine` (~`:1694`), `apply_gpx_placement` (GPX interp/extrap with gap/distance/speed
   thresholds, ~`:2345`), `apply_photo_anchors` (~`:2420`), exiftool read + **CSV batch write with

@@ -485,8 +485,8 @@ class CalibrationCache:
 # ============================================================================
 # Stage 8 — GPS placement from the GPX track at a photo's resolved UTC
 # (calibration §23/§25). Pure helpers (no I/O), exhaustively unit-tested.
-# Mined from archive/reengineer/photos-ingest::apply_gpx_placement and
-# archive/storage/photos-gps-tagger (interpolation/extrapolation).
+# Mined from the former photos-ingest monolith (apply_gpx_placement) and the
+# former photos-gps-tagger interpolation/extrapolation engine (both since removed).
 # ============================================================================
 
 def _interp(a, b, target):
