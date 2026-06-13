@@ -911,12 +911,24 @@ class CalibrationWorkflow:
         info["handoff_sha256"] = sha256_file(ho_p)
         self.handoff = handoff          # stashed for the model/group stages (Phase 2)
 
+        by_dest = folder_name('photos_by_dest')
+        # §7.1 development-started guard — PRESENCE-STRICT and re-checked at execute/finalize too, not
+        # just planning: the mere existence of a jpg/tif distribution subfolder under by-dest (even an
+        # empty one) hard-stops. A breakout begun between `run` and `execute` moves no planned file, so
+        # the per-op media preconditions (§29) would not catch it; this existence check is what does.
+        dev_found, nonphoto = self._scan_by_dest(by_dest)
+        if dev_found:
+            names = ", ".join(sorted(set(CONFIG.get("destination_distribution_subfolders") or [])))
+            blockers.append(f"Development has already started — a distribution subfolder ({names}) "
+                            f"exists under {by_dest}: {dev_found[0]}. Time/GPS calibration must run "
+                            "BEFORE development; roll the breakout back first.")
+            return blockers, warnings, info
+
         if for_execute:                 # execution skips the planning-phase scope/re-prep gates
             return blockers, warnings, info
 
         sources = folder_name('sources')
         by_date = folder_name('photos_by_date')
-        by_dest = folder_name('photos_by_dest')
 
         # 3. Scope gates.
         if self._entries(sources):
@@ -928,12 +940,6 @@ class CalibrationWorkflow:
             blockers.append(f"{by_date}/ still contains {len(stray)} photo(s) — finish moving them "
                             f"into {by_dest}/ before calibrating (e.g. {stray[0]}).")
 
-        dev_found, nonphoto = self._scan_by_dest(by_dest)
-        if dev_found:
-            names = ", ".join(sorted(set(CONFIG.get("destination_distribution_subfolders") or [])))
-            blockers.append(f"Development has already started — a distribution subfolder ({names}) "
-                            f"exists under {by_dest}: {dev_found[0]}. Time/GPS calibration must run "
-                            "BEFORE development; roll the breakout back first.")
         if nonphoto:
             videos = [p for p, mc in nonphoto if mc == "video"]
             others = [p for p, mc in nonphoto if mc != "video"]
