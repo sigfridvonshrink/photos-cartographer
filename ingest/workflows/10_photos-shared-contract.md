@@ -193,7 +193,12 @@ A file whose timestamp component collides with one already taken receives a zero
 <timestamp>-002.ext    second collision
 ```
 
-The suffix (`-NNN`) is allocated against a per-run, case-insensitive, **monotonic** index — it only grows, always taking the next value above the current highest in use, never reusing a freed-up lower number — so two files never collide and ordering is stable. Suffix allocation rules (treating all on-disk and planned names as occupied for the duration of the allocation loop) are specified per phase where the renames are planned (prep Section 8 / Section 7.3; calibration Section 27).
+The suffix (`-NNN`) is allocated **no-clobber against a per-run, case-insensitive occupied-name set** — every on-disk and planned name is treated as occupied for the duration of the allocation loop — so two files never collide. *Which* free name is chosen differs by phase, and deliberately so:
+
+- **Prep and calibration** take the **first free** name: the bare `<timestamp>.ext` when available, otherwise the lowest free `-NNN`. Bare-first is what makes an uncorrected file's provisional (prep) and final (calibration) names coincide, so calibration plans no needless rename (Section 7.3); the two phases use the identical rule so they never disagree on a name.
+- **Merge** instead **appends at `max+1`** (the next index above the highest already in use for that root name), never reusing a freed-up lower number, because the library is append-only and a re-run must reproduce the same name (merge spec `10_photos-3-merge-workflow.md` Section 7).
+
+Suffix allocation rules are specified per phase where the renames are planned (prep Section 8 / Section 7.3; calibration Section 27; merge spec Section 7).
 
 ### 7.3 Provisional (prep) vs. final (calibration) timestamps
 
