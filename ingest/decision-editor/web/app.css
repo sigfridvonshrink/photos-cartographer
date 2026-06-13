@@ -87,3 +87,17 @@ main { flex: 1; display: grid; grid-template-columns: minmax(360px, 1fr) minmax(
 .kv dt { color: var(--muted); } .kv dd { margin: 0; font: 12px var(--mono); word-break: break-word; }
 pre.json { margin: 0; font: 12px var(--mono); white-space: pre-wrap; word-break: break-word; color: #cdd3db; }
 .placeholder { color: var(--muted); font-size: 12px; font-style: italic; }
+
+/* GPS map picker + photo */
+.mapwrap { position: relative; }
+.map { height: 320px; border-radius: 8px; overflow: hidden; background: #14171c; }
+.leaflet-container { background: #14171c; font: inherit; }
+/* fixed centre crosshair — the pick target; never intercepts map drags */
+.crosshair { position: absolute; left: 50%; top: 50%; width: 26px; height: 26px;
+  transform: translate(-50%, -50%); pointer-events: none; z-index: 500; }
+.crosshair::before, .crosshair::after { content: ""; position: absolute; background: #ff7043; box-shadow: 0 0 0 1px rgba(0,0,0,.4); }
+.crosshair::before { left: 50%; top: 0; width: 2px; height: 100%; transform: translateX(-50%); }
+.crosshair::after { top: 50%; left: 0; height: 2px; width: 100%; transform: translateY(-50%); }
+.map-bar { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.map-read { flex: 1; font: 12px var(--mono); color: var(--muted); }
+.photo-img { display: block; max-width: 100%; max-height: 360px; border-radius: 6px; background: #111; }
