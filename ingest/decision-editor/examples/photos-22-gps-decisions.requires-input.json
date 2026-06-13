@@ -1,0 +1,252 @@
+{
+  "artifact_name": "photos-22-gps-decisions.json",
+  "artifact_type": "gps_decisions",
+  "depends_on": {
+    "gps_policy_fingerprint": "43e9f3bfa9185120b624decb2abb298ef45589a820c1fba5622d31dd28b3b215",
+    "gpx_fingerprint": "example-gpx-fingerprint",
+    "handoff": {
+      "artifact_name": "photos-11-handoff.json",
+      "artifact_path": ".photos-ingest/photos-11-handoff.json",
+      "content_fingerprint": "4a95ea1226cabb898264b4a4018edf3e1881acbbc93050dc9384c94ec08c3ef9",
+      "dependency_type": "handoff_content"
+    },
+    "resolved_utc_cache_fingerprint": "example-resolved-utc-fingerprint"
+  },
+  "destinations": {
+    "6-photos-by-dest": {
+      "destination_path": "6-photos-by-dest",
+      "folder_fallback": {
+        "effective_fallback": null,
+        "proposal": {
+          "proposal_source": "manual_required"
+        },
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "accept_proposal": false,
+          "fallback_lat": "",
+          "fallback_lon": ""
+        }
+      },
+      "gps_decisions": {
+        "automatic_decision_summary": {
+          "confidence": "automatic",
+          "gpx_files_used": [],
+          "max_distance_to_track_m": 1000.0,
+          "max_interpolation_gap_seconds": 120.0,
+          "notes": [
+            "Automatic decisions are summarized here; exact file-level write operations are listed only in photos-23-executable-plan.json."
+          ]
+        },
+        "review_items": [],
+        "summary": {
+          "automatic_folder_fallback": 0,
+          "automatic_gpx_extrapolation": 0,
+          "automatic_gpx_interpolation": 0,
+          "blocked": 0,
+          "files_total": 1,
+          "manual_locked": 0,
+          "manual_review_required": 0,
+          "no_gps_change_needed": 0,
+          "preserve_native_gps": 1
+        }
+      }
+    },
+    "6-photos-by-dest/Belgium": {
+      "destination_path": "6-photos-by-dest/Belgium",
+      "folder_fallback": {
+        "effective_fallback": null,
+        "proposal": {
+          "proposal_source": "manual_required"
+        },
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "accept_proposal": false,
+          "fallback_lat": "",
+          "fallback_lon": ""
+        }
+      },
+      "gps_decisions": {
+        "automatic_decision_summary": {
+          "confidence": "mixed",
+          "gpx_files_used": [],
+          "max_distance_to_track_m": 1000.0,
+          "max_interpolation_gap_seconds": 120.0,
+          "notes": [
+            "Automatic decisions are summarized here; exact file-level write operations are listed only in photos-23-executable-plan.json."
+          ]
+        },
+        "review_items": [
+          {
+            "reason": "no_reliable_gps_source",
+            "relative_path": "6-photos-by-dest/Belgium/bel-cam.arw",
+            "requires_user_input": true,
+            "stale_user_decision": false,
+            "user_decision": {
+              "accept_unlocated": false,
+              "manual_lat": "",
+              "manual_lon": ""
+            }
+          }
+        ],
+        "summary": {
+          "automatic_folder_fallback": 0,
+          "automatic_gpx_extrapolation": 0,
+          "automatic_gpx_interpolation": 0,
+          "blocked": 1,
+          "files_total": 2,
+          "manual_locked": 0,
+          "manual_review_required": 1,
+          "no_gps_change_needed": 0,
+          "preserve_native_gps": 1
+        }
+      }
+    },
+    "6-photos-by-dest/Belgium/Bruges": {
+      "destination_path": "6-photos-by-dest/Belgium/Bruges",
+      "folder_fallback": {
+        "effective_fallback": null,
+        "proposal": {
+          "proposal_source": "manual_required"
+        },
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "accept_proposal": false,
+          "fallback_lat": "",
+          "fallback_lon": ""
+        }
+      },
+      "gps_decisions": {
+        "automatic_decision_summary": {
+          "confidence": "automatic",
+          "gpx_files_used": [],
+          "max_distance_to_track_m": 1000.0,
+          "max_interpolation_gap_seconds": 120.0,
+          "notes": [
+            "Automatic decisions are summarized here; exact file-level write operations are listed only in photos-23-executable-plan.json."
+          ]
+        },
+        "review_items": [],
+        "summary": {
+          "automatic_folder_fallback": 0,
+          "automatic_gpx_extrapolation": 0,
+          "automatic_gpx_interpolation": 0,
+          "blocked": 0,
+          "files_total": 1,
+          "manual_locked": 0,
+          "manual_review_required": 0,
+          "no_gps_change_needed": 0,
+          "preserve_native_gps": 1
+        }
+      }
+    },
+    "6-photos-by-dest/Japan": {
+      "destination_path": "6-photos-by-dest/Japan",
+      "folder_fallback": {
+        "effective_fallback": null,
+        "proposal": {
+          "proposal_source": "manual_required"
+        },
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "accept_proposal": false,
+          "fallback_lat": "",
+          "fallback_lon": ""
+        }
+      },
+      "gps_decisions": {
+        "automatic_decision_summary": {
+          "confidence": "mixed",
+          "gpx_files_used": [
+            "trip-2024-07-03.gpx"
+          ],
+          "max_distance_to_track_m": 1000.0,
+          "max_interpolation_gap_seconds": 120.0,
+          "notes": [
+            "Automatic decisions are summarized here; exact file-level write operations are listed only in photos-23-executable-plan.json."
+          ]
+        },
+        "review_items": [
+          {
+            "reason": "no_reliable_gps_source",
+            "relative_path": "6-photos-by-dest/Japan/blocked-a.arw",
+            "requires_user_input": true,
+            "stale_user_decision": false,
+            "user_decision": {
+              "accept_unlocated": false,
+              "manual_lat": "",
+              "manual_lon": ""
+            }
+          },
+          {
+            "reason": "no_reliable_gps_source",
+            "relative_path": "6-photos-by-dest/Japan/blocked-b.arw",
+            "requires_user_input": true,
+            "stale_user_decision": false,
+            "user_decision": {
+              "accept_unlocated": false,
+              "manual_lat": "",
+              "manual_lon": ""
+            }
+          }
+        ],
+        "summary": {
+          "automatic_folder_fallback": 0,
+          "automatic_gpx_extrapolation": 1,
+          "automatic_gpx_interpolation": 1,
+          "blocked": 2,
+          "files_total": 6,
+          "manual_locked": 0,
+          "manual_review_required": 2,
+          "no_gps_change_needed": 0,
+          "preserve_native_gps": 2
+        }
+      }
+    },
+    "6-photos-by-dest/PhoneOnly": {
+      "destination_path": "6-photos-by-dest/PhoneOnly",
+      "folder_fallback": {
+        "effective_fallback": null,
+        "proposal": {
+          "proposal_source": "manual_required"
+        },
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "accept_proposal": false,
+          "fallback_lat": "",
+          "fallback_lon": ""
+        }
+      },
+      "gps_decisions": {
+        "automatic_decision_summary": {
+          "confidence": "automatic",
+          "gpx_files_used": [],
+          "max_distance_to_track_m": 1000.0,
+          "max_interpolation_gap_seconds": 120.0,
+          "notes": [
+            "Automatic decisions are summarized here; exact file-level write operations are listed only in photos-23-executable-plan.json."
+          ]
+        },
+        "review_items": [],
+        "summary": {
+          "automatic_folder_fallback": 0,
+          "automatic_gpx_extrapolation": 0,
+          "automatic_gpx_interpolation": 0,
+          "blocked": 0,
+          "files_total": 1,
+          "manual_locked": 0,
+          "manual_review_required": 0,
+          "no_gps_change_needed": 0,
+          "preserve_native_gps": 1
+        }
+      }
+    }
+  },
+  "executable": false,
+  "requires_user_input": true,
+  "status": "requires_user_input"
+}
