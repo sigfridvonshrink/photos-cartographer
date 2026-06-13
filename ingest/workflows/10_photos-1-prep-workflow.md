@@ -471,7 +471,7 @@ The whole prep run — `plan`, `dry-run`, and `execute` alike — runs under the
 3. take a pre-mutation snapshot where configured (the `zfs` block in config), honoring `snapshots_required`;
 4. apply only the planned operations, each verified no-clobber **at execute time** and performed atomically (shared contract `10_photos-shared-contract.md` Section 15): immediately before each move/rename/quarantine, confirm the specific target path does not already exist (case-insensitively where the filesystem is case-insensitive) rather than trusting the plan's collision analysis, and perform the operation as a single atomic filesystem action. If a target unexpectedly exists at execute time, the operation is a blocker (or is re-checked against the plan's recorded safe-alternative allocation where the operation class permits) — never a clobber;
 5. journal every operation (move, rename, quarantine, cache write) with its result;
-6. write the quarantine manifest for any quarantined file;
+6. write each quarantined file's manifest entry **before** moving that file into quarantine, so the recoverable record always precedes the move (evidence-before-quarantine, Section 15);
 7. update SQLite/cache from the validated plan and journal in a single controlled writer/transaction after verification;
 8. write the handoff manifest only on overall success (Section 16);
 9. write the end-of-prep audit log `photos-15-prep-log.json` on overall success (Section 16.1);
@@ -504,6 +504,8 @@ A successful prep run still writes the handoff manifest only as the final step (
 ## 15. Quarantine model
 
 Duplicate removal is recoverable, never destructive. Each duplicate is moved (not deleted) under `.photos-ingest-quarantine/<plan_id>/` preserving its original relative path, and a manifest records, per item: original path, quarantine path, retained counterpart, duplicate evidence (the content fingerprint), and the plan id. The quarantine directory is excluded from scanning, so re-running prep neither re-organizes nor re-quarantines already-quarantined files.
+
+**Evidence is recorded before the move (evidence-before-quarantine).** The manifest entry is the only durable record of *why* a file was quarantined (the journal records the operation's result, not its duplicate evidence; the cache is committed once at the end of the run), and the quarantine tree is excluded from scanning, so a file moved into quarantine without its manifest entry would be invisible to every later run and stranded with no record. Prep therefore writes the manifest entry **first**, then moves the file. A crash or move failure in between leaves the file at its source — where the next run re-detects and re-quarantines it (with fresh evidence under a new plan id) — so the interrupted run's pre-written entry becomes at worst a benign, prunable orphan (a `<plan_id>/` holding only a manifest), never a quarantined file with no record of why.
 
 ### 15.1 Retention
 
