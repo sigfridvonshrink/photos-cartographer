@@ -74,10 +74,12 @@ See **[`immich/README.md`](immich/README.md)** for details and the `photos-cfg.j
 ---
 
 ## Archive
-The `archive/` directory holds material kept for reference but not part of the active workflow:
+The `archive/` directory holds standalone legacy tools kept for reference. Unlike the removed
+reengineering prototype, these still implement functionality the active pipeline does **not** cover:
 
--   Legacy scripts such as the original `dk2im` conversion tools.
--   `archive/reengineer/` — the phase-gated reengineering specs and the monolithic `photos-ingest`
-    prototype (plus its calibration/merge tests) that the `ingest/` pipeline was split out of.
--   `archive/storage/` — the former storage-machine tools, including `photos-gps-tagger`, whose
-    track-based geotagging is superseded by the `ingest/` calibration phase.
+-   Direct-mutation digiKam↔Immich integration scripts (`photos-dk2im-sync`, `photos-im2dk-sync`,
+    `photos-dk-pick-std-jpg`, `photos-im-mark`, `photos-gps-sync-xmp`, `photos-fix-exif-dates`).
+-   `archive/storage/legacy-utils/` — the `photocheck-*` library-audit scripts and `photoflow.py`.
+
+The phase-gated reengineering specs, the monolithic `photos-ingest` prototype that `ingest/` was split
+out of, and the superseded `photos-gps-tagger` have been removed; their behavior now lives in `ingest/`.
