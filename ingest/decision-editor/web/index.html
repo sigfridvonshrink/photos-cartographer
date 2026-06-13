@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Decision editor</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header id="topbar">
+    <strong>Decision editor</strong>
+    <span id="workspace" class="muted"></span>
+    <span class="grow"></span>
+    <div id="view-toggle" class="seg" role="tablist">
+      <button data-view="time" class="on">Time</button>
+      <button data-view="gps">GPS</button>
+    </div>
+    <span id="todo" class="badge"></span>
+    <span class="ro-note" title="The editing, map, and save features land in later phases.">read-only skeleton</span>
+  </header>
+  <main>
+    <section id="list" aria-label="decisions"></section>
+    <aside id="panel" aria-label="detail"><div class="empty">Select a decision to inspect it.</div></aside>
+  </main>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
