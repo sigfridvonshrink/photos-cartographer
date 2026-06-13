@@ -85,11 +85,12 @@ def _ws(tmp_path, photos, library_files=(), name="ws"):
     cfg["merge"]["library_root"] = str(lib)
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
     (ctl / "photos-23-executable-plan.json").write_text(json.dumps(
-        {"status": "ready", "destinations": {"d": {"operations": ops}},
+        {"status": "ready", "plan_id": "cal-plan-1", "destinations": {"d": {"operations": ops}},
          "depends_on": {"handoff": {"dependency_type": "handoff_content",
                                     "artifact_name": "photos-11-handoff.json",
                                     "content_fingerprint": utils.handoff_content_fingerprint(handoff)}}}))
-    (ctl / "photos-24-execution-summary.json").write_text(json.dumps({"status": "success"}))
+    (ctl / "photos-24-execution-summary.json").write_text(json.dumps(
+        {"status": "success", "run_metadata": {"execution_id": "cal-exec-1"}}))
     (ctl / "photos-25-complete-log.json").write_text(json.dumps({"photos": {}}))
     (ctl / "photos-25-archive-manifest.json").write_text(json.dumps({"artifact_name": "m"}))
     return ws, lib
@@ -281,6 +282,11 @@ def test_full_success_writes_terminal_artifacts_and_seals(tmp_path):
         assert os.path.exists(_ctl(ws, name)), name
     sealed = json.loads(open(_ctl(ws, "photos-00-sealed.json")).read())
     assert sealed["sealed"] is True and sealed["library_root"] == str(lib)
+    # §9.1 item 2/9: summary carries the merge plan id, the calibration run ids, and a finish time.
+    summ = _summary(ws)
+    assert summ["merge_plan_id"] == json.loads(open(_ctl(ws, "photos-30-merge-plan.json")).read())["plan_id"]
+    assert summ["calibration"] == {"plan_id": "cal-plan-1", "execution_id": "cal-exec-1"}
+    assert summ["run_metadata"]["finished_at"] and summ["run_metadata"]["started_at"]
     # The re-seal manifest supersedes calibration's and lists the merge artifacts.
     manifest = json.loads(open(_ctl(ws, "photos-35-archive-manifest.json")).read())
     assert manifest["supersedes"] == "photos-25-archive-manifest.json"

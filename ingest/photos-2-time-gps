@@ -1989,15 +1989,16 @@ def main():
             groups, unknown = wf.recognize_camera_groups(files)
 
             if unknown:
-                print("\nCalibration cannot proceed: unknown camera group(s). Classify each in "
-                      "photos-00-config.json under camera_time_and_timezone_policy.device_groups — "
-                      "add to \"phones\" (smartphone) or \"fixed_clock_cameras\" (camera):\n",
-                      file=sys.stderr)
-                print('  "fixed_clock_cameras": [', file=sys.stderr)
-                for k in unknown:
-                    print(f'    {json.dumps(k)},', file=sys.stderr)
-                print("  ]\n", file=sys.stderr)
-                print("Then re-run. No calibration JSON was written.", file=sys.stderr)
+                print("\nCalibration cannot proceed: unknown camera group(s). Add each to ONE of these "
+                      "arrays in photos-00-config.json under camera_time_and_timezone_policy.device_groups "
+                      "(phones = smartphone, auto timezone; fixed_clock_cameras = camera with a manual "
+                      "clock), then re-run — keep each group in only one array:\n", file=sys.stderr)
+                for label in ("phones", "fixed_clock_cameras"):
+                    print(f'  "{label}": [', file=sys.stderr)
+                    for k in unknown:
+                        print(f'    {json.dumps(k)},', file=sys.stderr)
+                    print("  ],", file=sys.stderr)
+                print("\nNo calibration JSON was written.", file=sys.stderr)
                 sys.exit(2)
 
             n_dest = len({f["destination"] for f in files})
