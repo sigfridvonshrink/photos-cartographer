@@ -2,9 +2,10 @@
 """Local server for the decision editor (skeleton).
 
 Serves the single-page app from web/ and exposes the workspace's decision artifacts as JSON. Stdlib
-only — no dependencies, no build step.
+only — no dependencies, no build step. An extensionless executable run directly (like the pipeline
+scripts), not via `python3`:
 
-  python3 ingest/decision-editor/serve.py [workspace] [--port 8765]
+  ingest/decision-editor/serve [workspace] [--port 8765]
 
 With a workspace path it reads `<workspace>/.photos-ingest/photos-21-time-decisions.json` and
 `…/photos-22-gps-decisions.json`. With no workspace it runs in DEMO mode, loading the `examples/`
