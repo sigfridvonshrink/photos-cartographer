@@ -108,14 +108,14 @@ One boundary is worth stating plainly: this no-clobber guarantee begins at the *
 cannot protect a file you overwrite *while dumping* — if your own copy command clobbers a same-named file
 in the drop folder (`0-sources/`) before prep ever sees it, that loss is outside the pipeline's view. Dump
 each source into its own subfolder or use a non-overwriting copy, and prep then preserves everything (prep
-`10_photos-1-prep-workflow.md` Section 7.2).
+`photos-1-prep-workflow.md` Section 7.2).
 
 The full design is specified in four documents:
 
-- `10_photos-1-prep-workflow.md` — the prep phase
-- `10_photos-2-time-gps-workflow.md` — the time/GPS calibration phase
-- `10_photos-3-merge-workflow.md` — the library-merge phase
-- `10_photos-shared-contract.md` — facts the phases share (lock, config, formats, GPX root, the
+- `photos-1-prep-workflow.md` — the prep phase
+- `photos-2-time-gps-workflow.md` — the time/GPS calibration phase
+- `photos-3-merge-workflow.md` — the library-merge phase
+- `photos-shared-contract.md` — facts the phases share (lock, config, formats, GPX root, the
   input-validation discipline, the execute-time no-clobber/atomicity rule, the archival package, the
   end-to-end operator loop, and the workspace lifecycle: initialization, the strays folder, and the
   sealed terminal state)
