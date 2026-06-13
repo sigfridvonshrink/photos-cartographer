@@ -678,18 +678,24 @@ class PlanExecutor:
                                 if expected_mtime is not None and stat.st_mtime_ns != expected_mtime:
                                     raise ValueError(f"Precondition failed: mtime changed for {op.source}.")
 
-                            # Atomic, race-free no-clobber: fails (FileExistsError) rather than
-                            # overwriting if the destination exists at the moment of the move.
-                            os.makedirs(os.path.dirname(abs_dest), exist_ok=True)
-                            _move_no_clobber(abs_src, abs_dest)
-
-# Write quarantine manifest
+                            # Quarantine records its evidence BEFORE moving the file
+                            # (evidence-before-quarantine, §15): the manifest entry is the only durable
+                            # record of WHY a file was quarantined, so writing it first guarantees a
+                            # crash never strands a file in quarantine with no record. If the move then
+                            # fails/crashes, the file stays at its source and a re-run re-quarantines it
+                            # (fresh evidence under a new plan id); the pre-written entry of the
+                            # interrupted run becomes a benign, prunable orphan rather than a lost record.
                             if op.type == "quarantine_move":
                                 plan_id = op.verification.get("plan_id", "unknown_plan")
                                 manifest_dir = os.path.join(self.workspace_root, ".photos-ingest-quarantine", plan_id)
                                 manifest_entry = op.verification.copy()
                                 manifest_entry["operation_id"] = op.operation_id
                                 _append_quarantine_manifest(manifest_dir, manifest_entry)
+
+                            # Atomic, race-free no-clobber: fails (FileExistsError) rather than
+                            # overwriting if the destination exists at the moment of the move.
+                            os.makedirs(os.path.dirname(abs_dest), exist_ok=True)
+                            _move_no_clobber(abs_src, abs_dest)
 
                         # Apply DB effects
                         if op.database_effects_after_verification:
