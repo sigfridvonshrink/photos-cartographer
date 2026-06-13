@@ -4,7 +4,7 @@
 > editor can be built against a stable picture. The **authoritative** source is the code that writes
 > and validates them — `ingest/photos-2-time-gps` (`build_time_decisions`, `build_gps_decisions`,
 > `_timezone_decision`, `_offset_cell`, `_folder_fallback_cell`, `_review_item`, and the `_valid_*`
-> validators) — with the calibration spec `ingest/workflows/10_photos-2-time-gps-workflow.md` as the
+> validators) — with the calibration spec `ingest/workflows/photos-2-time-gps-workflow.md` as the
 > behavioural reference. If this doc and the code ever disagree, the code wins; update this doc.
 
 The editor is narrowly scoped: it helps a human fill in the **decisions** these files request, and its
