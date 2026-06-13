@@ -488,6 +488,21 @@ class MergeWorkflow:
         return stale
 
     def do_plan(self, ws, library_root):
+        # Don't re-plan over a partially-applied merge. A prior partial execute already moved some
+        # finalized photos into the library (their by-dest sources are gone); re-planning would
+        # `continue` past them (build_merge_plan) and omit them from the merge log a later execute
+        # writes — and an already-placed *renamed* file can't be reliably re-located on a fresh plan.
+        # The correct resume is `execute`, which reuses the saved photos-30 (still complete) and
+        # finishes the remaining moves. (To deliberately start a fresh plan, remove the summary first.)
+        if os.path.exists(merge_plan_path(ws)) and \
+                _json_get(merge_summary_path(ws), "status") == "partial":
+            print(f"A prior merge is only partially applied ({MERGE_SUMMARY_ARTIFACT} status=partial): "
+                  "some photos are already in the library and their by-dest sources are gone. Run "
+                  f"`execute` to resume the saved {MERGE_PLAN_ARTIFACT} — it completes the remaining "
+                  "moves and writes a log covering every file. Re-planning now would drop the "
+                  f"already-moved files from the merge log. (To re-plan from scratch instead, remove "
+                  f"{MERGE_SUMMARY_ARTIFACT} first.)", file=sys.stderr)
+            return 2
         cache = WorkspaceCache(ws)
         try:
             plan = self.build_merge_plan(ws, self.calib_plan, library_root, cache)
