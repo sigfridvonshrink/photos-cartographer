@@ -16,7 +16,8 @@ is **advisory**; the loop is **edit → Save → re-run `photos-2-time-gps run` 
 
 ## 2. Stack (decided)
 
-- **Local Python server**, stdlib only (`serve.py <workspace>`): serves the SPA, reads/writes the
+- **Local Python server**, stdlib only — an extensionless executable run directly like the pipeline
+  scripts (`ingest/decision-editor/serve <workspace>`, not via `python3`): serves the SPA, reads/writes the
   workspace's `.photos-ingest/` decision JSON, serves **photo previews** (embedded JPEG via
   exiftool/ImageMagick — already repo deps), and offers a **Re-run calibration** action. Default with no
   workspace = demo mode loading the `examples/` fixtures, so it runs with nothing installed.
@@ -62,12 +63,12 @@ panel.
 
 ## 5. Build plan (phased)
 
-0. **Skeleton (this step):** `serve.py` loads the artifacts (fixtures by default) + the SPA shell renders
+0. **Skeleton (this step):** `serve` loads the artifacts (fixtures by default) + the SPA shell renders
    both views **read-only** (tree for time, worklist for GPS, selection → side-panel detail). No editing.
 1. **Editing:** the shared model + `user_decision` overlay; per-cell controls (tz select, offset
    wheel-spinner, accept toggles); override/inherited badges; client-side validation; dirty state.
 2. **Map + photo:** vendor Leaflet; the side-panel context map (centre-crosshair pick, track/anchors/ghost)
-   and embedded-JPEG photo previews served by `serve.py`, for GPS cells.
+   and embedded-JPEG photo previews served by `serve`, for GPS cells.
 3. **Persist + loop:** **Save** (write `user_decision` back, round-tripping the rest) and **Re-run
    calibration** (invoke `photos-2-time-gps run`, reload the authoritative artifacts); the advisory live
    inheritance preview for the time tree.
