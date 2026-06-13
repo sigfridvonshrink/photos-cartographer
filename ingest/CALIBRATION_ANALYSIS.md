@@ -115,7 +115,7 @@ their convergent-rerun staleness cascade.
   `haversine` (~`:1694`), `apply_gpx_placement` (GPX interp/extrap with gap/distance/speed
   thresholds, ~`:2345`), `apply_photo_anchors` (~`:2420`), exiftool read + **CSV batch write with
   read-back verification** (~`:1175`), `apply_time_sync` offset application (~`:2316`).
-- `storage/photos-gps-tagger`: the mature **photo-anchor interp/extrap engine** (`:505-664`) —
+- `archive/storage/photos-gps-tagger`: the mature **photo-anchor interp/extrap engine** (`:505-664`) —
   native-point detection via `GPSProcessingMethod ∉ {manual, interpolated}`, velocity-aware
   extrapolation using a `MIN_EXTRAPOLATE_GAP_S` stability vector, **idempotent skip-if-unchanged**,
   N/S/E/W ref handling. The GPX-track engine (monolith) is the primary source; photo-anchors are
