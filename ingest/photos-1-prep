@@ -1037,7 +1037,7 @@ class PlanExecutor:
                         }
                     }
 
-                    # Write out atomically AND deterministically (shared contract §4): route through
+                    # Write out atomically AND deterministically (prep §16.2; shared contract §15): route through
                     # write_json_artifact (temp → atomic rename, sort_keys) so the handoff bytes are
                     # byte-stable for a given workspace state. Calibration records a json_dependency on
                     # this file's exact bytes, so a non-deterministic dump (the old indent-only
@@ -1198,7 +1198,7 @@ class WorkspacePrepWorkflow:
     def _flag_dir_symlinks(self, root, dir_names, blockers):
         """Flag any subdirectory symlink encountered during a walk as a forbidden escape. os.walk does
         not descend into them (followlinks=False), so without this they would be silently ignored
-        rather than blocked — the spec forbids symlinks among managed files (prep §9)."""
+        rather than blocked — the spec forbids symlinks among managed files (prep §6.2 item 3; shared contract §5.3)."""
         for dd in dir_names:
             p = os.path.join(root, dd)
             if os.path.islink(p):
@@ -1255,7 +1255,8 @@ class WorkspacePrepWorkflow:
         _gpx_skip = selected_gpx_root()
         for f in os.listdir(self.workspace_root):
             path = os.path.join(self.workspace_root, f)
-            # A symlink at the workspace root is forbidden outright (never followed, §13) — flagged
+            # A symlink at the workspace root is forbidden outright (never followed, prep §6.2 item 2/3;
+            # shared contract §5.3) — flagged
             # BEFORE the isdir-gated skips/walk. os.path.isdir() FOLLOWS a directory symlink, so a
             # dot-named symlink-to-directory would otherwise be skipped as if it were the control dir
             # (.photos-ingest*, which are always real directories, never symlinks), and a non-dot one
@@ -1615,7 +1616,7 @@ class WorkspacePrepWorkflow:
         db_files = [f for f in all_db_files if not f['relative_path'].startswith(folder_name('photos_by_dest') + '/')]
         by_dest_files = [f for f in all_db_files if f['relative_path'].startswith(folder_name('photos_by_dest') + '/')]
 
-        # Band-misplacement guard (prep Section 6.1 / 6.2.4): photos and videos live in
+        # Band-misplacement guard (prep Section 6.1 / 6.2 item 6): photos and videos live in
         # separate bands. A video under the photo bands (5-photos-by-date / 6-photos-by-dest),
         # or an image/raw under the video band (4-videos-by-date), is a hand-introduced break
         # prep never creates itself — hard-block, do not proceed.
