@@ -179,6 +179,31 @@ def test_ghost_prune_removes_missing_cache_row(tmp_path, monkeypatch):
                for op in plan.operations), [op.type for op in plan.operations]
 
 
+def test_quarantine_writes_evidence_before_moving(tmp_path, monkeypatch):
+    # Evidence-before-quarantine (§15): the manifest entry must be written BEFORE the move, so a
+    # crash/failure mid-move never strands a file in quarantine with no record. We simulate the move
+    # failing; with the correct ordering the manifest entry exists anyway (with the old move-then-
+    # manifest order, the failed move would abort before the manifest write and leave none).
+    _install(monkeypatch)                                      # content-based hash -> dupes collide
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"SAME")
+    (ws / "0-sources" / "b.jpg").write_bytes(b"SAME")          # identical content -> one quarantined
+    real_move = prep._move_no_clobber
+
+    def failing_move(src, dest):
+        if ".photos-ingest-quarantine" in dest:
+            raise OSError("simulated crash mid quarantine move")
+        return real_move(src, dest)
+    monkeypatch.setattr(prep, "_move_no_clobber", failing_move)
+
+    with pytest.raises(RuntimeError):                          # execute raises on the failed move
+        _run(ws)
+    manifests = glob.glob(str(ws / ".photos-ingest-quarantine" / "*" / "manifest.json"))
+    assert manifests, "manifest entry must be written before the move, so it survives a failed move"
+    entries = json.loads(open(manifests[0]).read())
+    assert entries and "duplicate_evidence" in entries[0], entries
+
+
 def test_by_dest_hash_failure_skipped_mutable_blocks(tmp_path, monkeypatch):
     def hash_for(p):
         if "fail" in os.path.basename(p):
