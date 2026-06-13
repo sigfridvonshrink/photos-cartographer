@@ -13,6 +13,41 @@
     }
   },
   "destinations": {
+    "6-photos-by-dest": {
+      "camera_group_time_decisions": {
+        "NIKON|D750|B": {
+          "camera_group": "NIKON|D750|B",
+          "camera_group_class": "camera",
+          "effective_time_anchor": "",
+          "proposal": {
+            "proposal_source": "manual_required"
+          },
+          "requires_user_input": true,
+          "stale_user_decision": false,
+          "user_decision": {
+            "accept_proposal": false,
+            "manual_offset_seconds": "",
+            "manual_real_utc": ""
+          }
+        }
+      },
+      "camera_groups_present": [
+        "NIKON|D750|B"
+      ],
+      "destination_path": "6-photos-by-dest",
+      "destination_timezone": {
+        "effective_iana_timezone": "",
+        "proposal_confidence": "high",
+        "proposal_source": "config_default",
+        "proposed_iana_timezone": "Europe/Brussels",
+        "requires_user_input": true,
+        "stale_user_decision": false,
+        "user_decision": {
+          "accept_proposed_timezone": false,
+          "manual_iana_timezone": ""
+        }
+      }
+    },
     "6-photos-by-dest/Belgium": {
       "camera_group_time_decisions": {
         "NIKON|D750|B": {
@@ -36,6 +71,41 @@
         "NIKON|D750|B"
       ],
       "destination_path": "6-photos-by-dest/Belgium",
+      "destination_timezone": {
+        "effective_iana_timezone": "",
+        "proposal_confidence": "high",
+        "proposal_source": "config_default",
+        "proposed_iana_timezone": "Europe/Brussels",
+        "requires_user_input": true,
+        "stale_user_decision": false,
+        "user_decision": {
+          "accept_proposed_timezone": false,
+          "manual_iana_timezone": ""
+        }
+      }
+    },
+    "6-photos-by-dest/Belgium/Bruges": {
+      "camera_group_time_decisions": {
+        "NIKON|D750|B": {
+          "camera_group": "NIKON|D750|B",
+          "camera_group_class": "camera",
+          "effective_time_anchor": "",
+          "proposal": {
+            "proposal_source": "manual_required"
+          },
+          "requires_user_input": true,
+          "stale_user_decision": false,
+          "user_decision": {
+            "accept_proposal": false,
+            "manual_offset_seconds": "",
+            "manual_real_utc": ""
+          }
+        }
+      },
+      "camera_groups_present": [
+        "NIKON|D750|B"
+      ],
+      "destination_path": "6-photos-by-dest/Belgium/Bruges",
       "destination_timezone": {
         "effective_iana_timezone": "",
         "proposal_confidence": "high",
@@ -76,7 +146,7 @@
                 },
                 "proposal_id": "anchor-001",
                 "proposed_offset_seconds": -7200,
-                "source_file": "6-photos-by-dest/Japan/2024-anchor-1.arw"
+                "source_file": "6-photos-by-dest/Japan/anchor-1.arw"
               },
               {
                 "camera_source_naive_time": "2024:07:03 14:10:00",
@@ -92,7 +162,7 @@
                 },
                 "proposal_id": "anchor-002",
                 "proposed_offset_seconds": -7200,
-                "source_file": "6-photos-by-dest/Japan/2024-anchor-2.arw"
+                "source_file": "6-photos-by-dest/Japan/anchor-2.arw"
               }
             ],
             "confidence": "high",
@@ -135,32 +205,12 @@
         }
       }
     },
-    "6-photos-by-dest/Japan/Kyoto": {
-      "camera_group_time_decisions": {
-        "SONY|ILCE-6400|A": {
-          "camera_group": "SONY|ILCE-6400|A",
-          "camera_group_class": "camera",
-          "effective_time_anchor": "",
-          "proposal": {
-            "confidence": "review_required",
-            "inherited_from": "6-photos-by-dest/Japan",
-            "proposal_source": "inherited",
-            "proposed_offset_seconds": -7200,
-            "rank": "inherited_from_ancestor"
-          },
-          "requires_user_input": true,
-          "stale_user_decision": false,
-          "user_decision": {
-            "accept_proposal": false,
-            "manual_offset_seconds": "",
-            "manual_real_utc": ""
-          }
-        }
-      },
+    "6-photos-by-dest/PhoneOnly": {
+      "camera_group_time_decisions": {},
       "camera_groups_present": [
-        "SONY|ILCE-6400|A"
+        "APPLE|iPhone15|P"
       ],
-      "destination_path": "6-photos-by-dest/Japan/Kyoto",
+      "destination_path": "6-photos-by-dest/PhoneOnly",
       "destination_timezone": {
         "effective_iana_timezone": "",
         "proposal_confidence": "high",
