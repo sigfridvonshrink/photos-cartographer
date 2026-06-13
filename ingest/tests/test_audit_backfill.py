@@ -94,6 +94,23 @@ def test_other_class_moves_to_strays(tmp_path, monkeypatch):
     assert glob.glob(str(ws / "1-strays" / "*" / "notes.txt"))     # landed in strays
 
 
+def test_strays_are_abandoned_not_in_handoff(tmp_path, monkeypatch):
+    # Strays are abandoned once moved (§3.2): the act is logged, but the stray file is NOT tracked in
+    # the handoff and 1-strays is NOT listed in folders_scanned — so nothing downstream depends on
+    # strays remaining constant (its content never enters the handoff content fingerprint).
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "notes.txt").write_bytes(b"junk")          # non-media -> strays
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")              # a real photo -> by-date
+    _run(ws)
+    handoff = json.loads(open(ws / ".photos-ingest" / "photos-11-handoff.json").read())
+    scanned = {f["name"] for f in handoff["folders_scanned"]}
+    assert "1-strays" not in scanned                              # never scanned -> not listed
+    assert {"0-sources", "5-photos-by-date", "6-photos-by-dest"} <= scanned
+    tracked = {f["relative_path"] for f in handoff["files"]}
+    assert not any(p.startswith("1-strays/") for p in tracked)     # stray file untracked (abandoned)
+
+
 def test_missing_timestamp_routes_to_missing_metadata_with_unkn_name(tmp_path, monkeypatch):
     _install(monkeypatch, meta_for=lambda f: {})                  # no timestamp
     ws = _ws(tmp_path)
