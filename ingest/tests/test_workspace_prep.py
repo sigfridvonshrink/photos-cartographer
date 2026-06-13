@@ -121,7 +121,7 @@ def test_prep_workflow_plan_and_execute(mock_meta, mock_hash_img, tmp_path, monk
     # PHOTO_555.CR2 and PHOTO_555.jpg have the same fake hash, but shouldn't quarantine.
     # The JPG should be in 3-redundant-jpgs. The RAW should be in 5-photos-by-date.
     assert (ws / "3-redundant-jpgs" / "PHOTO_555.jpg").exists()
-    assert (ws / "5-photos-by-date" / "2023-02-02--14-00-00-001.cr2").exists()
+    assert (ws / "5-photos-by-date" / "2023-02-02--14-00-00.cr2").exists()   # lone file -> bare (§7.2)
 
     # PR ACCEPTANCE TEST: RAW/JPG pair (same content) is NOT quarantined — the jpg is the
     # redundant sibling (-> 3-redundant-jpgs), the raw is the master (-> 2-missing-metadata).

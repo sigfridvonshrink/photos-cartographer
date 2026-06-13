@@ -168,6 +168,12 @@ def test_allocate_suffix_sequential_and_case_insensitive():
     assert utils.allocate_suffix("x", "tif", set(), start_idx=5) == "x-005.tif"
     # No extension form.
     assert utils.allocate_suffix("base", "", set()) == "base-001"
+    # bare_first (prep's by-date naming, §7.2): the un-suffixed name is taken first, then -NNN.
+    bidx = set()
+    assert utils.allocate_suffix("ts", "jpg", bidx, bare_first=True) == "ts.jpg"
+    assert utils.allocate_suffix("ts", "jpg", bidx, bare_first=True) == "ts-001.jpg"   # collision
+    # bare_first still suffixes when the bare name is already occupied (merge's default stays unaffected).
+    assert utils.allocate_suffix("x", "jpg", {"x.jpg"}, bare_first=True) == "x-001.jpg"
 
 
 def test_suffix_root_strips_only_the_dedup_suffix():
