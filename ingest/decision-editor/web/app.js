@@ -1,9 +1,12 @@
-// Decision editor — editing phase. Loads the workspace's decision artifacts into a working copy,
-// lets the human edit only the `user_decision` blocks (timezone / offset / fallback / review), with
-// client-side validation, override/inherited/edited badges, an advisory effective-outcome preview,
-// and Save (writes user_decision back via the server). The map/photo panel, the re-run-calibration
-// action, and the advisory inheritance preview land in later phases (see design-notes.md).
-// Vanilla + ES modules; no build.
+// Decision editor. Loads the workspace's decision artifacts into a working copy, lets the human edit
+// only the `user_decision` blocks (timezone / offset / fallback / review) with client-side validation,
+// override/inherited/edited badges, an advisory effective-outcome preview, and Save (writes
+// user_decision back via the server). GPS cells get a side-panel map picker (fixed-crosshair pick) plus
+// a photo preview for review items (map.js + the server's /api/photo). The re-run-calibration action
+// and the advisory inheritance preview land in the next phase (see design-notes.md).
+// Vanilla + ES modules; no build. Leaflet is vendored (global L); tiles come from OSM at runtime.
+
+import { mapPicker } from "./map.js";
 
 const state = { base: null, work: null, view: "time", selected: null, saving: false, message: null };
 
@@ -74,6 +77,7 @@ const udSet = (u) => Object.values(u || {}).some((v) => v === true || (v !== "" 
 
 // --- edit + status -----------------------------------------------------------
 function edit(ref, field, value) { workCell(ref).user_decision[field] = value; render(); }
+function editMany(ref, obj) { Object.assign(workCell(ref).user_decision, obj); render(); }
 function resetRef(ref) { workCell(ref).user_decision = clone(baseCell(ref).user_decision); render(); }
 
 function cellStatus(cell) {
@@ -244,16 +248,68 @@ function controls(ref) {
     wrap.append(checkbox(hasProp ? `accept inherited (${p.proposed_fallback.lat}, ${p.proposed_fallback.lon})` : "accept inherited — none", u.accept_proposal, (v) => edit(ref, "accept_proposal", v)));
     wrap.append(numField("Fallback lat", u.fallback_lat, (v) => edit(ref, "fallback_lat", v), !validLat(u.fallback_lat)));
     wrap.append(numField("Fallback lon", u.fallback_lon, (v) => edit(ref, "fallback_lon", v), !validLon(u.fallback_lon)));
-    wrap.append(el("div", { class: "hint" }, "map picker arrives in a later phase"));
+    wrap.append(el("div", { class: "hint" }, "or pan the map below under the crosshair and “use map center”"));
     if (!bothOrNeither(u.fallback_lat, u.fallback_lon)) wrap.append(el("div", { class: "err" }, "set both lat and lon, or neither"));
   } else {
     wrap.append(numField("Manual lat", u.manual_lat, (v) => edit(ref, "manual_lat", v), !validLat(u.manual_lat)));
     wrap.append(numField("Manual lon", u.manual_lon, (v) => edit(ref, "manual_lon", v), !validLon(u.manual_lon)));
     wrap.append(checkbox("leave unlocated (accept no GPS)", u.accept_unlocated, (v) => edit(ref, "accept_unlocated", v)));
-    wrap.append(el("div", { class: "hint" }, "map picker + photo preview arrive in a later phase"));
+    wrap.append(el("div", { class: "hint" }, "or pan the map below under the crosshair and “use map center”"));
     if (!bothOrNeither(u.manual_lat, u.manual_lon)) wrap.append(el("div", { class: "err" }, "set both lat and lon, or neither"));
   }
   return wrap;
+}
+
+// --- GPS map + photo (side panel) --------------------------------------------
+const coordFields = (ref) => ref.kind === "fallback" ? ["fallback_lat", "fallback_lon"] : ["manual_lat", "manual_lon"];
+function currentCoord(ref) {
+  const u = workCell(ref).user_decision || {}, [la, lo] = coordFields(ref);
+  return isNum(u[la]) && isNum(u[lo]) ? { lat: u[la], lon: u[lo] } : null;
+}
+function destFallbackCoord(dest) {
+  const fb = state.work.gps?.destinations?.[dest]?.folder_fallback;
+  const e = fb?.effective_fallback || fb?.proposal?.proposed_fallback;
+  return e && isNum(e.lat) && isNum(e.lon) ? { lat: e.lat, lon: e.lon } : null;
+}
+function gpsRefMarkers(ref) {
+  const c = workCell(ref), p = c.proposal || {}, out = [];
+  if (ref.kind === "fallback") {
+    if (c.effective_fallback) out.push({ ...c.effective_fallback, label: "effective fallback", color: "#4f9cf9" });
+    if (p.proposed_fallback) out.push({ ...p.proposed_fallback, label: `inherited (${p.inherited_from || "ancestor"})`, color: "#e0a85e" });
+  } else {
+    const fb = destFallbackCoord(ref.dest);
+    if (fb) out.push({ ...fb, label: "folder fallback", color: "#e0a85e" });
+  }
+  return out;
+}
+const seedCenter = (ref) => currentCoord(ref) || gpsRefMarkers(ref)[0] || null;
+
+// One Leaflet instance, kept across re-renders of the same selection (rebuilding it on each keystroke
+// would reset pan/zoom). Rebuilt when the selected cell changes; torn down for non-GPS cells.
+let _map = null, _mapKey = null;
+const mapKeyFor = (ref) => ref ? `${ref.file}|${ref.dest}|${ref.kind}|${ref.key || ""}|${ref.path || ""}` : null;
+function teardownMap() { if (_map) { _map.destroy(); _map = null; _mapKey = null; } }
+function mapBlock(ref) {
+  const key = mapKeyFor(ref);
+  if (_mapKey !== key) {
+    teardownMap();
+    const [la, lo] = coordFields(ref);
+    _map = mapPicker({ center: seedCenter(ref), markers: gpsRefMarkers(ref),
+      onPick: (lat, lon) => editMany(ref, { [la]: lat, [lo]: lon }) });
+    _mapKey = key;
+  }
+  _map.setCurrent(currentCoord(ref));
+  setTimeout(() => _map && _map.refresh(), 0);     // recompute size after (re)attach to the DOM
+  return el("div", { class: "pblock" }, el("h3", {}, "Place on map"), _map.el, _map.bar);
+}
+function photoBlock(ref) {
+  if (state.base.demo)
+    return el("div", { class: "pblock" }, el("h3", {}, "Photo"),
+      el("div", { class: "placeholder" }, "no preview in demo mode (no workspace files)"));
+  const img = el("img", { class: "photo-img", alt: ref.path, src: "/api/photo?path=" + encodeURIComponent(ref.path) });
+  const block = el("div", { class: "pblock" }, el("h3", {}, "Photo"), img);
+  img.addEventListener("error", () => { img.remove(); block.append(el("div", { class: "placeholder" }, "no embedded preview available")); });
+  return block;
 }
 
 // --- side panel --------------------------------------------------------------
@@ -261,6 +317,8 @@ function jsonBlock(title, obj) { return obj === undefined ? null : el("div", { c
 function renderPanel() {
   const p = $("#panel"); p.replaceChildren();
   const ref = state.selected, c = workCell(ref);
+  const isGpsCoord = ref && ref.file === "gps" && (ref.kind === "fallback" || ref.kind === "review");
+  if (!isGpsCoord) teardownMap();
   if (!ref || !c) return p.append(el("div", { class: "empty" }, "Select a decision to edit it."));
   const title = ref.kind === "offset" ? `Offset · ${ref.key}` : ref.kind === "review" ? "GPS review item" : ref.kind === "fallback" ? "Folder fallback" : "Timezone";
   p.append(el("h2", {}, title), el("div", { class: "path" }, ref.path || ref.dest));
@@ -268,6 +326,8 @@ function renderPanel() {
   if (isDirty(ref)) head.append(el("button", { class: "mini", onclick: () => resetRef(ref) }, "reset"));
   p.append(head);
   if (c.proposal) p.append(jsonBlock("Proposal", c.proposal));
+  if (ref.kind === "review") p.append(photoBlock(ref));
+  if (isGpsCoord) p.append(mapBlock(ref));
   p.append(el("div", { class: "pblock" }, el("h3", {}, "Your decision"), controls(ref)));
   p.append(el("div", { class: "pblock eff" }, el("h3", {}, "Effective (advisory — re-run to apply)"), el("div", { class: "eff-val" }, previewEffective(ref))));
 }
