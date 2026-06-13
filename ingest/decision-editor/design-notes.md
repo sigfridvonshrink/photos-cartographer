@@ -78,6 +78,13 @@ panel.
    pins + current-decision marker, and embedded-JPEG photo previews served by `serve` (`/api/photo`,
    path-safe, workspace-only), for GPS cells. (Track/anchors/ghost dropped — not in the GPS artifact for
    review items; see §4.)
-3. **Persist + loop:** **Save** (write `user_decision` back, round-tripping the rest) and **Re-run
-   calibration** (invoke `photos-2-time-gps run`, reload the authoritative artifacts); the advisory live
-   inheritance preview for the time tree.
+3. **Persist + loop (done):** **Save** (write `user_decision` back, round-tripping the rest) plus
+   **Re-run** — `POST /api/rerun` invokes `photos-2-time-gps run` (workspace as CWD; calibration owns its
+   own `WorkspaceLock`, separate from the editor lock) and, on success, reloads the regenerated
+   authoritative artifacts. Re-run acts on the *saved* decisions, so it's disabled while there are
+   unsaved/invalid edits (save first); its outcome — exit code + stderr/stdout tail — shows in a
+   dismissible banner. Plus the **advisory live inheritance preview** for the time tree (§4): a timezone
+   with no own decision shows, badged `inherited ⟵ <ancestor>`, the value it would inherit from its
+   nearest resolved ancestor, updating as you edit ancestors — display-only, authoritative on the next
+   Re-run. (Offsets also inherit, but their resolution is GPX/auto-driven rather than a manual-override
+   cascade, so the live preview is scoped to timezones — the clearest override-and-inherit case.)
