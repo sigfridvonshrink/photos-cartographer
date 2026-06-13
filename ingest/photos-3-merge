@@ -7,12 +7,12 @@ on success it re-seals the archival package and seals the workspace. The full be
 in `ingest/workflows/10_photos-3-merge-workflow.md` (and the shared contract); this is the workflow
 built on top of the shared primitives in `photos_utils.py`.
 
-This file currently implements **Increment 2** (merge spec §3 / §4 / §12): the script scaffold, the
-preconditions preflight, the one-time `init-library` setup command, and the two-lock acquisition
-flow. It writes **no** merge artifacts and performs **no** placement — `plan`/`dry-run`/`execute`
-are stubbed until later increments. Preflight covers preconditions 0, 0a, 0b, 0c, 1, 1a, 2, 3, 5;
-precondition 4 (on-disk prep-consistency) lands with the finalized-name enumeration in a later
-increment, ahead of the first mutating command.
+Subcommands: `init-library` (one-time: bless a directory as the permanent library, §4),
+`plan` (map by-dest photos to library targets and resolve collisions → `photos-30-merge-plan.json`,
+§6/§7/§10.1), `dry-run` (revalidate + display that plan, §10.2), and `execute` (apply it as the §11
+place-then-remove move, then — on full success only — re-seal the archive and seal the workspace,
+§9.4/§10.3). Preflight enforces all of preconditions 0/0a/0b/0c/1/1a/2/3/4/5 (§3). The whole run holds
+the workspace lock and the library-side lock (§12).
 
 The script sits beside `photos_utils.py` and imports the shared infrastructure from it.
 """
@@ -85,13 +85,9 @@ def merge_db_snapshot_path(ws):
     return _cd(ws, MERGE_DB_SNAPSHOT)
 
 
-def complete_log_path(ws):
-    return _cd(ws, COMPLETE_LOG_ARTIFACT)
-
-
 class MergeWorkflow:
-    """Library-merge workflow. Increment 2 implements preflight only; the plan builder, execute, and
-    the terminal outputs (summary, merge log, DB snapshot, re-seal, seal) arrive in later increments."""
+    """Library-merge workflow: preflight (§3), plan/dry-run/execute, and — on full success only — the
+    terminal outputs (summary, merge log, DB snapshot, archive re-seal, workspace seal, §9.4)."""
 
     def __init__(self, workspace_root: str):
         self.workspace_root = workspace_root
@@ -104,7 +100,7 @@ class MergeWorkflow:
         """Return (blockers, warnings, info). A non-empty `blockers` means merge cannot proceed; it is
         textual only and writes no JSON. The lifecycle/structural/config/marker/handoff guards
         hard-stop early (each a prerequisite for the checks after it); the remaining preconditions
-        (0b, 1, 1a, 2, 3) are gathered so every problem is reported at once.
+        (0b, 1, 1a, 2, 3, 4) are gathered so every problem is reported at once.
 
         NOTE: config validation + the `.photos-library` marker identity check happen HERE, under the
         workspace lock, BEFORE main() acquires the library lock (merge spec §12) — so no

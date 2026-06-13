@@ -6,10 +6,12 @@ offset by matching its geotagged frames against GPX tracks, resolves every photo
 places GPS for the un-tagged majority, and renames files to destination-local civil time — all on
 the same plan/validate/execute, fingerprinted-dependency, authored-decisions discipline as prep.
 
-This file currently implements **Stage 1 only** (calibration spec §7 / §13): the lifecycle guards
-and the by-dest preflight gates that must pass before any calibration work. It writes **no JSON
-artifacts** (§8: no JSON before the first formal decision stage). Later phases add the in-memory
-model, GPX index, camera groups, the time/GPS decision artifacts, execution, and finalize.
+It implements the full calibration workflow (Stages 1–11): the preflight lifecycle/by-dest gates
+(§7/§13), the in-memory by-dest model (Stage 2), the GPX index (§15), camera-group recognition
+(§16), the time- and GPS-decision artifacts `photos-21`/`photos-22` (§18/§23), resolved-UTC
+computation (§22), the executable plan `photos-23` (§28), `execute` of that plan into `photos-24`
+(§29), and `finalize` of the archival package `photos-25` + DB snapshot + manifest (§31). Subcommands:
+`run` (plan), `execute`, `finalize`.
 
 The script sits beside `photos_utils.py` and imports the shared infrastructure from it.
 """
@@ -815,8 +817,9 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, l
 
 
 class CalibrationWorkflow:
-    """Stages 1–9: validate the workspace, build the model, produce photos-21/22 decision artifacts,
-    compute resolved UTC, and (when decisions are complete) assemble photos-23-executable-plan.json."""
+    """Stages 1–11: validate the workspace, build the model, produce photos-21/22 decision artifacts,
+    compute resolved UTC, assemble photos-23-executable-plan.json (when decisions are complete),
+    execute it into photos-24 (§29), and finalize the archival package photos-25 (§31)."""
 
     def __init__(self, workspace_root: str):
         self.workspace_root = workspace_root
@@ -1302,9 +1305,10 @@ class CalibrationWorkflow:
         return cell
 
     def _handoff_dependency(self, ws):
-        """The handoff dependency is its deterministic CONTENT fingerprint (§16), not the volatile
-        file bytes — so a no-op prep re-run (which only refreshes run_metadata) does not restale this
-        plan. Falls back to a plain byte-hash dependency for a legacy handoff with no content_fingerprint."""
+        """The handoff dependency is its deterministic CONTENT fingerprint (prep §16.2), not the
+        volatile file bytes — so a no-op prep re-run (which only refreshes run_metadata) does not
+        restale this plan. Falls back to a plain byte-hash dependency for a legacy handoff with no
+        content_fingerprint."""
         with open(handoff_path(ws)) as f:
             ho = json.load(f)
         if "content_fingerprint" in ho:
@@ -1950,7 +1954,7 @@ class CalibrationWorkflow:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="photos-2-time-gps: time/GPS calibration (Stage 1 — preflight).")
+        description="photos-2-time-gps: time/GPS calibration (run / execute / finalize).")
     parser.add_argument("-j", "--jobs", type=int, default=None,
                         help="Worker threads for execution (default: config jobs, else 4).")
     sub = parser.add_subparsers(dest="command", required=True)

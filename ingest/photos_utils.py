@@ -40,7 +40,7 @@ CONFIG = {
     "zfs": {
         "enabled": False,                # opt-in; the dataset is auto-detected from the workspace
         "snapshots_required": False,     # if true, failure to snapshot aborts execution
-        "snapshot_prefix": "photos-ingest-",   # prepended to the plan id: <dataset>@<prefix><plan_id>
+        "snapshot_prefix": "photos-ingest-",   # snapshot name: <dataset>@<prefix><label>-<plan_id> (label = phase)
         "datasets": {
             "workspace": "auto",         # "auto" = detect from the workspace path; or an explicit dataset
             "library": "auto"            # reserved for the future finalize/merge step (not used by prep)
@@ -178,7 +178,7 @@ def is_sealed(ws: str) -> bool:
     return os.path.exists(sealed_marker_path(ws))
 
 def config_path(ws: str) -> str:
-    # Location only in this phase; the seed/read lifecycle lands in the next phase.
+    # Path only; load_or_seed_config (below) seeds it on first prep run, then reads it as authoritative.
     return os.path.join(ws, CONTROL_DIR, "photos-00-config.json")
 
 def db_path(ws: str) -> str:
@@ -237,7 +237,7 @@ def sha256_file(path: str) -> str:
 
 def sha256_text(text: str) -> str:
     """SHA-256 over a UTF-8 string — used for field-scoped config fingerprints (a SHA-256 over a
-    canonical serialization of a config sub-block, calibration §4.2)."""
+    canonical serialization of a config sub-block, shared contract §4.2)."""
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 def json_dependency(name: str, ws: str, abs_path: str) -> dict:
