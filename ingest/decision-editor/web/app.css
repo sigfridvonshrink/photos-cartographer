@@ -21,6 +21,15 @@ body { margin: 0; font: 14px/1.45 system-ui, sans-serif; color: var(--fg); backg
 .seg button.on { background: var(--accent); color: #07121f; font-weight: 600; }
 .badge { font-size: 12px; color: var(--warn); }
 
+/* re-run output banner */
+.runlog { position: relative; padding: 8px 36px 8px 14px; border-bottom: 1px solid var(--line);
+  background: #20242b; font-size: 13px; }
+.runlog.ok { border-left: 3px solid var(--ok); }
+.runlog.bad { border-left: 3px solid #c0556a; }
+.runlog .close { position: absolute; top: 6px; right: 8px; }
+.runlog-out { margin: 6px 0 0; max-height: 180px; overflow: auto; font: 12px var(--mono);
+  white-space: pre-wrap; word-break: break-word; color: var(--muted); }
+
 main { flex: 1; display: grid; grid-template-columns: minmax(360px, 1fr) minmax(380px, 1fr); min-height: 0; }
 #list { overflow: auto; border-right: 1px solid var(--line); padding: 8px 0; }
 #panel { overflow: auto; padding: 14px; background: #20242b; }
