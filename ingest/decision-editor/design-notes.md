@@ -17,10 +17,15 @@ is **advisory**; the loop is **edit → Save → re-run `photos-2-time-gps run` 
 ## 2. Stack (decided)
 
 - **Local Python server**, stdlib only — an extensionless executable run directly like the pipeline
-  scripts (`ingest/decision-editor/serve <workspace>`, not via `python3`): serves the SPA, reads/writes the
-  workspace's `.photos-ingest/` decision JSON, serves **photo previews** (embedded JPEG via
-  exiftool/ImageMagick — already repo deps), and offers a **Re-run calibration** action. Default with no
-  workspace = demo mode loading the `examples/` fixtures, so it runs with nothing installed.
+  scripts (`ingest/decision-editor/decision-editor <workspace>`, not via `python3`): serves the SPA,
+  reads/writes the workspace's `.photos-ingest/` decision JSON, serves **photo previews** (embedded JPEG
+  via exiftool/ImageMagick — already repo deps), and offers a **Re-run calibration** action. Default with
+  no workspace = demo mode loading the `examples/` fixtures, so it runs with nothing installed.
+  - Ships in two forms: the readable source **`decision-editor.unbundled`** (reads `web/` + `examples/`
+    from disk) and the **`decision-editor`** single file, which **`./bundle`** regenerates with those
+    assets embedded inline so it runs anywhere from one copied file. `./bundle --check` fails if the
+    committed bundle is stale or hand-edited (CI/pre-push guard). Re-run and previews still need the
+    surrounding pipeline / exiftool / ImageMagick, and degrade gracefully when absent.
 - **No-build SPA**: plain ES modules; a tiny reactive helper (**Preact + htm**) and **Leaflet** for the
   map, both **vendored** under `web/vendor/` (no CDN at runtime, no build step, works offline). The
   skeleton is dependency-free vanilla; the lib/map come in with the editing/map phases.
@@ -70,12 +75,12 @@ panel.
 
 ## 5. Build plan (phased)
 
-0. **Skeleton (this step):** `serve` loads the artifacts (fixtures by default) + the SPA shell renders
+0. **Skeleton (this step):** the server loads the artifacts (fixtures by default) + the SPA shell renders
    both views **read-only** (tree for time, worklist for GPS, selection → side-panel detail). No editing.
 1. **Editing:** the shared model + `user_decision` overlay; per-cell controls (tz select, offset
    wheel-spinner, accept toggles); override/inherited badges; client-side validation; dirty state.
 2. **Map + photo (done):** vendored Leaflet; the side-panel centre-crosshair map picker with reference
-   pins + current-decision marker, and embedded-JPEG photo previews served by `serve` (`/api/photo`,
+   pins + current-decision marker, and embedded-JPEG photo previews served by the server (`/api/photo`,
    path-safe, workspace-only), for GPS cells. (Track/anchors/ghost dropped — not in the GPS artifact for
    review items; see §4.)
 3. **Persist + loop (done):** **Save** (write `user_decision` back, round-tripping the rest) plus

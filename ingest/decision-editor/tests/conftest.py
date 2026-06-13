@@ -3,10 +3,12 @@ import sys
 import importlib.machinery
 import importlib.util
 
-# The decision-editor server is an extensionless executable (`ingest/decision-editor/serve`), stdlib
-# only and independent of the pipeline modules. Load it once here — exactly as ingest/tests/conftest.py
-# loads the pipeline scripts — under a stable name so every test file's `import decision_editor_serve`
-# returns the same instance (matters for the Handler class attribute the HTTP tests toggle).
+# The decision-editor server source is an extensionless executable
+# (`ingest/decision-editor/decision-editor.unbundled`), stdlib only and independent of the pipeline
+# modules. Load it once here — exactly as ingest/tests/conftest.py loads the pipeline scripts — under a
+# stable name so every test file's `import decision_editor_serve` returns the same instance (matters for
+# the Handler class attribute the HTTP tests toggle). Tests target the source, not the generated bundle;
+# test_bundle.py loads the bundle separately to verify it stays in sync.
 _DE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 
@@ -21,4 +23,4 @@ def _load_once(module_name, filename):
     return sys.modules[module_name]
 
 
-_load_once("decision_editor_serve", "serve")
+_load_once("decision_editor_serve", "decision-editor.unbundled")
