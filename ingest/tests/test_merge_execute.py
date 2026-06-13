@@ -341,10 +341,22 @@ def test_re_plan_after_partial_is_refused(tmp_path):
 
 
 def test_re_plan_allowed_when_no_partial(tmp_path):
-    # The guard only fires on a partial-in-flight: a plan with no prior partial summary re-plans fine.
+    # The guard only fires on an in-flight (unsealed) merge: a plan with no prior summary re-plans fine.
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     assert merge._run_locked_workflow("plan", str(ws)) == 0
     assert merge._run_locked_workflow("plan", str(ws)) == 0
+
+
+def test_re_plan_after_crash_before_seal_is_refused(tmp_path, monkeypatch):
+    # A crash between the summary write (status=success) and the seal leaves the workspace unsealed
+    # with status=success. Re-planning must STILL be refused (resume via execute) so the complete
+    # log/summary is not overwritten by an empty re-plan that then seals an incomplete record.
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    monkeypatch.setattr(merge.MergeWorkflow, "_finalize_terminal", lambda *a, **k: None)  # skip the seal
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 0       # success, but crashed before seal
+    assert _summary(ws)["status"] == "success" and not utils.is_sealed(str(ws))
+    assert merge._run_locked_workflow("plan", str(ws)) == 2          # re-plan still refused
 
 
 def test_sealed_workspace_rerun_hardstops(tmp_path):

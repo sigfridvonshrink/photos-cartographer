@@ -380,7 +380,7 @@ class MergeWorkflow:
         for e in entries:
             src_abs = os.path.join(ws, e["by_dest_relpath"])
             if not os.path.exists(src_abs):
-                continue                       # finalized entry already moved/absent: resume (Inc 4)
+                continue                       # finalized entry already moved/absent: resume case
             st = os.stat(src_abs)
             rec = {"by_dest_source": e["by_dest_relpath"], "content_fingerprint": e["content_fingerprint"],
                    "preconditions": {"size": st.st_size, "mtime_ns": st.st_mtime_ns,
@@ -468,7 +468,7 @@ class MergeWorkflow:
     def revalidate_plan_deps(self, ws, plan):
         """Re-check the saved plan's recorded dependencies against current state (non-mutating). A
         non-empty list means the plan is stale and must be re-planned. Full per-file precondition
-        revalidation + execute-time no-clobber happen in execute (Increment 4)."""
+        revalidation + execute-time no-clobber happen per file in execute (_move_file)."""
         stale = []
         if plan.get("schema_version") != MERGE_PLAN_SCHEMA_VERSION:
             stale.append(f"plan schema_version {plan.get('schema_version')} is not "
@@ -488,20 +488,23 @@ class MergeWorkflow:
         return stale
 
     def do_plan(self, ws, library_root):
-        # Don't re-plan over a partially-applied merge. A prior partial execute already moved some
-        # finalized photos into the library (their by-dest sources are gone); re-planning would
-        # `continue` past them (build_merge_plan) and omit them from the merge log a later execute
-        # writes — and an already-placed *renamed* file can't be reliably re-located on a fresh plan.
-        # The correct resume is `execute`, which reuses the saved photos-30 (still complete) and
-        # finishes the remaining moves. (To deliberately start a fresh plan, remove the summary first.)
+        # Don't re-plan over a merge that has already been (partly) applied but not sealed. A prior
+        # execute — whether it ended `partial` (a blocker left in by-dest) or `success` but crashed
+        # before the seal — already moved some finalized photos into the library (their by-dest
+        # sources are gone). Re-planning would `continue` past them (build_merge_plan) and omit them
+        # from the merge log a later execute writes — and an already-placed *renamed* file can't be
+        # reliably re-located on a fresh plan. The correct resume is `execute`, which reuses the saved
+        # photos-30 (still complete) and finishes/seals. (do_plan is only reached on an UNSEALED
+        # workspace — precondition 0 blocks a sealed one — so a present summary means an in-flight
+        # merge; a `rejected` summary moved nothing, so re-planning after it is safe and allowed.)
         if os.path.exists(merge_plan_path(ws)) and \
-                _json_get(merge_summary_path(ws), "status") == "partial":
-            print(f"A prior merge is only partially applied ({MERGE_SUMMARY_ARTIFACT} status=partial): "
-                  "some photos are already in the library and their by-dest sources are gone. Run "
-                  f"`execute` to resume the saved {MERGE_PLAN_ARTIFACT} — it completes the remaining "
-                  "moves and writes a log covering every file. Re-planning now would drop the "
-                  f"already-moved files from the merge log. (To re-plan from scratch instead, remove "
-                  f"{MERGE_SUMMARY_ARTIFACT} first.)", file=sys.stderr)
+                _json_get(merge_summary_path(ws), "status") in ("partial", "success"):
+            print(f"A prior merge is in flight but not sealed ({MERGE_SUMMARY_ARTIFACT} present on an "
+                  "unsealed workspace): some photos are already in the library. Run `execute` to resume "
+                  f"the saved {MERGE_PLAN_ARTIFACT} — it finishes any remaining moves, writes a log "
+                  "covering every file, and seals. Re-planning now would drop the already-moved files "
+                  f"from the merge log. (To re-plan from scratch instead, remove {MERGE_SUMMARY_ARTIFACT} "
+                  "first.)", file=sys.stderr)
             return 2
         cache = WorkspaceCache(ws)
         try:
