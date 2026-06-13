@@ -7,16 +7,59 @@ scripts), not via `python3`:
 
   ingest/decision-editor/serve [workspace] [--port 8765]
 
+It launches nothing — it prints a clickable link using the machine's own IP and binds to a reachable
+interface (default 0.0.0.0), so you can open the editor in your laptop's browser while SSH'd into the
+machine. Ctrl-C stops it cleanly (releasing the port), so you needn't stop it from the UI.
+
 With a workspace path it reads `<workspace>/.photos-ingest/photos-21-time-decisions.json` and
 `…/photos-22-gps-decisions.json`. With no workspace it runs in DEMO mode, loading the `examples/`
-fixtures so the app is runnable with nothing set up. (Skeleton: read-only. Saving, the map/photo panel,
-and re-run land in later phases — see design-notes.md.)
+fixtures so the app is runnable with nothing set up. The app edits the `user_decision` fields and
+saves them back to the workspace (POST /api/save writes only `user_decision`, round-tripping every
+other field; disabled in demo mode). The map/photo panel and the re-run-calibration action land in
+later phases — see design-notes.md.)
 """
 import argparse
+import errno
 import json
 import os
+import socket
 import sys
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+try:
+    import fcntl  # POSIX advisory locking (Linux — the pipeline already relies on it)
+except ImportError:
+    fcntl = None
+
+
+def _bind(host, port, handler):
+    """Bind to `port`, or the next free port above it if it's in use — so a busy port is never an error,
+    the server just moves up. Returns the server (its actual port is server_address[1])."""
+    for p in range(port, port + 64):
+        try:
+            return ThreadingHTTPServer((host, p), handler)
+        except OSError as e:
+            if e.errno == errno.EADDRINUSE:
+                continue          # busy — try the next one
+            raise                 # EACCES (privileged port), bad host, etc. — a real problem
+    raise OSError(errno.EADDRINUSE, f"no free port in {port}..{port + 63}")
+
+
+def _machine_ip():
+    """The machine's primary outbound IPv4 — the address a remote browser would use. No packets are
+    sent (UDP connect just selects the routing interface). Falls back to the hostname, then loopback."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))
+        return s.getsockname()[0]
+    except OSError:
+        try:
+            return socket.gethostbyname(socket.gethostname())
+        except OSError:
+            return "127.0.0.1"
+    finally:
+        s.close()
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "web")
@@ -24,10 +67,41 @@ EXAMPLES = os.path.join(HERE, "examples")
 CONTROL = ".photos-ingest"
 TIME_NAME = "photos-21-time-decisions.json"
 GPS_NAME = "photos-22-gps-decisions.json"
+EDITOR_LOCK = "photos-00-decision-editor.lock"  # dotfile lives in CONTROL; flock, fail-fast
 
 _CONTENT_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
                   ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8",
                   ".svg": "image/svg+xml"}
+
+
+def _acquire_editor_lock(workspace):
+    """Take a fail-fast exclusive lock so only one editor edits a workspace's decision JSON at a time.
+
+    Returns (lock_file, None) on success — keep the file open for the session; the OS releases the
+    flock when it closes (including on a crash/kill). Returns (None, owner_dict) if another editor
+    already holds it. If flock is unavailable (non-POSIX), returns (open_file, None) without locking —
+    best effort, never blocks the editor from running."""
+    path = os.path.join(workspace, CONTROL, EDITOR_LOCK)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    f = open(path, "a+")
+    if fcntl is None:
+        return f, None
+    try:
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        f.seek(0)
+        try:
+            owner = json.loads(f.read() or "null")
+        except ValueError:
+            owner = None
+        f.close()
+        return None, owner
+    f.seek(0)
+    f.truncate(0)
+    json.dump({"pid": os.getpid(), "host": socket.gethostname(),
+               "started_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}, f)
+    f.flush()
+    return f, None
 
 
 def _read_json(path):
@@ -50,6 +124,59 @@ def _load_artifacts(workspace):
     return {"workspace": None, "demo": True,
             "time": _read_json(os.path.join(EXAMPLES, "photos-21-time-decisions.requires-input.json")),
             "gps": _read_json(os.path.join(EXAMPLES, "photos-22-gps-decisions.requires-input.json"))}
+
+
+def _write_json(path, obj):
+    """Deterministic, atomic write matching the pipeline's write_json_artifact (sorted, indented)."""
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(obj, f, indent=2, sort_keys=True)
+    os.replace(tmp, path)
+
+
+def _apply_edits(art, edits):
+    """Apply each edit's `user_decision` to the matching cell in `art`, in place. ONLY `user_decision`
+    is ever written — every other field is left exactly as calibration produced it, so the round-trip
+    conforms regardless of what the client sent. Returns the count applied."""
+    applied = 0
+    dests = (art or {}).get("destinations") or {}
+    for e in edits:
+        d = dests.get(e.get("dest"))
+        if not isinstance(d, dict):
+            continue
+        kind = e.get("kind")
+        if kind == "timezone":
+            cell = d.get("destination_timezone")
+        elif kind == "offset":
+            cell = (d.get("camera_group_time_decisions") or {}).get(e.get("key"))
+        elif kind == "fallback":
+            cell = d.get("folder_fallback")
+        elif kind == "review":
+            cell = next((r for r in (d.get("gps_decisions") or {}).get("review_items") or []
+                         if r.get("relative_path") == e.get("path")), None)
+        else:
+            cell = None
+        if isinstance(cell, dict) and isinstance(e.get("user_decision"), dict):
+            cell["user_decision"] = e["user_decision"]
+            applied += 1
+    return applied
+
+
+def _save(workspace, payload):
+    """Write the posted user_decision edits back into the workspace's decision artifacts."""
+    cd = os.path.join(workspace, CONTROL)
+    written = []
+    for key, name in (("time", TIME_NAME), ("gps", GPS_NAME)):
+        edits = (payload or {}).get(key) or []
+        if not edits:
+            continue
+        art = _read_json(os.path.join(cd, name))
+        if not isinstance(art, dict) or "_error" in art:
+            return {"ok": False, "error": f"cannot read {name} to update"}
+        _apply_edits(art, edits)
+        _write_json(os.path.join(cd, name), art)
+        written.append(name)
+    return {"ok": True, "written": written}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -88,25 +215,71 @@ class Handler(BaseHTTPRequestHandler):
             return self._serve_static("index.html")
         return self._serve_static(path)
 
+    def do_POST(self):
+        path = self.path.split("?", 1)[0]
+        if path != "/api/save":
+            return self._send(404, {"error": "not found"})
+        if self.workspace is None:
+            return self._send(403, {"ok": False, "error": "demo mode is read-only — "
+                                    "run `serve <workspace>` to save edits to a real workspace"})
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+            payload = json.loads(self.rfile.read(n) or b"{}")
+        except (ValueError, OSError) as e:
+            return self._send(400, {"ok": False, "error": f"bad request: {e}"})
+        self._send(200, _save(self.workspace, payload))
+
 
 def main():
-    ap = argparse.ArgumentParser(description="Decision editor server (skeleton).")
+    ap = argparse.ArgumentParser(description="Decision editor server.")
     ap.add_argument("workspace", nargs="?", default=None,
                     help="Workspace dir (reads its .photos-ingest/). Omit for demo mode (example fixtures).")
     ap.add_argument("--port", type=int, default=8765)
-    ap.add_argument("--host", default="127.0.0.1")
+    ap.add_argument("--host", default="0.0.0.0",
+                    help="Bind address. Default 0.0.0.0 = reachable over the network (e.g. from a "
+                         "browser on your laptop while SSH'd into this machine). Use 127.0.0.1 for "
+                         "local-only.")
     args = ap.parse_args()
 
     if args.workspace and not os.path.isdir(os.path.join(args.workspace, CONTROL)):
         print(f"warning: {args.workspace}/{CONTROL} not found — is that a workspace?", file=sys.stderr)
     Handler.workspace = args.workspace
-    srv = ThreadingHTTPServer((args.host, args.port), Handler)
-    mode = "demo (example fixtures)" if not args.workspace else f"workspace {os.path.abspath(args.workspace)}"
-    print(f"decision editor — {mode}\n  open http://{args.host}:{args.port}/   (Ctrl-C to stop)")
+
+    # Editor lock: refuse to open a second editor on the same workspace, so two people can't edit the
+    # decision JSON at once and clobber each other on Save. Demo mode touches no workspace files, so it
+    # needs no lock. The lock is held for the whole session and auto-released on exit (even on a kill).
+    lock = None
+    if args.workspace:
+        lock, owner = _acquire_editor_lock(args.workspace)
+        if lock is None:
+            d = owner or {}
+            print(f"another decision editor is already editing this workspace "
+                  f"(pid {d.get('pid', '?')} on {d.get('host', '?')}, since {d.get('started_at', '?')}). "
+                  f"Close it first, or point this one at a different workspace.", file=sys.stderr)
+            sys.exit(1)
+
+    srv = _bind(args.host, args.port, Handler)
+    srv.daemon_threads = True  # don't let an in-flight request block Ctrl-C shutdown
+    port = srv.server_address[1]
+    # The clickable link uses the machine's real IP (so it works from a remote browser); a specific
+    # --host is shown verbatim.
+    link_host = _machine_ip() if args.host in ("0.0.0.0", "", "::") else args.host
+    mode = "demo mode — example fixtures (read-only)" if not args.workspace \
+        else f"workspace {os.path.abspath(args.workspace)}"
+    print(f"decision editor — {mode}")
+    if port != args.port:
+        print(f"  (port {args.port} was busy — using {port})")
+    print(f"  open  http://{link_host}:{port}/")
+    print("  (Ctrl-C to stop)", flush=True)  # flush so the link shows at once even when piped
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
-        print("\nstopped.")
+        print("\nstopping…")
+    finally:
+        srv.server_close()  # release the port; daemon worker threads exit with the process
+        if lock is not None:
+            lock.close()  # releases the flock
+        print("stopped.")
 
 
 if __name__ == "__main__":
