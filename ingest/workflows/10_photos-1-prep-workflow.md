@@ -544,7 +544,7 @@ It is written only after the validated plan executed, the journal is complete, t
 1. schema version and tool name (`photos-1-prep`);
 2. the per-run identifiers (plan id, execution id) under a dedicated **`run_metadata`** block — segregated from the deterministic content, not at the top level (Section 16.2);
 3. the cache fingerprint and content-fingerprint algorithm, and a top-level **`content_fingerprint`** that pins the handoff's deterministic content (Section 16.2);
-4. folders scanned with mutability flags;
+4. folders scanned with mutability flags — the managed bands prep scans/organizes; **`1-strays` is excluded**, because strays are abandoned once moved there (written but never re-scanned) and are not part of the deterministic content downstream phases depend on (Section 3.2);
 5. a sorted file list with workspace-relative path, size, mtime, fingerprint status, folder class, and per-file metadata status;
 6. camera groups and by-dest destination-folder facts (Section 12.2);
 7. metadata field-set/extractor versions and per-file metadata cache status;

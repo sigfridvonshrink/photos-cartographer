@@ -984,9 +984,12 @@ class PlanExecutor:
                         "run_metadata": {"plan_id": plan.plan_id, "execution_id": self.execution_id},
                         "cache_fingerprint": cache_fingerprint,
                         "hash_algorithm": "sha256",
+                        # The folders prep actually scans/organizes — `1-strays` is deliberately EXCLUDED:
+                        # strays are abandoned once moved there (written, never re-scanned), so they are
+                        # not part of the deterministic content downstream phases depend on (§3 / §16.2).
                         "folders_scanned": [
-                            {"name": folder_name(r), "mutable": folder_name(r) != folder_name('photos_by_dest')}
-                            for r in FOLDER_ROLES        # all managed 0-6, incl. 1-strays (§3)
+                            {"name": n, "mutable": n != folder_name('photos_by_dest')}
+                            for n in managed_folder_names(CONFIG)
                         ],
                         "files": final_files,
                         "camera_groups": camera_groups,
