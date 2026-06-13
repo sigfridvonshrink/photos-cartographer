@@ -683,8 +683,9 @@ class MergeWorkflow:
 
         results.sort(key=lambda r: r["by_dest_source"])
         status = "success" if not any(r["final_kind"] == "blocked" for r in results) else "partial"
+        finished_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         summary = self._build_summary(ws, plan, library_root, results, snapshot, status,
-                                      now_iso, execution_id, jobs)
+                                      now_iso, execution_id, jobs, finished_at=finished_at)
         write_json_artifact(merge_summary_path(ws), summary)
         finalized = None
         if status == "success":
@@ -739,7 +740,7 @@ class MergeWorkflow:
                 "archive_manifest": "photos-35-archive-manifest.json", "manifest_sha256": manifest_sha}
 
     def _build_summary(self, ws, plan, library_root, results, snapshot, status, now_iso,
-                       execution_id, jobs, extra_failures=None):
+                       execution_id, jobs, finished_at=None, extra_failures=None):
         kinds = {"placed_new": 0, "already_present": 0, "renamed_for_library": 0, "blocked": 0}
         newly = already_done = 0
         failures = list(extra_failures or [])
@@ -764,7 +765,11 @@ class MergeWorkflow:
         return {
             "artifact_type": "merge_summary", "artifact_name": MERGE_SUMMARY_ARTIFACT,
             "schema_version": MERGE_PLAN_SCHEMA_VERSION, "merge_run_id": execution_id,
-            "library_root": library_root,
+            "merge_plan_id": plan.get("plan_id"), "library_root": library_root,
+            # §9.1 item 2: identify the calibration run whose finalized output this merged.
+            "calibration": {"plan_id": _json_get(executable_plan_path(ws), "plan_id"),
+                            "execution_id": _json_get(execution_summary_path(ws),
+                                                       "run_metadata", "execution_id")},
             "merged": {
                 EXECUTABLE_PLAN_ARTIFACT: {"sha256": sha256_file(executable_plan_path(ws))},
                 EXECUTION_SUMMARY_ARTIFACT: {"sha256": sha256_file(execution_summary_path(ws))},
@@ -776,7 +781,7 @@ class MergeWorkflow:
             "resume": {"newly_moved": newly, "already_done_skipped": already_done},
             "failures": failures, "destinations": dests, "status": status, "snapshot": snapshot,
             "run_metadata": {"execution_id": execution_id, "started_at": now_iso,
-                             "finished_at": now_iso, "jobs": jobs},
+                             "finished_at": finished_at or now_iso, "jobs": jobs},
         }
 
     def do_execute(self, ws, library_root, jobs):
@@ -873,6 +878,21 @@ class MergeWorkflow:
                 if os.path.islink(p):
                     found.append(os.path.relpath(p, self.workspace_root))
         return sorted(found)
+
+
+def _json_get(path, *keys):
+    """Best-effort read of a JSON file at `path`, walking nested `keys`; None on any miss/error.
+    Used to surface the calibration run's plan/execution ids in the merge summary (§9.1 item 2)."""
+    try:
+        with open(path) as f:
+            v = json.load(f)
+    except Exception:
+        return None
+    for k in keys:
+        if not isinstance(v, dict):
+            return None
+        v = v.get(k)
+    return v
 
 
 def _record_fingerprint(rec):
@@ -972,8 +992,10 @@ def do_init_library(path_arg, ws):
         except Exception as e:
             print(f"Workspace config could not be read: {e}", file=sys.stderr)
             return 2
+        # §4.1 item 2: the setup command writes the single library_root key — and ONLY that key. Don't
+        # seed placement/collision policy (prep is the config seeder; merge reads those with defaults).
         if not isinstance(cfg.get("merge"), dict):
-            cfg["merge"] = dict(CONFIG.get("merge") or {})
+            cfg["merge"] = {}
         cfg["merge"]["library_root"] = resolved
         try:
             validate_merge_config(cfg, ws)
