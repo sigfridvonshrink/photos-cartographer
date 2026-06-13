@@ -1,0 +1,55 @@
+{
+  "artifact_name": "photos-21-time-decisions.json",
+  "artifact_type": "time_decisions",
+  "depends_on": {
+    "camera_group_key_version": 1,
+    "camera_time_policy_fingerprint": "f2ba2712166ef2286c42ce9b0f9728c792ad4692131871a7f209de3fed84fb57",
+    "gpx_fingerprint": "example-gpx-fingerprint",
+    "handoff": {
+      "artifact_name": "photos-11-handoff.json",
+      "artifact_path": ".photos-ingest/photos-11-handoff.json",
+      "content_fingerprint": "4a95ea1226cabb898264b4a4018edf3e1881acbbc93050dc9384c94ec08c3ef9",
+      "dependency_type": "handoff_content"
+    }
+  },
+  "destinations": {
+    "6-photos-by-dest/Nowhere": {
+      "camera_group_time_decisions": {
+        "SONY|ILCE-6400|A": {
+          "camera_group": "SONY|ILCE-6400|A",
+          "camera_group_class": "camera",
+          "effective_time_anchor": "",
+          "proposal": {
+            "proposal_source": "manual_required"
+          },
+          "requires_user_input": true,
+          "stale_user_decision": false,
+          "user_decision": {
+            "accept_proposal": false,
+            "manual_offset_seconds": "",
+            "manual_real_utc": ""
+          }
+        }
+      },
+      "camera_groups_present": [
+        "SONY|ILCE-6400|A"
+      ],
+      "destination_path": "6-photos-by-dest/Nowhere",
+      "destination_timezone": {
+        "effective_iana_timezone": "",
+        "proposal_confidence": "none",
+        "proposal_source": "none",
+        "proposed_iana_timezone": null,
+        "requires_user_input": true,
+        "stale_user_decision": false,
+        "user_decision": {
+          "accept_proposed_timezone": false,
+          "manual_iana_timezone": ""
+        }
+      }
+    }
+  },
+  "executable": false,
+  "requires_user_input": true,
+  "status": "requires_user_input"
+}

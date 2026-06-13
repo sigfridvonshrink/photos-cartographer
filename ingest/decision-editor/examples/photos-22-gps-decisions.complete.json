@@ -14,6 +14,45 @@
     "resolved_utc_cache_fingerprint": "example-resolved-utc-fingerprint"
   },
   "destinations": {
+    "6-photos-by-dest": {
+      "destination_path": "6-photos-by-dest",
+      "folder_fallback": {
+        "effective_fallback": null,
+        "proposal": {
+          "proposal_source": "manual_required"
+        },
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "accept_proposal": false,
+          "fallback_lat": "",
+          "fallback_lon": ""
+        }
+      },
+      "gps_decisions": {
+        "automatic_decision_summary": {
+          "confidence": "automatic",
+          "gpx_files_used": [],
+          "max_distance_to_track_m": 1000.0,
+          "max_interpolation_gap_seconds": 120.0,
+          "notes": [
+            "Automatic decisions are summarized here; exact file-level write operations are listed only in photos-23-executable-plan.json."
+          ]
+        },
+        "review_items": [],
+        "summary": {
+          "automatic_folder_fallback": 0,
+          "automatic_gpx_extrapolation": 0,
+          "automatic_gpx_interpolation": 0,
+          "blocked": 0,
+          "files_total": 1,
+          "manual_locked": 0,
+          "manual_review_required": 0,
+          "no_gps_change_needed": 0,
+          "preserve_native_gps": 1
+        }
+      }
+    },
     "6-photos-by-dest/Belgium": {
       "destination_path": "6-photos-by-dest/Belgium",
       "folder_fallback": {
@@ -56,6 +95,53 @@
         }
       }
     },
+    "6-photos-by-dest/Belgium/Bruges": {
+      "destination_path": "6-photos-by-dest/Belgium/Bruges",
+      "folder_fallback": {
+        "effective_fallback": {
+          "lat": 50.8503,
+          "lon": 4.3517
+        },
+        "proposal": {
+          "inherited_from": "6-photos-by-dest/Belgium",
+          "proposal_source": "inherited",
+          "proposed_fallback": {
+            "lat": 50.8503,
+            "lon": 4.3517
+          }
+        },
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "accept_proposal": true,
+          "fallback_lat": "",
+          "fallback_lon": ""
+        }
+      },
+      "gps_decisions": {
+        "automatic_decision_summary": {
+          "confidence": "automatic",
+          "gpx_files_used": [],
+          "max_distance_to_track_m": 1000.0,
+          "max_interpolation_gap_seconds": 120.0,
+          "notes": [
+            "Automatic decisions are summarized here; exact file-level write operations are listed only in photos-23-executable-plan.json."
+          ]
+        },
+        "review_items": [],
+        "summary": {
+          "automatic_folder_fallback": 0,
+          "automatic_gpx_extrapolation": 0,
+          "automatic_gpx_interpolation": 0,
+          "blocked": 0,
+          "files_total": 1,
+          "manual_locked": 0,
+          "manual_review_required": 0,
+          "no_gps_change_needed": 0,
+          "preserve_native_gps": 1
+        }
+      }
+    },
     "6-photos-by-dest/Japan": {
       "destination_path": "6-photos-by-dest/Japan",
       "folder_fallback": {
@@ -86,7 +172,7 @@
         "review_items": [
           {
             "reason": "manual_locked",
-            "relative_path": "6-photos-by-dest/Japan/2024-blocked-a.arw",
+            "relative_path": "6-photos-by-dest/Japan/blocked-a.arw",
             "requires_user_input": false,
             "stale_user_decision": false,
             "user_decision": {
@@ -97,7 +183,7 @@
           },
           {
             "reason": "accepted_unlocated",
-            "relative_path": "6-photos-by-dest/Japan/2024-blocked-b.arw",
+            "relative_path": "6-photos-by-dest/Japan/blocked-b.arw",
             "requires_user_input": false,
             "stale_user_decision": false,
             "user_decision": {
@@ -109,10 +195,10 @@
         ],
         "summary": {
           "automatic_folder_fallback": 0,
-          "automatic_gpx_extrapolation": 0,
+          "automatic_gpx_extrapolation": 1,
           "automatic_gpx_interpolation": 1,
           "blocked": 0,
-          "files_total": 5,
+          "files_total": 6,
           "manual_locked": 1,
           "manual_review_required": 0,
           "no_gps_change_needed": 1,
@@ -120,8 +206,8 @@
         }
       }
     },
-    "6-photos-by-dest/Japan/Kyoto": {
-      "destination_path": "6-photos-by-dest/Japan/Kyoto",
+    "6-photos-by-dest/PhoneOnly": {
+      "destination_path": "6-photos-by-dest/PhoneOnly",
       "folder_fallback": {
         "effective_fallback": null,
         "proposal": {
