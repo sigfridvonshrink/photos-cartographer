@@ -2,13 +2,15 @@
 // only the `user_decision` blocks (timezone / offset / fallback / review) with client-side validation,
 // override/inherited/edited badges, an advisory effective-outcome preview, and Save (writes
 // user_decision back via the server). GPS cells get a side-panel map picker (fixed-crosshair pick) plus
-// a photo preview for review items (map.js + the server's /api/photo). The re-run-calibration action
-// and the advisory inheritance preview land in the next phase (see design-notes.md).
+// a photo preview for review items (map.js + the server's /api/photo). The time tree shows a live,
+// advisory inheritance preview (a child with no own decision shows the timezone it would inherit from
+// its nearest resolved ancestor), and Re-run invokes `photos-2-time-gps run` on the server then reloads
+// the regenerated authoritative artifacts (the edit → Save → Re-run → reload loop).
 // Vanilla + ES modules; no build. Leaflet is vendored (global L); tiles come from OSM at runtime.
 
 import { mapPicker } from "./map.js";
 
-const state = { base: null, work: null, view: "time", selected: null, saving: false, message: null };
+const state = { base: null, work: null, view: "time", selected: null, saving: false, running: false, message: null, runResult: null };
 
 const $ = (s) => document.querySelector(s);
 function el(tag, attrs = {}, ...kids) {
@@ -101,6 +103,8 @@ function previewEffective(ref) {
   if (ref.kind === "timezone") {
     if (u.manual_iana_timezone) return validTz(u.manual_iana_timezone) ? u.manual_iana_timezone : "✗ invalid zone";
     if (u.accept_proposed_timezone && c.proposed_iana_timezone) return c.proposed_iana_timezone;
+    const pv = previewTz(ref.dest);
+    if (pv && pv.source === "inherited") return `${pv.tz} (inherited ⟵ ${leaf(pv.from)}, preview)`;
     return "— (needs input)";
   }
   if (ref.kind === "offset") {
@@ -120,11 +124,43 @@ function previewEffective(ref) {
   return "— (needs a coordinate or accept-unlocated)";
 }
 
+// --- advisory timezone inheritance preview -----------------------------------
+// Mirrors calibration's rule for DISPLAY ONLY: a child timezone with no own decision would, on re-run,
+// inherit from its nearest ancestor that resolves. Updates live as you edit ancestors; authoritative
+// only after Re-run. (Timezone never auto-resolves, so a resolved value always traces to a decision.)
+const leaf = (p) => (p || "").split("/").pop();
+function tzOwnDecision(dest) {
+  const c = state.work.time?.destinations?.[dest]?.destination_timezone;
+  if (!c) return null;
+  const u = c.user_decision || {};
+  if (u.manual_iana_timezone) return { tz: u.manual_iana_timezone, source: "manual" };
+  if (u.accept_proposed_timezone && c.proposed_iana_timezone) return { tz: c.proposed_iana_timezone, source: "accept" };
+  return null;
+}
+function previewTz(dest) {
+  const own = tzOwnDecision(dest);
+  if (own) return own;
+  const parts = dest.split("/");
+  for (let i = parts.length - 1; i > 0; i--) {
+    const anc = parts.slice(0, i).join("/");
+    if (state.work.time?.destinations?.[anc]) {
+      const a = previewTz(anc);
+      if (a && a.tz) return { tz: a.tz, source: "inherited", from: anc };
+    }
+  }
+  return null;
+}
+
 // --- list views --------------------------------------------------------------
 function isSel(ref) { const s = state.selected; return s && s.file === ref.file && s.dest === ref.dest && s.kind === ref.kind && s.key === ref.key && s.path === ref.path; }
 function tags(ref) {
   const c = baseCell(ref), out = [];
-  if (c?.proposal?.proposal_source === "inherited") out.push(chip("inherited", "inherited"));
+  if (ref.kind === "timezone") {
+    const pv = previewTz(ref.dest);                       // live preview, updates as ancestors change
+    if (pv && pv.source === "inherited") out.push(chip("inherited", `inherited ⟵ ${leaf(pv.from)}`));
+  } else if (c?.proposal?.proposal_source === "inherited") {
+    out.push(chip("inherited", "inherited"));
+  }
   if (isDirty(ref)) out.push(chip("edited", "edited"));
   if (refInvalid(ref)) out.push(chip("invalid", "✗ invalid"));
   return out;
@@ -148,7 +184,8 @@ function renderTreeNode(node, box) {
   const n = el("div", { class: "node" });
   if (node.dest) {
     n.append(el("div", { class: "dest" }, node.seg || "(root)"));
-    n.append(row({ file: "time", dest: node.path, kind: "timezone" }, "Timezone", null, node.dest.destination_timezone.effective_iana_timezone || "—"));
+    const tzpv = previewTz(node.path);
+    n.append(row({ file: "time", dest: node.path, kind: "timezone" }, "Timezone", null, tzpv ? tzpv.tz : "—"));
     for (const key of Object.keys(node.dest.camera_group_time_decisions || {}).sort()) {
       const c = node.dest.camera_group_time_decisions[key];
       const e = c.effective_time_anchor; n.append(row({ file: "time", dest: node.path, kind: "offset", key }, "Offset", key, e && typeof e === "object" ? fmtOffset(e.offset_seconds) : "—"));
@@ -349,15 +386,52 @@ async function save() {
   state.saving = false; render();
 }
 
+// Re-run calibration: `photos-2-time-gps run` regenerates the authoritative artifacts from the SAVED
+// decisions, so we require a clean (saved, valid) state first, then reload what calibration wrote.
+async function rerun() {
+  if (state.base.demo || state.saving || state.running) return;
+  state.running = true; state.runResult = null; state.message = "re-running calibration…"; render();
+  try {
+    const r = await (await fetch("/api/rerun", { method: "POST" })).json();
+    state.runResult = r;
+    if (r.ok) {
+      state.base = await (await fetch("/api/artifacts")).json();
+      state.work = clone(state.base);
+      state.selected = null;
+      state.message = "re-ran calibration — artifacts reloaded";
+    } else {
+      state.message = r.error ? `re-run failed: ${r.error}` : `re-run reported blockers (exit ${r.returncode})`;
+    }
+  } catch (e) { state.message = "re-run failed: " + e; state.runResult = { ok: false, error: String(e) }; }
+  state.running = false; render();
+}
+
+function renderRunlog() {
+  const box = $("#runlog"), r = state.runResult;
+  if (!r) { box.hidden = true; box.replaceChildren(); return; }
+  box.hidden = false; box.className = "runlog " + (r.ok ? "ok" : "bad");
+  const out = [r.error, r.stderr, r.stdout].filter(Boolean).join("\n").trim();
+  box.replaceChildren(
+    el("button", { class: "mini close", onclick: () => { state.runResult = null; render(); } }, "✕"),
+    el("strong", {}, r.ok ? "calibration re-run OK" : `calibration did not complete${r.returncode != null ? ` (exit ${r.returncode})` : ""}`),
+    out ? el("pre", { class: "runlog-out" }, out) : null);
+}
+
 function render() {
   const a = state.base;
   $("#workspace").textContent = a.demo ? "demo mode — example fixtures (read-only)" : a.workspace;
   for (const b of document.querySelectorAll("#view-toggle button")) b.classList.toggle("on", b.dataset.view === state.view);
-  const dirty = dirtyRefs().length, invalid = anyInvalid();
+  const dirty = dirtyRefs().length, invalid = anyInvalid(), busy = state.saving || state.running;
   $("#todo").textContent = dirty ? `${dirty} unsaved${invalid ? " · ✗ invalid" : ""}` : (state.message || "no changes");
-  const save = $("#save"); save.disabled = state.base.demo || state.saving || dirty === 0 || invalid;
-  save.title = state.base.demo ? "demo mode is read-only — run `serve <workspace>` to save" : invalid ? "fix invalid fields first" : "";
-  $("#reset").disabled = dirty === 0;
+  const save = $("#save"); save.disabled = a.demo || busy || dirty === 0 || invalid;
+  save.title = a.demo ? "demo mode is read-only — run `serve <workspace>` to save" : invalid ? "fix invalid fields first" : "";
+  const rerunBtn = $("#rerun"); rerunBtn.disabled = a.demo || busy || dirty > 0 || invalid;
+  rerunBtn.textContent = state.running ? "running…" : "Re-run";
+  rerunBtn.title = a.demo ? "demo mode — no workspace to calibrate"
+    : dirty > 0 ? "save your changes first, then re-run"
+    : invalid ? "fix invalid fields first" : "run `photos-2-time-gps run` and reload the result";
+  $("#reset").disabled = dirty === 0 || busy;
+  renderRunlog();
   const list = $("#list"); list.replaceChildren();
   (state.view === "time" ? renderTime : renderGps)(list);
   renderPanel();
@@ -366,6 +440,7 @@ function render() {
 async function main() {
   for (const b of document.querySelectorAll("#view-toggle button")) b.addEventListener("click", () => { state.view = b.dataset.view; state.selected = null; render(); });
   $("#save").addEventListener("click", save);
+  $("#rerun").addEventListener("click", rerun);
   $("#reset").addEventListener("click", () => { state.work = clone(state.base); state.message = null; render(); });
   try { state.base = await (await fetch("/api/artifacts")).json(); state.work = clone(state.base); }
   catch (e) { $("#list").replaceChildren(el("div", { class: "empty" }, "Could not load /api/artifacts: " + e)); return; }
