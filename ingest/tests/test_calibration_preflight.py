@@ -131,6 +131,25 @@ def test_dev_subfolder_blocks(tmp_path):
     assert any("Development has already started" in b for b in blockers), blockers
 
 
+def test_dev_subfolder_blocks_at_execute(tmp_path):
+    # §7.1 is presence-strict AND re-checked at execute/finalize: an empty jpg/tif subfolder created
+    # between `run` and `execute` must hard-stop execution (the per-op preconditions cannot catch it,
+    # because the breakout moved no planned file).
+    ws = _ws(tmp_path)
+    (ws / "6-photos-by-dest" / "Trip" / "jpg").mkdir()
+    blockers, _, _ = cal.CalibrationWorkflow(str(ws)).preflight(for_execute=True)
+    assert any("Development has already started" in b for b in blockers), blockers
+
+
+def test_execute_preflight_still_skips_planning_scope_gates(tmp_path):
+    # Over-blocking guard: only the dev-subfolder presence check was added to the execute path. A
+    # planning-only scope gate (a leftover in 0-sources) must NOT block execute.
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "leftover.jpg").write_bytes(b"x")
+    blockers, _, _ = cal.CalibrationWorkflow(str(ws)).preflight(for_execute=True)
+    assert not any("0-sources/ is not empty" in b for b in blockers), blockers
+
+
 def test_video_in_by_dest_blocks(tmp_path):
     ws = _ws(tmp_path)
     (ws / "6-photos-by-dest" / "Trip" / "clip.mp4").write_bytes(b"v")
