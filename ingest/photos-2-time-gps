@@ -831,11 +831,13 @@ class CalibrationWorkflow:
     def preflight(self, for_execute=False):
         """Return (blockers, warnings, info). A non-empty `blockers` means calibration cannot
         proceed. Textual only — writes no JSON. The lifecycle guards (sealed / uninitialized /
-        loose-root-file) hard-stop early; the by-dest scope and re-prep gates are collected so
-        every problem is reported at once. `for_execute` keeps the lifecycle guards + config/handoff
-        load but SKIPS the planning-phase scope and re-prep gates: execution validates against the
-        plan's own dependency fingerprints + per-op preconditions, and the by-dest filenames it
-        renames would otherwise trip the re-prep gate (§13.1 is a planning concern)."""
+        loose-root-file) and the §7.1 development-started gate hard-stop early; the remaining by-dest
+        scope and re-prep gates are collected so the rest are reported at once. `for_execute` keeps the
+        lifecycle guards, the §7.1 development gate, and the config/handoff load, but SKIPS the
+        planning-phase scope and re-prep gates: execution validates against the plan's own dependency
+        fingerprints + per-op preconditions, and the by-dest filenames it renames would otherwise trip
+        the re-prep gate (§13.1 is a planning concern). The §7.1 gate is the exception — it is
+        re-checked at execute/finalize too (a breakout begun after planning moves no planned file)."""
         blockers, warnings, info = [], [], {}
         ws = self.workspace_root
 

@@ -321,11 +321,11 @@ For files that were not mutated and whose cache record is stale (changed size/mt
 Date-organized names follow the project standard and are derived from the source-naive timestamp:
 
 ```text
-4-videos-by-date / 5-photos-by-date :  YYYY-MM-DD--HH-MM-SS-NNN.ext
-2-missing-metadata                  :  UNKN_<original-base>-NNN.ext
+4-videos-by-date / 5-photos-by-date :  YYYY-MM-DD--HH-MM-SS[-NNN].ext
+2-missing-metadata                  :  UNKN_<original-base>[-NNN].ext
 ```
 
-`-NNN` is a zero-padded differentiating suffix (`-001`, `-002`, …) allocated deterministically against a per-run, case-insensitive, monotonic index (only grows, from the current highest), so two files never collide and ordering is stable. Extensions are normalized to lowercase (Section 7.3). The timestamp shape and the differentiating-suffix convention are defined once in the shared contract (`10_photos-shared-contract.md` Section 7); prep reads the same shared `filename_timestamp_format` key as calibration.
+The **first** file at a given name takes the **bare** name (no suffix); a `-NNN` zero-padded differentiating suffix (`-001`, `-002`, …) is added only on a collision, allocated deterministically and no-clobber against a per-run, case-insensitive occupied-name set, taking the **lowest free** index, so two files never collide. This bare-first, first-free rule is shared with calibration so an uncorrected file's provisional (prep) and final (calibration) names coincide (Section 7.3; shared contract `10_photos-shared-contract.md` Section 7.2) — it is **not** monotonic/append-only; only merge appends at `max+1` (for its append-only library). Extensions are normalized to lowercase (Section 7.3). The timestamp shape and the differentiating-suffix convention are defined once in the shared contract (Section 7); prep reads the same shared `filename_timestamp_format` key as calibration.
 
 The timestamp component (`YYYY-MM-DD--HH-MM-SS`) is the raw camera-naive value, used here only for organization and ordering. It shares the same textual format as the final filename calibration assigns later (`10_photos-2-time-gps-workflow.md` Section 26 / shared contract Section 7.3), but the value is **provisional**: calibration recomputes it from corrected, destination-local civil time and rewrites the name. Prep does not correct, timezone-resolve, or UTC-convert the timestamp.
 
