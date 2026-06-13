@@ -13,9 +13,13 @@ between **digiKam** (management/storage) and **Immich** (display/sharing). Top-l
 - **`develop/`** — `photos-developer`, the development-workspace manager (RAW/JPEG → `__std.tif`
   masters). Kept and active; slated for later improvement.
 - **`immich/`** — Immich-backend integration (timeline-visibility sync, hardlinked "TV" folder).
-- **`archive/`** — reference-only, *not* active. Includes `archive/reengineer/` (the phase-gated specs
-  and the monolithic `photos-ingest` prototype that `ingest/` was split out of) and `archive/storage/`
-  (former storage-machine tools, including the superseded `photos-gps-tagger`).
+- **`archive/`** — reference-only, *not* active. Holds standalone legacy tools whose functionality has
+  **not** been reimplemented in the active pipeline: direct-mutation digiKam↔Immich integration scripts
+  (`photos-dk2im-sync`, `photos-im2dk-sync`, `photos-dk-pick-std-jpg`, `photos-im-mark`,
+  `photos-gps-sync-xmp`, `photos-fix-exif-dates`) and `archive/storage/legacy-utils/` (the `photocheck-*`
+  library-audit scripts and `photoflow.py`). The reengineering specs, the monolithic `photos-ingest`
+  prototype that `ingest/` was split out of, and the superseded `photos-gps-tagger` have been removed —
+  their behavior now lives in `ingest/` (`photos-1-prep`, `photos-2-time-gps`, `photos-3-merge`).
 
 See `README.md` for the `__std` naming convention and dependencies, and each folder's `README.md` for
 per-script detail.
@@ -64,14 +68,15 @@ There is no build step, no linter config, and no dependency manifest; deps are s
 ### CLI contract
 
 - `ingest/photos-1-prep` (prep phase): subcommands `plan` / `dry-run` / `execute`.
-- The future `photos-2-time-gps` (calibration phase) is reserved by the shared contract but not yet
-  implemented. The archived `archive/reengineer/photos-ingest` monolith (`prep` / `calibrate` /
-  `refresh-library` / `merge`) is reference only — do not extend it.
+- `ingest/photos-2-time-gps` (time/GPS calibration phase) and `ingest/photos-3-merge` (library merge)
+  are implemented and share the same plan/validate/execute contract. The original `prep` / `calibrate` /
+  `refresh-library` / `merge` monolith they were split from has been removed; `refresh-library` was
+  deliberately dropped in favor of on-demand fingerprinting in `photos-3-merge` (see its workflow spec).
 
 ## Architecture & non-negotiable rules
 
 The whole design exists to safely mutate **irreplaceable originals**. These rules are specified in
-`ingest/workflows/` (and elaborated historically in `archive/reengineer/`) and override convenience:
+`ingest/workflows/` and override convenience:
 
 - **No mutation outside a plan.** Every move/rename/quarantine/metadata-write/DB-mutation is a planned
   operation with a plan ID, op ID, explicit preconditions, expected result, and journal entry. Planning
@@ -83,9 +88,8 @@ The whole design exists to safely mutate **irreplaceable originals**. These rule
 - **No clobber.** No operation ever overwrites existing media. Destinations are reserved/validated first.
 - **Quarantine, not delete.** Duplicates are moved to a recoverable quarantine; permanent purge would be
   a separate explicit command.
-- **The archived `photos-ingest` monolith is a prototype, not a patch target.** Mine
-  `archive/reengineer/photos-ingest` for parsing/grouping/naming logic, but do not extend its destructive
-  in-place mutation model — work in `ingest/photos-1-prep` on the plan/validate/execute path instead.
+- **No destructive in-place mutation model.** The active scripts work strictly on the plan/validate/execute
+  path; never reintroduce the original monolith's destructive in-place mutation approach.
 - **Idempotent & resumable.** Reruns act on the diff; a crash mid-run is recoverable (prep re-plans from
   the filesystem as truth; calibration resumes its plan and skips applied ops).
 
@@ -114,7 +118,6 @@ Defined in `ingest/workflows/10_photos-shared-contract.md`:
 - `ingest/tests/` — `test_prep_split`, `test_idempotency_cache`, `test_exif_metadata`,
   `test_workspace_prep`, `test_concurrency` (named for what they test, not the old phase numbers).
 - `ingest/workflows/` — the authoritative specs (see below).
-- `archive/reengineer/` — the original monolith and historical phase specs, kept for reference only.
 
 ## Specs are the source of truth
 
@@ -122,5 +125,4 @@ The pipeline is **specification-driven**: behavior is defined by `ingest/workflo
 per-phase workflows plus `10_photos-shared-contract.md`. When changing pipeline behavior, update the
 governing spec; the markdown is authoritative, not just the code. The current task is to make
 `photos-1-prep` fully conform to these (updated) workflow specs, so expect to reconcile differences
-between the script and the spec rather than treat the existing code as ground truth. The deeper history
-of how the design was reached lives in the phase-gated documents under `archive/reengineer/`.
+between the script and the spec rather than treat the existing code as ground truth.
