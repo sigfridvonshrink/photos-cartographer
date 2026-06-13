@@ -1,0 +1,189 @@
+{
+  "artifact_name": "photos-21-time-decisions.json",
+  "artifact_type": "time_decisions",
+  "decision_mode": "no_op_or_auto_resolved",
+  "depends_on": {
+    "camera_group_key_version": 1,
+    "camera_time_policy_fingerprint": "91162f868be20fabdeca9cc1a35beb977d6abf786f01899fadb7b2888ad7c847",
+    "gpx_fingerprint": "example-gpx-fingerprint",
+    "handoff": {
+      "artifact_name": "photos-11-handoff.json",
+      "artifact_path": ".photos-ingest/photos-11-handoff.json",
+      "content_fingerprint": "4a95ea1226cabb898264b4a4018edf3e1881acbbc93050dc9384c94ec08c3ef9",
+      "dependency_type": "handoff_content"
+    }
+  },
+  "destinations": {
+    "6-photos-by-dest/Belgium": {
+      "camera_group_time_decisions": {
+        "NIKON|D750|B": {
+          "camera_group": "NIKON|D750|B",
+          "camera_group_class": "camera",
+          "effective_time_anchor": {
+            "offset_seconds": 3600,
+            "source": "manual"
+          },
+          "proposal": {
+            "proposal_source": "manual_required"
+          },
+          "requires_user_input": false,
+          "stale_user_decision": false,
+          "user_decision": {
+            "accept_proposal": false,
+            "manual_offset_seconds": 3600,
+            "manual_real_utc": ""
+          }
+        }
+      },
+      "camera_groups_present": [
+        "APPLE|iPhone15|P",
+        "NIKON|D750|B"
+      ],
+      "destination_path": "6-photos-by-dest/Belgium",
+      "destination_timezone": {
+        "effective_iana_timezone": "Europe/Brussels",
+        "proposal_confidence": "high",
+        "proposal_source": "config_default",
+        "proposed_iana_timezone": "Europe/Brussels",
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "accept_proposed_timezone": true,
+          "manual_iana_timezone": ""
+        }
+      }
+    },
+    "6-photos-by-dest/Japan": {
+      "camera_group_time_decisions": {
+        "SONY|ILCE-6400|A": {
+          "camera_group": "SONY|ILCE-6400|A",
+          "camera_group_class": "camera",
+          "decision_mode": "auto_resolved",
+          "effective_time_anchor": {
+            "offset_seconds": -7200,
+            "source": "gpx_anchor_auto"
+          },
+          "proposal": {
+            "anchor_count": 2,
+            "anchors": [
+              {
+                "camera_source_naive_time": "2024:07:03 14:00:00",
+                "gpx_match": {
+                  "distance_m": 0.0,
+                  "gpx_file": "trip-2024-07-03.gpx",
+                  "match_type": "gpx_point_match",
+                  "segment_duration_seconds": null
+                },
+                "native_gps": {
+                  "lat": 50.0,
+                  "lon": 4.0
+                },
+                "proposal_id": "anchor-001",
+                "proposed_offset_seconds": -7200,
+                "source_file": "6-photos-by-dest/Japan/2024-anchor-1.arw"
+              },
+              {
+                "camera_source_naive_time": "2024:07:03 14:10:00",
+                "gpx_match": {
+                  "distance_m": 0.0,
+                  "gpx_file": "trip-2024-07-03.gpx",
+                  "match_type": "gpx_point_match",
+                  "segment_duration_seconds": null
+                },
+                "native_gps": {
+                  "lat": 50.0,
+                  "lon": 4.002
+                },
+                "proposal_id": "anchor-002",
+                "proposed_offset_seconds": -7200,
+                "source_file": "6-photos-by-dest/Japan/2024-anchor-2.arw"
+              }
+            ],
+            "confidence": "high",
+            "conflicting_count": 0,
+            "proposal_source": "gpx_self_anchor",
+            "proposed_offset_seconds": -7200,
+            "proposed_real_utc": "2024-07-03T12:00:00Z",
+            "rank": "recommended",
+            "recommended_gpx_match": {
+              "distance_m": 0.0,
+              "gpx_file": "trip-2024-07-03.gpx",
+              "match_type": "gpx_point_match",
+              "segment_duration_seconds": null
+            },
+            "supporting_count": 1
+          },
+          "requires_user_input": false,
+          "stale_user_decision": false,
+          "user_decision": {
+            "accept_proposal": false,
+            "manual_offset_seconds": "",
+            "manual_real_utc": ""
+          }
+        }
+      },
+      "camera_groups_present": [
+        "SONY|ILCE-6400|A"
+      ],
+      "destination_path": "6-photos-by-dest/Japan",
+      "destination_timezone": {
+        "effective_iana_timezone": "Asia/Tokyo",
+        "proposal_confidence": "high",
+        "proposal_source": "config_default",
+        "proposed_iana_timezone": "Europe/Brussels",
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "accept_proposed_timezone": false,
+          "manual_iana_timezone": "Asia/Tokyo"
+        }
+      }
+    },
+    "6-photos-by-dest/Japan/Kyoto": {
+      "camera_group_time_decisions": {
+        "SONY|ILCE-6400|A": {
+          "camera_group": "SONY|ILCE-6400|A",
+          "camera_group_class": "camera",
+          "effective_time_anchor": {
+            "offset_seconds": -7200,
+            "source": "inherited_accepted"
+          },
+          "proposal": {
+            "confidence": "review_required",
+            "inherited_from": "6-photos-by-dest/Japan",
+            "proposal_source": "inherited",
+            "proposed_offset_seconds": -7200,
+            "rank": "inherited_from_ancestor"
+          },
+          "requires_user_input": false,
+          "stale_user_decision": false,
+          "user_decision": {
+            "accept_proposal": true,
+            "manual_offset_seconds": "",
+            "manual_real_utc": ""
+          }
+        }
+      },
+      "camera_groups_present": [
+        "SONY|ILCE-6400|A"
+      ],
+      "destination_path": "6-photos-by-dest/Japan/Kyoto",
+      "destination_timezone": {
+        "effective_iana_timezone": "Asia/Tokyo",
+        "inherited_from": "6-photos-by-dest/Japan",
+        "proposal_confidence": "review_required",
+        "proposal_source": "inherited",
+        "proposed_iana_timezone": "Asia/Tokyo",
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "accept_proposed_timezone": false,
+          "manual_iana_timezone": "Asia/Tokyo"
+        }
+      }
+    }
+  },
+  "executable": false,
+  "requires_user_input": false,
+  "status": "complete"
+}
