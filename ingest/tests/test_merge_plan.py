@@ -224,15 +224,18 @@ def test_plan_is_deterministic(tmp_path, monkeypatch):
     assert _plan_of(ws)["plan_id"] == first
 
 
-def test_dry_run_displays_validated_plan(tmp_path, monkeypatch, capsys):
+def test_dry_run_summarizes_validated_plan(tmp_path, monkeypatch, capsys):
     ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     _patch_fp(monkeypatch, fp)
     assert merge._run_locked_workflow("plan", str(ws)) == 0
     capsys.readouterr()
     assert merge._run_locked_workflow("dry-run", str(ws)) == 0
     out = capsys.readouterr().out
-    displayed = json.loads(out)                       # stdout is the exact plan JSON
-    assert displayed["plan_id"] == _plan_of(ws)["plan_id"]
+    pid = _plan_of(ws)["plan_id"]
+    assert out.strip().startswith("Dry-run:") and pid in out   # a summary, names the validated plan
+    assert "Full plan:" in out                                 # points to the saved artifact for detail
+    with pytest.raises(json.JSONDecodeError):                  # NOT a full JSON dump anymore
+        json.loads(out)
 
 
 def test_dry_run_without_plan_errors(tmp_path, monkeypatch):

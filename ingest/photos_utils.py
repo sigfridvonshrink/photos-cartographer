@@ -112,6 +112,27 @@ def media_class_for_ext(ext: str) -> str:
     return _MEDIA_CLASS_BY_EXT.get((ext or "").lower().lstrip('.'), "other")
 
 
+# Exiftool intermediates/backups of a media file: `<media>_exiftool_tmp` (the temp `-overwrite_original`
+# writes then atomically renames over the original) and `<media>_original` (the backup exiftool keeps
+# when `-overwrite_original` is NOT used). A clean Ctrl-C is self-cleaned by exiftool, but a hard kill
+# (SIGKILL/OOM/power loss) can orphan one in a managed folder; prep recognizes and quarantines these
+# (the live original is always intact — the rename is atomic). Calibration's writer also unlinks a
+# stale `_exiftool_tmp` for a file right before it rewrites it.
+_EXIFTOOL_ARTIFACT_SUFFIXES = ("_exiftool_tmp", "_original")
+
+def exiftool_artifact_base(name: str) -> str:
+    """If `name` is an exiftool intermediate/backup OF A MEDIA FILE, return the underlying media
+    filename; otherwise None. The media-extension check on the stripped name keeps unrelated files
+    (e.g. a user's `notes_original.txt`) from matching — only `<media-ext>_original` /
+    `<media-ext>_exiftool_tmp` qualify."""
+    for suffix in _EXIFTOOL_ARTIFACT_SUFFIXES:
+        if name.endswith(suffix):
+            base = name[: -len(suffix)]
+            if base and media_class_for_ext(os.path.splitext(base)[1]) != "other":
+                return base
+    return None
+
+
 def _folders(cfg=None):
     return ((cfg or CONFIG).get("folders") or DEFAULT_FOLDERS)
 
@@ -183,6 +204,15 @@ def config_path(ws: str) -> str:
 
 def db_path(ws: str) -> str:
     return os.path.join(ws, CONTROL_DIR, "photos-00-ingest.db")
+
+PREP_PLAN_ARTIFACT = "photos-10-prep-plan.json"
+
+def prep_plan_path(ws: str) -> str:
+    """The prep-phase plan artifact (prep §14.2), written by `plan` and consumed by `dry-run`/`execute`
+    from this canonical control-dir path — no flag tells the phase where to look. `photos-10-` precedes
+    the `photos-11-handoff.json` it leads to. Re-planning backs up any prior plan via
+    backup_existing_artifact (the shared `-NNN` suffix), so a superseded plan stays recoverable."""
+    return os.path.join(ws, CONTROL_DIR, PREP_PLAN_ARTIFACT)
 
 def handoff_path(ws: str) -> str:
     return os.path.join(ws, CONTROL_DIR, "photos-11-handoff.json")
@@ -291,6 +321,43 @@ def write_json_artifact(path: str, obj: dict) -> str:
     workspace state so downstream re-hashing is stable (§4)."""
     _atomic_write_text(path, json.dumps(obj, indent=2, sort_keys=True))
     return sha256_file(path)
+
+def backup_existing_artifact(path: str):
+    """If an artifact already exists at `path`, rename it aside to the next free `<stem>-NNN<ext>`
+    sibling — the shared `-{idx:03d}` no-clobber suffix (see allocate_suffix) — and return the backup
+    path; if nothing is there, return None. Used before re-writing a canonical plan/decision artifact
+    so the prior version is preserved rather than clobbered (shared contract §5). The rename is an
+    atomic same-directory os.replace, so the prior bytes are never lost mid-swap."""
+    if not os.path.lexists(path):
+        return None
+    d = os.path.dirname(path) or "."
+    stem, ext = os.path.splitext(os.path.basename(path))
+    existing = {n.lower() for n in os.listdir(d)}
+    name = allocate_suffix(stem, ext.lstrip("."), existing, start_idx=1, bare_first=False)
+    backup = os.path.join(d, name)
+    os.replace(path, backup)
+    return backup
+
+def write_versioned_json(path: str, obj: dict):
+    """Atomically write `obj` as deterministic JSON to `path`, backing up any existing artifact first
+    (incremental `-NNN`). Returns (sha256, backup_path_or_None) so the caller can tell the operator
+    where the plan landed and where the prior one was kept. The control dir is assumed to exist.
+
+    A no-op guard: if the existing file is already byte-identical to what we'd write, nothing is backed
+    up or rewritten (sha, None) — so an unchanged re-run (e.g. calibration regenerating identical
+    decisions) never accumulates redundant backups. A plan with a fresh plan_id differs every run, so
+    re-planning still always preserves the prior plan."""
+    new_text = json.dumps(obj, indent=2, sort_keys=True)
+    if os.path.exists(path):
+        try:
+            with open(path, "r") as f:
+                if f.read() == new_text:
+                    return sha256_file(path), None
+        except OSError:
+            pass
+    backup = backup_existing_artifact(path)
+    _atomic_write_text(path, new_text)
+    return sha256_file(path), backup
 
 def lock_path(ws: str) -> str:
     return os.path.join(ws, CONTROL_DIR, "photos-00-workspace.lock")
@@ -1325,24 +1392,30 @@ class MetadataReader:
         with ExifToolWorkerPool(size=max_workers) as pool:
             with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
                 future_to_folder = {executor.submit(pool.execute, f, progress_coordinator): f for f in folders}
-                for future in concurrent.futures.as_completed(future_to_folder):
-                    folder = future_to_folder[future]
-                    try:
-                        data = future.result()
-                        if "error" in data:
+                try:
+                    for future in concurrent.futures.as_completed(future_to_folder):
+                        folder = future_to_folder[future]
+                        try:
+                            data = future.result()
+                            if "error" in data:
+                                failed_folders.add(folder)
+                            else:
+                                results.update(data)
+                        except ProcessCrashedError:
+                            if progress_coordinator:
+                                progress_coordinator.increment("worker_crashes")
                             failed_folders.add(folder)
-                        else:
-                            results.update(data)
-                    except ProcessCrashedError:
+                        except Exception as exc:
+                            failed_folders.add(folder)
+                            print(f"Folder {folder} generated an exception: {exc}")
                         if progress_coordinator:
-                            progress_coordinator.increment("worker_crashes")
-                        failed_folders.add(folder)
-                    except Exception as exc:
-                        failed_folders.add(folder)
-                        print(f"Folder {folder} generated an exception: {exc}")
-                    if progress_coordinator:
-                        progress_coordinator.increment("metadata_extracted")
-                        progress_coordinator.increment_completed()
+                            progress_coordinator.increment("metadata_extracted")
+                            progress_coordinator.increment_completed()
+                except KeyboardInterrupt:
+                    # Ctrl-C: cancel pending extractions instead of letting the `with` exit drain
+                    # them. The ExifToolWorkerPool's __exit__ then closes/kills the worker processes.
+                    executor.shutdown(wait=False, cancel_futures=True)
+                    raise
 
         # Sort results by key deterministically
         return {k: results[k] for k in sorted(results.keys())}, failed_folders
