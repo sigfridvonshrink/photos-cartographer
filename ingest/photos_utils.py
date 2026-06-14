@@ -60,12 +60,16 @@ CONFIG = {
     # Position-based thresholds for the calibration time-anchor inference (calibration §19):
     # how close a native-GPS frame must be to a GPX point/segment to anchor its real time, and how
     # far supporting anchors' offsets may spread before they conflict. Consumed by calibration.
-    "gpx_anchor_max_point_distance_meters": 30.0,
-    "gpx_anchor_max_segment_distance_meters": 30.0,
+    # 50m (not a tighter value) tolerates the poorer GPS agreement typical at destinations — old-town
+    # canyons, forested parks, castle courtyards — so clock-offset inference still finds enough anchors.
+    "gpx_anchor_max_point_distance_meters": 50.0,
+    "gpx_anchor_max_segment_distance_meters": 50.0,
     "gpx_anchor_offset_spread_max_seconds": 120.0,
     # How far past either end of the GPX track a photo's resolved time may be placed by velocity
-    # extrapolation before it is left unplaced (calibration §23/§25 GPS placement).
-    "gpx_extrapolation_max_seconds": 120.0,
+    # extrapolation before it is left unplaced (calibration §23/§25 GPS placement). 300s covers a few
+    # edge-of-visit frames (before the first fix / after the last); kept modest because extrapolation
+    # has no second bracket and projects the endpoint velocity (risky if the track ended on a drive-away).
+    "gpx_extrapolation_max_seconds": 300.0,
     "photo_anchor_interpolation_max_gap_seconds": 1800.0,
     "photo_anchor_extrapolation_max_seconds": 300.0,
     "camera_time_and_timezone_policy": {
