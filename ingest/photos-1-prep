@@ -539,29 +539,34 @@ class PlanExecutor:
         self.coordinator = ProgressCoordinator()
 
     def _prune_empty_dirs(self):
-        """Remove directory skeletons left empty by structure-preserving moves: emptied subtrees
-        under the 0-sources inbox, and any non-managed base dump dir left behind by an init move.
-        The managed folders, the control dirs, and the user-curated by-dest tree are never touched
-        (only 0-sources internals + non-managed base dirs are pruned). Empty-dir removal is pure
-        housekeeping — no media is affected."""
+        """Remove directory skeletons left empty by structure-preserving moves and dump-dotfile
+        quarantine: emptied subtrees under the 0-sources inbox, and any non-managed base entry an
+        init move/quarantine emptied — including a hidden dump dir like `.thumbnails/` once its files
+        are quarantined. The managed folders (`0`–`6`), the strays tree, and the control directories
+        (`.photos-ingest`, `.photos-ingest-quarantine`, `.git`) are **never removed, even when
+        empty** — they are explicitly protected by absolute path. Empty-dir removal is pure
+        housekeeping; no media is affected."""
         from photos_utils import managed_folder_names, folder_name, CONTROL_DIR, QUARANTINE_DIR
         ws = self.workspace_root
         sources_path = os.path.join(ws, folder_name('sources'))
-        protected_top = set(managed_folder_names()) | {folder_name('strays'), CONTROL_DIR,
-                                                       QUARANTINE_DIR, ".git"}
+        control_top = {CONTROL_DIR, QUARANTINE_DIR, ".git"}
+        managed_top = set(managed_folder_names()) | {folder_name('strays')}
+        # Explicit guard: a managed/strays/control directory is never pruned even if empty. (0-sources
+        # is a managed folder, so this also keeps the inbox itself while its internals are pruned.)
+        protected = {os.path.abspath(os.path.join(ws, n)) for n in (managed_top | control_top)}
         targets = [sources_path]
         for f in os.listdir(ws):
-            if f in protected_top or f.startswith('.'):
-                continue
+            if f in managed_top or f in control_top:
+                continue                               # never a prune target (managed/strays/control)
             p = os.path.join(ws, f)
             if os.path.isdir(p) and not os.path.islink(p):
-                targets.append(p)                      # a non-managed base dir (init-move source)
+                targets.append(p)                      # a non-managed base entry (dump dir, incl hidden)
         for base in targets:
             if not os.path.isdir(base):
                 continue
             for dirpath, _dirs, _files in os.walk(base, topdown=False):
-                if dirpath == sources_path:
-                    continue                           # keep the 0-sources inbox itself
+                if os.path.abspath(dirpath) in protected:
+                    continue                           # explicit: never remove a managed/strays/control dir
                 try:
                     if not os.listdir(dirpath):
                         os.rmdir(dirpath)
@@ -1210,6 +1215,62 @@ class WorkspacePrepWorkflow:
             if os.path.islink(p):
                 blockers.append(f"Forbidden symlink detected: {os.path.relpath(p, self.workspace_root)}")
 
+    def _collect_dump_dotfiles(self, blockers):
+        """Hidden (dot-prefixed) files arriving as part of a dump — OS metadata (`.DS_Store`),
+        thumbnail caches (`.thumbnails/`), editor temp files — are recoverable junk that should not
+        silently litter the workspace. Collect them from the DUMP AREAS so they can be quarantined
+        (recoverable, never deleted): the workspace root on an init run, and the `0-sources/` inbox on
+        any run. The workspace's own control directories (`.photos-ingest`, `.photos-ingest-quarantine`,
+        `.git`) are NEVER touched; managed bands, `1-strays/`, and the read-only `6-photos-by-dest`
+        tree are not dump areas and are left alone. A file is "hidden" if its own name is dot-prefixed,
+        if any ancestor directory below the dump area is dot-prefixed, or if the whole dump entry it
+        came in under is dot-prefixed. A dot-symlink is forbidden like any symlink (flagged, not
+        quarantined). Returns workspace-relative file paths. (Hashing/inventory never see these — like
+        the exiftool-leftover sweep, they bypass the media pipeline straight to quarantine.)"""
+        from photos_utils import CONTROL_DIR, QUARANTINE_DIR, folder_name, managed_folder_names
+        ws = self.workspace_root
+        out = []
+
+        def _walk_hidden(root_abs, all_hidden):
+            for r, _dirs, fnames in os.walk(root_abs):
+                rel_to_root = os.path.relpath(r, root_abs)
+                under_hidden = all_hidden or any(
+                    part.startswith('.') for part in rel_to_root.split(os.sep) if part not in ('.', ''))
+                for fn in fnames:
+                    if not (under_hidden or fn.startswith('.')):
+                        continue                       # a plain file in a plain dir — the main scan owns it
+                    p = os.path.join(r, fn)
+                    rel = os.path.relpath(p, ws)
+                    if os.path.islink(p):
+                        blockers.append(f"Forbidden symlink detected: {rel}")
+                    else:
+                        out.append(rel)
+
+        # 0-sources inbox (every run): hidden files anywhere under it.
+        src = os.path.join(ws, folder_name('sources'))
+        if os.path.isdir(src) and not os.path.islink(src):
+            _walk_hidden(src, all_hidden=False)
+
+        # Workspace root dump (init run only): hidden root-level entries, and hidden files nested in
+        # non-dot dump folders. The control dirs and managed/strays folders are excluded outright.
+        if self._initializing:
+            skip_top = {CONTROL_DIR, QUARANTINE_DIR, ".git"}
+            managed = set(managed_folder_names()) | {folder_name('strays')}
+            for f in os.listdir(ws):
+                if f in skip_top or f in managed:
+                    continue
+                p = os.path.join(ws, f)
+                if os.path.islink(p):
+                    continue                           # symlinks are flagged by the main scan
+                if os.path.isdir(p):
+                    # A dot dump dir (e.g. `.thumbnails`) -> everything under it is hidden; a plain dump
+                    # dir -> only its name-hidden / under-a-dot-subdir files.
+                    _walk_hidden(p, all_hidden=f.startswith('.'))
+                elif f.startswith('.'):
+                    out.append(f)                      # a root-level dump dotfile
+        out.sort()
+        return out
+
     def plan(self) -> Plan:
         operations = []
         blockers = []
@@ -1314,6 +1375,11 @@ class WorkspacePrepWorkflow:
             if os.path.isdir(folder_path):
                 for root, _dirs, filenames in os.walk(folder_path):
                     self._flag_dir_symlinks(root, _dirs, blockers)   # nested dir symlinks are forbidden too
+                    # Do not descend into hidden subdirs: their files are not managed media (a non-dot
+                    # file inside a `.thumbnails/` is still dump junk). In 0-sources those files are
+                    # picked up by _collect_dump_dotfiles for quarantine; elsewhere they are skipped.
+                    # (Matches the init dump-folder walk, which also prunes dot-subdirs.)
+                    _dirs[:] = [dd for dd in _dirs if not dd.startswith('.')]
                     if _gpx_skip:                                    # prune a gpx_root subtree nested here (§8.2)
                         _dirs[:] = [dd for dd in _dirs
                                     if os.path.realpath(os.path.join(root, dd)) != _gpx_skip]
@@ -1326,6 +1392,12 @@ class WorkspacePrepWorkflow:
                             else:
                                 files.append(rel_path)
         files.sort()
+
+        # Hidden (dot-prefixed) files arriving in a dump (.DS_Store, .thumbnails/, editor temp) are
+        # recoverable junk; collect them from the dump areas (root on init, 0-sources inbox) for
+        # quarantine below rather than leaving them to litter the workspace. The control dirs are
+        # never touched (see _collect_dump_dotfiles).
+        dump_dotfiles = self._collect_dump_dotfiles(blockers)
 
         # Recognize orphaned exiftool intermediates/backups (`<media>_exiftool_tmp` / `<media>_original`)
         # left by a hard-killed calibration write (a clean SIGINT is self-cleaned by exiftool). They are
@@ -1889,6 +1961,26 @@ class WorkspacePrepWorkflow:
                 preconditions={"size": _st.st_size, "mtime_ns": _st.st_mtime_ns},
                 verification={"original_path": rel, "quarantine_path": q_dest,
                               "plan_id": plan_id_for_quarantine, "kind": "exiftool_leftover"},
+                database_effects_after_verification=[]))
+
+        # Quarantine hidden dump files (same recoverable, evidence-before-quarantine discipline). Like
+        # the exiftool leftovers, they never entered the media inventory, so there is no cache row to
+        # remove. Their emptied dot-dir skeletons are pruned by _prune_empty_dirs on success.
+        for rel in dump_dotfiles:
+            try:
+                _st = os.stat(os.path.join(self.workspace_root, rel))
+            except OSError:
+                continue   # vanished between scan and planning — nothing to quarantine
+            q_dest = os.path.join(".photos-ingest-quarantine", plan_id_for_quarantine, rel)
+            operations.append(Operation(
+                operation_id=f"op-{uuid.uuid4().hex[:8]}",
+                type="quarantine_move",
+                reason="Hidden dump file (recoverable; not organized as media)",
+                source=rel,
+                destination=q_dest,
+                preconditions={"size": _st.st_size, "mtime_ns": _st.st_mtime_ns},
+                verification={"original_path": rel, "quarantine_path": q_dest,
+                              "plan_id": plan_id_for_quarantine, "kind": "dump_dotfile"},
                 database_effects_after_verification=[]))
 
         for (ch_str, mc), group in content_groups.items():
