@@ -117,7 +117,7 @@ def test_recognized_move_appends_moved_to_by_dest(tmp_path, monkeypatch):
     ws = _ws(tmp_path)
     (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
     _run(ws)
-    organized = glob.glob(str(ws / "5-photos-by-date" / "*.jpg"))[0]
+    organized = glob.glob(str(ws / "5-photos-by-date" / "**" / "*.jpg"), recursive=True)[0]
     fp_before = next(iter(_log(ws)["photos"]))
     # user moves the photo into by-dest
     dest_dir = ws / "6-photos-by-dest" / "Trip"
@@ -148,7 +148,8 @@ def test_missing_history_warns_and_marks_partial(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
     # An already-organized file with no prior prep-log/journal: history is unreconstructable.
-    (ws / "5-photos-by-date" / "2023-01-02--03-04-05-001.jpg").write_bytes(b"AAAA")
+    (ws / "5-photos-by-date" / "2023-01-02").mkdir()
+    (ws / "5-photos-by-date" / "2023-01-02" / "2023-01-02--03-04-05-001.jpg").write_bytes(b"AAAA")
     _run(ws)
     entry = next(iter(_log(ws)["photos"].values()))
     assert entry.get("partial") is True

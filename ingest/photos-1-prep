@@ -554,7 +554,11 @@ class PlanExecutor:
         # Explicit guard: a managed/strays/control directory is never pruned even if empty. (0-sources
         # is a managed folder, so this also keeps the inbox itself while its internals are pruned.)
         protected = {os.path.abspath(os.path.join(ws, n)) for n in (managed_top | control_top)}
-        targets = [sources_path]
+        # Also sweep the by-date bands so a `YYYY-MM-DD/` day folder emptied by a by-dest move (or by
+        # re-bucketing) does not linger; the band roots themselves stay protected above.
+        targets = [sources_path,
+                   os.path.join(ws, folder_name('photos_by_date')),
+                   os.path.join(ws, folder_name('videos_by_date'))]
         for f in os.listdir(ws):
             if f in managed_top or f in control_top:
                 continue                               # never a prune target (managed/strays/control)
@@ -1214,6 +1218,26 @@ class WorkspacePrepWorkflow:
             p = os.path.join(root, dd)
             if os.path.islink(p):
                 blockers.append(f"Forbidden symlink detected: {os.path.relpath(p, self.workspace_root)}")
+
+    def _file_datetime(self, f):
+        """The source-naive datetime parsed from a file's cached metadata (DateTimeOriginal, else
+        CreateDate, else ModifyDate), or None if absent/unparseable. Used both to pick the by-date
+        `YYYY-MM-DD/` subfolder and to test whether an already-organized file is in its conforming
+        day folder."""
+        md = (f.get('metadata') or {}).get('parsed_json')
+        if not md:
+            return None
+        try:
+            parsed = json.loads(md)
+        except Exception:
+            return None
+        dt_str = parsed.get('DateTimeOriginal') or parsed.get('CreateDate') or parsed.get('ModifyDate')
+        if not dt_str:
+            return None
+        try:
+            return datetime.strptime(dt_str[:19], "%Y:%m:%d %H:%M:%S")
+        except ValueError:
+            return None
 
     def _collect_dump_dotfiles(self, blockers):
         """Hidden (dot-prefixed) files arriving as part of a dump — OS metadata (`.DS_Store`),
@@ -2023,14 +2047,21 @@ class WorkspacePrepWorkflow:
                     quarantined.add(dup['relative_path'])
                     current_paths[dup['relative_path']] = quarantine_dest
 
-        # Pass 1: seed the per-run suffix index with EVERY already-organized name first, so a
-        # newly-organized file never collides with an existing one regardless of iteration order.
+        # Pass 1: seed the per-run suffix index with EVERY already-conforming name first, so a
+        # newly-organized (or re-located) file never collides with an existing one regardless of
+        # iteration order. A single global index suffices even with the new day subfolders: the
+        # filename carries the full date (`YYYY-MM-DD--HH-MM-SS`), so two files can share a name only
+        # if they share the full timestamp — i.e. the same day, hence the same `YYYY-MM-DD/` folder.
+        # Two files in different day folders can never collide on name, so a global basename set is
+        # exactly equivalent to per-folder scoping.
         global_index = set()
         to_organize = []
         strays_to_move = []
         _managed = set(managed_folder_names(CONFIG))
         _sources = folder_name('sources')
         _sources_prefix = _sources + '/'
+        _by_date_bands = {folder_name('photos_by_date'), folder_name('videos_by_date')}
+
         for f in db_files:
             if f['relative_path'] in quarantined: continue
             rel_path = current_paths[f['relative_path']]
@@ -2043,8 +2074,19 @@ class WorkspacePrepWorkflow:
                     strays_to_move.append((f, rel_path))
                 continue
             top = rel_path.split('/', 1)[0]
-            if top != _sources and top in _managed:   # already organized into a band
-                global_index.add(os.path.basename(rel_path).lower())
+            if top != _sources and top in _managed:    # already in a managed band
+                if top in _by_date_bands:
+                    # By-date files must live under a `band/YYYY-MM-DD/` day folder. One already there
+                    # (matching its own timestamp) is conforming -> no-op; a flat or wrong-day file is
+                    # re-located into the correct day folder (Section 7.6 migration).
+                    dt = self._file_datetime(f)
+                    parts = rel_path.split('/')
+                    if dt is not None and len(parts) == 3 and parts[1] == dt.strftime("%Y-%m-%d"):
+                        global_index.add(os.path.basename(rel_path).lower())   # conforming day placement
+                    else:
+                        to_organize.append((f, rel_path))
+                else:
+                    global_index.add(os.path.basename(rel_path).lower())       # by-dest / missing-metadata / redundant-jpgs
             else:
                 to_organize.append((f, rel_path))
 
@@ -2063,40 +2105,30 @@ class WorkspacePrepWorkflow:
                 database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}]))
             current_paths[f['relative_path']] = dest
 
-        # Pass 2: allocate names for the files still in 0-sources against the fully-seeded index.
+        # Pass 2: place each file still in 0-sources (or being re-located from a non-conforming by-date
+        # spot) into its destination directory and allocate its name against that directory's index.
         for f, rel_path in to_organize:
-            md_parsed = {}
-            if f.get('metadata') and f['metadata'].get('parsed_json'):
-                try:
-                    md_parsed = json.loads(f['metadata']['parsed_json'])
-                except Exception:
-                    pass
-
-            dt_str = md_parsed.get('DateTimeOriginal') or md_parsed.get('CreateDate') or md_parsed.get('ModifyDate')
-            target_folder = folder_name('missing_metadata')
-            prefix = "UNKN"
-
-            if dt_str:
-                try:
-                    dt = datetime.strptime(dt_str[:19], "%Y:%m:%d %H:%M:%S")
-                    if f['media_class'] == 'video':
-                        target_folder = folder_name('videos_by_date')
-                    else:
-                        target_folder = folder_name('photos_by_date')
-                    prefix = dt.strftime(CONFIG["filename_timestamp_format"])
-                except ValueError:
-                    pass
-
+            dt = self._file_datetime(f)
             base, ext = os.path.splitext(os.path.basename(rel_path))
             ext = ext.lstrip('.')
-            if prefix == "UNKN":
+
+            if dt is not None:
+                target_folder = (folder_name('videos_by_date') if f['media_class'] == 'video'
+                                 else folder_name('photos_by_date'))
+                prefix = dt.strftime(CONFIG["filename_timestamp_format"])
+                # Group by-date media into a YYYY-MM-DD/ day subfolder; the filename keeps the full
+                # timestamp (Section 8). The day uses the date portion of the source-naive timestamp.
+                target_dir = os.path.join(target_folder, dt.strftime("%Y-%m-%d"))
+            else:
+                target_dir = folder_name('missing_metadata')   # untimestamped -> flat, no day folder
                 prefix = f"UNKN_{base}"
 
             # §7.2: the first file at a given timestamp gets the bare name; the -NNN suffix appears only
             # on a genuine collision (matches calibration's final naming, so an uncorrected file's
-            # provisional and final names coincide and calibration plans no needless rename — §7.3).
+            # provisional and final names coincide — §7.3). A same-named file can only be in this same
+            # day folder, so the global index is exact (see Pass 1).
             final_name = self._allocate_suffix(prefix, ext, global_index, bare_first=True)
-            dest = os.path.join(target_folder, final_name)
+            dest = os.path.join(target_dir, final_name)
 
             media_mutated_originals.add(f["relative_path"])
 

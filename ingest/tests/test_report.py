@@ -91,7 +91,7 @@ def test_recognized_move_counted_in_report(tmp_path, monkeypatch):
     p1 = prep.WorkspacePrepWorkflow(str(ws), cache).plan()
     cache.close()
     prep.PlanExecutor(str(ws)).execute(p1)
-    org = glob.glob(str(ws / "5-photos-by-date" / "*.jpg"))[0]
+    org = glob.glob(str(ws / "5-photos-by-date" / "**" / "*.jpg"), recursive=True)[0]
     (ws / "6-photos-by-dest" / "T").mkdir(parents=True)
     os.rename(org, ws / "6-photos-by-dest" / "T" / os.path.basename(org))
     p2 = prep.WorkspacePrepWorkflow(str(ws), prep.WorkspaceCache(str(ws))).plan()

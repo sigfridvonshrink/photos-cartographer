@@ -143,11 +143,12 @@ def test_bare_timestamp_name_used_when_free(tmp_path, monkeypatch):
     # existing -001 is untouched (no clobber).
     _install(monkeypatch, meta_for=lambda f: {"DateTimeOriginal": "2023:01:02 03:04:05"})
     ws = _ws(tmp_path)
-    (ws / "5-photos-by-date" / "2023-01-02--03-04-05-001.jpg").write_bytes(b"existing")
+    (ws / "5-photos-by-date" / "2023-01-02").mkdir()
+    (ws / "5-photos-by-date" / "2023-01-02" / "2023-01-02--03-04-05-001.jpg").write_bytes(b"existing")
     (ws / "0-sources" / "new.jpg").write_bytes(b"new")
     org = [op for op in _moves(_plan(ws)) if op.source == "0-sources/new.jpg"]
-    assert org and org[0].destination == "5-photos-by-date/2023-01-02--03-04-05.jpg", org[0].destination
-    assert (ws / "5-photos-by-date" / "2023-01-02--03-04-05-001.jpg").exists()       # untouched
+    assert org and org[0].destination == "5-photos-by-date/2023-01-02/2023-01-02--03-04-05.jpg", org[0].destination
+    assert (ws / "5-photos-by-date" / "2023-01-02" / "2023-01-02--03-04-05-001.jpg").exists()   # untouched
 
 
 def test_same_timestamp_collision_suffixes_after_bare(tmp_path, monkeypatch):
@@ -159,8 +160,8 @@ def test_same_timestamp_collision_suffixes_after_bare(tmp_path, monkeypatch):
     (ws / "0-sources" / "b.jpg").write_bytes(b"BBB")
     dests = {op.destination for op in _moves(_plan(ws))
              if op.source in ("0-sources/a.jpg", "0-sources/b.jpg")}
-    assert dests == {"5-photos-by-date/2023-01-02--03-04-05.jpg",
-                     "5-photos-by-date/2023-01-02--03-04-05-001.jpg"}, dests
+    assert dests == {"5-photos-by-date/2023-01-02/2023-01-02--03-04-05.jpg",
+                     "5-photos-by-date/2023-01-02/2023-01-02--03-04-05-001.jpg"}, dests
 
 
 # --- dedup / cache -----------------------------------------------------------
@@ -170,7 +171,7 @@ def test_ghost_prune_removes_missing_cache_row(tmp_path, monkeypatch):
     ws = _ws(tmp_path)
     (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
     _run(ws)                                                      # organize + cache
-    organized = glob.glob(str(ws / "5-photos-by-date" / "*.jpg"))[0]
+    organized = glob.glob(str(ws / "5-photos-by-date" / "**" / "*.jpg"), recursive=True)[0]
     os.remove(organized)                                          # file vanishes
     plan = _plan(ws)
     rel = os.path.relpath(organized, str(ws))
@@ -239,7 +240,7 @@ def test_camera_group_key_version_staleness_refreshes(tmp_path, monkeypatch):
     _run(ws)
     monkeypatch.setattr(utils, "CAMERA_GROUP_KEY_VERSION", 999)   # derivation bumped
     plan = _plan(ws)
-    organized = glob.glob(str(ws / "5-photos-by-date" / "*.jpg"))[0]
+    organized = glob.glob(str(ws / "5-photos-by-date" / "**" / "*.jpg"), recursive=True)[0]
     rel = os.path.relpath(organized, str(ws))
     assert plan.summary["metadata_plan_status"].get(rel) == "extracted_ok", \
         plan.summary["metadata_plan_status"]
