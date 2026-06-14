@@ -517,7 +517,7 @@ Illustrative per-photo shape (not normative):
   "camera_group": "sony_a6400_serial_123456",
   "journey": [
     { "phase": "prep", "action": "extension_normalized", "from": "DSC01234.ARW", "to": "dsc01234.arw" },
-    { "phase": "prep", "action": "moved_to_by_date", "to": "5-photos-by-date/2024/2024-07-03/…" },
+    { "phase": "prep", "action": "moved_to_by_date", "to": "5-photos-by-date/2024-07-03/…" },
     { "phase": "prep", "action": "provisional_rename", "to": "2024-07-03--14-12-08.arw" },
     { "phase": "user", "action": "moved_to_by_dest", "to": "6-photos-by-dest/Belgium/Brussels/…" },
     { "phase": "calibrate", "action": "clock_offset_applied",

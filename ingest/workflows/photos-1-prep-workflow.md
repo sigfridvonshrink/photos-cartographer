@@ -60,8 +60,8 @@ Prep manages a fixed set of numbered folders under the workspace root, plus cont
 1-strays/<plan-id>/  non-media set aside per run, structure preserved    (mutable)
 2-missing-metadata/  media with no usable timestamp                      (mutable)
 3-redundant-jpgs/    JPEGs that have a RAW sibling                       (mutable)
-4-videos-by-date/    timestamped videos, renamed by date                 (mutable)
-5-photos-by-date/    timestamped photos, renamed by date                 (mutable)
+4-videos-by-date/    timestamped videos, in YYYY-MM-DD/ day folders      (mutable)
+5-photos-by-date/    timestamped photos, in YYYY-MM-DD/ day folders      (mutable)
 6-photos-by-dest/    user-curated destinations                           (READ-ONLY)
 ```
 
@@ -259,7 +259,7 @@ Then scan `0-sources/` and every managed folder, apply the guards of Section 6.2
 
 **`0-sources/` is the one and only inbox.** On an initialized workspace you place a dump — arbitrary files and whole folder trees, in any structure — into `0-sources/`; on an uninitialized workspace prep moves the as-arrived base dump into `0-sources/` during initialization (Stage 0). Either way the dump then sits in `0-sources/` and prep processes it from there. You are not expected to pre-organize, rename, or sort anything. A single workspace may receive one or many dumps over time (shared contract `photos-shared-contract.md` Section 10).
 
-**Prep does not flatten `0-sources`.** Dumped folder trees are left as they are on disk; prep does not lift files up into the top level of `0-sources/`. The job flattening used to do — guaranteeing no destination-name collisions — is instead handled **in memory during planning**: prep computes each file's by-date destination name and resolves any collision with the deterministic `-NNN` suffix allocator (Section 8), treating every on-disk and planned name as occupied. So the *organized outputs* — by-date photos and videos — are always uniquely named (logically "flattened") without ever physically flattening `0-sources`. Files already inside a managed folder are left where they are at this stage; non-media files are routed to `1-strays/` at Stage 5 (Section 7.6).
+**Prep does not flatten `0-sources`.** Dumped folder trees are left as they are on disk; prep does not lift files up into the top level of `0-sources/`. The job flattening used to do — guaranteeing no destination-name collisions — is instead handled **in memory during planning**: prep computes each file's by-date destination name and resolves any collision with the deterministic `-NNN` suffix allocator (Section 8), treating every on-disk and planned name as occupied. So the *organized outputs* — by-date photos and videos — always land at a unique destination path (logically "flattened") without ever physically flattening `0-sources`; uniqueness is per day folder (within a `YYYY-MM-DD/` band subfolder, Section 8). Files already inside a managed folder are left where they are at this stage, **except** a by-date file not in its conforming day folder, which is re-located into it (Section 7.6); non-media files are routed to `1-strays/` at Stage 5 (Section 7.6).
 
 > **Caution — protect your originals *during* the dump; a clobber at copy time is invisible to the pipeline.** Every operation the pipeline performs is no-clobber and atomic (Section 14.3; shared contract `photos-shared-contract.md` Section 15), and prep preserves every distinct file it finds — photos and videos are organized under uniquely-allocated by-date names (Section 8), non-media is moved into `1-strays/` (Section 3.2), and nothing is overwritten. **That protection begins only at the first prep invocation.** It cannot cover a file overwritten *while you are dumping*, before prep has run: if your own copy/move command overwrites a same-named file in the same destination folder as you stage files — e.g. `cp a/IMG_1234.jpg 0-sources/` then `cp b/IMG_1234.jpg 0-sources/`, where the second silently replaces the first — that file is gone at the filesystem level and the pipeline has **no record it ever existed**: nothing to detect, nothing to recover. The pipeline cannot see a collision that happened before it was invoked. To stay safe, dump each source into its **own subfolder** under `0-sources/` (prep keeps the subfolder structure on disk and gives same-named files from different subtrees distinct by-date names — it won't conflate them), or use a non-overwriting copy (`cp -n`, `rsync --ignore-existing`, or a tool that refuses to overwrite) and verify file counts before running prep. The dump is the one step where avoiding a clobber is in your hands, not the pipeline's.
 
@@ -298,11 +298,13 @@ DateTimeOriginal -> CreateDate -> ModifyDate
 Routing:
 
 ```text
-valid timestamp + video    -> 4-videos-by-date/
-valid timestamp + photo    -> 5-photos-by-date/
-media, no valid timestamp  -> 2-missing-metadata/
-non-media (other-class)    -> 1-strays/<plan-id>/   (structure preserved, inert; Section 3.2)
+valid timestamp + video    -> 4-videos-by-date/YYYY-MM-DD/
+valid timestamp + photo    -> 5-photos-by-date/YYYY-MM-DD/
+media, no valid timestamp  -> 2-missing-metadata/            (flat — no day folder)
+non-media (other-class)    -> 1-strays/<plan-id>/            (structure preserved, inert; Section 3.2)
 ```
+
+Timestamped media is grouped into a **`YYYY-MM-DD/` day subfolder** under its band (the day is the date portion of the source-naive timestamp, Section 8); the filename still carries the full timestamp. An already-organized by-date file that is **not** in its conforming day folder — a flat file from an older layout, or one whose timestamp changed — is **re-located into the correct day folder** on the next run (idempotent: a file already in its day folder is a no-op). `2-missing-metadata` stays flat (it has no date to group by). Empty day folders left behind (e.g. after the user moves a day's photos into by-dest) are pruned (Section 14.3).
 
 After Stage 5, **`0-sources/` is empty** — every file it held has been organized into a by-date band, set aside in `2-missing-metadata`, quarantined as a duplicate, or moved to `1-strays/`. Leaving `0-sources/` empty at the end of every run is a deliberate end-state (Section 18): it is the clean inbox the next dump arrives into, and it is what calibration's "`0-sources` empty" gate checks (calibration `photos-2-time-gps-workflow.md` Section 13).
 
@@ -321,9 +323,11 @@ For files that were not mutated and whose cache record is stale (changed size/mt
 Date-organized names follow the project standard and are derived from the source-naive timestamp:
 
 ```text
-4-videos-by-date / 5-photos-by-date :  YYYY-MM-DD--HH-MM-SS[-NNN].ext
-2-missing-metadata                  :  UNKN_<original-base>[-NNN].ext
+4-videos-by-date / 5-photos-by-date :  YYYY-MM-DD/YYYY-MM-DD--HH-MM-SS[-NNN].ext
+2-missing-metadata                  :  UNKN_<original-base>[-NNN].ext            (flat — no day folder)
 ```
+
+By-date media is grouped into a `YYYY-MM-DD/` day subfolder (the date portion of the same source-naive timestamp); the filename keeps the full timestamp. Because the filename already encodes the full date, two files can share a name only if they share the whole timestamp — i.e. the same day, hence the same day folder — so a single occupied-name set across the band is sufficient to allocate suffixes (two files in different day folders can never collide on name).
 
 The **first** file at a given name takes the **bare** name (no suffix); a `-NNN` zero-padded differentiating suffix (`-001`, `-002`, …) is added only on a collision, allocated deterministically and no-clobber against a per-run, case-insensitive occupied-name set, taking the **lowest free** index, so two files never collide. This bare-first, first-free rule is shared with calibration so an uncorrected file's provisional (prep) and final (calibration) names coincide (Section 7.3; shared contract `photos-shared-contract.md` Section 7.2) — it is **not** monotonic/append-only; only merge appends at `max+1` (for its append-only library). Extensions are normalized to lowercase (Section 7.3). The timestamp shape and the differentiating-suffix convention are defined once in the shared contract (Section 7); prep reads the same shared `filename_timestamp_format` key as calibration.
 

@@ -24,7 +24,8 @@ def setup_workspace(tmp_path: Path):
     (ws / "6-photos-by-dest" / "vacation" / "img1.jpg").parent.mkdir(parents=True)
     (ws / "6-photos-by-dest" / "vacation" / "img1.jpg").write_text("already_dest")
 
-    (ws / "5-photos-by-date" / "2023-01-01--12-00-00.jpg").write_text("already_date")
+    (ws / "5-photos-by-date" / "2023-01-01").mkdir()
+    (ws / "5-photos-by-date" / "2023-01-01" / "2023-01-01--12-00-00.jpg").write_text("already_date")
 
     # Source file that needs prep
     (ws / "0-sources" / "new_img.jpg").write_text("new_source")
@@ -112,7 +113,7 @@ def test_prep_idempotency_and_by_dest_accounting(mock_meta, tmp_path):
     # Check that cache correctly preserved identity
     # The new_img should now be in 2-missing-metadata, and its hash should exist in cache
     all_files = cache2.get_all_files()
-    assert any(f.startswith("5-photos-by-date/2023-01-01--12-00-00-001") for f in all_files.keys())
+    assert any(f.startswith("5-photos-by-date/2023-01-01/2023-01-01--12-00-00-001") for f in all_files.keys())
 
     # Verify that by-dest files were NEVER mutated (still in original place)
     assert (ws / "6-photos-by-dest" / "vacation" / "img1.jpg").exists()
@@ -334,7 +335,7 @@ def test_stale_already_cached_file_aborts(mock_meta, tmp_path):
     # Wait, the first run already moved 0-sources files to 2-missing-metadata and quarantine!
     # So we should check that they weren't mutated *again* or something.
     # We can just check that no execution succeeded.
-    assert (ws / "5-photos-by-date" / "2023-01-01--12-00-00-001.jpg").exists()
+    assert (ws / "5-photos-by-date" / "2023-01-01" / "2023-01-01--12-00-00-001.jpg").exists()
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
 def test_stale_ghost_prune_reappeared_file_aborts_before_cache_remove(mock_meta, tmp_path):
