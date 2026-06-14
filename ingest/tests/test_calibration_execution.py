@@ -210,6 +210,32 @@ def test_exiftool_write_invocation(tmp_path, monkeypatch):
     assert wf._exiftool_write("/x.jpg", {}) is False                  # tool missing
 
 
+def test_exiftool_write_unlinks_stale_tmp(tmp_path, monkeypatch):
+    """A hard-killed prior write can orphan `<file>_exiftool_tmp`; the writer removes it for THIS
+    target before re-invoking exiftool, so the resumed write never trips over the leftover."""
+    wf = cal.CalibrationWorkflow(str(tmp_path))
+    target = tmp_path / "x.jpg"
+    target.write_bytes(b"orig")
+    stale = tmp_path / "x.jpg_exiftool_tmp"
+    stale.write_bytes(b"partial")
+
+    class _R:
+        returncode = 0
+    monkeypatch.setattr(cal.subprocess, "run", lambda cmd, **k: _R())
+    assert wf._exiftool_write(str(target), {"DateTimeOriginal": "2024:07:03 14:00:00"}) is True
+    assert not stale.exists()                 # stale temp cleaned before the write
+    assert target.read_bytes() == b"orig"     # the live original is untouched
+
+
+def test_exiftool_write_no_tmp_is_noop(tmp_path, monkeypatch):
+    """The unlink is best-effort: a missing temp (the normal case) is not an error."""
+    wf = cal.CalibrationWorkflow(str(tmp_path))
+    class _R:
+        returncode = 0
+    monkeypatch.setattr(cal.subprocess, "run", lambda cmd, **k: _R())
+    assert wf._exiftool_write(str(tmp_path / "y.jpg"), {}) is True
+
+
 def test_target_occupied_bad_directory(tmp_path):
     wf = cal.CalibrationWorkflow(str(tmp_path))
     assert wf._target_occupied(str(tmp_path / "nope"), "a.jpg", "s.jpg") is False  # listdir OSError -> False

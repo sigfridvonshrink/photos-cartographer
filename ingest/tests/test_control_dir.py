@@ -85,6 +85,33 @@ def test_journals_are_per_run_and_retained(tmp_path, monkeypatch):
     assert os.path.exists(utils.journal_path(str(ws), p2.plan_id))
 
 
+def test_backup_existing_artifact_uses_incremental_suffix(tmp_path):
+    """The shared backup primitive (used by every phase's canonical plan/decision save) renames a
+    pre-existing artifact aside under the `-NNN` suffix and never clobbers it."""
+    p = tmp_path / "photos-10-prep-plan.json"
+    assert utils.backup_existing_artifact(str(p)) is None      # nothing to back up yet
+    p.write_text('{"v": 1}')
+    b1 = utils.backup_existing_artifact(str(p))
+    assert os.path.basename(b1) == "photos-10-prep-plan-001.json"
+    assert not p.exists() and os.path.exists(b1)               # moved aside, original byte-preserved
+    p.write_text('{"v": 2}')
+    b2 = utils.backup_existing_artifact(str(p))
+    assert os.path.basename(b2) == "photos-10-prep-plan-002.json"   # second backup advances the index
+    import json as _json
+    assert _json.load(open(b1))["v"] == 1 and _json.load(open(b2))["v"] == 2
+
+
+def test_write_versioned_json_backs_up_then_writes(tmp_path):
+    p = tmp_path / "photos-30-merge-plan.json"
+    sha1, bak1 = utils.write_versioned_json(str(p), {"plan": "a"})
+    assert bak1 is None and sha1                               # first write: nothing to back up
+    sha2, bak2 = utils.write_versioned_json(str(p), {"plan": "b"})
+    assert os.path.basename(bak2) == "photos-30-merge-plan-001.json"
+    import json as _json
+    assert _json.load(open(p))["plan"] == "b"                  # canonical holds the new content
+    assert _json.load(open(bak2))["plan"] == "a"              # prior content preserved in the backup
+
+
 def test_media_inside_control_dir_is_not_inventoried(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)

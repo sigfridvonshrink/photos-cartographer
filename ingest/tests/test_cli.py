@@ -43,21 +43,50 @@ def _main(monkeypatch, ws, *argv):
 
 # --- happy path --------------------------------------------------------------
 
-def test_plan_prints_json_and_locks(tmp_path, monkeypatch, capsys):
-    code = _main(monkeypatch, _ws(tmp_path), "plan")
+def test_plan_saves_canonical_and_locks(tmp_path, monkeypatch, capsys):
+    ws = _ws(tmp_path)
+    code = _main(monkeypatch, ws, "plan")
     out = capsys.readouterr()
     assert code == 0, out.err
-    assert json.loads(out.out)["command"] == "prep"
+    pp = utils.prep_plan_path(str(ws))
+    assert os.path.exists(pp)                                  # auto-saved to the canonical path
+    assert json.load(open(pp))["command"] == "prep"
+    assert "Plan saved to" in out.out                         # and the location is announced
     assert "Lock acquired" in out.err and "Lock released" in out.err
 
 
-def test_plan_output_dryrun_execute_roundtrip(tmp_path, monkeypatch, capsys):
+def test_plan_dryrun_execute_roundtrip(tmp_path, monkeypatch, capsys):
     ws = _ws(tmp_path)
-    assert _main(monkeypatch, ws, "plan", "--output", "p.json") == 0
-    assert (ws / "p.json").exists()
-    assert "Plan saved" in capsys.readouterr().out
-    assert _main(monkeypatch, ws, "dry-run", "--plan", "p.json") == 0
-    assert _main(monkeypatch, ws, "execute", "--plan", "p.json") == 0
+    assert _main(monkeypatch, ws, "plan") == 0                # writes canonical plan
+    assert os.path.exists(utils.prep_plan_path(str(ws)))
+    assert "Plan saved to" in capsys.readouterr().out
+    assert _main(monkeypatch, ws, "dry-run") == 0             # reads it, no flag needed
+    assert _main(monkeypatch, ws, "execute") == 0             # reads it, no flag needed
+
+
+def test_dry_run_summarizes_not_dumps(tmp_path, monkeypatch, capsys):
+    ws = _ws(tmp_path)
+    assert _main(monkeypatch, ws, "plan") == 0
+    capsys.readouterr()
+    assert _main(monkeypatch, ws, "dry-run") == 0
+    out = capsys.readouterr().out
+    assert "Dry-run: validated plan" in out
+    assert "Full plan:" in out                        # points to the saved artifact for detail
+    import pytest as _pt
+    with _pt.raises(json.JSONDecodeError):            # a summary, not the full plan JSON
+        json.loads(out)
+
+
+def test_replan_backs_up_previous_plan(tmp_path, monkeypatch, capsys):
+    ws = _ws(tmp_path)
+    assert _main(monkeypatch, ws, "plan") == 0
+    capsys.readouterr()
+    assert _main(monkeypatch, ws, "plan") == 0                # re-plan
+    assert "Previous plan backed up to" in capsys.readouterr().out
+    cd = ws / ".photos-ingest"
+    backups = sorted(n for n in os.listdir(cd)
+                     if n.startswith("photos-10-prep-plan-") and n.endswith(".json"))
+    assert backups == ["photos-10-prep-plan-001.json"]       # incremental -NNN suffix, not clobbered
 
 
 def test_prune_quarantine_dry_run_and_delete(tmp_path, monkeypatch, capsys):
@@ -105,8 +134,10 @@ def test_locked_workspace_fails_fast(tmp_path, monkeypatch, capsys):
         fcntl.flock(fd, fcntl.LOCK_UN); os.close(fd)
 
 
-def test_missing_plan_file_exits_nonzero(tmp_path, monkeypatch):
-    assert _main(monkeypatch, _ws(tmp_path), "execute", "--plan", "nope.json") != 0
+def test_execute_without_saved_plan_exits_nonzero(tmp_path, monkeypatch, capsys):
+    code = _main(monkeypatch, _ws(tmp_path), "execute")       # no plan generated yet
+    assert code != 0
+    assert "run `plan` first" in capsys.readouterr().err
 
 
 def test_invalid_config_rejected_at_load(tmp_path, monkeypatch, capsys):

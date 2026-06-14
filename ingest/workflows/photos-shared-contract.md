@@ -100,6 +100,7 @@ All pipeline control and artifact files live inside a single workspace control d
   photos-00-ingest.db              SQLite identity/metadata cache + derived caches (live working DB, Section 13.4)
   photos-15-prep-ingest.db         prep-phase artifact: DB backup snapshot, end of prep (Section 13.4a)
   journal-*.json                   execution journals
+  photos-10-prep-plan.json         prep-phase artifact: prep plan (written by `plan`, consumed by `dry-run`/`execute`; see "Canonical plan persistence" below)
   photos-11-handoff.json           prep-phase artifact: handoff manifest
   photos-15-prep-log.json          prep-phase artifact: end-of-prep audit log (Section 13.3 / prep 16.1)
   photos-21-time-decisions.json    calibration-phase artifact
@@ -118,7 +119,7 @@ All pipeline control and artifact files live inside a single workspace control d
 
 ```text
 0X  workspace infrastructure (phase-neutral): config, guard, live database
-1X  prep-phase artifacts        (currently: 11 = handoff, 15 = prep audit log + prep DB snapshot)
+1X  prep-phase artifacts        (currently: 10 = prep plan, 11 = handoff, 15 = prep audit log + prep DB snapshot)
 2X  calibration-phase artifacts (currently: 21–25; 25 = complete log + calibration DB snapshot)
 3X  merge-phase artifacts        (currently: 31 = merge summary, 35 = merge log + merge DB snapshot)
 ```
@@ -128,6 +129,8 @@ That is the whole meaning of the scheme: read the first digit to know the produc
 Skipping is directory-level: prep skips `.photos-ingest/`, `.photos-ingest-quarantine/`, and `.git` as whole subtrees, plus dotfiles, and the strays folder `1-strays/` in its entirety (all `<plan-id>` subfolders) (`photos-1-prep-workflow.md` Sections 3, 3.2). A `gpx_root` misconfigured to resolve inside the managed `0`–`6` tree is the one case needing an extra subtree skip (Section 8).
 
 (`1-strays/` is a media-tree folder at the workspace root, holding non-media files prep moved out of `0-sources` per run, structure preserved, in per-`<plan-id>` subfolders — prep writes to it but never scans it, and the pipeline never processes its contents again. It is *not* an artifact band and *not* a phase output; see prep Section 3.2.)
+
+**Canonical plan persistence.** Every phase's plan/decision artifact lives at a **fixed, canonical control-dir path** — prep's `photos-10-prep-plan.json`, calibration's `photos-21`/`photos-22`/`photos-23`, merge's `photos-30-merge-plan.json` — and the phase always reads and writes it there: the planning command (`plan` / calibration `run`) writes the canonical file and the validating/applying commands (`dry-run` / `execute`) read it from the same place. **No command takes a path flag telling it where to put or find its plan**; the canonical location is the contract. A planning command **prints the path it saved to** so the operator can review the artifact without hunting for it, and a validate/apply command that finds the canonical file missing stops and directs the operator to plan first. Because the full plan is now a persisted artifact, **`dry-run` reports a concise summary** (operation/move counts by type, blockers, and the path to the full plan) rather than dumping the whole plan to the terminal — this is still not a simulation (the summary is computed from the real serialized plan, not a separate virtual-filesystem walk), it simply summarizes the on-disk plan instead of printing all of it. Re-planning **never clobbers** a prior plan or hand-edited decision file: when the regenerated artifact **differs** from what is on disk, the existing artifact is first renamed aside under the shared incremental `-NNN` suffix (Section 7.2) — e.g. `photos-10-prep-plan-001.json` — and the backup location is announced, so a superseded plan and any authored decisions stay recoverable. An **unchanged** re-run (byte-identical regenerated content — e.g. calibration re-running with no edited decisions) writes nothing and backs up nothing, so the iterative decision-editing loop does not accumulate redundant backups. A plan carrying a fresh plan id differs every run, so re-planning always preserves the prior plan. (Per-run *journals* keep their existing `journal-<run_id>.json` naming, Section 5 listing; this convention governs the plan/decision artifacts.)
 
 ### 5.2 The handoff is hashed despite living in the skipped directory
 

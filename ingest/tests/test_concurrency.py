@@ -248,14 +248,14 @@ def test_cli_jobs_argparse(workspace):
 
     script = "ingest/photos-1-prep"
     # Ensure it rejects invalid jobs
-    res = subprocess.run(["python3", script, "--jobs", "0", "plan", "--output", "test.json"], capture_output=True, text=True)
+    res = subprocess.run(["python3", script, "--jobs", "0", "plan"], capture_output=True, text=True)
     assert res.returncode != 0
     assert "jobs must be a positive integer" in res.stderr
 
-    res = subprocess.run(["python3", script, "--jobs", "-1", "plan", "--output", "test.json"], capture_output=True, text=True)
+    res = subprocess.run(["python3", script, "--jobs", "-1", "plan"], capture_output=True, text=True)
     assert res.returncode != 0
 
-    res = subprocess.run(["python3", script, "--jobs", "abc", "plan", "--output", "test.json"], capture_output=True, text=True)
+    res = subprocess.run(["python3", script, "--jobs", "abc", "plan"], capture_output=True, text=True)
     assert res.returncode != 0
 
     # Ensure it accepts valid jobs and produces output plan
@@ -272,31 +272,32 @@ def test_cli_jobs_argparse(workspace):
 
     import json
 
-    plan_path_1 = os.path.join(workspace, "plan-j1.json")
+    # plan auto-saves to the canonical control-dir path (no --output flag).
+    canonical = os.path.join(workspace, ".photos-ingest", "photos-10-prep-plan.json")
     res = subprocess.run(
-        ["python3", os.path.abspath(script), "-j", "1", "plan", "--output", plan_path_1],
+        ["python3", os.path.abspath(script), "-j", "1", "plan"],
         cwd=workspace, capture_output=True, text=True, env=env
     )
     assert res.returncode == 0, res.stderr
-    assert os.path.exists(plan_path_1)
+    assert os.path.exists(canonical)
 
-    with open(plan_path_1, "r") as f:
+    with open(canonical, "r") as f:
         plan_data_1 = json.load(f)
     assert plan_data_1["summary"]["execution_config"]["jobs_requested"] == 1
     assert plan_data_1["summary"]["execution_config"]["jobs_semantic"] is False
 
-    plan_path_2 = os.path.join(workspace, "plan-j2.json")
     res = subprocess.run(
-        ["python3", os.path.abspath(script), "--jobs", "2", "plan", "--output", plan_path_2],
+        ["python3", os.path.abspath(script), "--jobs", "2", "plan"],
         cwd=workspace, capture_output=True, text=True, env=env
     )
     assert res.returncode == 0, res.stderr
-    assert os.path.exists(plan_path_2)
 
-    with open(plan_path_2, "r") as f:
+    with open(canonical, "r") as f:
         plan_data_2 = json.load(f)
     assert plan_data_2["summary"]["execution_config"]["jobs_requested"] == 2
     assert plan_data_2["summary"]["execution_config"]["jobs_semantic"] is False
+    # the re-plan backed the first plan up rather than clobbering it
+    assert os.path.exists(os.path.join(workspace, ".photos-ingest", "photos-10-prep-plan-001.json"))
 
     res = subprocess.run(["python3", os.path.abspath(script), "--jobs", "2", "plan"], cwd=workspace, capture_output=True, text=True)
     assert "jobs must be a positive integer" not in res.stderr

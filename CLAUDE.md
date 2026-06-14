@@ -72,6 +72,12 @@ There is no build step, no linter config, and no dependency manifest; deps are s
   are implemented and share the same plan/validate/execute contract. The original `prep` / `calibrate` /
   `refresh-library` / `merge` monolith they were split from has been removed; `refresh-library` was
   deliberately dropped in favor of on-demand fingerprinting in `photos-3-merge` (see its workflow spec).
+- **Canonical plan persistence (all phases):** each phase's plan/decision artifact lives at a fixed
+  control-dir path (`photos-10-prep-plan.json`, calibration `photos-21`/`22`/`23`, `photos-30-merge-plan.json`).
+  The planning command writes it there and prints the location; the validate/apply commands read it from
+  there — there are **no** `--output`/`--plan` path flags. Re-planning backs up the prior artifact under
+  the shared incremental `-NNN` suffix (never clobbered). See shared contract Section 5 ("Canonical plan
+  persistence") and `photos_utils.write_versioned_json`.
 
 ## Architecture & non-negotiable rules
 
@@ -81,8 +87,10 @@ The whole design exists to safely mutate **irreplaceable originals**. These rule
 - **No mutation outside a plan.** Every move/rename/quarantine/metadata-write/DB-mutation is a planned
   operation with a plan ID, op ID, explicit preconditions, expected result, and journal entry. Planning
   never mutates.
-- **Dry-run is not simulation.** Dry-run serializes and displays the *real* plan JSON that execution
-  would consume — not a virtual-filesystem code path.
+- **Dry-run is not simulation.** Dry-run validates the *real* serialized plan that execution would
+  consume (the persisted canonical plan artifact) and reports a **summary** of it — never a separate
+  virtual-filesystem code path. It does not dump every operation: the full exact plan is the saved
+  artifact on disk, so dry-run summarizes the real plan rather than flooding the terminal.
 - **Instruction fingerprint.** Execution recomputes the SHA-256 of the human-edited instruction file
   (e.g. `calibration.json`) and aborts if it differs from what the plan was built against.
 - **No clobber.** No operation ever overwrites existing media. Destinations are reserved/validated first.
