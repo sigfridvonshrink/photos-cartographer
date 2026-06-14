@@ -96,7 +96,9 @@ def test_distribution_subfolders_rejects_bad(bad, needle):
 # --- library-merge config (G5.4; deep validation is the merge phase's, shared §4.3/§14.1) ----
 
 def test_merge_block_seeded_and_default_valid():
-    assert utils.CONFIG["merge"]["library_root"] == ""
+    # library_root is seeded with a deployment default (a non-empty path); the merge phase deep-validates
+    # its existence, prep only type-checks it.
+    assert isinstance(utils.CONFIG["merge"]["library_root"], str) and utils.CONFIG["merge"]["library_root"]
     assert utils.CONFIG["merge"]["placement_policy"] and utils.CONFIG["merge"]["collision_policy"]
     utils.validate_config(_cfg(merge=dict(utils.CONFIG["merge"], library_root="/srv/library")))
 

@@ -112,7 +112,7 @@ All pipeline control and artifact files live inside a single workspace control d
   photos-31-merge-summary.json     merge-phase artifact: library-merge summary (Section 13.5)
   photos-35-merge-log.json         merge-phase artifact: full transformation log (prep+calibrate+merge, Section 13.3)
   photos-35-merge-ingest.db        merge-phase artifact: DB backup snapshot, end of merge (Section 13.4a)
-  gpx/                             default gpx_root (Section 8)
+  gpx/                             gpx_root, when configured to live here (Section 8)
 ```
 
 **Numbering convention.** The first digit identifies the phase that produces the file — nothing more:
@@ -226,13 +226,7 @@ GPX track files are consumed only by calibration (`photos-2-time-gps-workflow.md
 
 ### 8.1 Location
 
-The GPX folder is configured by `gpx_root` in the shared configuration (Section 4). `gpx_root` resolves to a path **outside the managed media tree** — that is, not under any of the numbered folders `0-sources` … `6-photos-by-dest`. The default location is under the prep control directory:
-
-```text
-.photos-ingest/gpx/        default gpx_root
-```
-
-which is already outside the managed tree (prep treats `.photos-ingest/` as control, not media). `gpx_root` may instead be configured to an arbitrary path outside the managed tree (including an absolute path elsewhere on disk). Keeping GPX outside `0`–`6` means prep's normal scan never encounters GPX files, so they can never be misclassified as `other`-class media or swept into `0-sources` and organized.
+The GPX folder is configured by `gpx_root` in the shared configuration (Section 4). The contract is only that `gpx_root` resolves to a path **outside the managed media tree** — that is, not under any of the numbered folders `0-sources` … `6-photos-by-dest`. Its specific location is a deployment choice, not part of this contract: it may be an absolute path anywhere on disk, or a subdirectory of the prep control directory (e.g. `.photos-ingest/gpx/`, which is already outside the managed tree since prep treats `.photos-ingest/` as control, not media). Keeping GPX outside `0`–`6` means prep's normal scan never encounters GPX files, so they can never be misclassified as `other`-class media or swept into `0-sources` and organized.
 
 ### 8.2 Prep's only obligation
 
