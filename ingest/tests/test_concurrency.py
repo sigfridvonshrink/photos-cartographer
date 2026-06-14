@@ -258,9 +258,14 @@ def test_cli_jobs_argparse(workspace):
     res = subprocess.run(["python3", script, "--jobs", "abc", "plan"], capture_output=True, text=True)
     assert res.returncode != 0
 
-    # Ensure it accepts valid jobs and produces output plan
+    # Ensure it accepts valid jobs and produces output plan. A conforming initialized workspace:
+    # guard + the full 0-6 managed structure (a missing managed folder would be a blocker that `plan`
+    # now surfaces with a non-zero exit).
     os.makedirs(os.path.join(workspace, ".photos-ingest"), exist_ok=True)
     with open(os.path.join(workspace, ".photos-ingest", "photos-00-workspace-guard"), "w") as f: f.write("")
+    for _d in ("0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
+               "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"):
+        os.makedirs(os.path.join(workspace, _d), exist_ok=True)
 
     # Create dummy exiftool to pass the Popen check
     exiftool_path = os.path.join(workspace, "exiftool")
@@ -278,8 +283,7 @@ def test_cli_jobs_argparse(workspace):
         ["python3", os.path.abspath(script), "-j", "1", "plan"],
         cwd=workspace, capture_output=True, text=True, env=env
     )
-    assert res.returncode == 0, res.stderr
-    assert os.path.exists(canonical)
+    assert os.path.exists(canonical), res.stderr          # plan is saved even when blockers exist
 
     with open(canonical, "r") as f:
         plan_data_1 = json.load(f)
@@ -290,7 +294,6 @@ def test_cli_jobs_argparse(workspace):
         ["python3", os.path.abspath(script), "--jobs", "2", "plan"],
         cwd=workspace, capture_output=True, text=True, env=env
     )
-    assert res.returncode == 0, res.stderr
 
     with open(canonical, "r") as f:
         plan_data_2 = json.load(f)

@@ -227,3 +227,20 @@ def test_prune_never_removes_managed_folders_even_when_empty(tmp_path, monkeypat
     for d in ("0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
               "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"):
         assert (ws / d).is_dir(), f"managed folder {d} must survive pruning even when empty"
+
+
+def test_prune_reports_unremovable_dump_dir(tmp_path):
+    """_prune_empty_dirs removes emptied dump dirs and RETURNS a (relpath, reason) for any that
+    survive, so a leftover folder is reported rather than left silently."""
+    ws = _ws(tmp_path)
+    (ws / "empty-dump").mkdir()                                   # should be pruned (empty)
+    (ws / "residual-dump").mkdir()
+    (ws / "residual-dump" / "leftover.bin").write_bytes(b"x")     # cannot be emptied -> survives
+    leftovers = prep.PlanExecutor(str(ws))._prune_empty_dirs()
+    assert not (ws / "empty-dump").exists()                       # empty dump dir pruned
+    assert (ws / "residual-dump").exists()                        # non-empty dump dir kept
+    rels = {rel: why for rel, why in leftovers}
+    assert "residual-dump" in rels and "still contains" in rels["residual-dump"], leftovers
+    assert "empty-dump" not in rels                               # pruned ones are not reported
+    # managed folders are never reported even though empty
+    assert not any(r in rels for r in ("0-sources", "5-photos-by-date", "1-strays"))
