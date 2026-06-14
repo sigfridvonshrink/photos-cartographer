@@ -823,7 +823,7 @@ def detect_zfs_dataset(path: str):
     abspath = os.path.realpath(os.path.abspath(path))
     try:
         res = subprocess.run(["zfs", "list", "-H", "-o", "name", abspath],
-                             capture_output=True, text=True, check=True)
+                             capture_output=True, text=True, check=True, stdin=subprocess.DEVNULL)
         name = res.stdout.strip()
         return name or None
     except Exception:
@@ -859,7 +859,7 @@ def take_zfs_snapshot(ws: str, snapshot_id: str, label: str, *, target_path=None
     snap = f"{dataset}@{zfs.get('snapshot_prefix', '')}{label}-{snapshot_id}"
     cmd = ["zfs", "snapshot", snap]
     try:
-        res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        res = subprocess.run(cmd, capture_output=True, text=True, check=True, stdin=subprocess.DEVNULL)
         return {"required": required, "snapshot_name": snap, "command": " ".join(cmd),
                 "exit_code": res.returncode, "stdout": res.stdout, "stderr": res.stderr,
                 "ok": res.returncode == 0}
@@ -878,7 +878,7 @@ EXTRACTION_OPTIONS_FINGERPRINT = hashlib.sha256(json.dumps(EXIFTOOL_METADATA_OPT
 def get_exiftool_version() -> str:
     import subprocess
     try:
-        return subprocess.check_output(["exiftool", "-ver"], text=True).strip()
+        return subprocess.check_output(["exiftool", "-ver"], text=True, stdin=subprocess.DEVNULL).strip()
     except Exception:
         return "unknown"
 
@@ -897,7 +897,7 @@ def get_imagemagick_version() -> str:
     tool = "magick" if shutil.which("magick") else ("identify" if shutil.which("identify") else None)
     if tool:
         try:
-            out = subprocess.check_output([tool, "--version"], text=True, stderr=subprocess.DEVNULL)
+            out = subprocess.check_output([tool, "--version"], text=True, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
             first = out.splitlines()[0].strip() if out else ""
             if first:
                 _IMAGEMAGICK_VERSION = first
@@ -1084,7 +1084,8 @@ class ContentHasher:
         last_error = "ImageMagick failed"
         for _attempt in range(2):
             try:
-                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                        stdin=subprocess.DEVNULL, text=True)
                 stdout_data = ""
                 while True:
                     reads, _, _ = select.select([proc.stdout], [], [], 10.0)
@@ -1109,11 +1110,16 @@ class ContentHasher:
 
     @staticmethod
     def fingerprint_video(filepath: str) -> Dict[str, Any]:
-        cmd = ["ffmpeg", "-i", filepath, "-c", "copy", "-f", "md5", "-"]
+        # `-nostdin` is essential: without it ffmpeg grabs the controlling TTY to read interactive
+        # keypresses (e.g. 'q'), switching it to no-echo and often leaving it that way — the terminal
+        # is then left where typed characters are invisible. We also detach stdin entirely
+        # (stdin=DEVNULL) so no subprocess can ever touch the terminal via stdin.
+        cmd = ["ffmpeg", "-nostdin", "-i", filepath, "-c", "copy", "-f", "md5", "-"]
         last_error = None
         for attempt in range(2):                       # safe restart on a transient ffmpeg failure
             try:
-                res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                res = subprocess.run(cmd, capture_output=True, text=True, check=True,
+                                     stdin=subprocess.DEVNULL)
                 for line in res.stdout.splitlines():
                     if line.startswith("MD5="):
                         return {"status": "valid", "strategy": "video-md5-v1", "value": line.split("=")[1].strip()}
