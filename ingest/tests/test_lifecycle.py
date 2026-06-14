@@ -83,7 +83,7 @@ def test_init_creates_structure_and_moves_dump_structure_preserved(tmp_path, mon
     assert os.path.exists(_guard(ws))                          # sentinel written (last)
     for d in MANAGED:
         assert (ws / d).is_dir()
-    assert len(glob.glob(str(ws / "5-photos-by-date" / "*.jpg"))) == 2   # both organized
+    assert len(glob.glob(str(ws / "5-photos-by-date" / "**" / "*.jpg"), recursive=True)) == 2   # both organized
     # base is folders-only and 0-sources is left empty (no leftover dump skeleton)
     assert not (ws / "MyDump").exists()                        # init-move source pruned
     assert list((ws / "0-sources").iterdir()) == []
@@ -103,7 +103,7 @@ def test_guard_written_last_then_reentry_is_clean(tmp_path, monkeypatch):
     assert not plan2.blockers
     prep.PlanExecutor(str(ws)).execute(plan2)
     assert os.path.exists(_guard(ws))                          # re-written
-    assert len(glob.glob(str(ws / "5-photos-by-date" / "*.jpg"))) == 1  # still organized, no dup
+    assert len(glob.glob(str(ws / "5-photos-by-date" / "**" / "*.jpg"), recursive=True)) == 1  # still organized, no dup
 
 
 # --- root-file block (initialized) -------------------------------------------
@@ -156,5 +156,5 @@ def test_no_flatten_same_name_distinct_subtrees_both_survive(tmp_path, monkeypat
     (ws / "0-sources" / "A" / "x.jpg").write_bytes(b"AAAA")    # distinct content
     (ws / "0-sources" / "B" / "x.jpg").write_bytes(b"BBBB")
     prep.PlanExecutor(str(ws)).execute(_plan(ws))
-    organized = glob.glob(str(ws / "5-photos-by-date" / "*.jpg"))
+    organized = glob.glob(str(ws / "5-photos-by-date" / "**" / "*.jpg"), recursive=True)
     assert len(organized) == 2, organized                     # both survive with distinct names

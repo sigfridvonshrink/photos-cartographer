@@ -125,6 +125,6 @@ def test_mixed_media_and_stray(tmp_path, monkeypatch):
     (ws / "0-sources" / "photo.jpg").write_bytes(b"img")
     (ws / "0-sources" / "notes.txt").write_bytes(b"hello")
     _run(ws)
-    assert len(glob.glob(str(ws / "5-photos-by-date" / "*.jpg"))) == 1
+    assert len(glob.glob(str(ws / "5-photos-by-date" / "**" / "*.jpg"), recursive=True)) == 1
     assert glob.glob(str(ws / "1-strays" / "*" / "notes.txt"))
     assert list((ws / "0-sources").iterdir()) == []

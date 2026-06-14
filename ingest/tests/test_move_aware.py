@@ -61,9 +61,9 @@ def _seed_one(ws, content=b"AAAA"):
     prep.CONFIG["jobs"] = 1
     plan = _plan(ws)
     prep.PlanExecutor(str(ws)).execute(plan)
-    organized = glob.glob(str(ws / "5-photos-by-date" / "*.jpg"))
+    organized = glob.glob(str(ws / "5-photos-by-date" / "**" / "*.jpg"), recursive=True)
     assert len(organized) == 1, organized
-    return organized[0]  # absolute path
+    return organized[0]  # absolute path (now under a YYYY-MM-DD/ day subfolder)
 
 
 def _media_ops(plan):
