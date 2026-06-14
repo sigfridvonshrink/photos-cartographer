@@ -545,7 +545,11 @@ class PlanExecutor:
         are quarantined. The managed folders (`0`–`6`), the strays tree, and the control directories
         (`.photos-ingest`, `.photos-ingest-quarantine`, `.git`) are **never removed, even when
         empty** — they are explicitly protected by absolute path. Empty-dir removal is pure
-        housekeeping; no media is affected."""
+        housekeeping; no media is affected.
+
+        Returns a list of (relpath, reason) for non-managed base **dump** dirs that could NOT be
+        pruned — still non-empty, or an `rmdir` failure (e.g. no write permission on the workspace
+        root) — so the caller can warn the operator rather than leave the folder behind silently."""
         from photos_utils import managed_folder_names, folder_name, CONTROL_DIR, QUARANTINE_DIR
         ws = self.workspace_root
         sources_path = os.path.join(ws, folder_name('sources'))
@@ -554,17 +558,19 @@ class PlanExecutor:
         # Explicit guard: a managed/strays/control directory is never pruned even if empty. (0-sources
         # is a managed folder, so this also keeps the inbox itself while its internals are pruned.)
         protected = {os.path.abspath(os.path.join(ws, n)) for n in (managed_top | control_top)}
-        # Also sweep the by-date bands so a `YYYY-MM-DD/` day folder emptied by a by-dest move (or by
-        # re-bucketing) does not linger; the band roots themselves stay protected above.
-        targets = [sources_path,
-                   os.path.join(ws, folder_name('photos_by_date')),
-                   os.path.join(ws, folder_name('videos_by_date'))]
+        # Non-managed base entries are the dump dirs an init move/quarantine should have emptied.
+        base_dumps = []
         for f in os.listdir(ws):
             if f in managed_top or f in control_top:
                 continue                               # never a prune target (managed/strays/control)
             p = os.path.join(ws, f)
             if os.path.isdir(p) and not os.path.islink(p):
-                targets.append(p)                      # a non-managed base entry (dump dir, incl hidden)
+                base_dumps.append(p)
+        # Also sweep the by-date bands so a `YYYY-MM-DD/` day folder emptied by a by-dest move (or by
+        # re-bucketing) does not linger; the band roots themselves stay protected above.
+        targets = [sources_path,
+                   os.path.join(ws, folder_name('photos_by_date')),
+                   os.path.join(ws, folder_name('videos_by_date'))] + base_dumps
         for base in targets:
             if not os.path.isdir(base):
                 continue
@@ -575,7 +581,27 @@ class PlanExecutor:
                     if not os.listdir(dirpath):
                         os.rmdir(dirpath)
                 except OSError:
-                    pass
+                    pass                               # surfaced below if the dir is a base dump dir
+
+        # Diagnose any base dump dir that survived, so a leftover is never silent (it answers the
+        # "why wasn't this folder deleted?" question directly).
+        leftovers = []
+        for p in base_dumps:
+            if not os.path.isdir(p):
+                continue                               # pruned successfully
+            rel = os.path.relpath(p, ws)
+            try:
+                entries = [e for e in os.listdir(p)]
+            except OSError as e:
+                leftovers.append((rel, f"cannot list it ({e})"))
+                continue
+            if entries:
+                sample = ", ".join(sorted(entries)[:3]) + ("…" if len(entries) > 3 else "")
+                leftovers.append((rel, f"still contains: {sample}"))
+            else:
+                leftovers.append((rel, "it is empty but could not be removed — check write permission "
+                                       "on the workspace root (e.g. a group-owned dir without group write)"))
+        return leftovers
 
     def execute(self, plan: Plan, journal_path: str = None):
         # A distinct id for this execution run (vs plan.plan_id which identifies the plan);
@@ -795,8 +821,10 @@ class PlanExecutor:
                 # Housekeeping: structure-preserving moves + organization empty out the dump's
                 # directory skeleton. Prune the empty dirs left under 0-sources and any base dump
                 # dir an init move emptied, so 0-sources is left empty and the base holds only the
-                # managed folders (prep Section 3.1 / 7). Empty-dir removal loses no media.
-                self._prune_empty_dirs()
+                # managed folders (prep Section 3.1 / 7). Empty-dir removal loses no media. Any dump
+                # dir that could NOT be removed is reported (never left silently).
+                for _rel, _why in self._prune_empty_dirs():
+                    print(f"Warning: left the dump folder {_rel}/ in place — {_why}", file=sys.stderr)
 
                 # Update summary with db effects
                 if plan.summary and "performance_and_cache" in plan.summary:
@@ -2516,6 +2544,18 @@ def main():
             print(f"Plan saved to {pp}")
             if _bak:
                 print(f"  Previous plan backed up to {_bak}")
+
+            # Surface blockers immediately: the plan is still saved (for inspection), but it cannot be
+            # executed as-is, so don't let "Plan saved" read as all-clear — print each blocker and exit
+            # non-zero. (A common one: a stray folder at the workspace root — "dumps belong in
+            # 0-sources/" — which prep never auto-removes; the operator must move it into 0-sources or
+            # delete it.) dry-run/execute would otherwise be where the operator first learns of it.
+            if plan.blockers:
+                print(f"\nThis plan CANNOT be executed — {len(plan.blockers)} blocker(s) must be "
+                      "resolved first:", file=sys.stderr)
+                for b in plan.blockers:
+                    print(f"  - {b}", file=sys.stderr)
+                sys.exit(2)
 
         elif args.command == "dry-run":
             from photos_utils import prep_plan_path, PREP_PLAN_ARTIFACT
