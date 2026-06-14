@@ -43,7 +43,7 @@ def test_real_exiftool_and_magick_end_to_end(tmp_path):
     assert not plan.blockers, plan.blockers
     prep.PlanExecutor(str(ws)).execute(plan)
 
-    organized = glob.glob(str(ws / "5-photos-by-date" / "*.jpg"))
+    organized = glob.glob(str(ws / "5-photos-by-date" / "**" / "*.jpg"), recursive=True)
     assert len(organized) == 1, organized
     rel = os.path.relpath(organized[0], str(ws))
     # the spec naming derives from the real DateTimeOriginal (2026:05:15 11:32:29)

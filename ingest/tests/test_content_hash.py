@@ -133,7 +133,7 @@ def test_real_jpeg_organizes_with_spec_filename_and_no_blocker(tmp_path):
     assert plan.blockers == [], plan.blockers
     # DateTimeOriginal 2026:05:15 11:32:29 -> spec-shaped by-date name.
     assert any(
-        d.startswith("5-photos-by-date/2026-05-15--11-32-29") and d.endswith(".jpg")
+        d.startswith("5-photos-by-date/2026-05-15/2026-05-15--11-32-29") and d.endswith(".jpg")
         for d in _dests(plan)
     ), _dests(plan)
 
@@ -183,7 +183,7 @@ def test_raw_jpeg_pair_separates_redundant_jpeg(tmp_path):
     dests = _dests(plan)
     assert any(d.startswith("3-redundant-jpgs/") for d in dests), dests  # JPEG sibling is redundant
     assert any(
-        d.startswith("5-photos-by-date/2026-05-15--11-32-29") and d.endswith(".arw")
+        d.startswith("5-photos-by-date/2026-05-15/2026-05-15--11-32-29") and d.endswith(".arw")
         for d in dests
     ), dests  # RAW retained + organized
 
@@ -215,7 +215,7 @@ def test_filename_format_is_config_driven(tmp_path, monkeypatch):
 
     cache = prep.WorkspaceCache(str(ws), in_memory=True)
     plan = prep.WorkspacePrepWorkflow(str(ws), cache).plan()
-    assert any("5-photos-by-date/20230304__050607" in d for d in _dests(plan)), _dests(plan)
+    assert any("5-photos-by-date/2023-03-04/20230304__050607" in d for d in _dests(plan)), _dests(plan)
 
 
 @requires_magick

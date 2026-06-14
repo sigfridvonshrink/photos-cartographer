@@ -95,7 +95,7 @@ def test_handwritten_config_is_authoritative(tmp_path, monkeypatch):
     plan = _plan(ws)
     dests = [op.destination for op in plan.operations if op.destination]
     # DateTimeOriginal 2023:01:02 03:04:05 under the custom format.
-    assert any("5-photos-by-date/20230102__030405" in d for d in dests), dests
+    assert any("5-photos-by-date/2023-01-02/20230102__030405" in d for d in dests), dests
 
 
 def test_config_fingerprint_is_file_sha_and_in_handoff(tmp_path, monkeypatch):
