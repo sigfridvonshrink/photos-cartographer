@@ -29,7 +29,7 @@ from photos_utils import (
     CONFIG, CONTROL_DIR, config_path, handoff_path, guard_path, is_sealed,
     validate_config, validate_merge_config, sha256_file, sha256_text, media_class_for_ext,
     folder_name, FOLDER_ROLES, missing_managed_folders, handoff_content_fingerprint,
-    verify_json_dependency, json_dependency, write_json_artifact, is_library, write_library_marker,
+    verify_json_dependency, json_dependency, write_json_artifact, write_versioned_json, is_library, write_library_marker,
     library_marker_path, allocate_suffix, suffix_root, max_suffix, ContentHasher, WorkspaceCache,
     journal_path, take_zfs_snapshot, _move_no_clobber, write_db_snapshot, reseal_archival_package,
     write_sealed_marker, WorkspaceLock, LibraryLock,
@@ -511,11 +511,16 @@ class MergeWorkflow:
             plan = self.build_merge_plan(ws, self.calib_plan, library_root, cache)
         finally:
             cache.close()
-        write_json_artifact(merge_plan_path(ws), plan)
+        mpp = merge_plan_path(ws)
+        _, _mp_bak = write_versioned_json(mpp, plan)
         t = plan["totals"]
         print(f"Wrote {MERGE_PLAN_ARTIFACT}: plan {plan['plan_id']} — {t['placed_new']} new, "
               f"{t['already_present']} already-present, {t['renamed_for_library']} renamed, "
-              f"{t['blocked']} blocked. Review it, `dry-run` to display, then `execute`.")
+              f"{t['blocked']} blocked.")
+        print(f"  Plan saved to {mpp}")
+        if _mp_bak:
+            print(f"  Previous plan backed up to {_mp_bak}")
+        print("  Review it, `dry-run` to display, then `execute`.")
         for b in plan["blockers"]:
             print(f"  Blocker: {b}", file=sys.stderr)
         return 0
@@ -533,10 +538,21 @@ class MergeWorkflow:
             for s in stale:
                 print(f"  - {s}", file=sys.stderr)
             return 2
+        # Dry-run validates the REAL saved plan and reports a SUMMARY; the full exact plan is the
+        # saved artifact at `p`, so there is no need to dump every move to the terminal.
         n = sum(len(d.get("files", [])) for d in (plan.get("destinations") or {}).values())
-        print(f"Dry-run: validated plan {plan.get('plan_id')} ({n} move(s)). The exact plan `execute` "
-              "would consume follows:", file=sys.stderr)
-        print(json.dumps(plan, indent=2, sort_keys=True))
+        t = plan.get("totals", {})
+        print(f"Dry-run: validated plan {plan.get('plan_id')} — {n} move(s).")
+        print(f"  new: {t.get('placed_new', 0)}, already-present: {t.get('already_present', 0)}, "
+              f"renamed: {t.get('renamed_for_library', 0)}, blocked: {t.get('blocked', 0)}")
+        _bl = plan.get("blockers") or []
+        if _bl:
+            print(f"  BLOCKERS: {len(_bl)} — execute will refuse:")
+            for b in _bl[:20]:
+                print(f"    - {b}")
+            if len(_bl) > 20:
+                print(f"    … and {len(_bl) - 20} more")
+        print(f"  Full plan: {p}")
         return 0
 
     # --- execute: place-then-remove, journal, resume, concurrency (§10.3/§11) ---
@@ -681,16 +697,23 @@ class MergeWorkflow:
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, jobs)) as ex:
                 futs = [ex.submit(self._move_file, ws, library_root, rec, journal) for rec in recs]
-                for fut in concurrent.futures.as_completed(futs):
-                    r = fut.result()
-                    results.append(r)
-                    # Incremental confirmation journal (§8.3): persist each completion AS IT FINISHES,
-                    # in this main thread (workers never touch the journal), so a crash mid-run lets the
-                    # next run skip the already-moved files.
-                    if r["removed"]:
-                        journal[r["by_dest_source"]] = "confirmed"
-                        write_json_artifact(jpath, {"journal_version": 1, "plan_id": plan["plan_id"],
-                                                    "operations": journal, "updated_at": now_iso})
+                try:
+                    for fut in concurrent.futures.as_completed(futs):
+                        r = fut.result()
+                        results.append(r)
+                        # Incremental confirmation journal (§8.3): persist each completion AS IT FINISHES,
+                        # in this main thread (workers never touch the journal), so a crash mid-run lets the
+                        # next run skip the already-moved files.
+                        if r["removed"]:
+                            journal[r["by_dest_source"]] = "confirmed"
+                            write_json_artifact(jpath, {"journal_version": 1, "plan_id": plan["plan_id"],
+                                                        "operations": journal, "updated_at": now_iso})
+                except KeyboardInterrupt:
+                    # Ctrl-C: drop pending moves and stop waiting instead of letting the `with` exit
+                    # drain them (shutdown(wait=True)). Files already moved are confirmed in the journal
+                    # above, so the next run resumes from the diff (§8.3). Re-raise to main().
+                    ex.shutdown(wait=False, cancel_futures=True)
+                    raise
         finally:
             from photos_utils import PersistentMagickWorker
             PersistentMagickWorker.cleanup_all()      # close the per-thread magick workers (verify pass)
@@ -1070,6 +1093,13 @@ def _run_locked_workflow(command, ws, jobs=None):
             return wf.do_execute(ws, library_root, jobs)
         finally:
             lib_lock.release()
+    except KeyboardInterrupt:
+        # Clean Ctrl-C: plan/dry-run never mutate and execute is journalled/idempotent, so moved
+        # files are confirmed and the next run resumes from the diff (§8.3). Exit quietly with the
+        # conventional 130 instead of a traceback; the `finally` blocks still release both locks.
+        print("\nInterrupted; aborting. Moved files are journalled — safe to rerun.",
+              file=sys.stderr)
+        return 130
     finally:
         run_lock.release()
 

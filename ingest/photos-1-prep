@@ -1326,6 +1326,26 @@ class WorkspacePrepWorkflow:
                             else:
                                 files.append(rel_path)
         files.sort()
+
+        # Recognize orphaned exiftool intermediates/backups (`<media>_exiftool_tmp` / `<media>_original`)
+        # left by a hard-killed calibration write (a clean SIGINT is self-cleaned by exiftool). They are
+        # partial/superseded artifacts — never the live original (the rename is atomic) — so they are
+        # pulled out of the media inventory here and quarantined below (recoverable, never deleted),
+        # rather than being mis-inventoried as `other` and parked forever in 1-strays. By-dest is
+        # read-only staging: a leftover there is left untouched (only flagged) to honor that invariant.
+        from photos_utils import exiftool_artifact_base
+        _bydest_prefix = folder_name('photos_by_dest') + '/'
+        exiftool_leftovers = []
+        _kept = []
+        for rel in files:
+            if exiftool_artifact_base(os.path.basename(rel)) is None:
+                _kept.append(rel)
+            elif rel.startswith(_bydest_prefix):
+                warnings.append(f"Exiftool leftover under read-only by-dest left untouched: {rel}")
+            else:
+                exiftool_leftovers.append(rel)
+        files = _kept
+
         self.coordinator.increment("files_scanned", len(files))
         self.coordinator.finish_phase()
 
@@ -1599,9 +1619,19 @@ class WorkspacePrepWorkflow:
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=CONFIG.get('jobs', 4)) as executor:
                 future_to_file = {executor.submit(process_file, f): f for f in files}
-                for future in concurrent.futures.as_completed(future_to_file):
-                    worker_results.append(future.result())
-                    self.coordinator.increment_completed()
+                try:
+                    for future in concurrent.futures.as_completed(future_to_file):
+                        worker_results.append(future.result())
+                        self.coordinator.increment_completed()
+                except KeyboardInterrupt:
+                    # Ctrl-C: drop every not-yet-started future immediately and stop waiting.
+                    # The default `with` exit calls shutdown(wait=True), which would instead keep
+                    # processing all remaining files before the interrupt could propagate — the
+                    # cause of the "have to mash Ctrl-C several times" behavior. In-flight workers
+                    # unblock on their own because the exiftool/magick children share our process
+                    # group and receive the same SIGINT. Re-raise so main() exits cleanly.
+                    executor.shutdown(wait=False, cancel_futures=True)
+                    raise
         finally:
             from photos_utils import PersistentMagickWorker
             PersistentMagickWorker.cleanup_all()       # close the per-thread magick workers
@@ -1838,6 +1868,28 @@ class WorkspacePrepWorkflow:
 
         quarantined = set()
         plan_id_for_quarantine = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:6]}"
+
+        # Quarantine the orphaned exiftool artifacts recognized during the scan. They were never
+        # hashed/inventoried (excluded from `files`), so there is no cache row to remove (empty db
+        # effects); the move records evidence-before-quarantine like any other quarantine_move, so the
+        # artifact is recoverable, never deleted. A precondition stat guards against the file changing
+        # between plan and execute.
+        for rel in exiftool_leftovers:
+            try:
+                _st = os.stat(os.path.join(self.workspace_root, rel))
+            except OSError:
+                continue   # vanished between scan and planning — nothing to quarantine
+            q_dest = os.path.join(".photos-ingest-quarantine", plan_id_for_quarantine, rel)
+            operations.append(Operation(
+                operation_id=f"op-{uuid.uuid4().hex[:8]}",
+                type="quarantine_move",
+                reason="Orphaned exiftool intermediate/backup from an interrupted metadata write",
+                source=rel,
+                destination=q_dest,
+                preconditions={"size": _st.st_size, "mtime_ns": _st.st_mtime_ns},
+                verification={"original_path": rel, "quarantine_path": q_dest,
+                              "plan_id": plan_id_for_quarantine, "kind": "exiftool_leftover"},
+                database_effects_after_verification=[]))
 
         for (ch_str, mc), group in content_groups.items():
             if len(group) > 1:
@@ -2267,15 +2319,14 @@ def main():
     parser.add_argument("-j", "--jobs", type=positive_int, default=4, help="Number of parallel jobs for processing.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    # prep command
-    prep_parser = subparsers.add_parser("plan", help="Generate a prep-only workspace organization plan")
-    prep_parser.add_argument("--output", help="Save the generated plan to FILE (e.g., plans/prep.plan.json).")
+    # prep command. plan/dry-run/execute all use the canonical control-dir plan path
+    # (photos_utils.prep_plan_path) — `plan` writes it, `dry-run`/`execute` read it — so there are no
+    # --output/--plan flags: the phase always knows where its plan lives (shared contract §5).
+    subparsers.add_parser("plan", help="Generate the prep plan (saved to .photos-ingest/photos-10-prep-plan.json)")
 
-    dry_parser = subparsers.add_parser("dry-run", help="Dry-run a previously generated prep plan")
-    dry_parser.add_argument("--plan", required=True, help="Execute a previously generated plan from FILE.")
+    subparsers.add_parser("dry-run", help="Validate and display the saved prep plan")
 
-    exec_parser = subparsers.add_parser("execute", help="Execute a previously generated prep plan")
-    exec_parser.add_argument("--plan", required=True, help="Execute a previously generated plan from FILE.")
+    subparsers.add_parser("execute", help="Execute the saved prep plan")
 
     prune_parser = subparsers.add_parser("prune-quarantine", help="Delete recoverable quarantine (dry-run by default).")
     prune_parser.add_argument("--plan-id", action="append", dest="plan_ids", help="Quarantine <plan_id> directory to prune (repeatable).")
@@ -2332,16 +2383,23 @@ def main():
                   f"{_qf.get('total_bytes', 0)} bytes across {_qf.get('plan_id_dirs', 0)} plan(s).",
                   file=sys.stderr)
 
-            if getattr(args, "output", None):
-                os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
-                with open(args.output, "w") as f:
-                    f.write(plan.to_json())
-                print(f"Plan saved to {args.output}")
-            else:
-                print(plan.to_json())
+            # Auto-save to the canonical control-dir path; a prior plan is backed up under an
+            # incremental -NNN suffix (never clobbered), and we tell the operator both locations so
+            # the plan can be reviewed without hunting for it.
+            from photos_utils import prep_plan_path, write_versioned_json
+            pp = prep_plan_path(workspace_root)
+            _sha, _bak = write_versioned_json(pp, asdict(plan))
+            print(f"Plan saved to {pp}")
+            if _bak:
+                print(f"  Previous plan backed up to {_bak}")
 
         elif args.command == "dry-run":
-            with open(args.plan, "r") as f:
+            from photos_utils import prep_plan_path, PREP_PLAN_ARTIFACT
+            pp = prep_plan_path(workspace_root)
+            if not os.path.exists(pp):
+                print(f"No {PREP_PLAN_ARTIFACT} found — run `plan` first.", file=sys.stderr)
+                sys.exit(2)
+            with open(pp, "r") as f:
                 plan_data = json.load(f)
             plan = Plan.from_dict(plan_data)
 
@@ -2355,14 +2413,33 @@ def main():
                 print(f"Preflight validation failed: {e}", file=sys.stderr)
                 sys.exit(1)
 
-            # Dry-run is not a simulation: display the EXACT serialized plan that `execute` would
-            # consume (the real plan JSON, not a virtual-filesystem walk), after validating it.
-            print(f"Dry-run: validated plan {plan.plan_id} ({len(plan.operations)} operation(s)). "
-                  "The exact plan `execute` would consume follows:", file=sys.stderr)
-            print(plan.to_json())
+            # Dry-run is not a simulation: it validates the REAL saved plan (no virtual-filesystem
+            # walk) and reports a SUMMARY of it. The full exact plan is the saved artifact at `pp`,
+            # so there is no need to flood the terminal with every operation.
+            op_counts = {}
+            for op in plan.operations:
+                op_counts[op.type] = op_counts.get(op.type, 0) + 1
+            print(f"Dry-run: validated plan {plan.plan_id} — {len(plan.operations)} operation(s).")
+            for t in sorted(op_counts):
+                print(f"  {t}: {op_counts[t]}")
+            print(f"  no-op / already-correct files: {plan.summary.get('no_op_files', 0)}")
+            if plan.warnings:
+                print(f"  warnings: {len(plan.warnings)}")
+            if plan.blockers:
+                print(f"  BLOCKERS: {len(plan.blockers)} — execute will refuse:")
+                for b in plan.blockers[:20]:
+                    print(f"    - {b}")
+                if len(plan.blockers) > 20:
+                    print(f"    … and {len(plan.blockers) - 20} more")
+            print(f"  Full plan: {pp}")
 
         elif args.command == "execute":
-            with open(args.plan, "r") as f:
+            from photos_utils import prep_plan_path, PREP_PLAN_ARTIFACT
+            pp = prep_plan_path(workspace_root)
+            if not os.path.exists(pp):
+                print(f"No {PREP_PLAN_ARTIFACT} found — run `plan` first.", file=sys.stderr)
+                sys.exit(2)
+            with open(pp, "r") as f:
                 plan_data = json.load(f)
             plan = Plan.from_dict(plan_data)
 
@@ -2383,6 +2460,13 @@ def main():
                 prune_all=getattr(args, "prune_all", False),
             )
 
+    except KeyboardInterrupt:
+        # Clean Ctrl-C: planning never mutates and execute is journalled/idempotent, so an
+        # interrupted run leaves nothing partially applied. Exit quietly with the conventional
+        # 130 instead of dumping a traceback. The `finally` below still releases the lock.
+        print("\nInterrupted; aborting. Nothing was partially applied — safe to rerun.",
+              file=sys.stderr)
+        sys.exit(130)
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
