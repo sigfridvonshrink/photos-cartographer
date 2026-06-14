@@ -79,6 +79,20 @@ There is no build step, no linter config, and no dependency manifest; deps are s
   the shared incremental `-NNN` suffix (never clobbered). See shared contract Section 5 ("Canonical plan
   persistence") and `photos_utils.write_versioned_json`.
 
+### Seeded config defaults
+
+The in-code `photos_utils.CONFIG` template is the source of these defaults; it is seeded into each
+workspace's `photos-00-config.json` on first prep run, then hand-edited and authoritative thereafter
+(the workflow specs deliberately do **not** pin default *values* — they are a deployment choice, not
+part of the behavioral contract). Current defaults worth knowing:
+
+- **`gpx_root`**: `/srv/pictures/gpslogs/gpx` — where calibration looks for GPX tracks.
+- **`merge.library_root`**: `/srv/pictures/5-finished` — the permanent digiKam library merge writes into.
+- **GPX placement is tuned for narrow destinations** (museum/castle/park, where you move slowly and GPS
+  goes sparse/indoors): interpolation gap `1800s`, extrapolation `300s`, anchor-match distance `50m`.
+  The interpolation **distance** (`1000m`) and **speed** (`150 km/h`) caps are the safety net and are
+  left tight, so a long time-gap only interpolates when net movement is small.
+
 ## Architecture & non-negotiable rules
 
 The whole design exists to safely mutate **irreplaceable originals**. These rules are specified in
