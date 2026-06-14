@@ -43,7 +43,7 @@ CONFIG = {
         "snapshot_prefix": "photos-ingest-",   # snapshot name: <dataset>@<prefix><label>-<plan_id> (label = phase)
         "datasets": {
             "workspace": "auto",         # "auto" = detect from the workspace path; or an explicit dataset
-            "library": "auto"            # reserved for the future finalize/merge step (not used by prep)
+            "library": "auto"            # "auto" = detect from library_root; consumed by merge's pre-mutation library snapshot
         }
     },
     "gpx_root": "/srv/pictures/gpslogs/gpx",
