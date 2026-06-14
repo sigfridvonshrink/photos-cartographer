@@ -246,3 +246,25 @@ def test_content_hash_restaled_on_imagemagick_version_change(tmp_path, monkeypat
     assert row is not None
     import json as _json
     assert _json.loads(row["content_hash"])["engine_version"] == "im-NEW"
+
+
+def test_fingerprint_video_uses_nostdin_and_detaches_stdin(monkeypatch):
+    """Regression: ffmpeg must run with -nostdin AND a detached stdin, so it never grabs the
+    controlling TTY (switching it to no-echo and leaving typed characters invisible)."""
+    seen = {}
+
+    class _R:
+        returncode = 0
+        stdout = "MD5=deadbeef\n"
+        stderr = ""
+
+    def _run(cmd, **kw):
+        seen["cmd"] = cmd
+        seen["kw"] = kw
+        return _R()
+
+    monkeypatch.setattr(utils.subprocess, "run", _run)
+    res = utils.ContentHasher.fingerprint_video("/some/clip.mp4")
+    assert res["status"] == "valid" and res["value"] == "deadbeef"
+    assert "-nostdin" in seen["cmd"], seen["cmd"]
+    assert seen["kw"].get("stdin") == subprocess.DEVNULL, seen["kw"]
