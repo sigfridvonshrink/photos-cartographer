@@ -34,7 +34,7 @@ from photos_utils import (
     validate_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
     selected_gpx_root, CAMERA_IDENTITY_FIELDS, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
     missing_managed_folders,
-    json_dependency, verify_json_dependency, handoff_content_fingerprint, write_json_artifact, db_path, ensure_control_dir,
+    json_dependency, verify_json_dependency, handoff_content_fingerprint, write_json_artifact, write_versioned_json, db_path, ensure_control_dir,
     journal_path, ContentHasher, _move_no_clobber,
     prep_log_path, prep_db_snapshot_path, write_db_snapshot, take_zfs_snapshot,
     WorkspaceLock,
@@ -1616,6 +1616,17 @@ class CalibrationWorkflow:
     def _exiftool_write(self, abs_path, tags):
         """Apply a file's batched tag writes atomically (exiftool -overwrite_original = temp + atomic
         rename). Returns True on success. The single seam the tests mock to avoid invoking exiftool."""
+        # A hard kill (SIGKILL/OOM/power loss) during a prior run can orphan exiftool's
+        # `<file>_exiftool_tmp` intermediate; a clean SIGINT is self-cleaned by exiftool, so this only
+        # matters for the un-graceful case. Calibration re-applies every un-confirmed file on resume,
+        # and the only file that can hold an orphan is the one killed mid-write (never confirmed, so
+        # revisited here) — so removing a stale temp for THIS target right before we rewrite it cleans
+        # exactly the orphan that can exist. Safe: the original is untouched (the atomic rename never
+        # happened) and the temp is a partial exiftool artifact, never user media.
+        try:
+            os.remove(abs_path + "_exiftool_tmp")
+        except OSError:
+            pass  # absent (the normal case) or unremovable — exiftool will surface a write error
         cmd = (["exiftool", "-overwrite_original", "-n"]
                + [f"-{k}={v}" for k, v in sorted(tags.items())] + [abs_path])
         try:
@@ -1794,17 +1805,24 @@ class CalibrationWorkflow:
             with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, jobs)) as ex:
                 futs = [ex.submit(self._apply_file, rel, ops, journal, accepted)
                         for rel, ops in sorted(by_file.items())]
-                for fut in concurrent.futures.as_completed(futs):
-                    r = fut.result()
-                    results.append(r)
-                    # Incremental confirmation journal (§29.1a): persist each file's confirmed ops AS
-                    # IT COMPLETES (in this main thread — workers never touch the journal), so a crash
-                    # mid-run leaves a journal that lets the next run skip the already-applied files.
-                    if r["applied"]:
-                        for oid in r["applied"]:
-                            journal[oid] = "confirmed"
-                        write_json_artifact(jpath, {"journal_version": 1, "plan_id": plan["plan_id"],
-                                                    "operations": journal, "updated_at": now_iso})
+                try:
+                    for fut in concurrent.futures.as_completed(futs):
+                        r = fut.result()
+                        results.append(r)
+                        # Incremental confirmation journal (§29.1a): persist each file's confirmed ops AS
+                        # IT COMPLETES (in this main thread — workers never touch the journal), so a crash
+                        # mid-run leaves a journal that lets the next run skip the already-applied files.
+                        if r["applied"]:
+                            for oid in r["applied"]:
+                                journal[oid] = "confirmed"
+                            write_json_artifact(jpath, {"journal_version": 1, "plan_id": plan["plan_id"],
+                                                        "operations": journal, "updated_at": now_iso})
+                except KeyboardInterrupt:
+                    # Ctrl-C: drop pending file writes and stop waiting instead of letting the `with`
+                    # exit drain them (shutdown(wait=True)). Files already applied are confirmed in the
+                    # journal above, so the next run resumes from the diff (§29.1a). Re-raise to main().
+                    ex.shutdown(wait=False, cancel_futures=True)
+                    raise
 
             # Consume-on-restore (§24.1.4): a successfully-reverted present file's pin is removed.
             reverted = 0
@@ -2041,7 +2059,11 @@ def main():
                     print(f"  - {b}", file=sys.stderr)
                 print("\nFix the field(s) and re-run; the artifact was left unchanged.", file=sys.stderr)
                 sys.exit(2)
-            write_json_artifact(tdp, artifact)
+            # Back up any prior hand-edited decision file before regenerating it (incremental -NNN),
+            # so an authored decision is always recoverable.
+            _, _td_bak = write_versioned_json(tdp, artifact)
+            if _td_bak:
+                print(f"  Previous {TIME_DECISIONS_ARTIFACT} backed up to {_td_bak}", file=sys.stderr)
             need_tz = sum(1 for d in artifact["destinations"].values()
                           if d["destination_timezone"]["requires_user_input"])
             need_off = sum(1 for d in artifact["destinations"].values()
@@ -2093,7 +2115,9 @@ def main():
                         print(f"  - {b}", file=sys.stderr)
                     print("\nFix the field(s) and re-run; the artifact was left unchanged.", file=sys.stderr)
                     sys.exit(2)
-                write_json_artifact(gdp, gps_artifact)
+                _, _gd_bak = write_versioned_json(gdp, gps_artifact)
+                if _gd_bak:
+                    print(f"  Previous {GPS_DECISIONS_ARTIFACT} backed up to {_gd_bak}", file=sys.stderr)
                 tot = {k: sum(d["gps_decisions"]["summary"][k] for d in gps_artifact["destinations"].values())
                        for k in ("automatic_gpx_interpolation", "automatic_gpx_extrapolation",
                                  "preserve_native_gps", "blocked")}
@@ -2105,11 +2129,15 @@ def main():
                 if artifact["status"] == "complete" and gps_artifact["status"] == "complete":
                     plan, _ = wf.build_executable_plan(files, rows, artifact, gps_artifact, gpx, fp,
                                                        ledger_entries)
-                    write_json_artifact(executable_plan_path(workspace_root), plan)
+                    epp = executable_plan_path(workspace_root)
+                    _, _ep_bak = write_versioned_json(epp, plan)
                     n_ops = sum(d["summary"]["operations_total"] for d in plan["destinations"].values())
                     print(f"Wrote {EXECUTABLE_PLAN_ARTIFACT}: status={plan['status']} "
-                          f"(plan {plan['plan_id']}, {n_ops} operation(s)). "
-                          "Review it, then run `execute` to apply.")
+                          f"(plan {plan['plan_id']}, {n_ops} operation(s)).")
+                    print(f"  Plan saved to {epp}")
+                    if _ep_bak:
+                        print(f"  Previous plan backed up to {_ep_bak}")
+                    print("  Review it, then run `execute` to apply.")
 
         elif args.command == "execute":
             wf = CalibrationWorkflow(workspace_root)
@@ -2163,6 +2191,13 @@ def main():
             print(f"Finalized: wrote {COMPLETE_LOG_ARTIFACT}, {CALIBRATE_DB_SNAPSHOT}, and "
                   f"{ARCHIVE_MANIFEST_ARTIFACT} to {CONTROL_DIR}/. The archival package is ready to "
                   "copy to permanent storage (calibration does not seal or merge).")
+    except KeyboardInterrupt:
+        # Clean Ctrl-C: planning never mutates and execute is journalled/idempotent, so applied
+        # files are confirmed and the next run resumes from the diff (§29.1a). Exit quietly with
+        # the conventional 130 instead of a traceback; the `finally` still releases the lock.
+        print("\nInterrupted; aborting. Applied files are journalled — safe to rerun.",
+              file=sys.stderr)
+        sys.exit(130)
     finally:
         run_lock.release()
 

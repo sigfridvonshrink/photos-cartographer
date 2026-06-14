@@ -129,7 +129,7 @@ Write the handoff manifest only after success.
 Invariants that hold at every gate:
 
 1. planning is non-mutating — it touches no media, no SQLite, no manifest;
-2. dry-run reports the exact serialized plan that would execute;
+2. dry-run validates the real saved plan and reports a concise summary of it (the full exact plan is the saved artifact), never a separate simulation;
 3. execution revalidates the plan before any mutation and rejects stale plans;
 4. all media operations are no-clobber — planned no-clobber *and* re-verified no-clobber at execute time, performed atomically (Section 14.3; shared contract `photos-shared-contract.md` Section 15);
 5. all media mutations are journaled;
@@ -456,15 +456,17 @@ The whole prep run — `plan`, `dry-run`, and `execute` alike — runs under the
 
 ### 14.1 Plan
 
-`plan` produces a serialized plan containing: plan id, plan/schema version, command, config fingerprint, the ordered operation list, blockers, warnings, per-file workspace preconditions (with role `no_op_prepared` or `by_dest_read_only`), metadata dependencies, and a summary (no-op count, operations planned, blockers, per-file metadata plan status). Planning mutates nothing.
+`plan` produces a serialized plan containing: plan id, plan/schema version, command, config fingerprint, the ordered operation list, blockers, warnings, per-file workspace preconditions (with role `no_op_prepared` or `by_dest_read_only`), metadata dependencies, and a summary (no-op count, operations planned, blockers, per-file metadata plan status). Planning mutates nothing (the plan file it writes is a control artifact, not workspace media).
+
+The plan is written to the **canonical control-directory path `photos-10-prep-plan.json`** (shared contract `photos-shared-contract.md` Section 5) — there is no flag that tells prep where to put it or where to find it; `dry-run` and `execute` read it from the same canonical path. `plan` prints the saved location so the operator can review it without hunting for it. Re-planning **never clobbers** a prior plan: any existing `photos-10-prep-plan.json` is first renamed aside under the shared incremental `-NNN` suffix (Section 7.2) and its backup location is announced, so a superseded plan stays recoverable. (This is consistent with "prep re-plans, it does not resume the old plan," Section 14 below: re-planning supersedes the prior plan but preserves it.)
 
 ### 14.2 Dry-run
 
-`dry-run` validates and reports the exact plan that would execute, without mutating.
+`dry-run` reads the saved `photos-10-prep-plan.json`, validates it, and reports a **concise summary** of what would execute — operation counts by type, the no-op/already-correct count, the number of warnings, and any blockers (which `execute` would refuse on) — followed by the path to the full plan. It does **not** dump every operation: the exact, complete plan is the saved canonical artifact itself, available for review at that path. Dry-run is still *not a simulation* — the summary is derived from the **real** serialized plan that `execute` will consume, not from a separate virtual-filesystem walk — it simply summarizes that real plan rather than printing all of it. Dry-run mutates nothing. If no saved plan is present, it stops and directs the operator to run `plan` first.
 
 ### 14.3 Execute
 
-`execute` applies the validated plan. It must:
+`execute` reads the saved `photos-10-prep-plan.json` from the canonical control-dir path (no flag; if absent, it stops and directs the operator to run `plan` first) and applies the validated plan. It must:
 
 1. confirm the workspace lock is held (shared contract `photos-shared-contract.md` Section 2). On an **initialized** workspace, confirm the root sentinel `photos-00-workspace-guard`; on an **uninitialized** workspace this is an **init run** (Section 7.1) — there is no sentinel yet, the planned operations include creating the control directory and the full `0`–`6` structure and moving the base dump into `0-sources/`, and the sentinel is written at the very end (step 11);
 2. revalidate every recorded dependency and per-file precondition; reject the plan before any mutation if stale, missing, or unverifiable, or if the plan was produced by a different tool/version/schema;
