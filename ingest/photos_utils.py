@@ -46,9 +46,15 @@ CONFIG = {
             "library": "auto"            # reserved for the future finalize/merge step (not used by prep)
         }
     },
-    "gpx_root": "",
+    "gpx_root": "/srv/pictures/gpslogs/gpx",
     "gpx_direct_match_max_seconds": 60.0,
-    "gpx_interpolation_max_gap_seconds": 120.0,
+    # The interpolation gap is intentionally generous: at a narrow destination (museum/castle/park)
+    # the photographer is stationary or slow and GPS goes sparse/absent (indoors, tree cover,
+    # battery-save), so bracketing track points can be far apart in TIME yet close in SPACE. The
+    # distance + speed caps below are the real safety net (a long gap only interpolates if you moved
+    # <1 km net), so the time gap can be large without placing a photo somewhere it wasn't. (Mirrors
+    # photo_anchor_interpolation_max_gap_seconds, which is already 1800 for the same kind of bracket.)
+    "gpx_interpolation_max_gap_seconds": 1800.0,
     "gpx_interpolation_max_distance_meters": 1000.0,
     "gpx_interpolation_max_speed_kmh": 150.0,
     # Position-based thresholds for the calibration time-anchor inference (calibration §19):
@@ -90,7 +96,7 @@ CONFIG = {
     # validation — library_root must be an existing directory outside the managed 0-6 tree, and
     # the policy values are enum-checked there (merge spec Section 4). Prep only type-validates.
     "merge": {
-        "library_root": "",                                   # permanent library dir (unset by default)
+        "library_root": "/srv/pictures/5-finished",           # permanent library dir
         "placement_policy": "preserve_destination_structure", # by-dest -> library subpath mapping
         "collision_policy": "suffix_incoming"                 # different-content name clash -> rename the incoming file
     }
