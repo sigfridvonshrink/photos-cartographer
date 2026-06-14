@@ -46,20 +46,30 @@ CONFIG = {
             "library": "auto"            # reserved for the future finalize/merge step (not used by prep)
         }
     },
-    "gpx_root": "",
+    "gpx_root": "/srv/pictures/gpslogs/gpx",
     "gpx_direct_match_max_seconds": 60.0,
-    "gpx_interpolation_max_gap_seconds": 120.0,
+    # The interpolation gap is intentionally generous: at a narrow destination (museum/castle/park)
+    # the photographer is stationary or slow and GPS goes sparse/absent (indoors, tree cover,
+    # battery-save), so bracketing track points can be far apart in TIME yet close in SPACE. The
+    # distance + speed caps below are the real safety net (a long gap only interpolates if you moved
+    # <1 km net), so the time gap can be large without placing a photo somewhere it wasn't. (Mirrors
+    # photo_anchor_interpolation_max_gap_seconds, which is already 1800 for the same kind of bracket.)
+    "gpx_interpolation_max_gap_seconds": 1800.0,
     "gpx_interpolation_max_distance_meters": 1000.0,
     "gpx_interpolation_max_speed_kmh": 150.0,
     # Position-based thresholds for the calibration time-anchor inference (calibration §19):
     # how close a native-GPS frame must be to a GPX point/segment to anchor its real time, and how
     # far supporting anchors' offsets may spread before they conflict. Consumed by calibration.
-    "gpx_anchor_max_point_distance_meters": 30.0,
-    "gpx_anchor_max_segment_distance_meters": 30.0,
+    # 50m (not a tighter value) tolerates the poorer GPS agreement typical at destinations — old-town
+    # canyons, forested parks, castle courtyards — so clock-offset inference still finds enough anchors.
+    "gpx_anchor_max_point_distance_meters": 50.0,
+    "gpx_anchor_max_segment_distance_meters": 50.0,
     "gpx_anchor_offset_spread_max_seconds": 120.0,
     # How far past either end of the GPX track a photo's resolved time may be placed by velocity
-    # extrapolation before it is left unplaced (calibration §23/§25 GPS placement).
-    "gpx_extrapolation_max_seconds": 120.0,
+    # extrapolation before it is left unplaced (calibration §23/§25 GPS placement). 300s covers a few
+    # edge-of-visit frames (before the first fix / after the last); kept modest because extrapolation
+    # has no second bracket and projects the endpoint velocity (risky if the track ended on a drive-away).
+    "gpx_extrapolation_max_seconds": 300.0,
     "photo_anchor_interpolation_max_gap_seconds": 1800.0,
     "photo_anchor_extrapolation_max_seconds": 300.0,
     "camera_time_and_timezone_policy": {
@@ -90,7 +100,7 @@ CONFIG = {
     # validation — library_root must be an existing directory outside the managed 0-6 tree, and
     # the policy values are enum-checked there (merge spec Section 4). Prep only type-validates.
     "merge": {
-        "library_root": "",                                   # permanent library dir (unset by default)
+        "library_root": "/srv/pictures/5-finished",           # permanent library dir
         "placement_policy": "preserve_destination_structure", # by-dest -> library subpath mapping
         "collision_policy": "suffix_incoming"                 # different-content name clash -> rename the incoming file
     }
