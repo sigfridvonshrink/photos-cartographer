@@ -168,3 +168,62 @@ def test_quarantine_manifest_non_array_is_treated_as_corrupt(tmp_path):
     prep._append_quarantine_manifest(str(mdir), {"operation_id": "op-1"})
     assert len(list(mdir.glob("manifest.json.corrupt-*"))) == 1
     assert json.loads((mdir / "manifest.json").read_text()) == [{"operation_id": "op-1"}]
+
+
+# --- dump dotfile quarantine + managed-folder prune protection -----------------
+
+def _dump_dotfile_ops(plan):
+    return sorted(op.source for op in plan.operations
+                  if op.type == "quarantine_move" and op.verification.get("kind") == "dump_dotfile")
+
+
+def test_0sources_dotfiles_quarantined(tmp_path, monkeypatch):
+    _mock(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / ".DS_Store").write_bytes(b"junk")
+    (ws / "0-sources" / ".thumbnails").mkdir()
+    (ws / "0-sources" / ".thumbnails" / "t.jpg").write_bytes(b"thumb")
+    (ws / "0-sources" / "real.jpg").write_bytes(b"img")        # genuine media still organized
+    # control dir and read-only by-dest must be left alone
+    (ws / ".photos-ingest" / ".hidden").write_bytes(b"keep")
+    (ws / "6-photos-by-dest" / ".DS_Store").write_bytes(b"keep")
+
+    plan = _plan(ws)
+    assert _dump_dotfile_ops(plan) == ["0-sources/.DS_Store", "0-sources/.thumbnails/t.jpg"]
+    assert not any(".photos-ingest" in op.source or op.source.startswith("6-photos-by-dest")
+                   for op in plan.operations if op.source)
+
+    prep.PlanExecutor(str(ws)).execute(plan)
+    assert not (ws / "0-sources" / ".DS_Store").exists()
+    assert not (ws / "0-sources" / ".thumbnails").exists()     # emptied dot-dir skeleton pruned
+    assert (ws / ".photos-ingest" / ".hidden").exists()        # control dir untouched
+    assert (ws / "6-photos-by-dest" / ".DS_Store").exists()    # read-only by-dest untouched
+    moved = [f for _r, _d, fs in os.walk(utils.quarantine_dir(str(ws))) for f in fs]
+    assert ".DS_Store" in moved and "t.jpg" in moved
+
+
+def test_init_root_dotfiles_quarantined(tmp_path, monkeypatch):
+    _mock(monkeypatch)
+    ws = tmp_path / "ws"; ws.mkdir()                           # uninitialized (no guard / no 0-6)
+    (ws / ".DS_Store").write_bytes(b"junk")
+    (ws / ".cache").mkdir(); (ws / ".cache" / "c.dat").write_bytes(b"x")
+    (ws / "Dump").mkdir(); (ws / "Dump" / ".hiddennote").write_bytes(b"n")   # nested hidden in plain dump dir
+    (ws / "Dump" / "real.jpg").write_bytes(b"img")
+
+    plan = _plan(ws)
+    assert _dump_dotfile_ops(plan) == [".DS_Store", ".cache/c.dat", "Dump/.hiddennote"]
+
+    prep.PlanExecutor(str(ws)).execute(plan)
+    assert not (ws / ".DS_Store").exists()
+    assert not (ws / ".cache").exists()                        # emptied dump dot-dir pruned
+    assert (ws / ".photos-ingest" / "photos-00-workspace-guard").exists()    # init completed
+
+
+def test_prune_never_removes_managed_folders_even_when_empty(tmp_path, monkeypatch):
+    _mock(monkeypatch)
+    ws = _ws(tmp_path)                                          # initialized, all 0-6 empty
+    plan = _plan(ws)
+    prep.PlanExecutor(str(ws)).execute(plan)                    # success path runs _prune_empty_dirs
+    for d in ("0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
+              "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"):
+        assert (ws / d).is_dir(), f"managed folder {d} must survive pruning even when empty"
