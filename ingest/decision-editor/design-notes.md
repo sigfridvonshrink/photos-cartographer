@@ -98,9 +98,15 @@ panel.
     formula). A small "clear"
     returns the cell to unset (calibration auto-resolves / inherits). The picker writes the derived
     offset, so `manual_real_utc` isn't persisted by the editor (a hand-edited one is still honored). The
-    *accept* row notes the proposal's source (`from timezone <tz>` for a `timezone_naive` proposal,
-    `inherited ⟵ <ancestor>` for an inherited one); when there's no proposal at all the editor says to set
-    the destination timezone and Re-run to derive one from the local time.
+    *accept* row notes the proposal's source (`from timezone <tz>` for a `timezone_naive` proposal); when
+    there's no proposal at all the editor says to set the destination timezone and Re-run to derive one
+    from the local time. **Per-date buckets:** a destination spanning >1 naive day keys its offset cells
+    `<group>@<YYYY-MM-DD>` (a camera set to local time each morning has a per-day offset). The time view
+    groups these under the camera group and **collapses equal-proposal undecided days into one cluster
+    row** (e.g. all summer days → one row, winter → another), so the operator confirms each distinct
+    offset once; editing a cluster **fans out** to all its days (`ref.peers`). A chevron expands a cluster
+    to per-day rows for a divergent manual edit; a day with its own decision breaks out automatically.
+    Offsets do **not** inherit between destinations (only the timezone and folder fallback do).
   - **GPS coordinate / fallback:** a **zoomable map with a fixed centre crosshair** — pan/zoom under it,
     "use map center" → take `map.getCenter()` into the lat/lon fields. Reference pins (effective /
     inherited / folder fallback) and a marker for the current decision give context, and the map seeds
@@ -143,5 +149,6 @@ panel.
    can be prepared anywhere and calibrated on the right host. No other dependencies exist today. Plus the **advisory live inheritance preview** for the time tree (§4): a timezone
    with no own decision shows, badged `inherited ⟵ <ancestor>`, the value it would inherit from its
    nearest resolved ancestor, updating as you edit ancestors — display-only, authoritative on the next
-   Re-run. (Offsets also inherit, but their resolution is GPX/auto-driven rather than a manual-override
-   cascade, so the live preview is scoped to timezones — the clearest override-and-inherit case.)
+   Re-run. (Offsets do **not** inherit — they are per-date buckets resolved from a GPX self-anchor or the
+   destination timezone, §4.4 — so the live inheritance preview is scoped to timezones and the folder
+   fallback, the two facts that actually cascade.)

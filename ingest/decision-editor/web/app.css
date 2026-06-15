@@ -45,6 +45,14 @@ main { flex: 1; display: grid; grid-template-columns: minmax(360px, 1fr) minmax(
 .row .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row .label .sub { color: var(--muted); font: 11px var(--mono); }
 .row .eff { font: 12px var(--mono); color: var(--fg); opacity: .85; }
+/* per-date offset buckets: a camera-group header, indented day/cluster rows, expand/collapse affordances */
+.offset-grp { padding: 6px 12px 2px; font: 11px var(--mono); color: var(--muted); }
+.offset-grp .sub { opacity: .8; }
+.row.off-sub { padding-left: 26px; }
+.off-chevron { color: var(--muted); cursor: pointer; user-select: none; margin-right: -2px; }
+.off-chevron:hover { color: var(--fg); }
+.off-collapse { padding: 4px 12px 4px 26px; font: 11px var(--mono); color: var(--muted); cursor: pointer; }
+.off-collapse:hover { color: var(--fg); }
 
 .chip { font-size: 11px; padding: 1px 7px; border-radius: 10px; background: var(--chip); color: var(--muted); white-space: nowrap; }
 .chip.needs { background: #4a3320; color: var(--warn); }
