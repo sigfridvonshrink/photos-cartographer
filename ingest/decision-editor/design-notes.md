@@ -52,6 +52,13 @@ panel.
   counts row. Either view is switchable to the other. File-less **container** destinations (parents with
   no media of their own, Section 10.1 of the time spec) appear in both views badged `container` —
   editable propagation points that hold defaults for their children and never sit on the to-do list.
+- **GPS-depends-on-time gate.** GPS placement is derived from each photo's resolved UTC, and the pipeline
+  only (re)generates `photos-22` once **every** time decision is resolved. The editor surfaces that gate:
+  while the time artifact `requires_user_input`, the GPS view is **locked** behind an explanatory banner
+  (finish time, then Re-run) instead of showing an empty or stale list; and once any time decision is
+  changed, a **stale** banner on both views reminds you a Re-run is needed before GPS reflects it (tracked
+  by `timeChangedSinceRerun`, cleared on Re-run). Both notices are skipped in demo mode (its curated
+  fixtures intentionally pair an incomplete time artifact with a GPS one).
 - **Side-panel editor** for the selected cell: the proposal + evidence (for offsets, the GPX anchors +
   confidence), the decision control, a **photo thumbnail** (review items), a **context map**, and a live
   **effective-outcome** preview with client-side validation.
