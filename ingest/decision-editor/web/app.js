@@ -93,7 +93,29 @@ function cellStatus(cell) {
   return ["ok", "resolved"];
 }
 const chip = (k, t) => el("span", { class: `chip ${k}` }, t);
-function statusChip(ref) { const s = cellStatus(baseCell(ref)); return s ? chip(s[0], s[1]) : null; }
+// Would the WORKING decision resolve this cell? (advisory — mirrors the reference §6 resolution rules.)
+function wouldResolve(ref) {
+  const c = workCell(ref); if (!c) return false;
+  const u = c.user_decision || {}, p = c.proposal || {};
+  if (ref.kind === "timezone")
+    return (!!u.manual_iana_timezone && validTz(u.manual_iana_timezone)) || (!!u.accept_proposed_timezone && !!c.proposed_iana_timezone);
+  if (ref.kind === "offset")
+    return (u.manual_offset_seconds !== "" && u.manual_offset_seconds != null && validOffset(u.manual_offset_seconds))
+      || (!!u.manual_real_utc && validUtc(u.manual_real_utc) && p.proposal_source === "gpx_self_anchor")
+      || (!!u.accept_proposal && "proposed_offset_seconds" in p);
+  if (ref.kind === "fallback")
+    return (u.fallback_lat !== "" && u.fallback_lat != null && u.fallback_lon !== "" && u.fallback_lon != null)
+      || (!!u.accept_proposal && !!p.proposed_fallback);
+  return (u.manual_lat !== "" && u.manual_lat != null && u.manual_lon !== "" && u.manual_lon != null) || !!u.accept_unlocated;
+}
+function statusChip(ref) {
+  if (isDirty(ref)) {                          // a pending edit supersedes the last run's status
+    if (refInvalid(ref)) return null;          // the ✗ invalid chip (tags) already speaks
+    if (wouldResolve(ref)) return chip("ok", "resolved");
+  }
+  const s = cellStatus(baseCell(ref));
+  return s ? chip(s[0], s[1]) : null;
+}
 
 function fmtOffset(s) {
   if (s === "" || s == null) return "—"; const n = Math.abs(s), sign = s < 0 ? "−" : "+";
@@ -120,6 +142,14 @@ function utcStrToMs(s) { const ms = Date.parse(s || ""); return isFinite(ms) ? m
 function fmtLocal(ms, tz) { // the real instant rendered in destination-local wall time
   try { return new Intl.DateTimeFormat("en-GB", { timeZone: tz, dateStyle: "medium", timeStyle: "medium" }).format(new Date(ms)); }
   catch { return null; }
+}
+function fmtDT(ms, tz) { // {date,time} in `tz`, the two halves formatted identically for both sides of an arrow
+  try {
+    return {
+      date: new Intl.DateTimeFormat("en-GB", { timeZone: tz, day: "2-digit", month: "short", year: "numeric" }).format(new Date(ms)),
+      time: new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(new Date(ms)),
+    };
+  } catch { return null; }
 }
 
 // advisory effective preview (NOT authoritative — calibration recomputes on re-run)
@@ -493,18 +523,25 @@ function jsonBlock(title, obj) { return obj === undefined ? null : el("div", { c
 function offsetProposalBlock(ref, p) {
   if (p.proposal_source !== "gpx_self_anchor") return jsonBlock("Proposal", p);
   const tz = previewTz(ref.dest)?.tz;
-  const localOf = (utc) => { const ms = utcStrToMs(utc); return ms != null && tz ? fmtLocal(ms, tz) : null; };
   const wrap = el("div", { class: "pblock" }, el("h3", {}, "Proposal — suggested clock correction"),
     el("div", { class: "prop-head" }, fmtOffset(p.proposed_offset_seconds),
       el("span", { class: "muted" }, ` (${p.confidence}; ${p.anchor_count} geotagged photo${p.anchor_count === 1 ? "" : "s"})`)));
   const groups = p.groups || [];
   for (const g of groups.slice(0, 3)) {
-    const loc = localOf(g.representative.real_utc);
+    // camera (naive wall time) → corrected (real UTC in the destination tz), both formatted identically;
+    // when the date is unchanged it's shown once and the arrow carries only the time correction.
+    const cam = camNaiveMs(g.representative.camera_source_naive_time), real = utcStrToMs(g.representative.real_utc);
+    const cdt = cam != null ? fmtDT(cam, "UTC") : null, rdt = real != null && tz ? fmtDT(real, tz) : null;
+    let line;
+    if (cdt && rdt) line = cdt.date === rdt.date
+      ? `${cdt.date} · ${cdt.time} → ${rdt.time} (${tz})`
+      : `${cdt.date} ${cdt.time} → ${rdt.date} ${rdt.time} (${tz})`;
+    else if (cdt) line = `${cdt.date} ${cdt.time} → ${g.representative.real_utc} — set this destination's timezone to see local time`;
+    else line = `camera ${g.representative.camera_source_naive_time} → ${g.representative.real_utc}`;
     wrap.append(el("div", { class: "prop-group" },
       el("div", { class: "prop-group-h" }, `${g.count} photo${g.count === 1 ? "" : "s"} → ${fmtOffset(g.offset_seconds)}`),
       el("div", { class: "hint" }, `e.g. ${g.representative.source_file}`),
-      el("div", { class: "hint" }, `camera: ${g.representative.camera_source_naive_time}  →  corrected: `
-        + (loc ? `${loc} (${tz})` : `${g.representative.real_utc} — set this destination's timezone to see local time`))));
+      el("div", { class: "hint" }, line)));
   }
   if (groups.length > 3) wrap.append(el("div", { class: "hint" }, `+ ${groups.length - 3} more correction group(s)`));
   const sk = p.skipped || {}, notes = [];
