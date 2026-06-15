@@ -96,6 +96,8 @@ main { flex: 1; display: grid; grid-template-columns: minmax(360px, 1fr) minmax(
 .pblock.eff { background: #1d2a22; border-color: #2c4434; }
 .eff-val { font: 13px var(--mono); color: #b8e0c2; }
 
+.container-tag { margin-left: 8px; font-size: 9px; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--auto); border: 1px solid var(--line); border-radius: 8px; padding: 0 6px; }
 .group-title { padding: 10px 12px 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
 .summary { padding: 4px 12px 8px 24px; font: 11px var(--mono); color: var(--muted); }
 
