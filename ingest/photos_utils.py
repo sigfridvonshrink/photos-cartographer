@@ -65,6 +65,14 @@ CONFIG = {
     "gpx_anchor_max_point_distance_meters": 50.0,
     "gpx_anchor_max_segment_distance_meters": 50.0,
     "gpx_anchor_offset_spread_max_seconds": 120.0,
+    # The largest camera-clock error the time-anchor inference will entertain: a GPX point/segment can
+    # only anchor a frame if its timestamp is within this window of the frame's naive time (treated as
+    # UTC). Bounds the offset by construction, so a track that merely passes through the SAME PLACE on a
+    # DIFFERENT TRIP (e.g. the same spot years ago) can no longer win on distance and yield an absurd
+    # multi-year "correction". 2 days comfortably covers any timezone the camera might be set to (±14 h)
+    # plus drift, while you essentially never revisit a destination within 2 days — so the bound is safe.
+    # A genuinely huge clock error (battery reset) falls outside this and is left for a manual offset.
+    "gpx_anchor_max_clock_error_seconds": 172800.0,
     # How far past either end of the GPX track a photo's resolved time may be placed by velocity
     # extrapolation before it is left unplaced (calibration §23/§25 GPS placement). 300s covers a few
     # edge-of-visit frames (before the first fix / after the last); kept modest because extrapolation
@@ -656,7 +664,8 @@ _GPX_NUMERIC_KEYS = (
     "gpx_direct_match_max_seconds", "gpx_interpolation_max_gap_seconds",
     "gpx_interpolation_max_distance_meters", "gpx_interpolation_max_speed_kmh",
     "gpx_anchor_max_point_distance_meters", "gpx_anchor_max_segment_distance_meters",
-    "gpx_anchor_offset_spread_max_seconds", "gpx_extrapolation_max_seconds",
+    "gpx_anchor_offset_spread_max_seconds", "gpx_anchor_max_clock_error_seconds",
+    "gpx_extrapolation_max_seconds",
     "photo_anchor_interpolation_max_gap_seconds", "photo_anchor_extrapolation_max_seconds",
 )
 
