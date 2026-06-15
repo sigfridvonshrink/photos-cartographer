@@ -30,9 +30,16 @@ body { margin: 0; font: 14px/1.45 system-ui, sans-serif; color: var(--fg); backg
 .runlog-out { margin: 6px 0 0; max-height: 180px; overflow: auto; font: 12px var(--mono);
   white-space: pre-wrap; word-break: break-word; color: var(--muted); }
 
-main { flex: 1; display: grid; grid-template-columns: minmax(360px, 1fr) minmax(380px, 1fr); min-height: 0; }
+/* list | draggable divider | panel — the list width is the drag-controlled var (default ~equal split) */
+main { flex: 1; display: grid; grid-template-columns: var(--list-w, minmax(360px, 1fr)) 6px minmax(320px, 1fr); min-height: 0; }
 #list { overflow: auto; border-right: 1px solid var(--line); padding: 8px 0; }
-#panel { overflow: auto; padding: 14px; background: #20242b; }
+#divider { background: var(--line); cursor: col-resize; }
+#divider:hover, #divider.dragging { background: var(--accent); }
+/* panel itself does not scroll: a fixed top (title + status + decision) over a scroll area (proposal,
+   photo, map). Keeps the decision controls always visible — only the evidence/media below scroll. */
+#panel { display: flex; flex-direction: column; overflow: hidden; padding: 14px; background: #20242b; min-width: 0; }
+.panel-top { flex: none; }
+.panel-scroll { flex: 1; min-height: 0; overflow: auto; margin: 0 -14px -14px; padding: 0 14px 14px; }
 .empty { color: var(--muted); padding: 24px; text-align: center; }
 
 /* tree + rows */
