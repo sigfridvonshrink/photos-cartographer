@@ -97,6 +97,28 @@ function fmtOffset(s) {
   return `${sign}${Math.floor(n / 3600)}h ${String(Math.floor(n % 3600 / 60)).padStart(2, "0")}m ${String(n % 60).padStart(2, "0")}s`;
 }
 
+// Offset ⟷ real-UTC conversion. The offset is the one stored value; UTC is just the anchor frame's
+// real instant (camera_naive + offset) rendered as a clock. All math is on naive wall-times treated as
+// UTC epoch ms (Date.UTC), matching calibration's `real_utc_naive − camera_naive` (photos-2-time-gps).
+const _pad = (n) => String(n).padStart(2, "0");
+function camNaiveMs(s) { // camera EXIF naive "YYYY:MM:DD HH:MM:SS"
+  const m = /^(\d{4}):(\d\d):(\d\d)[ T](\d\d):(\d\d):(\d\d)/.exec(s || "");
+  return m ? Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]) : null;
+}
+function dtLocalToMs(s) { // <input type=datetime-local> value "YYYY-MM-DDTHH:MM(:SS)?", read as UTC wall time
+  const m = /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d)(?::(\d\d))?$/.exec(s || "");
+  return m ? Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], m[6] ? +m[6] : 0) : null;
+}
+function msToDtLocal(ms) { // UTC epoch ms → datetime-local value
+  const d = new Date(ms);
+  return `${d.getUTCFullYear()}-${_pad(d.getUTCMonth() + 1)}-${_pad(d.getUTCDate())}T${_pad(d.getUTCHours())}:${_pad(d.getUTCMinutes())}:${_pad(d.getUTCSeconds())}`;
+}
+function utcStrToMs(s) { const ms = Date.parse(s || ""); return isFinite(ms) ? ms : null; }
+function fmtLocal(ms, tz) { // the real instant rendered in destination-local wall time
+  try { return new Intl.DateTimeFormat("en-GB", { timeZone: tz, dateStyle: "medium", timeStyle: "medium" }).format(new Date(ms)); }
+  catch { return null; }
+}
+
 // advisory effective preview (NOT authoritative — calibration recomputes on re-run)
 function previewEffective(ref) {
   const c = workCell(ref), u = c.user_decision || {}, p = c.proposal || {};
@@ -218,9 +240,9 @@ function renderGps(list) {
 }
 
 // --- editing controls --------------------------------------------------------
-function checkbox(label, checked, onchange) {
-  const cb = el("input", { type: "checkbox" }); cb.checked = !!checked; cb.addEventListener("change", () => onchange(cb.checked));
-  return el("label", { class: "ctl-check" }, cb, label);
+function checkbox(label, checked, onchange, disabled) {
+  const cb = el("input", { type: "checkbox", disabled: disabled ? "" : null }); cb.checked = !!checked; cb.addEventListener("change", () => onchange(cb.checked));
+  return el("label", { class: disabled ? "ctl-check disabled" : "ctl-check" }, cb, label);
 }
 function numField(label, value, onchange, invalid) {
   const inp = el("input", { type: "number", step: "any", class: invalid ? "bad" : null, value: value === "" || value == null ? "" : value });
@@ -228,61 +250,124 @@ function numField(label, value, onchange, invalid) {
   return el("label", { class: "ctl-field" }, el("span", {}, label), inp);
 }
 
-let TZ_LIST = null;
-function tzDatalist() {
-  if (TZ_LIST) return TZ_LIST;
-  let zones = [];
-  try { zones = Intl.supportedValuesOf("timeZone"); } catch { zones = ["UTC", "Europe/Brussels", "Asia/Tokyo", "America/New_York"]; }
-  TZ_LIST = el("datalist", { id: "tz-zones" }, ...zones.map((z) => el("option", { value: z })));
-  return TZ_LIST;
+let TZ_ZONES = null;
+function tzZones() {
+  if (TZ_ZONES) return TZ_ZONES;
+  try { TZ_ZONES = Intl.supportedValuesOf("timeZone"); } catch { TZ_ZONES = ["UTC", "Europe/Brussels", "Asia/Tokyo", "America/New_York"]; }
+  return TZ_ZONES;
+}
+function tzSelect(value, onchange, disabled) {
+  const cur = value || "", zones = tzZones();
+  const opts = [el("option", { value: "" }, "— none —"), ...zones.map((z) => el("option", { value: z }, z))];
+  // Keep a pre-existing value the browser doesn't know about visible/selectable rather than silently dropping it.
+  if (cur && !zones.includes(cur)) opts.splice(1, 0, el("option", { value: cur }, cur + " (unknown)"));
+  const sel = el("select", { class: validTz(cur) ? null : "bad", disabled: disabled ? "" : null }, ...opts);
+  sel.value = cur;
+  sel.addEventListener("change", () => onchange(sel.value));
+  return sel;
 }
 
-function offsetSpinner(ref) {
-  const cell = workCell(ref), get = () => cell.user_decision.manual_offset_seconds;
-  const readout = el("div", { class: "spin-read" });
-  const num = el("input", { type: "number", step: "1", class: "spin-num" });
-  const sync = () => { const v = get(); readout.textContent = fmtOffset(v); readout.classList.toggle("bad", !validOffset(v)); num.value = v === "" || v == null ? "" : v; };
-  const setv = (v) => { cell.user_decision.manual_offset_seconds = v; render(); };
-  const STEPS = [1, 5, 15, 60, 300, 900, 3600]; let accel = 0, last = 0;
-  const spin = el("div", { class: "spinner", tabindex: "0", title: "scroll to adjust (faster = bigger step); arrows ±1s, Shift ±60s" }, readout);
-  spin.addEventListener("wheel", (e) => {
-    e.preventDefault(); const now = performance.now(); accel = now - last < 160 ? Math.min(accel + 1, STEPS.length - 1) : 0; last = now;
-    const step = STEPS[accel], cur = Number(get()) || 0, dir = e.deltaY < 0 ? 1 : -1;
-    setv(Math.max(-86400, Math.min(86400, cur + dir * step)));
-  }, { passive: false });
-  spin.addEventListener("keydown", (e) => {
-    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return; e.preventDefault();
-    const cur = Number(get()) || 0, d = (e.key === "ArrowUp" ? 1 : -1) * (e.shiftKey ? 60 : 1);
-    setv(Math.max(-86400, Math.min(86400, cur + d)));
-  });
-  num.addEventListener("change", () => setv(num.value === "" ? "" : Number(num.value)));
-  sync();
-  return el("div", { class: "ctl-field" }, el("span", {}, "Manual offset"),
-    el("div", { class: "spin-wrap" }, spin, num, el("button", { class: "mini", onclick: () => setv("") }, "clear")));
+// Offset editor: the h/m/s spinner and a real-UTC datetime picker are two views of one stored value
+// (manual_offset_seconds). Whichever view you click drives editing; the other goes read-only and tracks
+// it. The UTC view only exists for a gpx_self_anchor proposal (it needs the anchor frame's camera time);
+// editing always canonicalizes to the offset and clears manual_real_utc so the stored value is unambiguous.
+function offsetEditor(ref) {
+  const c = workCell(ref), u = c.user_decision, p = c.proposal || {};
+  const isGpx = p.proposal_source === "gpx_self_anchor";
+  const camMs = isGpx && p.anchors && p.anchors[0] ? camNaiveMs(p.anchors[0].camera_source_naive_time) : null;
+  const canUtc = camMs != null;
+  // current offset: the stored value, or (legacy hand-edited JSON) derived from manual_real_utc
+  let off = u.manual_offset_seconds;
+  if ((off === "" || off == null) && u.manual_real_utc && camMs != null) {
+    const m = utcStrToMs(u.manual_real_utc); if (m != null) off = Math.round((m - camMs) / 1000);
+  }
+  const hasOff = off !== "" && off != null, cur = Number(off) || 0, abs = Math.abs(cur);
+  const selKey = `${ref.dest}|${ref.key}`;
+  const mode = canUtc && state.offsetEdit?.key === selKey && state.offsetEdit.mode === "utc" ? "utc" : "offset";
+  const activate = (m) => { state.offsetEdit = { key: selKey, mode: m }; state._focusOffset = m; render(); };
+  const setOff = (v) => editMany(ref, { manual_offset_seconds: v, manual_real_utc: "" });
+
+  // --- offset view: h/m/s spinner --------------------------------------------
+  const bump = (secs, dir) => setOff(Math.max(-86400, Math.min(86400, cur + dir * secs)));
+  const unit = (label, secs, value) => {
+    const box = el("div", { class: "spin-unit", tabindex: mode === "offset" ? "0" : null,
+      title: mode === "offset" ? `scroll or ↑/↓ to adjust ${label}` : "driven by real-UTC — click to edit the offset directly" },
+      el("div", { class: "spin-unit-val" }, String(value).padStart(2, "0")),
+      el("div", { class: "spin-unit-lbl" }, label));
+    if (mode === "offset") {
+      box.addEventListener("wheel", (e) => { e.preventDefault(); bump(secs, e.deltaY < 0 ? 1 : -1); }, { passive: false });
+      box.addEventListener("keydown", (e) => {
+        if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return; e.preventDefault();
+        bump(secs, e.key === "ArrowUp" ? 1 : -1);
+      });
+    } else box.addEventListener("click", () => activate("offset"));
+    return box;
+  };
+  const units = el("div", { class: "spin-units" + (validOffset(off) ? "" : " bad") + (mode === "offset" ? "" : " ro") },
+    el("span", { class: "spin-sign" }, cur < 0 ? "−" : "+"),
+    unit("h", 3600, Math.floor(abs / 3600)), el("span", { class: "spin-colon" }, ":"),
+    unit("m", 60, Math.floor(abs / 60) % 60), el("span", { class: "spin-colon" }, ":"),
+    unit("s", 1, abs % 60));
+  const num = el("input", { type: "number", step: "1", class: "spin-num", readonly: mode === "offset" ? null : "",
+    value: hasOff ? off : "" });
+  if (mode === "offset") num.addEventListener("change", () => setOff(num.value === "" ? "" : Number(num.value)));
+  else num.addEventListener("focus", () => activate("offset"));
+  const wrap = el("div", { class: "ctl-block" },
+    el("div", { class: "ctl-field" }, el("span", {}, "Manual offset"),
+      el("div", { class: "spin-wrap" }, units, num, el("button", { class: "mini", onclick: () => setOff("") }, "clear"))));
+  if (!validOffset(off)) wrap.append(el("div", { class: "err" }, "offset must be a number within ±86400 s"));
+
+  if (!canUtc) {
+    wrap.append(el("div", { class: "hint" }, isGpx
+      ? "no anchor frame on this proposal — set the offset directly"
+      : "real-UTC entry needs a GPX self-anchor proposal — set the offset directly"));
+    return wrap;
+  }
+
+  // --- real-UTC view: datetime-local picker (interpreted as UTC) --------------
+  const pick = el("input", { type: "datetime-local", step: "1", class: "spin-num utc-pick", readonly: mode === "utc" ? null : "",
+    title: "the true UTC time of the matched anchor frame; sets the offset = this − the frame's camera clock" });
+  pick.value = hasOff ? msToDtLocal(camMs + cur * 1000) : "";
+  if (mode === "utc") pick.addEventListener("change", () => setOff(pick.value === "" ? "" : Math.round((dtLocalToMs(pick.value) - camMs) / 1000)));
+  else { pick.addEventListener("click", () => activate("utc")); pick.addEventListener("focus", () => activate("utc")); }
+  wrap.append(el("label", { class: "ctl-field" }, el("span", {}, "Anchor real-UTC"), pick));
+
+  // derived destination-local label (display only), or a nudge when the timezone isn't resolved yet
+  if (hasOff) {
+    const realMs = camMs + cur * 1000, pv = previewTz(ref.dest), loc = pv && pv.tz ? fmtLocal(realMs, pv.tz) : null;
+    wrap.append(loc
+      ? el("div", { class: "hint" }, `= ${loc} · ${pv.tz}${pv.source === "inherited" ? " (inherited)" : ""} — local time, derived from this destination's timezone decision`)
+      : el("div", { class: "hint" }, "set this destination's timezone to see the equivalent local time"));
+  }
+  if (p.proposed_real_utc) wrap.append(el("div", { class: "hint" }, `GPX estimate for this anchor: ${p.proposed_real_utc}`));
+
+  if (state._focusOffset) {
+    const target = state._focusOffset === "utc" ? pick : num; state._focusOffset = null;
+    queueMicrotask(() => target.focus());
+  }
+  return wrap;
 }
 
 function controls(ref) {
   const c = workCell(ref), u = c.user_decision, p = c.proposal || {}, wrap = el("div", { class: "ctl-block" });
   if (ref.kind === "timezone") {
     const hasProp = !!c.proposed_iana_timezone;
-    wrap.append(checkbox(`accept proposed${hasProp ? " (" + c.proposed_iana_timezone + ")" : " — none"}`, u.accept_proposed_timezone, (v) => edit(ref, "accept_proposed_timezone", v)));
-    const inp = el("input", { type: "text", list: "tz-zones", placeholder: "IANA zone e.g. Asia/Tokyo", value: u.manual_iana_timezone || "", class: validTz(u.manual_iana_timezone) ? null : "bad" });
-    inp.addEventListener("change", () => edit(ref, "manual_iana_timezone", inp.value.trim()));
-    wrap.append(el("label", { class: "ctl-field" }, el("span", {}, "Manual timezone"), inp), tzDatalist());
+    const locked = !!u.accept_proposed_timezone && hasProp;
+    // Accepting the proposal mirrors it into the manual field and locks the drop-down; unaccepting frees it again.
+    wrap.append(checkbox(`accept proposed${hasProp ? " (" + c.proposed_iana_timezone + ")" : " — none"}`, u.accept_proposed_timezone,
+      (v) => v && hasProp
+        ? editMany(ref, { accept_proposed_timezone: true, manual_iana_timezone: c.proposed_iana_timezone })
+        : edit(ref, "accept_proposed_timezone", v), !hasProp));
+    const sel = tzSelect(u.manual_iana_timezone, (v) => edit(ref, "manual_iana_timezone", v), locked);
+    wrap.append(el("label", { class: "ctl-field" }, el("span", {}, "Manual timezone"), sel));
     if (!validTz(u.manual_iana_timezone)) wrap.append(el("div", { class: "err" }, "not a valid IANA timezone"));
   } else if (ref.kind === "offset") {
     const hasOff = "proposed_offset_seconds" in p;
-    wrap.append(checkbox(`accept proposal${hasOff ? " (" + fmtOffset(p.proposed_offset_seconds) + ")" : " — none to accept"}`, u.accept_proposal, (v) => edit(ref, "accept_proposal", v)));
-    wrap.append(offsetSpinner(ref));
-    if (!validOffset(u.manual_offset_seconds)) wrap.append(el("div", { class: "err" }, "offset must be a number within ±86400 s"));
-    const utc = el("input", { type: "text", placeholder: "2024-07-03T12:00:00Z", value: u.manual_real_utc || "", class: validUtc(u.manual_real_utc) ? null : "bad" });
-    utc.addEventListener("change", () => edit(ref, "manual_real_utc", utc.value.trim()));
-    wrap.append(el("label", { class: "ctl-field" }, el("span", {}, "Manual real-UTC"), utc));
-    if (p.proposal_source !== "gpx_self_anchor") wrap.append(el("div", { class: "hint" }, "real-UTC only applies to a GPX self-anchor proposal"));
-    if (!validUtc(u.manual_real_utc)) wrap.append(el("div", { class: "err" }, "not a valid ISO-8601 UTC datetime"));
+    wrap.append(checkbox(`accept proposal${hasOff ? " (" + fmtOffset(p.proposed_offset_seconds) + ")" : " — none to accept"}`, u.accept_proposal, (v) => edit(ref, "accept_proposal", v), !hasOff));
+    wrap.append(offsetEditor(ref));
   } else if (ref.kind === "fallback") {
     const hasProp = p.proposal_source === "inherited";
-    wrap.append(checkbox(hasProp ? `accept inherited (${p.proposed_fallback.lat}, ${p.proposed_fallback.lon})` : "accept inherited — none", u.accept_proposal, (v) => edit(ref, "accept_proposal", v)));
+    wrap.append(checkbox(hasProp ? `accept inherited (${p.proposed_fallback.lat}, ${p.proposed_fallback.lon})` : "accept inherited — none", u.accept_proposal, (v) => edit(ref, "accept_proposal", v), !hasProp));
     wrap.append(numField("Fallback lat", u.fallback_lat, (v) => edit(ref, "fallback_lat", v), !validLat(u.fallback_lat)));
     wrap.append(numField("Fallback lon", u.fallback_lon, (v) => edit(ref, "fallback_lon", v), !validLon(u.fallback_lon)));
     wrap.append(el("div", { class: "hint" }, "or pan the map below under the crosshair and “use map center”"));
