@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Decision-editor front-end unit tests (web/app.js pure logic), via Node's built-in runner — no npm,
+# no deps. The explicit *.test.mjs glob is intentional: `node --test <dir>` also tries the Python test
+# files that share the directory. Extra args pass through, e.g.  tools/jstest --test-name-pattern tz.
+# Run from anywhere; it cd's to the repo root.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+exec node --test "$@" ingest/decision-editor/tests/*.test.mjs

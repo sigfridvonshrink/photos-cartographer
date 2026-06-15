@@ -30,6 +30,12 @@ is **advisory**; the loop is **edit → Save → re-run `photos-2-time-gps run` 
   map, both **vendored** under `web/vendor/` (no CDN at runtime, no build step, works offline). The
   skeleton is dependency-free vanilla; the lib/map come in with the editing/map phases.
 - Rationale: matches the repo's Python/CLI, no-build, system-deps-only ethos; zero new package managers.
+- **Front-end tests**: the pure logic in `app.js` (validation, offset⟷UTC/local date math, the §6
+  resolution rules, inheritance previews) is unit-tested with **Node's built-in runner** (`node:test`,
+  no npm) in `tests/*.test.mjs` — run via `tools/jstest`, also in CI and the pre-push hook. `app.js`
+  exports those functions and guards its auto-start (`if (typeof document !== "undefined") main()`) so it
+  imports cleanly in Node. The server is tested in Python (`tests/test_serve.py`); DOM-building
+  functions aren't covered yet (would need jsdom — deliberately out of scope for the no-deps harness).
 
 ## 3. Architecture
 
