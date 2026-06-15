@@ -57,7 +57,7 @@ export function mapPicker({ center, zoom = 13, markers = [], onPick }) {
     map,
     setCurrent,
     refresh() { map.invalidateSize(); },          // call after (re)attaching to the DOM
-    recenter(c) { if (c && fin(c.lat) && fin(c.lon)) map.setView([c.lat, c.lon], Math.max(map.getZoom(), 13)); },
+    recenter(c) { if (c && fin(c.lat) && fin(c.lon)) map.panTo([c.lat, c.lon]); },   // keep the current zoom
     destroy() { map.remove(); },
   };
 }
