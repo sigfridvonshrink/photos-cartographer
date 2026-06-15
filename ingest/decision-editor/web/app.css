@@ -153,4 +153,14 @@ pre.json { margin: 0; font: 12px var(--mono); white-space: pre-wrap; word-break:
 .map-read { flex: 1; font: 12px var(--mono); color: var(--muted); }
 .map-cp { display: flex; gap: 8px; margin-top: 6px; }
 .map-cp .btn { font-size: 12px; padding: 3px 10px; }
+.map-search-wrap { margin-top: 8px; position: relative; }
+.map-search-bar { display: flex; gap: 8px; }
+.map-search { flex: 1; font: inherit; font-size: 13px; padding: 5px 10px; border-radius: 6px;
+  background: #14171c; color: var(--fg); border: 1px solid var(--line); }
+.map-search-results { margin-top: 4px; background: #14171c; border: 1px solid var(--line); border-radius: 6px;
+  max-height: 220px; overflow: auto; font-size: 12px; color: var(--muted); padding: 2px; }
+.map-search-results:empty { display: none; }
+.map-search-hit { display: block; width: 100%; text-align: left; background: none; border: 0; color: var(--fg);
+  font: inherit; font-size: 12px; padding: 6px 8px; border-radius: 4px; cursor: pointer; }
+.map-search-hit:hover { background: #2b303a; }
 .photo-img { display: block; max-width: 100%; max-height: 360px; border-radius: 6px; background: #111; }
