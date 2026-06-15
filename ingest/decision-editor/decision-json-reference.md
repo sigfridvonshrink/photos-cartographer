@@ -183,9 +183,21 @@ Resolution: `manual_iana_timezone` (if valid) wins; else `accept_proposed_timezo
                                "segment_duration_seconds": 0 },
     "anchor_count": 3, "supporting_count": 2, "conflicting_count": 0,
     "anchors": [ { "proposal_id": "anchor-001", "source_file": "…", "camera_source_naive_time": "…",
-                   "native_gps": { … }, "gpx_match": { … }, "proposed_offset_seconds": -3600 }, … ]
+                   "native_gps": { … }, "gpx_match": { … }, "proposed_offset_seconds": -3600 }, … ],
+    // collapsed view: the offset clusters, largest first (the recommended offset = the largest cluster)
+    "groups": [ { "offset_seconds": -3600, "count": 2,
+                  "representative": { "source_file": "6-photos-by-dest/Japan/Kyoto/IMG_1234.arw",  // FULL by-dest path
+                                      "camera_source_naive_time": "2024:07:03 15:12:08",
+                                      "real_utc": "2024-07-03T14:12:21Z",       // → corrected local time via the tz
+                                      "match_type": "gpx_point_match", "distance_m": 4.2 } }, … ],
+    // frames that produced no in-window anchor, by reason (a track only from another trip vs none nearby)
+    "skipped": { "no_nearby_track": 0, "outside_time_window": 1,
+                 "examples": [ { "source_file": "…", "reason": "outside_time_window" } ] }
   }
   ```
+  The recommended `proposed_offset_seconds` is the **largest agreeing cluster** (consensus), not merely the
+  closest single match; `anchors[0]` is that cluster's representative. The editor renders `groups` (top ~3)
+  and `skipped` instead of dumping every anchor — see the offset proposal panel.
 - **Inherited** (`proposal_source: "inherited"`) — taken from the nearest resolved ancestor destination:
   `{ "proposal_source": "inherited", "proposed_offset_seconds": int, "inherited_from": "<ancestor>",
      "confidence": "review_required", "rank": "inherited_from_ancestor" }`. Confirmable only — never

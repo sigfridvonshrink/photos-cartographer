@@ -486,6 +486,33 @@ function photoBlock(ref) {
 
 // --- side panel --------------------------------------------------------------
 function jsonBlock(title, obj) { return obj === undefined ? null : el("div", { class: "pblock" }, el("h3", {}, title), el("pre", { class: "json" }, JSON.stringify(obj, null, 2))); }
+
+// A GPX self-anchor offset proposal, collapsed: the consensus correction, then up to three
+// "N photos → ±Xh Ym" groups (each with one named photo at its FULL by-dest path and that photo's
+// corrected local time), plus a note for frames skipped (no track / track from another trip).
+function offsetProposalBlock(ref, p) {
+  if (p.proposal_source !== "gpx_self_anchor") return jsonBlock("Proposal", p);
+  const tz = previewTz(ref.dest)?.tz;
+  const localOf = (utc) => { const ms = utcStrToMs(utc); return ms != null && tz ? fmtLocal(ms, tz) : null; };
+  const wrap = el("div", { class: "pblock" }, el("h3", {}, "Proposal — suggested clock correction"),
+    el("div", { class: "prop-head" }, fmtOffset(p.proposed_offset_seconds),
+      el("span", { class: "muted" }, ` (${p.confidence}; ${p.anchor_count} geotagged photo${p.anchor_count === 1 ? "" : "s"})`)));
+  const groups = p.groups || [];
+  for (const g of groups.slice(0, 3)) {
+    const loc = localOf(g.representative.real_utc);
+    wrap.append(el("div", { class: "prop-group" },
+      el("div", { class: "prop-group-h" }, `${g.count} photo${g.count === 1 ? "" : "s"} → ${fmtOffset(g.offset_seconds)}`),
+      el("div", { class: "hint" }, `e.g. ${g.representative.source_file}`),
+      el("div", { class: "hint" }, `camera: ${g.representative.camera_source_naive_time}  →  corrected: `
+        + (loc ? `${loc} (${tz})` : `${g.representative.real_utc} — set this destination's timezone to see local time`))));
+  }
+  if (groups.length > 3) wrap.append(el("div", { class: "hint" }, `+ ${groups.length - 3} more correction group(s)`));
+  const sk = p.skipped || {}, notes = [];
+  if (sk.outside_time_window) notes.push(`${sk.outside_time_window} with a GPX track only outside the plausible time window (likely a different trip/year)`);
+  if (sk.no_nearby_track) notes.push(`${sk.no_nearby_track} with no nearby GPX track`);
+  if (notes.length) wrap.append(el("div", { class: "hint skip" }, `Skipped: ${notes.join("; ")}.`));
+  return wrap;
+}
 function renderPanel() {
   const p = $("#panel"); p.replaceChildren();
   const ref = state.selected, c = workCell(ref);
@@ -497,7 +524,7 @@ function renderPanel() {
   const head = el("div", { class: "pblock" }, ...(statusChip(ref) ? [statusChip(ref)] : []), ...tags(ref));
   if (isDirty(ref)) head.append(el("button", { class: "mini", onclick: () => resetRef(ref) }, "reset"));
   p.append(head);
-  if (c.proposal) p.append(jsonBlock("Proposal", c.proposal));
+  if (c.proposal) p.append(ref.kind === "offset" ? offsetProposalBlock(ref, c.proposal) : jsonBlock("Proposal", c.proposal));
   if (ref.kind === "review") p.append(photoBlock(ref));
   if (isGpsCoord) p.append(mapBlock(ref));
   p.append(el("div", { class: "pblock" }, el("h3", {}, "Your decision"), controls(ref)));

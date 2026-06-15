@@ -149,6 +149,56 @@ def test_proposal_skips_unmatched_frames():
     assert p["anchor_count"] == 1
 
 
+# --- plausible-clock-error window + consensus + groups/skipped (§19.1/§19.3) -
+
+WCFG = dict(CFG, gpx_anchor_max_clock_error_seconds=172800.0)   # 2-day window
+
+
+def test_window_rejects_same_place_other_year():
+    # the SAME spot has a point this trip and one 13 years earlier; the old one would win on distance
+    # (a tie at 0 m, listed first) but is out of the window, so the recent point anchors instead.
+    gpx = _gpx([_pt(50.0, 4.0, datetime(2011, 7, 3, 12, 0, 0, tzinfo=timezone.utc)),
+                _pt(50.0, 4.0, _utc(12, 0, 0))])
+    c = cal.match_frame_to_gpx(_frame(50.0, 4.0, "2024:07:03 14:00:00"), gpx, WCFG)
+    assert c is not None and c["offset_seconds"] == -7200        # 2024 point, not a ~13-year "offset"
+
+
+def test_window_out_of_window_is_skipped_with_reason():
+    gpx = _gpx([_pt(50.0, 4.0, datetime(2011, 7, 3, 12, 0, 0, tzinfo=timezone.utc))])   # only the old point
+    frame = _frame(50.0, 4.0, "2024:07:03 14:00:00")
+    assert cal.match_frame_to_gpx(frame, gpx, WCFG) is None
+    assert cal._frame_skip_reason(frame, gpx, WCFG) == "outside_time_window"   # spatially close, wrong time
+    far = _frame(60.0, 10.0, "2024:07:03 14:00:00")
+    assert cal._frame_skip_reason(far, gpx, WCFG) == "no_nearby_track"
+
+
+def test_consensus_majority_beats_closer_minority():
+    # three frames agree on +3600; a fourth exact match says 0 -> the crowd wins, the loner conflicts
+    gpx = _gpx([_pt(50.0, 4.0, _utc(15, 0, 0)), _pt(51.0, 5.0, _utc(15, 0, 0)),
+                _pt(52.0, 6.0, _utc(15, 0, 0)), _pt(53.0, 7.0, _utc(14, 0, 0))])
+    frames = [_frame(50.0, 4.0, "2024:07:03 14:00:00", "6-photos-by-dest/B/a.arw"),
+              _frame(51.0, 5.0, "2024:07:03 14:00:00", "6-photos-by-dest/B/b.arw"),
+              _frame(52.0, 6.0, "2024:07:03 14:00:00", "6-photos-by-dest/B/c.arw"),
+              _frame(53.0, 7.0, "2024:07:03 14:00:00", "6-photos-by-dest/B/d.arw")]
+    p = cal.infer_anchor_proposal(frames, gpx, WCFG)
+    assert p["proposed_offset_seconds"] == 3600 and p["conflicting_count"] == 1
+    assert [g["count"] for g in p["groups"]] == [3, 1]            # sorted by count desc
+    assert p["groups"][0]["offset_seconds"] == 3600
+    assert p["anchors"][0]["proposed_offset_seconds"] == 3600     # anchors[0] is the consensus rep
+
+
+def test_groups_carry_full_path_and_local_inputs_plus_skipped():
+    gpx = _gpx([_pt(50.0, 4.0, _utc(15, 0, 0))])
+    frames = [_frame(50.0, 4.0, "2024:07:03 14:00:00", "6-photos-by-dest/Japan/Kyoto/keep.arw"),
+              _frame(60.0, 10.0, "2024:07:03 14:00:00", "6-photos-by-dest/Japan/Kyoto/faraway.arw")]
+    p = cal.infer_anchor_proposal(frames, gpx, WCFG)
+    rep = p["groups"][0]["representative"]
+    assert rep["source_file"] == "6-photos-by-dest/Japan/Kyoto/keep.arw"   # full by-dest relative path
+    assert rep["real_utc"] == "2024-07-03T15:00:00Z" and rep["camera_source_naive_time"] == "2024:07:03 14:00:00"
+    assert p["skipped"]["no_nearby_track"] == 1
+    assert p["skipped"]["examples"][0]["source_file"] == "6-photos-by-dest/Japan/Kyoto/faraway.arw"
+
+
 # --- offset cell: auto-resolution / accept / manual (end-to-end) ------------
 
 def _cell(prior_ud, frames, gpx, *, multi=True, single=False):
