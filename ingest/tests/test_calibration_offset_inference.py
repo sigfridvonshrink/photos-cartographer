@@ -337,3 +337,51 @@ def test_run_auto_resolves_offset_from_gpx(tmp_path, monkeypatch):
     assert cell["proposal"]["proposed_offset_seconds"] == -7187
     assert cell["decision_mode"] == "auto_resolved"                    # two consistent anchors
     assert cell["effective_time_anchor"]["offset_seconds"] == -7187
+
+
+# --- timezone-derived offset proposal (no anchor, no inherited) — §19.4 -------
+
+def _tzcell(prior_ud, *, tz, rep_naive, inherited=None, frames=None):
+    wf = cal.CalibrationWorkflow("/tmp")
+    utils.CONFIG.update(CFG)
+    blockers = []
+    cell = wf._offset_cell("6-photos-by-dest/B", "K", {"camera_group_class": "camera"},
+                           {"user_decision": prior_ud}, frames or [], _gpx([]), blockers,
+                           inherited=inherited, tz=tz, rep_naive=rep_naive)
+    return cell, blockers
+
+
+def test_timezone_naive_offset_is_dst_aware():
+    assert cal._timezone_naive_offset("2024:07:03 14:00:00", "Europe/Brussels")[0] == -7200   # summer +2
+    assert cal._timezone_naive_offset("2024:01:03 14:00:00", "Europe/Brussels")[0] == -3600   # winter +1
+    assert cal._timezone_naive_offset("2024:07:03 14:00:00", "Asia/Tokyo")[0] == -32400        # +9, no DST
+    off, real = cal._timezone_naive_offset("2024:07:03 14:00:00", "Europe/Brussels")
+    assert off == -7200 and real == "2024-07-03T12:00:00Z"
+    for bad in [("2024:07:03 14:00:00", "Bogus/Zone"), ("garbage", "UTC"), ("2024:07:03 14:00:00", "")]:
+        assert cal._timezone_naive_offset(*bad) is None
+
+
+def test_cell_timezone_derived_when_no_anchor_no_inherited():
+    cell, _ = _tzcell({}, tz="Europe/Brussels", rep_naive="2024:07:03 14:00:00")
+    p = cell["proposal"]
+    assert p["proposal_source"] == "timezone_naive" and p["proposed_offset_seconds"] == -7200
+    assert p["proposed_real_utc"] == "2024-07-03T12:00:00Z" and p["proposed_from_timezone"] == "Europe/Brussels"
+    assert p["confidence"] == "review_required"
+    assert cell["requires_user_input"] is True and "decision_mode" not in cell   # confirmable, never auto
+
+
+def test_cell_inherited_beats_timezone_derived():
+    cell, _ = _tzcell({}, tz="Europe/Brussels", rep_naive="2024:07:03 14:00:00",
+                      inherited=("6-photos-by-dest", -3600))
+    assert cell["proposal"]["proposal_source"] == "inherited"
+
+
+def test_cell_accept_timezone_derived_resolves():
+    cell, _ = _tzcell({"accept_proposal": True}, tz="Europe/Brussels", rep_naive="2024:07:03 14:00:00")
+    assert cell["effective_time_anchor"] == {"offset_seconds": -7200, "source": "timezone_accepted"}
+    assert cell["requires_user_input"] is False
+
+
+def test_cell_no_timezone_is_manual_required():
+    cell, _ = _tzcell({}, tz=None, rep_naive="2024:07:03 14:00:00")
+    assert cell["proposal"] == {"proposal_source": "manual_required"}
