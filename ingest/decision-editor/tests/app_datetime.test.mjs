@@ -30,3 +30,13 @@ test("fmtDT splits identical {date,time}; fmtLocal renders in the tz; bad tz →
   assert.equal(app.fmtDT(ms, "Bogus/Zone"), null);
   assert.equal(app.fmtLocal(ms, "Bogus/Zone"), null);
 });
+
+test("offsetImpact: photo-local → corrected-local (UTC in parens after), date once if invariant", () => {
+  const cam = app.camNaiveMs("2026:03:22 14:25:21");       // photo's current (camera) local
+  // offset 0: corrected UTC = 14:25:21Z, Brussels (UTC+1 pre-DST) → 15:25:21 local, same date
+  assert.equal(app.offsetImpact(cam, 0, "Europe/Brussels"),
+    "22 Mar 2026 · 14:25:21 → 15:25:21 (Europe/Brussels, UTC 14:25:21)");
+  // no timezone → corrected shown as UTC
+  assert.equal(app.offsetImpact(cam, -3600, null), "22 Mar 2026 · 14:25:21 → 13:25:21 UTC");
+  assert.equal(app.offsetImpact(null, 0, "UTC"), null);
+});
