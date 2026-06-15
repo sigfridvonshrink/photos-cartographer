@@ -636,6 +636,32 @@ def _nearest_ancestor(dest, eff, key):
     return None
 
 
+def _expand_destinations(by_dest):
+    """Enumerate the destinations to decide on, given {real_dest: [files]}.
+
+    Returns (ordered, containers, subtree_groups):
+      * `ordered` — the real (media-bearing) destinations PLUS every ancestor folder within the
+        by-dest tree, sorted parent-first (so an ancestor's effective values are known before a
+        child inherits them).
+      * `containers` — the file-less ancestors (folders that hold only sub-destinations). A container
+        carries timezone / fallback / offset decisions purely so a human can set defaults that
+        propagate DOWN to its children; its own cells never block (it has no media to act on).
+      * `subtree_groups` — maps each destination to the set of camera_group_keys appearing ANYWHERE
+        beneath it (recursively: children, grandchildren, …). Used only for a container, to know
+        which per-group offset cells it could speak for. This gathers the *set of groups* from
+        descendants but never a descendant's decided value — decisions are never pooled upward."""
+    real = set(by_dest)
+    containers, subtree_groups = set(), {}
+    for dest, fs in by_dest.items():
+        keys = {f["camera_group_key"] for f in fs if f.get("camera_group_key")}   # absent in the GPS model
+        for anc in _walk_ancestors(dest):
+            subtree_groups.setdefault(anc, set()).update(keys)
+            if anc not in real:
+                containers.add(anc)
+    ordered = sorted(real | containers, key=lambda d: (d.count('/'), d))
+    return ordered, containers, subtree_groups
+
+
 # ============================================================================
 # Stage 9 — no-clobber timestamp rename planning (calibration §26/§27). Pure,
 # exhaustively unit-tested. Filenames are destination-LOCAL civil time, never
@@ -1155,22 +1181,29 @@ class CalibrationWorkflow:
         # offset; `eff_tz` maps (destination, "tz") -> resolved effective timezone.
         eff = {}
         eff_tz = {}
-        for dest in sorted(by_dest, key=lambda d: (d.count('/'), d)):
+        ordered, containers, subtree_groups = _expand_destinations(by_dest)
+        for dest in ordered:
+            is_container = dest in containers       # a file-less folder: holds defaults for its children only
             prior_d = prior_dests.get(dest, {})
             inherited_tz = _nearest_ancestor(dest, eff_tz, "tz")        # confirmable basis if no default
             tz_block = self._timezone_decision(dest, prior_d.get("destination_timezone") or {},
-                                               blockers, inherited_tz)
+                                               blockers, inherited_tz, file_less=is_container)
             eff_tz[(dest, "tz")] = tz_block["effective_iana_timezone"] or None   # what children inherit
-            present = sorted({f["camera_group_key"] for f in by_dest[dest]})
+            # A container's offset cells cover the camera groups found anywhere in its subtree (so a
+            # human can set one offset that propagates down); a real destination covers only its own.
+            present = sorted(subtree_groups.get(dest, set())) if is_container \
+                else sorted({f["camera_group_key"] for f in by_dest[dest]})
             prior_cells = prior_d.get("camera_group_time_decisions") or {}
             cells = {}
             for key in present:
                 g = groups.get(key) or {}
                 if g.get("camera_group_class") != "camera":
                     continue                       # smartphones are solved per-file; no offset cell
-                frames = [f for f in by_dest[dest] if f["camera_group_key"] == key and f.get("native_gps")]
+                frames = [] if is_container else [f for f in by_dest[dest]
+                                                  if f["camera_group_key"] == key and f.get("native_gps")]
                 inherited = self._nearest_ancestor_offset(dest, key, eff)   # confirmable basis if no self-anchor
-                cell = self._offset_cell(dest, key, g, prior_cells.get(key) or {}, frames, gpx, blockers, inherited)
+                cell = self._offset_cell(dest, key, g, prior_cells.get(key) or {}, frames, gpx, blockers,
+                                         inherited, file_less=is_container)
                 cells[key] = cell
                 e = cell["effective_time_anchor"]
                 eff[(dest, key)] = e["offset_seconds"] if e else None       # what this cell's children inherit
@@ -1180,6 +1213,8 @@ class CalibrationWorkflow:
                 "camera_groups_present": present,
                 "camera_group_time_decisions": cells,
             }
+            if is_container:
+                destinations[dest]["file_less"] = True
 
         requires = (any(d["destination_timezone"]["requires_user_input"] for d in destinations.values())
                     or any(c["requires_user_input"] for d in destinations.values()
@@ -1197,7 +1232,7 @@ class CalibrationWorkflow:
             artifact["decision_mode"] = "no_op_or_auto_resolved"
         return artifact, blockers
 
-    def _timezone_decision(self, dest, prior_tz, blockers, inherited=None):
+    def _timezone_decision(self, dest, prior_tz, blockers, inherited=None, file_less=False):
         # Proposal precedence (§18): the nearest RESOLVED ancestor destination's timezone (a more
         # specific signal than the generic global default — e.g. a Japan/Kyoto leaf inheriting Japan's
         # Asia/Tokyo over a Europe/Brussels home default) wins; else the config default; else none.
@@ -1226,15 +1261,23 @@ class CalibrationWorkflow:
                 effective = proposed
             else:
                 stale = True                       # accepted a proposal that no longer exists
+        # A file-less container has no photos to mis-tag, so the "review every destination" safety
+        # rule does not apply: it auto-adopts its inherited/default proposal (and re-propagates it
+        # downward) without demanding confirmation, while staying overridable by a manual entry.
+        auto = effective == "" and not manual and file_less and bool(proposed)
+        if auto:
+            effective = proposed
         block = {
             "proposed_iana_timezone": proposed,
             "proposal_source": source,
             "proposal_confidence": confidence,
             "user_decision": {"manual_iana_timezone": manual, "accept_proposed_timezone": accept},
             "effective_iana_timezone": effective,
-            "requires_user_input": effective == "",
+            "requires_user_input": effective == "" and not file_less,   # a container never blocks
             "stale_user_decision": stale,
         }
+        if auto:
+            block["decision_mode"] = "auto_resolved"
         if inherited_from:
             block["inherited_from"] = inherited_from
         return block
@@ -1245,7 +1288,7 @@ class CalibrationWorkflow:
         already-processed, resolved ancestors qualify; inheritance flows parent->child only."""
         return _nearest_ancestor(dest, eff, key)
 
-    def _offset_cell(self, dest, key, g, prior_cell, frames, gpx, blockers, inherited=None):
+    def _offset_cell(self, dest, key, g, prior_cell, frames, gpx, blockers, inherited=None, file_less=False):
         proposal = infer_anchor_proposal(frames, gpx, CONFIG)
         if proposal is None and inherited is not None:
             anc_path, anc_off = inherited
@@ -1296,6 +1339,12 @@ class CalibrationWorkflow:
                (n == 1 and policy.get("single_anchor_auto_apply", False)):
                 effective = {"offset_seconds": proposal["proposed_offset_seconds"], "source": "gpx_anchor_auto"}
                 decision_mode = "auto_resolved"
+        elif file_less and has_offset:
+            # A file-less container has no frames to anchor and no media to mis-correct, so it
+            # auto-adopts its inherited offset (and re-propagates it downward) without confirmation,
+            # while staying overridable by a manual offset above.
+            effective = {"offset_seconds": proposal["proposed_offset_seconds"], "source": "inherited_auto"}
+            decision_mode = "auto_resolved"
 
         cell = {
             "camera_group": key,
@@ -1305,7 +1354,7 @@ class CalibrationWorkflow:
                               "manual_offset_seconds": manual_off if manual_off is not None else "",
                               "manual_real_utc": manual_utc},
             "effective_time_anchor": effective,
-            "requires_user_input": effective == "",
+            "requires_user_input": effective == "" and not file_less,   # a container never blocks
             "stale_user_decision": stale,
         }
         if decision_mode:
@@ -1365,7 +1414,9 @@ class CalibrationWorkflow:
 
         destinations = {}
         fallback_eff = {}                                     # (dest, None) -> effective fallback coord
-        for dest in sorted(by_dest, key=lambda d: (d.count('/'), d)):
+        ordered, containers, _ = _expand_destinations(by_dest)
+        for dest in ordered:
+            is_container = dest in containers       # a file-less folder: its fallback only seeds children
             prior_d = prior_dests.get(dest, {})
             inherited = _nearest_ancestor(dest, fallback_eff, None)
             fb_cell = self._folder_fallback_cell(dest, prior_d.get("folder_fallback") or {}, inherited, blockers)
@@ -1376,7 +1427,7 @@ class CalibrationWorkflow:
                              ((prior_d.get("gps_decisions") or {}).get("review_items") or [])}
             counts = {k: 0 for k in self._SUMMARY_KEYS}
             review_items, gpx_files = [], set()
-            for f in sorted(by_dest[dest], key=lambda x: x["relative_path"]):
+            for f in sorted(by_dest.get(dest, []), key=lambda x: x["relative_path"]):
                 rel = f["relative_path"]
                 ru = _parse_utc(utc_by_path.get(rel)) if utc_by_path.get(rel) else None
                 fd = (prior_reviews.get(rel) or {}).get("user_decision") or {}
@@ -1417,6 +1468,8 @@ class CalibrationWorkflow:
                     "review_items": review_items,
                 },
             }
+            if is_container:
+                destinations[dest]["file_less"] = True
 
         requires = any(ri["requires_user_input"]
                        for d in destinations.values() for ri in d["gps_decisions"]["review_items"])

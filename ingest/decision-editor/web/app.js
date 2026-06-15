@@ -139,6 +139,8 @@ function previewEffective(ref) {
   if (ref.kind === "fallback") {
     if (u.fallback_lat !== "" && u.fallback_lon !== "") return `${u.fallback_lat}, ${u.fallback_lon}`;
     if (u.accept_proposal && p.proposed_fallback) return `${p.proposed_fallback.lat}, ${p.proposed_fallback.lon} (inherited)`;
+    const pv = previewFallback(ref.dest);
+    if (pv && pv.source === "inherited") return `${pv.lat}, ${pv.lon} (inherited ⟵ ${leaf(pv.from)}, preview)`;
     return "— (optional)";
   }
   if (u.manual_lat !== "" && u.manual_lon !== "") return `${u.manual_lat}, ${u.manual_lon} (manual)`;
@@ -172,6 +174,31 @@ function previewTz(dest) {
   }
   return null;
 }
+// Same advisory walk for the GPS folder-fallback: a destination with no own fallback shows the one it
+// would inherit from its nearest resolved ancestor (e.g. a parent/container you just set), updating live.
+function fbOwnDecision(dest) {
+  const c = state.work.gps?.destinations?.[dest]?.folder_fallback;
+  if (!c) return null;
+  const u = c.user_decision || {};
+  if (u.fallback_lat !== "" && u.fallback_lat != null && u.fallback_lon !== "" && u.fallback_lon != null)
+    return { lat: u.fallback_lat, lon: u.fallback_lon, source: "manual" };
+  if (u.accept_proposal && c.proposal?.proposed_fallback)
+    return { lat: c.proposal.proposed_fallback.lat, lon: c.proposal.proposed_fallback.lon, source: "accept" };
+  return null;
+}
+function previewFallback(dest) {
+  const own = fbOwnDecision(dest);
+  if (own) return own;
+  const parts = dest.split("/");
+  for (let i = parts.length - 1; i > 0; i--) {
+    const anc = parts.slice(0, i).join("/");
+    if (state.work.gps?.destinations?.[anc]) {
+      const a = previewFallback(anc);
+      if (a) return { lat: a.lat, lon: a.lon, source: "inherited", from: anc };
+    }
+  }
+  return null;
+}
 
 // --- list views --------------------------------------------------------------
 function isSel(ref) { const s = state.selected; return s && s.file === ref.file && s.dest === ref.dest && s.kind === ref.kind && s.key === ref.key && s.path === ref.path; }
@@ -179,6 +206,9 @@ function tags(ref) {
   const c = baseCell(ref), out = [];
   if (ref.kind === "timezone") {
     const pv = previewTz(ref.dest);                       // live preview, updates as ancestors change
+    if (pv && pv.source === "inherited") out.push(chip("inherited", `inherited ⟵ ${leaf(pv.from)}`));
+  } else if (ref.kind === "fallback") {
+    const pv = previewFallback(ref.dest);                 // live preview, updates as ancestors change
     if (pv && pv.source === "inherited") out.push(chip("inherited", `inherited ⟵ ${leaf(pv.from)}`));
   } else if (c?.proposal?.proposal_source === "inherited") {
     out.push(chip("inherited", "inherited"));
@@ -205,7 +235,8 @@ function buildTree(dests) {
 function renderTreeNode(node, box) {
   const n = el("div", { class: "node" });
   if (node.dest) {
-    n.append(el("div", { class: "dest" }, node.seg || "(root)"));
+    n.append(el("div", { class: "dest" }, node.seg || "(root)",
+      node.dest.file_less ? el("span", { class: "container-tag", title: "no photos here — its decisions only set defaults for sub-destinations" }, "container") : null));
     const tzpv = previewTz(node.path);
     n.append(row({ file: "time", dest: node.path, kind: "timezone" }, "Timezone", null, tzpv ? tzpv.tz : "—"));
     for (const key of Object.keys(node.dest.camera_group_time_decisions || {}).sort()) {
@@ -228,8 +259,11 @@ function renderGps(list) {
   if (!g?.destinations) return list.append(el("div", { class: "empty" }, "No photos-22-gps-decisions.json."));
   for (const dest of Object.keys(g.destinations).sort()) {
     const d = g.destinations[dest], fb = d.folder_fallback, s = d.gps_decisions?.summary || {};
-    list.append(el("div", { class: "group-title" }, dest));
-    list.append(row({ file: "gps", dest, kind: "fallback" }, "Folder fallback", null, fb.effective_fallback ? `${fb.effective_fallback.lat}, ${fb.effective_fallback.lon}` : "—"));
+    list.append(el("div", { class: "group-title" }, dest,
+      d.file_less ? el("span", { class: "container-tag", title: "no photos here — its fallback only seeds sub-destinations" }, "container") : null));
+    const fbpv = previewFallback(dest);
+    list.append(row({ file: "gps", dest, kind: "fallback" }, "Folder fallback", null,
+      fb.effective_fallback ? `${fb.effective_fallback.lat}, ${fb.effective_fallback.lon}` : (fbpv ? `${fbpv.lat}, ${fbpv.lon}` : "—")));
     for (const ri of d.gps_decisions?.review_items || []) {
       const ref = { file: "gps", dest, kind: "review", path: ri.relative_path };
       list.append(el("div", { class: "row" + (isSel(ref) ? " sel" : ""), onclick: () => { state.selected = ref; render(); } },
