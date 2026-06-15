@@ -709,7 +709,7 @@ function mapBlock(ref) {
   }
   _map.setCurrent(currentCoord(ref));
   setTimeout(() => _map && _map.refresh(), 0);     // recompute size after (re)attach to the DOM
-  return el("div", { class: "pblock" }, el("h3", {}, "Place on map"), _map.el, _map.bar, copyPasteBar(ref));
+  return el("div", { class: "pblock" }, el("h3", {}, "Place on map"), _map.el, _map.search, _map.bar, copyPasteBar(ref));
 }
 function photoBlock(ref) {
   if (state.base.demo)
