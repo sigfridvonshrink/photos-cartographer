@@ -59,9 +59,14 @@ panel.
   changed, a **stale** banner on both views reminds you a Re-run is needed before GPS reflects it (tracked
   by `timeChangedSinceRerun`, cleared on Re-run). Both notices are skipped in demo mode (its curated
   fixtures intentionally pair an incomplete time artifact with a GPS one).
-- **Side-panel editor** for the selected cell: the proposal + evidence (for offsets, the GPX anchors +
-  confidence), the decision control, a **photo thumbnail** (review items), a **context map**, and a live
-  **effective-outcome** preview with client-side validation.
+- **Side-panel editor** for the selected cell: the proposal + evidence, the decision control, a **photo
+  thumbnail** (review items), a **context map**, and a live **effective-outcome** preview with
+  client-side validation. For an **offset** proposal the raw anchor list is **collapsed**: the consensus
+  correction, then up to three "N photos → ±Xh Ym" groups — each naming one photo by its full by-dest
+  path and showing that photo's **corrected local time** (via the destination timezone, with the usual
+  "set the timezone" nudge when unresolved) — plus a note counting frames skipped (no nearby track / a
+  track only from another trip). The data comes from the proposal's `groups`/`skipped` (calibration);
+  the editor only renders it.
 - **Specialized controls:**
   - **Timezone:** a full IANA-zone **drop-down**; accepting the proposal mirrors it into the field and
     **locks** the drop-down (unaccepting frees it). The "accept" box is disabled when there's nothing to accept.
