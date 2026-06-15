@@ -659,4 +659,12 @@ async function main() {
   catch (e) { $("#list").replaceChildren(el("div", { class: "empty" }, "Could not load /api/artifacts: " + e)); return; }
   render();
 }
-main();
+// Auto-start in the browser only; importing this module in Node (for the unit tests) must not run it
+// (there's no document/fetch there). The named exports below expose the pure logic for those tests.
+if (typeof document !== "undefined") main();
+
+export {
+  isNum, validTz, validOffset, validUtc, validLat, validLon, bothOrNeither,
+  fmtOffset, camNaiveMs, dtLocalToMs, msToDtLocal, utcStrToMs, fmtLocal, fmtDT,
+  cellAt, cellStatus, wouldResolve, previewTz, previewFallback, refInvalid, isDirty, state,
+};
