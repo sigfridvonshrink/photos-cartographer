@@ -522,7 +522,8 @@ The rules are:
 4. a cell without its own native-GPS evidence **does not start from a blank field — it inherits, downward, as a confirmable proposal**. The proposed offset for a (camera group, destination) cell is chosen in priority order:
    - **(a) self-anchored** — if that group has native-GPS frame(s) *in this destination* that produce a GPX anchor (Section 19), that anchor is the proposal;
    - **(b) inherited** — otherwise, the cell takes the **effective offset of the nearest ancestor destination** that has one for the same group, surfaced as a **proposal to confirm**, labelled with the ancestor path it came from;
-   - **(c) manual-required** — otherwise (no self-anchor and no ancestor offset for this group), a blank manual field.
+   - **(c) timezone-derived** — otherwise, if the destination's civil timezone is resolved (Section 18), assume the camera clock tracked that local time and propose `offset = -(timezone UTC offset)` at the group's earliest naive instant here, DST-aware (Section 19.4). `proposal_source: "timezone_naive"`, confirmable-only (the local-clock assumption can be wrong — e.g. a camera left on home time), never auto-applied;
+   - **(d) manual-required** — otherwise (no self-anchor, no ancestor offset, no resolved timezone), a blank manual field.
 
    Inheritance is **recursive down the destination tree**: a destination's *effective* offset — however it was reached, whether self-anchored, inherited-and-confirmed, or manually set — is the basis propagated to its **immediate children** as their inherited proposal, and onward to grandchildren, and so on. A **manual offset set at a folder resets the chain at that point**: that manual value becomes the folder's effective offset and therefore the basis its descendants inherit, replacing whatever would have flowed down from further up. Inherited proposals are **confirmable, never silently applied**: as a non-anchor proposal class they require user confirmation by default (Section 9.1 item 2), so propagation is the user accepting a sensible default at each level, not a hidden cross-destination borrow. This is what lets one anchor at a trip's root seed all its sub-destinations without re-anchoring each leaf, while still honoring "corrections between destinations, never within" (Section 7) — every level is confirmable and any level can diverge. The sole exception is a **file-less container** destination (Section 10.1): having no frames of its own and no media to mis-correct, its offset cell **auto-adopts** the inherited proposal (`effective_time_anchor.source: "inherited_auto"`, `decision_mode: "auto_resolved"`, `requires_user_input: false`) instead of waiting for a confirmation — while a manual offset authored on the container still re-roots the chain for its descendants as usual;
 5. camera-group **identity and classification** (camera vs smartphone) remain group-scoped config (Section 16). A cell may surface `camera_group_class` read-only to explain why it needs (camera) or does not need (smartphone solved from its own metadata) a clock-offset decision; the editable offset itself is per (group, destination);
@@ -1044,6 +1045,16 @@ Example shape:
 ```
 
 The proposal is anchored only from native-GPS frames of this `camera_group` within this `destination`, and its accepted/effective offset is recorded in that destination's `camera_group_time_decisions[camera_group]` cell (Section 10.2) — it does not affect the same group in any other destination. The user fills existing fields only.
+
+### 19.4 Timezone-derived offset (no anchor, no inherited)
+
+When a `(camera group, destination)` has **no** GPX self-anchor (Section 19.1) and **no** ancestor offset to inherit (Section 10.2 rule 4b), but the destination's **civil timezone is resolved** (Section 18), calibration still proposes an offset by assuming the camera clock was set to that local time:
+
+```text
+offset = -(civil timezone's UTC offset at the group's earliest naive instant in this destination)
+```
+
+computed DST-aware via `zoneinfo` (so the same destination yields the summer or winter offset according to its date). The proposal carries `proposal_source: "timezone_naive"`, the chosen `proposed_offset_seconds`, a `proposed_real_utc`, and `proposed_from_timezone`. It is **confirmable-only** (`confidence: review_required`, never auto-applied) because the local-clock assumption can be wrong — a camera left on home time gives a wrong offset — so the operator reviews it like any non-anchor proposal. It ranks **below** an inherited offset (a measured ancestor value beats an assumption) and **above** manual-required. It needs the timezone first, so the operator resolves the destination timezone and re-runs to obtain it; until then the cell is `manual_required` and the editor says so.
 
 ---
 
