@@ -404,8 +404,10 @@ function offsetEditor(ref) {
   let numI, pickI;
 
   // choice 1 — accept the proposal (automatic; its value is never edited)
+  const src = p.proposal_source === "timezone_naive" ? ` from timezone ${p.proposed_from_timezone}`
+    : p.proposal_source === "inherited" ? ` inherited ⟵ ${(p.inherited_from || "").split("/").pop()}` : "";
   wrap.append(opt(active === "accept",
-    el("span", {}, hasProp ? `accept proposal (${fmtOffset(p.proposed_offset_seconds)})` : "accept proposal — none to accept"),
+    el("span", {}, hasProp ? `accept proposal (${fmtOffset(p.proposed_offset_seconds)})${src}` : "accept proposal — none to accept"),
     hasProp ? accept : undefined, hasProp ? "" : " disabled"));
 
   // choice 2 — manual offset (h/m/s spinner). Editable only when active; otherwise click to activate.
@@ -453,6 +455,10 @@ function offsetEditor(ref) {
   } else {
     wrap.append(el("div", { class: "off-impact" }, `offset ${fmtOffset(cur)} — a photo's camera time + this = UTC${tz ? `, shown in ${tz}` : ""}`));
   }
+  // no proposal at all → tell the user how to get one: a resolved timezone yields a timezone-derived offset
+  if (!hasProp) wrap.append(el("div", { class: "hint" }, tz
+    ? "no offset proposal yet — Re-run to derive one from the resolved timezone"
+    : "no offset proposal — set this destination's timezone (Time view), then Re-run, to derive one from the local time"));
 
   if (accepted || manualSet) wrap.append(el("button", { class: "mini",
     onclick: () => { state.offsetEdit = null; editMany(ref, { accept_proposal: false, manual_offset_seconds: "", manual_real_utc: "" }); } },
