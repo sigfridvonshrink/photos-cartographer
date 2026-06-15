@@ -98,6 +98,11 @@ main { flex: 1; display: grid; grid-template-columns: minmax(360px, 1fr) minmax(
 
 .container-tag { margin-left: 8px; font-size: 9px; text-transform: uppercase; letter-spacing: .05em;
   color: var(--auto); border: 1px solid var(--line); border-radius: 8px; padding: 0 6px; }
+/* GPS-depends-on-time gate / staleness notices */
+.gate { margin: 10px 12px; padding: 10px 12px; border: 1px solid var(--line); border-left: 3px solid var(--accent);
+  border-radius: 6px; background: #20242b; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.gate-title { color: var(--fg); font-weight: 600; margin-bottom: 4px; }
+.gate.warn { border-left-color: var(--warn); }
 .group-title { padding: 10px 12px 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
 .summary { padding: 4px 12px 8px 24px; font: 11px var(--mono); color: var(--muted); }
 
