@@ -118,7 +118,7 @@ class GPXIndex:
         self.status = "disabled"
         self.warnings = []
 
-    def build(self):
+    def build(self, coordinator=None):
         if not self.gpx_root:
             self.status = "disabled"
             self.fingerprint = hashlib.sha256(b"gpx-disabled-v1").hexdigest()
@@ -134,18 +134,28 @@ class GPXIndex:
             for r, _d, files in os.walk(self.gpx_root) for f in files
             if f.lower().endswith(".gpx"))
 
+        if coordinator:                       # per-file progress (count + %), named by GPX file
+            coordinator.start_phase("loading GPX tracks", len(gpx_files))
         h = hashlib.sha256()
         h.update(self.gpx_root.encode("utf-8"))
         h.update(b"gpx-index-v1")
         for rel, abs_path in gpx_files:
+            if coordinator:
+                coordinator.set_detail(rel)
             h.update(rel.encode("utf-8"))
+            read_ok = True
             try:
                 with open(abs_path, "rb") as f:
                     h.update(hashlib.sha256(f.read()).digest())
             except OSError as e:
                 self.warnings.append(f"Could not read GPX file {rel}: {e}")
-                continue
-            self._parse_file(rel, abs_path)
+                read_ok = False
+            if read_ok:
+                self._parse_file(rel, abs_path)
+            if coordinator:
+                coordinator.increment_completed(1)
+        if coordinator:
+            coordinator.finish_phase()
 
         self.points.sort(key=lambda p: (p.time_utc, p.source_file, p.point_index))
         for p in self.points:
@@ -1178,9 +1188,7 @@ class CalibrationWorkflow:
     # --- Stage 3: GPX index (calibration spec §15) ---------------------------
 
     def load_gpx(self):
-        self.coordinator.start_phase("loading GPX tracks")
-        idx = GPXIndex(selected_gpx_root()).build()
-        self.coordinator.finish_phase()
+        idx = GPXIndex(selected_gpx_root()).build(self.coordinator)
         self._gpx_fingerprint = idx.fingerprint
         return idx
 
@@ -1871,7 +1879,7 @@ class CalibrationWorkflow:
         ws = self.workspace_root
         with open(executable_plan_path(ws)) as f:
             plan = json.load(f)
-        gpx = GPXIndex(selected_gpx_root()).build()
+        gpx = GPXIndex(selected_gpx_root()).build(self.coordinator)
         stale = self.revalidate_plan(plan, gpx)
         if stale:
             return {"status": "rejected", "plan_id": plan.get("plan_id"), "stale": stale}
