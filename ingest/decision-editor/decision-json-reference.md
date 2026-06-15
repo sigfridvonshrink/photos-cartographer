@@ -202,8 +202,14 @@ Resolution: `manual_iana_timezone` (if valid) wins; else `accept_proposed_timezo
   `{ "proposal_source": "inherited", "proposed_offset_seconds": int, "inherited_from": "<ancestor>",
      "confidence": "review_required", "rank": "inherited_from_ancestor" }`. Confirmable only — never
   auto-applied.
-- **Manual required** (`proposal_source: "manual_required"`) — no signal; the human must enter a manual
-  offset (or real UTC): `{ "proposal_source": "manual_required" }`.
+- **Timezone-derived** (`proposal_source: "timezone_naive"`) — no anchor and no ancestor, but the
+  destination's timezone is resolved, so the offset is derived from the local time assuming the camera
+  clock tracked it (DST-aware):
+  `{ "proposal_source": "timezone_naive", "proposed_offset_seconds": int, "proposed_real_utc": "…Z",
+     "proposed_from_timezone": "Europe/Brussels", "confidence": "review_required", "rank": "timezone_derived" }`.
+  Confirmable only — the assumption can be wrong (camera on home time).
+- **Manual required** (`proposal_source: "manual_required"`) — no signal (and no resolved timezone); the
+  human must enter a manual offset (or real UTC): `{ "proposal_source": "manual_required" }`.
 
 ---
 

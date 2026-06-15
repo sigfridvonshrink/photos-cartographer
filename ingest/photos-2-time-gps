@@ -324,6 +324,24 @@ def _frame_skip_reason(frame, gpx, cfg):
     return "no_nearby_track"
 
 
+def _timezone_naive_offset(naive_str, tz):
+    """Timezone-derived clock-offset (§19.4): when a (camera group, destination) has no GPX anchor and no
+    ancestor to inherit from, assume the camera clock was set to the destination's civil timezone, so the
+    offset is -(that timezone's UTC offset at this naive instant) — DST-aware via zoneinfo. Returns
+    (offset_seconds, real_utc_iso), or None if `tz`/`naive_str` is missing or unresolvable. A confirmable
+    proposal only (the local-clock assumption can be wrong, e.g. a camera left on home time)."""
+    dt = _parse_camera_naive(naive_str)
+    if dt is None or not tz:
+        return None
+    try:
+        off = dt.replace(tzinfo=zoneinfo.ZoneInfo(tz)).utcoffset()
+    except (zoneinfo.ZoneInfoNotFoundError, ValueError, TypeError):
+        return None
+    if off is None:
+        return None
+    return -int(off.total_seconds()), (dt - off).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def infer_anchor_proposal(frames, gpx, cfg):
     """Turn all native-GPS frames' GPX matches for one (camera group, destination) into a single
     recommended clock-offset proposal (§19.2/§19.3), or None if nothing anchors. The frames' offsets
@@ -1274,8 +1292,15 @@ class CalibrationWorkflow:
                 frames = [] if is_container else [f for f in by_dest[dest]
                                                   if f["camera_group_key"] == key and f.get("native_gps")]
                 inherited = self._nearest_ancestor_offset(dest, key, eff)   # confirmable basis if no self-anchor
+                # earliest parseable naive of THIS group in THIS destination — basis for a timezone-derived
+                # proposal when there's no anchor and no inherited offset (§19.4). None for a container.
+                rep_naive = None if is_container else min(
+                    (f.get("source_naive_time") for f in by_dest[dest]
+                     if f["camera_group_key"] == key and _parse_camera_naive(f.get("source_naive_time"))),
+                    default=None)
                 cell = self._offset_cell(dest, key, g, prior_cells.get(key) or {}, frames, gpx, blockers,
-                                         inherited, file_less=is_container)
+                                         inherited, file_less=is_container,
+                                         tz=tz_block["effective_iana_timezone"] or None, rep_naive=rep_naive)
                 cells[key] = cell
                 e = cell["effective_time_anchor"]
                 eff[(dest, key)] = e["offset_seconds"] if e else None       # what this cell's children inherit
@@ -1362,13 +1387,21 @@ class CalibrationWorkflow:
         already-processed, resolved ancestors qualify; inheritance flows parent->child only."""
         return _nearest_ancestor(dest, eff, key)
 
-    def _offset_cell(self, dest, key, g, prior_cell, frames, gpx, blockers, inherited=None, file_less=False):
+    def _offset_cell(self, dest, key, g, prior_cell, frames, gpx, blockers, inherited=None, file_less=False,
+                     tz=None, rep_naive=None):
         proposal = infer_anchor_proposal(frames, gpx, CONFIG)
         if proposal is None and inherited is not None:
             anc_path, anc_off = inherited
             proposal = {"proposal_source": "inherited", "proposed_offset_seconds": anc_off,
                         "inherited_from": anc_path, "confidence": "review_required",
                         "rank": "inherited_from_ancestor"}
+        elif proposal is None and (tzr := _timezone_naive_offset(rep_naive, tz)) is not None:
+            # no anchor, no ancestor: assume the camera clock tracked the destination's civil timezone,
+            # so offset = -(tz UTC offset) at this naive instant (DST-aware). Confirmable, never auto (§19.4).
+            off_s, real_iso = tzr
+            proposal = {"proposal_source": "timezone_naive", "proposed_offset_seconds": off_s,
+                        "proposed_real_utc": real_iso, "proposed_from_timezone": tz,
+                        "confidence": "review_required", "rank": "timezone_derived"}
         elif proposal is None:
             proposal = {"proposal_source": "manual_required"}
         is_gpx = proposal.get("proposal_source") == "gpx_self_anchor"
@@ -1400,9 +1433,11 @@ class CalibrationWorkflow:
                 effective = {"offset_seconds": round((dt.replace(tzinfo=None) - naive).total_seconds()),
                              "source": "manual_real_utc"}
         elif accept:
-            if has_offset:                         # accept a GPX self-anchor OR an inherited proposal
-                effective = {"offset_seconds": proposal["proposed_offset_seconds"],
-                             "source": "gpx_anchor_accepted" if is_gpx else "inherited_accepted"}
+            if has_offset:                         # accept a GPX self-anchor / inherited / timezone proposal
+                src = ("gpx_anchor_accepted" if is_gpx
+                       else "timezone_accepted" if proposal.get("proposal_source") == "timezone_naive"
+                       else "inherited_accepted")
+                effective = {"offset_seconds": proposal["proposed_offset_seconds"], "source": src}
             else:
                 stale = True                       # accepted a proposal that does not exist
         elif is_gpx and not conflicting:

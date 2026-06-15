@@ -97,7 +97,10 @@ panel.
     groups (one date copy when invariant; UTC in parens after), with a no-anchor fallback (offset +
     formula). A small "clear"
     returns the cell to unset (calibration auto-resolves / inherits). The picker writes the derived
-    offset, so `manual_real_utc` isn't persisted by the editor (a hand-edited one is still honored).
+    offset, so `manual_real_utc` isn't persisted by the editor (a hand-edited one is still honored). The
+    *accept* row notes the proposal's source (`from timezone <tz>` for a `timezone_naive` proposal,
+    `inherited ⟵ <ancestor>` for an inherited one); when there's no proposal at all the editor says to set
+    the destination timezone and Re-run to derive one from the local time.
   - **GPS coordinate / fallback:** a **zoomable map with a fixed centre crosshair** — pan/zoom under it,
     "use map center" → take `map.getCenter()` into the lat/lon fields. Reference pins (effective /
     inherited / folder fallback) and a marker for the current decision give context, and the map seeds
