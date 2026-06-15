@@ -118,8 +118,9 @@ progress and to know when the file is "done". (Both are system-owned; don't set 
   "destination_path": "Belgium/Brussels",
   "destination_timezone": { /* §4.3 tz cell */ },
   "camera_groups_present": ["<camera_group_key>", ...],   // SYSTEM: groups seen in this destination
-  "camera_group_time_decisions": {                        // one offset cell per FIXED-CLOCK camera group
-    "<camera_group_key>": { /* §4.4 offset cell */ }
+  "camera_group_time_decisions": {                        // one offset cell per FIXED-CLOCK camera group,
+    "<camera_group_key>": { /* §4.4 offset cell */ },     //   SPLIT per naive date when the group spans >1
+    "<camera_group_key>@<YYYY-MM-DD>": { /* §4.4 */ }      //   day here (see §4.4 "per-date buckets")
   },
   "file_less": true                                       // SYSTEM, optional: a CONTAINER destination (see below)
 }
@@ -129,11 +130,12 @@ Note: smartphones are resolved per-file and get **no** offset cell — `camera_g
 holds `camera`-class groups.
 
 **Container destinations.** A folder that holds only sub-destinations (no media of its own) is still
-emitted as a destination, flagged `"file_less": true`, so you can author timezone / offset / fallback
-decisions on it that propagate **downward** to its children. A container carries the same cells (its
-`camera_group_time_decisions` cover the camera groups found anywhere in its subtree) but, having no media
-to act on, **none of its cells ever block**: each `requires_user_input` is `false` and unset timezone /
-offset cells **auto-resolve by inheritance** (`decision_mode: "auto_resolved"`) while staying editable.
+emitted as a destination, flagged `"file_less": true`, so you can author timezone / fallback decisions on
+it that propagate **downward** to its children. A container carries timezone and fallback cells (which
+inherit), but **no offset cells at all** — `camera_group_time_decisions` is empty, because clock offsets
+neither cascade down nor roll up and a file-less folder has no media to time-correct. Having no media to
+act on, **none of a container's cells ever block**: each `requires_user_input` is `false` and an unset
+timezone cell **auto-resolves by inheritance** (`decision_mode: "auto_resolved"`) while staying editable.
 The editor badges these destinations as `container` and keeps them off the to-do list.
 
 ### 4.3 `destination_timezone` cell
@@ -155,18 +157,27 @@ Resolution: `manual_iana_timezone` (if valid) wins; else `accept_proposed_timezo
 
 ### 4.4 `camera_group_time_decisions[<key>]` offset cell
 
+**Per-date buckets.** The cell key is normally the bare `<camera_group_key>`, but when a (camera group,
+destination) spans **more than one naive calendar date** the cell SPLITS into per-day buckets keyed
+`<camera_group_key>@<YYYY-MM-DD>` (the camera is set to local time each morning, so its offset is constant
+only within a day). Each bucket carries a `date` field and proposes/resolves independently; a manual
+decision on one day's bucket does not touch the others. The single-day common case keeps the bare key with
+no `date`. Resolved-UTC picks each file's own naive-date bucket. Offsets do **not** inherit between
+destinations or buckets.
+
 | Field | Type | Editable | Meaning |
 |-------|------|----------|---------|
-| `camera_group` | string | no | The camera-group key. |
+| `camera_group` | string | no | The camera-group key (the bare group, even for a dated bucket). |
 | `camera_group_class` | `"camera"` | no | Always `camera` here. |
+| `date` | string | no | Present only on a per-date bucket: the naive calendar date (`"YYYY-MM-DD"`) this bucket covers. |
 | `proposal` | object | no | One of three shapes — see below. |
 | **`user_decision.accept_proposal`** | bool | **yes** | Accept the proposal's offset. |
 | **`user_decision.manual_offset_seconds`** | number \| `""` | **yes** | A manual clock offset, seconds (camera_time + offset = real UTC). |
 | **`user_decision.manual_real_utc`** | string (`""`) | **yes** | The true UTC of the recommended anchor frame, ISO-8601 (`"2024-07-03T14:12:21Z"`). **Only meaningful when `proposal.proposal_source == "gpx_self_anchor"`** (calibration derives the offset from the recommended anchor's camera time). |
-| `effective_time_anchor` | `""` \| object | no | `""` if unresolved; else `{ "offset_seconds": int, "source": … }` where source ∈ `manual` \| `manual_real_utc` \| `gpx_anchor_accepted` \| `inherited_accepted` \| `gpx_anchor_auto` \| `inherited_auto`. |
-| `requires_user_input` | bool | no | `true` ⇔ `effective_time_anchor == ""` — **except** a `file_less` container, always `false`. |
+| `effective_time_anchor` | `""` \| object | no | `""` if unresolved; else `{ "offset_seconds": int, "source": … }` where source ∈ `manual` \| `manual_real_utc` \| `gpx_anchor_accepted` \| `timezone_accepted` \| `gpx_anchor_auto`. |
+| `requires_user_input` | bool | no | `true` ⇔ `effective_time_anchor == ""`. (Containers carry no offset cells, so this is never softened here.) |
 | `stale_user_decision` | bool | no | Accepted a proposal with no offset. |
-| `decision_mode` | `"auto_resolved"` | no | Present when the GPX anchor auto-resolved, or a `file_less` container auto-adopted its inherited offset (`source: "inherited_auto"`). |
+| `decision_mode` | `"auto_resolved"` | no | Present when a GPX self-anchor auto-resolved under the policy flags. (Timezone-derived and manual offsets are never auto-resolved.) |
 
 **`proposal` shapes** (all read-only; this is the evidence the UI shows):
 
@@ -198,16 +209,13 @@ Resolution: `manual_iana_timezone` (if valid) wins; else `accept_proposed_timezo
   The recommended `proposed_offset_seconds` is the **largest agreeing cluster** (consensus), not merely the
   closest single match; `anchors[0]` is that cluster's representative. The editor renders `groups` (top ~3)
   and `skipped` instead of dumping every anchor — see the offset proposal panel.
-- **Inherited** (`proposal_source: "inherited"`) — taken from the nearest resolved ancestor destination:
-  `{ "proposal_source": "inherited", "proposed_offset_seconds": int, "inherited_from": "<ancestor>",
-     "confidence": "review_required", "rank": "inherited_from_ancestor" }`. Confirmable only — never
-  auto-applied.
-- **Timezone-derived** (`proposal_source: "timezone_naive"`) — no anchor and no ancestor, but the
-  destination's timezone is resolved, so the offset is derived from the local time assuming the camera
-  clock tracked it (DST-aware):
+- **Timezone-derived** (`proposal_source: "timezone_naive"`) — no GPX anchor, but the destination's
+  timezone is resolved, so the offset is derived from the bucket's local time assuming the camera clock
+  tracked it (DST-aware, per day):
   `{ "proposal_source": "timezone_naive", "proposed_offset_seconds": int, "proposed_real_utc": "…Z",
      "proposed_from_timezone": "Europe/Brussels", "confidence": "review_required", "rank": "timezone_derived" }`.
-  Confirmable only — the assumption can be wrong (camera on home time).
+  Confirmable only — the assumption can be wrong (camera on home time). This is the no-anchor default;
+  offsets are never inherited from an ancestor destination.
 - **Manual required** (`proposal_source: "manual_required"`) — no signal (and no resolved timezone); the
   human must enter a manual offset (or real UTC): `{ "proposal_source": "manual_required" }`.
 

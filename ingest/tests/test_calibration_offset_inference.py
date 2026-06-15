@@ -341,13 +341,13 @@ def test_run_auto_resolves_offset_from_gpx(tmp_path, monkeypatch):
 
 # --- timezone-derived offset proposal (no anchor, no inherited) — §19.4 -------
 
-def _tzcell(prior_ud, *, tz, rep_naive, inherited=None, frames=None):
+def _tzcell(prior_ud, *, tz, rep_naive, frames=None, date=None):
     wf = cal.CalibrationWorkflow("/tmp")
     utils.CONFIG.update(CFG)
     blockers = []
     cell = wf._offset_cell("6-photos-by-dest/B", "K", {"camera_group_class": "camera"},
                            {"user_decision": prior_ud}, frames or [], _gpx([]), blockers,
-                           inherited=inherited, tz=tz, rep_naive=rep_naive)
+                           tz=tz, rep_naive=rep_naive, date=date)
     return cell, blockers
 
 
@@ -361,7 +361,7 @@ def test_timezone_naive_offset_is_dst_aware():
         assert cal._timezone_naive_offset(*bad) is None
 
 
-def test_cell_timezone_derived_when_no_anchor_no_inherited():
+def test_cell_timezone_derived_when_no_anchor():
     cell, _ = _tzcell({}, tz="Europe/Brussels", rep_naive="2024:07:03 14:00:00")
     p = cell["proposal"]
     assert p["proposal_source"] == "timezone_naive" and p["proposed_offset_seconds"] == -7200
@@ -370,10 +370,11 @@ def test_cell_timezone_derived_when_no_anchor_no_inherited():
     assert cell["requires_user_input"] is True and "decision_mode" not in cell   # confirmable, never auto
 
 
-def test_cell_inherited_beats_timezone_derived():
-    cell, _ = _tzcell({}, tz="Europe/Brussels", rep_naive="2024:07:03 14:00:00",
-                      inherited=("6-photos-by-dest", -3600))
-    assert cell["proposal"]["proposal_source"] == "inherited"
+def test_cell_records_its_date_bucket():
+    cell, _ = _tzcell({}, tz="Europe/Brussels", rep_naive="2024:07:03 14:00:00", date="2024-07-03")
+    assert cell["date"] == "2024-07-03"                       # per-day bucket stamps its naive date
+    bare, _ = _tzcell({}, tz="Europe/Brussels", rep_naive="2024:07:03 14:00:00")
+    assert "date" not in bare                                 # single-date common case: bare group key, no date
 
 
 def test_cell_accept_timezone_derived_resolves():

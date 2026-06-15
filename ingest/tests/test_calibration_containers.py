@@ -1,13 +1,13 @@
 """Phase 3/5 (calibration) — file-less CONTAINER destinations.
 
 A folder that holds only sub-destinations (no media of its own) is still materialized as a
-destination so a human can author timezone / GPS-fallback / clock-offset decisions on it that
-propagate DOWN to its children. Such a container:
+destination so a human can author timezone / GPS-fallback decisions on it that propagate DOWN to its
+children. Such a container:
   * never blocks and stays off the to-do list (it has no media to act on);
-  * auto-resolves its timezone/offset by inheritance, while remaining overridable;
-  * exposes offset cells for the camera groups found ANYWHERE in its subtree (recursively), so one
-    offset set on the parent reaches every child — but a child's own decision is never pooled upward.
-From conftest.py.
+  * auto-resolves its timezone by inheritance, while remaining overridable, and propagates a manual
+    GPS fallback downward.
+Clock OFFSETS, by contrast, do NOT inherit or aggregate (§10.2): a container exposes NO offset cells
+(it has no media to time-correct and offsets never cross destinations). From conftest.py.
 """
 import photos_2_time_gps as cal
 import photos_utils as utils
@@ -46,7 +46,7 @@ def _gfile(rel, dest):
 
 # --- enumeration -------------------------------------------------------------
 
-def test_container_materialized_with_recursive_groups(tmp_path):
+def test_container_materialized_with_no_offset_cells(tmp_path):
     wf = _wf(tmp_path)
     # CAM lives under Trip/Day1; CAM2 lives two levels down under Trip/Day2/Sub.
     files = [_tfile(f"{BYDEST}/Trip/Day1/a.arw", f"{BYDEST}/Trip/Day1", key=CAM),
@@ -56,13 +56,11 @@ def test_container_materialized_with_recursive_groups(tmp_path):
     # every ancestor folder is materialized and flagged file-less
     for c in (BYDEST, f"{BYDEST}/Trip", f"{BYDEST}/Trip/Day2"):
         assert d[c]["file_less"] is True
-    # real leaves are not file-less
+        assert d[c]["camera_group_time_decisions"] == {}     # containers hold NO offset cells (§10.2)
+    # real leaves are not file-less and carry their own group's cell
     assert "file_less" not in d[f"{BYDEST}/Trip/Day1"]
-    # RECURSIVE aggregation: Trip (grandparent of Sub) speaks for BOTH cameras in its subtree
-    assert set(d[f"{BYDEST}/Trip"]["camera_group_time_decisions"]) == {CAM, CAM2}
-    # an intermediate container speaks only for the groups beneath IT
-    assert set(d[f"{BYDEST}/Trip/Day2"]["camera_group_time_decisions"]) == {CAM2}
     assert set(d[f"{BYDEST}/Trip/Day1"]["camera_group_time_decisions"]) == {CAM}
+    assert set(d[f"{BYDEST}/Trip/Day2/Sub"]["camera_group_time_decisions"]) == {CAM2}
 
 
 def test_containers_never_block(tmp_path):
@@ -71,7 +69,7 @@ def test_containers_never_block(tmp_path):
     art, _ = wf.build_time_decisions(files, GROUPS, None, _gpx())
     trip = art["destinations"][f"{BYDEST}/Trip"]
     assert trip["destination_timezone"]["requires_user_input"] is False
-    assert trip["camera_group_time_decisions"][CAM]["requires_user_input"] is False
+    assert trip["camera_group_time_decisions"] == {}         # no offset cell to block on
 
 
 # --- auto-resolve + propagation ----------------------------------------------
@@ -88,23 +86,7 @@ def test_container_timezone_autoresolves_from_default(tmp_path):
     assert art["destinations"][f"{BYDEST}/Trip/Day1"]["destination_timezone"]["requires_user_input"] is True
 
 
-def test_manual_container_offset_propagates_to_children(tmp_path):
-    wf = _wf(tmp_path)
-    files = [_tfile(f"{BYDEST}/Trip/Day1/a.arw", f"{BYDEST}/Trip/Day1"),
-             _tfile(f"{BYDEST}/Trip/Day2/b.arw", f"{BYDEST}/Trip/Day2")]
-    prior = {"destinations": {f"{BYDEST}/Trip": {"camera_group_time_decisions":
-             {CAM: {"user_decision": {"manual_offset_seconds": -3600}}}}}}
-    art, _ = wf.build_time_decisions(files, GROUPS, prior, _gpx())
-    trip = art["destinations"][f"{BYDEST}/Trip"]["camera_group_time_decisions"][CAM]
-    assert trip["effective_time_anchor"] == {"offset_seconds": -3600, "source": "manual"}
-    for child in (f"{BYDEST}/Trip/Day1", f"{BYDEST}/Trip/Day2"):
-        c = art["destinations"][child]["camera_group_time_decisions"][CAM]
-        assert c["proposal"]["proposal_source"] == "inherited"
-        assert c["proposal"]["inherited_from"] == f"{BYDEST}/Trip"
-        assert c["proposal"]["proposed_offset_seconds"] == -3600
-
-
-def test_child_decision_is_not_pooled_upward(tmp_path):
+def test_child_offset_decision_is_not_pooled_upward(tmp_path):
     wf = _wf(tmp_path)
     files = [_tfile(f"{BYDEST}/Trip/Day1/a.arw", f"{BYDEST}/Trip/Day1")]
     prior = {"destinations": {f"{BYDEST}/Trip/Day1": {"camera_group_time_decisions":
@@ -113,9 +95,8 @@ def test_child_decision_is_not_pooled_upward(tmp_path):
     # the child resolved from its own decision
     leaf = art["destinations"][f"{BYDEST}/Trip/Day1"]["camera_group_time_decisions"][CAM]
     assert leaf["effective_time_anchor"]["offset_seconds"] == -3600
-    # the parent container has a cell for CAM (gathered from the subtree) but it stays UNSET
-    trip = art["destinations"][f"{BYDEST}/Trip"]["camera_group_time_decisions"][CAM]
-    assert trip["effective_time_anchor"] == "" and trip["requires_user_input"] is False
+    # the parent container exposes NO offset cell at all — offsets never aggregate upward (§10.2)
+    assert art["destinations"][f"{BYDEST}/Trip"]["camera_group_time_decisions"] == {}
 
 
 # --- GPS fallback ------------------------------------------------------------
