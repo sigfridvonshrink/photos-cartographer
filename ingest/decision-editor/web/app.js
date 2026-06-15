@@ -10,7 +10,7 @@
 
 import { mapPicker } from "./map.js";
 
-const state = { base: null, work: null, view: "time", selected: null, saving: false, running: false, message: null, runResult: null, timeChangedSinceRerun: false, offsetExpand: new Set(), coordClipboard: null };
+const state = { base: null, work: null, view: "time", selected: null, saving: false, running: false, message: null, runResult: null, timeChangedSinceRerun: false, offsetExpand: new Set(), coordClipboard: null, gpsAnchor: null, gpsAnchorDest: null };
 
 const $ = (s) => document.querySelector(s);
 function el(tag, attrs = {}, ...kids) {
@@ -35,6 +35,23 @@ function validUtc(s) { if (s === "" || s == null) return true; return /^\d{4}-\d
 const validLat = (v) => v === "" || v == null || (isNum(v) && v >= -90 && v <= 90);
 const validLon = (v) => v === "" || v == null || (isNum(v) && v >= -180 && v <= 180);
 const bothOrNeither = (a, b) => (a === "" || a == null) === (b === "" || b == null);
+// Parse a "lat, lon" coordinate as copied from Google Maps ("50.5254337, 4.2697812") — comma or
+// whitespace separated — into {lat, lon}, or null if it isn't a valid in-range pair. The single
+// canonical coordinate parser used by every coordinate input and paste in the editor.
+function parseLatLon(s) {
+  if (typeof s !== "string") return null;
+  const m = s.trim().match(/^(-?\d+(?:\.\d+)?)\s*[,\s]\s*(-?\d+(?:\.\d+)?)$/);
+  if (!m) return null;
+  const lat = +m[1], lon = +m[2];
+  return lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180 ? { lat, lon } : null;
+}
+// How a coordinate cell's stored decision renders in the single text field: "lat, lon" when both are
+// numbers, the raw rejected text when a bad entry was kept (so it stays visible + flagged), else empty.
+function coordText(u, la, lo) {
+  if (isNum(u[la]) && isNum(u[lo])) return `${u[la]}, ${u[lo]}`;
+  if (typeof u[la] === "string" && u[la].trim() !== "") return u[la];
+  return "";
+}
 
 // --- cell access -------------------------------------------------------------
 function cellAt(arts, ref) {
@@ -132,15 +149,18 @@ function fmtDate(iso) {
 // Time edits invalidate the GPS decisions (GPS placement is computed from resolved UTC), and GPS is
 // only recomputed on a Re-run — so flag any time change to drive the GPS-view stale/lock notices below.
 const touchTime = (ref) => { if (ref.file === "time") state.timeChangedSinceRerun = true; };
-// A collapsed per-date offset row stands for several equal-proposal day buckets (`ref.peers`); an edit
-// fans out identically to all of them so confirming once resolves every matching day. Non-grouped refs
-// (one bucket, or timezone/fallback/review) carry no peers and edit just their own cell.
-const peerKeys = (ref) => (ref.peers && ref.peers.length ? ref.peers : [ref.key]);
-const eachPeer = (ref, fn) => { for (const k of peerKeys(ref)) { const c = cellAt(state.work, { ...ref, key: k }); if (c) fn(c); } };
+// A ref may stand for SEVERAL sibling cells via `ref.peers` — a collapsed per-date offset cluster (peers
+// are bucket keys) or a multi-selected run of GPS review photos (peers are relative paths). An edit fans
+// out identically to all of them so one action resolves the whole set. The identifying field differs by
+// kind: review cells are addressed by `path`, everything else by `key`. A ref with no peers edits itself.
+const peerField = (ref) => (ref.kind === "review" ? "path" : "key");
+const peerKeys = (ref) => (ref.peers && ref.peers.length ? ref.peers : [ref[peerField(ref)]]);
+const peerRefs = (ref) => peerKeys(ref).map((id) => ({ ...ref, [peerField(ref)]: id, peers: undefined }));
+const eachPeer = (ref, fn) => { for (const r of peerRefs(ref)) { const c = cellAt(state.work, r); if (c) fn(c, r); } };
 function edit(ref, field, value) { touchTime(ref); eachPeer(ref, (c) => { c.user_decision[field] = value; }); render(); }
 function editMany(ref, obj) { touchTime(ref); eachPeer(ref, (c) => Object.assign(c.user_decision, obj)); render(); }
 function resetRef(ref) {
-  for (const k of peerKeys(ref)) { const w = cellAt(state.work, { ...ref, key: k }), b = cellAt(state.base, { ...ref, key: k }); if (w && b) w.user_decision = clone(b.user_decision); }
+  for (const r of peerRefs(ref)) { const w = cellAt(state.work, r), b = cellAt(state.base, r); if (w && b) w.user_decision = clone(b.user_decision); }
   render();
 }
 
@@ -305,7 +325,12 @@ function previewFallback(dest) {
 }
 
 // --- list views --------------------------------------------------------------
-function isSel(ref) { const s = state.selected; return s && s.file === ref.file && s.dest === ref.dest && s.kind === ref.kind && s.key === ref.key && s.path === ref.path; }
+function isSel(ref) {
+  const s = state.selected;
+  if (!s || s.file !== ref.file || s.dest !== ref.dest || s.kind !== ref.kind) return false;
+  const id = ref[peerField(ref)];                         // highlight the primary AND any peer in a multi-selection
+  return s[peerField(s)] === id || !!(s.peers && s.peers.includes(id));
+}
 function tags(ref) {
   const out = [];
   if (ref.kind === "timezone") {
@@ -391,6 +416,26 @@ function renderTime(list) {
   const root = buildTree(t.destinations);
   for (const k of Object.keys(root.children).sort()) renderTreeNode(root.children[k], list);
 }
+// The contiguous run of `order` between `anchor` and `target` inclusive (either direction), or null if
+// either is absent — the set a shift-click multi-selection covers. Pure logic — unit-tested.
+function contiguousRange(order, anchor, target) {
+  const i = order.indexOf(anchor), j = order.indexOf(target);
+  if (i < 0 || j < 0) return null;
+  const [a, b] = i <= j ? [i, j] : [j, i];
+  return order.slice(a, b + 1);
+}
+// Select a GPS review photo. A plain click selects one and sets the range anchor; a shift-click extends
+// to a CONTIGUOUS run from the anchor — but only within the SAME destination's worklist (a shift-click in
+// another destination just starts a fresh single selection), so a multi-selection never crosses a
+// destination boundary. A run of >1 becomes a `peers` ref whose edits fan out to every photo in it.
+function selectReview(ev, dest, path, order) {
+  const base = { file: "gps", dest, kind: "review", path };
+  if (ev.shiftKey && state.gpsAnchor && state.gpsAnchorDest === dest) {
+    const run = contiguousRange(order, state.gpsAnchor, path);
+    if (run && run.length > 1) { state.selected = { ...base, path: run[0], peers: run }; render(); return; }
+  }
+  state.gpsAnchor = path; state.gpsAnchorDest = dest; state.selected = base; render();
+}
 function renderGps(list) {
   const g = state.work.gps;
   // GPS placement is derived from each photo's resolved UTC, so the GPS phase is gated on the time
@@ -412,9 +457,10 @@ function renderGps(list) {
     const fbpv = previewFallback(dest);
     list.append(row({ file: "gps", dest, kind: "fallback" }, "Folder fallback", null,
       fb.effective_fallback ? `${fb.effective_fallback.lat}, ${fb.effective_fallback.lon}` : (fbpv ? `${fbpv.lat}, ${fbpv.lon}` : "—")));
+    const order = (d.gps_decisions?.review_items || []).map((ri) => ri.relative_path);
     for (const ri of d.gps_decisions?.review_items || []) {
       const ref = { file: "gps", dest, kind: "review", path: ri.relative_path };
-      list.append(el("div", { class: "row" + (isSel(ref) ? " sel" : ""), onclick: () => { state.selected = ref; render(); } },
+      list.append(el("div", { class: "row" + (isSel(ref) ? " sel" : ""), onclick: (ev) => selectReview(ev, dest, ri.relative_path, order) },
         el("span", { class: "label" }, ri.relative_path.split("/").pop()), chip("reason", ri.reason), ...tags(ref), statusChip(ref)));
     }
     list.append(el("div", { class: "summary" }, `${s.files_total ?? 0} files — preserve ${s.preserve_native_gps ?? 0}, interp ${s.automatic_gpx_interpolation ?? 0}, extrap ${s.automatic_gpx_extrapolation ?? 0}, fallback ${s.automatic_folder_fallback ?? 0}, blocked ${s.blocked ?? 0}`));
@@ -425,11 +471,6 @@ function renderGps(list) {
 function checkbox(label, checked, onchange, disabled) {
   const cb = el("input", { type: "checkbox", disabled: disabled ? "" : null }); cb.checked = !!checked; cb.addEventListener("change", () => onchange(cb.checked));
   return el("label", { class: disabled ? "ctl-check disabled" : "ctl-check" }, cb, label);
-}
-function numField(label, value, onchange, invalid) {
-  const inp = el("input", { type: "number", step: "any", class: invalid ? "bad" : null, value: value === "" || value == null ? "" : value });
-  inp.addEventListener("change", () => onchange(inp.value === "" ? "" : Number(inp.value)));
-  return el("label", { class: "ctl-field" }, el("span", {}, label), inp);
 }
 
 let TZ_ZONES = null;
@@ -585,17 +626,31 @@ function controls(ref) {
   } else if (ref.kind === "fallback") {
     const hasProp = p.proposal_source === "inherited";
     wrap.append(checkbox(hasProp ? `accept inherited (${p.proposed_fallback.lat}, ${p.proposed_fallback.lon})` : "accept inherited — none", u.accept_proposal, (v) => edit(ref, "accept_proposal", v), !hasProp));
-    wrap.append(numField("Fallback lat", u.fallback_lat, (v) => edit(ref, "fallback_lat", v), !validLat(u.fallback_lat)));
-    wrap.append(numField("Fallback lon", u.fallback_lon, (v) => edit(ref, "fallback_lon", v), !validLon(u.fallback_lon)));
-    wrap.append(el("div", { class: "hint" }, "or pan the map below under the crosshair and “use map center”"));
-    if (!bothOrNeither(u.fallback_lat, u.fallback_lon)) wrap.append(el("div", { class: "err" }, "set both lat and lon, or neither"));
+    wrap.append(coordField(ref));
   } else {
-    wrap.append(numField("Manual lat", u.manual_lat, (v) => edit(ref, "manual_lat", v), !validLat(u.manual_lat)));
-    wrap.append(numField("Manual lon", u.manual_lon, (v) => edit(ref, "manual_lon", v), !validLon(u.manual_lon)));
+    wrap.append(coordField(ref));
     wrap.append(checkbox("leave unlocated (accept no GPS)", u.accept_unlocated, (v) => edit(ref, "accept_unlocated", v)));
-    wrap.append(el("div", { class: "hint" }, "or pan the map below under the crosshair and “use map center”"));
-    if (!bothOrNeither(u.manual_lat, u.manual_lon)) wrap.append(el("div", { class: "err" }, "set both lat and lon, or neither"));
   }
+  return wrap;
+}
+// A single "lat, lon" text field for a coordinate cell (review or fallback) — accepts a value pasted
+// straight from Google Maps. A valid entry writes both stored fields, refreshes the in-editor clipboard,
+// and recenters the map (keeping zoom); a non-empty unparseable entry is kept verbatim and flagged
+// invalid; empty clears the cell. Replaces the old two-spinner lat/lon pair.
+function coordField(ref) {
+  const [la, lo] = coordFields(ref), u = workCell(ref).user_decision || {};
+  const inp = el("input", { type: "text", class: refInvalid(ref) ? "bad" : null,
+    placeholder: "lat, lon  —  e.g. 50.525434, 4.269781", value: coordText(u, la, lo) });
+  inp.addEventListener("change", () => {
+    const t = inp.value.trim();
+    if (t === "") return editMany(ref, { [la]: "", [lo]: "" });
+    const c = parseLatLon(t);
+    if (c) { state.coordClipboard = { lat: c.lat, lon: c.lon }; editMany(ref, { [la]: c.lat, [lo]: c.lon }); if (_map) _map.recenter(c); }
+    else editMany(ref, { [la]: t, [lo]: "" });        // keep the bad text visible and let validation flag it
+  });
+  const lbl = el("label", { class: "ctl-field" }, el("span", {}, "Coordinate (lat, lon)"), inp);
+  const wrap = el("div", {}, lbl, el("div", { class: "hint" }, "paste “lat, lon” (e.g. from Google Maps), pan the map under the crosshair and “use map center”, or paste a copied location"));
+  if (refInvalid(ref)) wrap.append(el("div", { class: "err" }, "enter coordinates as “lat, lon” (lat ±90, lon ±180)"));
   return wrap;
 }
 
@@ -631,7 +686,7 @@ function copyPasteBar(ref) {
   const [la, lo] = coordFields(ref), have = currentCoord(ref) || gpsRefMarkers(ref)[0] || null, clip = state.coordClipboard;
   const fmtC = (c) => `${c.lat.toFixed(6)}, ${c.lon.toFixed(6)}`;
   const copy = el("button", { class: "btn", disabled: have ? null : "", title: have ? "remember this location for other photos" : "no location here to copy",
-    onclick: () => { state.coordClipboard = { lat: have.lat, lon: have.lon }; state.message = `copied ${fmtC(have)}`; render(); } }, "copy location");
+    onclick: () => { state.coordClipboard = { lat: have.lat, lon: have.lon }; try { navigator.clipboard?.writeText(fmtC(have)); } catch { /* best effort */ } state.message = `copied ${fmtC(have)}`; render(); } }, "copy location");
   const paste = el("button", { class: "btn", disabled: clip ? null : "", title: clip ? `paste ${fmtC(clip)}` : "copy a location first",
     onclick: () => { editMany(ref, { [la]: clip.lat, [lo]: clip.lon }); if (_map) _map.recenter(clip); } },
     clip ? `paste ${fmtC(clip)}` : "paste");
@@ -641,7 +696,7 @@ function copyPasteBar(ref) {
 // One Leaflet instance, kept across re-renders of the same selection (rebuilding it on each keystroke
 // would reset pan/zoom). Rebuilt when the selected cell changes; torn down for non-GPS cells.
 let _map = null, _mapKey = null;
-const mapKeyFor = (ref) => ref ? `${ref.file}|${ref.dest}|${ref.kind}|${ref.key || ""}|${ref.path || ""}` : null;
+const mapKeyFor = (ref) => ref ? `${ref.file}|${ref.dest}|${ref.kind}|${ref.key || ""}|${ref.path || ""}|${(ref.peers || []).join(",")}` : null;
 function teardownMap() { if (_map) { _map.destroy(); _map = null; _mapKey = null; } }
 function mapBlock(ref) {
   const key = mapKeyFor(ref);
@@ -716,15 +771,22 @@ function renderPanel() {
   const isGpsCoord = ref && ref.file === "gps" && (ref.kind === "fallback" || ref.kind === "review");
   if (!isGpsCoord) teardownMap();
   if (!ref || !c) return p.append(el("div", { class: "empty" }, "Select a decision to edit it."));
-  const title = ref.kind === "offset" ? `Offset · ${c.camera_group || ref.key}` : ref.kind === "review" ? "GPS review item" : ref.kind === "fallback" ? "Folder fallback" : "Timezone";
+  const multi = ref.peers && ref.peers.length > 1;
+  const title = ref.kind === "offset" ? `Offset · ${c.camera_group || ref.key}`
+    : ref.kind === "review" ? (multi ? `GPS review · ${ref.peers.length} photos` : "GPS review item")
+      : ref.kind === "fallback" ? "Folder fallback" : "Timezone";
   p.append(el("h2", {}, title), el("div", { class: "path" }, ref.path || ref.dest));
   const head = el("div", { class: "pblock" }, ...(statusChip(ref) ? [statusChip(ref)] : []), ...tags(ref));
-  // A collapsed cluster edits several equal-proposal days at once — say so, and which days.
-  if (ref.kind === "offset" && ref.peers && ref.peers.length > 1) {
+  // A multi-cell ref edits several siblings at once — say so. Offset cluster → which days; review run → how many.
+  if (ref.kind === "offset" && multi) {
     const dates = ref.peers.map((k) => workCell({ ...ref, key: k })?.date).filter(Boolean);
     head.append(el("div", { class: "hint" }, `editing all ${ref.peers.length} days with this proposal: ${dateRange(dates)}`));
   } else if (ref.kind === "offset" && c.date) {
     head.append(el("div", { class: "hint" }, `this day only: ${fmtDate(c.date)}`));
+  } else if (ref.kind === "review" && multi) {
+    head.append(el("div", { class: "hint" }, `applying one location to all ${ref.peers.length} selected photos: ${ref.peers.map((p2) => p2.split("/").pop()).join(", ")}`));
+  } else if (ref.kind === "review") {
+    head.append(el("div", { class: "hint" }, "shift-click another photo in this destination to select a run and place them together"));
   }
   if (isDirty(ref)) head.append(el("button", { class: "mini", onclick: () => resetRef(ref) }, "reset"));
   p.append(head);
@@ -826,5 +888,5 @@ export {
   isNum, validTz, validOffset, validUtc, validLat, validLon, bothOrNeither,
   fmtOffset, camNaiveMs, dtLocalToMs, msToDtLocal, utcStrToMs, fmtLocal, fmtDT, offsetImpact,
   cellAt, cellStatus, wouldResolve, previewTz, previewFallback, refInvalid, isDirty, state,
-  offsetGroups, dateRange, fmtDate, peerKeys,
+  offsetGroups, dateRange, fmtDate, peerKeys, parseLatLon, coordText, contiguousRange,
 };
