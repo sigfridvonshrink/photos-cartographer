@@ -696,7 +696,13 @@ _WEB_ASSETS = {
         'KTsgc3RhdGUubWVzc2FnZSA9IG51bGw7IHJlbmRlcigpOyB9KTsKICB0cnkgeyBzdGF0ZS5iYXNlID0gYXdhaXQgKGF3YWl0IGZldGNoKCIvYXBpL2Fy'
         'dGlmYWN0cyIpKS5qc29uKCk7IHN0YXRlLndvcmsgPSBjbG9uZShzdGF0ZS5iYXNlKTsgfQogIGNhdGNoIChlKSB7ICQoIiNsaXN0IikucmVwbGFjZUNo'
         'aWxkcmVuKGVsKCJkaXYiLCB7IGNsYXNzOiAiZW1wdHkiIH0sICJDb3VsZCBub3QgbG9hZCAvYXBpL2FydGlmYWN0czogIiArIGUpKTsgcmV0dXJuOyB9'
-        'CiAgcmVuZGVyKCk7Cn0KbWFpbigpOwo='
+        'CiAgcmVuZGVyKCk7Cn0KLy8gQXV0by1zdGFydCBpbiB0aGUgYnJvd3NlciBvbmx5OyBpbXBvcnRpbmcgdGhpcyBtb2R1bGUgaW4gTm9kZSAoZm9yIHRo'
+        'ZSB1bml0IHRlc3RzKSBtdXN0IG5vdCBydW4gaXQKLy8gKHRoZXJlJ3Mgbm8gZG9jdW1lbnQvZmV0Y2ggdGhlcmUpLiBUaGUgbmFtZWQgZXhwb3J0cyBi'
+        'ZWxvdyBleHBvc2UgdGhlIHB1cmUgbG9naWMgZm9yIHRob3NlIHRlc3RzLgppZiAodHlwZW9mIGRvY3VtZW50ICE9PSAidW5kZWZpbmVkIikgbWFpbigp'
+        'OwoKZXhwb3J0IHsKICBpc051bSwgdmFsaWRUeiwgdmFsaWRPZmZzZXQsIHZhbGlkVXRjLCB2YWxpZExhdCwgdmFsaWRMb24sIGJvdGhPck5laXRoZXIs'
+        'CiAgZm10T2Zmc2V0LCBjYW1OYWl2ZU1zLCBkdExvY2FsVG9NcywgbXNUb0R0TG9jYWwsIHV0Y1N0clRvTXMsIGZtdExvY2FsLCBmbXREVCwKICBjZWxs'
+        'QXQsIGNlbGxTdGF0dXMsIHdvdWxkUmVzb2x2ZSwgcHJldmlld1R6LCBwcmV2aWV3RmFsbGJhY2ssIHJlZkludmFsaWQsIGlzRGlydHksIHN0YXRlLAp9'
+        'Owo='
     ),
     'index.html': _b(
         'PCFkb2N0eXBlIGh0bWw+CjxodG1sIGxhbmc9ImVuIj4KPGhlYWQ+CiAgPG1ldGEgY2hhcnNldD0idXRmLTgiPgogIDxtZXRhIG5hbWU9InZpZXdwb3J0'

@@ -39,3 +39,8 @@ jobs:
           coverage run -m pytest -q
           coverage report
           coverage report --fail-under=80
+
+      # The decision-editor front-end (web/app.js) is plain ES modules with no build/deps; its pure
+      # logic is unit-tested with Node's built-in runner (node:test), no npm install.
+      - name: Run decision-editor front-end tests
+        run: node --test ingest/decision-editor/tests/*.test.mjs
