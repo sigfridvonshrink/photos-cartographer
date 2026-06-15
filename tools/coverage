@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Repeatable per-script test coverage for the active pipeline.
+#
+# Creates a local .venv (with --system-site-packages, so the suite keeps any system pip deps),
+# installs the dev tooling (dev-requirements.txt), then runs the suite exactly the way CI does —
+# `coverage run -m pytest` with the committed .coveragerc (branch coverage, concurrency=thread,
+# report scoped to the production scripts of every phase) — and prints the per-script report plus
+# an HTML drill-down under htmlcov/.
+#
+# Extra arguments pass through to pytest, e.g.  tools/coverage -k merge   or   tools/coverage -x.
+# Run from anywhere; it cd's to the repo root. The .venv / .coverage / htmlcov outputs are gitignored.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+venv=.venv
+[ -x "$venv/bin/python" ] || python3 -m venv --system-site-packages "$venv"
+"$venv/bin/python" -m pip install -q -r dev-requirements.txt
+
+"$venv/bin/python" -m coverage run -m pytest -q "$@"
+"$venv/bin/python" -m coverage report
+"$venv/bin/python" -m coverage html -d htmlcov >/dev/null
+echo "HTML report: htmlcov/index.html"

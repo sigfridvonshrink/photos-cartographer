@@ -29,10 +29,11 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest coverage
+          pip install -r dev-requirements.txt
 
       # Must run from the repo root; pytest.ini sets testpaths and ignores archive/.
-      # Coverage config (branch + the two prep source files) is in .coveragerc.
+      # Coverage config (branch + concurrency=thread; report scoped to every phase's production
+      # scripts) is in .coveragerc — the same config tools/coverage uses locally.
       - name: Run tests with coverage
         run: |
           coverage run -m pytest -q
