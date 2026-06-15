@@ -78,6 +78,7 @@ CALIBRATE = os.path.join(os.path.dirname(HERE), "photos-2-time-gps")  # the cali
 CONTROL = ".photos-ingest"
 TIME_NAME = "photos-21-time-decisions.json"
 GPS_NAME = "photos-22-gps-decisions.json"
+CONFIG_NAME = "photos-00-config.json"
 EDITOR_LOCK = "photos-00-decision-editor.lock"  # dotfile lives in CONTROL; flock, fail-fast
 
 _CONTENT_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
@@ -209,14 +210,43 @@ def _example_json(name):
         return {"_error": f"could not parse {name}: {e}"}
 
 
+def _environment(workspace):
+    """Folder dependencies calibration needs that may live on a different machine than this editor.
+
+    Two things calibration needs that may be absent on the host running the editor:
+      * the pipeline script itself (`CALIBRATE`, expected beside the editor — the single-file bundle does
+        NOT embed it, so a copy taken away from the repo can't re-run); and
+      * the configured `gpx_root`, which GPX time-anchoring reads and which can be a mount visible only on
+        the workspace's own host. Re-running without it would regenerate the time/GPS decisions as if there
+        were no GPX, silently discarding good offsets/placements.
+    `gpx_root` is resolved from the workspace config (`photos-00-config.json`) the way calibration resolves
+    it (`photos_utils.selected_gpx_root`); an EMPTY gpx_root means 'no GPX configured' and does not block.
+    The Re-run button (and `_rerun`) gate on `deps_ok`; `missing` names each absent dependency for the
+    tooltip/error. No other folder dependencies exist at present."""
+    missing = []
+    calibration_present = os.path.isfile(CALIBRATE)
+    if not calibration_present:
+        missing.append(f"calibration script ({CALIBRATE})")
+    cfg = _read_json(os.path.join(workspace, CONTROL, CONFIG_NAME))
+    root = (cfg or {}).get("gpx_root") or "" if isinstance(cfg, dict) else ""
+    resolved = os.path.realpath(os.path.abspath(root)) if root else ""
+    gpx_available = (not resolved) or os.path.isdir(resolved)
+    if not gpx_available:
+        missing.append(f"gpx_root ({resolved})")
+    return {"calibration_present": calibration_present,
+            "gpx_root": resolved, "gpx_configured": bool(resolved),
+            "gpx_available": gpx_available, "deps_ok": not missing, "missing": missing}
+
+
 def _load_artifacts(workspace):
-    """Return {workspace, demo, time, gps}. Demo mode loads the requires-input example fixtures."""
+    """Return {workspace, demo, time, gps, environment}. Demo mode loads the requires-input fixtures."""
     if workspace:
         cd = os.path.join(workspace, CONTROL)
         return {"workspace": os.path.abspath(workspace), "demo": False,
                 "time": _read_json(os.path.join(cd, TIME_NAME)),
-                "gps": _read_json(os.path.join(cd, GPS_NAME))}
-    return {"workspace": None, "demo": True,
+                "gps": _read_json(os.path.join(cd, GPS_NAME)),
+                "environment": _environment(workspace)}
+    return {"workspace": None, "demo": True, "environment": None,
             "time": _example_json("photos-21-time-decisions.requires-input.json"),
             "gps": _example_json("photos-22-gps-decisions.requires-input.json")}
 
@@ -280,8 +310,10 @@ def _rerun(workspace):
     (separate from the editor lock), so a concurrent calibration is reported, not forced. Returns the
     process outcome; the client reloads /api/artifacts on success. Mutates nothing here — `run` only
     plans (no writes to originals)."""
-    if not os.path.isfile(CALIBRATE):
-        return {"ok": False, "error": f"calibration script not found at {CALIBRATE}"}
+    env = _environment(workspace)        # gate: never recalc without the pipeline + its data on this host
+    if not env["deps_ok"]:
+        return {"ok": False, "error": "calibration cannot run on this machine — missing: "
+                + ", ".join(env["missing"]) + ". Run the editor on the host that has the pipeline and its data."}
     try:
         proc = subprocess.run([sys.executable, CALIBRATE, "run"], cwd=workspace,
                               capture_output=True, text=True, timeout=RERUN_TIMEOUT_S)
