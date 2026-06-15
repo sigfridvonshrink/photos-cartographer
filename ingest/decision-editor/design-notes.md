@@ -49,7 +49,9 @@ panel.
   preview updates children when you override a parent (the rule mirrored is just "nearest **resolved**
   ancestor → child with no own decision"; badged *preview*, authoritative on re-run). **GPS** defaults to
   a **worklist** of review items (+ per-destination fallback); automatic-only destinations collapse to a
-  counts row. Either view is switchable to the other.
+  counts row. Either view is switchable to the other. File-less **container** destinations (parents with
+  no media of their own, Section 10.1 of the time spec) appear in both views badged `container` —
+  editable propagation points that hold defaults for their children and never sit on the to-do list.
 - **Side-panel editor** for the selected cell: the proposal + evidence (for offsets, the GPX anchors +
   confidence), the decision control, a **photo thumbnail** (review items), a **context map**, and a live
   **effective-outcome** preview with client-side validation.

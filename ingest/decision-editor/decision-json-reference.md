@@ -120,12 +120,21 @@ progress and to know when the file is "done". (Both are system-owned; don't set 
   "camera_groups_present": ["<camera_group_key>", ...],   // SYSTEM: groups seen in this destination
   "camera_group_time_decisions": {                        // one offset cell per FIXED-CLOCK camera group
     "<camera_group_key>": { /* §4.4 offset cell */ }
-  }
+  },
+  "file_less": true                                       // SYSTEM, optional: a CONTAINER destination (see below)
 }
 ```
 
 Note: smartphones are resolved per-file and get **no** offset cell — `camera_group_time_decisions` only
 holds `camera`-class groups.
+
+**Container destinations.** A folder that holds only sub-destinations (no media of its own) is still
+emitted as a destination, flagged `"file_less": true`, so you can author timezone / offset / fallback
+decisions on it that propagate **downward** to its children. A container carries the same cells (its
+`camera_group_time_decisions` cover the camera groups found anywhere in its subtree) but, having no media
+to act on, **none of its cells ever block**: each `requires_user_input` is `false` and unset timezone /
+offset cells **auto-resolve by inheritance** (`decision_mode: "auto_resolved"`) while staying editable.
+The editor badges these destinations as `container` and keeps them off the to-do list.
 
 ### 4.3 `destination_timezone` cell
 
@@ -138,7 +147,8 @@ holds `camera`-class groups.
 | **`user_decision.manual_iana_timezone`** | string (`""`) | **yes** | A human-entered IANA zone (e.g. `"Asia/Tokyo"`). |
 | **`user_decision.accept_proposed_timezone`** | bool | **yes** | Accept `proposed_iana_timezone`. |
 | `effective_iana_timezone` | string (`""` if unresolved) | no | The resolved zone. |
-| `requires_user_input` | bool | no | `true` ⇔ `effective_iana_timezone == ""`. A timezone never auto-resolves, so the human reviews **every** destination. |
+| `requires_user_input` | bool | no | `true` ⇔ `effective_iana_timezone == ""` — **except** a `file_less` container, which auto-resolves and is always `false`. A timezone otherwise never auto-resolves, so the human reviews every real destination. |
+| `decision_mode` | `"auto_resolved"` | no | Present only on a `file_less` container that auto-adopted its inherited/default zone. |
 | `stale_user_decision` | bool | no | Accepted a proposal that no longer exists. |
 
 Resolution: `manual_iana_timezone` (if valid) wins; else `accept_proposed_timezone` applies the proposal.
@@ -153,10 +163,10 @@ Resolution: `manual_iana_timezone` (if valid) wins; else `accept_proposed_timezo
 | **`user_decision.accept_proposal`** | bool | **yes** | Accept the proposal's offset. |
 | **`user_decision.manual_offset_seconds`** | number \| `""` | **yes** | A manual clock offset, seconds (camera_time + offset = real UTC). |
 | **`user_decision.manual_real_utc`** | string (`""`) | **yes** | The true UTC of the recommended anchor frame, ISO-8601 (`"2024-07-03T14:12:21Z"`). **Only meaningful when `proposal.proposal_source == "gpx_self_anchor"`** (calibration derives the offset from the recommended anchor's camera time). |
-| `effective_time_anchor` | `""` \| object | no | `""` if unresolved; else `{ "offset_seconds": int, "source": … }` where source ∈ `manual` \| `manual_real_utc` \| `gpx_anchor_accepted` \| `inherited_accepted` \| `gpx_anchor_auto`. |
-| `requires_user_input` | bool | no | `true` ⇔ `effective_time_anchor == ""`. |
+| `effective_time_anchor` | `""` \| object | no | `""` if unresolved; else `{ "offset_seconds": int, "source": … }` where source ∈ `manual` \| `manual_real_utc` \| `gpx_anchor_accepted` \| `inherited_accepted` \| `gpx_anchor_auto` \| `inherited_auto`. |
+| `requires_user_input` | bool | no | `true` ⇔ `effective_time_anchor == ""` — **except** a `file_less` container, always `false`. |
 | `stale_user_decision` | bool | no | Accepted a proposal with no offset. |
-| `decision_mode` | `"auto_resolved"` | no | Present only when the GPX anchor auto-resolved (no human input needed). |
+| `decision_mode` | `"auto_resolved"` | no | Present when the GPX anchor auto-resolved, or a `file_less` container auto-adopted its inherited offset (`source: "inherited_auto"`). |
 
 **`proposal` shapes** (all read-only; this is the evidence the UI shows):
 
