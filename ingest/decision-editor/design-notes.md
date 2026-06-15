@@ -54,11 +54,18 @@ panel.
   confidence), the decision control, a **photo thumbnail** (review items), a **context map**, and a live
   **effective-outcome** preview with client-side validation.
 - **Specialized controls:**
-  - **Timezone:** searchable IANA select; or accept the proposal.
-  - **Clock offset:** a **mouse-wheel spinner** (`+1h 00m 00s` / raw seconds) whose **step accelerates
-    with scroll velocity** (gentle nudge ±1 s → fast flick minutes→hours); arrow keys (±1 s, Shift ±60 s)
-    and type-to-set fallbacks; "accept" pre-fills it. Wheel-edit only when hovered/focused, with
-    `preventDefault` so it never hijacks page scroll. **Real-UTC** entry is the equivalent alternate input.
+  - **Timezone:** a full IANA-zone **drop-down**; accepting the proposal mirrors it into the field and
+    **locks** the drop-down (unaccepting frees it). The "accept" box is disabled when there's nothing to accept.
+  - **Clock offset:** an **h/m/s spinner** with three independent fields — hover-scroll (or focus + ↑/↓)
+    over a field nudges just that unit (±3600/±60/±1 s), clamped to ±86400 s; a raw-seconds box and "clear"
+    sit alongside; `preventDefault` keeps the wheel from hijacking page scroll. For a **gpx_self_anchor**
+    proposal a second view appears — a **`datetime-local` picker for the anchor frame's real UTC**.
+    The spinner and picker are **two views of the one stored value** (`manual_offset_seconds`): click the
+    view you want to drive, the other goes read-only and tracks it; editing the UTC view sets
+    `offset = picker − the frame's camera clock` and clears `manual_real_utc`, so the editor always
+    persists the offset (never `manual_real_utc`). A **display-only label** renders the equivalent
+    destination-local time via the resolved timezone (with a "set the timezone" nudge when it isn't), and
+    the proposal's GPX-estimated UTC is shown as a reference. The "accept" box is disabled with no proposal.
   - **GPS coordinate / fallback:** a **zoomable map with a fixed centre crosshair** — pan/zoom under it,
     "use map center" → take `map.getCenter()` into the lat/lon fields. Reference pins (effective /
     inherited / folder fallback) and a marker for the current decision give context, and the map seeds
