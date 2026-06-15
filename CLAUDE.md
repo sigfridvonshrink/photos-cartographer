@@ -44,6 +44,12 @@ python3 -m pytest -q
 # A single test file / test
 python3 -m pytest ingest/tests/test_workspace_prep.py -q
 python3 -m pytest ingest/tests/test_workspace_prep.py::test_name -q
+
+# Per-script test coverage (branch coverage; report scoped to the production scripts).
+# tools/coverage bootstraps a local .venv (--system-site-packages) with dev-requirements.txt,
+# runs `coverage run -m pytest` against .coveragerc, and writes htmlcov/. Args pass through:
+tools/coverage                 # whole suite + per-script report + htmlcov/
+tools/coverage -k merge        # subset (report % will be partial)
 ```
 
 `ingest/tests/conftest.py` loads the extensionless `photos-1-prep` script and `photos_utils` **once**
@@ -52,8 +58,10 @@ between tests). Test files therefore `import photos_1_prep` rather than each re-
 without that, a combined `pytest` session breaks because `@patch("photos_1_prep....")` and a test's
 captured module reference can resolve to different objects.
 
-There is no build step, no linter config, and no dependency manifest; deps are system tools
-(`exiftool`, `magick`, `cjxl`, `avifenc`, `ffmpeg`) plus pip packages listed in `README.md`.
+There is no build step and no linter config; runtime deps are system tools (`exiftool`, `magick`,
+`cjxl`, `avifenc`, `ffmpeg`) plus pip packages listed in `README.md`. The only manifest is
+`dev-requirements.txt` — `pytest` + `coverage` for running the suite / measuring coverage (used by
+`tools/coverage` and CI); the pipeline itself needs no pip install.
 
 ### Continuous integration
 
