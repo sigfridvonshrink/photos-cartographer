@@ -229,6 +229,13 @@ def _parse_camera_naive(s):
         return None
 
 
+def _naive_date(s):
+    """The camera naive timestamp's calendar date as 'YYYY-MM-DD', or None — the per-day offset bucket
+    key within a destination (§10.2: a clock set to local time each morning is constant only per day)."""
+    dt = _parse_camera_naive(s)
+    return dt.strftime("%Y-%m-%d") if dt else None
+
+
 def _parse_utc(s):
     """An ISO-8601 UTC datetime (trailing Z accepted) as an aware datetime, or None."""
     try:
@@ -452,7 +459,12 @@ def compute_resolved_utc(files, groups, artifact):
         resolved, status, rule, offset_used, prov = None, "unresolved", "missing_timestamp", None, None
         if naive is not None:
             if cls == "camera":
-                eff = ((d.get("camera_group_time_decisions") or {}).get(key) or {}).get("effective_time_anchor")
+                # per-date offset bucket: a destination split over >1 naive date keys cells
+                # `group@YYYY-MM-DD`; the single-date common case keeps the bare `group` key.
+                cells = d.get("camera_group_time_decisions") or {}
+                date = _naive_date(f.get("source_naive_time"))
+                cell = cells.get(f"{key}@{date}") or cells.get(key) or {}
+                eff = cell.get("effective_time_anchor")
                 if isinstance(eff, dict) and "offset_seconds" in eff:
                     offset_used = eff["offset_seconds"]
                     resolved = naive + timedelta(seconds=offset_used)
@@ -718,27 +730,21 @@ def _nearest_ancestor(dest, eff, key):
 def _expand_destinations(by_dest):
     """Enumerate the destinations to decide on, given {real_dest: [files]}.
 
-    Returns (ordered, containers, subtree_groups):
+    Returns (ordered, containers):
       * `ordered` — the real (media-bearing) destinations PLUS every ancestor folder within the
-        by-dest tree, sorted parent-first (so an ancestor's effective values are known before a
-        child inherits them).
+        by-dest tree, sorted parent-first (so an ancestor's effective timezone/fallback is known before
+        a child inherits it).
       * `containers` — the file-less ancestors (folders that hold only sub-destinations). A container
-        carries timezone / fallback / offset decisions purely so a human can set defaults that
-        propagate DOWN to its children; its own cells never block (it has no media to act on).
-      * `subtree_groups` — maps each destination to the set of camera_group_keys appearing ANYWHERE
-        beneath it (recursively: children, grandchildren, …). Used only for a container, to know
-        which per-group offset cells it could speak for. This gathers the *set of groups* from
-        descendants but never a descendant's decided value — decisions are never pooled upward."""
+        carries a timezone and a GPS-fallback decision purely so a human can set defaults that propagate
+        DOWN to its children; it has no media, so it carries no clock-offset cells."""
     real = set(by_dest)
-    containers, subtree_groups = set(), {}
-    for dest, fs in by_dest.items():
-        keys = {f["camera_group_key"] for f in fs if f.get("camera_group_key")}   # absent in the GPS model
+    containers = set()
+    for dest in by_dest:
         for anc in _walk_ancestors(dest):
-            subtree_groups.setdefault(anc, set()).update(keys)
             if anc not in real:
                 containers.add(anc)
     ordered = sorted(real | containers, key=lambda d: (d.count('/'), d))
-    return ordered, containers, subtree_groups
+    return ordered, containers
 
 
 def _dest_label(dest):
@@ -1264,46 +1270,42 @@ class CalibrationWorkflow:
             by_dest.setdefault(f["destination"], []).append(f)
 
         destinations = {}
-        # Process destinations PARENT-FIRST so an ancestor's effective offset/timezone is known before
-        # its children can inherit it (§10.2 rule 4). `eff` maps (destination, group) -> resolved
-        # offset; `eff_tz` maps (destination, "tz") -> resolved effective timezone.
-        eff = {}
+        # Process destinations PARENT-FIRST so an ancestor's effective TIMEZONE is known before a child
+        # inherits it (§18). `eff_tz` maps (destination, "tz") -> resolved effective timezone. Clock
+        # offsets do NOT inherit across destinations (§10.2): each (group, date) bucket proposes its own.
         eff_tz = {}
-        ordered, containers, subtree_groups = _expand_destinations(by_dest)
+        ordered, containers = _expand_destinations(by_dest)
         self.coordinator.start_phase("calibrating clock offsets", len(ordered))
         for dest in ordered:
             self.coordinator.set_detail(_dest_label(dest))   # name the destination so heavy ones are visible
-            is_container = dest in containers       # a file-less folder: holds defaults for its children only
+            is_container = dest in containers       # a file-less folder: holds a timezone/fallback, no offsets
             prior_d = prior_dests.get(dest, {})
             inherited_tz = _nearest_ancestor(dest, eff_tz, "tz")        # confirmable basis if no default
             tz_block = self._timezone_decision(dest, prior_d.get("destination_timezone") or {},
                                                blockers, inherited_tz, file_less=is_container)
             eff_tz[(dest, "tz")] = tz_block["effective_iana_timezone"] or None   # what children inherit
-            # A container's offset cells cover the camera groups found anywhere in its subtree (so a
-            # human can set one offset that propagates down); a real destination covers only its own.
-            present = sorted(subtree_groups.get(dest, set())) if is_container \
-                else sorted({f["camera_group_key"] for f in by_dest[dest]})
+            tz = tz_block["effective_iana_timezone"] or None
             prior_cells = prior_d.get("camera_group_time_decisions") or {}
-            cells = {}
-            for key in present:
-                g = groups.get(key) or {}
+            cells, present = {}, []
+            # Containers hold no media → no offset cells. A real destination gets one offset cell per
+            # camera group, SPLIT per naive calendar date when the group spans >1 day there (§10.2): the
+            # camera is set to local time each morning, so the offset is constant only within a day. The
+            # bucket key is the bare group for a single day, else `<group>@<YYYY-MM-DD>`.
+            for group in (sorted({f["camera_group_key"] for f in by_dest[dest]}) if not is_container else []):
+                present.append(group)
+                g = groups.get(group) or {}
                 if g.get("camera_group_class") != "camera":
                     continue                       # smartphones are solved per-file; no offset cell
-                frames = [] if is_container else [f for f in by_dest[dest]
-                                                  if f["camera_group_key"] == key and f.get("native_gps")]
-                inherited = self._nearest_ancestor_offset(dest, key, eff)   # confirmable basis if no self-anchor
-                # earliest parseable naive of THIS group in THIS destination — basis for a timezone-derived
-                # proposal when there's no anchor and no inherited offset (§19.4). None for a container.
-                rep_naive = None if is_container else min(
-                    (f.get("source_naive_time") for f in by_dest[dest]
-                     if f["camera_group_key"] == key and _parse_camera_naive(f.get("source_naive_time"))),
-                    default=None)
-                cell = self._offset_cell(dest, key, g, prior_cells.get(key) or {}, frames, gpx, blockers,
-                                         inherited, file_less=is_container,
-                                         tz=tz_block["effective_iana_timezone"] or None, rep_naive=rep_naive)
-                cells[key] = cell
-                e = cell["effective_time_anchor"]
-                eff[(dest, key)] = e["offset_seconds"] if e else None       # what this cell's children inherit
+                gframes = [f for f in by_dest[dest] if f["camera_group_key"] == group]
+                dates = sorted({d for f in gframes if (d := _naive_date(f.get("source_naive_time")))})
+                for date in (dates if len(dates) > 1 else [None]):
+                    sel = gframes if date is None else [f for f in gframes if _naive_date(f.get("source_naive_time")) == date]
+                    anchor_frames = [f for f in sel if f.get("native_gps")]
+                    rep_naive = min((f.get("source_naive_time") for f in sel
+                                     if _parse_camera_naive(f.get("source_naive_time"))), default=None)
+                    bucket = group if date is None else f"{group}@{date}"
+                    cells[bucket] = self._offset_cell(dest, group, g, prior_cells.get(bucket) or {},
+                                                      anchor_frames, gpx, blockers, tz=tz, rep_naive=rep_naive, date=date)
             destinations[dest] = {
                 "destination_path": dest,
                 "destination_timezone": tz_block,
@@ -1381,23 +1383,14 @@ class CalibrationWorkflow:
             block["inherited_from"] = inherited_from
         return block
 
-    def _nearest_ancestor_offset(self, dest, key, eff):
-        """The deepest ancestor destination of `dest` with a RESOLVED effective offset for `key`
-        (§10.2 rule 4) — the clock-offset use of the shared `_nearest_ancestor` walk. Only
-        already-processed, resolved ancestors qualify; inheritance flows parent->child only."""
-        return _nearest_ancestor(dest, eff, key)
-
-    def _offset_cell(self, dest, key, g, prior_cell, frames, gpx, blockers, inherited=None, file_less=False,
-                     tz=None, rep_naive=None):
+    def _offset_cell(self, dest, key, g, prior_cell, frames, gpx, blockers, tz=None, rep_naive=None, date=None):
+        # One (camera group, destination[, date]) clock-offset bucket. Proposal precedence (§10.2 rule 4):
+        # GPX self-anchor → timezone-derived (camera assumed on local time; DST-aware, §19.4) → manual.
+        # Clock offsets do not inherit across destinations. `date` (YYYY-MM-DD) is set when the group
+        # spans >1 naive day here; the bucket key is `<key>@<date>` and is the blocker location.
+        loc = key if date is None else f"{key}@{date}"
         proposal = infer_anchor_proposal(frames, gpx, CONFIG)
-        if proposal is None and inherited is not None:
-            anc_path, anc_off = inherited
-            proposal = {"proposal_source": "inherited", "proposed_offset_seconds": anc_off,
-                        "inherited_from": anc_path, "confidence": "review_required",
-                        "rank": "inherited_from_ancestor"}
-        elif proposal is None and (tzr := _timezone_naive_offset(rep_naive, tz)) is not None:
-            # no anchor, no ancestor: assume the camera clock tracked the destination's civil timezone,
-            # so offset = -(tz UTC offset) at this naive instant (DST-aware). Confirmable, never auto (§19.4).
+        if proposal is None and (tzr := _timezone_naive_offset(rep_naive, tz)) is not None:
             off_s, real_iso = tzr
             proposal = {"proposal_source": "timezone_naive", "proposed_offset_seconds": off_s,
                         "proposed_real_utc": real_iso, "proposed_from_timezone": tz,
@@ -1419,41 +1412,33 @@ class CalibrationWorkflow:
             if _valid_offset(manual_off):
                 effective = {"offset_seconds": int(manual_off), "source": "manual"}
             else:
-                blockers.append(f"{dest}: camera_group_time_decisions[{key}].user_decision."
+                blockers.append(f"{dest}: camera_group_time_decisions[{loc}].user_decision."
                                 "manual_offset_seconds must be a number within +/-86400.")
         elif manual_utc:
             dt = _parse_utc(manual_utc)
             if dt is None:
-                blockers.append(f"{dest}: camera_group_time_decisions[{key}].user_decision."
+                blockers.append(f"{dest}: camera_group_time_decisions[{loc}].user_decision."
                                 f"manual_real_utc {manual_utc!r} is not a valid UTC datetime.")
             elif is_gpx and proposal["anchors"]:
-                # derive the (group,dest) offset from the recommended anchor's camera naive time
+                # derive the offset from the recommended anchor's camera naive time
                 # (guaranteed parseable — match_frame_to_gpx rejects frames with an unparseable time)
                 naive = _parse_camera_naive(proposal["anchors"][0]["camera_source_naive_time"])
                 effective = {"offset_seconds": round((dt.replace(tzinfo=None) - naive).total_seconds()),
                              "source": "manual_real_utc"}
         elif accept:
-            if has_offset:                         # accept a GPX self-anchor / inherited / timezone proposal
-                src = ("gpx_anchor_accepted" if is_gpx
-                       else "timezone_accepted" if proposal.get("proposal_source") == "timezone_naive"
-                       else "inherited_accepted")
-                effective = {"offset_seconds": proposal["proposed_offset_seconds"], "source": src}
+            if has_offset:                         # accept a GPX self-anchor or a timezone-derived proposal
+                effective = {"offset_seconds": proposal["proposed_offset_seconds"],
+                             "source": "gpx_anchor_accepted" if is_gpx else "timezone_accepted"}
             else:
                 stale = True                       # accepted a proposal that does not exist
         elif is_gpx and not conflicting:
-            # auto-resolution under the config flags (§9.1). Inherited proposals are confirmable
-            # only — never auto-applied — so this branch is GPX-self-anchor exclusively.
+            # auto-resolution under the config flags (§9.1) — GPX-self-anchor only; a timezone-derived
+            # proposal is confirmable, never auto-applied (the local-clock assumption can be wrong).
             n = proposal["anchor_count"]
             if (n >= 2 and policy.get("multi_anchor_auto_apply", True)) or \
                (n == 1 and policy.get("single_anchor_auto_apply", False)):
                 effective = {"offset_seconds": proposal["proposed_offset_seconds"], "source": "gpx_anchor_auto"}
                 decision_mode = "auto_resolved"
-        elif file_less and has_offset:
-            # A file-less container has no frames to anchor and no media to mis-correct, so it
-            # auto-adopts its inherited offset (and re-propagates it downward) without confirmation,
-            # while staying overridable by a manual offset above.
-            effective = {"offset_seconds": proposal["proposed_offset_seconds"], "source": "inherited_auto"}
-            decision_mode = "auto_resolved"
 
         cell = {
             "camera_group": key,
@@ -1463,9 +1448,11 @@ class CalibrationWorkflow:
                               "manual_offset_seconds": manual_off if manual_off is not None else "",
                               "manual_real_utc": manual_utc},
             "effective_time_anchor": effective,
-            "requires_user_input": effective == "" and not file_less,   # a container never blocks
+            "requires_user_input": effective == "",
             "stale_user_decision": stale,
         }
+        if date is not None:
+            cell["date"] = date                    # this bucket covers only that naive calendar date
         if decision_mode:
             cell["decision_mode"] = decision_mode
         return cell
@@ -1523,7 +1510,7 @@ class CalibrationWorkflow:
 
         destinations = {}
         fallback_eff = {}                                     # (dest, None) -> effective fallback coord
-        ordered, containers, _ = _expand_destinations(by_dest)
+        ordered, containers = _expand_destinations(by_dest)
         self.coordinator.start_phase("deciding GPS placement", len(files))
         for dest in ordered:
             self.coordinator.set_detail(_dest_label(dest))
