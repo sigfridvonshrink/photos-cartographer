@@ -10,7 +10,7 @@
 
 import { mapPicker } from "./map.js";
 
-const state = { base: null, work: null, view: "time", selected: null, saving: false, running: false, message: null, runResult: null };
+const state = { base: null, work: null, view: "time", selected: null, saving: false, running: false, message: null, runResult: null, timeChangedSinceRerun: false };
 
 const $ = (s) => document.querySelector(s);
 function el(tag, attrs = {}, ...kids) {
@@ -78,8 +78,11 @@ const anyInvalid = () => allRefs().some(refInvalid);
 const udSet = (u) => Object.values(u || {}).some((v) => v === true || (v !== "" && v != null && v !== false));
 
 // --- edit + status -----------------------------------------------------------
-function edit(ref, field, value) { workCell(ref).user_decision[field] = value; render(); }
-function editMany(ref, obj) { Object.assign(workCell(ref).user_decision, obj); render(); }
+// Time edits invalidate the GPS decisions (GPS placement is computed from resolved UTC), and GPS is
+// only recomputed on a Re-run — so flag any time change to drive the GPS-view stale/lock notices below.
+const touchTime = (ref) => { if (ref.file === "time") state.timeChangedSinceRerun = true; };
+function edit(ref, field, value) { touchTime(ref); workCell(ref).user_decision[field] = value; render(); }
+function editMany(ref, obj) { touchTime(ref); Object.assign(workCell(ref).user_decision, obj); render(); }
 function resetRef(ref) { workCell(ref).user_decision = clone(baseCell(ref).user_decision); render(); }
 
 function cellStatus(cell) {
@@ -251,12 +254,25 @@ function renderTreeNode(node, box) {
 function renderTime(list) {
   const t = state.work.time;
   if (!t?.destinations) return list.append(el("div", { class: "empty" }, "No photos-21-time-decisions.json."));
+  if (!state.base.demo && state.timeChangedSinceRerun)
+    list.append(el("div", { class: "gate warn" }, "Time decisions changed — Re-run afterward so GPS is recomputed from the new times."));
   const root = buildTree(t.destinations);
   for (const k of Object.keys(root.children).sort()) renderTreeNode(root.children[k], list);
 }
 function renderGps(list) {
   const g = state.work.gps;
+  // GPS placement is derived from each photo's resolved UTC, so the GPS phase is gated on the time
+  // decisions: calibration only (re)generates photos-22 once every time decision is resolved. Make
+  // that gate visible rather than showing an empty or stale GPS view.
+  if (!state.base.demo && state.work.time?.requires_user_input)
+    return list.append(el("div", { class: "gate" },
+      el("div", { class: "gate-title" }, "GPS is waiting on the time decisions"),
+      "GPS placement (interpolation / extrapolation) is computed from each photo's resolved UTC, so the GPS "
+      + "decisions are generated only once every timezone and clock-offset decision is resolved. Finish them in "
+      + "the Time view, then Re-run."));
   if (!g?.destinations) return list.append(el("div", { class: "empty" }, "No photos-22-gps-decisions.json."));
+  if (!state.base.demo && state.timeChangedSinceRerun)
+    list.append(el("div", { class: "gate warn" }, "Time decisions changed since the last calibration run — Re-run to recompute GPS. The decisions below are stale until you do."));
   for (const dest of Object.keys(g.destinations).sort()) {
     const d = g.destinations[dest], fb = d.folder_fallback, s = d.gps_decisions?.summary || {};
     list.append(el("div", { class: "group-title" }, dest,
@@ -517,6 +533,7 @@ async function rerun() {
       state.base = await (await fetch("/api/artifacts")).json();
       state.work = clone(state.base);
       state.selected = null;
+      state.timeChangedSinceRerun = false;   // GPS was just recomputed against the current time decisions
       state.message = "re-ran calibration — artifacts reloaded";
     } else {
       state.message = r.error ? `re-run failed: ${r.error}` : `re-run reported blockers (exit ${r.returncode})`;
