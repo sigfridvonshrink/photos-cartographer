@@ -2,7 +2,7 @@
 # ============================================================================
 # GENERATED FILE — DO NOT EDIT.  Built from decision-editor.unbundled by ./bundle.
 # Edit the source and re-run ./bundle; edits here are lost.  Verify with ./bundle --check.
-# source-sha256: 295b50a5948fcbb53219762267172a0fbcdb55fd95555765328a010269fdf9f2
+# source-sha256: 001a1890d13c82e6cf676fc8d266a0e6d89b8f5838037f396ef6b91c684e6373
 # ============================================================================
 """Local server for the decision editor.
 
@@ -83,6 +83,7 @@ CALIBRATE = os.path.join(os.path.dirname(HERE), "photos-2-time-gps")  # the cali
 CONTROL = ".photos-ingest"
 TIME_NAME = "photos-21-time-decisions.json"
 GPS_NAME = "photos-22-gps-decisions.json"
+CONFIG_NAME = "photos-00-config.json"
 EDITOR_LOCK = "photos-00-decision-editor.lock"  # dotfile lives in CONTROL; flock, fail-fast
 
 _CONTENT_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
@@ -608,21 +609,27 @@ _WEB_ASSETS = {
         'JCgiI3RvZG8iKS50ZXh0Q29udGVudCA9IGRpcnR5ID8gYCR7ZGlydHl9IHVuc2F2ZWQke2ludmFsaWQgPyAiIMK3IOKclyBpbnZhbGlkIiA6ICIifWAg'
         'OiAoc3RhdGUubWVzc2FnZSB8fCAibm8gY2hhbmdlcyIpOwogIGNvbnN0IHNhdmUgPSAkKCIjc2F2ZSIpOyBzYXZlLmRpc2FibGVkID0gYS5kZW1vIHx8'
         'IGJ1c3kgfHwgZGlydHkgPT09IDAgfHwgaW52YWxpZDsKICBzYXZlLnRpdGxlID0gYS5kZW1vID8gImRlbW8gbW9kZSBpcyByZWFkLW9ubHkg4oCUIHJ1'
-        'biBgc2VydmUgPHdvcmtzcGFjZT5gIHRvIHNhdmUiIDogaW52YWxpZCA/ICJmaXggaW52YWxpZCBmaWVsZHMgZmlyc3QiIDogIiI7CiAgY29uc3QgcmVy'
-        'dW5CdG4gPSAkKCIjcmVydW4iKTsgcmVydW5CdG4uZGlzYWJsZWQgPSBhLmRlbW8gfHwgYnVzeSB8fCBkaXJ0eSA+IDAgfHwgaW52YWxpZDsKICByZXJ1'
-        'bkJ0bi50ZXh0Q29udGVudCA9IHN0YXRlLnJ1bm5pbmcgPyAicnVubmluZ+KApiIgOiAiUmUtcnVuIjsKICByZXJ1bkJ0bi50aXRsZSA9IGEuZGVtbyA/'
-        'ICJkZW1vIG1vZGUg4oCUIG5vIHdvcmtzcGFjZSB0byBjYWxpYnJhdGUiCiAgICA6IGRpcnR5ID4gMCA/ICJzYXZlIHlvdXIgY2hhbmdlcyBmaXJzdCwg'
-        'dGhlbiByZS1ydW4iCiAgICA6IGludmFsaWQgPyAiZml4IGludmFsaWQgZmllbGRzIGZpcnN0IiA6ICJydW4gYHBob3Rvcy0yLXRpbWUtZ3BzIHJ1bmAg'
-        'YW5kIHJlbG9hZCB0aGUgcmVzdWx0IjsKICAkKCIjcmVzZXQiKS5kaXNhYmxlZCA9IGRpcnR5ID09PSAwIHx8IGJ1c3k7CiAgcmVuZGVyUnVubG9nKCk7'
-        'CiAgY29uc3QgbGlzdCA9ICQoIiNsaXN0Iik7IGxpc3QucmVwbGFjZUNoaWxkcmVuKCk7CiAgKHN0YXRlLnZpZXcgPT09ICJ0aW1lIiA/IHJlbmRlclRp'
-        'bWUgOiByZW5kZXJHcHMpKGxpc3QpOwogIHJlbmRlclBhbmVsKCk7Cn0KCmFzeW5jIGZ1bmN0aW9uIG1haW4oKSB7CiAgZm9yIChjb25zdCBiIG9mIGRv'
-        'Y3VtZW50LnF1ZXJ5U2VsZWN0b3JBbGwoIiN2aWV3LXRvZ2dsZSBidXR0b24iKSkgYi5hZGRFdmVudExpc3RlbmVyKCJjbGljayIsICgpID0+IHsgc3Rh'
-        'dGUudmlldyA9IGIuZGF0YXNldC52aWV3OyBzdGF0ZS5zZWxlY3RlZCA9IG51bGw7IHJlbmRlcigpOyB9KTsKICAkKCIjc2F2ZSIpLmFkZEV2ZW50TGlz'
-        'dGVuZXIoImNsaWNrIiwgc2F2ZSk7CiAgJCgiI3JlcnVuIikuYWRkRXZlbnRMaXN0ZW5lcigiY2xpY2siLCByZXJ1bik7CiAgJCgiI3Jlc2V0IikuYWRk'
-        'RXZlbnRMaXN0ZW5lcigiY2xpY2siLCAoKSA9PiB7IHN0YXRlLndvcmsgPSBjbG9uZShzdGF0ZS5iYXNlKTsgc3RhdGUubWVzc2FnZSA9IG51bGw7IHJl'
-        'bmRlcigpOyB9KTsKICB0cnkgeyBzdGF0ZS5iYXNlID0gYXdhaXQgKGF3YWl0IGZldGNoKCIvYXBpL2FydGlmYWN0cyIpKS5qc29uKCk7IHN0YXRlLndv'
-        'cmsgPSBjbG9uZShzdGF0ZS5iYXNlKTsgfQogIGNhdGNoIChlKSB7ICQoIiNsaXN0IikucmVwbGFjZUNoaWxkcmVuKGVsKCJkaXYiLCB7IGNsYXNzOiAi'
-        'ZW1wdHkiIH0sICJDb3VsZCBub3QgbG9hZCAvYXBpL2FydGlmYWN0czogIiArIGUpKTsgcmV0dXJuOyB9CiAgcmVuZGVyKCk7Cn0KbWFpbigpOwo='
+        'biBgc2VydmUgPHdvcmtzcGFjZT5gIHRvIHNhdmUiIDogaW52YWxpZCA/ICJmaXggaW52YWxpZCBmaWVsZHMgZmlyc3QiIDogIiI7CiAgLy8gQ2FsaWJy'
+        'YXRpb24gcmVhZHMgZm9sZGVyIGRlcGVuZGVuY2llcyAodGhlIGdweF9yb290KSB0aGF0IG1heSBsaXZlIG9ubHkgb24gdGhlIHdvcmtzcGFjZSdzIG93'
+        'bgogIC8vIGhvc3Q7IHJlLXJ1bm5pbmcgd2hlcmUgdGhleSdyZSBpbnZpc2libGUgd291bGQgc2lsZW50bHkgd2lwZSBHUFgtZGVyaXZlZCBkZWNpc2lv'
+        'bnMuIEdhdGUgb24gaXQuCiAgY29uc3QgZGVwc01pc3NpbmcgPSAhYS5kZW1vICYmIGEuZW52aXJvbm1lbnQgJiYgIWEuZW52aXJvbm1lbnQuZGVwc19v'
+        'azsKICBjb25zdCByZXJ1bkJ0biA9ICQoIiNyZXJ1biIpOyByZXJ1bkJ0bi5kaXNhYmxlZCA9IGEuZGVtbyB8fCBidXN5IHx8IGRpcnR5ID4gMCB8fCBp'
+        'bnZhbGlkIHx8IGRlcHNNaXNzaW5nOwogIHJlcnVuQnRuLnRleHRDb250ZW50ID0gc3RhdGUucnVubmluZyA/ICJydW5uaW5n4oCmIiA6ICJSZS1ydW4i'
+        'OwogIHJlcnVuQnRuLnRpdGxlID0gYS5kZW1vID8gImRlbW8gbW9kZSDigJQgbm8gd29ya3NwYWNlIHRvIGNhbGlicmF0ZSIKICAgIDogZGVwc01pc3Np'
+        'bmcgPyBgY2FuJ3QgcmUtcnVuIG9uIHRoaXMgbWFjaGluZSDigJQgJHthLmVudmlyb25tZW50Lm1pc3Npbmcuam9pbigiLCAiKX0gbm90IHZpc2libGUg'
+        'aGVyZTsgY2FsaWJyYXRpb24gbmVlZHMgaXQsIHNvIHJ1biB0aGUgZWRpdG9yIG9uIHRoZSB3b3Jrc3BhY2UncyBob3N0YAogICAgOiBkaXJ0eSA+IDAg'
+        'PyAic2F2ZSB5b3VyIGNoYW5nZXMgZmlyc3QsIHRoZW4gcmUtcnVuIgogICAgOiBpbnZhbGlkID8gImZpeCBpbnZhbGlkIGZpZWxkcyBmaXJzdCIgOiAi'
+        'cnVuIGBwaG90b3MtMi10aW1lLWdwcyBydW5gIGFuZCByZWxvYWQgdGhlIHJlc3VsdCI7CiAgJCgiI3Jlc2V0IikuZGlzYWJsZWQgPSBkaXJ0eSA9PT0g'
+        'MCB8fCBidXN5OwogIHJlbmRlclJ1bmxvZygpOwogIGNvbnN0IGxpc3QgPSAkKCIjbGlzdCIpOyBsaXN0LnJlcGxhY2VDaGlsZHJlbigpOwogIChzdGF0'
+        'ZS52aWV3ID09PSAidGltZSIgPyByZW5kZXJUaW1lIDogcmVuZGVyR3BzKShsaXN0KTsKICByZW5kZXJQYW5lbCgpOwp9Cgphc3luYyBmdW5jdGlvbiBt'
+        'YWluKCkgewogIGZvciAoY29uc3QgYiBvZiBkb2N1bWVudC5xdWVyeVNlbGVjdG9yQWxsKCIjdmlldy10b2dnbGUgYnV0dG9uIikpIGIuYWRkRXZlbnRM'
+        'aXN0ZW5lcigiY2xpY2siLCAoKSA9PiB7IHN0YXRlLnZpZXcgPSBiLmRhdGFzZXQudmlldzsgc3RhdGUuc2VsZWN0ZWQgPSBudWxsOyByZW5kZXIoKTsg'
+        'fSk7CiAgJCgiI3NhdmUiKS5hZGRFdmVudExpc3RlbmVyKCJjbGljayIsIHNhdmUpOwogICQoIiNyZXJ1biIpLmFkZEV2ZW50TGlzdGVuZXIoImNsaWNr'
+        'IiwgcmVydW4pOwogICQoIiNyZXNldCIpLmFkZEV2ZW50TGlzdGVuZXIoImNsaWNrIiwgKCkgPT4geyBzdGF0ZS53b3JrID0gY2xvbmUoc3RhdGUuYmFz'
+        'ZSk7IHN0YXRlLm1lc3NhZ2UgPSBudWxsOyByZW5kZXIoKTsgfSk7CiAgdHJ5IHsgc3RhdGUuYmFzZSA9IGF3YWl0IChhd2FpdCBmZXRjaCgiL2FwaS9h'
+        'cnRpZmFjdHMiKSkuanNvbigpOyBzdGF0ZS53b3JrID0gY2xvbmUoc3RhdGUuYmFzZSk7IH0KICBjYXRjaCAoZSkgeyAkKCIjbGlzdCIpLnJlcGxhY2VD'
+        'aGlsZHJlbihlbCgiZGl2IiwgeyBjbGFzczogImVtcHR5IiB9LCAiQ291bGQgbm90IGxvYWQgL2FwaS9hcnRpZmFjdHM6ICIgKyBlKSk7IHJldHVybjsg'
+        'fQogIHJlbmRlcigpOwp9Cm1haW4oKTsK'
     ),
     'index.html': _b(
         'PCFkb2N0eXBlIGh0bWw+CjxodG1sIGxhbmc9ImVuIj4KPGhlYWQ+CiAgPG1ldGEgY2hhcnNldD0idXRmLTgiPgogIDxtZXRhIG5hbWU9InZpZXdwb3J0'
@@ -3346,14 +3353,33 @@ def _example_json(name):
         return {"_error": f"could not parse {name}: {e}"}
 
 
+def _environment(workspace):
+    """Folder dependencies calibration needs that may live on a different machine than this editor.
+
+    The editor can run on a host that sees the workspace (e.g. over a share) but NOT the configured
+    `gpx_root` — and GPX time-anchoring reads that path. Re-running there would regenerate the time/GPS
+    decisions as if there were no GPX, silently discarding good offsets/placements. So the Re-run button
+    gates on this. Resolved from the workspace config (`photos-00-config.json`) the same way calibration
+    resolves it (`photos_utils.selected_gpx_root`). An EMPTY gpx_root means 'no GPX configured' — nothing
+    to depend on, so it does not block. Other folder dependencies: none at present."""
+    cfg = _read_json(os.path.join(workspace, CONTROL, CONFIG_NAME))
+    root = (cfg or {}).get("gpx_root") or "" if isinstance(cfg, dict) else ""
+    resolved = os.path.realpath(os.path.abspath(root)) if root else ""
+    gpx_available = (not resolved) or os.path.isdir(resolved)
+    missing = [] if gpx_available else [f"gpx_root ({resolved})"]
+    return {"gpx_root": resolved, "gpx_configured": bool(resolved),
+            "gpx_available": gpx_available, "deps_ok": not missing, "missing": missing}
+
+
 def _load_artifacts(workspace):
-    """Return {workspace, demo, time, gps}. Demo mode loads the requires-input example fixtures."""
+    """Return {workspace, demo, time, gps, environment}. Demo mode loads the requires-input fixtures."""
     if workspace:
         cd = os.path.join(workspace, CONTROL)
         return {"workspace": os.path.abspath(workspace), "demo": False,
                 "time": _read_json(os.path.join(cd, TIME_NAME)),
-                "gps": _read_json(os.path.join(cd, GPS_NAME))}
-    return {"workspace": None, "demo": True,
+                "gps": _read_json(os.path.join(cd, GPS_NAME)),
+                "environment": _environment(workspace)}
+    return {"workspace": None, "demo": True, "environment": None,
             "time": _example_json("photos-21-time-decisions.requires-input.json"),
             "gps": _example_json("photos-22-gps-decisions.requires-input.json")}
 
@@ -3419,6 +3445,10 @@ def _rerun(workspace):
     plans (no writes to originals)."""
     if not os.path.isfile(CALIBRATE):
         return {"ok": False, "error": f"calibration script not found at {CALIBRATE}"}
+    env = _environment(workspace)        # defence in depth: never recalc with a dependency off-machine
+    if not env["deps_ok"]:
+        return {"ok": False, "error": "calibration dependency not available on this machine: "
+                + ", ".join(env["missing"]) + ". Run the editor on the host that holds it, then re-run."}
     try:
         proc = subprocess.run([sys.executable, CALIBRATE, "run"], cwd=workspace,
                               capture_output=True, text=True, timeout=RERUN_TIMEOUT_S)

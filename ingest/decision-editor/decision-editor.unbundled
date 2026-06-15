@@ -78,6 +78,7 @@ CALIBRATE = os.path.join(os.path.dirname(HERE), "photos-2-time-gps")  # the cali
 CONTROL = ".photos-ingest"
 TIME_NAME = "photos-21-time-decisions.json"
 GPS_NAME = "photos-22-gps-decisions.json"
+CONFIG_NAME = "photos-00-config.json"
 EDITOR_LOCK = "photos-00-decision-editor.lock"  # dotfile lives in CONTROL; flock, fail-fast
 
 _CONTENT_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
@@ -209,14 +210,33 @@ def _example_json(name):
         return {"_error": f"could not parse {name}: {e}"}
 
 
+def _environment(workspace):
+    """Folder dependencies calibration needs that may live on a different machine than this editor.
+
+    The editor can run on a host that sees the workspace (e.g. over a share) but NOT the configured
+    `gpx_root` — and GPX time-anchoring reads that path. Re-running there would regenerate the time/GPS
+    decisions as if there were no GPX, silently discarding good offsets/placements. So the Re-run button
+    gates on this. Resolved from the workspace config (`photos-00-config.json`) the same way calibration
+    resolves it (`photos_utils.selected_gpx_root`). An EMPTY gpx_root means 'no GPX configured' — nothing
+    to depend on, so it does not block. Other folder dependencies: none at present."""
+    cfg = _read_json(os.path.join(workspace, CONTROL, CONFIG_NAME))
+    root = (cfg or {}).get("gpx_root") or "" if isinstance(cfg, dict) else ""
+    resolved = os.path.realpath(os.path.abspath(root)) if root else ""
+    gpx_available = (not resolved) or os.path.isdir(resolved)
+    missing = [] if gpx_available else [f"gpx_root ({resolved})"]
+    return {"gpx_root": resolved, "gpx_configured": bool(resolved),
+            "gpx_available": gpx_available, "deps_ok": not missing, "missing": missing}
+
+
 def _load_artifacts(workspace):
-    """Return {workspace, demo, time, gps}. Demo mode loads the requires-input example fixtures."""
+    """Return {workspace, demo, time, gps, environment}. Demo mode loads the requires-input fixtures."""
     if workspace:
         cd = os.path.join(workspace, CONTROL)
         return {"workspace": os.path.abspath(workspace), "demo": False,
                 "time": _read_json(os.path.join(cd, TIME_NAME)),
-                "gps": _read_json(os.path.join(cd, GPS_NAME))}
-    return {"workspace": None, "demo": True,
+                "gps": _read_json(os.path.join(cd, GPS_NAME)),
+                "environment": _environment(workspace)}
+    return {"workspace": None, "demo": True, "environment": None,
             "time": _example_json("photos-21-time-decisions.requires-input.json"),
             "gps": _example_json("photos-22-gps-decisions.requires-input.json")}
 
@@ -282,6 +302,10 @@ def _rerun(workspace):
     plans (no writes to originals)."""
     if not os.path.isfile(CALIBRATE):
         return {"ok": False, "error": f"calibration script not found at {CALIBRATE}"}
+    env = _environment(workspace)        # defence in depth: never recalc with a dependency off-machine
+    if not env["deps_ok"]:
+        return {"ok": False, "error": "calibration dependency not available on this machine: "
+                + ", ".join(env["missing"]) + ". Run the editor on the host that holds it, then re-run."}
     try:
         proc = subprocess.run([sys.executable, CALIBRATE, "run"], cwd=workspace,
                               capture_output=True, text=True, timeout=RERUN_TIMEOUT_S)

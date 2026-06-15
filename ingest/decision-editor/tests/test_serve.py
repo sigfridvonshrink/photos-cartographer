@@ -395,6 +395,51 @@ def test_rerun_surfaces_calibration_blockers(tmp_path):
     assert "photos-1-prep" in (r.get("stderr") or "")
 
 
+# ------------------------------------------------------------ folder-dependency gate (_environment)
+
+def _ws_with_gpx_config(tmp_path, gpx_root):
+    cd = tmp_path / serve.CONTROL
+    cd.mkdir(parents=True, exist_ok=True)
+    (cd / serve.CONFIG_NAME).write_text(json.dumps({"gpx_root": gpx_root}))
+    return str(tmp_path)
+
+
+def test_environment_no_config_does_not_block(tmp_path):
+    (tmp_path / serve.CONTROL).mkdir()
+    env = serve._environment(str(tmp_path))
+    assert env["gpx_configured"] is False and env["deps_ok"] is True and env["missing"] == []
+
+
+def test_environment_empty_gpx_root_does_not_block(tmp_path):
+    env = serve._environment(_ws_with_gpx_config(tmp_path, ""))
+    assert env["gpx_configured"] is False and env["deps_ok"] is True
+
+
+def test_environment_visible_gpx_root_is_ok(tmp_path):
+    gpx = tmp_path / "gpx"; gpx.mkdir()
+    env = serve._environment(_ws_with_gpx_config(tmp_path, str(gpx)))
+    assert env["gpx_available"] is True and env["deps_ok"] is True
+    assert env["gpx_root"] == os.path.realpath(str(gpx))
+
+
+def test_environment_missing_gpx_root_blocks(tmp_path):
+    env = serve._environment(_ws_with_gpx_config(tmp_path, str(tmp_path / "not-here")))
+    assert env["gpx_available"] is False and env["deps_ok"] is False
+    assert any("gpx_root" in m for m in env["missing"])
+
+
+def test_load_artifacts_carries_environment(tmp_path):
+    art = serve._load_artifacts(_ws_with_gpx_config(tmp_path, str(tmp_path / "not-here")))
+    assert art["environment"]["deps_ok"] is False
+
+
+def test_rerun_refuses_when_gpx_root_off_machine(tmp_path):
+    # Re-run must not silently regenerate decisions without the GPX the workspace depends on: the guard
+    # short-circuits BEFORE invoking calibration (no returncode), so good GPX-derived decisions survive.
+    r = serve._rerun(_ws_with_gpx_config(tmp_path, str(tmp_path / "not-here")))
+    assert r["ok"] is False and "gpx_root" in r["error"] and "returncode" not in r
+
+
 def test_http_rerun_403_in_demo():
     with _running(None) as base:
         status, data = _post_json(base + "/api/rerun", {})
