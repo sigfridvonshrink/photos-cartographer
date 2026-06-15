@@ -232,7 +232,7 @@ No calibration JSON was written.
 
 ### 7.0a Assumption: each destination is time-coherent for a camera
 
-Calibration assumes that **a single destination folder does not span a change in a camera's clock error** — every photo from one camera within one destination shares one true clock offset. Clock corrections therefore vary **between** destinations, never **within** one.
+Calibration assumes that **a camera's clock error is constant within one destination on one day** — every photo from one camera within one destination *on the same naive calendar date* shares one true clock offset. Clock corrections therefore vary **between** destinations and **between days within a destination** (a place revisited on different days or seasons), never within a single day's shoot. The user typically sets the camera to local time each morning, so the offset is a per-day fact; a destination spanning more than one naive date splits into per-day offset buckets (Section 10.2 rule 4).
 
 This is a deliberate assumption about how the user organizes media, and it is *why* the camera clock offset is inferred and applied per **(camera group, destination)** rather than once per camera (Section 10.2):
 
@@ -240,7 +240,7 @@ This is a deliberate assumption about how the user organizes media, and it is *w
 - Each destination's offset is anchored only from that camera group's native-GPS frames *in that destination* (Section 19), so each trip is corrected on its own evidence.
 - A **nested subfolder is a separate destination** (Section 10.1) with its own offset cell — there is no roll-up. If you keep a single coherent shoot in one destination (the natural way to organize), this assumption holds automatically; if you deliberately split one shoot across nested destinations, each is corrected independently.
 
-The cost of correctness is softened by **downward inheritance**: a (camera group, destination) with no native-GPS frame of its own does not start blank — it inherits the **nearest ancestor destination's** effective offset for that group as a *proposal to confirm*, recursively down the tree (Section 10.2 rule 4). So anchoring once at a trip's root seeds all its sub-destinations as confirmable defaults; you confirm or override at each level, and a manual offset at any folder re-roots what its descendants inherit. Only a cell with neither its own GPS frames nor any ancestor offset starts from a blank manual field. Inheritance flows parent→child only (never sibling→sibling) and is always confirmable, so it stays within "corrections between destinations, never within."
+A (camera group, destination, date) bucket with no native-GPS frame of its own does not start blank: when the destination's civil timezone is resolved, calibration proposes a **timezone-derived** offset from the local clock for that day (Section 10.2 rule 4b, Section 19.4), confirmable. Clock offsets are **not** inherited from ancestor destinations — unlike the timezone and the folder GPS fallback, an offset is a measured/assumed fact tied to a specific place and day, not a folder default to cascade. A bucket with neither its own GPS frames nor a resolved timezone starts from a blank manual field.
 
 ### 7.1 Development must not have started
 
@@ -455,7 +455,7 @@ A folder is a destination if it directly contains media; nested folders that dir
 
 This matches prep's handoff `destination_folders` grouping (immediate parent, `os.path.dirname`), which is correct precisely *because* the format-distribution subfolders (jpg/tif) must not exist yet. Their presence is a hard-stop blocker, not a grouping case to collapse (Section 7.1).
 
-A folder that holds only sub-destinations — with **no media directly in it** — is *also* materialized as a destination, called a **container destination** and flagged `file_less: true`. It exists so an operator can author timezone / clock-offset / folder-GPS-fallback decisions on it that propagate **downward** to its children, through the same nearest-ancestor inheritance used everywhere else (Section 10.2 rule 4, Section 18, Section 25.3) — e.g. setting one GPS fallback or one camera offset on a trip's parent folder seeds every leaf beneath it. The container set is derived from the real destinations' ancestor paths within `6-photos-by-dest` (no extra filesystem scan); the by-dest root is itself a container when it holds only sub-destinations, giving a single library-wide default node. Because a container has no media of its own to act on, its decision cells **never block and never demand input**: each cell **auto-resolves by inheritance** (it adopts its own nearest-ancestor or config-default proposal without confirmation) yet stays fully overridable, so containers extend reach without adding to the operator's to-do list. A container's per-(camera group) offset cells cover the camera groups found **anywhere in its subtree** (recursively — children, grandchildren, …), gathered so the container knows which groups it can speak for; this collects only the *set of groups* present below, **never a descendant's decided value** — decisions are never rolled up (Section 10.2 item 3), only offered downward.
+A folder that holds only sub-destinations — with **no media directly in it** — is *also* materialized as a destination, called a **container destination** and flagged `file_less: true`. It exists so an operator can author timezone / folder-GPS-fallback decisions on it that propagate **downward** to its children, through the same nearest-ancestor inheritance those two facts use (Section 18, Section 25.3) — e.g. setting one GPS fallback on a trip's parent folder seeds every leaf beneath it. The container set is derived from the real destinations' ancestor paths within `6-photos-by-dest` (no extra filesystem scan); the by-dest root is itself a container when it holds only sub-destinations, giving a single library-wide default node. Because a container has no media of its own to act on, its decision cells **never block and never demand input**: each cell **auto-resolves by inheritance** (it adopts its own nearest-ancestor or config-default proposal without confirmation) yet stays fully overridable, so containers extend reach without adding to the operator's to-do list. A container carries **no clock-offset cells at all**: offsets neither cascade downward nor roll up (Section 10.2 rules 3–4), and a file-less folder has no media to time-correct, so `camera_group_time_decisions` on a container is empty.
 
 All numbered calibration JSON artifacts must cover destinations separately.
 
@@ -518,29 +518,30 @@ The rules are:
 
 1. there is exactly **one** editable clock-offset decision per **(camera group, destination)** — inside that destination's section, keyed by `camera_group_key`. The same camera group appearing in N destinations has N independent decisions, not one shared one;
 2. each cell's offset is inferred only from that group's native-GPS frames **in that destination** (Section 19). The same camera in two destinations is anchored twice, independently — never is one destination's offset carried onto another;
-3. a **destination is the immediate containing folder, and a nested subfolder is a separate destination** (Section 10.1): there is **no upward roll-up** — a parent's offset is never computed by aggregating its children, and `.../Louvre` and `.../Louvre/Napoleon's Apartments` are distinct cells each with its own effective offset. (Downward inheritance is the opposite direction and *is* offered — rule 4.);
-4. a cell without its own native-GPS evidence **does not start from a blank field — it inherits, downward, as a confirmable proposal**. The proposed offset for a (camera group, destination) cell is chosen in priority order:
-   - **(a) self-anchored** — if that group has native-GPS frame(s) *in this destination* that produce a GPX anchor (Section 19), that anchor is the proposal;
-   - **(b) inherited** — otherwise, the cell takes the **effective offset of the nearest ancestor destination** that has one for the same group, surfaced as a **proposal to confirm**, labelled with the ancestor path it came from;
-   - **(c) timezone-derived** — otherwise, if the destination's civil timezone is resolved (Section 18), assume the camera clock tracked that local time and propose `offset = -(timezone UTC offset)` at the group's earliest naive instant here, DST-aware (Section 19.4). `proposal_source: "timezone_naive"`, confirmable-only (the local-clock assumption can be wrong — e.g. a camera left on home time), never auto-applied;
-   - **(d) manual-required** — otherwise (no self-anchor, no ancestor offset, no resolved timezone), a blank manual field.
+3. a **destination is the immediate containing folder, and a nested subfolder is a separate destination** (Section 10.1): there is **no upward roll-up** — a parent's offset is never computed by aggregating its children, and `.../Louvre` and `.../Louvre/Napoleon's Apartments` are distinct cells each with its own effective offset. **Clock offsets also do not flow downward**: unlike the civil timezone (Section 18) and the folder GPS fallback (Section 25.3), an offset is *never* inherited from an ancestor destination — it is a measured/assumed clock fact specific to where and when frames were shot, not a folder default to cascade. A child with no anchor of its own does not borrow its parent's offset;
+4. **per-date buckets within a destination.** A user travelling typically **sets the camera to local time each morning**, so the clock offset is constant only *within a naive calendar day*, not across a destination revisited on different days or seasons (nearby attractions hit on separate trips). Therefore the offset cell **splits per naive date** when a (camera group, destination) spans more than one day there: each day gets its own bucket keyed `<camera_group_key>@<YYYY-MM-DD>` and carrying a `date` field. The common single-day case keeps the bare `<camera_group_key>` key with no `date`. A single visit that crosses local midnight splits into two buckets by design. The naive date is the camera's own wall-clock date (`source_naive_time`), taken before any correction. Each bucket's proposed offset is chosen independently, in priority order:
+   - **(a) self-anchored** — if that group has native-GPS frame(s) *for this date in this destination* that produce a GPX anchor (Section 19), that anchor is the proposal;
+   - **(b) timezone-derived** — otherwise, if the destination's civil timezone is resolved (Section 18), assume the camera clock tracked that local time and propose `offset = -(timezone UTC offset)` at the bucket's earliest naive instant, DST-aware (Section 19.4). `proposal_source: "timezone_naive"`, confirmable-only (the local-clock assumption can be wrong — e.g. a camera left on home time), never auto-applied;
+   - **(c) manual-required** — otherwise (no self-anchor, no resolved timezone), a blank manual field.
 
-   Inheritance is **recursive down the destination tree**: a destination's *effective* offset — however it was reached, whether self-anchored, inherited-and-confirmed, or manually set — is the basis propagated to its **immediate children** as their inherited proposal, and onward to grandchildren, and so on. A **manual offset set at a folder resets the chain at that point**: that manual value becomes the folder's effective offset and therefore the basis its descendants inherit, replacing whatever would have flowed down from further up. Inherited proposals are **confirmable, never silently applied**: as a non-anchor proposal class they require user confirmation by default (Section 9.1 item 2), so propagation is the user accepting a sensible default at each level, not a hidden cross-destination borrow. This is what lets one anchor at a trip's root seed all its sub-destinations without re-anchoring each leaf, while still honoring "corrections between destinations, never within" (Section 7) — every level is confirmable and any level can diverge. The sole exception is a **file-less container** destination (Section 10.1): having no frames of its own and no media to mis-correct, its offset cell **auto-adopts** the inherited proposal (`effective_time_anchor.source: "inherited_auto"`, `decision_mode: "auto_resolved"`, `requires_user_input: false`) instead of waiting for a confirmation — while a manual offset authored on the container still re-roots the chain for its descendants as usual;
-5. camera-group **identity and classification** (camera vs smartphone) remain group-scoped config (Section 16). A cell may surface `camera_group_class` read-only to explain why it needs (camera) or does not need (smartphone solved from its own metadata) a clock-offset decision; the editable offset itself is per (group, destination);
-6. resolved UTC for a file uses its **(camera group, destination) effective offset** together with its **destination effective timezone** — both destination-scoped. A file is fully solvable only when **both** are complete.
+   There is **no inheritance step** — a bucket is resolved entirely from its own date's evidence or the destination timezone. A manual offset entered on one bucket applies only to that day; sibling date buckets are untouched. This honors "corrections between destinations, never within" (Section 7) refined to the day: within one day the offset is one constant, across days it is re-derived. The **only** offset auto-resolution is a GPX self-anchor under the Section 9.1 policy flags; timezone-derived and manual buckets are always confirmable;
+5. camera-group **identity and classification** (camera vs smartphone) remain group-scoped config (Section 16). A cell may surface `camera_group_class` read-only to explain why it needs (camera) or does not need (smartphone solved from its own metadata) a clock-offset decision; the editable offset itself is per (group, destination[, date]);
+6. resolved UTC for a file uses its **(camera group, destination, date) effective offset** — selecting the file's own naive-date bucket, falling back to the bare-group bucket for a single-day destination — together with its **destination effective timezone**. A file is fully solvable only when **both** are complete.
 
-An **inherited** proposal (rule 4b) looks like a self-anchored one but names its source ancestor instead of a GPX match — e.g. a child `…/Kyoto/Kinkaku-ji` that has no native-GPS frame of its own, inheriting the confirmed offset of its parent `…/Kyoto`:
+A **timezone-derived** proposal (rule 4b) is the no-anchor default — e.g. a `…/Kyoto/Kinkaku-ji` day with no native-GPS frame, deriving its offset from Kyoto's resolved `Asia/Tokyo`:
 
 ```json
 {
   "camera_group": "sony_a6400_serial_123456",
   "camera_group_class": "camera",
+  "date": "2024-04-07",
   "proposal": {
-    "proposed_offset_seconds": -7187,
-    "proposal_source": "inherited",
-    "inherited_from": "6-photos-by-dest/Japan/Kyoto",
+    "proposed_offset_seconds": -32400,
+    "proposal_source": "timezone_naive",
+    "proposed_real_utc": "2024-04-07T03:12:08Z",
+    "proposed_from_timezone": "Asia/Tokyo",
     "confidence": "review_required",
-    "rank": "inherited_from_ancestor"
+    "rank": "timezone_derived"
   },
   "user_decision": { "accept_proposal": false, "manual_offset_seconds": "" },
   "effective_time_anchor": "",
@@ -548,7 +549,7 @@ An **inherited** proposal (rule 4b) looks like a self-anchored one but names its
 }
 ```
 
-If the user instead types a `manual_offset_seconds` here, that becomes this folder's effective offset and the basis any deeper sub-destinations inherit (the reset of rule 4).
+If the user instead types a `manual_offset_seconds` here, that becomes this bucket's effective offset for that day only.
 
 All numbered calibration JSON artifacts are destination-grouped (Section 10.3); the time decisions are no exception — they sit inside their destination's section like everything else.
 
@@ -839,7 +840,7 @@ For each camera group **present in the destination**, the workflow determines wh
 6. GPX/native-GPS time-anchor proposals anchored from that group's native-GPS frames in this destination (Section 19);
 7. other explicitly supported calibration evidence.
 
-A camera group present in a destination with **no** anchorable native-GPS frame *in that destination* is not self-solved there; that (group, destination) cell instead **inherits the nearest ancestor destination's effective offset for the group as a confirmable proposal** (Section 10.2 rule 4), recursively down the tree, and falls to a blank manual field only if no ancestor has an offset either. The destination's **civil timezone** inherits the same way and from the same nearest-ancestor machinery: a destination with no timezone of its own takes its nearest ancestor destination's effective timezone as a confirmable proposal (Section 18), so the timezone and the per-group offset both seed downward from a trip's root and are each confirmed or overridden per level.
+A camera group present in a destination with **no** anchorable native-GPS frame *for a given day* is not self-solved for that day's bucket; the bucket instead takes a **timezone-derived** proposal from the destination's resolved civil timezone (Section 10.2 rule 4b, Section 19.4), and falls to a blank manual field only if the timezone is unresolved too. Offsets are **not** inherited from ancestor destinations. The destination's **civil timezone**, by contrast, *does* inherit: a destination with no timezone of its own takes its nearest ancestor destination's effective timezone as a confirmable proposal (Section 18), seeding downward from a trip's root — so the timezone cascades, while each day's offset is re-derived locally.
 
 Once this analysis is complete, the workflow has reached the formal time-decision stage.
 
@@ -912,16 +913,16 @@ If destination timezone is unknown or ambiguous **and no ancestor destination su
 
 Resolved UTC must not be finalized for files in a destination whose timezone/time dependencies are incomplete.
 
-**Downward inheritance of the timezone proposal.** A destination whose timezone cannot be proposed on its own evidence **does not start from a blank field — it inherits, downward, as a confirmable proposal**, reusing the **same nearest-ancestor machinery** as the per-(camera group, destination) clock offset (Section 10.2 rule 4) and the folder GPS fallback (Section 25.3). The `proposed_iana_timezone` for a destination is chosen in priority order:
+**Downward inheritance of the timezone proposal.** A destination whose timezone cannot be proposed on its own evidence **does not start from a blank field — it inherits, downward, as a confirmable proposal**, reusing the **same nearest-ancestor machinery** as the folder GPS fallback (Section 25.3). (The per-(camera group, destination) clock offset does **not** inherit — Section 10.2 rule 4 — so the timezone and the fallback are the only two facts that cascade down the destination tree.) The `proposed_iana_timezone` for a destination is chosen in priority order:
 
 1. **(a) self-proposed** — a timezone derived from **this destination's own evidence** (a native-GPS/GPX-derived zone), with the corresponding `proposal_source`. *(Not yet implemented: the code currently has no GPS-derived zone, so in practice the chain starts at (b).)*
 2. **(b) inherited** — otherwise, the destination takes the **effective timezone of the nearest ancestor destination** that has one, surfaced as a **proposal to confirm**, with `proposal_source: "inherited"` and an `inherited_from` field naming the ancestor path;
-3. **(c) config default** — otherwise, the configured global **`default_folder_timezone`** is the proposal (`proposal_source: "config_default"`). The configured default is a **global fallback, not per-destination evidence**, so it sits **below** inheritance: a nested destination prefers its nearest ancestor's confirmed timezone over the blunt global default, and only falls to the global default when no ancestor supplies one. (Putting the default above inheritance would make inheritance unreachable whenever a default is set, and would contradict the offset/fallback model and Section 17.)
+3. **(c) config default** — otherwise, the configured global **`default_folder_timezone`** is the proposal (`proposal_source: "config_default"`). The configured default is a **global fallback, not per-destination evidence**, so it sits **below** inheritance: a nested destination prefers its nearest ancestor's confirmed timezone over the blunt global default, and only falls to the global default when no ancestor supplies one. (Putting the default above inheritance would make inheritance unreachable whenever a default is set, and would contradict the fallback model and Section 17.)
 4. **else** — no self-proposal, no ancestor timezone, and no configured default: the manual field starts blank and the destination is marked `requires_user_input`.
 
-Inheritance is **recursive down the destination tree**: a destination's *effective* timezone — however it was reached (self-proposed-and-accepted, inherited-and-confirmed, or manually set) — is the basis propagated to its immediate children, and onward. A **manual timezone set at a folder re-roots the chain** at that point: that zone becomes the folder's effective timezone and therefore the basis its descendants inherit. To compute this, destinations are processed **parent-first** (the same ordering the offset and fallback inheritance use), so an ancestor's effective timezone is known before any child that would inherit it is built; inheritance flows **parent → child only**, never sibling → sibling.
+Inheritance is **recursive down the destination tree**: a destination's *effective* timezone — however it was reached (self-proposed-and-accepted, inherited-and-confirmed, or manually set) — is the basis propagated to its immediate children, and onward. A **manual timezone set at a folder re-roots the chain** at that point: that zone becomes the folder's effective timezone and therefore the basis its descendants inherit. To compute this, destinations are processed **parent-first** (the same ordering the fallback inheritance uses), so an ancestor's effective timezone is known before any child that would inherit it is built; inheritance flows **parent → child only**, never sibling → sibling.
 
-An inherited timezone proposal is **confirmable, never auto-applied**. Like the inherited offset proposal (Section 9.1 item 2, Section 10.2 rule 4), it is a non-anchor proposal class, so it keeps `requires_user_input: true` by default — there is no timezone auto-accept policy. Propagation is therefore the operator accepting a sensible default at each level (a single `accept_proposed_timezone: true`, or a manual override), never a hidden cross-destination borrow: every level is confirmable and any level can diverge. The exception is a **file-less container** destination (Section 10.1): with no photos to mis-tag, its timezone **auto-resolves** from the nearest-ancestor (or config-default) proposal (`decision_mode: "auto_resolved"`, `requires_user_input: false`) rather than requiring an accept, and remains overridable by a manual zone. An inherited proposal looks like a self-proposed one but names its source ancestor:
+An inherited timezone proposal is **confirmable, never auto-applied**. As a non-anchor proposal class (Section 9.1 item 2), it keeps `requires_user_input: true` by default — there is no timezone auto-accept policy. Propagation is therefore the operator accepting a sensible default at each level (a single `accept_proposed_timezone: true`, or a manual override), never a hidden cross-destination borrow: every level is confirmable and any level can diverge. The exception is a **file-less container** destination (Section 10.1): with no photos to mis-tag, its timezone **auto-resolves** from the nearest-ancestor (or config-default) proposal (`decision_mode: "auto_resolved"`, `requires_user_input: false`) rather than requiring an accept, and remains overridable by a manual zone. An inherited proposal looks like a self-proposed one but names its source ancestor:
 
 ```json
 {
@@ -959,7 +960,7 @@ It is used when:
 
 The purpose is to propose a real UTC timestamp for a photo whose camera clock may be wrong.
 
-This produces a proposed camera-time calibration for that **(camera group, destination)** — not for the whole camera group. Because the camera's clock error varies between destinations (it drifts, and may be reset, between trips, Section 10.2), the offset is anchored **only from that group's native-GPS frames in that destination** and the resulting decision is **destination-scoped**: it is recorded inside that destination's section, keyed by `camera_group_key` (Section 10.2), not shared across the destinations the group appears in. The user accepts or overrides it per destination. The same camera appearing in two destinations yields two independent proposals, each anchored from its own destination's frames. A (camera group, destination) with **no** native-GPS frame of its own produces no self-anchor here; instead of a blank field it inherits its nearest ancestor destination's effective offset for that group as a confirmable proposal (Section 10.2 rule 4).
+This produces a proposed camera-time calibration for that **(camera group, destination)** — not for the whole camera group. Because the camera's clock error varies between destinations (it drifts, and may be reset, between trips, Section 10.2), the offset is anchored **only from that group's native-GPS frames in that destination** and the resulting decision is **destination-scoped**: it is recorded inside that destination's section, keyed by `camera_group_key` (Section 10.2), not shared across the destinations the group appears in. The user accepts or overrides it per destination. The same camera appearing in two destinations yields two independent proposals, each anchored from its own destination's frames, and within a destination it splits per naive date (Section 10.2 rule 4). A bucket with **no** native-GPS frame of its own produces no self-anchor here; instead of a blank field it takes a timezone-derived proposal when the destination timezone is resolved (Section 19.4), else manual-required. Offsets are never inherited from an ancestor destination.
 
 ### 19.1 Matching cases
 
@@ -1046,15 +1047,15 @@ Example shape:
 
 The proposal is anchored only from native-GPS frames of this `camera_group` within this `destination`, and its accepted/effective offset is recorded in that destination's `camera_group_time_decisions[camera_group]` cell (Section 10.2) — it does not affect the same group in any other destination. The user fills existing fields only.
 
-### 19.4 Timezone-derived offset (no anchor, no inherited)
+### 19.4 Timezone-derived offset (no anchor)
 
-When a `(camera group, destination)` has **no** GPX self-anchor (Section 19.1) and **no** ancestor offset to inherit (Section 10.2 rule 4b), but the destination's **civil timezone is resolved** (Section 18), calibration still proposes an offset by assuming the camera clock was set to that local time:
+When a `(camera group, destination, date)` bucket has **no** GPX self-anchor (Section 19.1) but the destination's **civil timezone is resolved** (Section 18), calibration proposes an offset by assuming the camera clock was set to that local time:
 
 ```text
-offset = -(civil timezone's UTC offset at the group's earliest naive instant in this destination)
+offset = -(civil timezone's UTC offset at the bucket's earliest naive instant)
 ```
 
-computed DST-aware via `zoneinfo` (so the same destination yields the summer or winter offset according to its date). The proposal carries `proposal_source: "timezone_naive"`, the chosen `proposed_offset_seconds`, a `proposed_real_utc`, and `proposed_from_timezone`. It is **confirmable-only** (`confidence: review_required`, never auto-applied) because the local-clock assumption can be wrong — a camera left on home time gives a wrong offset — so the operator reviews it like any non-anchor proposal. It ranks **below** an inherited offset (a measured ancestor value beats an assumption) and **above** manual-required. It needs the timezone first, so the operator resolves the destination timezone and re-runs to obtain it; until then the cell is `manual_required` and the editor says so.
+computed DST-aware via `zoneinfo` — so a destination revisited in summer and winter yields the summer or winter offset **per day bucket** (Section 10.2 rule 4), each derived from its own date's local instant. The proposal carries `proposal_source: "timezone_naive"`, the chosen `proposed_offset_seconds`, a `proposed_real_utc`, and `proposed_from_timezone`. It is **confirmable-only** (`confidence: review_required`, never auto-applied) because the local-clock assumption can be wrong — a camera left on home time gives a wrong offset — so the operator reviews it like any non-anchor proposal. It ranks directly **above** manual-required (there is no inherited offset — offsets do not cascade). It needs the timezone first, so the operator resolves the destination timezone and re-runs to obtain it; until then the bucket is `manual_required` and the editor says so.
 
 ---
 
@@ -1966,7 +1967,7 @@ Important textual outputs include:
 9. pasteable config snippets for newly recognised groups;
 10. invalid-value blocker — a config or decision field that failed sanity-validation, naming the artifact and field (Section 9.2);
 11. reason why no JSON artifact was produced, if blocked before time-decision stage;
-12. time-decision summary (including per-destination clock-offset cells and their inherited/confirmable proposals, Section 10.2, and per-destination civil-timezone decisions including timezone proposals inherited from the nearest ancestor destination, Section 18);
+12. time-decision summary (including per-(destination, camera group, naive date) clock-offset buckets and their self-anchor/timezone-derived/confirmable proposals, Section 10.2, and per-destination civil-timezone decisions including timezone proposals inherited from the nearest ancestor destination, Section 18);
 13. resolved UTC cache summary;
 14. GPS-decision summary (including per-destination folder-fallback cells and their inherited/confirmable proposals, Section 25.3);
 15. executable plan summary;
@@ -2025,7 +2026,7 @@ The calibration workflow is:
 9. If unknown groups exist, print config snippets and stop. No JSON artifact yet.
 10. Analyse per-destination time requirements.
 11. Determine/confirm destination civil timezone for every destination; a destination with no timezone of its own inherits its nearest ancestor destination's timezone as a confirmable proposal (Section 18).
-12. Generate GPX/native-GPS time-anchor proposals where possible; a (group, destination) with no self-anchor inherits its nearest ancestor's offset as a confirmable proposal (Section 10.2 rule 4).
+12. Generate GPX/native-GPS time-anchor proposals where possible, per (group, destination, naive date) bucket; a bucket with no self-anchor takes a timezone-derived offset proposal when the destination timezone is resolved, else manual-required (Section 10.2 rule 4, Section 19.4). Offsets are not inherited across destinations.
 13. Create photos-21-time-decisions.json, grouped by destination, even if no-op.
 14. User completes/accepts time decisions if needed.
 15. Compute and persist resolved UTC per file in SQLite.
