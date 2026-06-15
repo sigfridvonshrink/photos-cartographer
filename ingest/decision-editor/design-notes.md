@@ -46,8 +46,11 @@ applies the overlay onto the artifact JSON (round-tripping every other field) an
 ## 4. UI
 
 **Master–detail shell:** header (workspace • view toggle • to-do/stale count • Save • Re-run) → a compact
-**list** (left) + a persistent **side-panel** editor (right). Selecting a cell anywhere opens it in the
-panel.
+**list** (left) + a persistent **side-panel** editor (right), separated by a **draggable divider** (the
+split width is clamped and persisted in `localStorage`; the map is resized live as you drag). Selecting a
+cell anywhere opens it in the panel. The panel itself does **not** scroll: a **fixed top** holds the
+title, status, the **decision controls**, and the effective preview — always visible — over a **scroll
+area** that holds the evidence (proposal) and the big media (photo, map), the only things that scroll.
 
 - **Two views, switchable mid-edit** (one shared model): **Time** defaults to a **recursive destination
   tree** — a parent shows its descendants' proposals; you can override any node; inheriting cells are
