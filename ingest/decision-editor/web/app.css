@@ -93,6 +93,15 @@ main { flex: 1; display: grid; grid-template-columns: minmax(360px, 1fr) minmax(
 .spin-units.ro .spin-unit { cursor: pointer; }
 .spin-num[readonly], .ctl-field input[readonly] { opacity: .55; cursor: pointer; }
 
+/* offset editor: three click-to-activate choices (accept / manual offset / anchor real-UTC) + impact */
+.off-opt { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 5px; cursor: pointer; }
+.off-opt:hover:not(.disabled):not(.on) { background: #2b303a; }
+.off-opt.on { background: #2f3a4d; cursor: default; }
+.off-opt.disabled { color: var(--muted); cursor: default; opacity: .55; }
+.off-dot { color: var(--accent); font-size: 11px; width: 12px; text-align: center; flex: none; }
+.off-field { flex: 1; grid-template-columns: 110px 1fr; }   /* the spinner/picker view fills the row */
+.off-impact { margin-top: 6px; font: 12px var(--mono); color: #b8e0c2; }
+
 /* collapsed offset proposal */
 .prop-head { font: 14px var(--mono); margin-bottom: 6px; }
 .prop-group { border-left: 2px solid var(--line); padding: 1px 0 1px 8px; margin: 6px 0; }
