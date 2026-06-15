@@ -151,6 +151,18 @@ function fmtDT(ms, tz) { // {date,time} in `tz`, the two halves formatted identi
     };
   } catch { return null; }
 }
+// The human-readable impact of an offset on the anchor photo: its current (camera) local time → the
+// corrected local time, with the corrected UTC in parentheses after. Date shown once when invariant;
+// any side whose date differs carries its own. With no resolved timezone, corrected is shown as UTC.
+function offsetImpact(camMs, offsetSec, tz) {
+  if (camMs == null || offsetSec == null) return null;
+  const realMs = camMs + offsetSec * 1000, cam = fmtDT(camMs, "UTC"), utc = fmtDT(realMs, "UTC");
+  const utcStr = utc.date === cam.date ? utc.time : `${utc.date} ${utc.time}`;
+  const cor = tz ? fmtDT(realMs, tz) : null;
+  if (!cor) return `${cam.date} · ${cam.time} → ${utcStr} UTC`;
+  const right = cor.date === cam.date ? cor.time : `${cor.date} ${cor.time}`;
+  return `${cam.date} · ${cam.time} → ${right} (${tz}, UTC ${utcStr})`;
+}
 
 // advisory effective preview (NOT authoritative — calibration recomputes on re-run)
 function previewEffective(ref) {
@@ -324,11 +336,6 @@ function checkbox(label, checked, onchange, disabled) {
   const cb = el("input", { type: "checkbox", disabled: disabled ? "" : null }); cb.checked = !!checked; cb.addEventListener("change", () => onchange(cb.checked));
   return el("label", { class: disabled ? "ctl-check disabled" : "ctl-check" }, cb, label);
 }
-function radio(name, label, checked, onselect, disabled) {
-  const r = el("input", { type: "radio", name, disabled: disabled ? "" : null }); r.checked = !!checked;
-  r.addEventListener("change", () => { if (r.checked) onselect(); });
-  return el("label", { class: disabled ? "ctl-check disabled" : "ctl-check" }, r, label);
-}
 function numField(label, value, onchange, invalid) {
   const inp = el("input", { type: "number", step: "any", class: invalid ? "bad" : null, value: value === "" || value == null ? "" : value });
   inp.addEventListener("change", () => onchange(inp.value === "" ? "" : Number(inp.value)));
@@ -360,81 +367,102 @@ function tzSelect(value, onchange, disabled) {
 // manual offset, or the anchor frame's real-UTC — mapped to the three user_decision fields
 // (accept_proposal / manual_offset_seconds / manual_real_utc). Picking one resets the other two, so the
 // reference §6 precedence never has to arbitrate. Anchor real-UTC needs a gpx_self_anchor frame.
+// Two exclusive choices: ACCEPT the proposal (the automatic offset) or SET IT YOURSELF. The self-set
+// offset has two ALWAYS-VISIBLE, ALWAYS-SYNCED views — the h/m/s spinner and the anchor real-UTC picker
+// (picker = anchor camera time + offset); editing either updates both. They're editable only while
+// self-set is the active choice; otherwise they're read-only but still show the effective offset (so
+// nothing is hidden), and clicking either switches to self-set seeded from it. A common Impact line
+// shows what the effective offset does to the anchor photo. Stored canonically as manual_offset_seconds.
 function offsetEditor(ref) {
   const c = workCell(ref), u = c.user_decision, p = c.proposal || {};
   const isGpx = p.proposal_source === "gpx_self_anchor";
   const camMs = isGpx && p.anchors && p.anchors[0] ? camNaiveMs(p.anchors[0].camera_source_naive_time) : null;
-  const canAnchor = camMs != null;
   const hasProp = "proposed_offset_seconds" in p;
-  const name = `off|${ref.dest}|${ref.key}`;
-  const hasManual = u.manual_offset_seconds !== "" && u.manual_offset_seconds != null;
-  const hasAnchor = !!u.manual_real_utc;
-  const mode = hasManual ? "manual" : hasAnchor ? "anchor" : (u.accept_proposal ? "accept" : "");
+  const accepted = !!u.accept_proposal && hasProp;
+  let manualOff = u.manual_offset_seconds;            // canonical store; tolerate a legacy manual_real_utc
+  if ((manualOff === "" || manualOff == null) && u.manual_real_utc && camMs != null) {
+    const m = utcStrToMs(u.manual_real_utc); if (m != null) manualOff = Math.round((m - camMs) / 1000);
+  }
+  const manualSet = manualOff !== "" && manualOff != null;
+  const selKey = `${ref.dest}|${ref.key}`;
+  // Exactly one of three choices is active. For a self-set value the active VIEW (offset spinner vs
+  // anchor-UTC picker) is a per-cell UI state; default to the spinner. The automatic (accept) value is
+  // never edited — it's always the proposal. Clicking a choice activates it; the other manual view
+  // updates to show the active value (synced), the automatic stays the proposal.
+  const view = state.offsetEdit && state.offsetEdit.key === selKey ? state.offsetEdit.view : "offset";
+  const active = accepted ? "accept" : manualSet ? view : "";
+  const eff = accepted ? p.proposed_offset_seconds : manualSet ? Number(manualOff) : (hasProp ? p.proposed_offset_seconds : null);
+  const cur = Number(eff) || 0, abs = Math.abs(cur);
 
-  // the offset implied by the current decision — used to seed a mode switch so the value carries over
-  let curOff = hasProp ? p.proposed_offset_seconds : 0;
-  if (hasManual) curOff = Number(u.manual_offset_seconds) || 0;
-  else if (hasAnchor && camMs != null) { const m = utcStrToMs(u.manual_real_utc); if (m != null) curOff = Math.round((m - camMs) / 1000); }
-  const isoUtc = (ms) => msToDtLocal(ms) + "Z";        // "YYYY-MM-DDTHH:MM:SSZ" — no millis, passes validUtc
-
-  const choose = (m) => {
-    if (m === "accept") editMany(ref, { accept_proposal: true, manual_offset_seconds: "", manual_real_utc: "" });
-    else if (m === "manual") editMany(ref, { accept_proposal: false, manual_real_utc: "", manual_offset_seconds: curOff });
-    else editMany(ref, { accept_proposal: false, manual_offset_seconds: "",
-      manual_real_utc: u.manual_real_utc || (camMs != null ? isoUtc(camMs + curOff * 1000) : p.proposed_real_utc || "") });
-  };
+  const setManual = (off, v) => { state.offsetEdit = { key: selKey, view: v }; editMany(ref, { accept_proposal: false, manual_real_utc: "", manual_offset_seconds: off }); };
+  const choose = (v) => { state._focusOffset = v; if (manualSet) { state.offsetEdit = { key: selKey, view: v }; render(); } else setManual(eff ?? 0, v); };
+  const accept = () => { state.offsetEdit = null; editMany(ref, { accept_proposal: true, manual_offset_seconds: "", manual_real_utc: "" }); };
+  const opt = (on, body, onclick, cls = "") => el("div", { class: "off-opt" + (on ? " on" : "") + cls, onclick },
+    el("span", { class: "off-dot" }, on ? "●" : "○"), body);
 
   const wrap = el("div", { class: "ctl-block" });
-  wrap.append(radio(name, hasProp ? `accept proposal (${fmtOffset(p.proposed_offset_seconds)})` : "accept proposal — none to accept",
-    mode === "accept", () => choose("accept"), !hasProp));
-  wrap.append(radio(name, "set a manual offset", mode === "manual", () => choose("manual"), false));
-  if (canAnchor)
-    wrap.append(radio(name, "set the anchor's real-UTC", mode === "anchor", () => choose("anchor"), false));
-  else if (isGpx)
-    wrap.append(el("div", { class: "hint" }, "no anchor frame on this proposal — real-UTC entry unavailable"));
+  let numI, pickI;
 
-  if (mode === "manual") {
-    const off = u.manual_offset_seconds, cur = Number(off) || 0, abs = Math.abs(cur), hasOff = off !== "" && off != null;
-    const setOff = (v) => editMany(ref, { manual_offset_seconds: v, accept_proposal: false, manual_real_utc: "" });
-    const bump = (secs, dir) => setOff(Math.max(-86400, Math.min(86400, cur + dir * secs)));
-    const unit = (label, secs, value) => {
-      const box = el("div", { class: "spin-unit", tabindex: "0", title: `scroll or ↑/↓ to adjust ${label}` },
-        el("div", { class: "spin-unit-val" }, String(value).padStart(2, "0")), el("div", { class: "spin-unit-lbl" }, label));
+  // choice 1 — accept the proposal (automatic; its value is never edited)
+  wrap.append(opt(active === "accept",
+    el("span", {}, hasProp ? `accept proposal (${fmtOffset(p.proposed_offset_seconds)})` : "accept proposal — none to accept"),
+    hasProp ? accept : undefined, hasProp ? "" : " disabled"));
+
+  // choice 2 — manual offset (h/m/s spinner). Editable only when active; otherwise click to activate.
+  const editO = active === "offset";
+  const bump = (secs, dir) => setManual(Math.max(-86400, Math.min(86400, cur + dir * secs)), "offset");
+  const unit = (label, secs, value) => {
+    const box = el("div", { class: "spin-unit", tabindex: editO ? "0" : null,
+      title: editO ? `scroll or ↑/↓ to adjust ${label}` : "click to set the offset" },
+      el("div", { class: "spin-unit-val" }, String(value).padStart(2, "0")), el("div", { class: "spin-unit-lbl" }, label));
+    if (editO) {
       box.addEventListener("wheel", (e) => { e.preventDefault(); bump(secs, e.deltaY < 0 ? 1 : -1); }, { passive: false });
       box.addEventListener("keydown", (e) => { if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return; e.preventDefault(); bump(secs, e.key === "ArrowUp" ? 1 : -1); });
-      return box;
-    };
-    const units = el("div", { class: "spin-units" + (validOffset(off) ? "" : " bad") },
-      el("span", { class: "spin-sign" }, cur < 0 ? "−" : "+"),
-      unit("h", 3600, Math.floor(abs / 3600)), el("span", { class: "spin-colon" }, ":"),
-      unit("m", 60, Math.floor(abs / 60) % 60), el("span", { class: "spin-colon" }, ":"),
-      unit("s", 1, abs % 60));
-    const numI = el("input", { type: "number", step: "1", class: "spin-num", value: hasOff ? off : "" });
-    numI.addEventListener("change", () => setOff(numI.value === "" ? "" : Number(numI.value)));
-    wrap.append(el("div", { class: "ctl-field" }, el("span", {}, "Manual offset"),
-      el("div", { class: "spin-wrap" }, units, numI)));
-    if (!validOffset(off)) wrap.append(el("div", { class: "err" }, "offset must be a number within ±86400 s"));
-  } else if (mode === "anchor") {
-    const ms = utcStrToMs(u.manual_real_utc);
-    const setUtc = (v) => editMany(ref, { manual_real_utc: v, accept_proposal: false, manual_offset_seconds: "" });
-    const pickI = el("input", { type: "datetime-local", step: "1", class: "spin-num utc-pick",
-      title: "the true UTC time of the matched anchor frame; the offset = this − the frame's camera clock" });
-    pickI.value = ms != null ? msToDtLocal(ms) : "";
-    pickI.addEventListener("change", () => { const m = dtLocalToMs(pickI.value); setUtc(pickI.value && m != null ? isoUtc(m) : ""); });
-    wrap.append(el("label", { class: "ctl-field" }, el("span", {}, "Anchor real-UTC"), pickI));
-    if (!validUtc(u.manual_real_utc)) wrap.append(el("div", { class: "err" }, "not a valid UTC datetime"));
-    else if (ms != null) {
-      wrap.append(el("div", { class: "hint" }, `= offset ${fmtOffset(Math.round((ms - camMs) / 1000))}`));
-      const pv = previewTz(ref.dest), loc = pv && pv.tz ? fmtLocal(ms, pv.tz) : null;
-      wrap.append(loc ? el("div", { class: "hint" }, `= ${loc} (${pv.tz}) local`)
-        : el("div", { class: "hint" }, "set this destination's timezone to see the equivalent local time"));
     }
-    if (p.proposed_real_utc) wrap.append(el("div", { class: "hint" }, `GPX estimate for this anchor: ${p.proposed_real_utc}`));
+    return box;
+  };
+  const units = el("div", { class: "spin-units" + (editO ? "" : " ro") + (validOffset(manualOff) ? "" : " bad") },
+    el("span", { class: "spin-sign" }, cur < 0 ? "−" : "+"),
+    unit("h", 3600, Math.floor(abs / 3600)), el("span", { class: "spin-colon" }, ":"),
+    unit("m", 60, Math.floor(abs / 60) % 60), el("span", { class: "spin-colon" }, ":"),
+    unit("s", 1, abs % 60));
+  numI = el("input", { type: "number", step: "1", class: "spin-num", readonly: editO ? null : "", value: eff == null ? "" : eff });
+  if (editO) numI.addEventListener("change", () => setManual(numI.value === "" ? "" : Number(numI.value), "offset"));
+  wrap.append(opt(editO, el("div", { class: "ctl-field off-field" }, el("span", {}, "manual offset"),
+    el("div", { class: "spin-wrap" }, units, numI)), editO ? undefined : () => choose("offset")));
+  if (editO && !validOffset(manualOff)) wrap.append(el("div", { class: "err" }, "offset must be within ±86400 s"));
+
+  // choice 3 — anchor real-UTC (datetime picker), only with an anchor frame. Editable only when active.
+  if (camMs != null) {
+    const editU = active === "utc";
+    pickI = el("input", { type: "datetime-local", step: "1", class: "spin-num utc-pick", readonly: editU ? null : "",
+      title: "the anchor frame's true UTC; offset = this − the frame's camera clock" });
+    pickI.value = eff == null ? "" : msToDtLocal(camMs + cur * 1000);
+    if (editU) pickI.addEventListener("change", () => { const m = dtLocalToMs(pickI.value); setManual(pickI.value && m != null ? Math.round((m - camMs) / 1000) : "", "utc"); });
+    wrap.append(opt(editU, el("label", { class: "ctl-field off-field" }, el("span", {}, "anchor real-UTC"), pickI),
+      editU ? undefined : () => choose("utc")));
+    if (p.proposed_real_utc) wrap.append(el("div", { class: "hint" }, `GPX estimate: ${p.proposed_real_utc}`));
   }
 
-  if (mode) wrap.append(el("button", { class: "mini",
-    onclick: () => editMany(ref, { accept_proposal: false, manual_offset_seconds: "", manual_real_utc: "" }) },
+  // common Impact line — what the effective offset does to the anchor photo (or the offset + formula)
+  const tz = previewTz(ref.dest)?.tz;
+  if (eff == null) wrap.append(el("div", { class: "off-impact hint" }, "no offset set — calibration will auto-resolve or inherit"));
+  else if (camMs != null) {
+    wrap.append(el("div", { class: "off-impact" }, offsetImpact(camMs, cur, tz)));
+    if (!tz) wrap.append(el("div", { class: "hint" }, "set this destination's timezone to see the corrected local time"));
+  } else {
+    wrap.append(el("div", { class: "off-impact" }, `offset ${fmtOffset(cur)} — a photo's camera time + this = UTC${tz ? `, shown in ${tz}` : ""}`));
+  }
+
+  if (accepted || manualSet) wrap.append(el("button", { class: "mini",
+    onclick: () => { state.offsetEdit = null; editMany(ref, { accept_proposal: false, manual_offset_seconds: "", manual_real_utc: "" }); } },
     "clear (let calibration auto/inherit)"));
+
+  // restore focus to the view just activated (click-to-activate), so it's ready to edit
+  if (state._focusOffset) {
+    const tgt = state._focusOffset === "utc" ? pickI : numI; state._focusOffset = null;
+    if (tgt) queueMicrotask(() => tgt.focus());
+  }
   return wrap;
 }
 
@@ -665,6 +693,6 @@ if (typeof document !== "undefined") main();
 
 export {
   isNum, validTz, validOffset, validUtc, validLat, validLon, bothOrNeither,
-  fmtOffset, camNaiveMs, dtLocalToMs, msToDtLocal, utcStrToMs, fmtLocal, fmtDT,
+  fmtOffset, camNaiveMs, dtLocalToMs, msToDtLocal, utcStrToMs, fmtLocal, fmtDT, offsetImpact,
   cellAt, cellStatus, wouldResolve, previewTz, previewFallback, refInvalid, isDirty, state,
 };
