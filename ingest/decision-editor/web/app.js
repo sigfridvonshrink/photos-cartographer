@@ -561,9 +561,13 @@ function render() {
   $("#todo").textContent = dirty ? `${dirty} unsaved${invalid ? " · ✗ invalid" : ""}` : (state.message || "no changes");
   const save = $("#save"); save.disabled = a.demo || busy || dirty === 0 || invalid;
   save.title = a.demo ? "demo mode is read-only — run `serve <workspace>` to save" : invalid ? "fix invalid fields first" : "";
-  const rerunBtn = $("#rerun"); rerunBtn.disabled = a.demo || busy || dirty > 0 || invalid;
+  // Calibration reads folder dependencies (the gpx_root) that may live only on the workspace's own
+  // host; re-running where they're invisible would silently wipe GPX-derived decisions. Gate on it.
+  const depsMissing = !a.demo && a.environment && !a.environment.deps_ok;
+  const rerunBtn = $("#rerun"); rerunBtn.disabled = a.demo || busy || dirty > 0 || invalid || depsMissing;
   rerunBtn.textContent = state.running ? "running…" : "Re-run";
   rerunBtn.title = a.demo ? "demo mode — no workspace to calibrate"
+    : depsMissing ? `can't re-run on this machine — ${a.environment.missing.join(", ")} not visible here; calibration needs it, so run the editor on the workspace's host`
     : dirty > 0 ? "save your changes first, then re-run"
     : invalid ? "fix invalid fields first" : "run `photos-2-time-gps run` and reload the result";
   $("#reset").disabled = dirty === 0 || busy;
