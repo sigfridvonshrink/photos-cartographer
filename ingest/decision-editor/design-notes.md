@@ -82,18 +82,22 @@ panel.
 - **Specialized controls:**
   - **Timezone:** a full IANA-zone **drop-down**; accepting the proposal mirrors it into the field and
     **locks** the drop-down (unaccepting frees it). The "accept" box is disabled when there's nothing to accept.
-  - **Clock offset:** the offset is set in exactly **one of three mutually-exclusive ways**, chosen by
-    radio buttons, mapped 1:1 to the three `user_decision` fields so the reference §6 precedence never has
-    to arbitrate — picking one **resets the other two**:
-    - **accept proposal** → `accept_proposal` (disabled when there's no proposal);
-    - **manual offset** → `manual_offset_seconds`, edited with the **h/m/s spinner** (three independent
-      fields: hover-scroll or focus + ↑/↓ nudges just that unit by ±3600/±60/±1 s, clamped to ±86400 s;
-      `preventDefault` keeps the wheel off page scroll) plus a raw-seconds box;
-    - **anchor real-UTC** → `manual_real_utc`, a **`datetime-local` picker** (UTC) shown only for a
-      `gpx_self_anchor` proposal; it shows the **derived offset** and the equivalent **destination-local
-      time** (with a "set the timezone" nudge when unresolved) and the proposal's GPX-estimated UTC.
-    Switching mode carries the current offset over (seeds the new field from it). A small "clear" returns
-    the cell to the unset state (calibration auto-resolves / inherits).
+  - **Clock offset:** **three always-visible choices, click-to-activate** — *accept proposal* (the
+    automatic offset, never edited → `accept_proposal`), *manual offset* (the **h/m/s spinner**:
+    hover-scroll or focus + ↑/↓ nudges just that unit by ±3600/±60/±1 s, clamped to ±86400 s;
+    `preventDefault` keeps the wheel off page scroll), and *anchor real-UTC* (a `datetime-local` picker,
+    only for a `gpx_self_anchor` proposal). Exactly one is active; clicking another **deactivates the
+    others and they update to the active value** — the two manual views are synced (offset ⟷ anchor camera
+    time + offset), while the automatic stays the proposal. Only the active view is editable; the rest are
+    read-only but **still show the effective offset** (nothing hidden). Manual offset and anchor-UTC are
+    both stored canonically as `manual_offset_seconds` (which one is active is per-cell UI state); the
+    picker writes the derived offset, so the editor never persists `manual_real_utc` (a hand-edited one is
+    still honored). Below the choices a common **Impact** line shows what the effective offset does to the
+    anchor photo: `camera local → corrected local (tz, UTC …)` — same compact format as the proposal
+    groups (one date copy when invariant; UTC in parens after), with a no-anchor fallback (offset +
+    formula). A small "clear"
+    returns the cell to unset (calibration auto-resolves / inherits). The picker writes the derived
+    offset, so `manual_real_utc` isn't persisted by the editor (a hand-edited one is still honored).
   - **GPS coordinate / fallback:** a **zoomable map with a fixed centre crosshair** — pan/zoom under it,
     "use map center" → take `map.getCenter()` into the lat/lon fields. Reference pins (effective /
     inherited / folder fallback) and a marker for the current decision give context, and the map seeds
