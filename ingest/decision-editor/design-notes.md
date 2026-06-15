@@ -110,8 +110,12 @@ panel.
   - **GPS coordinate / fallback:** a **zoomable map with a fixed centre crosshair** — pan/zoom under it,
     "use map center" → take `map.getCenter()` into the lat/lon fields. Reference pins (effective /
     inherited / folder fallback) and a marker for the current decision give context, and the map seeds
-    its view to the current coordinate or the nearest known reference. The **photo** (embedded-JPEG
-    preview from the server) sits above the map for review items.
+    its view to the current coordinate, **else the last coordinate the operator placed** (so the next
+    un-located photo opens centred where the previous one was set — consecutive shots are usually near
+    each other), else the nearest known reference. A **copy/paste** pair under the map remembers a found
+    location (set on every pick, or via *copy location*) and **paste**s it onto another cell, so a place
+    found once need not be re-navigated. The **photo** (embedded-JPEG preview from the server) sits above
+    the map for review items.
     - *Built with vendored Leaflet (`web/vendor/leaflet/`, no CDN/build); map tiles load from
       OpenStreetMap **at runtime** — the one external dependency, as any web map needs a tile source.*
     - *The earlier idea of drawing the **GPX track / anchors / ghost marker** is not realised here: a GPS

@@ -151,4 +151,6 @@ pre.json { margin: 0; font: 12px var(--mono); white-space: pre-wrap; word-break:
 .crosshair::after { top: 50%; left: 0; height: 2px; width: 100%; transform: translateY(-50%); }
 .map-bar { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
 .map-read { flex: 1; font: 12px var(--mono); color: var(--muted); }
+.map-cp { display: flex; gap: 8px; margin-top: 6px; }
+.map-cp .btn { font-size: 12px; padding: 3px 10px; }
 .photo-img { display: block; max-width: 100%; max-height: 360px; border-radius: 6px; background: #111; }
