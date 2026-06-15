@@ -122,9 +122,12 @@ panel.
     photo in the **same destination** to select a **contiguous run** (a multi-selection never crosses a
     destination boundary); the side panel then **applies one location to every photo in the run** (a
     `peers` ref whose edits fan out). The **photo** (embedded-JPEG preview from the server) sits above the
-    map for review items.
-    - *Built with vendored Leaflet (`web/vendor/leaflet/`, no CDN/build); map tiles load from
-      OpenStreetMap **at runtime** — the one external dependency, as any web map needs a tile source.*
+    map for review items. A **place-search box** under the map (geocoding via **Nominatim/OpenStreetMap**,
+    Google-Maps style) **relocates** the map to a named place — manual submit only (Enter/button, never
+    per-keystroke, to respect Nominatim's ≤1 req/s policy); picking a result moves the view but does **not**
+    set the decision (the operator still picks under the crosshair).
+    - *Built with vendored Leaflet (`web/vendor/leaflet/`, no CDN/build); two **runtime** OpenStreetMap
+      dependencies — map **tiles** and the **Nominatim** geocoder — degrade gracefully when offline.*
     - *The earlier idea of drawing the **GPX track / anchors / ghost marker** is not realised here: a GPS
       `review_item` is on the list precisely because no reliable GPS source placed it, so the
       `photos-22` artifact carries no track/anchor/candidate for it. The crosshair pick + photo are the
