@@ -789,12 +789,17 @@ function renderPanel() {
     head.append(el("div", { class: "hint" }, "shift-click another photo in this destination to select a run and place them together"));
   }
   if (isDirty(ref)) head.append(el("button", { class: "mini", onclick: () => resetRef(ref) }, "reset"));
-  p.append(head);
-  if (c.proposal) p.append(ref.kind === "offset" ? offsetProposalBlock(ref, c.proposal) : jsonBlock("Proposal", c.proposal));
-  if (ref.kind === "review") p.append(photoBlock(ref));
-  if (isGpsCoord) p.append(mapBlock(ref));
-  p.append(el("div", { class: "pblock" }, el("h3", {}, "Your decision"), controls(ref)));
-  p.append(el("div", { class: "pblock eff" }, el("h3", {}, "Effective (advisory — re-run to apply)"), el("div", { class: "eff-val" }, previewEffective(ref))));
+  // Fixed top: title + status + the decision controls + the effective preview — always visible, no scroll.
+  const top = el("div", { class: "panel-top" },
+    el("h2", {}, title), el("div", { class: "path" }, ref.path || ref.dest), head,
+    el("div", { class: "pblock" }, el("h3", {}, "Your decision"), controls(ref)),
+    el("div", { class: "pblock eff" }, el("h3", {}, "Effective (advisory — re-run to apply)"), el("div", { class: "eff-val" }, previewEffective(ref))));
+  // Scroll area: the evidence (proposal) and the big media (photo, map) — the only things that scroll.
+  const scroll = el("div", { class: "panel-scroll" });
+  if (c.proposal) scroll.append(ref.kind === "offset" ? offsetProposalBlock(ref, c.proposal) : jsonBlock("Proposal", c.proposal));
+  if (ref.kind === "review") scroll.append(photoBlock(ref));
+  if (isGpsCoord) scroll.append(mapBlock(ref));
+  p.replaceChildren(top, scroll);
 }
 
 // --- header / save -----------------------------------------------------------
@@ -871,11 +876,36 @@ function render() {
   renderPanel();
 }
 
+// Draggable list|panel split. The divider sets the grid's first-column width (`--list-w`); the panel
+// takes the rest. Clamped to sane bounds, persisted in localStorage, and the map is resized live so
+// Leaflet keeps filling its (now narrower/wider) pane.
+function setupDivider() {
+  const divider = $("#divider"), mainEl = document.querySelector("main"), root = document.documentElement;
+  try { const w = localStorage.getItem("listW"); if (w) root.style.setProperty("--list-w", w); } catch { /* ignore */ }
+  let dragging = false;
+  const onMove = (e) => {
+    if (!dragging) return;
+    const x = e.clientX - mainEl.getBoundingClientRect().left;
+    const w = Math.max(280, Math.min(mainEl.clientWidth - 340, x));
+    root.style.setProperty("--list-w", `${Math.round(w)}px`);
+    if (_map) _map.refresh();
+  };
+  divider.addEventListener("mousedown", (e) => { e.preventDefault(); dragging = true; divider.classList.add("dragging"); document.body.style.userSelect = "none"; });
+  window.addEventListener("mousemove", onMove);
+  window.addEventListener("mouseup", () => {
+    if (!dragging) return;
+    dragging = false; divider.classList.remove("dragging"); document.body.style.userSelect = "";
+    try { localStorage.setItem("listW", root.style.getPropertyValue("--list-w")); } catch { /* ignore */ }
+    if (_map) _map.refresh();
+  });
+}
+
 async function main() {
   for (const b of document.querySelectorAll("#view-toggle button")) b.addEventListener("click", () => { state.view = b.dataset.view; state.selected = null; render(); });
   $("#save").addEventListener("click", save);
   $("#rerun").addEventListener("click", rerun);
   $("#reset").addEventListener("click", () => { state.work = clone(state.base); state.message = null; render(); });
+  setupDivider();
   try { state.base = await (await fetch("/api/artifacts")).json(); state.work = clone(state.base); }
   catch (e) { $("#list").replaceChildren(el("div", { class: "empty" }, "Could not load /api/artifacts: " + e)); return; }
   render();
