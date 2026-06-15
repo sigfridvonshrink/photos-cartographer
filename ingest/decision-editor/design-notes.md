@@ -63,10 +63,16 @@ panel.
   thumbnail** (review items), a **context map**, and a live **effective-outcome** preview with
   client-side validation. For an **offset** proposal the raw anchor list is **collapsed**: the consensus
   correction, then up to three "N photos → ±Xh Ym" groups — each naming one photo by its full by-dest
-  path and showing that photo's **corrected local time** (via the destination timezone, with the usual
-  "set the timezone" nudge when unresolved) — plus a note counting frames skipped (no nearby track / a
-  track only from another trip). The data comes from the proposal's `groups`/`skipped` (calibration);
-  the editor only renders it.
+  path and showing that photo's camera time → **corrected local time** (via the destination timezone,
+  with the usual "set the timezone" nudge when unresolved) — plus a note counting frames skipped (no
+  nearby track / a track only from another trip). The data comes from the proposal's `groups`/`skipped`
+  (calibration); the editor only renders it. The camera and corrected sides are formatted **identically**
+  (`DD Mon YYYY` + `HH:MM:SS`); when the date is unchanged it's shown once and the arrow carries only the
+  time correction (`22 Mar 2026 · 13:25:21 → 13:24:18 (Europe/Brussels)`).
+- **Status is edit-aware.** The status chip normally reflects the last calibration run (`needs input` /
+  `stale` / `auto` / `resolved`), but a **pending edit supersedes it**: once your working decision would
+  resolve the cell (mirroring the §6 resolution rules) it shows `resolved` next to the `edited` chip
+  rather than the now-stale `needs input` — advisory until Re-run, like the effective-outcome preview.
 - **Specialized controls:**
   - **Timezone:** a full IANA-zone **drop-down**; accepting the proposal mirrors it into the field and
     **locks** the drop-down (unaccepting frees it). The "accept" box is disabled when there's nothing to accept.
