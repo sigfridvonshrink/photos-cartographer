@@ -10,7 +10,7 @@
 
 import { mapPicker } from "./map.js";
 
-const state = { base: null, work: null, view: "time", selected: null, saving: false, running: false, message: null, runResult: null, timeChangedSinceRerun: false, offsetExpand: new Set() };
+const state = { base: null, work: null, view: "time", selected: null, saving: false, running: false, message: null, runResult: null, timeChangedSinceRerun: false, offsetExpand: new Set(), coordClipboard: null };
 
 const $ = (s) => document.querySelector(s);
 function el(tag, attrs = {}, ...kids) {
@@ -621,7 +621,22 @@ function gpsRefMarkers(ref) {
   }
   return out;
 }
-const seedCenter = (ref) => currentCoord(ref) || gpsRefMarkers(ref)[0] || null;
+// Seed the map view for a freshly-selected GPS cell: its own decision first, else the LAST coordinate
+// the operator placed (so the next un-located photo opens centred where the previous one was set — they
+// are usually near each other), else a reference pin. The clipboard is set on every pick/paste below.
+const seedCenter = (ref) => currentCoord(ref) || state.coordClipboard || gpsRefMarkers(ref)[0] || null;
+// Copy/paste a coordinate between cells so the operator need not re-navigate to a place already found.
+// "copy" stashes this cell's decision (or its best reference) on the clipboard; "paste" applies it here.
+function copyPasteBar(ref) {
+  const [la, lo] = coordFields(ref), have = currentCoord(ref) || gpsRefMarkers(ref)[0] || null, clip = state.coordClipboard;
+  const fmtC = (c) => `${c.lat.toFixed(6)}, ${c.lon.toFixed(6)}`;
+  const copy = el("button", { class: "btn", disabled: have ? null : "", title: have ? "remember this location for other photos" : "no location here to copy",
+    onclick: () => { state.coordClipboard = { lat: have.lat, lon: have.lon }; state.message = `copied ${fmtC(have)}`; render(); } }, "copy location");
+  const paste = el("button", { class: "btn", disabled: clip ? null : "", title: clip ? `paste ${fmtC(clip)}` : "copy a location first",
+    onclick: () => { editMany(ref, { [la]: clip.lat, [lo]: clip.lon }); if (_map) _map.recenter(clip); } },
+    clip ? `paste ${fmtC(clip)}` : "paste");
+  return el("div", { class: "map-cp" }, copy, paste);
+}
 
 // One Leaflet instance, kept across re-renders of the same selection (rebuilding it on each keystroke
 // would reset pan/zoom). Rebuilt when the selected cell changes; torn down for non-GPS cells.
@@ -634,12 +649,12 @@ function mapBlock(ref) {
     teardownMap();
     const [la, lo] = coordFields(ref);
     _map = mapPicker({ center: seedCenter(ref), markers: gpsRefMarkers(ref),
-      onPick: (lat, lon) => editMany(ref, { [la]: lat, [lo]: lon }) });
+      onPick: (lat, lon) => { state.coordClipboard = { lat, lon }; editMany(ref, { [la]: lat, [lo]: lon }); } });
     _mapKey = key;
   }
   _map.setCurrent(currentCoord(ref));
   setTimeout(() => _map && _map.refresh(), 0);     // recompute size after (re)attach to the DOM
-  return el("div", { class: "pblock" }, el("h3", {}, "Place on map"), _map.el, _map.bar);
+  return el("div", { class: "pblock" }, el("h3", {}, "Place on map"), _map.el, _map.bar, copyPasteBar(ref));
 }
 function photoBlock(ref) {
   if (state.base.demo)
