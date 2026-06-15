@@ -29,3 +29,13 @@ def test_detail_silent_when_quiet(capsys):
     c.set_detail("Japan/Kyoto")
     c.increment_completed(1)
     assert capsys.readouterr().err == ""
+
+
+def test_gpx_build_reports_per_file_progress(tmp_path):
+    import photos_2_time_gps as cal
+    d = tmp_path / "gpx"; d.mkdir()
+    for i in range(3):
+        (d / f"track{i}.gpx").write_text("")           # extension is enough to be counted
+    c = utils.ProgressCoordinator(quiet=True)          # quiet: no output, but the count still advances
+    cal.GPXIndex(str(d)).build(c)
+    assert c.total_items == 3 and c.completed_items == 3
