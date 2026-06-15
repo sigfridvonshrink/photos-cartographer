@@ -10,7 +10,7 @@
 
 import { mapPicker } from "./map.js";
 
-const state = { base: null, work: null, view: "time", selected: null, saving: false, running: false, message: null, runResult: null, timeChangedSinceRerun: false };
+const state = { base: null, work: null, view: "time", selected: null, saving: false, running: false, message: null, runResult: null, timeChangedSinceRerun: false, offsetExpand: new Set() };
 
 const $ = (s) => document.querySelector(s);
 function el(tag, attrs = {}, ...kids) {
@@ -75,15 +75,74 @@ function refInvalid(ref) {
 }
 const dirtyRefs = () => allRefs().filter(isDirty);
 const anyInvalid = () => allRefs().some(refInvalid);
-const udSet = (u) => Object.values(u || {}).some((v) => v === true || (v !== "" && v != null && v !== false));
+// --- per-date offset buckets (decision-json-reference §4.4) -------------------
+// A destination's `camera_group_time_decisions` is keyed by the bare camera group for the single-day
+// common case, or `<group>@<YYYY-MM-DD>` per day when the group spans >1 naive date there (a camera set
+// to local time each morning has a per-day offset). Group those buckets by camera group, then collapse
+// undecided buckets that share the SAME proposed offset into one actionable cluster (equal proposals —
+// e.g. all summer days — confirm together; winter falls into its own cluster). A bucket with its own
+// user_decision stays its own cluster so a divergent manual day is never hidden. Pure logic — unit-tested.
+function offsetGroups(destCell) {
+  const cells = destCell?.camera_group_time_decisions || {};
+  const byGroup = new Map();
+  for (const key of Object.keys(cells)) {
+    const c = cells[key], g = c.camera_group || key;
+    if (!byGroup.has(g)) byGroup.set(g, []);
+    byGroup.get(g).push({ key, cell: c, date: c.date || null });
+  }
+  const out = [];
+  for (const group of [...byGroup.keys()].sort()) {
+    const buckets = byGroup.get(group).sort((a, b) => (a.date || "") < (b.date || "") ? -1 : (a.date || "") > (b.date || "") ? 1 : 0);
+    // Cluster by (decision signature, proposed offset): undecided equal-proposal days collapse together;
+    // days sharing an identical decision (e.g. both "accept proposal") stay collapsed after editing; a
+    // day with a divergent manual decision breaks out into its own row so it is never hidden.
+    const byProp = new Map();                              // cluster key → member buckets
+    for (const b of buckets) {
+      const u = b.cell.user_decision || {}, p = b.cell.proposal || {};
+      const udSig = `${u.accept_proposal === true ? 1 : 0}|${u.manual_offset_seconds ?? ""}|${u.manual_real_utc ?? ""}`;
+      const pk = `${udSig}@${"proposed_offset_seconds" in p ? p.proposed_offset_seconds : "none"}`;
+      if (!byProp.has(pk)) byProp.set(pk, []);
+      byProp.get(pk).push(b);
+    }
+    const proposals = [...byProp.values()].map((members) => {
+      const p = members[0].cell.proposal || {};
+      return { keys: members.map((m) => m.key), dates: members.map((m) => m.date).filter(Boolean),
+        offset: "proposed_offset_seconds" in p ? p.proposed_offset_seconds : null,
+        source: p.proposal_source || null, tz: p.proposed_from_timezone || null };
+    });
+    out.push({ group, dated: buckets.some((b) => b.date), buckets, proposals });
+  }
+  return out;
+}
+// Compact a sorted list of YYYY-MM-DD dates: single → "3 Jul 2024", contiguous-ish range → "3–7 Jul",
+// else "first … last". Purely for the row label of a collapsed multi-day cluster.
+function dateRange(dates) {
+  const ds = (dates || []).filter(Boolean);
+  if (!ds.length) return "";
+  if (ds.length === 1) return fmtDate(ds[0]);
+  return `${fmtDate(ds[0])} … ${fmtDate(ds[ds.length - 1])} (${ds.length} days)`;
+}
+function fmtDate(iso) {
+  const m = /^(\d{4})-(\d\d)-(\d\d)$/.exec(iso || ""); if (!m) return iso || "";
+  const mon = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][+m[2] - 1];
+  return `${+m[3]} ${mon} ${m[1]}`;
+}
 
 // --- edit + status -----------------------------------------------------------
 // Time edits invalidate the GPS decisions (GPS placement is computed from resolved UTC), and GPS is
 // only recomputed on a Re-run — so flag any time change to drive the GPS-view stale/lock notices below.
 const touchTime = (ref) => { if (ref.file === "time") state.timeChangedSinceRerun = true; };
-function edit(ref, field, value) { touchTime(ref); workCell(ref).user_decision[field] = value; render(); }
-function editMany(ref, obj) { touchTime(ref); Object.assign(workCell(ref).user_decision, obj); render(); }
-function resetRef(ref) { workCell(ref).user_decision = clone(baseCell(ref).user_decision); render(); }
+// A collapsed per-date offset row stands for several equal-proposal day buckets (`ref.peers`); an edit
+// fans out identically to all of them so confirming once resolves every matching day. Non-grouped refs
+// (one bucket, or timezone/fallback/review) carry no peers and edit just their own cell.
+const peerKeys = (ref) => (ref.peers && ref.peers.length ? ref.peers : [ref.key]);
+const eachPeer = (ref, fn) => { for (const k of peerKeys(ref)) { const c = cellAt(state.work, { ...ref, key: k }); if (c) fn(c); } };
+function edit(ref, field, value) { touchTime(ref); eachPeer(ref, (c) => { c.user_decision[field] = value; }); render(); }
+function editMany(ref, obj) { touchTime(ref); eachPeer(ref, (c) => Object.assign(c.user_decision, obj)); render(); }
+function resetRef(ref) {
+  for (const k of peerKeys(ref)) { const w = cellAt(state.work, { ...ref, key: k }), b = cellAt(state.base, { ...ref, key: k }); if (w && b) w.user_decision = clone(b.user_decision); }
+  render();
+}
 
 function cellStatus(cell) {
   if (!cell) return null;
@@ -179,7 +238,7 @@ function previewEffective(ref) {
       return validOffset(u.manual_offset_seconds) ? `${fmtOffset(u.manual_offset_seconds)} (manual)` : "✗ invalid offset";
     if (u.manual_real_utc) return validUtc(u.manual_real_utc) ? "via real-UTC (computed on re-run)" : "✗ invalid UTC";
     if (u.accept_proposal && "proposed_offset_seconds" in p) return `${fmtOffset(p.proposed_offset_seconds)} (accept proposal)`;
-    return "— (will auto/inherit on re-run, or needs input)";
+    return "— (GPX auto-resolves on re-run, else needs input)";
   }
   if (ref.kind === "fallback") {
     if (u.fallback_lat !== "" && u.fallback_lon !== "") return `${u.fallback_lat}, ${u.fallback_lon}`;
@@ -248,16 +307,14 @@ function previewFallback(dest) {
 // --- list views --------------------------------------------------------------
 function isSel(ref) { const s = state.selected; return s && s.file === ref.file && s.dest === ref.dest && s.kind === ref.kind && s.key === ref.key && s.path === ref.path; }
 function tags(ref) {
-  const c = baseCell(ref), out = [];
+  const out = [];
   if (ref.kind === "timezone") {
     const pv = previewTz(ref.dest);                       // live preview, updates as ancestors change
     if (pv && pv.source === "inherited") out.push(chip("inherited", `inherited ⟵ ${leaf(pv.from)}`));
   } else if (ref.kind === "fallback") {
     const pv = previewFallback(ref.dest);                 // live preview, updates as ancestors change
     if (pv && pv.source === "inherited") out.push(chip("inherited", `inherited ⟵ ${leaf(pv.from)}`));
-  } else if (c?.proposal?.proposal_source === "inherited") {
-    out.push(chip("inherited", "inherited"));
-  }
+  }                                                       // offsets never inherit (per-date buckets, §10.2)
   if (isDirty(ref)) out.push(chip("edited", "edited"));
   if (refInvalid(ref)) out.push(chip("invalid", "✗ invalid"));
   return out;
@@ -284,14 +341,47 @@ function renderTreeNode(node, box) {
       node.dest.file_less ? el("span", { class: "container-tag", title: "no photos here — its decisions only set defaults for sub-destinations" }, "container") : null));
     const tzpv = previewTz(node.path);
     n.append(row({ file: "time", dest: node.path, kind: "timezone" }, "Timezone", null, tzpv ? tzpv.tz : "—"));
-    for (const key of Object.keys(node.dest.camera_group_time_decisions || {}).sort()) {
-      const c = node.dest.camera_group_time_decisions[key];
-      const e = c.effective_time_anchor; n.append(row({ file: "time", dest: node.path, kind: "offset", key }, "Offset", key, e && typeof e === "object" ? fmtOffset(e.offset_seconds) : "—"));
-    }
+    renderOffsetRows(node.path, node.dest, n);
   }
   const kids = Object.keys(node.children).sort();
   if (kids.length) { const w = el("div", { class: "kids" }); for (const k of kids) renderTreeNode(node.children[k], w); n.append(w); }
   box.append(n);
+}
+// One selectable offset row. `keys` is the bucket(s) it stands for — >1 ⇒ a collapsed equal-proposal
+// cluster that edits all its days at once (`ref.peers`). `pr` supplies the cluster's proposal so a
+// timezone-derived row is labelled with its source zone.
+function offsetRow(dest, keys, sub, cell, pr, indent) {
+  const ref = { file: "time", dest, kind: "offset", key: keys[0] };
+  if (keys.length > 1) ref.peers = keys;
+  const e = cell.effective_time_anchor;
+  const eff = e && typeof e === "object" ? fmtOffset(e.offset_seconds)
+    : "proposed_offset_seconds" in (cell.proposal || {}) ? `${fmtOffset(cell.proposal.proposed_offset_seconds)} proposed` : "—";
+  const s = pr && pr.source === "timezone_naive" && pr.tz ? `${sub} · from ${leaf(pr.tz)}` : sub;
+  const r = row(ref, "Offset", s, eff);
+  if (indent) r.classList.add("off-sub");
+  return r;
+}
+// Render a destination's offset decisions. Single-day common case → one plain row. A group spanning >1
+// naive date → a header + one row per distinct proposal, equal proposals collapsed into a single
+// multi-day cluster row (a chevron expands it to per-day rows for divergent manual edits).
+function renderOffsetRows(dest, destCell, n) {
+  const cells = destCell.camera_group_time_decisions || {};
+  for (const g of offsetGroups(destCell)) {
+    if (g.buckets.length === 1 && !g.buckets[0].date) { n.append(offsetRow(dest, [g.buckets[0].key], g.group, g.buckets[0].cell, null, false)); continue; }
+    n.append(el("div", { class: "offset-grp" }, `Offset · ${g.group}`, el("span", { class: "sub" }, `  ${g.buckets.length} days`)));
+    for (const pr of g.proposals) {
+      if (pr.keys.length === 1) { const k = pr.keys[0]; n.append(offsetRow(dest, [k], fmtDate(cells[k].date) || g.group, cells[k], pr, true)); continue; }
+      const expKey = `${dest}|${pr.keys.join(",")}`;
+      if (!state.offsetExpand.has(expKey)) {
+        const r = offsetRow(dest, pr.keys, dateRange(pr.dates), cells[pr.keys[0]], pr, true);
+        r.prepend(el("span", { class: "off-chevron", title: "show each day", onclick: (e) => { e.stopPropagation(); state.offsetExpand.add(expKey); render(); } }, "▸"));
+        n.append(r);
+      } else {
+        n.append(el("div", { class: "off-collapse", onclick: () => { state.offsetExpand.delete(expKey); render(); } }, `▾ ${dateRange(pr.dates)} — collapse`));
+        for (const k of pr.keys) n.append(offsetRow(dest, [k], fmtDate(cells[k].date), cells[k], pr, true));
+      }
+    }
+  }
 }
 function renderTime(list) {
   const t = state.work.time;
@@ -404,8 +494,7 @@ function offsetEditor(ref) {
   let numI, pickI;
 
   // choice 1 — accept the proposal (automatic; its value is never edited)
-  const src = p.proposal_source === "timezone_naive" ? ` from timezone ${p.proposed_from_timezone}`
-    : p.proposal_source === "inherited" ? ` inherited ⟵ ${(p.inherited_from || "").split("/").pop()}` : "";
+  const src = p.proposal_source === "timezone_naive" ? ` from timezone ${p.proposed_from_timezone}` : "";
   wrap.append(opt(active === "accept",
     el("span", {}, hasProp ? `accept proposal (${fmtOffset(p.proposed_offset_seconds)})${src}` : "accept proposal — none to accept"),
     hasProp ? accept : undefined, hasProp ? "" : " disabled"));
@@ -448,7 +537,7 @@ function offsetEditor(ref) {
 
   // common Impact line — what the effective offset does to the anchor photo (or the offset + formula)
   const tz = previewTz(ref.dest)?.tz;
-  if (eff == null) wrap.append(el("div", { class: "off-impact hint" }, "no offset set — calibration will auto-resolve or inherit"));
+  if (eff == null) wrap.append(el("div", { class: "off-impact hint" }, "no offset set — a GPX self-anchor auto-resolves on re-run; otherwise this day needs input"));
   else if (camMs != null) {
     wrap.append(el("div", { class: "off-impact" }, offsetImpact(camMs, cur, tz)));
     if (!tz) wrap.append(el("div", { class: "hint" }, "set this destination's timezone to see the corrected local time"));
@@ -462,7 +551,7 @@ function offsetEditor(ref) {
 
   if (accepted || manualSet) wrap.append(el("button", { class: "mini",
     onclick: () => { state.offsetEdit = null; editMany(ref, { accept_proposal: false, manual_offset_seconds: "", manual_real_utc: "" }); } },
-    "clear (let calibration auto/inherit)"));
+    "clear (let calibration auto-resolve / re-derive)"));
 
   // restore focus to the view just activated (click-to-activate), so it's ready to edit
   if (state._focusOffset) {
@@ -563,6 +652,14 @@ function jsonBlock(title, obj) { return obj === undefined ? null : el("div", { c
 // "N photos → ±Xh Ym" groups (each with one named photo at its FULL by-dest path and that photo's
 // corrected local time), plus a note for frames skipped (no track / track from another trip).
 function offsetProposalBlock(ref, p) {
+  if (p.proposal_source === "timezone_naive") {
+    // No GPX anchor: the offset is derived from the destination's local time for this day, assuming the
+    // camera clock tracked it (DST-aware, so summer/winter days get different offsets — §19.4).
+    return el("div", { class: "pblock" }, el("h3", {}, "Proposal — derived from the local time"),
+      el("div", { class: "prop-head" }, fmtOffset(p.proposed_offset_seconds),
+        el("span", { class: "muted" }, ` (assuming the camera was on ${p.proposed_from_timezone} time)`)),
+      el("div", { class: "hint" }, `real UTC ${p.proposed_real_utc} — confirm only if the camera really tracked local time (a camera left on home time would be wrong).`));
+  }
   if (p.proposal_source !== "gpx_self_anchor") return jsonBlock("Proposal", p);
   const tz = previewTz(ref.dest)?.tz;
   const wrap = el("div", { class: "pblock" }, el("h3", {}, "Proposal — suggested clock correction"),
@@ -598,9 +695,16 @@ function renderPanel() {
   const isGpsCoord = ref && ref.file === "gps" && (ref.kind === "fallback" || ref.kind === "review");
   if (!isGpsCoord) teardownMap();
   if (!ref || !c) return p.append(el("div", { class: "empty" }, "Select a decision to edit it."));
-  const title = ref.kind === "offset" ? `Offset · ${ref.key}` : ref.kind === "review" ? "GPS review item" : ref.kind === "fallback" ? "Folder fallback" : "Timezone";
+  const title = ref.kind === "offset" ? `Offset · ${c.camera_group || ref.key}` : ref.kind === "review" ? "GPS review item" : ref.kind === "fallback" ? "Folder fallback" : "Timezone";
   p.append(el("h2", {}, title), el("div", { class: "path" }, ref.path || ref.dest));
   const head = el("div", { class: "pblock" }, ...(statusChip(ref) ? [statusChip(ref)] : []), ...tags(ref));
+  // A collapsed cluster edits several equal-proposal days at once — say so, and which days.
+  if (ref.kind === "offset" && ref.peers && ref.peers.length > 1) {
+    const dates = ref.peers.map((k) => workCell({ ...ref, key: k })?.date).filter(Boolean);
+    head.append(el("div", { class: "hint" }, `editing all ${ref.peers.length} days with this proposal: ${dateRange(dates)}`));
+  } else if (ref.kind === "offset" && c.date) {
+    head.append(el("div", { class: "hint" }, `this day only: ${fmtDate(c.date)}`));
+  }
   if (isDirty(ref)) head.append(el("button", { class: "mini", onclick: () => resetRef(ref) }, "reset"));
   p.append(head);
   if (c.proposal) p.append(ref.kind === "offset" ? offsetProposalBlock(ref, c.proposal) : jsonBlock("Proposal", c.proposal));
@@ -701,4 +805,5 @@ export {
   isNum, validTz, validOffset, validUtc, validLat, validLon, bothOrNeither,
   fmtOffset, camNaiveMs, dtLocalToMs, msToDtLocal, utcStrToMs, fmtLocal, fmtDT, offsetImpact,
   cellAt, cellStatus, wouldResolve, previewTz, previewFallback, refInvalid, isDirty, state,
+  offsetGroups, dateRange, fmtDate, peerKeys,
 };
