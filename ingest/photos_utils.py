@@ -1504,6 +1504,7 @@ class ProgressCoordinator:
         self.completed_items = 0
         self.start_time = time.time()
         self.last_print_time = 0
+        self._detail = ""              # optional per-item label appended to the progress line
 
     def start_phase(self, phase_name: str, total_items: int = 0):
         with self._lock:
@@ -1511,6 +1512,7 @@ class ProgressCoordinator:
             self.total_items = total_items
             self.completed_items = 0
             self.start_time = time.time()
+            self._detail = ""
             if not self.quiet:
                 if self.is_tty:
                     print(f"\r\033[KStarting {phase_name}...", end="", file=sys.stderr)
@@ -1526,26 +1528,34 @@ class ProgressCoordinator:
             self.completed_items += amount
             self._render_progress()
 
-    def _render_progress(self):
+    def set_detail(self, detail: str = ""):
+        """Set the per-item label shown on the progress line (e.g. the destination being worked on)
+        and render it immediately, so a long single item announces itself before its work begins."""
+        with self._lock:
+            self._detail = detail or ""
+            self._render_progress(force=True)
+
+    def _render_progress(self, force: bool = False):
         if self.quiet:
             return
 
         now = time.time()
+        suffix = f" — {self._detail}" if self._detail else ""
         if self.is_tty:
-            if now - self.last_print_time > 0.1:
+            if force or now - self.last_print_time > 0.1:
                 self.last_print_time = now
                 pct = ""
                 if self.total_items > 0:
                     pct = f" ({self.completed_items / self.total_items * 100:.1f}%)"
-                print(f"\r\033[K{self.current_phase}: {self.completed_items}/{self.total_items}{pct} ...", end="", file=sys.stderr)
+                print(f"\r\033[K{self.current_phase}: {self.completed_items}/{self.total_items}{pct}{suffix} ...", end="", file=sys.stderr)
                 sys.stderr.flush()
         else:
-            if now - self.last_print_time > 10.0:
+            if force or now - self.last_print_time > 10.0:
                 self.last_print_time = now
                 pct = ""
                 if self.total_items > 0:
                     pct = f" ({self.completed_items / self.total_items * 100:.1f}%)"
-                print(f"{self.current_phase}: {self.completed_items}/{self.total_items}{pct} ...", file=sys.stderr)
+                print(f"{self.current_phase}: {self.completed_items}/{self.total_items}{pct}{suffix} ...", file=sys.stderr)
 
     def finish_phase(self):
         with self._lock:
