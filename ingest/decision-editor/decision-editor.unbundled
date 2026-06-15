@@ -213,18 +213,28 @@ def _example_json(name):
 def _environment(workspace):
     """Folder dependencies calibration needs that may live on a different machine than this editor.
 
-    The editor can run on a host that sees the workspace (e.g. over a share) but NOT the configured
-    `gpx_root` — and GPX time-anchoring reads that path. Re-running there would regenerate the time/GPS
-    decisions as if there were no GPX, silently discarding good offsets/placements. So the Re-run button
-    gates on this. Resolved from the workspace config (`photos-00-config.json`) the same way calibration
-    resolves it (`photos_utils.selected_gpx_root`). An EMPTY gpx_root means 'no GPX configured' — nothing
-    to depend on, so it does not block. Other folder dependencies: none at present."""
+    Two things calibration needs that may be absent on the host running the editor:
+      * the pipeline script itself (`CALIBRATE`, expected beside the editor — the single-file bundle does
+        NOT embed it, so a copy taken away from the repo can't re-run); and
+      * the configured `gpx_root`, which GPX time-anchoring reads and which can be a mount visible only on
+        the workspace's own host. Re-running without it would regenerate the time/GPS decisions as if there
+        were no GPX, silently discarding good offsets/placements.
+    `gpx_root` is resolved from the workspace config (`photos-00-config.json`) the way calibration resolves
+    it (`photos_utils.selected_gpx_root`); an EMPTY gpx_root means 'no GPX configured' and does not block.
+    The Re-run button (and `_rerun`) gate on `deps_ok`; `missing` names each absent dependency for the
+    tooltip/error. No other folder dependencies exist at present."""
+    missing = []
+    calibration_present = os.path.isfile(CALIBRATE)
+    if not calibration_present:
+        missing.append(f"calibration script ({CALIBRATE})")
     cfg = _read_json(os.path.join(workspace, CONTROL, CONFIG_NAME))
     root = (cfg or {}).get("gpx_root") or "" if isinstance(cfg, dict) else ""
     resolved = os.path.realpath(os.path.abspath(root)) if root else ""
     gpx_available = (not resolved) or os.path.isdir(resolved)
-    missing = [] if gpx_available else [f"gpx_root ({resolved})"]
-    return {"gpx_root": resolved, "gpx_configured": bool(resolved),
+    if not gpx_available:
+        missing.append(f"gpx_root ({resolved})")
+    return {"calibration_present": calibration_present,
+            "gpx_root": resolved, "gpx_configured": bool(resolved),
             "gpx_available": gpx_available, "deps_ok": not missing, "missing": missing}
 
 
@@ -300,12 +310,10 @@ def _rerun(workspace):
     (separate from the editor lock), so a concurrent calibration is reported, not forced. Returns the
     process outcome; the client reloads /api/artifacts on success. Mutates nothing here — `run` only
     plans (no writes to originals)."""
-    if not os.path.isfile(CALIBRATE):
-        return {"ok": False, "error": f"calibration script not found at {CALIBRATE}"}
-    env = _environment(workspace)        # defence in depth: never recalc with a dependency off-machine
+    env = _environment(workspace)        # gate: never recalc without the pipeline + its data on this host
     if not env["deps_ok"]:
-        return {"ok": False, "error": "calibration dependency not available on this machine: "
-                + ", ".join(env["missing"]) + ". Run the editor on the host that holds it, then re-run."}
+        return {"ok": False, "error": "calibration cannot run on this machine — missing: "
+                + ", ".join(env["missing"]) + ". Run the editor on the host that has the pipeline and its data."}
     try:
         proc = subprocess.run([sys.executable, CALIBRATE, "run"], cwd=workspace,
                               capture_output=True, text=True, timeout=RERUN_TIMEOUT_S)

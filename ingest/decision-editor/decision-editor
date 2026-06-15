@@ -2,7 +2,7 @@
 # ============================================================================
 # GENERATED FILE — DO NOT EDIT.  Built from decision-editor.unbundled by ./bundle.
 # Edit the source and re-run ./bundle; edits here are lost.  Verify with ./bundle --check.
-# source-sha256: 001a1890d13c82e6cf676fc8d266a0e6d89b8f5838037f396ef6b91c684e6373
+# source-sha256: 540ed03b152380af89a7fc46910650cf9ed9353d6484fc0ee59f1a9ba96faf0c
 # ============================================================================
 """Local server for the decision editor.
 
@@ -609,27 +609,28 @@ _WEB_ASSETS = {
         'JCgiI3RvZG8iKS50ZXh0Q29udGVudCA9IGRpcnR5ID8gYCR7ZGlydHl9IHVuc2F2ZWQke2ludmFsaWQgPyAiIMK3IOKclyBpbnZhbGlkIiA6ICIifWAg'
         'OiAoc3RhdGUubWVzc2FnZSB8fCAibm8gY2hhbmdlcyIpOwogIGNvbnN0IHNhdmUgPSAkKCIjc2F2ZSIpOyBzYXZlLmRpc2FibGVkID0gYS5kZW1vIHx8'
         'IGJ1c3kgfHwgZGlydHkgPT09IDAgfHwgaW52YWxpZDsKICBzYXZlLnRpdGxlID0gYS5kZW1vID8gImRlbW8gbW9kZSBpcyByZWFkLW9ubHkg4oCUIHJ1'
-        'biBgc2VydmUgPHdvcmtzcGFjZT5gIHRvIHNhdmUiIDogaW52YWxpZCA/ICJmaXggaW52YWxpZCBmaWVsZHMgZmlyc3QiIDogIiI7CiAgLy8gQ2FsaWJy'
-        'YXRpb24gcmVhZHMgZm9sZGVyIGRlcGVuZGVuY2llcyAodGhlIGdweF9yb290KSB0aGF0IG1heSBsaXZlIG9ubHkgb24gdGhlIHdvcmtzcGFjZSdzIG93'
-        'bgogIC8vIGhvc3Q7IHJlLXJ1bm5pbmcgd2hlcmUgdGhleSdyZSBpbnZpc2libGUgd291bGQgc2lsZW50bHkgd2lwZSBHUFgtZGVyaXZlZCBkZWNpc2lv'
-        'bnMuIEdhdGUgb24gaXQuCiAgY29uc3QgZGVwc01pc3NpbmcgPSAhYS5kZW1vICYmIGEuZW52aXJvbm1lbnQgJiYgIWEuZW52aXJvbm1lbnQuZGVwc19v'
-        'azsKICBjb25zdCByZXJ1bkJ0biA9ICQoIiNyZXJ1biIpOyByZXJ1bkJ0bi5kaXNhYmxlZCA9IGEuZGVtbyB8fCBidXN5IHx8IGRpcnR5ID4gMCB8fCBp'
-        'bnZhbGlkIHx8IGRlcHNNaXNzaW5nOwogIHJlcnVuQnRuLnRleHRDb250ZW50ID0gc3RhdGUucnVubmluZyA/ICJydW5uaW5n4oCmIiA6ICJSZS1ydW4i'
-        'OwogIHJlcnVuQnRuLnRpdGxlID0gYS5kZW1vID8gImRlbW8gbW9kZSDigJQgbm8gd29ya3NwYWNlIHRvIGNhbGlicmF0ZSIKICAgIDogZGVwc01pc3Np'
-        'bmcgPyBgY2FuJ3QgcmUtcnVuIG9uIHRoaXMgbWFjaGluZSDigJQgJHthLmVudmlyb25tZW50Lm1pc3Npbmcuam9pbigiLCAiKX0gbm90IHZpc2libGUg'
-        'aGVyZTsgY2FsaWJyYXRpb24gbmVlZHMgaXQsIHNvIHJ1biB0aGUgZWRpdG9yIG9uIHRoZSB3b3Jrc3BhY2UncyBob3N0YAogICAgOiBkaXJ0eSA+IDAg'
-        'PyAic2F2ZSB5b3VyIGNoYW5nZXMgZmlyc3QsIHRoZW4gcmUtcnVuIgogICAgOiBpbnZhbGlkID8gImZpeCBpbnZhbGlkIGZpZWxkcyBmaXJzdCIgOiAi'
-        'cnVuIGBwaG90b3MtMi10aW1lLWdwcyBydW5gIGFuZCByZWxvYWQgdGhlIHJlc3VsdCI7CiAgJCgiI3Jlc2V0IikuZGlzYWJsZWQgPSBkaXJ0eSA9PT0g'
-        'MCB8fCBidXN5OwogIHJlbmRlclJ1bmxvZygpOwogIGNvbnN0IGxpc3QgPSAkKCIjbGlzdCIpOyBsaXN0LnJlcGxhY2VDaGlsZHJlbigpOwogIChzdGF0'
-        'ZS52aWV3ID09PSAidGltZSIgPyByZW5kZXJUaW1lIDogcmVuZGVyR3BzKShsaXN0KTsKICByZW5kZXJQYW5lbCgpOwp9Cgphc3luYyBmdW5jdGlvbiBt'
-        'YWluKCkgewogIGZvciAoY29uc3QgYiBvZiBkb2N1bWVudC5xdWVyeVNlbGVjdG9yQWxsKCIjdmlldy10b2dnbGUgYnV0dG9uIikpIGIuYWRkRXZlbnRM'
-        'aXN0ZW5lcigiY2xpY2siLCAoKSA9PiB7IHN0YXRlLnZpZXcgPSBiLmRhdGFzZXQudmlldzsgc3RhdGUuc2VsZWN0ZWQgPSBudWxsOyByZW5kZXIoKTsg'
-        'fSk7CiAgJCgiI3NhdmUiKS5hZGRFdmVudExpc3RlbmVyKCJjbGljayIsIHNhdmUpOwogICQoIiNyZXJ1biIpLmFkZEV2ZW50TGlzdGVuZXIoImNsaWNr'
-        'IiwgcmVydW4pOwogICQoIiNyZXNldCIpLmFkZEV2ZW50TGlzdGVuZXIoImNsaWNrIiwgKCkgPT4geyBzdGF0ZS53b3JrID0gY2xvbmUoc3RhdGUuYmFz'
-        'ZSk7IHN0YXRlLm1lc3NhZ2UgPSBudWxsOyByZW5kZXIoKTsgfSk7CiAgdHJ5IHsgc3RhdGUuYmFzZSA9IGF3YWl0IChhd2FpdCBmZXRjaCgiL2FwaS9h'
-        'cnRpZmFjdHMiKSkuanNvbigpOyBzdGF0ZS53b3JrID0gY2xvbmUoc3RhdGUuYmFzZSk7IH0KICBjYXRjaCAoZSkgeyAkKCIjbGlzdCIpLnJlcGxhY2VD'
-        'aGlsZHJlbihlbCgiZGl2IiwgeyBjbGFzczogImVtcHR5IiB9LCAiQ291bGQgbm90IGxvYWQgL2FwaS9hcnRpZmFjdHM6ICIgKyBlKSk7IHJldHVybjsg'
-        'fQogIHJlbmRlcigpOwp9Cm1haW4oKTsK'
+        'biBgc2VydmUgPHdvcmtzcGFjZT5gIHRvIHNhdmUiIDogaW52YWxpZCA/ICJmaXggaW52YWxpZCBmaWVsZHMgZmlyc3QiIDogIiI7CiAgLy8gUmUtcnVu'
+        'IG5lZWRzIGNhbGlicmF0aW9uJ3MgZGVwZW5kZW5jaWVzIHByZXNlbnQgb24gVEhJUyBob3N0OiB0aGUgcGlwZWxpbmUgc2NyaXB0ICh0aGUgYnVuZGxl'
+        'CiAgLy8gZG9lc24ndCBlbWJlZCBpdCkgYW5kIHRoZSBjb25maWd1cmVkIGdweF9yb290IChhIG1vdW50IHRoYXQgbWF5IGxpdmUgb25seSBvbiB0aGUg'
+        'd29ya3NwYWNlJ3Mgb3duCiAgLy8gaG9zdCkuIFJlLXJ1bm5pbmcgd2l0aG91dCB0aGVtIHdvdWxkIGZhaWwgb3Igc2lsZW50bHkgd2lwZSBHUFgtZGVy'
+        'aXZlZCBkZWNpc2lvbnMg4oCUIHNvIGdhdGUgb24gaXQuCiAgY29uc3QgZGVwc01pc3NpbmcgPSAhYS5kZW1vICYmIGEuZW52aXJvbm1lbnQgJiYgIWEu'
+        'ZW52aXJvbm1lbnQuZGVwc19vazsKICBjb25zdCByZXJ1bkJ0biA9ICQoIiNyZXJ1biIpOyByZXJ1bkJ0bi5kaXNhYmxlZCA9IGEuZGVtbyB8fCBidXN5'
+        'IHx8IGRpcnR5ID4gMCB8fCBpbnZhbGlkIHx8IGRlcHNNaXNzaW5nOwogIHJlcnVuQnRuLnRleHRDb250ZW50ID0gc3RhdGUucnVubmluZyA/ICJydW5u'
+        'aW5n4oCmIiA6ICJSZS1ydW4iOwogIHJlcnVuQnRuLnRpdGxlID0gYS5kZW1vID8gImRlbW8gbW9kZSDigJQgbm8gd29ya3NwYWNlIHRvIGNhbGlicmF0'
+        'ZSIKICAgIDogZGVwc01pc3NpbmcgPyBgY2FuJ3QgcmUtcnVuIG9uIHRoaXMgbWFjaGluZSDigJQgbWlzc2luZzogJHthLmVudmlyb25tZW50Lm1pc3Np'
+        'bmcuam9pbigiLCAiKX0uIFJ1biB0aGUgZWRpdG9yIG9uIHRoZSBob3N0IHdpdGggdGhlIHBpcGVsaW5lIGFuZCBpdHMgZGF0YS5gCiAgICA6IGRpcnR5'
+        'ID4gMCA/ICJzYXZlIHlvdXIgY2hhbmdlcyBmaXJzdCwgdGhlbiByZS1ydW4iCiAgICA6IGludmFsaWQgPyAiZml4IGludmFsaWQgZmllbGRzIGZpcnN0'
+        'IiA6ICJydW4gYHBob3Rvcy0yLXRpbWUtZ3BzIHJ1bmAgYW5kIHJlbG9hZCB0aGUgcmVzdWx0IjsKICAkKCIjcmVzZXQiKS5kaXNhYmxlZCA9IGRpcnR5'
+        'ID09PSAwIHx8IGJ1c3k7CiAgcmVuZGVyUnVubG9nKCk7CiAgY29uc3QgbGlzdCA9ICQoIiNsaXN0Iik7IGxpc3QucmVwbGFjZUNoaWxkcmVuKCk7CiAg'
+        'KHN0YXRlLnZpZXcgPT09ICJ0aW1lIiA/IHJlbmRlclRpbWUgOiByZW5kZXJHcHMpKGxpc3QpOwogIHJlbmRlclBhbmVsKCk7Cn0KCmFzeW5jIGZ1bmN0'
+        'aW9uIG1haW4oKSB7CiAgZm9yIChjb25zdCBiIG9mIGRvY3VtZW50LnF1ZXJ5U2VsZWN0b3JBbGwoIiN2aWV3LXRvZ2dsZSBidXR0b24iKSkgYi5hZGRF'
+        'dmVudExpc3RlbmVyKCJjbGljayIsICgpID0+IHsgc3RhdGUudmlldyA9IGIuZGF0YXNldC52aWV3OyBzdGF0ZS5zZWxlY3RlZCA9IG51bGw7IHJlbmRl'
+        'cigpOyB9KTsKICAkKCIjc2F2ZSIpLmFkZEV2ZW50TGlzdGVuZXIoImNsaWNrIiwgc2F2ZSk7CiAgJCgiI3JlcnVuIikuYWRkRXZlbnRMaXN0ZW5lcigi'
+        'Y2xpY2siLCByZXJ1bik7CiAgJCgiI3Jlc2V0IikuYWRkRXZlbnRMaXN0ZW5lcigiY2xpY2siLCAoKSA9PiB7IHN0YXRlLndvcmsgPSBjbG9uZShzdGF0'
+        'ZS5iYXNlKTsgc3RhdGUubWVzc2FnZSA9IG51bGw7IHJlbmRlcigpOyB9KTsKICB0cnkgeyBzdGF0ZS5iYXNlID0gYXdhaXQgKGF3YWl0IGZldGNoKCIv'
+        'YXBpL2FydGlmYWN0cyIpKS5qc29uKCk7IHN0YXRlLndvcmsgPSBjbG9uZShzdGF0ZS5iYXNlKTsgfQogIGNhdGNoIChlKSB7ICQoIiNsaXN0IikucmVw'
+        'bGFjZUNoaWxkcmVuKGVsKCJkaXYiLCB7IGNsYXNzOiAiZW1wdHkiIH0sICJDb3VsZCBub3QgbG9hZCAvYXBpL2FydGlmYWN0czogIiArIGUpKTsgcmV0'
+        'dXJuOyB9CiAgcmVuZGVyKCk7Cn0KbWFpbigpOwo='
     ),
     'index.html': _b(
         'PCFkb2N0eXBlIGh0bWw+CjxodG1sIGxhbmc9ImVuIj4KPGhlYWQ+CiAgPG1ldGEgY2hhcnNldD0idXRmLTgiPgogIDxtZXRhIG5hbWU9InZpZXdwb3J0'
@@ -3356,18 +3357,28 @@ def _example_json(name):
 def _environment(workspace):
     """Folder dependencies calibration needs that may live on a different machine than this editor.
 
-    The editor can run on a host that sees the workspace (e.g. over a share) but NOT the configured
-    `gpx_root` — and GPX time-anchoring reads that path. Re-running there would regenerate the time/GPS
-    decisions as if there were no GPX, silently discarding good offsets/placements. So the Re-run button
-    gates on this. Resolved from the workspace config (`photos-00-config.json`) the same way calibration
-    resolves it (`photos_utils.selected_gpx_root`). An EMPTY gpx_root means 'no GPX configured' — nothing
-    to depend on, so it does not block. Other folder dependencies: none at present."""
+    Two things calibration needs that may be absent on the host running the editor:
+      * the pipeline script itself (`CALIBRATE`, expected beside the editor — the single-file bundle does
+        NOT embed it, so a copy taken away from the repo can't re-run); and
+      * the configured `gpx_root`, which GPX time-anchoring reads and which can be a mount visible only on
+        the workspace's own host. Re-running without it would regenerate the time/GPS decisions as if there
+        were no GPX, silently discarding good offsets/placements.
+    `gpx_root` is resolved from the workspace config (`photos-00-config.json`) the way calibration resolves
+    it (`photos_utils.selected_gpx_root`); an EMPTY gpx_root means 'no GPX configured' and does not block.
+    The Re-run button (and `_rerun`) gate on `deps_ok`; `missing` names each absent dependency for the
+    tooltip/error. No other folder dependencies exist at present."""
+    missing = []
+    calibration_present = os.path.isfile(CALIBRATE)
+    if not calibration_present:
+        missing.append(f"calibration script ({CALIBRATE})")
     cfg = _read_json(os.path.join(workspace, CONTROL, CONFIG_NAME))
     root = (cfg or {}).get("gpx_root") or "" if isinstance(cfg, dict) else ""
     resolved = os.path.realpath(os.path.abspath(root)) if root else ""
     gpx_available = (not resolved) or os.path.isdir(resolved)
-    missing = [] if gpx_available else [f"gpx_root ({resolved})"]
-    return {"gpx_root": resolved, "gpx_configured": bool(resolved),
+    if not gpx_available:
+        missing.append(f"gpx_root ({resolved})")
+    return {"calibration_present": calibration_present,
+            "gpx_root": resolved, "gpx_configured": bool(resolved),
             "gpx_available": gpx_available, "deps_ok": not missing, "missing": missing}
 
 
@@ -3443,12 +3454,10 @@ def _rerun(workspace):
     (separate from the editor lock), so a concurrent calibration is reported, not forced. Returns the
     process outcome; the client reloads /api/artifacts on success. Mutates nothing here — `run` only
     plans (no writes to originals)."""
-    if not os.path.isfile(CALIBRATE):
-        return {"ok": False, "error": f"calibration script not found at {CALIBRATE}"}
-    env = _environment(workspace)        # defence in depth: never recalc with a dependency off-machine
+    env = _environment(workspace)        # gate: never recalc without the pipeline + its data on this host
     if not env["deps_ok"]:
-        return {"ok": False, "error": "calibration dependency not available on this machine: "
-                + ", ".join(env["missing"]) + ". Run the editor on the host that holds it, then re-run."}
+        return {"ok": False, "error": "calibration cannot run on this machine — missing: "
+                + ", ".join(env["missing"]) + ". Run the editor on the host that has the pipeline and its data."}
     try:
         proc = subprocess.run([sys.executable, CALIBRATE, "run"], cwd=workspace,
                               capture_output=True, text=True, timeout=RERUN_TIMEOUT_S)

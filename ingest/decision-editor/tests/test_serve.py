@@ -384,7 +384,7 @@ def test_http_serves_vendored_leaflet():
 def test_rerun_missing_script_errors(tmp_path, monkeypatch):
     monkeypatch.setattr(serve, "CALIBRATE", str(tmp_path / "no-such-script"))
     r = serve._rerun(str(tmp_path))
-    assert r["ok"] is False and "not found" in r["error"]
+    assert r["ok"] is False and "calibration script" in r["error"] and "returncode" not in r
 
 
 def test_rerun_surfaces_calibration_blockers(tmp_path):
@@ -407,7 +407,15 @@ def _ws_with_gpx_config(tmp_path, gpx_root):
 def test_environment_no_config_does_not_block(tmp_path):
     (tmp_path / serve.CONTROL).mkdir()
     env = serve._environment(str(tmp_path))
+    assert env["calibration_present"] is True       # the real ../photos-2-time-gps is beside the editor
     assert env["gpx_configured"] is False and env["deps_ok"] is True and env["missing"] == []
+
+
+def test_environment_missing_pipeline_blocks(tmp_path, monkeypatch):
+    monkeypatch.setattr(serve, "CALIBRATE", str(tmp_path / "no-such-script"))
+    env = serve._environment(str(tmp_path))
+    assert env["calibration_present"] is False and env["deps_ok"] is False
+    assert any("calibration script" in m for m in env["missing"])
 
 
 def test_environment_empty_gpx_root_does_not_block(tmp_path):
