@@ -468,6 +468,12 @@ function offsetEditor(ref) {
   const isGpx = p.proposal_source === "gpx_self_anchor";
   const camMs = isGpx && p.anchors && p.anchors[0] ? camNaiveMs(p.anchors[0].camera_source_naive_time) : null;
   const hasProp = "proposed_offset_seconds" in p;
+  // Representative camera-naive instant for the Impact line — the anchor frame's time for a GPX proposal,
+  // else recovered from a timezone-derived proposal (camera_naive = proposed_real_utc − proposed_offset),
+  // so the per-date / timezone buckets also show "camera local → corrected local" with the common date.
+  const repCamMs = camMs != null ? camMs
+    : (hasProp && p.proposed_real_utc != null && utcStrToMs(p.proposed_real_utc) != null
+      ? utcStrToMs(p.proposed_real_utc) - p.proposed_offset_seconds * 1000 : null);
   const accepted = !!u.accept_proposal && hasProp;
   let manualOff = u.manual_offset_seconds;            // canonical store; tolerate a legacy manual_real_utc
   if ((manualOff === "" || manualOff == null) && u.manual_real_utc && camMs != null) {
@@ -538,8 +544,8 @@ function offsetEditor(ref) {
   // common Impact line — what the effective offset does to the anchor photo (or the offset + formula)
   const tz = previewTz(ref.dest)?.tz;
   if (eff == null) wrap.append(el("div", { class: "off-impact hint" }, "no offset set — a GPX self-anchor auto-resolves on re-run; otherwise this day needs input"));
-  else if (camMs != null) {
-    wrap.append(el("div", { class: "off-impact" }, offsetImpact(camMs, cur, tz)));
+  else if (repCamMs != null) {
+    wrap.append(el("div", { class: "off-impact" }, offsetImpact(repCamMs, cur, tz)));
     if (!tz) wrap.append(el("div", { class: "hint" }, "set this destination's timezone to see the corrected local time"));
   } else {
     wrap.append(el("div", { class: "off-impact" }, `offset ${fmtOffset(cur)} — a photo's camera time + this = UTC${tz ? `, shown in ${tz}` : ""}`));
