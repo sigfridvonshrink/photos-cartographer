@@ -104,7 +104,17 @@ panel.
    own `WorkspaceLock`, separate from the editor lock) and, on success, reloads the regenerated
    authoritative artifacts. Re-run acts on the *saved* decisions, so it's disabled while there are
    unsaved/invalid edits (save first); its outcome — exit code + stderr/stdout tail — shows in a
-   dismissible banner. Plus the **advisory live inheritance preview** for the time tree (§4): a timezone
+   dismissible banner. **Re-run is also gated on calibration's dependencies being present on the host
+   running the editor** — two of them: the **pipeline script** (`CALIBRATE`, expected beside the editor;
+   the single-file bundle does not embed it, so a copy taken away from the repo can't re-run), and the
+   configured **`gpx_root`** (a mount that may live only on the workspace's own host — re-running without
+   it would regenerate the time/GPS decisions as if there were no GPX, silently discarding good offsets
+   and placements). So `/api/artifacts` returns an `environment` block (`_environment`: `os.path.isfile`
+   on `CALIBRATE`; `gpx_root` resolved from `photos-00-config.json` the way `selected_gpx_root` does and
+   `os.path.isdir`-checked — an empty `gpx_root` means "no GPX configured" and does not gate). When any
+   dependency is missing the Re-run button is **disabled with a tooltip** naming it (from `missing[]`),
+   and `_rerun` refuses server-side too (defence in depth) — editing and Save stay available so decisions
+   can be prepared anywhere and calibrated on the right host. No other dependencies exist today. Plus the **advisory live inheritance preview** for the time tree (§4): a timezone
    with no own decision shows, badged `inherited ⟵ <ancestor>`, the value it would inherit from its
    nearest resolved ancestor, updating as you edit ancestors — display-only, authoritative on the next
    Re-run. (Offsets also inherit, but their resolution is GPX/auto-driven rather than a manual-override
