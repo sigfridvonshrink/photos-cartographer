@@ -50,6 +50,9 @@ python3 -m pytest ingest/tests/test_workspace_prep.py::test_name -q
 # runs `coverage run -m pytest` against .coveragerc, and writes htmlcov/. Args pass through:
 tools/coverage                 # whole suite + per-script report + htmlcov/
 tools/coverage -k merge        # subset (report % will be partial)
+
+# Decision-editor front-end unit tests (web/app.js pure logic) — Node's built-in runner, no deps.
+tools/jstest                   # node --test over ingest/decision-editor/tests/*.test.mjs
 ```
 
 `ingest/tests/conftest.py` loads the extensionless `photos-1-prep` script and `photos_utils` **once**

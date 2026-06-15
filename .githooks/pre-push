@@ -20,4 +20,19 @@ if ! python3 -m pytest -q -m "not slow"; then
     exit 1
 fi
 echo "pre-push: tests passed."
+
+# Decision-editor front-end unit tests (Node's built-in runner; no deps). Skip with a notice if Node
+# isn't installed locally — CI runs them regardless.
+if command -v node >/dev/null 2>&1; then
+    echo "pre-push: running decision-editor front-end tests..."
+    if ! node --test ingest/decision-editor/tests/*.test.mjs >/dev/null 2>&1; then
+        echo
+        echo "pre-push: front-end tests FAILED — push aborted (run 'tools/jstest' to see details)."
+        echo "          (override with 'git push --no-verify')"
+        exit 1
+    fi
+    echo "pre-push: front-end tests passed."
+else
+    echo "pre-push: node not found — skipping front-end tests (CI will run them)."
+fi
 exit 0
