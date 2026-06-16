@@ -8,7 +8,7 @@
 const round6 = (n) => Math.round(n * 1e6) / 1e6;
 const fin = (v) => typeof v === "number" && isFinite(v);
 
-export function mapPicker({ center, zoom = 13, markers = [], onPick, onMove }) {
+export function mapPicker({ center, zoom = 13, markers = [], onPick, onMove, track = null, scrubIndex = 0, onScrub }) {
   const map_el = document.createElement("div");
   map_el.className = "map";
   const cross = document.createElement("div");
@@ -91,7 +91,7 @@ export function mapPicker({ center, zoom = 13, markers = [], onPick, onMove }) {
   bar.className = "map-bar";
   bar.append(readout, pick);
 
-  return {
+  const api = {
     el: wrap,
     bar,
     search,
@@ -102,4 +102,28 @@ export function mapPicker({ center, zoom = 13, markers = [], onPick, onMove }) {
     jumpMax(c) { if (c && fin(c.lat) && fin(c.lon)) map.setView([c.lat, c.lon], map.getMaxZoom()); },  // a pasted exact coord -> go there, zoom in fully
     destroy() { map.remove(); },
   };
+
+  // Scrub-on-track (GPS-drift validation): draw the GPX segment and move a marker ALONG it with the
+  // scroll wheel — the photo conceptually slides under the fixed centre crosshair (the map pans to keep
+  // the chosen point centred). Each step reports the chosen point so the caller can compute the
+  // corrected offset = (chosen track time) − (photo camera-naive).
+  if (track && track.length) {
+    L.polyline(track.map((p) => [p.lat, p.lon]), { color: "#e0a85e", weight: 3, opacity: 0.85 }).addTo(map);
+    let idx = Math.max(0, Math.min(track.length - 1, scrubIndex | 0));
+    const dot = L.circleMarker([track[idx].lat, track[idx].lon],
+      { radius: 8, color: "#6cc06c", weight: 3, fillColor: "#6cc06c", fillOpacity: 0.7 })
+      .addTo(map).bindTooltip("scrub point", { direction: "top" });
+    const place = (i, fire) => {
+      idx = Math.max(0, Math.min(track.length - 1, i));
+      const pt = track[idx];
+      dot.setLatLng([pt.lat, pt.lon]);
+      map.panTo([pt.lat, pt.lon]);
+      if (fire && onScrub) onScrub(idx, pt);
+    };
+    map_el.addEventListener("wheel", (e) => { e.preventDefault(); place(idx + (e.deltaY < 0 ? -1 : 1), true); }, { passive: false });
+    map.setView([track[idx].lat, track[idx].lon], map.getMaxZoom());
+    api.setScrub = (i) => place(i, false);        // reposition without firing (e.g. re-seed after re-render)
+    api.scrubIndex = () => idx;
+  }
+  return api;
 }

@@ -291,6 +291,51 @@ def scenario_stale_decision():
 
 
 # =====================================================================================
+# Scenario 5 — GPS-drift validation (photos-21a): a timezone-derived offset with no native-GPS
+# anchor but GPX coverage -> the bucket must be confirmed (or corrected) before GPS is placed.
+# =====================================================================================
+
+CAM_DR = "CAM|drift|D"
+DR = f"{BD}/DriftTown"
+
+
+def scenario_drift_validation():
+    _set_policy(device_groups={"fixed_clock_cameras": [CAM_DR], "phones": []},
+                default_folder_timezone="Europe/Brussels")
+    gpx = _gpx([_pt(50.0, round(4.0 + 0.0006 * m, 6), _utc(12, m)) for m in range(11)])  # 12:00..12:10
+    files = [_file(f"{DR}/d1.arw", CAM_DR, "2024:07:03 14:00:00"),       # no native GPS -> tz-derived offset
+             _file(f"{DR}/d2.arw", CAM_DR, "2024:07:03 14:05:00")]
+    groups = {CAM_DR: {"camera_group_class": "camera"}}
+
+    def fill_time(a):
+        d = a["destinations"]
+        for dp in (BD, DR):
+            d[dp]["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
+        d[DR]["camera_group_time_decisions"][CAM_DR]["user_decision"]["accept_proposal"] = True  # tz-derived
+        return a
+
+    wf = _wf()
+    _, time_comp = _td(wf, files, groups, gpx, fill_time)
+    assert time_comp["status"] == "complete", time_comp["status"]
+    # build_drift_validation hashes the on-disk photos-21, exactly as the real run writes it first.
+    utils.write_json_artifact(cal.time_decisions_path(wf.workspace_root), time_comp)
+    rows0 = cal.compute_resolved_utc(files, groups, time_comp)
+    drift_req, blk = wf.build_drift_validation(files, time_comp, rows0, gpx, None)
+    assert not blk, blk
+
+    def fill_drift(a):                                                   # confirm the bucket (zero scrub)
+        a["destinations"][DR]["drift_decisions"][CAM_DR]["user_decision"]["confirmed"] = True
+        return a
+
+    drift_comp, blk = wf.build_drift_validation(files, time_comp, rows0, gpx, fill_drift(_copy(drift_req)))
+    assert not blk, blk
+    assert drift_req["requires_user_input"] and drift_comp["status"] == "complete", \
+        (drift_req["status"], drift_comp["status"])
+    _emit("photos-21a-gps-drift-validation.requires-input.json", drift_req)
+    _emit("photos-21a-gps-drift-validation.complete.json", drift_comp)
+
+
+# =====================================================================================
 
 def _verify():
     """Fail loudly unless every distinct decision-cell state appears across the fixtures."""
@@ -326,7 +371,17 @@ def _verify():
         struct.append("by-dest-root destination")
     if not any(not v["camera_group_time_decisions"] for v in td["destinations"].values()):
         struct.append("phone-only destination (no offset cells)")
-    problems = missing + [f"GPS category {c}" for c in cat_missing] + struct
+    # GPS-drift (21a): the gate's two states + the scrub evidence the editor renders.
+    dr_req = json.load(open(os.path.join(OUT, "photos-21a-gps-drift-validation.requires-input.json")))
+    dr_comp = json.load(open(os.path.join(OUT, "photos-21a-gps-drift-validation.complete.json")))
+    drift = []
+    rc = next(iter(dr_req["destinations"][DR]["drift_decisions"].values()))
+    cc = next(iter(dr_comp["destinations"][DR]["drift_decisions"].values()))
+    if not (rc["requires_user_input"] and rc["proposal"]["frames"] and rc["proposal"]["track_segment"]):
+        drift.append("21a requires-input cell with frames + track_segment")
+    if not (cc["effective_drift_offset"] and cc["effective_drift_offset"].get("source") == "gps_drift_validated"):
+        drift.append("21a confirmed cell with gps_drift_validated effective offset")
+    problems = missing + [f"GPS category {c}" for c in cat_missing] + struct + drift
     if problems:
         raise SystemExit("MISSING decision states in fixtures:\n  " + "\n  ".join(problems))
 
@@ -337,6 +392,7 @@ def main():
     scenario_offset_variants()
     scenario_no_default_timezone()
     scenario_stale_decision()
+    scenario_drift_validation()
     _verify()
     for name, status in written:
         print(f"wrote examples/{name}  (status={status})")

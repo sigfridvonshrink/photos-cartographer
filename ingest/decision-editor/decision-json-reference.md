@@ -324,6 +324,7 @@ photos-21 offset cell it refines — bare `<camera_group_key>` or `<camera_group
   "proposal": {
     "proposal_source": "timezone_accepted",
     "current_offset_seconds": -7200,
+    "frames": [ { "source_file": "6-photos-by-dest/Belgium/Brussels/a.arw", "camera_naive": "2024:07:03 14:00:00" }, ... ],
     "track_segment": [ { "lat": 50.0, "lon": 4.0, "time_utc": "2024-07-03T12:00:00Z" }, ... ]
   },
   "user_decision": { "confirmed": false, "corrected_offset_seconds": "" },
@@ -333,9 +334,15 @@ photos-21 offset cell it refines — bare `<camera_group_key>` or `<camera_group
 }
 ```
 
-- `proposal.track_segment` is read-only evidence — the GPX points covering the bucket's time window,
-  the track a reviewer scrubs the representative photo along. `current_offset_seconds` is the
-  offset photos-21 resolved.
+- `proposal.track_segment` is read-only evidence — the GPX points covering the bucket's time window
+  (±2 days, wide enough that any valid corrected offset lands on a point already in the segment, so a
+  scrub never needs a re-run to fetch more track). `current_offset_seconds` is the offset photos-21
+  resolved.
+- `proposal.frames` is read-only — every photo in the bucket as `{source_file, camera_naive}`,
+  earliest first. The editor scrubs one (default the earliest) along the track and **computes** the
+  decision: `corrected_offset_seconds = (chosen track point's time_utc) − (that frame's camera_naive)`.
+  Both `track_segment` and `frames` are re-extracted by the script on every re-run, so a changed
+  photos-21 time decision shifts them automatically.
 - `user_decision.confirmed` (bool) — the **only** thing that satisfies the gate. `false` (the default)
   blocks. **A "zero scrub" / "the offset was right" must be set explicitly** (`confirmed: true` with an
   empty `corrected_offset_seconds`) — inaction never counts.
