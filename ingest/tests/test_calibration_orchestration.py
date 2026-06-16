@@ -191,27 +191,27 @@ def test_complete_run_writes_photos22_then_bad_coord_aborts(tmp_path, monkeypatc
     _accept_tz(ctl)
     assert _run(monkeypatch, ws) == 0                              # run 2: complete -> writes photos-22
     out = capsys.readouterr().out
-    assert "Wrote photos-22-gps-decisions.json" in out
-    gps = json.load(open(ctl / "photos-22-gps-decisions.json"))
+    assert "Wrote photos-23-gps-decisions.json" in out
+    gps = json.load(open(ctl / "photos-23-gps-decisions.json"))
     assert gps["destinations"]["6-photos-by-dest/T"]["gps_decisions"]["summary"]["blocked"] == 1
 
     # inject a bad manual coord into the blocked file's review item -> run 3 loads the prior
     # photos-22, build_gps_decisions reports a blocker, and main aborts with exit 2 (artifact kept).
     ud = gps["destinations"]["6-photos-by-dest/T"]["gps_decisions"]["review_items"][0]["user_decision"]
     ud["manual_lat"], ud["manual_lon"] = 999, 0                    # out-of-range coord
-    (ctl / "photos-22-gps-decisions.json").write_text(json.dumps(gps))
-    before = (ctl / "photos-22-gps-decisions.json").read_bytes()
+    (ctl / "photos-23-gps-decisions.json").write_text(json.dumps(gps))
+    before = (ctl / "photos-23-gps-decisions.json").read_bytes()
     assert _run(monkeypatch, ws) == 2
     assert "out of range" in capsys.readouterr().err
-    assert (ctl / "photos-22-gps-decisions.json").read_bytes() == before     # left unchanged
+    assert (ctl / "photos-23-gps-decisions.json").read_bytes() == before     # left unchanged
 
 
 def test_complete_run_tolerates_corrupt_prior_gps_artifact(tmp_path, monkeypatch):
     ws, ctl = _completable_ws(tmp_path)
     _run(monkeypatch, ws); _accept_tz(ctl); _run(monkeypatch, ws)             # produce both artifacts
-    (ctl / "photos-22-gps-decisions.json").write_text("{corrupt")            # corrupt only photos-22
+    (ctl / "photos-23-gps-decisions.json").write_text("{corrupt")            # corrupt only photos-22
     assert _run(monkeypatch, ws) == 0                                         # prior ignored, regenerated
-    assert json.load(open(ctl / "photos-22-gps-decisions.json"))["artifact_type"] == "gps_decisions"
+    assert json.load(open(ctl / "photos-23-gps-decisions.json"))["artifact_type"] == "gps_decisions"
 
 
 def test_corrupt_prior_time_decisions_tolerated(tmp_path, monkeypatch):

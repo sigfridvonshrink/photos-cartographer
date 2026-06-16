@@ -90,10 +90,10 @@ def test_full_execute_with_real_tools(tmp_path, monkeypatch):
     a["destinations"]["6-photos-by-dest/T"]["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
     p.write_text(json.dumps(a))
     _run(monkeypatch, ws, "plan")
-    assert (ctl / "photos-23-executable-plan.json").exists()
+    assert (ctl / "photos-24-executable-plan.json").exists()
 
     assert _run(monkeypatch, ws, "execute") == 0                      # real exiftool + fingerprint, no mocks
-    summary = json.load(open(ctl / "photos-24-execution-summary.json"))
+    summary = json.load(open(ctl / "photos-25-execution-summary.json"))
     assert summary["status"] == "success", summary
     assert summary["totals"]["metadata_time_writes"] == 2 and summary["totals"]["renames"] == 2
     assert not summary["fingerprint_mismatches"]                       # the real write was content-invariant

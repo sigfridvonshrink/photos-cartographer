@@ -71,7 +71,7 @@ def _ready_ws(tmp_path, monkeypatch, *, zfs=None):
     a["destinations"]["6-photos-by-dest/T"]["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
     p.write_text(json.dumps(a))
     run()
-    assert (ctl / "photos-23-executable-plan.json").exists()
+    assert (ctl / "photos-24-executable-plan.json").exists()
     return ws, ctl
 
 
@@ -95,7 +95,7 @@ def _execute(monkeypatch, ws):
 
 
 def _summary(ctl):
-    return json.load(open(ctl / "photos-24-execution-summary.json"))
+    return json.load(open(ctl / "photos-25-execution-summary.json"))
 
 
 # --- clean apply -------------------------------------------------------------
@@ -155,7 +155,7 @@ def test_accept_fingerprint_change_finalizes(tmp_path, monkeypatch):
     s = _summary(ctl)
     for m in s["fingerprint_mismatches"]:
         m["user_decision"]["accept_fingerprint_change"] = True
-    (ctl / "photos-24-execution-summary.json").write_text(json.dumps(s))
+    (ctl / "photos-25-execution-summary.json").write_text(json.dumps(s))
     assert _execute(monkeypatch, ws) == 0
     assert _summary(ctl)["status"] == "success"
 
@@ -169,12 +169,12 @@ def test_stale_plan_is_rejected_without_mutation(tmp_path, monkeypatch):
     before = sorted(os.listdir(ws / "6-photos-by-dest" / "T"))
     assert _execute(monkeypatch, ws) == 2                         # rejected
     assert sorted(os.listdir(ws / "6-photos-by-dest" / "T")) == before   # nothing mutated
-    assert not (ctl / "photos-24-execution-summary.json").exists()
+    assert not (ctl / "photos-25-execution-summary.json").exists()
 
 
 def test_missing_plan_errors(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
-    os.remove(ctl / "photos-23-executable-plan.json")
+    os.remove(ctl / "photos-24-executable-plan.json")
     _mock_tools(monkeypatch, ws)
     assert _execute(monkeypatch, ws) == 2
 
@@ -287,7 +287,7 @@ def test_apply_file_rename_skip_and_failure(tmp_path, monkeypatch):
 def test_revalidate_detects_each_stale_input(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     wf = cal.CalibrationWorkflow(str(ws)); wf.preflight(for_execute=True)
-    plan = json.load(open(ctl / "photos-23-executable-plan.json"))
+    plan = json.load(open(ctl / "photos-24-executable-plan.json"))
     gpx = cal.GPXIndex(cal.selected_gpx_root()).build()
     assert wf.revalidate_plan(plan, gpx) == []                        # fresh -> nothing stale
     assert any("not 'ready'" in s for s in wf.revalidate_plan({**plan, "status": "blocked"}, gpx))
@@ -302,7 +302,7 @@ def test_corrupt_journal_is_ignored(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)
     # a corrupt journal must not crash execution (treated as empty -> a fresh apply)
-    plan = json.load(open(ctl / "photos-23-executable-plan.json"))
+    plan = json.load(open(ctl / "photos-24-executable-plan.json"))
     with open(utils.journal_path(str(ws), plan["plan_id"]), "w") as f:
         f.write("{corrupt")
     assert _execute(monkeypatch, ws) == 0
@@ -336,7 +336,7 @@ def test_apply_file_already_renamed_resumes_without_journal(tmp_path):
 def test_corrupt_prior_summary_ignored(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)
-    (ctl / "photos-24-execution-summary.json").write_text("{corrupt")   # unreadable prior reconciliation
+    (ctl / "photos-25-execution-summary.json").write_text("{corrupt")   # unreadable prior reconciliation
     assert _execute(monkeypatch, ws) == 0                              # ignored -> a clean apply
     assert _summary(ctl)["status"] == "success"
 
@@ -412,7 +412,7 @@ def test_resume_after_journal_lost_skips_applied_files(tmp_path, monkeypatch):
     _mock_tools(monkeypatch, ws)
     assert _execute(monkeypatch, ws) == 0
     assert _summary(ctl)["status"] == "success"
-    plan = json.load(open(ctl / "photos-23-executable-plan.json"))
+    plan = json.load(open(ctl / "photos-24-executable-plan.json"))
     _os.remove(utils.journal_path(str(ws), plan["plan_id"]))          # journal "lost" to a crash
 
     assert _execute(monkeypatch, ws) == 0                             # resumes cleanly
@@ -462,7 +462,7 @@ def test_noop_reprep_does_not_restale_plan(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)
     wf = cal.CalibrationWorkflow(str(ws)); wf.preflight(for_execute=True)
-    plan = json.load(open(ctl / "photos-23-executable-plan.json"))
+    plan = json.load(open(ctl / "photos-24-executable-plan.json"))
     gpx = cal.GPXIndex(cal.selected_gpx_root()).build()
     assert wf.revalidate_plan(plan, gpx) == []                            # fresh
     ho = json.load(open(ctl / "photos-11-handoff.json"))

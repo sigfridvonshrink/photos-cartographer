@@ -1,4 +1,4 @@
-"""Phase 5b (calibration) — the §23 GPS decision tree + photos-22-gps-decisions.json (§25).
+"""Phase 5b (calibration) — the §23 GPS decision tree + photos-23-gps-decisions.json (§25).
 
 Per-file classifier (preserve/manual-locked/interpolation/extrapolation/folder-fallback/
 accept-unlocated/blocked), the per-destination summary artifact (paths only for review/blocker
