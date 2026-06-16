@@ -75,6 +75,8 @@ def _plan_wf(tmp_path, files, *, manual=None):
         d: {"folder_fallback": {"effective_fallback": None},
             "gps_decisions": {"review_items": reviews[d]}} for d in dests}}
     (ctl / "photos-21-time-decisions.json").write_text(json.dumps(time_art))
+    (ctl / "photos-21a-gps-drift-validation.json").write_text(
+        json.dumps({"status": "complete", "destinations": {}}))
     (ctl / "photos-22-gps-decisions.json").write_text(json.dumps(gps_art))
     wf = cal.CalibrationWorkflow(str(ws)); wf.handoff = {"cache_fingerprint": "pcf"}; wf._gpx_fingerprint = "g"
     gpx = cal.GPXIndex(""); gpx.points = []

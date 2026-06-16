@@ -16,17 +16,19 @@ to understand the wider pipeline.
 
 ---
 
-## 1. The two files
+## 1. The files
 
-Both live in the workspace control directory `.photos-ingest/`:
+All live in the workspace control directory `.photos-ingest/`:
 
 | File | `artifact_type` | What the human decides |
 |------|-----------------|------------------------|
 | `photos-21-time-decisions.json` | `time_decisions` | Per-destination **civil timezone**, and per-(camera-group, destination) **clock offset** for fixed-clock cameras. |
+| `photos-21a-gps-drift-validation.json` | `gps_drift_validation` | Per at-risk bucket, **confirm or correct** a manual/timezone-derived clock offset against the GPX track before it is used to place photos (§5a below). |
 | `photos-22-gps-decisions.json`  | `gps_decisions`  | Per-destination **GPS fallback** coordinate, and per-file **GPS** decisions for files an automatic source could not place. |
 
 The editor opens one of these, presents the open decisions, lets the human resolve them, and writes the
-file back.
+file back. (`photos-21a` is produced by the pipeline today and resolvable by hand-editing its
+`user_decision` fields; a dedicated scrub-on-track editor view is planned — see §5a.)
 
 ---
 
@@ -295,6 +297,58 @@ One entry per file that needs the human (or that the human already locked/accept
 `files_total`, `preserve_native_gps`, `automatic_gpx_interpolation`, `automatic_gpx_extrapolation`,
 `automatic_folder_fallback`, `manual_locked`, `manual_review_required`, `blocked`,
 `no_gps_change_needed`. Useful for a per-destination progress display; the editor never writes these.
+
+---
+
+## 5a. `photos-21a-gps-drift-validation.json` (GPS-drift validation)
+
+A gate the pipeline writes **between** photos-21 and photos-22 (calibration workflow §22a). It flags
+every `(camera group, destination[, date])` offset bucket whose clock offset is **manual or
+timezone-derived** and that has **no native-GPS anchor** but **does** have GPX coverage — exactly the
+case where a wrong offset would silently mis-place the whole bucket along the track. Each flagged
+bucket must be **explicitly confirmed** (or corrected) before photos-22 is generated.
+
+### 5a.1 Top level
+
+Same decision wrapper as §4.1 with `artifact_type: "gps_drift_validation"` / `artifact_name:
+"photos-21a-gps-drift-validation.json"`. `destinations` maps a destination path to
+`{ "destination_path", "drift_decisions": { <bucket_key>: cell } }`. The `<bucket_key>` matches the
+photos-21 offset cell it refines — bare `<camera_group_key>` or `<camera_group_key>@<YYYY-MM-DD>`.
+
+### 5a.2 A `drift_decisions[<bucket>]` cell
+
+```json
+{
+  "camera_group": "SONY|ILCE-6400|A",
+  "date": "2024-07-03",
+  "proposal": {
+    "proposal_source": "timezone_accepted",
+    "current_offset_seconds": -7200,
+    "track_segment": [ { "lat": 50.0, "lon": 4.0, "time_utc": "2024-07-03T12:00:00Z" }, ... ]
+  },
+  "user_decision": { "confirmed": false, "corrected_offset_seconds": "" },
+  "effective_drift_offset": "",
+  "requires_user_input": true,
+  "stale_user_decision": false
+}
+```
+
+- `proposal.track_segment` is read-only evidence — the GPX points covering the bucket's time window,
+  the track a reviewer scrubs the representative photo along. `current_offset_seconds` is the
+  offset photos-21 resolved.
+- `user_decision.confirmed` (bool) — the **only** thing that satisfies the gate. `false` (the default)
+  blocks. **A "zero scrub" / "the offset was right" must be set explicitly** (`confirmed: true` with an
+  empty `corrected_offset_seconds`) — inaction never counts.
+- `user_decision.corrected_offset_seconds` — empty for a zero scrub, or a number (seconds, ±86400) to
+  correct the whole bucket's offset.
+- `effective_drift_offset` — `""` until confirmed, then `{ "offset_seconds": N, "source":
+  "gps_drift_validated" }`. Calibration recomputes resolved UTC consuming this; the value does **not**
+  mutate the photos-21 decision it refines.
+
+### 5a.3 `date`
+
+Present only when the bucket is per-date (the group spans >1 naive day in this destination, §10.2);
+omitted for a single-date bucket.
 
 ---
 
