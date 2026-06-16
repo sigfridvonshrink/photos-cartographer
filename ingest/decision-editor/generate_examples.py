@@ -92,10 +92,20 @@ def _copy(art):
     return json.loads(json.dumps(art))
 
 
-def _td(wf, files, groups, gpx, fill):
-    """Build time decisions twice: fresh (requires-input) and with the filled prior (complete)."""
-    req, blk = wf.build_time_decisions(files, groups, None, gpx)
+def _td(wf, files, groups, gpx, fill, pre=None):
+    """Build time decisions twice: a still-undecided "requires-input" state and the filled "complete".
+
+    `pre` (optional) applies a partial prior to the requires-input pass — a legit mid-workflow state
+    the editor opens (e.g. timezones already resolved, offsets still pending). It must leave the
+    artifact `requires_user_input`; without it the requires-input pass is a fresh (no-prior) build."""
+    base, blk = wf.build_time_decisions(files, groups, None, gpx)
     assert not blk, blk
+    if pre is not None:
+        req, blk = wf.build_time_decisions(files, groups, pre(_copy(base)), gpx)
+        assert not blk, blk
+        assert req["requires_user_input"], "pre() must leave the requires-input artifact undecided"
+    else:
+        req = base
     comp, blk = wf.build_time_decisions(files, groups, fill(_copy(req)), gpx)
     assert not blk, blk
     return req, comp
@@ -110,6 +120,7 @@ CAM_B = "NIKON|D750|B"              # no GPX -> timezone-derived offset (manual 
 PHONE = "APPLE|iPhone15|P"          # smartphone -> no offset cell
 JP, KY = f"{BD}/Japan", f"{BD}/Japan/Kyoto"
 BE, BR = f"{BD}/Belgium", f"{BD}/Belgium/Bruges"
+BRU = f"{BD}/Belgium/Brussels"      # CAM_A across 3 naive dates -> per-date offset buckets (§10.2)
 PHO = f"{BD}/PhoneOnly"
 
 
@@ -131,6 +142,13 @@ def scenario_trip():
         _file(f"{BE}/bel-phone.jpg", PHONE, "2024:07:03 13:30:00",
               gps={"lat": 51.0, "lon": 4.3}, raw_times={"OffsetTimeOriginal": "+02:00"}),
         _file(f"{BR}/bruges.arw", CAM_B, "2024:07:03 13:15:00", gps={"lat": 51.2, "lon": 3.2}),  # tz-derived offset
+        # Per-date offset buckets (§10.2): CAM_A in one dest across 3 naive dates, no GPX anchor here
+        # (far from the lat50/lon4 track) -> timezone-derived per day. Summer days share -7200 (CEST),
+        # the winter day is -3600 (CET) -> DST-aware split; the two equal days collapse in the editor.
+        # native-GPS so the GPS phase preserves-native and the bucket stays clean.
+        _file(f"{BRU}/bru-summer-1.arw", CAM_A, "2024:07:03 14:00:00", gps={"lat": 50.85, "lon": 4.35}),
+        _file(f"{BRU}/bru-summer-2.arw", CAM_A, "2024:07:04 14:00:00", gps={"lat": 50.85, "lon": 4.36}),
+        _file(f"{BRU}/bru-winter.arw", CAM_A, "2024:12:22 14:00:00", gps={"lat": 50.85, "lon": 4.37}),
     ]
     groups = {CAM_A: {"camera_group_class": "camera"}, CAM_B: {"camera_group_class": "camera"},
               PHONE: {"camera_group_class": "phone"}}
@@ -138,15 +156,24 @@ def scenario_trip():
     def fill_time(a):
         d = a["destinations"]
         d[JP]["destination_timezone"]["user_decision"]["manual_iana_timezone"] = "Asia/Tokyo"
-        for dp in (BD, PHO, BE, BR):
+        for dp in (BD, PHO, BE, BR, BRU):
             d[dp]["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
         d[BD]["camera_group_time_decisions"][CAM_B]["user_decision"]["manual_offset_seconds"] = 0
         d[BE]["camera_group_time_decisions"][CAM_B]["user_decision"]["manual_offset_seconds"] = 3600  # manual override
         d[BR]["camera_group_time_decisions"][CAM_B]["user_decision"]["accept_proposal"] = True  # accept tz-derived
+        for dt in ("2024-07-03", "2024-07-04", "2024-12-22"):                      # accept each per-date bucket
+            d[BRU]["camera_group_time_decisions"][f"{CAM_A}@{dt}"]["user_decision"]["accept_proposal"] = True
+        return a
+
+    def pre_time(a):
+        # Mid-workflow state for the requires-input fixture: the operator has resolved Brussels'
+        # timezone (so its per-date offset buckets surface DST-aware timezone_naive proposals to
+        # demo §10.2), but every offset — and all other timezones — is still pending.
+        a["destinations"][BRU]["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
         return a
 
     wf = _wf()
-    time_req, time_comp = _td(wf, files, groups, gpx, fill_time)
+    time_req, time_comp = _td(wf, files, groups, gpx, fill_time, pre=pre_time)
 
     # GPS is built on the completed-time resolved rows (calibration only reaches GPS once time is done).
     rows = cal.compute_resolved_utc(files, groups, time_comp)
@@ -196,13 +223,14 @@ def scenario_offset_variants():
                 default_folder_timezone="Europe/Brussels")
     gpx = _gpx([
         _pt(52.0, 6.0, _utc(12, 0, 0)),                                  # SinglePoint anchor
-        _pt(53.0, 7.0, _utc(12, 0, 0)), _pt(53.0, 7.001, _utc(12, 0, 30)),  # Segment (30 s apart)
+        _pt(53.0, 7.0, _utc(12, 0, 0)), _pt(53.0, 7.003, _utc(12, 0, 30)),  # Segment (~200 m, 30 s apart)
         _pt(54.0, 8.0, _utc(12, 0, 0)), _pt(55.0, 9.0, _utc(9, 0, 0)),    # Conflict (offsets disagree)
         _pt(56.0, 10.0, _utc(12, 0, 0)),                                  # ManualUtc anchor
     ])
     files = [
         _file(f"{P}/p.arw", CAM_PT, "2024:07:03 14:00:00", gps={"lat": 52.0, "lon": 6.0}),
-        _file(f"{S}/g.arw", CAM_SEG, "2024:07:03 14:00:15", gps={"lat": 53.0001, "lon": 7.0005}),
+        # near the segment interior (~33 m off) but >50 m from BOTH endpoints -> segment-only -> medium
+        _file(f"{S}/g.arw", CAM_SEG, "2024:07:03 14:00:15", gps={"lat": 53.0003, "lon": 7.0015}),
         _file(f"{C}/c1.arw", CAM_CONF, "2024:07:03 14:00:00", gps={"lat": 54.0, "lon": 8.0}),
         _file(f"{C}/c2.arw", CAM_CONF, "2024:07:03 14:00:00", gps={"lat": 55.0, "lon": 9.0}),
         _file(f"{U}/u.arw", CAM_UTC, "2024:07:03 14:00:00", gps={"lat": 56.0, "lon": 10.0}),

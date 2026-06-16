@@ -2,7 +2,7 @@
   "artifact_name": "photos-22-gps-decisions.json",
   "artifact_type": "gps_decisions",
   "depends_on": {
-    "gps_policy_fingerprint": "43e9f3bfa9185120b624decb2abb298ef45589a820c1fba5622d31dd28b3b215",
+    "gps_policy_fingerprint": "cfbe834442286f76a9a138f06168fc0fb2292087f94496167c1c9a7bd25c9d80",
     "gpx_fingerprint": "example-gpx-fingerprint",
     "handoff": {
       "artifact_name": "photos-11-handoff.json",
@@ -33,7 +33,7 @@
           "confidence": "automatic",
           "gpx_files_used": [],
           "max_distance_to_track_m": 1000.0,
-          "max_interpolation_gap_seconds": 120.0,
+          "max_interpolation_gap_seconds": 1800.0,
           "notes": [
             "Automatic decisions are summarized here; exact file-level write operations are listed only in photos-23-executable-plan.json."
           ]
@@ -72,7 +72,7 @@
           "confidence": "mixed",
           "gpx_files_used": [],
           "max_distance_to_track_m": 1000.0,
-          "max_interpolation_gap_seconds": 120.0,
+          "max_interpolation_gap_seconds": 1800.0,
           "notes": [
             "Automatic decisions are summarized here; exact file-level write operations are listed only in photos-23-executable-plan.json."
           ]
@@ -123,7 +123,7 @@
           "confidence": "automatic",
           "gpx_files_used": [],
           "max_distance_to_track_m": 1000.0,
-          "max_interpolation_gap_seconds": 120.0,
+          "max_interpolation_gap_seconds": 1800.0,
           "notes": [
             "Automatic decisions are summarized here; exact file-level write operations are listed only in photos-23-executable-plan.json."
           ]
@@ -139,6 +139,45 @@
           "manual_review_required": 0,
           "no_gps_change_needed": 0,
           "preserve_native_gps": 1
+        }
+      }
+    },
+    "6-photos-by-dest/Belgium/Brussels": {
+      "destination_path": "6-photos-by-dest/Belgium/Brussels",
+      "folder_fallback": {
+        "effective_fallback": null,
+        "proposal": {
+          "proposal_source": "manual_required"
+        },
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "accept_proposal": false,
+          "fallback_lat": "",
+          "fallback_lon": ""
+        }
+      },
+      "gps_decisions": {
+        "automatic_decision_summary": {
+          "confidence": "automatic",
+          "gpx_files_used": [],
+          "max_distance_to_track_m": 1000.0,
+          "max_interpolation_gap_seconds": 1800.0,
+          "notes": [
+            "Automatic decisions are summarized here; exact file-level write operations are listed only in photos-23-executable-plan.json."
+          ]
+        },
+        "review_items": [],
+        "summary": {
+          "automatic_folder_fallback": 0,
+          "automatic_gpx_extrapolation": 0,
+          "automatic_gpx_interpolation": 0,
+          "blocked": 0,
+          "files_total": 3,
+          "manual_locked": 0,
+          "manual_review_required": 0,
+          "no_gps_change_needed": 0,
+          "preserve_native_gps": 3
         }
       }
     },
@@ -164,7 +203,7 @@
             "trip-2024-07-03.gpx"
           ],
           "max_distance_to_track_m": 1000.0,
-          "max_interpolation_gap_seconds": 120.0,
+          "max_interpolation_gap_seconds": 1800.0,
           "notes": [
             "Automatic decisions are summarized here; exact file-level write operations are listed only in photos-23-executable-plan.json."
           ]
@@ -226,7 +265,7 @@
           "confidence": "automatic",
           "gpx_files_used": [],
           "max_distance_to_track_m": 1000.0,
-          "max_interpolation_gap_seconds": 120.0,
+          "max_interpolation_gap_seconds": 1800.0,
           "notes": [
             "Automatic decisions are summarized here; exact file-level write operations are listed only in photos-23-executable-plan.json."
           ]

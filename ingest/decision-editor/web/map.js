@@ -8,7 +8,7 @@
 const round6 = (n) => Math.round(n * 1e6) / 1e6;
 const fin = (v) => typeof v === "number" && isFinite(v);
 
-export function mapPicker({ center, zoom = 13, markers = [], onPick }) {
+export function mapPicker({ center, zoom = 13, markers = [], onPick, onMove }) {
   const map_el = document.createElement("div");
   map_el.className = "map";
   const cross = document.createElement("div");
@@ -79,7 +79,9 @@ export function mapPicker({ center, zoom = 13, markers = [], onPick }) {
   const readout = document.createElement("div");
   readout.className = "map-read";
   const fmt = () => { const c = map.getCenter(); readout.textContent = `center  ${c.lat.toFixed(6)}, ${c.lng.toFixed(6)}`; };
-  map.on("move", fmt);
+  // Only USER pans mirror into the pinned decision box (onMove); the initial fit must not clobber an
+  // empty/seeded coord field, so it just paints the readout.
+  map.on("move", () => { fmt(); if (onMove) { const c = map.getCenter(); onMove(round6(c.lat), round6(c.lng)); } });
   fmt();
   const pick = document.createElement("button");
   pick.className = "btn primary";
@@ -97,6 +99,7 @@ export function mapPicker({ center, zoom = 13, markers = [], onPick }) {
     setCurrent,
     refresh() { map.invalidateSize(); },          // call after (re)attaching to the DOM
     recenter(c) { if (c && fin(c.lat) && fin(c.lon)) map.panTo([c.lat, c.lon]); },   // keep the current zoom
+    jumpMax(c) { if (c && fin(c.lat) && fin(c.lon)) map.setView([c.lat, c.lon], map.getMaxZoom()); },  // a pasted exact coord -> go there, zoom in fully
     destroy() { map.remove(); },
   };
 }
