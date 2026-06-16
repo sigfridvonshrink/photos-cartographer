@@ -148,7 +148,13 @@ pre.json { margin: 0; font: 12px var(--mono); white-space: pre-wrap; word-break:
 
 /* GPS map picker + photo */
 .mapwrap { position: relative; }
-.map { height: 320px; border-radius: 8px; overflow: hidden; background: #14171c; }
+.map { height: 60vh; min-height: 340px; border-radius: 8px; overflow: hidden; background: #14171c; margin-top: 8px; }
+/* small right-aligned preview of the selected photo inside the pinned "Your decision" box */
+.decision-thumb { float: right; max-width: 120px; max-height: 90px; margin: 0 0 6px 12px; border-radius: 4px; background: #111; }
+/* full-size preview that floats while hovering a photo name in the worklist */
+.hover-preview { position: fixed; max-width: 320px; max-height: 320px; border: 1px solid var(--line);
+  border-radius: 6px; box-shadow: 0 8px 28px rgba(0,0,0,.55); background: #111; z-index: 1000; pointer-events: none; }
+.hover-preview[hidden] { display: none; }
 .leaflet-container { background: #14171c; font: inherit; }
 /* fixed centre crosshair — the pick target; never intercepts map drags */
 .crosshair { position: absolute; left: 50%; top: 50%; width: 26px; height: 26px;
