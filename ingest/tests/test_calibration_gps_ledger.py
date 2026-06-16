@@ -186,13 +186,13 @@ def _edit(ctl, name, fn):
 def test_full_pin_then_withdraw_reverts_and_consumes(tmp_path, monkeypatch):
     ws, ctl = _exec_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)
-    _run(monkeypatch, ws, "run")                                       # photos-21: timezone needs input
+    _run(monkeypatch, ws, "plan")                                       # photos-21: timezone needs input
     _edit(ctl, "photos-21-time-decisions.json", lambda a: a["destinations"][f"{BYDEST}/T"]
           ["destination_timezone"]["user_decision"].update({"accept_proposed_timezone": True}))
-    _run(monkeypatch, ws, "run")                                       # now photos-22 exists (c blocked)
+    _run(monkeypatch, ws, "plan")                                       # now photos-22 exists (c blocked)
     _edit(ctl, "photos-22-gps-decisions.json", lambda b: b["destinations"][f"{BYDEST}/T"]
           ["folder_fallback"]["user_decision"].update({"fallback_lat": 48.85, "fallback_lon": 2.35}))
-    _run(monkeypatch, ws, "run")                                       # c.arw now manual_fallback -> photos-23
+    _run(monkeypatch, ws, "plan")                                       # c.arw now manual_fallback -> photos-23
     assert (ctl / "photos-23-executable-plan.json").exists()
     assert _run(monkeypatch, ws, "execute") == 0
     # pre-state pinned (c had no native GPS -> absent), manual GPS written
@@ -213,7 +213,7 @@ def test_full_pin_then_withdraw_reverts_and_consumes(tmp_path, monkeypatch):
     b["destinations"][f"{BYDEST}/T"]["gps_decisions"]["review_items"] = [
         {"relative_path": f"{BYDEST}/T/c.arw", "user_decision": {"accept_unlocated": True}}]
     q.write_text(json.dumps(b))
-    _run(monkeypatch, ws, "run")
+    _run(monkeypatch, ws, "plan")
     plan = json.load(open(ctl / "photos-23-executable-plan.json"))
     assert any(o["type"] == "revert_manual_gps" for dd in plan["destinations"].values() for o in dd["operations"])
     assert _run(monkeypatch, ws, "execute") == 0
