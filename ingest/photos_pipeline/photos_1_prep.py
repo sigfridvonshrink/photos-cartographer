@@ -2454,21 +2454,36 @@ def prune_quarantine(workspace_root, plan_ids=None, older_than_days=None, do_del
         print("(dry-run; pass --yes to delete)")
 
 
-def main():
-    import argparse
+import argparse
 
-    def positive_int(value):
-        try:
-            parsed = int(value)
-        except ValueError:
-            raise argparse.ArgumentTypeError("jobs must be a positive integer")
-        if parsed < 1:
-            raise argparse.ArgumentTypeError("jobs must be a positive integer")
-        return parsed
+# One-paragraph role blurb shown by the combined CLI when `photos-ingest prep` is run with no
+# subcommand (and as this phase's standalone --help description).
+PREP_BLURB = (
+    "prep — get a raw photo dump workspace-ready (phase 1 of 3).\n\n"
+    "Consolidates a dump into the managed 0-6 folders: normalizes extensions, de-duplicates and "
+    "quarantines (recoverably, never deletes), organizes media by date and into by-dest, and builds "
+    "the hash cache + handoff that the next phase consumes. Planning never mutates; execution applies "
+    "only a validated plan. Run inside the workspace directory.\n\n"
+    "Next: `photos-ingest geotag` to place photos in time + on the map."
+)
 
-    parser = argparse.ArgumentParser(description="photos-1-prep: prep-only workspace organization, cache update, and handoff generation")
+
+def positive_int(value):
+    try:
+        parsed = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError("jobs must be a positive integer")
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("jobs must be a positive integer")
+    return parsed
+
+
+def add_arguments(parser):
+    """Register prep's `-j` + subcommands on `parser` — the top parser when run standalone
+    (`python -m photos_pipeline.photos_1_prep`), or the `prep` subparser in the combined
+    `photos-ingest` CLI. Shared so both invocations expose an identical surface."""
     parser.add_argument("-j", "--jobs", type=positive_int, default=4, help="Number of parallel jobs for processing.")
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers = parser.add_subparsers(dest="command")
 
     # prep command. plan/dry-run/execute all use the canonical control-dir plan path
     # (photos_utils.prep_plan_path) — `plan` writes it, `dry-run`/`execute` read it — so there are no
@@ -2484,8 +2499,10 @@ def main():
     prune_parser.add_argument("--older-than-days", type=int, help="Prune quarantine directories older than N days.")
     prune_parser.add_argument("--all", action="store_true", dest="prune_all", help="Confirm deleting ALL quarantine when no selector is given.")
     prune_parser.add_argument("--yes", action="store_true", help="Actually delete (default is a dry-run that only lists).")
+    parser.set_defaults(_run=run, _parser=parser)
 
-    args = parser.parse_args()
+
+def run(args):
     CONFIG["jobs"] = getattr(args, "jobs", 4)
 
     workspace_root = os.getcwd()
@@ -2636,6 +2653,18 @@ def main():
     finally:
         run_lock.release()
         print("Lock released.", file=sys.stderr)
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(prog="photos_pipeline.photos_1_prep", description=PREP_BLURB,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    add_arguments(parser)
+    args = parser.parse_args(argv)
+    if getattr(args, "command", None) is None:        # no subcommand -> show the role blurb, not an error
+        parser.print_help()
+        return 0
+    return run(args)
+
 
 if __name__ == '__main__':
     main()

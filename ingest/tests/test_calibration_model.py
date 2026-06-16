@@ -164,7 +164,7 @@ def _full_ws(tmp_path, *, device_groups, bydest_key="SONY|ILCE-6400|123"):
 
 def _main(monkeypatch, ws):
     monkeypatch.chdir(str(ws))
-    monkeypatch.setattr(sys, "argv", ["photos-2-time-gps", "run"])
+    monkeypatch.setattr(sys, "argv", ["photos-2-time-gps", "plan"])
     try:
         cal.main(); return 0
     except SystemExit as e:
