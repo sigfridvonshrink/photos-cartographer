@@ -25,9 +25,8 @@ import errno
 # ==============================================================================
 # CONFIGURATION BLOCK
 # ==============================================================================
-sys.path.insert(0, os.path.dirname(__file__))
-from photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, selected_gpx_root, missing_managed_folders, FOLDER_ROLES
-from photos_utils import (_move_no_clobber, _move_link_unlink, _get_renameat2,
+from .photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, selected_gpx_root, missing_managed_folders, FOLDER_ROLES
+from .photos_utils import (_move_no_clobber, _move_link_unlink, _get_renameat2,
                           WorkspaceCache, WorkspaceLock, ContentHasher,
                           CACHE_SCHEMA_VERSION, FINGERPRINT_ALGORITHM_VERSION,
                           allocate_suffix)
@@ -395,7 +394,7 @@ class PlanValidator:
 
         # Prevalidate metadata dependencies
         if getattr(plan, "metadata_dependencies", None):
-            from photos_utils import (
+            from .photos_utils import (
                 get_exiftool_version,
                 FIELD_SET_VERSION,
                 METADATA_SCHEMA_VERSION,
@@ -416,7 +415,7 @@ class PlanValidator:
         # Config staleness: the workspace config must be byte-identical to what the plan
         # was built against (prep Section 21). load_or_seed_config and _hash_file both
         # sha256 the raw file bytes, so this compares like-for-like.
-        from photos_utils import config_path
+        from .photos_utils import config_path
         cfg = config_path(current_workspace)
         if not os.path.exists(cfg):
             raise ValueError("Stale plan: workspace config photos-00-config.json is missing; regenerate the plan.")
@@ -535,7 +534,7 @@ class PlanValidator:
 class PlanExecutor:
     def __init__(self, workspace_root: str):
         self.workspace_root = workspace_root
-        from photos_utils import ProgressCoordinator
+        from .photos_utils import ProgressCoordinator
         self.coordinator = ProgressCoordinator()
 
     def _prune_empty_dirs(self):
@@ -550,7 +549,7 @@ class PlanExecutor:
         Returns a list of (relpath, reason) for non-managed base **dump** dirs that could NOT be
         pruned — still non-empty, or an `rmdir` failure (e.g. no write permission on the workspace
         root) — so the caller can warn the operator rather than leave the folder behind silently."""
-        from photos_utils import managed_folder_names, folder_name, CONTROL_DIR, QUARANTINE_DIR
+        from .photos_utils import managed_folder_names, folder_name, CONTROL_DIR, QUARANTINE_DIR
         ws = self.workspace_root
         sources_path = os.path.join(ws, folder_name('sources'))
         control_top = {CONTROL_DIR, QUARANTINE_DIR, ".git"}
@@ -610,16 +609,16 @@ class PlanExecutor:
         # Workspace lifecycle (prep Section 3.1 / 14.3 step 11): if the sentinel is absent this is
         # an INIT run — the plan creates the structure and moves the base dump into 0-sources, and
         # the sentinel is written LAST (below, only on full success), so a crash re-enters init.
-        from photos_utils import guard_path as _guard_path
+        from .photos_utils import guard_path as _guard_path
         self._was_uninitialized = not os.path.exists(_guard_path(self.workspace_root))
         # Read the authoritative workspace config (zfs block, etc.) from photos-00-config.json
         # before applying the plan. (Config-staleness rejection against the plan is Phase 4.)
-        from photos_utils import load_or_seed_config
+        from .photos_utils import load_or_seed_config
         load_or_seed_config(self.workspace_root)
         # Per-run journal under the control directory (retained, not overwritten),
         # unless a caller supplies an explicit path.
         if journal_path is None:
-            from photos_utils import journal_path as _journal_path
+            from .photos_utils import journal_path as _journal_path
             journal_path = _journal_path(self.workspace_root, plan.plan_id)
         # The workspace lock is held for the whole run by main() (shared contract Section 2);
         # execute() does not acquire it (callers that bypass main() — e.g. tests — run lock-free).
@@ -650,7 +649,7 @@ class PlanExecutor:
 
             # 3. ZFS Hook (Optional) — pre-mutation snapshot of the workspace dataset (shared helper,
             #    labelled "prep" so it never collides with calibration's "calibrate-" snapshot).
-            from photos_utils import take_zfs_snapshot
+            from .photos_utils import take_zfs_snapshot
             snap = take_zfs_snapshot(self.workspace_root, plan.plan_id, "prep")
             if snap is not None:
                 if snap["snapshot_name"] is not None:          # a snapshot was attempted -> journal it
@@ -1018,7 +1017,7 @@ class PlanExecutor:
 
                     # 3. Create handoff payload
                     md_deps = plan.metadata_dependencies if hasattr(plan, "metadata_dependencies") and isinstance(plan.metadata_dependencies, dict) else getattr(plan, "metadata_dependencies", {})
-                    from photos_utils import get_imagemagick_version as _get_imagemagick_version
+                    from .photos_utils import get_imagemagick_version as _get_imagemagick_version
                     handoff = {
                         "schema_version": 1,
                         "tool": "photos-1-prep",
@@ -1085,7 +1084,7 @@ class PlanExecutor:
                     # byte-stable for a given workspace state. Calibration records a json_dependency on
                     # this file's exact bytes, so a non-deterministic dump (the old indent-only
                     # json.dump) could flip its SHA-256 and spuriously restale photos-21/22/23.
-                    from photos_utils import handoff_path, write_json_artifact, handoff_content_fingerprint
+                    from .photos_utils import handoff_path, write_json_artifact, handoff_content_fingerprint
                     # The content fingerprint over the deterministic content (excludes run_metadata +
                     # diagnostics + the journal pointer) — calibration depends on THIS, not the volatile
                     # file bytes, so a no-op re-run does not restale it (§16).
@@ -1112,7 +1111,7 @@ class PlanExecutor:
                     # did — complete and self-sufficient even if no later phase runs. Derived from
                     # this run's plan + quarantine evidence, merged onto the prior log carried forward
                     # (incremental, §16.1 item 6), written atomically at this same success gate.
-                    from photos_utils import prep_log_path
+                    from .photos_utils import prep_log_path
                     plp = prep_log_path(self.workspace_root)
                     prior_photos = {}
                     if os.path.exists(plp):
@@ -1151,7 +1150,7 @@ class PlanExecutor:
                 # rename. A failed/interrupted capture leaves the prior snapshot intact. This
                 # refreshes prep's OWN snapshot only (never another phase's).
                 if cache is not None:
-                    from photos_utils import prep_db_snapshot_path, write_db_snapshot
+                    from .photos_utils import prep_db_snapshot_path, write_db_snapshot
                     write_db_snapshot(cache.conn, prep_db_snapshot_path(self.workspace_root))
                     if plan.summary and "performance_and_cache" in plan.summary:
                         plan.summary["performance_and_cache"]["prep_db_snapshot_written"] = True
@@ -1227,7 +1226,7 @@ class WorkspacePrepWorkflow:
         self.workspace_root = workspace_root
         self.cache = cache
         self.managed_folders = managed_folder_names(CONFIG)
-        from photos_utils import ProgressCoordinator
+        from .photos_utils import ProgressCoordinator
         self.coordinator = ProgressCoordinator()
 
     def _allocate_suffix(self, base: str, ext: str, index: set, start_idx: int = 1,
@@ -1279,7 +1278,7 @@ class WorkspacePrepWorkflow:
         came in under is dot-prefixed. A dot-symlink is forbidden like any symlink (flagged, not
         quarantined). Returns workspace-relative file paths. (Hashing/inventory never see these — like
         the exiftool-leftover sweep, they bypass the media pipeline straight to quarantine.)"""
-        from photos_utils import CONTROL_DIR, QUARANTINE_DIR, folder_name, managed_folder_names
+        from .photos_utils import CONTROL_DIR, QUARANTINE_DIR, folder_name, managed_folder_names
         ws = self.workspace_root
         out = []
 
@@ -1333,11 +1332,11 @@ class WorkspacePrepWorkflow:
 
         # Seed photos-00-config.json on first run, then read it as authoritative, before
         # any config-dependent value is used or fingerprinted (shared contract Section 4 / prep Section 3).
-        from photos_utils import load_or_seed_config
+        from .photos_utils import load_or_seed_config
         self._config_fingerprint = load_or_seed_config(self.workspace_root)
 
         # Workspace lifecycle (prep Section 3.1): INITIALIZED once the root sentinel exists.
-        from photos_utils import guard_path, FOLDER_ROLES
+        from .photos_utils import guard_path, FOLDER_ROLES
         self._initializing = not os.path.exists(guard_path(self.workspace_root))
         if self._initializing:
             # Plan creation of the full 0-6 structure (idempotent mkdir; the sentinel is written
@@ -1457,7 +1456,7 @@ class WorkspacePrepWorkflow:
         # pulled out of the media inventory here and quarantined below (recoverable, never deleted),
         # rather than being mis-inventoried as `other` and parked forever in 1-strays. By-dest is
         # read-only staging: a leftover there is left untouched (only flagged) to honor that invariant.
-        from photos_utils import exiftool_artifact_base
+        from .photos_utils import exiftool_artifact_base
         _bydest_prefix = folder_name('photos_by_dest') + '/'
         exiftool_leftovers = []
         _kept = []
@@ -1525,7 +1524,7 @@ class WorkspacePrepWorkflow:
                 _carried["metadata"] = _old_md
                 carried_forward[_new_path] = {"source": _old_path, "db_file": _carried}
 
-        from photos_utils import MetadataReader, ProgressCoordinator, get_exiftool_version, get_imagemagick_version, FIELD_SET_VERSION, EXTRACTION_OPTIONS_FINGERPRINT, METADATA_SCHEMA_VERSION, CAMERA_GROUP_KEY_VERSION
+        from .photos_utils import MetadataReader, ProgressCoordinator, get_exiftool_version, get_imagemagick_version, FIELD_SET_VERSION, EXTRACTION_OPTIONS_FINGERPRINT, METADATA_SCHEMA_VERSION, CAMERA_GROUP_KEY_VERSION
         current_exiftool_version = get_exiftool_version()
         current_magick_version = get_imagemagick_version()
         current_field_set_version = FIELD_SET_VERSION
@@ -1557,7 +1556,7 @@ class WorkspacePrepWorkflow:
             if cached and cached.get('content_hash'):
                 file_record['content_hash'] = cached.get('content_hash')
 
-            from photos_utils import is_metadata_cache_fresh
+            from .photos_utils import is_metadata_cache_fresh
 
             if not cached or not is_metadata_cache_fresh(file_record, cached_md, current_metadata_context):
                 folders_to_scan.add(os.path.dirname(os.path.join(self.workspace_root, f)))
@@ -1613,11 +1612,11 @@ class WorkspacePrepWorkflow:
             if cached and cached.get('content_hash'):
                 file_record['content_hash'] = cached.get('content_hash')
 
-            from photos_utils import media_class_for_ext
+            from .photos_utils import media_class_for_ext
             media_class = media_class_for_ext(ext)
 
             # Check metadata freshness
-            from photos_utils import is_metadata_cache_fresh
+            from .photos_utils import is_metadata_cache_fresh
             md_fresh = is_metadata_cache_fresh(file_record, cached_md, current_metadata_context)
 
             # Content-hash (pixel signature) freshness: an image/raw content hash is
@@ -1757,7 +1756,7 @@ class WorkspacePrepWorkflow:
                     executor.shutdown(wait=False, cancel_futures=True)
                     raise
         finally:
-            from photos_utils import PersistentMagickWorker
+            from .photos_utils import PersistentMagickWorker
             PersistentMagickWorker.cleanup_all()       # close the per-thread magick workers
 
         # 1. Collect and sort all worker results by workspace-relative path
@@ -2206,7 +2205,7 @@ class WorkspacePrepWorkflow:
             if cached and cached.get('content_hash'):
                 file_record['content_hash'] = cached.get('content_hash')
 
-            from photos_utils import is_metadata_cache_fresh
+            from .photos_utils import is_metadata_cache_fresh
             md_fresh = is_metadata_cache_fresh(file_record, cached_md, current_metadata_context)
 
             if (cached and cached["size"] == f["size"] and cached["mtime_ns"] == f["mtime_ns"]
@@ -2258,7 +2257,7 @@ class WorkspacePrepWorkflow:
             ))
 
         no_op_count = len(files) - len(media_mutated_originals)
-        from photos_utils import quarantine_footprint
+        from .photos_utils import quarantine_footprint
         qf = quarantine_footprint(self.workspace_root)
 
         # User-visible run report (prep Section 19), re-presenting data already on hand.
@@ -2316,7 +2315,7 @@ class WorkspacePrepWorkflow:
                     "role": "by_dest_read_only" if f["relative_path"].startswith(folder_name('photos_by_dest') + "/") else "no_op_prepared"
                 })
 
-        from photos_utils import (
+        from .photos_utils import (
             get_exiftool_version,
             FIELD_SET_VERSION,
             METADATA_SCHEMA_VERSION,
@@ -2410,7 +2409,7 @@ def prune_quarantine(workspace_root, plan_ids=None, older_than_days=None, do_del
     touches `.photos-ingest-quarantine/`."""
     import shutil
     from datetime import timedelta
-    from photos_utils import quarantine_dir
+    from .photos_utils import quarantine_dir
     base = quarantine_dir(workspace_root)
     if not os.path.isdir(base):
         print("No quarantine directory; nothing to prune.")
@@ -2511,7 +2510,7 @@ def main():
         # Sealed/terminal-workspace guard (prep Section 6.2 item 1 / shared 13.7): a successful
         # merge seals the workspace. Prep then hard-stops and mutates nothing. Applies to the prep
         # operations (plan/dry-run/execute); prune-quarantine is a separate maintenance command.
-        from photos_utils import is_sealed, folder_name as _folder_name
+        from .photos_utils import is_sealed, folder_name as _folder_name
         if args.command in ("plan", "dry-run", "execute") and is_sealed(workspace_root):
             print("Workspace is SEALED (already merged): prep will not run. Nothing was touched.",
                   file=sys.stderr)
@@ -2538,7 +2537,7 @@ def main():
             # Auto-save to the canonical control-dir path; a prior plan is backed up under an
             # incremental -NNN suffix (never clobbered), and we tell the operator both locations so
             # the plan can be reviewed without hunting for it.
-            from photos_utils import prep_plan_path, write_versioned_json
+            from .photos_utils import prep_plan_path, write_versioned_json
             pp = prep_plan_path(workspace_root)
             _sha, _bak = write_versioned_json(pp, asdict(plan))
             print(f"Plan saved to {pp}")
@@ -2558,7 +2557,7 @@ def main():
                 sys.exit(2)
 
         elif args.command == "dry-run":
-            from photos_utils import prep_plan_path, PREP_PLAN_ARTIFACT
+            from .photos_utils import prep_plan_path, PREP_PLAN_ARTIFACT
             pp = prep_plan_path(workspace_root)
             if not os.path.exists(pp):
                 print(f"No {PREP_PLAN_ARTIFACT} found — run `plan` first.", file=sys.stderr)
@@ -2598,7 +2597,7 @@ def main():
             print(f"  Full plan: {pp}")
 
         elif args.command == "execute":
-            from photos_utils import prep_plan_path, PREP_PLAN_ARTIFACT
+            from .photos_utils import prep_plan_path, PREP_PLAN_ARTIFACT
             pp = prep_plan_path(workspace_root)
             if not os.path.exists(pp):
                 print(f"No {PREP_PLAN_ARTIFACT} found — run `plan` first.", file=sys.stderr)
