@@ -106,7 +106,7 @@ def _td(wf, files, groups, gpx, fill):
 # =====================================================================================
 
 CAM_A = "SONY|ILCE-6400|A"          # geotagged in Japan -> gpx self-anchor, auto-resolved
-CAM_B = "NIKON|D750|B"              # no GPX -> manual-required offset; inherited in a child
+CAM_B = "NIKON|D750|B"              # no GPX -> timezone-derived offset (manual override in one dest)
 PHONE = "APPLE|iPhone15|P"          # smartphone -> no offset cell
 JP, KY = f"{BD}/Japan", f"{BD}/Japan/Kyoto"
 BE, BR = f"{BD}/Belgium", f"{BD}/Belgium/Bruges"
@@ -130,7 +130,7 @@ def scenario_trip():
         _file(f"{BE}/bel-cam.arw", CAM_B, "2024:07:03 13:00:00"),                         # -> folder fallback
         _file(f"{BE}/bel-phone.jpg", PHONE, "2024:07:03 13:30:00",
               gps={"lat": 51.0, "lon": 4.3}, raw_times={"OffsetTimeOriginal": "+02:00"}),
-        _file(f"{BR}/bruges.arw", CAM_B, "2024:07:03 13:15:00", gps={"lat": 51.2, "lon": 3.2}),  # inherited
+        _file(f"{BR}/bruges.arw", CAM_B, "2024:07:03 13:15:00", gps={"lat": 51.2, "lon": 3.2}),  # tz-derived offset
     ]
     groups = {CAM_A: {"camera_group_class": "camera"}, CAM_B: {"camera_group_class": "camera"},
               PHONE: {"camera_group_class": "phone"}}
@@ -141,8 +141,8 @@ def scenario_trip():
         for dp in (BD, PHO, BE, BR):
             d[dp]["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
         d[BD]["camera_group_time_decisions"][CAM_B]["user_decision"]["manual_offset_seconds"] = 0
-        d[BE]["camera_group_time_decisions"][CAM_B]["user_decision"]["manual_offset_seconds"] = 3600
-        d[BR]["camera_group_time_decisions"][CAM_B]["user_decision"]["accept_proposal"] = True  # inherited
+        d[BE]["camera_group_time_decisions"][CAM_B]["user_decision"]["manual_offset_seconds"] = 3600  # manual override
+        d[BR]["camera_group_time_decisions"][CAM_B]["user_decision"]["accept_proposal"] = True  # accept tz-derived
         return a
 
     wf = _wf()
@@ -270,11 +270,11 @@ def _verify():
     for name, _ in written:
         blob += open(os.path.join(OUT, name)).read()
     required = [
-        '"proposal_source": "config_default"', '"proposal_source": "inherited"',
+        '"proposal_source": "config_default"', '"proposal_source": "inherited"',  # inherited: timezone only
         '"proposal_source": "none"', '"proposal_source": "gpx_self_anchor"',
-        '"proposal_source": "manual_required"',
+        '"proposal_source": "timezone_naive"', '"proposal_source": "manual_required"',
         '"source": "gpx_anchor_auto"', '"source": "gpx_anchor_accepted"',
-        '"source": "inherited_accepted"', '"source": "manual"', '"source": "manual_real_utc"',
+        '"source": "timezone_accepted"', '"source": "manual"', '"source": "manual_real_utc"',
         '"confidence": "high"', '"confidence": "medium"', '"confidence": "review_required"',
         '"stale_user_decision": true',
         '"reason": "no_reliable_gps_source"', '"reason": "manual_locked"', '"reason": "accepted_unlocated"',
