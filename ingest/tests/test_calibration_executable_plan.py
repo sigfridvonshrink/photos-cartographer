@@ -106,6 +106,8 @@ def _wf(tmp_path, *, files, time_status="complete", gps_status="complete", tz="E
     gps_art = {"status": gps_status, "destinations": {
         d: {"folder_fallback": {"effective_fallback": None}, "gps_decisions": {"review_items": []}} for d in dests}}
     (ctl / "photos-21-time-decisions.json").write_text(json.dumps(time_art))
+    (ctl / "photos-21a-gps-drift-validation.json").write_text(
+        json.dumps({"status": "complete", "destinations": {}}))
     (ctl / "photos-22-gps-decisions.json").write_text(json.dumps(gps_art))
     wf = cal.CalibrationWorkflow(str(ws))
     wf.handoff = {"cache_fingerprint": "pcf"}
