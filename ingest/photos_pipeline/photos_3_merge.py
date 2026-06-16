@@ -120,7 +120,7 @@ class MergeWorkflow:
         # 0a. Initialized, and no misplaced entry at the workspace root (§3 precond 0a; shared §5.3).
         if not os.path.exists(guard_path(ws)):
             blockers.append("Not an initialized workspace (no photos-00-workspace-guard) — "
-                            "run photos-1-prep first.")
+                            "run `photos-ingest prep` first.")
             return blockers, warnings, info
         root_syms = self._root_symlinks()
         if root_syms:
@@ -149,7 +149,7 @@ class MergeWorkflow:
         # Config (read-only) — must exist and be valid; merge's data path never writes it.
         cfg_p = config_path(ws)
         if not os.path.exists(cfg_p):
-            blockers.append("Workspace config photos-00-config.json is missing — run photos-1-prep first.")
+            blockers.append("Workspace config photos-00-config.json is missing — run `photos-ingest prep` first.")
             return blockers, warnings, info
         try:
             with open(cfg_p) as f:
@@ -173,14 +173,14 @@ class MergeWorkflow:
         library_root = cfg["merge"]["library_root"]
         if not is_library(library_root):
             blockers.append(f"{library_root} is not a blessed library (the {os.path.basename(library_marker_path(library_root))} "
-                            "marker is absent). Run `photos-3-merge init-library` to bless it first.")
+                            "marker is absent). Run `photos-ingest merge init-library` to bless it first.")
             return blockers, warnings, info
         info["library_root"] = library_root
 
         # Handoff (read-only) — needed for the prep-consistency / currency checks below.
         ho_p = handoff_path(ws)
         if not os.path.exists(ho_p):
-            blockers.append("Prep handoff photos-11-handoff.json is missing — run photos-1-prep first.")
+            blockers.append("Prep handoff photos-11-handoff.json is missing — run `photos-ingest prep` first.")
             return blockers, warnings, info
         try:
             with open(ho_p) as f:
@@ -195,7 +195,7 @@ class MergeWorkflow:
         # 0b. 0-sources empty (§3 precond 0b).
         if self._entries(folder_name('sources')):
             blockers.append(f"{folder_name('sources')}/ is not empty — an unprocessed dump is waiting; "
-                            "merge requires it empty. Re-run photos-1-prep to process it.")
+                            "merge requires it empty. Re-run `photos-ingest prep` to process it.")
 
         # 1 + 1a. Calibration ended successfully, and the finalized record is current with by-dest.
         calib_plan = self._check_calibration_finalized(ws, handoff, blockers)
@@ -204,11 +204,11 @@ class MergeWorkflow:
         # 2. The workspace was finalized (§3 precond 2).
         if not os.path.exists(complete_log_path(ws)):
             blockers.append("The workspace has not been finalized (photos-25-complete-log.json is "
-                            "missing). Run the finalize command (`photos-2-time-gps finalize`) first, "
+                            "missing). Run the finalize command (`photos-ingest geotag finalize`) first, "
                             "then merge.")
         if not os.path.exists(archive_manifest_path(ws)):
             blockers.append("The archival package is incomplete (photos-25-archive-manifest.json is "
-                            "missing) — run `photos-2-time-gps finalize` before merging.")
+                            "missing) — run `photos-ingest geotag finalize` before merging.")
 
         # 3. By-dest is the clean photo-only set (§3 precond 3).
         self._check_by_dest_clean(blockers, info)
@@ -231,7 +231,7 @@ class MergeWorkflow:
         plan = None
         if not os.path.exists(plan_p):
             blockers.append("Calibration has not produced an executable plan "
-                            "(photos-23-executable-plan.json is missing) — run `photos-2-time-gps run` "
+                            "(photos-23-executable-plan.json is missing) — run `photos-ingest geotag plan` "
                             "then `execute` before merging.")
         else:
             try:
@@ -241,7 +241,7 @@ class MergeWorkflow:
                 blockers.append(f"Calibration plan photos-23-executable-plan.json could not be read: {e}")
         if not os.path.exists(summ_p):
             blockers.append("Calibration was not executed (photos-24-execution-summary.json is missing) "
-                            "— run `photos-2-time-gps execute` before merging.")
+                            "— run `photos-ingest geotag execute` before merging.")
         else:
             try:
                 with open(summ_p) as f:
@@ -249,7 +249,7 @@ class MergeWorkflow:
                 if summ.get("status") != "success":
                     blockers.append("Calibration execution did not end successfully "
                                     f"(photos-24 status={summ.get('status')!r}) — resolve it and re-run "
-                                    "`photos-2-time-gps execute` before merging.")
+                                    "`photos-ingest geotag execute` before merging.")
             except Exception as e:
                 blockers.append(f"Calibration execution summary could not be read: {e}")
 
@@ -349,7 +349,7 @@ class MergeWorkflow:
         if unrecorded:
             blockers.append(f"{by_dest} contains {len(unrecorded)} photo(s) the finalized record does "
                             f"not recognize (e.g. {unrecorded[0]}) — the handoff predates the latest "
-                            "move into by-dest. Re-run photos-1-prep, then merge.")
+                            "move into by-dest. Re-run `photos-ingest prep`, then merge.")
 
     # --- plan builder (merge spec §6 mapping, §7 collision, §10.1 plan) -------
 
@@ -966,7 +966,7 @@ def do_init_library(path_arg, ws):
         if not in_ws:
             print("init-library needs a library path when run outside a workspace "
                   "(there is no workspace config to read). Pass the library directory, e.g. "
-                  "`photos-3-merge init-library /srv/library`.", file=sys.stderr)
+                  "`photos-ingest merge init-library /srv/library`.", file=sys.stderr)
             return 2
         cfg_p = config_path(ws)
         try:
@@ -978,7 +978,7 @@ def do_init_library(path_arg, ws):
         library_root = ((cfg.get("merge") or {}).get("library_root") or "")
         if not library_root:
             print("No merge.library_root is set in photos-00-config.json — pass a path "
-                  "(`photos-3-merge init-library <path>`) or set it in config first.", file=sys.stderr)
+                  "(`photos-ingest merge init-library <path>`) or set it in config first.", file=sys.stderr)
             return 2
         try:
             validate_merge_config(cfg, ws)          # validates library_root (existing, outside ws)

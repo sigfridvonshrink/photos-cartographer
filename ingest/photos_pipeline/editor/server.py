@@ -78,7 +78,7 @@ _CONTENT_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; 
                   ".svg": "image/svg+xml", ".png": "image/png"}
 
 PREVIEW_MAX_PX = 1600     # longest edge of a generated photo preview
-RERUN_TIMEOUT_S = 3600    # cap on a `photos-2-time-gps run` invoked from the editor
+RERUN_TIMEOUT_S = 3600    # cap on a `photos-ingest geotag plan` invoked from the editor
 
 
 # Front-end + demo fixtures are PACKAGE DATA (photos_pipeline/editor/{web,examples}), read via
@@ -301,7 +301,7 @@ def _save(workspace, payload):
 
 
 def _rerun(workspace):
-    """Re-run `photos-2-time-gps run` against the workspace, regenerating the authoritative artifacts
+    """Re-run `photos-ingest geotag plan` against the workspace, regenerating the authoritative artifacts
     from the saved decisions. Calibration takes the workspace as its CWD and owns its own WorkspaceLock
     (separate from the editor lock), so a concurrent calibration is reported, not forced. Returns the
     process outcome; the client reloads /api/artifacts on success. Mutates nothing here — `run` only
