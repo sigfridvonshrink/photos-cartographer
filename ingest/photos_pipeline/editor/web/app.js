@@ -4,13 +4,13 @@
 // user_decision back via the server). GPS cells get a side-panel map picker (fixed-crosshair pick) plus
 // a photo preview for review items (map.js + the server's /api/photo). The time tree shows a live,
 // advisory inheritance preview (a child with no own decision shows the timezone it would inherit from
-// its nearest resolved ancestor), and Re-run invokes `photos-ingest geotag plan` on the server then reloads
-// the regenerated authoritative artifacts (the edit → Save → Re-run → reload loop).
+// its nearest resolved ancestor). The edit loop is: edit → Save → re-run `photos-ingest geotag plan`
+// in a terminal → reload the page (no in-app Re-run).
 // Vanilla + ES modules; no build. Leaflet is vendored (global L); tiles come from OSM at runtime.
 
 import { mapPicker } from "./map.js";
 
-const state = { base: null, work: null, view: "time", selected: null, saving: false, running: false, message: null, runResult: null, timeChangedSinceRerun: false, driftChangedSinceRerun: false, offsetExpand: new Set(), coordClipboard: null, gpsAnchor: null, gpsAnchorDest: null };
+const state = { base: null, work: null, view: "time", selected: null, saving: false, message: null, timeChangedSinceRerun: false, driftChangedSinceRerun: false, offsetExpand: new Set(), coordClipboard: null, gpsAnchor: null, gpsAnchorDest: null };
 
 const $ = (s) => document.querySelector(s);
 function el(tag, attrs = {}, ...kids) {
@@ -454,7 +454,7 @@ function renderTime(list) {
   const t = state.work.time;
   if (!t?.destinations) return list.append(el("div", { class: "empty" }, "No photos-21-time-decisions.json."));
   if (!state.base.demo && state.timeChangedSinceRerun)
-    list.append(el("div", { class: "gate warn" }, "Time decisions changed — Re-run afterward so GPS is recomputed from the new times."));
+    list.append(el("div", { class: "gate warn" }, "Time decisions changed — re-run `photos-ingest geotag plan` (in a terminal), then reload, so GPS is recomputed from the new times."));
   const root = buildTree(t.destinations);
   for (const k of Object.keys(root.children).sort()) renderTreeNode(root.children[k], list);
 }
@@ -488,16 +488,16 @@ function renderGps(list) {
       el("div", { class: "gate-title" }, "GPS is waiting on the time decisions"),
       "GPS placement (interpolation / extrapolation) is computed from each photo's resolved UTC, so the GPS "
       + "decisions are generated only once every timezone and clock-offset decision is resolved. Finish them in "
-      + "the Time view, then Re-run."));
+      + "the Time view, then re-run `photos-ingest geotag plan` and reload."));
   if (!state.base.demo && state.work.drift?.requires_user_input)
     return list.append(el("div", { class: "gate" },
       el("div", { class: "gate-title" }, "GPS is waiting on the drift validation"),
       "A manual or timezone-derived clock offset with no native-GPS anchor must be confirmed against the GPX "
       + "track before placement, or it could silently mis-place the whole batch. Confirm each bucket in the "
-      + "Drift view, then Re-run."));
+      + "Drift view, then re-run `photos-ingest geotag plan` and reload."));
   if (!g?.destinations) return list.append(el("div", { class: "empty" }, "No photos-22-gps-decisions.json."));
   if (!state.base.demo && (state.timeChangedSinceRerun || state.driftChangedSinceRerun))
-    list.append(el("div", { class: "gate warn" }, "Time or drift decisions changed since the last calibration run — Re-run to recompute GPS. The decisions below are stale until you do."));
+    list.append(el("div", { class: "gate warn" }, "Time or drift decisions changed since the last calibration run — re-run `photos-ingest geotag plan` and reload to recompute GPS. The decisions below are stale until you do."));
   for (const dest of Object.keys(g.destinations).sort()) {
     const d = g.destinations[dest], fb = d.folder_fallback, s = d.gps_decisions?.summary || {};
     list.append(el("div", { class: "group-title" }, dest,
@@ -509,7 +509,7 @@ function renderGps(list) {
     for (const ri of d.gps_decisions?.review_items || []) {
       const ref = { file: "gps", dest, kind: "review", path: ri.relative_path };
       list.append(el("div", { class: "row" + (isSel(ref) ? " sel" : ""), onclick: (ev) => selectReview(ev, dest, ri.relative_path, order),
-          onmouseenter: (ev) => showHoverPreview(ri.relative_path, ev.currentTarget), onmouseleave: hideHoverPreview },
+          onmouseenter: (ev) => showHoverPreview(ri.relative_path, ev), onmousemove: moveHoverPreview, onmouseleave: hideHoverPreview },
         el("span", { class: "label" }, ri.relative_path.split("/").pop()), chip("reason", ri.reason), ...tags(ref), statusChip(ref)));
     }
     list.append(el("div", { class: "summary" }, `${s.files_total ?? 0} files — preserve ${s.preserve_native_gps ?? 0}, interp ${s.automatic_gpx_interpolation ?? 0}, extrap ${s.automatic_gpx_extrapolation ?? 0}, fallback ${s.automatic_folder_fallback ?? 0}, blocked ${s.blocked ?? 0}`));
@@ -524,10 +524,10 @@ function renderDrift(list) {
     return list.append(el("div", { class: "gate" },
       el("div", { class: "gate-title" }, "Drift validation is waiting on the time decisions"),
       "The GPS-drift check validates each bucket's clock offset against the GPX track, so it is generated "
-      + "only once every timezone and clock-offset decision is resolved. Finish them in the Time view, then Re-run."));
+      + "only once every timezone and clock-offset decision is resolved. Finish them in the Time view, then re-run `photos-ingest geotag plan` and reload."));
   if (!dr?.destinations) return list.append(el("div", { class: "empty" }, "No photos-21a-gps-drift-validation.json."));
   if (!state.base.demo && state.timeChangedSinceRerun)
-    list.append(el("div", { class: "gate warn" }, "Time decisions changed since the last calibration run — Re-run so the drift buckets (and their track segments) are re-extracted. The buckets below are stale until you do."));
+    list.append(el("div", { class: "gate warn" }, "Time decisions changed since the last calibration run — re-run `photos-ingest geotag plan` and reload so the drift buckets (and their track segments) are re-extracted. The buckets below are stale until you do."));
   const dests = Object.keys(dr.destinations);
   if (!dests.length) return list.append(el("div", { class: "empty" }, "No at-risk buckets — every offset is GPX-anchored or independently placeable."));
   for (const dest of dests.sort()) {
@@ -668,8 +668,8 @@ function offsetEditor(ref) {
   }
   // no proposal at all → tell the user how to get one: a resolved timezone yields a timezone-derived offset
   if (!hasProp) wrap.append(el("div", { class: "hint" }, tz
-    ? "no offset proposal yet — Re-run to derive one from the resolved timezone"
-    : "no offset proposal — set this destination's timezone (Time view), then Re-run, to derive one from the local time"));
+    ? "no offset proposal yet — re-run `photos-ingest geotag plan` to derive one from the resolved timezone"
+    : "no offset proposal — set this destination's timezone (Time view), then re-run `photos-ingest geotag plan`, to derive one from the local time"));
 
   if (accepted || manualSet) wrap.append(el("button", { class: "mini",
     onclick: () => { state.offsetEdit = null; editMany(ref, { accept_proposal: false, manual_offset_seconds: "", manual_real_utc: "" }); } },
@@ -884,22 +884,31 @@ function decisionThumb(ref) {
 }
 
 // Floating full-size preview shown while hovering a photo name in the worklist — lets you eyeball each
-// photo (and build a shift-click run) without opening it. One reused element; never in demo mode.
-let _hoverImg = null;
-function showHoverPreview(path, anchor) {
+// photo (and build a shift-click run) without opening it. Follows the cursor like a tooltip. One reused
+// element; never in demo mode.
+let _hoverImg = null, _hoverPath = null;
+function _placeHover(x, y) {                      // near the cursor, flipped/clamped to stay on-screen
+  if (!_hoverImg) return;
+  const W = 340, H = 340, off = 16;
+  let left = x + off, top = y + off;
+  if (left + W > window.innerWidth) left = x - W - off;
+  if (top + H > window.innerHeight) top = y - H - off;
+  _hoverImg.style.left = Math.max(8, left) + "px";
+  _hoverImg.style.top = Math.max(8, top) + "px";
+}
+function showHoverPreview(path, ev) {
   if (state.base.demo || !path) return;
   if (!_hoverImg) {
     _hoverImg = el("img", { class: "hover-preview" });
     _hoverImg.addEventListener("error", () => { _hoverImg.hidden = true; });
     document.body.append(_hoverImg);
   }
-  _hoverImg.src = "/api/photo?path=" + encodeURIComponent(path);
-  const r = anchor.getBoundingClientRect();
-  _hoverImg.style.left = Math.max(12, Math.min(r.right + 12, window.innerWidth - 340)) + "px";
-  _hoverImg.style.top = Math.max(12, Math.min(r.top, window.innerHeight - 340)) + "px";
+  if (path !== _hoverPath) { _hoverImg.src = "/api/photo?path=" + encodeURIComponent(path); _hoverPath = path; }
+  _placeHover(ev.clientX, ev.clientY);
   _hoverImg.hidden = false;
 }
-function hideHoverPreview() { if (_hoverImg) _hoverImg.hidden = true; }
+function moveHoverPreview(ev) { if (_hoverImg && !_hoverImg.hidden) _placeHover(ev.clientX, ev.clientY); }
+function hideHoverPreview() { if (_hoverImg) { _hoverImg.hidden = true; _hoverPath = null; } }
 
 // --- side panel --------------------------------------------------------------
 function jsonBlock(title, obj) { return obj === undefined ? null : el("div", { class: "pblock" }, el("h3", {}, title), el("pre", { class: "json" }, JSON.stringify(obj, null, 2))); }
@@ -1002,66 +1011,26 @@ async function save() {
   state.saving = true; state.message = "saving…"; render();
   try {
     const r = await (await fetch("/api/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })).json();
-    if (r.ok) { state.base = clone(state.work); state.message = `saved ${r.written.join(", ")} — Re-run (\`photos-ingest geotag plan\`) to apply`; }
+    if (r.ok) { state.base = clone(state.work); state.message = `saved ${r.written.join(", ")} — run \`photos-ingest geotag plan\` then reload to apply`; }
     else state.message = "save failed: " + (r.error || "unknown");
   } catch (e) { state.message = "save failed: " + e; }
   state.saving = false; render();
 }
 
-// Re-run calibration: `photos-ingest geotag plan` regenerates the authoritative artifacts from the SAVED
-// decisions, so we require a clean (saved, valid) state first, then reload what calibration wrote.
-async function rerun() {
-  if (state.base.demo || state.saving || state.running) return;
-  state.running = true; state.runResult = null; state.message = "re-running calibration…"; render();
-  try {
-    const r = await (await fetch("/api/rerun", { method: "POST" })).json();
-    state.runResult = r;
-    if (r.ok) {
-      state.base = await (await fetch("/api/artifacts")).json();
-      state.work = clone(state.base);
-      state.selected = null;
-      state.timeChangedSinceRerun = false;   // drift + GPS were just recomputed against the current times
-      state.driftChangedSinceRerun = false;  // GPS was just recomputed against the current drift decisions
-      state.message = "re-ran calibration — artifacts reloaded";
-    } else {
-      state.message = r.error ? `re-run failed: ${r.error}` : `re-run reported blockers (exit ${r.returncode})`;
-    }
-  } catch (e) { state.message = "re-run failed: " + e; state.runResult = { ok: false, error: String(e) }; }
-  state.running = false; render();
-}
-
-function renderRunlog() {
-  const box = $("#runlog"), r = state.runResult;
-  if (!r) { box.hidden = true; box.replaceChildren(); return; }
-  box.hidden = false; box.className = "runlog " + (r.ok ? "ok" : "bad");
-  const out = [r.error, r.stderr, r.stdout].filter(Boolean).join("\n").trim();
-  box.replaceChildren(
-    el("button", { class: "mini close", onclick: () => { state.runResult = null; render(); } }, "✕"),
-    el("strong", {}, r.ok ? "calibration re-run OK" : `calibration did not complete${r.returncode != null ? ` (exit ${r.returncode})` : ""}`),
-    out ? el("pre", { class: "runlog-out" }, out) : null);
-}
+// Calibration is re-run from the CLI (`photos-ingest geotag plan`), then the operator reloads the page;
+// the editor only edits + saves the decision JSON (no in-app Re-run — it was error-prone and offered
+// little over a terminal command).
 
 function render() {
   hideHoverPreview();                              // a re-render replaces the worklist rows; drop any stuck hover preview
   const a = state.base;
   $("#workspace").textContent = a.demo ? "demo mode — example fixtures (read-only)" : a.workspace;
   for (const b of document.querySelectorAll("#view-toggle button")) b.classList.toggle("on", b.dataset.view === state.view);
-  const dirty = dirtyRefs().length, invalid = anyInvalid(), busy = state.saving || state.running;
+  const dirty = dirtyRefs().length, invalid = anyInvalid(), busy = state.saving;
   $("#todo").textContent = dirty ? `${dirty} unsaved${invalid ? " · ✗ invalid" : ""}` : (state.message || "no changes");
   const save = $("#save"); save.disabled = a.demo || busy || dirty === 0 || invalid;
   save.title = a.demo ? "demo mode is read-only — run `serve <workspace>` to save" : invalid ? "fix invalid fields first" : "";
-  // Re-run needs calibration's dependencies present on THIS host: the pipeline script (the bundle
-  // doesn't embed it) and the configured gpx_root (a mount that may live only on the workspace's own
-  // host). Re-running without them would fail or silently wipe GPX-derived decisions — so gate on it.
-  const depsMissing = !a.demo && a.environment && !a.environment.deps_ok;
-  const rerunBtn = $("#rerun"); rerunBtn.disabled = a.demo || busy || dirty > 0 || invalid || depsMissing;
-  rerunBtn.textContent = state.running ? "running…" : "Re-run";
-  rerunBtn.title = a.demo ? "demo mode — no workspace to calibrate"
-    : depsMissing ? `can't re-run on this machine — missing: ${a.environment.missing.join(", ")}. Run the editor on the host with the pipeline and its data.`
-    : dirty > 0 ? "save your changes first, then re-run"
-    : invalid ? "fix invalid fields first" : "run `photos-ingest geotag plan` and reload the result";
   $("#reset").disabled = dirty === 0 || busy;
-  renderRunlog();
   const list = $("#list"); list.replaceChildren();
   (state.view === "time" ? renderTime : state.view === "drift" ? renderDrift : renderGps)(list);
   renderPanel();
@@ -1094,7 +1063,6 @@ function setupDivider() {
 async function main() {
   for (const b of document.querySelectorAll("#view-toggle button")) b.addEventListener("click", () => { state.view = b.dataset.view; state.selected = null; render(); });
   $("#save").addEventListener("click", save);
-  $("#rerun").addEventListener("click", rerun);
   $("#reset").addEventListener("click", () => { state.work = clone(state.base); state.message = null; render(); });
   setupDivider();
   try { state.base = await (await fetch("/api/artifacts")).json(); state.work = clone(state.base); }
