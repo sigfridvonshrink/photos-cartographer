@@ -33,11 +33,19 @@ majority by interpolating along the track. See `ingest/workflows/README.md`.
 
 The active pipeline is the **`photos_pipeline` package** at `ingest/photos_pipeline/`:
 `photos_utils.py` (shared lib) + `photos_1_prep.py` / `photos_2_time_gps.py` / `photos_3_merge.py`
-(the three phases, each exposing `main()`). From a checkout, run a phase with
-`python3 -m photos_pipeline.photos_1_prep plan` (with `ingest/` on `PYTHONPATH`, or from `ingest/`).
-The package is **shipped detached** as three self-contained, executable zipapps named
-`photos-1-prep` / `photos-2-time-gps` / `photos-3-merge` (PR2: `tools/build-pyz`), each launched
-`./photos-1-prep plan` exactly like a plain script (shebang'd; needs a `python3` on the host).
+(the three phases) + `cli.py`/`__main__.py` (the combined entry) + `editor/` (the decision editor).
+From a checkout, run via `python3 -m photos_pipeline <phase> <subcommand>` (with `ingest/` on
+`PYTHONPATH`, or from `ingest/`). It is **shipped detached** as ONE self-contained executable
+`ingest/dist/photos-ingest` — a shebang'd zipapp of the whole package — built deterministically by
+`tools/build-pyz` (+ an editable `photos-config-defaults.json` sibling); launched `./photos-ingest
+prep plan` exactly like a plain script (needs a `python3` on the host; zipapp doesn't embed Python).
+`tools/build-pyz --check` (CI + pre-push) builds it to a temp dir and smoke-runs it; `ingest/dist/` is gitignored (build output, not committed).
+
+**Config seed source:** a new workspace's `photos-00-config.json` is seeded by
+`photos_utils.default_config()` — an external `photos-config-defaults.json` beside the executable (or
+`$PHOTOS_PIPELINE_CONFIG`) wins over the built-in `DEFAULT_CONFIG`, so a detached deploy retunes
+defaults by editing that sibling, never the zip. The built-in (with its documented tunables) stays in
+`photos_utils.py`.
 
 Tests **MUST be run from the repo root** — `conftest.py` puts `ingest/` on `sys.path` so
 `import photos_pipeline` resolves, and some tests reference repo-root paths like
