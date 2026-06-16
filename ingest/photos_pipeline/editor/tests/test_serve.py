@@ -20,7 +20,8 @@ import pytest
 
 import decision_editor_serve as serve
 
-EXAMPLES = serve.EXAMPLES
+# Demo fixtures are package data now; in a checkout they're a real dir beside the server module.
+EXAMPLES = os.path.join(os.path.dirname(serve.__file__), "examples")
 HAVE_MAGICK = bool(shutil.which("magick"))
 
 
@@ -380,12 +381,8 @@ def test_http_serves_vendored_leaflet():
 
 
 # --------------------------------------------------------------------------- re-run calibration
-
-def test_rerun_missing_pipeline_errors(tmp_path, monkeypatch):
-    monkeypatch.setattr(serve, "PIPELINE_ROOT", str(tmp_path))   # no photos_pipeline package here
-    r = serve._rerun(str(tmp_path))
-    assert r["ok"] is False and "calibration pipeline" in r["error"] and "returncode" not in r
-
+# (calibration now ships in the same package as the editor, so it is always runnable — the old
+# "missing pipeline" cases no longer apply; the gpx_root gate below is the remaining dependency.)
 
 def test_rerun_surfaces_calibration_blockers(tmp_path):
     # A bare dir is not an initialized workspace: calibration's preflight blocks (exit 2) and mutates
@@ -407,15 +404,8 @@ def _ws_with_gpx_config(tmp_path, gpx_root):
 def test_environment_no_config_does_not_block(tmp_path):
     (tmp_path / serve.CONTROL).mkdir()
     env = serve._environment(str(tmp_path))
-    assert env["calibration_present"] is True       # the real photos_pipeline package is beside the editor
+    assert env["calibration_present"] is True       # calibration ships in this package — always present
     assert env["gpx_configured"] is False and env["deps_ok"] is True and env["missing"] == []
-
-
-def test_environment_missing_pipeline_blocks(tmp_path, monkeypatch):
-    monkeypatch.setattr(serve, "PIPELINE_ROOT", str(tmp_path))   # no photos_pipeline package here
-    env = serve._environment(str(tmp_path))
-    assert env["calibration_present"] is False and env["deps_ok"] is False
-    assert any("calibration pipeline" in m for m in env["missing"])
 
 
 def test_environment_empty_gpx_root_does_not_block(tmp_path):
