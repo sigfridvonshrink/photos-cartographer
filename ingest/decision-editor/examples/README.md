@@ -32,9 +32,9 @@ by the real edit→re-run round-trip, so they also illustrate the loop the edito
 ## Decision-cell states covered
 
 - **Timezone proposal source:** `config_default`, `inherited`, `none`.
-- **Offset proposal source:** `gpx_self_anchor` (confidence high/medium/review_required), `inherited`,
-  `manual_required`.
-- **Effective offset source:** `gpx_anchor_auto`, `gpx_anchor_accepted`, `inherited_accepted`,
+- **Offset proposal source:** `gpx_self_anchor` (confidence high/medium/review_required),
+  `timezone_naive`, `manual_required`. (Offsets do **not** inherit across destinations — §10.2.)
+- **Effective offset source:** `gpx_anchor_auto`, `gpx_anchor_accepted`, `timezone_accepted`,
   `manual`, `manual_real_utc`.
 - **GPS categories:** preserve-native, GPX interpolation, GPX extrapolation, folder fallback
   (manual + inherited+accepted); review reasons `no_reliable_gps_source`, `manual_locked`,
