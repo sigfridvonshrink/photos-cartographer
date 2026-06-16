@@ -135,17 +135,18 @@ Each downstream artifact must include the full flattened dependency set it relie
 For example, `photos-23-executable-plan.json` must directly include dependencies for:
 
 1. `photos-21-time-decisions.json` and its SHA-256;
-2. `photos-22-gps-decisions.json` and its SHA-256;
-3. resolved UTC cache fingerprint;
-4. `photos-11-handoff.json` and its **`content_fingerprint`** (recomputed from the handoff's deterministic content, not a whole-file byte hash, Section 4; prep Section 16.2);
-5. prep SQLite cache fingerprint;
-6. config fingerprint;
-7. camera group/config classification fingerprint;
-8. GPX folder/file fingerprint, if relevant;
-9. metadata field-set version;
-10. media file preconditions;
-11. filename-format config fingerprint;
-12. planned operation fingerprint.
+2. `photos-21a-gps-drift-validation.json` and its SHA-256;
+3. `photos-22-gps-decisions.json` and its SHA-256;
+4. resolved UTC cache fingerprint;
+5. `photos-11-handoff.json` and its **`content_fingerprint`** (recomputed from the handoff's deterministic content, not a whole-file byte hash, Section 4; prep Section 16.2);
+6. prep SQLite cache fingerprint;
+7. config fingerprint;
+8. camera group/config classification fingerprint;
+9. GPX folder/file fingerprint, if relevant;
+10. metadata field-set version;
+11. media file preconditions;
+12. filename-format config fingerprint;
+13. planned operation fingerprint.
 
 It must not merely say:
 
@@ -612,6 +613,8 @@ calibration invocation
   -> time-decision stage
   -> photos-21-time-decisions.json
   -> resolved UTC per file in SQLite
+  -> GPS-drift validation gate (photos-21a-gps-drift-validation.json)
+  -> resolved UTC recomputed with validated offsets
   -> GPS-decision stage
   -> photos-22-gps-decisions.json
   -> photos-23-executable-plan.json
@@ -635,7 +638,8 @@ STATE 3 — GPX indexed/fingerprinted
 STATE 4 — camera groups classified or blocked
 STATE 5 — time-decision stage reached
 STATE 6 — photos-21-time-decisions.json created
-STATE 7 — resolved UTC persisted
+STATE 7 — resolved UTC computed (current offsets)
+STATE 7a — photos-21a-gps-drift-validation.json created (gate; resolved UTC re-persisted once complete)
 STATE 8 — GPS-decision stage reached
 STATE 9 — photos-22-gps-decisions.json created
 STATE 10 — photos-23-executable-plan.json ready
@@ -1180,11 +1184,51 @@ If config, camera grouping, `photos-21-time-decisions.json`, prep cache, metadat
 Because the resolved-UTC cache lives in SQLite rather than as a hashable file, it must expose a deterministic fingerprint so downstream JSON artifacts can record and re-verify it the same way they re-hash JSON dependencies. The `resolved_utc_cache_fingerprint` must be a SHA-256 computed over a canonical, deterministically ordered serialization of:
 
 1. every per-file resolved row (`file_id`/workspace path, `resolved_utc`, `resolved_utc_status`, `time_rule_used`, `utc_offset_used`, `source_time_provenance`);
-2. the input fingerprints that produced those rows: the **time-policy fingerprint** (a SHA-256 over just the `camera_time_and_timezone_policy` config area — *not* the whole-config hash), the camera-group-key version, `photos-21-time-decisions.json` SHA-256, the prep cache fingerprint, the metadata field-set version, and the **GPX fingerprint**. The GPX fingerprint is included **unconditionally** — a deliberate, conservative over-inclusion: even a destination whose UTC was resolved entirely without GPX (e.g. from native EXIF plus a manual offset) still carries the current GPX fingerprint, so editing the GPX set conservatively restales resolved UTC even where GPX had no effect on the result. This errs toward re-resolving rather than risk serving a stale value, and the cost is bounded (resolved UTC is recomputed, not the expensive media work).
+2. the input fingerprints that produced those rows: the **time-policy fingerprint** (a SHA-256 over just the `camera_time_and_timezone_policy` config area — *not* the whole-config hash), the camera-group-key version, `photos-21-time-decisions.json` SHA-256, **`photos-21a-gps-drift-validation.json` SHA-256** (so an operator-validated/corrected offset restales resolved UTC — Section 22a), the prep cache fingerprint, the metadata field-set version, and the **GPX fingerprint**. The GPX fingerprint is included **unconditionally** — a deliberate, conservative over-inclusion: even a destination whose UTC was resolved entirely without GPX (e.g. from native EXIF plus a manual offset) still carries the current GPX fingerprint, so editing the GPX set conservatively restales resolved UTC even where GPX had no effect on the result. This errs toward re-resolving rather than risk serving a stale value, and the cost is bounded (resolved UTC is recomputed, not the expensive media work).
 
 The config input is deliberately the **time-policy subset**, not the whole-config file hash, so resolved-UTC staleness stays **surgical** (shared contract `photos-shared-contract.md` Section 4.2): a config edit *outside* the time policy — for example to `library_root`, the GPX matching thresholds, the filename format, or the `zfs` block — must **not** restale already-resolved UTC, because none of those affect how UTC is computed. Only a change to the time policy (or to one of the other listed inputs) restales it. The whole-config SHA-256 still appears as `config_fingerprint` in the **executable plan's** (`photos-23`) `depends_on` for end-to-end **integrity and change-detection** (it is the byte hash the dependency cascade re-verifies, shared contract Section 9), but it is **not** the resolved-UTC staleness trigger — the two roles are kept distinct exactly as Section 4.2 prescribes (field-scoped fingerprints drive staleness; the whole-file hash is for integrity, not staleness). The decision artifacts (`photos-21`/`photos-22`) deliberately carry only their **field-scoped** policy fingerprints (the time-policy / GPS-policy subsets), not the whole-file hash, so an unrelated config edit cannot needlessly restale them; the whole-file integrity hash enters the cascade once, at the plan, which is the artifact `execute` revalidates.
 
 Rows must be ordered by workspace path and all values normalized to text before hashing, so the fingerprint is stable across runs with unchanged inputs. This `resolved_utc_cache_fingerprint` is the value referenced as the "resolved UTC cache fingerprint" dependency in Sections 5, 6, 24, and 28.
+
+---
+
+## 22a. Stage 7a — GPS-drift validation gate (`photos-21a-gps-drift-validation.json`)
+
+**The highest-danger gap this gate closes.** GPS placement (Section 23) positions a file purely from its **resolved UTC**: it finds where the GPX track was at that instant. That is safe when the file's offset came from a GPX self-anchor (the offset was *derived* from the track) or when the file has its own native-GPS anchor (it is independently placeable). But when a bucket's offset is **manual** or **timezone-derived** and the bucket has **no native-GPS anchor**, nothing has ever checked that offset against the track — a wrong offset silently slides the **whole** bucket to the wrong point on the GPX track, drift the operator never sees. Stage 7a makes that drift **explicit and gated**: every at-risk bucket must be confirmed before GPS planning runs.
+
+**This stage runs between resolved UTC (Section 22) and GPS planning (Section 23).** It consumes the **complete** `photos-21-time-decisions.json` and the resolved UTC computed under the *current* offsets, and emits `photos-21a-gps-drift-validation.json`. It mirrors the time→GPS gate: while 21a `requires_user_input`, the workflow stops and does **not** create `photos-22`/`photos-23`.
+
+### 22a.1 Trigger
+
+A `(camera group, destination[, naive date])` offset bucket — the same buckets as Section 10.2 — becomes a 21a **review item** if and only if **all** hold:
+
+1. its **effective offset source** is `timezone_accepted`, `manual`, or `manual_real_utc` (i.e. *not* `gpx_anchor_auto` / `gpx_anchor_accepted` — a GPX self-anchor offset is already track-derived);
+2. the bucket has **no native-GPS anchor** — no frame in it has GPS that matches the track (Section 19.1); with such an anchor the bucket is independently placeable and needs no validation;
+3. **GPX coverage exists** over the bucket's resolved-UTC interval widened by the plausible-clock-error window (`gpx_anchor_max_clock_error_seconds`, reused from the self-anchor search). With no covering track there is nothing to validate against — GPS planning will treat those files as fallback/lost (Section 25), not as drift.
+
+Buckets that fail any condition produce no 21a item. An artifact with no items is trivially `complete`.
+
+### 22a.2 Evidence and decision fields
+
+Each review item carries a `proposal` (the `current_offset_seconds`, its `proposal_source`, and the covering **GPX track segment** — the points `lat`/`lon`/`time_utc` within the widened window, the evidence a reviewer scrubs the representative photo along) and a `user_decision`:
+
+```text
+"user_decision": { "confirmed": false, "corrected_offset_seconds": "" }
+```
+
+- `confirmed: true` with an **empty** `corrected_offset_seconds` = a **zero scrub** — "the offset was right, leave it."
+- `confirmed: true` with a **number** = a **corrected** offset for the whole bucket (within ±86400 s).
+- `confirmed: false` ⇒ `requires_user_input: true`. **A zero scrub is never implied by inaction** — an untouched bucket blocks the gate; the operator must actively affirm even "no change." This is the load-bearing safety rule.
+
+`corrected_offset_seconds` is sanity-validated like every authored value (Section 9.2): non-numeric or out-of-range is a blocker that leaves the artifact unchanged. Authored confirmations are **preserved** across reruns; a confirmation whose bucket no longer triggers is stale-flagged.
+
+### 22a.3 Output consumed by resolved UTC
+
+Once 21a is complete, resolved UTC is **recomputed** consuming each confirmed bucket's validated offset (`effective_drift_offset`, source `gps_drift_validated`), and only then are the SQLite cache and `resolved_utc_cache_fingerprint` persisted (the fingerprint includes the `photos-21a` SHA-256, Section 22.1). The validated offset lives in `photos-21a` and does **not** mutate the `photos-21` decision it refines — `photos-21` stays the immutable record of the time decision; 21a is its GPS-drift check. GPS planning (Section 23) then proceeds on the corrected resolved UTC.
+
+### 22a.4 Dependencies
+
+`photos-21a` records `photos-21-time-decisions.json` SHA-256, the GPX fingerprint, the time-policy fingerprint, and the camera-group-key version. Because the recomputed `resolved_utc_cache_fingerprint` folds in the `photos-21a` SHA-256, a changed or withdrawn 21a confirmation restales `photos-22`/`photos-23` through the normal cascade; the executable plan additionally records `photos-21a` as a direct dependency so `execute` rejects a plan whose drift confirmation was withdrawn after planning (Section 28, Section 29).
 
 ---
 
@@ -1628,14 +1672,17 @@ An executable calibration plan may be produced only when:
 1. `photos-21-time-decisions.json` exists and completely covers each destination;
 2. destination timezone is known;
 3. resolved UTC exists for every file and is current;
-4. `photos-22-gps-decisions.json` exists and completely covers each destination;
-5. all GPS decisions are complete;
-6. planned timestamp renames are no-clobber and safe;
-7. no blockers remain;
-8. config dependencies are current;
-9. GPX dependencies are current, where relevant;
-10. prep handoff/cache dependencies are current;
-11. media file size/mtime/fingerprint preconditions are current.
+4. `photos-21a-gps-drift-validation.json` is complete — every at-risk bucket explicitly confirmed (Section 22a);
+5. `photos-22-gps-decisions.json` exists and completely covers each destination;
+6. all GPS decisions are complete;
+7. planned timestamp renames are no-clobber and safe;
+8. no blockers remain;
+9. config dependencies are current;
+10. GPX dependencies are current, where relevant;
+11. prep handoff/cache dependencies are current;
+12. media file size/mtime/fingerprint preconditions are current.
+
+The plan records `photos-21a-gps-drift-validation.json` as a direct dependency (alongside `photos-21`/`photos-22`), so a drift confirmation withdrawn after planning restales the plan and `execute` rejects it (Section 29).
 
 The executable artifact is:
 
