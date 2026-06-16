@@ -163,7 +163,7 @@ def test_run_populates_cache_when_complete(tmp_path, monkeypatch, capsys):
 
     def run():
         monkeypatch.chdir(str(ws))
-        monkeypatch.setattr(sys, "argv", ["photos-2-time-gps", "run"])
+        monkeypatch.setattr(sys, "argv", ["photos-2-time-gps", "plan"])
         try:
             cal.main()
         except SystemExit as e:

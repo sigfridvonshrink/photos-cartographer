@@ -226,7 +226,7 @@ def _calibration_cmd_env():
     PIPELINE_ROOT on PYTHONPATH so the package imports regardless of the editor's cwd."""
     env = os.environ.copy()
     env["PYTHONPATH"] = PIPELINE_ROOT + os.pathsep + env.get("PYTHONPATH", "")
-    return [sys.executable, "-m", CALIBRATE_MODULE, "run"], env
+    return [sys.executable, "-m", CALIBRATE_MODULE, "plan"], env
 
 
 def _environment(workspace):

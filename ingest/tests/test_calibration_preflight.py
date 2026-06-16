@@ -186,7 +186,7 @@ def test_missing_by_date_photo_demands_reprep(tmp_path):
 
 def _main(monkeypatch, ws):
     monkeypatch.chdir(str(ws))
-    monkeypatch.setattr(sys, "argv", ["photos-2-time-gps", "run"])
+    monkeypatch.setattr(sys, "argv", ["photos-2-time-gps", "plan"])
     try:
         cal.main()
         return 0

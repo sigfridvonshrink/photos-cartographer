@@ -61,7 +61,7 @@ def _ready_ws(tmp_path, monkeypatch, *, zfs=None):
 
     def run():
         monkeypatch.chdir(str(ws))
-        monkeypatch.setattr(sys, "argv", ["photos-2-time-gps", "run"])
+        monkeypatch.setattr(sys, "argv", ["photos-2-time-gps", "plan"])
         try:
             cal.main()
         except SystemExit:

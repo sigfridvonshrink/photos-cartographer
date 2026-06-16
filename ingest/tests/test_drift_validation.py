@@ -314,14 +314,14 @@ def test_e2e_drift_gate_blocks_then_resumes(tmp_path, monkeypatch):
     dvp = ctl / "photos-21a-gps-drift-validation.json"
     gdp = ctl / "photos-22-gps-decisions.json"
 
-    _run(monkeypatch, ws, "run")                                          # photos-21 needs tz + offset
+    _run(monkeypatch, ws, "plan")                                          # photos-21 needs tz + offset
     _edit(ctl, "photos-21-time-decisions.json", lambda a: (
         a["destinations"][f"{BYDEST}/T"]["destination_timezone"]["user_decision"]
         .update({"accept_proposed_timezone": True}),
         a["destinations"][f"{BYDEST}/T"]["camera_group_time_decisions"][CAM]["user_decision"]
         .update({"accept_proposal": True})))                              # tz-derived offset accepted
 
-    _run(monkeypatch, ws, "run")                                          # photos-21 complete -> 21a GATE
+    _run(monkeypatch, ws, "plan")                                          # photos-21 complete -> 21a GATE
     assert dvp.exists()
     drift = json.load(open(dvp))
     assert drift["status"] == "requires_user_input"
@@ -331,6 +331,6 @@ def test_e2e_drift_gate_blocks_then_resumes(tmp_path, monkeypatch):
     # Confirm the bucket (zero scrub, explicit) -> the gate opens.
     _edit(ctl, "photos-21a-gps-drift-validation.json", lambda a: a["destinations"][f"{BYDEST}/T"]
           ["drift_decisions"][CAM]["user_decision"].update({"confirmed": True}))
-    _run(monkeypatch, ws, "run")
+    _run(monkeypatch, ws, "plan")
     assert json.load(open(dvp))["status"] == "complete"
     assert gdp.exists()                                                   # phase 22 now built
