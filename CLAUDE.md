@@ -91,6 +91,13 @@ There is no build step and no linter config; runtime deps are system tools (`exi
   tests) and then the suite before a push, aborting on either failure. Enable it per clone with
   `git config core.hooksPath .githooks`; bypass once with `git push --no-verify`. The guard's
   `SRC_FILES` covers all three phase modules + `photos_utils` under `ingest/photos_pipeline/`.
+- **Local `pre-commit` hook** (`.githooks/pre-commit`) rebuilds `ingest/dist/photos-ingest` on every
+  commit so the local executable is never stale. `ingest/dist/` is gitignored — this is a LOCAL build
+  only; nothing is committed or pushed. It blocks a commit only if the build itself breaks.
+- **Releases** (`.github/workflows/release.yml`): push a version tag (`git tag v1.2.0 && git push
+  origin v1.2.0`) and CI builds `photos-ingest` with `__version__` set to the tag (via
+  `tools/build-pyz --version`) and attaches it + `photos-config-defaults.json` to a GitHub Release.
+  The executable is distributed via releases, never committed to the repo.
 
 ### CLI contract
 

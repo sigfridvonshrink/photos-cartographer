@@ -17,6 +17,7 @@ import argparse
 import io
 import json
 import os
+import re
 import stat
 import subprocess
 import sys
@@ -51,7 +52,9 @@ def _included():
     return sorted(out)
 
 
-def build_pyz_bytes():
+def build_pyz_bytes(version=None):
+    """Build the zipapp bytes. If `version` is given, the package's `__version__` is overridden to it
+    in the built artifact (the release workflow passes the git tag) — the source tree is untouched."""
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         def write(arc, data):
@@ -62,7 +65,10 @@ def build_pyz_bytes():
         write("__main__.py", MAIN_PY.encode("utf-8"))
         for arc, abspath in _included():
             with open(abspath, "rb") as f:
-                write(arc, f.read())
+                data = f.read()
+            if version and arc == "photos_pipeline/__init__.py":
+                data = re.sub(rb'__version__ = "[^"]*"', b'__version__ = "%s"' % version.encode(), data)
+            write(arc, data)
     return SHEBANG + buf.getvalue()
 
 
@@ -76,10 +82,12 @@ def build_sibling_bytes():
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--check", action="store_true",
-                    help="verify the committed artifacts match the source; exit nonzero if stale")
+                    help="build to a temp dir and smoke-run the executable; exit nonzero if it can't")
+    ap.add_argument("--version", dest="version", default=None,
+                    help="override the built executable's __version__ (the release workflow passes the git tag)")
     args = ap.parse_args()
 
-    pyz, sib = build_pyz_bytes(), build_sibling_bytes()
+    pyz, sib = build_pyz_bytes(args.version), build_sibling_bytes()
 
     if args.check:
         # Build to a throwaway dir and run the executable — verifies it assembles AND runs (the
