@@ -42,7 +42,7 @@ The package is **shipped detached** as three self-contained, executable zipapps 
 Tests **MUST be run from the repo root** — `conftest.py` puts `ingest/` on `sys.path` so
 `import photos_pipeline` resolves, and some tests reference repo-root paths like
 `ingest/photos_pipeline/photos_1_prep.py`. `pytest.ini` sets
-`testpaths=ingest/tests ingest/decision-editor/tests develop/tests` and ignores `archive/`.
+`testpaths=ingest/tests ingest/photos_pipeline/editor/tests develop/tests` and ignores `archive/`.
 
 ```bash
 # Whole suite
@@ -59,7 +59,7 @@ tools/coverage                 # whole suite + per-script report + htmlcov/
 tools/coverage -k merge        # subset (report % will be partial)
 
 # Decision-editor front-end unit tests (web/app.js pure logic) — Node's built-in runner, no deps.
-tools/jstest                   # node --test over ingest/decision-editor/tests/*.test.mjs
+tools/jstest                   # node --test over ingest/photos_pipeline/editor/tests/*.test.mjs
 ```
 
 `ingest/tests/conftest.py` imports the package modules once and **aliases them under their historical
@@ -97,7 +97,7 @@ entry (`python -m photos_pipeline.photos_1_prep …`) sharing the same `add_argu
 - `photos-ingest geotag` — `plan` / `execute` / `finalize` (was the `photos-2-time-gps` phase, formerly
   named "calibrate"; its `run` subcommand was **renamed to `plan`** so all phases start with `plan`).
 - `photos-ingest merge` — `init-library` / `plan` / `dry-run` / `execute`.
-- `photos-ingest edit [WORKSPACE]` — the decision editor (folds into the package next step).
+- `photos-ingest edit [WORKSPACE]` — the decision editor (a local web server; folded into the package at `photos_pipeline/editor/`, web assets served as package data via importlib.resources, no bundler).
   Phases share the plan/validate/execute contract; workspace = cwd. The original `prep` / `calibrate` /
   `refresh-library` / `merge` monolith they were split from has been removed; `refresh-library` was
   deliberately dropped in favor of on-demand fingerprinting in merge (see its workflow spec).
