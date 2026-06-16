@@ -46,8 +46,11 @@ applies the overlay onto the artifact JSON (round-tripping every other field) an
 ## 4. UI
 
 **Master–detail shell:** header (workspace • view toggle • to-do/stale count • Save • Re-run) → a compact
-**list** (left) + a persistent **side-panel** editor (right). Selecting a cell anywhere opens it in the
-panel.
+**list** (left) + a persistent **side-panel** editor (right), separated by a **draggable divider** (the
+split width is clamped and persisted in `localStorage`; the map is resized live as you drag). Selecting a
+cell anywhere opens it in the panel. The panel itself does **not** scroll: a **fixed top** holds the
+title, status, the **decision controls**, and the effective preview — always visible — over a **scroll
+area** that holds the evidence (proposal) and the big media (photo, map), the only things that scroll.
 
 - **Two views, switchable mid-edit** (one shared model): **Time** defaults to a **recursive destination
   tree** — a parent shows its descendants' proposals; you can override any node; inheriting cells are
@@ -107,17 +110,27 @@ panel.
     offset once; editing a cluster **fans out** to all its days (`ref.peers`). A chevron expands a cluster
     to per-day rows for a divergent manual edit; a day with its own decision breaks out automatically.
     Offsets do **not** inherit between destinations (only the timezone and folder fallback do).
-  - **GPS coordinate / fallback:** a **zoomable map with a fixed centre crosshair** — pan/zoom under it,
-    "use map center" → take `map.getCenter()` into the lat/lon fields. Reference pins (effective /
-    inherited / folder fallback) and a marker for the current decision give context, and the map seeds
-    its view to the current coordinate, **else the last coordinate the operator placed** (so the next
-    un-located photo opens centred where the previous one was set — consecutive shots are usually near
-    each other), else the nearest known reference. A **copy/paste** pair under the map remembers a found
-    location (set on every pick, or via *copy location*) and **paste**s it onto another cell, so a place
-    found once need not be re-navigated. The **photo** (embedded-JPEG preview from the server) sits above
-    the map for review items.
-    - *Built with vendored Leaflet (`web/vendor/leaflet/`, no CDN/build); map tiles load from
-      OpenStreetMap **at runtime** — the one external dependency, as any web map needs a tile source.*
+  - **GPS coordinate / fallback:** a **single `lat, lon` text field** (accepts a value pasted straight
+    from Google Maps, e.g. `50.525434, 4.269781` — comma- or space-separated; parsed by the one canonical
+    `parseLatLon`) plus a **zoomable map with a fixed centre crosshair** — pan/zoom under it, "use map
+    center" → take `map.getCenter()`. A valid field entry / paste writes the coordinate, refreshes the
+    clipboard, and **recenters the map keeping its zoom** (`map.panTo`); a bad non-empty entry is kept
+    verbatim and flagged invalid. Reference pins (effective / inherited / folder fallback) and a marker
+    for the current decision give context, and the map seeds its view to the current coordinate, **else
+    the last coordinate the operator placed** (so the next un-located photo opens centred where the
+    previous one was set — consecutive shots are usually near each other), else the nearest known
+    reference. A **copy/paste** pair under the map remembers a found location (set on every pick, or via
+    *copy location*, which also writes `lat, lon` to the system clipboard) and **paste**s it onto another
+    cell, so a place found once need not be re-navigated. **Multi-select:** shift-click another review
+    photo in the **same destination** to select a **contiguous run** (a multi-selection never crosses a
+    destination boundary); the side panel then **applies one location to every photo in the run** (a
+    `peers` ref whose edits fan out). The **photo** (embedded-JPEG preview from the server) sits above the
+    map for review items. A **place-search box** under the map (geocoding via **Nominatim/OpenStreetMap**,
+    Google-Maps style) **relocates** the map to a named place — manual submit only (Enter/button, never
+    per-keystroke, to respect Nominatim's ≤1 req/s policy); picking a result moves the view but does **not**
+    set the decision (the operator still picks under the crosshair).
+    - *Built with vendored Leaflet (`web/vendor/leaflet/`, no CDN/build); two **runtime** OpenStreetMap
+      dependencies — map **tiles** and the **Nominatim** geocoder — degrade gracefully when offline.*
     - *The earlier idea of drawing the **GPX track / anchors / ghost marker** is not realised here: a GPS
       `review_item` is on the list precisely because no reliable GPS source placed it, so the
       `photos-22` artifact carries no track/anchor/candidate for it. The crosshair pick + photo are the
