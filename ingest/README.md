@@ -22,11 +22,15 @@ and the code is expected to follow them. When changing behavior, update the gove
 
 ## Contents
 
-- `photos-1-prep` — the Phase 1 prep script. Subcommands: `plan` / `dry-run` / `execute`.
-- `photos_utils.py` — shared config template (`CONFIG`) and utilities; must sit beside `photos-1-prep`
-  (the script adds its own directory to `sys.path` and imports it).
+- `photos_pipeline/` — the pipeline package: `photos_1_prep.py` (Phase 1 prep; subcommands
+  `plan` / `dry-run` / `execute`), `photos_2_time_gps.py` (Phase 2 calibration), `photos_3_merge.py`
+  (Phase 3 merge), and `photos_utils.py` (shared `CONFIG` template + utilities, imported
+  package-relatively). Run a phase from a checkout with `python3 -m photos_pipeline.photos_1_prep plan`
+  (with `ingest/` on `PYTHONPATH`); shipped detached as three executable zipapps named
+  `photos-1-prep` / `photos-2-time-gps` / `photos-3-merge` (run `./photos-1-prep plan`).
 - `workflows/` — the authoritative specifications (above).
-- `tests/` — the test suite for the prep script.
+- `decision-editor/` — the side-panel decision editor (separate deliverable).
+- `tests/` — the test suite for the pipeline.
 
 ## Core safety rules
 
@@ -39,15 +43,16 @@ and the code is expected to follow them. When changing behavior, update the gove
 
 ## Running the tests
 
-From the **repository root** (some tests reference `ingest/photos-1-prep` relative to the root):
+From the **repository root** (`conftest.py` puts `ingest/` on `sys.path` so `import photos_pipeline`
+resolves; some tests reference repo-root paths like `ingest/photos_pipeline/photos_1_prep.py`):
 
 ```bash
 python3 -m pytest -q
 ```
 
-`tests/conftest.py` loads the extensionless `photos-1-prep` script and `photos_utils` once into
-`sys.modules` so every test file shares a single module instance; tests `import photos_1_prep` rather
-than re-loading it.
+`tests/conftest.py` imports the package modules once and aliases them under their short names in
+`sys.modules` (`photos_1_prep` → `photos_pipeline.photos_1_prep`, etc.), so test files keep
+`import photos_1_prep` / `@patch("photos_1_prep....")` working against a single shared instance.
 
 ## History
 
