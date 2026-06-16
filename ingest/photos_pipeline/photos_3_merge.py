@@ -36,10 +36,10 @@ from .photos_utils import (
 
 # Calibration / prep artifacts merge READS (never writes — shared contract §13.0a).
 HANDOFF_ARTIFACT = "photos-11-handoff.json"
-EXECUTABLE_PLAN_ARTIFACT = "photos-23-executable-plan.json"
-EXECUTION_SUMMARY_ARTIFACT = "photos-24-execution-summary.json"
-COMPLETE_LOG_ARTIFACT = "photos-25-complete-log.json"
-ARCHIVE_MANIFEST_ARTIFACT = "photos-25-archive-manifest.json"
+EXECUTABLE_PLAN_ARTIFACT = "photos-24-executable-plan.json"
+EXECUTION_SUMMARY_ARTIFACT = "photos-25-execution-summary.json"
+COMPLETE_LOG_ARTIFACT = "photos-26-complete-log.json"
+ARCHIVE_MANIFEST_ARTIFACT = "photos-26-archive-manifest.json"
 # Merge's own artifacts. The plan (photos-30) precedes the terminal summary/log (31/35).
 MERGE_PLAN_ARTIFACT = "photos-30-merge-plan.json"
 MERGE_SUMMARY_ARTIFACT = "photos-31-merge-summary.json"
@@ -91,7 +91,7 @@ class MergeWorkflow:
     def __init__(self, workspace_root: str):
         self.workspace_root = workspace_root
         self.handoff = None
-        self.calib_plan = None      # photos-23 parsed once in preflight; reused by the plan builder
+        self.calib_plan = None      # photos-24 parsed once in preflight; reused by the plan builder
 
     # --- preflight (merge spec §3) -------------------------------------------
 
@@ -203,27 +203,27 @@ class MergeWorkflow:
 
         # 2. The workspace was finalized (§3 precond 2).
         if not os.path.exists(complete_log_path(ws)):
-            blockers.append("The workspace has not been finalized (photos-25-complete-log.json is "
+            blockers.append("The workspace has not been finalized (photos-26-complete-log.json is "
                             "missing). Run the finalize command (`photos-ingest geotag finalize`) first, "
                             "then merge.")
         if not os.path.exists(archive_manifest_path(ws)):
-            blockers.append("The archival package is incomplete (photos-25-archive-manifest.json is "
+            blockers.append("The archival package is incomplete (photos-26-archive-manifest.json is "
                             "missing) — run `photos-ingest geotag finalize` before merging.")
 
         # 3. By-dest is the clean photo-only set (§3 precond 3).
         self._check_by_dest_clean(blockers, info)
 
-        # 4. Prep-consistency against the finalized-name set (§3 precond 4) — needs photos-23. Built on
-        # the handoff⨝photos-23 enumeration because calibration renamed by-dest without re-keying it.
+        # 4. Prep-consistency against the finalized-name set (§3 precond 4) — needs photos-24. Built on
+        # the handoff⨝photos-24 enumeration because calibration renamed by-dest without re-keying it.
         if calib_plan is not None:
             self._check_prep_consistency(handoff, calib_plan, info["library_root"], blockers)
 
         return blockers, warnings, info
 
     def _check_calibration_finalized(self, ws, handoff, blockers):
-        """Preconditions 1 and 1a. Calibration must have produced an executed plan (photos-23) with a
-        successful execution summary (photos-24), and the finalized record must still be current with
-        by-dest: the CURRENT handoff's content fingerprint must equal the one photos-23 pinned as a
+        """Preconditions 1 and 1a. Calibration must have produced an executed plan (photos-24) with a
+        successful execution summary (photos-25), and the finalized record must still be current with
+        by-dest: the CURRENT handoff's content fingerprint must equal the one photos-24 pinned as a
         dependency. A no-op re-prep (run-metadata only) does not trip this; only a real by-dest content
         change does — that one needs re-calibrate + re-finalize, not just re-prep (distinct from §3.4)."""
         plan_p = executable_plan_path(ws)
@@ -231,16 +231,16 @@ class MergeWorkflow:
         plan = None
         if not os.path.exists(plan_p):
             blockers.append("Calibration has not produced an executable plan "
-                            "(photos-23-executable-plan.json is missing) — run `photos-ingest geotag plan` "
+                            "(photos-24-executable-plan.json is missing) — run `photos-ingest geotag plan` "
                             "then `execute` before merging.")
         else:
             try:
                 with open(plan_p) as f:
                     plan = json.load(f)
             except Exception as e:
-                blockers.append(f"Calibration plan photos-23-executable-plan.json could not be read: {e}")
+                blockers.append(f"Calibration plan photos-24-executable-plan.json could not be read: {e}")
         if not os.path.exists(summ_p):
-            blockers.append("Calibration was not executed (photos-24-execution-summary.json is missing) "
+            blockers.append("Calibration was not executed (photos-25-execution-summary.json is missing) "
                             "— run `photos-ingest geotag execute` before merging.")
         else:
             try:
@@ -248,7 +248,7 @@ class MergeWorkflow:
                     summ = json.load(f)
                 if summ.get("status") != "success":
                     blockers.append("Calibration execution did not end successfully "
-                                    f"(photos-24 status={summ.get('status')!r}) — resolve it and re-run "
+                                    f"(photos-25 status={summ.get('status')!r}) — resolve it and re-run "
                                     "`photos-ingest geotag execute` before merging.")
             except Exception as e:
                 blockers.append(f"Calibration execution summary could not be read: {e}")
@@ -266,7 +266,7 @@ class MergeWorkflow:
             ok = verify_json_dependency(dep, ws)   # legacy byte-hash handoff dependency
         if not ok:
             blockers.append("By-dest has changed since calibration was finalized (the current handoff's "
-                            "content fingerprint no longer matches the one photos-23-executable-plan.json "
+                            "content fingerprint no longer matches the one photos-24-executable-plan.json "
                             "recorded). Re-calibrate and re-finalize before merging — a present but "
                             "un-calibrated photo must not be merged.")
         return plan
@@ -307,7 +307,7 @@ class MergeWorkflow:
 
     def enumerate_finalized(self, calib_plan, library_root):
         """The by-dest photo set to merge, built from the FINALIZED record (not a disk scan): the
-        handoff's by-dest photos joined to photos-23's rename ops by content fingerprint. Each entry
+        handoff's by-dest photos joined to photos-24's rename ops by content fingerprint. Each entry
         carries its final on-disk by-dest path, its library-relative destination, final name, content
         fingerprint, and library target. Robust to a handoff that carries pre- OR post-rename names —
         the fingerprint join is name-independent (calibration renamed by-dest without re-keying it)."""
@@ -421,9 +421,9 @@ class MergeWorkflow:
         for d in dests.values():
             d["files"].sort(key=lambda r: r["by_dest_source"])
         depends_on = {
-            "photos-23-executable-plan.json": json_dependency(
+            "photos-24-executable-plan.json": json_dependency(
                 EXECUTABLE_PLAN_ARTIFACT, ws, executable_plan_path(ws)),
-            "photos-24-execution-summary.json": json_dependency(
+            "photos-25-execution-summary.json": json_dependency(
                 EXECUTION_SUMMARY_ARTIFACT, ws, execution_summary_path(ws)),
             "handoff": {"dependency_type": "handoff_content", "artifact_name": HANDOFF_ARTIFACT,
                         "content_fingerprint": handoff_content_fingerprint(self.handoff)},
@@ -473,7 +473,7 @@ class MergeWorkflow:
             stale.append(f"plan schema_version {plan.get('schema_version')} is not "
                          f"{MERGE_PLAN_SCHEMA_VERSION}")
         dep = plan.get("depends_on") or {}
-        for key in ("photos-23-executable-plan.json", "photos-24-execution-summary.json"):
+        for key in ("photos-24-executable-plan.json", "photos-25-execution-summary.json"):
             d = dep.get(key)
             if not (d and verify_json_dependency(d, ws)):
                 stale.append(f"{key} changed or missing")
@@ -730,17 +730,17 @@ class MergeWorkflow:
                 "blocked": [r for r in results if r["final_kind"] == "blocked"]}
 
     def _build_merge_log(self, ws, results):
-        """photos-35-merge-log.json (§9.2): photos-25-complete-log.json copied FORWARD with a per-file
+        """photos-35-merge-log.json (§9.2): photos-26-complete-log.json copied FORWARD with a per-file
         `merge` step appended to each merged photo's journey (final library path + renamed flag). Built
-        fresh from photos-25 every run (never from a prior photos-35), so it is deterministic and
-        idempotent under resume; photos-25 itself is never edited (§13.0a)."""
+        fresh from photos-26 every run (never from a prior photos-35), so it is deterministic and
+        idempotent under resume; photos-26 itself is never edited (§13.0a)."""
         base = {}
         if os.path.exists(complete_log_path(ws)):
             try:
                 base = json.load(open(complete_log_path(ws)))
             except Exception:
                 base = {}
-        photos = json.loads(json.dumps(base.get("photos") or {}))      # deep copy; never touch photos-25
+        photos = json.loads(json.dumps(base.get("photos") or {}))      # deep copy; never touch photos-26
         for r in sorted(results, key=lambda x: x["by_dest_source"]):
             if r["final_kind"] == "blocked" or not r.get("content_fingerprint"):
                 continue
@@ -758,7 +758,7 @@ class MergeWorkflow:
         """Full-success terminal bookkeeping (§9.4 / §10.3 steps 7-10), in order, SEAL LAST. Each step
         is rebuilt from pristine inputs (never from a prior merge artifact), so a crash before the seal
         re-runs cleanly. Runs only when status == success (no blockers, by-dest empty of photos)."""
-        # 1. Merge log (copy photos-25 forward + per-file merge step).
+        # 1. Merge log (copy photos-26 forward + per-file merge step).
         write_json_artifact(merge_log_path(ws), self._build_merge_log(ws, results))
         # 2. End-of-merge DB snapshot of the live workspace DB (captures the library-fingerprint cache).
         cache = WorkspaceCache(ws)
@@ -766,7 +766,7 @@ class MergeWorkflow:
             write_db_snapshot(cache.conn, merge_db_snapshot_path(ws))
         finally:
             cache.close()
-        # 3. Re-seal: merge's own photos-35-archive-manifest.json (supersedes the photos-25 manifest).
+        # 3. Re-seal: merge's own photos-35-archive-manifest.json (supersedes the photos-26 manifest).
         manifest_sha = reseal_archival_package(
             ws, workspace_name=os.path.basename(os.path.abspath(ws)), plan_id=plan.get("plan_id"),
             execution_id=execution_id, merge_run_id=execution_id, generated_at=now_iso)

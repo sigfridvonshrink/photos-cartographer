@@ -91,11 +91,11 @@ Control / non-media paths (never treated as managed media). All pipeline control
   photos-11-handoff.json                 prep-phase artifact: handoff manifest
   photos-15-prep-log.json                prep-phase artifact: end-of-prep audit log
   photos-21-time-decisions.json          calibration-phase artifact
-  photos-22-gps-decisions.json           calibration-phase artifact
-  photos-23-executable-plan.json         calibration-phase artifact
-  photos-24-execution-summary.json       calibration-phase artifact
-  photos-25-complete-log.json            calibration-phase artifact: transformation log (at finalize)
-  photos-25-calibrate-ingest.db          calibration-phase artifact: DB backup snapshot, end of calibration
+  photos-23-gps-decisions.json           calibration-phase artifact
+  photos-24-executable-plan.json         calibration-phase artifact
+  photos-25-execution-summary.json       calibration-phase artifact
+  photos-26-complete-log.json            calibration-phase artifact: transformation log (at finalize)
+  photos-26-calibrate-ingest.db          calibration-phase artifact: DB backup snapshot, end of calibration
   photos-31-merge-summary.json           merge-phase artifact: library-merge summary
   photos-35-merge-log.json               merge-phase artifact: full transformation log (prep+calibrate+merge)
   photos-35-merge-ingest.db              merge-phase artifact: DB backup snapshot, end of merge
@@ -491,7 +491,7 @@ Execution must not patch or recompute a stale plan, and SQLite writes must never
 
 Prep execution must be safe to re-run after a crash or partial application. Prep upholds the shared idempotency principle (shared contract `photos-shared-contract.md` Section 11): a crashed or interrupted run leaves the workspace in a state the next run can finish without redoing completed work and without double-applying anything.
 
-**Prep re-plans; it does not resume the old plan.** This is a deliberate difference from calibration, which resumes the *same* `photos-23-executable-plan.json` because that plan embeds irreplaceable human decisions (calibration Section 29.1). Prep embeds no human decisions — it derives organization purely from filesystem and cache state — so after a crash the next invocation discards the interrupted plan and **plans afresh from the current workspace state**. Because every prep operation is idempotent by target state (a file already moved, already case-normalized, already separated, or already quarantined is detected as already-correct and produces a `no_op`/`already_correct`, per Section 13), re-planning naturally proposes only the operations still outstanding and completes the remaining work without repeating finished work. A stale interrupted plan is never patched or resumed; it is simply superseded (consistent with Section 14.3's rejection of stale plans).
+**Prep re-plans; it does not resume the old plan.** This is a deliberate difference from calibration, which resumes the *same* `photos-24-executable-plan.json` because that plan embeds irreplaceable human decisions (calibration Section 29.1). Prep embeds no human decisions — it derives organization purely from filesystem and cache state — so after a crash the next invocation discards the interrupted plan and **plans afresh from the current workspace state**. Because every prep operation is idempotent by target state (a file already moved, already case-normalized, already separated, or already quarantined is detected as already-correct and produces a `no_op`/`already_correct`, per Section 13), re-planning naturally proposes only the operations still outstanding and completes the remaining work without repeating finished work. A stale interrupted plan is never patched or resumed; it is simply superseded (consistent with Section 14.3's rejection of stale plans).
 
 **The filesystem is the source of truth; the cache is reconciled to it.** The one genuinely hazardous interval is a crash *between* a filesystem mutation and its corresponding cache write, leaving SQLite and the filesystem disagreeing (e.g. a move applied on disk whose `db_upsert` never committed, or a `db_remove` that committed before the file was actually moved). On the next run, inventory treats the filesystem as authoritative:
 
@@ -580,7 +580,7 @@ It must:
 5. be written **only after a successful run** (the same gate as the handoff, Section 14.3 step 8), be **deterministic** for a given workspace state, and live in `.photos-ingest/` (skipped wholesale, never inventoried as media);
 6. be **maintained incrementally across prep runs** like the handoff: re-prep that only recognizes a by-date→by-dest move (Sections 10.1, 10.2) updates the affected entries' locations from carried-forward identity without re-deriving unmoved files; a no-op prep run leaves it unchanged.
 
-`photos-15-prep-log.json` is **carried forward, not discarded**: calibration's finalize consumes it (with the prep journals) as the prep portion of each photo's journey when it produces `photos-25-complete-log.json` (shared contract Section 13.3 item 6), appending calibration's steps rather than re-deriving prep's. Where both files exist, `photos-25-complete-log.json` is the authoritative full record and `photos-15-prep-log.json` remains as prep's standalone phase record. Prep fails (or warns and writes a clearly-partial log) if retained history is insufficient to reconstruct the prep journey (shared contract Section 13.3a) — it must not emit a log that looks complete but reflects only the last run.
+`photos-15-prep-log.json` is **carried forward, not discarded**: calibration's finalize consumes it (with the prep journals) as the prep portion of each photo's journey when it produces `photos-26-complete-log.json` (shared contract Section 13.3 item 6), appending calibration's steps rather than re-deriving prep's. Where both files exist, `photos-26-complete-log.json` is the authoritative full record and `photos-15-prep-log.json` remains as prep's standalone phase record. Prep fails (or warns and writes a clearly-partial log) if retained history is insufficient to reconstruct the prep journey (shared contract Section 13.3a) — it must not emit a log that looks complete but reflects only the last run.
 
 ### 16.2 Handoff determinism
 

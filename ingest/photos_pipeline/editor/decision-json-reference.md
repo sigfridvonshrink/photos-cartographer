@@ -23,11 +23,11 @@ All live in the workspace control directory `.photos-ingest/`:
 | File | `artifact_type` | What the human decides |
 |------|-----------------|------------------------|
 | `photos-21-time-decisions.json` | `time_decisions` | Per-destination **civil timezone**, and per-(camera-group, destination) **clock offset** for fixed-clock cameras. |
-| `photos-21a-gps-drift-validation.json` | `gps_drift_validation` | Per at-risk bucket, **confirm or correct** a manual/timezone-derived clock offset against the GPX track before it is used to place photos (§5a below). |
-| `photos-22-gps-decisions.json`  | `gps_decisions`  | Per-destination **GPS fallback** coordinate, and per-file **GPS** decisions for files an automatic source could not place. |
+| `photos-22-gps-drift-validation.json` | `gps_drift_validation` | Per at-risk bucket, **confirm or correct** a manual/timezone-derived clock offset against the GPX track before it is used to place photos (§5a below). |
+| `photos-23-gps-decisions.json`  | `gps_decisions`  | Per-destination **GPS fallback** coordinate, and per-file **GPS** decisions for files an automatic source could not place. |
 
 The editor opens one of these, presents the open decisions, lets the human resolve them, and writes the
-file back. (`photos-21a` is produced by the pipeline today and resolvable by hand-editing its
+file back. (`photos-22` is produced by the pipeline today and resolvable by hand-editing its
 `user_decision` fields; a dedicated scrub-on-track editor view is planned — see §5a.)
 
 ---
@@ -223,12 +223,12 @@ destinations or buckets.
 
 ---
 
-## 5. `photos-22-gps-decisions.json` (GPS)
+## 5. `photos-23-gps-decisions.json` (GPS)
 
 ### 5.1 Top level
 
 Same wrapper as §4.1 with `artifact_type: "gps_decisions"` / `artifact_name:
-"photos-22-gps-decisions.json"`. `destinations` is keyed by destination path; each destination is §5.2.
+"photos-23-gps-decisions.json"`. `destinations` is keyed by destination path; each destination is §5.2.
 
 ### 5.2 A destination
 
@@ -250,7 +250,7 @@ Same wrapper as §4.1 with `artifact_type: "gps_decisions"` / `artifact_name:
 **Editable surface in this file = `folder_fallback` (per destination) + `review_items` (per file).**
 Automatically-placed files (preserve-native, GPX interpolation/extrapolation, fallback) are **only
 counted** in `summary`, never listed per file — they are not editable here (they're automatic; the
-exact per-file writes live in `photos-23-executable-plan.json`, which the editor does not touch).
+exact per-file writes live in `photos-24-executable-plan.json`, which the editor does not touch).
 
 ### 5.3 `folder_fallback` cell
 
@@ -300,18 +300,18 @@ One entry per file that needs the human (or that the human already locked/accept
 
 ---
 
-## 5a. `photos-21a-gps-drift-validation.json` (GPS-drift validation)
+## 5a. `photos-22-gps-drift-validation.json` (GPS-drift validation)
 
-A gate the pipeline writes **between** photos-21 and photos-22 (calibration workflow §22a). It flags
+A gate the pipeline writes **between** photos-21 and photos-23 (calibration workflow §22a). It flags
 every `(camera group, destination[, date])` offset bucket whose clock offset is **manual or
 timezone-derived** and that has **no native-GPS anchor** but **does** have GPX coverage — exactly the
 case where a wrong offset would silently mis-place the whole bucket along the track. Each flagged
-bucket must be **explicitly confirmed** (or corrected) before photos-22 is generated.
+bucket must be **explicitly confirmed** (or corrected) before photos-23 is generated.
 
 ### 5a.1 Top level
 
 Same decision wrapper as §4.1 with `artifact_type: "gps_drift_validation"` / `artifact_name:
-"photos-21a-gps-drift-validation.json"`. `destinations` maps a destination path to
+"photos-22-gps-drift-validation.json"`. `destinations` maps a destination path to
 `{ "destination_path", "drift_decisions": { <bucket_key>: cell } }`. The `<bucket_key>` matches the
 photos-21 offset cell it refines — bare `<camera_group_key>` or `<camera_group_key>@<YYYY-MM-DD>`.
 

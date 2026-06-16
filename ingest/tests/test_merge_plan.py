@@ -120,10 +120,10 @@ def _build_ws(tmp_path, photos, library_files=()):
               "depends_on": {"handoff": {"dependency_type": "handoff_content",
                                          "artifact_name": "photos-11-handoff.json",
                                          "content_fingerprint": utils.handoff_content_fingerprint(handoff)}}}
-    (ctl / "photos-23-executable-plan.json").write_text(json.dumps(plan23))
-    (ctl / "photos-24-execution-summary.json").write_text(json.dumps({"status": "success"}))
-    (ctl / "photos-25-complete-log.json").write_text(json.dumps({"photos": {}}))
-    (ctl / "photos-25-archive-manifest.json").write_text(json.dumps({"artifact_name": "m"}))
+    (ctl / "photos-24-executable-plan.json").write_text(json.dumps(plan23))
+    (ctl / "photos-25-execution-summary.json").write_text(json.dumps({"status": "success"}))
+    (ctl / "photos-26-complete-log.json").write_text(json.dumps({"photos": {}}))
+    (ctl / "photos-26-archive-manifest.json").write_text(json.dumps({"artifact_name": "m"}))
     return ws, lib, fp_by_path
 
 
@@ -250,6 +250,6 @@ def test_dry_run_rejects_stale_plan(tmp_path, monkeypatch):
     assert merge._run_locked_workflow("plan", str(ws)) == 0
     # Change a recorded dependency (photos-24) after planning, keeping status=success so preflight
     # still passes -> the saved plan's recorded photos-24 sha no longer matches: stale.
-    p24 = os.path.join(str(ws), ".photos-ingest", "photos-24-execution-summary.json")
+    p24 = os.path.join(str(ws), ".photos-ingest", "photos-25-execution-summary.json")
     open(p24, "w").write(json.dumps({"status": "success", "touched": True}))
     assert merge._run_locked_workflow("dry-run", str(ws)) == 2
