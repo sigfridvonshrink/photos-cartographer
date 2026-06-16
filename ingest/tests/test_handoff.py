@@ -102,7 +102,7 @@ def test_conflict_attributed_to_by_dest_folder(tmp_path, monkeypatch):
     assert trip["conflicts_or_duplicates"][0]["original_path"] == "0-sources/dup.jpg"
 
 
-def test_grouping_facts_identity_and_device_class(tmp_path, monkeypatch):
+def test_grouping_facts_identity_and_device_class(tmp_path, monkeypatch, seed_from_live_config):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
     (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
