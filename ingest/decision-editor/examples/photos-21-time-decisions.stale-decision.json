@@ -13,6 +13,25 @@
     }
   },
   "destinations": {
+    "6-photos-by-dest": {
+      "camera_group_time_decisions": {},
+      "camera_groups_present": [],
+      "destination_path": "6-photos-by-dest",
+      "destination_timezone": {
+        "decision_mode": "auto_resolved",
+        "effective_iana_timezone": "Europe/Brussels",
+        "proposal_confidence": "high",
+        "proposal_source": "config_default",
+        "proposed_iana_timezone": "Europe/Brussels",
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "accept_proposed_timezone": false,
+          "manual_iana_timezone": ""
+        }
+      },
+      "file_less": true
+    },
     "6-photos-by-dest/Stale": {
       "camera_group_time_decisions": {
         "NIKON|D750|B": {
@@ -37,8 +56,9 @@
       "destination_path": "6-photos-by-dest/Stale",
       "destination_timezone": {
         "effective_iana_timezone": "",
-        "proposal_confidence": "high",
-        "proposal_source": "config_default",
+        "inherited_from": "6-photos-by-dest",
+        "proposal_confidence": "review_required",
+        "proposal_source": "inherited",
         "proposed_iana_timezone": "Europe/Brussels",
         "requires_user_input": true,
         "stale_user_decision": false,

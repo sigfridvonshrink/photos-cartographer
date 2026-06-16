@@ -14,6 +14,25 @@
     }
   },
   "destinations": {
+    "6-photos-by-dest": {
+      "camera_group_time_decisions": {},
+      "camera_groups_present": [],
+      "destination_path": "6-photos-by-dest",
+      "destination_timezone": {
+        "decision_mode": "auto_resolved",
+        "effective_iana_timezone": "Europe/Brussels",
+        "proposal_confidence": "high",
+        "proposal_source": "config_default",
+        "proposed_iana_timezone": "Europe/Brussels",
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "accept_proposed_timezone": false,
+          "manual_iana_timezone": ""
+        }
+      },
+      "file_less": true
+    },
     "6-photos-by-dest/Conflict": {
       "camera_group_time_decisions": {
         "CAM|conflict|C": {
@@ -61,6 +80,30 @@
             ],
             "confidence": "review_required",
             "conflicting_count": 1,
+            "groups": [
+              {
+                "count": 1,
+                "offset_seconds": -18000,
+                "representative": {
+                  "camera_source_naive_time": "2024:07:03 14:00:00",
+                  "distance_m": 0.0,
+                  "match_type": "gpx_point_match",
+                  "real_utc": "2024-07-03T09:00:00Z",
+                  "source_file": "6-photos-by-dest/Conflict/c2.arw"
+                }
+              },
+              {
+                "count": 1,
+                "offset_seconds": -7200,
+                "representative": {
+                  "camera_source_naive_time": "2024:07:03 14:00:00",
+                  "distance_m": 0.0,
+                  "match_type": "gpx_point_match",
+                  "real_utc": "2024-07-03T12:00:00Z",
+                  "source_file": "6-photos-by-dest/Conflict/c1.arw"
+                }
+              }
+            ],
             "proposal_source": "gpx_self_anchor",
             "proposed_offset_seconds": -7200,
             "proposed_real_utc": "2024-07-03T12:00:00Z",
@@ -70,6 +113,11 @@
               "gpx_file": "trip-2024-07-03.gpx",
               "match_type": "gpx_point_match",
               "segment_duration_seconds": null
+            },
+            "skipped": {
+              "examples": [],
+              "no_nearby_track": 0,
+              "outside_time_window": 0
             },
             "supporting_count": 0
           },
@@ -88,8 +136,9 @@
       "destination_path": "6-photos-by-dest/Conflict",
       "destination_timezone": {
         "effective_iana_timezone": "Europe/Brussels",
-        "proposal_confidence": "high",
-        "proposal_source": "config_default",
+        "inherited_from": "6-photos-by-dest",
+        "proposal_confidence": "review_required",
+        "proposal_source": "inherited",
         "proposed_iana_timezone": "Europe/Brussels",
         "requires_user_input": false,
         "stale_user_decision": false,
@@ -130,6 +179,19 @@
             ],
             "confidence": "high",
             "conflicting_count": 0,
+            "groups": [
+              {
+                "count": 1,
+                "offset_seconds": -7200,
+                "representative": {
+                  "camera_source_naive_time": "2024:07:03 14:00:00",
+                  "distance_m": 0.0,
+                  "match_type": "gpx_point_match",
+                  "real_utc": "2024-07-03T12:00:00Z",
+                  "source_file": "6-photos-by-dest/ManualUtc/u.arw"
+                }
+              }
+            ],
             "proposal_source": "gpx_self_anchor",
             "proposed_offset_seconds": -7200,
             "proposed_real_utc": "2024-07-03T12:00:00Z",
@@ -139,6 +201,11 @@
               "gpx_file": "trip-2024-07-03.gpx",
               "match_type": "gpx_point_match",
               "segment_duration_seconds": null
+            },
+            "skipped": {
+              "examples": [],
+              "no_nearby_track": 0,
+              "outside_time_window": 0
             },
             "supporting_count": 0
           },
@@ -157,8 +224,9 @@
       "destination_path": "6-photos-by-dest/ManualUtc",
       "destination_timezone": {
         "effective_iana_timezone": "Europe/Brussels",
-        "proposal_confidence": "high",
-        "proposal_source": "config_default",
+        "inherited_from": "6-photos-by-dest",
+        "proposal_confidence": "review_required",
+        "proposal_source": "inherited",
         "proposed_iana_timezone": "Europe/Brussels",
         "requires_user_input": false,
         "stale_user_decision": false,
@@ -183,14 +251,14 @@
               {
                 "camera_source_naive_time": "2024:07:03 14:00:15",
                 "gpx_match": {
-                  "distance_m": 11.12,
+                  "distance_m": 33.36,
                   "gpx_file": "trip-2024-07-03.gpx",
                   "match_type": "gpx_segment_interpolation",
                   "segment_duration_seconds": 30
                 },
                 "native_gps": {
-                  "lat": 53.0001,
-                  "lon": 7.0005
+                  "lat": 53.0003,
+                  "lon": 7.0015
                 },
                 "proposal_id": "anchor-001",
                 "proposed_offset_seconds": -7200,
@@ -199,15 +267,33 @@
             ],
             "confidence": "medium",
             "conflicting_count": 0,
+            "groups": [
+              {
+                "count": 1,
+                "offset_seconds": -7200,
+                "representative": {
+                  "camera_source_naive_time": "2024:07:03 14:00:15",
+                  "distance_m": 33.36,
+                  "match_type": "gpx_segment_interpolation",
+                  "real_utc": "2024-07-03T12:00:15Z",
+                  "source_file": "6-photos-by-dest/Segment/g.arw"
+                }
+              }
+            ],
             "proposal_source": "gpx_self_anchor",
             "proposed_offset_seconds": -7200,
             "proposed_real_utc": "2024-07-03T12:00:15Z",
             "rank": "recommended",
             "recommended_gpx_match": {
-              "distance_m": 11.12,
+              "distance_m": 33.36,
               "gpx_file": "trip-2024-07-03.gpx",
               "match_type": "gpx_segment_interpolation",
               "segment_duration_seconds": 30
+            },
+            "skipped": {
+              "examples": [],
+              "no_nearby_track": 0,
+              "outside_time_window": 0
             },
             "supporting_count": 0
           },
@@ -226,8 +312,9 @@
       "destination_path": "6-photos-by-dest/Segment",
       "destination_timezone": {
         "effective_iana_timezone": "Europe/Brussels",
-        "proposal_confidence": "high",
-        "proposal_source": "config_default",
+        "inherited_from": "6-photos-by-dest",
+        "proposal_confidence": "review_required",
+        "proposal_source": "inherited",
         "proposed_iana_timezone": "Europe/Brussels",
         "requires_user_input": false,
         "stale_user_decision": false,
@@ -268,6 +355,19 @@
             ],
             "confidence": "high",
             "conflicting_count": 0,
+            "groups": [
+              {
+                "count": 1,
+                "offset_seconds": -7200,
+                "representative": {
+                  "camera_source_naive_time": "2024:07:03 14:00:00",
+                  "distance_m": 0.0,
+                  "match_type": "gpx_point_match",
+                  "real_utc": "2024-07-03T12:00:00Z",
+                  "source_file": "6-photos-by-dest/SinglePoint/p.arw"
+                }
+              }
+            ],
             "proposal_source": "gpx_self_anchor",
             "proposed_offset_seconds": -7200,
             "proposed_real_utc": "2024-07-03T12:00:00Z",
@@ -277,6 +377,11 @@
               "gpx_file": "trip-2024-07-03.gpx",
               "match_type": "gpx_point_match",
               "segment_duration_seconds": null
+            },
+            "skipped": {
+              "examples": [],
+              "no_nearby_track": 0,
+              "outside_time_window": 0
             },
             "supporting_count": 0
           },
@@ -295,8 +400,9 @@
       "destination_path": "6-photos-by-dest/SinglePoint",
       "destination_timezone": {
         "effective_iana_timezone": "Europe/Brussels",
-        "proposal_confidence": "high",
-        "proposal_source": "config_default",
+        "inherited_from": "6-photos-by-dest",
+        "proposal_confidence": "review_required",
+        "proposal_source": "inherited",
         "proposed_iana_timezone": "Europe/Brussels",
         "requires_user_input": false,
         "stale_user_decision": false,

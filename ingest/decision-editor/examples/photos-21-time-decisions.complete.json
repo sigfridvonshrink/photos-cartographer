@@ -24,7 +24,12 @@
             "source": "manual"
           },
           "proposal": {
-            "proposal_source": "manual_required"
+            "confidence": "review_required",
+            "proposal_source": "timezone_naive",
+            "proposed_from_timezone": "Europe/Brussels",
+            "proposed_offset_seconds": -7200,
+            "proposed_real_utc": "2024-07-03T11:00:00Z",
+            "rank": "timezone_derived"
           },
           "requires_user_input": false,
           "stale_user_decision": false,
@@ -141,6 +146,99 @@
         }
       }
     },
+    "6-photos-by-dest/Belgium/Brussels": {
+      "camera_group_time_decisions": {
+        "SONY|ILCE-6400|A@2024-07-03": {
+          "camera_group": "SONY|ILCE-6400|A",
+          "camera_group_class": "camera",
+          "date": "2024-07-03",
+          "effective_time_anchor": {
+            "offset_seconds": -7200,
+            "source": "timezone_accepted"
+          },
+          "proposal": {
+            "confidence": "review_required",
+            "proposal_source": "timezone_naive",
+            "proposed_from_timezone": "Europe/Brussels",
+            "proposed_offset_seconds": -7200,
+            "proposed_real_utc": "2024-07-03T12:00:00Z",
+            "rank": "timezone_derived"
+          },
+          "requires_user_input": false,
+          "stale_user_decision": false,
+          "user_decision": {
+            "accept_proposal": true,
+            "manual_offset_seconds": "",
+            "manual_real_utc": ""
+          }
+        },
+        "SONY|ILCE-6400|A@2024-07-04": {
+          "camera_group": "SONY|ILCE-6400|A",
+          "camera_group_class": "camera",
+          "date": "2024-07-04",
+          "effective_time_anchor": {
+            "offset_seconds": -7200,
+            "source": "timezone_accepted"
+          },
+          "proposal": {
+            "confidence": "review_required",
+            "proposal_source": "timezone_naive",
+            "proposed_from_timezone": "Europe/Brussels",
+            "proposed_offset_seconds": -7200,
+            "proposed_real_utc": "2024-07-04T12:00:00Z",
+            "rank": "timezone_derived"
+          },
+          "requires_user_input": false,
+          "stale_user_decision": false,
+          "user_decision": {
+            "accept_proposal": true,
+            "manual_offset_seconds": "",
+            "manual_real_utc": ""
+          }
+        },
+        "SONY|ILCE-6400|A@2024-12-22": {
+          "camera_group": "SONY|ILCE-6400|A",
+          "camera_group_class": "camera",
+          "date": "2024-12-22",
+          "effective_time_anchor": {
+            "offset_seconds": -3600,
+            "source": "timezone_accepted"
+          },
+          "proposal": {
+            "confidence": "review_required",
+            "proposal_source": "timezone_naive",
+            "proposed_from_timezone": "Europe/Brussels",
+            "proposed_offset_seconds": -3600,
+            "proposed_real_utc": "2024-12-22T13:00:00Z",
+            "rank": "timezone_derived"
+          },
+          "requires_user_input": false,
+          "stale_user_decision": false,
+          "user_decision": {
+            "accept_proposal": true,
+            "manual_offset_seconds": "",
+            "manual_real_utc": ""
+          }
+        }
+      },
+      "camera_groups_present": [
+        "SONY|ILCE-6400|A"
+      ],
+      "destination_path": "6-photos-by-dest/Belgium/Brussels",
+      "destination_timezone": {
+        "effective_iana_timezone": "Europe/Brussels",
+        "inherited_from": "6-photos-by-dest/Belgium",
+        "proposal_confidence": "review_required",
+        "proposal_source": "inherited",
+        "proposed_iana_timezone": "Europe/Brussels",
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "accept_proposed_timezone": true,
+          "manual_iana_timezone": ""
+        }
+      }
+    },
     "6-photos-by-dest/Japan": {
       "camera_group_time_decisions": {
         "SONY|ILCE-6400|A": {
@@ -189,6 +287,19 @@
             ],
             "confidence": "high",
             "conflicting_count": 0,
+            "groups": [
+              {
+                "count": 2,
+                "offset_seconds": -7200,
+                "representative": {
+                  "camera_source_naive_time": "2024:07:03 14:00:00",
+                  "distance_m": 0.0,
+                  "match_type": "gpx_point_match",
+                  "real_utc": "2024-07-03T12:00:00Z",
+                  "source_file": "6-photos-by-dest/Japan/anchor-1.arw"
+                }
+              }
+            ],
             "proposal_source": "gpx_self_anchor",
             "proposed_offset_seconds": -7200,
             "proposed_real_utc": "2024-07-03T12:00:00Z",
@@ -198,6 +309,11 @@
               "gpx_file": "trip-2024-07-03.gpx",
               "match_type": "gpx_point_match",
               "segment_duration_seconds": null
+            },
+            "skipped": {
+              "examples": [],
+              "no_nearby_track": 0,
+              "outside_time_window": 0
             },
             "supporting_count": 1
           },
