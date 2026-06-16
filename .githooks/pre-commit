@@ -1,0 +1,9 @@
+#!/bin/sh
+# Keep the local photos-ingest executable current on every commit. ingest/dist/ is gitignored, so this
+# only refreshes the LOCAL build — nothing is staged or pushed (official builds come from the release
+# workflow on a tag). Blocks the commit only if the build genuinely breaks; bypass with --no-verify.
+if ! python3 tools/build-pyz >/dev/null 2>&1; then
+    echo "pre-commit: tools/build-pyz failed — fix the build, or commit with --no-verify." >&2
+    exit 1
+fi
+exit 0
