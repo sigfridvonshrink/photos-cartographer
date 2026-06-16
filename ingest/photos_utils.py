@@ -210,7 +210,7 @@ def guard_path(ws: str) -> str:
 def sealed_marker_path(ws: str) -> str:
     """The terminal/seal marker a successful merge writes (prep Section 6.2 / shared 13.7).
     Its presence seals the workspace: every phase hard-stops and mutates nothing. Prep only
-    READS it (the merge phase — not yet built — writes it)."""
+    READS it; the merge phase (photos-3-merge) writes it on a successful merge."""
     return os.path.join(ws, CONTROL_DIR, "photos-00-sealed.json")
 
 def is_sealed(ws: str) -> bool:
