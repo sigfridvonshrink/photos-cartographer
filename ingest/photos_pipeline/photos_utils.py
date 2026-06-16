@@ -1747,7 +1747,7 @@ class WorkspaceCache:
     SQLite accelerator cache for inventory, metadata, and hashes.
     """
     def __init__(self, workspace_root: str, db_name: str = None, in_memory: bool = False, read_only: bool = False):
-        from photos_utils import db_path as _db_path
+        from .photos_utils import db_path as _db_path
         self.in_memory = in_memory
         self.read_only = read_only
         self.db_path = os.path.join(workspace_root, db_name) if db_name else _db_path(workspace_root)
@@ -1764,7 +1764,7 @@ class WorkspaceCache:
                 else:
                     self.conn = sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True, check_same_thread=False)
             else:
-                from photos_utils import ensure_control_dir
+                from .photos_utils import ensure_control_dir
                 ensure_control_dir(workspace_root)
                 self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
                 self._init_db()
@@ -2110,6 +2110,6 @@ class WorkspaceLock(_FlockLock):
     photos-00-workspace.lock. Inherits the non-blocking flock + owner-identity discipline from
     _FlockLock; only the keyed path (and ensuring the control dir exists) differs."""
     def __init__(self, workspace_root: str):
-        from photos_utils import lock_path, ensure_control_dir
+        from .photos_utils import lock_path, ensure_control_dir
         ensure_control_dir(workspace_root)
         super().__init__(lock_path(workspace_root))

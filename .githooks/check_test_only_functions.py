@@ -14,8 +14,8 @@ import os
 import re
 import sys
 
-SRC_FILES = ["ingest/photos-1-prep", "ingest/photos-2-time-gps", "ingest/photos-3-merge",
-             "ingest/photos_utils.py"]
+SRC_FILES = ["ingest/photos_pipeline/photos_1_prep.py", "ingest/photos_pipeline/photos_2_time_gps.py",
+             "ingest/photos_pipeline/photos_3_merge.py", "ingest/photos_pipeline/photos_utils.py"]
 TESTS_DIR = "ingest/tests"
 
 # Names that are legitimately definition-only / entry points, not "test-only production code".

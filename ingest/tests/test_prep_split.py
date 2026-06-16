@@ -8,15 +8,15 @@ from unittest import mock
 import photos_1_prep
 
 def test_photos_1_prep_exists():
-    assert os.path.exists('ingest/photos-1-prep')
+    assert os.path.exists('ingest/photos_pipeline/photos_1_prep.py')
 
 def test_photos_utils_exists():
-    assert os.path.exists('ingest/photos_utils.py')
+    assert os.path.exists('ingest/photos_pipeline/photos_utils.py')
 
 def test_no_calibrate_command():
     parser = mock.MagicMock()
     # we just want to ensure that 'calibrate' is not mentioned in the argparse setup or the file content as an active command path
-    with open('ingest/photos-1-prep', 'r') as f:
+    with open('ingest/photos_pipeline/photos_1_prep.py', 'r') as f:
         content = f.read()
         # Verify that subcommands don't include calibrate
         assert 'add_parser("calibrate"' not in content
@@ -24,13 +24,13 @@ def test_no_calibrate_command():
         assert 'add_parser("merge"' not in content
 
 def test_no_calibration_json_generation():
-    with open('ingest/photos-1-prep', 'r') as f:
+    with open('ingest/photos_pipeline/photos_1_prep.py', 'r') as f:
         content = f.read()
         assert 'class CalibrationGenerator' not in content
         assert 'class CalibrationWorkflow' not in content
 
 def test_prep_plans_contain_no_time_metadata():
-    with open('ingest/photos-1-prep', 'r') as f:
+    with open('ingest/photos_pipeline/photos_1_prep.py', 'r') as f:
         content = f.read()
         assert 'apply_time_sync' not in content
         assert 'apply_gpx_placement' not in content

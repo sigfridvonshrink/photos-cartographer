@@ -1,18 +1,15 @@
 # Coverage config for the active pipeline. The metadata/hash pools and the calibration executor run
 # in worker threads, so concurrency=thread is required to trace them. The report targets the
-# production scripts of every phase — the extensionless executables (loaded via SourceFileLoader, so
-# scoped by explicit file include, not a .py glob) plus photos_utils, the decision-editor server, and
-# the developer. Run via `tools/coverage`, or as CI does: `coverage run -m pytest && coverage report`.
+# production code of every phase — the `photos_pipeline` package (prep / time-gps / merge / utils),
+# the decision-editor server, and the developer. Run via `tools/coverage`, or as CI does:
+# `coverage run -m pytest && coverage report`.
 [run]
 branch = true
 concurrency = thread
 
 [report]
 include =
-    */ingest/photos-1-prep
-    */ingest/photos-2-time-gps
-    */ingest/photos-3-merge
-    */ingest/photos_utils.py
+    */photos_pipeline/*.py
     */ingest/decision-editor/decision-editor.unbundled
     */develop/photos-developer
 show_missing = true
