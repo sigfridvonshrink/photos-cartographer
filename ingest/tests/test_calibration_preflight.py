@@ -100,12 +100,12 @@ def test_directory_symlink_at_root_blocks(tmp_path):
 
 def test_missing_config_blocks(tmp_path):
     blockers, _, _ = _pf(_ws(tmp_path, config=False))
-    assert any("config" in b and "run photos-1-prep" in b for b in blockers), blockers
+    assert any("config" in b and "photos-ingest prep" in b for b in blockers), blockers
 
 
 def test_missing_handoff_blocks(tmp_path):
     blockers, _, _ = _pf(_ws(tmp_path, handoff=False))
-    assert any("handoff" in b and "run photos-1-prep" in b for b in blockers), blockers
+    assert any("handoff" in b and "photos-ingest prep" in b for b in blockers), blockers
 
 
 # --- by-dest scope gates -----------------------------------------------------
@@ -170,7 +170,7 @@ def test_unrecorded_by_dest_photo_demands_reprep(tmp_path):
     ws = _ws(tmp_path)                                        # a.jpg recorded
     (ws / "6-photos-by-dest" / "Trip" / "b.jpg").write_bytes(b"img")   # NOT in the handoff
     blockers, _, _ = _pf(ws)
-    assert any("has not yet recorded" in b and "Re-run photos-1-prep" in b for b in blockers), blockers
+    assert any("has not yet recorded" in b and "photos-ingest prep" in b for b in blockers), blockers
 
 
 def test_missing_by_date_photo_demands_reprep(tmp_path):

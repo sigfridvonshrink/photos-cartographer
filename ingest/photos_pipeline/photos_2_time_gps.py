@@ -996,7 +996,7 @@ class CalibrationWorkflow:
             return blockers, warnings, info
         if not os.path.exists(guard_path(ws)):
             blockers.append("Not an initialized workspace (no photos-00-workspace-guard) — "
-                            "run photos-1-prep first.")
+                            "run `photos-ingest prep` first.")
             return blockers, warnings, info
         # A symlink at the workspace root is barred outright (§13) and never followed — including a
         # dangling link (neither file nor dir) or one named like a managed folder (which os.path.isdir
@@ -1013,7 +1013,7 @@ class CalibrationWorkflow:
         if struct_missing:
             blockers.append("Workspace is non-conforming: missing managed folder(s): "
                             f"{', '.join(struct_missing)}. Restore the 0-6 structure (or move the "
-                            "media into a fresh workspace and re-run photos-1-prep) before calibrating.")
+                            "media into a fresh workspace and re-run `photos-ingest prep`) before calibrating.")
             return blockers, warnings, info
         loose = self._root_files()
         if loose:
@@ -1033,7 +1033,7 @@ class CalibrationWorkflow:
         # 2. Config (read-only) + handoff — both must exist; calibration never seeds/writes config.
         cfg_p = config_path(ws)
         if not os.path.exists(cfg_p):
-            blockers.append("Workspace config photos-00-config.json is missing — run photos-1-prep first.")
+            blockers.append("Workspace config photos-00-config.json is missing — run `photos-ingest prep` first.")
             return blockers, warnings, info
         try:
             with open(cfg_p) as f:
@@ -1049,7 +1049,7 @@ class CalibrationWorkflow:
 
         ho_p = handoff_path(ws)
         if not os.path.exists(ho_p):
-            blockers.append("Prep handoff photos-11-handoff.json is missing — run photos-1-prep first.")
+            blockers.append("Prep handoff photos-11-handoff.json is missing — run `photos-ingest prep` first.")
             return blockers, warnings, info
         try:
             with open(ho_p) as f:
@@ -1082,7 +1082,7 @@ class CalibrationWorkflow:
         # 3. Scope gates.
         if self._entries(sources):
             blockers.append(f"{sources}/ is not empty — prep leaves it empty after every run; an "
-                            "unprocessed dump is waiting. Re-run photos-1-prep.")
+                            "unprocessed dump is waiting. Re-run `photos-ingest prep`.")
 
         stray = [rel for rel, mc in self._scan_media(by_date) if mc in ("image", "raw")]
         if stray:
@@ -1177,7 +1177,7 @@ class CalibrationWorkflow:
             ex = (unrecorded or missing_bydate)[0]
             blockers.append(
                 f"{by_dest} contains photos prep has not yet recorded (the handoff predates your most "
-                f"recent move from {by_date} into {by_dest}; e.g. {ex}). Re-run photos-1-prep — it "
+                f"recent move from {by_date} into {by_dest}; e.g. {ex}). Re-run `photos-ingest prep` — it "
                 "recognizes the moved files (no re-fingerprint, no re-read) and refreshes the "
                 "handoff/cache, then calibration can proceed.")
 
