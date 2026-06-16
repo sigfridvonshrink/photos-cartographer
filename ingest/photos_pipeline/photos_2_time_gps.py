@@ -2293,17 +2293,31 @@ class CalibrationWorkflow:
         }
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="photos-2-time-gps: time/GPS calibration (run / execute / finalize).")
+GEOTAG_BLURB = (
+    "geotag — place every photo in time and on the map (phase 2 of 3).\n\n"
+    "Infers each camera's clock offset from its already-geotagged frames against your GPX tracks, then "
+    "geotags the un-tagged majority by interpolating along the track; you resolve the residual time / "
+    "GPS / drift decisions in `photos-ingest edit` between `plan` runs. `plan` (re-runnable) produces "
+    "the decision + executable-plan artifacts and mutates nothing; `execute` applies them to the "
+    "originals (corrected times + GPS, renames); `finalize` bundles the durable archive. Run inside "
+    "the workspace directory.\n\n"
+    "Loop: plan -> edit -> plan -> ... -> execute -> finalize. Next: `photos-ingest merge`."
+)
+
+
+def add_arguments(parser):
+    """Register geotag's `-j` + subcommands (plan / execute / finalize) on `parser`. Shared by the
+    standalone `python -m photos_pipeline.photos_2_time_gps` and the combined `photos-ingest geotag`."""
     parser.add_argument("-j", "--jobs", type=int, default=None,
                         help="Worker threads for execution (default: config jobs, else 4).")
-    sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("run", help="Plan the calibration pass: produce photos-21/22/23 (no mutation).")
+    sub = parser.add_subparsers(dest="command")
+    sub.add_parser("plan", help="Plan the geotag pass: produce photos-21/21a/22/23 (no mutation).")
     sub.add_parser("execute", help="Apply photos-23 to the originals (metadata writes + renames).")
     sub.add_parser("finalize", help="Bundle the durable archival package (photos-25; non-destructive).")
-    args = parser.parse_args()
+    parser.set_defaults(_run=run, _parser=parser)
 
+
+def run(args):
     workspace_root = os.getcwd()
 
     # Whole-run workspace lock (shared contract §2): one lock across every phase; fail-fast.
@@ -2316,7 +2330,7 @@ def main():
         sys.exit(1)
     print(f"Lock acquired: {run_lock.lock_path}", file=sys.stderr)
     try:
-        if args.command == "run":
+        if args.command == "plan":
             wf = CalibrationWorkflow(workspace_root)
             blockers, warnings, info = wf.preflight()
             for w in warnings:
@@ -2555,6 +2569,17 @@ def main():
         sys.exit(130)
     finally:
         run_lock.release()
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(prog="photos_pipeline.photos_2_time_gps", description=GEOTAG_BLURB,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    add_arguments(parser)
+    args = parser.parse_args(argv)
+    if getattr(args, "command", None) is None:
+        parser.print_help()
+        return 0
+    return run(args)
 
 
 if __name__ == "__main__":
