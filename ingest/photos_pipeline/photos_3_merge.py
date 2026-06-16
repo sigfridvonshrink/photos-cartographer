@@ -1103,12 +1103,23 @@ def _run_locked_workflow(command, ws, jobs=None):
         run_lock.release()
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="photos-3-merge: move a calibrated, finalized by-dest tree into the permanent library.")
+MERGE_BLURB = (
+    "merge — move the calibrated library into permanent storage (phase 3 of 3, terminal).\n\n"
+    "Takes the finalized 6-photos-by-dest tree and moves it into your permanent library "
+    "(merge.library_root), never renaming or overwriting a file already there; on success it re-seals "
+    "the archive and seals the workspace. `init-library` blesses a directory as the library (one-time); "
+    "`plan` maps by-dest photos to library targets (no mutation); `dry-run` displays the placements / "
+    "collisions; `execute` applies the move. Run inside the workspace directory.\n\n"
+    "Requires geotag to have finalized first. This is the last step for a workspace."
+)
+
+
+def add_arguments(parser):
+    """Register merge's `-j` + subcommands (init-library / plan / dry-run / execute) on `parser`.
+    Shared by the standalone `python -m photos_pipeline.photos_3_merge` and `photos-ingest merge`."""
     parser.add_argument("-j", "--jobs", type=int, default=None,
                         help="Worker threads for execution (default: config jobs, else 4).")
-    sub = parser.add_subparsers(dest="command", required=True)
+    sub = parser.add_subparsers(dest="command")
     p_init = sub.add_parser("init-library",
                             help="Bless a directory as the permanent library (writes .photos-library).")
     p_init.add_argument("path", nargs="?", default=None,
@@ -1116,12 +1127,25 @@ def main():
     sub.add_parser("plan", help="Plan the merge: map by-dest photos to library targets (no mutation).")
     sub.add_parser("dry-run", help="Display the exact placements/collisions the plan would execute.")
     sub.add_parser("execute", help="Apply the validated plan: move photos into the library.")
-    args = parser.parse_args()
+    parser.set_defaults(_run=run, _parser=parser)
 
+
+def run(args):
     ws = os.getcwd()
     if args.command == "init-library":
         sys.exit(do_init_library(args.path, ws))
     sys.exit(_run_locked_workflow(args.command, ws, getattr(args, "jobs", None)))
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(prog="photos_pipeline.photos_3_merge", description=MERGE_BLURB,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    add_arguments(parser)
+    args = parser.parse_args(argv)
+    if getattr(args, "command", None) is None:
+        parser.print_help()
+        return 0
+    return run(args)
 
 
 if __name__ == "__main__":
