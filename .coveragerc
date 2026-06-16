@@ -10,7 +10,7 @@ concurrency = thread
 [report]
 include =
     */photos_pipeline/*.py
-    */ingest/decision-editor/decision-editor.unbundled
+    */photos_pipeline/editor/server.py
     */develop/photos-developer
 show_missing = true
 precision = 0

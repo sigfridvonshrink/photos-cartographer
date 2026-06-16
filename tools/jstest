@@ -5,4 +5,4 @@
 # Run from anywhere; it cd's to the repo root.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-exec node --test "$@" ingest/decision-editor/tests/*.test.mjs
+exec node --test "$@" ingest/photos_pipeline/editor/tests/*.test.mjs
