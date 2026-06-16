@@ -4,7 +4,7 @@
 // user_decision back via the server). GPS cells get a side-panel map picker (fixed-crosshair pick) plus
 // a photo preview for review items (map.js + the server's /api/photo). The time tree shows a live,
 // advisory inheritance preview (a child with no own decision shows the timezone it would inherit from
-// its nearest resolved ancestor), and Re-run invokes `photos-2-time-gps run` on the server then reloads
+// its nearest resolved ancestor), and Re-run invokes `photos-ingest geotag plan` on the server then reloads
 // the regenerated authoritative artifacts (the edit → Save → Re-run → reload loop).
 // Vanilla + ES modules; no build. Leaflet is vendored (global L); tiles come from OSM at runtime.
 
@@ -218,7 +218,7 @@ function fmtOffset(s) {
 
 // Offset ⟷ real-UTC conversion. The offset is the one stored value; UTC is just the anchor frame's
 // real instant (camera_naive + offset) rendered as a clock. All math is on naive wall-times treated as
-// UTC epoch ms (Date.UTC), matching calibration's `real_utc_naive − camera_naive` (photos-2-time-gps).
+// UTC epoch ms (Date.UTC), matching calibration's `real_utc_naive − camera_naive` (photos_pipeline.photos_2_time_gps).
 const _pad = (n) => String(n).padStart(2, "0");
 function camNaiveMs(s) { // camera EXIF naive "YYYY:MM:DD HH:MM:SS"
   const m = /^(\d{4}):(\d\d):(\d\d)[ T](\d\d):(\d\d):(\d\d)/.exec(s || "");
@@ -980,13 +980,13 @@ async function save() {
   state.saving = true; state.message = "saving…"; render();
   try {
     const r = await (await fetch("/api/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })).json();
-    if (r.ok) { state.base = clone(state.work); state.message = `saved ${r.written.join(", ")} — re-run calibration to apply`; }
+    if (r.ok) { state.base = clone(state.work); state.message = `saved ${r.written.join(", ")} — Re-run (\`photos-ingest geotag plan\`) to apply`; }
     else state.message = "save failed: " + (r.error || "unknown");
   } catch (e) { state.message = "save failed: " + e; }
   state.saving = false; render();
 }
 
-// Re-run calibration: `photos-2-time-gps run` regenerates the authoritative artifacts from the SAVED
+// Re-run calibration: `photos-ingest geotag plan` regenerates the authoritative artifacts from the SAVED
 // decisions, so we require a clean (saved, valid) state first, then reload what calibration wrote.
 async function rerun() {
   if (state.base.demo || state.saving || state.running) return;
@@ -1036,7 +1036,7 @@ function render() {
   rerunBtn.title = a.demo ? "demo mode — no workspace to calibrate"
     : depsMissing ? `can't re-run on this machine — missing: ${a.environment.missing.join(", ")}. Run the editor on the host with the pipeline and its data.`
     : dirty > 0 ? "save your changes first, then re-run"
-    : invalid ? "fix invalid fields first" : "run `photos-2-time-gps run` and reload the result";
+    : invalid ? "fix invalid fields first" : "run `photos-ingest geotag plan` and reload the result";
   $("#reset").disabled = dirty === 0 || busy;
   renderRunlog();
   const list = $("#list"); list.replaceChildren();
