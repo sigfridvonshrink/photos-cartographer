@@ -75,9 +75,9 @@ def _plan_wf(tmp_path, files, *, manual=None):
         d: {"folder_fallback": {"effective_fallback": None},
             "gps_decisions": {"review_items": reviews[d]}} for d in dests}}
     (ctl / "photos-21-time-decisions.json").write_text(json.dumps(time_art))
-    (ctl / "photos-21a-gps-drift-validation.json").write_text(
+    (ctl / "photos-22-gps-drift-validation.json").write_text(
         json.dumps({"status": "complete", "destinations": {}}))
-    (ctl / "photos-22-gps-decisions.json").write_text(json.dumps(gps_art))
+    (ctl / "photos-23-gps-decisions.json").write_text(json.dumps(gps_art))
     wf = cal.CalibrationWorkflow(str(ws)); wf.handoff = {"cache_fingerprint": "pcf"}; wf._gpx_fingerprint = "g"
     gpx = cal.GPXIndex(""); gpx.points = []
     return wf, time_art, gps_art, gpx
@@ -190,33 +190,33 @@ def test_full_pin_then_withdraw_reverts_and_consumes(tmp_path, monkeypatch):
     _edit(ctl, "photos-21-time-decisions.json", lambda a: a["destinations"][f"{BYDEST}/T"]
           ["destination_timezone"]["user_decision"].update({"accept_proposed_timezone": True}))
     _run(monkeypatch, ws, "plan")                                       # now photos-22 exists (c blocked)
-    _edit(ctl, "photos-22-gps-decisions.json", lambda b: b["destinations"][f"{BYDEST}/T"]
+    _edit(ctl, "photos-23-gps-decisions.json", lambda b: b["destinations"][f"{BYDEST}/T"]
           ["folder_fallback"]["user_decision"].update({"fallback_lat": 48.85, "fallback_lon": 2.35}))
     _run(monkeypatch, ws, "plan")                                       # c.arw now manual_fallback -> photos-23
-    assert (ctl / "photos-23-executable-plan.json").exists()
+    assert (ctl / "photos-24-executable-plan.json").exists()
     assert _run(monkeypatch, ws, "execute") == 0
     # pre-state pinned (c had no native GPS -> absent), manual GPS written
     db = cal.CalibrationCache(str(ws)); pinned = {e["relative_path"]: e["pre_state"] for e in db.ledger_all()}; db.close()
     assert pinned == {f"{BYDEST}/T/c.arw": {"present": False}}
-    t1 = json.load(open(ctl / "photos-24-execution-summary.json"))["totals"]
+    t1 = json.load(open(ctl / "photos-25-execution-summary.json"))["totals"]
     assert t1["metadata_gps_writes"] == 1 and t1["manual_gps_pre_states_captured"] == 1
 
     # idempotent re-execute (c still manual): pin-once -> not re-captured, ledger unchanged
     assert _run(monkeypatch, ws, "execute") == 0
-    t2 = json.load(open(ctl / "photos-24-execution-summary.json"))["totals"]
+    t2 = json.load(open(ctl / "photos-25-execution-summary.json"))["totals"]
     assert t2["manual_gps_pre_states_captured"] == 0                   # already pinned, skipped
     db = cal.CalibrationCache(str(ws)); assert len(db.ledger_all()) == 1; db.close()
 
     # WITHDRAW: drop the fallback, accept c as unlocated -> non-manual -> revert planned
-    q = ctl / "photos-22-gps-decisions.json"; b = json.load(open(q))
+    q = ctl / "photos-23-gps-decisions.json"; b = json.load(open(q))
     b["destinations"][f"{BYDEST}/T"]["folder_fallback"]["user_decision"].update({"fallback_lat": "", "fallback_lon": ""})
     b["destinations"][f"{BYDEST}/T"]["gps_decisions"]["review_items"] = [
         {"relative_path": f"{BYDEST}/T/c.arw", "user_decision": {"accept_unlocated": True}}]
     q.write_text(json.dumps(b))
     _run(monkeypatch, ws, "plan")
-    plan = json.load(open(ctl / "photos-23-executable-plan.json"))
+    plan = json.load(open(ctl / "photos-24-executable-plan.json"))
     assert any(o["type"] == "revert_manual_gps" for dd in plan["destinations"].values() for o in dd["operations"])
     assert _run(monkeypatch, ws, "execute") == 0
-    s = json.load(open(ctl / "photos-24-execution-summary.json"))
+    s = json.load(open(ctl / "photos-25-execution-summary.json"))
     assert s["totals"]["manual_gps_reverts"] == 1
     db = cal.CalibrationCache(str(ws)); assert db.ledger_all() == []; db.close()   # consumed on restore

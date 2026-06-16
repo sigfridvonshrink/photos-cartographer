@@ -163,7 +163,7 @@ did (`photos-15-prep-log.json`), plus a point-in-time backup image of the SQLite
 prep — a full account even if you never calibrate. By the end of **calibration**, an explicit finalize
 step bundles an *archival package* — the config, the live SQLite database (and the per-phase DB backup
 images), all the decision JSONs, and a consolidated **full transformation log**
-(`photos-25-complete-log.json`): a per-photo record of every change each photo underwent from dump to
+(`photos-26-complete-log.json`): a per-photo record of every change each photo underwent from dump to
 finished calibration, and why (the prep log carried forward and extended, not regenerated). That package
 is **complete on its own** — if you finalize but never merge, you still have the full human-readable audit
 log, the database images, and the job reports, exactly as if the merge phase didn't exist. And by the end

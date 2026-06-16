@@ -284,7 +284,7 @@ def write_db_snapshot(conn, dest_path: str) -> None:
     """Capture a transactionally-consistent point-in-time image of `conn`'s database to `dest_path`
     (shared contract §13.4a): VACUUM INTO a temp name, VERIFY it, then atomic rename — so an
     interrupted capture leaves either the prior snapshot or the complete new one, never a corrupt/torn
-    file. Shared by prep (photos-15-prep-ingest.db) and calibration finalize (photos-25-calibrate-ingest.db)."""
+    file. Shared by prep (photos-15-prep-ingest.db) and calibration finalize (photos-26-calibrate-ingest.db)."""
     import uuid
     tmp = os.path.join(os.path.dirname(dest_path) or ".", f".tmp-snapshot-{uuid.uuid4().hex[:8]}.db")
     try:
@@ -519,16 +519,16 @@ def max_suffix(root: str, names) -> int:
 # Library-merge archival re-seal (merge spec §9.4 step 1 / shared contract §13.6). On a successful
 # merge, the package gains merge's own artifacts; merge re-bundles by recomputing every present
 # artifact's SHA-256 into its OWN photos-35-archive-manifest.json, which supersedes calibration's
-# photos-25 manifest (parallel to the photos-15→25→35 log chain). It reads each artifact and never
+# photos-26 manifest (parallel to the photos-15→25→35 log chain). It reads each artifact and never
 # rewrites another phase's file (shared contract §13.0a). Consumed by ingest/photos-3-merge.
 MERGE_ARCHIVE_MANIFEST = "photos-35-archive-manifest.json"
-CALIBRATE_ARCHIVE_MANIFEST = "photos-25-archive-manifest.json"
+CALIBRATE_ARCHIVE_MANIFEST = "photos-26-archive-manifest.json"
 _MERGE_ARCHIVE_ITEMS = [
     "photos-00-config.json", "photos-11-handoff.json",
     "photos-15-prep-log.json", "photos-15-prep-ingest.db",
-    "photos-21-time-decisions.json", "photos-22-gps-decisions.json",
-    "photos-23-executable-plan.json", "photos-24-execution-summary.json",
-    "photos-25-complete-log.json", "photos-25-calibrate-ingest.db",
+    "photos-21-time-decisions.json", "photos-23-gps-decisions.json",
+    "photos-24-executable-plan.json", "photos-25-execution-summary.json",
+    "photos-26-complete-log.json", "photos-26-calibrate-ingest.db",
     CALIBRATE_ARCHIVE_MANIFEST,
     "photos-31-merge-summary.json", "photos-35-merge-log.json", "photos-35-merge-ingest.db",
     "photos-00-ingest.db",
@@ -541,7 +541,7 @@ def reseal_archival_package(ws: str, *, workspace_name: str, plan_id: str, execu
                             merge_run_id: str, generated_at: str) -> str:
     """Re-seal the archival package after a successful merge: recompute the SHA-256 of every package
     artifact present in the control dir (including merge's photos-31/35 artifacts and the live DB) and
-    write merge's own photos-35-archive-manifest.json (supersedes calibration's photos-25 manifest,
+    write merge's own photos-35-archive-manifest.json (supersedes calibration's photos-26 manifest,
     shared contract §13.6). Reads each artifact; never mutates another phase's file (§13.0a). Returns
     the manifest's SHA-256."""
     cd = control_dir(ws)

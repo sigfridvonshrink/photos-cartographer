@@ -1,4 +1,4 @@
-"""Phase 6b (calibration) — photos-23-executable-plan.json (§28): the per-file operation builder,
+"""Phase 6b (calibration) — photos-24-executable-plan.json (§28): the per-file operation builder,
 the readiness gate, and the deterministic plan + dependency cascade. Op logic at full coverage.
 From conftest.py.
 """
@@ -106,9 +106,9 @@ def _wf(tmp_path, *, files, time_status="complete", gps_status="complete", tz="E
     gps_art = {"status": gps_status, "destinations": {
         d: {"folder_fallback": {"effective_fallback": None}, "gps_decisions": {"review_items": []}} for d in dests}}
     (ctl / "photos-21-time-decisions.json").write_text(json.dumps(time_art))
-    (ctl / "photos-21a-gps-drift-validation.json").write_text(
+    (ctl / "photos-22-gps-drift-validation.json").write_text(
         json.dumps({"status": "complete", "destinations": {}}))
-    (ctl / "photos-22-gps-decisions.json").write_text(json.dumps(gps_art))
+    (ctl / "photos-23-gps-decisions.json").write_text(json.dumps(gps_art))
     wf = cal.CalibrationWorkflow(str(ws))
     wf.handoff = {"cache_fingerprint": "pcf"}
     wf._gpx_fingerprint = "gfp"
@@ -160,9 +160,9 @@ def test_incomplete_decisions_block(tmp_path):
     rows = [_row(f"{BYDEST}/T/a.arw")]
     wf, t, g = _wf(tmp_path, files=files)                                     # both complete on disk
     plan, blk = wf.build_executable_plan(files, rows, t, dict(g, status="requires_user_input"), _gpx(), "rfp")
-    assert plan["status"] == "blocked" and any("photos-22" in b for b in blk)
+    assert plan["status"] == "blocked" and any("photos-23-gps-decisions" in b for b in blk)
     _, blk2 = wf.build_executable_plan(files, rows, dict(t, status="requires_user_input"), g, _gpx(), "rfp")
-    assert any("photos-21" in b for b in blk2)
+    assert any("photos-21-time-decisions" in b for b in blk2)
 
 
 def test_plan_deterministic_and_fingerprint_sensitive(tmp_path):

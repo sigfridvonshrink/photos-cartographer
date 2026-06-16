@@ -84,15 +84,15 @@ def _ws(tmp_path, photos, library_files=(), name="ws"):
     cfg["merge"] = dict(cfg.get("merge") or {})
     cfg["merge"]["library_root"] = str(lib)
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
-    (ctl / "photos-23-executable-plan.json").write_text(json.dumps(
+    (ctl / "photos-24-executable-plan.json").write_text(json.dumps(
         {"status": "ready", "plan_id": "cal-plan-1", "destinations": {"d": {"operations": ops}},
          "depends_on": {"handoff": {"dependency_type": "handoff_content",
                                     "artifact_name": "photos-11-handoff.json",
                                     "content_fingerprint": utils.handoff_content_fingerprint(handoff)}}}))
-    (ctl / "photos-24-execution-summary.json").write_text(json.dumps(
+    (ctl / "photos-25-execution-summary.json").write_text(json.dumps(
         {"status": "success", "run_metadata": {"execution_id": "cal-exec-1"}}))
-    (ctl / "photos-25-complete-log.json").write_text(json.dumps({"photos": {}}))
-    (ctl / "photos-25-archive-manifest.json").write_text(json.dumps({"artifact_name": "m"}))
+    (ctl / "photos-26-complete-log.json").write_text(json.dumps({"photos": {}}))
+    (ctl / "photos-26-archive-manifest.json").write_text(json.dumps({"artifact_name": "m"}))
     return ws, lib
 
 
@@ -260,7 +260,7 @@ def test_execute_without_plan_errors(tmp_path):
 def test_execute_rejects_stale_plan(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     assert merge._run_locked_workflow("plan", str(ws)) == 0
-    p24 = os.path.join(str(ws), ".photos-ingest", "photos-24-execution-summary.json")
+    p24 = os.path.join(str(ws), ".photos-ingest", "photos-25-execution-summary.json")
     open(p24, "w").write(json.dumps({"status": "success", "touched": True}))   # dep changed
     assert merge._run_locked_workflow("execute", str(ws)) == 2
     assert not os.path.exists(os.path.join(str(ws.parent), "ws-lib", "Trip"))  # nothing moved
@@ -289,7 +289,7 @@ def test_full_success_writes_terminal_artifacts_and_seals(tmp_path):
     assert summ["run_metadata"]["finished_at"] and summ["run_metadata"]["started_at"]
     # The re-seal manifest supersedes calibration's and lists the merge artifacts.
     manifest = json.loads(open(_ctl(ws, "photos-35-archive-manifest.json")).read())
-    assert manifest["supersedes"] == "photos-25-archive-manifest.json"
+    assert manifest["supersedes"] == "photos-26-archive-manifest.json"
     assert "photos-31-merge-summary.json" in manifest["contents"]
     assert "photos-35-merge-log.json" in manifest["contents"]
 
@@ -297,7 +297,7 @@ def test_full_success_writes_terminal_artifacts_and_seals(tmp_path):
 def test_merge_log_copies_photos25_forward_and_appends(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     # Seed photos-25 with a prior calibrate journey for fingerprint A.
-    open(_ctl(ws, "photos-25-complete-log.json"), "w").write(json.dumps(
+    open(_ctl(ws, "photos-26-complete-log.json"), "w").write(json.dumps(
         {"schema_version": 1, "tool": "photos-2-time-gps",
          "photos": {"A": {"content_fingerprint": "A",
                           "journey": [{"phase": "calibrate", "action": "renamed"}]}}}))
@@ -311,7 +311,7 @@ def test_merge_log_copies_photos25_forward_and_appends(tmp_path):
                            "library_path": os.path.join(str(lib), "Trip", "a.jpg"),
                            "renamed_for_library": False}
     # photos-25 itself must be byte-unchanged (never edited).
-    p25 = json.loads(open(_ctl(ws, "photos-25-complete-log.json")).read())
+    p25 = json.loads(open(_ctl(ws, "photos-26-complete-log.json")).read())
     assert p25["photos"]["A"]["journey"] == [{"phase": "calibrate", "action": "renamed"}]
 
 
