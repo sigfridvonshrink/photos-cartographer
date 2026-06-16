@@ -49,7 +49,7 @@ run -> inspect textual output / blockers
     -> rerun
     -> machine proposals recomputed, user decisions preserved (Section 9)
     -> downstream artifacts recomputed where upstream changed (Section 30)
-    -> repeat until photos-23-executable-plan.json is ready
+    -> repeat until photos-24-executable-plan.json is ready
     -> execute
 ```
 
@@ -113,14 +113,14 @@ This applies to every JSON artifact in the calibration dependency graph, includi
 ```text
 photos-11-handoff.json   (upstream input, produced by prep)
 photos-21-time-decisions.json
-photos-22-gps-decisions.json
-photos-23-executable-plan.json
-photos-24-execution-summary.json
+photos-23-gps-decisions.json
+photos-24-executable-plan.json
+photos-25-execution-summary.json
 ```
 
 `photos-11-handoff.json` is the contract calibration receives from prep (prep `photos-1-prep-workflow.md` Section 16). It is the **one JSON dependency calibration checks by a recomputed content fingerprint rather than a whole-file byte hash**, and for a specific reason: the handoff deliberately mixes a deterministic description of the post-prep workspace state with per-run audit (the `run_metadata` block, diagnostics, and the `execution_journal` pointer), so its exact bytes change on every prep run even when the organized result did not (prep Section 16.2). Depending on the whole-file SHA-256 would therefore restale calibration on a no-op re-prep, which is wrong. Instead, wherever calibration depends on the handoff, the dependency entry records the handoff's top-level **`content_fingerprint`** (the SHA-256 prep computes over the handoff's deterministic content with `run_metadata`, diagnostics, the journal pointer, and the fingerprint field itself removed, prep Section 16.2), and calibration **recomputes that fingerprint from the handoff** and compares it before use — the same recompute-and-verify discipline it applies to every other dependency fingerprint. The handoff's **whole-file SHA-256 still exists** as its integrity/archival hash (shared contract Section 13), and calibration may record it for identification, but it is **not** the staleness trigger. This keeps the handoff's staleness **surgical** (shared contract Section 4.2): only a change to the deterministic content restales downstream, while a run-only refresh does not. (Among the numbered `photos-2X` artifacts, which carry no per-run audit of this kind, the dependency check remains the whole-file byte hash as before.)
 
-`photos-24-execution-summary.json` is the terminal artifact. It records the SHA-256 of the JSON artifacts it summarizes (which is why it appears in the list above), but nothing downstream depends on it, so it is never itself re-hashed as an upstream dependency.
+`photos-25-execution-summary.json` is the terminal artifact. It records the SHA-256 of the JSON artifacts it summarizes (which is why it appears in the list above), but nothing downstream depends on it, so it is never itself re-hashed as an upstream dependency.
 
 ---
 
@@ -132,11 +132,11 @@ A downstream artifact must not depend only on the immediately previous artifact 
 
 Each downstream artifact must include the full flattened dependency set it relies on.
 
-For example, `photos-23-executable-plan.json` must directly include dependencies for:
+For example, `photos-24-executable-plan.json` must directly include dependencies for:
 
 1. `photos-21-time-decisions.json` and its SHA-256;
-2. `photos-21a-gps-drift-validation.json` and its SHA-256;
-3. `photos-22-gps-decisions.json` and its SHA-256;
+2. `photos-22-gps-drift-validation.json` and its SHA-256;
+3. `photos-23-gps-decisions.json` and its SHA-256;
 4. resolved UTC cache fingerprint;
 5. `photos-11-handoff.json` and its **`content_fingerprint`** (recomputed from the handoff's deterministic content, not a whole-file byte hash, Section 4; prep Section 16.2);
 6. prep SQLite cache fingerprint;
@@ -151,10 +151,10 @@ For example, `photos-23-executable-plan.json` must directly include dependencies
 It must not merely say:
 
 ```text
-depends on photos-22-gps-decisions.json
+depends on photos-23-gps-decisions.json
 ```
 
-and rely on `photos-22-gps-decisions.json` to prove all earlier dependencies recursively.
+and rely on `photos-23-gps-decisions.json` to prove all earlier dependencies recursively.
 
 The flattened dependency model makes validation simple, auditable, and resistant to stale partial chains.
 
@@ -338,9 +338,9 @@ The required numbered artifacts are:
 
 ```text
 photos-21-time-decisions.json
-photos-22-gps-decisions.json
-photos-23-executable-plan.json
-photos-24-execution-summary.json
+photos-23-gps-decisions.json
+photos-24-executable-plan.json
+photos-25-execution-summary.json
 ```
 
 The first durable calibration artifact is:
@@ -357,9 +357,9 @@ All numbered calibration artifacts are written to the workspace control director
 
 ```text
 .photos-ingest/photos-21-time-decisions.json
-.photos-ingest/photos-22-gps-decisions.json
-.photos-ingest/photos-23-executable-plan.json
-.photos-ingest/photos-24-execution-summary.json
+.photos-ingest/photos-23-gps-decisions.json
+.photos-ingest/photos-24-executable-plan.json
+.photos-ingest/photos-25-execution-summary.json
 ```
 
 They must never be written inside `6-photos-by-dest/` (or any scanned media folder), because that tree is read-only for prep and prep would otherwise inventory the artifacts as ordinary files and fold them into its cache fingerprint.
@@ -464,8 +464,8 @@ This applies to:
 
 ```text
 photos-21-time-decisions.json
-photos-22-gps-decisions.json
-photos-23-executable-plan.json
+photos-23-gps-decisions.json
+photos-24-executable-plan.json
 ```
 
 Each artifact should be grouped by destination under `6-photos-by-dest`.
@@ -562,8 +562,8 @@ This applies to:
 
 ```text
 photos-21-time-decisions.json   (destination sections; each carries its timezone + per-group time decisions)
-photos-22-gps-decisions.json
-photos-23-executable-plan.json
+photos-23-gps-decisions.json
+photos-24-executable-plan.json
 ```
 
 Each artifact should be grouped by destination under `6-photos-by-dest`.
@@ -613,14 +613,14 @@ calibration invocation
   -> time-decision stage
   -> photos-21-time-decisions.json
   -> resolved UTC per file in SQLite
-  -> GPS-drift validation gate (photos-21a-gps-drift-validation.json)
+  -> GPS-drift validation gate (photos-22-gps-drift-validation.json)
   -> resolved UTC recomputed with validated offsets
   -> GPS-decision stage
-  -> photos-22-gps-decisions.json
-  -> photos-23-executable-plan.json
+  -> photos-23-gps-decisions.json
+  -> photos-24-executable-plan.json
   -> metadata/rename execution
   -> updated SQLite/cache/journal
-  -> photos-24-execution-summary.json
+  -> photos-25-execution-summary.json
 ```
 
 If any upstream dependency changes, all downstream artifacts that depend on it become stale.
@@ -639,17 +639,17 @@ STATE 4 — camera groups classified or blocked
 STATE 5 — time-decision stage reached
 STATE 6 — photos-21-time-decisions.json created
 STATE 7 — resolved UTC computed (current offsets)
-STATE 7a — photos-21a-gps-drift-validation.json created (gate; resolved UTC re-persisted once complete)
+STATE 7a — photos-22-gps-drift-validation.json created (gate; resolved UTC re-persisted once complete)
 STATE 8 — GPS-decision stage reached
-STATE 9 — photos-22-gps-decisions.json created
-STATE 10 — photos-23-executable-plan.json ready
+STATE 9 — photos-23-gps-decisions.json created
+STATE 10 — photos-24-executable-plan.json ready
 STATE 11 — executed
-STATE 12 — photos-24-execution-summary.json created
+STATE 12 — photos-25-execution-summary.json created
 ```
 
 A calibration JSON file existing on disk does not automatically mean execution is allowed.
 
-Execution is allowed only after `photos-23-executable-plan.json` exists, is current, and validates all upstream dependencies.
+Execution is allowed only after `photos-24-executable-plan.json` exists, is current, and validates all upstream dependencies.
 
 ---
 
@@ -780,7 +780,7 @@ If GPX is unavailable or disabled, later artifacts should record that no GPX evi
 
 If GPX is used for time-anchor proposals, the GPX fingerprint becomes an upstream dependency of `photos-21-time-decisions.json`.
 
-If GPX is used for GPS interpolation/extrapolation, the GPX fingerprint becomes an upstream dependency of `photos-22-gps-decisions.json` and `photos-23-executable-plan.json`.
+If GPX is used for GPS interpolation/extrapolation, the GPX fingerprint becomes an upstream dependency of `photos-23-gps-decisions.json` and `photos-24-executable-plan.json`.
 
 The two statements above describe *why* the GPX fingerprint matters. In practice the implementation records the current GPX fingerprint as a dependency **unconditionally whenever a GPX set is loaded** — even for an artifact (or destination) that ended up using no GPX evidence — rather than tracking per-artifact whether GPX actually contributed. This is a deliberate, conservative over-inclusion (Section 22.1): editing the GPX set may restale an artifact that did not depend on GPX, which only costs a recompute and never serves a stale result. If GPX is wholly unavailable or disabled, there is no fingerprint to record and these dependencies are simply absent.
 
@@ -1184,29 +1184,29 @@ If config, camera grouping, `photos-21-time-decisions.json`, prep cache, metadat
 Because the resolved-UTC cache lives in SQLite rather than as a hashable file, it must expose a deterministic fingerprint so downstream JSON artifacts can record and re-verify it the same way they re-hash JSON dependencies. The `resolved_utc_cache_fingerprint` must be a SHA-256 computed over a canonical, deterministically ordered serialization of:
 
 1. every per-file resolved row (`file_id`/workspace path, `resolved_utc`, `resolved_utc_status`, `time_rule_used`, `utc_offset_used`, `source_time_provenance`);
-2. the input fingerprints that produced those rows: the **time-policy fingerprint** (a SHA-256 over just the `camera_time_and_timezone_policy` config area — *not* the whole-config hash), the camera-group-key version, `photos-21-time-decisions.json` SHA-256, **`photos-21a-gps-drift-validation.json` SHA-256** (so an operator-validated/corrected offset restales resolved UTC — Section 22a), the prep cache fingerprint, the metadata field-set version, and the **GPX fingerprint**. The GPX fingerprint is included **unconditionally** — a deliberate, conservative over-inclusion: even a destination whose UTC was resolved entirely without GPX (e.g. from native EXIF plus a manual offset) still carries the current GPX fingerprint, so editing the GPX set conservatively restales resolved UTC even where GPX had no effect on the result. This errs toward re-resolving rather than risk serving a stale value, and the cost is bounded (resolved UTC is recomputed, not the expensive media work).
+2. the input fingerprints that produced those rows: the **time-policy fingerprint** (a SHA-256 over just the `camera_time_and_timezone_policy` config area — *not* the whole-config hash), the camera-group-key version, `photos-21-time-decisions.json` SHA-256, **`photos-22-gps-drift-validation.json` SHA-256** (so an operator-validated/corrected offset restales resolved UTC — Section 22a), the prep cache fingerprint, the metadata field-set version, and the **GPX fingerprint**. The GPX fingerprint is included **unconditionally** — a deliberate, conservative over-inclusion: even a destination whose UTC was resolved entirely without GPX (e.g. from native EXIF plus a manual offset) still carries the current GPX fingerprint, so editing the GPX set conservatively restales resolved UTC even where GPX had no effect on the result. This errs toward re-resolving rather than risk serving a stale value, and the cost is bounded (resolved UTC is recomputed, not the expensive media work).
 
-The config input is deliberately the **time-policy subset**, not the whole-config file hash, so resolved-UTC staleness stays **surgical** (shared contract `photos-shared-contract.md` Section 4.2): a config edit *outside* the time policy — for example to `library_root`, the GPX matching thresholds, the filename format, or the `zfs` block — must **not** restale already-resolved UTC, because none of those affect how UTC is computed. Only a change to the time policy (or to one of the other listed inputs) restales it. The whole-config SHA-256 still appears as `config_fingerprint` in the **executable plan's** (`photos-23`) `depends_on` for end-to-end **integrity and change-detection** (it is the byte hash the dependency cascade re-verifies, shared contract Section 9), but it is **not** the resolved-UTC staleness trigger — the two roles are kept distinct exactly as Section 4.2 prescribes (field-scoped fingerprints drive staleness; the whole-file hash is for integrity, not staleness). The decision artifacts (`photos-21`/`photos-22`) deliberately carry only their **field-scoped** policy fingerprints (the time-policy / GPS-policy subsets), not the whole-file hash, so an unrelated config edit cannot needlessly restale them; the whole-file integrity hash enters the cascade once, at the plan, which is the artifact `execute` revalidates.
+The config input is deliberately the **time-policy subset**, not the whole-config file hash, so resolved-UTC staleness stays **surgical** (shared contract `photos-shared-contract.md` Section 4.2): a config edit *outside* the time policy — for example to `library_root`, the GPX matching thresholds, the filename format, or the `zfs` block — must **not** restale already-resolved UTC, because none of those affect how UTC is computed. Only a change to the time policy (or to one of the other listed inputs) restales it. The whole-config SHA-256 still appears as `config_fingerprint` in the **executable plan's** (`photos-24`) `depends_on` for end-to-end **integrity and change-detection** (it is the byte hash the dependency cascade re-verifies, shared contract Section 9), but it is **not** the resolved-UTC staleness trigger — the two roles are kept distinct exactly as Section 4.2 prescribes (field-scoped fingerprints drive staleness; the whole-file hash is for integrity, not staleness). The decision artifacts (`photos-21`/`photos-23`) deliberately carry only their **field-scoped** policy fingerprints (the time-policy / GPS-policy subsets), not the whole-file hash, so an unrelated config edit cannot needlessly restale them; the whole-file integrity hash enters the cascade once, at the plan, which is the artifact `execute` revalidates.
 
 Rows must be ordered by workspace path and all values normalized to text before hashing, so the fingerprint is stable across runs with unchanged inputs. This `resolved_utc_cache_fingerprint` is the value referenced as the "resolved UTC cache fingerprint" dependency in Sections 5, 6, 24, and 28.
 
 ---
 
-## 22a. Stage 7a — GPS-drift validation gate (`photos-21a-gps-drift-validation.json`)
+## 22a. Stage 7a — GPS-drift validation gate (`photos-22-gps-drift-validation.json`)
 
 **The highest-danger gap this gate closes.** GPS placement (Section 23) positions a file purely from its **resolved UTC**: it finds where the GPX track was at that instant. That is safe when the file's offset came from a GPX self-anchor (the offset was *derived* from the track) or when the file has its own native-GPS anchor (it is independently placeable). But when a bucket's offset is **manual** or **timezone-derived** and the bucket has **no native-GPS anchor**, nothing has ever checked that offset against the track — a wrong offset silently slides the **whole** bucket to the wrong point on the GPX track, drift the operator never sees. Stage 7a makes that drift **explicit and gated**: every at-risk bucket must be confirmed before GPS planning runs.
 
-**This stage runs between resolved UTC (Section 22) and GPS planning (Section 23).** It consumes the **complete** `photos-21-time-decisions.json` and the resolved UTC computed under the *current* offsets, and emits `photos-21a-gps-drift-validation.json`. It mirrors the time→GPS gate: while 21a `requires_user_input`, the workflow stops and does **not** create `photos-22`/`photos-23`.
+**This stage runs between resolved UTC (Section 22) and GPS planning (Section 23).** It consumes the **complete** `photos-21-time-decisions.json` and the resolved UTC computed under the *current* offsets, and emits `photos-22-gps-drift-validation.json`. It mirrors the time→GPS gate: while 22 `requires_user_input`, the workflow stops and does **not** create `photos-23`/`photos-24`.
 
 ### 22a.1 Trigger
 
-A `(camera group, destination[, naive date])` offset bucket — the same buckets as Section 10.2 — becomes a 21a **review item** if and only if **all** hold:
+A `(camera group, destination[, naive date])` offset bucket — the same buckets as Section 10.2 — becomes a 22 **review item** if and only if **all** hold:
 
 1. its **effective offset source** is `timezone_accepted`, `manual`, or `manual_real_utc` (i.e. *not* `gpx_anchor_auto` / `gpx_anchor_accepted` — a GPX self-anchor offset is already track-derived);
 2. the bucket has **no native-GPS anchor** — no frame in it has GPS that matches the track (Section 19.1); with such an anchor the bucket is independently placeable and needs no validation;
 3. **GPX coverage exists** over the bucket's resolved-UTC interval widened by the plausible-clock-error window (`gpx_anchor_max_clock_error_seconds`, reused from the self-anchor search). With no covering track there is nothing to validate against — GPS planning will treat those files as fallback/lost (Section 25), not as drift.
 
-Buckets that fail any condition produce no 21a item. An artifact with no items is trivially `complete`.
+Buckets that fail any condition produce no 22 item. An artifact with no items is trivially `complete`.
 
 ### 22a.2 Evidence and decision fields
 
@@ -1224,11 +1224,11 @@ Each review item carries a `proposal` (the `current_offset_seconds`, its `propos
 
 ### 22a.3 Output consumed by resolved UTC
 
-Once 21a is complete, resolved UTC is **recomputed** consuming each confirmed bucket's validated offset (`effective_drift_offset`, source `gps_drift_validated`), and only then are the SQLite cache and `resolved_utc_cache_fingerprint` persisted (the fingerprint includes the `photos-21a` SHA-256, Section 22.1). The validated offset lives in `photos-21a` and does **not** mutate the `photos-21` decision it refines — `photos-21` stays the immutable record of the time decision; 21a is its GPS-drift check. GPS planning (Section 23) then proceeds on the corrected resolved UTC.
+Once 22 is complete, resolved UTC is **recomputed** consuming each confirmed bucket's validated offset (`effective_drift_offset`, source `gps_drift_validated`), and only then are the SQLite cache and `resolved_utc_cache_fingerprint` persisted (the fingerprint includes the `photos-22` SHA-256, Section 22.1). The validated offset lives in `photos-22` and does **not** mutate the `photos-21` decision it refines — `photos-21` stays the immutable record of the time decision; 22 is its GPS-drift check. GPS planning (Section 23) then proceeds on the corrected resolved UTC.
 
 ### 22a.4 Dependencies
 
-`photos-21a` records `photos-21-time-decisions.json` SHA-256, the GPX fingerprint, the time-policy fingerprint, and the camera-group-key version. Because the recomputed `resolved_utc_cache_fingerprint` folds in the `photos-21a` SHA-256, a changed or withdrawn 21a confirmation restales `photos-22`/`photos-23` through the normal cascade; the executable plan additionally records `photos-21a` as a direct dependency so `execute` rejects a plan whose drift confirmation was withdrawn after planning (Section 28, Section 29).
+`photos-22` records `photos-21-time-decisions.json` SHA-256, the GPX fingerprint, the time-policy fingerprint, and the camera-group-key version. Because the recomputed `resolved_utc_cache_fingerprint` folds in the `photos-22` SHA-256, a changed or withdrawn 22 confirmation restales `photos-23`/`photos-24` through the normal cascade; the executable plan additionally records `photos-22` as a direct dependency so `execute` rejects a plan whose drift confirmation was withdrawn after planning (Section 28, Section 29).
 
 ---
 
@@ -1270,7 +1270,7 @@ Once GPS decisions have been analysed, the workflow has reached the formal GPS-d
 At this point, it must create:
 
 ```text
-photos-22-gps-decisions.json
+photos-23-gps-decisions.json
 ```
 
 even if no GPS changes are required.
@@ -1299,8 +1299,8 @@ The rule is:
 
 ```text
 If GPS planning inputs changed, GPS decisions are stale.
-If GPS decisions are stale, regenerate photos-22-gps-decisions.json.
-If regenerated GPS decisions imply metadata changes, photos-23-executable-plan.json must include those changes.
+If GPS decisions are stale, regenerate photos-23-gps-decisions.json.
+If regenerated GPS decisions imply metadata changes, photos-24-executable-plan.json must include those changes.
 If the executable plan includes GPS metadata writes, execution applies them after dependency validation.
 ```
 
@@ -1344,23 +1344,23 @@ The plan therefore distinguishes three operation origins for a GPS field — *ap
 
 ---
 
-## 25. Create `photos-22-gps-decisions.json`
+## 25. Create `photos-23-gps-decisions.json`
 
 Once the GPS-decision stage is reached, the workflow must create:
 
 ```text
-photos-22-gps-decisions.json
+photos-23-gps-decisions.json
 ```
 
 This artifact exists even if no GPS changes are required.
 
 It must be grouped by destination.
 
-`photos-22-gps-decisions.json` is a GPS decision artifact, not the executable operation list.
+`photos-23-gps-decisions.json` is a GPS decision artifact, not the executable operation list.
 
 For files whose GPS decision is automatic, no-op, or automatically correctable without user review, the JSON should contain per-destination summaries rather than enumerating every file path.
 
-File paths should appear in `photos-22-gps-decisions.json` only for items where the user must make or review a decision, for example:
+File paths should appear in `photos-23-gps-decisions.json` only for items where the user must make or review a decision, for example:
 
 1. manual GPS fallback needed;
 2. ambiguous GPX match;
@@ -1371,7 +1371,7 @@ File paths should appear in `photos-22-gps-decisions.json` only for items where 
 The exact file-level operation list belongs in:
 
 ```text
-photos-23-executable-plan.json
+photos-24-executable-plan.json
 ```
 
 That executable plan must include the actual file paths, metadata writes, marker writes, and rename operations to be executed.
@@ -1379,17 +1379,17 @@ That executable plan must include the actual file paths, metadata writes, marker
 The GPS decision artifact therefore follows this rule:
 
 ```text
-photos-22-gps-decisions.json:
+photos-23-gps-decisions.json:
   summarize automatic/no-op GPS decisions;
   list file paths only for user-review or blocker items.
 
-photos-23-executable-plan.json:
+photos-24-executable-plan.json:
   list exact file-level operations to execute.
 ```
 
-Because `photos-22-gps-decisions.json` only *summarizes* automatic and no-op GPS decisions (it enumerates individual file paths solely for user-review and blocker items), it is NOT the source of the per-file automatic GPS operations. `photos-23-executable-plan.json` re-derives every automatic GPS decision deterministically from its own validated inputs (resolved-UTC cache, GPX index/fingerprint, native GPS facts, folder fallback rules, and GPS policy config). `photos-22-gps-decisions.json` contributes to the plan only (a) the human-reviewed decisions and (b) its SHA-256 as a dependency proving the review state the plan was built against. Automatic decisions must be reproducible from inputs alone, so the summary-only artifact never needs to carry per-file automatic data.
+Because `photos-23-gps-decisions.json` only *summarizes* automatic and no-op GPS decisions (it enumerates individual file paths solely for user-review and blocker items), it is NOT the source of the per-file automatic GPS operations. `photos-24-executable-plan.json` re-derives every automatic GPS decision deterministically from its own validated inputs (resolved-UTC cache, GPX index/fingerprint, native GPS facts, folder fallback rules, and GPS policy config). `photos-23-gps-decisions.json` contributes to the plan only (a) the human-reviewed decisions and (b) its SHA-256 as a dependency proving the review state the plan was built against. Automatic decisions must be reproducible from inputs alone, so the summary-only artifact never needs to carry per-file automatic data.
 
-For each destination, `photos-22-gps-decisions.json` should summarize automatic categories such as:
+For each destination, `photos-23-gps-decisions.json` should summarize automatic categories such as:
 
 1. number of files preserving native GPS;
 2. number of files with no GPS change needed;
@@ -1426,7 +1426,7 @@ Example shape:
       "max_distance_to_track_m": 30,
       "confidence": "mixed",
       "notes": [
-        "Automatic decisions are summarized here. Exact file-level write operations are listed only in photos-23-executable-plan.json."
+        "Automatic decisions are summarized here. Exact file-level write operations are listed only in photos-24-executable-plan.json."
       ]
     },
     "review_items": []
@@ -1441,7 +1441,7 @@ The artifact should indicate:
 ```json
 {
   "artifact_type": "gps_decisions",
-  "artifact_name": "photos-22-gps-decisions.json",
+  "artifact_name": "photos-23-gps-decisions.json",
   "status": "requires_user_input",
   "requires_user_input": true,
   "executable": false
@@ -1464,7 +1464,7 @@ The artifact should still be created and should indicate:
 ```json
 {
   "artifact_type": "gps_decisions",
-  "artifact_name": "photos-22-gps-decisions.json",
+  "artifact_name": "photos-23-gps-decisions.json",
   "status": "complete",
   "requires_user_input": false,
   "executable": false,
@@ -1480,7 +1480,7 @@ Downstream stages must depend on it and validate it.
 
 The **folder GPS fallback** is a per-destination decision that supplies a single coordinate to place any photo in that destination which has no native GPS, no per-file manual lock, and no usable GPX match. In the resolution order calibration applies, it ranks **after** preserve-native, the per-file manual lock, and GPX interpolation/extrapolation, and **before** accept-unlocated or block (the seven GPS outcomes of Section 23). It is the destination-level analogue of the per-(camera group, destination) clock offset (Section 10.2): a destination-scoped value that a nested subfolder does not have to re-author from scratch.
 
-Its decision cell lives **inside each per-destination section** of `photos-22-gps-decisions.json` (alongside that destination's `gps_decisions` summary), with pre-created human-decision fields exactly like every other decision (Section 9). It carries a machine `proposal`, a `user_decision` the operator fills, and a derived `effective_fallback`:
+Its decision cell lives **inside each per-destination section** of `photos-23-gps-decisions.json` (alongside that destination's `gps_decisions` summary), with pre-created human-decision fields exactly like every other decision (Section 9). It carries a machine `proposal`, a `user_decision` the operator fills, and a derived `effective_fallback`:
 
 ```json
 {
@@ -1515,7 +1515,7 @@ The cell resolves its `effective_fallback` during validation:
 
 The fallback is **optional and never blocks**: a destination with no effective fallback is fine — its un-located photos simply fall through to the remaining Section 23 options (accept-unlocated if the operator marked the file so, otherwise a per-file blocker). Accordingly the cell's `requires_user_input` is always `false`; the inherited proposal is a convenience the operator *may* validate, not a gate. An authored coordinate that is out of range is a validation blocker located to the destination's `folder_fallback` (Section 9.2), preserved and flagged rather than silently dropped; accepting a proposal that no longer exists marks the cell `stale_user_decision` rather than failing.
 
-A file placed from the effective folder fallback is a **manual** GPS placement (origin *apply manual*, marker `manual_fallback`), so it is reversible via the pre-state ledger exactly like a per-file manual lock (Section 24.1) — withdrawing the destination's fallback (or moving the file out of a destination that had one) restores the file's pinned pre-state. In the `photos-22` per-destination summary it is counted under `automatic_folder_fallback`; the exact per-file write is re-derived in `photos-23-executable-plan.json` from the resolved inputs (the effective fallback among them), never read from the summary (Section 25).
+A file placed from the effective folder fallback is a **manual** GPS placement (origin *apply manual*, marker `manual_fallback`), so it is reversible via the pre-state ledger exactly like a per-file manual lock (Section 24.1) — withdrawing the destination's fallback (or moving the file out of a destination that had one) restores the file's pinned pre-state. In the `photos-23` per-destination summary it is counted under `automatic_folder_fallback`; the exact per-file write is re-derived in `photos-24-executable-plan.json` from the resolved inputs (the effective fallback among them), never read from the summary (Section 25).
 
 ---
 
@@ -1661,19 +1661,19 @@ The executable plan must:
 
 Execution must not invent new rename decisions or choose a different suffix.
 
-It only applies renames already present in `photos-23-executable-plan.json`.
+It only applies renames already present in `photos-24-executable-plan.json`.
 
 ---
 
-## 28. Create `photos-23-executable-plan.json`
+## 28. Create `photos-24-executable-plan.json`
 
 An executable calibration plan may be produced only when:
 
 1. `photos-21-time-decisions.json` exists and completely covers each destination;
 2. destination timezone is known;
 3. resolved UTC exists for every file and is current;
-4. `photos-21a-gps-drift-validation.json` is complete — every at-risk bucket explicitly confirmed (Section 22a);
-5. `photos-22-gps-decisions.json` exists and completely covers each destination;
+4. `photos-22-gps-drift-validation.json` is complete — every at-risk bucket explicitly confirmed (Section 22a);
+5. `photos-23-gps-decisions.json` exists and completely covers each destination;
 6. all GPS decisions are complete;
 7. planned timestamp renames are no-clobber and safe;
 8. no blockers remain;
@@ -1682,12 +1682,12 @@ An executable calibration plan may be produced only when:
 11. prep handoff/cache dependencies are current;
 12. media file size/mtime/fingerprint preconditions are current.
 
-The plan records `photos-21a-gps-drift-validation.json` as a direct dependency (alongside `photos-21`/`photos-22`), so a drift confirmation withdrawn after planning restales the plan and `execute` rejects it (Section 29).
+The plan records `photos-22-gps-drift-validation.json` as a direct dependency (alongside `photos-21`/`photos-23`), so a drift confirmation withdrawn after planning restales the plan and `execute` rejects it (Section 29).
 
 The executable artifact is:
 
 ```text
-photos-23-executable-plan.json
+photos-24-executable-plan.json
 ```
 
 It must be grouped by destination.
@@ -1707,7 +1707,7 @@ It should clearly indicate:
 ```json
 {
   "artifact_type": "executable_plan",
-  "artifact_name": "photos-23-executable-plan.json",
+  "artifact_name": "photos-24-executable-plan.json",
   "status": "ready",
   "executable": true
 }
@@ -1721,7 +1721,7 @@ It must depend on:
 
 1. `photos-21-time-decisions.json` path and SHA-256;
 2. resolved UTC cache fingerprint;
-3. `photos-22-gps-decisions.json` path and SHA-256;
+3. `photos-23-gps-decisions.json` path and SHA-256;
 4. config fingerprint;
 5. camera group/config classification fingerprint;
 6. `photos-11-handoff.json` path and its `content_fingerprint` (the content-scoped staleness key, not a whole-file byte hash, Section 4; prep Section 16.2);
@@ -1742,17 +1742,17 @@ Execution applies only the already-planned metadata and rename operations.
 
 Execution must:
 
-1. load `photos-23-executable-plan.json`;
+1. load `photos-24-executable-plan.json`;
 2. re-hash all named JSON artifact dependencies using SHA-256;
 3. validate all non-JSON upstream dependencies;
 4. reject stale plans before mutation;
 5. confirm the workspace lock is held (acquired at run start per shared contract Section 2);
-6. take a pre-mutation snapshot where configured, reusing the **same optional ZFS snapshot mechanism prep uses** (the `zfs` block in the workspace config `photos-00-config.json`, keyed by plan id; shared contract `photos-shared-contract.md` Section 3), and honoring the same `snapshots_required` semantics (abort before any mutation if a required snapshot fails, and carry the snapshot record into `photos-24` either way). Snapshots are **strictly optional** — disabled by default and never a prerequisite for the safety model, which rests on the plan/validate/execute discipline, the journal, no-clobber, and the pre-state ledger (shared contract Section 3); they add a clean-slate rollback path for operators on ZFS. The snapshot is **labelled for its phase** (e.g. a `calibrate` label distinct from prep's) so that, even on a dataset shared with prep, calibration's pre-mutation snapshot never collides in name with a prep snapshot for the same plan id;
+6. take a pre-mutation snapshot where configured, reusing the **same optional ZFS snapshot mechanism prep uses** (the `zfs` block in the workspace config `photos-00-config.json`, keyed by plan id; shared contract `photos-shared-contract.md` Section 3), and honoring the same `snapshots_required` semantics (abort before any mutation if a required snapshot fails, and carry the snapshot record into `photos-25` either way). Snapshots are **strictly optional** — disabled by default and never a prerequisite for the safety model, which rests on the plan/validate/execute discipline, the journal, no-clobber, and the pre-state ledger (shared contract Section 3); they add a clean-slate rollback path for operators on ZFS. The snapshot is **labelled for its phase** (e.g. a `calibrate` label distinct from prep's) so that, even on a dataset shared with prep, calibration's pre-mutation snapshot never collides in name with a prep snapshot for the same plan id;
 7. apply only planned operations, each re-verified no-clobber **at execute time** and performed atomically (Section 29.1a; shared contract `photos-shared-contract.md` Section 15): immediately before each rename, confirm the target name is not already occupied (case-insensitively where applicable) rather than trusting the plan's suffix allocation, and apply the rename as a single atomic filesystem operation; metadata writes are applied atomically (write-and-atomic-rename or safe-write mode). Per-file operations may be applied **concurrently** under `-j`/`--jobs` without changing semantic results (Section 29.3). An unexpectedly occupied rename target at execute time is a blocker, never a clobber;
 8. after each file's metadata write, **verify the photo's decoded-content fingerprint is unchanged** before treating the write as applied — the integrity check of Section 29.1a item 5: an `identify` pixel fingerprint must be invariant under an EXIF/GPS write (prep Section 9), so a mismatch means the write altered pixels and the operation is held back (no confirm, no dependent rename) and recorded for review, not silently accepted;
 9. journal every metadata write, marker write, file move, or rename;
 10. update SQLite/cache after successful writes;
-11. write `photos-24-execution-summary.json` (contents per Section 29.2);
+11. write `photos-25-execution-summary.json` (contents per Section 29.2);
 12. produce a final execution summary.
 
 Execution must not recalculate time, GPS, filename, or rename decisions.
@@ -1765,7 +1765,7 @@ If the executable plan includes local-time-based no-clobber renames, execution a
 
 ### 29.1 Execution idempotency and resume
 
-Execution must be safely re-runnable after a crash or partial application. The plan carries a stable plan id and every applied operation is journaled (steps above), so a re-run of the same `photos-23-executable-plan.json` must:
+Execution must be safely re-runnable after a crash or partial application. The plan carries a stable plan id and every applied operation is journaled (steps above), so a re-run of the same `photos-24-executable-plan.json` must:
 
 1. re-validate all dependencies (a crash does not excuse stale execution);
 2. consult the journal and treat already-applied operations as completed no-ops rather than reapplying them;
@@ -1784,23 +1784,23 @@ Execution mutates the photographic files' metadata and names, so each operation 
 4. **Tool failure is fatal to that operation, not silent.** If `exiftool` reports failure for a file, execution records the failure (Section 29.2 item 6), leaves that file at its pre-operation state (point 1 guarantees it is intact), and continues or aborts per policy — it never records the operation as applied. A failed write is never treated as a no-op on the next run.
 5. **Post-write content-fingerprint verification.** After a file's metadata write succeeds, execution **recomputes the photo's decoded-content fingerprint** (ImageMagick `identify`, prep Section 9) and compares it to the fingerprint recorded for that file in the plan's per-operation preconditions. The fingerprint is the file's identity spine precisely *because* it is invariant under an in-place EXIF/GPS write (prep Section 9; shared contract Section 9.1), so the expected result is that it is **unchanged**:
    - **unchanged → the write is confirmed.** Only then are the write operation (and any rename that depends on it) eligible to proceed and be journaled as confirmed.
-   - **changed → the operation is held back, not silently accepted.** A changed fingerprint means the metadata write disturbed decoded pixels — something the pipeline's identity model does not expect and must not paper over. Execution does **not** confirm the write, does **not** apply the file's dependent rename (the file keeps its current name), and records a **fingerprint mismatch** for the file in `photos-24-execution-summary.json` (Section 29.2 item 8) carrying the expected and actual fingerprints. The run's status becomes `partial`.
-   This verification is what `photos-24`'s mismatch list and its `accept_fingerprint_change` review field exist for (Section 29.2 item 8): the operator inspects a flagged file, and if the pixel change is understood and acceptable, sets `accept_fingerprint_change: true` for it and re-runs, at which point execution treats that file's post-write fingerprint as the accepted identity and confirms the held-back operation. The verification runs **per file** and is therefore safe to perform inside the concurrent worker pool (Section 29.3) — each file's check touches only that file and contributes an independent result the executor aggregates deterministically.
+   - **changed → the operation is held back, not silently accepted.** A changed fingerprint means the metadata write disturbed decoded pixels — something the pipeline's identity model does not expect and must not paper over. Execution does **not** confirm the write, does **not** apply the file's dependent rename (the file keeps its current name), and records a **fingerprint mismatch** for the file in `photos-25-execution-summary.json` (Section 29.2 item 8) carrying the expected and actual fingerprints. The run's status becomes `partial`.
+   This verification is what `photos-25`'s mismatch list and its `accept_fingerprint_change` review field exist for (Section 29.2 item 8): the operator inspects a flagged file, and if the pixel change is understood and acceptable, sets `accept_fingerprint_change: true` for it and re-runs, at which point execution treats that file's post-write fingerprint as the accepted identity and confirms the held-back operation. The verification runs **per file** and is therefore safe to perform inside the concurrent worker pool (Section 29.3) — each file's check touches only that file and contributes an independent result the executor aggregates deterministically.
 
-### 29.2 The execution summary artifact (`photos-24-execution-summary.json`)
+### 29.2 The execution summary artifact (`photos-25-execution-summary.json`)
 
-On finishing execution, the workflow writes the terminal artifact `photos-24-execution-summary.json` to `.photos-ingest/` (Section 8.1). It is a record of what execution actually did; unlike `photos-21`–`23` it is never an upstream **dependency** and is never re-hashed (Section 4), so nothing is built from it. It does, however, carry **one confirmable review field** — the per-file `accept_fingerprint_change` flag in its `fingerprint_mismatches` list (item 8) — that a *subsequent* execution reads back to learn which flagged pixel changes the operator has accepted (Section 29.1a item 5). This is not a hash dependency (the file is still never re-hashed); it is a small authored-decision surface on the otherwise terminal artifact, in the same spirit as the decision fields of the numbered artifacts (Section 9).
+On finishing execution, the workflow writes the terminal artifact `photos-25-execution-summary.json` to `.photos-ingest/` (Section 8.1). It is a record of what execution actually did; unlike `photos-21`–`23` it is never an upstream **dependency** and is never re-hashed (Section 4), so nothing is built from it. It does, however, carry **one confirmable review field** — the per-file `accept_fingerprint_change` flag in its `fingerprint_mismatches` list (item 8) — that a *subsequent* execution reads back to learn which flagged pixel changes the operator has accepted (Section 29.1a item 5). This is not a hash dependency (the file is still never re-hashed); it is a small authored-decision surface on the otherwise terminal artifact, in the same spirit as the decision fields of the numbered artifacts (Section 9).
 
 It must record at least:
 
 1. **Artifact identity** — artifact type, name, and schema version;
 2. **Run identity** — the plan id and execution id it summarizes;
-3. **What it summarizes** — the SHA-256 of `photos-23-executable-plan.json` (the plan that was executed) and the flattened upstream chain that plan validated against (e.g. `photos-21-time-decisions.json`, `photos-22-gps-decisions.json`, and `photos-11-handoff.json` SHA-256s and the non-JSON fingerprints), so the summary unambiguously identifies the exact inputs the execution was based on;
+3. **What it summarizes** — the SHA-256 of `photos-24-executable-plan.json` (the plan that was executed) and the flattened upstream chain that plan validated against (e.g. `photos-21-time-decisions.json`, `photos-23-gps-decisions.json`, and `photos-11-handoff.json` SHA-256s and the non-JSON fingerprints), so the summary unambiguously identifies the exact inputs the execution was based on;
 4. **Operations applied, per destination and in global total** — counts of: time-metadata writes, GPS metadata writes, `GPSProcessingMethod` marker writes, no-clobber renames, no-ops (already-correct files), and skips;
 5. **Resume/journal facts** — for a re-run after a crash or partial application (Section 29.1): how many planned operations were newly applied versus treated as already-satisfied-and-skipped, so a resumed run is auditable;
 6. **Failures and blockers** — any operation that failed or any blocker encountered during execution, with enough detail to act on;
 7. **Final status** — `success`, `partial`, or `failed`;
-8. **Fingerprint mismatches** — the per-file list of post-write content-fingerprint mismatches detected in this run (Section 29.1a item 5): for each, the file path, the expected fingerprint, the actual fingerprint, and a pre-created `user_decision` object with `accept_fingerprint_change` (default `false`). A non-empty list forces status `partial`. On a later run, a file whose entry has `accept_fingerprint_change: true` has its held-back operation confirmed (the accepted post-write fingerprint becomes its identity); entries the operator has not accepted remain held back. This is the only field of `photos-24` that a later run consumes;
+8. **Fingerprint mismatches** — the per-file list of post-write content-fingerprint mismatches detected in this run (Section 29.1a item 5): for each, the file path, the expected fingerprint, the actual fingerprint, and a pre-created `user_decision` object with `accept_fingerprint_change` (default `false`). A non-empty list forces status `partial`. On a later run, a file whose entry has `accept_fingerprint_change: true` has its held-back operation confirmed (the accepted post-write fingerprint becomes its identity); entries the operator has not accepted remain held back. This is the only field of `photos-25` that a later run consumes;
 9. **Run metadata** — wall-clock timestamps, job count, and similar, kept **separate** from the fingerprints in item 3.
 
 Although nothing re-hashes it, the artifact follows the same structure and determinism discipline as the other artifacts for consistency: it is grouped by destination (with a global summary), records the SHA-256 of what it summarizes (item 3), and separates run-metadata timestamps from fingerprints (item 9), mirroring the prep handoff's determinism rule (prep `photos-1-prep-workflow.md` Section 16).
@@ -1810,14 +1810,14 @@ Example shape:
 ```json
 {
   "artifact_type": "execution_summary",
-  "artifact_name": "photos-24-execution-summary.json",
+  "artifact_name": "photos-25-execution-summary.json",
   "schema_version": "...",
   "plan_id": "...",
   "execution_id": "...",
   "status": "success",
   "summarizes": {
-    "photos-23-executable-plan.json": { "sha256": "..." },
-    "upstream": { "photos-21-time-decisions.json": "sha256", "photos-22-gps-decisions.json": "sha256", "photos-11-handoff.json": "sha256", "...": "..." }
+    "photos-24-executable-plan.json": { "sha256": "..." },
+    "upstream": { "photos-21-time-decisions.json": "sha256", "photos-23-gps-decisions.json": "sha256", "photos-11-handoff.json": "sha256", "...": "..." }
   },
   "totals": {
     "time_metadata_writes": 0,
@@ -1848,7 +1848,7 @@ Execution's per-file work — the `exiftool` metadata/marker writes, the post-wr
 
 1. **The operation set is fixed before any concurrent work.** The plan is loaded, dependency-revalidated, and the optional pre-mutation snapshot taken (Section 29 steps 1–6) single-threaded; the per-file operation batches are then derived deterministically. Only the application of those already-decided per-file batches is parallelized — execution never *decides* anything concurrently (it never recalculates time, GPS, filename, or rename, Section 29).
 2. **Per-file isolation.** Each file's batch (its metadata write, fingerprint verify, and rename) is applied as an independent unit of work that touches only that file; a worker mutates no shared state and returns a per-file result the executor aggregates. Two files never contend, because the no-clobber rename targets were allocated against the whole destination's occupied-name set at plan time (Section 27) and are re-verified free at execute time (Section 29.1a item 1).
-3. **Deterministic aggregation.** Results are merged in a deterministic (path-sorted) order so the journal, the per-destination and global totals, the resume facts, and the `fingerprint_mismatches` list (Section 29.2) are identical regardless of job count or completion order. Two different safe job counts produce the same `photos-24-execution-summary.json` content (modulo run-metadata timestamps and the recorded `jobs` value, which are run metadata, not semantic fingerprints, Section 29.2 item 9).
+3. **Deterministic aggregation.** Results are merged in a deterministic (path-sorted) order so the journal, the per-destination and global totals, the resume facts, and the `fingerprint_mismatches` list (Section 29.2) are identical regardless of job count or completion order. Two different safe job counts produce the same `photos-25-execution-summary.json` content (modulo run-metadata timestamps and the recorded `jobs` value, which are run metadata, not semantic fingerprints, Section 29.2 item 9).
 4. **Single-writer journal and cache.** The execution journal and the SQLite writes (including the manual-GPS pre-state ledger captures, which are committed **before** the writes they protect, Section 29.1a item 3) go through a single controlled writer, never from worker threads. The pre-state capture pass therefore completes before the concurrent write pass begins, so no worker races the ledger.
 5. **Tool workers, safe restart, no partial persistence.** `exiftool` runs as a persistent `-stay_open` worker, and the `identify` fingerprint tool can likewise run as a persistent worker via ImageMagick's script/command-stream mode (resetting per-image state between commands), falling back to per-file spawn where that is unavailable (prep `photos-1-prep-workflow.md` Section 17 item 5). Either way a worker crash is recoverable and a transient per-file failure is retried, bounded, before becoming a blocker. (Calibration touches photos only, so `ffmpeg`/video is never involved here.) Partial or failed worker output is never journaled as a confirmed operation or cached as a valid fingerprint — it surfaces as a failure or a held-back mismatch (Section 29.1a items 4–5), not a silent success.
 6. **Observability.** Long-running execution is visible: phase-level log lines (lock, validate, snapshot, apply, verify, journal, cache, summary) and live aggregate progress for the concurrent apply/verify pass, with the journal — not the progress output — as the durable record (mirroring prep Section 17).
@@ -1917,40 +1917,40 @@ Workspace config changed
   -> camera groups stale
   -> photos-21-time-decisions.json stale
   -> resolved UTC stale
-  -> photos-22-gps-decisions.json stale
-  -> photos-23-executable-plan.json stale
+  -> photos-23-gps-decisions.json stale
+  -> photos-24-executable-plan.json stale
 
 Camera group classification changed
   -> photos-21-time-decisions.json stale
   -> resolved UTC stale
-  -> photos-22-gps-decisions.json stale
+  -> photos-23-gps-decisions.json stale
 
 photos-21-time-decisions.json changed
   -> resolved UTC stale
-  -> photos-22-gps-decisions.json stale
-  -> photos-23-executable-plan.json stale
+  -> photos-23-gps-decisions.json stale
+  -> photos-24-executable-plan.json stale
 
 Resolved UTC cache changed
-  -> photos-22-gps-decisions.json stale
-  -> photos-23-executable-plan.json stale
+  -> photos-23-gps-decisions.json stale
+  -> photos-24-executable-plan.json stale
 
 GPX folder changed
   -> GPX index stale
   -> GPX/native-GPS time-anchor proposals stale if they used GPX
-  -> photos-22-gps-decisions.json stale
-  -> photos-23-executable-plan.json stale
+  -> photos-23-gps-decisions.json stale
+  -> photos-24-executable-plan.json stale
 
 Destination timezone changed
   -> resolved UTC may be stale where timezone affected time interpretation
   -> local rename plan stale
-  -> photos-23-executable-plan.json stale
+  -> photos-24-executable-plan.json stale
 
 Filename format config changed
   -> local rename plan stale
-  -> photos-23-executable-plan.json stale
+  -> photos-24-executable-plan.json stale
 
-photos-22-gps-decisions.json changed
-  -> photos-23-executable-plan.json stale
+photos-23-gps-decisions.json changed
+  -> photos-24-executable-plan.json stale
 
 Media file size/mtime/fingerprint changed
   -> calibration blocked
@@ -1965,7 +1965,7 @@ or a hand-edited decision object is structurally broken)
 
 Post-write content fingerprint changed (metadata write disturbed pixels)
   -> the file's write is held back: not confirmed, dependent rename not applied
-  -> recorded in photos-24 fingerprint_mismatches (Section 29.1a item 5 / 29.2 item 8)
+  -> recorded in photos-25 fingerprint_mismatches (Section 29.1a item 5 / 29.2 item 8)
   -> run status partial; operator sets accept_fingerprint_change=true and re-runs
      to accept the new identity, else fixes the cause
 
@@ -1982,17 +1982,17 @@ Finalize is a **separate, explicitly-invoked command**, not part of `execute` an
 
 Finalize must:
 
-1. run under the workspace lock (shared contract Section 2) and be **non-destructive** — it reads and bundles; it never mutates the workspace, the artifacts, the live SQLite DB, or the library. (Generating `photos-25-complete-log.json` and capturing the `photos-25-calibrate-ingest.db` backup snapshot below are *new-file* writes into `.photos-ingest/`, not mutations of any existing photo, artifact, or the live DB — the snapshot is a read-only copy of the live DB.)
-2. require that calibration has ended successfully (a complete, executed `photos-23-executable-plan.json` with a corresponding `photos-24-execution-summary.json`); it refuses to finalize an incomplete or stale state;
-3. assemble the **archival package** defined in shared contract Section 13 — `photos-00-config.json`, the live SQLite database `photos-00-ingest.db`, the per-phase DB backup snapshots present (`photos-15-prep-ingest.db` and the calibration snapshot captured in item 4a), the JSON artifacts `photos-11-handoff.json`, `photos-15-prep-log.json`, `photos-21-time-decisions.json`, `photos-22-gps-decisions.json`, `photos-23-executable-plan.json`, `photos-24-execution-summary.json`, and a freshly generated `photos-25-complete-log.json`;
-4. generate the transformation log `photos-25-complete-log.json` (shared contract Section 13.3) by **carrying prep's end-of-prep audit log (`photos-15-prep-log.json`) forward** as the prep portion of each photo's journey and appending calibration's steps — consolidating prep's handoff/journal and calibration's decision artifacts/journal into a per-photo, content-fingerprint-keyed, human-readable JSON record of every transformation between ingestion and successful calibration. It does not re-derive prep's history or discard the prep log; `photos-25-complete-log.json` is a superset of `photos-15-prep-log.json` (shared contract Section 13.3 item 6);
-4a. capture the end-of-calibration database backup snapshot `photos-25-calibrate-ingest.db` — a consistent, atomic copy of the live `photos-00-ingest.db` taken at finalize (shared contract Section 13.4a). This reads the live DB and writes a new immutable file; it does not mutate the live DB (consistent with item 1);
+1. run under the workspace lock (shared contract Section 2) and be **non-destructive** — it reads and bundles; it never mutates the workspace, the artifacts, the live SQLite DB, or the library. (Generating `photos-26-complete-log.json` and capturing the `photos-26-calibrate-ingest.db` backup snapshot below are *new-file* writes into `.photos-ingest/`, not mutations of any existing photo, artifact, or the live DB — the snapshot is a read-only copy of the live DB.)
+2. require that calibration has ended successfully (a complete, executed `photos-24-executable-plan.json` with a corresponding `photos-25-execution-summary.json`); it refuses to finalize an incomplete or stale state;
+3. assemble the **archival package** defined in shared contract Section 13 — `photos-00-config.json`, the live SQLite database `photos-00-ingest.db`, the per-phase DB backup snapshots present (`photos-15-prep-ingest.db` and the calibration snapshot captured in item 4a), the JSON artifacts `photos-11-handoff.json`, `photos-15-prep-log.json`, `photos-21-time-decisions.json`, `photos-23-gps-decisions.json`, `photos-24-executable-plan.json`, `photos-25-execution-summary.json`, and a freshly generated `photos-26-complete-log.json`;
+4. generate the transformation log `photos-26-complete-log.json` (shared contract Section 13.3) by **carrying prep's end-of-prep audit log (`photos-15-prep-log.json`) forward** as the prep portion of each photo's journey and appending calibration's steps — consolidating prep's handoff/journal and calibration's decision artifacts/journal into a per-photo, content-fingerprint-keyed, human-readable JSON record of every transformation between ingestion and successful calibration. It does not re-derive prep's history or discard the prep log; `photos-26-complete-log.json` is a superset of `photos-15-prep-log.json` (shared contract Section 13.3 item 6);
+4a. capture the end-of-calibration database backup snapshot `photos-26-calibrate-ingest.db` — a consistent, atomic copy of the live `photos-00-ingest.db` taken at finalize (shared contract Section 13.4a). This reads the live DB and writes a new immutable file; it does not mutate the live DB (consistent with item 1);
 5. write a self-describing manifest (workspace identity, plan/execution ids, and SHA-256 of each bundled item, including the DB snapshots) so the package's integrity is verifiable later;
 6. leave the package in a known location the user can move to permanent storage alongside the library.
 
 Finalize creates no new authority and makes no decisions; it is the retention step that makes authored decisions (shared contract Section 12) outlive the transient workspace.
 
-Finalize is followed, when the operator chooses, by the **merge** phase (`photos-3-merge`, spec `photos-3-merge-workflow.md`; shared contract Sections 10.4 and 13.5), which **moves** the finalized photos from `6-photos-by-dest` into the permanent library and writes its own log `photos-35-merge-log.json` (copied forward from `photos-25-complete-log.json`, never editing it) recording each file's final library location. Merge is optional and additive: the finalize archival package — the `photos-25` transformation log, the SQLite database and its snapshots, and the job/decision artifacts — is complete and self-sufficient without it, and a workspace that is never merged keeps that full record intact (shared contract Section 13). Merge requires a successfully finalized workspace; calibration and finalize never perform the merge themselves.
+Finalize is followed, when the operator chooses, by the **merge** phase (`photos-3-merge`, spec `photos-3-merge-workflow.md`; shared contract Sections 10.4 and 13.5), which **moves** the finalized photos from `6-photos-by-dest` into the permanent library and writes its own log `photos-35-merge-log.json` (copied forward from `photos-26-complete-log.json`, never editing it) recording each file's final library location. Merge is optional and additive: the finalize archival package — the `photos-26` transformation log, the SQLite database and its snapshots, and the job/decision artifacts — is complete and self-sufficient without it, and a workspace that is never merged keeps that full record intact (shared contract Section 13). Merge requires a successfully finalized workspace; calibration and finalize never perform the merge themselves.
 
 ---
 
@@ -2024,9 +2024,9 @@ Important JSON artifacts include:
 
 ```text
 photos-21-time-decisions.json
-photos-22-gps-decisions.json
-photos-23-executable-plan.json
-photos-24-execution-summary.json
+photos-23-gps-decisions.json
+photos-24-executable-plan.json
+photos-25-execution-summary.json
 ```
 
 The user should always know:
@@ -2078,10 +2078,10 @@ The calibration workflow is:
 14. User completes/accepts time decisions if needed.
 15. Compute and persist resolved UTC per file in SQLite.
 16. Start GPS planning only after resolved UTC exists for every file.
-17. Create photos-22-gps-decisions.json, grouped by destination, even if no-op; summarize automatic/no-op decisions and list file paths only for review/blocker items. Each destination's folder GPS fallback inherits its nearest ancestor's fallback as a confirmable proposal (Section 25.3).
+17. Create photos-23-gps-decisions.json, grouped by destination, even if no-op; summarize automatic/no-op decisions and list file paths only for review/blocker items. Each destination's folder GPS fallback inherits its nearest ancestor's fallback as a confirmable proposal (Section 25.3).
 18. Plan metadata writes and no-clobber destination-local-time renames using configured filename format.
-19. Create photos-23-executable-plan.json, grouped by destination, with flattened dependency list and exact file-level operations.
-20. Execute only after strict dependency validation (SHA-256 rehashing of named JSON artifacts): take the optional pre-mutation snapshot (like prep), apply per-file operations concurrently, verify each photo's content fingerprint is unchanged after the metadata write, journal, and write photos-24 (with any fingerprint mismatches for review).
+19. Create photos-24-executable-plan.json, grouped by destination, with flattened dependency list and exact file-level operations.
+20. Execute only after strict dependency validation (SHA-256 rehashing of named JSON artifacts): take the optional pre-mutation snapshot (like prep), apply per-file operations concurrently, verify each photo's content fingerprint is unchanged after the metadata write, journal, and write photos-25 (with any fingerprint mismatches for review).
 ```
 
 The most important workflow rule is:

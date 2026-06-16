@@ -8,7 +8,7 @@ It launches nothing — it prints a clickable link using the machine's own IP an
 interface (default 0.0.0.0), so you can open the editor in your laptop's browser while SSH'd into the
 machine. Ctrl-C stops it cleanly (releasing the port).
 
-With a workspace it reads `<workspace>/.photos-ingest/photos-21*/photos-22*` decision JSON; with none
+With a workspace it reads `<workspace>/.photos-ingest/photos-21*/photos-23*` decision JSON; with none
 it runs in DEMO mode on the bundled example fixtures. The app edits `user_decision` and saves it back
 (POST /api/save writes only `user_decision`, round-tripping the rest; disabled in demo). GET
 /api/photo returns a downscaled JPEG preview for the map picker (path-safe; 404 in demo). POST
@@ -68,8 +68,8 @@ def _machine_ip():
 PKG_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CONTROL = ".photos-ingest"
 TIME_NAME = "photos-21-time-decisions.json"
-DRIFT_NAME = "photos-21a-gps-drift-validation.json"
-GPS_NAME = "photos-22-gps-decisions.json"
+DRIFT_NAME = "photos-22-gps-drift-validation.json"
+GPS_NAME = "photos-23-gps-decisions.json"
 CONFIG_NAME = "photos-00-config.json"
 EDITOR_LOCK = "photos-00-decision-editor.lock"  # dotfile lives in CONTROL; flock, fail-fast
 
@@ -241,8 +241,8 @@ def _load_artifacts(workspace):
                 "environment": _environment(workspace)}
     return {"workspace": None, "demo": True, "environment": None,
             "time": _example_json("photos-21-time-decisions.requires-input.json"),
-            "drift": _example_json("photos-21a-gps-drift-validation.requires-input.json"),
-            "gps": _example_json("photos-22-gps-decisions.requires-input.json")}
+            "drift": _example_json("photos-22-gps-drift-validation.requires-input.json"),
+            "gps": _example_json("photos-23-gps-decisions.requires-input.json")}
 
 
 def _write_json(path, obj):

@@ -8,9 +8,9 @@ the same plan/validate/execute, fingerprinted-dependency, authored-decisions dis
 
 It implements the full calibration workflow (Stages 1–11): the preflight lifecycle/by-dest gates
 (§7/§13), the in-memory by-dest model (Stage 2), the GPX index (§15), camera-group recognition
-(§16), the time- and GPS-decision artifacts `photos-21`/`photos-22` (§18/§23), resolved-UTC
-computation (§22), the executable plan `photos-23` (§28), `execute` of that plan into `photos-24`
-(§29), and `finalize` of the archival package `photos-25` + DB snapshot + manifest (§31). Subcommands:
+(§16), the time- and GPS-decision artifacts `photos-21`/`photos-23` (§18/§23), resolved-UTC
+computation (§22), the executable plan `photos-24` (§28), `execute` of that plan into `photos-25`
+(§29), and `finalize` of the archival package `photos-26` + DB snapshot + manifest (§31). Subcommands:
 `run` (plan), `execute`, `finalize`.
 
 The script sits beside `photos_utils.py` and imports the shared infrastructure from it.
@@ -40,13 +40,13 @@ from .photos_utils import (
 )
 
 TIME_DECISIONS_ARTIFACT = "photos-21-time-decisions.json"
-DRIFT_VALIDATION_ARTIFACT = "photos-21a-gps-drift-validation.json"
-GPS_DECISIONS_ARTIFACT = "photos-22-gps-decisions.json"
-EXECUTABLE_PLAN_ARTIFACT = "photos-23-executable-plan.json"
-EXECUTION_SUMMARY_ARTIFACT = "photos-24-execution-summary.json"
-COMPLETE_LOG_ARTIFACT = "photos-25-complete-log.json"
-CALIBRATE_DB_SNAPSHOT = "photos-25-calibrate-ingest.db"
-ARCHIVE_MANIFEST_ARTIFACT = "photos-25-archive-manifest.json"
+DRIFT_VALIDATION_ARTIFACT = "photos-22-gps-drift-validation.json"
+GPS_DECISIONS_ARTIFACT = "photos-23-gps-decisions.json"
+EXECUTABLE_PLAN_ARTIFACT = "photos-24-executable-plan.json"
+EXECUTION_SUMMARY_ARTIFACT = "photos-25-execution-summary.json"
+COMPLETE_LOG_ARTIFACT = "photos-26-complete-log.json"
+CALIBRATE_DB_SNAPSHOT = "photos-26-calibrate-ingest.db"
+ARCHIVE_MANIFEST_ARTIFACT = "photos-26-archive-manifest.json"
 
 
 def time_decisions_path(ws):
@@ -448,9 +448,9 @@ def _local_to_utc(naive, tz):
 
 
 def drift_offset_overrides(drift_artifact):
-    """Map a COMPLETE photos-21a to `{(destination, bucket_key): validated_offset_seconds}` for every
+    """Map a COMPLETE photos-23 to `{(destination, bucket_key): validated_offset_seconds}` for every
     confirmed bucket, so compute_resolved_utc can re-resolve those photos under the operator-validated
-    offset (§21a). The bucket_key matches the photos-21 cell key it was built from."""
+    offset (§22a). The bucket_key matches the photos-21 cell key it was built from."""
     out = {}
     for dest, d in ((drift_artifact or {}).get("destinations") or {}).items():
         for bucket, cell in (d.get("drift_decisions") or {}).items():
@@ -464,7 +464,7 @@ def compute_resolved_utc(files, groups, artifact, offset_overrides=None):
     """Resolve every by-dest photo to real UTC from the completed time decisions (§22). Camera
     groups use their (group, destination) effective offset (absolute camera->UTC correction);
     smartphones use their own EXIF offset, else the destination timezone. `offset_overrides`
-    (from photos-21a, §21a) replaces a bucket's offset with the operator-validated one. Returns
+    (from photos-23, §22a) replaces a bucket's offset with the operator-validated one. Returns
     per-file rows (the §22 fields), path-sorted and deterministic."""
     dests = artifact.get("destinations") or {}
     overrides = offset_overrides or {}
@@ -485,7 +485,7 @@ def compute_resolved_utc(files, groups, artifact, offset_overrides=None):
                 bucket_key = f"{key}@{date}" if f"{key}@{date}" in cells else key
                 cell = cells.get(bucket_key) or {}
                 eff = cell.get("effective_time_anchor")
-                if (dest, bucket_key) in overrides:        # §21a: operator-validated offset wins
+                if (dest, bucket_key) in overrides:        # §22a: operator-validated offset wins
                     offset_used = overrides[(dest, bucket_key)]
                     resolved = naive + timedelta(seconds=offset_used)
                     status, rule, prov = "valid", "camera_group_offset", "gps_drift_validated"
@@ -833,7 +833,7 @@ def plan_renames(files, fmt):
 # Stage 9 — executable plan operations (calibration §28). Pure op builders so
 # the op list is deterministic and exhaustively unit-testable. Automatic GPS is
 # RE-DERIVED here from inputs (classify_gps/place_gps), never read from the
-# photos-22 summary (§25). Execution (§29, Phase 6c) only applies these ops.
+# photos-23 summary (§25). Execution (§29, Phase 6c) only applies these ops.
 # ============================================================================
 
 _GPS_OP_ORIGIN = {"gpx_interpolation": "recompute_automated", "gpx_extrapolation": "recompute_automated",
@@ -895,15 +895,15 @@ def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename, cfg):
 
 
 # ============================================================================
-# Stage 11 — finalize: the photos-25 transformation log (shared contract §13.3).
+# Stage 11 — finalize: the photos-26 transformation log (shared contract §13.3).
 # Prep's per-photo log carried forward + calibration steps appended. A derived
 # consolidation of artifacts already written — no new authority.
 # ============================================================================
 
 def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, ledger):
-    """photos-25-complete-log.json's `photos` (§13.3): a deep copy of prep's per-photo, content-
+    """photos-26-complete-log.json's `photos` (§13.3): a deep copy of prep's per-photo, content-
     fingerprint-keyed journeys with each calibrated photo's `phase:"calibrate"` steps APPENDED — a
-    strict superset of the prep log, derived from photos-21 / the resolved-UTC cache / photos-23 /
+    strict superset of the prep log, derived from photos-21 / the resolved-UTC cache / photos-24 /
     the ledger. Deterministic, fingerprint-keyed. The prep file itself is never edited."""
     photos = json.loads(json.dumps(prep_photos or {}))            # deep copy; never touch the prep file
     row_by_rel = {r["relative_path"]: r for r in resolved_rows}
@@ -960,8 +960,8 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, l
 
 class CalibrationWorkflow:
     """Stages 1–11: validate the workspace, build the model, produce photos-21/22 decision artifacts,
-    compute resolved UTC, assemble photos-23-executable-plan.json (when decisions are complete),
-    execute it into photos-24 (§29), and finalize the archival package photos-25 (§31)."""
+    compute resolved UTC, assemble photos-24-executable-plan.json (when decisions are complete),
+    execute it into photos-25 (§29), and finalize the archival package photos-26 (§31)."""
 
     def __init__(self, workspace_root: str):
         self.workspace_root = workspace_root
@@ -1514,18 +1514,18 @@ class CalibrationWorkflow:
             "camera_group_key_version": CAMERA_GROUP_KEY_VERSION,
         }
 
-    # --- Stage 7a: GPS-drift validation (photos-21a, §21a) -------------------
+    # --- Stage 7a: GPS-drift validation (photos-23, §22a) -------------------
     # The highest-danger gap: a (group, dest, date) bucket whose clock offset is manual/timezone-
     # derived (NOT a GPX self-anchor) and that has NO native-GPS anchor is placed in phase 22 purely
     # from its resolved UTC — a wrong offset silently lands the whole batch at the wrong track point.
-    # 21a flags every such bucket that GPX *could* validate, blocks until the operator explicitly
+    # 22 flags every such bucket that GPX *could* validate, blocks until the operator explicitly
     # confirms each (a zero-scrub "offset was right" must be actively confirmed, never implied), and
-    # carries the corrected/validated offset that compute_resolved_utc then re-consumes (§21a).
+    # carries the corrected/validated offset that compute_resolved_utc then re-consumes (§22a).
 
     _DRIFT_TRIGGER_SOURCES = ("timezone_accepted", "manual", "manual_real_utc")
 
     def build_drift_validation(self, files, time_artifact, rows0, gpx, prior):
-        """Build/regenerate photos-21a from the COMPLETE photos-21 + the resolved UTC under the
+        """Build/regenerate photos-23 from the COMPLETE photos-21 + the resolved UTC under the
         current offsets (`rows0`). One review item per at-risk bucket (manual/tz-derived offset, no
         native-GPS anchor, and GPX coverage over its plausible time window). Authored confirmations
         are preserved across reruns; a confirmation whose bucket no longer triggers is stale-flagged.
@@ -1560,7 +1560,7 @@ class CalibrationWorkflow:
                        if (window is None or (lo - timedelta(seconds=window)) <= p.time_utc
                            <= (hi + timedelta(seconds=window)))]
                 if not seg:
-                    continue                                  # no GPX coverage -> phase 22 fallback/lost, not 21a
+                    continue                                  # no GPX coverage -> phase 22 fallback/lost, not 22
                 cells[bucket] = self._drift_cell(dest, bucket, cell, seg, frames,
                                                  prior_cells.get(bucket) or {}, blockers, date=date)
             if cells:
@@ -1585,7 +1585,7 @@ class CalibrationWorkflow:
         frames (evidence the editor scrubs a photo along), the operator's explicit confirmation, and
         the validated/corrected offset compute_resolved_utc consumes. requires_user_input until
         `confirmed` is actively set (a zero-scrub counts only when the operator confirms it — inaction
-        never satisfies the gate, §21a)."""
+        never satisfies the gate, §22a)."""
         eff = time_cell.get("effective_time_anchor") or {}
         current = eff.get("offset_seconds")
         loc = bucket
@@ -1636,14 +1636,14 @@ class CalibrationWorkflow:
             "camera_group_key_version": CAMERA_GROUP_KEY_VERSION,
         }
 
-    # --- Stage 8: GPS decisions (photos-22, §23/§25) -------------------------
+    # --- Stage 8: GPS decisions (photos-23, §23/§25) -------------------------
 
     _SUMMARY_KEYS = ("files_total", "preserve_native_gps", "automatic_gpx_interpolation",
                      "automatic_gpx_extrapolation", "automatic_folder_fallback", "manual_locked",
                      "manual_review_required", "blocked", "no_gps_change_needed")
 
     def build_gps_decisions(self, files, resolved_rows, gpx, prior, resolved_fp):
-        """Build/regenerate photos-22 (§25): the §23 decision per by-dest file, grouped by
+        """Build/regenerate photos-23 (§25): the §23 decision per by-dest file, grouped by
         destination as automatic-category SUMMARIES with file paths only for review/blocker items.
         Destinations are processed parent-first so a folder_fallback inherits its nearest resolved
         ancestor's effective fallback (§25, mirroring §10.2). Returns (artifact, blockers)."""
@@ -1708,7 +1708,7 @@ class CalibrationWorkflow:
                         "max_distance_to_track_m": CONFIG["gpx_interpolation_max_distance_meters"],
                         "confidence": "mixed" if counts["blocked"] else "automatic",
                         "notes": ["Automatic decisions are summarized here; exact file-level write "
-                                  "operations are listed only in photos-23-executable-plan.json."],
+                                  "operations are listed only in photos-24-executable-plan.json."],
                     },
                     "review_items": review_items,
                 },
@@ -1781,22 +1781,22 @@ class CalibrationWorkflow:
             "gpx_interpolation_max_distance_meters", "gpx_interpolation_max_speed_kmh",
             "gpx_extrapolation_max_seconds")}, sort_keys=True)
         return {
-            # 21a is covered transitively: resolved_fp folds in photos_21a_sha256 (§22.1), so a changed
-            # drift confirmation already restales this. No separate 21a dep needed here.
+            # 22 is covered transitively: resolved_fp folds in photos_22_sha256 (§22.1), so a changed
+            # drift confirmation already restales this. No separate 22 dep needed here.
             "resolved_utc_cache_fingerprint": resolved_fp,
             "gpx_fingerprint": self._gpx_fingerprint,
             "gps_policy_fingerprint": sha256_text(gps_policy),
             "handoff": self._handoff_dependency(self.workspace_root),
         }
 
-    # --- Stage 9: executable plan (photos-23, §28) ---------------------------
+    # --- Stage 9: executable plan (photos-24, §28) ---------------------------
 
     def build_executable_plan(self, files, resolved_rows, time_artifact, gps_artifact, gpx,
                               resolved_fp, ledger_entries=None):
-        """Assemble photos-23 (§28): per-destination operations (corrected-time / GPS / marker /
+        """Assemble photos-24 (§28): per-destination operations (corrected-time / GPS / marker /
         rename, plus revert-manual-GPS for withdrawn overrides §24.1) for execution to apply, the
         readiness gate, and the flattened dependency cascade. Automatic GPS is re-derived from
-        inputs, never read from the photos-22 summary. Deterministic. Returns (plan, blockers)."""
+        inputs, never read from the photos-23 summary. Deterministic. Returns (plan, blockers)."""
         cfg = CONFIG
         fmt = cfg["filename_timestamp_format"]
         utc_by_path = {r["relative_path"]: r for r in resolved_rows}
@@ -1807,9 +1807,9 @@ class CalibrationWorkflow:
         if time_artifact.get("status") != "complete":
             blockers.append("photos-21-time-decisions.json is not complete.")
         if gps_artifact.get("status") != "complete":
-            blockers.append("photos-22-gps-decisions.json is not complete.")
-        # Defensive: main() never reaches here unless 21a is complete, but assert it so a plan can
-        # never assemble while a GPS-drift bucket is unconfirmed (§21a gate).
+            blockers.append("photos-23-gps-decisions.json is not complete.")
+        # Defensive: main() never reaches here unless 22 is complete, but assert it so a plan can
+        # never assemble while a GPS-drift bucket is unconfirmed (§22a gate).
         dvp = drift_validation_path(self.workspace_root)
         if os.path.exists(dvp):
             try:
@@ -1918,7 +1918,7 @@ class CalibrationWorkflow:
             "planned_operation_fingerprint": planned_op_fp,
         }
 
-    # --- Stage 10: execution (photos-24, §29) --------------------------------
+    # --- Stage 10: execution (photos-25, §29) --------------------------------
 
     _META_OP_TYPES = ("metadata_time_write", "metadata_gps_write", "gps_marker_write")
     _OP_TOTAL_KEY = {"metadata_time_write": "metadata_time_writes", "metadata_gps_write": "metadata_gps_writes",
@@ -2053,8 +2053,8 @@ class CalibrationWorkflow:
         return res
 
     def execute_plan(self, jobs, now_iso, execution_id):
-        """Stage 10 (§29): apply photos-23 after re-validating every dependency, journaling for
-        idempotent resume, verifying content fingerprints, and writing photos-24. now_iso /
+        """Stage 10 (§29): apply photos-24 after re-validating every dependency, journaling for
+        idempotent resume, verifying content fingerprints, and writing photos-25. now_iso /
         execution_id are injected so the fingerprint-bearing body stays reproducible. Returns the
         summary dict (status 'rejected' with stale reasons if the plan no longer applies)."""
         ws = self.workspace_root
@@ -2067,11 +2067,11 @@ class CalibrationWorkflow:
 
         # Optional pre-mutation ZFS snapshot (§29 step 6), labelled "calibrate" so it never collides
         # with prep's "prep-" snapshot. A REQUIRED snapshot that cannot be taken aborts before any
-        # mutation; the record is carried into photos-24 either way.
+        # mutation; the record is carried into photos-25 either way.
         snapshot = take_zfs_snapshot(ws, plan["plan_id"], "calibrate")
         if snapshot is not None and snapshot["required"] and not snapshot["ok"]:
             reason = f"required ZFS pre-mutation snapshot failed: {snapshot['stderr']}"
-            # Nothing was mutated, but §29 step 6 requires the snapshot record be carried into photos-24
+            # Nothing was mutated, but §29 step 6 requires the snapshot record be carried into photos-25
             # either way, so the abort is auditable like any other run.
             write_json_artifact(execution_summary_path(ws), {
                 "artifact_type": "execution_summary", "artifact_name": EXECUTION_SUMMARY_ARTIFACT,
@@ -2159,7 +2159,7 @@ class CalibrationWorkflow:
 
     @staticmethod
     def _accepted_mismatches(ws):
-        """File paths whose prior photos-24 fingerprint mismatch the user marked accept=true."""
+        """File paths whose prior photos-25 fingerprint mismatch the user marked accept=true."""
         p = execution_summary_path(ws)
         if not os.path.exists(p):
             return set()
@@ -2227,7 +2227,7 @@ class CalibrationWorkflow:
                       CALIBRATE_DB_SNAPSHOT, "photos-00-ingest.db"]
 
     def finalize_package(self, now_iso):
-        """Stage 11 (§31): assemble the durable archival package — the photos-25 transformation log,
+        """Stage 11 (§31): assemble the durable archival package — the photos-26 transformation log,
         an end-of-calibration DB snapshot, and a manifest. Non-destructive (only NEW files; never
         mutates an artifact, photo, or the live DB). Returns blockers (empty = package written)."""
         ws = self.workspace_root
@@ -2311,9 +2311,9 @@ def add_arguments(parser):
     parser.add_argument("-j", "--jobs", type=int, default=None,
                         help="Worker threads for execution (default: config jobs, else 4).")
     sub = parser.add_subparsers(dest="command")
-    sub.add_parser("plan", help="Plan the geotag pass: produce photos-21/21a/22/23 (no mutation).")
-    sub.add_parser("execute", help="Apply photos-23 to the originals (metadata writes + renames).")
-    sub.add_parser("finalize", help="Bundle the durable archival package (photos-25; non-destructive).")
+    sub.add_parser("plan", help="Plan the geotag pass: produce photos-21/22/23/24 (no mutation).")
+    sub.add_parser("execute", help="Apply photos-24 to the originals (metadata writes + renames).")
+    sub.add_parser("finalize", help="Bundle the durable archival package (photos-26; non-destructive).")
     parser.set_defaults(_run=run, _parser=parser)
 
 
@@ -2405,13 +2405,13 @@ def run(args):
                 print(f"Wrote {TIME_DECISIONS_ARTIFACT}: status=complete — all time decisions resolved.")
 
                 # Stage 7: time decisions are complete -> resolve UTC under the CURRENT offsets
-                # (rows0). This drives drift detection (§21a) and, once 21a is clean, is recomputed
+                # (rows0). This drives drift detection (§22a) and, once 22 is clean, is recomputed
                 # with the operator-validated offsets before anything downstream consumes it.
                 rows0 = compute_resolved_utc(files, groups, artifact)
 
-                # Stage 7a: GPS-drift validation (photos-21a, §21a) — the gate before phase 22. A
+                # Stage 7a: GPS-drift validation (photos-23, §22a) — the gate before phase 22. A
                 # manual/timezone-derived offset with no native-GPS anchor is placed purely from its
-                # resolved UTC, so a wrong offset silently mis-places the whole batch; 21a makes the
+                # resolved UTC, so a wrong offset silently mis-places the whole batch; 22 makes the
                 # operator confirm each such bucket (a zero-scrub must be explicit) before GPS is built.
                 dvp = drift_validation_path(workspace_root)
                 prior_drift = None
@@ -2442,14 +2442,14 @@ def run(args):
                     print(f"Wrote {DRIFT_VALIDATION_ARTIFACT}: status=complete — all GPS-drift buckets confirmed.")
 
                 if not drift_artifact["requires_user_input"]:
-                    # Stage 7b: re-resolve UTC consuming 21a's validated offsets, persist the cache,
+                    # Stage 7b: re-resolve UTC consuming 22's validated offsets, persist the cache,
                     # and report the deterministic fingerprint downstream stages depend on (§22).
                     rows = compute_resolved_utc(files, groups, artifact, drift_offset_overrides(drift_artifact))
                     input_fps = {
                         "camera_time_policy_fingerprint": artifact["depends_on"]["camera_time_policy_fingerprint"],
                         "camera_group_key_version": CAMERA_GROUP_KEY_VERSION,
                         "photos_21_sha256": sha256_file(tdp),
-                        "photos_21a_sha256": sha256_file(dvp),
+                        "photos_22_sha256": sha256_file(dvp),
                         "prep_cache_fingerprint": (wf.handoff or {}).get("cache_fingerprint"),
                         "metadata_field_set_version": FIELD_SET_VERSION,
                         "gpx_fingerprint": gpx.fingerprint,
@@ -2465,7 +2465,7 @@ def run(args):
                     print(f"Resolved UTC for {n_valid}/{len(rows)} photo(s) "
                           f"(resolved_utc_cache_fingerprint {fp[:12]}).")
 
-                    # Stage 8: GPS decisions (photos-22). Regenerate from the resolved rows + GPX,
+                    # Stage 8: GPS decisions (photos-23). Regenerate from the resolved rows + GPX,
                     # preserving authored GPS decisions; a bad authored coord leaves the artifact as-is.
                     gdp = gps_decisions_path(workspace_root)
                     prior_gps = None
@@ -2493,7 +2493,7 @@ def run(args):
                           f"({tot['preserve_native_gps']} native, {tot['automatic_gpx_interpolation']} interp, "
                           f"{tot['automatic_gpx_extrapolation']} extrap, {tot['blocked']} blocked).")
 
-                    # Stage 9: assemble photos-23 only when ALL decision artifacts are complete (§28).
+                    # Stage 9: assemble photos-24 only when ALL decision artifacts are complete (§28).
                     if (artifact["status"] == "complete" and drift_artifact["status"] == "complete"
                             and gps_artifact["status"] == "complete"):
                         plan, _ = wf.build_executable_plan(files, rows, artifact, gps_artifact, gpx, fp,

@@ -63,14 +63,14 @@ def _make(tmp_path, *, guard=True, config=True, library_in_config=True, bless_li
                 "depends_on": {"handoff": {"dependency_type": "handoff_content",
                                            "artifact_name": "photos-11-handoff.json",
                                            "content_fingerprint": pinned}}}
-        (ctl / "photos-23-executable-plan.json").write_text(json.dumps(plan))
+        (ctl / "photos-24-executable-plan.json").write_text(json.dumps(plan))
     if cal_summary:
-        (ctl / "photos-24-execution-summary.json").write_text(json.dumps({"status": summary_status}))
+        (ctl / "photos-25-execution-summary.json").write_text(json.dumps({"status": summary_status}))
     if complete_log:
-        (ctl / "photos-25-complete-log.json").write_text(json.dumps({"photos": {}}))
+        (ctl / "photos-26-complete-log.json").write_text(json.dumps({"photos": {}}))
     if archive_manifest:
-        (ctl / "photos-25-archive-manifest.json").write_text(
-            json.dumps({"artifact_name": "photos-25-archive-manifest.json"}))
+        (ctl / "photos-26-archive-manifest.json").write_text(
+            json.dumps({"artifact_name": "photos-26-archive-manifest.json"}))
     return ws, lib
 
 

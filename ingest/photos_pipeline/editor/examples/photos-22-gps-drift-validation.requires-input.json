@@ -1,7 +1,6 @@
 {
-  "artifact_name": "photos-21a-gps-drift-validation.json",
+  "artifact_name": "photos-22-gps-drift-validation.json",
   "artifact_type": "gps_drift_validation",
-  "decision_mode": "no_op_or_confirmed",
   "depends_on": {
     "camera_group_key_version": 1,
     "camera_time_policy_fingerprint": "840f62db228ba45660d44cf8eebbaa8e22405f59a695ce3dc10a4be3c78e4650",
@@ -14,10 +13,7 @@
       "drift_decisions": {
         "CAM|drift|D": {
           "camera_group": "CAM|drift|D",
-          "effective_drift_offset": {
-            "offset_seconds": -7200,
-            "source": "gps_drift_validated"
-          },
+          "effective_drift_offset": "",
           "proposal": {
             "current_offset_seconds": -7200,
             "frames": [
@@ -89,10 +85,10 @@
               }
             ]
           },
-          "requires_user_input": false,
+          "requires_user_input": true,
           "stale_user_decision": false,
           "user_decision": {
-            "confirmed": true,
+            "confirmed": false,
             "corrected_offset_seconds": ""
           }
         }
@@ -100,6 +96,6 @@
     }
   },
   "executable": false,
-  "requires_user_input": false,
-  "status": "complete"
+  "requires_user_input": true,
+  "status": "requires_user_input"
 }
