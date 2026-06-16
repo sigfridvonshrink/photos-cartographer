@@ -63,10 +63,11 @@
           },
           "proposal": {
             "confidence": "review_required",
-            "inherited_from": "6-photos-by-dest",
-            "proposal_source": "inherited",
-            "proposed_offset_seconds": 0,
-            "rank": "inherited_from_ancestor"
+            "proposal_source": "timezone_naive",
+            "proposed_from_timezone": "Europe/Brussels",
+            "proposed_offset_seconds": -7200,
+            "proposed_real_utc": "2024-07-03T11:00:00Z",
+            "rank": "timezone_derived"
           },
           "requires_user_input": false,
           "stale_user_decision": false,
@@ -102,15 +103,16 @@
           "camera_group": "NIKON|D750|B",
           "camera_group_class": "camera",
           "effective_time_anchor": {
-            "offset_seconds": 3600,
-            "source": "inherited_accepted"
+            "offset_seconds": -7200,
+            "source": "timezone_accepted"
           },
           "proposal": {
             "confidence": "review_required",
-            "inherited_from": "6-photos-by-dest/Belgium",
-            "proposal_source": "inherited",
-            "proposed_offset_seconds": 3600,
-            "rank": "inherited_from_ancestor"
+            "proposal_source": "timezone_naive",
+            "proposed_from_timezone": "Europe/Brussels",
+            "proposed_offset_seconds": -7200,
+            "proposed_real_utc": "2024-07-03T11:15:00Z",
+            "rank": "timezone_derived"
           },
           "requires_user_input": false,
           "stale_user_decision": false,
