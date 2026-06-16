@@ -1,11 +1,11 @@
-"""Calibration §21a — GPS-drift validation gate (photos-21a).
+"""Calibration §22a — GPS-drift validation gate (photos-22).
 
 The highest-danger gap: a (camera group, destination[, date]) bucket whose clock offset is
 manual/timezone-derived (NOT a GPX self-anchor) and that has NO native-GPS anchor is placed in
-phase 22 purely from its resolved UTC, so a wrong offset silently mis-places the whole batch. 21a
+phase 22 purely from its resolved UTC, so a wrong offset silently mis-places the whole batch. 22
 flags every such bucket that GPX could validate and BLOCKS until the operator explicitly confirms
 each (a zero-scrub "the offset was right" must be actively set — inaction never satisfies the gate).
-The validated/corrected offset lives in 21a; compute_resolved_utc re-consumes it. From conftest.py.
+The validated/corrected offset lives in 22; compute_resolved_utc re-consumes it. From conftest.py.
 """
 import json
 import os
@@ -122,7 +122,7 @@ def test_gpx_anchored_offset_does_not_trigger(tmp_path):
 
 def test_manual_offset_but_native_anchor_present_does_not_trigger(tmp_path):
     wf = _wf(tmp_path)
-    # manual override even though a native-GPS anchor exists -> reliably placeable, so NOT a 21a case.
+    # manual override even though a native-GPS anchor exists -> reliably placeable, so NOT a 22 case.
     files = [_file(f"{DEST}/a.arw", "2024:07:03 14:00:00", gps={"lat": 50.0, "lon": 4.0})]
     gpx = _gpx([(50.0, 4.0, _utc(12))])
     art = _complete_time(wf, files, gpx, {CAM: {"user_decision": {"manual_offset_seconds": 5}}})
@@ -261,7 +261,7 @@ MANAGED = ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
 
 def _e2e_ws(tmp_path):
     """A workspace with a manual/tz-derived camera offset and NO native-GPS anchor, but GPX coverage
-    over its window — exactly the 21a trigger. Photos-21 only needs its timezone + offset accepted."""
+    over its window — exactly the 22 trigger. Photos-21 only needs its timezone + offset accepted."""
     ws = tmp_path / "ws"; ws.mkdir()
     for d in MANAGED:
         (ws / d).mkdir()
@@ -311,8 +311,8 @@ def _edit(ctl, name, fn):
 
 def test_e2e_drift_gate_blocks_then_resumes(tmp_path, monkeypatch):
     ws, ctl = _e2e_ws(tmp_path)
-    dvp = ctl / "photos-21a-gps-drift-validation.json"
-    gdp = ctl / "photos-22-gps-decisions.json"
+    dvp = ctl / "photos-22-gps-drift-validation.json"
+    gdp = ctl / "photos-23-gps-decisions.json"
 
     _run(monkeypatch, ws, "plan")                                          # photos-21 needs tz + offset
     _edit(ctl, "photos-21-time-decisions.json", lambda a: (
@@ -321,7 +321,7 @@ def test_e2e_drift_gate_blocks_then_resumes(tmp_path, monkeypatch):
         a["destinations"][f"{BYDEST}/T"]["camera_group_time_decisions"][CAM]["user_decision"]
         .update({"accept_proposal": True})))                              # tz-derived offset accepted
 
-    _run(monkeypatch, ws, "plan")                                          # photos-21 complete -> 21a GATE
+    _run(monkeypatch, ws, "plan")                                          # photos-21 complete -> 22 GATE
     assert dvp.exists()
     drift = json.load(open(dvp))
     assert drift["status"] == "requires_user_input"
@@ -329,7 +329,7 @@ def test_e2e_drift_gate_blocks_then_resumes(tmp_path, monkeypatch):
     assert not gdp.exists()                                               # phase 22 BLOCKED by the gate
 
     # Confirm the bucket (zero scrub, explicit) -> the gate opens.
-    _edit(ctl, "photos-21a-gps-drift-validation.json", lambda a: a["destinations"][f"{BYDEST}/T"]
+    _edit(ctl, "photos-22-gps-drift-validation.json", lambda a: a["destinations"][f"{BYDEST}/T"]
           ["drift_decisions"][CAM]["user_decision"].update({"confirmed": True}))
     _run(monkeypatch, ws, "plan")
     assert json.load(open(dvp))["status"] == "complete"

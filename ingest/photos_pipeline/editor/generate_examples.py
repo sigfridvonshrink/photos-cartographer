@@ -192,8 +192,8 @@ def scenario_trip():
 
     _emit("photos-21-time-decisions.requires-input.json", time_req)
     _emit("photos-21-time-decisions.complete.json", time_comp)
-    _emit("photos-22-gps-decisions.requires-input.json", gps_req)
-    _emit("photos-22-gps-decisions.complete.json", gps_comp)
+    _emit("photos-23-gps-decisions.requires-input.json", gps_req)
+    _emit("photos-23-gps-decisions.complete.json", gps_comp)
 
 
 # =====================================================================================
@@ -282,7 +282,7 @@ def scenario_stale_decision():
 
 
 # =====================================================================================
-# Scenario 5 — GPS-drift validation (photos-21a): a timezone-derived offset with no native-GPS
+# Scenario 5 — GPS-drift validation (photos-22): a timezone-derived offset with no native-GPS
 # anchor but GPX coverage -> the bucket must be confirmed (or corrected) before GPS is placed.
 # =====================================================================================
 
@@ -322,8 +322,8 @@ def scenario_drift_validation():
     assert not blk, blk
     assert drift_req["requires_user_input"] and drift_comp["status"] == "complete", \
         (drift_req["status"], drift_comp["status"])
-    _emit("photos-21a-gps-drift-validation.requires-input.json", drift_req)
-    _emit("photos-21a-gps-drift-validation.complete.json", drift_comp)
+    _emit("photos-22-gps-drift-validation.requires-input.json", drift_req)
+    _emit("photos-22-gps-drift-validation.complete.json", drift_comp)
 
 
 # =====================================================================================
@@ -348,7 +348,7 @@ def _verify():
     cat_missing = []
     for name, _ in written:
         pass
-    gps = json.load(open(os.path.join(OUT, "photos-22-gps-decisions.complete.json")))
+    gps = json.load(open(os.path.join(OUT, "photos-23-gps-decisions.complete.json")))
     totals = {k: 0 for k in ("preserve_native_gps", "automatic_gpx_interpolation",
                              "automatic_gpx_extrapolation", "automatic_folder_fallback")}
     for d in gps["destinations"].values():
@@ -362,16 +362,16 @@ def _verify():
         struct.append("by-dest-root destination")
     if not any(not v["camera_group_time_decisions"] for v in td["destinations"].values()):
         struct.append("phone-only destination (no offset cells)")
-    # GPS-drift (21a): the gate's two states + the scrub evidence the editor renders.
-    dr_req = json.load(open(os.path.join(OUT, "photos-21a-gps-drift-validation.requires-input.json")))
-    dr_comp = json.load(open(os.path.join(OUT, "photos-21a-gps-drift-validation.complete.json")))
+    # GPS-drift (22): the gate's two states + the scrub evidence the editor renders.
+    dr_req = json.load(open(os.path.join(OUT, "photos-22-gps-drift-validation.requires-input.json")))
+    dr_comp = json.load(open(os.path.join(OUT, "photos-22-gps-drift-validation.complete.json")))
     drift = []
     rc = next(iter(dr_req["destinations"][DR]["drift_decisions"].values()))
     cc = next(iter(dr_comp["destinations"][DR]["drift_decisions"].values()))
     if not (rc["requires_user_input"] and rc["proposal"]["frames"] and rc["proposal"]["track_segment"]):
-        drift.append("21a requires-input cell with frames + track_segment")
+        drift.append("22 requires-input cell with frames + track_segment")
     if not (cc["effective_drift_offset"] and cc["effective_drift_offset"].get("source") == "gps_drift_validated"):
-        drift.append("21a confirmed cell with gps_drift_validated effective offset")
+        drift.append("22 confirmed cell with gps_drift_validated effective offset")
     problems = missing + [f"GPS category {c}" for c in cat_missing] + struct + drift
     if problems:
         raise SystemExit("MISSING decision states in fixtures:\n  " + "\n  ".join(problems))

@@ -257,7 +257,7 @@ function offsetImpact(camMs, offsetSec, tz) {
   const right = cor.date === cam.date ? cor.time : `${cor.date} ${cor.time}`;
   return `${cam.date} · ${cam.time} → ${right} (${tz}, UTC ${utcStr})`;
 }
-// --- GPS-drift scrub math (§21a) ---------------------------------------------
+// --- GPS-drift scrub math (§22a) ---------------------------------------------
 // Placing a photo at a GPX track point fixes the camera→UTC offset: offset = (that point's UTC time)
 // − (the photo's camera-naive time), in seconds. Both are naive wall-times read as UTC epoch ms, the
 // same convention as the pipeline's `resolved_utc_naive − camera_naive`. Pure — unit-tested.
@@ -481,7 +481,7 @@ function selectReview(ev, dest, path, order) {
 function renderGps(list) {
   const g = state.work.gps;
   // GPS placement is derived from each photo's resolved UTC, so the GPS phase is gated on the time
-  // decisions: calibration only (re)generates photos-22 once every time decision is resolved. Make
+  // decisions: calibration only (re)generates photos-23 once every time decision is resolved. Make
   // that gate visible rather than showing an empty or stale GPS view.
   if (!state.base.demo && state.work.time?.requires_user_input)
     return list.append(el("div", { class: "gate" },
@@ -495,7 +495,7 @@ function renderGps(list) {
       "A manual or timezone-derived clock offset with no native-GPS anchor must be confirmed against the GPX "
       + "track before placement, or it could silently mis-place the whole batch. Confirm each bucket in the "
       + "Drift view, then re-run `photos-ingest geotag plan` and reload."));
-  if (!g?.destinations) return list.append(el("div", { class: "empty" }, "No photos-22-gps-decisions.json."));
+  if (!g?.destinations) return list.append(el("div", { class: "empty" }, "No photos-23-gps-decisions.json."));
   if (!state.base.demo && (state.timeChangedSinceRerun || state.driftChangedSinceRerun))
     list.append(el("div", { class: "gate warn" }, "Time or drift decisions changed since the last calibration run — re-run `photos-ingest geotag plan` and reload to recompute GPS. The decisions below are stale until you do."));
   for (const dest of Object.keys(g.destinations).sort()) {
@@ -525,7 +525,7 @@ function renderDrift(list) {
       el("div", { class: "gate-title" }, "Drift validation is waiting on the time decisions"),
       "The GPS-drift check validates each bucket's clock offset against the GPX track, so it is generated "
       + "only once every timezone and clock-offset decision is resolved. Finish them in the Time view, then re-run `photos-ingest geotag plan` and reload."));
-  if (!dr?.destinations) return list.append(el("div", { class: "empty" }, "No photos-21a-gps-drift-validation.json."));
+  if (!dr?.destinations) return list.append(el("div", { class: "empty" }, "No photos-22-gps-drift-validation.json."));
   if (!state.base.demo && state.timeChangedSinceRerun)
     list.append(el("div", { class: "gate warn" }, "Time decisions changed since the last calibration run — re-run `photos-ingest geotag plan` and reload so the drift buckets (and their track segments) are re-extracted. The buckets below are stale until you do."));
   const dests = Object.keys(dr.destinations);

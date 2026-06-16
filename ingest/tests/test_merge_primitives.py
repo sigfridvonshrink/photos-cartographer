@@ -215,13 +215,13 @@ def test_reseal_writes_own_manifest_and_never_touches_the_25(tmp_path):
     for name, body in [
         ("photos-00-config.json", {"a": 1}),
         ("photos-11-handoff.json", {"files": []}),
-        ("photos-25-complete-log.json", {"photos": {}}),
-        ("photos-25-archive-manifest.json", {"artifact_name": "photos-25-archive-manifest.json"}),
+        ("photos-26-complete-log.json", {"photos": {}}),
+        ("photos-26-archive-manifest.json", {"artifact_name": "photos-26-archive-manifest.json"}),
         ("photos-31-merge-summary.json", {"status": "success"}),
         ("photos-35-merge-log.json", {"photos": {}}),
     ]:
         utils.write_json_artifact(os.path.join(cd, name), body)
-    cal_manifest = os.path.join(cd, "photos-25-archive-manifest.json")
+    cal_manifest = os.path.join(cd, "photos-26-archive-manifest.json")
     cal_before = utils.sha256_file(cal_manifest)
 
     digest = utils.reseal_archival_package(
@@ -233,12 +233,12 @@ def test_reseal_writes_own_manifest_and_never_touches_the_25(tmp_path):
     assert digest == utils.sha256_file(mpath)
     manifest = json.loads(open(mpath).read())
     assert manifest["artifact_name"] == "photos-35-archive-manifest.json"
-    assert manifest["supersedes"] == "photos-25-archive-manifest.json"
+    assert manifest["supersedes"] == "photos-26-archive-manifest.json"
     assert manifest["merge_run_id"] == "m1"
     # Present artifacts are listed with correct hashes; absent ones (e.g. the DB) are omitted.
     c = manifest["contents"]
     assert "photos-31-merge-summary.json" in c and "photos-35-merge-log.json" in c
-    assert "photos-25-archive-manifest.json" in c          # calibration's manifest is bundled
+    assert "photos-26-archive-manifest.json" in c          # calibration's manifest is bundled
     assert "photos-00-ingest.db" not in c                  # not present in this fixture
     assert c["photos-11-handoff.json"]["sha256"] == utils.sha256_file(
         os.path.join(cd, "photos-11-handoff.json"))

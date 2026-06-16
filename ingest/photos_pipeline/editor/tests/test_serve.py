@@ -36,7 +36,7 @@ def _workspace_with_fixtures(tmp_path):
     cd = tmp_path / serve.CONTROL
     cd.mkdir(parents=True)
     for src, dst in (("photos-21-time-decisions.requires-input.json", serve.TIME_NAME),
-                     ("photos-22-gps-decisions.requires-input.json", serve.GPS_NAME)):
+                     ("photos-23-gps-decisions.requires-input.json", serve.GPS_NAME)):
         (cd / dst).write_text((open(os.path.join(EXAMPLES, src))).read())
     return str(tmp_path)
 
@@ -203,7 +203,7 @@ def _time_art():
 
 
 def _gps_art():
-    return json.load(open(os.path.join(EXAMPLES, "photos-22-gps-decisions.requires-input.json")))
+    return json.load(open(os.path.join(EXAMPLES, "photos-23-gps-decisions.requires-input.json")))
 
 
 def test_apply_edits_timezone_touches_only_user_decision():
