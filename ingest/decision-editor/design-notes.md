@@ -70,6 +70,29 @@ then the proposal evidence last; non-coord cells just show the proposal.
   changed, a **stale** banner on both views reminds you a Re-run is needed before GPS reflects it (tracked
   by `timeChangedSinceRerun`, cleared on Re-run). Both notices are skipped in demo mode (its curated
   fixtures intentionally pair an incomplete time artifact with a GPS one).
+- **Drift view + GPS-depends-on-drift gate.** A third view (`photos-21a-gps-drift-validation.json`, calibration
+  workflow §22a) sits between Time and GPS. It lists the **at-risk buckets** — a manual/timezone-derived
+  clock offset with no native-GPS anchor — that GPX *can* validate, and must be confirmed before GPS is
+  placed (an unconfirmed bucket could silently mis-place a whole batch along the track). It is gated behind
+  time (`time.requires_user_input`) and in turn gates GPS (`drift.requires_user_input` locks the GPS view).
+  A drift edit sets `driftChangedSinceRerun` so the GPS view shows a stale banner until Re-run; both flags
+  clear on Re-run.
+  - **Scrub-on-track control.** The drift panel shows a representative photo above a max-zoomed map of the
+    bucket's covering GPX segment (`proposal.track_segment`). The **scroll wheel** slides the photo along the
+    track under the centre crosshair (`map.js` `mapPicker({track, onScrub})`); each step computes
+    `corrected_offset_seconds = (chosen track point's UTC) − (that photo's camera-naive)` (pure `scrubOffset`)
+    and writes it with `confirmed:true`. The marker **seeds** at the point the current offset implies
+    (`scrubSeedIndex`), so "don't move" = the current placement and any scroll is a deliberate correction.
+    A frame picker lets the operator cross-check other photos in the bucket (each must yield the same offset;
+    the last scrub wins). **Confirming without moving** (the pinned checkbox / "clear correction") is a
+    **zero scrub** — `confirmed:true` with an empty correction — and must be explicit; inaction never resolves.
+  - **No-merry-go-round invariant.** The script extracts the track segment ±2 days
+    (`gpx_anchor_max_clock_error_seconds`) around the bucket. Since valid offsets are capped at ±1 day, any
+    two valid offsets differ by ≤2 days, so **every reachable scrub correction is already inside the loaded
+    segment** — a scrub never needs a Re-run to fetch more track. The editor validates the computed offset
+    against the ±1-day bound (`validOffset`) and flags a point that falls outside it. Re-extraction happens
+    only when a *time* decision changes (edit → Save → Re-run → reload), which legitimately shifts the window;
+    the editor never touches GPX itself.
 - **Side-panel editor** for the selected cell: the proposal + evidence, the decision control, a **photo
   thumbnail** (review items), a **context map**, and a live **effective-outcome** preview with
   client-side validation. For an **offset** proposal the raw anchor list is **collapsed**: the consensus

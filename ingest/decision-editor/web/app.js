@@ -10,7 +10,7 @@
 
 import { mapPicker } from "./map.js";
 
-const state = { base: null, work: null, view: "time", selected: null, saving: false, running: false, message: null, runResult: null, timeChangedSinceRerun: false, offsetExpand: new Set(), coordClipboard: null, gpsAnchor: null, gpsAnchorDest: null };
+const state = { base: null, work: null, view: "time", selected: null, saving: false, running: false, message: null, runResult: null, timeChangedSinceRerun: false, driftChangedSinceRerun: false, offsetExpand: new Set(), coordClipboard: null, gpsAnchor: null, gpsAnchorDest: null };
 
 const $ = (s) => document.querySelector(s);
 function el(tag, attrs = {}, ...kids) {
@@ -60,6 +60,10 @@ function cellAt(arts, ref) {
     const d = arts.time?.destinations?.[ref.dest]; if (!d) return null;
     return ref.kind === "timezone" ? d.destination_timezone : d.camera_group_time_decisions?.[ref.key];
   }
+  if (ref.file === "drift") {
+    const d = arts.drift?.destinations?.[ref.dest]; if (!d) return null;
+    return d.drift_decisions?.[ref.key];
+  }
   const d = arts.gps?.destinations?.[ref.dest]; if (!d) return null;
   if (ref.kind === "fallback") return d.folder_fallback;
   return (d.gps_decisions?.review_items || []).find((r) => r.relative_path === ref.path);
@@ -72,6 +76,9 @@ function allRefs() {
   for (const [dest, d] of Object.entries(state.work.time?.destinations || {})) {
     out.push({ file: "time", dest, kind: "timezone" });
     for (const key of Object.keys(d.camera_group_time_decisions || {})) out.push({ file: "time", dest, kind: "offset", key });
+  }
+  for (const [dest, d] of Object.entries(state.work.drift?.destinations || {})) {
+    for (const key of Object.keys(d.drift_decisions || {})) out.push({ file: "drift", dest, kind: "drift", key });
   }
   for (const [dest, d] of Object.entries(state.work.gps?.destinations || {})) {
     out.push({ file: "gps", dest, kind: "fallback" });
@@ -87,6 +94,7 @@ function refInvalid(ref) {
   const c = workCell(ref); if (!c) return false; const u = c.user_decision || {};
   if (ref.kind === "timezone") return !validTz(u.manual_iana_timezone);
   if (ref.kind === "offset") return !validOffset(u.manual_offset_seconds) || !validUtc(u.manual_real_utc);
+  if (ref.kind === "drift") return !validOffset(u.corrected_offset_seconds);
   if (ref.kind === "fallback") return !validLat(u.fallback_lat) || !validLon(u.fallback_lon) || !bothOrNeither(u.fallback_lat, u.fallback_lon);
   return !validLat(u.manual_lat) || !validLon(u.manual_lon) || !bothOrNeither(u.manual_lat, u.manual_lon);
 }
@@ -148,7 +156,12 @@ function fmtDate(iso) {
 // --- edit + status -----------------------------------------------------------
 // Time edits invalidate the GPS decisions (GPS placement is computed from resolved UTC), and GPS is
 // only recomputed on a Re-run — so flag any time change to drive the GPS-view stale/lock notices below.
-const touchTime = (ref) => { if (ref.file === "time") state.timeChangedSinceRerun = true; };
+// Time edits invalidate drift + GPS; drift edits invalidate GPS. Both are only recomputed on Re-run,
+// so flag each to drive the downstream stale notices.
+const touchChange = (ref) => {
+  if (ref.file === "time") state.timeChangedSinceRerun = true;
+  if (ref.file === "drift") state.driftChangedSinceRerun = true;
+};
 // A ref may stand for SEVERAL sibling cells via `ref.peers` — a collapsed per-date offset cluster (peers
 // are bucket keys) or a multi-selected run of GPS review photos (peers are relative paths). An edit fans
 // out identically to all of them so one action resolves the whole set. The identifying field differs by
@@ -157,8 +170,8 @@ const peerField = (ref) => (ref.kind === "review" ? "path" : "key");
 const peerKeys = (ref) => (ref.peers && ref.peers.length ? ref.peers : [ref[peerField(ref)]]);
 const peerRefs = (ref) => peerKeys(ref).map((id) => ({ ...ref, [peerField(ref)]: id, peers: undefined }));
 const eachPeer = (ref, fn) => { for (const r of peerRefs(ref)) { const c = cellAt(state.work, r); if (c) fn(c, r); } };
-function edit(ref, field, value) { touchTime(ref); eachPeer(ref, (c) => { c.user_decision[field] = value; }); render(); }
-function editMany(ref, obj) { touchTime(ref); eachPeer(ref, (c) => Object.assign(c.user_decision, obj)); render(); }
+function edit(ref, field, value) { touchChange(ref); eachPeer(ref, (c) => { c.user_decision[field] = value; }); render(); }
+function editMany(ref, obj) { touchChange(ref); eachPeer(ref, (c) => Object.assign(c.user_decision, obj)); render(); }
 function resetRef(ref) {
   for (const r of peerRefs(ref)) { const w = cellAt(state.work, r), b = cellAt(state.base, r); if (w && b) w.user_decision = clone(b.user_decision); }
   render();
@@ -182,6 +195,8 @@ function wouldResolve(ref) {
     return (u.manual_offset_seconds !== "" && u.manual_offset_seconds != null && validOffset(u.manual_offset_seconds))
       || (!!u.manual_real_utc && validUtc(u.manual_real_utc) && p.proposal_source === "gpx_self_anchor")
       || (!!u.accept_proposal && "proposed_offset_seconds" in p);
+  if (ref.kind === "drift")                       // confirmed (zero-scrub or a valid correction) resolves
+    return !!u.confirmed && validOffset(u.corrected_offset_seconds);
   if (ref.kind === "fallback")
     return (u.fallback_lat !== "" && u.fallback_lat != null && u.fallback_lon !== "" && u.fallback_lon != null)
       || (!!u.accept_proposal && !!p.proposed_fallback);
@@ -242,6 +257,25 @@ function offsetImpact(camMs, offsetSec, tz) {
   const right = cor.date === cam.date ? cor.time : `${cor.date} ${cor.time}`;
   return `${cam.date} · ${cam.time} → ${right} (${tz}, UTC ${utcStr})`;
 }
+// --- GPS-drift scrub math (§21a) ---------------------------------------------
+// Placing a photo at a GPX track point fixes the camera→UTC offset: offset = (that point's UTC time)
+// − (the photo's camera-naive time), in seconds. Both are naive wall-times read as UTC epoch ms, the
+// same convention as the pipeline's `resolved_utc_naive − camera_naive`. Pure — unit-tested.
+function scrubOffset(point, frame) {
+  const t = utcStrToMs(point && point.time_utc), n = camNaiveMs(frame && frame.camera_naive);
+  return t == null || n == null ? null : Math.round((t - n) / 1000);
+}
+// The track index a photo currently sits at under `currentOffset` — where the scrub marker starts, so
+// "don't move" = the current placement and any scroll is a deliberate correction.
+function scrubSeedIndex(track, frame, currentOffset) {
+  const n = camNaiveMs(frame && frame.camera_naive);
+  if (!Array.isArray(track) || !track.length || n == null || currentOffset == null) return 0;
+  const target = n + currentOffset * 1000;
+  let best = 0, bestD = Infinity;
+  track.forEach((p, i) => { const d = Math.abs((utcStrToMs(p.time_utc) ?? target) - target); if (d < bestD) { bestD = d; best = i; } });
+  return best;
+}
+let _driftFrame = 0, _driftCellKey = null;   // which bucket frame the scrub view shows (earliest default); reset on cell change
 
 // advisory effective preview (NOT authoritative — calibration recomputes on re-run)
 function previewEffective(ref) {
@@ -259,6 +293,13 @@ function previewEffective(ref) {
     if (u.manual_real_utc) return validUtc(u.manual_real_utc) ? "via real-UTC (computed on re-run)" : "✗ invalid UTC";
     if (u.accept_proposal && "proposed_offset_seconds" in p) return `${fmtOffset(p.proposed_offset_seconds)} (accept proposal)`;
     return "— (GPX auto-resolves on re-run, else needs input)";
+  }
+  if (ref.kind === "drift") {
+    if (!u.confirmed) return "— (needs confirmation)";
+    if (u.corrected_offset_seconds === "" || u.corrected_offset_seconds == null)
+      return `${fmtOffset(p.current_offset_seconds)} (confirmed — offset was right)`;
+    return validOffset(u.corrected_offset_seconds)
+      ? `${fmtOffset(u.corrected_offset_seconds)} (corrected)` : "✗ invalid offset";
   }
   if (ref.kind === "fallback") {
     if (u.fallback_lat !== "" && u.fallback_lon !== "") return `${u.fallback_lat}, ${u.fallback_lon}`;
@@ -447,9 +488,15 @@ function renderGps(list) {
       "GPS placement (interpolation / extrapolation) is computed from each photo's resolved UTC, so the GPS "
       + "decisions are generated only once every timezone and clock-offset decision is resolved. Finish them in "
       + "the Time view, then Re-run."));
+  if (!state.base.demo && state.work.drift?.requires_user_input)
+    return list.append(el("div", { class: "gate" },
+      el("div", { class: "gate-title" }, "GPS is waiting on the drift validation"),
+      "A manual or timezone-derived clock offset with no native-GPS anchor must be confirmed against the GPX "
+      + "track before placement, or it could silently mis-place the whole batch. Confirm each bucket in the "
+      + "Drift view, then Re-run."));
   if (!g?.destinations) return list.append(el("div", { class: "empty" }, "No photos-22-gps-decisions.json."));
-  if (!state.base.demo && state.timeChangedSinceRerun)
-    list.append(el("div", { class: "gate warn" }, "Time decisions changed since the last calibration run — Re-run to recompute GPS. The decisions below are stale until you do."));
+  if (!state.base.demo && (state.timeChangedSinceRerun || state.driftChangedSinceRerun))
+    list.append(el("div", { class: "gate warn" }, "Time or drift decisions changed since the last calibration run — Re-run to recompute GPS. The decisions below are stale until you do."));
   for (const dest of Object.keys(g.destinations).sort()) {
     const d = g.destinations[dest], fb = d.folder_fallback, s = d.gps_decisions?.summary || {};
     list.append(el("div", { class: "group-title" }, dest,
@@ -464,6 +511,32 @@ function renderGps(list) {
         el("span", { class: "label" }, ri.relative_path.split("/").pop()), chip("reason", ri.reason), ...tags(ref), statusChip(ref)));
     }
     list.append(el("div", { class: "summary" }, `${s.files_total ?? 0} files — preserve ${s.preserve_native_gps ?? 0}, interp ${s.automatic_gpx_interpolation ?? 0}, extrap ${s.automatic_gpx_extrapolation ?? 0}, fallback ${s.automatic_folder_fallback ?? 0}, blocked ${s.blocked ?? 0}`));
+  }
+}
+
+function renderDrift(list) {
+  const dr = state.work.drift;
+  // Drift sits between time and GPS: it can only be validated once the time decisions are complete
+  // (the offsets it checks must exist), and it itself gates GPS. Mirror the time→GPS gate.
+  if (!state.base.demo && state.work.time?.requires_user_input)
+    return list.append(el("div", { class: "gate" },
+      el("div", { class: "gate-title" }, "Drift validation is waiting on the time decisions"),
+      "The GPS-drift check validates each bucket's clock offset against the GPX track, so it is generated "
+      + "only once every timezone and clock-offset decision is resolved. Finish them in the Time view, then Re-run."));
+  if (!dr?.destinations) return list.append(el("div", { class: "empty" }, "No photos-21a-gps-drift-validation.json."));
+  if (!state.base.demo && state.timeChangedSinceRerun)
+    list.append(el("div", { class: "gate warn" }, "Time decisions changed since the last calibration run — Re-run so the drift buckets (and their track segments) are re-extracted. The buckets below are stale until you do."));
+  const dests = Object.keys(dr.destinations);
+  if (!dests.length) return list.append(el("div", { class: "empty" }, "No at-risk buckets — every offset is GPX-anchored or independently placeable."));
+  for (const dest of dests.sort()) {
+    const d = dr.destinations[dest];
+    list.append(el("div", { class: "group-title" }, dest));
+    for (const [key, cell] of Object.entries(d.drift_decisions || {})) {
+      const ref = { file: "drift", dest, kind: "drift", key };
+      const sub = `${cell.proposal?.proposal_source || "?"} · ${fmtOffset(cell.proposal?.current_offset_seconds ?? 0)}`
+        + (cell.date ? ` · ${fmtDate(cell.date)}` : "");
+      list.append(row(ref, `Drift · ${cell.camera_group || key}`, sub, null));
+    }
   }
 }
 
@@ -623,6 +696,8 @@ function controls(ref) {
     if (!validTz(u.manual_iana_timezone)) wrap.append(el("div", { class: "err" }, "not a valid IANA timezone"));
   } else if (ref.kind === "offset") {
     wrap.append(offsetEditor(ref));
+  } else if (ref.kind === "drift") {
+    wrap.append(driftControls(ref));
   } else if (ref.kind === "fallback") {
     const hasProp = p.proposal_source === "inherited";
     wrap.append(checkbox(hasProp ? `accept inherited (${p.proposed_fallback.lat}, ${p.proposed_fallback.lon})` : "accept inherited — none", u.accept_proposal, (v) => edit(ref, "accept_proposal", v), !hasProp));
@@ -633,6 +708,25 @@ function controls(ref) {
   }
   return wrap;
 }
+// GPS-drift bucket: confirm the current offset as-is (zero scrub — must be explicit) or show the
+// scrubbed correction. The scrub itself happens on the track map below (it sets `confirmed` +
+// `corrected_offset_seconds`); this pinned control is the affirmation + readout + a clear-back.
+function driftControls(ref) {
+  const c = workCell(ref), u = c.user_decision || {}, p = c.proposal || {}, wrap = el("div", { class: "ctl-block" });
+  wrap.append(el("div", { class: "hint" },
+    `Current offset ${fmtOffset(p.current_offset_seconds)} (${p.proposal_source || "?"}). Scroll the photo along the track below to correct it, or confirm it as-is.`));
+  wrap.append(checkbox("confirm this bucket (offset is right as shown)", u.confirmed, (v) => edit(ref, "confirmed", v)));
+  const corr = u.corrected_offset_seconds;
+  if (corr !== "" && corr != null) {
+    const delta = isNum(corr) ? corr - (p.current_offset_seconds || 0) : null;
+    wrap.append(el("div", { class: "ctl-field" },
+      el("span", {}, `scrubbed correction: ${fmtOffset(corr)}${delta != null ? ` (Δ ${fmtOffset(delta)})` : ""}`),
+      el("button", { class: "mini", onclick: () => editMany(ref, { corrected_offset_seconds: "" }) }, "clear — offset was right")));
+  }
+  if (!validOffset(corr)) wrap.append(el("div", { class: "err" }, "scrubbed point is more than 24h off the camera clock — pick a nearer point"));
+  return wrap;
+}
+
 // The "lat, lon" input lives in the pinned top box; as the map pans below, the live map center is
 // mirrored into it (display only — committing stays on Enter/blur or "use map center"). Tracked here so
 // the map's onMove can reach the current input across re-renders.
@@ -722,6 +816,45 @@ function mapBlock(ref) {
   setTimeout(() => _map && _map.refresh(), 0);     // recompute size after (re)attach to the DOM
   return el("div", { class: "pblock" }, el("h3", {}, "Place on map"), _map.el, _map.search, _map.bar, copyPasteBar(ref));
 }
+// Scrub-on-track block for a drift bucket: a representative photo above a max-zoomed track map; the
+// scroll wheel slides the photo along the GPX segment (map.js), and each step computes the bucket's
+// corrected offset from THAT photo's camera-naive time. A frame picker lets the operator cross-check
+// other photos in the bucket (each must yield the same offset); the last scrub wins.
+function scrubBlock(ref) {
+  const c = workCell(ref), p = c.proposal || {}, frames = p.frames || [], track = p.track_segment || [];
+  const wrap = el("div", { class: "pblock" }, el("h3", {}, "Scrub the photo along the GPX track"));
+  if (!frames.length || !track.length) { wrap.append(el("div", { class: "placeholder" }, "no frames or track to scrub")); return wrap; }
+  const fi = Math.min(_driftFrame, frames.length - 1), frame = frames[fi];
+  if (frames.length > 1) {
+    const sel = el("select", { class: "frame-sel" }, ...frames.map((f, i) => el("option", { value: String(i) }, f.source_file.split("/").pop())));
+    sel.value = String(fi);
+    sel.addEventListener("change", () => { _driftFrame = +sel.value; teardownMap(); render(); });
+    wrap.append(el("label", { class: "ctl-field" }, el("span", {}, `Photo (${fi + 1}/${frames.length})`), sel));
+  } else {
+    wrap.append(el("div", { class: "hint" }, frame.source_file.split("/").pop()));
+  }
+  if (state.base.demo) wrap.append(el("div", { class: "placeholder" }, "no preview in demo mode (no workspace files)"));
+  else {
+    const img = el("img", { class: "photo-img", alt: frame.source_file, src: "/api/photo?path=" + encodeURIComponent(frame.source_file) });
+    img.addEventListener("error", () => { img.remove(); wrap.append(el("div", { class: "placeholder" }, "no embedded preview available")); });
+    wrap.append(img);
+  }
+  wrap.append(driftMap(ref, frame, fi));
+  wrap.append(el("div", { class: "hint" }, "scroll over the map to slide the photo along the track; the chosen point sets this bucket's corrected offset for every photo in it."));
+  return wrap;
+}
+function driftMap(ref, frame, fi) {
+  const key = mapKeyFor(ref) + "|f" + fi;
+  if (_mapKey !== key) {
+    teardownMap();
+    const p = workCell(ref).proposal || {}, track = p.track_segment || [];
+    _map = mapPicker({ track, scrubIndex: scrubSeedIndex(track, frame, p.current_offset_seconds),
+      onScrub: (i, pt) => { const off = scrubOffset(pt, frame); if (off != null) editMany(ref, { confirmed: true, corrected_offset_seconds: off }); } });
+    _mapKey = key;
+  }
+  setTimeout(() => _map && _map.refresh(), 0);
+  return _map.el;
+}
 function photoBlock(ref) {
   if (state.base.demo)
     return el("div", { class: "pblock" }, el("h3", {}, "Photo"),
@@ -781,10 +914,14 @@ function renderPanel() {
   _coordInp = null;                                   // re-set by coordField() when this panel has one
   const ref = state.selected, c = workCell(ref);
   const isGpsCoord = ref && ref.file === "gps" && (ref.kind === "fallback" || ref.kind === "review");
-  if (!isGpsCoord) teardownMap();
+  const isScrub = ref && ref.kind === "drift";
+  if (!isGpsCoord && !isScrub) teardownMap();
+  const cellKey = mapKeyFor(ref);
+  if (cellKey !== _driftCellKey) { _driftFrame = 0; _driftCellKey = cellKey; }   // reset frame on cell change
   if (!ref || !c) return p.append(el("div", { class: "empty" }, "Select a decision to edit it."));
   const multi = ref.peers && ref.peers.length > 1;
   const title = ref.kind === "offset" ? `Offset · ${c.camera_group || ref.key}`
+    : ref.kind === "drift" ? `Drift · ${c.camera_group || ref.key}`
     : ref.kind === "review" ? (multi ? `GPS review · ${ref.peers.length} photos` : "GPS review item")
       : ref.kind === "fallback" ? "Folder fallback" : "Timezone";
   p.append(el("h2", {}, title), el("div", { class: "path" }, ref.path || ref.dest));
@@ -799,6 +936,8 @@ function renderPanel() {
     head.append(el("div", { class: "hint" }, `applying one location to all ${ref.peers.length} selected photos: ${ref.peers.map((p2) => p2.split("/").pop()).join(", ")}`));
   } else if (ref.kind === "review") {
     head.append(el("div", { class: "hint" }, "shift-click another photo in this destination to select a run and place them together"));
+  } else if (ref.kind === "drift" && c.date) {
+    head.append(el("div", { class: "hint" }, `this day only: ${fmtDate(c.date)}`));
   }
   if (isDirty(ref)) head.append(el("button", { class: "mini", onclick: () => resetRef(ref) }, "reset"));
   // Fixed top: title + status + the decision controls + the effective preview — always visible, no scroll.
@@ -810,16 +949,17 @@ function renderPanel() {
   // the pinned "Your decision" box — so a paste/edit's effect (jump to full zoom) is visible without
   // scrolling; then the photo; then the proposal evidence last. Non-GPS cells just show the proposal.
   const scroll = el("div", { class: "panel-scroll" });
+  if (isScrub) scroll.append(scrubBlock(ref));
   if (isGpsCoord) scroll.append(mapBlock(ref));
   if (ref.kind === "review") scroll.append(photoBlock(ref));
-  if (c.proposal) scroll.append(ref.kind === "offset" ? offsetProposalBlock(ref, c.proposal) : jsonBlock("Proposal", c.proposal));
+  if (c.proposal && ref.kind !== "drift") scroll.append(ref.kind === "offset" ? offsetProposalBlock(ref, c.proposal) : jsonBlock("Proposal", c.proposal));
   p.replaceChildren(top, scroll);
 }
 
 // --- header / save -----------------------------------------------------------
 async function save() {
   if (state.base.demo || state.saving) return;
-  const payload = { time: [], gps: [] };
+  const payload = { time: [], drift: [], gps: [] };
   for (const ref of dirtyRefs()) {
     const ud = workCell(ref).user_decision;
     payload[ref.file].push({ dest: ref.dest, kind: ref.kind, key: ref.key, path: ref.path, user_decision: ud });
@@ -845,7 +985,8 @@ async function rerun() {
       state.base = await (await fetch("/api/artifacts")).json();
       state.work = clone(state.base);
       state.selected = null;
-      state.timeChangedSinceRerun = false;   // GPS was just recomputed against the current time decisions
+      state.timeChangedSinceRerun = false;   // drift + GPS were just recomputed against the current times
+      state.driftChangedSinceRerun = false;  // GPS was just recomputed against the current drift decisions
       state.message = "re-ran calibration — artifacts reloaded";
     } else {
       state.message = r.error ? `re-run failed: ${r.error}` : `re-run reported blockers (exit ${r.returncode})`;
@@ -886,7 +1027,7 @@ function render() {
   $("#reset").disabled = dirty === 0 || busy;
   renderRunlog();
   const list = $("#list"); list.replaceChildren();
-  (state.view === "time" ? renderTime : renderGps)(list);
+  (state.view === "time" ? renderTime : state.view === "drift" ? renderDrift : renderGps)(list);
   renderPanel();
 }
 
@@ -933,4 +1074,5 @@ export {
   fmtOffset, camNaiveMs, dtLocalToMs, msToDtLocal, utcStrToMs, fmtLocal, fmtDT, offsetImpact,
   cellAt, cellStatus, wouldResolve, previewTz, previewFallback, refInvalid, isDirty, state,
   offsetGroups, dateRange, fmtDate, peerKeys, parseLatLon, coordText, contiguousRange,
+  scrubOffset, scrubSeedIndex,
 };

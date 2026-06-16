@@ -81,7 +81,20 @@ def test_manual_offset_no_anchor_with_coverage_triggers(tmp_path):
     assert cell["proposal"]["proposal_source"] == "manual"
     assert cell["proposal"]["current_offset_seconds"] == 0
     assert len(cell["proposal"]["track_segment"]) == 1                    # the covering point as evidence
+    assert cell["proposal"]["frames"] == [                               # the photo(s) the editor scrubs
+        {"source_file": f"{DEST}/a.arw", "camera_naive": "2024:07:03 14:00:00"}]
     assert drift["status"] == "requires_user_input"
+
+
+def test_frames_listed_earliest_first(tmp_path):
+    wf = _wf(tmp_path)
+    files = [_file(f"{DEST}/late.arw", "2024:07:03 16:00:00"),
+             _file(f"{DEST}/early.arw", "2024:07:03 14:00:00")]
+    gpx = _gpx([(50.0, 4.0, _utc(12))])
+    art = _complete_time(wf, files, gpx, {CAM: {"user_decision": {"manual_offset_seconds": 0}}})
+    drift, _ = _drift(wf, files, art, gpx)
+    frames = drift["destinations"][DEST]["drift_decisions"][CAM]["proposal"]["frames"]
+    assert [f["source_file"] for f in frames] == [f"{DEST}/early.arw", f"{DEST}/late.arw"]
 
 
 def test_timezone_derived_offset_triggers(tmp_path):
