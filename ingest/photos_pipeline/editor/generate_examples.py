@@ -19,13 +19,13 @@ import sys
 import tempfile
 from datetime import datetime, timezone
 
-ING = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+# This dev tool lives at photos_pipeline/editor/generate_examples.py; it writes the demo fixtures into
+# the sibling examples/ package-data dir, and imports the pipeline package from ingest/ (three levels up).
+_INGEST = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "examples")
 
-# The pipeline now lives in the `photos_pipeline` package (`ingest/photos_pipeline/`); import it the
-# normal way (ING is `ingest/`, the dir that contains the package).
-if ING not in sys.path:
-    sys.path.insert(0, ING)
+if _INGEST not in sys.path:
+    sys.path.insert(0, _INGEST)
 from photos_pipeline import photos_utils as utils, photos_2_time_gps as cal  # noqa: E402
 
 BD = "6-photos-by-dest"
