@@ -25,7 +25,7 @@ echo "pre-push: tests passed."
 # isn't installed locally — CI runs them regardless.
 if command -v node >/dev/null 2>&1; then
     echo "pre-push: running decision-editor front-end tests..."
-    if ! node --test ingest/decision-editor/tests/*.test.mjs >/dev/null 2>&1; then
+    if ! node --test ingest/photos_pipeline/editor/tests/*.test.mjs >/dev/null 2>&1; then
         echo
         echo "pre-push: front-end tests FAILED — push aborted (run 'tools/jstest' to see details)."
         echo "          (override with 'git push --no-verify')"
@@ -34,5 +34,14 @@ if command -v node >/dev/null 2>&1; then
     echo "pre-push: front-end tests passed."
 else
     echo "pre-push: node not found — skipping front-end tests (CI will run them)."
+fi
+
+# The photos-ingest executable must build and run (ingest/dist is gitignored, not committed).
+echo "pre-push: checking the photos-ingest build assembles and runs..."
+if ! python3 tools/build-pyz --check; then
+    echo
+    echo "pre-push: photos-ingest build is broken — push aborted."
+    echo "          (override with 'git push --no-verify')"
+    exit 1
 fi
 exit 0
