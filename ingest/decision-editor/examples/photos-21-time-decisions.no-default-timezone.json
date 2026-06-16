@@ -13,6 +13,24 @@
     }
   },
   "destinations": {
+    "6-photos-by-dest": {
+      "camera_group_time_decisions": {},
+      "camera_groups_present": [],
+      "destination_path": "6-photos-by-dest",
+      "destination_timezone": {
+        "effective_iana_timezone": "",
+        "proposal_confidence": "none",
+        "proposal_source": "none",
+        "proposed_iana_timezone": null,
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "accept_proposed_timezone": false,
+          "manual_iana_timezone": ""
+        }
+      },
+      "file_less": true
+    },
     "6-photos-by-dest/Nowhere": {
       "camera_group_time_decisions": {
         "SONY|ILCE-6400|A": {
