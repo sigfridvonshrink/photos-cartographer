@@ -1562,8 +1562,8 @@ class CalibrationWorkflow:
                            <= (hi + timedelta(seconds=window)))]
                 if not seg:
                     continue                                  # no GPX coverage -> phase 22 fallback/lost, not 21a
-                cells[bucket] = self._drift_cell(dest, bucket, cell, seg, prior_cells.get(bucket) or {},
-                                                 blockers, date=date)
+                cells[bucket] = self._drift_cell(dest, bucket, cell, seg, frames,
+                                                 prior_cells.get(bucket) or {}, blockers, date=date)
             if cells:
                 destinations[dest] = {"destination_path": dest, "drift_decisions": cells}
         requires = any(c["requires_user_input"] for d in destinations.values()
@@ -1581,11 +1581,12 @@ class CalibrationWorkflow:
             artifact["decision_mode"] = "no_op_or_confirmed"
         return artifact, blockers
 
-    def _drift_cell(self, dest, bucket, time_cell, track_segment, prior_cell, blockers, date=None):
-        """One drift-validation bucket: the current offset + the covering GPX track (evidence), the
-        operator's explicit confirmation, and the validated/corrected offset compute_resolved_utc
-        consumes. requires_user_input until `confirmed` is actively set (a zero-scrub counts only when
-        the operator confirms it — inaction never satisfies the gate, §21a)."""
+    def _drift_cell(self, dest, bucket, time_cell, track_segment, frames, prior_cell, blockers, date=None):
+        """One drift-validation bucket: the current offset, the covering GPX track + the bucket's
+        frames (evidence the editor scrubs a photo along), the operator's explicit confirmation, and
+        the validated/corrected offset compute_resolved_utc consumes. requires_user_input until
+        `confirmed` is actively set (a zero-scrub counts only when the operator confirms it — inaction
+        never satisfies the gate, §21a)."""
         eff = time_cell.get("effective_time_anchor") or {}
         current = eff.get("offset_seconds")
         loc = bucket
@@ -1601,11 +1602,18 @@ class CalibrationWorkflow:
             else:
                 blockers.append(f"{dest}: drift_decisions[{loc}].user_decision.corrected_offset_seconds "
                                 "must be empty or a number within +/-86400.")
+        # The editor scrubs a representative photo along the track: corrected_offset = (chosen track
+        # time) - (that photo's camera naive). Expose every bucket frame (earliest first) so it can
+        # default to one and let the operator cross-check others; re-extracted every run with the track.
+        frame_rows = sorted(({"source_file": f.get("relative_path"),
+                              "camera_naive": f.get("source_naive_time")} for f in frames),
+                            key=lambda r: (r["camera_naive"] or "", r["source_file"] or ""))
         cell = {
             "camera_group": time_cell.get("camera_group"),
             "proposal": {
                 "proposal_source": eff.get("source"),
                 "current_offset_seconds": current,
+                "frames": frame_rows,
                 "track_segment": [{"lat": p.lat, "lon": p.lon,
                                    "time_utc": p.time_utc.strftime("%Y-%m-%dT%H:%M:%SZ")}
                                   for p in track_segment],

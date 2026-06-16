@@ -1,0 +1,101 @@
+{
+  "artifact_name": "photos-21a-gps-drift-validation.json",
+  "artifact_type": "gps_drift_validation",
+  "depends_on": {
+    "camera_group_key_version": 1,
+    "camera_time_policy_fingerprint": "840f62db228ba45660d44cf8eebbaa8e22405f59a695ce3dc10a4be3c78e4650",
+    "gpx_fingerprint": "example-gpx-fingerprint",
+    "photos_21_sha256": "3066347f113a0e129dce53c4e403a01a6a915c3a6e417e5c9d27ecf9e81ac366"
+  },
+  "destinations": {
+    "6-photos-by-dest/DriftTown": {
+      "destination_path": "6-photos-by-dest/DriftTown",
+      "drift_decisions": {
+        "CAM|drift|D": {
+          "camera_group": "CAM|drift|D",
+          "effective_drift_offset": "",
+          "proposal": {
+            "current_offset_seconds": -7200,
+            "frames": [
+              {
+                "camera_naive": "2024:07:03 14:00:00",
+                "source_file": "6-photos-by-dest/DriftTown/d1.arw"
+              },
+              {
+                "camera_naive": "2024:07:03 14:05:00",
+                "source_file": "6-photos-by-dest/DriftTown/d2.arw"
+              }
+            ],
+            "proposal_source": "timezone_accepted",
+            "track_segment": [
+              {
+                "lat": 50.0,
+                "lon": 4.0,
+                "time_utc": "2024-07-03T12:00:00Z"
+              },
+              {
+                "lat": 50.0,
+                "lon": 4.0006,
+                "time_utc": "2024-07-03T12:01:00Z"
+              },
+              {
+                "lat": 50.0,
+                "lon": 4.0012,
+                "time_utc": "2024-07-03T12:02:00Z"
+              },
+              {
+                "lat": 50.0,
+                "lon": 4.0018,
+                "time_utc": "2024-07-03T12:03:00Z"
+              },
+              {
+                "lat": 50.0,
+                "lon": 4.0024,
+                "time_utc": "2024-07-03T12:04:00Z"
+              },
+              {
+                "lat": 50.0,
+                "lon": 4.003,
+                "time_utc": "2024-07-03T12:05:00Z"
+              },
+              {
+                "lat": 50.0,
+                "lon": 4.0036,
+                "time_utc": "2024-07-03T12:06:00Z"
+              },
+              {
+                "lat": 50.0,
+                "lon": 4.0042,
+                "time_utc": "2024-07-03T12:07:00Z"
+              },
+              {
+                "lat": 50.0,
+                "lon": 4.0048,
+                "time_utc": "2024-07-03T12:08:00Z"
+              },
+              {
+                "lat": 50.0,
+                "lon": 4.0054,
+                "time_utc": "2024-07-03T12:09:00Z"
+              },
+              {
+                "lat": 50.0,
+                "lon": 4.006,
+                "time_utc": "2024-07-03T12:10:00Z"
+              }
+            ]
+          },
+          "requires_user_input": true,
+          "stale_user_decision": false,
+          "user_decision": {
+            "confirmed": false,
+            "corrected_offset_seconds": ""
+          }
+        }
+      }
+    }
+  },
+  "executable": false,
+  "requires_user_input": true,
+  "status": "requires_user_input"
+}
