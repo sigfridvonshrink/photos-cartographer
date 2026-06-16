@@ -389,7 +389,7 @@ def test_rerun_surfaces_calibration_blockers(tmp_path):
     # nothing — which is exactly the failure the editor must surface, so this exercises the real plumbing.
     r = serve._rerun(str(tmp_path))
     assert r["ok"] is False and r["returncode"] == 2
-    assert "photos-1-prep" in (r.get("stderr") or "")
+    assert "photos-ingest prep" in (r.get("stderr") or "")
 
 
 # ------------------------------------------------------------ folder-dependency gate (_environment)

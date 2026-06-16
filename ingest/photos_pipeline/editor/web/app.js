@@ -4,7 +4,7 @@
 // user_decision back via the server). GPS cells get a side-panel map picker (fixed-crosshair pick) plus
 // a photo preview for review items (map.js + the server's /api/photo). The time tree shows a live,
 // advisory inheritance preview (a child with no own decision shows the timezone it would inherit from
-// its nearest resolved ancestor), and Re-run invokes `photos-2-time-gps run` on the server then reloads
+// its nearest resolved ancestor), and Re-run invokes `photos-ingest geotag plan` on the server then reloads
 // the regenerated authoritative artifacts (the edit → Save → Re-run → reload loop).
 // Vanilla + ES modules; no build. Leaflet is vendored (global L); tiles come from OSM at runtime.
 
@@ -218,7 +218,7 @@ function fmtOffset(s) {
 
 // Offset ⟷ real-UTC conversion. The offset is the one stored value; UTC is just the anchor frame's
 // real instant (camera_naive + offset) rendered as a clock. All math is on naive wall-times treated as
-// UTC epoch ms (Date.UTC), matching calibration's `real_utc_naive − camera_naive` (photos-2-time-gps).
+// UTC epoch ms (Date.UTC), matching calibration's `real_utc_naive − camera_naive` (photos_pipeline.photos_2_time_gps).
 const _pad = (n) => String(n).padStart(2, "0");
 function camNaiveMs(s) { // camera EXIF naive "YYYY:MM:DD HH:MM:SS"
   const m = /^(\d{4}):(\d\d):(\d\d)[ T](\d\d):(\d\d):(\d\d)/.exec(s || "");
@@ -508,7 +508,8 @@ function renderGps(list) {
     const order = (d.gps_decisions?.review_items || []).map((ri) => ri.relative_path);
     for (const ri of d.gps_decisions?.review_items || []) {
       const ref = { file: "gps", dest, kind: "review", path: ri.relative_path };
-      list.append(el("div", { class: "row" + (isSel(ref) ? " sel" : ""), onclick: (ev) => selectReview(ev, dest, ri.relative_path, order) },
+      list.append(el("div", { class: "row" + (isSel(ref) ? " sel" : ""), onclick: (ev) => selectReview(ev, dest, ri.relative_path, order),
+          onmouseenter: (ev) => showHoverPreview(ri.relative_path, ev.currentTarget), onmouseleave: hideHoverPreview },
         el("span", { class: "label" }, ri.relative_path.split("/").pop()), chip("reason", ri.reason), ...tags(ref), statusChip(ref)));
     }
     list.append(el("div", { class: "summary" }, `${s.files_total ?? 0} files — preserve ${s.preserve_native_gps ?? 0}, interp ${s.automatic_gpx_interpolation ?? 0}, extrap ${s.automatic_gpx_extrapolation ?? 0}, fallback ${s.automatic_folder_fallback ?? 0}, blocked ${s.blocked ?? 0}`));
@@ -815,7 +816,10 @@ function mapBlock(ref) {
   }
   _map.setCurrent(currentCoord(ref));
   setTimeout(() => _map && _map.refresh(), 0);     // recompute size after (re)attach to the DOM
-  return el("div", { class: "pblock" }, el("h3", {}, "Place on map"), _map.el, _map.search, _map.bar, copyPasteBar(ref));
+  // Controls (place search, readout + "use map center", copy/paste) ABOVE the map; the big map fills
+  // the rest of the panel below them.
+  return el("div", { class: "pblock" }, el("h3", {}, "Place on map"),
+    _map.search, _map.bar, copyPasteBar(ref), _map.el);
 }
 // Scrub-on-track block for a drift bucket: a representative photo above a max-zoomed track map; the
 // scroll wheel slides the photo along the GPX segment (map.js), and each step computes the bucket's
@@ -868,15 +872,34 @@ function driftMap(ref, frame, fi) {
   setTimeout(() => _map && _map.refresh(), 0);
   return _map.el;
 }
-function photoBlock(ref) {
-  if (state.base.demo)
-    return el("div", { class: "pblock" }, el("h3", {}, "Photo"),
-      el("div", { class: "placeholder" }, "no preview in demo mode (no workspace files)"));
-  const img = el("img", { class: "photo-img", alt: ref.path, src: "/api/photo?path=" + encodeURIComponent(ref.path) });
-  const block = el("div", { class: "pblock" }, el("h3", {}, "Photo"), img);
-  img.addEventListener("error", () => { img.remove(); block.append(el("div", { class: "placeholder" }, "no embedded preview available")); });
-  return block;
+// A small right-aligned preview of the first/only selected photo, shown inside the pinned "Your
+// decision" box for a GPS review item (the big map gets the rest of the panel). Null in demo mode or
+// for non-photo cells; for a multi-photo run, `ref.path` is the first photo.
+function decisionThumb(ref) {
+  if (state.base.demo || ref.kind !== "review" || !ref.path) return null;
+  const img = el("img", { class: "decision-thumb", alt: ref.path, title: ref.path.split("/").pop(),
+    src: "/api/photo?path=" + encodeURIComponent(ref.path) });
+  img.addEventListener("error", () => img.remove());
+  return img;
 }
+
+// Floating full-size preview shown while hovering a photo name in the worklist — lets you eyeball each
+// photo (and build a shift-click run) without opening it. One reused element; never in demo mode.
+let _hoverImg = null;
+function showHoverPreview(path, anchor) {
+  if (state.base.demo || !path) return;
+  if (!_hoverImg) {
+    _hoverImg = el("img", { class: "hover-preview" });
+    _hoverImg.addEventListener("error", () => { _hoverImg.hidden = true; });
+    document.body.append(_hoverImg);
+  }
+  _hoverImg.src = "/api/photo?path=" + encodeURIComponent(path);
+  const r = anchor.getBoundingClientRect();
+  _hoverImg.style.left = Math.max(12, Math.min(r.right + 12, window.innerWidth - 340)) + "px";
+  _hoverImg.style.top = Math.max(12, Math.min(r.top, window.innerHeight - 340)) + "px";
+  _hoverImg.hidden = false;
+}
+function hideHoverPreview() { if (_hoverImg) _hoverImg.hidden = true; }
 
 // --- side panel --------------------------------------------------------------
 function jsonBlock(title, obj) { return obj === undefined ? null : el("div", { class: "pblock" }, el("h3", {}, title), el("pre", { class: "json" }, JSON.stringify(obj, null, 2))); }
@@ -956,15 +979,14 @@ function renderPanel() {
   // Fixed top: title + status + the decision controls + the effective preview — always visible, no scroll.
   const top = el("div", { class: "panel-top" },
     el("h2", {}, title), el("div", { class: "path" }, ref.path || ref.dest), head,
-    el("div", { class: "pblock" }, el("h3", {}, "Your decision"), controls(ref)),
+    el("div", { class: "pblock" }, el("h3", {}, "Your decision"), decisionThumb(ref), controls(ref)),
     el("div", { class: "pblock eff" }, el("h3", {}, "Effective (advisory — re-run to apply)"), el("div", { class: "eff-val" }, previewEffective(ref))));
   // Scroll area, the only thing that scrolls. For a GPS coord cell the MAP comes first — directly under
   // the pinned "Your decision" box — so a paste/edit's effect (jump to full zoom) is visible without
   // scrolling; then the photo; then the proposal evidence last. Non-GPS cells just show the proposal.
   const scroll = el("div", { class: "panel-scroll" });
   if (isScrub) scroll.append(scrubBlock(ref));
-  if (isGpsCoord) scroll.append(mapBlock(ref));
-  if (ref.kind === "review") scroll.append(photoBlock(ref));
+  if (isGpsCoord) scroll.append(mapBlock(ref));   // the review photo is now a thumbnail in "Your decision" + a hover preview in the worklist
   if (c.proposal && ref.kind !== "drift") scroll.append(ref.kind === "offset" ? offsetProposalBlock(ref, c.proposal) : jsonBlock("Proposal", c.proposal));
   p.replaceChildren(top, scroll);
 }
@@ -980,13 +1002,13 @@ async function save() {
   state.saving = true; state.message = "saving…"; render();
   try {
     const r = await (await fetch("/api/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })).json();
-    if (r.ok) { state.base = clone(state.work); state.message = `saved ${r.written.join(", ")} — re-run calibration to apply`; }
+    if (r.ok) { state.base = clone(state.work); state.message = `saved ${r.written.join(", ")} — Re-run (\`photos-ingest geotag plan\`) to apply`; }
     else state.message = "save failed: " + (r.error || "unknown");
   } catch (e) { state.message = "save failed: " + e; }
   state.saving = false; render();
 }
 
-// Re-run calibration: `photos-2-time-gps run` regenerates the authoritative artifacts from the SAVED
+// Re-run calibration: `photos-ingest geotag plan` regenerates the authoritative artifacts from the SAVED
 // decisions, so we require a clean (saved, valid) state first, then reload what calibration wrote.
 async function rerun() {
   if (state.base.demo || state.saving || state.running) return;
@@ -1020,6 +1042,7 @@ function renderRunlog() {
 }
 
 function render() {
+  hideHoverPreview();                              // a re-render replaces the worklist rows; drop any stuck hover preview
   const a = state.base;
   $("#workspace").textContent = a.demo ? "demo mode — example fixtures (read-only)" : a.workspace;
   for (const b of document.querySelectorAll("#view-toggle button")) b.classList.toggle("on", b.dataset.view === state.view);
@@ -1036,7 +1059,7 @@ function render() {
   rerunBtn.title = a.demo ? "demo mode — no workspace to calibrate"
     : depsMissing ? `can't re-run on this machine — missing: ${a.environment.missing.join(", ")}. Run the editor on the host with the pipeline and its data.`
     : dirty > 0 ? "save your changes first, then re-run"
-    : invalid ? "fix invalid fields first" : "run `photos-2-time-gps run` and reload the result";
+    : invalid ? "fix invalid fields first" : "run `photos-ingest geotag plan` and reload the result";
   $("#reset").disabled = dirty === 0 || busy;
   renderRunlog();
   const list = $("#list"); list.replaceChildren();
