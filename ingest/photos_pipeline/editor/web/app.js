@@ -276,6 +276,7 @@ function scrubSeedIndex(track, frame, currentOffset) {
   return best;
 }
 let _driftFrame = 0, _driftCellKey = null;   // which bucket frame the scrub view shows (earliest default); reset on cell change
+let _driftTab = "photo";                     // drift sub-tab: "photo" (choose representative) | "map" (scrub track); resets to photo per cell
 
 // advisory effective preview (NOT authoritative — calibration recomputes on re-run)
 function previewEffective(ref) {
@@ -820,29 +821,39 @@ function mapBlock(ref) {
 // scroll wheel slides the photo along the GPX segment (map.js), and each step computes the bucket's
 // corrected offset from THAT photo's camera-naive time. A frame picker lets the operator cross-check
 // other photos in the bucket (each must yield the same offset); the last scrub wins.
+// Two sub-tabs under the pinned decision (like the Time/Drift/GPS views): "Photo" (active on load) to
+// pick which frame represents the bucket, and "Track" to scrub that photo along the GPX segment. The
+// scrub map is mounted only on the Track tab (so its wheel/key handlers exist only there).
 function scrubBlock(ref) {
   const c = workCell(ref), p = c.proposal || {}, frames = p.frames || [], track = p.track_segment || [];
-  const wrap = el("div", { class: "pblock" }, el("h3", {}, "Scrub the photo along the GPX track"));
-  if (!frames.length || !track.length) { wrap.append(el("div", { class: "placeholder" }, "no frames or track to scrub")); return wrap; }
+  const wrap = el("div", { class: "pblock" });
+  if (!frames.length || !track.length) { teardownMap(); wrap.append(el("div", { class: "placeholder" }, "no frames or track to scrub")); return wrap; }
   const fi = Math.min(_driftFrame, frames.length - 1), frame = frames[fi];
-  // Browse the group's photos with ‹ prev / next › to pick which one represents the bucket for the
-  // scrub. Changing the photo re-seeds the map at that photo's current-offset position.
-  const setFrame = (i) => { _driftFrame = Math.max(0, Math.min(frames.length - 1, i)); teardownMap(); render(); };
+  const tabBtn = (id, label) => el("button", { class: _driftTab === id ? "on" : null, onclick: () => { _driftTab = id; render(); } }, label);
+  wrap.append(el("div", { class: "seg subtab" }, tabBtn("photo", "Photo"), tabBtn("map", "Track")));
+
+  if (_driftTab === "map") {                      // Track tab — scrub the chosen photo along the GPX segment
+    wrap.append(driftMap(ref, frame, fi));
+    wrap.append(el("div", { class: "hint" }, `Placing ${frame.source_file.split("/").pop()} (photo ${fi + 1}/${frames.length}). `
+      + "Scroll over the map, or press [ / ] (Shift for ×10), to slide it along the track; the chosen point sets this bucket's corrected offset for every photo in it."));
+    return wrap;
+  }
+
+  // Photo tab — choose the representative frame (the map is not mounted here).
+  teardownMap();
+  const setFrame = (i) => { _driftFrame = Math.max(0, Math.min(frames.length - 1, i)); render(); };
   wrap.append(el("div", { class: "frame-nav" },
     el("button", { class: "btn", disabled: fi === 0 ? "" : null, onclick: () => setFrame(fi - 1) }, "‹ prev"),
     el("span", { class: "frame-count" }, `Photo ${fi + 1} / ${frames.length}`),
     el("button", { class: "btn", disabled: fi === frames.length - 1 ? "" : null, onclick: () => setFrame(fi + 1) }, "next ›")));
   wrap.append(el("div", { class: "hint" }, frame.source_file.split("/").pop()));
-  // Map first; the photo goes UNDER it (matching the GPS coord panel).
-  wrap.append(driftMap(ref, frame, fi));
   if (state.base.demo) wrap.append(el("div", { class: "placeholder" }, "no preview in demo mode (no workspace files)"));
   else {
     const img = el("img", { class: "photo-img", alt: frame.source_file, src: "/api/photo?path=" + encodeURIComponent(frame.source_file) });
     img.addEventListener("error", () => { img.remove(); wrap.append(el("div", { class: "placeholder" }, "no embedded preview available")); });
     wrap.append(img);
   }
-  wrap.append(el("div", { class: "hint" }, "Scroll over the map, or press [ / ] (Shift for ×10), to slide the photo along the track. "
-    + "The chosen point sets this bucket's corrected offset for every photo in it; ‹ prev / next › changes which photo represents the group."));
+  wrap.append(el("div", { class: "hint" }, "‹ prev / next › picks the photo that represents this group; switch to Track to place it on the GPX track."));
   return wrap;
 }
 function driftMap(ref, frame, fi) {
@@ -919,7 +930,7 @@ function renderPanel() {
   const isScrub = ref && ref.kind === "drift";
   if (!isGpsCoord && !isScrub) teardownMap();
   const cellKey = mapKeyFor(ref);
-  if (cellKey !== _driftCellKey) { _driftFrame = 0; _driftCellKey = cellKey; }   // reset frame on cell change
+  if (cellKey !== _driftCellKey) { _driftFrame = 0; _driftTab = "photo"; _driftCellKey = cellKey; }  // reset frame + tab per cell
   if (!ref || !c) return p.append(el("div", { class: "empty" }, "Select a decision to edit it."));
   const multi = ref.peers && ref.peers.length > 1;
   const title = ref.kind === "offset" ? `Offset · ${c.camera_group || ref.key}`
