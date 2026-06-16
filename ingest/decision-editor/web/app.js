@@ -638,21 +638,25 @@ function controls(ref) {
 // the map's onMove can reach the current input across re-renders.
 let _coordInp = null;
 // A single "lat, lon" text field for a coordinate cell (review or fallback) — accepts a value pasted
-// straight from Google Maps. A valid entry (on Enter or blur) writes both stored fields, refreshes the
-// in-editor clipboard, and jumps the map to that exact coordinate at full zoom; a non-empty unparseable
-// entry is kept verbatim and flagged invalid; empty clears the cell. Replaces the old two-spinner pair.
+// straight from Google Maps. A valid entry (committed on paste, or on Enter / blur) writes both stored
+// fields, refreshes the in-editor clipboard, and jumps the map to that exact coordinate at full zoom; a
+// non-empty unparseable entry is kept verbatim and flagged invalid; empty clears the cell.
 function coordField(ref) {
   const [la, lo] = coordFields(ref), u = workCell(ref).user_decision || {};
   const inp = el("input", { type: "text", class: refInvalid(ref) ? "bad" : null,
     placeholder: "lat, lon  —  e.g. 50.525434, 4.269781", value: coordText(u, la, lo) });
   _coordInp = inp;
-  inp.addEventListener("change", () => {
+  const commit = () => {
     const t = inp.value.trim();
     if (t === "") return editMany(ref, { [la]: "", [lo]: "" });
     const c = parseLatLon(t);
     if (c) { state.coordClipboard = { lat: c.lat, lon: c.lon }; editMany(ref, { [la]: c.lat, [lo]: c.lon }); if (_map) _map.jumpMax(c); }
     else editMany(ref, { [la]: t, [lo]: "" });        // keep the bad text visible and let validation flag it
-  });
+  };
+  inp.addEventListener("change", commit);             // Enter / blur
+  // Paste should act immediately, not wait for Enter/blur. The value isn't updated yet on the paste
+  // event, so commit on the next tick (a re-render rebuilds the field, so read inp.value before then).
+  inp.addEventListener("paste", () => setTimeout(commit, 0));
   const lbl = el("label", { class: "ctl-field" }, el("span", {}, "Coordinate (lat, lon)"), inp);
   const wrap = el("div", {}, lbl, el("div", { class: "hint" }, "paste “lat, lon” (e.g. from Google Maps), pan the map under the crosshair and “use map center”, or paste a copied location"));
   if (refInvalid(ref)) wrap.append(el("div", { class: "err" }, "enter coordinates as “lat, lon” (lat ±90, lon ±180)"));

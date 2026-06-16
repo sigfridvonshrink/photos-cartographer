@@ -115,7 +115,7 @@ then the proposal evidence last; non-coord cells just show the proposal.
   - **GPS coordinate / fallback:** a **single `lat, lon` text field** (accepts a value pasted straight
     from Google Maps, e.g. `50.525434, 4.269781` — comma- or space-separated; parsed by the one canonical
     `parseLatLon`) plus a **zoomable map with a fixed centre crosshair** — pan/zoom under it, "use map
-    center" → take `map.getCenter()`. A valid field entry / paste (committed on Enter or blur) writes the
+    center" → take `map.getCenter()`. A valid field entry / paste (committed on paste, or on Enter / blur) writes the
     coordinate, refreshes the clipboard, and **jumps the map to that exact point at full zoom**
     (`map.setView(c, getMaxZoom())`) — an exact coordinate wants the closest view, not the old one; a bad
     non-empty entry is kept verbatim and flagged invalid. As the map pans, the live crosshair centre is
