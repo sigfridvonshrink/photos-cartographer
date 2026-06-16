@@ -19,7 +19,8 @@ between **digiKam** (management/storage) and **Immich** (display/sharing). Top-l
   `photos-gps-sync-xmp`, `photos-fix-exif-dates`) and `archive/storage/legacy-utils/` (the `photocheck-*`
   library-audit scripts and `photoflow.py`). The reengineering specs, the monolithic `photos-ingest`
   prototype that `ingest/` was split out of, and the superseded `photos-gps-tagger` have been removed —
-  their behavior now lives in `ingest/` (`photos-1-prep`, `photos-2-time-gps`, `photos-3-merge`).
+  their behavior now lives in the `ingest/photos_pipeline/` package (`photos_1_prep`,
+  `photos_2_time_gps`, `photos_3_merge`).
 
 See `README.md` for the `__std` naming convention and dependencies, and each folder's `README.md` for
 per-script detail.
@@ -30,12 +31,18 @@ majority by interpolating along the track. See `ingest/workflows/README.md`.
 
 ## Commands
 
-The active script is an **executable Python file with no `.py` extension** (`ingest/photos-1-prep`).
-Tests load it via `importlib.machinery.SourceFileLoader`, not normal import. `ingest/photos_utils.py`
-must sit beside it — the script adds its own directory to `sys.path` and imports `photos_utils`.
+The active pipeline is the **`photos_pipeline` package** at `ingest/photos_pipeline/`:
+`photos_utils.py` (shared lib) + `photos_1_prep.py` / `photos_2_time_gps.py` / `photos_3_merge.py`
+(the three phases, each exposing `main()`). From a checkout, run a phase with
+`python3 -m photos_pipeline.photos_1_prep plan` (with `ingest/` on `PYTHONPATH`, or from `ingest/`).
+The package is **shipped detached** as three self-contained, executable zipapps named
+`photos-1-prep` / `photos-2-time-gps` / `photos-3-merge` (PR2: `tools/build-pyz`), each launched
+`./photos-1-prep plan` exactly like a plain script (shebang'd; needs a `python3` on the host).
 
-Tests **MUST be run from the repo root** — several reference paths like `ingest/photos-1-prep`
-relative to the root. `pytest.ini` sets `testpaths=ingest/tests develop/tests` and ignores `archive/`.
+Tests **MUST be run from the repo root** — `conftest.py` puts `ingest/` on `sys.path` so
+`import photos_pipeline` resolves, and some tests reference repo-root paths like
+`ingest/photos_pipeline/photos_1_prep.py`. `pytest.ini` sets
+`testpaths=ingest/tests ingest/decision-editor/tests develop/tests` and ignores `archive/`.
 
 ```bash
 # Whole suite
@@ -55,11 +62,12 @@ tools/coverage -k merge        # subset (report % will be partial)
 tools/jstest                   # node --test over ingest/decision-editor/tests/*.test.mjs
 ```
 
-`ingest/tests/conftest.py` loads the extensionless `photos-1-prep` script and `photos_utils` **once**
-into `sys.modules` so every test file shares one module instance (and restores the global `CONFIG`
-between tests). Test files therefore `import photos_1_prep` rather than each re-loading the script —
-without that, a combined `pytest` session breaks because `@patch("photos_1_prep....")` and a test's
-captured module reference can resolve to different objects.
+`ingest/tests/conftest.py` imports the package modules once and **aliases them under their historical
+short names** in `sys.modules` (`photos_1_prep` → `photos_pipeline.photos_1_prep`, likewise
+`photos_utils` / `photos_2_time_gps` / `photos_3_merge`), then restores the global `CONFIG` between
+tests. So test files keep `import photos_1_prep` and `@patch("photos_1_prep....")` unchanged — the
+alias is the *same module object* as the package module, so every import and patch resolves
+identically. (This replaced the old `SourceFileLoader` hack once the scripts became package modules.)
 
 There is no build step and no linter config; runtime deps are system tools (`exiftool`, `magick`,
 `cjxl`, `avifenc`, `ffmpeg`) plus pip packages listed in `README.md`. The only manifest is
@@ -73,14 +81,16 @@ There is no build step and no linter config; runtime deps are system tools (`exi
 - **Local `pre-push` hook** (`.githooks/pre-push`) runs a static guard
   (`.githooks/check_test_only_functions.py` — fails if any production function is referenced only by
   tests) and then the suite before a push, aborting on either failure. Enable it per clone with
-  `git config core.hooksPath .githooks`; bypass once with `git push --no-verify`. When the merge phase
-  `ingest/photos-3-merge` lands, add it to `SRC_FILES` in the guard so the same sweep covers it.
+  `git config core.hooksPath .githooks`; bypass once with `git push --no-verify`. The guard's
+  `SRC_FILES` covers all three phase modules + `photos_utils` under `ingest/photos_pipeline/`.
 
 ### CLI contract
 
-- `ingest/photos-1-prep` (prep phase): subcommands `plan` / `dry-run` / `execute`.
-- `ingest/photos-2-time-gps` (time/GPS calibration phase) and `ingest/photos-3-merge` (library merge)
-  are implemented and share the same plan/validate/execute contract. The original `prep` / `calibrate` /
+- `photos_pipeline.photos_1_prep` (prep phase): subcommands `plan` / `dry-run` / `execute`.
+- `photos_pipeline.photos_2_time_gps` (time/GPS calibration) and `photos_pipeline.photos_3_merge`
+  (library merge) are implemented and share the same plan/validate/execute contract. (Run via
+  `python -m photos_pipeline.<module> <subcommand>`, or the shipped `./photos-1-prep <subcommand>`
+  zipapp executables.) The original `prep` / `calibrate` /
   `refresh-library` / `merge` monolith they were split from has been removed; `refresh-library` was
   deliberately dropped in favor of on-demand fingerprinting in `photos-3-merge` (see its workflow spec).
 - **Canonical plan persistence (all phases):** each phase's plan/decision artifact lives at a fixed
@@ -144,10 +154,11 @@ Defined in `ingest/workflows/photos-shared-contract.md`:
 
 ### Module structure
 
-- `ingest/photos_utils.py` — shared config template (`CONFIG`) + utilities; must sit beside
-  `photos-1-prep` (the script inserts its own directory into `sys.path` to import it).
-- `ingest/photos-1-prep` — the prep workflow; owns *only* filesystem prep, no-clobber moves,
-  dedup/quarantine, SQLite/hash cache, and the handoff manifest. It must not plan or apply GPS/time fixes.
+- `ingest/photos_pipeline/photos_utils.py` — shared config template (`CONFIG`) + utilities; the phase
+  modules import it package-relatively (`from .photos_utils import ...`).
+- `ingest/photos_pipeline/photos_1_prep.py` — the prep workflow; owns *only* filesystem prep,
+  no-clobber moves, dedup/quarantine, SQLite/hash cache, and the handoff manifest. It must not plan or
+  apply GPS/time fixes.
 - `ingest/tests/` — `test_prep_split`, `test_idempotency_cache`, `test_exif_metadata`,
   `test_workspace_prep`, `test_concurrency` (named for what they test, not the old phase numbers).
 - `ingest/workflows/` — the authoritative specs (see below).

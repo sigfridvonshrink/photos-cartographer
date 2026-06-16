@@ -246,16 +246,21 @@ def test_cli_jobs_argparse(workspace):
     import subprocess
     import os
 
-    script = "ingest/photos-1-prep"
+    # The prep phase is now a package module; invoke it via `python -m` with ingest/ on PYTHONPATH so
+    # `photos_pipeline` imports (mirrors how it runs from a checkout / how the editor re-runs it).
+    ingest_dir = os.path.abspath("ingest")
+    mod = ["python3", "-m", "photos_pipeline.photos_1_prep"]
+    base_env = os.environ.copy()
+    base_env["PYTHONPATH"] = ingest_dir + os.pathsep + base_env.get("PYTHONPATH", "")
     # Ensure it rejects invalid jobs
-    res = subprocess.run(["python3", script, "--jobs", "0", "plan"], capture_output=True, text=True)
+    res = subprocess.run([*mod, "--jobs", "0", "plan"], capture_output=True, text=True, env=base_env)
     assert res.returncode != 0
     assert "jobs must be a positive integer" in res.stderr
 
-    res = subprocess.run(["python3", script, "--jobs", "-1", "plan"], capture_output=True, text=True)
+    res = subprocess.run([*mod, "--jobs", "-1", "plan"], capture_output=True, text=True, env=base_env)
     assert res.returncode != 0
 
-    res = subprocess.run(["python3", script, "--jobs", "abc", "plan"], capture_output=True, text=True)
+    res = subprocess.run([*mod, "--jobs", "abc", "plan"], capture_output=True, text=True, env=base_env)
     assert res.returncode != 0
 
     # Ensure it accepts valid jobs and produces output plan. A conforming initialized workspace:
@@ -274,13 +279,14 @@ def test_cli_jobs_argparse(workspace):
     os.chmod(exiftool_path, 0o755)
     env = os.environ.copy()
     env["PATH"] = workspace + os.pathsep + env.get("PATH", "")
+    env["PYTHONPATH"] = ingest_dir + os.pathsep + env.get("PYTHONPATH", "")
 
     import json
 
     # plan auto-saves to the canonical control-dir path (no --output flag).
     canonical = os.path.join(workspace, ".photos-ingest", "photos-10-prep-plan.json")
     res = subprocess.run(
-        ["python3", os.path.abspath(script), "-j", "1", "plan"],
+        [*mod, "-j", "1", "plan"],
         cwd=workspace, capture_output=True, text=True, env=env
     )
     assert os.path.exists(canonical), res.stderr          # plan is saved even when blockers exist
@@ -291,7 +297,7 @@ def test_cli_jobs_argparse(workspace):
     assert plan_data_1["summary"]["execution_config"]["jobs_semantic"] is False
 
     res = subprocess.run(
-        ["python3", os.path.abspath(script), "--jobs", "2", "plan"],
+        [*mod, "--jobs", "2", "plan"],
         cwd=workspace, capture_output=True, text=True, env=env
     )
 
@@ -302,7 +308,7 @@ def test_cli_jobs_argparse(workspace):
     # the re-plan backed the first plan up rather than clobbering it
     assert os.path.exists(os.path.join(workspace, ".photos-ingest", "photos-10-prep-plan-001.json"))
 
-    res = subprocess.run(["python3", os.path.abspath(script), "--jobs", "2", "plan"], cwd=workspace, capture_output=True, text=True)
+    res = subprocess.run([*mod, "--jobs", "2", "plan"], cwd=workspace, capture_output=True, text=True, env=env)
     assert "jobs must be a positive integer" not in res.stderr
 
 @patch("subprocess.Popen")

@@ -2,7 +2,7 @@
 # ============================================================================
 # GENERATED FILE — DO NOT EDIT.  Built from decision-editor.unbundled by ./bundle.
 # Edit the source and re-run ./bundle; edits here are lost.  Verify with ./bundle --check.
-# source-sha256: a3f24127775d6a77eb11a3f70cfccf01b49a6bd79e2507fb4df617a72cc6af4b
+# source-sha256: a98d513aee360f54d75365d4cd85c27b825d9f7f8b10ea16baab23aec77b8bf1
 # ============================================================================
 """Local server for the decision editor.
 
@@ -79,7 +79,11 @@ def _machine_ip():
         s.close()
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-CALIBRATE = os.path.join(os.path.dirname(HERE), "photos-2-time-gps")  # the calibration script (../)
+# Calibration is the `photos_pipeline` package (`ingest/photos_pipeline/`, beside this editor's parent
+# dir); re-run invokes it as `python -m photos_pipeline.photos_2_time_gps` with that dir on PYTHONPATH.
+# (PR2: a shipped `photos-2-time-gps` zipapp executable will be detected here too.)
+PIPELINE_ROOT = os.path.dirname(HERE)            # dir that CONTAINS the photos_pipeline package
+CALIBRATE_MODULE = "photos_pipeline.photos_2_time_gps"
 CONTROL = ".photos-ingest"
 TIME_NAME = "photos-21-time-decisions.json"
 DRIFT_NAME = "photos-21a-gps-drift-validation.json"
@@ -4098,12 +4102,26 @@ def _example_json(name):
         return {"_error": f"could not parse {name}: {e}"}
 
 
+def _calibration_available():
+    """True iff the calibration pipeline is runnable from this editor — the `photos_pipeline` package
+    sits under `PIPELINE_ROOT` (a checkout). (PR2 will also accept a shipped executable here.)"""
+    return os.path.isdir(os.path.join(PIPELINE_ROOT, "photos_pipeline"))
+
+
+def _calibration_cmd_env():
+    """The argv + env to invoke calibration `run`: `python -m photos_pipeline.photos_2_time_gps` with
+    PIPELINE_ROOT on PYTHONPATH so the package imports regardless of the editor's cwd."""
+    env = os.environ.copy()
+    env["PYTHONPATH"] = PIPELINE_ROOT + os.pathsep + env.get("PYTHONPATH", "")
+    return [sys.executable, "-m", CALIBRATE_MODULE, "run"], env
+
+
 def _environment(workspace):
     """Folder dependencies calibration needs that may live on a different machine than this editor.
 
     Two things calibration needs that may be absent on the host running the editor:
-      * the pipeline script itself (`CALIBRATE`, expected beside the editor — the single-file bundle does
-        NOT embed it, so a copy taken away from the repo can't re-run); and
+      * the calibration pipeline itself (the `photos_pipeline` package beside the editor — the single-file
+        bundle does NOT embed it, so a copy taken away from the repo can't re-run); and
       * the configured `gpx_root`, which GPX time-anchoring reads and which can be a mount visible only on
         the workspace's own host. Re-running without it would regenerate the time/GPS decisions as if there
         were no GPX, silently discarding good offsets/placements.
@@ -4112,9 +4130,9 @@ def _environment(workspace):
     The Re-run button (and `_rerun`) gate on `deps_ok`; `missing` names each absent dependency for the
     tooltip/error. No other folder dependencies exist at present."""
     missing = []
-    calibration_present = os.path.isfile(CALIBRATE)
+    calibration_present = _calibration_available()
     if not calibration_present:
-        missing.append(f"calibration script ({CALIBRATE})")
+        missing.append(f"calibration pipeline (photos_pipeline package under {PIPELINE_ROOT})")
     cfg = _read_json(os.path.join(workspace, CONTROL, CONFIG_NAME))
     root = (cfg or {}).get("gpx_root") or "" if isinstance(cfg, dict) else ""
     resolved = os.path.realpath(os.path.abspath(root)) if root else ""
@@ -4206,8 +4224,9 @@ def _rerun(workspace):
     if not env["deps_ok"]:
         return {"ok": False, "error": "calibration cannot run on this machine — missing: "
                 + ", ".join(env["missing"]) + ". Run the editor on the host that has the pipeline and its data."}
+    cmd, run_env = _calibration_cmd_env()
     try:
-        proc = subprocess.run([sys.executable, CALIBRATE, "run"], cwd=workspace,
+        proc = subprocess.run(cmd, cwd=workspace, env=run_env,
                               capture_output=True, text=True, timeout=RERUN_TIMEOUT_S)
     except subprocess.TimeoutExpired:
         return {"ok": False, "error": f"calibration timed out after {RERUN_TIMEOUT_S}s"}

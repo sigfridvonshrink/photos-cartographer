@@ -13,8 +13,6 @@ preservation/validation path).
 
 Run from the repo root:  python3 ingest/decision-editor/generate_examples.py
 """
-import importlib.machinery
-import importlib.util
 import json
 import os
 import sys
@@ -24,18 +22,11 @@ from datetime import datetime, timezone
 ING = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "examples")
 
-
-def _load(name, filename):
-    loader = importlib.machinery.SourceFileLoader(name, os.path.join(ING, filename))
-    spec = importlib.util.spec_from_loader(name, loader)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    loader.exec_module(mod)
-    return mod
-
-
-utils = _load("photos_utils", "photos_utils.py")
-cal = _load("photos_2_time_gps", "photos-2-time-gps")
+# The pipeline now lives in the `photos_pipeline` package (`ingest/photos_pipeline/`); import it the
+# normal way (ING is `ingest/`, the dir that contains the package).
+if ING not in sys.path:
+    sys.path.insert(0, ING)
+from photos_pipeline import photos_utils as utils, photos_2_time_gps as cal  # noqa: E402
 
 BD = "6-photos-by-dest"
 written = []

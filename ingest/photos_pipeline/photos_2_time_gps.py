@@ -28,8 +28,7 @@ import xml.etree.ElementTree as ET
 import zoneinfo
 from datetime import datetime, timedelta, timezone
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from photos_utils import (
+from .photos_utils import (
     CONFIG, CONTROL_DIR, config_path, handoff_path, guard_path, is_sealed,
     validate_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
     selected_gpx_root, CAMERA_IDENTITY_FIELDS, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
@@ -2148,7 +2147,7 @@ class CalibrationWorkflow:
                     reverted += 1
         finally:
             cache.close()
-            from photos_utils import PersistentMagickWorker
+            from .photos_utils import PersistentMagickWorker
             PersistentMagickWorker.cleanup_all()       # close the per-thread magick workers (verify pass)
 
         # The journal was persisted incrementally as each file completed (above); nothing more to flush.
