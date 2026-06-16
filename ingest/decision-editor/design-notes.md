@@ -113,9 +113,14 @@ area** that holds the evidence (proposal) and the big media (photo, map), the on
   - **GPS coordinate / fallback:** a **single `lat, lon` text field** (accepts a value pasted straight
     from Google Maps, e.g. `50.525434, 4.269781` — comma- or space-separated; parsed by the one canonical
     `parseLatLon`) plus a **zoomable map with a fixed centre crosshair** — pan/zoom under it, "use map
-    center" → take `map.getCenter()`. A valid field entry / paste writes the coordinate, refreshes the
-    clipboard, and **recenters the map keeping its zoom** (`map.panTo`); a bad non-empty entry is kept
-    verbatim and flagged invalid. Reference pins (effective / inherited / folder fallback) and a marker
+    center" → take `map.getCenter()`. A valid field entry / paste (committed on Enter or blur) writes the
+    coordinate, refreshes the clipboard, and **jumps the map to that exact point at full zoom**
+    (`map.setView(c, getMaxZoom())`) — an exact coordinate wants the closest view, not the old one; a bad
+    non-empty entry is kept verbatim and flagged invalid. As the map pans, the live crosshair centre is
+    **mirrored into the pinned `lat, lon` field** (display only — unless it is being typed in — so the
+    always-visible top box reflects where the crosshair sits without scrolling down to the map readout).
+    The in-editor *copy/paste-location* pair still **`panTo`s keeping zoom**. Reference pins (effective /
+    inherited / folder fallback) and a marker
     for the current decision give context, and the map seeds its view to the current coordinate, **else
     the last coordinate the operator placed** (so the next un-located photo opens centred where the
     previous one was set — consecutive shots are usually near each other), else the nearest known
