@@ -85,11 +85,11 @@ def test_full_execute_with_real_tools(tmp_path, monkeypatch):
              rec("6-photos-by-dest/T/b.jpg", "2024:07:03 15:00:00", 51.0, 5.0)]
     (ctl / "photos-11-handoff.json").write_text(json.dumps({"files": files, "cache_fingerprint": "pcf"}))
 
-    _run(monkeypatch, ws, "run")
+    _run(monkeypatch, ws, "plan")
     p = ctl / "photos-21-time-decisions.json"; a = json.load(open(p))
     a["destinations"]["6-photos-by-dest/T"]["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
     p.write_text(json.dumps(a))
-    _run(monkeypatch, ws, "run")
+    _run(monkeypatch, ws, "plan")
     assert (ctl / "photos-23-executable-plan.json").exists()
 
     assert _run(monkeypatch, ws, "execute") == 0                      # real exiftool + fingerprint, no mocks

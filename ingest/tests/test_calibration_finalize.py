@@ -149,17 +149,17 @@ def _run(monkeypatch, ws, cmd):
 
 
 def _to_executed(monkeypatch, ws, ctl):
-    _run(monkeypatch, ws, "run")
+    _run(monkeypatch, ws, "plan")
     a = json.load(open(ctl / "photos-21-time-decisions.json"))
     a["destinations"][f"{BYDEST}/T"]["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
     (ctl / "photos-21-time-decisions.json").write_text(json.dumps(a))
-    _run(monkeypatch, ws, "run")
+    _run(monkeypatch, ws, "plan")
     _run(monkeypatch, ws, "execute")
 
 
 def test_finalize_refuses_before_execute(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
-    _run(monkeypatch, ws, "run")                                         # only photos-21 yet
+    _run(monkeypatch, ws, "plan")                                         # only photos-21 yet
     assert _run(monkeypatch, ws, "finalize") == 2
     assert not (ctl / "photos-25-complete-log.json").exists()
 
@@ -210,11 +210,11 @@ def test_finalize_assembles_package_and_is_nondestructive(tmp_path, monkeypatch)
 
 def test_finalize_refuses_without_summary(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
-    _run(monkeypatch, ws, "run")
+    _run(monkeypatch, ws, "plan")
     a = json.load(open(ctl / "photos-21-time-decisions.json"))
     a["destinations"][f"{BYDEST}/T"]["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
     (ctl / "photos-21-time-decisions.json").write_text(json.dumps(a))
-    _run(monkeypatch, ws, "run")                                         # photos-23 ready, NOT executed
+    _run(monkeypatch, ws, "plan")                                         # photos-23 ready, NOT executed
     assert (ctl / "photos-23-executable-plan.json").exists()
     assert _run(monkeypatch, ws, "finalize") == 2                        # no photos-24 yet
     assert not (ctl / "photos-25-complete-log.json").exists()

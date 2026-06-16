@@ -326,7 +326,7 @@ def test_run_auto_resolves_offset_from_gpx(tmp_path, monkeypatch):
 
     CAM_CFG = CAM
     monkeypatch.chdir(str(ws))
-    monkeypatch.setattr(sys, "argv", ["photos-2-time-gps", "run"])
+    monkeypatch.setattr(sys, "argv", ["photos-2-time-gps", "plan"])
     try:
         cal.main()
     except SystemExit as e:

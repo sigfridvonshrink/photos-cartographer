@@ -48,7 +48,7 @@ def _ws(tmp_path, *, files, device_groups, default_tz=""):
 
 def _run(monkeypatch, ws):
     monkeypatch.chdir(str(ws))
-    monkeypatch.setattr(sys, "argv", ["photos-2-time-gps", "run"])
+    monkeypatch.setattr(sys, "argv", ["photos-2-time-gps", "plan"])
     try:
         cal.main(); return 0
     except SystemExit as e:

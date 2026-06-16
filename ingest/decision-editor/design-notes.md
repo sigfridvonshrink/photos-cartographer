@@ -12,7 +12,7 @@ it surfaces a to-do list, shows each decision's proposal + evidence, captures a 
 and writes back. Its **only hard requirement is conforming output** (see the reference's "conformance
 contract"): it edits **only `user_decision`**, round-trips everything else, and never recomputes
 `proposal`/`effective_*`/`status` — calibration does that on the next run. Any in-app outcome it shows
-is **advisory**; the loop is **edit → Save → re-run `photos-2-time-gps run` → reload**.
+is **advisory**; the loop is **edit → Save → re-run `photos-ingest geotag plan` → reload**.
 
 ## 2. Stack (decided)
 
@@ -179,7 +179,7 @@ then the proposal evidence last; non-coord cells just show the proposal.
    path-safe, workspace-only), for GPS cells. (Track/anchors/ghost dropped — not in the GPS artifact for
    review items; see §4.)
 3. **Persist + loop (done):** **Save** (write `user_decision` back, round-tripping the rest) plus
-   **Re-run** — `POST /api/rerun` invokes `photos-2-time-gps run` (workspace as CWD; calibration owns its
+   **Re-run** — `POST /api/rerun` invokes `photos-ingest geotag plan` (workspace as CWD; calibration owns its
    own `WorkspaceLock`, separate from the editor lock) and, on success, reloads the regenerated
    authoritative artifacts. Re-run acts on the *saved* decisions, so it's disabled while there are
    unsaved/invalid edits (save first); its outcome — exit code + stderr/stdout tail — shows in a

@@ -2,7 +2,7 @@
 # ============================================================================
 # GENERATED FILE — DO NOT EDIT.  Built from decision-editor.unbundled by ./bundle.
 # Edit the source and re-run ./bundle; edits here are lost.  Verify with ./bundle --check.
-# source-sha256: a98d513aee360f54d75365d4cd85c27b825d9f7f8b10ea16baab23aec77b8bf1
+# source-sha256: 3919e83e7e738c7dae66327ee6ca70ca549bdf0150204bcf21b0d11914b38b93
 # ============================================================================
 """Local server for the decision editor.
 
@@ -4113,7 +4113,7 @@ def _calibration_cmd_env():
     PIPELINE_ROOT on PYTHONPATH so the package imports regardless of the editor's cwd."""
     env = os.environ.copy()
     env["PYTHONPATH"] = PIPELINE_ROOT + os.pathsep + env.get("PYTHONPATH", "")
-    return [sys.executable, "-m", CALIBRATE_MODULE, "run"], env
+    return [sys.executable, "-m", CALIBRATE_MODULE, "plan"], env
 
 
 def _environment(workspace):

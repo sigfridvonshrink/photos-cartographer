@@ -86,13 +86,21 @@ There is no build step and no linter config; runtime deps are system tools (`exi
 
 ### CLI contract
 
-- `photos_pipeline.photos_1_prep` (prep phase): subcommands `plan` / `dry-run` / `execute`.
-- `photos_pipeline.photos_2_time_gps` (time/GPS calibration) and `photos_pipeline.photos_3_merge`
-  (library merge) are implemented and share the same plan/validate/execute contract. (Run via
-  `python -m photos_pipeline.<module> <subcommand>`, or the shipped `./photos-1-prep <subcommand>`
-  zipapp executables.) The original `prep` / `calibrate` /
+One combined entry point — `photos_pipeline.cli:main` — dispatched git-style as
+`photos-ingest <phase> <subcommand>` (shipped as the single `photos-ingest` zipapp executable; from a
+checkout, `python -m photos_pipeline <phase> <subcommand>`). The CLI is **self-documenting**: bare
+`photos-ingest` prints the overall role + phase list; bare `photos-ingest <phase>` prints that phase's
+role blurb + its subcommands (the tool is used a few times a year). Each phase still has a standalone
+entry (`python -m photos_pipeline.photos_1_prep …`) sharing the same `add_arguments`/`run` — tests use it.
+
+- `photos-ingest prep` — subcommands `plan` / `dry-run` / `execute` (+ `prune-quarantine`).
+- `photos-ingest geotag` — `plan` / `execute` / `finalize` (was the `photos-2-time-gps` phase, formerly
+  named "calibrate"; its `run` subcommand was **renamed to `plan`** so all phases start with `plan`).
+- `photos-ingest merge` — `init-library` / `plan` / `dry-run` / `execute`.
+- `photos-ingest edit [WORKSPACE]` — the decision editor (folds into the package next step).
+  Phases share the plan/validate/execute contract; workspace = cwd. The original `prep` / `calibrate` /
   `refresh-library` / `merge` monolith they were split from has been removed; `refresh-library` was
-  deliberately dropped in favor of on-demand fingerprinting in `photos-3-merge` (see its workflow spec).
+  deliberately dropped in favor of on-demand fingerprinting in merge (see its workflow spec).
 - **Canonical plan persistence (all phases):** each phase's plan/decision artifact lives at a fixed
   control-dir path (`photos-10-prep-plan.json`, calibration `photos-21`/`22`/`23`, `photos-30-merge-plan.json`).
   The planning command writes it there and prints the location; the validate/apply commands read it from
