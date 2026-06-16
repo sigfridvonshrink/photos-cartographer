@@ -190,7 +190,7 @@ def test_raw_jpeg_pair_separates_redundant_jpeg(tmp_path):
 
 # --- config-driven filename format (no external tools needed) ----------------
 
-def test_filename_format_is_config_driven(tmp_path, monkeypatch):
+def test_filename_format_is_config_driven(tmp_path, monkeypatch, seed_from_live_config):
     ws = _make_ws(tmp_path)
     monkeypatch.setattr(
         prep.ContentHasher, "fingerprint_image",

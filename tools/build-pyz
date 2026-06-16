@@ -1,0 +1,109 @@
+#!/usr/bin/env python3
+"""Build the single shippable `photos-ingest` executable (a shebang'd zipapp of the photos_pipeline
+package, editor included) plus its editable default-config sibling.
+
+  tools/build-pyz            # (re)build ingest/dist/{photos-ingest, photos-config-defaults.json}
+  tools/build-pyz --check    # build to a temp dir + smoke-run the exe (CI / pre-push guard)
+
+The zipapp runs directly — `./photos-ingest prep plan` — needing only a python3 on the host (the
+shebang finds it; zipapp does not embed Python). The build is DETERMINISTIC (sorted entries, fixed
+timestamps). `ingest/dist/` is gitignored (build output, not committed), so `--check` guards
+buildability by building to a temp dir and running the executable (`--version`) rather than byte-
+comparing a committed artifact. Detached deploy = build, copy the two files anywhere, `chmod +x
+photos-ingest`, edit the sibling JSON to retune defaults (it wins over the built-in; see
+photos_utils.default_config). Run from the repo root.
+"""
+import argparse
+import io
+import json
+import os
+import stat
+import subprocess
+import sys
+import tempfile
+import zipfile
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+INGEST = os.path.join(ROOT, "ingest")
+PKG = os.path.join(INGEST, "photos_pipeline")
+DIST = os.path.join(INGEST, "dist")
+OUT = os.path.join(DIST, "photos-ingest")
+SIBLING = os.path.join(DIST, "photos-config-defaults.json")
+
+SHEBANG = b"#!/usr/bin/env python3\n"
+# zipapp's root __main__.py: dispatch into the combined CLI.
+MAIN_PY = "import sys\nimport photos_pipeline.cli\nsys.exit(photos_pipeline.cli.main())\n"
+FIXED_DATE = (1980, 1, 1, 0, 0, 0)            # constant mtime -> reproducible archive bytes
+
+
+def _included():
+    """(arcname, abspath) for every runtime file in the package, sorted. Excludes caches, the test
+    suite, the dev-only example generator, and the design docs — none needed to run."""
+    out = []
+    for dirpath, dirnames, filenames in os.walk(PKG):
+        dirnames[:] = sorted(d for d in dirnames if d not in ("__pycache__", "tests"))
+        for name in sorted(filenames):
+            if name == "generate_examples.py" or name.endswith((".md", ".pyc")):
+                continue
+            abspath = os.path.join(dirpath, name)
+            arc = os.path.relpath(abspath, INGEST)        # -> "photos_pipeline/..."
+            out.append((arc, abspath))
+    return sorted(out)
+
+
+def build_pyz_bytes():
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        def write(arc, data):
+            zi = zipfile.ZipInfo(arc, FIXED_DATE)
+            zi.compress_type = zipfile.ZIP_DEFLATED
+            zi.external_attr = 0o644 << 16
+            z.writestr(zi, data)
+        write("__main__.py", MAIN_PY.encode("utf-8"))
+        for arc, abspath in _included():
+            with open(abspath, "rb") as f:
+                write(arc, f.read())
+    return SHEBANG + buf.getvalue()
+
+
+def build_sibling_bytes():
+    sys.path.insert(0, INGEST)
+    from photos_pipeline import photos_utils          # noqa: E402
+    defaults = {k: v for k, v in photos_utils.DEFAULT_CONFIG.items() if k != "jobs"}
+    return (json.dumps(defaults, indent=2, sort_keys=True) + "\n").encode("utf-8")
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--check", action="store_true",
+                    help="verify the committed artifacts match the source; exit nonzero if stale")
+    args = ap.parse_args()
+
+    pyz, sib = build_pyz_bytes(), build_sibling_bytes()
+
+    if args.check:
+        # Build to a throwaway dir and run the executable — verifies it assembles AND runs (the
+        # committed artifact is gitignored, so there's nothing to byte-compare against).
+        with tempfile.TemporaryDirectory() as td:
+            exe = os.path.join(td, "photos-ingest")
+            with open(exe, "wb") as f:
+                f.write(pyz)
+            os.chmod(exe, 0o755)
+            json.loads(sib)                                   # the sibling is valid JSON
+            r = subprocess.run([exe, "--version"], capture_output=True, text=True)
+            if r.returncode != 0 or "photos-ingest" not in r.stdout:
+                sys.exit(f"photos-ingest build does not run: rc={r.returncode} out={r.stdout!r} err={r.stderr!r}")
+        print("photos-ingest builds and runs.")
+        return
+
+    os.makedirs(DIST, exist_ok=True)
+    with open(OUT, "wb") as f:
+        f.write(pyz)
+    os.chmod(OUT, os.stat(OUT).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    with open(SIBLING, "wb") as f:
+        f.write(sib)
+    print(f"wrote {os.path.relpath(OUT, ROOT)} ({len(pyz):,} bytes) + {os.path.relpath(SIBLING, ROOT)}")
+
+
+if __name__ == "__main__":
+    main()

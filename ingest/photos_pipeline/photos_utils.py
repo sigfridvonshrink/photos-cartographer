@@ -1,4 +1,6 @@
 import os
+import sys
+import copy
 import json
 import hashlib
 import re
@@ -113,6 +115,41 @@ CONFIG = {
         "collision_policy": "suffix_incoming"                 # different-content name clash -> rename the incoming file
     }
 }
+
+# The built-in defaults — a frozen snapshot of the CONFIG template above, immune to the runtime
+# mutation of `CONFIG` (load_or_seed_config replaces CONFIG with the workspace's authoritative file;
+# tests mutate it too). This is the in-built fallback `default_config()` seeds a NEW workspace from when
+# no external defaults file is present. The rich inline comments above stay the documentation of every
+# tunable; `tools/build-pyz` emits an editable JSON copy of these defaults beside the shipped executable.
+DEFAULT_CONFIG = copy.deepcopy(CONFIG)
+
+
+def _default_config_paths():
+    """Candidate external default-config files, highest precedence first: an explicit
+    $PHOTOS_PIPELINE_CONFIG path, then a `photos-config-defaults.json` sibling of the running
+    executable (so a detached deploy retunes new-workspace defaults by editing that file, never the
+    zip). Yields paths to try; missing ones are skipped by the caller."""
+    env = os.environ.get("PHOTOS_PIPELINE_CONFIG")
+    if env:
+        yield env
+    argv0 = sys.argv[0] if sys.argv else ""
+    if argv0:
+        yield os.path.join(os.path.dirname(os.path.abspath(argv0)), "photos-config-defaults.json")
+
+
+def default_config() -> dict:
+    """The seed defaults for a NEW workspace's photos-00-config.json: the first present external file
+    from `_default_config_paths()` (validated before use — a bad one is a hard error, never silently
+    ignored), else the built-in DEFAULT_CONFIG. The external file fully replaces the built-in (it is a
+    complete config, as emitted by `tools/build-pyz`)."""
+    for src in _default_config_paths():
+        if src and os.path.isfile(src):
+            with open(src) as f:
+                data = json.load(f)
+            validate_config(data)
+            return data
+    return copy.deepcopy(DEFAULT_CONFIG)
+
 
 def selected_gpx_root() -> str:
     root = CONFIG.get("gpx_root") or ""
@@ -578,8 +615,9 @@ def _atomic_write_text(path: str, text: str) -> None:
         raise
 
 def load_or_seed_config(workspace_root: str) -> str:
-    """Seed `photos-00-config.json` from the in-code CONFIG template on first run,
-    then read it as the authoritative config for this workspace.
+    """Seed `photos-00-config.json` from `default_config()` on first run (an external
+    `photos-config-defaults.json` beside the executable if present, else the built-in
+    DEFAULT_CONFIG), then read it as the authoritative config for this workspace.
 
     Per the shared contract (Section 4), the on-disk file — not the in-code dict —
     governs all processing once it exists; prep is its sole writer (seeds once). The
@@ -590,7 +628,7 @@ def load_or_seed_config(workspace_root: str) -> str:
     ensure_control_dir(workspace_root)
     path = config_path(workspace_root)
     if not os.path.exists(path):
-        seed = {k: v for k, v in CONFIG.items() if k != "jobs"}
+        seed = {k: v for k, v in default_config().items() if k != "jobs"}
         _atomic_write_text(path, json.dumps(seed, indent=2, sort_keys=True))
     with open(path, "rb") as f:
         raw = f.read()

@@ -385,7 +385,7 @@ def test_nested_directory_symlink_in_managed_folder_blocked(tmp_path, monkeypatc
     assert any("Forbidden symlink detected" in b and "nested" in b for b in plan.blockers), plan.blockers
 
 
-def test_gpx_root_inside_managed_tree_is_skipped(tmp_path, monkeypatch):
+def test_gpx_root_inside_managed_tree_is_skipped(tmp_path, monkeypatch, seed_from_live_config):
     """Defensive GPX skip (shared contract §8.2): a gpx_root misconfigured to resolve inside a managed
     folder must be skipped during scanning so the GPX tracks are never organized / swept to strays —
     while ordinary media in the same managed folder is still organized."""
