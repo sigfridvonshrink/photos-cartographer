@@ -9,6 +9,7 @@ so it explains itself.
 import argparse
 
 from . import __version__, photos_1_prep, photos_2_time_gps, photos_3_merge
+from .editor import server as editor
 
 OVERALL_BLURB = (
     "photos-ingest — safely turn a raw photo dump into a calibrated, geotagged, merged library.\n\n"
@@ -23,8 +24,9 @@ OVERALL_BLURB = (
     "`photos-ingest <phase> <cmd> --help` for argument detail."
 )
 
-# (name, module). `edit` (the decision editor) folds in as a phase in the next step.
-_PHASES = (("prep", photos_1_prep), ("geotag", photos_2_time_gps), ("merge", photos_3_merge))
+# (name, module). `edit` (the decision editor) is a leaf phase — no subcommands; it runs the server.
+_PHASES = (("prep", photos_1_prep), ("geotag", photos_2_time_gps), ("merge", photos_3_merge),
+           ("edit", editor))
 
 
 def build_parser():
@@ -41,7 +43,7 @@ def build_parser():
 
 
 def _phase_blurb(mod):
-    for attr in ("PREP_BLURB", "GEOTAG_BLURB", "MERGE_BLURB"):
+    for attr in ("PREP_BLURB", "GEOTAG_BLURB", "MERGE_BLURB", "EDIT_BLURB"):
         if hasattr(mod, attr):
             return getattr(mod, attr)
     return mod.__doc__ or ""
@@ -53,10 +55,10 @@ def main(argv=None):
     if getattr(args, "phase", None) is None:        # no phase -> overall role blurb
         parser.print_help()
         return 0
-    if getattr(args, "command", None) is None:      # phase but no subcommand -> that phase's blurb
+    if hasattr(args, "command") and args.command is None:   # a phase with subcommands, none given -> its blurb
         args._parser.print_help()
         return 0
-    return args._run(args)
+    return args._run(args)                           # leaf phase (edit) or a chosen subcommand
 
 
 if __name__ == "__main__":
