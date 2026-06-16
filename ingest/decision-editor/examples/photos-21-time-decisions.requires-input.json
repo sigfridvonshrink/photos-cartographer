@@ -198,7 +198,7 @@
         "stale_user_decision": false,
         "user_decision": {
           "accept_proposed_timezone": true,
-          "manual_iana_timezone": "Europe/Brussels"
+          "manual_iana_timezone": ""
         }
       }
     },
@@ -250,6 +250,19 @@
             ],
             "confidence": "high",
             "conflicting_count": 0,
+            "groups": [
+              {
+                "count": 2,
+                "offset_seconds": -7200,
+                "representative": {
+                  "camera_source_naive_time": "2024:07:03 14:00:00",
+                  "distance_m": 0.0,
+                  "match_type": "gpx_point_match",
+                  "real_utc": "2024-07-03T12:00:00Z",
+                  "source_file": "6-photos-by-dest/Japan/anchor-1.arw"
+                }
+              }
+            ],
             "proposal_source": "gpx_self_anchor",
             "proposed_offset_seconds": -7200,
             "proposed_real_utc": "2024-07-03T12:00:00Z",
@@ -259,6 +272,11 @@
               "gpx_file": "trip-2024-07-03.gpx",
               "match_type": "gpx_point_match",
               "segment_duration_seconds": null
+            },
+            "skipped": {
+              "examples": [],
+              "no_nearby_track": 0,
+              "outside_time_window": 0
             },
             "supporting_count": 1
           },

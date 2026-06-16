@@ -633,19 +633,24 @@ function controls(ref) {
   }
   return wrap;
 }
+// The "lat, lon" input lives in the pinned top box; as the map pans below, the live map center is
+// mirrored into it (display only — committing stays on Enter/blur or "use map center"). Tracked here so
+// the map's onMove can reach the current input across re-renders.
+let _coordInp = null;
 // A single "lat, lon" text field for a coordinate cell (review or fallback) — accepts a value pasted
-// straight from Google Maps. A valid entry writes both stored fields, refreshes the in-editor clipboard,
-// and recenters the map (keeping zoom); a non-empty unparseable entry is kept verbatim and flagged
-// invalid; empty clears the cell. Replaces the old two-spinner lat/lon pair.
+// straight from Google Maps. A valid entry (on Enter or blur) writes both stored fields, refreshes the
+// in-editor clipboard, and jumps the map to that exact coordinate at full zoom; a non-empty unparseable
+// entry is kept verbatim and flagged invalid; empty clears the cell. Replaces the old two-spinner pair.
 function coordField(ref) {
   const [la, lo] = coordFields(ref), u = workCell(ref).user_decision || {};
   const inp = el("input", { type: "text", class: refInvalid(ref) ? "bad" : null,
     placeholder: "lat, lon  —  e.g. 50.525434, 4.269781", value: coordText(u, la, lo) });
+  _coordInp = inp;
   inp.addEventListener("change", () => {
     const t = inp.value.trim();
     if (t === "") return editMany(ref, { [la]: "", [lo]: "" });
     const c = parseLatLon(t);
-    if (c) { state.coordClipboard = { lat: c.lat, lon: c.lon }; editMany(ref, { [la]: c.lat, [lo]: c.lon }); if (_map) _map.recenter(c); }
+    if (c) { state.coordClipboard = { lat: c.lat, lon: c.lon }; editMany(ref, { [la]: c.lat, [lo]: c.lon }); if (_map) _map.jumpMax(c); }
     else editMany(ref, { [la]: t, [lo]: "" });        // keep the bad text visible and let validation flag it
   });
   const lbl = el("label", { class: "ctl-field" }, el("span", {}, "Coordinate (lat, lon)"), inp);
@@ -704,7 +709,9 @@ function mapBlock(ref) {
     teardownMap();
     const [la, lo] = coordFields(ref);
     _map = mapPicker({ center: seedCenter(ref), markers: gpsRefMarkers(ref),
-      onPick: (lat, lon) => { state.coordClipboard = { lat, lon }; editMany(ref, { [la]: lat, [lo]: lon }); } });
+      onPick: (lat, lon) => { state.coordClipboard = { lat, lon }; editMany(ref, { [la]: lat, [lo]: lon }); },
+      // Pan mirrors the crosshair into the pinned coord field (skipped while it's being typed in).
+      onMove: (lat, lon) => { if (_coordInp && document.activeElement !== _coordInp) _coordInp.value = `${lat}, ${lon}`; } });
     _mapKey = key;
   }
   _map.setCurrent(currentCoord(ref));
@@ -767,6 +774,7 @@ function offsetProposalBlock(ref, p) {
 }
 function renderPanel() {
   const p = $("#panel"); p.replaceChildren();
+  _coordInp = null;                                   // re-set by coordField() when this panel has one
   const ref = state.selected, c = workCell(ref);
   const isGpsCoord = ref && ref.file === "gps" && (ref.kind === "fallback" || ref.kind === "review");
   if (!isGpsCoord) teardownMap();
