@@ -115,7 +115,7 @@ def _plan(ws):
     return plan
 
 
-def test_snapshot_taken_with_detected_dataset_and_prefix(tmp_path, monkeypatch):
+def test_snapshot_taken_with_detected_dataset_and_prefix(tmp_path, monkeypatch, seed_from_live_config):
     _mock_media(monkeypatch)
     monkeypatch.setattr(utils, "detect_zfs_dataset", lambda p: "pool/ws")
     _intercept_zfs_snapshot(monkeypatch, fail=False)
@@ -132,7 +132,7 @@ def test_snapshot_taken_with_detected_dataset_and_prefix(tmp_path, monkeypatch):
     assert snap["snapshot_name"] == f"pool/ws@photos-ingest-prep-{plan.plan_id}"
 
 
-def test_required_snapshot_with_no_dataset_aborts(tmp_path, monkeypatch):
+def test_required_snapshot_with_no_dataset_aborts(tmp_path, monkeypatch, seed_from_live_config):
     _mock_media(monkeypatch)
     monkeypatch.setattr(utils, "detect_zfs_dataset", lambda p: None)   # workspace not on zfs
     prep.CONFIG["zfs"] = {"enabled": True, "snapshots_required": True,
