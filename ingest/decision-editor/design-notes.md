@@ -50,7 +50,9 @@ applies the overlay onto the artifact JSON (round-tripping every other field) an
 split width is clamped and persisted in `localStorage`; the map is resized live as you drag). Selecting a
 cell anywhere opens it in the panel. The panel itself does **not** scroll: a **fixed top** holds the
 title, status, the **decision controls**, and the effective preview — always visible — over a **scroll
-area** that holds the evidence (proposal) and the big media (photo, map), the only things that scroll.
+area** (the only thing that scrolls) that, for a GPS coord cell, orders the **map first** — directly
+under the pinned decision so a paste/edit's jump-to-zoom is visible without scrolling — then the photo,
+then the proposal evidence last; non-coord cells just show the proposal.
 
 - **Two views, switchable mid-edit** (one shared model): **Time** defaults to a **recursive destination
   tree** — a parent shows its descendants' proposals; you can override any node; inheriting cells are
