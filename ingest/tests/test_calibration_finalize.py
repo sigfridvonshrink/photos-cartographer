@@ -161,23 +161,23 @@ def test_finalize_refuses_before_execute(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _run(monkeypatch, ws, "plan")                                         # only photos-21 yet
     assert _run(monkeypatch, ws, "finalize") == 2
-    assert not (ctl / "photos-25-complete-log.json").exists()
+    assert not (ctl / "photos-26-complete-log.json").exists()
 
 
 def test_finalize_refuses_partial_execution(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _to_executed(monkeypatch, ws, ctl)
-    s = json.load(open(ctl / "photos-24-execution-summary.json")); s["status"] = "partial"
-    (ctl / "photos-24-execution-summary.json").write_text(json.dumps(s))
+    s = json.load(open(ctl / "photos-25-execution-summary.json")); s["status"] = "partial"
+    (ctl / "photos-25-execution-summary.json").write_text(json.dumps(s))
     assert _run(monkeypatch, ws, "finalize") == 2
-    assert not (ctl / "photos-25-complete-log.json").exists()
+    assert not (ctl / "photos-26-complete-log.json").exists()
 
 
 def test_finalize_refuses_plan_id_mismatch(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _to_executed(monkeypatch, ws, ctl)
-    s = json.load(open(ctl / "photos-24-execution-summary.json")); s["plan_id"] = "stale"
-    (ctl / "photos-24-execution-summary.json").write_text(json.dumps(s))
+    s = json.load(open(ctl / "photos-25-execution-summary.json")); s["plan_id"] = "stale"
+    (ctl / "photos-25-execution-summary.json").write_text(json.dumps(s))
     assert _run(monkeypatch, ws, "finalize") == 2
 
 
@@ -185,27 +185,27 @@ def test_finalize_assembles_package_and_is_nondestructive(tmp_path, monkeypatch)
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _to_executed(monkeypatch, ws, ctl)
     before = {n: (ctl / n).read_bytes() for n in
-              ("photos-21-time-decisions.json", "photos-22-gps-decisions.json",
-               "photos-23-executable-plan.json", "photos-24-execution-summary.json",
+              ("photos-21-time-decisions.json", "photos-23-gps-decisions.json",
+               "photos-24-executable-plan.json", "photos-25-execution-summary.json",
                "photos-15-prep-log.json")}
     assert _run(monkeypatch, ws, "finalize") == 0
     # the three package files appear
-    assert (ctl / "photos-25-complete-log.json").exists()
-    assert (ctl / "photos-25-calibrate-ingest.db").exists()
-    manifest = json.load(open(ctl / "photos-25-archive-manifest.json"))
+    assert (ctl / "photos-26-complete-log.json").exists()
+    assert (ctl / "photos-26-calibrate-ingest.db").exists()
+    manifest = json.load(open(ctl / "photos-26-archive-manifest.json"))
     # non-destructive: upstream artifacts byte-unchanged
     after = {n: (ctl / n).read_bytes() for n in before}
     assert after == before
     # complete-log is a superset: prep photo preserved + calibration steps appended
-    log = json.load(open(ctl / "photos-25-complete-log.json"))
+    log = json.load(open(ctl / "photos-26-complete-log.json"))
     j = log["photos"]["fp-" + f"{BYDEST}/T/a.arw"]["journey"]
     assert j[0]["action"] == "organized" and any(s["phase"] == "calibrate" for s in j)
     # manifest: identity + ids + every present item with a correct sha256
-    assert manifest["plan_id"] == json.load(open(ctl / "photos-23-executable-plan.json"))["plan_id"]
+    assert manifest["plan_id"] == json.load(open(ctl / "photos-24-executable-plan.json"))["plan_id"]
     assert manifest["execution_id"] and manifest["workspace"] == "ws"
     for name, rec in manifest["contents"].items():
         assert rec["sha256"] == utils.sha256_file(str(ctl / name)), name
-    assert "photos-25-complete-log.json" in manifest["contents"] and "photos-00-ingest.db" in manifest["contents"]
+    assert "photos-26-complete-log.json" in manifest["contents"] and "photos-00-ingest.db" in manifest["contents"]
 
 
 def test_finalize_refuses_without_summary(tmp_path, monkeypatch):
@@ -215,16 +215,16 @@ def test_finalize_refuses_without_summary(tmp_path, monkeypatch):
     a["destinations"][f"{BYDEST}/T"]["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
     (ctl / "photos-21-time-decisions.json").write_text(json.dumps(a))
     _run(monkeypatch, ws, "plan")                                         # photos-23 ready, NOT executed
-    assert (ctl / "photos-23-executable-plan.json").exists()
+    assert (ctl / "photos-24-executable-plan.json").exists()
     assert _run(monkeypatch, ws, "finalize") == 2                        # no photos-24 yet
-    assert not (ctl / "photos-25-complete-log.json").exists()
+    assert not (ctl / "photos-26-complete-log.json").exists()
 
 
 def test_finalize_refuses_unready_plan(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _to_executed(monkeypatch, ws, ctl)
-    p = json.load(open(ctl / "photos-23-executable-plan.json")); p["status"] = "blocked"
-    (ctl / "photos-23-executable-plan.json").write_text(json.dumps(p))
+    p = json.load(open(ctl / "photos-24-executable-plan.json")); p["status"] = "blocked"
+    (ctl / "photos-24-executable-plan.json").write_text(json.dumps(p))
     assert _run(monkeypatch, ws, "finalize") == 2                        # plan not 'ready'
 
 
@@ -241,15 +241,15 @@ def test_finalize_tolerates_corrupt_prep_log(tmp_path, monkeypatch):
     _to_executed(monkeypatch, ws, ctl)
     (ctl / "photos-15-prep-log.json").write_text("{corrupt")             # unreadable prior -> ignored
     assert _run(monkeypatch, ws, "finalize") == 0
-    assert (ctl / "photos-25-complete-log.json").exists()
+    assert (ctl / "photos-26-complete-log.json").exists()
 
 
 def test_finalize_is_idempotent(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _to_executed(monkeypatch, ws, ctl)
     assert _run(monkeypatch, ws, "finalize") == 0
-    log1 = (ctl / "photos-25-complete-log.json").read_bytes()
+    log1 = (ctl / "photos-26-complete-log.json").read_bytes()
     prep1 = (ctl / "photos-15-prep-log.json").read_bytes()
     assert _run(monkeypatch, ws, "finalize") == 0
-    assert (ctl / "photos-25-complete-log.json").read_bytes() == log1     # deterministic
+    assert (ctl / "photos-26-complete-log.json").read_bytes() == log1     # deterministic
     assert (ctl / "photos-15-prep-log.json").read_bytes() == prep1        # prep untouched

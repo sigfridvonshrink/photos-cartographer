@@ -7,7 +7,7 @@
 ## 1. What it is
 
 A small single-page app that helps a human resolve the open decisions in a workspace's
-`photos-21-time-decisions.json` / `photos-22-gps-decisions.json`. It is **not** a generic JSON editor:
+`photos-21-time-decisions.json` / `photos-23-gps-decisions.json`. It is **not** a generic JSON editor:
 it surfaces a to-do list, shows each decision's proposal + evidence, captures a choice, validates it,
 and writes back. Its **only hard requirement is conforming output** (see the reference's "conformance
 contract"): it edits **only `user_decision`**, round-trips everything else, and never recomputes
@@ -64,13 +64,13 @@ then the proposal evidence last; non-coord cells just show the proposal.
   no media of their own, Section 10.1 of the time spec) appear in both views badged `container` —
   editable propagation points that hold defaults for their children and never sit on the to-do list.
 - **GPS-depends-on-time gate.** GPS placement is derived from each photo's resolved UTC, and the pipeline
-  only (re)generates `photos-22` once **every** time decision is resolved. The editor surfaces that gate:
+  only (re)generates `photos-23` once **every** time decision is resolved. The editor surfaces that gate:
   while the time artifact `requires_user_input`, the GPS view is **locked** behind an explanatory banner
   (finish time, then Re-run) instead of showing an empty or stale list; and once any time decision is
   changed, a **stale** banner on both views reminds you a Re-run is needed before GPS reflects it (tracked
   by `timeChangedSinceRerun`, cleared on Re-run). Both notices are skipped in demo mode (its curated
   fixtures intentionally pair an incomplete time artifact with a GPS one).
-- **Drift view + GPS-depends-on-drift gate.** A third view (`photos-21a-gps-drift-validation.json`, calibration
+- **Drift view + GPS-depends-on-drift gate.** A third view (`photos-22-gps-drift-validation.json`, calibration
   workflow §22a) sits between Time and GPS. It lists the **at-risk buckets** — a manual/timezone-derived
   clock offset with no native-GPS anchor — that GPX *can* validate, and must be confirmed before GPS is
   placed (an unconfirmed bucket could silently mis-place a whole batch along the track). It is gated behind
@@ -163,7 +163,7 @@ then the proposal evidence last; non-coord cells just show the proposal.
       dependencies — map **tiles** and the **Nominatim** geocoder — degrade gracefully when offline.*
     - *The earlier idea of drawing the **GPX track / anchors / ghost marker** is not realised here: a GPS
       `review_item` is on the list precisely because no reliable GPS source placed it, so the
-      `photos-22` artifact carries no track/anchor/candidate for it. The crosshair pick + photo are the
+      `photos-23` artifact carries no track/anchor/candidate for it. The crosshair pick + photo are the
       manual-placement aid; the fallback pins are the only positional evidence the artifact provides.*
 - **Validation** mirrors the reference (IANA tz, offset ±86400, ISO-UTC, lat/lon ranges); invalid input is
   blocked client-side so calibration never rejects the save.
