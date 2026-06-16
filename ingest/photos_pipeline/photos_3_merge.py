@@ -24,8 +24,7 @@ import os
 import sys
 from datetime import datetime, timezone
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from photos_utils import (
+from .photos_utils import (
     CONFIG, CONTROL_DIR, config_path, handoff_path, guard_path, is_sealed,
     validate_config, validate_merge_config, sha256_file, sha256_text, media_class_for_ext,
     folder_name, FOLDER_ROLES, missing_managed_folders, handoff_content_fingerprint,
@@ -715,7 +714,7 @@ class MergeWorkflow:
                     ex.shutdown(wait=False, cancel_futures=True)
                     raise
         finally:
-            from photos_utils import PersistentMagickWorker
+            from .photos_utils import PersistentMagickWorker
             PersistentMagickWorker.cleanup_all()      # close the per-thread magick workers (verify pass)
 
         results.sort(key=lambda r: r["by_dest_source"])
