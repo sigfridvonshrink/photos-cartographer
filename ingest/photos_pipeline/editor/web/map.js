@@ -17,7 +17,9 @@ export function mapPicker({ center, zoom = 13, markers = [], onPick, onMove, tra
   wrap.className = "mapwrap";
   wrap.append(map_el, cross);
 
-  const map = L.map(map_el, { worldCopyJump: true })
+  // In scrub mode the wheel MOVES the marker along the track (handled below), so Leaflet's own
+  // scroll-zoom is turned off — otherwise the wheel would zoom the map instead.
+  const map = L.map(map_el, { worldCopyJump: true, scrollWheelZoom: !track })
     .setView(center ? [center.lat, center.lon] : [20, 0], center ? zoom : 2);
   L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
     { maxZoom: 19, attribution: "© OpenStreetMap contributors" }).addTo(map);
@@ -120,7 +122,25 @@ export function mapPicker({ center, zoom = 13, markers = [], onPick, onMove, tra
       map.panTo([pt.lat, pt.lon]);
       if (fire && onScrub) onScrub(idx, pt);
     };
-    map_el.addEventListener("wheel", (e) => { e.preventDefault(); place(idx + (e.deltaY < 0 ? -1 : 1), true); }, { passive: false });
+    // Wheel: one track point per notch. preventDefault + stopPropagation so it neither zooms the map
+    // nor scrolls the surrounding panel.
+    map_el.addEventListener("wheel", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      place(idx + (e.deltaY < 0 ? -1 : 1), true);
+    }, { passive: false });
+    // Keys: [ / ] step one point, { / } (Shift) step ten — captured document-wide while this scrub map
+    // is mounted (so no click-to-focus needed), but ignored while typing in a field.
+    const STEP = { "[": -1, "]": 1, "{": -10, "}": 10 };
+    const onKey = (e) => {
+      if (!(e.key in STEP)) return;
+      const t = e.target;
+      if (t && /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName)) return;
+      e.preventDefault();
+      place(idx + STEP[e.key], true);
+    };
+    document.addEventListener("keydown", onKey);
+    const baseDestroy = api.destroy;
+    api.destroy = () => { document.removeEventListener("keydown", onKey); baseDestroy(); };
     map.setView([track[idx].lat, track[idx].lon], map.getMaxZoom());
     api.setScrub = (i) => place(i, false);        // reposition without firing (e.g. re-seed after re-render)
     api.scrubIndex = () => idx;
