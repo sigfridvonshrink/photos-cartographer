@@ -34,3 +34,14 @@ def _restore_config():
     finally:
         photos_utils.CONFIG.clear()
         photos_utils.CONFIG.update(saved)
+
+
+@pytest.fixture
+def seed_from_live_config(monkeypatch):
+    """Make `load_or_seed_config` seed a fresh workspace from the IN-MEMORY `CONFIG` instead of the
+    frozen built-in `DEFAULT_CONFIG`/external file. A few prep e2e tests deliberately mutate `CONFIG`
+    (e.g. enable zfs, set a filename format, classify a device group) BEFORE the first prep run and
+    expect that to be what gets seeded — request this fixture so seeding honours the configured state.
+    """
+    monkeypatch.setattr(photos_utils, "default_config",
+                        lambda: {k: v for k, v in photos_utils.CONFIG.items() if k != "jobs"})
