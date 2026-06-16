@@ -825,22 +825,24 @@ function scrubBlock(ref) {
   const wrap = el("div", { class: "pblock" }, el("h3", {}, "Scrub the photo along the GPX track"));
   if (!frames.length || !track.length) { wrap.append(el("div", { class: "placeholder" }, "no frames or track to scrub")); return wrap; }
   const fi = Math.min(_driftFrame, frames.length - 1), frame = frames[fi];
-  if (frames.length > 1) {
-    const sel = el("select", { class: "frame-sel" }, ...frames.map((f, i) => el("option", { value: String(i) }, f.source_file.split("/").pop())));
-    sel.value = String(fi);
-    sel.addEventListener("change", () => { _driftFrame = +sel.value; teardownMap(); render(); });
-    wrap.append(el("label", { class: "ctl-field" }, el("span", {}, `Photo (${fi + 1}/${frames.length})`), sel));
-  } else {
-    wrap.append(el("div", { class: "hint" }, frame.source_file.split("/").pop()));
-  }
+  // Browse the group's photos with ‹ prev / next › to pick which one represents the bucket for the
+  // scrub. Changing the photo re-seeds the map at that photo's current-offset position.
+  const setFrame = (i) => { _driftFrame = Math.max(0, Math.min(frames.length - 1, i)); teardownMap(); render(); };
+  wrap.append(el("div", { class: "frame-nav" },
+    el("button", { class: "btn", disabled: fi === 0 ? "" : null, onclick: () => setFrame(fi - 1) }, "‹ prev"),
+    el("span", { class: "frame-count" }, `Photo ${fi + 1} / ${frames.length}`),
+    el("button", { class: "btn", disabled: fi === frames.length - 1 ? "" : null, onclick: () => setFrame(fi + 1) }, "next ›")));
+  wrap.append(el("div", { class: "hint" }, frame.source_file.split("/").pop()));
+  // Map first; the photo goes UNDER it (matching the GPS coord panel).
+  wrap.append(driftMap(ref, frame, fi));
   if (state.base.demo) wrap.append(el("div", { class: "placeholder" }, "no preview in demo mode (no workspace files)"));
   else {
     const img = el("img", { class: "photo-img", alt: frame.source_file, src: "/api/photo?path=" + encodeURIComponent(frame.source_file) });
     img.addEventListener("error", () => { img.remove(); wrap.append(el("div", { class: "placeholder" }, "no embedded preview available")); });
     wrap.append(img);
   }
-  wrap.append(driftMap(ref, frame, fi));
-  wrap.append(el("div", { class: "hint" }, "scroll over the map to slide the photo along the track; the chosen point sets this bucket's corrected offset for every photo in it."));
+  wrap.append(el("div", { class: "hint" }, "Scroll over the map, or press [ / ] (Shift for ×10), to slide the photo along the track. "
+    + "The chosen point sets this bucket's corrected offset for every photo in it; ‹ prev / next › changes which photo represents the group."));
   return wrap;
 }
 function driftMap(ref, frame, fi) {
