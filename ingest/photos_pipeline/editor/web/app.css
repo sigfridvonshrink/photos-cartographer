@@ -171,5 +171,6 @@ pre.json { margin: 0; font: 12px var(--mono); white-space: pre-wrap; word-break:
   font: inherit; font-size: 12px; padding: 6px 8px; border-radius: 4px; cursor: pointer; }
 .map-search-hit:hover { background: #2b303a; }
 .photo-img { display: block; max-width: 100%; max-height: 360px; border-radius: 6px; background: #111; }
+.subtab { margin-bottom: 10px; }
 .frame-nav { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
 .frame-count { font-variant-numeric: tabular-nums; color: var(--muted); }
