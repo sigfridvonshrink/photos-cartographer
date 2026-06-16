@@ -77,6 +77,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CALIBRATE = os.path.join(os.path.dirname(HERE), "photos-2-time-gps")  # the calibration script (../)
 CONTROL = ".photos-ingest"
 TIME_NAME = "photos-21-time-decisions.json"
+DRIFT_NAME = "photos-21a-gps-drift-validation.json"
 GPS_NAME = "photos-22-gps-decisions.json"
 CONFIG_NAME = "photos-00-config.json"
 EDITOR_LOCK = "photos-00-decision-editor.lock"  # dotfile lives in CONTROL; flock, fail-fast
@@ -239,15 +240,17 @@ def _environment(workspace):
 
 
 def _load_artifacts(workspace):
-    """Return {workspace, demo, time, gps, environment}. Demo mode loads the requires-input fixtures."""
+    """Return {workspace, demo, time, drift, gps, environment}. Demo mode loads requires-input fixtures."""
     if workspace:
         cd = os.path.join(workspace, CONTROL)
         return {"workspace": os.path.abspath(workspace), "demo": False,
                 "time": _read_json(os.path.join(cd, TIME_NAME)),
+                "drift": _read_json(os.path.join(cd, DRIFT_NAME)),
                 "gps": _read_json(os.path.join(cd, GPS_NAME)),
                 "environment": _environment(workspace)}
     return {"workspace": None, "demo": True, "environment": None,
             "time": _example_json("photos-21-time-decisions.requires-input.json"),
+            "drift": _example_json("photos-21a-gps-drift-validation.requires-input.json"),
             "gps": _example_json("photos-22-gps-decisions.requires-input.json")}
 
 
@@ -274,6 +277,8 @@ def _apply_edits(art, edits):
             cell = d.get("destination_timezone")
         elif kind == "offset":
             cell = (d.get("camera_group_time_decisions") or {}).get(e.get("key"))
+        elif kind == "drift":
+            cell = (d.get("drift_decisions") or {}).get(e.get("key"))
         elif kind == "fallback":
             cell = d.get("folder_fallback")
         elif kind == "review":
@@ -291,7 +296,7 @@ def _save(workspace, payload):
     """Write the posted user_decision edits back into the workspace's decision artifacts."""
     cd = os.path.join(workspace, CONTROL)
     written = []
-    for key, name in (("time", TIME_NAME), ("gps", GPS_NAME)):
+    for key, name in (("time", TIME_NAME), ("drift", DRIFT_NAME), ("gps", GPS_NAME)):
         edits = (payload or {}).get(key) or []
         if not edits:
             continue
