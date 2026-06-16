@@ -802,11 +802,13 @@ function renderPanel() {
     el("h2", {}, title), el("div", { class: "path" }, ref.path || ref.dest), head,
     el("div", { class: "pblock" }, el("h3", {}, "Your decision"), controls(ref)),
     el("div", { class: "pblock eff" }, el("h3", {}, "Effective (advisory — re-run to apply)"), el("div", { class: "eff-val" }, previewEffective(ref))));
-  // Scroll area: the evidence (proposal) and the big media (photo, map) — the only things that scroll.
+  // Scroll area, the only thing that scrolls. For a GPS coord cell the MAP comes first — directly under
+  // the pinned "Your decision" box — so a paste/edit's effect (jump to full zoom) is visible without
+  // scrolling; then the photo; then the proposal evidence last. Non-GPS cells just show the proposal.
   const scroll = el("div", { class: "panel-scroll" });
-  if (c.proposal) scroll.append(ref.kind === "offset" ? offsetProposalBlock(ref, c.proposal) : jsonBlock("Proposal", c.proposal));
-  if (ref.kind === "review") scroll.append(photoBlock(ref));
   if (isGpsCoord) scroll.append(mapBlock(ref));
+  if (ref.kind === "review") scroll.append(photoBlock(ref));
+  if (c.proposal) scroll.append(ref.kind === "offset" ? offsetProposalBlock(ref, c.proposal) : jsonBlock("Proposal", c.proposal));
   p.replaceChildren(top, scroll);
 }
 
