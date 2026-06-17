@@ -120,7 +120,7 @@ class MergeWorkflow:
         # 0a. Initialized, and no misplaced entry at the workspace root (§3 precond 0a; shared §5.3).
         if not os.path.exists(guard_path(ws)):
             blockers.append("Not an initialized workspace (no photos-00-workspace-guard) — "
-                            "run `photos-ingest prep` first.")
+                            "run prep first: `photos-ingest prep plan` then `photos-ingest prep execute`.")
             return blockers, warnings, info
         root_syms = self._root_symlinks()
         if root_syms:
@@ -149,7 +149,7 @@ class MergeWorkflow:
         # Config (read-only) — must exist and be valid; merge's data path never writes it.
         cfg_p = config_path(ws)
         if not os.path.exists(cfg_p):
-            blockers.append("Workspace config photos-00-config.json is missing — run `photos-ingest prep` first.")
+            blockers.append("Workspace config photos-00-config.json is missing — run prep first: `photos-ingest prep plan` then `photos-ingest prep execute`.")
             return blockers, warnings, info
         try:
             with open(cfg_p) as f:
@@ -180,7 +180,7 @@ class MergeWorkflow:
         # Handoff (read-only) — needed for the prep-consistency / currency checks below.
         ho_p = handoff_path(ws)
         if not os.path.exists(ho_p):
-            blockers.append("Prep handoff photos-11-handoff.json is missing — run `photos-ingest prep` first.")
+            blockers.append("Prep handoff photos-11-handoff.json is missing — run prep first: `photos-ingest prep plan` then `photos-ingest prep execute`.")
             return blockers, warnings, info
         try:
             with open(ho_p) as f:
@@ -195,7 +195,7 @@ class MergeWorkflow:
         # 0b. 0-sources empty (§3 precond 0b).
         if self._entries(folder_name('sources')):
             blockers.append(f"{folder_name('sources')}/ is not empty — an unprocessed dump is waiting; "
-                            "merge requires it empty. Re-run `photos-ingest prep` to process it.")
+                            "merge requires it empty. Re-run prep to process it: `photos-ingest prep plan` then `photos-ingest prep execute`.")
 
         # 1 + 1a. Calibration ended successfully, and the finalized record is current with by-dest.
         calib_plan = self._check_calibration_finalized(ws, handoff, blockers)
@@ -349,7 +349,7 @@ class MergeWorkflow:
         if unrecorded:
             blockers.append(f"{by_dest} contains {len(unrecorded)} photo(s) the finalized record does "
                             f"not recognize (e.g. {unrecorded[0]}) — the handoff predates the latest "
-                            "move into by-dest. Re-run `photos-ingest prep`, then merge.")
+                            "move into by-dest. Re-run prep to refresh the handoff — `photos-ingest prep execute` (run `photos-ingest prep plan` first only if 0-sources still holds a dump) — then merge.")
 
     # --- plan builder (merge spec §6 mapping, §7 collision, §10.1 plan) -------
 
