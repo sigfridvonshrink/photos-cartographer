@@ -1362,8 +1362,10 @@ class CalibrationWorkflow:
         # Proposal precedence (§18): the nearest RESOLVED ancestor destination's timezone (a more
         # specific signal than the generic global default — e.g. a Japan/Kyoto leaf inheriting Japan's
         # Asia/Tokyo over a Europe/Brussels home default) wins; else the config default; else none.
-        # An inherited proposal is confirmable-only (review_required), never auto-applied — and a
-        # timezone never auto-resolves anyway, so the user reviews every destination.
+        # Destinations are geographically NESTED — a child sits inside its parent, so it can scarcely
+        # cross a timezone boundary the parent didn't — so a timezone proposal (inherited or config
+        # default) auto-resolves without per-destination confirmation, staying overridable by a manual
+        # entry. Only a destination with NO proposal at all (no ancestor, no default) blocks.
         default = (CONFIG.get("camera_time_and_timezone_policy") or {}).get("default_folder_timezone") or None
         if inherited is not None:
             anc_path, anc_tz = inherited
@@ -1387,10 +1389,11 @@ class CalibrationWorkflow:
                 effective = proposed
             else:
                 stale = True                       # accepted a proposal that no longer exists
-        # A file-less container has no photos to mis-tag, so the "review every destination" safety
-        # rule does not apply: it auto-adopts its inherited/default proposal (and re-propagates it
-        # downward) without demanding confirmation, while staying overridable by a manual entry.
-        auto = effective == "" and not manual and file_less and bool(proposed)
+        # Any destination with a proposal auto-adopts it (and re-propagates it downward) without
+        # demanding confirmation — inherited or config-default, container or real — because the nested
+        # geography makes the parent's timezone the right default for the child. A manual entry still
+        # overrides. (File-less containers always took this path; real destinations now do too.)
+        auto = effective == "" and not manual and bool(proposed)
         if auto:
             effective = proposed
         block = {
