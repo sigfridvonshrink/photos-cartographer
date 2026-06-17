@@ -482,6 +482,23 @@ def test_serve_aborts_when_control_present_but_guard_absent(tmp_path):
     assert e.value.code == 2
 
 
+def test_send_swallows_client_disconnect():
+    # A browser that cancels a hover photo-preview mid-send makes wfile.write raise BrokenPipeError;
+    # _send must drop it quietly (no traceback) and mark the connection for close.
+    h = serve.Handler.__new__(serve.Handler)
+    h.close_connection = False
+    h.send_response = lambda *a, **k: None
+    h.send_header = lambda *a, **k: None
+    h.end_headers = lambda: None
+
+    class _Boom:
+        def write(self, b):
+            raise BrokenPipeError(32, "Broken pipe")
+    h.wfile = _Boom()
+    h._send(200, b"x" * 16, "image/jpeg")        # must NOT raise
+    assert h.close_connection is True
+
+
 def test_edit_has_no_workspace_arg_and_demo_is_the_only_no_workspace_mode():
     import argparse
     p = argparse.ArgumentParser()
