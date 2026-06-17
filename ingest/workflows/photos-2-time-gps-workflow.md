@@ -607,9 +607,9 @@ The calibration workflow follows this cascade:
 calibration invocation
   -> prep/by-dest staleness validation
   -> in-memory by-dest file objects
-  -> GPX folder parsing/fingerprinting
-  -> camera group recognition/classification
+  -> camera group recognition/classification   (in-memory; aborts here on an unknown group)
   -> textual config snippets if unknown groups exist
+  -> GPX folder parsing/fingerprinting          (disk-heavy; only after recognition passes)
   -> time-decision stage
   -> photos-21-time-decisions.json
   -> resolved UTC per file in SQLite
@@ -634,8 +634,8 @@ The workflow should be understood as a state machine:
 ```text
 STATE 1 — calibration invoked
 STATE 2 — prep/by-dest preflight passed
-STATE 3 — GPX indexed/fingerprinted
-STATE 4 — camera groups classified or blocked
+STATE 3 — camera groups classified or blocked
+STATE 4 — GPX indexed/fingerprinted
 STATE 5 — time-decision stage reached
 STATE 6 — photos-21-time-decisions.json created
 STATE 7 — resolved UTC computed (current offsets)
@@ -760,7 +760,11 @@ These objects are the planning basis for all later stages.
 
 ## 15. Stage 3 — Load, parse, and fingerprint GPX folder
 
-GPX folder scanning, parsing, and fingerprinting must happen before the time-decision stage.
+GPX folder scanning, parsing, and fingerprinting must happen before the time-decision stage. It is the
+**disk-heavy** step, so it runs **after** the in-memory camera-group recognition (Section 16): an
+unknown-group abort then costs nothing in GPX I/O, and a re-run after the operator classifies the group
+re-ingests GPX only once recognition passes. (GPX ingestion does not depend on camera grouping; the
+ordering is purely to avoid wasted parsing on an early abort.)
 
 This is required because GPX data may be used in two distinct ways:
 
