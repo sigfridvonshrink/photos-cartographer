@@ -252,3 +252,41 @@ def test_sealed_workspace_with_dump_warns_and_blocks(tmp_path, monkeypatch, caps
     wf = cal.CalibrationWorkflow(str(ws))
     blk, warn, _ = wf.preflight()
     assert any("SEALED" in b for b in blk) and not warn
+
+
+def test_unknown_group_aborts_before_gpx_ingest(tmp_path, monkeypatch):
+    # In-memory camera-group recognition runs BEFORE disk-heavy GPX ingestion, so an unknown-group
+    # abort costs no GPX I/O (the next run re-ingests GPX only once recognition passes).
+    ws, ctl = _completable_ws(tmp_path)
+    called = []
+    monkeypatch.setattr(cal.CalibrationWorkflow, "recognize_camera_groups",
+                        lambda self, files: ({}, ["SONY|ILCE-7|unclassified"]))
+    monkeypatch.setattr(cal.CalibrationWorkflow, "load_gpx",
+                        lambda self: called.append(1))
+    assert _run(monkeypatch, ws) == 2          # unknown group -> abort
+    assert called == []                        # GPX ingest never reached
+
+
+def test_unknown_group_template_is_valid_full_json(tmp_path, monkeypatch, capsys):
+    # The cut/paste template must be VALID JSON (no trailing comma -> the ",]" reader-rejection bug)
+    # and the COMPLETE final list: each array carries the operator's known groups plus the new one.
+    import copy
+    ws, ctl = _completable_ws(tmp_path)                       # config: fixed_clock_cameras=[CAM]
+    NEW = "NIKON|D750|abc123"
+    h = json.load(open(ctl / "photos-11-handoff.json"))
+    extra = copy.deepcopy(h["files"][0])
+    extra["relative_path"] = "6-photos-by-dest/T/z.nef"
+    extra["metadata_status"]["camera_group_key"] = NEW
+    parsed = json.loads(extra["metadata_status"]["parsed_json"]); parsed["camera_group_key"] = NEW
+    extra["metadata_status"]["parsed_json"] = json.dumps(parsed)
+    (ws / "6-photos-by-dest/T/z.nef").write_bytes(b"x")
+    h["files"].append(extra)
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(h))
+
+    assert _run(monkeypatch, ws) == 2
+    err = capsys.readouterr().err
+    block = err[err.index('  "phones":'):err.index("\n\nNo calibration")]
+    tmpl = json.loads("{" + block + "}")                     # parses iff no trailing comma
+    assert NEW in tmpl["phones"]                             # new group offered in both arrays
+    assert NEW in tmpl["fixed_clock_cameras"]
+    assert CAM in tmpl["fixed_clock_cameras"]                # known group preserved (full list)
