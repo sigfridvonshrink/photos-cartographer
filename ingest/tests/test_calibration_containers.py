@@ -82,8 +82,11 @@ def test_container_timezone_autoresolves_from_default(tmp_path):
     trip = art["destinations"][f"{BYDEST}/Trip"]["destination_timezone"]
     assert trip["effective_iana_timezone"] == "Europe/Brussels"
     assert trip["decision_mode"] == "auto_resolved" and trip["requires_user_input"] is False
-    # the real leaf still must confirm (it has photos)
-    assert art["destinations"][f"{BYDEST}/Trip/Day1"]["destination_timezone"]["requires_user_input"] is True
+    # the real leaf auto-inherits too (nested geography): adopts Trip's zone, no confirmation demanded
+    leaf = art["destinations"][f"{BYDEST}/Trip/Day1"]["destination_timezone"]
+    assert leaf["effective_iana_timezone"] == "Europe/Brussels"
+    assert leaf["proposal_source"] == "inherited" and leaf["decision_mode"] == "auto_resolved"
+    assert leaf["requires_user_input"] is False
 
 
 def test_child_offset_decision_is_not_pooled_upward(tmp_path):
