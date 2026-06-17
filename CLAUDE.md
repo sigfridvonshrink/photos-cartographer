@@ -112,8 +112,10 @@ entry (`python -m photos_pipeline.photos_1_prep …`) sharing the same `add_argu
 - `photos-ingest geotag` — `plan` / `execute` / `finalize` (was the `photos-2-time-gps` phase, formerly
   named "calibrate"; its `run` subcommand was **renamed to `plan`** so all phases start with `plan`).
 - `photos-ingest merge` — `init-library` / `plan` / `dry-run` / `execute`.
-- `photos-ingest edit [WORKSPACE]` — the decision editor (a local web server; folded into the package at `photos_pipeline/editor/`, web assets served as package data via importlib.resources, no bundler).
-  Phases share the plan/validate/execute contract; workspace = cwd. The original `prep` / `calibrate` /
+- `photos-ingest edit` — the decision editor (a local web server; folded into the package at `photos_pipeline/editor/`, web assets served as package data via importlib.resources, no bundler).
+  Like every phase it operates on the **cwd workspace** (no workspace-naming argument) and refuses to
+  run if the cwd is not an initialized workspace; `--demo` is the only no-workspace mode (read-only
+  fixtures tour). Phases share the plan/validate/execute contract; workspace = cwd. The original `prep` / `calibrate` /
   `refresh-library` / `merge` monolith they were split from has been removed; `refresh-library` was
   deliberately dropped in favor of on-demand fingerprinting in merge (see its workflow spec).
 - **Canonical plan persistence (all phases):** each phase's plan/decision artifact lives at a fixed

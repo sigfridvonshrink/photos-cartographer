@@ -462,3 +462,30 @@ def test_http_post_save_writes_to_workspace(tmp_path):
     saved = json.load(open(os.path.join(ws, serve.CONTROL, serve.TIME_NAME)))
     cell = saved["destinations"]["6-photos-by-dest/Japan"]["destination_timezone"]
     assert cell["user_decision"]["manual_iana_timezone"] == "Asia/Tokyo"
+
+
+# --------------------------------------------------------------------------- cwd-workspace contract
+
+def test_serve_aborts_when_cwd_is_not_a_workspace(tmp_path):
+    # edit operates on the cwd workspace; an uninitialized dir (no guard sentinel) is refused, not served.
+    with pytest.raises(SystemExit) as e:
+        serve.serve(str(tmp_path), port=0)
+    assert e.value.code == 2
+
+
+def test_serve_aborts_when_control_present_but_guard_absent(tmp_path):
+    # Having a .photos-ingest/ with decision JSON is NOT enough — the workspace guard must exist.
+    ws = _workspace_with_fixtures(tmp_path)
+    assert not os.path.exists(os.path.join(ws, serve.CONTROL, serve.GUARD_NAME))
+    with pytest.raises(SystemExit) as e:
+        serve.serve(ws, port=0)
+    assert e.value.code == 2
+
+
+def test_edit_has_no_workspace_arg_and_demo_is_the_only_no_workspace_mode():
+    import argparse
+    p = argparse.ArgumentParser()
+    serve.add_arguments(p)
+    a = p.parse_args([])
+    assert a.demo is False and not hasattr(a, "workspace")   # no workspace-naming argument
+    assert p.parse_args(["--demo"]).demo is True
