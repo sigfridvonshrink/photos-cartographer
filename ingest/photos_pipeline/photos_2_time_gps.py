@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """photos-2-time-gps — time/GPS calibration phase.
 
-Calibration takes a prepped, user-curated `6-photos-by-dest/` and: infers each camera's clock
+Geotag takes a prepped, user-curated `6-photos-by-dest/` and: infers each camera's clock
 offset by matching its geotagged frames against GPX tracks, resolves every photo to real UTC,
 places GPS for the un-tagged majority, and renames files to destination-local civil time — all on
 the same plan/validate/execute, fingerprinted-dependency, authored-decisions discipline as prep.
 
-It implements the full calibration workflow (Stages 1–11): the preflight lifecycle/by-dest gates
+It implements the full geotag workflow (Stages 1–11): the preflight lifecycle/by-dest gates
 (§7/§13), the in-memory by-dest model (Stage 2), the GPX index (§15), camera-group recognition
 (§16), the time- and GPS-decision artifacts `photos-21`/`photos-23` (§18/§23), resolved-UTC
 computation (§22), the executable plan `photos-24` (§28), `execute` of that plan into `photos-25`
@@ -45,7 +45,7 @@ GPS_DECISIONS_ARTIFACT = "photos-23-gps-decisions.json"
 EXECUTABLE_PLAN_ARTIFACT = "photos-24-executable-plan.json"
 EXECUTION_SUMMARY_ARTIFACT = "photos-25-execution-summary.json"
 COMPLETE_LOG_ARTIFACT = "photos-26-complete-log.json"
-CALIBRATE_DB_SNAPSHOT = "photos-26-calibrate-ingest.db"
+GEOTAG_DB_SNAPSHOT = "photos-26-geotag-ingest.db"
 ARCHIVE_MANIFEST_ARTIFACT = "photos-26-archive-manifest.json"
 
 
@@ -73,8 +73,8 @@ def complete_log_path(ws):
     return os.path.join(ws, CONTROL_DIR, COMPLETE_LOG_ARTIFACT)
 
 
-def calibrate_db_snapshot_path(ws):
-    return os.path.join(ws, CONTROL_DIR, CALIBRATE_DB_SNAPSHOT)
+def geotag_db_snapshot_path(ws):
+    return os.path.join(ws, CONTROL_DIR, GEOTAG_DB_SNAPSHOT)
 
 
 def archive_manifest_path(ws):
@@ -82,8 +82,8 @@ def archive_manifest_path(ws):
 
 
 # ============================================================================
-# Stage 3 — GPX index (calibration spec §15). Mined from the archived monolith
-# (archive/reengineer/photos-ingest); GPX is calibration-only — prep is GPX-unaware
+# Stage 3 — GPX index (geotag spec §15). Mined from the archived monolith
+# (archive/reengineer/photos-ingest); GPX is geotag-only — prep is GPX-unaware
 # (shared contract §8.2). Stdlib xml.etree only; no new dependency.
 # ============================================================================
 
@@ -207,7 +207,7 @@ class GPXIndex:
 
 
 def _valid_iana(tz):
-    """True iff `tz` resolves to a real IANA timezone (calibration §9.2)."""
+    """True iff `tz` resolves to a real IANA timezone (geotag §9.2)."""
     try:
         zoneinfo.ZoneInfo(tz)
         return True
@@ -216,12 +216,12 @@ def _valid_iana(tz):
 
 
 def _valid_offset(v):
-    """True iff `v` is a finite number of seconds within +/- one day (calibration §9.2)."""
+    """True iff `v` is a finite number of seconds within +/- one day (geotag §9.2)."""
     return isinstance(v, (int, float)) and not isinstance(v, bool) and abs(v) <= 86400
 
 
 # ============================================================================
-# Stage 5 — GPX/native-GPS time-anchor inference (calibration §19). Pure helpers
+# Stage 5 — GPX/native-GPS time-anchor inference (geotag §19). Pure helpers
 # (plain inputs, no I/O) so the geometry/ranking is exhaustively unit-testable.
 # ============================================================================
 
@@ -426,8 +426,8 @@ def infer_anchor_proposal(frames, gpx, cfg):
 
 
 # ============================================================================
-# Stage 7 — resolved UTC per file (calibration §22). Pure computation + the
-# calibration-owned SQLite cache and its deterministic fingerprint (§22.1).
+# Stage 7 — resolved UTC per file (geotag §22). Pure computation + the
+# geotag-owned SQLite cache and its deterministic fingerprint (§22.1).
 # ============================================================================
 
 def _parse_iso_offset(s):
@@ -529,8 +529,8 @@ def resolved_utc_fingerprint(rows, input_fingerprints):
     return sha256_text("\n".join(parts))
 
 
-class CalibrationCache:
-    """Calibration's own region of the shared photos-00-ingest.db (shared contract §13.4) — the
+class GeotagCache:
+    """Geotag's own region of the shared photos-00-ingest.db (shared contract §13.4) — the
     resolved-UTC cache here, the manual-GPS pre-state ledger later. Disjoint from prep's tables."""
 
     COLUMNS = ["relative_path", "destination_path", "destination_timezone", "camera_group",
@@ -599,7 +599,7 @@ class CalibrationCache:
 
 # ============================================================================
 # Stage 8 — GPS placement from the GPX track at a photo's resolved UTC
-# (calibration §23/§25). Pure helpers (no I/O), exhaustively unit-tested.
+# (geotag §23/§25). Pure helpers (no I/O), exhaustively unit-tested.
 # Mined from the former photos-ingest monolith (apply_gpx_placement) and the
 # former photos-gps-tagger interpolation/extrapolation engine (both since removed).
 # ============================================================================
@@ -675,7 +675,7 @@ def place_gps(target_utc, gpx, cfg):
 
 
 def _valid_coord(lat, lon):
-    """True iff (lat, lon) is a numeric coordinate in range (calibration §9.2 / §25)."""
+    """True iff (lat, lon) is a numeric coordinate in range (geotag §9.2 / §25)."""
     return (isinstance(lat, (int, float)) and not isinstance(lat, bool) and -90 <= lat <= 90
             and isinstance(lon, (int, float)) and not isinstance(lon, bool) and -180 <= lon <= 180)
 
@@ -779,7 +779,7 @@ def _dest_label(dest):
 
 
 # ============================================================================
-# Stage 9 — no-clobber timestamp rename planning (calibration §26/§27). Pure,
+# Stage 9 — no-clobber timestamp rename planning (geotag §26/§27). Pure,
 # exhaustively unit-tested. Filenames are destination-LOCAL civil time, never
 # raw camera time or UTC; every on-disk + planned name is permanently occupied.
 # ============================================================================
@@ -830,7 +830,7 @@ def plan_renames(files, fmt):
 
 
 # ============================================================================
-# Stage 9 — executable plan operations (calibration §28). Pure op builders so
+# Stage 9 — executable plan operations (geotag §28). Pure op builders so
 # the op list is deterministic and exhaustively unit-testable. Automatic GPS is
 # RE-DERIVED here from inputs (classify_gps/place_gps), never read from the
 # photos-23 summary (§25). Execution (§29, Phase 6c) only applies these ops.
@@ -896,13 +896,13 @@ def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename, cfg):
 
 # ============================================================================
 # Stage 11 — finalize: the photos-26 transformation log (shared contract §13.3).
-# Prep's per-photo log carried forward + calibration steps appended. A derived
+# Prep's per-photo log carried forward + geotag steps appended. A derived
 # consolidation of artifacts already written — no new authority.
 # ============================================================================
 
 def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, ledger):
     """photos-26-complete-log.json's `photos` (§13.3): a deep copy of prep's per-photo, content-
-    fingerprint-keyed journeys with each calibrated photo's `phase:"calibrate"` steps APPENDED — a
+    fingerprint-keyed journeys with each calibrated photo's `phase:"geotag"` steps APPENDED — a
     strict superset of the prep log, derived from photos-21 / the resolved-UTC cache / photos-24 /
     the ledger. Deterministic, fingerprint-keyed. The prep file itself is never edited."""
     photos = json.loads(json.dumps(prep_photos or {}))            # deep copy; never touch the prep file
@@ -925,40 +925,40 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, l
         ops = ops_by_rel.get(rel) or []
 
         if row.get("time_rule_used") == "camera_group_offset" and row.get("utc_offset_used") is not None:
-            steps.append({"phase": "calibrate", "action": "clock_offset_applied",
+            steps.append({"phase": "geotag", "action": "clock_offset_applied",
                           "offset_seconds": row["utc_offset_used"],
                           "because": f"photos-21 destinations.{dest}.camera_group_time_decisions.{group}"})
         if row.get("resolved_utc"):
-            steps.append({"phase": "calibrate", "action": "resolved_utc", "value": row["resolved_utc"]})
+            steps.append({"phase": "geotag", "action": "resolved_utc", "value": row["resolved_utc"]})
         tz = ((t_dests.get(dest, {}).get("destination_timezone")) or {}).get("effective_iana_timezone")
         if tz:
-            steps.append({"phase": "calibrate", "action": "timezone_resolved", "value": tz,
+            steps.append({"phase": "geotag", "action": "timezone_resolved", "value": tz,
                           "because": f"photos-21 destinations.{dest}.destination_timezone"})
 
         revert_op = next((o for o in ops if o["type"] == "revert_manual_gps"), None)
         gps_op = next((o for o in ops if o["type"] == "metadata_gps_write"), None)
         marker = next((o for o in ops if o["type"] == "gps_marker_write"), None)
         if revert_op is not None:
-            steps.append({"phase": "calibrate", "action": "gps_reverted",
+            steps.append({"phase": "geotag", "action": "gps_reverted",
                           "pre_state": revert_op.get("pre_state") or pre_by_fp.get(fp)})
         elif gps_op is not None:
             w = gps_op.get("writes") or {}
-            step = {"phase": "calibrate", "action": "gps_written", "lat": w.get("GPSLatitude"),
+            step = {"phase": "geotag", "action": "gps_written", "lat": w.get("GPSLatitude"),
                     "lon": w.get("GPSLongitude"), "origin": gps_op.get("gps_origin"),
                     "gps_processing_method": (marker.get("writes") or {}).get("GPSProcessingMethod") if marker else None}
             if gps_op.get("gps_origin") == "apply_manual" and fp in pre_by_fp:
                 step["pre_state"] = pre_by_fp[fp]
             steps.append(step)
         elif f.get("has_native_gps"):
-            steps.append({"phase": "calibrate", "action": "gps_preserved"})
+            steps.append({"phase": "geotag", "action": "gps_preserved"})
 
         rename_op = next((o for o in ops if o["type"] == "rename_no_clobber"), None)
         if rename_op is not None:
-            steps.append({"phase": "calibrate", "action": "final_rename", "to": rename_op["to"]})
+            steps.append({"phase": "geotag", "action": "final_rename", "to": rename_op["to"]})
     return photos
 
 
-class CalibrationWorkflow:
+class GeotagWorkflow:
     """Stages 1–11: validate the workspace, build the model, produce photos-21/22 decision artifacts,
     compute resolved UTC, assemble photos-24-executable-plan.json (when decisions are complete),
     execute it into photos-25 (§29), and finalize the archival package photos-26 (§31)."""
@@ -970,10 +970,10 @@ class CalibrationWorkflow:
         # Live progress for the long phases (TTY: in-place bar; piped: a line every ~10 s; tests: quiet).
         self.coordinator = ProgressCoordinator()
 
-    # --- preflight (calibration spec §7 / §13) -------------------------------
+    # --- preflight (geotag spec §7 / §13) -------------------------------
 
     def preflight(self, for_execute=False):
-        """Return (blockers, warnings, info). A non-empty `blockers` means calibration cannot
+        """Return (blockers, warnings, info). A non-empty `blockers` means geotag cannot
         proceed. Textual only — writes no JSON. The lifecycle guards (sealed / uninitialized /
         loose-root-file) and the §7.1 development-started gate hard-stop early; the remaining by-dest
         scope and re-prep gates are collected so the rest are reported at once. `for_execute` keeps the
@@ -987,7 +987,7 @@ class CalibrationWorkflow:
 
         # 1. Lifecycle guards (shared contract §13.7), evaluated under the run lock by main().
         if is_sealed(ws):
-            blockers.append("Workspace is SEALED (already merged): calibration will not run. "
+            blockers.append("Workspace is SEALED (already merged): geotag will not run. "
                             "Nothing was touched — move new media into a fresh workspace.")
             if self._root_files() or self._entries(folder_name('sources')):
                 warnings.append("A likely new dump is present (files at the root or in "
@@ -1004,16 +1004,16 @@ class CalibrationWorkflow:
         root_syms = self._root_symlinks()
         if root_syms:
             blockers.append(f"Forbidden symlink at the workspace root: {root_syms[0]}. Symlinks are "
-                            "never followed; remove it before calibrating.")
+                            "never followed; remove it before geotagging.")
             return blockers, warnings, info
         # The activated workspace must have its full 0-6 structure. A managed folder that is missing or
         # no longer a directory means the root is non-conforming — almost always an inadvertent user
-        # deletion (possibly of irreplaceable media) — so HARD STOP; calibration never creates folders.
+        # deletion (possibly of irreplaceable media) — so HARD STOP; geotag never creates folders.
         struct_missing = missing_managed_folders(ws)
         if struct_missing:
             blockers.append("Workspace is non-conforming: missing managed folder(s): "
                             f"{', '.join(struct_missing)}. Restore the 0-6 structure (or move the "
-                            "media into a fresh workspace and re-run prep there — `photos-ingest prep plan` then `photos-ingest prep execute`) before calibrating.")
+                            "media into a fresh workspace and re-run prep there — `photos-ingest prep plan` then `photos-ingest prep execute`) before geotagging.")
             return blockers, warnings, info
         loose = self._root_files()
         if loose:
@@ -1030,7 +1030,7 @@ class CalibrationWorkflow:
                             "the managed folders.")
             return blockers, warnings, info
 
-        # 2. Config (read-only) + handoff — both must exist; calibration never seeds/writes config.
+        # 2. Config (read-only) + handoff — both must exist; geotag never seeds/writes config.
         cfg_p = config_path(ws)
         if not os.path.exists(cfg_p):
             blockers.append("Workspace config photos-00-config.json is missing — run prep first: `photos-ingest prep plan` then `photos-ingest prep execute`.")
@@ -1087,7 +1087,7 @@ class CalibrationWorkflow:
         stray = [rel for rel, mc in self._scan_media(by_date) if mc in ("image", "raw")]
         if stray:
             blockers.append(f"{by_date}/ still contains {len(stray)} photo(s) — finish moving them "
-                            f"into {by_dest}/ before calibrating (e.g. {stray[0]}).")
+                            f"into {by_dest}/ before geotagging (e.g. {stray[0]}).")
 
         if nonphoto:
             videos = [p for p, mc in nonphoto if mc == "video"]
@@ -1099,7 +1099,7 @@ class CalibrationWorkflow:
                 parts.append(f"{len(videos)} video(s) (e.g. {videos[0]} — belongs in "
                              f"{folder_name('videos_by_date')}/)")
             blockers.append(f"{by_dest}/ must contain only photos. Found " + " and ".join(parts) +
-                            ". Remove or relocate them before calibrating.")
+                            ". Remove or relocate them before geotagging.")
 
         # 4. Re-prep-after-move gate (§13.1): a prep run must follow the latest by-date→by-dest move.
         self._check_reprep_gate(handoff, by_dest, by_date, blockers)
@@ -1180,13 +1180,13 @@ class CalibrationWorkflow:
                 f"recent move from {by_date} into {by_dest}; e.g. {ex}). Re-run prep to refresh the handoff so it records the moved files: "
                 "`photos-ingest prep execute` (it re-records the moved files — no re-fingerprint, no re-read — "
                 "and rewrites the handoff/cache; run `photos-ingest prep plan` first only if 0-sources still "
-                "holds a dump). Then calibration can proceed.")
+                "holds a dump). Then geotag can proceed.")
 
-    # --- Stage 2: in-memory by-dest file model (calibration spec §14) --------
+    # --- Stage 2: in-memory by-dest file model (geotag spec §14) --------
 
     def build_file_model(self):
         """One object per by-dest photo, built from the handoff's records (+ the EXIF prep already
-        extracted into metadata_status.parsed_json). Calibration never re-reads the file — a stale
+        extracted into metadata_status.parsed_json). Geotag never re-reads the file — a stale
         handoff was already blocked (§13.1)."""
         by_dest = folder_name('photos_by_dest')
         files = []
@@ -1234,7 +1234,7 @@ class CalibrationWorkflow:
         files.sort(key=lambda f: f["relative_path"])
         return files
 
-    # --- Stage 3: GPX index (calibration spec §15) ---------------------------
+    # --- Stage 3: GPX index (geotag spec §15) ---------------------------
 
     def load_gpx(self):
         idx = GPXIndex(selected_gpx_root()).build(self.coordinator)
@@ -1247,7 +1247,7 @@ class CalibrationWorkflow:
         """Group the file objects by camera_group_key; classify each via config device_groups.
         Returns (groups_by_key, unknown_keys). A camera_group_key listed in `phones` is a
         smartphone (solved per-file); in `fixed_clock_cameras` a camera (needs a per-(group,
-        destination) offset); otherwise it is unknown and must be classified before calibration."""
+        destination) offset); otherwise it is unknown and must be classified before geotag."""
         dg = (CONFIG.get("camera_time_and_timezone_policy") or {}).get("device_groups") or {}
         phones = set(dg.get("phones") or [])
         fixed = set(dg.get("fixed_clock_cameras") or [])
@@ -1934,7 +1934,7 @@ class CalibrationWorkflow:
         rename). Returns True on success. The single seam the tests mock to avoid invoking exiftool."""
         # A hard kill (SIGKILL/OOM/power loss) during a prior run can orphan exiftool's
         # `<file>_exiftool_tmp` intermediate; a clean SIGINT is self-cleaned by exiftool, so this only
-        # matters for the un-graceful case. Calibration re-applies every un-confirmed file on resume,
+        # matters for the un-graceful case. Geotag re-applies every un-confirmed file on resume,
         # and the only file that can hold an orphan is the one killed mid-write (never confirmed, so
         # revisited here) — so removing a stale temp for THIS target right before we rewrite it cleans
         # exactly the orphan that can exist. Safe: the original is untouched (the atomic rename never
@@ -2069,10 +2069,10 @@ class CalibrationWorkflow:
         if stale:
             return {"status": "rejected", "plan_id": plan.get("plan_id"), "stale": stale}
 
-        # Optional pre-mutation ZFS snapshot (§29 step 6), labelled "calibrate" so it never collides
+        # Optional pre-mutation ZFS snapshot (§29 step 6), labelled "geotag" so it never collides
         # with prep's "prep-" snapshot. A REQUIRED snapshot that cannot be taken aborts before any
         # mutation; the record is carried into photos-25 either way.
-        snapshot = take_zfs_snapshot(ws, plan["plan_id"], "calibrate")
+        snapshot = take_zfs_snapshot(ws, plan["plan_id"], "geotag")
         if snapshot is not None and snapshot["required"] and not snapshot["ok"]:
             reason = f"required ZFS pre-mutation snapshot failed: {snapshot['stderr']}"
             # Nothing was mutated, but §29 step 6 requires the snapshot record be carried into photos-25
@@ -2101,7 +2101,7 @@ class CalibrationWorkflow:
             for op in dd["operations"]:
                 by_file.setdefault(op["relative_path"], []).append(op)
 
-        cache = CalibrationCache(ws)
+        cache = GeotagCache(ws)
         try:
             # Capture-before-write (§24.1 / §29.1a.3): pin each manual GPS override's pre-state —
             # prep's original GPS, NOT a re-read — once, BEFORE any write, keyed by content fingerprint.
@@ -2228,11 +2228,11 @@ class CalibrationWorkflow:
     _ARCHIVE_ITEMS = ["photos-00-config.json", "photos-11-handoff.json", "photos-15-prep-log.json",
                       "photos-15-prep-ingest.db", TIME_DECISIONS_ARTIFACT, GPS_DECISIONS_ARTIFACT,
                       EXECUTABLE_PLAN_ARTIFACT, EXECUTION_SUMMARY_ARTIFACT, COMPLETE_LOG_ARTIFACT,
-                      CALIBRATE_DB_SNAPSHOT, "photos-00-ingest.db"]
+                      GEOTAG_DB_SNAPSHOT, "photos-00-ingest.db"]
 
     def finalize_package(self, now_iso):
         """Stage 11 (§31): assemble the durable archival package — the photos-26 transformation log,
-        an end-of-calibration DB snapshot, and a manifest. Non-destructive (only NEW files; never
+        an end-of-geotag DB snapshot, and a manifest. Non-destructive (only NEW files; never
         mutates an artifact, photo, or the live DB). Returns blockers (empty = package written)."""
         ws = self.workspace_root
         if not os.path.exists(executable_plan_path(ws)):
@@ -2254,7 +2254,7 @@ class CalibrationWorkflow:
             return blk
 
         files = self.build_file_model()
-        cache = CalibrationCache(ws)
+        cache = GeotagCache(ws)
         try:
             rows, ledger = cache.get_rows(), cache.ledger_all()
         finally:
@@ -2272,7 +2272,7 @@ class CalibrationWorkflow:
 
         conn = sqlite3.connect(db_path(ws))
         try:
-            write_db_snapshot(conn, calibrate_db_snapshot_path(ws))   # §13.4a: consistent, atomic
+            write_db_snapshot(conn, geotag_db_snapshot_path(ws))   # §13.4a: consistent, atomic
         finally:
             conn.close()
 
@@ -2335,18 +2335,18 @@ def run(args):
     print(f"Lock acquired: {run_lock.lock_path}", file=sys.stderr)
     try:
         if args.command == "plan":
-            wf = CalibrationWorkflow(workspace_root)
+            wf = GeotagWorkflow(workspace_root)
             blockers, warnings, info = wf.preflight()
             for w in warnings:
                 print(f"  Warning: {w}", file=sys.stderr)
             if blockers:
-                print("\nCalibration cannot proceed:", file=sys.stderr)
+                print("\nGeotag cannot proceed:", file=sys.stderr)
                 for b in blockers:
                     print(f"  - {b}", file=sys.stderr)
-                print("\nNo calibration JSON was written.", file=sys.stderr)
+                print("\nNo geotag JSON was written.", file=sys.stderr)
                 sys.exit(2)
 
-            # Stages 2–4: build the in-memory model calibration reasons over.
+            # Stages 2–4: build the in-memory model geotag reasons over.
             files = wf.build_file_model()
             # Order matters: run the IN-MEMORY camera-group recognition (which can abort on an unknown
             # group) BEFORE the disk-heavy GPX ingestion, so aborting to let the operator classify a
@@ -2355,7 +2355,7 @@ def run(args):
             groups, unknown = wf.recognize_camera_groups(files)
 
             if unknown:
-                print("\nCalibration cannot proceed: unknown camera group(s). In photos-00-config.json "
+                print("\nGeotag cannot proceed: unknown camera group(s). In photos-00-config.json "
                       "under camera_time_and_timezone_policy.device_groups, REPLACE both arrays below "
                       "(phones = smartphone, auto timezone; fixed_clock_cameras = camera with a manual "
                       "clock), then re-run. Each array is the complete final list (your known groups plus "
@@ -2372,7 +2372,7 @@ def run(args):
                         print(f'  "{label}": [\n{items}\n  ]{tail}', file=sys.stderr)
                     else:
                         print(f'  "{label}": []{tail}', file=sys.stderr)
-                print("\nNo calibration JSON was written.", file=sys.stderr)
+                print("\nNo geotag JSON was written.", file=sys.stderr)
                 sys.exit(2)
 
             gpx = wf.load_gpx()      # disk-heavy: only after the in-memory checks above have passed
@@ -2398,7 +2398,7 @@ def run(args):
                     prior = None
             artifact, td_blockers = wf.build_time_decisions(files, groups, prior, gpx)
             if td_blockers:
-                print("\nCalibration cannot proceed: invalid value(s) in photos-21-time-decisions.json:",
+                print("\nGeotag cannot proceed: invalid value(s) in photos-21-time-decisions.json:",
                       file=sys.stderr)
                 for b in td_blockers:
                     print(f"  - {b}", file=sys.stderr)
@@ -2439,7 +2439,7 @@ def run(args):
                         prior_drift = None
                 drift_artifact, drift_blockers = wf.build_drift_validation(files, artifact, rows0, gpx, prior_drift)
                 if drift_blockers:
-                    print(f"\nCalibration cannot proceed: invalid value(s) in {DRIFT_VALIDATION_ARTIFACT}:",
+                    print(f"\nGeotag cannot proceed: invalid value(s) in {DRIFT_VALIDATION_ARTIFACT}:",
                           file=sys.stderr)
                     for b in drift_blockers:
                         print(f"  - {b}", file=sys.stderr)
@@ -2470,7 +2470,7 @@ def run(args):
                         "metadata_field_set_version": FIELD_SET_VERSION,
                         "gpx_fingerprint": gpx.fingerprint,
                     }
-                    cache = CalibrationCache(workspace_root)
+                    cache = GeotagCache(workspace_root)
                     try:
                         cache.replace_all(rows)
                         ledger_entries = cache.ledger_all()    # to plan revert ops for withdrawn overrides
@@ -2493,7 +2493,7 @@ def run(args):
                             prior_gps = None
                     gps_artifact, gps_blockers = wf.build_gps_decisions(files, rows, gpx, prior_gps, fp)
                     if gps_blockers:
-                        print("\nCalibration cannot proceed: invalid value(s) in "
+                        print("\nGeotag cannot proceed: invalid value(s) in "
                               f"{GPS_DECISIONS_ARTIFACT}:", file=sys.stderr)
                         for b in gps_blockers:
                             print(f"  - {b}", file=sys.stderr)
@@ -2525,7 +2525,7 @@ def run(args):
                         print("  Review it, then run `execute` to apply.")
 
         elif args.command == "execute":
-            wf = CalibrationWorkflow(workspace_root)
+            wf = GeotagWorkflow(workspace_root)
             blockers, warnings, info = wf.preflight(for_execute=True)
             for w in warnings:
                 print(f"  Warning: {w}", file=sys.stderr)
@@ -2557,7 +2557,7 @@ def run(args):
                 sys.exit(3)
 
         elif args.command == "finalize":
-            wf = CalibrationWorkflow(workspace_root)
+            wf = GeotagWorkflow(workspace_root)
             blockers, warnings, info = wf.preflight(for_execute=True)
             for w in warnings:
                 print(f"  Warning: {w}", file=sys.stderr)
@@ -2569,13 +2569,13 @@ def run(args):
             now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             fin_blockers = wf.finalize_package(now_iso)
             if fin_blockers:
-                print("\nCannot finalize — calibration has not ended successfully:", file=sys.stderr)
+                print("\nCannot finalize — geotag has not ended successfully:", file=sys.stderr)
                 for b in fin_blockers:
                     print(f"  - {b}", file=sys.stderr)
                 sys.exit(2)
-            print(f"Finalized: wrote {COMPLETE_LOG_ARTIFACT}, {CALIBRATE_DB_SNAPSHOT}, and "
+            print(f"Finalized: wrote {COMPLETE_LOG_ARTIFACT}, {GEOTAG_DB_SNAPSHOT}, and "
                   f"{ARCHIVE_MANIFEST_ARTIFACT} to {CONTROL_DIR}/. The archival package is ready to "
-                  "copy to permanent storage (calibration does not seal or merge).")
+                  "copy to permanent storage (geotag does not seal or merge).")
     except KeyboardInterrupt:
         # Clean Ctrl-C: planning never mutates and execute is journalled/idempotent, so applied
         # files are confirmed and the next run resumes from the diff (§29.1a). Exit quietly with

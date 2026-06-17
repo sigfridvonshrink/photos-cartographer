@@ -34,7 +34,7 @@ from .photos_utils import (
     write_sealed_marker, WorkspaceLock, LibraryLock,
 )
 
-# Calibration / prep artifacts merge READS (never writes — shared contract §13.0a).
+# Geotag / prep artifacts merge READS (never writes — shared contract §13.0a).
 HANDOFF_ARTIFACT = "photos-11-handoff.json"
 EXECUTABLE_PLAN_ARTIFACT = "photos-24-executable-plan.json"
 EXECUTION_SUMMARY_ARTIFACT = "photos-25-execution-summary.json"
@@ -197,8 +197,8 @@ class MergeWorkflow:
             blockers.append(f"{folder_name('sources')}/ is not empty — an unprocessed dump is waiting; "
                             "merge requires it empty. Re-run prep to process it: `photos-ingest prep plan` then `photos-ingest prep execute`.")
 
-        # 1 + 1a. Calibration ended successfully, and the finalized record is current with by-dest.
-        calib_plan = self._check_calibration_finalized(ws, handoff, blockers)
+        # 1 + 1a. Geotag ended successfully, and the finalized record is current with by-dest.
+        calib_plan = self._check_geotag_finalized(ws, handoff, blockers)
         self.calib_plan = calib_plan       # stash for the plan builder (plan/dry-run)
 
         # 2. The workspace was finalized (§3 precond 2).
@@ -214,23 +214,23 @@ class MergeWorkflow:
         self._check_by_dest_clean(blockers, info)
 
         # 4. Prep-consistency against the finalized-name set (§3 precond 4) — needs photos-24. Built on
-        # the handoff⨝photos-24 enumeration because calibration renamed by-dest without re-keying it.
+        # the handoff⨝photos-24 enumeration because geotag renamed by-dest without re-keying it.
         if calib_plan is not None:
             self._check_prep_consistency(handoff, calib_plan, info["library_root"], blockers)
 
         return blockers, warnings, info
 
-    def _check_calibration_finalized(self, ws, handoff, blockers):
-        """Preconditions 1 and 1a. Calibration must have produced an executed plan (photos-24) with a
+    def _check_geotag_finalized(self, ws, handoff, blockers):
+        """Preconditions 1 and 1a. Geotag must have produced an executed plan (photos-24) with a
         successful execution summary (photos-25), and the finalized record must still be current with
         by-dest: the CURRENT handoff's content fingerprint must equal the one photos-24 pinned as a
         dependency. A no-op re-prep (run-metadata only) does not trip this; only a real by-dest content
-        change does — that one needs re-calibrate + re-finalize, not just re-prep (distinct from §3.4)."""
+        change does — that one needs re-run geotag + re-finalize, not just re-prep (distinct from §3.4)."""
         plan_p = executable_plan_path(ws)
         summ_p = execution_summary_path(ws)
         plan = None
         if not os.path.exists(plan_p):
-            blockers.append("Calibration has not produced an executable plan "
+            blockers.append("Geotag has not produced an executable plan "
                             "(photos-24-executable-plan.json is missing) — run `photos-ingest geotag plan` "
                             "then `execute` before merging.")
         else:
@@ -238,26 +238,26 @@ class MergeWorkflow:
                 with open(plan_p) as f:
                     plan = json.load(f)
             except Exception as e:
-                blockers.append(f"Calibration plan photos-24-executable-plan.json could not be read: {e}")
+                blockers.append(f"Geotag plan photos-24-executable-plan.json could not be read: {e}")
         if not os.path.exists(summ_p):
-            blockers.append("Calibration was not executed (photos-25-execution-summary.json is missing) "
+            blockers.append("Geotag was not executed (photos-25-execution-summary.json is missing) "
                             "— run `photos-ingest geotag execute` before merging.")
         else:
             try:
                 with open(summ_p) as f:
                     summ = json.load(f)
                 if summ.get("status") != "success":
-                    blockers.append("Calibration execution did not end successfully "
+                    blockers.append("Geotag execution did not end successfully "
                                     f"(photos-25 status={summ.get('status')!r}) — resolve it and re-run "
                                     "`photos-ingest geotag execute` before merging.")
             except Exception as e:
-                blockers.append(f"Calibration execution summary could not be read: {e}")
+                blockers.append(f"Geotag execution summary could not be read: {e}")
 
         if plan is None:
             return None
         dep = (plan.get("depends_on") or {}).get("handoff")
         if not dep:
-            blockers.append("The calibration plan records no handoff dependency — re-calibrate and "
+            blockers.append("The geotag plan records no handoff dependency — re-run geotag and "
                             "re-finalize before merging.")
             return plan
         if dep.get("dependency_type") == "handoff_content":
@@ -265,10 +265,10 @@ class MergeWorkflow:
         else:
             ok = verify_json_dependency(dep, ws)   # legacy byte-hash handoff dependency
         if not ok:
-            blockers.append("By-dest has changed since calibration was finalized (the current handoff's "
+            blockers.append("By-dest has changed since geotag was finalized (the current handoff's "
                             "content fingerprint no longer matches the one photos-24-executable-plan.json "
-                            "recorded). Re-calibrate and re-finalize before merging — a present but "
-                            "un-calibrated photo must not be merged.")
+                            "recorded). Re-run geotag and re-finalize before merging — a present but "
+                            "un-geotagged photo must not be merged.")
         return plan
 
     def _check_by_dest_clean(self, blockers, info):
@@ -310,7 +310,7 @@ class MergeWorkflow:
         handoff's by-dest photos joined to photos-24's rename ops by content fingerprint. Each entry
         carries its final on-disk by-dest path, its library-relative destination, final name, content
         fingerprint, and library target. Robust to a handoff that carries pre- OR post-rename names —
-        the fingerprint join is name-independent (calibration renamed by-dest without re-keying it)."""
+        the fingerprint join is name-independent (geotag renamed by-dest without re-keying it)."""
         by_dest = folder_name('photos_by_dest')
         final_by_fp = {}
         for dd in (calib_plan.get("destinations") or {}).values():
@@ -802,8 +802,8 @@ class MergeWorkflow:
             "artifact_type": "merge_summary", "artifact_name": MERGE_SUMMARY_ARTIFACT,
             "schema_version": MERGE_PLAN_SCHEMA_VERSION, "merge_run_id": execution_id,
             "merge_plan_id": plan.get("plan_id"), "library_root": library_root,
-            # §9.1 item 2: identify the calibration run whose finalized output this merged.
-            "calibration": {"plan_id": _json_get(executable_plan_path(ws), "plan_id"),
+            # §9.1 item 2: identify the geotag run whose finalized output this merged.
+            "geotag": {"plan_id": _json_get(executable_plan_path(ws), "plan_id"),
                             "execution_id": _json_get(execution_summary_path(ws),
                                                        "run_metadata", "execution_id")},
             "merged": {
@@ -851,7 +851,7 @@ class MergeWorkflow:
               "process more media in a fresh workspace.")
         return 0
 
-    # --- filesystem helpers (mirrors of calibration's; merge is read-only here) ---
+    # --- filesystem helpers (mirrors of geotag's; merge is read-only here) ---
 
     def _root_files(self):
         ws = self.workspace_root
@@ -918,7 +918,7 @@ class MergeWorkflow:
 
 def _json_get(path, *keys):
     """Best-effort read of a JSON file at `path`, walking nested `keys`; None on any miss/error.
-    Used to surface the calibration run's plan/execution ids in the merge summary (§9.1 item 2)."""
+    Used to surface the geotag run's plan/execution ids in the merge summary (§9.1 item 2)."""
     try:
         with open(path) as f:
             v = json.load(f)

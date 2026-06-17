@@ -74,7 +74,7 @@ def test_valid_edits_pass():
                                gpx_direct_match_max_seconds=0))
 
 
-# --- destination_distribution_subfolders (calibration §7.1 dev-subfolder gate) ----------------
+# --- destination_distribution_subfolders (geotag §7.1 dev-subfolder gate) ----------------
 
 def test_distribution_subfolders_default_valid():
     assert utils.CONFIG["destination_distribution_subfolders"] == ["jpg", "tif"]

@@ -115,11 +115,11 @@ entry (`python -m photos_pipeline.photos_1_prep …`) sharing the same `add_argu
 - `photos-ingest edit` — the decision editor (a local web server; folded into the package at `photos_pipeline/editor/`, web assets served as package data via importlib.resources, no bundler).
   Like every phase it operates on the **cwd workspace** (no workspace-naming argument) and refuses to
   run if the cwd is not an initialized workspace; `--demo` is the only no-workspace mode (read-only
-  fixtures tour). Phases share the plan/validate/execute contract; workspace = cwd. The original `prep` / `calibrate` /
+  fixtures tour). Phases share the plan/validate/execute contract; workspace = cwd. The original `prep` / `geotag` /
   `refresh-library` / `merge` monolith they were split from has been removed; `refresh-library` was
   deliberately dropped in favor of on-demand fingerprinting in merge (see its workflow spec).
 - **Canonical plan persistence (all phases):** each phase's plan/decision artifact lives at a fixed
-  control-dir path (`photos-10-prep-plan.json`, calibration `photos-21`/`22`/`23`, `photos-30-merge-plan.json`).
+  control-dir path (`photos-10-prep-plan.json`, geotag `photos-21`/`22`/`23`, `photos-30-merge-plan.json`).
   The planning command writes it there and prints the location; the validate/apply commands read it from
   there — there are **no** `--output`/`--plan` path flags. Re-planning backs up the prior artifact under
   the shared incremental `-NNN` suffix (never clobbered). See shared contract Section 5 ("Canonical plan
@@ -132,7 +132,7 @@ workspace's `photos-00-config.json` on first prep run, then hand-edited and auth
 (the workflow specs deliberately do **not** pin default *values* — they are a deployment choice, not
 part of the behavioral contract). Current defaults worth knowing:
 
-- **`gpx_root`**: `/srv/pictures/gpslogs/gpx` — where calibration looks for GPX tracks.
+- **`gpx_root`**: `/srv/pictures/gpslogs/gpx` — where geotag looks for GPX tracks.
 - **`merge.library_root`**: `/srv/pictures/5-finished` — the permanent digiKam library merge writes into.
 - **GPX placement is tuned for narrow destinations** (museum/castle/park, where you move slowly and GPS
   goes sparse/indoors): interpolation gap `1800s`, extrapolation `300s`, anchor-match distance `50m`.
@@ -152,14 +152,14 @@ The whole design exists to safely mutate **irreplaceable originals**. These rule
   virtual-filesystem code path. It does not dump every operation: the full exact plan is the saved
   artifact on disk, so dry-run summarizes the real plan rather than flooding the terminal.
 - **Instruction fingerprint.** Execution recomputes the SHA-256 of the human-edited instruction file
-  (e.g. `calibration.json`) and aborts if it differs from what the plan was built against.
+  (e.g. `geotag.json`) and aborts if it differs from what the plan was built against.
 - **No clobber.** No operation ever overwrites existing media. Destinations are reserved/validated first.
 - **Quarantine, not delete.** Duplicates are moved to a recoverable quarantine; permanent purge would be
   a separate explicit command.
 - **No destructive in-place mutation model.** The active scripts work strictly on the plan/validate/execute
   path; never reintroduce the original monolith's destructive in-place mutation approach.
 - **Idempotent & resumable.** Reruns act on the diff; a crash mid-run is recoverable (prep re-plans from
-  the filesystem as truth; calibration resumes its plan and skips applied ops).
+  the filesystem as truth; geotag resumes its plan and skips applied ops).
 
 ### Pipeline layout (shared contract)
 

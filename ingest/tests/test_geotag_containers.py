@@ -1,4 +1,4 @@
-"""Phase 3/5 (calibration) — file-less CONTAINER destinations.
+"""Phase 3/5 (geotag) — file-less CONTAINER destinations.
 
 A folder that holds only sub-destinations (no media of its own) is still materialized as a
 destination so a human can author timezone / GPS-fallback decisions on it that propagate DOWN to its
@@ -23,7 +23,7 @@ def _wf(tmp_path):
     ws = tmp_path / "ws"
     (ws / ".photos-ingest").mkdir(parents=True)
     (ws / ".photos-ingest" / "photos-11-handoff.json").write_text("{}")
-    wf = cal.CalibrationWorkflow(str(ws))
+    wf = cal.GeotagWorkflow(str(ws))
     wf._gpx_fingerprint = "fp"
     return wf
 

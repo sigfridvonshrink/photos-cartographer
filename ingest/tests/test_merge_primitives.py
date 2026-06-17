@@ -211,7 +211,7 @@ def test_append_at_max_plus_one_integration():
 def test_reseal_writes_own_manifest_and_never_touches_the_25(tmp_path):
     ws = tmp_path / "ws"
     cd = utils.ensure_control_dir(str(ws))
-    # A realistic subset of package artifacts present, including the calibration manifest.
+    # A realistic subset of package artifacts present, including the geotag manifest.
     for name, body in [
         ("photos-00-config.json", {"a": 1}),
         ("photos-11-handoff.json", {"files": []}),
@@ -238,9 +238,9 @@ def test_reseal_writes_own_manifest_and_never_touches_the_25(tmp_path):
     # Present artifacts are listed with correct hashes; absent ones (e.g. the DB) are omitted.
     c = manifest["contents"]
     assert "photos-31-merge-summary.json" in c and "photos-35-merge-log.json" in c
-    assert "photos-26-archive-manifest.json" in c          # calibration's manifest is bundled
+    assert "photos-26-archive-manifest.json" in c          # geotag's manifest is bundled
     assert "photos-00-ingest.db" not in c                  # not present in this fixture
     assert c["photos-11-handoff.json"]["sha256"] == utils.sha256_file(
         os.path.join(cd, "photos-11-handoff.json"))
-    # §13.0a: calibration's own manifest is bundled (read), never rewritten.
+    # §13.0a: geotag's own manifest is bundled (read), never rewritten.
     assert utils.sha256_file(cal_manifest) == cal_before
