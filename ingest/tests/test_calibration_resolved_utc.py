@@ -181,19 +181,15 @@ def test_run_populates_cache_when_complete(tmp_path, monkeypatch, capsys):
         finally:
             conn.close()
 
-    # run 1: the GPX anchor auto-resolves the offset, but the timezone still needs accepting ->
-    # status requires_user_input -> NO resolved-UTC cache yet.
-    run()
-    assert cache_rows() in (None, [])
-
-    # accept the proposed timezone -> status complete -> run 2 populates the cache.
-    p = ctl / "photos-21-time-decisions.json"
-    art = json.load(open(p))
-    art["destinations"]["6-photos-by-dest/B"]["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
-    p.write_text(json.dumps(art, indent=2, sort_keys=True))
+    # The GPX anchor auto-resolves the offset and the timezone auto-resolves from the config default
+    # (inherited down the nested geography), so status=complete on the FIRST run and the resolved-UTC
+    # cache is populated immediately — no separate timezone-accept step is needed.
     run()
     out = capsys.readouterr().out
     assert "resolved_utc_cache_fingerprint" in out
+    tz = json.load(open(ctl / "photos-21-time-decisions.json"))[
+        "destinations"]["6-photos-by-dest/B"]["destination_timezone"]
+    assert tz["requires_user_input"] is False and tz["decision_mode"] == "auto_resolved"
     rows = cache_rows()
     assert rows == [("6-photos-by-dest/B/a.arw", "2024-07-03T12:12:21Z", "camera_group_offset"),
                     ("6-photos-by-dest/B/b.arw", "2024-07-03T12:13:21Z", "camera_group_offset")]
