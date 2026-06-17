@@ -252,3 +252,16 @@ def test_sealed_workspace_with_dump_warns_and_blocks(tmp_path, monkeypatch, caps
     wf = cal.CalibrationWorkflow(str(ws))
     blk, warn, _ = wf.preflight()
     assert any("SEALED" in b for b in blk) and not warn
+
+
+def test_unknown_group_aborts_before_gpx_ingest(tmp_path, monkeypatch):
+    # In-memory camera-group recognition runs BEFORE disk-heavy GPX ingestion, so an unknown-group
+    # abort costs no GPX I/O (the next run re-ingests GPX only once recognition passes).
+    ws, ctl = _completable_ws(tmp_path)
+    called = []
+    monkeypatch.setattr(cal.CalibrationWorkflow, "recognize_camera_groups",
+                        lambda self, files: ({}, ["SONY|ILCE-7|unclassified"]))
+    monkeypatch.setattr(cal.CalibrationWorkflow, "load_gpx",
+                        lambda self: called.append(1))
+    assert _run(monkeypatch, ws) == 2          # unknown group -> abort
+    assert called == []                        # GPX ingest never reached

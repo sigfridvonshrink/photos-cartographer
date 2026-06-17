@@ -2344,7 +2344,10 @@ def run(args):
 
             # Stages 2–4: build the in-memory model calibration reasons over.
             files = wf.build_file_model()
-            gpx = wf.load_gpx()
+            # Order matters: run the IN-MEMORY camera-group recognition (which can abort on an unknown
+            # group) BEFORE the disk-heavy GPX ingestion, so aborting to let the operator classify a
+            # group doesn't waste the GPX parse — the next run re-ingests GPX only once this passes.
+            # (Recognition needs only the file model, not GPX.)
             groups, unknown = wf.recognize_camera_groups(files)
 
             if unknown:
@@ -2360,6 +2363,7 @@ def run(args):
                 print("\nNo calibration JSON was written.", file=sys.stderr)
                 sys.exit(2)
 
+            gpx = wf.load_gpx()      # disk-heavy: only after the in-memory checks above have passed
             n_dest = len({f["destination"] for f in files})
             by_class = {}
             for g in groups.values():
