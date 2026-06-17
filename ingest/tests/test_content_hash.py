@@ -89,7 +89,7 @@ def test_pixel_signature_distinct_for_different_photos():
 @requires_exiftool
 def test_pixel_signature_is_exif_invariant(tmp_path):
     # Copy the JPEG, mutate EXIF (date + GPS) on the copy without touching pixels;
-    # the pixel signature must be unchanged. This is the property calibration relies
+    # the pixel signature must be unchanged. This is the property geotag relies
     # on (the content hash survives EXIF writes).
     variant = tmp_path / "variant.jpg"
     shutil.copy(CAM_SMALL, variant)

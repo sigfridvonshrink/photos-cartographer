@@ -1,4 +1,4 @@
-"""Phase 6c-2 (calibration) — the reversible manual-GPS pre-state ledger + revert ops (§24.1).
+"""Phase 6c-2 (geotag) — the reversible manual-GPS pre-state ledger + revert ops (§24.1).
 
 The revert target is prep's recorded original GPS (the handoff's native_gps), pinned once; a withdrawn
 manual override plans + applies a revert that restores it (or clears added GPS), then consumes the
@@ -37,7 +37,7 @@ def test_revert_tags():
 
 def test_ledger_cache_pin_once_get_consume(tmp_path):
     (tmp_path / ".photos-ingest").mkdir()
-    c = cal.CalibrationCache(str(tmp_path))
+    c = cal.GeotagCache(str(tmp_path))
     c.ledger_pin("fp1", "a.jpg", {"present": False}, "t0")
     c.ledger_pin("fp1", "a.jpg", {"present": True, "GPSLatitude": 9}, "t1")     # pin-once -> ignored
     assert c.ledger_get("fp1")["pre_state"] == {"present": False}              # the original stands
@@ -78,7 +78,7 @@ def _plan_wf(tmp_path, files, *, manual=None):
     (ctl / "photos-22-gps-drift-validation.json").write_text(
         json.dumps({"status": "complete", "destinations": {}}))
     (ctl / "photos-23-gps-decisions.json").write_text(json.dumps(gps_art))
-    wf = cal.CalibrationWorkflow(str(ws)); wf.handoff = {"cache_fingerprint": "pcf"}; wf._gpx_fingerprint = "g"
+    wf = cal.GeotagWorkflow(str(ws)); wf.handoff = {"cache_fingerprint": "pcf"}; wf._gpx_fingerprint = "g"
     gpx = cal.GPXIndex(""); gpx.points = []
     return wf, time_art, gps_art, gpx
 
@@ -174,7 +174,7 @@ def _run(monkeypatch, ws, cmd):
 def _mock_tools(monkeypatch, ws):
     # the write is content-invariant -> the post-write fingerprint equals the pinned precondition
     # ("fp-<relative path>"); no renames in this test, so the path is stable.
-    monkeypatch.setattr(cal.CalibrationWorkflow, "_exiftool_write", lambda self, p, tags: True)
+    monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", lambda self, p, tags: True)
     monkeypatch.setattr(cal.ContentHasher, "fingerprint_image",
                         staticmethod(lambda p: {"value": "fp-" + os.path.relpath(p, str(ws))}))
 
@@ -196,7 +196,7 @@ def test_full_pin_then_withdraw_reverts_and_consumes(tmp_path, monkeypatch):
     assert (ctl / "photos-24-executable-plan.json").exists()
     assert _run(monkeypatch, ws, "execute") == 0
     # pre-state pinned (c had no native GPS -> absent), manual GPS written
-    db = cal.CalibrationCache(str(ws)); pinned = {e["relative_path"]: e["pre_state"] for e in db.ledger_all()}; db.close()
+    db = cal.GeotagCache(str(ws)); pinned = {e["relative_path"]: e["pre_state"] for e in db.ledger_all()}; db.close()
     assert pinned == {f"{BYDEST}/T/c.arw": {"present": False}}
     t1 = json.load(open(ctl / "photos-25-execution-summary.json"))["totals"]
     assert t1["metadata_gps_writes"] == 1 and t1["manual_gps_pre_states_captured"] == 1
@@ -205,7 +205,7 @@ def test_full_pin_then_withdraw_reverts_and_consumes(tmp_path, monkeypatch):
     assert _run(monkeypatch, ws, "execute") == 0
     t2 = json.load(open(ctl / "photos-25-execution-summary.json"))["totals"]
     assert t2["manual_gps_pre_states_captured"] == 0                   # already pinned, skipped
-    db = cal.CalibrationCache(str(ws)); assert len(db.ledger_all()) == 1; db.close()
+    db = cal.GeotagCache(str(ws)); assert len(db.ledger_all()) == 1; db.close()
 
     # WITHDRAW: drop the fallback, accept c as unlocated -> non-manual -> revert planned
     q = ctl / "photos-23-gps-decisions.json"; b = json.load(open(q))
@@ -219,4 +219,4 @@ def test_full_pin_then_withdraw_reverts_and_consumes(tmp_path, monkeypatch):
     assert _run(monkeypatch, ws, "execute") == 0
     s = json.load(open(ctl / "photos-25-execution-summary.json"))
     assert s["totals"]["manual_gps_reverts"] == 1
-    db = cal.CalibrationCache(str(ws)); assert db.ledger_all() == []; db.close()   # consumed on restore
+    db = cal.GeotagCache(str(ws)); assert db.ledger_all() == []; db.close()   # consumed on restore

@@ -59,9 +59,9 @@ CONFIG = {
     "gpx_interpolation_max_gap_seconds": 1800.0,
     "gpx_interpolation_max_distance_meters": 1000.0,
     "gpx_interpolation_max_speed_kmh": 150.0,
-    # Position-based thresholds for the calibration time-anchor inference (calibration §19):
+    # Position-based thresholds for the calibration time-anchor inference (geotag §19):
     # how close a native-GPS frame must be to a GPX point/segment to anchor its real time, and how
-    # far supporting anchors' offsets may spread before they conflict. Consumed by calibration.
+    # far supporting anchors' offsets may spread before they conflict. Consumed by geotag.
     # 50m (not a tighter value) tolerates the poorer GPS agreement typical at destinations — old-town
     # canyons, forested parks, castle courtyards — so clock-offset inference still finds enough anchors.
     "gpx_anchor_max_point_distance_meters": 50.0,
@@ -76,7 +76,7 @@ CONFIG = {
     # A genuinely huge clock error (battery reset) falls outside this and is left for a manual offset.
     "gpx_anchor_max_clock_error_seconds": 172800.0,
     # How far past either end of the GPX track a photo's resolved time may be placed by velocity
-    # extrapolation before it is left unplaced (calibration §23/§25 GPS placement). 300s covers a few
+    # extrapolation before it is left unplaced (geotag §23/§25 GPS placement). 300s covers a few
     # edge-of-visit frames (before the first fix / after the last); kept modest because extrapolation
     # has no second bracket and projects the endpoint velocity (risky if the track ended on a drive-away).
     "gpx_extrapolation_max_seconds": 300.0,
@@ -102,8 +102,8 @@ CONFIG = {
     },
     "filename_timestamp_format": "%Y-%m-%d--%H-%M-%S",
     # Format-distribution subfolder names that mark the later development/processing phase
-    # (calibration spec Section 7.1). Their presence anywhere under 6-photos-by-dest hard-stops
-    # calibration (development must not start before time/GPS are fixed). Consumed by calibration.
+    # (geotag spec Section 7.1). Their presence anywhere under 6-photos-by-dest hard-stops
+    # geotag (development must not start before time/GPS are fixed). Consumed by geotag.
     "destination_distribution_subfolders": ["jpg", "tif"],
     # Library-merge settings (shared contract Section 4.3 item 7). Seeded by prep for
     # forward-compatibility but CONSUMED by the future merge phase, which does the deep
@@ -171,7 +171,7 @@ def media_class_for_ext(ext: str) -> str:
 # writes then atomically renames over the original) and `<media>_original` (the backup exiftool keeps
 # when `-overwrite_original` is NOT used). A clean Ctrl-C is self-cleaned by exiftool, but a hard kill
 # (SIGKILL/OOM/power loss) can orphan one in a managed folder; prep recognizes and quarantines these
-# (the live original is always intact — the rename is atomic). Calibration's writer also unlinks a
+# (the live original is always intact — the rename is atomic). Geotag's writer also unlinks a
 # stale `_exiftool_tmp` for a file right before it rewrites it.
 _EXIFTOOL_ARTIFACT_SUFFIXES = ("_exiftool_tmp", "_original")
 
@@ -284,7 +284,7 @@ def write_db_snapshot(conn, dest_path: str) -> None:
     """Capture a transactionally-consistent point-in-time image of `conn`'s database to `dest_path`
     (shared contract §13.4a): VACUUM INTO a temp name, VERIFY it, then atomic rename — so an
     interrupted capture leaves either the prior snapshot or the complete new one, never a corrupt/torn
-    file. Shared by prep (photos-15-prep-ingest.db) and calibration finalize (photos-26-calibrate-ingest.db)."""
+    file. Shared by prep (photos-15-prep-ingest.db) and geotag finalize (photos-26-geotag-ingest.db)."""
     import uuid
     tmp = os.path.join(os.path.dirname(dest_path) or ".", f".tmp-snapshot-{uuid.uuid4().hex[:8]}.db")
     try:
@@ -312,8 +312,8 @@ def journal_path(ws: str, run_id: str) -> str:
 
 def sha256_file(path: str) -> str:
     """SHA-256 over a file's exact bytes — the byte-hash used to verify JSON-artifact
-    dependencies (the prep handoff and the numbered calibration artifacts are re-hashed from
-    their exact bytes before use, shared contract §9.1 / calibration §4)."""
+    dependencies (the prep handoff and the numbered geotag artifacts are re-hashed from
+    their exact bytes before use, shared contract §9.1 / geotag §4)."""
     h = hashlib.sha256()
     with open(path, "rb") as f:
         for chunk in iter(lambda: f.read(65536), b""):
@@ -355,7 +355,7 @@ def handoff_content_fingerprint(handoff: dict) -> str:
     AUDIT field recursively removed (`run_metadata`, `diagnostics`, the execution-journal pointer, the
     `content_fingerprint` field itself, and the nested `cache_freshness` / `conflicts_or_duplicates`).
     Byte-stable for a given workspace state, so a no-op prep re-run (which only refreshes run metadata
-    and freshness counts) leaves it unchanged and never restales calibration's downstream artifacts.
+    and freshness counts) leaves it unchanged and never restales geotag's downstream artifacts.
     The whole-file SHA-256 stays the archival-integrity hash (§13), not the staleness trigger (§4.2)."""
     return hashlib.sha256(
         json.dumps(_strip_handoff_volatile(handoff), sort_keys=True).encode("utf-8")).hexdigest()
@@ -399,7 +399,7 @@ def write_versioned_json(path: str, obj: dict):
     where the plan landed and where the prior one was kept. The control dir is assumed to exist.
 
     A no-op guard: if the existing file is already byte-identical to what we'd write, nothing is backed
-    up or rewritten (sha, None) — so an unchanged re-run (e.g. calibration regenerating identical
+    up or rewritten (sha, None) — so an unchanged re-run (e.g. geotag regenerating identical
     decisions) never accumulates redundant backups. A plan with a fresh plan_id differs every run, so
     re-planning still always preserves the prior plan."""
     new_text = json.dumps(obj, indent=2, sort_keys=True)
@@ -427,7 +427,7 @@ def ensure_control_dir(ws: str) -> str:
 # scaffolding (no 0-6 folders, no guard, no lifecycle). Its sole identity is a single dotfile
 # marker in its root; its lock is another dotfile (merge spec §4/§12, shared contract §15.1/§15.2).
 # These names + helpers are consumed by the merge phase (ingest/photos-3-merge, built in later
-# increments); prep/calibration neither read nor write them.
+# increments); prep/geotag neither read nor write them.
 LIBRARY_MARKER = ".photos-library"
 LIBRARY_LOCK = ".photos-merge.lock"
 
@@ -518,18 +518,18 @@ def max_suffix(root: str, names) -> int:
 
 # Library-merge archival re-seal (merge spec §9.4 step 1 / shared contract §13.6). On a successful
 # merge, the package gains merge's own artifacts; merge re-bundles by recomputing every present
-# artifact's SHA-256 into its OWN photos-35-archive-manifest.json, which supersedes calibration's
+# artifact's SHA-256 into its OWN photos-35-archive-manifest.json, which supersedes geotag's
 # photos-26 manifest (parallel to the photos-15→25→35 log chain). It reads each artifact and never
 # rewrites another phase's file (shared contract §13.0a). Consumed by ingest/photos-3-merge.
 MERGE_ARCHIVE_MANIFEST = "photos-35-archive-manifest.json"
-CALIBRATE_ARCHIVE_MANIFEST = "photos-26-archive-manifest.json"
+GEOTAG_ARCHIVE_MANIFEST = "photos-26-archive-manifest.json"
 _MERGE_ARCHIVE_ITEMS = [
     "photos-00-config.json", "photos-11-handoff.json",
     "photos-15-prep-log.json", "photos-15-prep-ingest.db",
     "photos-21-time-decisions.json", "photos-23-gps-decisions.json",
     "photos-24-executable-plan.json", "photos-25-execution-summary.json",
-    "photos-26-complete-log.json", "photos-26-calibrate-ingest.db",
-    CALIBRATE_ARCHIVE_MANIFEST,
+    "photos-26-complete-log.json", "photos-26-geotag-ingest.db",
+    GEOTAG_ARCHIVE_MANIFEST,
     "photos-31-merge-summary.json", "photos-35-merge-log.json", "photos-35-merge-ingest.db",
     "photos-00-ingest.db",
 ]
@@ -541,7 +541,7 @@ def reseal_archival_package(ws: str, *, workspace_name: str, plan_id: str, execu
                             merge_run_id: str, generated_at: str) -> str:
     """Re-seal the archival package after a successful merge: recompute the SHA-256 of every package
     artifact present in the control dir (including merge's photos-31/35 artifacts and the live DB) and
-    write merge's own photos-35-archive-manifest.json (supersedes calibration's photos-26 manifest,
+    write merge's own photos-35-archive-manifest.json (supersedes geotag's photos-26 manifest,
     shared contract §13.6). Reads each artifact; never mutates another phase's file (§13.0a). Returns
     the manifest's SHA-256."""
     cd = control_dir(ws)
@@ -558,7 +558,7 @@ def reseal_archival_package(ws: str, *, workspace_name: str, plan_id: str, execu
         "plan_id": plan_id,
         "execution_id": execution_id,
         "merge_run_id": merge_run_id,
-        "supersedes": CALIBRATE_ARCHIVE_MANIFEST,
+        "supersedes": GEOTAG_ARCHIVE_MANIFEST,
         "contents": contents,
         "run_metadata": {"generated_at": generated_at},
     }
@@ -712,7 +712,7 @@ def validate_config(cfg: dict):
     sanity-validated (types, ranges, paths, formats), not merely parsed as JSON. Raises
     ValueError with a clear 'config: <path> ...' message on any violation; missing keys
     default and unknown keys are ignored. The same validate-on-load discipline will extend
-    to calibration decision JSON once that phase exists ([[validate-human-input]])."""
+    to geotag decision JSON once that phase exists ([[validate-human-input]])."""
     if not isinstance(cfg, dict):
         raise ValueError("config: top level must be a JSON object.")
 
@@ -878,9 +878,9 @@ def detect_zfs_dataset(path: str):
 
 def take_zfs_snapshot(ws: str, snapshot_id: str, label: str, *, target_path=None,
                       dataset_key: str = "workspace"):
-    """Take an optional pre-mutation ZFS snapshot — shared by prep (§14.3, workspace), calibration
+    """Take an optional pre-mutation ZFS snapshot — shared by prep (§14.3, workspace), geotag
     execute (§29 step 6, workspace), and merge execute (merge spec §10.3 step 3, the LIBRARY volume).
-    `label` is the phase ("prep" / "calibrate" / "merge") so the phases' snapshots never resolve to the
+    `label` is the phase ("prep" / "geotag" / "merge") so the phases' snapshots never resolve to the
     same name even on a shared dataset: `<dataset>@<zfs.snapshot_prefix><label>-<snapshot_id>`.
 
     By default the snapshot targets the workspace dataset (auto-detected from `ws` or pinned via
@@ -1084,10 +1084,10 @@ atexit.register(PersistentMagickWorker.cleanup_all)
 
 
 class ContentHasher:
-    """Content fingerprints — the cross-phase identity spine, shared by prep and calibration.
+    """Content fingerprints — the cross-phase identity spine, shared by prep and geotag.
 
     `fingerprint_image` is an EXIF-invariant pixel-content hash via ImageMagick's signature
-    (`identify %#`): it survives the EXIF writes calibration later makes, so calibration recomputes
+    (`identify %#`): it survives the EXIF writes geotag later makes, so geotag recomputes
     it after each metadata write to confirm only metadata (not decoded content) changed."""
 
     @staticmethod
@@ -1095,7 +1095,7 @@ class ContentHasher:
         """EXIF-invariant pixel-content hash via ImageMagick's signature (`identify %#`).
 
         Used for both `image` and `raw`: it hashes normalized pixels, so it survives the EXIF writes
-        calibration later makes (the content hash is the cross-phase identity spine). The result is
+        geotag later makes (the content hash is the cross-phase identity spine). The result is
         bound to the ImageMagick version so a magick upgrade restales the cache rather than silently
         mixing signatures.
         """
@@ -1669,8 +1669,8 @@ class ProgressCoordinator:
 
 
 # ============================================================================
-# Shared workspace infrastructure (extracted from photos-1-prep so calibration
-# can import it too). The DB and lock are phase-neutral: prep and calibration
+# Shared workspace infrastructure (extracted from photos-1-prep so geotag
+# can import it too). The DB and lock are phase-neutral: prep and geotag
 # share one photos-00-ingest.db and one whole-run lock (shared contract §2/§13.4).
 # ============================================================================
 

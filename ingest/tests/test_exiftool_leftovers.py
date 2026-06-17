@@ -1,6 +1,6 @@
 """Recognition + quarantine of orphaned exiftool artifacts.
 
-A hard kill (SIGKILL/OOM/power loss) during a calibration metadata write can orphan exiftool's
+A hard kill (SIGKILL/OOM/power loss) during a geotag metadata write can orphan exiftool's
 `<media>_exiftool_tmp` intermediate (or, were `-overwrite_original` ever dropped, a `<media>_original`
 backup). The live original is always intact (the rename is atomic). Prep recognizes such leftovers,
 pulls them out of the media inventory, and quarantines them (recoverable, never deleted) instead of

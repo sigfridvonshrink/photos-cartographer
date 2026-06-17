@@ -138,8 +138,8 @@ def test_create_date_used_when_no_datetimeoriginal(tmp_path, monkeypatch):
 
 def test_bare_timestamp_name_used_when_free(tmp_path, monkeypatch):
     # §7.2 bare-first: the un-suffixed timestamp name is taken when free, even though a -001 sibling
-    # already exists. This MATCHES calibration's final naming (also bare-first), so an uncorrected file
-    # gets the same provisional and final name and calibration plans no needless rename (§7.3). The
+    # already exists. This MATCHES geotag's final naming (also bare-first), so an uncorrected file
+    # gets the same provisional and final name and geotag plans no needless rename (§7.3). The
     # existing -001 is untouched (no clobber).
     _install(monkeypatch, meta_for=lambda f: {"DateTimeOriginal": "2023:01:02 03:04:05"})
     ws = _ws(tmp_path)

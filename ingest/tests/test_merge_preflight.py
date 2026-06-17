@@ -169,19 +169,19 @@ def test_sources_not_empty_blocks(tmp_path):
     assert any("0-sources/ is not empty" in b for b in blockers), blockers
 
 
-def test_missing_calibration_plan_blocks(tmp_path):
+def test_missing_geotag_plan_blocks(tmp_path):
     ws, _ = _make(tmp_path, cal_plan=False)
     blockers, _, _ = _pf(ws)
     assert any("has not produced an executable plan" in b for b in blockers), blockers
 
 
-def test_calibration_not_executed_blocks(tmp_path):
+def test_geotag_not_executed_blocks(tmp_path):
     ws, _ = _make(tmp_path, cal_summary=False)
     blockers, _, _ = _pf(ws)
     assert any("was not executed" in b for b in blockers), blockers
 
 
-def test_calibration_failed_status_blocks(tmp_path):
+def test_geotag_failed_status_blocks(tmp_path):
     ws, _ = _make(tmp_path, summary_status="partial")
     blockers, _, _ = _pf(ws)
     assert any("did not end successfully" in b for b in blockers), blockers
@@ -190,8 +190,8 @@ def test_calibration_failed_status_blocks(tmp_path):
 def test_stale_finalized_record_blocks(tmp_path):
     ws, _ = _make(tmp_path, handoff_current=False)
     blockers, _, _ = _pf(ws)
-    assert any("changed since calibration was finalized" in b for b in blockers), blockers
-    assert any("re-calibrate and re-finalize" in b.lower() for b in blockers), blockers
+    assert any("changed since geotag was finalized" in b for b in blockers), blockers
+    assert any("re-run geotag and re-finalize" in b.lower() for b in blockers), blockers
 
 
 def test_not_finalized_blocks(tmp_path):

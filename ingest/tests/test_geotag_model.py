@@ -1,4 +1,4 @@
-"""Phase 2 (calibration) — the in-memory model: by-dest file objects, GPX index, camera groups
+"""Phase 2 (geotag) — the in-memory model: by-dest file objects, GPX index, camera groups
 (photos-2-time-gps, spec §14–§16). Still pre-decision: no JSON artifacts. From conftest.py.
 """
 import json
@@ -37,7 +37,7 @@ def _hfile(rel, *, key="SONY|ILCE-6400|123", dto="2024:07:03 14:12:08", gps=None
 
 
 def _wf(tmp_path, handoff_files):
-    wf = cal.CalibrationWorkflow(str(tmp_path))
+    wf = cal.GeotagWorkflow(str(tmp_path))
     wf.handoff = {"files": handoff_files}
     return wf
 

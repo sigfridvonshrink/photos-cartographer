@@ -1,5 +1,5 @@
 """ProgressCoordinator.set_detail — the per-item label (e.g. the destination being calibrated) that
-calibration shows on the progress line so a heavy destination is visible while it's worked on. From
+geotag shows on the progress line so a heavy destination is visible while it's worked on. From
 conftest.py (photos_utils loaded once into sys.modules)."""
 import photos_utils as utils
 
