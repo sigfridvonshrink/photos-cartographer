@@ -2351,15 +2351,23 @@ def run(args):
             groups, unknown = wf.recognize_camera_groups(files)
 
             if unknown:
-                print("\nCalibration cannot proceed: unknown camera group(s). Add each to ONE of these "
-                      "arrays in photos-00-config.json under camera_time_and_timezone_policy.device_groups "
+                print("\nCalibration cannot proceed: unknown camera group(s). In photos-00-config.json "
+                      "under camera_time_and_timezone_policy.device_groups, REPLACE both arrays below "
                       "(phones = smartphone, auto timezone; fixed_clock_cameras = camera with a manual "
-                      "clock), then re-run — keep each group in only one array:\n", file=sys.stderr)
-                for label in ("phones", "fixed_clock_cameras"):
-                    print(f'  "{label}": [', file=sys.stderr)
-                    for k in unknown:
-                        print(f'    {json.dumps(k)},', file=sys.stderr)
-                    print("  ],", file=sys.stderr)
+                      "clock), then re-run. Each array is the complete final list (your known groups plus "
+                      "the new one(s)); the new group(s) appear in BOTH — keep each in only ONE array and "
+                      "delete it from the other:\n", file=sys.stderr)
+                dg = (CONFIG.get("camera_time_and_timezone_policy") or {}).get("device_groups") or {}
+                labels = ("phones", "fixed_clock_cameras")
+                for i, label in enumerate(labels):
+                    existing = list(dg.get(label) or [])
+                    merged = existing + [k for k in unknown if k not in existing]
+                    tail = "," if i < len(labels) - 1 else ""
+                    if merged:
+                        items = ",\n".join(f"    {json.dumps(k)}" for k in merged)
+                        print(f'  "{label}": [\n{items}\n  ]{tail}', file=sys.stderr)
+                    else:
+                        print(f'  "{label}": []{tail}', file=sys.stderr)
                 print("\nNo calibration JSON was written.", file=sys.stderr)
                 sys.exit(2)
 
