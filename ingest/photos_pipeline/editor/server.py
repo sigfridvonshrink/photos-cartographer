@@ -337,11 +337,17 @@ class Handler(BaseHTTPRequestHandler):
             body = json.dumps(body).encode()
         elif isinstance(body, str):
             body = body.encode()
-        self.send_response(code)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.send_response(code)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            # The client went away mid-response — e.g. the browser cancelled a hover photo-preview
+            # request as the mouse moved off before the JPEG finished sending. Harmless: drop the
+            # response quietly and end the connection, rather than letting socketserver dump a traceback.
+            self.close_connection = True
 
     def _serve_static(self, rel):
         rel = rel.lstrip("/") or "index.html"
