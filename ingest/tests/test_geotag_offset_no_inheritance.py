@@ -1,8 +1,8 @@
-"""Phase 3c (calibration) — §10.2: clock offsets do NOT inherit across destinations.
+"""Phase 3c (geotag) — §10.2: clock offsets do NOT inherit across destinations.
 
 Each (camera group, destination[, date]) bucket proposes its own offset from GPX self-anchor →
 timezone-derived → manual. A child with no self-anchor does NOT adopt an ancestor's resolved offset
-(unlike the timezone, which still inherits — see test_calibration_time_decisions.py). Self-anchors
+(unlike the timezone, which still inherits — see test_geotag_time_decisions.py). Self-anchors
 never leak between destinations. From conftest.py.
 """
 from datetime import datetime, timezone
@@ -37,7 +37,7 @@ def _wf(tmp_path):
     ws = tmp_path / "ws"
     (ws / ".photos-ingest").mkdir(parents=True)
     (ws / ".photos-ingest" / "photos-11-handoff.json").write_text("{}")
-    wf = cal.CalibrationWorkflow(str(ws))
+    wf = cal.GeotagWorkflow(str(ws))
     wf._gpx_fingerprint = "fp"
     return wf
 
@@ -60,7 +60,7 @@ PARENT_FRAMES = [_file(f"{BYDEST}/Trip/a.arw", f"{BYDEST}/Trip", gps=(50.0, 4.0)
 
 def test_no_method_named_nearest_ancestor_offset():
     # The offset-inheritance helper was removed with §10.2; only the timezone still inherits.
-    assert not hasattr(cal.CalibrationWorkflow, "_nearest_ancestor_offset")
+    assert not hasattr(cal.GeotagWorkflow, "_nearest_ancestor_offset")
 
 
 def test_child_does_not_inherit_resolved_parent_offset(tmp_path):

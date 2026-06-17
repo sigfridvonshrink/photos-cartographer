@@ -13,21 +13,21 @@ def test_photos_1_prep_exists():
 def test_photos_utils_exists():
     assert os.path.exists('ingest/photos_pipeline/photos_utils.py')
 
-def test_no_calibrate_command():
+def test_no_geotag_command():
     parser = mock.MagicMock()
-    # we just want to ensure that 'calibrate' is not mentioned in the argparse setup or the file content as an active command path
+    # we just want to ensure that 'geotag' is not mentioned in the argparse setup or the file content as an active command path
     with open('ingest/photos_pipeline/photos_1_prep.py', 'r') as f:
         content = f.read()
-        # Verify that subcommands don't include calibrate
-        assert 'add_parser("calibrate"' not in content
+        # Verify that subcommands don't include geotag
+        assert 'add_parser("geotag"' not in content
         assert 'add_parser("refresh-library"' not in content
         assert 'add_parser("merge"' not in content
 
-def test_no_calibration_json_generation():
+def test_no_geotag_json_generation():
     with open('ingest/photos_pipeline/photos_1_prep.py', 'r') as f:
         content = f.read()
-        assert 'class CalibrationGenerator' not in content
-        assert 'class CalibrationWorkflow' not in content
+        assert 'class GeotagGenerator' not in content
+        assert 'class GeotagWorkflow' not in content
 
 def test_prep_plans_contain_no_time_metadata():
     with open('ingest/photos_pipeline/photos_1_prep.py', 'r') as f:
@@ -77,7 +77,7 @@ def test_execute_rejects_non_prep_plans(tmp_path):
     plan = photos_1_prep.Plan(
         plan_version=1,
         plan_id="test",
-        command="calibrate",
+        command="geotag",
         created_at="now",
         workspace_root=str(tmp_path),
         digikam_root=None,
@@ -90,7 +90,7 @@ def test_execute_rejects_non_prep_plans(tmp_path):
         operations=[]
     )
 
-    with pytest.raises(ValueError, match="Plan command 'calibrate' is not supported by photos-1-prep"):
+    with pytest.raises(ValueError, match="Plan command 'geotag' is not supported by photos-1-prep"):
         executor.execute(plan, str(tmp_path / "j.json"))
 
 

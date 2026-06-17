@@ -128,7 +128,7 @@ def test_snapshot_taken_with_detected_dataset_and_prefix(tmp_path, monkeypatch, 
     j = json.load(open(glob.glob(str(ws / ".photos-ingest" / "journal-*.json"))[0]))
     snap = j["snapshots"]["workspace"]
     assert snap["exit_code"] == 0
-    # the shared helper labels prep's snapshot "prep-" so it never collides with calibration's
+    # the shared helper labels prep's snapshot "prep-" so it never collides with geotag's
     assert snap["snapshot_name"] == f"pool/ws@photos-ingest-prep-{plan.plan_id}"
 
 
@@ -145,7 +145,7 @@ def test_required_snapshot_with_no_dataset_aborts(tmp_path, monkeypatch, seed_fr
     assert os.path.exists(ws / "0-sources" / "a.jpg")                  # no mutation
 
 
-# --- the shared take_zfs_snapshot helper (used by prep + calibration) --------
+# --- the shared take_zfs_snapshot helper (used by prep + geotag) --------
 
 def test_take_zfs_snapshot_disabled(monkeypatch):
     monkeypatch.setitem(utils.CONFIG, "zfs", {"enabled": False})
@@ -167,9 +167,9 @@ def test_take_zfs_snapshot_phase_labels_are_distinct(monkeypatch):
     monkeypatch.setattr(subprocess, "run",
                         lambda *a, **k: types.SimpleNamespace(returncode=0, stdout="", stderr=""))
     p = utils.take_zfs_snapshot("/ws", "PID", "prep")
-    c = utils.take_zfs_snapshot("/ws", "PID", "calibrate")
+    c = utils.take_zfs_snapshot("/ws", "PID", "geotag")
     assert p["snapshot_name"] == "pool/ws@px-prep-PID"
-    assert c["snapshot_name"] == "pool/ws@px-calibrate-PID"
+    assert c["snapshot_name"] == "pool/ws@px-geotag-PID"
     assert p["snapshot_name"] != c["snapshot_name"] and p["ok"] and c["ok"]
 
 
@@ -180,5 +180,5 @@ def test_take_zfs_snapshot_failure_is_recorded_not_raised(monkeypatch):
     def boom(*a, **k):
         raise subprocess.CalledProcessError(1, "zfs", stderr="pool busy")
     monkeypatch.setattr(subprocess, "run", boom)
-    r = utils.take_zfs_snapshot("/ws", "PID", "calibrate")        # never raises
+    r = utils.take_zfs_snapshot("/ws", "PID", "geotag")        # never raises
     assert r["ok"] is False and r["required"] is True and "pool busy" in r["stderr"]

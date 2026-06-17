@@ -1,4 +1,4 @@
-"""Phase 3c (calibration) — §10.2 per-date offset buckets.
+"""Phase 3c (geotag) — §10.2 per-date offset buckets.
 
 A camera is set to local time each morning, so its clock offset is constant only WITHIN a naive
 calendar day. When one (camera group, destination) spans >1 naive date, the offset cell SPLITS into
@@ -18,7 +18,7 @@ def _wf(tmp_path):
     ws = tmp_path / "ws"
     (ws / ".photos-ingest").mkdir(parents=True)
     (ws / ".photos-ingest" / "photos-11-handoff.json").write_text("{}")
-    wf = cal.CalibrationWorkflow(str(ws))
+    wf = cal.GeotagWorkflow(str(ws))
     wf._gpx_fingerprint = "fp"
     return wf
 

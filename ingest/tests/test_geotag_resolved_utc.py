@@ -1,4 +1,4 @@
-"""Phase 4 (calibration) — Stage 7 resolved UTC per file + the resolved-UTC cache fingerprint
+"""Phase 4 (geotag) — Stage 7 resolved UTC per file + the resolved-UTC cache fingerprint
 (spec §22/§22.1). Time-correctness code, so the computation gets full branch coverage: camera
 offset, smartphone native offset, destination-timezone fallback (DST-correct), and the unresolved
 branches; plus the SQLite cache round-trip and the deterministic fingerprint. From conftest.py.
@@ -104,7 +104,7 @@ def _rows():
 
 def test_cache_round_trips_and_replaces(tmp_path):
     ws = tmp_path / "ws"; (ws / ".photos-ingest").mkdir(parents=True)
-    c = cal.CalibrationCache(str(ws))
+    c = cal.GeotagCache(str(ws))
     c.replace_all(_rows())
     got = c.get_rows()
     assert len(got) == 1 and got[0]["resolved_utc"] == "2024-07-03T12:12:21Z"
