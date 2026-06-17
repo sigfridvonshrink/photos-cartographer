@@ -15,7 +15,7 @@ It does three things, carefully:
 2. **Time/GPS calibration** — resolves each photo to real UTC, **automatically figures out and
    corrects a wrong camera clock** by matching your geotagged frames against the GPX track, then
    geotags everything from the track and renames by corrected local time.
-3. **Library merge** — once a shoot is calibrated and **finalized**, **moves** the staging tree into your
+3. **Library merge** — once a shoot is geotagged and **finalized**, **moves** the staging tree into your
    permanent library (the merged files leave the workspace; anything that can't be merged stays put for
    you to deal with),
    **renaming the incoming file (never a file already in your library)** if a name would clash, recording
@@ -93,11 +93,11 @@ The clock correction is the *core mechanism*; the safety and reproducibility aro
 - **Recoverable, not destructive.** Duplicates are *quarantined*, never deleted, and never
   auto-removed; you prune them explicitly when you choose.
 - **Resumable.** A crash mid-run is recoverable — prep re-plans from the filesystem (which is treated
-  as truth), calibration resumes its plan and skips already-applied operations, and merge finishes moving
+  as truth), geotag resumes its plan and skips already-applied operations, and merge finishes moving
   the files it hadn't yet placed (and never loses one — a file leaves the workspace only once its verified
   copy is in the library).
 - **Read-only destinations.** Prep treats your curated `6-photos-by-dest` staging tree as read-only —
-  it's scanned but never mutated; calibration writes only the corrected metadata/renames you've approved.
+  it's scanned but never mutated; geotag writes only the corrected metadata/renames you've approved.
   And when a finalized shoot is merged into your permanent library, **library files are never renamed or
   overwritten** — on a name clash it's the incoming file that gets renamed, never the file already in your
   library.
@@ -128,10 +128,10 @@ Safe doesn't mean rigid. All three phases are **idempotent** — they track what
 run changes only what actually needs changing:
 
 - **Add a dump later and it does the diff.** Re-running reuses everything already fingerprinted, organized, and
-  calibrated; only the genuinely new files get processed. A run over unchanged state is a no-op.
+  geotagged; only the genuinely new files get processed. A run over unchanged state is a no-op.
 - **Your decisions stick.** Set a timezone or accept a clock offset once — reruns preserve it; you never
   re-answer a settled question.
-- **Re-run anytime, even after calibrating.** New photos months later just flow through; already-processed
+- **Re-run anytime, even after geotagging.** New photos months later just flow through; already-processed
   files are left untouched.
 
 Same mechanism as the safety, seen from the other side: because it tracks state and acts on the diff, it
@@ -160,11 +160,11 @@ re-assertion.
 And the decisions are **kept** — and the record is whole at the end of *every* phase, not just at the
 finish. By the end of **prep** you already have a complete, human-readable audit log of everything prep
 did (`photos-15-prep-log.json`), plus a point-in-time backup image of the SQLite database as of the end of
-prep — a full account even if you never calibrate. By the end of **calibration**, an explicit finalize
+prep — a full account even if you never geotag. By the end of **geotag**, an explicit finalize
 step bundles an *archival package* — the config, the live SQLite database (and the per-phase DB backup
 images), all the decision JSONs, and a consolidated **full transformation log**
 (`photos-26-complete-log.json`): a per-photo record of every change each photo underwent from dump to
-finished calibration, and why (the prep log carried forward and extended, not regenerated). That package
+finished geotag, and why (the prep log carried forward and extended, not regenerated). That package
 is **complete on its own** — if you finalize but never merge, you still have the full human-readable audit
 log, the database images, and the job reports, exactly as if the merge phase didn't exist. And by the end
 of **merge**, the same log is **additionally extended** with where each photo finally landed in your
@@ -189,7 +189,7 @@ This is **built for my own workflow** and open-sourced in case it fits yours. It
   used only for the pipeline's own JSON/config artifacts, never to identify a photo. It may well work
   elsewhere, but I don't test on Windows or macOS and make no promises there.
 - **GPS tracks** (GPX) from a logger. You dump **all** your track files into a single GPX folder
-  (`gpx_root`) and calibration ingests the whole set, matching each photo against the right point
+  (`gpx_root`) and geotag ingests the whole set, matching each photo against the right point
   across all tracks — no per-shoot sorting. No tracks at all, no geotag-from-track.
 - **One destination = one coherent shoot, time-wise.** The clock correction is figured out and applied
   **per (camera, destination folder)**, not once per camera — because a camera's clock drifts (and gets
@@ -208,7 +208,7 @@ This is **built for my own workflow** and open-sourced in case it fits yours. It
   You drop dumps into **`0-sources`** (the one inbox); prep organizes the media out and moves any
   non-media into **`1-strays`** (a per-run subfolder, structure preserved, never processed again), leaving
   `0-sources` empty. The workspace is transient working space for one or more dumps, *not* your library:
-  `6-photos-by-dest` is a staging area where a dump is organized and calibrated, then — by the merge
+  `6-photos-by-dest` is a staging area where a dump is organized and geotagged, then — by the merge
   phase — **merged into** your permanent library at a configured `library_root` elsewhere. It's structured
   to merge in cleanly (e.g. into digiKam), but workspace ≠ library, and the merge never renames or
   overwrites anything already in the library. A workspace is **single-use through to merge**: once its

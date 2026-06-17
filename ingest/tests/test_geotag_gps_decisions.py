@@ -1,4 +1,4 @@
-"""Phase 5b (calibration) — the §23 GPS decision tree + photos-23-gps-decisions.json (§25).
+"""Phase 5b (geotag) — the §23 GPS decision tree + photos-23-gps-decisions.json (§25).
 
 Per-file classifier (preserve/manual-locked/interpolation/extrapolation/folder-fallback/
 accept-unlocated/blocked), the per-destination summary artifact (paths only for review/blocker
@@ -37,7 +37,7 @@ def _wf(tmp_path):
     ws = tmp_path / "ws"
     (ws / ".photos-ingest").mkdir(parents=True)
     (ws / ".photos-ingest" / "photos-11-handoff.json").write_text("{}")
-    wf = cal.CalibrationWorkflow(str(ws))
+    wf = cal.GeotagWorkflow(str(ws))
     wf._gpx_fingerprint = "gfp"
     return wf
 

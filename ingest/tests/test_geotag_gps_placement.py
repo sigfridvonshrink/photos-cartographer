@@ -1,4 +1,4 @@
-"""Phase 5a (calibration) — GPS placement from the GPX track at a photo's resolved UTC (spec §23
+"""Phase 5a (geotag) — GPS placement from the GPX track at a photo's resolved UTC (spec §23
 options 4/5). GPS math, so the engine gets full branch coverage: direct match, time-fraction
 interpolation (gap/distance/speed gates), and velocity extrapolation past either end. From
 conftest.py.

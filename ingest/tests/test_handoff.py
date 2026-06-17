@@ -127,7 +127,7 @@ def test_unknown_device_class_when_not_configured(tmp_path, monkeypatch):
 
 def test_handoff_written_sorted_and_deterministic(tmp_path, monkeypatch):
     """The handoff must be byte-deterministic for a given workspace state (shared contract §4):
-    routed through write_json_artifact (sort_keys), so its SHA-256 — which calibration records as a
+    routed through write_json_artifact (sort_keys), so its SHA-256 — which geotag records as a
     json_dependency over the exact bytes — does not flip spuriously. The on-disk bytes must equal the
     canonical sorted form."""
     _mock(monkeypatch)
