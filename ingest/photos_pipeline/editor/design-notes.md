@@ -16,11 +16,12 @@ is **advisory**; the loop is **edit → Save → re-run `photos-ingest geotag pl
 
 ## 2. Stack (decided)
 
-- **Local Python server**, stdlib only — an extensionless executable run directly like the pipeline
-  scripts (`ingest/decision-editor/decision-editor <workspace>`, not via `python3`): serves the SPA,
-  reads/writes the workspace's `.photos-ingest/` decision JSON, serves **photo previews** (embedded JPEG
-  via exiftool/ImageMagick — already repo deps), and offers a **Re-run calibration** action. Default with
-  no workspace = demo mode loading the `examples/` fixtures, so it runs with nothing installed.
+- **Local Python server**, stdlib only — launched as `photos-ingest edit`, which (like every phase)
+  operates on the **current-directory workspace**; there is no workspace-naming argument, and it
+  refuses to run if the cwd is not an initialized workspace. It serves the SPA, reads/writes the
+  workspace's `.photos-ingest/` decision JSON, serves **photo previews** (embedded JPEG via
+  exiftool/ImageMagick — already repo deps), and offers a **Re-run calibration** action. `--demo` is
+  the only no-workspace mode: read-only on the `examples/` fixtures, so it runs with nothing installed.
   - Ships in two forms: the readable source **`decision-editor.unbundled`** (reads `web/` + `examples/`
     from disk) and the **`decision-editor`** single file, which **`./bundle`** regenerates with those
     assets embedded inline so it runs anywhere from one copied file. `./bundle --check` fails if the
