@@ -416,9 +416,9 @@ single_anchor_auto_apply   (default false)
 multi_anchor_auto_apply    (default true)
 ```
 
-2. Other proposal classes (e.g. destination timezone) auto-resolve only if a corresponding policy flag is enabled. With no such flag, the default is conservative and the proposal keeps `requires_user_input: true`.
+2. The **destination timezone auto-resolves by default**, with no policy flag. A destination is geographically **nested** inside its parent, so it can scarcely cross a timezone boundary the parent did not — its inherited (or config-default) proposal is therefore adopted as the `effective_iana_timezone` without per-destination confirmation (`decision_mode: "auto_resolved"`, `requires_user_input: false`), while staying overridable by a manual zone (Section 18). Only a destination with **no proposal at all** (no ancestor timezone and no configured default) keeps `requires_user_input: true`. Any *other* non-anchor proposal class auto-resolves only if a corresponding policy flag is enabled; with no such flag the default is conservative and it keeps `requires_user_input: true`.
 
-The default posture is therefore conservative. A single high-confidence time-anchor proposal with `single_anchor_auto_apply` false still sets `requires_user_input: true`; likewise the destination-timezone proposal in the Section 18 example keeps `requires_user_input: true` because no timezone auto-accept policy is enabled. When a policy flag enables auto-apply for a given class, the workflow may set the effective value directly and mark that section `requires_user_input: false` with `decision_mode: "auto_resolved"`.
+The default posture for anchors and other proposal classes is therefore conservative. A single high-confidence time-anchor proposal with `single_anchor_auto_apply` false still sets `requires_user_input: true`; the destination-timezone proposal in the Section 18 example, by contrast, auto-resolves (`requires_user_input: false`, `decision_mode: "auto_resolved"`) under the nested-geography rule above. When a policy flag enables auto-apply for a given class, the workflow may set the effective value directly and mark that section `requires_user_input: false` with `decision_mode: "auto_resolved"`.
 
 This is what makes the no-op/`complete` artifact path of Sections 20.2 and 25.2 reachable: a `complete` artifact is produced only for sections that are either genuinely no-op or auto-resolved under an enabled policy flag. When auto-apply is disabled, every proposal requires confirmation and resolved UTC is not finalized until the user acts.
 
@@ -921,16 +921,16 @@ If destination timezone is unknown or ambiguous **and no ancestor destination su
 
 Resolved UTC must not be finalized for files in a destination whose timezone/time dependencies are incomplete.
 
-**Downward inheritance of the timezone proposal.** A destination whose timezone cannot be proposed on its own evidence **does not start from a blank field — it inherits, downward, as a confirmable proposal**, reusing the **same nearest-ancestor machinery** as the folder GPS fallback (Section 25.3). (The per-(camera group, destination) clock offset does **not** inherit — Section 10.2 rule 4 — so the timezone and the fallback are the only two facts that cascade down the destination tree.) The `proposed_iana_timezone` for a destination is chosen in priority order:
+**Downward inheritance of the timezone proposal.** A destination whose timezone cannot be proposed on its own evidence **does not start from a blank field — it inherits, downward, auto-adopting that proposal**, reusing the **same nearest-ancestor machinery** as the folder GPS fallback (Section 25.3). (The per-(camera group, destination) clock offset does **not** inherit — Section 10.2 rule 4 — so the timezone and the fallback are the only two facts that cascade down the destination tree.) The `proposed_iana_timezone` for a destination is chosen in priority order:
 
 1. **(a) self-proposed** — a timezone derived from **this destination's own evidence** (a native-GPS/GPX-derived zone), with the corresponding `proposal_source`. *(Not yet implemented: the code currently has no GPS-derived zone, so in practice the chain starts at (b).)*
-2. **(b) inherited** — otherwise, the destination takes the **effective timezone of the nearest ancestor destination** that has one, surfaced as a **proposal to confirm**, with `proposal_source: "inherited"` and an `inherited_from` field naming the ancestor path;
+2. **(b) inherited** — otherwise, the destination takes the **effective timezone of the nearest ancestor destination** that has one, **auto-adopted** (overridable), with `proposal_source: "inherited"` and an `inherited_from` field naming the ancestor path;
 3. **(c) config default** — otherwise, the configured global **`default_folder_timezone`** is the proposal (`proposal_source: "config_default"`). The configured default is a **global fallback, not per-destination evidence**, so it sits **below** inheritance: a nested destination prefers its nearest ancestor's confirmed timezone over the blunt global default, and only falls to the global default when no ancestor supplies one. (Putting the default above inheritance would make inheritance unreachable whenever a default is set, and would contradict the fallback model and Section 17.)
 4. **else** — no self-proposal, no ancestor timezone, and no configured default: the manual field starts blank and the destination is marked `requires_user_input`.
 
 Inheritance is **recursive down the destination tree**: a destination's *effective* timezone — however it was reached (self-proposed-and-accepted, inherited-and-confirmed, or manually set) — is the basis propagated to its immediate children, and onward. A **manual timezone set at a folder re-roots the chain** at that point: that zone becomes the folder's effective timezone and therefore the basis its descendants inherit. To compute this, destinations are processed **parent-first** (the same ordering the fallback inheritance uses), so an ancestor's effective timezone is known before any child that would inherit it is built; inheritance flows **parent → child only**, never sibling → sibling.
 
-An inherited timezone proposal is **confirmable, never auto-applied**. As a non-anchor proposal class (Section 9.1 item 2), it keeps `requires_user_input: true` by default — there is no timezone auto-accept policy. Propagation is therefore the operator accepting a sensible default at each level (a single `accept_proposed_timezone: true`, or a manual override), never a hidden cross-destination borrow: every level is confirmable and any level can diverge. The exception is a **file-less container** destination (Section 10.1): with no photos to mis-tag, its timezone **auto-resolves** from the nearest-ancestor (or config-default) proposal (`decision_mode: "auto_resolved"`, `requires_user_input: false`) rather than requiring an accept, and remains overridable by a manual zone. An inherited proposal looks like a self-proposed one but names its source ancestor:
+A timezone proposal — inherited or config-default — is **auto-applied by default**, not held for per-destination confirmation (Section 9.1 item 2). Because destinations are geographically **nested**, a child sits inside its parent and can scarcely cross a timezone boundary the parent did not, so adopting the parent's (or the global default's) zone is the right default at every level: the cell resolves with `decision_mode: "auto_resolved"` and `requires_user_input: false`, and stays fully overridable by a manual zone or an explicit `accept_proposed_timezone`. This holds for **both** real destinations and file-less containers (Section 10.1) — the latter were always auto-resolved; real destinations now are too. A manual zone set at any level **re-roots** the chain there (Section 18 recursion), and any level can still diverge by override. The **only** timezone that blocks is a destination with no proposal at all — no ancestor timezone and no configured default — which keeps `requires_user_input: true` (priority item 4). An inherited proposal looks like a self-proposed one but names its source ancestor:
 
 ```json
 {
@@ -941,9 +941,10 @@ An inherited timezone proposal is **confirmable, never auto-applied**. As a non-
     "inherited_from": "6-photos-by-dest/Belgium/Brussels",
     "proposal_confidence": "review_required",
     "user_decision": { "manual_iana_timezone": "", "accept_proposed_timezone": false },
-    "effective_iana_timezone": "",
-    "requires_user_input": true,
-    "stale_user_decision": false
+    "effective_iana_timezone": "Europe/Brussels",
+    "requires_user_input": false,
+    "stale_user_decision": false,
+    "decision_mode": "auto_resolved"
   }
 }
 ```
