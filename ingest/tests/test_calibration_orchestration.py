@@ -187,9 +187,9 @@ def _accept_tz(ctl):
 
 def test_complete_run_writes_photos22_then_bad_coord_aborts(tmp_path, monkeypatch, capsys):
     ws, ctl = _completable_ws(tmp_path)
-    assert _run(monkeypatch, ws) == 0                              # run 1: timezone needs accepting
-    _accept_tz(ctl)
-    assert _run(monkeypatch, ws) == 0                              # run 2: complete -> writes photos-22
+    # The timezone auto-resolves (config default, inherited down the nested geography) and the GPX
+    # anchor auto-resolves the offset, so a single run reaches status=complete and writes photos-23.
+    assert _run(monkeypatch, ws) == 0
     out = capsys.readouterr().out
     assert "Wrote photos-23-gps-decisions.json" in out
     gps = json.load(open(ctl / "photos-23-gps-decisions.json"))

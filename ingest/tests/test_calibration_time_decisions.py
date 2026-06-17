@@ -158,8 +158,9 @@ def test_depends_on_reverifies(tmp_path, monkeypatch):
 
 
 def test_timezone_proposal_inherits_nearest_resolved_ancestor():
-    """A destination's timezone proposal prefers the nearest RESOLVED ancestor's timezone (confirmable)
-    over the generic global default; a destination with no ancestor tz falls back to the default."""
+    """A destination's timezone proposal prefers the nearest RESOLVED ancestor's timezone over the
+    generic global default; an inherited (or config-default) proposal auto-resolves without per-
+    destination confirmation (nested geography), staying overridable."""
     utils.CONFIG["camera_time_and_timezone_policy"]["default_folder_timezone"] = "Europe/Brussels"
     wf = cal.CalibrationWorkflow("/tmp/ws")
     blk = []
@@ -168,14 +169,22 @@ def test_timezone_proposal_inherits_nearest_resolved_ancestor():
     inh = cal._nearest_ancestor("6-photos-by-dest/Japan/Kyoto", eff_tz, "tz")
     child = wf._timezone_decision("6-photos-by-dest/Japan/Kyoto", {}, blk, inh)
     assert child["proposed_iana_timezone"] == "Asia/Tokyo"
-    assert child["proposal_source"] == "inherited" and child["proposal_confidence"] == "review_required"
+    assert child["proposal_source"] == "inherited"
     assert child["inherited_from"] == "6-photos-by-dest/Japan"
-    assert child["requires_user_input"] is True            # inherited is confirmable, never auto-applied
-    # accepting the inherited proposal resolves it
-    accepted = wf._timezone_decision("6-photos-by-dest/Japan/Kyoto",
-                                     {"user_decision": {"accept_proposed_timezone": True}}, blk, inh)
-    assert accepted["effective_iana_timezone"] == "Asia/Tokyo"
-    # no ancestor tz -> the global default proposal
+    # inherited auto-resolves: effective set, no input demanded, marked auto_resolved
+    assert child["effective_iana_timezone"] == "Asia/Tokyo"
+    assert child["requires_user_input"] is False
+    assert child["decision_mode"] == "auto_resolved"
+    # a manual override still wins over the auto-adopted inheritance
+    overridden = wf._timezone_decision("6-photos-by-dest/Japan/Kyoto",
+                                       {"user_decision": {"manual_iana_timezone": "America/New_York"}}, blk, inh)
+    assert overridden["effective_iana_timezone"] == "America/New_York" and "decision_mode" not in overridden
+    # no ancestor tz -> the global default proposal, also auto-resolved
     top = wf._timezone_decision("6-photos-by-dest/Belgium", {}, blk, None)
     assert top["proposed_iana_timezone"] == "Europe/Brussels" and top["proposal_source"] == "config_default"
+    assert top["effective_iana_timezone"] == "Europe/Brussels" and top["requires_user_input"] is False
     assert "inherited_from" not in top
+    # no proposal at all (no ancestor, no default) -> blank, blocks
+    utils.CONFIG["camera_time_and_timezone_policy"]["default_folder_timezone"] = None
+    blank = wf._timezone_decision("6-photos-by-dest/Belgium", {}, blk, None)
+    assert blank["effective_iana_timezone"] == "" and blank["requires_user_input"] is True
