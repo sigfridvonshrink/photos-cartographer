@@ -62,7 +62,7 @@ def _machine_ip():
     finally:
         s.close()
 
-# The editor lives inside the photos_pipeline package; calibration re-run self-invokes the combined
+# The editor lives inside the photos_pipeline package; geotag re-run self-invokes the combined
 # CLI (`python -m photos_pipeline geotag plan`) — works from a checkout and from inside the shipped
 # zipapp. PKG_ROOT is the sys.path entry that holds the package: a checkout's ingest/, or the .pyz file
 # itself (so a subprocess `python -m photos_pipeline …` imports it).
@@ -200,8 +200,8 @@ def _example_json(name):
         return {"_error": f"could not parse {name}: {e}"}
 
 
-def _calibration_cmd_env():
-    """The argv + env to re-run calibration: self-invoke the combined CLI `python -m photos_pipeline
+def _geotag_cmd_env():
+    """The argv + env to re-run geotag: self-invoke the combined CLI `python -m photos_pipeline
     geotag plan` with PKG_ROOT on PYTHONPATH, so it imports the package whether that root is a
     checkout's ingest/ or the shipped .pyz — and regardless of the editor's cwd."""
     env = os.environ.copy()
@@ -210,24 +210,24 @@ def _calibration_cmd_env():
 
 
 def _environment(workspace):
-    """Folder dependencies calibration needs that may live on a different machine than this editor.
+    """Folder dependencies geotag needs that may live on a different machine than this editor.
 
-    The calibration pipeline ships in the same package as this editor, so it is always runnable. The
+    The geotag pipeline ships in the same package as this editor, so it is always runnable. The
     one external dependency is the configured `gpx_root`, which GPX time-anchoring reads and which can
     be a mount visible only on the workspace's own host: re-running without it would regenerate the
     time/GPS decisions as if there were no GPX, silently discarding good offsets/placements. It is
-    resolved from the workspace config (`photos-00-config.json`) the way calibration resolves it
+    resolved from the workspace config (`photos-00-config.json`) the way geotag resolves it
     (`photos_utils.selected_gpx_root`); an EMPTY gpx_root means 'no GPX configured' and does not block.
     The Re-run button (and `_rerun`) gate on `deps_ok`; `missing` names each absent dependency."""
     missing = []
-    calibration_present = True               # calibration is a sibling module in this package
+    geotag_present = True               # geotag is a sibling module in this package
     cfg = _read_json(os.path.join(workspace, CONTROL, CONFIG_NAME))
     root = (cfg or {}).get("gpx_root") or "" if isinstance(cfg, dict) else ""
     resolved = os.path.realpath(os.path.abspath(root)) if root else ""
     gpx_available = (not resolved) or os.path.isdir(resolved)
     if not gpx_available:
         missing.append(f"gpx_root ({resolved})")
-    return {"calibration_present": calibration_present,
+    return {"geotag_present": geotag_present,
             "gpx_root": resolved, "gpx_configured": bool(resolved),
             "gpx_available": gpx_available, "deps_ok": not missing, "missing": missing}
 
@@ -257,7 +257,7 @@ def _write_json(path, obj):
 
 def _apply_edits(art, edits):
     """Apply each edit's `user_decision` to the matching cell in `art`, in place. ONLY `user_decision`
-    is ever written — every other field is left exactly as calibration produced it, so the round-trip
+    is ever written — every other field is left exactly as geotag produced it, so the round-trip
     conforms regardless of what the client sent. Returns the count applied."""
     applied = 0
     dests = (art or {}).get("destinations") or {}
@@ -304,22 +304,22 @@ def _save(workspace, payload):
 
 def _rerun(workspace):
     """Re-run `photos-ingest geotag plan` against the workspace, regenerating the authoritative artifacts
-    from the saved decisions. Calibration takes the workspace as its CWD and owns its own WorkspaceLock
-    (separate from the editor lock), so a concurrent calibration is reported, not forced. Returns the
+    from the saved decisions. Geotag takes the workspace as its CWD and owns its own WorkspaceLock
+    (separate from the editor lock), so a concurrent geotag is reported, not forced. Returns the
     process outcome; the client reloads /api/artifacts on success. Mutates nothing here — `run` only
     plans (no writes to originals)."""
     env = _environment(workspace)        # gate: never recalc without the pipeline + its data on this host
     if not env["deps_ok"]:
-        return {"ok": False, "error": "calibration cannot run on this machine — missing: "
+        return {"ok": False, "error": "geotag cannot run on this machine — missing: "
                 + ", ".join(env["missing"]) + ". Run the editor on the host that has the pipeline and its data."}
-    cmd, run_env = _calibration_cmd_env()
+    cmd, run_env = _geotag_cmd_env()
     try:
         proc = subprocess.run(cmd, cwd=workspace, env=run_env,
                               capture_output=True, text=True, timeout=RERUN_TIMEOUT_S)
     except subprocess.TimeoutExpired:
-        return {"ok": False, "error": f"calibration timed out after {RERUN_TIMEOUT_S}s"}
+        return {"ok": False, "error": f"geotag timed out after {RERUN_TIMEOUT_S}s"}
     except OSError as e:
-        return {"ok": False, "error": f"could not start calibration: {e}"}
+        return {"ok": False, "error": f"could not start geotag: {e}"}
     # Tail the output so a huge log can't bloat the response; the exit code is the source of truth
     # (0 = planned, 2 = blockers/unknown groups, 1 = workspace locked — see photos-2-time-gps main()).
     return {"ok": proc.returncode == 0, "returncode": proc.returncode,

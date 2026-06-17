@@ -23,7 +23,7 @@ and the code is expected to follow them. When changing behavior, update the gove
 ## Contents
 
 - `photos_pipeline/` — the pipeline package: `photos_1_prep.py` (Phase 1 prep; subcommands
-  `plan` / `dry-run` / `execute`), `photos_2_time_gps.py` (Phase 2 calibration), `photos_3_merge.py`
+  `plan` / `dry-run` / `execute`), `photos_2_time_gps.py` (Phase 2 geotag), `photos_3_merge.py`
   (Phase 3 merge), and `photos_utils.py` (shared `CONFIG` template + utilities, imported
   package-relatively). Run a phase from a checkout with `python3 -m photos_pipeline.photos_1_prep plan`
   (with `ingest/` on `PYTHONPATH`); shipped detached as three executable zipapps named
@@ -57,6 +57,6 @@ python3 -m pytest -q
 ## History
 
 This pipeline was split out of an earlier monolithic `photos-ingest` prototype. That prototype, the
-phase-gated reengineering specs, and the original calibration/merge tests have since been removed — their
+phase-gated reengineering specs, and the original geotag/merge tests have since been removed — their
 behavior now lives in `photos-1-prep`, `photos-2-time-gps`, and `photos-3-merge`, governed by the
 `workflows/` specifications.

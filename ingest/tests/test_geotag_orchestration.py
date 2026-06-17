@@ -1,4 +1,4 @@
-"""Calibration — orchestration + edge-branch coverage for photos-2-time-gps: the run()/main CLI
+"""Geotag — orchestration + edge-branch coverage for photos-2-time-gps: the run()/main CLI
 error & exit paths (lock contention, unreadable/invalid config & handoff, blocker reports, the GPS
 bad-coord abort), and a few helper edge branches (scans, malformed handoff records, timezone manual/
 stale, _valid_iana). Complements the per-stage suites. From conftest.py.
@@ -95,7 +95,7 @@ def test_valid_iana_true_and_false():
 def test_timezone_manual_valid_and_accept_without_proposal(tmp_path):
     ws, ctl = _init_ws(tmp_path)
     (ctl / "photos-11-handoff.json").write_text("{}")
-    wf = cal.CalibrationWorkflow(str(ws))
+    wf = cal.GeotagWorkflow(str(ws))
     # a valid manual override -> effective = the manual zone
     blk = []
     tz = wf._timezone_decision("d", {"user_decision": {"manual_iana_timezone": "Europe/Paris"}}, blk)
@@ -109,7 +109,7 @@ def test_timezone_manual_valid_and_accept_without_proposal(tmp_path):
 def test_build_file_model_tolerates_malformed_records(tmp_path):
     ws, ctl = _init_ws(tmp_path)
     (ctl / "photos-11-handoff.json").write_text("{}")
-    wf = cal.CalibrationWorkflow(str(ws))
+    wf = cal.GeotagWorkflow(str(ws))
     wf.handoff = {"files": [
         {"relative_path": "6-photos-by-dest/T/a.jpg", "media_class": "image",
          "folder_class": "6-photos-by-dest", "content_hash": "{not json",      # bad content_hash
@@ -124,7 +124,7 @@ def test_build_file_model_tolerates_malformed_records(tmp_path):
 
 def test_scans_handle_missing_folder_and_dotfiles(tmp_path):
     ws, ctl = _init_ws(tmp_path)
-    wf = cal.CalibrationWorkflow(str(ws))
+    wf = cal.GeotagWorkflow(str(ws))
     # a dotfile is skipped by the media scan; a non-existent subfolder yields nothing
     (ws / "5-photos-by-date" / ".DS_Store").write_text("x")
     (ws / "5-photos-by-date" / "real.jpg").write_bytes(b"x")
@@ -224,7 +224,7 @@ def test_corrupt_prior_time_decisions_tolerated(tmp_path, monkeypatch):
 
 def test_recognize_camera_groups_records_timestamps(tmp_path):
     ws, ctl = _init_ws(tmp_path)
-    wf = cal.CalibrationWorkflow(str(ws))
+    wf = cal.GeotagWorkflow(str(ws))
     utils.CONFIG["camera_time_and_timezone_policy"]["device_groups"] = {"fixed_clock_cameras": [CAM], "phones": []}
     files = [{"camera_group_key": CAM, "destination": "6-photos-by-dest/T", "has_native_gps": False,
               "has_timestamp": True, "source_naive_time": "2024:07:03 14:00:00", "camera_identity": {}},
@@ -249,7 +249,7 @@ def test_sealed_workspace_with_dump_warns_and_blocks(tmp_path, monkeypatch, caps
     assert "SEALED" in err and "likely new dump" in err           # the warning loop printed
     # a sealed but otherwise-clean workspace blocks WITHOUT the dump warning
     os.remove(ws / "loose.jpg")
-    wf = cal.CalibrationWorkflow(str(ws))
+    wf = cal.GeotagWorkflow(str(ws))
     blk, warn, _ = wf.preflight()
     assert any("SEALED" in b for b in blk) and not warn
 
@@ -259,9 +259,9 @@ def test_unknown_group_aborts_before_gpx_ingest(tmp_path, monkeypatch):
     # abort costs no GPX I/O (the next run re-ingests GPX only once recognition passes).
     ws, ctl = _completable_ws(tmp_path)
     called = []
-    monkeypatch.setattr(cal.CalibrationWorkflow, "recognize_camera_groups",
+    monkeypatch.setattr(cal.GeotagWorkflow, "recognize_camera_groups",
                         lambda self, files: ({}, ["SONY|ILCE-7|unclassified"]))
-    monkeypatch.setattr(cal.CalibrationWorkflow, "load_gpx",
+    monkeypatch.setattr(cal.GeotagWorkflow, "load_gpx",
                         lambda self: called.append(1))
     assert _run(monkeypatch, ws) == 2          # unknown group -> abort
     assert called == []                        # GPX ingest never reached
@@ -285,7 +285,7 @@ def test_unknown_group_template_is_valid_full_json(tmp_path, monkeypatch, capsys
 
     assert _run(monkeypatch, ws) == 2
     err = capsys.readouterr().err
-    block = err[err.index('  "phones":'):err.index("\n\nNo calibration")]
+    block = err[err.index('  "phones":'):err.index("\n\nNo geotag")]
     tmpl = json.loads("{" + block + "}")                     # parses iff no trailing comma
     assert NEW in tmpl["phones"]                             # new group offered in both arrays
     assert NEW in tmpl["fixed_clock_cameras"]

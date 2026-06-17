@@ -1,4 +1,4 @@
-"""Phase 6c-1 (calibration) — the `execute` subcommand (§29): apply photos-23, verify content
+"""Phase 6c-1 (geotag) — the `execute` subcommand (§29): apply photos-23, verify content
 fingerprints, journal/resume, write photos-24. exiftool + fingerprint are mocked (the suite mocks
 all external tools), so the executor logic is driven deterministically. From conftest.py.
 """
@@ -76,7 +76,7 @@ def _ready_ws(tmp_path, monkeypatch, *, zfs=None):
 
 
 def _mock_tools(monkeypatch, ws, *, write_ok=True, content_changed=False):
-    monkeypatch.setattr(cal.CalibrationWorkflow, "_exiftool_write",
+    monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write",
                         lambda self, p, tags: write_ok)
 
     def fp(path):
@@ -182,7 +182,7 @@ def test_missing_plan_errors(tmp_path, monkeypatch):
 # --- no-clobber recheck + determinism (unit) --------------------------------
 
 def test_target_occupied_recheck(tmp_path):
-    wf = cal.CalibrationWorkflow(str(tmp_path))
+    wf = cal.GeotagWorkflow(str(tmp_path))
     (tmp_path / "A.JPG").write_text("x")
     assert wf._target_occupied(str(tmp_path), "a.jpg", "src.arw") is True      # case-insensitive
     assert wf._target_occupied(str(tmp_path), "b.jpg", "src.arw") is False
@@ -192,7 +192,7 @@ def test_target_occupied_recheck(tmp_path):
 # --- unit: _exiftool_write seam --------------------------------------------
 
 def test_exiftool_write_invocation(tmp_path, monkeypatch):
-    wf = cal.CalibrationWorkflow(str(tmp_path))
+    wf = cal.GeotagWorkflow(str(tmp_path))
     calls = {}
 
     class _R:
@@ -213,7 +213,7 @@ def test_exiftool_write_invocation(tmp_path, monkeypatch):
 def test_exiftool_write_unlinks_stale_tmp(tmp_path, monkeypatch):
     """A hard-killed prior write can orphan `<file>_exiftool_tmp`; the writer removes it for THIS
     target before re-invoking exiftool, so the resumed write never trips over the leftover."""
-    wf = cal.CalibrationWorkflow(str(tmp_path))
+    wf = cal.GeotagWorkflow(str(tmp_path))
     target = tmp_path / "x.jpg"
     target.write_bytes(b"orig")
     stale = tmp_path / "x.jpg_exiftool_tmp"
@@ -229,7 +229,7 @@ def test_exiftool_write_unlinks_stale_tmp(tmp_path, monkeypatch):
 
 def test_exiftool_write_no_tmp_is_noop(tmp_path, monkeypatch):
     """The unlink is best-effort: a missing temp (the normal case) is not an error."""
-    wf = cal.CalibrationWorkflow(str(tmp_path))
+    wf = cal.GeotagWorkflow(str(tmp_path))
     class _R:
         returncode = 0
     monkeypatch.setattr(cal.subprocess, "run", lambda cmd, **k: _R())
@@ -237,7 +237,7 @@ def test_exiftool_write_no_tmp_is_noop(tmp_path, monkeypatch):
 
 
 def test_target_occupied_bad_directory(tmp_path):
-    wf = cal.CalibrationWorkflow(str(tmp_path))
+    wf = cal.GeotagWorkflow(str(tmp_path))
     assert wf._target_occupied(str(tmp_path / "nope"), "a.jpg", "s.jpg") is False  # listdir OSError -> False
 
 
@@ -249,9 +249,9 @@ def _op(oid, typ, rel, **extra):
 
 
 def test_apply_file_precondition_and_resume_branches(tmp_path, monkeypatch):
-    wf = cal.CalibrationWorkflow(str(tmp_path))
+    wf = cal.GeotagWorkflow(str(tmp_path))
     p = tmp_path / "f.arw"; p.write_bytes(b"data")
-    monkeypatch.setattr(cal.CalibrationWorkflow, "_exiftool_write", lambda self, path, t: True)
+    monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", lambda self, path, t: True)
     # already confirmed -> skipped (no stat, no write)
     r = wf._apply_file("f.arw", [_op("oC", "metadata_time_write", "f.arw")], {"oC": "confirmed"}, set())
     assert r["skipped"] == ["oC"]
@@ -272,7 +272,7 @@ def test_apply_file_precondition_and_resume_branches(tmp_path, monkeypatch):
 
 
 def test_apply_file_rename_skip_and_failure(tmp_path, monkeypatch):
-    wf = cal.CalibrationWorkflow(str(tmp_path))
+    wf = cal.GeotagWorkflow(str(tmp_path))
     p = tmp_path / "a.arw"; p.write_bytes(b"x")
     ren = _op("oR", "rename_no_clobber", "a.arw", **{"from": "a.arw", "to": "b.arw"})
     # rename already confirmed -> skipped (file not moved)
@@ -286,7 +286,7 @@ def test_apply_file_rename_skip_and_failure(tmp_path, monkeypatch):
 
 def test_revalidate_detects_each_stale_input(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
-    wf = cal.CalibrationWorkflow(str(ws)); wf.preflight(for_execute=True)
+    wf = cal.GeotagWorkflow(str(ws)); wf.preflight(for_execute=True)
     plan = json.load(open(ctl / "photos-24-executable-plan.json"))
     gpx = cal.GPXIndex(cal.selected_gpx_root()).build()
     assert wf.revalidate_plan(plan, gpx) == []                        # fresh -> nothing stale
@@ -324,7 +324,7 @@ def test_apply_file_already_renamed_resumes_without_journal(tmp_path):
     """A crashed prior run that already renamed the file (source gone, planned target present) is
     detected by state and skipped on resume — even with an empty/lost journal — rather than blocking
     on the missing source (§29.1.3)."""
-    wf = cal.CalibrationWorkflow(str(tmp_path))
+    wf = cal.GeotagWorkflow(str(tmp_path))
     (tmp_path / "b.arw").write_bytes(b"x")                            # already at its planned target
     ops = [_op("oM", "metadata_time_write", "a.arw", pre={"content_fingerprint": "fp"},
                writes={"DateTimeOriginal": "x"}),
@@ -355,7 +355,7 @@ def test_execute_on_sealed_workspace_warns_and_blocks(tmp_path, monkeypatch):
 def test_summary_keeps_run_metadata_separate(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)
-    wf = cal.CalibrationWorkflow(str(ws)); wf.preflight(for_execute=True)
+    wf = cal.GeotagWorkflow(str(ws)); wf.preflight(for_execute=True)
     s = wf.execute_plan(1, "2024-07-03T00:00:00Z", "exec-1")
     # the volatile bits (timestamps, execution id, jobs) live ONLY in run_metadata, off the
     # fingerprint-bearing body (summarizes / totals / plan_id), per §29.2.
@@ -386,7 +386,7 @@ def test_execute_records_zfs_snapshot(tmp_path, monkeypatch):
     _mock_tools(monkeypatch, ws); _mock_zfs(monkeypatch)
     assert _execute(monkeypatch, ws) == 0
     s = _summary(ctl)
-    assert s["snapshot"]["ok"] and s["snapshot"]["snapshot_name"] == f"pool/ws@px-calibrate-{s['plan_id']}"
+    assert s["snapshot"]["ok"] and s["snapshot"]["snapshot_name"] == f"pool/ws@px-geotag-{s['plan_id']}"
 
 
 def test_execute_aborts_when_required_snapshot_fails(tmp_path, monkeypatch):
@@ -455,13 +455,13 @@ def test_summary_grouped_by_destination(tmp_path, monkeypatch):
 
 
 def test_noop_reprep_does_not_restale_plan(tmp_path, monkeypatch):
-    """A no-op prep re-run refreshes only the handoff's run_metadata (and its byte layout); calibration
+    """A no-op prep re-run refreshes only the handoff's run_metadata (and its byte layout); geotag
     depends on the handoff CONTENT fingerprint, so the plan must NOT restale — but a real content change
     (the inventory) does (§16)."""
     import photos_utils as u
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)
-    wf = cal.CalibrationWorkflow(str(ws)); wf.preflight(for_execute=True)
+    wf = cal.GeotagWorkflow(str(ws)); wf.preflight(for_execute=True)
     plan = json.load(open(ctl / "photos-24-executable-plan.json"))
     gpx = cal.GPXIndex(cal.selected_gpx_root()).build()
     assert wf.revalidate_plan(plan, gpx) == []                            # fresh

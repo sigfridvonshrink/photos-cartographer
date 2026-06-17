@@ -2,7 +2,7 @@
 
 > **NON-AUTHORITATIVE.** Design/UX decisions for the decision-editing app, recorded so the build has a
 > shared picture. The JSON it edits is described in `decision-json-reference.md`; the authoritative
-> behaviour is the calibration code (`../photos-2-time-gps`). These notes are a plan, not a contract.
+> behaviour is the geotag code (`../photos-2-time-gps`). These notes are a plan, not a contract.
 
 ## 1. What it is
 
@@ -11,7 +11,7 @@ A small single-page app that helps a human resolve the open decisions in a works
 it surfaces a to-do list, shows each decision's proposal + evidence, captures a choice, validates it,
 and writes back. Its **only hard requirement is conforming output** (see the reference's "conformance
 contract"): it edits **only `user_decision`**, round-trips everything else, and never recomputes
-`proposal`/`effective_*`/`status` — calibration does that on the next run. Any in-app outcome it shows
+`proposal`/`effective_*`/`status` — geotag does that on the next run. Any in-app outcome it shows
 is **advisory**; the loop is **edit → Save → re-run `photos-ingest geotag plan` → reload**.
 
 ## 2. Stack (decided)
@@ -20,7 +20,7 @@ is **advisory**; the loop is **edit → Save → re-run `photos-ingest geotag pl
   operates on the **current-directory workspace**; there is no workspace-naming argument, and it
   refuses to run if the cwd is not an initialized workspace. It serves the SPA, reads/writes the
   workspace's `.photos-ingest/` decision JSON, serves **photo previews** (embedded JPEG via
-  exiftool/ImageMagick — already repo deps), and offers a **Re-run calibration** action. `--demo` is
+  exiftool/ImageMagick — already repo deps), and offers a **Re-run geotag** action. `--demo` is
   the only no-workspace mode: read-only on the `examples/` fixtures, so it runs with nothing installed.
   - Ships in two forms: the readable source **`decision-editor.unbundled`** (reads `web/` + `examples/`
     from disk) and the **`decision-editor`** single file, which **`./bundle`** regenerates with those
@@ -71,7 +71,7 @@ then the proposal evidence last; non-coord cells just show the proposal.
   changed, a **stale** banner on both views reminds you a Re-run is needed before GPS reflects it (tracked
   by `timeChangedSinceRerun`, cleared on Re-run). Both notices are skipped in demo mode (its curated
   fixtures intentionally pair an incomplete time artifact with a GPS one).
-- **Drift view + GPS-depends-on-drift gate.** A third view (`photos-22-gps-drift-validation.json`, calibration
+- **Drift view + GPS-depends-on-drift gate.** A third view (`photos-22-gps-drift-validation.json`, geotag
   workflow §22a) sits between Time and GPS. It lists the **at-risk buckets** — a manual/timezone-derived
   clock offset with no native-GPS anchor — that GPX *can* validate, and must be confirmed before GPS is
   placed (an unconfirmed bucket could silently mis-place a whole batch along the track). It is gated behind
@@ -101,10 +101,10 @@ then the proposal evidence last; non-coord cells just show the proposal.
   path and showing that photo's camera time → **corrected local time** (via the destination timezone,
   with the usual "set the timezone" nudge when unresolved) — plus a note counting frames skipped (no
   nearby track / a track only from another trip). The data comes from the proposal's `groups`/`skipped`
-  (calibration); the editor only renders it. The camera and corrected sides are formatted **identically**
+  (geotag); the editor only renders it. The camera and corrected sides are formatted **identically**
   (`DD Mon YYYY` + `HH:MM:SS`); when the date is unchanged it's shown once and the arrow carries only the
   time correction (`22 Mar 2026 · 13:25:21 → 13:24:18 (Europe/Brussels)`).
-- **Status is edit-aware.** The status chip normally reflects the last calibration run (`needs input` /
+- **Status is edit-aware.** The status chip normally reflects the last geotag run (`needs input` /
   `stale` / `auto` / `resolved`), but a **pending edit supersedes it**: once your working decision would
   resolve the cell (mirroring the §6 resolution rules) it shows `resolved` next to the `edited` chip
   rather than the now-stale `needs input` — advisory until Re-run, like the effective-outcome preview.
@@ -125,7 +125,7 @@ then the proposal evidence last; non-coord cells just show the proposal.
     anchor photo: `camera local → corrected local (tz, UTC …)` — same compact format as the proposal
     groups (one date copy when invariant; UTC in parens after), with a no-anchor fallback (offset +
     formula). A small "clear"
-    returns the cell to unset (calibration auto-resolves / inherits). The picker writes the derived
+    returns the cell to unset (geotag auto-resolves / inherits). The picker writes the derived
     offset, so `manual_real_utc` isn't persisted by the editor (a hand-edited one is still honored). The
     *accept* row notes the proposal's source (`from timezone <tz>` for a `timezone_naive` proposal); when
     there's no proposal at all the editor says to set the destination timezone and Re-run to derive one
@@ -167,7 +167,7 @@ then the proposal evidence last; non-coord cells just show the proposal.
       `photos-23` artifact carries no track/anchor/candidate for it. The crosshair pick + photo are the
       manual-placement aid; the fallback pins are the only positional evidence the artifact provides.*
 - **Validation** mirrors the reference (IANA tz, offset ±86400, ISO-UTC, lat/lon ranges); invalid input is
-  blocked client-side so calibration never rejects the save.
+  blocked client-side so geotag never rejects the save.
 
 ## 5. Build plan (phased)
 
@@ -180,21 +180,21 @@ then the proposal evidence last; non-coord cells just show the proposal.
    path-safe, workspace-only), for GPS cells. (Track/anchors/ghost dropped — not in the GPS artifact for
    review items; see §4.)
 3. **Persist + loop (done):** **Save** (write `user_decision` back, round-tripping the rest) plus
-   **Re-run** — `POST /api/rerun` invokes `photos-ingest geotag plan` (workspace as CWD; calibration owns its
+   **Re-run** — `POST /api/rerun` invokes `photos-ingest geotag plan` (workspace as CWD; geotag owns its
    own `WorkspaceLock`, separate from the editor lock) and, on success, reloads the regenerated
    authoritative artifacts. Re-run acts on the *saved* decisions, so it's disabled while there are
    unsaved/invalid edits (save first); its outcome — exit code + stderr/stdout tail — shows in a
-   dismissible banner. **Re-run is also gated on calibration's dependencies being present on the host
-   running the editor** — two of them: the **pipeline script** (`CALIBRATE`, expected beside the editor;
+   dismissible banner. **Re-run is also gated on geotag's dependencies being present on the host
+   running the editor** — two of them: the **pipeline script** (`GEOTAG`, expected beside the editor;
    the single-file bundle does not embed it, so a copy taken away from the repo can't re-run), and the
    configured **`gpx_root`** (a mount that may live only on the workspace's own host — re-running without
    it would regenerate the time/GPS decisions as if there were no GPX, silently discarding good offsets
    and placements). So `/api/artifacts` returns an `environment` block (`_environment`: `os.path.isfile`
-   on `CALIBRATE`; `gpx_root` resolved from `photos-00-config.json` the way `selected_gpx_root` does and
+   on `GEOTAG`; `gpx_root` resolved from `photos-00-config.json` the way `selected_gpx_root` does and
    `os.path.isdir`-checked — an empty `gpx_root` means "no GPX configured" and does not gate). When any
    dependency is missing the Re-run button is **disabled with a tooltip** naming it (from `missing[]`),
    and `_rerun` refuses server-side too (defence in depth) — editing and Save stay available so decisions
-   can be prepared anywhere and calibrated on the right host. No other dependencies exist today. Plus the **advisory live inheritance preview** for the time tree (§4): a timezone
+   can be prepared anywhere and geotagged on the right host. No other dependencies exist today. Plus the **advisory live inheritance preview** for the time tree (§4): a timezone
    with no own decision shows, badged `inherited ⟵ <ancestor>`, the value it would inherit from its
    nearest resolved ancestor, updating as you edit ancestors — display-only, authoritative on the next
    Re-run. (Offsets do **not** inherit — they are per-date buckets resolved from a GPX self-anchor or the

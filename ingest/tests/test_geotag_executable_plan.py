@@ -1,4 +1,4 @@
-"""Phase 6b (calibration) — photos-24-executable-plan.json (§28): the per-file operation builder,
+"""Phase 6b (geotag) — photos-24-executable-plan.json (§28): the per-file operation builder,
 the readiness gate, and the deterministic plan + dependency cascade. Op logic at full coverage.
 From conftest.py.
 """
@@ -109,7 +109,7 @@ def _wf(tmp_path, *, files, time_status="complete", gps_status="complete", tz="E
     (ctl / "photos-22-gps-drift-validation.json").write_text(
         json.dumps({"status": "complete", "destinations": {}}))
     (ctl / "photos-23-gps-decisions.json").write_text(json.dumps(gps_art))
-    wf = cal.CalibrationWorkflow(str(ws))
+    wf = cal.GeotagWorkflow(str(ws))
     wf.handoff = {"cache_fingerprint": "pcf"}
     wf._gpx_fingerprint = "gfp"
     return wf, time_art, gps_art

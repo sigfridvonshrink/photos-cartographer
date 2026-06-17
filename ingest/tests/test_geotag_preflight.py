@@ -1,6 +1,6 @@
-"""Phase 1 (calibration) — Stage-1 preflight (photos-2-time-gps, spec §7/§13).
+"""Phase 1 (geotag) — Stage-1 preflight (photos-2-time-gps, spec §7/§13).
 
-The lifecycle guards + by-dest scope/re-prep gates that must pass before calibration runs. No
+The lifecycle guards + by-dest scope/re-prep gates that must pass before geotag runs. No
 JSON artifacts are produced. photos_2_time_gps / photos_utils come from conftest.py.
 """
 import json
@@ -43,7 +43,7 @@ def _ws(tmp_path, *, guard=True, sealed=False, config=True, handoff=True,
 
 
 def _pf(ws):
-    return cal.CalibrationWorkflow(str(ws)).preflight()
+    return cal.GeotagWorkflow(str(ws)).preflight()
 
 
 # --- happy path --------------------------------------------------------------
@@ -137,7 +137,7 @@ def test_dev_subfolder_blocks_at_execute(tmp_path):
     # because the breakout moved no planned file).
     ws = _ws(tmp_path)
     (ws / "6-photos-by-dest" / "Trip" / "jpg").mkdir()
-    blockers, _, _ = cal.CalibrationWorkflow(str(ws)).preflight(for_execute=True)
+    blockers, _, _ = cal.GeotagWorkflow(str(ws)).preflight(for_execute=True)
     assert any("Development has already started" in b for b in blockers), blockers
 
 
@@ -146,7 +146,7 @@ def test_execute_preflight_still_skips_planning_scope_gates(tmp_path):
     # planning-only scope gate (a leftover in 0-sources) must NOT block execute.
     ws = _ws(tmp_path)
     (ws / "0-sources" / "leftover.jpg").write_bytes(b"x")
-    blockers, _, _ = cal.CalibrationWorkflow(str(ws)).preflight(for_execute=True)
+    blockers, _, _ = cal.GeotagWorkflow(str(ws)).preflight(for_execute=True)
     assert not any("0-sources/ is not empty" in b for b in blockers), blockers
 
 
@@ -196,7 +196,7 @@ def _main(monkeypatch, ws):
 
 def test_main_clean_passes_and_holds_lock(tmp_path, monkeypatch, capsys):
     # The minimal fixture's handoff records carry no folder_class/metadata, so the by-dest model
-    # is empty here (the rich model path is exercised in test_calibration_model.py). Preflight
+    # is empty here (the rich model path is exercised in test_geotag_model.py). Preflight
     # passes and main() advances into the Stage 2-4 build, holding the lock throughout.
     code = _main(monkeypatch, _ws(tmp_path))
     out = capsys.readouterr()
@@ -208,14 +208,14 @@ def test_main_clean_passes_and_holds_lock(tmp_path, monkeypatch, capsys):
 def test_main_blocker_exits_2(tmp_path, monkeypatch, capsys):
     code = _main(monkeypatch, _ws(tmp_path, guard=False))
     assert code == 2
-    assert "Calibration cannot proceed" in capsys.readouterr().err
+    assert "Geotag cannot proceed" in capsys.readouterr().err
 
 
 def test_preflight_writes_no_json(tmp_path):
     ws = _ws(tmp_path)
     _pf(ws)
     arts = [f for f in os.listdir(ws / ".photos-ingest") if f.startswith("photos-2")]
-    assert arts == []                                        # no calibration JSON in preflight
+    assert arts == []                                        # no geotag JSON in preflight
 
 
 def test_missing_managed_folder_blocks(tmp_path):

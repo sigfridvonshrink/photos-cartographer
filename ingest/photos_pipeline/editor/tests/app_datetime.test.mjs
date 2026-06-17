@@ -16,7 +16,7 @@ test("datetime-local parse (seconds optional, treated as UTC wall time)", () => 
   assert.equal(app.dtLocalToMs("garbage"), null);
 });
 
-test("offset derives as real_utc − camera_naive (matches the calibration script)", () => {
+test("offset derives as real_utc − camera_naive (matches the geotag script)", () => {
   const cam = app.camNaiveMs("2026:03:22 14:25:21");
   const real = app.utcStrToMs("2026-03-22T13:25:21Z");
   assert.equal(Math.round((real - cam) / 1000), -3600);   // camera 1h ahead of UTC

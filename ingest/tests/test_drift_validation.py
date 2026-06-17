@@ -1,4 +1,4 @@
-"""Calibration §22a — GPS-drift validation gate (photos-22).
+"""Geotag §22a — GPS-drift validation gate (photos-22).
 
 The highest-danger gap: a (camera group, destination[, date]) bucket whose clock offset is
 manual/timezone-derived (NOT a GPX self-anchor) and that has NO native-GPS anchor is placed in
@@ -25,7 +25,7 @@ def _wf(tmp_path):
     ws = tmp_path / "ws"
     (ws / ".photos-ingest").mkdir(parents=True, exist_ok=True)
     (ws / ".photos-ingest" / "photos-11-handoff.json").write_text("{}")
-    wf = cal.CalibrationWorkflow(str(ws))
+    wf = cal.GeotagWorkflow(str(ws))
     wf._gpx_fingerprint = "fp"
     return wf
 

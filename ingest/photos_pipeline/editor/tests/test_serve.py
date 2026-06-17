@@ -380,12 +380,12 @@ def test_http_serves_vendored_leaflet():
         assert _get(base + "/vendor/leaflet/images/marker-icon.png")[2] == "image/png"
 
 
-# --------------------------------------------------------------------------- re-run calibration
-# (calibration now ships in the same package as the editor, so it is always runnable — the old
+# --------------------------------------------------------------------------- re-run geotag
+# (geotag now ships in the same package as the editor, so it is always runnable — the old
 # "missing pipeline" cases no longer apply; the gpx_root gate below is the remaining dependency.)
 
-def test_rerun_surfaces_calibration_blockers(tmp_path):
-    # A bare dir is not an initialized workspace: calibration's preflight blocks (exit 2) and mutates
+def test_rerun_surfaces_geotag_blockers(tmp_path):
+    # A bare dir is not an initialized workspace: geotag's preflight blocks (exit 2) and mutates
     # nothing — which is exactly the failure the editor must surface, so this exercises the real plumbing.
     r = serve._rerun(str(tmp_path))
     assert r["ok"] is False and r["returncode"] == 2
@@ -404,7 +404,7 @@ def _ws_with_gpx_config(tmp_path, gpx_root):
 def test_environment_no_config_does_not_block(tmp_path):
     (tmp_path / serve.CONTROL).mkdir()
     env = serve._environment(str(tmp_path))
-    assert env["calibration_present"] is True       # calibration ships in this package — always present
+    assert env["geotag_present"] is True       # geotag ships in this package — always present
     assert env["gpx_configured"] is False and env["deps_ok"] is True and env["missing"] == []
 
 
@@ -433,7 +433,7 @@ def test_load_artifacts_carries_environment(tmp_path):
 
 def test_rerun_refuses_when_gpx_root_off_machine(tmp_path):
     # Re-run must not silently regenerate decisions without the GPX the workspace depends on: the guard
-    # short-circuits BEFORE invoking calibration (no returncode), so good GPX-derived decisions survive.
+    # short-circuits BEFORE invoking geotag (no returncode), so good GPX-derived decisions survive.
     r = serve._rerun(_ws_with_gpx_config(tmp_path, str(tmp_path / "not-here")))
     assert r["ok"] is False and "gpx_root" in r["error"] and "returncode" not in r
 
@@ -444,7 +444,7 @@ def test_http_rerun_403_in_demo():
         assert status == 403 and data["ok"] is False
 
 
-def test_http_rerun_invokes_calibration(tmp_path):
+def test_http_rerun_invokes_geotag(tmp_path):
     ws = _workspace_with_fixtures(tmp_path)
     with _running(ws) as base:
         status, data = _post_json(base + "/api/rerun", {})

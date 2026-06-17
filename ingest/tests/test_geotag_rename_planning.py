@@ -1,4 +1,4 @@
-"""Phase 6a (calibration) — no-clobber timestamp rename planning (spec §26/§27).
+"""Phase 6a (geotag) — no-clobber timestamp rename planning (spec §26/§27).
 
 Destination-local filename computation + the deterministic suffix allocator that treats every
 on-disk and already-planned name as permanently occupied. Safety-critical naming, so full branch

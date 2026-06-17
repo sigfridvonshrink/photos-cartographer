@@ -1,5 +1,5 @@
-"""Phase 7 (calibration) — Stage 11 finalize + archive (§31 / shared §13): the photos-25
-transformation log (prep carried forward + calibration steps), the DB snapshot, and the manifest.
+"""Phase 7 (geotag) — Stage 11 finalize + archive (§31 / shared §13): the photos-25
+transformation log (prep carried forward + geotag steps), the DB snapshot, and the manifest.
 Non-destructive. exiftool-write + fingerprint mocked. From conftest.py.
 """
 import json
@@ -40,7 +40,7 @@ def _file(rel, fp, *, native=False, group=CAM):
             "camera_group_key": group, "has_native_gps": native}
 
 
-def test_complete_log_superset_and_calibration_steps():
+def test_complete_log_superset_and_geotag_steps():
     prep = {"fpA": {"content_fingerprint": "fpA", "journey": [{"phase": "prep", "action": "organized"}]}}
     files = [_file(f"{BYDEST}/T/a.arw", "fpA", native=True)]
     rows = [{"relative_path": f"{BYDEST}/T/a.arw", "resolved_utc": "2024-07-03T12:00:00Z",
@@ -133,7 +133,7 @@ def _ready_ws(tmp_path, monkeypatch):
              rec(f"{BYDEST}/T/b.arw", "2024:07:03 15:00:00", (51.0, 5.0))]
     (ctl / "photos-11-handoff.json").write_text(json.dumps({"files": files, "cache_fingerprint": "pcf"}))
 
-    monkeypatch.setattr(cal.CalibrationWorkflow, "_exiftool_write", lambda self, p, t: True)
+    monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", lambda self, p, t: True)
     monkeypatch.setattr(cal.ContentHasher, "fingerprint_image",
                         staticmethod(lambda p: {"value": "fp-" + os.path.relpath(p, str(ws))}))
     return ws, ctl
@@ -191,15 +191,15 @@ def test_finalize_assembles_package_and_is_nondestructive(tmp_path, monkeypatch)
     assert _run(monkeypatch, ws, "finalize") == 0
     # the three package files appear
     assert (ctl / "photos-26-complete-log.json").exists()
-    assert (ctl / "photos-26-calibrate-ingest.db").exists()
+    assert (ctl / "photos-26-geotag-ingest.db").exists()
     manifest = json.load(open(ctl / "photos-26-archive-manifest.json"))
     # non-destructive: upstream artifacts byte-unchanged
     after = {n: (ctl / n).read_bytes() for n in before}
     assert after == before
-    # complete-log is a superset: prep photo preserved + calibration steps appended
+    # complete-log is a superset: prep photo preserved + geotag steps appended
     log = json.load(open(ctl / "photos-26-complete-log.json"))
     j = log["photos"]["fp-" + f"{BYDEST}/T/a.arw"]["journey"]
-    assert j[0]["action"] == "organized" and any(s["phase"] == "calibrate" for s in j)
+    assert j[0]["action"] == "organized" and any(s["phase"] == "geotag" for s in j)
     # manifest: identity + ids + every present item with a correct sha256
     assert manifest["plan_id"] == json.load(open(ctl / "photos-24-executable-plan.json"))["plan_id"]
     assert manifest["execution_id"] and manifest["workspace"] == "ws"

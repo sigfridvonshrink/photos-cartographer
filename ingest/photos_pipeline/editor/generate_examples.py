@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Generate example decision artifacts (fixtures) for the decision editor.
 
-These are produced by the REAL calibration decision builders (`build_time_decisions`,
+These are produced by the REAL geotag decision builders (`build_time_decisions`,
 `compute_resolved_utc`, `build_gps_decisions` in `ingest/photos-2-time-gps`) and written with the
-real `write_json_artifact` serializer — guaranteed byte-identical to a calibration run's output, not
+real `write_json_artifact` serializer — guaranteed byte-identical to a geotag run's output, not
 hand-authored. The *inputs* are small synthetic photo sets chosen to exercise every distinct
 decision-cell state the editor must render/edit; the *outputs* are authentic.
 
@@ -69,7 +69,7 @@ def _wf():
     ws = tempfile.mkdtemp()
     os.makedirs(os.path.join(ws, ".photos-ingest"), exist_ok=True)
     utils.write_json_artifact(utils.handoff_path(ws), {"files": [], "content_fingerprint": "example"})
-    wf = cal.CalibrationWorkflow(ws)
+    wf = cal.GeotagWorkflow(ws)
     wf._gpx_fingerprint = "example-gpx-fingerprint"
     return wf
 
@@ -166,7 +166,7 @@ def scenario_trip():
     wf = _wf()
     time_req, time_comp = _td(wf, files, groups, gpx, fill_time, pre=pre_time)
 
-    # GPS is built on the completed-time resolved rows (calibration only reaches GPS once time is done).
+    # GPS is built on the completed-time resolved rows (geotag only reaches GPS once time is done).
     rows = cal.compute_resolved_utc(files, groups, time_comp)
     rfp = "example-resolved-utc-fingerprint"
     gps_req, blk = wf.build_gps_decisions(files, rows, gpx, None, rfp)

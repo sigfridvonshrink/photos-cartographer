@@ -1,4 +1,4 @@
-"""Phase 3b (calibration) — GPX/native-GPS ranking clock-offset inference (spec §19).
+"""Phase 3b (geotag) — GPX/native-GPS ranking clock-offset inference (spec §19).
 
 GPS is correctness-critical, so the geometry/matching/ranking engine is tested at full branch
 coverage: the pure helpers directly (point/segment matching, projection clamping, ranking,
@@ -202,7 +202,7 @@ def test_groups_carry_full_path_and_local_inputs_plus_skipped():
 # --- offset cell: auto-resolution / accept / manual (end-to-end) ------------
 
 def _cell(prior_ud, frames, gpx, *, multi=True, single=False):
-    wf = cal.CalibrationWorkflow("/tmp")
+    wf = cal.GeotagWorkflow("/tmp")
     utils.CONFIG.update(CFG)
     utils.CONFIG["camera_time_and_timezone_policy"]["multi_anchor_auto_apply"] = multi
     utils.CONFIG["camera_time_and_timezone_policy"]["single_anchor_auto_apply"] = single
@@ -342,7 +342,7 @@ def test_run_auto_resolves_offset_from_gpx(tmp_path, monkeypatch):
 # --- timezone-derived offset proposal (no anchor, no inherited) — §19.4 -------
 
 def _tzcell(prior_ud, *, tz, rep_naive, frames=None, date=None):
-    wf = cal.CalibrationWorkflow("/tmp")
+    wf = cal.GeotagWorkflow("/tmp")
     utils.CONFIG.update(CFG)
     blockers = []
     cell = wf._offset_cell("6-photos-by-dest/B", "K", {"camera_group_class": "camera"},
