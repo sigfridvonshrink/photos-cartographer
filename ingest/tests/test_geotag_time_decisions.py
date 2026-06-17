@@ -1,4 +1,4 @@
-"""Phase 3a (calibration) — photos-21-time-decisions.json: per-destination timezone + per-(camera
+"""Phase 3a (geotag) — photos-21-time-decisions.json: per-destination timezone + per-(camera
 group, destination) offset cells, with the decision-field / rerun-preservation engine and the
 SHA-256 dependency block (spec §17–§21). The GPX offset inference is Phase 3b. From conftest.py.
 """
@@ -162,7 +162,7 @@ def test_timezone_proposal_inherits_nearest_resolved_ancestor():
     generic global default; an inherited (or config-default) proposal auto-resolves without per-
     destination confirmation (nested geography), staying overridable."""
     utils.CONFIG["camera_time_and_timezone_policy"]["default_folder_timezone"] = "Europe/Brussels"
-    wf = cal.CalibrationWorkflow("/tmp/ws")
+    wf = cal.GeotagWorkflow("/tmp/ws")
     blk = []
     # parent "Japan" resolved to Asia/Tokyo -> a deeper child inherits it, not the Brussels default
     eff_tz = {("6-photos-by-dest/Japan", "tz"): "Asia/Tokyo"}

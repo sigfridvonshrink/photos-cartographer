@@ -282,12 +282,12 @@ def test_full_success_writes_terminal_artifacts_and_seals(tmp_path):
         assert os.path.exists(_ctl(ws, name)), name
     sealed = json.loads(open(_ctl(ws, "photos-00-sealed.json")).read())
     assert sealed["sealed"] is True and sealed["library_root"] == str(lib)
-    # §9.1 item 2/9: summary carries the merge plan id, the calibration run ids, and a finish time.
+    # §9.1 item 2/9: summary carries the merge plan id, the geotag run ids, and a finish time.
     summ = _summary(ws)
     assert summ["merge_plan_id"] == json.loads(open(_ctl(ws, "photos-30-merge-plan.json")).read())["plan_id"]
-    assert summ["calibration"] == {"plan_id": "cal-plan-1", "execution_id": "cal-exec-1"}
+    assert summ["geotag"] == {"plan_id": "cal-plan-1", "execution_id": "cal-exec-1"}
     assert summ["run_metadata"]["finished_at"] and summ["run_metadata"]["started_at"]
-    # The re-seal manifest supersedes calibration's and lists the merge artifacts.
+    # The re-seal manifest supersedes geotag's and lists the merge artifacts.
     manifest = json.loads(open(_ctl(ws, "photos-35-archive-manifest.json")).read())
     assert manifest["supersedes"] == "photos-26-archive-manifest.json"
     assert "photos-31-merge-summary.json" in manifest["contents"]
@@ -296,23 +296,23 @@ def test_full_success_writes_terminal_artifacts_and_seals(tmp_path):
 
 def test_merge_log_copies_photos25_forward_and_appends(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
-    # Seed photos-25 with a prior calibrate journey for fingerprint A.
+    # Seed photos-25 with a prior geotag journey for fingerprint A.
     open(_ctl(ws, "photos-26-complete-log.json"), "w").write(json.dumps(
         {"schema_version": 1, "tool": "photos-2-time-gps",
          "photos": {"A": {"content_fingerprint": "A",
-                          "journey": [{"phase": "calibrate", "action": "renamed"}]}}}))
+                          "journey": [{"phase": "geotag", "action": "renamed"}]}}}))
     assert merge._run_locked_workflow("plan", str(ws)) == 0
     assert merge._run_locked_workflow("execute", str(ws)) == 0
     log = json.loads(open(_ctl(ws, "photos-35-merge-log.json")).read())
     assert log["tool"] == "photos-3-merge"
     journey = log["photos"]["A"]["journey"]
-    assert journey[0]["phase"] == "calibrate"                      # carried forward
+    assert journey[0]["phase"] == "geotag"                      # carried forward
     assert journey[-1] == {"phase": "merge", "action": "placed",
                            "library_path": os.path.join(str(lib), "Trip", "a.jpg"),
                            "renamed_for_library": False}
     # photos-25 itself must be byte-unchanged (never edited).
     p25 = json.loads(open(_ctl(ws, "photos-26-complete-log.json")).read())
-    assert p25["photos"]["A"]["journey"] == [{"phase": "calibrate", "action": "renamed"}]
+    assert p25["photos"]["A"]["journey"] == [{"phase": "geotag", "action": "renamed"}]
 
 
 def test_partial_run_does_not_seal_or_finalize(tmp_path):

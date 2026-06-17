@@ -218,7 +218,7 @@ function fmtOffset(s) {
 
 // Offset ⟷ real-UTC conversion. The offset is the one stored value; UTC is just the anchor frame's
 // real instant (camera_naive + offset) rendered as a clock. All math is on naive wall-times treated as
-// UTC epoch ms (Date.UTC), matching calibration's `real_utc_naive − camera_naive` (photos_pipeline.photos_2_time_gps).
+// UTC epoch ms (Date.UTC), matching geotag's `real_utc_naive − camera_naive` (photos_pipeline.photos_2_time_gps).
 const _pad = (n) => String(n).padStart(2, "0");
 function camNaiveMs(s) { // camera EXIF naive "YYYY:MM:DD HH:MM:SS"
   const m = /^(\d{4}):(\d\d):(\d\d)[ T](\d\d):(\d\d):(\d\d)/.exec(s || "");
@@ -278,7 +278,7 @@ function scrubSeedIndex(track, frame, currentOffset) {
 let _driftFrame = 0, _driftCellKey = null;   // which bucket frame the scrub view shows (earliest default); reset on cell change
 let _driftTab = "photo";                     // drift sub-tab: "photo" (choose representative) | "map" (scrub track); resets to photo per cell
 
-// advisory effective preview (NOT authoritative — calibration recomputes on re-run)
+// advisory effective preview (NOT authoritative — geotag recomputes on re-run)
 function previewEffective(ref) {
   const c = workCell(ref), u = c.user_decision || {}, p = c.proposal || {};
   if (ref.kind === "timezone") {
@@ -315,7 +315,7 @@ function previewEffective(ref) {
 }
 
 // --- advisory timezone inheritance preview -----------------------------------
-// Mirrors calibration's rule for DISPLAY ONLY: a child timezone with no own decision would, on re-run,
+// Mirrors geotag's rule for DISPLAY ONLY: a child timezone with no own decision would, on re-run,
 // inherit from its nearest ancestor that resolves. Updates live as you edit ancestors; authoritative
 // only after Re-run. (Timezone never auto-resolves, so a resolved value always traces to a decision.)
 const leaf = (p) => (p || "").split("/").pop();
@@ -481,7 +481,7 @@ function selectReview(ev, dest, path, order) {
 function renderGps(list) {
   const g = state.work.gps;
   // GPS placement is derived from each photo's resolved UTC, so the GPS phase is gated on the time
-  // decisions: calibration only (re)generates photos-23 once every time decision is resolved. Make
+  // decisions: geotag only (re)generates photos-23 once every time decision is resolved. Make
   // that gate visible rather than showing an empty or stale GPS view.
   if (!state.base.demo && state.work.time?.requires_user_input)
     return list.append(el("div", { class: "gate" },
@@ -497,7 +497,7 @@ function renderGps(list) {
       + "Drift view, then re-run `photos-ingest geotag plan` and reload."));
   if (!g?.destinations) return list.append(el("div", { class: "empty" }, "No photos-23-gps-decisions.json."));
   if (!state.base.demo && (state.timeChangedSinceRerun || state.driftChangedSinceRerun))
-    list.append(el("div", { class: "gate warn" }, "Time or drift decisions changed since the last calibration run — re-run `photos-ingest geotag plan` and reload to recompute GPS. The decisions below are stale until you do."));
+    list.append(el("div", { class: "gate warn" }, "Time or drift decisions changed since the last geotag run — re-run `photos-ingest geotag plan` and reload to recompute GPS. The decisions below are stale until you do."));
   for (const dest of Object.keys(g.destinations).sort()) {
     const d = g.destinations[dest], fb = d.folder_fallback, s = d.gps_decisions?.summary || {};
     list.append(el("div", { class: "group-title" }, dest,
@@ -527,7 +527,7 @@ function renderDrift(list) {
       + "only once every timezone and clock-offset decision is resolved. Finish them in the Time view, then re-run `photos-ingest geotag plan` and reload."));
   if (!dr?.destinations) return list.append(el("div", { class: "empty" }, "No photos-22-gps-drift-validation.json."));
   if (!state.base.demo && state.timeChangedSinceRerun)
-    list.append(el("div", { class: "gate warn" }, "Time decisions changed since the last calibration run — re-run `photos-ingest geotag plan` and reload so the drift buckets (and their track segments) are re-extracted. The buckets below are stale until you do."));
+    list.append(el("div", { class: "gate warn" }, "Time decisions changed since the last geotag run — re-run `photos-ingest geotag plan` and reload so the drift buckets (and their track segments) are re-extracted. The buckets below are stale until you do."));
   const dests = Object.keys(dr.destinations);
   if (!dests.length) return list.append(el("div", { class: "empty" }, "No at-risk buckets — every offset is GPX-anchored or independently placeable."));
   for (const dest of dests.sort()) {
@@ -673,7 +673,7 @@ function offsetEditor(ref) {
 
   if (accepted || manualSet) wrap.append(el("button", { class: "mini",
     onclick: () => { state.offsetEdit = null; editMany(ref, { accept_proposal: false, manual_offset_seconds: "", manual_real_utc: "" }); } },
-    "clear (let calibration auto-resolve / re-derive)"));
+    "clear (let geotag auto-resolve / re-derive)"));
 
   // restore focus to the view just activated (click-to-activate), so it's ready to edit
   if (state._focusOffset) {
@@ -1017,7 +1017,7 @@ async function save() {
   state.saving = false; render();
 }
 
-// Calibration is re-run from the CLI (`photos-ingest geotag plan`), then the operator reloads the page;
+// Geotag is re-run from the CLI (`photos-ingest geotag plan`), then the operator reloads the page;
 // the editor only edits + saves the decision JSON (no in-app Re-run — it was error-prone and offered
 // little over a terminal command).
 

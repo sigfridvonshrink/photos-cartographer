@@ -1,14 +1,14 @@
 # Decision-JSON reference (for the decision editor)
 
-> **NON-AUTHORITATIVE.** This describes the shape of the two calibration *decision* artifacts so the
+> **NON-AUTHORITATIVE.** This describes the shape of the two geotag *decision* artifacts so the
 > editor can be built against a stable picture. The **authoritative** source is the code that writes
 > and validates them — `ingest/photos-2-time-gps` (`build_time_decisions`, `build_gps_decisions`,
 > `_timezone_decision`, `_offset_cell`, `_folder_fallback_cell`, `_review_item`, and the `_valid_*`
-> validators) — with the calibration spec `ingest/workflows/photos-2-time-gps-workflow.md` as the
+> validators) — with the geotag spec `ingest/workflows/photos-2-time-gps-workflow.md` as the
 > behavioural reference. If this doc and the code ever disagree, the code wins; update this doc.
 
 The editor is narrowly scoped: it helps a human fill in the **decisions** these files request, and its
-only hard requirement is that its output **conforms** (so calibration accepts it). It does **not** need
+only hard requirement is that its output **conforms** (so geotag accepts it). It does **not** need
 to understand the wider pipeline.
 
 > **Worked examples:** real, code-generated fixtures of both files in both states (`requires_user_input`
@@ -39,20 +39,20 @@ Everything the editor must guarantee, in five rules:
 1. **Only `user_decision` blocks are yours to write.** Every other field — `proposal*`, `effective_*`,
    `requires_user_input`, `stale_user_decision`, `status`, `summary`, `automatic_decision_summary`,
    `depends_on`, `artifact_type`/`artifact_name`, `decision_mode`, the per-file `reason`, etc. — is
-   **system-owned**. Calibration **regenerates the whole artifact from scratch** on its next run and
+   **system-owned**. Geotag **regenerates the whole artifact from scratch** on its next run and
    reads back **only the `user_decision` values** from the file you saved, matched by their location
    (destination path → camera-group key / file `relative_path`). So:
    - You may **round-trip the whole file** (load, change `user_decision` in place, save). The
      system-owned fields you carry along are ignored and overwritten next run — they exist only so the
      UI can *show* the proposal/result.
    - You do **not** need to (and must not rely on having) recomputed `effective_*`, `status`,
-     `requires_user_input`, or the summaries. They go stale the instant you edit; calibration recomputes
+     `requires_user_input`, or the summaries. They go stale the instant you edit; geotag recomputes
      them. (If you want a live preview, compute it for display only.)
 2. **Preserve structure and unknown keys verbatim.** Keep the JSON shape (the `destinations` map keyed by
    destination path, the cells, the `review_items` list) and pass through any field you don't recognise,
-   so a future calibration field isn't dropped by a round-trip.
-3. **Write only valid values** (Section 7). Calibration **sanity-validates** every authored value; a bad
-   value makes calibration **reject the artifact as a blocker and leave it untouched** (it will not
+   so a future geotag field isn't dropped by a round-trip.
+3. **Write only valid values** (Section 7). Geotag **sanity-validates** every authored value; a bad
+   value makes geotag **reject the artifact as a blocker and leave it untouched** (it will not
    partially apply). Validate client-side so the human never has to round-trip through a rejection.
 4. **`""` (empty string) means "no decision".** That is how every `user_decision` text/number field is
    left unset. Clearing a field = setting it back to `""`. Booleans default to `false`.
@@ -68,7 +68,7 @@ the same way:
 
 ```jsonc
 {
-  "proposal":           { ... },        // SYSTEM: what calibration suggests + the evidence for it
+  "proposal":           { ... },        // SYSTEM: what geotag suggests + the evidence for it
   "user_decision":      { ... },        // EDITABLE: the only thing the editor writes
   "effective_…":        ... ,           // SYSTEM: the resolved outcome ("" / null = unresolved)
   "requires_user_input": false,         // SYSTEM: true => this cell still needs a human decision
@@ -82,8 +82,8 @@ the same way:
 - **`user_decision`** — the human's choice. Typically "accept the proposal" (a boolean) *or* enter a
   manual value. **Within a cell, a manual value takes precedence over `accept_*`** (Section 6).
 - **`effective_…`** — the resolved result after applying the decision. `""` or `null` = not yet
-  resolved. Read-only (recomputed by calibration).
-- **`requires_user_input`** — the actionable flag: `true` means this cell is blocking calibration until
+  resolved. Read-only (recomputed by geotag).
+- **`requires_user_input`** — the actionable flag: `true` means this cell is blocking geotag until
   the human decides. The editor's "to-do list" is every cell with `requires_user_input: true`.
 - **`stale_user_decision`** — `true` means a previously-accepted proposal disappeared (e.g. the GPX
   evidence changed); the accept is now inert and the human should re-decide.
@@ -175,7 +175,7 @@ destinations or buckets.
 | `proposal` | object | no | One of three shapes — see below. |
 | **`user_decision.accept_proposal`** | bool | **yes** | Accept the proposal's offset. |
 | **`user_decision.manual_offset_seconds`** | number \| `""` | **yes** | A manual clock offset, seconds (camera_time + offset = real UTC). |
-| **`user_decision.manual_real_utc`** | string (`""`) | **yes** | The true UTC of the recommended anchor frame, ISO-8601 (`"2024-07-03T14:12:21Z"`). **Only meaningful when `proposal.proposal_source == "gpx_self_anchor"`** (calibration derives the offset from the recommended anchor's camera time). |
+| **`user_decision.manual_real_utc`** | string (`""`) | **yes** | The true UTC of the recommended anchor frame, ISO-8601 (`"2024-07-03T14:12:21Z"`). **Only meaningful when `proposal.proposal_source == "gpx_self_anchor"`** (geotag derives the offset from the recommended anchor's camera time). |
 | `effective_time_anchor` | `""` \| object | no | `""` if unresolved; else `{ "offset_seconds": int, "source": … }` where source ∈ `manual` \| `manual_real_utc` \| `gpx_anchor_accepted` \| `timezone_accepted` \| `gpx_anchor_auto`. |
 | `requires_user_input` | bool | no | `true` ⇔ `effective_time_anchor == ""`. (Containers carry no offset cells, so this is never softened here.) |
 | `stale_user_decision` | bool | no | Accepted a proposal with no offset. |
@@ -183,7 +183,7 @@ destinations or buckets.
 
 **`proposal` shapes** (all read-only; this is the evidence the UI shows):
 
-- **GPX self-anchor** (`proposal_source: "gpx_self_anchor"`) — calibration matched the group's geotagged
+- **GPX self-anchor** (`proposal_source: "gpx_self_anchor"`) — geotag matched the group's geotagged
   frames against GPX tracks:
   ```jsonc
   {
@@ -302,7 +302,7 @@ One entry per file that needs the human (or that the human already locked/accept
 
 ## 5a. `photos-22-gps-drift-validation.json` (GPS-drift validation)
 
-A gate the pipeline writes **between** photos-21 and photos-23 (calibration workflow §22a). It flags
+A gate the pipeline writes **between** photos-21 and photos-23 (geotag workflow §22a). It flags
 every `(camera group, destination[, date])` offset bucket whose clock offset is **manual or
 timezone-derived** and that has **no native-GPS anchor** but **does** have GPX coverage — exactly the
 case where a wrong offset would silently mis-place the whole bucket along the track. Each flagged
@@ -349,7 +349,7 @@ photos-21 offset cell it refines — bare `<camera_group_key>` or `<camera_group
 - `user_decision.corrected_offset_seconds` — empty for a zero scrub, or a number (seconds, ±86400) to
   correct the whole bucket's offset.
 - `effective_drift_offset` — `""` until confirmed, then `{ "offset_seconds": N, "source":
-  "gps_drift_validated" }`. Calibration recomputes resolved UTC consuming this; the value does **not**
+  "gps_drift_validated" }`. Geotag recomputes resolved UTC consuming this; the value does **not**
   mutate the photos-21 decision it refines.
 
 ### 5a.3 `date`
@@ -361,7 +361,7 @@ omitted for a single-date bucket.
 
 ## 6. Within-cell precedence (which `user_decision` field wins)
 
-A cell can carry more than one decision field; calibration applies them in a fixed order. The editor's
+A cell can carry more than one decision field; geotag applies them in a fixed order. The editor's
 UI should make the *effective* choice obvious and ideally offer them as mutually-exclusive.
 
 - **Timezone:** `manual_iana_timezone` (if valid) → else `accept_proposed_timezone`.
@@ -378,7 +378,7 @@ A bare `""`/`false` everywhere = "no decision yet".
 
 ## 7. Validation rules for editable values
 
-Mirror these client-side; a value that fails makes calibration reject the whole artifact as a blocker.
+Mirror these client-side; a value that fails makes geotag reject the whole artifact as a blocker.
 (Source: the `_valid_*` helpers in `ingest/photos-2-time-gps`.)
 
 | Field(s) | Rule |

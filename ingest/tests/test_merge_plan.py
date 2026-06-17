@@ -46,7 +46,7 @@ def test_enumerate_joins_prerename_handoff_to_final_name():
 
 
 def test_enumerate_robust_to_postrename_handoff():
-    # If prep was re-run after calibration, the handoff already carries the FINAL name; the
+    # If prep was re-run after geotag, the handoff already carries the FINAL name; the
     # fingerprint join still resolves it (name-independent).
     wf, cp = _wf([_ho("6-photos-by-dest/Trip/2024-07-03--14-12-21.arw", "A")],
                  [_rename("A", "2024-07-03--14-12-21.arw")])

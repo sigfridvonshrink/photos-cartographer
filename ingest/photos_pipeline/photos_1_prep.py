@@ -186,7 +186,7 @@ class RootGuard:
 import concurrent.futures
 
 # ContentHasher now lives in photos_utils (the cross-phase content-fingerprint spine, shared with
-# calibration); re-exported below so existing references and tests resolve unchanged.
+# geotag); re-exported below so existing references and tests resolve unchanged.
 
 PREP_LOG_SCHEMA_VERSION = 1
 
@@ -648,7 +648,7 @@ class PlanExecutor:
             })
 
             # 3. ZFS Hook (Optional) — pre-mutation snapshot of the workspace dataset (shared helper,
-            #    labelled "prep" so it never collides with calibration's "calibrate-" snapshot).
+            #    labelled "prep" so it never collides with geotag's "geotag-" snapshot).
             from .photos_utils import take_zfs_snapshot
             snap = take_zfs_snapshot(self.workspace_root, plan.plan_id, "prep")
             if snap is not None:
@@ -1081,12 +1081,12 @@ class PlanExecutor:
 
                     # Write out atomically AND deterministically (prep §16.2; shared contract §15): route through
                     # write_json_artifact (temp → atomic rename, sort_keys) so the handoff bytes are
-                    # byte-stable for a given workspace state. Calibration records a json_dependency on
+                    # byte-stable for a given workspace state. Geotag records a json_dependency on
                     # this file's exact bytes, so a non-deterministic dump (the old indent-only
                     # json.dump) could flip its SHA-256 and spuriously restale photos-21/22/23.
                     from .photos_utils import handoff_path, write_json_artifact, handoff_content_fingerprint
                     # The content fingerprint over the deterministic content (excludes run_metadata +
-                    # diagnostics + the journal pointer) — calibration depends on THIS, not the volatile
+                    # diagnostics + the journal pointer) — geotag depends on THIS, not the volatile
                     # file bytes, so a no-op re-run does not restale it (§16).
                     handoff["content_fingerprint"] = handoff_content_fingerprint(handoff)
                     target_handoff_path = handoff_path(self.workspace_root)
@@ -1094,9 +1094,9 @@ class PlanExecutor:
                     try:
                         write_json_artifact(target_handoff_path, handoff)
                         # Belt-and-suspenders (§16): the just-written handoff must re-read to the SAME
-                        # content_fingerprint, or calibration's recompute would mismatch — which can only
+                        # content_fingerprint, or geotag's recompute would mismatch — which can only
                         # happen if a non-round-trip-stable field crept into the handoff. Fail loudly here
-                        # rather than ship a handoff calibration would (silently) treat as forever-stale.
+                        # rather than ship a handoff geotag would (silently) treat as forever-stale.
                         with open(target_handoff_path) as _hf:
                             if handoff_content_fingerprint(json.load(_hf)) != handoff["content_fingerprint"]:
                                 raise RuntimeError("handoff content_fingerprint is not round-trip stable")
@@ -1451,7 +1451,7 @@ class WorkspacePrepWorkflow:
         dump_dotfiles = self._collect_dump_dotfiles(blockers)
 
         # Recognize orphaned exiftool intermediates/backups (`<media>_exiftool_tmp` / `<media>_original`)
-        # left by a hard-killed calibration write (a clean SIGINT is self-cleaned by exiftool). They are
+        # left by a hard-killed geotag write (a clean SIGINT is self-cleaned by exiftool). They are
         # partial/superseded artifacts — never the live original (the rename is atomic) — so they are
         # pulled out of the media inventory here and quarantined below (recoverable, never deleted),
         # rather than being mis-inventoried as `other` and parked forever in 1-strays. By-dest is
@@ -2151,7 +2151,7 @@ class WorkspacePrepWorkflow:
                 prefix = f"UNKN_{base}"
 
             # §7.2: the first file at a given timestamp gets the bare name; the -NNN suffix appears only
-            # on a genuine collision (matches calibration's final naming, so an uncorrected file's
+            # on a genuine collision (matches geotag's final naming, so an uncorrected file's
             # provisional and final names coincide — §7.3). A same-named file can only be in this same
             # day folder, so the global index is exact (see Pass 1).
             final_name = self._allocate_suffix(prefix, ext, global_index, bare_first=True)

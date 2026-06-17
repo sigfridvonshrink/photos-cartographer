@@ -30,7 +30,7 @@ def test_exif_write_preserves_content_fingerprint(tmp_path):
     img = tmp_path / "img.jpg"; shutil.copy(FIXTURE, img)
     before = utils.ContentHasher.fingerprint_image(str(img))
     assert before["status"] == "valid"
-    assert cal.CalibrationWorkflow(str(tmp_path))._exiftool_write(
+    assert cal.GeotagWorkflow(str(tmp_path))._exiftool_write(
         str(img), {"DateTimeOriginal": "2024:07:03 14:12:21", "GPSLatitude": 50.8467, "GPSLongitude": 4.3525})
     after = utils.ContentHasher.fingerprint_image(str(img))
     assert after["value"] == before["value"]                          # decoded content unchanged
@@ -49,7 +49,7 @@ def _run(monkeypatch, ws, cmd):
 
 
 def test_full_execute_with_real_tools(tmp_path, monkeypatch):
-    """plan -> execute the whole calibration against real exiftool + ImageMagick: two real photos get
+    """plan -> execute the whole geotag against real exiftool + ImageMagick: two real photos get
     their corrected time written and are renamed to destination-local civil time, and every post-write
     content fingerprint matches (status success)."""
     ws = tmp_path / "ws"; ws.mkdir()
