@@ -1,4 +1,4 @@
-"""The decision editor's local server — `photos-ingest edit [WORKSPACE]`.
+"""The decision editor's local server — `photos-ingest edit` (operates on the current-directory workspace).
 
 Serves the single-page app and exposes the workspace's decision artifacts as JSON. Stdlib only; its
 front-end + demo fixtures are PACKAGE DATA (`photos_pipeline/editor/{web,examples}`) read via
@@ -8,8 +8,9 @@ It launches nothing — it prints a clickable link using the machine's own IP an
 interface (default 0.0.0.0), so you can open the editor in your laptop's browser while SSH'd into the
 machine. Ctrl-C stops it cleanly (releasing the port).
 
-With a workspace it reads `<workspace>/.photos-ingest/photos-21*/photos-23*` decision JSON; with none
-it runs in DEMO mode on the bundled example fixtures. The app edits `user_decision` and saves it back
+It reads `./.photos-ingest/photos-21*/photos-23*` decision JSON from the current-directory workspace
+(refusing to run if the cwd is not an initialized workspace); `--demo` runs read-only on the bundled
+example fixtures instead. The app edits `user_decision` and saves it back
 (POST /api/save writes only `user_decision`, round-tripping the rest; disabled in demo). GET
 /api/photo returns a downscaled JPEG preview for the map picker (path-safe; 404 in demo). POST
 /api/rerun self-invokes `photos-ingest geotag plan` against the workspace and returns its exit code +
@@ -71,6 +72,7 @@ TIME_NAME = "photos-21-time-decisions.json"
 DRIFT_NAME = "photos-22-gps-drift-validation.json"
 GPS_NAME = "photos-23-gps-decisions.json"
 CONFIG_NAME = "photos-00-config.json"
+GUARD_NAME = "photos-00-workspace-guard"        # root sentinel written once a workspace is initialized
 EDITOR_LOCK = "photos-00-decision-editor.lock"  # dotfile lives in CONTROL; flock, fail-fast
 
 _CONTENT_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
@@ -371,7 +373,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(404, {"error": "not found"})
         if self.workspace is None:
             return self._send(403, {"ok": False, "error": "demo mode is read-only — "
-                                    "run `serve <workspace>` to edit and re-run a real workspace"})
+                                    "run `photos-ingest edit` inside a workspace to edit and re-run"})
         if path == "/api/rerun":
             return self._send(200, _rerun(self.workspace))
         try:
@@ -384,20 +386,23 @@ class Handler(BaseHTTPRequestHandler):
 
 EDIT_BLURB = (
     "edit — resolve the open decisions in a browser (between geotag plans).\n\n"
-    "Launches a local web server for the decision editor over the given WORKSPACE (default: the "
-    "current directory; omit for a read-only demo on bundled fixtures). You confirm/correct the time, "
-    "GPS and drift decisions geotag surfaced; Save writes them back, and the editor's Re-run button "
-    "self-invokes `photos-ingest geotag plan` to regenerate from your edits. Open the printed URL "
-    "(reachable over the network so you can use it from another machine's browser); Ctrl-C to stop.\n\n"
+    "Launches a local web server for the decision editor over the CURRENT DIRECTORY (the workspace; "
+    "like every other phase, edit operates on the cwd and refuses to run anywhere that is not an "
+    "initialized workspace). You confirm/correct the time, GPS and drift decisions geotag surfaced; "
+    "Save writes them back, and the editor's Re-run button self-invokes `photos-ingest geotag plan` "
+    "to regenerate from your edits. Open the printed URL (reachable over the network so you can use it "
+    "from another machine's browser); Ctrl-C to stop.\n\n"
+    "  --demo   read-only tour on bundled fixtures (no workspace; nothing is written).\n\n"
     "Loop: geotag plan -> edit -> geotag plan -> ... -> geotag execute."
 )
 
 
 def add_arguments(parser):
     """Register the `edit` phase's arguments. Unlike the workflow phases, `edit` has no subcommands —
-    it runs the server directly — so the combined CLI dispatches it the moment `edit` is chosen."""
-    parser.add_argument("workspace", nargs="?", default=None,
-                        help="Workspace dir (reads its .photos-ingest/). Omit for demo mode (example fixtures).")
+    it runs the server directly — so the combined CLI dispatches it the moment `edit` is chosen. Like
+    every phase, the workspace is the cwd; there is no workspace-naming argument."""
+    parser.add_argument("--demo", action="store_true",
+                        help="Read-only tour on bundled example fixtures (no workspace; writes nothing).")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--host", default="0.0.0.0",
                         help="Bind address. Default 0.0.0.0 = reachable over the network (e.g. from a "
@@ -407,12 +412,19 @@ def add_arguments(parser):
 
 
 def run(args):
-    return serve(args.workspace, args.port, args.host)
+    # Workspace = cwd, like every other phase. `--demo` is the only way to run without one (read-only
+    # fixtures); there is no positional workspace path.
+    return serve(None if args.demo else os.getcwd(), args.port, args.host)
 
 
 def serve(workspace, port=8765, host="0.0.0.0"):
-    if workspace and not os.path.isdir(os.path.join(workspace, CONTROL)):
-        print(f"warning: {workspace}/{CONTROL} not found — is that a workspace?", file=sys.stderr)
+    # A real (non-demo) workspace must be an initialized workspace — the same bar every phase applies:
+    # the root guard sentinel must exist. Refuse anything else rather than serving an empty editor.
+    if workspace and not os.path.exists(os.path.join(workspace, CONTROL, GUARD_NAME)):
+        print(f"{os.path.abspath(workspace)} is not an initialized workspace "
+              f"(no {CONTROL}/{GUARD_NAME}). Run `photos-ingest prep plan` here first, "
+              f"or use `photos-ingest edit --demo` for a read-only fixtures tour.", file=sys.stderr)
+        sys.exit(2)
     Handler.workspace = workspace
 
     # Editor lock: refuse to open a second editor on the same workspace, so two people can't edit the
