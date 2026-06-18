@@ -2541,6 +2541,23 @@ def run(args):
             sys.exit(2)
 
         if args.command == "plan":
+            # External-tool preflight (shared contract: decline cleanly, don't crash mid-scan).
+            # exiftool is hard-required — planning extracts metadata from every file through it and
+            # there is no graceful fallback. magick/ffmpeg are SOFT: their absence degrades content
+            # fingerprinting (image/video files are reported fingerprint-failed) but does not abort,
+            # so they are a warning, not a blocker.
+            from .photos_utils import missing_tools
+            miss = missing_tools(["exiftool"])
+            if miss:
+                print(f"Required external tool not found on PATH: {', '.join(miss)}. "
+                      "Install exiftool and re-run `photos-ingest prep plan`.", file=sys.stderr)
+                sys.exit(3)
+            soft = missing_tools(["magick", "ffmpeg"])
+            if soft:
+                print(f"Warning: {', '.join(soft)} not found on PATH — content fingerprinting will be "
+                      "degraded (affected files reported as fingerprint-failed): "
+                      "magick→images, ffmpeg→videos.", file=sys.stderr)
+
             cache = WorkspaceCache(workspace_root, read_only=True)
             workflow = WorkspacePrepWorkflow(workspace_root, cache)
             plan = workflow.plan()
