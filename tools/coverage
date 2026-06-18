@@ -4,7 +4,7 @@
 # Creates a local .venv (with --system-site-packages, so the suite keeps any system pip deps),
 # installs the dev tooling (dev-requirements.txt), then runs the suite exactly the way CI does —
 # `coverage run -m pytest` with the committed .coveragerc (branch coverage, concurrency=thread,
-# report scoped to the photos_pipeline package + the editor server + the developer) — and prints the per-module report plus
+# report scoped to the photos_pipeline package + the editor server) — and prints the per-module report plus
 # an HTML drill-down under htmlcov/.
 #
 # Extra arguments pass through to pytest, e.g.  tools/coverage -k merge   or   tools/coverage -x.

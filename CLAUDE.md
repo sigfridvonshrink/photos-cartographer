@@ -4,26 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-A suite of scripts for managing, converting, and synchronizing a high-quality photo library
-between **digiKam** (management/storage) and **Immich** (display/sharing). Top-level layout:
+The ingestion pipeline for a high-quality photo library managed in **digiKam**: a safe
+plan/validate/execute pipeline that ingests media and performs automatic GPS/time calibration.
+Top-level layout:
 
-- **`ingest/`** — the **active development area**: a safe plan/validate/execute ingestion + GPS/time
-  calibration pipeline. New work happens here. Each folder has its own `README.md`.
-- **`convert/`** — compute-node image-conversion tools (RAW/TIFF → `__std.jpg` / `__std.jxl`).
-- **`develop/`** — `photos-developer`, the development-workspace manager (RAW/JPEG → `__std.tif`
-  masters). Kept and active; slated for later improvement.
-- **`immich/`** — Immich-backend integration (timeline-visibility sync, hardlinked "TV" folder).
-- **`archive/`** — reference-only, *not* active. Holds standalone legacy tools whose functionality has
-  **not** been reimplemented in the active pipeline: direct-mutation digiKam↔Immich integration scripts
-  (`photos-dk2im-sync`, `photos-im2dk-sync`, `photos-dk-pick-std-jpg`, `photos-im-mark`,
-  `photos-gps-sync-xmp`, `photos-fix-exif-dates`) and `archive/storage/legacy-utils/` (the `photocheck-*`
-  library-audit scripts and `photoflow.py`). The reengineering specs, the monolithic `photos-ingest`
-  prototype that `ingest/` was split out of, and the superseded `photos-gps-tagger` have been removed —
-  their behavior now lives in the `ingest/photos_pipeline/` package (`photos_1_prep`,
-  `photos_2_time_gps`, `photos_3_merge`).
+- **`ingest/`** — the pipeline itself: the `photos_pipeline` package (prep / geotag / merge phases +
+  the decision editor), its tests, and the authoritative workflow specs. Each folder has its own
+  `README.md`.
+- **`tools/`** — build + test helpers (`build-pyz`, `coverage`, `jstest`).
+- **`.githooks/`** — local pre-commit / pre-push hooks. `.github/workflows/` — CI.
 
-See `README.md` for the `__std` naming convention and dependencies, and each folder's `README.md` for
-per-script detail.
+See `README.md` for the `__std` naming convention and dependencies, and `ingest/`'s `README.md` for
+per-module detail. (This repo was carved out of a larger digiKam↔Immich suite; the conversion,
+develop, Immich-sync, and legacy-archive components live in sibling repos.)
 
 The headline capability of the pipeline is **automatic camera-clock correction**: it infers a camera's
 clock offset by matching its already-geotagged frames against GPX tracks, then geotags the un-tagged
@@ -50,7 +43,7 @@ defaults by editing that sibling, never the zip. The built-in (with its document
 Tests **MUST be run from the repo root** — `conftest.py` puts `ingest/` on `sys.path` so
 `import photos_pipeline` resolves, and some tests reference repo-root paths like
 `ingest/photos_pipeline/photos_1_prep.py`. `pytest.ini` sets
-`testpaths=ingest/tests ingest/photos_pipeline/editor/tests develop/tests` and ignores `archive/`.
+`testpaths=ingest/tests ingest/photos_pipeline/editor/tests`.
 
 ```bash
 # Whole suite
