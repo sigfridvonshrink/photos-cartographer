@@ -1060,6 +1060,15 @@ class GeotagWorkflow:
         info["handoff_sha256"] = sha256_file(ho_p)
         self.handoff = handoff          # stashed for the model/group stages (Phase 2)
 
+        # External-tool preflight: geotag reads existing EXIF GPS/time through exiftool and WRITES the
+        # corrected tags through it at execute/finalize. There is no graceful fallback for the write, so
+        # a missing exiftool is a hard blocker (checked for plan AND execute, before any heavy work).
+        from .photos_utils import missing_tools
+        if missing_tools(["exiftool"]):
+            blockers.append("exiftool not found on PATH — geotag reads and writes EXIF GPS/time "
+                            "through it. Install exiftool and re-run.")
+            return blockers, warnings, info
+
         by_dest = folder_name('photos_by_dest')
         # §7.1 development-started guard — PRESENCE-STRICT and re-checked at execute/finalize too, not
         # just planning: the mere existence of a jpg/tif distribution subfolder under by-dest (even an

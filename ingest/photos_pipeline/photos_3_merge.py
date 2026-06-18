@@ -192,6 +192,14 @@ class MergeWorkflow:
         self.handoff = handoff
 
         # ---- Gathered preconditions (report every problem at once) ----------
+        # External-tool preflight: merge fingerprints library targets with ImageMagick (magick) for
+        # de-dup/no-clobber identity. Its absence degrades — affected files report fingerprint-failed —
+        # rather than crashing, so it is a warning, not a blocker.
+        from .photos_utils import missing_tools
+        if missing_tools(["magick"]):
+            warnings.append("magick (ImageMagick v7) not found on PATH — content fingerprinting for "
+                            "de-dup will be degraded (affected files reported as fingerprint-failed).")
+
         # 0b. 0-sources empty (§3 precond 0b).
         if self._entries(folder_name('sources')):
             blockers.append(f"{folder_name('sources')}/ is not empty — an unprocessed dump is waiting; "

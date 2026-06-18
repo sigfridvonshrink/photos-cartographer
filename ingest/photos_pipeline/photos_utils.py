@@ -977,6 +977,33 @@ import atexit
 from typing import Dict, List, Any, Optional
 
 
+class MissingToolError(Exception):
+    """Raised when a required external CLI binary is not on PATH. Carries the missing names so a
+    caller can format its own message; str() is already a clear, install-me sentence."""
+    def __init__(self, missing, context=""):
+        self.missing = list(missing)
+        msg = "Required external tool(s) not found on PATH: " + ", ".join(self.missing)
+        if context:
+            msg += f" ({context})"
+        msg += ". Install them and re-run."
+        super().__init__(msg)
+
+
+def missing_tools(tools) -> list:
+    """Return the subset of `tools` whose binary is not resolvable on PATH (shutil.which). The single
+    place phase preflights ask 'is this external dependency installed?' so a phase can decline cleanly
+    up front instead of crashing mid-run when exiftool/ffmpeg/etc. is absent."""
+    return [t for t in tools if shutil.which(t) is None]
+
+
+def require_tools(tools, context="") -> None:
+    """Raise MissingToolError if any of `tools` is absent from PATH. Use at a phase entry point that
+    cannot do its job without the binary (e.g. exiftool for metadata extraction / tag writes)."""
+    miss = missing_tools(tools)
+    if miss:
+        raise MissingToolError(miss, context=context)
+
+
 _MAGICK_COMMAND = None
 def get_magick_command() -> list:
     """Return ['magick'] if ImageMagick v7's `magick` (which supports the persistent `-script -` mode)
@@ -1171,6 +1198,12 @@ class ContentHasher:
                     if line.startswith("MD5="):
                         return {"status": "valid", "strategy": "video-md5-v1", "value": line.split("=")[1].strip()}
                 last_error = "No MD5 output"
+            except FileNotFoundError:
+                # ffmpeg not installed — decline this fingerprint gracefully (matches the magick-less
+                # image path) instead of letting FileNotFoundError crash the whole scan. A phase
+                # preflight warns up front; here we just mark the file fingerprint-failed and move on.
+                return {"status": "failed", "strategy": "video-md5-v1", "value": None,
+                        "error": "ffmpeg not found"}
             except subprocess.CalledProcessError as e:
                 last_error = str(e)
                 if attempt == 1:
@@ -1184,6 +1217,10 @@ class PersistentExifToolWorker:
         self._start_process()
 
     def _start_process(self):
+        # Defense-in-depth: phase preflights already hard-require exiftool, but a raw Popen of a
+        # missing binary raises a bare FileNotFoundError deep in a worker thread. Fail with a clear,
+        # actionable message instead if exiftool somehow isn't on PATH here.
+        require_tools(['exiftool'], context="persistent metadata worker")
         self.process = subprocess.Popen(
             ['exiftool', '-stay_open', 'True', '-@', '-'],
             stdin=subprocess.PIPE,
