@@ -801,7 +801,14 @@ function copyPasteBar(ref) {
 // One Leaflet instance, kept across re-renders of the same selection (rebuilding it on each keystroke
 // would reset pan/zoom). Rebuilt when the selected cell changes; torn down for non-GPS cells.
 let _map = null, _mapKey = null;
-const mapKeyFor = (ref) => ref ? `${ref.file}|${ref.dest}|${ref.kind}|${ref.key || ""}|${ref.path || ""}|${(ref.peers || []).join(",")}` : null;
+// A GPS-review cell's reference pins and seed centre are DEST-scoped (gpsRefMarkers ignores path/peers),
+// so extending a multi-photo selection — shift-click — never changes the map. Give review cells a key
+// that's stable across path/peers within a dest, so the SAME Leaflet instance survives the re-render
+// instead of being torn down and rebuilt (a rebuild blanks the whole panel = the visible flash). Other
+// kinds keep their per-cell key so switching cell still rebuilds the map.
+const mapKeyFor = (ref) => !ref ? null
+  : ref.kind === "review" ? `${ref.file}|${ref.dest}|review`
+    : `${ref.file}|${ref.dest}|${ref.kind}|${ref.key || ""}|${ref.path || ""}|${(ref.peers || []).join(",")}`;
 function teardownMap() { if (_map) { _map.destroy(); _map = null; _mapKey = null; } }
 function mapBlock(ref) {
   const key = mapKeyFor(ref);
@@ -1078,5 +1085,5 @@ export {
   fmtOffset, camNaiveMs, dtLocalToMs, msToDtLocal, utcStrToMs, fmtLocal, fmtDT, offsetImpact,
   cellAt, cellStatus, wouldResolve, previewTz, previewFallback, refInvalid, isDirty, state,
   offsetGroups, dateRange, fmtDate, peerKeys, parseLatLon, coordText, contiguousRange,
-  scrubOffset, scrubSeedIndex,
+  scrubOffset, scrubSeedIndex, mapKeyFor,
 };
