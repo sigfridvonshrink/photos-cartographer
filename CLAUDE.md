@@ -156,11 +156,11 @@ The whole design exists to safely mutate **irreplaceable originals**. These rule
 
 Defined in `ingest/workflows/photos-shared-contract.md`:
 
-- The pipeline is two phases: **prep** (`photos-1-prep`) → **time/GPS calibration**
-  (`photos-2-time-gps`, reserved/in progress).
-- A transient **workspace** holds numbered media folders `0-source` … `5-photos-by-dest`
-  (`5-photos-by-dest` is read-only staging, later merged into the permanent digiKam library — it is *not*
-  the library).
+- The pipeline is three phases: **prep** (`photos-1-prep`) → **time/GPS calibration**
+  (`photos-2-time-gps`) → **merge** (`photos-3-merge`), all implemented.
+- A transient **workspace** holds numbered media folders `0-sources` … `6-photos-by-dest`
+  (`6-photos-by-dest` is read-only staging that merge joins into the permanent digiKam library — it is
+  *not* the library).
 - All control/artifact files live in a single `.photos-ingest/` control directory (config, guard
   sentinel `photos-00-workspace-guard`, handoff manifest, decision JSONs, journals, default `gpx/` root).
   Prep skips this subtree wholesale, so artifacts can never be mistaken for media.
@@ -175,14 +175,17 @@ Defined in `ingest/workflows/photos-shared-contract.md`:
 - `ingest/photos_pipeline/photos_1_prep.py` — the prep workflow; owns *only* filesystem prep,
   no-clobber moves, dedup/quarantine, SQLite/hash cache, and the handoff manifest. It must not plan or
   apply GPS/time fixes.
+- `ingest/photos_pipeline/photos_2_time_gps.py` — the geotag workflow: camera-clock-offset inference,
+  resolve-to-UTC, GPX-based GPS placement, and destination-local renaming.
+- `ingest/photos_pipeline/photos_3_merge.py` — the merge workflow: safe merge of the finalized
+  `6-photos-by-dest` staging tree into the permanent digiKam library.
 - `ingest/tests/` — `test_prep_split`, `test_idempotency_cache`, `test_exif_metadata`,
   `test_workspace_prep`, `test_concurrency` (named for what they test, not the old phase numbers).
 - `ingest/workflows/` — the authoritative specs (see below).
 
 ## Specs are the source of truth
 
-The pipeline is **specification-driven**: behavior is defined by `ingest/workflows/*.md` — the two
-per-phase workflows plus `photos-shared-contract.md`. When changing pipeline behavior, update the
-governing spec; the markdown is authoritative, not just the code. The current task is to make
-`photos-1-prep` fully conform to these (updated) workflow specs, so expect to reconcile differences
-between the script and the spec rather than treat the existing code as ground truth.
+The pipeline is **specification-driven**: behavior is defined by `ingest/workflows/*.md` — the three
+per-phase workflows (prep / time-gps / merge) plus `photos-shared-contract.md`. When changing pipeline
+behavior, update the governing spec; the markdown is authoritative, not just the code, so reconcile
+differences between a script and its spec rather than treating the existing code as ground truth.
