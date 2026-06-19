@@ -1,3 +1,17 @@
+# Copyright 2026 sigfridvonshrink
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """Increment 4 — execute: the §11 place-then-remove move, journal, state-derivation resume (§8.3),
 concurrency (§10.4), and photos-31-merge-summary.json. execute consumes photos-30; the terminal
 archival steps (merge-log, DB snapshot, re-seal, seal) are Increment 5.

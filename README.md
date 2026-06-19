@@ -240,3 +240,8 @@ I built this after years of frustration with geotagging photos by hand: typing i
 a map one at a time, and still ending up with gaps. It does the tedious parts automatically and asks only for
 what it truly can't work out, so geotagging a whole trip stops being a chore. It's made first for my own
 archive and shared as-is, in case it's useful to anyone with the same problem.
+
+## License
+
+Apache License 2.0 — see [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE). The bundled Leaflet library keeps
+its own BSD-2-Clause license (`ingest/photos_pipeline/editor/web/vendor/leaflet/LICENSE`).

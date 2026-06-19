@@ -1,3 +1,17 @@
+# Copyright 2026 sigfridvonshrink
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """Phase 6c-1 (geotag) — the `execute` subcommand (§29): apply photos-23, verify content
 fingerprints, journal/resume, write photos-24. exiftool + fingerprint are mocked (the suite mocks
 all external tools), so the executor logic is driven deterministically. From conftest.py.
