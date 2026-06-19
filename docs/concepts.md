@@ -169,6 +169,30 @@ placement is recorded as a manual GPS write (reversible) so it's always clear it
 
 ---
 
+## Configuration
+
+The pipeline reads one config file per workspace: `.photos-ingest/photos-00-config.json`. It's
+**seeded** from built-in defaults on the first `prep` run, then **authoritative** — the on-disk file
+governs all processing thereafter, and you change behavior by hand-editing it. The built-in values are
+defaults, not law; review them at the start of a workspace and tune to your setup (see the
+[quick start](quickstart.md#review-your-config-do-this-once-at-the-start)).
+
+Two areas matter for the concepts above:
+
+- **`media_extensions`** — the `image` / `raw` / `video` extension lists. These decide what counts as
+  media at all: an extension not listed falls to `other` and is set aside as a stray, never organized
+  or geotagged. The class vocabulary is fixed; the lists are yours. Prep flags likely-media strays
+  (via exiftool) so you can spot a format you forgot to list.
+- **`folders`** — the names of the numbered managed folders. You can rename them; their *roles* (inbox,
+  read-only staging, etc.) are fixed.
+
+Config is **fingerprinted for surgical staleness**: each area has a field-scoped fingerprint, so editing
+one area restales only the stages that depend on it — a GPX-threshold change doesn't touch your renames;
+a `media_extensions` or `folders` change restales the organization-shaped stages (the geotag executable
+plan and the merge plan). A re-run then recomputes exactly what's affected and nothing else. Every
+authored value is validated before use — a bad timezone, out-of-range coordinate, or extension collision
+is rejected with a specific error, not silently coerced.
+
 ## Putting it together
 
 The pipeline's order falls straight out of these concepts:

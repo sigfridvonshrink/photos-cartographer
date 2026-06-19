@@ -69,6 +69,27 @@ into `3-redundant-jpgs/`, and non-media into `1-strays/`. `0-sources/` is left e
 > From now on, `0-sources/` is the **only** inbox for new dumps — never drop files at the workspace
 > root again (prep will hard-block on a misplaced entry).
 
+### Review your config (do this once, at the start)
+
+The first `prep` run seeds `.photos-ingest/photos-00-config.json` from built-in defaults, then treats
+that file as **authoritative for this workspace**. The defaults are *my* choices and may not match
+yours — **open it and tune it before you go further.** Worth checking:
+
+- **`media_extensions`** — which extensions count as `image` / `raw` / `video`. Anything not listed is
+  treated as non-media and parked in `1-strays/`. If you shoot a RAW format that isn't in the list
+  (e.g. Fuji `.raf`, Olympus `.orf`), add it here or those files won't be organized or geotagged.
+- **`gpx_root`** — where geotag looks for your GPX tracks.
+- **`merge.library_root`** — the permanent library merge writes into.
+- **folder names**, timezone defaults, and the GPX matching thresholds.
+
+Prep helps you catch the common mistake: when it sets a file aside as a stray, it asks `exiftool` what
+the file actually is, and if that's an image or video it **warns you in the plan output** — e.g.
+*"Dump contains .raf files that exiftool sees as media … add '.raf' to media_extensions and re-run."*
+It never reclassifies on its own; you decide, edit the config, and re-run `prep`.
+
+Config edits are **fingerprinted**: changing the extension or folder settings restales exactly the
+downstream stages that depend on them, so a later re-run recomputes what's needed and nothing else.
+
 ---
 
 ## 3. Sort photos into destinations

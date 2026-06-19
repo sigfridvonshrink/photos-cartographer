@@ -1803,6 +1803,28 @@ class WorkspacePrepWorkflow:
             elif top == _video_band and mc in ('image', 'raw'):
                 blockers.append(f"Band misplacement: {mc} under {_video_band}: {f['relative_path']}")
 
+        # Stray-media detection (prep Section 6.1): a dump file prep is about to set aside as a stray
+        # (class `other`, in 0-sources) whose extension exiftool reports as image/* or video/* is most
+        # likely a media format the workspace's media_extensions config doesn't list. Probe each
+        # DISTINCT stray extension once (not per file) and warn — non-blocking — so the operator can add
+        # it to media_extensions and re-run to organize those files instead of parking them in 1-strays.
+        from .photos_utils import exiftool_mime_type
+        _sources_top = folder_name('sources')
+        _stray_ext_sample = {}
+        for f in all_db_files:
+            if f.get('media_class') == 'other' and f['relative_path'].split('/')[0] == _sources_top:
+                e = os.path.splitext(f['relative_path'])[1].lower().lstrip('.')
+                if e and e not in _stray_ext_sample:
+                    _stray_ext_sample[e] = f['absolute_path']
+        for e, sample in sorted(_stray_ext_sample.items()):
+            mime = exiftool_mime_type(sample)
+            if mime and (mime.startswith('image/') or mime.startswith('video/')):
+                msg = (f"Dump contains .{e} files that exiftool sees as media ({mime}) but media_extensions "
+                       f"config does not list — they will be set aside in 1-strays. Add '.{e}' to the right "
+                       f"media_extensions class in photos-00-config.json and re-run prep to organize them.")
+                warnings.append(msg)
+                print(f"  Notice: {msg}", file=sys.stderr)
+
         self.coordinator.finish_phase()
         self.coordinator.start_phase("planning - building duplicate groups")
 
@@ -2636,6 +2658,10 @@ def run(args):
             print(f"  no-op / already-correct files: {plan.summary.get('no_op_files', 0)}")
             if plan.warnings:
                 print(f"  warnings: {len(plan.warnings)}")
+                for w in plan.warnings[:20]:
+                    print(f"    - {w}")
+                if len(plan.warnings) > 20:
+                    print(f"    … and {len(plan.warnings) - 20} more")
             if plan.blockers:
                 print(f"  BLOCKERS: {len(plan.blockers)} — execute will refuse:")
                 for b in plan.blockers[:20]:

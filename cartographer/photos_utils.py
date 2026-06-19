@@ -209,6 +209,21 @@ def media_class_for_ext(ext: str, cfg=None) -> str:
     m = _build_media_class_map(cfg) if cfg is not None else _MEDIA_CLASS_BY_EXT
     return m.get((ext or "").lower().lstrip('.'), "other")
 
+def exiftool_mime_type(path: str):
+    """exiftool's reported MIMEType for one file (e.g. 'image/x-fujifilm-raf', 'video/mp4'), or None if
+    exiftool is absent/fails or reports nothing. Used by prep's stray-media detection (Section 6.1) to
+    flag a dump extension that exiftool sees as image/video but the workspace's media_extensions config
+    doesn't list. This is the single mockable seam for that probe."""
+    import subprocess
+    try:
+        r = subprocess.run(["exiftool", "-s3", "-MIMEType", path],
+                           capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    except Exception:
+        return None
+    if r.returncode != 0:
+        return None
+    return (r.stdout or "").strip() or None
+
 
 # Exiftool intermediates/backups of a media file: `<media>_exiftool_tmp` (the temp `-overwrite_original`
 # writes then atomically renames over the original) and `<media>_original` (the backup exiftool keeps
