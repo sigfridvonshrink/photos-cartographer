@@ -31,10 +31,14 @@ that is what this is for.
 ## Designed to ask you the least
 
 Every other tool treats geotagging as a **manual operation you perform** — you supply the offset, you
-supply the coordinates. photos-cartographer treats it as a **constraint-propagation problem** and
-converges on the **minimal sufficient set of human decisions**. The human isn't asked to do the
-geolocating; the human is asked only for the irreducible inputs the available data genuinely can't
-supply — and never asked twice for the same fact.
+supply the coordinates. Even the advanced ones leave you to *calculate* things yourself, like a camera's
+clock offset, when many of those offsets could be derived automatically from a single correct input.
+photos-cartographer treats geotagging as a **constraint-propagation problem** and converges on the
+**minimal sufficient set of human decisions** — and, crucially, it **orders the questions so each answer
+unlocks the most automatic work downstream**, shrinking not just *repeated* questions but the *total
+number* of them. You are never asked to do the geolocating, never asked to hand-compute what the data can
+derive, asked only for the irreducible inputs the data genuinely can't supply — each at the point where it
+resolves the most — and never asked twice for the same fact.
 
 So it works as a funnel that resolves everything it can before it ever asks you:
 
@@ -52,6 +56,10 @@ placement steps downstream. A decision made on a parent destination **cascades r
 children unless they override it. A manual coordinate or confirmed offset is remembered across re-runs.
 So you are asked only for what is *genuinely undetermined* — and the moment something becomes derivable
 from an earlier answer, you are not asked again.
+
+This is why the *order* matters: a single well-placed answer high in the funnel — one timezone, one
+confirmed anchor — can let the pipeline solve **every** camera's clock offset on its own, where a
+traditional tool would have you work out and type in each offset by hand.
 
 ## Safety model
 
