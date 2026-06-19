@@ -120,6 +120,16 @@ The full design is specified in four documents:
   end-to-end operator loop, and the workspace lifecycle: initialization, the strays folder, and the
   sealed terminal state)
 
+These four are the **authoritative** behavioral specs. The decision *editor* that helps a human fill in
+the JSON they produce has its own docs alongside its code — **non-authoritative and downstream of the
+above** (if they ever disagree, the spec and code win):
+
+- `../photos_pipeline/editor/decision-json-reference.md` — the field-level shape of the decision
+  artifacts (`photos-21`/`22`/`23`) the editor reads and writes.
+- `../photos_pipeline/editor/design-notes.md` — the editor's UI/architecture design notes.
+
+For a user-facing walkthrough, see the guides in [`../docs/`](../docs/).
+
 ---
 
 ## It works with you, not against you
