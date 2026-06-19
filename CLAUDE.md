@@ -27,8 +27,8 @@ The active pipeline is the **`photos_pipeline` package** at `ingest/photos_pipel
 (the three phases) + `cli.py`/`__main__.py` (the combined entry) + `editor/` (the decision editor).
 From a checkout, run via `python3 -m photos_pipeline <phase> <subcommand>` (with `ingest/` on
 `PYTHONPATH`, or from `ingest/`). It is **shipped detached** as ONE self-contained executable
-`ingest/dist/photos-ingest` — a shebang'd zipapp of the whole package — built deterministically by
-`tools/build-pyz` (+ an editable `photos-config-defaults.json` sibling); launched `./photos-ingest
+`ingest/dist/photos-cartographer` — a shebang'd zipapp of the whole package — built deterministically by
+`tools/build-pyz` (+ an editable `photos-config-defaults.json` sibling); launched `./photos-cartographer
 prep plan` exactly like a plain script (needs a `python3` on the host; zipapp doesn't embed Python).
 `tools/build-pyz --check` (CI + pre-push) builds it to a temp dir and smoke-runs it; `ingest/dist/` is gitignored (build output, not committed).
 
@@ -82,28 +82,28 @@ There is no build step and no linter config; runtime deps are system tools (`exi
   tests) and then the suite before a push, aborting on either failure. Enable it per clone with
   `git config core.hooksPath .githooks`; bypass once with `git push --no-verify`. The guard's
   `SRC_FILES` covers all three phase modules + `photos_utils` under `ingest/photos_pipeline/`.
-- **Local `pre-commit` hook** (`.githooks/pre-commit`) rebuilds `ingest/dist/photos-ingest` on every
+- **Local `pre-commit` hook** (`.githooks/pre-commit`) rebuilds `ingest/dist/photos-cartographer` on every
   commit so the local executable is never stale. `ingest/dist/` is gitignored — this is a LOCAL build
   only; nothing is committed or pushed. It blocks a commit only if the build itself breaks.
 - **Releases** (`.github/workflows/release.yml`): push a version tag (`git tag v1.2.0 && git push
-  origin v1.2.0`) and CI builds `photos-ingest` with `__version__` set to the tag (via
+  origin v1.2.0`) and CI builds `photos-cartographer` with `__version__` set to the tag (via
   `tools/build-pyz --version`) and attaches it + `photos-config-defaults.json` to a GitHub Release.
   The executable is distributed via releases, never committed to the repo.
 
 ### CLI contract
 
 One combined entry point — `photos_pipeline.cli:main` — dispatched git-style as
-`photos-ingest <phase> <subcommand>` (shipped as the single `photos-ingest` zipapp executable; from a
+`photos-cartographer <phase> <subcommand>` (shipped as the single `photos-cartographer` zipapp executable; from a
 checkout, `python -m photos_pipeline <phase> <subcommand>`). The CLI is **self-documenting**: bare
-`photos-ingest` prints the overall role + phase list; bare `photos-ingest <phase>` prints that phase's
+`photos-cartographer` prints the overall role + phase list; bare `photos-cartographer <phase>` prints that phase's
 role blurb + its subcommands (the tool is used a few times a year). Each phase still has a standalone
 entry (`python -m photos_pipeline.photos_1_prep …`) sharing the same `add_arguments`/`run` — tests use it.
 
-- `photos-ingest prep` — subcommands `plan` / `dry-run` / `execute` (+ `prune-quarantine`).
-- `photos-ingest geotag` — `plan` / `execute` / `finalize` (was the `photos-2-geotag` phase, formerly
+- `photos-cartographer prep` — subcommands `plan` / `dry-run` / `execute` (+ `prune-quarantine`).
+- `photos-cartographer geotag` — `plan` / `execute` / `finalize` (was the `photos-2-geotag` phase, formerly
   named "calibrate"; its `run` subcommand was **renamed to `plan`** so all phases start with `plan`).
-- `photos-ingest merge` — `init-library` / `plan` / `dry-run` / `execute`.
-- `photos-ingest edit` — the decision editor (a local web server; folded into the package at `photos_pipeline/editor/`, web assets served as package data via importlib.resources, no bundler).
+- `photos-cartographer merge` — `init-library` / `plan` / `dry-run` / `execute`.
+- `photos-cartographer edit` — the decision editor (a local web server; folded into the package at `photos_pipeline/editor/`, web assets served as package data via importlib.resources, no bundler).
   Like every phase it operates on the **cwd workspace** (no workspace-naming argument) and refuses to
   run if the cwd is not an initialized workspace; `--demo` is the only no-workspace mode (read-only
   fixtures tour). Phases share the plan/validate/execute contract; workspace = cwd. The original `prep` / `geotag` /

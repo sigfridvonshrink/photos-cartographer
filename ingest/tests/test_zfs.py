@@ -73,7 +73,7 @@ def _intercept_zfs_snapshot(monkeypatch, fail=False):
 
 def test_validate_config_accepts_valid_zfs():
     utils.validate_config({"zfs": {"enabled": True, "snapshots_required": False,
-                                   "snapshot_prefix": "photos-ingest-",
+                                   "snapshot_prefix": "photos-cartographer-",
                                    "datasets": {"workspace": "auto", "library": "pool/lib"}}})
 
 
@@ -134,7 +134,7 @@ def test_snapshot_taken_with_detected_dataset_and_prefix(tmp_path, monkeypatch, 
     monkeypatch.setattr(utils, "detect_zfs_dataset", lambda p: "pool/ws")
     _intercept_zfs_snapshot(monkeypatch, fail=False)
     prep.CONFIG["zfs"] = {"enabled": True, "snapshots_required": True,
-                          "snapshot_prefix": "photos-ingest-", "datasets": {"workspace": "auto"}}
+                          "snapshot_prefix": "photos-cartographer-", "datasets": {"workspace": "auto"}}
     ws = _ws(tmp_path)
     (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
     plan = _plan(ws)
@@ -143,14 +143,14 @@ def test_snapshot_taken_with_detected_dataset_and_prefix(tmp_path, monkeypatch, 
     snap = j["snapshots"]["workspace"]
     assert snap["exit_code"] == 0
     # the shared helper labels prep's snapshot "prep-" so it never collides with geotag's
-    assert snap["snapshot_name"] == f"pool/ws@photos-ingest-prep-{plan.plan_id}"
+    assert snap["snapshot_name"] == f"pool/ws@photos-cartographer-prep-{plan.plan_id}"
 
 
 def test_required_snapshot_with_no_dataset_aborts(tmp_path, monkeypatch, seed_from_live_config):
     _mock_media(monkeypatch)
     monkeypatch.setattr(utils, "detect_zfs_dataset", lambda p: None)   # workspace not on zfs
     prep.CONFIG["zfs"] = {"enabled": True, "snapshots_required": True,
-                          "snapshot_prefix": "photos-ingest-", "datasets": {"workspace": "auto"}}
+                          "snapshot_prefix": "photos-cartographer-", "datasets": {"workspace": "auto"}}
     ws = _ws(tmp_path)
     (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
     plan = _plan(ws)

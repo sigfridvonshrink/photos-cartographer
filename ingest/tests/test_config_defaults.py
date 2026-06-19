@@ -25,7 +25,7 @@ import photos_utils as u
 
 def test_falls_back_to_builtin(monkeypatch):
     monkeypatch.delenv("PHOTOS_PIPELINE_CONFIG", raising=False)
-    monkeypatch.setattr(u.sys, "argv", ["photos-ingest"])     # no sibling next to a bare prog name
+    monkeypatch.setattr(u.sys, "argv", ["photos-cartographer"])     # no sibling next to a bare prog name
     assert u.default_config()["gpx_root"] == u.DEFAULT_CONFIG["gpx_root"]
 
 
@@ -38,7 +38,7 @@ def test_env_path_overrides_builtin(tmp_path, monkeypatch):
 
 def test_sibling_of_executable_overrides_builtin(tmp_path, monkeypatch):
     monkeypatch.delenv("PHOTOS_PIPELINE_CONFIG", raising=False)
-    exe = tmp_path / "photos-ingest"; exe.write_text("")
+    exe = tmp_path / "photos-cartographer"; exe.write_text("")
     cfg = json.loads(json.dumps(u.DEFAULT_CONFIG)); cfg["gpx_root"] = "/sibling/gpx"
     (tmp_path / "photos-config-defaults.json").write_text(json.dumps(cfg))
     monkeypatch.setattr(u.sys, "argv", [str(exe)])
@@ -46,7 +46,7 @@ def test_sibling_of_executable_overrides_builtin(tmp_path, monkeypatch):
 
 
 def test_env_beats_sibling(tmp_path, monkeypatch):
-    exe = tmp_path / "photos-ingest"; exe.write_text("")
+    exe = tmp_path / "photos-cartographer"; exe.write_text("")
     sib = json.loads(json.dumps(u.DEFAULT_CONFIG)); sib["gpx_root"] = "/sibling"
     (tmp_path / "photos-config-defaults.json").write_text(json.dumps(sib))
     env = json.loads(json.dumps(u.DEFAULT_CONFIG)); env["gpx_root"] = "/env"

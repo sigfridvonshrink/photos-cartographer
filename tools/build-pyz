@@ -13,18 +13,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Build the single shippable `photos-ingest` executable (a shebang'd zipapp of the photos_pipeline
+"""Build the single shippable `photos-cartographer` executable (a shebang'd zipapp of the photos_pipeline
 package, editor included) plus its editable default-config sibling.
 
-  tools/build-pyz            # (re)build ingest/dist/{photos-ingest, photos-config-defaults.json}
+  tools/build-pyz            # (re)build ingest/dist/{photos-cartographer, photos-config-defaults.json}
   tools/build-pyz --check    # build to a temp dir + smoke-run the exe (CI / pre-push guard)
 
-The zipapp runs directly — `./photos-ingest prep plan` — needing only a python3 on the host (the
+The zipapp runs directly — `./photos-cartographer prep plan` — needing only a python3 on the host (the
 shebang finds it; zipapp does not embed Python). The build is DETERMINISTIC (sorted entries, fixed
 timestamps). `ingest/dist/` is gitignored (build output, not committed), so `--check` guards
 buildability by building to a temp dir and running the executable (`--version`) rather than byte-
 comparing a committed artifact. Detached deploy = build, copy the two files anywhere, `chmod +x
-photos-ingest`, edit the sibling JSON to retune defaults (it wins over the built-in; see
+photos-cartographer`, edit the sibling JSON to retune defaults (it wins over the built-in; see
 photos_utils.default_config). Run from the repo root.
 """
 import argparse
@@ -42,7 +42,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 INGEST = os.path.join(ROOT, "ingest")
 PKG = os.path.join(INGEST, "photos_pipeline")
 DIST = os.path.join(INGEST, "dist")
-OUT = os.path.join(DIST, "photos-ingest")
+OUT = os.path.join(DIST, "photos-cartographer")
 SIBLING = os.path.join(DIST, "photos-config-defaults.json")
 
 SHEBANG = b"#!/usr/bin/env python3\n"
@@ -107,15 +107,15 @@ def main():
         # Build to a throwaway dir and run the executable — verifies it assembles AND runs (the
         # committed artifact is gitignored, so there's nothing to byte-compare against).
         with tempfile.TemporaryDirectory() as td:
-            exe = os.path.join(td, "photos-ingest")
+            exe = os.path.join(td, "photos-cartographer")
             with open(exe, "wb") as f:
                 f.write(pyz)
             os.chmod(exe, 0o755)
             json.loads(sib)                                   # the sibling is valid JSON
             r = subprocess.run([exe, "--version"], capture_output=True, text=True)
-            if r.returncode != 0 or "photos-ingest" not in r.stdout:
-                sys.exit(f"photos-ingest build does not run: rc={r.returncode} out={r.stdout!r} err={r.stderr!r}")
-        print("photos-ingest builds and runs.")
+            if r.returncode != 0 or "photos-cartographer" not in r.stdout:
+                sys.exit(f"photos-cartographer build does not run: rc={r.returncode} out={r.stdout!r} err={r.stderr!r}")
+        print("photos-cartographer builds and runs.")
         return
 
     os.makedirs(DIST, exist_ok=True)

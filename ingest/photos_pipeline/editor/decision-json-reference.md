@@ -402,5 +402,5 @@ A natural shape that satisfies the contract:
 3. Let the human edit only `user_decision`; validate per §7 live; show a computed preview of the outcome
    if desired (display-only — not written authoritatively).
 4. Save by writing the modified `user_decision` blocks back into the loaded JSON (round-trip, preserving
-   all other fields and unknown keys) and serialising. The human then re-runs `photos-ingest geotag`, which
+   all other fields and unknown keys) and serialising. The human then re-runs `photos-cartographer geotag`, which
    regenerates the artifact, reads back the `user_decision` values, recomputes everything, and validates.

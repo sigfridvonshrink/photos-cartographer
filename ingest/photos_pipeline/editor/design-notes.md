@@ -12,11 +12,11 @@ it surfaces a to-do list, shows each decision's proposal + evidence, captures a 
 and writes back. Its **only hard requirement is conforming output** (see the reference's "conformance
 contract"): it edits **only `user_decision`**, round-trips everything else, and never recomputes
 `proposal`/`effective_*`/`status` — geotag does that on the next run. Any in-app outcome it shows
-is **advisory**; the loop is **edit → Save → re-run `photos-ingest geotag plan` → reload**.
+is **advisory**; the loop is **edit → Save → re-run `photos-cartographer geotag plan` → reload**.
 
 ## 2. Stack (decided)
 
-- **Local Python server**, stdlib only — launched as `photos-ingest edit`, which (like every phase)
+- **Local Python server**, stdlib only — launched as `photos-cartographer edit`, which (like every phase)
   operates on the **current-directory workspace**; there is no workspace-naming argument, and it
   refuses to run if the cwd is not an initialized workspace. It serves the SPA, reads/writes the
   workspace's `.photos-ingest/` decision JSON, and serves **photo previews** (embedded JPEG via
@@ -24,7 +24,7 @@ is **advisory**; the loop is **edit → Save → re-run `photos-ingest geotag pl
   `examples/` fixtures, so it runs with nothing installed.
   - The editor is **folded into the `photos_pipeline` package** (`photos_pipeline/editor/`): `server.py`
     plus the `web/` and `examples/` assets, which the server reads as **package data via
-    `importlib.resources`**. So it ships inside the single `photos-ingest` zipapp — no separate bundle,
+    `importlib.resources`**. So it ships inside the single `photos-cartographer` zipapp — no separate bundle,
     no `./bundle` step. Previews still need exiftool / ImageMagick and degrade gracefully when absent.
 - **No-build SPA**: plain vanilla ES modules — a hand-rolled DOM builder (`el()` + a manual `render()`),
   **no framework**. **Leaflet** (the map) is the only vendored library, under `web/vendor/` (no CDN at
@@ -181,7 +181,7 @@ then the proposal evidence last; non-coord cells just show the proposal.
    path-safe, workspace-only), for GPS cells. (Track/anchors/ghost dropped — not in the GPS artifact for
    review items; see §4.)
 3. **Persist + loop (done):** **Save** writes `user_decision` back (round-tripping every other field); a
-   **Reset** discards unsaved edits. The loop is **terminal**: after saving, re-run `photos-ingest geotag
+   **Reset** discards unsaved edits. The loop is **terminal**: after saving, re-run `photos-cartographer geotag
    plan` in a terminal and reload the regenerated artifacts. There is deliberately **no in-app Re-run
    button** — it proved error-prone and added little over the terminal command, so it was removed; every
    gate/stale banner instead tells you to re-run in a terminal and reload. (The server still exposes a

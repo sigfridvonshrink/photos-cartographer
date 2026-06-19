@@ -2470,7 +2470,7 @@ def prune_quarantine(workspace_root, plan_ids=None, older_than_days=None, do_del
 
 import argparse
 
-# One-paragraph role blurb shown by the combined CLI when `photos-ingest prep` is run with no
+# One-paragraph role blurb shown by the combined CLI when `photos-cartographer prep` is run with no
 # subcommand (and as this phase's standalone --help description).
 PREP_BLURB = (
     "prep — get a raw photo dump workspace-ready (phase 1 of 3).\n\n"
@@ -2478,7 +2478,7 @@ PREP_BLURB = (
     "quarantines (recoverably, never deletes), organizes media by date and into by-dest, and builds "
     "the hash cache + handoff that the next phase consumes. Planning never mutates; execution applies "
     "only a validated plan. Run inside the workspace directory.\n\n"
-    "Next: `photos-ingest geotag` to place photos in time + on the map."
+    "Next: `photos-cartographer geotag` to place photos in time + on the map."
 )
 
 
@@ -2495,7 +2495,7 @@ def positive_int(value):
 def add_arguments(parser):
     """Register prep's `-j` + subcommands on `parser` — the top parser when run standalone
     (`python -m photos_pipeline.photos_1_prep`), or the `prep` subparser in the combined
-    `photos-ingest` CLI. Shared so both invocations expose an identical surface."""
+    `photos-cartographer` CLI. Shared so both invocations expose an identical surface."""
     parser.add_argument("-j", "--jobs", type=positive_int, default=4, help="Number of parallel jobs for processing.")
     subparsers = parser.add_subparsers(dest="command")
 
@@ -2564,7 +2564,7 @@ def run(args):
             miss = missing_tools(["exiftool"])
             if miss:
                 print(f"Required external tool not found on PATH: {', '.join(miss)}. "
-                      "Install exiftool and re-run `photos-ingest prep plan`.", file=sys.stderr)
+                      "Install exiftool and re-run `photos-cartographer prep plan`.", file=sys.stderr)
                 sys.exit(3)
             soft = missing_tools(["magick", "ffmpeg"])
             if soft:
