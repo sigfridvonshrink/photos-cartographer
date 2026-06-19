@@ -51,8 +51,20 @@ FOLDER_DEDUP_PRIORITY = ["photos_by_dest", "photos_by_date", "videos_by_date",
 _MANAGED_ROLES = ["sources", "missing_metadata", "redundant_jpgs",
                   "videos_by_date", "photos_by_date", "photos_by_dest"]
 
+# --- Media classification by extension (prep Section 6.1). The extension LISTS are config (single
+# source of truth, seeded into photos-00-config.json, frozen per workspace, fingerprinted for
+# staleness); the CLASS VOCABULARY (image/raw/video) is pipeline logic and stays in code, with `other`
+# as the residual (anything not listed). Extensions are canonical: lowercase, no leading dot. ---
+MEDIA_CLASSES = ("image", "raw", "video")   # config-listed classes; "other" is the residual
+DEFAULT_MEDIA_EXTENSIONS = {
+    "image": ["jpg", "jpeg", "png", "heic", "tiff"],
+    "raw":   ["cr2", "cr3", "nef", "arw", "dng"],
+    "video": ["mp4", "mov", "avi", "mkv"],
+}
+
 CONFIG = {
     "folders": dict(DEFAULT_FOLDERS),
+    "media_extensions": {k: list(v) for k, v in DEFAULT_MEDIA_EXTENSIONS.items()},
     "zfs": {
         "enabled": False,                # opt-in; the dataset is auto-detected from the workspace
         "snapshots_required": False,     # if true, failure to snapshot aborts execution
@@ -169,16 +181,33 @@ def selected_gpx_root() -> str:
     root = CONFIG.get("gpx_root") or ""
     return os.path.realpath(os.path.abspath(root)) if root else ""
 
-# Media classification by extension (prep Section 6.1) — the single source of truth.
-_MEDIA_CLASS_BY_EXT = {}
-_MEDIA_CLASS_BY_EXT.update({e: "image" for e in ("jpg", "jpeg", "png", "heic", "tiff")})
-_MEDIA_CLASS_BY_EXT.update({e: "raw" for e in ("cr2", "cr3", "nef", "arw", "dng")})
-_MEDIA_CLASS_BY_EXT.update({e: "video" for e in ("mp4", "mov", "avi", "mkv")})
+# Media classification by extension (prep Section 6.1). The ext->class map is DERIVED from the active
+# CONFIG's `media_extensions` lists, rebuilt by _refresh_media_class_map() at import and whenever
+# load_or_seed_config swaps in a workspace's authoritative config. `other` is the residual.
+def _media_extensions(cfg=None):
+    return (cfg or CONFIG).get("media_extensions") or DEFAULT_MEDIA_EXTENSIONS
 
-def media_class_for_ext(ext: str) -> str:
-    """Classify a file by extension into image/raw/video/other (case-insensitive,
-    leading dot optional)."""
-    return _MEDIA_CLASS_BY_EXT.get((ext or "").lower().lstrip('.'), "other")
+def _build_media_class_map(cfg=None) -> dict:
+    m = {}
+    ext_cfg = _media_extensions(cfg)
+    for cls in MEDIA_CLASSES:
+        for ext in ext_cfg.get(cls, ()):
+            m[str(ext).lower().lstrip('.')] = cls
+    return m
+
+_MEDIA_CLASS_BY_EXT = _build_media_class_map(CONFIG)
+
+def _refresh_media_class_map():
+    """Rebuild the ext->class cache from the active CONFIG. Call after CONFIG is replaced/edited."""
+    global _MEDIA_CLASS_BY_EXT
+    _MEDIA_CLASS_BY_EXT = _build_media_class_map(CONFIG)
+
+def media_class_for_ext(ext: str, cfg=None) -> str:
+    """Classify a file by extension into image/raw/video/other (case-insensitive, leading dot
+    optional). The extension lists are config (prep Section 6.1); `other` is the residual. Pass `cfg`
+    to classify against a specific config rather than the active global CONFIG."""
+    m = _build_media_class_map(cfg) if cfg is not None else _MEDIA_CLASS_BY_EXT
+    return m.get((ext or "").lower().lstrip('.'), "other")
 
 
 # Exiftool intermediates/backups of a media file: `<media>_exiftool_tmp` (the temp `-overwrite_original`
@@ -338,6 +367,18 @@ def sha256_text(text: str) -> str:
     """SHA-256 over a UTF-8 string — used for field-scoped config fingerprints (a SHA-256 over a
     canonical serialization of a config sub-block, shared contract §4.2)."""
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+def folders_fingerprint(cfg=None) -> str:
+    """Field-scoped fingerprint of the folder-name set (shared contract §4.2). A change restales prep's
+    plan (organization/routing keyed on the names) and the geotag/merge plans (which locate by-dest by
+    name); it does not touch caches that don't depend on folder names."""
+    return sha256_text(json.dumps(_folders(cfg), sort_keys=True))
+
+def media_extensions_fingerprint(cfg=None) -> str:
+    """Field-scoped fingerprint of the media-extension classification lists (shared contract §4.2). A
+    change restales prep's plan: it flips files between media and stray and between image/raw/video, so
+    the organization itself changes."""
+    return sha256_text(json.dumps(_media_extensions(cfg), sort_keys=True))
 
 def json_dependency(name: str, ws: str, abs_path: str) -> dict:
     """The §4 JSON-artifact dependency entry for a numbered artifact / the prep handoff: its name,
@@ -660,6 +701,7 @@ def load_or_seed_config(workspace_root: str) -> str:
     CONFIG.update(loaded)
     if jobs is not None:
         CONFIG["jobs"] = jobs
+    _refresh_media_class_map()   # the workspace config's extension lists are now authoritative
     return sha
 
 
@@ -753,6 +795,30 @@ def validate_config(cfg: dict):
                 raise ValueError(f"config: folders.{role} and folders.{seen[name]} both name "
                                  f"{name!r} (folder names must be unique).")
             seen[name] = role
+
+    mx = cfg.get("media_extensions")
+    if mx is not None:
+        if not isinstance(mx, dict):
+            raise ValueError("config: media_extensions must be an object.")
+        missing = [c for c in MEDIA_CLASSES if c not in mx]
+        if missing:
+            raise ValueError(f"config: media_extensions is missing class(es): {', '.join(missing)}.")
+        ext_seen = {}
+        for cls in MEDIA_CLASSES:
+            lst = mx[cls]
+            if not isinstance(lst, list) or not lst:
+                raise ValueError(f"config: media_extensions.{cls} must be a non-empty list.")
+            for i, ext in enumerate(lst):
+                if not isinstance(ext, str) or not ext:
+                    raise ValueError(f"config: media_extensions.{cls}[{i}] must be a non-empty string.")
+                if (ext != ext.lower() or ext.startswith(".") or "/" in ext or "\x00" in ext
+                        or any(c.isspace() for c in ext)):
+                    raise ValueError(f"config: media_extensions.{cls}[{i}] {ext!r} must be a canonical "
+                                     f"bare extension (lowercase, no leading dot, no '/'/NUL/whitespace).")
+                if ext in ext_seen:
+                    raise ValueError(f"config: media_extensions.{cls} and media_extensions.{ext_seen[ext]} "
+                                     f"both list {ext!r} (an extension maps to exactly one class).")
+                ext_seen[ext] = cls
 
     if "filename_timestamp_format" in cfg:
         fmt = cfg["filename_timestamp_format"]

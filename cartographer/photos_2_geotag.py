@@ -45,6 +45,7 @@ from datetime import datetime, timedelta, timezone
 from .photos_utils import (
     CONFIG, CONTROL_DIR, config_path, handoff_path, guard_path, is_sealed,
     validate_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
+    folders_fingerprint, media_extensions_fingerprint,
     selected_gpx_root, CAMERA_IDENTITY_FIELDS, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
     missing_managed_folders,
     json_dependency, verify_json_dependency, handoff_content_fingerprint, write_json_artifact, write_versioned_json, db_path, ensure_control_dir,
@@ -1940,6 +1941,8 @@ class GeotagWorkflow:
             "gpx_fingerprint": self._gpx_fingerprint,
             "metadata_field_set_version": FIELD_SET_VERSION,
             "filename_format_fingerprint": sha256_text(CONFIG["filename_timestamp_format"]),
+            "folders_fingerprint": folders_fingerprint(),
+            "media_extensions_fingerprint": media_extensions_fingerprint(),
             "media_preconditions": media_pre,
             "planned_operation_fingerprint": planned_op_fp,
         }
@@ -1988,6 +1991,8 @@ class GeotagWorkflow:
         policy = json.dumps(CONFIG.get("camera_time_and_timezone_policy") or {}, sort_keys=True)
         for k, cur in (("config_fingerprint", sha256_file(config_path(ws))),
                        ("filename_format_fingerprint", sha256_text(CONFIG["filename_timestamp_format"])),
+                       ("folders_fingerprint", folders_fingerprint()),
+                       ("media_extensions_fingerprint", media_extensions_fingerprint()),
                        ("camera_group_fingerprint", sha256_text(policy)),
                        ("gpx_fingerprint", gpx.fingerprint)):
             if dep.get(k) != cur:
