@@ -22,15 +22,15 @@ from unittest import mock
 import photos_1_prep
 
 def test_photos_1_prep_exists():
-    assert os.path.exists('photos_pipeline/photos_1_prep.py')
+    assert os.path.exists('cartographer/photos_1_prep.py')
 
 def test_photos_utils_exists():
-    assert os.path.exists('photos_pipeline/photos_utils.py')
+    assert os.path.exists('cartographer/photos_utils.py')
 
 def test_no_geotag_command():
     parser = mock.MagicMock()
     # we just want to ensure that 'geotag' is not mentioned in the argparse setup or the file content as an active command path
-    with open('photos_pipeline/photos_1_prep.py', 'r') as f:
+    with open('cartographer/photos_1_prep.py', 'r') as f:
         content = f.read()
         # Verify that subcommands don't include geotag
         assert 'add_parser("geotag"' not in content
@@ -38,13 +38,13 @@ def test_no_geotag_command():
         assert 'add_parser("merge"' not in content
 
 def test_no_geotag_json_generation():
-    with open('photos_pipeline/photos_1_prep.py', 'r') as f:
+    with open('cartographer/photos_1_prep.py', 'r') as f:
         content = f.read()
         assert 'class GeotagGenerator' not in content
         assert 'class GeotagWorkflow' not in content
 
 def test_prep_plans_contain_no_time_metadata():
-    with open('photos_pipeline/photos_1_prep.py', 'r') as f:
+    with open('cartographer/photos_1_prep.py', 'r') as f:
         content = f.read()
         assert 'apply_time_sync' not in content
         assert 'apply_gpx_placement' not in content

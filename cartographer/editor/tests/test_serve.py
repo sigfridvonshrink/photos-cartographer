@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for the decision-editor server (`photos_pipeline/editor/server.py`).
+"""Tests for the decision-editor server (`cartographer/editor/server.py`).
 
 Covers the request-independent helpers (port auto-bump, machine-IP detection, the single-editor lock,
 JSON read/write, the user_decision-only edit apply, and save round-trip) plus a few end-to-end HTTP

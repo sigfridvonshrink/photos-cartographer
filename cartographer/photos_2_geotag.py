@@ -2333,7 +2333,7 @@ GEOTAG_BLURB = (
 
 def add_arguments(parser):
     """Register geotag's `-j` + subcommands (plan / execute / finalize) on `parser`. Shared by the
-    standalone `python -m photos_pipeline.photos_2_geotag` and the combined `photos-cartographer geotag`."""
+    standalone `python -m cartographer.photos_2_geotag` and the combined `photos-cartographer geotag`."""
     parser.add_argument("-j", "--jobs", type=int, default=None,
                         help="Worker threads for execution (default: config jobs, else 4).")
     sub = parser.add_subparsers(dest="command")
@@ -2610,7 +2610,7 @@ def run(args):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(prog="photos_pipeline.photos_2_geotag", description=GEOTAG_BLURB,
+    parser = argparse.ArgumentParser(prog="cartographer.photos_2_geotag", description=GEOTAG_BLURB,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     add_arguments(parser)
     args = parser.parse_args(argv)

@@ -6,7 +6,7 @@ actual geotag builders** (see `../generate_examples.py`) and serialized with the
 Regenerate with:
 
 ```bash
-python3 photos_pipeline/editor/generate_examples.py
+python3 cartographer/editor/generate_examples.py
 ```
 
 The generator self-verifies that **every distinct decision-cell state** appears across the fixtures

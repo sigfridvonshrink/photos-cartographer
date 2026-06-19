@@ -28,9 +28,9 @@ import os
 import re
 import sys
 
-SRC_FILES = ["photos_pipeline/photos_1_prep.py", "photos_pipeline/photos_2_geotag.py",
-             "photos_pipeline/photos_3_merge.py", "photos_pipeline/photos_utils.py",
-             "photos_pipeline/cli.py"]
+SRC_FILES = ["cartographer/photos_1_prep.py", "cartographer/photos_2_geotag.py",
+             "cartographer/photos_3_merge.py", "cartographer/photos_utils.py",
+             "cartographer/cli.py"]
 TESTS_DIR = "tests"
 
 # Names that are legitimately definition-only / entry points, not "test-only production code".

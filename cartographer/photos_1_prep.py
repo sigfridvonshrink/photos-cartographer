@@ -2494,7 +2494,7 @@ def positive_int(value):
 
 def add_arguments(parser):
     """Register prep's `-j` + subcommands on `parser` — the top parser when run standalone
-    (`python -m photos_pipeline.photos_1_prep`), or the `prep` subparser in the combined
+    (`python -m cartographer.photos_1_prep`), or the `prep` subparser in the combined
     `photos-cartographer` CLI. Shared so both invocations expose an identical surface."""
     parser.add_argument("-j", "--jobs", type=positive_int, default=4, help="Number of parallel jobs for processing.")
     subparsers = parser.add_subparsers(dest="command")
@@ -2687,7 +2687,7 @@ def run(args):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(prog="photos_pipeline.photos_1_prep", description=PREP_BLURB,
+    parser = argparse.ArgumentParser(prog="cartographer.photos_1_prep", description=PREP_BLURB,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     add_arguments(parser)
     args = parser.parse_args(argv)

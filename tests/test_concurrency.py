@@ -261,9 +261,9 @@ def test_cli_jobs_argparse(workspace):
     import os
 
     # The prep phase is now a package module; invoke it via `python -m` with the repo root on
-    # PYTHONPATH so `photos_pipeline` imports (mirrors how it runs from a checkout / how the editor re-runs it).
+    # PYTHONPATH so `cartographer` imports (mirrors how it runs from a checkout / how the editor re-runs it).
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    mod = ["python3", "-m", "photos_pipeline.photos_1_prep"]
+    mod = ["python3", "-m", "cartographer.photos_1_prep"]
     base_env = os.environ.copy()
     base_env["PYTHONPATH"] = repo_root + os.pathsep + base_env.get("PYTHONPATH", "")
     # Ensure it rejects invalid jobs

@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Build the single shippable `photos-cartographer` executable (a shebang'd zipapp of the photos_pipeline
+"""Build the single shippable `photos-cartographer` executable (a shebang'd zipapp of the cartographer
 package, editor included) plus its editable default-config sibling.
 
   tools/build-pyz            # (re)build dist/{photos-cartographer, photos-config-defaults.json}
@@ -39,14 +39,14 @@ import tempfile
 import zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PKG = os.path.join(ROOT, "photos_pipeline")
+PKG = os.path.join(ROOT, "cartographer")
 DIST = os.path.join(ROOT, "dist")
 OUT = os.path.join(DIST, "photos-cartographer")
 SIBLING = os.path.join(DIST, "photos-config-defaults.json")
 
 SHEBANG = b"#!/usr/bin/env python3\n"
 # zipapp's root __main__.py: dispatch into the combined CLI.
-MAIN_PY = "import sys\nimport photos_pipeline.cli\nsys.exit(photos_pipeline.cli.main())\n"
+MAIN_PY = "import sys\nimport cartographer.cli\nsys.exit(cartographer.cli.main())\n"
 FIXED_DATE = (1980, 1, 1, 0, 0, 0)            # constant mtime -> reproducible archive bytes
 
 
@@ -60,7 +60,7 @@ def _included():
             if name == "generate_examples.py" or name.endswith((".md", ".pyc")):
                 continue
             abspath = os.path.join(dirpath, name)
-            arc = os.path.relpath(abspath, ROOT)          # -> "photos_pipeline/..."
+            arc = os.path.relpath(abspath, ROOT)          # -> "cartographer/..."
             out.append((arc, abspath))
     return sorted(out)
 
@@ -79,7 +79,7 @@ def build_pyz_bytes(version=None):
         for arc, abspath in _included():
             with open(abspath, "rb") as f:
                 data = f.read()
-            if version and arc == "photos_pipeline/__init__.py":
+            if version and arc == "cartographer/__init__.py":
                 data = re.sub(rb'__version__ = "[^"]*"', b'__version__ = "%s"' % version.encode(), data)
             write(arc, data)
     return SHEBANG + buf.getvalue()
@@ -87,7 +87,7 @@ def build_pyz_bytes(version=None):
 
 def build_sibling_bytes():
     sys.path.insert(0, ROOT)
-    from photos_pipeline import photos_utils          # noqa: E402
+    from cartographer import photos_utils          # noqa: E402
     defaults = {k: v for k, v in photos_utils.DEFAULT_CONFIG.items() if k != "jobs"}
     return (json.dumps(defaults, indent=2, sort_keys=True) + "\n").encode("utf-8")
 

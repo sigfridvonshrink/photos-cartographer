@@ -25,7 +25,7 @@ decision-cell state the editor must render/edit; the *outputs* are authentic.
 fill in `user_decision` fields, and re-run the builder with it as the prior (the real
 preservation/validation path).
 
-Run from the repo root:  python3 photos_pipeline/editor/generate_examples.py
+Run from the repo root:  python3 cartographer/editor/generate_examples.py
 """
 import json
 import os
@@ -33,14 +33,14 @@ import sys
 import tempfile
 from datetime import datetime, timezone
 
-# This dev tool lives at photos_pipeline/editor/generate_examples.py; it writes the demo fixtures into
+# This dev tool lives at cartographer/editor/generate_examples.py; it writes the demo fixtures into
 # the sibling examples/ package-data dir, and imports the pipeline package from the repo root (two levels up).
 _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "examples")
 
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
-from photos_pipeline import photos_utils as utils, photos_2_geotag as cal  # noqa: E402
+from cartographer import photos_utils as utils, photos_2_geotag as cal  # noqa: E402
 
 BD = "6-photos-by-dest"
 written = []

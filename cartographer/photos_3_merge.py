@@ -1138,7 +1138,7 @@ MERGE_BLURB = (
 
 def add_arguments(parser):
     """Register merge's `-j` + subcommands (init-library / plan / dry-run / execute) on `parser`.
-    Shared by the standalone `python -m photos_pipeline.photos_3_merge` and `photos-cartographer merge`."""
+    Shared by the standalone `python -m cartographer.photos_3_merge` and `photos-cartographer merge`."""
     parser.add_argument("-j", "--jobs", type=int, default=None,
                         help="Worker threads for execution (default: config jobs, else 4).")
     sub = parser.add_subparsers(dest="command")
@@ -1160,7 +1160,7 @@ def run(args):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(prog="photos_pipeline.photos_3_merge", description=MERGE_BLURB,
+    parser = argparse.ArgumentParser(prog="cartographer.photos_3_merge", description=MERGE_BLURB,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     add_arguments(parser)
     args = parser.parse_args(argv)

@@ -15,7 +15,7 @@
 """The decision editor's local server — `photos-cartographer edit` (operates on the current-directory workspace).
 
 Serves the single-page app and exposes the workspace's decision artifacts as JSON. Stdlib only; its
-front-end + demo fixtures are PACKAGE DATA (`photos_pipeline/editor/{web,examples}`) read via
+front-end + demo fixtures are PACKAGE DATA (`cartographer/editor/{web,examples}`) read via
 importlib.resources, so it works identically from a checkout and from inside the shipped zipapp.
 
 It launches nothing — it prints a clickable link using the machine's own IP and binds to a reachable
@@ -76,10 +76,10 @@ def _machine_ip():
     finally:
         s.close()
 
-# The editor lives inside the photos_pipeline package; geotag re-run self-invokes the combined
-# CLI (`python -m photos_pipeline geotag plan`) — works from a checkout and from inside the shipped
+# The editor lives inside the cartographer package; geotag re-run self-invokes the combined
+# CLI (`python -m cartographer geotag plan`) — works from a checkout and from inside the shipped
 # zipapp. PKG_ROOT is the sys.path entry that holds the package: a checkout's , or the .pyz file
-# itself (so a subprocess `python -m photos_pipeline …` imports it).
+# itself (so a subprocess `python -m cartographer …` imports it).
 PKG_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CONTROL = ".photos-ingest"
 TIME_NAME = "photos-21-time-decisions.json"
@@ -97,7 +97,7 @@ PREVIEW_MAX_PX = 1600     # longest edge of a generated photo preview
 RERUN_TIMEOUT_S = 3600    # cap on a `photos-cartographer geotag plan` invoked from the editor
 
 
-# Front-end + demo fixtures are PACKAGE DATA (photos_pipeline/editor/{web,examples}), read via
+# Front-end + demo fixtures are PACKAGE DATA (cartographer/editor/{web,examples}), read via
 # importlib.resources so they resolve identically from a checkout and from inside the zipapp. The rest
 # of the server only ever calls _web_asset(rel) / _example_bytes(name).
 import importlib.resources as _res
@@ -107,7 +107,7 @@ def _read_data(subdir, parts):
     if not parts or any(p in ("", ".", "..") for p in parts):
         return None                                 # empty or path-escaping -> not found
     try:
-        t = _res.files("photos_pipeline.editor").joinpath(subdir, *parts)
+        t = _res.files("cartographer.editor").joinpath(subdir, *parts)
         return t.read_bytes() if t.is_file() else None
     except (FileNotFoundError, ModuleNotFoundError, OSError):
         return None
@@ -215,12 +215,12 @@ def _example_json(name):
 
 
 def _geotag_cmd_env():
-    """The argv + env to re-run geotag: self-invoke the combined CLI `python -m photos_pipeline
+    """The argv + env to re-run geotag: self-invoke the combined CLI `python -m cartographer
     geotag plan` with PKG_ROOT on PYTHONPATH, so it imports the package whether that root is a
     checkout's  or the shipped .pyz — and regardless of the editor's cwd."""
     env = os.environ.copy()
     env["PYTHONPATH"] = PKG_ROOT + os.pathsep + env.get("PYTHONPATH", "")
-    return [sys.executable, "-m", "photos_pipeline", "geotag", "plan"], env
+    return [sys.executable, "-m", "cartographer", "geotag", "plan"], env
 
 
 def _environment(workspace):
@@ -485,9 +485,9 @@ def serve(workspace, port=8765, host="0.0.0.0"):
 
 
 def main(argv=None):
-    """Standalone entry (`python -m photos_pipeline.editor.server`); the normal path is
+    """Standalone entry (`python -m cartographer.editor.server`); the normal path is
     `photos-cartographer edit`, which calls run()/serve() directly."""
-    parser = argparse.ArgumentParser(prog="photos_pipeline.editor.server", description=EDIT_BLURB,
+    parser = argparse.ArgumentParser(prog="cartographer.editor.server", description=EDIT_BLURB,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     add_arguments(parser)
     return run(parser.parse_args(argv))

@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""The combined `photos-cartographer` CLI dispatcher (photos_pipeline/cli.py): self-documenting blurbs,
+"""The combined `photos-cartographer` CLI dispatcher (cartographer/cli.py): self-documenting blurbs,
 phase→subcommand wiring, and the geotag run→plan rename. From conftest.py."""
 import pytest
 
-from photos_pipeline import cli, photos_1_prep, photos_2_geotag, photos_3_merge
+from cartographer import cli, photos_1_prep, photos_2_geotag, photos_3_merge
 
 
 def test_no_args_prints_overall_blurb(capsys):

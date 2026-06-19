@@ -140,10 +140,10 @@ DEFAULT_CONFIG = copy.deepcopy(CONFIG)
 
 def _default_config_paths():
     """Candidate external default-config files, highest precedence first: an explicit
-    $PHOTOS_PIPELINE_CONFIG path, then a `photos-config-defaults.json` sibling of the running
+    $PHOTOS_CARTOGRAPHER_CONFIG path, then a `photos-config-defaults.json` sibling of the running
     executable (so a detached deploy retunes new-workspace defaults by editing that file, never the
     zip). Yields paths to try; missing ones are skipped by the caller."""
-    env = os.environ.get("PHOTOS_PIPELINE_CONFIG")
+    env = os.environ.get("PHOTOS_CARTOGRAPHER_CONFIG")
     if env:
         yield env
     argv0 = sys.argv[0] if sys.argv else ""

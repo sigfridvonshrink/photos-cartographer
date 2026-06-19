@@ -22,7 +22,7 @@ is **advisory**; the loop is **edit → Save → re-run `photos-cartographer geo
   workspace's `.photos-ingest/` decision JSON, and serves **photo previews** (embedded JPEG via
   exiftool/ImageMagick — already repo deps). `--demo` is the only no-workspace mode: read-only on the
   `examples/` fixtures, so it runs with nothing installed.
-  - The editor is **folded into the `photos_pipeline` package** (`photos_pipeline/editor/`): `server.py`
+  - The editor is **folded into the `cartographer` package** (`cartographer/editor/`): `server.py`
     plus the `web/` and `examples/` assets, which the server reads as **package data via
     `importlib.resources`**. So it ships inside the single `photos-cartographer` zipapp — no separate bundle,
     no `./bundle` step. Previews still need exiftool / ImageMagick and degrade gracefully when absent.
