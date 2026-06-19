@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-import photos_2_time_gps as cal
+import photos_2_geotag as cal
 import photos_utils as utils
 
 CFG = {"gpx_anchor_max_point_distance_meters": 30.0, "gpx_anchor_max_segment_distance_meters": 30.0,
@@ -326,7 +326,7 @@ def test_run_auto_resolves_offset_from_gpx(tmp_path, monkeypatch):
 
     CAM_CFG = CAM
     monkeypatch.chdir(str(ws))
-    monkeypatch.setattr(sys, "argv", ["photos-2-time-gps", "plan"])
+    monkeypatch.setattr(sys, "argv", ["photos-2-geotag", "plan"])
     try:
         cal.main()
     except SystemExit as e:

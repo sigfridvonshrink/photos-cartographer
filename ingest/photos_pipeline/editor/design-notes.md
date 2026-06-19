@@ -2,7 +2,7 @@
 
 > **NON-AUTHORITATIVE.** Design/UX decisions for the decision-editing app, recorded so the build has a
 > shared picture. The JSON it edits is described in `decision-json-reference.md`; the authoritative
-> behaviour is the geotag code (`../photos-2-time-gps`). These notes are a plan, not a contract.
+> behaviour is the geotag code (`../photos-2-geotag`). These notes are a plan, not a contract.
 
 ## 1. What it is
 

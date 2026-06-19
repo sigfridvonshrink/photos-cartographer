@@ -321,7 +321,7 @@ def _rerun(workspace):
     except OSError as e:
         return {"ok": False, "error": f"could not start geotag: {e}"}
     # Tail the output so a huge log can't bloat the response; the exit code is the source of truth
-    # (0 = planned, 2 = blockers/unknown groups, 1 = workspace locked — see photos-2-time-gps main()).
+    # (0 = planned, 2 = blockers/unknown groups, 1 = workspace locked — see photos-2-geotag main()).
     return {"ok": proc.returncode == 0, "returncode": proc.returncode,
             "stdout": proc.stdout[-8000:], "stderr": proc.stderr[-8000:]}
 

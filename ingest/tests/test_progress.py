@@ -32,7 +32,7 @@ def test_detail_silent_when_quiet(capsys):
 
 
 def test_gpx_build_reports_per_file_progress(tmp_path):
-    import photos_2_time_gps as cal
+    import photos_2_geotag as cal
     d = tmp_path / "gpx"; d.mkdir()
     for i in range(3):
         (d / f"track{i}.gpx").write_text("")           # extension is enough to be counted

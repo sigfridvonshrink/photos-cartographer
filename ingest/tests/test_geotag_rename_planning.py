@@ -6,7 +6,7 @@ coverage. Pure functions, unit-tested directly. From conftest.py.
 """
 import pytest
 
-import photos_2_time_gps as cal
+import photos_2_geotag as cal
 
 FMT = "%Y-%m-%d--%H-%M-%S"
 TZ = "Europe/Brussels"

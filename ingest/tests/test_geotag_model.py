@@ -1,5 +1,5 @@
 """Phase 2 (geotag) — the in-memory model: by-dest file objects, GPX index, camera groups
-(photos-2-time-gps, spec §14–§16). Still pre-decision: no JSON artifacts. From conftest.py.
+(photos-2-geotag, spec §14–§16). Still pre-decision: no JSON artifacts. From conftest.py.
 """
 import json
 import os
@@ -7,7 +7,7 @@ import sys
 
 import pytest
 
-import photos_2_time_gps as cal
+import photos_2_geotag as cal
 import photos_utils as utils
 
 MANAGED = ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
@@ -164,7 +164,7 @@ def _full_ws(tmp_path, *, device_groups, bydest_key="SONY|ILCE-6400|123"):
 
 def _main(monkeypatch, ws):
     monkeypatch.chdir(str(ws))
-    monkeypatch.setattr(sys, "argv", ["photos-2-time-gps", "plan"])
+    monkeypatch.setattr(sys, "argv", ["photos-2-geotag", "plan"])
     try:
         cal.main(); return 0
     except SystemExit as e:

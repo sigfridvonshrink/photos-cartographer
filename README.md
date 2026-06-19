@@ -19,13 +19,13 @@ behavior, update the governing spec first.
 | Document | Scope |
 |---|---|
 | [`photos-1-prep-workflow.md`](ingest/workflows/photos-1-prep-workflow.md) | **Phase 1 — prep:** consolidation, extension normalization, dedup/quarantine, organization, cache/handoff. |
-| [`photos-2-time-gps-workflow.md`](ingest/workflows/photos-2-time-gps-workflow.md) | **Phase 2 — time/GPS calibration:** camera-clock inference and track-based geotagging. |
+| [`photos-2-geotag-workflow.md`](ingest/workflows/photos-2-geotag-workflow.md) | **Phase 2 — geotag:** camera-clock inference and track-based geotagging. |
 | [`photos-3-merge-workflow.md`](ingest/workflows/photos-3-merge-workflow.md) | **Phase 3 — merge:** safe merge of the calibrated working set into the permanent digiKam library. |
 | [`photos-shared-contract.md`](ingest/workflows/photos-shared-contract.md) | Facts all phases share: the run lock, the `.photos-ingest/` control directory, `photos-00-config.json`, the registry, formats, `gpx_root`, and the end-to-end operator loop. |
 
 ## Layout
 
-- `ingest/photos_pipeline/` — the pipeline package: `photos_1_prep.py` / `photos_2_time_gps.py` /
+- `ingest/photos_pipeline/` — the pipeline package: `photos_1_prep.py` / `photos_2_geotag.py` /
   `photos_3_merge.py` (the three phases) + `photos_utils.py` (shared `CONFIG` template + utilities) +
   `cli.py` (the combined `photos-ingest` entry) + `editor/` (the decision editor). Run a phase from a
   checkout with `python3 -m photos_pipeline <phase> <subcommand>` (with `ingest/` on `PYTHONPATH`), or

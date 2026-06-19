@@ -218,7 +218,7 @@ function fmtOffset(s) {
 
 // Offset ⟷ real-UTC conversion. The offset is the one stored value; UTC is just the anchor frame's
 // real instant (camera_naive + offset) rendered as a clock. All math is on naive wall-times treated as
-// UTC epoch ms (Date.UTC), matching geotag's `real_utc_naive − camera_naive` (photos_pipeline.photos_2_time_gps).
+// UTC epoch ms (Date.UTC), matching geotag's `real_utc_naive − camera_naive` (photos_pipeline.photos_2_geotag).
 const _pad = (n) => String(n).padStart(2, "0");
 function camNaiveMs(s) { // camera EXIF naive "YYYY:MM:DD HH:MM:SS"
   const m = /^(\d{4}):(\d\d):(\d\d)[ T](\d\d):(\d\d):(\d\d)/.exec(s || "");

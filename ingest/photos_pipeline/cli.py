@@ -8,7 +8,7 @@ so it explains itself.
 """
 import argparse
 
-from . import __version__, photos_1_prep, photos_2_time_gps, photos_3_merge
+from . import __version__, photos_1_prep, photos_2_geotag, photos_3_merge
 from .editor import server as editor
 
 OVERALL_BLURB = (
@@ -25,7 +25,7 @@ OVERALL_BLURB = (
 )
 
 # (name, module). `edit` (the decision editor) is a leaf phase — no subcommands; it runs the server.
-_PHASES = (("prep", photos_1_prep), ("geotag", photos_2_time_gps), ("merge", photos_3_merge),
+_PHASES = (("prep", photos_1_prep), ("geotag", photos_2_geotag), ("merge", photos_3_merge),
            ("edit", editor))
 
 

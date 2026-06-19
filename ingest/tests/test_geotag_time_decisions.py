@@ -8,7 +8,7 @@ import sys
 
 import pytest
 
-import photos_2_time_gps as cal
+import photos_2_geotag as cal
 import photos_utils as utils
 
 MANAGED = ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
@@ -48,7 +48,7 @@ def _ws(tmp_path, *, files, device_groups, default_tz=""):
 
 def _run(monkeypatch, ws):
     monkeypatch.chdir(str(ws))
-    monkeypatch.setattr(sys, "argv", ["photos-2-time-gps", "plan"])
+    monkeypatch.setattr(sys, "argv", ["photos-2-geotag", "plan"])
     try:
         cal.main(); return 0
     except SystemExit as e:

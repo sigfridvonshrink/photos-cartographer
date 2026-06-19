@@ -14,10 +14,10 @@ _INGEST_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if _INGEST_DIR not in sys.path:
     sys.path.insert(0, _INGEST_DIR)
 
-from photos_pipeline import photos_utils, photos_1_prep, photos_2_time_gps, photos_3_merge  # noqa: E402
+from photos_pipeline import photos_utils, photos_1_prep, photos_2_geotag, photos_3_merge  # noqa: E402
 
 for _short, _mod in (("photos_utils", photos_utils), ("photos_1_prep", photos_1_prep),
-                     ("photos_2_time_gps", photos_2_time_gps), ("photos_3_merge", photos_3_merge)):
+                     ("photos_2_geotag", photos_2_geotag), ("photos_3_merge", photos_3_merge)):
     sys.modules.setdefault(_short, _mod)
 
 

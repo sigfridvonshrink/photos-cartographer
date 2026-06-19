@@ -9,7 +9,7 @@ import sys
 
 import pytest
 
-import photos_2_time_gps as cal
+import photos_2_geotag as cal
 import photos_utils as utils
 
 CAM = "SONY|ILCE-6400|123"
@@ -163,7 +163,7 @@ def test_run_populates_cache_when_complete(tmp_path, monkeypatch, capsys):
 
     def run():
         monkeypatch.chdir(str(ws))
-        monkeypatch.setattr(sys, "argv", ["photos-2-time-gps", "plan"])
+        monkeypatch.setattr(sys, "argv", ["photos-2-geotag", "plan"])
         try:
             cal.main()
         except SystemExit as e:

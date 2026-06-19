@@ -298,7 +298,7 @@ def test_merge_log_copies_photos25_forward_and_appends(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     # Seed photos-25 with a prior geotag journey for fingerprint A.
     open(_ctl(ws, "photos-26-complete-log.json"), "w").write(json.dumps(
-        {"schema_version": 1, "tool": "photos-2-time-gps",
+        {"schema_version": 1, "tool": "photos-2-geotag",
          "photos": {"A": {"content_fingerprint": "A",
                           "journey": [{"phase": "geotag", "action": "renamed"}]}}}))
     assert merge._run_locked_workflow("plan", str(ws)) == 0

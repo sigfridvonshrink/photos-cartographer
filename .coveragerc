@@ -1,6 +1,6 @@
 # Coverage config for the active pipeline. The metadata/hash pools and the calibration executor run
 # in worker threads, so concurrency=thread is required to trace them. The report targets the
-# production code of every phase — the `photos_pipeline` package (prep / time-gps / merge / utils)
+# production code of every phase — the `photos_pipeline` package (prep / geotag / merge / utils)
 # and the decision-editor server. Run via `tools/coverage`, or as CI does:
 # `coverage run -m pytest && coverage report`.
 [run]

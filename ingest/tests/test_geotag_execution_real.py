@@ -13,7 +13,7 @@ import sys
 
 import pytest
 
-import photos_2_time_gps as cal
+import photos_2_geotag as cal
 import photos_utils as utils
 
 _HAVE_TOOLS = bool(shutil.which("exiftool") and (shutil.which("magick") or shutil.which("identify")))
@@ -41,7 +41,7 @@ def test_exif_write_preserves_content_fingerprint(tmp_path):
 
 def _run(monkeypatch, ws, cmd):
     monkeypatch.chdir(str(ws))
-    monkeypatch.setattr(sys, "argv", ["photos-2-time-gps", cmd])
+    monkeypatch.setattr(sys, "argv", ["photos-2-geotag", cmd])
     try:
         cal.main(); return 0
     except SystemExit as e:

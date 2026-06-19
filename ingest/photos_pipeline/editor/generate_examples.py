@@ -2,7 +2,7 @@
 """Generate example decision artifacts (fixtures) for the decision editor.
 
 These are produced by the REAL geotag decision builders (`build_time_decisions`,
-`compute_resolved_utc`, `build_gps_decisions` in `ingest/photos-2-time-gps`) and written with the
+`compute_resolved_utc`, `build_gps_decisions` in `ingest/photos-2-geotag`) and written with the
 real `write_json_artifact` serializer — guaranteed byte-identical to a geotag run's output, not
 hand-authored. The *inputs* are small synthetic photo sets chosen to exercise every distinct
 decision-cell state the editor must render/edit; the *outputs* are authentic.
@@ -26,7 +26,7 @@ OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "examples")
 
 if _INGEST not in sys.path:
     sys.path.insert(0, _INGEST)
-from photos_pipeline import photos_utils as utils, photos_2_time_gps as cal  # noqa: E402
+from photos_pipeline import photos_utils as utils, photos_2_geotag as cal  # noqa: E402
 
 BD = "6-photos-by-dest"
 written = []
