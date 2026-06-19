@@ -263,8 +263,11 @@ def scenario_no_default_timezone():
 # =====================================================================================
 
 def scenario_stale_decision():
+    # No default timezone (and no GPX) so the offset stays manual_required with NO proposal: accepting a
+    # proposal that isn't there is exactly the stale case. (With a default zone the offset would get a
+    # valid timezone_naive proposal and the accept would resolve cleanly — not stale.)
     _set_policy(device_groups={"fixed_clock_cameras": [CAM_B], "phones": []},
-                default_folder_timezone="Europe/Brussels")
+                default_folder_timezone="")
     files = [_file(f"{BD}/Stale/x.arw", CAM_B, "2024:07:03 13:00:00")]   # no GPX -> manual_required (no proposal)
     groups = {CAM_B: {"camera_group_class": "camera"}}
     wf = _wf()
