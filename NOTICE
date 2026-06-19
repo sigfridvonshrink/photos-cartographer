@@ -9,7 +9,7 @@ Third-party components bundled with this software
 
 This product bundles Leaflet 1.9.4 (https://leafletjs.com/), a JavaScript
 library for interactive maps, under
-ingest/photos_pipeline/editor/web/vendor/leaflet/. Leaflet is distributed
+photos_pipeline/editor/web/vendor/leaflet/. Leaflet is distributed
 under the BSD 2-Clause License. Its copyright notice and license terms are
 retained alongside the vendored files in
-ingest/photos_pipeline/editor/web/vendor/leaflet/LICENSE.
+photos_pipeline/editor/web/vendor/leaflet/LICENSE.

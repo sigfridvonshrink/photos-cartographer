@@ -2,9 +2,9 @@
 
 > **NON-AUTHORITATIVE.** This describes the shape of the two geotag *decision* artifacts so the
 > editor can be built against a stable picture. The **authoritative** source is the code that writes
-> and validates them — `ingest/photos_pipeline/photos_2_geotag.py` (`build_time_decisions`, `build_gps_decisions`,
+> and validates them — `photos_pipeline/photos_2_geotag.py` (`build_time_decisions`, `build_gps_decisions`,
 > `_timezone_decision`, `_offset_cell`, `_folder_fallback_cell`, `_review_item`, and the `_valid_*`
-> validators) — with the geotag spec `ingest/workflows/photos-2-geotag-workflow.md` as the
+> validators) — with the geotag spec `workflows/photos-2-geotag-workflow.md` as the
 > behavioural reference. If this doc and the code ever disagree, the code wins; update this doc.
 
 The editor is narrowly scoped: it helps a human fill in the **decisions** these files request, and its
@@ -380,7 +380,7 @@ A bare `""`/`false` everywhere = "no decision yet".
 ## 7. Validation rules for editable values
 
 Mirror these client-side; a value that fails makes geotag reject the whole artifact as a blocker.
-(Source: the `_valid_*` helpers in `ingest/photos_pipeline/photos_2_geotag.py`.)
+(Source: the `_valid_*` helpers in `photos_pipeline/photos_2_geotag.py`.)
 
 | Field(s) | Rule |
 |----------|------|

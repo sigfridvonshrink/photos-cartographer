@@ -3,7 +3,7 @@ name: release
 # Cut an official release by pushing a version tag, e.g.:  git tag v1.2.0 && git push origin v1.2.0
 # This builds the single `photos-cartographer` executable (version baked to match the tag) + its editable
 # config-defaults sibling, and attaches them to a GitHub Release. The binary is never committed to the
-# repo (ingest/dist/ is gitignored); releases are the distribution channel.
+# repo (dist/ is gitignored); releases are the distribution channel.
 on:
   push:
     tags: ["v*"]
@@ -24,13 +24,13 @@ jobs:
         run: |
           version="${GITHUB_REF_NAME#v}"          # v1.2.0 -> 1.2.0
           python3 tools/build-pyz --version "$version"
-          ingest/dist/photos-cartographer --version     # smoke: runs + reports the tagged version
+          dist/photos-cartographer --version     # smoke: runs + reports the tagged version
 
       - name: Create release and upload assets
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
-            ingest/dist/photos-cartographer \
-            ingest/dist/photos-config-defaults.json \
+            dist/photos-cartographer \
+            dist/photos-config-defaults.json \
             --title "$GITHUB_REF_NAME" --generate-notes

@@ -78,7 +78,7 @@ def _machine_ip():
 
 # The editor lives inside the photos_pipeline package; geotag re-run self-invokes the combined
 # CLI (`python -m photos_pipeline geotag plan`) — works from a checkout and from inside the shipped
-# zipapp. PKG_ROOT is the sys.path entry that holds the package: a checkout's ingest/, or the .pyz file
+# zipapp. PKG_ROOT is the sys.path entry that holds the package: a checkout's , or the .pyz file
 # itself (so a subprocess `python -m photos_pipeline …` imports it).
 PKG_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CONTROL = ".photos-ingest"
@@ -217,7 +217,7 @@ def _example_json(name):
 def _geotag_cmd_env():
     """The argv + env to re-run geotag: self-invoke the combined CLI `python -m photos_pipeline
     geotag plan` with PKG_ROOT on PYTHONPATH, so it imports the package whether that root is a
-    checkout's ingest/ or the shipped .pyz — and regardless of the editor's cwd."""
+    checkout's  or the shipped .pyz — and regardless of the editor's cwd."""
     env = os.environ.copy()
     env["PYTHONPATH"] = PKG_ROOT + os.pathsep + env.get("PYTHONPATH", "")
     return [sys.executable, "-m", "photos_pipeline", "geotag", "plan"], env

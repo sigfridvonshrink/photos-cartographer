@@ -16,7 +16,7 @@
 """Generate example decision artifacts (fixtures) for the decision editor.
 
 These are produced by the REAL geotag decision builders (`build_time_decisions`,
-`compute_resolved_utc`, `build_gps_decisions` in `ingest/photos-2-geotag`) and written with the
+`compute_resolved_utc`, `build_gps_decisions` in `photos-2-geotag`) and written with the
 real `write_json_artifact` serializer — guaranteed byte-identical to a geotag run's output, not
 hand-authored. The *inputs* are small synthetic photo sets chosen to exercise every distinct
 decision-cell state the editor must render/edit; the *outputs* are authentic.
@@ -25,7 +25,7 @@ decision-cell state the editor must render/edit; the *outputs* are authentic.
 fill in `user_decision` fields, and re-run the builder with it as the prior (the real
 preservation/validation path).
 
-Run from the repo root:  python3 ingest/photos_pipeline/editor/generate_examples.py
+Run from the repo root:  python3 photos_pipeline/editor/generate_examples.py
 """
 import json
 import os
@@ -34,12 +34,12 @@ import tempfile
 from datetime import datetime, timezone
 
 # This dev tool lives at photos_pipeline/editor/generate_examples.py; it writes the demo fixtures into
-# the sibling examples/ package-data dir, and imports the pipeline package from ingest/ (three levels up).
-_INGEST = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+# the sibling examples/ package-data dir, and imports the pipeline package from the repo root (two levels up).
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "examples")
 
-if _INGEST not in sys.path:
-    sys.path.insert(0, _INGEST)
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 from photos_pipeline import photos_utils as utils, photos_2_geotag as cal  # noqa: E402
 
 BD = "6-photos-by-dest"

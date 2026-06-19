@@ -6,7 +6,7 @@ actual geotag builders** (see `../generate_examples.py`) and serialized with the
 Regenerate with:
 
 ```bash
-python3 ingest/photos_pipeline/editor/generate_examples.py
+python3 photos_pipeline/editor/generate_examples.py
 ```
 
 The generator self-verifies that **every distinct decision-cell state** appears across the fixtures
@@ -45,4 +45,4 @@ by the real edit→re-run round-trip, so they also illustrate the loop the edito
 
 > The *inputs* are synthetic (chosen to exercise each state); the *outputs* are authentic. These are
 > illustrative fixtures, not a conformance suite — the authoritative shape is still the code
-> (`ingest/photos-2-geotag`).
+> (`photos-2-geotag`).

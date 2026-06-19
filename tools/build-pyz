@@ -16,12 +16,12 @@
 """Build the single shippable `photos-cartographer` executable (a shebang'd zipapp of the photos_pipeline
 package, editor included) plus its editable default-config sibling.
 
-  tools/build-pyz            # (re)build ingest/dist/{photos-cartographer, photos-config-defaults.json}
+  tools/build-pyz            # (re)build dist/{photos-cartographer, photos-config-defaults.json}
   tools/build-pyz --check    # build to a temp dir + smoke-run the exe (CI / pre-push guard)
 
 The zipapp runs directly — `./photos-cartographer prep plan` — needing only a python3 on the host (the
 shebang finds it; zipapp does not embed Python). The build is DETERMINISTIC (sorted entries, fixed
-timestamps). `ingest/dist/` is gitignored (build output, not committed), so `--check` guards
+timestamps). `dist/` is gitignored (build output, not committed), so `--check` guards
 buildability by building to a temp dir and running the executable (`--version`) rather than byte-
 comparing a committed artifact. Detached deploy = build, copy the two files anywhere, `chmod +x
 photos-cartographer`, edit the sibling JSON to retune defaults (it wins over the built-in; see
@@ -39,9 +39,8 @@ import tempfile
 import zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-INGEST = os.path.join(ROOT, "ingest")
-PKG = os.path.join(INGEST, "photos_pipeline")
-DIST = os.path.join(INGEST, "dist")
+PKG = os.path.join(ROOT, "photos_pipeline")
+DIST = os.path.join(ROOT, "dist")
 OUT = os.path.join(DIST, "photos-cartographer")
 SIBLING = os.path.join(DIST, "photos-config-defaults.json")
 
@@ -61,7 +60,7 @@ def _included():
             if name == "generate_examples.py" or name.endswith((".md", ".pyc")):
                 continue
             abspath = os.path.join(dirpath, name)
-            arc = os.path.relpath(abspath, INGEST)        # -> "photos_pipeline/..."
+            arc = os.path.relpath(abspath, ROOT)          # -> "photos_pipeline/..."
             out.append((arc, abspath))
     return sorted(out)
 
@@ -87,7 +86,7 @@ def build_pyz_bytes(version=None):
 
 
 def build_sibling_bytes():
-    sys.path.insert(0, INGEST)
+    sys.path.insert(0, ROOT)
     from photos_pipeline import photos_utils          # noqa: E402
     defaults = {k: v for k, v in photos_utils.DEFAULT_CONFIG.items() if k != "jobs"}
     return (json.dumps(defaults, indent=2, sort_keys=True) + "\n").encode("utf-8")

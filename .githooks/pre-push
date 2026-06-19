@@ -39,7 +39,7 @@ echo "pre-push: tests passed."
 # isn't installed locally — CI runs them regardless.
 if command -v node >/dev/null 2>&1; then
     echo "pre-push: running decision-editor front-end tests..."
-    if ! node --test ingest/photos_pipeline/editor/tests/*.test.mjs >/dev/null 2>&1; then
+    if ! node --test photos_pipeline/editor/tests/*.test.mjs >/dev/null 2>&1; then
         echo
         echo "pre-push: front-end tests FAILED — push aborted (run 'tools/jstest' to see details)."
         echo "          (override with 'git push --no-verify')"
@@ -50,7 +50,7 @@ else
     echo "pre-push: node not found — skipping front-end tests (CI will run them)."
 fi
 
-# The photos-cartographer executable must build and run (ingest/dist is gitignored, not committed).
+# The photos-cartographer executable must build and run (dist is gitignored, not committed).
 echo "pre-push: checking the photos-cartographer build assembles and runs..."
 if ! python3 tools/build-pyz --check; then
     echo
