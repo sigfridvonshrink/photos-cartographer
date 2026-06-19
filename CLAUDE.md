@@ -9,7 +9,7 @@ plan/validate/execute pipeline that ingests media and performs automatic GPS/tim
 Top-level layout (the package lives at the repo root):
 
 - **`photos_pipeline/`** — the pipeline package: prep / geotag / merge phases + the decision editor.
-- **`tests/`** — the test suite. **`workflows/`** — the authoritative workflow specs (with their own
+- **`tests/`** — the test suite. **`spec/`** — the authoritative workflow specs (with their own
   `README.md`).
 - **`tools/`** — build + test helpers (`build-pyz`, `coverage`, `jstest`).
 - **`.githooks/`** — local pre-commit / pre-push hooks. `.github/workflows/` — CI.
@@ -18,7 +18,7 @@ See `README.md` for the overview.
 
 The headline capability of the pipeline is **automatic camera-clock correction**: it infers a camera's
 clock offset by matching its already-geotagged frames against GPX tracks, then geotags the un-tagged
-majority by interpolating along the track. See `workflows/README.md`.
+majority by interpolating along the track. See `spec/README.md`.
 
 ## Commands
 
@@ -139,7 +139,7 @@ part of the behavioral contract). Current defaults worth knowing:
 ## Architecture & non-negotiable rules
 
 The whole design exists to safely mutate **irreplaceable originals**. These rules are specified in
-`workflows/` and override convenience:
+`spec/` and override convenience:
 
 - **No mutation outside a plan.** Every move/rename/quarantine/metadata-write/DB-mutation is a planned
   operation with a plan ID, op ID, explicit preconditions, expected result, and journal entry. Planning
@@ -160,7 +160,7 @@ The whole design exists to safely mutate **irreplaceable originals**. These rule
 
 ### Pipeline layout (shared contract)
 
-Defined in `workflows/photos-shared-contract.md`:
+Defined in `spec/photos-shared-contract.md`:
 
 - The pipeline is three phases: **prep** (`photos-1-prep`) → **geotag**
   (`photos-2-geotag`) → **merge** (`photos-3-merge`), all implemented.
@@ -187,11 +187,11 @@ Defined in `workflows/photos-shared-contract.md`:
   `6-photos-by-dest` staging tree into the permanent digiKam library.
 - `tests/` — `test_prep_split`, `test_idempotency_cache`, `test_exif_metadata`,
   `test_workspace_prep`, `test_concurrency` (named for what they test, not the old phase numbers).
-- `workflows/` — the authoritative specs (see below).
+- `spec/` — the authoritative specs (see below).
 
 ## Specs are the source of truth
 
-The pipeline is **specification-driven**: behavior is defined by `workflows/*.md` — the three
+The pipeline is **specification-driven**: behavior is defined by `spec/*.md` — the three
 per-phase workflows (prep / geotag / merge) plus `photos-shared-contract.md`. When changing pipeline
 behavior, update the governing spec; the markdown is authoritative, not just the code, so reconcile
 differences between a script and its spec rather than treating the existing code as ground truth.

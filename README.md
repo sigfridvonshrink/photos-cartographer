@@ -173,16 +173,16 @@ Photos are irreplaceable, so the whole design is **plan → validate → execute
 ## How it works (the detail)
 
 The pipeline is **specification-driven** — behavior is defined by the documents in
-[`workflows/`](workflows/), and the code follows them. Start with
-**[`workflows/README.md`](workflows/README.md)** for the architecture and the full motivation/safety model, then the
+[`spec/`](spec/), and the code follows them. Start with
+**[`spec/README.md`](spec/README.md)** for the architecture and the full motivation/safety model, then the
 per-phase specs:
 
 | Document | Scope |
 |---|---|
-| [`photos-1-prep-workflow.md`](workflows/photos-1-prep-workflow.md) | **Phase 1 — prep:** consolidation, extension normalization, dedup/quarantine, date-organization, cache/handoff. |
-| [`photos-2-geotag-workflow.md`](workflows/photos-2-geotag-workflow.md) | **Phase 2 — geotag:** timezone resolution, automatic camera-clock-offset inference, and track-based GPS placement. |
-| [`photos-3-merge-workflow.md`](workflows/photos-3-merge-workflow.md) | **Phase 3 — merge:** safe merge of the finalized working set into the permanent folder-based library. |
-| [`photos-shared-contract.md`](workflows/photos-shared-contract.md) | Facts all phases share: the run lock, the `.photos-ingest/` control directory, `photos-00-config.json`, the registry, formats, `gpx_root`, and the end-to-end operator loop. |
+| [`photos-1-prep-workflow.md`](spec/photos-1-prep-workflow.md) | **Phase 1 — prep:** consolidation, extension normalization, dedup/quarantine, date-organization, cache/handoff. |
+| [`photos-2-geotag-workflow.md`](spec/photos-2-geotag-workflow.md) | **Phase 2 — geotag:** timezone resolution, automatic camera-clock-offset inference, and track-based GPS placement. |
+| [`photos-3-merge-workflow.md`](spec/photos-3-merge-workflow.md) | **Phase 3 — merge:** safe merge of the finalized working set into the permanent folder-based library. |
+| [`photos-shared-contract.md`](spec/photos-shared-contract.md) | Facts all phases share: the run lock, the `.photos-ingest/` control directory, `photos-00-config.json`, the registry, formats, `gpx_root`, and the end-to-end operator loop. |
 
 ## Requirements
 
@@ -206,7 +206,7 @@ its map tiles and place search use OpenStreetMap/Nominatim at runtime and degrad
   (the combined `photos-cartographer` entry) + `editor/` (the locally-served Time/Drift/GPS decision app — a map-based web UI — that drives the worklist above).
   Run a phase with `python3 -m photos_pipeline <phase> <subcommand>` (from the repo root),
   or build the self-contained `photos-cartographer` zipapp with `tools/build-pyz`.
-- `workflows/` — the authoritative specifications. `tests/` — the test suite.
+- `spec/` — the authoritative specifications. `tests/` — the test suite.
   `tools/` — build + test helpers. `.githooks/` — pre-commit / pre-push.
 
 ## Tests and coverage
