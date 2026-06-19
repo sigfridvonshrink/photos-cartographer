@@ -46,6 +46,17 @@ so each supplied answer unlocks the most automatic work downstream:
 Every run is a **plan that can be dry-run and inspected**; only a validated plan ever writes. Re-runs act on
 the diff and are resumable after a crash.
 
+## Documentation
+
+- **[Quick start](docs/quickstart.md)** — download → prerequisites → the full end-to-end run (prep, sort into
+  destinations, the geotag time → drift → GPS loop, execute, merge).
+- **[Concepts](docs/concepts.md)** — the *why*: camera groups, per-day clock offsets, the by-dest tree, clock
+  offset vs. GPS drift, and what cascades down the folder tree.
+- **[Editor guide](docs/editor.md)** — driving the browser decision editor: the three views, validating drift,
+  placing GPS, shift-click multi-select, and how edits reset/cascade.
+
+The authoritative behavioral specifications live in [`spec/`](spec/) (see *How it works (the detail)* below).
+
 ## Decide in the browser, recorded in writing
 
 When the pipeline needs a decision, it's made in a **small single-page web app the pipeline serves locally**

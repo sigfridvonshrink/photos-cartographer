@@ -11,6 +11,8 @@ Top-level layout (the package lives at the repo root):
 - **`photos_pipeline/`** — the pipeline package: prep / geotag / merge phases + the decision editor.
 - **`tests/`** — the test suite. **`spec/`** — the authoritative workflow specs (with their own
   `README.md`).
+- **`docs/`** — user-facing guides (`quickstart.md`, `concepts.md`, `editor.md`), linked from `README.md`.
+  These are user docs; `spec/` remains the behavioral source of truth.
 - **`tools/`** — build + test helpers (`build-pyz`, `coverage`, `jstest`).
 - **`.githooks/`** — local pre-commit / pre-push hooks. `.github/workflows/` — CI.
 
