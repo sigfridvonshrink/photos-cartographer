@@ -16,7 +16,7 @@
 
 Dispatches to the pipeline phases: `prep` → `geotag` → `merge` (and, once folded in, `edit` — the
 decision editor). Each phase keeps its own subcommands (the same surface as running it standalone via
-`python -m photos_pipeline.<phase>`). Self-documenting: with no phase, or a phase with no subcommand,
+`python -m cartographer.<phase>`). Self-documenting: with no phase, or a phase with no subcommand,
 it prints a short role blurb rather than an arg-only usage line — the tool is used a few times a year,
 so it explains itself.
 """

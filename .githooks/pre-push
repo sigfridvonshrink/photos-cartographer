@@ -39,7 +39,7 @@ echo "pre-push: tests passed."
 # isn't installed locally — CI runs them regardless.
 if command -v node >/dev/null 2>&1; then
     echo "pre-push: running decision-editor front-end tests..."
-    if ! node --test photos_pipeline/editor/tests/*.test.mjs >/dev/null 2>&1; then
+    if ! node --test cartographer/editor/tests/*.test.mjs >/dev/null 2>&1; then
         echo
         echo "pre-push: front-end tests FAILED — push aborted (run 'tools/jstest' to see details)."
         echo "          (override with 'git push --no-verify')"

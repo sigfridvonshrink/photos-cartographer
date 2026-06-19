@@ -124,9 +124,9 @@ These four are the **authoritative** behavioral specs. The decision *editor* tha
 the JSON they produce has its own docs alongside its code — **non-authoritative and downstream of the
 above** (if they ever disagree, the spec and code win):
 
-- `../photos_pipeline/editor/decision-json-reference.md` — the field-level shape of the decision
+- `../cartographer/editor/decision-json-reference.md` — the field-level shape of the decision
   artifacts (`photos-21`/`22`/`23`) the editor reads and writes.
-- `../photos_pipeline/editor/design-notes.md` — the editor's UI/architecture design notes.
+- `../cartographer/editor/design-notes.md` — the editor's UI/architecture design notes.
 
 For a user-facing walkthrough, see the guides in [`../docs/`](../docs/).
 

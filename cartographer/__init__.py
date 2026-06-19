@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""photos_pipeline — safe digiKam/Immich photo ingestion + GPS/time calibration + merge.
+"""cartographer — safe digiKam/Immich photo ingestion + GPS/time calibration + merge.
 
 The three phases (prep / geotag / merge) plus the shared utilities, packaged so they can be
 shipped as self-contained zipapp executables. Each phase module exposes `main()`.

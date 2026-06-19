@@ -32,7 +32,7 @@ jobs:
           pip install -r dev-requirements.txt
 
       # Must run from the repo root; pytest.ini sets testpaths.
-      # Coverage config (branch + concurrency=thread; report scoped to the photos_pipeline package +
+      # Coverage config (branch + concurrency=thread; report scoped to the cartographer package +
       # the editor server) is in .coveragerc — the config tools/coverage uses locally.
       - name: Run tests with coverage
         run: |
@@ -43,7 +43,7 @@ jobs:
       # The decision-editor front-end (web/app.js) is plain ES modules with no build/deps; its pure
       # logic is unit-tested with Node's built-in runner (node:test), no npm install.
       - name: Run decision-editor front-end tests
-        run: node --test photos_pipeline/editor/tests/*.test.mjs
+        run: node --test cartographer/editor/tests/*.test.mjs
 
       # The single-file `photos-cartographer` executable must build and run (dist is gitignored).
       - name: Check photos-cartographer builds and runs

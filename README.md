@@ -212,10 +212,10 @@ its map tiles and place search use OpenStreetMap/Nominatim at runtime and degrad
 
 ## Layout
 
-- `photos_pipeline/` — the pipeline package: `photos_1_prep.py` / `photos_2_geotag.py` /
+- `cartographer/` — the pipeline package: `photos_1_prep.py` / `photos_2_geotag.py` /
   `photos_3_merge.py` (the three phases) + `photos_utils.py` (shared `CONFIG` + utilities) + `cli.py`
   (the combined `photos-cartographer` entry) + `editor/` (the locally-served Time/Drift/GPS decision app — a map-based web UI — that drives the worklist above).
-  Run a phase with `python3 -m photos_pipeline <phase> <subcommand>` (from the repo root),
+  Run a phase with `python3 -m cartographer <phase> <subcommand>` (from the repo root),
   or build the self-contained `photos-cartographer` zipapp with `tools/build-pyz`.
 - `spec/` — the authoritative specifications. `tests/` — the test suite.
   `tools/` — build + test helpers. `.githooks/` — pre-commit / pre-push.
@@ -255,4 +255,4 @@ archive and shared as-is, in case it's useful to anyone with the same problem.
 ## License
 
 Apache License 2.0 — see [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE). The bundled Leaflet library keeps
-its own BSD-2-Clause license (`photos_pipeline/editor/web/vendor/leaflet/LICENSE`).
+its own BSD-2-Clause license (`cartographer/editor/web/vendor/leaflet/LICENSE`).

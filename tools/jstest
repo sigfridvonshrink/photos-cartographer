@@ -19,4 +19,4 @@
 # Run from anywhere; it cd's to the repo root.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-exec node --test "$@" photos_pipeline/editor/tests/*.test.mjs
+exec node --test "$@" cartographer/editor/tests/*.test.mjs

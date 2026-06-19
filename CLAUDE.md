@@ -8,7 +8,7 @@ The ingestion pipeline for a high-quality photo library managed in **digiKam**: 
 plan/validate/execute pipeline that ingests media and performs automatic GPS/time calibration.
 Top-level layout (the package lives at the repo root):
 
-- **`photos_pipeline/`** — the pipeline package: prep / geotag / merge phases + the decision editor.
+- **`cartographer/`** — the pipeline package: prep / geotag / merge phases + the decision editor.
 - **`tests/`** — the test suite. **`spec/`** — the authoritative workflow specs (with their own
   `README.md`).
 - **`docs/`** — user-facing guides (`quickstart.md`, `concepts.md`, `editor.md`), linked from `README.md`.
@@ -24,10 +24,10 @@ majority by interpolating along the track. See `spec/README.md`.
 
 ## Commands
 
-The active pipeline is the **`photos_pipeline` package** at `photos_pipeline/`:
+The active pipeline is the **`cartographer` package** at `cartographer/`:
 `photos_utils.py` (shared lib) + `photos_1_prep.py` / `photos_2_geotag.py` / `photos_3_merge.py`
 (the three phases) + `cli.py`/`__main__.py` (the combined entry) + `editor/` (the decision editor).
-From a checkout, run via `python3 -m photos_pipeline <phase> <subcommand>` (with the repo root on
+From a checkout, run via `python3 -m cartographer <phase> <subcommand>` (with the repo root on
 `PYTHONPATH`, or from the repo root). It is **shipped detached** as ONE self-contained executable
 `dist/photos-cartographer` — a shebang'd zipapp of the whole package — built deterministically by
 `tools/build-pyz` (+ an editable `photos-config-defaults.json` sibling); launched `./photos-cartographer
@@ -36,14 +36,14 @@ prep plan` exactly like a plain script (needs a `python3` on the host; zipapp do
 
 **Config seed source:** a new workspace's `photos-00-config.json` is seeded by
 `photos_utils.default_config()` — an external `photos-config-defaults.json` beside the executable (or
-`$PHOTOS_PIPELINE_CONFIG`) wins over the built-in `DEFAULT_CONFIG`, so a detached deploy retunes
+`$PHOTOS_CARTOGRAPHER_CONFIG`) wins over the built-in `DEFAULT_CONFIG`, so a detached deploy retunes
 defaults by editing that sibling, never the zip. The built-in (with its documented tunables) stays in
 `photos_utils.py`.
 
 Tests **MUST be run from the repo root** — `conftest.py` puts the repo root on `sys.path` so
-`import photos_pipeline` resolves, and some tests reference repo-root paths like
-`photos_pipeline/photos_1_prep.py`. `pytest.ini` sets
-`testpaths=tests photos_pipeline/editor/tests`.
+`import cartographer` resolves, and some tests reference repo-root paths like
+`cartographer/photos_1_prep.py`. `pytest.ini` sets
+`testpaths=tests cartographer/editor/tests`.
 
 ```bash
 # Whole suite
@@ -60,11 +60,11 @@ tools/coverage                 # whole suite + per-script report + htmlcov/
 tools/coverage -k merge        # subset (report % will be partial)
 
 # Decision-editor front-end unit tests (web/app.js pure logic) — Node's built-in runner, no deps.
-tools/jstest                   # node --test over photos_pipeline/editor/tests/*.test.mjs
+tools/jstest                   # node --test over cartographer/editor/tests/*.test.mjs
 ```
 
 `tests/conftest.py` imports the package modules once and **aliases them under their historical
-short names** in `sys.modules` (`photos_1_prep` → `photos_pipeline.photos_1_prep`, likewise
+short names** in `sys.modules` (`photos_1_prep` → `cartographer.photos_1_prep`, likewise
 `photos_utils` / `photos_2_geotag` / `photos_3_merge`), then restores the global `CONFIG` between
 tests. So test files keep `import photos_1_prep` and `@patch("photos_1_prep....")` unchanged — the
 alias is the *same module object* as the package module, so every import and patch resolves
@@ -83,7 +83,7 @@ There is no build step and no linter config; runtime deps are system tools (`exi
   (`.githooks/check_test_only_functions.py` — fails if any production function is referenced only by
   tests) and then the suite before a push, aborting on either failure. Enable it per clone with
   `git config core.hooksPath .githooks`; bypass once with `git push --no-verify`. The guard's
-  `SRC_FILES` covers all three phase modules + `photos_utils` under `photos_pipeline/`.
+  `SRC_FILES` covers all three phase modules + `photos_utils` under `cartographer/`.
 - **Local `pre-commit` hook** (`.githooks/pre-commit`) rebuilds `dist/photos-cartographer` on every
   commit so the local executable is never stale. `dist/` is gitignored — this is a LOCAL build
   only; nothing is committed or pushed. It blocks a commit only if the build itself breaks.
@@ -94,24 +94,24 @@ There is no build step and no linter config; runtime deps are system tools (`exi
 
 ### Release history
 
-- **v1.0.1** — flatten `ingest/` into the repo root (`photos_pipeline/`, `tests/`, `workflows/`);
+- **v1.0.1** — flatten `ingest/` into the repo root (`cartographer/`, `tests/`, `workflows/`);
   README destination-folder-format update. No behavioral change.
 - **v1.0.0** — first release: the unified `photos-cartographer` executable (renamed from `photos-ingest`).
 
 ### CLI contract
 
-One combined entry point — `photos_pipeline.cli:main` — dispatched git-style as
+One combined entry point — `cartographer.cli:main` — dispatched git-style as
 `photos-cartographer <phase> <subcommand>` (shipped as the single `photos-cartographer` zipapp executable; from a
-checkout, `python -m photos_pipeline <phase> <subcommand>`). The CLI is **self-documenting**: bare
+checkout, `python -m cartographer <phase> <subcommand>`). The CLI is **self-documenting**: bare
 `photos-cartographer` prints the overall role + phase list; bare `photos-cartographer <phase>` prints that phase's
 role blurb + its subcommands (the tool is used a few times a year). Each phase still has a standalone
-entry (`python -m photos_pipeline.photos_1_prep …`) sharing the same `add_arguments`/`run` — tests use it.
+entry (`python -m cartographer.photos_1_prep …`) sharing the same `add_arguments`/`run` — tests use it.
 
 - `photos-cartographer prep` — subcommands `plan` / `dry-run` / `execute` (+ `prune-quarantine`).
 - `photos-cartographer geotag` — `plan` / `execute` / `finalize` (was the `photos-2-geotag` phase, formerly
   named "calibrate"; its `run` subcommand was **renamed to `plan`** so all phases start with `plan`).
 - `photos-cartographer merge` — `init-library` / `plan` / `dry-run` / `execute`.
-- `photos-cartographer edit` — the decision editor (a local web server; folded into the package at `photos_pipeline/editor/`, web assets served as package data via importlib.resources, no bundler).
+- `photos-cartographer edit` — the decision editor (a local web server; folded into the package at `cartographer/editor/`, web assets served as package data via importlib.resources, no bundler).
   Like every phase it operates on the **cwd workspace** (no workspace-naming argument) and refuses to
   run if the cwd is not an initialized workspace; `--demo` is the only no-workspace mode (read-only
   fixtures tour). Phases share the plan/validate/execute contract; workspace = cwd. The original `prep` / `geotag` /
@@ -178,14 +178,14 @@ Defined in `spec/photos-shared-contract.md`:
 
 ### Module structure
 
-- `photos_pipeline/photos_utils.py` — shared config template (`CONFIG`) + utilities; the phase
+- `cartographer/photos_utils.py` — shared config template (`CONFIG`) + utilities; the phase
   modules import it package-relatively (`from .photos_utils import ...`).
-- `photos_pipeline/photos_1_prep.py` — the prep workflow; owns *only* filesystem prep,
+- `cartographer/photos_1_prep.py` — the prep workflow; owns *only* filesystem prep,
   no-clobber moves, dedup/quarantine, SQLite/hash cache, and the handoff manifest. It must not plan or
   apply GPS/time fixes.
-- `photos_pipeline/photos_2_geotag.py` — the geotag workflow: camera-clock-offset inference,
+- `cartographer/photos_2_geotag.py` — the geotag workflow: camera-clock-offset inference,
   resolve-to-UTC, GPX-based GPS placement, and destination-local renaming.
-- `photos_pipeline/photos_3_merge.py` — the merge workflow: safe merge of the finalized
+- `cartographer/photos_3_merge.py` — the merge workflow: safe merge of the finalized
   `6-photos-by-dest` staging tree into the permanent digiKam library.
 - `tests/` — `test_prep_split`, `test_idempotency_cache`, `test_exif_metadata`,
   `test_workspace_prep`, `test_concurrency` (named for what they test, not the old phase numbers).
