@@ -2,7 +2,7 @@
 
 > **NON-AUTHORITATIVE.** This describes the shape of the two geotag *decision* artifacts so the
 > editor can be built against a stable picture. The **authoritative** source is the code that writes
-> and validates them — `ingest/photos-2-geotag` (`build_time_decisions`, `build_gps_decisions`,
+> and validates them — `ingest/photos_pipeline/photos_2_geotag.py` (`build_time_decisions`, `build_gps_decisions`,
 > `_timezone_decision`, `_offset_cell`, `_folder_fallback_cell`, `_review_item`, and the `_valid_*`
 > validators) — with the geotag spec `ingest/workflows/photos-2-geotag-workflow.md` as the
 > behavioural reference. If this doc and the code ever disagree, the code wins; update this doc.
@@ -28,7 +28,7 @@ All live in the workspace control directory `.photos-ingest/`:
 
 The editor opens one of these, presents the open decisions, lets the human resolve them, and writes the
 file back. (`photos-22` is produced by the pipeline today and resolvable by hand-editing its
-`user_decision` fields; a dedicated scrub-on-track editor view is planned — see §5a.)
+`user_decision` fields, or via the editor's dedicated scrub-on-track view — see §5a.)
 
 ---
 
@@ -151,8 +151,8 @@ The editor badges these destinations as `container` and keeps them off the to-do
 | **`user_decision.manual_iana_timezone`** | string (`""`) | **yes** | A human-entered IANA zone (e.g. `"Asia/Tokyo"`). |
 | **`user_decision.accept_proposed_timezone`** | bool | **yes** | Accept `proposed_iana_timezone`. |
 | `effective_iana_timezone` | string (`""` if unresolved) | no | The resolved zone. |
-| `requires_user_input` | bool | no | `true` ⇔ `effective_iana_timezone == ""` — **except** a `file_less` container, which auto-resolves and is always `false`. A timezone otherwise never auto-resolves, so the human reviews every real destination. |
-| `decision_mode` | `"auto_resolved"` | no | Present only on a `file_less` container that auto-adopted its inherited/default zone. |
+| `requires_user_input` | bool | no | `true` ⇔ `effective_iana_timezone == ""` **and** no proposal exists (no ancestor zone and no configured `default_folder_timezone`). **Any** destination — `file_less` container *or* real — that has a proposal auto-adopts it and is `false`; only a destination with no proposal at all blocks for review. |
+| `decision_mode` | `"auto_resolved"` | no | Present on **any** destination (container *or* real) that auto-adopted its inherited or config-default zone. |
 | `stale_user_decision` | bool | no | Accepted a proposal that no longer exists. |
 
 Resolution: `manual_iana_timezone` (if valid) wins; else `accept_proposed_timezone` applies the proposal.
@@ -240,7 +240,7 @@ Same wrapper as §4.1 with `artifact_type: "gps_decisions"` / `artifact_name:
     "summary": { /* §5.5 counts — SYSTEM */ },
     "automatic_decision_summary": {        // SYSTEM, informational
       "gpx_files_used": ["…"], "max_interpolation_gap_seconds": 120,
-      "max_distance_to_track_m": 50, "confidence": "automatic", "notes": ["…"]
+      "max_distance_to_track_m": 50, "confidence": "automatic", "notes": ["…"]   // confidence: "automatic", or "mixed" if the destination has blocked files
     },
     "review_items": [ /* §5.4 — the per-file editable list */ ]
   }
@@ -311,7 +311,8 @@ bucket must be **explicitly confirmed** (or corrected) before photos-23 is gener
 ### 5a.1 Top level
 
 Same decision wrapper as §4.1 with `artifact_type: "gps_drift_validation"` / `artifact_name:
-"photos-22-gps-drift-validation.json"`. `destinations` maps a destination path to
+"photos-22-gps-drift-validation.json"` — except its top-level `decision_mode`, when present (nothing
+requires input), is `"no_op_or_confirmed"` (not `"no_op_or_auto_resolved"`). `destinations` maps a destination path to
 `{ "destination_path", "drift_decisions": { <bucket_key>: cell } }`. The `<bucket_key>` matches the
 photos-21 offset cell it refines — bare `<camera_group_key>` or `<camera_group_key>@<YYYY-MM-DD>`.
 
@@ -379,7 +380,7 @@ A bare `""`/`false` everywhere = "no decision yet".
 ## 7. Validation rules for editable values
 
 Mirror these client-side; a value that fails makes geotag reject the whole artifact as a blocker.
-(Source: the `_valid_*` helpers in `ingest/photos-2-geotag`.)
+(Source: the `_valid_*` helpers in `ingest/photos_pipeline/photos_2_geotag.py`.)
 
 | Field(s) | Rule |
 |----------|------|
@@ -401,5 +402,5 @@ A natural shape that satisfies the contract:
 3. Let the human edit only `user_decision`; validate per §7 live; show a computed preview of the outcome
    if desired (display-only — not written authoritatively).
 4. Save by writing the modified `user_decision` blocks back into the loaded JSON (round-trip, preserving
-   all other fields and unknown keys) and serialising. The human then re-runs `photos-2-geotag`, which
+   all other fields and unknown keys) and serialising. The human then re-runs `photos-ingest geotag`, which
    regenerates the artifact, reads back the `user_decision` values, recomputes everything, and validates.

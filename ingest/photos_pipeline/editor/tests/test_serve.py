@@ -1,4 +1,4 @@
-"""Tests for the decision-editor server (`ingest/decision-editor/decision-editor.unbundled`).
+"""Tests for the decision-editor server (`ingest/photos_pipeline/editor/server.py`).
 
 Covers the request-independent helpers (port auto-bump, machine-IP detection, the single-editor lock,
 JSON read/write, the user_decision-only edit apply, and save round-trip) plus a few end-to-end HTTP

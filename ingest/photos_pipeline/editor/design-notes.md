@@ -2,7 +2,7 @@
 
 > **NON-AUTHORITATIVE.** Design/UX decisions for the decision-editing app, recorded so the build has a
 > shared picture. The JSON it edits is described in `decision-json-reference.md`; the authoritative
-> behaviour is the geotag code (`../photos-2-geotag`). These notes are a plan, not a contract.
+> behaviour is the geotag code (`../photos_2_geotag.py`). These notes are a plan, not a contract.
 
 ## 1. What it is
 
@@ -19,17 +19,16 @@ is **advisory**; the loop is **edit → Save → re-run `photos-ingest geotag pl
 - **Local Python server**, stdlib only — launched as `photos-ingest edit`, which (like every phase)
   operates on the **current-directory workspace**; there is no workspace-naming argument, and it
   refuses to run if the cwd is not an initialized workspace. It serves the SPA, reads/writes the
-  workspace's `.photos-ingest/` decision JSON, serves **photo previews** (embedded JPEG via
-  exiftool/ImageMagick — already repo deps), and offers a **Re-run geotag** action. `--demo` is
-  the only no-workspace mode: read-only on the `examples/` fixtures, so it runs with nothing installed.
-  - Ships in two forms: the readable source **`decision-editor.unbundled`** (reads `web/` + `examples/`
-    from disk) and the **`decision-editor`** single file, which **`./bundle`** regenerates with those
-    assets embedded inline so it runs anywhere from one copied file. `./bundle --check` fails if the
-    committed bundle is stale or hand-edited (CI/pre-push guard). Re-run and previews still need the
-    surrounding pipeline / exiftool / ImageMagick, and degrade gracefully when absent.
-- **No-build SPA**: plain ES modules; a tiny reactive helper (**Preact + htm**) and **Leaflet** for the
-  map, both **vendored** under `web/vendor/` (no CDN at runtime, no build step, works offline). The
-  skeleton is dependency-free vanilla; the lib/map come in with the editing/map phases.
+  workspace's `.photos-ingest/` decision JSON, and serves **photo previews** (embedded JPEG via
+  exiftool/ImageMagick — already repo deps). `--demo` is the only no-workspace mode: read-only on the
+  `examples/` fixtures, so it runs with nothing installed.
+  - The editor is **folded into the `photos_pipeline` package** (`photos_pipeline/editor/`): `server.py`
+    plus the `web/` and `examples/` assets, which the server reads as **package data via
+    `importlib.resources`**. So it ships inside the single `photos-ingest` zipapp — no separate bundle,
+    no `./bundle` step. Previews still need exiftool / ImageMagick and degrade gracefully when absent.
+- **No-build SPA**: plain vanilla ES modules — a hand-rolled DOM builder (`el()` + a manual `render()`),
+  **no framework**. **Leaflet** (the map) is the only vendored library, under `web/vendor/` (no CDN at
+  runtime, no build step, works offline).
 - Rationale: matches the repo's Python/CLI, no-build, system-deps-only ethos; zero new package managers.
 - **Front-end tests**: the pure logic in `app.js` (validation, offset⟷UTC/local date math, the §6
   resolution rules, inheritance previews) is unit-tested with **Node's built-in runner** (`node:test`,
@@ -46,7 +45,7 @@ applies the overlay onto the artifact JSON (round-tripping every other field) an
 
 ## 4. UI
 
-**Master–detail shell:** header (workspace • view toggle • to-do/stale count • Save • Re-run) → a compact
+**Master–detail shell:** header (workspace • view toggle • to-do/stale count • Reset • Save) → a compact
 **list** (left) + a persistent **side-panel** editor (right), separated by a **draggable divider** (the
 split width is clamped and persisted in `localStorage`; the map is resized live as you drag). Selecting a
 cell anywhere opens it in the panel. The panel itself does **not** scroll: a **fixed top** holds the
@@ -155,8 +154,10 @@ then the proposal evidence last; non-coord cells just show the proposal.
     cell, so a place found once need not be re-navigated. **Multi-select:** shift-click another review
     photo in the **same destination** to select a **contiguous run** (a multi-selection never crosses a
     destination boundary); the side panel then **applies one location to every photo in the run** (a
-    `peers` ref whose edits fan out). The **photo** (embedded-JPEG preview from the server) sits above the
-    map for review items. A **place-search box** under the map (geocoding via **Nominatim/OpenStreetMap**,
+    `peers` ref whose edits fan out). The **photo** (embedded-JPEG preview from the server) appears as a
+    thumbnail in the pinned "Your decision" box and as a hover preview in the worklist; the **map** sits
+    directly under the decision (map-first), so a paste/edit's jump-to-zoom is visible without scrolling.
+    A **place-search box** under the map (geocoding via **Nominatim/OpenStreetMap**,
     Google-Maps style) **relocates** the map to a named place — manual submit only (Enter/button, never
     per-keystroke, to respect Nominatim's ≤1 req/s policy); picking a result moves the view but does **not**
     set the decision (the operator still picks under the crosshair).
@@ -179,22 +180,15 @@ then the proposal evidence last; non-coord cells just show the proposal.
    pins + current-decision marker, and embedded-JPEG photo previews served by the server (`/api/photo`,
    path-safe, workspace-only), for GPS cells. (Track/anchors/ghost dropped — not in the GPS artifact for
    review items; see §4.)
-3. **Persist + loop (done):** **Save** (write `user_decision` back, round-tripping the rest) plus
-   **Re-run** — `POST /api/rerun` invokes `photos-ingest geotag plan` (workspace as CWD; geotag owns its
-   own `WorkspaceLock`, separate from the editor lock) and, on success, reloads the regenerated
-   authoritative artifacts. Re-run acts on the *saved* decisions, so it's disabled while there are
-   unsaved/invalid edits (save first); its outcome — exit code + stderr/stdout tail — shows in a
-   dismissible banner. **Re-run is also gated on geotag's dependencies being present on the host
-   running the editor** — two of them: the **pipeline script** (`GEOTAG`, expected beside the editor;
-   the single-file bundle does not embed it, so a copy taken away from the repo can't re-run), and the
-   configured **`gpx_root`** (a mount that may live only on the workspace's own host — re-running without
-   it would regenerate the time/GPS decisions as if there were no GPX, silently discarding good offsets
-   and placements). So `/api/artifacts` returns an `environment` block (`_environment`: `os.path.isfile`
-   on `GEOTAG`; `gpx_root` resolved from `photos-00-config.json` the way `selected_gpx_root` does and
-   `os.path.isdir`-checked — an empty `gpx_root` means "no GPX configured" and does not gate). When any
-   dependency is missing the Re-run button is **disabled with a tooltip** naming it (from `missing[]`),
-   and `_rerun` refuses server-side too (defence in depth) — editing and Save stay available so decisions
-   can be prepared anywhere and geotagged on the right host. No other dependencies exist today. Plus the **advisory live inheritance preview** for the time tree (§4): a timezone
+3. **Persist + loop (done):** **Save** writes `user_decision` back (round-tripping every other field); a
+   **Reset** discards unsaved edits. The loop is **terminal**: after saving, re-run `photos-ingest geotag
+   plan` in a terminal and reload the regenerated artifacts. There is deliberately **no in-app Re-run
+   button** — it proved error-prone and added little over the terminal command, so it was removed; every
+   gate/stale banner instead tells you to re-run in a terminal and reload. (The server still exposes a
+   `/api/rerun` endpoint and an `environment` check on the configured **`gpx_root`** — resolved from
+   `photos-00-config.json` and `os.path.isdir`-checked, an empty `gpx_root` meaning "no GPX configured"
+   and not gating — so the UI can warn when GPX isn't mounted on the editor's host; but no button drives
+   it.) Plus the **advisory live inheritance preview** for the time tree (§4): a timezone
    with no own decision shows, badged `inherited ⟵ <ancestor>`, the value it would inherit from its
    nearest resolved ancestor, updating as you edit ancestors — display-only, authoritative on the next
    Re-run. (Offsets do **not** inherit — they are per-date buckets resolved from a GPX self-anchor or the

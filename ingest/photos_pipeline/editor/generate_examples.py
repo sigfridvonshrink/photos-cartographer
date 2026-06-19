@@ -11,7 +11,7 @@ decision-cell state the editor must render/edit; the *outputs* are authentic.
 fill in `user_decision` fields, and re-run the builder with it as the prior (the real
 preservation/validation path).
 
-Run from the repo root:  python3 ingest/decision-editor/generate_examples.py
+Run from the repo root:  python3 ingest/photos_pipeline/editor/generate_examples.py
 """
 import json
 import os

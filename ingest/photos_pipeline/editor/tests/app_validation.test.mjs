@@ -1,5 +1,5 @@
 // Front-end unit tests for the decision editor's pure validation/format logic (web/app.js).
-// Run with Node's built-in runner (no deps): `node --test ingest/decision-editor/tests/`.
+// Run with Node's built-in runner (no deps): `node --test ingest/photos_pipeline/editor/tests/`.
 // app.js is a browser ES module; importing it in Node only works because its auto-start is guarded
 // (`if (typeof document !== "undefined") main()`) and the tested functions are exported.
 import { test } from "node:test";
