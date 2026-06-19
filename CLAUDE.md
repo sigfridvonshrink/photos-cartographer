@@ -90,6 +90,12 @@ There is no build step and no linter config; runtime deps are system tools (`exi
   `tools/build-pyz --version`) and attaches it + `photos-config-defaults.json` to a GitHub Release.
   The executable is distributed via releases, never committed to the repo.
 
+### Release history
+
+- **v1.0.1** — flatten `ingest/` into the repo root (`photos_pipeline/`, `tests/`, `workflows/`);
+  README destination-folder-format update. No behavioral change.
+- **v1.0.0** — first release: the unified `photos-cartographer` executable (renamed from `photos-ingest`).
+
 ### CLI contract
 
 One combined entry point — `photos_pipeline.cli:main` — dispatched git-style as
