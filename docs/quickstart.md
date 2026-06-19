@@ -103,8 +103,9 @@ under `6-photos-by-dest/`. Use a geographic hierarchy — ideally `year/country/
 6-photos-by-dest/2026/Belgium/Bruges/Markt/
 ```
 
-A *destination* is just any folder that directly holds photos; the intermediate folders become
-propagation points for timezone and GPS-fallback decisions. (See
+A *destination* is just any folder that directly holds photos (an intermediate folder may hold photos
+*and* sub-folders — that's fine); intermediate folders with no photos of their own become propagation
+points for timezone and GPS-fallback decisions. (See
 [Destinations and the by-dest tree](concepts.md#destinations-and-the-by-dest-tree) for why the
 hierarchy pays off.) Videos stay in `4-videos-by-date/` — `6-photos-by-dest/` is photo-only.
 
