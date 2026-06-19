@@ -171,9 +171,9 @@ then the proposal evidence last; non-coord cells just show the proposal.
 
 ## 5. Build plan (phased)
 
-0. **Skeleton (this step):** the server loads the artifacts (fixtures by default) + the SPA shell renders
-   both views **read-only** (tree for time, worklist for GPS, selection → side-panel detail). No editing.
-1. **Editing:** the shared model + `user_decision` overlay; per-cell controls (tz select, offset
+0. **Skeleton (done):** the server loads the artifacts (fixtures by default) + the SPA shell renders
+   both views read-only (tree for time, worklist for GPS, selection → side-panel detail).
+1. **Editing (done):** the shared model + `user_decision` overlay; per-cell controls (tz select, offset
    wheel-spinner, accept toggles); override/inherited badges; client-side validation; dirty state.
 2. **Map + photo (done):** vendored Leaflet; the side-panel centre-crosshair map picker with reference
    pins + current-decision marker, and embedded-JPEG photo previews served by the server (`/api/photo`,

@@ -17,8 +17,9 @@ and the code is expected to follow them. When changing behavior, update the gove
 | Document | Scope |
 |---|---|
 | [`workflows/photos-1-prep-workflow.md`](workflows/photos-1-prep-workflow.md) | **Phase 1 — prep:** consolidation, extension normalization, dedup/quarantine, organization, cache/handoff. Implemented by `photos-1-prep`. |
-| [`workflows/photos-2-time-gps-workflow.md`](workflows/photos-2-time-gps-workflow.md) | **Phase 2 — time/GPS calibration:** camera-clock inference and track-based geotagging. Reserved for `photos-2-time-gps` (not yet implemented here). |
-| [`workflows/photos-shared-contract.md`](workflows/photos-shared-contract.md) | Facts both phases share: the run lock, the `.photos-ingest/` control directory, `photos-00-config.json`, the registry, formats, `gpx_root`, and the end-to-end operator loop. |
+| [`workflows/photos-2-time-gps-workflow.md`](workflows/photos-2-time-gps-workflow.md) | **Phase 2 — time/GPS calibration:** camera-clock inference and track-based geotagging. Implemented by `photos-2-time-gps`. |
+| [`workflows/photos-3-merge-workflow.md`](workflows/photos-3-merge-workflow.md) | **Phase 3 — merge:** safe merge of the finalized `6-photos-by-dest` staging tree into the permanent digiKam library. Implemented by `photos-3-merge`. |
+| [`workflows/photos-shared-contract.md`](workflows/photos-shared-contract.md) | Facts the phases share: the run lock, the `.photos-ingest/` control directory, `photos-00-config.json`, the registry, formats, `gpx_root`, and the end-to-end operator loop. |
 
 ## Contents
 
