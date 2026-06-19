@@ -600,8 +600,8 @@ class GeotagCache:
 # ============================================================================
 # Stage 8 — GPS placement from the GPX track at a photo's resolved UTC
 # (geotag §23/§25). Pure helpers (no I/O), exhaustively unit-tested.
-# Mined from the former photos-ingest monolith (apply_gpx_placement) and the
-# former photos-gps-tagger interpolation/extrapolation engine (both since removed).
+# The GPX placement (apply_gpx_placement) and the interpolation/extrapolation
+# engine, consolidated here as pure helpers.
 # ============================================================================
 
 def _interp(a, b, target):
