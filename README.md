@@ -31,7 +31,7 @@ A clean **prep → geotag → merge** pipeline. Geotag resolves everything it ca
 so each supplied answer unlocks the most automatic work downstream:
 
 1. **Prep** — consolidate the dump, normalize extensions, detect duplicates (quarantined, never deleted), and
-   date-organize everything. Photos are then dragged into destination folders (`Belgium/Brussels`, …).
+   date-organize everything. Photos are then dragged into destination folders (`2026/France/Paris/Louvre`, …).
 2. **Timezone** — establish each destination's timezone, from the photos' own evidence where possible,
    otherwise asked **once** and cascaded down the folder tree.
 3. **Clock offset** — infer each camera's clock error by matching its already-located frames against the GPX
