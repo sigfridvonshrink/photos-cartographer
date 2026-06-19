@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Keep the local photos-cartographer executable current on every commit. ingest/dist/ is gitignored, so this
+# Keep the local photos-cartographer executable current on every commit. dist/ is gitignored, so this
 # only refreshes the LOCAL build — nothing is staged or pushed (official builds come from the release
 # workflow on a tag). Blocks the commit only if the build genuinely breaks; bypass with --no-verify.
 if ! python3 tools/build-pyz >/dev/null 2>&1; then

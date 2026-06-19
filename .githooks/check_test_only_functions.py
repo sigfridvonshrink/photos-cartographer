@@ -15,9 +15,9 @@
 
 """Guard: fail if any production function is referenced ONLY by tests.
 
-Production code (`ingest/photos-1-prep`, `ingest/photos-2-geotag`, `ingest/photos_utils.py`) must
+Production code (`photos-1-prep`, `photos-2-geotag`, `photos_utils.py`) must
 not carry APIs that exist only to serve the test suite. This finds every name `def`-ed in those three
-files that is referenced somewhere under `ingest/tests/` but NOWHERE in the production sources (other
+files that is referenced somewhere under `tests/` but NOWHERE in the production sources (other
 than its own definition) — i.e. test-only production code — and exits non-zero so the pre-push hook
 aborts. Remove the function and rewrite the test to not need it (inline the trivial work, or put a
 shared helper in the test layer — conftest.py — never in production).
@@ -28,14 +28,14 @@ import os
 import re
 import sys
 
-SRC_FILES = ["ingest/photos_pipeline/photos_1_prep.py", "ingest/photos_pipeline/photos_2_geotag.py",
-             "ingest/photos_pipeline/photos_3_merge.py", "ingest/photos_pipeline/photos_utils.py",
-             "ingest/photos_pipeline/cli.py"]
-TESTS_DIR = "ingest/tests"
+SRC_FILES = ["photos_pipeline/photos_1_prep.py", "photos_pipeline/photos_2_geotag.py",
+             "photos_pipeline/photos_3_merge.py", "photos_pipeline/photos_utils.py",
+             "photos_pipeline/cli.py"]
+TESTS_DIR = "tests"
 
 # Names that are legitimately definition-only / entry points, not "test-only production code".
 # Add a name here (with a comment justifying it) only if it is a genuine exception.
-# (The merge-phase shared primitives that were temporarily allowlisted while ingest/photos-3-merge
+# (The merge-phase shared primitives that were temporarily allowlisted while photos-3-merge
 # was being built are now consumed by it — and the script is in SRC_FILES above — so the sweep sees
 # their real callers and no exemption is needed.)
 ALLOWLIST = set()

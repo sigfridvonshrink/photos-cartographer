@@ -18,7 +18,7 @@
 Merge takes a calibrated, finalized `6-photos-by-dest/` staging tree and moves it into the user's
 permanent library at `library_root`, never renaming or overwriting a file already in the library;
 on success it re-seals the archival package and seals the workspace. The full behavior is specified
-in `ingest/workflows/photos-3-merge-workflow.md` (and the shared contract); this is the workflow
+in `workflows/photos-3-merge-workflow.md` (and the shared contract); this is the workflow
 built on top of the shared primitives in `photos_utils.py`.
 
 Subcommands: `init-library` (one-time: bless a directory as the permanent library, §4),

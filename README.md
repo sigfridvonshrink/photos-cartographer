@@ -173,16 +173,16 @@ Photos are irreplaceable, so the whole design is **plan → validate → execute
 ## How it works (the detail)
 
 The pipeline is **specification-driven** — behavior is defined by the documents in
-[`ingest/workflows/`](ingest/workflows/), and the code follows them. Start with
-**[`ingest/README.md`](ingest/README.md)** for the architecture and the full motivation/safety model, then the
+[`workflows/`](workflows/), and the code follows them. Start with
+**[`workflows/README.md`](workflows/README.md)** for the architecture and the full motivation/safety model, then the
 per-phase specs:
 
 | Document | Scope |
 |---|---|
-| [`photos-1-prep-workflow.md`](ingest/workflows/photos-1-prep-workflow.md) | **Phase 1 — prep:** consolidation, extension normalization, dedup/quarantine, date-organization, cache/handoff. |
-| [`photos-2-geotag-workflow.md`](ingest/workflows/photos-2-geotag-workflow.md) | **Phase 2 — geotag:** timezone resolution, automatic camera-clock-offset inference, and track-based GPS placement. |
-| [`photos-3-merge-workflow.md`](ingest/workflows/photos-3-merge-workflow.md) | **Phase 3 — merge:** safe merge of the finalized working set into the permanent folder-based library. |
-| [`photos-shared-contract.md`](ingest/workflows/photos-shared-contract.md) | Facts all phases share: the run lock, the `.photos-ingest/` control directory, `photos-00-config.json`, the registry, formats, `gpx_root`, and the end-to-end operator loop. |
+| [`photos-1-prep-workflow.md`](workflows/photos-1-prep-workflow.md) | **Phase 1 — prep:** consolidation, extension normalization, dedup/quarantine, date-organization, cache/handoff. |
+| [`photos-2-geotag-workflow.md`](workflows/photos-2-geotag-workflow.md) | **Phase 2 — geotag:** timezone resolution, automatic camera-clock-offset inference, and track-based GPS placement. |
+| [`photos-3-merge-workflow.md`](workflows/photos-3-merge-workflow.md) | **Phase 3 — merge:** safe merge of the finalized working set into the permanent folder-based library. |
+| [`photos-shared-contract.md`](workflows/photos-shared-contract.md) | Facts all phases share: the run lock, the `.photos-ingest/` control directory, `photos-00-config.json`, the registry, formats, `gpx_root`, and the end-to-end operator loop. |
 
 ## Requirements
 
@@ -201,12 +201,12 @@ its map tiles and place search use OpenStreetMap/Nominatim at runtime and degrad
 
 ## Layout
 
-- `ingest/photos_pipeline/` — the pipeline package: `photos_1_prep.py` / `photos_2_geotag.py` /
+- `photos_pipeline/` — the pipeline package: `photos_1_prep.py` / `photos_2_geotag.py` /
   `photos_3_merge.py` (the three phases) + `photos_utils.py` (shared `CONFIG` + utilities) + `cli.py`
   (the combined `photos-cartographer` entry) + `editor/` (the locally-served Time/Drift/GPS decision app — a map-based web UI — that drives the worklist above).
-  Run a phase with `python3 -m photos_pipeline <phase> <subcommand>` (with `ingest/` on `PYTHONPATH`),
+  Run a phase with `python3 -m photos_pipeline <phase> <subcommand>` (from the repo root),
   or build the self-contained `photos-cartographer` zipapp with `tools/build-pyz`.
-- `ingest/workflows/` — the authoritative specifications. `ingest/tests/` — the test suite.
+- `workflows/` — the authoritative specifications. `tests/` — the test suite.
   `tools/` — build + test helpers. `.githooks/` — pre-commit / pre-push.
 
 ## Tests and coverage
@@ -226,7 +226,7 @@ writes metadata into the photos.
 | editor server | 78.8% | 76.7% |
 | **Total** | **90.9%** | **86.7%** |
 
-Run the suite from the repository root (`conftest.py` puts `ingest/` on `sys.path`):
+Run the suite from the repository root (`conftest.py` puts the repo root on `sys.path`):
 
 ```bash
 python3 -m pytest -q
@@ -244,4 +244,4 @@ archive and shared as-is, in case it's useful to anyone with the same problem.
 ## License
 
 Apache License 2.0 — see [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE). The bundled Leaflet library keeps
-its own BSD-2-Clause license (`ingest/photos_pipeline/editor/web/vendor/leaflet/LICENSE`).
+its own BSD-2-Clause license (`photos_pipeline/editor/web/vendor/leaflet/LICENSE`).

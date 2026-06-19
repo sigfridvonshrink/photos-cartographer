@@ -6,31 +6,31 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 The ingestion pipeline for a high-quality photo library managed in **digiKam**: a safe
 plan/validate/execute pipeline that ingests media and performs automatic GPS/time calibration.
-Top-level layout:
+Top-level layout (the package lives at the repo root):
 
-- **`ingest/`** — the pipeline itself: the `photos_pipeline` package (prep / geotag / merge phases +
-  the decision editor), its tests, and the authoritative workflow specs. Each folder has its own
-  `README.md`.
+- **`photos_pipeline/`** — the pipeline package: prep / geotag / merge phases + the decision editor.
+- **`tests/`** — the test suite. **`workflows/`** — the authoritative workflow specs (with their own
+  `README.md`).
 - **`tools/`** — build + test helpers (`build-pyz`, `coverage`, `jstest`).
 - **`.githooks/`** — local pre-commit / pre-push hooks. `.github/workflows/` — CI.
 
-See `README.md` for the overview and `ingest/`'s `README.md` for per-module detail.
+See `README.md` for the overview.
 
 The headline capability of the pipeline is **automatic camera-clock correction**: it infers a camera's
 clock offset by matching its already-geotagged frames against GPX tracks, then geotags the un-tagged
-majority by interpolating along the track. See `ingest/workflows/README.md`.
+majority by interpolating along the track. See `workflows/README.md`.
 
 ## Commands
 
-The active pipeline is the **`photos_pipeline` package** at `ingest/photos_pipeline/`:
+The active pipeline is the **`photos_pipeline` package** at `photos_pipeline/`:
 `photos_utils.py` (shared lib) + `photos_1_prep.py` / `photos_2_geotag.py` / `photos_3_merge.py`
 (the three phases) + `cli.py`/`__main__.py` (the combined entry) + `editor/` (the decision editor).
-From a checkout, run via `python3 -m photos_pipeline <phase> <subcommand>` (with `ingest/` on
-`PYTHONPATH`, or from `ingest/`). It is **shipped detached** as ONE self-contained executable
-`ingest/dist/photos-cartographer` — a shebang'd zipapp of the whole package — built deterministically by
+From a checkout, run via `python3 -m photos_pipeline <phase> <subcommand>` (with the repo root on
+`PYTHONPATH`, or from the repo root). It is **shipped detached** as ONE self-contained executable
+`dist/photos-cartographer` — a shebang'd zipapp of the whole package — built deterministically by
 `tools/build-pyz` (+ an editable `photos-config-defaults.json` sibling); launched `./photos-cartographer
 prep plan` exactly like a plain script (needs a `python3` on the host; zipapp doesn't embed Python).
-`tools/build-pyz --check` (CI + pre-push) builds it to a temp dir and smoke-runs it; `ingest/dist/` is gitignored (build output, not committed).
+`tools/build-pyz --check` (CI + pre-push) builds it to a temp dir and smoke-runs it; `dist/` is gitignored (build output, not committed).
 
 **Config seed source:** a new workspace's `photos-00-config.json` is seeded by
 `photos_utils.default_config()` — an external `photos-config-defaults.json` beside the executable (or
@@ -38,18 +38,18 @@ prep plan` exactly like a plain script (needs a `python3` on the host; zipapp do
 defaults by editing that sibling, never the zip. The built-in (with its documented tunables) stays in
 `photos_utils.py`.
 
-Tests **MUST be run from the repo root** — `conftest.py` puts `ingest/` on `sys.path` so
+Tests **MUST be run from the repo root** — `conftest.py` puts the repo root on `sys.path` so
 `import photos_pipeline` resolves, and some tests reference repo-root paths like
-`ingest/photos_pipeline/photos_1_prep.py`. `pytest.ini` sets
-`testpaths=ingest/tests ingest/photos_pipeline/editor/tests`.
+`photos_pipeline/photos_1_prep.py`. `pytest.ini` sets
+`testpaths=tests photos_pipeline/editor/tests`.
 
 ```bash
 # Whole suite
 python3 -m pytest -q
 
 # A single test file / test
-python3 -m pytest ingest/tests/test_workspace_prep.py -q
-python3 -m pytest ingest/tests/test_workspace_prep.py::test_name -q
+python3 -m pytest tests/test_workspace_prep.py -q
+python3 -m pytest tests/test_workspace_prep.py::test_name -q
 
 # Per-script test coverage (branch coverage; report scoped to the production scripts).
 # tools/coverage bootstraps a local .venv (--system-site-packages) with dev-requirements.txt,
@@ -58,10 +58,10 @@ tools/coverage                 # whole suite + per-script report + htmlcov/
 tools/coverage -k merge        # subset (report % will be partial)
 
 # Decision-editor front-end unit tests (web/app.js pure logic) — Node's built-in runner, no deps.
-tools/jstest                   # node --test over ingest/photos_pipeline/editor/tests/*.test.mjs
+tools/jstest                   # node --test over photos_pipeline/editor/tests/*.test.mjs
 ```
 
-`ingest/tests/conftest.py` imports the package modules once and **aliases them under their historical
+`tests/conftest.py` imports the package modules once and **aliases them under their historical
 short names** in `sys.modules` (`photos_1_prep` → `photos_pipeline.photos_1_prep`, likewise
 `photos_utils` / `photos_2_geotag` / `photos_3_merge`), then restores the global `CONFIG` between
 tests. So test files keep `import photos_1_prep` and `@patch("photos_1_prep....")` unchanged — the
@@ -81,9 +81,9 @@ There is no build step and no linter config; runtime deps are system tools (`exi
   (`.githooks/check_test_only_functions.py` — fails if any production function is referenced only by
   tests) and then the suite before a push, aborting on either failure. Enable it per clone with
   `git config core.hooksPath .githooks`; bypass once with `git push --no-verify`. The guard's
-  `SRC_FILES` covers all three phase modules + `photos_utils` under `ingest/photos_pipeline/`.
-- **Local `pre-commit` hook** (`.githooks/pre-commit`) rebuilds `ingest/dist/photos-cartographer` on every
-  commit so the local executable is never stale. `ingest/dist/` is gitignored — this is a LOCAL build
+  `SRC_FILES` covers all three phase modules + `photos_utils` under `photos_pipeline/`.
+- **Local `pre-commit` hook** (`.githooks/pre-commit`) rebuilds `dist/photos-cartographer` on every
+  commit so the local executable is never stale. `dist/` is gitignored — this is a LOCAL build
   only; nothing is committed or pushed. It blocks a commit only if the build itself breaks.
 - **Releases** (`.github/workflows/release.yml`): push a version tag (`git tag v1.2.0 && git push
   origin v1.2.0`) and CI builds `photos-cartographer` with `__version__` set to the tag (via
@@ -133,7 +133,7 @@ part of the behavioral contract). Current defaults worth knowing:
 ## Architecture & non-negotiable rules
 
 The whole design exists to safely mutate **irreplaceable originals**. These rules are specified in
-`ingest/workflows/` and override convenience:
+`workflows/` and override convenience:
 
 - **No mutation outside a plan.** Every move/rename/quarantine/metadata-write/DB-mutation is a planned
   operation with a plan ID, op ID, explicit preconditions, expected result, and journal entry. Planning
@@ -154,7 +154,7 @@ The whole design exists to safely mutate **irreplaceable originals**. These rule
 
 ### Pipeline layout (shared contract)
 
-Defined in `ingest/workflows/photos-shared-contract.md`:
+Defined in `workflows/photos-shared-contract.md`:
 
 - The pipeline is three phases: **prep** (`photos-1-prep`) → **geotag**
   (`photos-2-geotag`) → **merge** (`photos-3-merge`), all implemented.
@@ -170,22 +170,22 @@ Defined in `ingest/workflows/photos-shared-contract.md`:
 
 ### Module structure
 
-- `ingest/photos_pipeline/photos_utils.py` — shared config template (`CONFIG`) + utilities; the phase
+- `photos_pipeline/photos_utils.py` — shared config template (`CONFIG`) + utilities; the phase
   modules import it package-relatively (`from .photos_utils import ...`).
-- `ingest/photos_pipeline/photos_1_prep.py` — the prep workflow; owns *only* filesystem prep,
+- `photos_pipeline/photos_1_prep.py` — the prep workflow; owns *only* filesystem prep,
   no-clobber moves, dedup/quarantine, SQLite/hash cache, and the handoff manifest. It must not plan or
   apply GPS/time fixes.
-- `ingest/photos_pipeline/photos_2_geotag.py` — the geotag workflow: camera-clock-offset inference,
+- `photos_pipeline/photos_2_geotag.py` — the geotag workflow: camera-clock-offset inference,
   resolve-to-UTC, GPX-based GPS placement, and destination-local renaming.
-- `ingest/photos_pipeline/photos_3_merge.py` — the merge workflow: safe merge of the finalized
+- `photos_pipeline/photos_3_merge.py` — the merge workflow: safe merge of the finalized
   `6-photos-by-dest` staging tree into the permanent digiKam library.
-- `ingest/tests/` — `test_prep_split`, `test_idempotency_cache`, `test_exif_metadata`,
+- `tests/` — `test_prep_split`, `test_idempotency_cache`, `test_exif_metadata`,
   `test_workspace_prep`, `test_concurrency` (named for what they test, not the old phase numbers).
-- `ingest/workflows/` — the authoritative specs (see below).
+- `workflows/` — the authoritative specs (see below).
 
 ## Specs are the source of truth
 
-The pipeline is **specification-driven**: behavior is defined by `ingest/workflows/*.md` — the three
+The pipeline is **specification-driven**: behavior is defined by `workflows/*.md` — the three
 per-phase workflows (prep / geotag / merge) plus `photos-shared-contract.md`. When changing pipeline
 behavior, update the governing spec; the markdown is authoritative, not just the code, so reconcile
 differences between a script and its spec rather than treating the existing code as ground truth.

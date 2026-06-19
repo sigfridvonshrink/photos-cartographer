@@ -440,7 +440,7 @@ def ensure_control_dir(ws: str) -> str:
 # The permanent library at library_root is final and owned: it carries NONE of the workspace
 # scaffolding (no 0-6 folders, no guard, no lifecycle). Its sole identity is a single dotfile
 # marker in its root; its lock is another dotfile (merge spec §4/§12, shared contract §15.1/§15.2).
-# These names + helpers are consumed by the merge phase (ingest/photos-3-merge, built in later
+# These names + helpers are consumed by the merge phase (photos-3-merge, built in later
 # increments); prep/geotag neither read nor write them.
 LIBRARY_MARKER = ".photos-library"
 LIBRARY_LOCK = ".photos-merge.lock"
@@ -534,7 +534,7 @@ def max_suffix(root: str, names) -> int:
 # merge, the package gains merge's own artifacts; merge re-bundles by recomputing every present
 # artifact's SHA-256 into its OWN photos-35-archive-manifest.json, which supersedes geotag's
 # photos-26 manifest (parallel to the photos-15→25→35 log chain). It reads each artifact and never
-# rewrites another phase's file (shared contract §13.0a). Consumed by ingest/photos-3-merge.
+# rewrites another phase's file (shared contract §13.0a). Consumed by photos-3-merge.
 MERGE_ARCHIVE_MANIFEST = "photos-35-archive-manifest.json"
 GEOTAG_ARCHIVE_MANIFEST = "photos-26-archive-manifest.json"
 _MERGE_ARCHIVE_ITEMS = [

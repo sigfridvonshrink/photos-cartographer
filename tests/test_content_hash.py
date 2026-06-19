@@ -16,7 +16,7 @@
 
 These exercise the actual `ContentHasher.fingerprint_image` (ImageMagick pixel signature),
 real EXIF extraction, and the config-driven filename format against the real fixtures
-in ``ingest/tests/fixtures/`` — the coverage that was missing while `fingerprint_image` was a
+in ``tests/fixtures/`` — the coverage that was missing while `fingerprint_image` was a
 stub and the tests mocked around it.
 
 Most tests use a small real-derived JPEG (`cam_small.jpg`, a downscaled DSC0020.JPG with
