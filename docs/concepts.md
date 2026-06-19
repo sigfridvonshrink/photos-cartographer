@@ -51,13 +51,19 @@ The recommended shape is a geographic hierarchy, e.g.:
       Brussels/
         Atomium/          <- destination (holds photos)
         Grand-Place/      <- destination (holds photos)
+        skyline.jpg       <- Brussels itself is also a destination (holds this photo)
       Bruges/
         Markt/            <- destination (holds photos)
 ```
 
-The intermediate folders (`2026`, `Belgium`, `Brussels`) hold only sub-folders, no photos. The
-pipeline still tracks them as **container destinations** — they exist so you can author a decision
-once on a parent and have it flow down to every child (see *What cascades*, below).
+Any folder that **directly holds photos** is a destination — including an intermediate one. Above,
+`Brussels` holds both sub-destinations *and* a loose photo, so it's a normal destination for that photo
+**and** a parent its children inherit from; the pipeline handles that fine. A folder that holds **no
+photos of its own** (purely sub-folders, like `2026` or `Belgium` here) isn't a media destination — the
+pipeline tracks it as a **container**: a propagation point that carries a timezone / GPS-fallback
+decision so you can set defaults once and have them flow down to children (see *What cascades*, below).
+The distinction is only "does this folder directly contain photos" — nothing requires intermediate
+folders to be empty of media.
 
 **Why a hierarchy helps:** two facts — the timezone and the folder GPS fallback — inherit *downward*
 through this tree. Set the timezone on `Belgium` once and every place beneath it adopts it; drop a GPS
