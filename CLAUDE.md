@@ -14,9 +14,7 @@ Top-level layout:
 - **`tools/`** — build + test helpers (`build-pyz`, `coverage`, `jstest`).
 - **`.githooks/`** — local pre-commit / pre-push hooks. `.github/workflows/` — CI.
 
-See `README.md` for the `__std` naming convention and dependencies, and `ingest/`'s `README.md` for
-per-module detail. (This repo was carved out of a larger digiKam↔Immich suite; the conversion,
-develop, Immich-sync, and legacy-archive components live in sibling repos.)
+See `README.md` for the overview and `ingest/`'s `README.md` for per-module detail.
 
 The headline capability of the pipeline is **automatic camera-clock correction**: it infers a camera's
 clock offset by matching its already-geotagged frames against GPX tracks, then geotags the un-tagged
