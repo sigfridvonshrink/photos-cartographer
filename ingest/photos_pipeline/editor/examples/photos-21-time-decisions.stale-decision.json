@@ -3,7 +3,7 @@
   "artifact_type": "time_decisions",
   "depends_on": {
     "camera_group_key_version": 1,
-    "camera_time_policy_fingerprint": "77b3df9d6b1cdac859dad4422662fba89c06d1a7cea1e310dc283ca4d1ff9279",
+    "camera_time_policy_fingerprint": "083fa134a054aeb202ec3e41a2b2921e251ed18a5c1ae310b714cc95a88ff006",
     "gpx_fingerprint": "example-gpx-fingerprint",
     "handoff": {
       "artifact_name": "photos-11-handoff.json",
@@ -18,11 +18,10 @@
       "camera_groups_present": [],
       "destination_path": "6-photos-by-dest",
       "destination_timezone": {
-        "decision_mode": "auto_resolved",
-        "effective_iana_timezone": "Europe/Brussels",
-        "proposal_confidence": "high",
-        "proposal_source": "config_default",
-        "proposed_iana_timezone": "Europe/Brussels",
+        "effective_iana_timezone": "",
+        "proposal_confidence": "none",
+        "proposal_source": "none",
+        "proposed_iana_timezone": null,
         "requires_user_input": false,
         "stale_user_decision": false,
         "user_decision": {
@@ -56,10 +55,9 @@
       "destination_path": "6-photos-by-dest/Stale",
       "destination_timezone": {
         "effective_iana_timezone": "",
-        "inherited_from": "6-photos-by-dest",
-        "proposal_confidence": "review_required",
-        "proposal_source": "inherited",
-        "proposed_iana_timezone": "Europe/Brussels",
+        "proposal_confidence": "none",
+        "proposal_source": "none",
+        "proposed_iana_timezone": null,
         "requires_user_input": true,
         "stale_user_decision": false,
         "user_decision": {
