@@ -61,6 +61,16 @@ This is why the *order* matters: a single well-placed answer high in the funnel 
 confirmed anchor — can let the pipeline solve **every** camera's clock offset on its own, where a
 traditional tool would have you work out and type in each offset by hand.
 
+**Propagation is opt-out, not opt-in.** Set a fact once near the top of the folder tree — a trip's
+timezone, a city's GPS fallback — and it flows down to every destination beneath it *automatically*,
+because a place nested inside another can scarcely sit in a different timezone than its parent. Each child
+**auto-adopts** the inherited value — it doesn't block and doesn't ask, it just shows where the value came
+from — and you override a child **only if you can see the inherited value is wrong** (an override then
+re-roots the chain from that point down). **Leaving a cell untouched *is* the decision to accept it**, so
+the common case costs zero clicks. It can't really get easier — and it stays safe, because every value
+remains overridable and is validated before use, and a value is auto-adopted only where the folder
+geometry makes it a sound default.
+
 ## Safety model
 
 Your photos are irreplaceable, so the whole design is **plan → validate → execute**:
