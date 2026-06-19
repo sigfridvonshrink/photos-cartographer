@@ -31,9 +31,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r dev-requirements.txt
 
-      # Must run from the repo root; pytest.ini sets testpaths and ignores archive/.
+      # Must run from the repo root; pytest.ini sets testpaths.
       # Coverage config (branch + concurrency=thread; report scoped to the photos_pipeline package +
-      # the editor server + the developer) is in .coveragerc — the config tools/coverage uses locally.
+      # the editor server) is in .coveragerc — the config tools/coverage uses locally.
       - name: Run tests with coverage
         run: |
           coverage run -m pytest -q

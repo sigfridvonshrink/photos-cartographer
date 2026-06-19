@@ -56,7 +56,6 @@ python3 -m pytest -q
 
 ## History
 
-This pipeline was split out of an earlier monolithic `photos-ingest` prototype. That prototype, the
-phase-gated reengineering specs, and the original geotag/merge tests have since been removed — their
+This pipeline was built from an earlier monolithic prototype, which has since been removed — its
 behavior now lives in `photos-1-prep`, `photos-2-time-gps`, and `photos-3-merge`, governed by the
 `workflows/` specifications.
