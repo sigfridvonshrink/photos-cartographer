@@ -1,4 +1,18 @@
 #!/bin/sh
+# Copyright 2026 sigfridvonshrink
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 # Keep the local photos-ingest executable current on every commit. ingest/dist/ is gitignored, so this
 # only refreshes the LOCAL build — nothing is staged or pushed (official builds come from the release
 # workflow on a tag). Blocks the commit only if the build genuinely breaks; bypass with --no-verify.
