@@ -94,6 +94,9 @@ There is no build step and no linter config; runtime deps are system tools (`exi
 
 ### Release history
 
+- **v1.1.1** — docs fix: correct the destination model in `docs/concepts.md` (an intermediate folder
+  may hold photos *and* sub-destinations; only folders with no direct media are `container` nodes).
+  Docs-only; the binary is unchanged from v1.1.0 (docs are not bundled).
 - **v1.1.0** — **media extensions are now workspace config** (`media_extensions`, seeded then
   authoritative); folder-set and media-extension changes get field-scoped config fingerprints so they
   surgically restale the geotag/merge plans. Prep `plan` now **warns on dump files exiftool sees as
