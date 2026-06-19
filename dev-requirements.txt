@@ -1,6 +1,6 @@
 # Test + coverage tooling. Install into a virtualenv — `tools/coverage` does this for you in a local
 # `.venv` created with --system-site-packages (so the suite keeps any system pip deps). The runtime
-# pipeline itself needs no pip install: its dependencies are system tools (exiftool, magick, cjxl,
-# avifenc, ffmpeg) — see README.md. These are only for running the tests / measuring coverage.
+# pipeline itself needs no pip install: its dependencies are system tools (exiftool, magick,
+# ffmpeg) — see README.md. These are only for running the tests / measuring coverage.
 pytest
 coverage

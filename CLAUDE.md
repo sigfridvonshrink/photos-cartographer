@@ -69,7 +69,7 @@ alias is the *same module object* as the package module, so every import and pat
 identically. (This replaced the old `SourceFileLoader` hack once the scripts became package modules.)
 
 There is no build step and no linter config; runtime deps are system tools (`exiftool`, `magick`,
-`cjxl`, `avifenc`, `ffmpeg`) plus pip packages listed in `README.md`. The only manifest is
+`ffmpeg`) plus pip packages listed in `README.md`. The only manifest is
 `dev-requirements.txt` — `pytest` + `coverage` for running the suite / measuring coverage (used by
 `tools/coverage` and CI); the pipeline itself needs no pip install.
 
