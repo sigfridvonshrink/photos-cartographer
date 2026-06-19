@@ -20,7 +20,7 @@ Almost all of the code that writes into those originals — the geotag phase —
 suite (**98% of lines, 97% of branches**), so a change that would misbehave is caught before it can touch a
 photo.
 
-> **Covers the searches that tend to land here:** how to *geotag photos with no GPS from a GPX track*,
+> **Searches that might land here:** how to *geotag photos with no GPS from a GPX track*,
 > *correlate photos to a GPS track when the camera time is wrong*, *batch/bulk geotag thousands of RAW photos
 > non-destructively*, *auto-detect a camera clock offset / timezone for geotagging*, or a scriptable
 > **GeoSetter / HoudahGeo / gpscorrelate / darktable alternative** for an entire trip at once.
