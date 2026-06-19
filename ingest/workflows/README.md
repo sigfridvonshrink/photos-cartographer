@@ -104,10 +104,10 @@ The clock correction is the *core mechanism*; the safety and reproducibility aro
 - **Optional snapshots.** If you're on ZFS you can enable pre-mutation snapshots for clean-slate
   rollback — but they are **strictly optional**; the safety above does not depend on them.
 
-One boundary is worth stating plainly: this no-clobber guarantee begins at the **first prep run**. It
-cannot protect a file you overwrite *while dumping* — if your own copy command clobbers a same-named file
-in the drop folder (`0-sources/`) before prep ever sees it, that loss is outside the pipeline's view. Dump
-each source into its own subfolder or use a non-overwriting copy, and prep then preserves everything (prep
+One boundary: this no-clobber guarantee begins at the **first prep run**. It cannot protect a file
+you overwrite *while dumping* — if your own copy command clobbers a same-named file in the drop
+folder (`0-sources/`) before prep ever sees it, that loss is outside the pipeline's view. Dump each
+source into its own subfolder or use a non-overwriting copy, and prep then preserves everything (prep
 `photos-1-prep-workflow.md` Section 7.2).
 
 The full design is specified in four documents:
