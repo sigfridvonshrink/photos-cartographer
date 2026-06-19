@@ -196,7 +196,7 @@ The pipeline is **Python 3** and shells out to a few standard command-line tools
 SQLite (the cache and decision database) comes in through Python's standard library, so there's nothing extra
 to install for it. **ZFS** is optional: when configured, the pipeline can take a pre-mutation snapshot before
 any write, but the safety model — journal, recoverable quarantine, no-clobber, filesystem-as-truth — stands on
-its own without it. The decision editor vendors its front-end (Preact, htm, Leaflet — no CDN, no build step);
+its own without it. The decision editor vendors its front-end (Leaflet — no CDN, no build step);
 its map tiles and place search use OpenStreetMap/Nominatim at runtime and degrade gracefully offline.
 
 ## Layout
