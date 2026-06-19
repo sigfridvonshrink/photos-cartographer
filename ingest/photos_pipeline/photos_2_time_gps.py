@@ -82,8 +82,7 @@ def archive_manifest_path(ws):
 
 
 # ============================================================================
-# Stage 3 — GPX index (geotag spec §15). Mined from the archived monolith
-# (archive/reengineer/photos-ingest); GPX is geotag-only — prep is GPX-unaware
+# Stage 3 — GPX index (geotag spec §15). GPX is geotag-only — prep is GPX-unaware
 # (shared contract §8.2). Stdlib xml.etree only; no new dependency.
 # ============================================================================
 
