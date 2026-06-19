@@ -4,7 +4,7 @@
 > editor can be built against a stable picture. The **authoritative** source is the code that writes
 > and validates them — `photos_pipeline/photos_2_geotag.py` (`build_time_decisions`, `build_gps_decisions`,
 > `_timezone_decision`, `_offset_cell`, `_folder_fallback_cell`, `_review_item`, and the `_valid_*`
-> validators) — with the geotag spec `workflows/photos-2-geotag-workflow.md` as the
+> validators) — with the geotag spec `spec/photos-2-geotag-workflow.md` as the
 > behavioural reference. If this doc and the code ever disagree, the code wins; update this doc.
 
 The editor is narrowly scoped: it helps a human fill in the **decisions** these files request, and its
