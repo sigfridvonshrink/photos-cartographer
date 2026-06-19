@@ -267,3 +267,20 @@ def test_dry_run_rejects_stale_plan(tmp_path, monkeypatch):
     p24 = os.path.join(str(ws), ".photos-ingest", "photos-25-execution-summary.json")
     open(p24, "w").write(json.dumps({"status": "success", "touched": True}))
     assert merge._run_locked_workflow("dry-run", str(ws)) == 2
+
+
+def test_merge_plan_records_folder_and_extension_fingerprints(tmp_path, monkeypatch):
+    ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    _patch_fp(monkeypatch, fp)
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    plan = json.load(open(os.path.join(str(ws), ".photos-ingest", "photos-30-merge-plan.json")))
+    dep = plan["depends_on"]
+    # Recorded, and matching the workspace config's field-scoped fingerprints.
+    assert dep["folders_fingerprint"] == utils.folders_fingerprint()
+    assert dep["media_extensions_fingerprint"] == utils.media_extensions_fingerprint()
+    # And revalidation flags a change in either area.
+    wf = merge.MergeWorkflow(str(ws))
+    wf.handoff = json.load(open(utils.handoff_path(str(ws))))
+    for k in ("folders_fingerprint", "media_extensions_fingerprint"):
+        doctored = {**plan, "depends_on": {**dep, k: "WRONG"}}
+        assert any(k in s for s in wf.revalidate_plan_deps(str(ws), doctored)), k

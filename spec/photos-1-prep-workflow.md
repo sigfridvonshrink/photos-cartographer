@@ -185,14 +185,22 @@ If any recorded dependency is stale, missing, or unverifiable, the script blocks
 
 ### 6.1 Media classes
 
-Each file is classified by extension:
+Each file is classified by extension. The class **vocabulary** — `image` / `raw` / `video`, with
+`other` as the residual for any unlisted extension — is fixed pipeline logic; the **extension lists**
+are config (`media_extensions`, shared contract `photos-shared-contract.md` Section 4.3 item 9), seeded
+on first run from the in-code default below and authoritative per workspace thereafter. Extensions are
+canonical (lowercase, no leading dot) and each maps to exactly one class. The seed defaults:
 
 ```text
 image : jpg jpeg png heic tiff
 raw   : cr2 cr3 nef arw dng
 video : mp4 mov avi mkv
-other : everything else
+other : everything else   (residual — not a config list)
 ```
+
+Because the lists are config, they participate in the field-scoped config fingerprint (shared contract
+Section 4.2): moving an extension between a media class and `other` changes which files prep organizes
+versus sets aside as strays, so the change restales the organization-shaped downstream stages.
 
 `other` files are carried in the cache as `not_applicable` for metadata, are **not fingerprinted** (Section 9), and are not date-organized. Prep **moves them out of `0-sources` into `1-strays/<plan-id>/`** (structure preserved) and ignores them thereafter — never deduplicated, organized, or blocking (Sections 3.2, 7.6, 18).
 
@@ -232,7 +240,7 @@ Prep validates at least the config it actually consumes:
 2. **`gpx_root`** must be a syntactically valid path; the defensive skip of Section 3 / shared contract Section 8.2 handles a misconfiguration that resolves inside the managed tree, but a path that is malformed (illegal characters, not a path at all) is a validation blocker.
 3. **The `zfs` block** (when snapshots are configured): the dataset/pool name and any snapshot-name prefix must be valid snapshot-name components — in particular a prefix must not contain whitespace, `/`, a second `@`, or other characters that would make the resulting `dataset@prefix-<plan_id>` snapshot name invalid. An invalid prefix is rejected before planning, so a snapshot that `snapshots_required` would demand can never fail at execute time for a name-syntax reason prep could have caught.
 4. **`filename_timestamp_format`** must produce a non-empty, filesystem-safe component containing no path separators or illegal filename characters (the by-date provisional names depend on it, Section 8).
-5. **Numeric/threshold and enumerated config** prep reads (e.g. job count, any classification lists it consults) must be of the right type and within sane ranges.
+5. **Numeric/threshold and enumerated config** prep reads (e.g. job count) must be of the right type and within sane ranges. The classification lists prep consults are validated too: `folders` (every role present, each name a unique single path component, no control-dir collision) and `media_extensions` (each class a non-empty list of canonical lowercase, dot-less extensions, with no extension mapped to more than one class).
 
 A validation failure is a hard blocker: prep reports it textually, naming the offending config field so the user can fix the JSON and re-run, and produces no executable plan and no mutation — exactly as for a hard input guard above. Validation never silently coerces or "repairs" a value.
 

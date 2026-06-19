@@ -305,7 +305,8 @@ def test_revalidate_detects_each_stale_input(tmp_path, monkeypatch):
     gpx = cal.GPXIndex(cal.selected_gpx_root()).build()
     assert wf.revalidate_plan(plan, gpx) == []                        # fresh -> nothing stale
     assert any("not 'ready'" in s for s in wf.revalidate_plan({**plan, "status": "blocked"}, gpx))
-    for k in ("config_fingerprint", "filename_format_fingerprint", "camera_group_fingerprint", "gpx_fingerprint"):
+    for k in ("config_fingerprint", "filename_format_fingerprint", "camera_group_fingerprint",
+              "folders_fingerprint", "media_extensions_fingerprint", "gpx_fingerprint"):
         pk = {**plan, "depends_on": {**plan["depends_on"], k: "WRONG"}}
         assert any(k in s for s in wf.revalidate_plan(pk, gpx)), k
     pk = {**plan, "depends_on": {**plan["depends_on"], "planned_operation_fingerprint": "WRONG"}}

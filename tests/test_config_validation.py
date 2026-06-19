@@ -142,3 +142,65 @@ def test_load_or_seed_config_rejects_bad_value(tmp_path):
         json.dump(bad, f)
     with pytest.raises(ValueError, match="gpx_interpolation_max_distance_meters"):
         utils.load_or_seed_config(str(ws))
+
+
+# --- media_extensions: classification lists are config (prep §6.1), fingerprinted (shared §4.2) ----
+
+def _mx(image=None, raw=None, video=None):
+    """A config whose media_extensions block can be selectively overridden (missing class if None)."""
+    c = copy.deepcopy(utils.CONFIG)
+    block = {}
+    if image is not None: block["image"] = image
+    if raw is not None: block["raw"] = raw
+    if video is not None: block["video"] = video
+    c["media_extensions"] = block
+    return c
+
+
+def test_media_extensions_default_seeded_and_valid():
+    assert set(utils.CONFIG["media_extensions"]) == {"image", "raw", "video"}
+    assert "jpg" in utils.CONFIG["media_extensions"]["image"]
+    utils.validate_config(copy.deepcopy(utils.CONFIG))
+
+
+@pytest.mark.parametrize("cfg, needle", [
+    (_cfg(media_extensions="nope"), "media_extensions must be an object"),
+    (_mx(raw=["arw"], video=["mp4"]), "missing class(es): image"),                 # missing class
+    (_mx(image=[], raw=["arw"], video=["mp4"]), "must be a non-empty list"),       # empty list
+    (_mx(image=["jpg"], raw=["jpg"], video=["mp4"]), "exactly one class"),         # cross-class dup
+    (_mx(image=[".jpg"], raw=["arw"], video=["mp4"]), "canonical bare extension"), # leading dot
+    (_mx(image=["JPG"], raw=["arw"], video=["mp4"]), "canonical bare extension"),  # uppercase
+    (_mx(image=["j pg"], raw=["arw"], video=["mp4"]), "canonical bare extension"), # whitespace
+    (_mx(image=[5], raw=["arw"], video=["mp4"]), "must be a non-empty string"),    # wrong type
+])
+def test_media_extensions_rejects_bad(cfg, needle):
+    with pytest.raises(ValueError) as ei:
+        utils.validate_config(cfg)
+    assert needle in str(ei.value), str(ei.value)
+
+
+def test_classification_follows_config_after_load(tmp_path, monkeypatch):
+    # A user adds .webp to the image list; after load_or_seed_config it classifies as image, not stray.
+    ws = tmp_path / "ws"
+    (ws / ".photos-ingest").mkdir(parents=True)
+    cfg = copy.deepcopy(utils.CONFIG)
+    cfg["media_extensions"]["image"].append("webp")
+    with open(utils.config_path(str(ws)), "w") as f:
+        json.dump({k: v for k, v in cfg.items() if k != "jobs"}, f)
+    assert utils.media_class_for_ext("webp") == "other"     # not yet loaded
+    utils.load_or_seed_config(str(ws))
+    try:
+        assert utils.media_class_for_ext(".WEBP") == "image"   # config now authoritative, case-insensitive
+    finally:
+        utils.CONFIG.clear(); utils.CONFIG.update(copy.deepcopy(utils.DEFAULT_CONFIG))
+        utils._refresh_media_class_map()                       # restore global for other tests
+
+
+def test_field_fingerprints_change_with_their_area():
+    base_fol, base_ext = utils.folders_fingerprint(), utils.media_extensions_fingerprint()
+    c = copy.deepcopy(utils.CONFIG); c["media_extensions"]["video"].append("webm")
+    assert utils.media_extensions_fingerprint(c) != base_ext
+    assert utils.folders_fingerprint(c) == base_fol            # extension edit doesn't move the folders fp
+    c2 = copy.deepcopy(utils.CONFIG); c2["folders"]["sources"] = "0-inbox"
+    assert utils.folders_fingerprint(c2) != base_fol
+    assert utils.media_extensions_fingerprint(c2) == base_ext  # folder edit doesn't move the ext fp

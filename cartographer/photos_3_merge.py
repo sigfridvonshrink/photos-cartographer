@@ -42,6 +42,7 @@ from .photos_utils import (
     CONFIG, CONTROL_DIR, config_path, handoff_path, guard_path, is_sealed,
     validate_config, validate_merge_config, sha256_file, sha256_text, media_class_for_ext,
     folder_name, FOLDER_ROLES, missing_managed_folders, handoff_content_fingerprint,
+    folders_fingerprint, media_extensions_fingerprint,
     verify_json_dependency, json_dependency, write_json_artifact, write_versioned_json, is_library, write_library_marker,
     library_marker_path, allocate_suffix, suffix_root, max_suffix, ContentHasher, WorkspaceCache,
     journal_path, take_zfs_snapshot, _move_no_clobber, write_db_snapshot, reseal_archival_package,
@@ -450,6 +451,8 @@ class MergeWorkflow:
             "handoff": {"dependency_type": "handoff_content", "artifact_name": HANDOFF_ARTIFACT,
                         "content_fingerprint": handoff_content_fingerprint(self.handoff)},
             "config_fingerprint": sha256_file(config_path(ws)),
+            "folders_fingerprint": folders_fingerprint(),
+            "media_extensions_fingerprint": media_extensions_fingerprint(),
         }
         plan = {
             "artifact_type": "merge_plan", "artifact_name": MERGE_PLAN_ARTIFACT,
@@ -506,6 +509,10 @@ class MergeWorkflow:
         cfp = dep.get("config_fingerprint")
         if cfp and cfp != sha256_file(config_path(ws)):
             stale.append("config changed")
+        for k, cur in (("folders_fingerprint", folders_fingerprint()),
+                       ("media_extensions_fingerprint", media_extensions_fingerprint())):
+            if dep.get(k) and dep.get(k) != cur:
+                stale.append(f"{k} changed")
         return stale
 
     def do_plan(self, ws, library_root):
