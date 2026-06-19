@@ -1,4 +1,4 @@
-"""Geotag — orchestration + edge-branch coverage for photos-2-time-gps: the run()/main CLI
+"""Geotag — orchestration + edge-branch coverage for photos-2-geotag: the run()/main CLI
 error & exit paths (lock contention, unreadable/invalid config & handoff, blocker reports, the GPS
 bad-coord abort), and a few helper edge branches (scans, malformed handoff records, timezone manual/
 stale, _valid_iana). Complements the per-stage suites. From conftest.py.
@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-import photos_2_time_gps as cal
+import photos_2_geotag as cal
 import photos_utils as utils
 
 MANAGED = ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
@@ -29,7 +29,7 @@ def _init_ws(tmp_path):
 
 def _run(monkeypatch, ws):
     monkeypatch.chdir(str(ws))
-    monkeypatch.setattr(sys, "argv", ["photos-2-time-gps", "plan"])
+    monkeypatch.setattr(sys, "argv", ["photos-2-geotag", "plan"])
     try:
         cal.main(); return 0
     except SystemExit as e:

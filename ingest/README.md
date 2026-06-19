@@ -17,18 +17,18 @@ and the code is expected to follow them. When changing behavior, update the gove
 | Document | Scope |
 |---|---|
 | [`workflows/photos-1-prep-workflow.md`](workflows/photos-1-prep-workflow.md) | **Phase 1 — prep:** consolidation, extension normalization, dedup/quarantine, organization, cache/handoff. Implemented by `photos-1-prep`. |
-| [`workflows/photos-2-time-gps-workflow.md`](workflows/photos-2-time-gps-workflow.md) | **Phase 2 — time/GPS calibration:** camera-clock inference and track-based geotagging. Implemented by `photos-2-time-gps`. |
+| [`workflows/photos-2-geotag-workflow.md`](workflows/photos-2-geotag-workflow.md) | **Phase 2 — geotag:** camera-clock inference and track-based geotagging. Implemented by `photos-2-geotag`. |
 | [`workflows/photos-3-merge-workflow.md`](workflows/photos-3-merge-workflow.md) | **Phase 3 — merge:** safe merge of the finalized `6-photos-by-dest` staging tree into the permanent digiKam library. Implemented by `photos-3-merge`. |
 | [`workflows/photos-shared-contract.md`](workflows/photos-shared-contract.md) | Facts the phases share: the run lock, the `.photos-ingest/` control directory, `photos-00-config.json`, the registry, formats, `gpx_root`, and the end-to-end operator loop. |
 
 ## Contents
 
 - `photos_pipeline/` — the pipeline package: `photos_1_prep.py` (Phase 1 prep; subcommands
-  `plan` / `dry-run` / `execute`), `photos_2_time_gps.py` (Phase 2 geotag), `photos_3_merge.py`
+  `plan` / `dry-run` / `execute`), `photos_2_geotag.py` (Phase 2 geotag), `photos_3_merge.py`
   (Phase 3 merge), and `photos_utils.py` (shared `CONFIG` template + utilities, imported
   package-relatively). Run a phase from a checkout with `python3 -m photos_pipeline.photos_1_prep plan`
   (with `ingest/` on `PYTHONPATH`); shipped detached as three executable zipapps named
-  `photos-1-prep` / `photos-2-time-gps` / `photos-3-merge` (run `./photos-1-prep plan`).
+  `photos-1-prep` / `photos-2-geotag` / `photos-3-merge` (run `./photos-1-prep plan`).
 - `workflows/` — the authoritative specifications (above).
 - `photos_pipeline/editor/` — the decision editor, folded into the package (served by `photos-ingest edit`).
 - `tests/` — the test suite for the pipeline.
@@ -58,5 +58,5 @@ python3 -m pytest -q
 ## History
 
 This pipeline was built from an earlier monolithic prototype, which has since been removed — its
-behavior now lives in `photos-1-prep`, `photos-2-time-gps`, and `photos-3-merge`, governed by the
+behavior now lives in `photos-1-prep`, `photos-2-geotag`, and `photos-3-merge`, governed by the
 `workflows/` specifications.

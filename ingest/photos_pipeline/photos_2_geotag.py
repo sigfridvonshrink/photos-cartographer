@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""photos-2-time-gps — time/GPS calibration phase.
+"""photos-2-geotag — geotag phase.
 
 Geotag takes a prepped, user-curated `6-photos-by-dest/` and: infers each camera's clock
 offset by matching its geotagged frames against GPX tracks, resolves every photo to real UTC,
@@ -2276,7 +2276,7 @@ class GeotagWorkflow:
                 prep_photos = {}
         photos = build_complete_log(prep_photos, files, rows, time_artifact, plan, ledger)
         write_json_artifact(complete_log_path(ws),
-                            {"schema_version": 1, "tool": "photos-2-time-gps", "photos": photos})
+                            {"schema_version": 1, "tool": "photos-2-geotag", "photos": photos})
 
         conn = sqlite3.connect(db_path(ws))
         try:
@@ -2319,7 +2319,7 @@ GEOTAG_BLURB = (
 
 def add_arguments(parser):
     """Register geotag's `-j` + subcommands (plan / execute / finalize) on `parser`. Shared by the
-    standalone `python -m photos_pipeline.photos_2_time_gps` and the combined `photos-ingest geotag`."""
+    standalone `python -m photos_pipeline.photos_2_geotag` and the combined `photos-ingest geotag`."""
     parser.add_argument("-j", "--jobs", type=int, default=None,
                         help="Worker threads for execution (default: config jobs, else 4).")
     sub = parser.add_subparsers(dest="command")
@@ -2596,7 +2596,7 @@ def run(args):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(prog="photos_pipeline.photos_2_time_gps", description=GEOTAG_BLURB,
+    parser = argparse.ArgumentParser(prog="photos_pipeline.photos_2_geotag", description=GEOTAG_BLURB,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     add_arguments(parser)
     args = parser.parse_args(argv)

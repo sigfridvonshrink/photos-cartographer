@@ -12,7 +12,7 @@ It does three things, carefully:
 
 1. **Prep** — takes an unorganized dump of files and leaves a clean, deduplicated,
    date-organized working set, without ever destroying an original.
-2. **Time/GPS calibration** — resolves each photo to real UTC, **automatically figures out and
+2. **Geotag** — resolves each photo to real UTC, **automatically figures out and
    corrects a wrong camera clock** by matching your geotagged frames against the GPX track, then
    geotags everything from the track and renames by corrected local time.
 3. **Library merge** — once a shoot is geotagged and **finalized**, **moves** the staging tree into your
@@ -113,7 +113,7 @@ each source into its own subfolder or use a non-overwriting copy, and prep then 
 The full design is specified in four documents:
 
 - `photos-1-prep-workflow.md` — the prep phase
-- `photos-2-time-gps-workflow.md` — the time/GPS calibration phase
+- `photos-2-geotag-workflow.md` — the geotag phase
 - `photos-3-merge-workflow.md` — the library-merge phase
 - `photos-shared-contract.md` — facts the phases share (lock, config, formats, GPX root, the
   input-validation discipline, the execute-time no-clobber/atomicity rule, the archival package, the

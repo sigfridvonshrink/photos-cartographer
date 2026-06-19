@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-import photos_2_time_gps as cal
+import photos_2_geotag as cal
 import photos_utils as utils
 
 CFG = {"gpx_direct_match_max_seconds": 60.0, "gpx_interpolation_max_gap_seconds": 120.0,

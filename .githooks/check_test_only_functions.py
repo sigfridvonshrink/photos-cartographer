@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Guard: fail if any production function is referenced ONLY by tests.
 
-Production code (`ingest/photos-1-prep`, `ingest/photos-2-time-gps`, `ingest/photos_utils.py`) must
+Production code (`ingest/photos-1-prep`, `ingest/photos-2-geotag`, `ingest/photos_utils.py`) must
 not carry APIs that exist only to serve the test suite. This finds every name `def`-ed in those three
 files that is referenced somewhere under `ingest/tests/` but NOWHERE in the production sources (other
 than its own definition) — i.e. test-only production code — and exits non-zero so the pre-push hook
@@ -14,7 +14,7 @@ import os
 import re
 import sys
 
-SRC_FILES = ["ingest/photos_pipeline/photos_1_prep.py", "ingest/photos_pipeline/photos_2_time_gps.py",
+SRC_FILES = ["ingest/photos_pipeline/photos_1_prep.py", "ingest/photos_pipeline/photos_2_geotag.py",
              "ingest/photos_pipeline/photos_3_merge.py", "ingest/photos_pipeline/photos_utils.py",
              "ingest/photos_pipeline/cli.py"]
 TESTS_DIR = "ingest/tests"

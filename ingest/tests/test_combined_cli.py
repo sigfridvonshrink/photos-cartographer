@@ -2,7 +2,7 @@
 phase→subcommand wiring, and the geotag run→plan rename. From conftest.py."""
 import pytest
 
-from photos_pipeline import cli, photos_1_prep, photos_2_time_gps, photos_3_merge
+from photos_pipeline import cli, photos_1_prep, photos_2_geotag, photos_3_merge
 
 
 def test_no_args_prints_overall_blurb(capsys):
@@ -37,7 +37,7 @@ def test_phase_subcommand_wires_the_right_handler():
     a = _parse(["prep", "plan"])
     assert a.phase == "prep" and a.command == "plan" and a._run is photos_1_prep.run
     a = _parse(["geotag", "plan"])
-    assert a.phase == "geotag" and a.command == "plan" and a._run is photos_2_time_gps.run
+    assert a.phase == "geotag" and a.command == "plan" and a._run is photos_2_geotag.run
     a = _parse(["merge", "init-library"])
     assert a.phase == "merge" and a.command == "init-library" and a._run is photos_3_merge.run
 

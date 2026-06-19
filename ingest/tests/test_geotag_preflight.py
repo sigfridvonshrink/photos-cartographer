@@ -1,7 +1,7 @@
-"""Phase 1 (geotag) — Stage-1 preflight (photos-2-time-gps, spec §7/§13).
+"""Phase 1 (geotag) — Stage-1 preflight (photos-2-geotag, spec §7/§13).
 
 The lifecycle guards + by-dest scope/re-prep gates that must pass before geotag runs. No
-JSON artifacts are produced. photos_2_time_gps / photos_utils come from conftest.py.
+JSON artifacts are produced. photos_2_geotag / photos_utils come from conftest.py.
 """
 import json
 import os
@@ -9,7 +9,7 @@ import sys
 
 import pytest
 
-import photos_2_time_gps as cal
+import photos_2_geotag as cal
 import photos_utils as utils
 
 MANAGED = ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
@@ -186,7 +186,7 @@ def test_missing_by_date_photo_demands_reprep(tmp_path):
 
 def _main(monkeypatch, ws):
     monkeypatch.chdir(str(ws))
-    monkeypatch.setattr(sys, "argv", ["photos-2-time-gps", "plan"])
+    monkeypatch.setattr(sys, "argv", ["photos-2-geotag", "plan"])
     try:
         cal.main()
         return 0

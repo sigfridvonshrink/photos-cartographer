@@ -2,7 +2,7 @@
 exiftool/ffmpeg/magick is absent). Covers the photos_utils helpers, the soft ffmpeg fingerprint
 fallback, the exiftool-worker guard, and the phase wiring (prep plan hard-stop, geotag blocker).
 
-photos_utils / photos_1_prep / photos_2_time_gps come from conftest.py.
+photos_utils / photos_1_prep / photos_2_geotag come from conftest.py.
 """
 import json
 import types
@@ -11,7 +11,7 @@ import pytest
 
 import photos_utils as utils
 import photos_1_prep as prep
-import photos_2_time_gps as cal
+import photos_2_geotag as cal
 
 MANAGED = ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
            "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"]

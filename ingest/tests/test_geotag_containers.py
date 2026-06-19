@@ -9,7 +9,7 @@ children. Such a container:
 Clock OFFSETS, by contrast, do NOT inherit or aggregate (§10.2): a container exposes NO offset cells
 (it has no media to time-correct and offsets never cross destinations). From conftest.py.
 """
-import photos_2_time_gps as cal
+import photos_2_geotag as cal
 import photos_utils as utils
 from datetime import datetime, timezone
 

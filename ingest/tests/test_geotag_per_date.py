@@ -6,7 +6,7 @@ per-day buckets keyed `<group>@<YYYY-MM-DD>`; the single-date common case keeps 
 key. Each bucket proposes independently (here: timezone-derived, DST-aware). Resolved-UTC picks the
 file's own date bucket. From conftest.py.
 """
-import photos_2_time_gps as cal
+import photos_2_geotag as cal
 import photos_utils as utils
 
 BYDEST = "6-photos-by-dest"

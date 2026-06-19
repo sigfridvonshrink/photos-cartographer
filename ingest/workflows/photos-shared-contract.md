@@ -5,7 +5,7 @@
 This document is the single authoritative home for facts that span the phases of the photos pipeline:
 
 1. the preparation phase, `photos-1-prep` (`photos-1-prep-workflow.md`);
-2. the time/GPS calibration phase, `photos-2-time-gps` (`photos-2-time-gps-workflow.md`);
+2. the geotag phase, `photos-2-geotag` (`photos-2-geotag-workflow.md`);
 3. the library-merge phase, `photos-3-merge` (`photos-3-merge-workflow.md`).
 
 Anything the phases must agree on — the workspace lock, the pre-mutation snapshot mechanism, the shared configuration object, the workspace control directory, the camera-group identity key, the filename timestamp format, the GPX root, the input-validation discipline, the execute-time no-clobber/atomicity rule, and the end-to-end operator loop — is defined here and is authoritative here. The phase specifications reference this document rather than restating these facts, so the contract cannot drift between them.
@@ -27,7 +27,7 @@ The lock guards the entire run, not just mutation:
 3. Acquisition is **fail-fast, not blocking**. If the lock is already held by another run, the invocation does not wait: it exits immediately with a clear message that the workspace is locked by an in-progress run, and performs no scan, no planning, and no mutation. It produces no plan, no dry-run report, and no artifact.
 4. The lock must be released on normal exit and on error. A lock left behind by a crashed process (a stale lock) must be detectable as stale — e.g. by recording the owning process identity/liveness and start time — and recoverable, so a crash does not permanently wedge the workspace. Stale-lock takeover must be conservative: only a lock whose owner is provably gone may be reclaimed.
 
-Because the lock covers planning as well as execution, the per-phase `plan` / `dry-run` / `execute` lifecycles described in `photos-1-prep-workflow.md` Section 14 and `photos-2-time-gps-workflow.md` Section 29 all run with the lock already held; those sections do not re-acquire or independently scope the lock. This whole-run lock is independent of, and stricter than, the dependency-revalidation discipline (Section 9): revalidation guards against *stale* inputs across separate runs, while the lock guarantees runs never overlap in the first place.
+Because the lock covers planning as well as execution, the per-phase `plan` / `dry-run` / `execute` lifecycles described in `photos-1-prep-workflow.md` Section 14 and `photos-2-geotag-workflow.md` Section 29 all run with the lock already held; those sections do not re-acquire or independently scope the lock. This whole-run lock is independent of, and stricter than, the dependency-revalidation discipline (Section 9): revalidation guards against *stale* inputs across separate runs, while the lock guarantees runs never overlap in the first place.
 
 ---
 
@@ -42,7 +42,7 @@ Each phase that mutates can take an optional pre-mutation snapshot before applyi
 
 The mechanism is named for ZFS because that is the reference implementation, but it is deliberately the *only* part of the pipeline that touches a specific filesystem feature, and it is optional; everything else is filesystem-agnostic.
 
-`photos-1-prep-workflow.md` Section 14.3, `photos-2-time-gps-workflow.md` Section 29, and `photos-3-merge-workflow.md` Section 10.3 invoke this mechanism; none redefines it. (Merge's optional snapshot targets the **library** volume, where its placements land, rather than the workspace tree — see the merge spec.)
+`photos-1-prep-workflow.md` Section 14.3, `photos-2-geotag-workflow.md` Section 29, and `photos-3-merge-workflow.md` Section 10.3 invoke this mechanism; none redefines it. (Merge's optional snapshot targets the **library** volume, where its placements land, rather than the workspace tree — see the merge spec.)
 
 ---
 
@@ -66,7 +66,7 @@ The config is the root of the dependency cascade (Section 9), but staleness stay
 
 So two things are derived from the file: (a) field-scoped fingerprints (filename-format, camera-time/timezone policy, GPX thresholds, camera-group-key version, snapshot policy, …) that drive precise staleness; and (b) one whole-file hash for integrity/provenance.
 
-**The whole-file config fingerprint has a deliberate *second* role beyond integrity: a coarse, conservative staleness trigger.** It is carried in the executable plan's `depends_on` (geotag `photos-2-time-gps-workflow.md` Section 28, within the flattened dependency set of Section 5) so that **any** config edit changes it and restales the **plan** — a catch-all guaranteeing no config-driven change is ever silently missed, even one in an area without its own field-scoped fingerprint. This is intentional belt-and-braces *alongside* the field-scoped fingerprints, not a contradiction of surgical staleness: the field-scoped fingerprints keep the **expensive** derived caches from restaling on unrelated edits (resolved UTC is keyed on the time-policy subset, geotag Section 22.1; renames on the filename-format fingerprint), while the **cheap-to-rebuild** plan simply re-plans on any config change. The two triggers therefore have deliberately different scopes: a config edit *outside* the time policy re-plans but does **not** restale already-resolved UTC. What §4.2 rules out is collapsing the *surgical* caches onto the whole-file hash; using that hash as an additional coarse trigger for a cheap artifact is consistent with — indeed protective of — surgical staleness.
+**The whole-file config fingerprint has a deliberate *second* role beyond integrity: a coarse, conservative staleness trigger.** It is carried in the executable plan's `depends_on` (geotag `photos-2-geotag-workflow.md` Section 28, within the flattened dependency set of Section 5) so that **any** config edit changes it and restales the **plan** — a catch-all guaranteeing no config-driven change is ever silently missed, even one in an area without its own field-scoped fingerprint. This is intentional belt-and-braces *alongside* the field-scoped fingerprints, not a contradiction of surgical staleness: the field-scoped fingerprints keep the **expensive** derived caches from restaling on unrelated edits (resolved UTC is keyed on the time-policy subset, geotag Section 22.1; renames on the filename-format fingerprint), while the **cheap-to-rebuild** plan simply re-plans on any config change. The two triggers therefore have deliberately different scopes: a config edit *outside* the time policy re-plans but does **not** restale already-resolved UTC. What §4.2 rules out is collapsing the *surgical* caches onto the whole-file hash; using that hash as an additional coarse trigger for a cheap artifact is consistent with — indeed protective of — surgical staleness.
 
 ### 4.3 Config areas
 
@@ -135,9 +135,9 @@ Skipping is directory-level: prep skips `.photos-ingest/`, `.photos-ingest-quara
 
 ### 5.2 The handoff is hashed despite living in the skipped directory
 
-`photos-11-handoff.json` lives in `.photos-ingest/` and so is never inventoried as media. That is independent of its role as a dependency: geotag fully verifies it before use — by **recomputing its `content_fingerprint`** (the content-scoped staleness key prep stamps on it) and comparing it to the value recorded in the dependency block (`photos-2-time-gps-workflow.md` Section 4; prep `photos-1-prep-workflow.md` Section 16.2). Its whole-file SHA-256 is retained as an integrity/archival hash (Section 13), but the dependency check is the recomputed content fingerprint, so a run-only refresh of the handoff does not restale downstream (Section 9.1). So the handoff is invisible to prep's media scan yet fully verified as a dependency by geotag — verified by content, not by exact bytes.
+`photos-11-handoff.json` lives in `.photos-ingest/` and so is never inventoried as media. That is independent of its role as a dependency: geotag fully verifies it before use — by **recomputing its `content_fingerprint`** (the content-scoped staleness key prep stamps on it) and comparing it to the value recorded in the dependency block (`photos-2-geotag-workflow.md` Section 4; prep `photos-1-prep-workflow.md` Section 16.2). Its whole-file SHA-256 is retained as an integrity/archival hash (Section 13), but the dependency check is the recomputed content fingerprint, so a run-only refresh of the handoff does not restale downstream (Section 9.1). So the handoff is invisible to prep's media scan yet fully verified as a dependency by geotag — verified by content, not by exact bytes.
 
-Prep `photos-1-prep-workflow.md` Section 3 and geotag `photos-2-time-gps-workflow.md` Section 8.1 reference this control-directory model rather than maintaining their own ignore lists.
+Prep `photos-1-prep-workflow.md` Section 3 and geotag `photos-2-geotag-workflow.md` Section 8.1 reference this control-directory model rather than maintaining their own ignore lists.
 
 ### 5.3 Workspace structural integrity: symlinks and the base-is-folders invariant
 
@@ -161,7 +161,7 @@ Both phases identify a camera/device by a single derived key so grouping is comp
 2. The derivation is versioned by `CAMERA_GROUP_KEY_VERSION`; the version participates in metadata-freshness and dependency fingerprints so a change to the derivation is detectable rather than silently mixing old and new keys.
 3. Geotag reuses prep's `camera_group_key` rather than recomputing identity. Mobile vs fixed-clock *classification* is a separate config concern, governed by `camera_time_and_timezone_policy.device_groups` (`phones` = mobile, `fixed_clock_cameras` = fixed-clock) in the shared config (Section 4). A group is "known" when its key is listed under one of those classes.
 
-`photos-1-prep-workflow.md` (Section 12) emits the key; `photos-2-time-gps-workflow.md` (Section 16) consumes and classifies it.
+`photos-1-prep-workflow.md` (Section 12) emits the key; `photos-2-geotag-workflow.md` (Section 16) consumes and classifies it.
 
 ---
 
@@ -223,7 +223,7 @@ A file already in the workspace whose name does **not** match the convention is 
 
 ## 8. GPX root
 
-GPX track files are consumed only by geotag (`photos-2-time-gps-workflow.md` Section 15), for time-anchor proposals and for GPS interpolation/extrapolation. Prep never parses, fingerprints, or organizes them. The shared rule that makes this safe is **where the GPX files live**.
+GPX track files are consumed only by geotag (`photos-2-geotag-workflow.md` Section 15), for time-anchor proposals and for GPS interpolation/extrapolation. Prep never parses, fingerprints, or organizes them. The shared rule that makes this safe is **where the GPX files live**.
 
 ### 8.1 Location
 
@@ -235,7 +235,7 @@ Prep stays GPX-unaware: it does not read, parse, fingerprint, or move GPX files.
 
 ### 8.3 Geotag's use and fingerprinting
 
-Geotag owns all GPX behaviour: scanning `gpx_root`, parsing tracks, computing the GPX fingerprint, and using it as evidence. The GPX fingerprint participates in geotag's dependency cascade (Section 9): it becomes an upstream dependency of `photos-21-time-decisions.json` when GPX is used for time anchors, and of `photos-23-gps-decisions.json` / `photos-24-executable-plan.json` when GPX is used for GPS placement. The `gpx_root` value and GPX matching thresholds live in the shared config (Section 4); their detailed semantics are in `photos-2-time-gps-workflow.md` Sections 15 and 19.
+Geotag owns all GPX behaviour: scanning `gpx_root`, parsing tracks, computing the GPX fingerprint, and using it as evidence. The GPX fingerprint participates in geotag's dependency cascade (Section 9): it becomes an upstream dependency of `photos-21-time-decisions.json` when GPX is used for time anchors, and of `photos-23-gps-decisions.json` / `photos-24-executable-plan.json` when GPX is used for GPS placement. The `gpx_root` value and GPX matching thresholds live in the shared config (Section 4); their detailed semantics are in `photos-2-geotag-workflow.md` Sections 15 and 19.
 
 ---
 
@@ -254,7 +254,7 @@ The shared facts that feed these fingerprints — config (Section 4), control di
 These specs draw an intentional, load-bearing distinction between the two terms — they name a value by the role it plays, not by the algorithm underneath:
 
 - a **fingerprint** is the **decoded-content identity of a media file** — a photo's pixels via ImageMagick `identify`, a video's streams via the `ffmpeg` stream MD5 (prep `photos-1-prep-workflow.md` Section 9). It is chosen precisely so it stays the **same** when the pipeline rewrites a photo's EXIF/GPS or renames a file: a media file's identity must survive those mutations, which is what makes it the identity spine the transformation log and de-duplication rely on (Section 13.3).
-- a **hash** is a **byte-level SHA-256 over an artifact's exact bytes** — the numbered JSON artifacts and the config. It is chosen precisely so it **changes** on any byte change: detecting change is its whole purpose, which is what makes it the right dependency check for artifacts (Section 4.1, Section 5.2). The **prep handoff** is the one deliberate refinement: its whole-file SHA-256 is kept as an **integrity/archival** hash, but its **staleness** key is a content-scoped fingerprint (`content_fingerprint`), because the handoff also carries per-run audit that would otherwise restale downstream on a no-op re-prep (prep `photos-1-prep-workflow.md` Section 16.2; geotag `photos-2-time-gps-workflow.md` Section 4). This keeps the handoff's staleness surgical (Section 4.2) without weakening byte-integrity.
+- a **hash** is a **byte-level SHA-256 over an artifact's exact bytes** — the numbered JSON artifacts and the config. It is chosen precisely so it **changes** on any byte change: detecting change is its whole purpose, which is what makes it the right dependency check for artifacts (Section 4.1, Section 5.2). The **prep handoff** is the one deliberate refinement: its whole-file SHA-256 is kept as an **integrity/archival** hash, but its **staleness** key is a content-scoped fingerprint (`content_fingerprint`), because the handoff also carries per-run audit that would otherwise restale downstream on a no-op re-prep (prep `photos-1-prep-workflow.md` Section 16.2; geotag `photos-2-geotag-workflow.md` Section 4). This keeps the handoff's staleness surgical (Section 4.2) without weakening byte-integrity.
 
 So the two values do **opposite** jobs — one must be invariant under mutation, the other must be sensitive to it — and they keep different names even though a content fingerprint is itself computed with a hash function internally (`identify`'s value is a SHA-256 of the normalized pixel stream; the video one is an MD5). The cascade above consumes both: media identity as **content fingerprints**, artifacts as **byte hashes**, plus the field-scoped **config fingerprints** (Section 4.2) that keep staleness surgical. "Fingerprint" unqualified means the media content fingerprint; "hash" unqualified means an artifact byte hash.
 
@@ -390,7 +390,7 @@ The shared principle has four parts:
 3. **Mutate only on a real difference.** A file is moved, renamed, or metadata-written only when its current state differs from the planned target. A file already in its correct location with its correct name and metadata produces no operation — it is reported as a no-op, not re-applied. Geotag's renames recompute to the same name for an already-finalized file; prep does not re-move or re-normalize files already in place.
 4. **A no-op run is a no-op.** Re-running any phase on a workspace whose relevant state has not changed produces zero mutations and a stable, equal result (same plan, same fingerprints, same names), reporting cache hits and already-correct files rather than treating prior work as error.
 
-Each phase states the concrete consequences of this principle in its own terms — prep in `photos-1-prep-workflow.md` Sections 13 and 21 (idempotency, incremental operation, staleness examples), geotag in `photos-2-time-gps-workflow.md` Sections 29.1 and 30 (execution idempotency/resume, recalculation), and merge in `photos-3-merge-workflow.md` Section 8 (idempotency, resume, non-destructiveness). This section is the single statement of the principle they share.
+Each phase states the concrete consequences of this principle in its own terms — prep in `photos-1-prep-workflow.md` Sections 13 and 21 (idempotency, incremental operation, staleness examples), geotag in `photos-2-geotag-workflow.md` Sections 29.1 and 30 (execution idempotency/resume, recalculation), and merge in `photos-3-merge-workflow.md` Section 8 (idempotency, resume, non-destructiveness). This section is the single statement of the principle they share.
 
 ---
 

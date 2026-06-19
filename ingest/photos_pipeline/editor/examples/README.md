@@ -45,4 +45,4 @@ by the real edit→re-run round-trip, so they also illustrate the loop the edito
 
 > The *inputs* are synthetic (chosen to exercise each state); the *outputs* are authentic. These are
 > illustrative fixtures, not a conformance suite — the authoritative shape is still the code
-> (`ingest/photos-2-time-gps`).
+> (`ingest/photos-2-geotag`).

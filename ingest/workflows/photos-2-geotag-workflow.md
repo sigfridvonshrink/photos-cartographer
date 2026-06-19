@@ -1,8 +1,8 @@
-# Time/GPS Calibration Workflow Specification (`photos-2-time-gps`)
+# Geotag Workflow Specification (`photos-2-geotag`)
 
 ## 1. Purpose
 
-This document defines the high-level workflow for the time/GPS calibration phase that follows `photos-1-prep`.
+This document defines the high-level workflow for the geotag phase that follows `photos-1-prep`.
 
 The geotag phase exists to:
 
@@ -259,7 +259,7 @@ A jpg/ or tif/ development subfolder was found under 6-photos-by-dest:
   6-photos-by-dest/2025/France/Paris/Louvre/jpg
 
 This means photo development/processing has already started.
-Time/GPS calibration must run BEFORE development, because it rewrites
+Geotag must run BEFORE development, because it rewrites
 timestamps, GPS, and filenames that development depends on.
 
 Stop and roll back the development breakout (remove the jpg/tif subfolders

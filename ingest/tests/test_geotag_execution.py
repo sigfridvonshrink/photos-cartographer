@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-import photos_2_time_gps as cal
+import photos_2_geotag as cal
 import photos_utils as utils
 
 CAM = "SONY|ILCE-6400|123"
@@ -61,7 +61,7 @@ def _ready_ws(tmp_path, monkeypatch, *, zfs=None):
 
     def run():
         monkeypatch.chdir(str(ws))
-        monkeypatch.setattr(sys, "argv", ["photos-2-time-gps", "plan"])
+        monkeypatch.setattr(sys, "argv", ["photos-2-geotag", "plan"])
         try:
             cal.main()
         except SystemExit:
@@ -87,7 +87,7 @@ def _mock_tools(monkeypatch, ws, *, write_ok=True, content_changed=False):
 
 def _execute(monkeypatch, ws):
     monkeypatch.chdir(str(ws))
-    monkeypatch.setattr(sys, "argv", ["photos-2-time-gps", "execute"])
+    monkeypatch.setattr(sys, "argv", ["photos-2-geotag", "execute"])
     try:
         cal.main(); return 0
     except SystemExit as e:

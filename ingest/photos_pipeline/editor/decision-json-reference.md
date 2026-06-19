@@ -2,9 +2,9 @@
 
 > **NON-AUTHORITATIVE.** This describes the shape of the two geotag *decision* artifacts so the
 > editor can be built against a stable picture. The **authoritative** source is the code that writes
-> and validates them — `ingest/photos-2-time-gps` (`build_time_decisions`, `build_gps_decisions`,
+> and validates them — `ingest/photos-2-geotag` (`build_time_decisions`, `build_gps_decisions`,
 > `_timezone_decision`, `_offset_cell`, `_folder_fallback_cell`, `_review_item`, and the `_valid_*`
-> validators) — with the geotag spec `ingest/workflows/photos-2-time-gps-workflow.md` as the
+> validators) — with the geotag spec `ingest/workflows/photos-2-geotag-workflow.md` as the
 > behavioural reference. If this doc and the code ever disagree, the code wins; update this doc.
 
 The editor is narrowly scoped: it helps a human fill in the **decisions** these files request, and its
@@ -379,7 +379,7 @@ A bare `""`/`false` everywhere = "no decision yet".
 ## 7. Validation rules for editable values
 
 Mirror these client-side; a value that fails makes geotag reject the whole artifact as a blocker.
-(Source: the `_valid_*` helpers in `ingest/photos-2-time-gps`.)
+(Source: the `_valid_*` helpers in `ingest/photos-2-geotag`.)
 
 | Field(s) | Rule |
 |----------|------|
@@ -401,5 +401,5 @@ A natural shape that satisfies the contract:
 3. Let the human edit only `user_decision`; validate per §7 live; show a computed preview of the outcome
    if desired (display-only — not written authoritatively).
 4. Save by writing the modified `user_decision` blocks back into the loaded JSON (round-trip, preserving
-   all other fields and unknown keys) and serialising. The human then re-runs `photos-2-time-gps`, which
+   all other fields and unknown keys) and serialising. The human then re-runs `photos-2-geotag`, which
    regenerates the artifact, reads back the `user_decision` values, recomputes everything, and validates.

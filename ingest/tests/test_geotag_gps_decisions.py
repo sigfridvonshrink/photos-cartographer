@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-import photos_2_time_gps as cal
+import photos_2_geotag as cal
 import photos_utils as utils
 
 BYDEST = "6-photos-by-dest"

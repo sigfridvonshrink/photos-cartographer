@@ -23,7 +23,7 @@ majority by interpolating along the track. See `ingest/workflows/README.md`.
 ## Commands
 
 The active pipeline is the **`photos_pipeline` package** at `ingest/photos_pipeline/`:
-`photos_utils.py` (shared lib) + `photos_1_prep.py` / `photos_2_time_gps.py` / `photos_3_merge.py`
+`photos_utils.py` (shared lib) + `photos_1_prep.py` / `photos_2_geotag.py` / `photos_3_merge.py`
 (the three phases) + `cli.py`/`__main__.py` (the combined entry) + `editor/` (the decision editor).
 From a checkout, run via `python3 -m photos_pipeline <phase> <subcommand>` (with `ingest/` on
 `PYTHONPATH`, or from `ingest/`). It is **shipped detached** as ONE self-contained executable
@@ -63,7 +63,7 @@ tools/jstest                   # node --test over ingest/photos_pipeline/editor/
 
 `ingest/tests/conftest.py` imports the package modules once and **aliases them under their historical
 short names** in `sys.modules` (`photos_1_prep` → `photos_pipeline.photos_1_prep`, likewise
-`photos_utils` / `photos_2_time_gps` / `photos_3_merge`), then restores the global `CONFIG` between
+`photos_utils` / `photos_2_geotag` / `photos_3_merge`), then restores the global `CONFIG` between
 tests. So test files keep `import photos_1_prep` and `@patch("photos_1_prep....")` unchanged — the
 alias is the *same module object* as the package module, so every import and patch resolves
 identically. (This replaced the old `SourceFileLoader` hack once the scripts became package modules.)
@@ -100,7 +100,7 @@ role blurb + its subcommands (the tool is used a few times a year). Each phase s
 entry (`python -m photos_pipeline.photos_1_prep …`) sharing the same `add_arguments`/`run` — tests use it.
 
 - `photos-ingest prep` — subcommands `plan` / `dry-run` / `execute` (+ `prune-quarantine`).
-- `photos-ingest geotag` — `plan` / `execute` / `finalize` (was the `photos-2-time-gps` phase, formerly
+- `photos-ingest geotag` — `plan` / `execute` / `finalize` (was the `photos-2-geotag` phase, formerly
   named "calibrate"; its `run` subcommand was **renamed to `plan`** so all phases start with `plan`).
 - `photos-ingest merge` — `init-library` / `plan` / `dry-run` / `execute`.
 - `photos-ingest edit` — the decision editor (a local web server; folded into the package at `photos_pipeline/editor/`, web assets served as package data via importlib.resources, no bundler).
@@ -156,8 +156,8 @@ The whole design exists to safely mutate **irreplaceable originals**. These rule
 
 Defined in `ingest/workflows/photos-shared-contract.md`:
 
-- The pipeline is three phases: **prep** (`photos-1-prep`) → **time/GPS calibration**
-  (`photos-2-time-gps`) → **merge** (`photos-3-merge`), all implemented.
+- The pipeline is three phases: **prep** (`photos-1-prep`) → **geotag**
+  (`photos-2-geotag`) → **merge** (`photos-3-merge`), all implemented.
 - A transient **workspace** holds numbered media folders `0-sources` … `6-photos-by-dest`
   (`6-photos-by-dest` is read-only staging that merge joins into the permanent digiKam library — it is
   *not* the library).
@@ -175,7 +175,7 @@ Defined in `ingest/workflows/photos-shared-contract.md`:
 - `ingest/photos_pipeline/photos_1_prep.py` — the prep workflow; owns *only* filesystem prep,
   no-clobber moves, dedup/quarantine, SQLite/hash cache, and the handoff manifest. It must not plan or
   apply GPS/time fixes.
-- `ingest/photos_pipeline/photos_2_time_gps.py` — the geotag workflow: camera-clock-offset inference,
+- `ingest/photos_pipeline/photos_2_geotag.py` — the geotag workflow: camera-clock-offset inference,
   resolve-to-UTC, GPX-based GPS placement, and destination-local renaming.
 - `ingest/photos_pipeline/photos_3_merge.py` — the merge workflow: safe merge of the finalized
   `6-photos-by-dest` staging tree into the permanent digiKam library.
@@ -186,6 +186,6 @@ Defined in `ingest/workflows/photos-shared-contract.md`:
 ## Specs are the source of truth
 
 The pipeline is **specification-driven**: behavior is defined by `ingest/workflows/*.md` — the three
-per-phase workflows (prep / time-gps / merge) plus `photos-shared-contract.md`. When changing pipeline
+per-phase workflows (prep / geotag / merge) plus `photos-shared-contract.md`. When changing pipeline
 behavior, update the governing spec; the markdown is authoritative, not just the code, so reconcile
 differences between a script and its spec rather than treating the existing code as ground truth.
