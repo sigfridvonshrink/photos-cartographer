@@ -6,8 +6,8 @@ photos-cartographer takes an unorganized dump of photos and videos, cleans and d
 **figures out where every shot was taken** by correlating each frame against a set of GPS tracks (GPX) —
 *first inferring and correcting each camera's clock error automatically*, so a camera set to the wrong
 timezone or drifting by minutes still lands on the right point of the track. Nothing is deleted and nothing is
-changed without a plan that can be inspected first, and **every coordinate it writes is tagged with how it was
-derived** — original, track-interpolated, extrapolated, or manual.
+changed without a plan that can be inspected first, and **every coordinate it writes is recorded with how it was
+derived** — native, track direct-match / interpolated / extrapolated, or manual.
 
 The aim is **100% geolocation coverage for the least possible effort**: every photo placed — precise where the tracks
 allow, rough or manual where they don't — so a map view in a library like Immich shows the whole trip, not
@@ -96,14 +96,18 @@ explainable from the record afterward:
   quarantine, never auto-removed.
 - **Idempotent & resumable.** Re-runs act only on the diff; a crash mid-run is recoverable; already-placed
   files are recognized and skipped, not re-written.
-- **Every GPS write is provenance-tagged.** Each photo records *how* its coordinates were derived via the
-  `GPSProcessingMethod` EXIF marker, so the source is always distinguishable — by the pipeline on re-run, and
-  by any downstream tool:
-  - **original** — the camera's or phone's own native GPS, preserved untouched;
+- **Every GPS write records how it was derived.** Each photo's journey log (below) captures the full
+  five-way provenance of its coordinates, and GPX- or manually-placed writes additionally carry a
+  `GPSProcessingMethod` EXIF marker for downstream tools:
+  - **native** — the camera's or phone's own GPS, preserved untouched (left exactly as-is, no marker written);
   - **GPX direct match** — a track point within seconds of the shot;
   - **GPX interpolation** — computed between the two surrounding track points;
   - **GPX extrapolation** — a bounded estimate just past the ends of a track;
   - **manual** — hand-entered coordinates, or a confirmed per-folder fallback.
+
+  (The EXIF marker is coarser than the log: every GPX-derived write shares `GPSProcessingMethod=interpolated`,
+  manual writes use `manual_locked` / `manual_fallback`, and native GPS is left untouched — the precise
+  five-way derivation lives in the per-photo journey log.)
 - **Manual coordinates are reversible.** A pinned pre-state ledger remembers what each file held before an
   override, so withdrawing a manual GPS decision restores the original — or clears the tag entirely if the
   file had no GPS to begin with. (Automated placements are simply recomputed from current inputs.)
