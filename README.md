@@ -51,7 +51,7 @@ So it works as a funnel that resolves everything it can before it ever asks you:
 4. **Then resolve only the true remainder.** What no evidence can locate is surfaced as a short,
    explicit worklist — the irreducible minimum.
 
-Crucially, **every decision you make is reused, not re-asked.** A timezone you set feeds the offset and
+Also, **every decision you make is reused, not re-asked.** A timezone you set feeds the offset and
 placement steps downstream. A decision made on a parent destination **cascades recursively** to its
 children unless they override it. A manual coordinate or confirmed offset is remembered across re-runs.
 So you are asked only for what is *genuinely undetermined* — and the moment something becomes derivable
