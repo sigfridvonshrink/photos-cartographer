@@ -94,7 +94,14 @@ There is no build step and no linter config; runtime deps are system tools (`exi
 
 ### Release history
 
-- **v1.0.1** — flatten `ingest/` into the repo root (`cartographer/`, `tests/`, `workflows/`);
+- **v1.1.0** — **media extensions are now workspace config** (`media_extensions`, seeded then
+  authoritative); folder-set and media-extension changes get field-scoped config fingerprints so they
+  surgically restale the geotag/merge plans. Prep `plan` now **warns on dump files exiftool sees as
+  media** (`image/*`/`video/*`) that aren't listed, suggesting a config add. Added user guides under
+  `docs/`. Renames: package `photos_pipeline` → `cartographer`, `workflows/` → `spec/`, and the
+  config-override env var `PHOTOS_PIPELINE_CONFIG` → `PHOTOS_CARTOGRAPHER_CONFIG` (the only
+  deploy-facing break; the CLI is unchanged and existing workspaces keep working).
+- **v1.0.1** — flatten `ingest/` into the repo root (`photos_pipeline/`, `tests/`, `workflows/`);
   README destination-folder-format update. No behavioral change.
 - **v1.0.0** — first release: the unified `photos-cartographer` executable (renamed from `photos-ingest`).
 
