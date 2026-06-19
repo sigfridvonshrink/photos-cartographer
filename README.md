@@ -224,18 +224,18 @@ its map tiles and place search use OpenStreetMap/Nominatim at runtime and degrad
 
 The geotag phase — the one that writes time and GPS into irreplaceable originals — is the most heavily tested,
 at **98.4% line / 96.8% branch** coverage. Across the whole codebase the suite covers **90.9% of lines and
-86.7% of branches**; the lighter areas are the merge phase and the editor's local server, neither of which
+86.8% of branches**; the lighter areas are the merge phase and the editor's local server, neither of which
 writes metadata into the photos.
 
 | Component | Line | Branch |
 |---|---:|---:|
-| prep (`photos_1_prep`) | 90.0% | 83.5% |
+| prep (`photos_1_prep`) | 89.8% | 83.1% |
 | geotag (`photos_2_geotag`) | 98.4% | 96.8% |
-| merge (`photos_3_merge`) | 84.3% | 80.6% |
-| shared (`photos_utils`) | 89.4% | 83.4% |
+| merge (`photos_3_merge`) | 84.4% | 80.9% |
+| shared (`photos_utils`) | 89.6% | 84.3% |
 | cli | 87.5% | 75.0% |
 | editor server | 78.8% | 76.7% |
-| **Total** | **90.9%** | **86.7%** |
+| **Total** | **90.9%** | **86.8%** |
 
 Run the suite from the repository root (`conftest.py` puts the repo root on `sys.path`):
 

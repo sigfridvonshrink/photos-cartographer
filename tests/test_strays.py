@@ -142,3 +142,29 @@ def test_mixed_media_and_stray(tmp_path, monkeypatch):
     assert len(glob.glob(str(ws / "5-photos-by-date" / "**" / "*.jpg"), recursive=True)) == 1
     assert glob.glob(str(ws / "1-strays" / "*" / "notes.txt"))
     assert list((ws / "0-sources").iterdir()) == []
+
+
+def test_stray_media_detection_warns_only_for_media_mime(tmp_path, monkeypatch):
+    # An unlisted RAW (.raf) and a real non-media (.txt) both land in strays. exiftool sees the .raf as
+    # image/*, the .txt as text/plain -> only the .raf gets the "add to media_extensions" hint.
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "DSCF1.raf").write_bytes(b"raw")        # not in default media_extensions -> stray
+    (ws / "0-sources" / "notes.txt").write_bytes(b"hello")      # genuine non-media stray
+    mimes = {".raf": "image/x-fujifilm-raf", ".txt": "text/plain"}
+    monkeypatch.setattr(utils, "exiftool_mime_type",
+                        lambda p: mimes.get(os.path.splitext(p)[1].lower()))
+    plan = _plan(ws)
+    raf_warn = [w for w in plan.warnings if ".raf" in w]
+    assert raf_warn and "media_extensions" in raf_warn[0], plan.warnings
+    assert not any(".txt" in w for w in plan.warnings)
+
+
+def test_stray_media_detection_silent_when_exiftool_absent(tmp_path, monkeypatch):
+    # exiftool unavailable (probe returns None) -> no stray-media warning, never blocks.
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "DSCF1.raf").write_bytes(b"raw")
+    monkeypatch.setattr(utils, "exiftool_mime_type", lambda p: None)
+    plan = _plan(ws)
+    assert not any(".raf" in w for w in plan.warnings)
