@@ -49,7 +49,7 @@ the diff and are resumable after a crash.
 ## Decide in the browser, recorded in writing
 
 When the pipeline needs a decision, it's made in a **small single-page web app the pipeline serves locally**
-(`photos-ingest edit`) — no build step, no CDN, works offline. It isn't a JSON editor: it shows a worklist of
+(`photos-cartographer edit`) — no build step, no CDN, works offline. It isn't a JSON editor: it shows a worklist of
 only the open decisions, each with its proposal and the evidence behind it, and writes the choice back into
 the durable decision records geotag reads. The loop is **edit → Save → re-run → reload**: save in the app,
 re-run geotag to recompute everything downstream, reload the refreshed decisions. It only ever touches the
@@ -203,9 +203,9 @@ its map tiles and place search use OpenStreetMap/Nominatim at runtime and degrad
 
 - `ingest/photos_pipeline/` — the pipeline package: `photos_1_prep.py` / `photos_2_geotag.py` /
   `photos_3_merge.py` (the three phases) + `photos_utils.py` (shared `CONFIG` + utilities) + `cli.py`
-  (the combined `photos-ingest` entry) + `editor/` (the locally-served Time/Drift/GPS decision app — a map-based web UI — that drives the worklist above).
+  (the combined `photos-cartographer` entry) + `editor/` (the locally-served Time/Drift/GPS decision app — a map-based web UI — that drives the worklist above).
   Run a phase with `python3 -m photos_pipeline <phase> <subcommand>` (with `ingest/` on `PYTHONPATH`),
-  or build the self-contained `photos-ingest` zipapp with `tools/build-pyz`.
+  or build the self-contained `photos-cartographer` zipapp with `tools/build-pyz`.
 - `ingest/workflows/` — the authoritative specifications. `ingest/tests/` — the test suite.
   `tools/` — build + test helpers. `.githooks/` — pre-commit / pre-push.
 

@@ -30,7 +30,7 @@ and the code is expected to follow them. When changing behavior, update the gove
   (with `ingest/` on `PYTHONPATH`); shipped detached as three executable zipapps named
   `photos-1-prep` / `photos-2-geotag` / `photos-3-merge` (run `./photos-1-prep plan`).
 - `workflows/` — the authoritative specifications (above).
-- `photos_pipeline/editor/` — the decision editor, folded into the package (served by `photos-ingest edit`).
+- `photos_pipeline/editor/` — the decision editor, folded into the package (served by `photos-cartographer edit`).
 - `tests/` — the test suite for the pipeline.
 
 ## Core safety rules

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""The combined `photos-ingest` CLI dispatcher (photos_pipeline/cli.py): self-documenting blurbs,
+"""The combined `photos-cartographer` CLI dispatcher (photos_pipeline/cli.py): self-documenting blurbs,
 phase→subcommand wiring, and the geotag run→plan rename. From conftest.py."""
 import pytest
 
@@ -22,7 +22,7 @@ from photos_pipeline import cli, photos_1_prep, photos_2_geotag, photos_3_merge
 def test_no_args_prints_overall_blurb(capsys):
     assert cli.main([]) == 0
     out = capsys.readouterr().out
-    assert "photos-ingest —" in out
+    assert "photos-cartographer —" in out
     assert "prep" in out and "geotag" in out and "merge" in out
 
 
@@ -40,7 +40,7 @@ def test_version(capsys):
     with pytest.raises(SystemExit) as e:
         cli.main(["--version"])
     assert e.value.code == 0
-    assert "photos-ingest" in capsys.readouterr().out
+    assert "photos-cartographer" in capsys.readouterr().out
 
 
 def _parse(argv):

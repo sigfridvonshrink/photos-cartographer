@@ -134,7 +134,7 @@ class MergeWorkflow:
         # 0a. Initialized, and no misplaced entry at the workspace root (§3 precond 0a; shared §5.3).
         if not os.path.exists(guard_path(ws)):
             blockers.append("Not an initialized workspace (no photos-00-workspace-guard) — "
-                            "run prep first: `photos-ingest prep plan` then `photos-ingest prep execute`.")
+                            "run prep first: `photos-cartographer prep plan` then `photos-cartographer prep execute`.")
             return blockers, warnings, info
         root_syms = self._root_symlinks()
         if root_syms:
@@ -163,7 +163,7 @@ class MergeWorkflow:
         # Config (read-only) — must exist and be valid; merge's data path never writes it.
         cfg_p = config_path(ws)
         if not os.path.exists(cfg_p):
-            blockers.append("Workspace config photos-00-config.json is missing — run prep first: `photos-ingest prep plan` then `photos-ingest prep execute`.")
+            blockers.append("Workspace config photos-00-config.json is missing — run prep first: `photos-cartographer prep plan` then `photos-cartographer prep execute`.")
             return blockers, warnings, info
         try:
             with open(cfg_p) as f:
@@ -187,14 +187,14 @@ class MergeWorkflow:
         library_root = cfg["merge"]["library_root"]
         if not is_library(library_root):
             blockers.append(f"{library_root} is not a blessed library (the {os.path.basename(library_marker_path(library_root))} "
-                            "marker is absent). Run `photos-ingest merge init-library` to bless it first.")
+                            "marker is absent). Run `photos-cartographer merge init-library` to bless it first.")
             return blockers, warnings, info
         info["library_root"] = library_root
 
         # Handoff (read-only) — needed for the prep-consistency / currency checks below.
         ho_p = handoff_path(ws)
         if not os.path.exists(ho_p):
-            blockers.append("Prep handoff photos-11-handoff.json is missing — run prep first: `photos-ingest prep plan` then `photos-ingest prep execute`.")
+            blockers.append("Prep handoff photos-11-handoff.json is missing — run prep first: `photos-cartographer prep plan` then `photos-cartographer prep execute`.")
             return blockers, warnings, info
         try:
             with open(ho_p) as f:
@@ -217,7 +217,7 @@ class MergeWorkflow:
         # 0b. 0-sources empty (§3 precond 0b).
         if self._entries(folder_name('sources')):
             blockers.append(f"{folder_name('sources')}/ is not empty — an unprocessed dump is waiting; "
-                            "merge requires it empty. Re-run prep to process it: `photos-ingest prep plan` then `photos-ingest prep execute`.")
+                            "merge requires it empty. Re-run prep to process it: `photos-cartographer prep plan` then `photos-cartographer prep execute`.")
 
         # 1 + 1a. Geotag ended successfully, and the finalized record is current with by-dest.
         calib_plan = self._check_geotag_finalized(ws, handoff, blockers)
@@ -226,11 +226,11 @@ class MergeWorkflow:
         # 2. The workspace was finalized (§3 precond 2).
         if not os.path.exists(complete_log_path(ws)):
             blockers.append("The workspace has not been finalized (photos-26-complete-log.json is "
-                            "missing). Run the finalize command (`photos-ingest geotag finalize`) first, "
+                            "missing). Run the finalize command (`photos-cartographer geotag finalize`) first, "
                             "then merge.")
         if not os.path.exists(archive_manifest_path(ws)):
             blockers.append("The archival package is incomplete (photos-26-archive-manifest.json is "
-                            "missing) — run `photos-ingest geotag finalize` before merging.")
+                            "missing) — run `photos-cartographer geotag finalize` before merging.")
 
         # 3. By-dest is the clean photo-only set (§3 precond 3).
         self._check_by_dest_clean(blockers, info)
@@ -253,7 +253,7 @@ class MergeWorkflow:
         plan = None
         if not os.path.exists(plan_p):
             blockers.append("Geotag has not produced an executable plan "
-                            "(photos-24-executable-plan.json is missing) — run `photos-ingest geotag plan` "
+                            "(photos-24-executable-plan.json is missing) — run `photos-cartographer geotag plan` "
                             "then `execute` before merging.")
         else:
             try:
@@ -263,7 +263,7 @@ class MergeWorkflow:
                 blockers.append(f"Geotag plan photos-24-executable-plan.json could not be read: {e}")
         if not os.path.exists(summ_p):
             blockers.append("Geotag was not executed (photos-25-execution-summary.json is missing) "
-                            "— run `photos-ingest geotag execute` before merging.")
+                            "— run `photos-cartographer geotag execute` before merging.")
         else:
             try:
                 with open(summ_p) as f:
@@ -271,7 +271,7 @@ class MergeWorkflow:
                 if summ.get("status") != "success":
                     blockers.append("Geotag execution did not end successfully "
                                     f"(photos-25 status={summ.get('status')!r}) — resolve it and re-run "
-                                    "`photos-ingest geotag execute` before merging.")
+                                    "`photos-cartographer geotag execute` before merging.")
             except Exception as e:
                 blockers.append(f"Geotag execution summary could not be read: {e}")
 
@@ -371,7 +371,7 @@ class MergeWorkflow:
         if unrecorded:
             blockers.append(f"{by_dest} contains {len(unrecorded)} photo(s) the finalized record does "
                             f"not recognize (e.g. {unrecorded[0]}) — the handoff predates the latest "
-                            "move into by-dest. Re-run prep to refresh the handoff — `photos-ingest prep execute` (run `photos-ingest prep plan` first only if 0-sources still holds a dump) — then merge.")
+                            "move into by-dest. Re-run prep to refresh the handoff — `photos-cartographer prep execute` (run `photos-cartographer prep plan` first only if 0-sources still holds a dump) — then merge.")
 
     # --- plan builder (merge spec §6 mapping, §7 collision, §10.1 plan) -------
 
@@ -988,7 +988,7 @@ def do_init_library(path_arg, ws):
         if not in_ws:
             print("init-library needs a library path when run outside a workspace "
                   "(there is no workspace config to read). Pass the library directory, e.g. "
-                  "`photos-ingest merge init-library /srv/library`.", file=sys.stderr)
+                  "`photos-cartographer merge init-library /srv/library`.", file=sys.stderr)
             return 2
         cfg_p = config_path(ws)
         try:
@@ -1000,7 +1000,7 @@ def do_init_library(path_arg, ws):
         library_root = ((cfg.get("merge") or {}).get("library_root") or "")
         if not library_root:
             print("No merge.library_root is set in photos-00-config.json — pass a path "
-                  "(`photos-ingest merge init-library <path>`) or set it in config first.", file=sys.stderr)
+                  "(`photos-cartographer merge init-library <path>`) or set it in config first.", file=sys.stderr)
             return 2
         try:
             validate_merge_config(cfg, ws)          # validates library_root (existing, outside ws)
@@ -1138,7 +1138,7 @@ MERGE_BLURB = (
 
 def add_arguments(parser):
     """Register merge's `-j` + subcommands (init-library / plan / dry-run / execute) on `parser`.
-    Shared by the standalone `python -m photos_pipeline.photos_3_merge` and `photos-ingest merge`."""
+    Shared by the standalone `python -m photos_pipeline.photos_3_merge` and `photos-cartographer merge`."""
     parser.add_argument("-j", "--jobs", type=int, default=None,
                         help="Worker threads for execution (default: config jobs, else 4).")
     sub = parser.add_subparsers(dest="command")

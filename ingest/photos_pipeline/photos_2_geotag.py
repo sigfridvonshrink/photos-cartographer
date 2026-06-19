@@ -1009,7 +1009,7 @@ class GeotagWorkflow:
             return blockers, warnings, info
         if not os.path.exists(guard_path(ws)):
             blockers.append("Not an initialized workspace (no photos-00-workspace-guard) — "
-                            "run prep first: `photos-ingest prep plan` then `photos-ingest prep execute`.")
+                            "run prep first: `photos-cartographer prep plan` then `photos-cartographer prep execute`.")
             return blockers, warnings, info
         # A symlink at the workspace root is barred outright (§13) and never followed — including a
         # dangling link (neither file nor dir) or one named like a managed folder (which os.path.isdir
@@ -1026,7 +1026,7 @@ class GeotagWorkflow:
         if struct_missing:
             blockers.append("Workspace is non-conforming: missing managed folder(s): "
                             f"{', '.join(struct_missing)}. Restore the 0-6 structure (or move the "
-                            "media into a fresh workspace and re-run prep there — `photos-ingest prep plan` then `photos-ingest prep execute`) before geotagging.")
+                            "media into a fresh workspace and re-run prep there — `photos-cartographer prep plan` then `photos-cartographer prep execute`) before geotagging.")
             return blockers, warnings, info
         loose = self._root_files()
         if loose:
@@ -1046,7 +1046,7 @@ class GeotagWorkflow:
         # 2. Config (read-only) + handoff — both must exist; geotag never seeds/writes config.
         cfg_p = config_path(ws)
         if not os.path.exists(cfg_p):
-            blockers.append("Workspace config photos-00-config.json is missing — run prep first: `photos-ingest prep plan` then `photos-ingest prep execute`.")
+            blockers.append("Workspace config photos-00-config.json is missing — run prep first: `photos-cartographer prep plan` then `photos-cartographer prep execute`.")
             return blockers, warnings, info
         try:
             with open(cfg_p) as f:
@@ -1062,7 +1062,7 @@ class GeotagWorkflow:
 
         ho_p = handoff_path(ws)
         if not os.path.exists(ho_p):
-            blockers.append("Prep handoff photos-11-handoff.json is missing — run prep first: `photos-ingest prep plan` then `photos-ingest prep execute`.")
+            blockers.append("Prep handoff photos-11-handoff.json is missing — run prep first: `photos-cartographer prep plan` then `photos-cartographer prep execute`.")
             return blockers, warnings, info
         try:
             with open(ho_p) as f:
@@ -1104,7 +1104,7 @@ class GeotagWorkflow:
         # 3. Scope gates.
         if self._entries(sources):
             blockers.append(f"{sources}/ is not empty — prep leaves it empty after every run; an "
-                            "unprocessed dump is waiting. Re-run prep to process it: `photos-ingest prep plan` then `photos-ingest prep execute`.")
+                            "unprocessed dump is waiting. Re-run prep to process it: `photos-cartographer prep plan` then `photos-cartographer prep execute`.")
 
         stray = [rel for rel, mc in self._scan_media(by_date) if mc in ("image", "raw")]
         if stray:
@@ -1200,8 +1200,8 @@ class GeotagWorkflow:
             blockers.append(
                 f"{by_dest} contains photos prep has not yet recorded (the handoff predates your most "
                 f"recent move from {by_date} into {by_dest}; e.g. {ex}). Re-run prep to refresh the handoff so it records the moved files: "
-                "`photos-ingest prep execute` (it re-records the moved files — no re-fingerprint, no re-read — "
-                "and rewrites the handoff/cache; run `photos-ingest prep plan` first only if 0-sources still "
+                "`photos-cartographer prep execute` (it re-records the moved files — no re-fingerprint, no re-read — "
+                "and rewrites the handoff/cache; run `photos-cartographer prep plan` first only if 0-sources still "
                 "holds a dump). Then geotag can proceed.")
 
     # --- Stage 2: in-memory by-dest file model (geotag spec §14) --------
@@ -2323,17 +2323,17 @@ GEOTAG_BLURB = (
     "geotag — place every photo in time and on the map (phase 2 of 3).\n\n"
     "Infers each camera's clock offset from its already-geotagged frames against your GPX tracks, then "
     "geotags the un-tagged majority by interpolating along the track; you resolve the residual time / "
-    "GPS / drift decisions in `photos-ingest edit` between `plan` runs. `plan` (re-runnable) produces "
+    "GPS / drift decisions in `photos-cartographer edit` between `plan` runs. `plan` (re-runnable) produces "
     "the decision + executable-plan artifacts and mutates nothing; `execute` applies them to the "
     "originals (corrected times + GPS, renames); `finalize` bundles the durable archive. Run inside "
     "the workspace directory.\n\n"
-    "Loop: plan -> edit -> plan -> ... -> execute -> finalize. Next: `photos-ingest merge`."
+    "Loop: plan -> edit -> plan -> ... -> execute -> finalize. Next: `photos-cartographer merge`."
 )
 
 
 def add_arguments(parser):
     """Register geotag's `-j` + subcommands (plan / execute / finalize) on `parser`. Shared by the
-    standalone `python -m photos_pipeline.photos_2_geotag` and the combined `photos-ingest geotag`."""
+    standalone `python -m photos_pipeline.photos_2_geotag` and the combined `photos-cartographer geotag`."""
     parser.add_argument("-j", "--jobs", type=int, default=None,
                         help="Worker threads for execution (default: config jobs, else 4).")
     sub = parser.add_subparsers(dest="command")

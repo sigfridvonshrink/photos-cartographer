@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""`python -m photos_pipeline …` / the zipapp entry → the combined photos-ingest CLI."""
+"""`python -m photos_pipeline …` / the zipapp entry → the combined photos-cartographer CLI."""
 import sys
 
 from .cli import main

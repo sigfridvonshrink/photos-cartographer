@@ -56,7 +56,7 @@ CONFIG = {
     "zfs": {
         "enabled": False,                # opt-in; the dataset is auto-detected from the workspace
         "snapshots_required": False,     # if true, failure to snapshot aborts execution
-        "snapshot_prefix": "photos-ingest-",   # snapshot name: <dataset>@<prefix><label>-<plan_id> (label = phase)
+        "snapshot_prefix": "photos-cartographer-",   # snapshot name: <dataset>@<prefix><label>-<plan_id> (label = phase)
         "datasets": {
             "workspace": "auto",         # "auto" = detect from the workspace path; or an explicit dataset
             "library": "auto"            # "auto" = detect from library_root; consumed by merge's pre-mutation library snapshot

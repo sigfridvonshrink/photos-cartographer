@@ -45,6 +45,6 @@ jobs:
       - name: Run decision-editor front-end tests
         run: node --test ingest/photos_pipeline/editor/tests/*.test.mjs
 
-      # The single-file `photos-ingest` executable must build and run (ingest/dist is gitignored).
-      - name: Check photos-ingest builds and runs
+      # The single-file `photos-cartographer` executable must build and run (ingest/dist is gitignored).
+      - name: Check photos-cartographer builds and runs
         run: python3 tools/build-pyz --check

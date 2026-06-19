@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""photos-ingest — the single combined CLI entry point.
+"""photos-cartographer — the single combined CLI entry point.
 
 Dispatches to the pipeline phases: `prep` → `geotag` → `merge` (and, once folded in, `edit` — the
 decision editor). Each phase keeps its own subcommands (the same surface as running it standalone via
@@ -26,7 +26,7 @@ from . import __version__, photos_1_prep, photos_2_geotag, photos_3_merge
 from .editor import server as editor
 
 OVERALL_BLURB = (
-    "photos-ingest — safely turn a raw photo dump into a calibrated, geotagged, merged library.\n\n"
+    "photos-cartographer — safely turn a raw photo dump into a calibrated, geotagged, merged library.\n\n"
     "A three-phase pipeline you run inside a workspace directory; between phases you resolve the open\n"
     "decisions in the editor, then re-plan. Every phase plans first (no mutation), and only a\n"
     "validated plan is ever executed; originals are never lost.\n\n"
@@ -34,8 +34,8 @@ OVERALL_BLURB = (
     "  geotag  phase 2 — infer camera clocks from GPX and place photos in time + on the map.\n"
     "  merge   phase 3 — move the finalized tree into your permanent library (terminal).\n"
     "  edit    open the decision editor to resolve time / GPS / drift decisions between geotag runs.\n\n"
-    "Run `photos-ingest <phase>` (no subcommand) for that phase's role + commands; "
-    "`photos-ingest <phase> <cmd> --help` for argument detail."
+    "Run `photos-cartographer <phase>` (no subcommand) for that phase's role + commands; "
+    "`photos-cartographer <phase> <cmd> --help` for argument detail."
 )
 
 # (name, module). `edit` (the decision editor) is a leaf phase — no subcommands; it runs the server.
@@ -44,9 +44,9 @@ _PHASES = (("prep", photos_1_prep), ("geotag", photos_2_geotag), ("merge", photo
 
 
 def build_parser():
-    parser = argparse.ArgumentParser(prog="photos-ingest", description=OVERALL_BLURB,
+    parser = argparse.ArgumentParser(prog="photos-cartographer", description=OVERALL_BLURB,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--version", action="version", version=f"photos-ingest {__version__}")
+    parser.add_argument("--version", action="version", version=f"photos-cartographer {__version__}")
     phases = parser.add_subparsers(dest="phase")
     for name, mod in _PHASES:
         blurb = _phase_blurb(mod)

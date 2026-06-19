@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""The decision editor's local server — `photos-ingest edit` (operates on the current-directory workspace).
+"""The decision editor's local server — `photos-cartographer edit` (operates on the current-directory workspace).
 
 Serves the single-page app and exposes the workspace's decision artifacts as JSON. Stdlib only; its
 front-end + demo fixtures are PACKAGE DATA (`photos_pipeline/editor/{web,examples}`) read via
@@ -27,7 +27,7 @@ It reads `./.photos-ingest/photos-21*/photos-23*` decision JSON from the current
 example fixtures instead. The app edits `user_decision` and saves it back
 (POST /api/save writes only `user_decision`, round-tripping the rest; disabled in demo). GET
 /api/photo returns a downscaled JPEG preview for the map picker (path-safe; 404 in demo). POST
-/api/rerun self-invokes `photos-ingest geotag plan` against the workspace and returns its exit code +
+/api/rerun self-invokes `photos-cartographer geotag plan` against the workspace and returns its exit code +
 output tail; the client reloads on success. See design-notes.md.
 """
 import argparse
@@ -94,7 +94,7 @@ _CONTENT_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; 
                   ".svg": "image/svg+xml", ".png": "image/png"}
 
 PREVIEW_MAX_PX = 1600     # longest edge of a generated photo preview
-RERUN_TIMEOUT_S = 3600    # cap on a `photos-ingest geotag plan` invoked from the editor
+RERUN_TIMEOUT_S = 3600    # cap on a `photos-cartographer geotag plan` invoked from the editor
 
 
 # Front-end + demo fixtures are PACKAGE DATA (photos_pipeline/editor/{web,examples}), read via
@@ -317,7 +317,7 @@ def _save(workspace, payload):
 
 
 def _rerun(workspace):
-    """Re-run `photos-ingest geotag plan` against the workspace, regenerating the authoritative artifacts
+    """Re-run `photos-cartographer geotag plan` against the workspace, regenerating the authoritative artifacts
     from the saved decisions. Geotag takes the workspace as its CWD and owns its own WorkspaceLock
     (separate from the editor lock), so a concurrent geotag is reported, not forced. Returns the
     process outcome; the client reloads /api/artifacts on success. Mutates nothing here — `run` only
@@ -393,7 +393,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(404, {"error": "not found"})
         if self.workspace is None:
             return self._send(403, {"ok": False, "error": "demo mode is read-only — "
-                                    "run `photos-ingest edit` inside a workspace to edit and re-run"})
+                                    "run `photos-cartographer edit` inside a workspace to edit and re-run"})
         if path == "/api/rerun":
             return self._send(200, _rerun(self.workspace))
         try:
@@ -409,7 +409,7 @@ EDIT_BLURB = (
     "Launches a local web server for the decision editor over the CURRENT DIRECTORY (the workspace; "
     "like every other phase, edit operates on the cwd and refuses to run anywhere that is not an "
     "initialized workspace). You confirm/correct the time, GPS and drift decisions geotag surfaced; "
-    "Save writes them back; then re-run `photos-ingest geotag plan` in a terminal to regenerate from "
+    "Save writes them back; then re-run `photos-cartographer geotag plan` in a terminal to regenerate from "
     "your edits and reload. Open the printed URL (reachable over the network so you can use it "
     "from another machine's browser); Ctrl-C to stop.\n\n"
     "  --demo   read-only tour on bundled fixtures (no workspace; nothing is written).\n\n"
@@ -442,8 +442,8 @@ def serve(workspace, port=8765, host="0.0.0.0"):
     # the root guard sentinel must exist. Refuse anything else rather than serving an empty editor.
     if workspace and not os.path.exists(os.path.join(workspace, CONTROL, GUARD_NAME)):
         print(f"{os.path.abspath(workspace)} is not an initialized workspace "
-              f"(no {CONTROL}/{GUARD_NAME}). Run `photos-ingest prep plan` here first, "
-              f"or use `photos-ingest edit --demo` for a read-only fixtures tour.", file=sys.stderr)
+              f"(no {CONTROL}/{GUARD_NAME}). Run `photos-cartographer prep plan` here first, "
+              f"or use `photos-cartographer edit --demo` for a read-only fixtures tour.", file=sys.stderr)
         sys.exit(2)
     Handler.workspace = workspace
 
@@ -486,7 +486,7 @@ def serve(workspace, port=8765, host="0.0.0.0"):
 
 def main(argv=None):
     """Standalone entry (`python -m photos_pipeline.editor.server`); the normal path is
-    `photos-ingest edit`, which calls run()/serve() directly."""
+    `photos-cartographer edit`, which calls run()/serve() directly."""
     parser = argparse.ArgumentParser(prog="photos_pipeline.editor.server", description=EDIT_BLURB,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     add_arguments(parser)

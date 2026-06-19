@@ -12,5 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Decision editor — served by `photos-ingest edit` (folded into the package; web assets +
+"""Decision editor — served by `photos-cartographer edit` (folded into the package; web assets +
 example fixtures are package data read via importlib.resources)."""
