@@ -309,6 +309,27 @@ Auth answers *who*. It does **not** replace the dry-run → confirm 2-step for
 execute/merge/quarantine. Keep both layers: auth stops the wrong person; the 2-step stops the right
 person's wrong click.
 
+## UI (agreed)
+
+Built on a **shared design system** — `cartographer/editor/web/tokens.css` (merged): palette, the
+four-step surface ladder, vendored JetBrains Mono for data, two-tier chips (colored **state** vs
+recessive **provenance**), focal decision block, `:focus-visible` + reduced-motion. The editor was
+reskinned onto it; the console inherits it. `docs/design/ui-showcase.html` is the living style guide.
+
+- **No standalone dashboard** (dropped — a 3-phase single-workspace sequential tool doesn't need a
+  landing screen). Land on the **furthest-runnable phase**; phase status as **chips in the tab strip**
+  (`.seg`); workspace guard/sealed/**lock** in the **topbar badge**; a one-line hint on a blocked tab.
+- **Phase navigation = `.seg` tabs** (Prep · Geotag · Merge · Edit). **Edit folds in as the 4th tab**
+  mounting the existing decision editor unchanged; standalone `cartographer edit` still works.
+- **Per-phase view = actions bar + Progress region + Log pane**, a direct 1:1 with the two event
+  channels. **Layout: bottom, full-width log under a sticky compact progress strip** — chosen on
+  content shape: the log has wide lines (full paths, journal entries) and is the thing you watch, so it
+  wants width + room to grow; progress is a few short latest-wins bars that shrink as tasks finish. A
+  half-width column would cramp the log and waste space on progress. Matches the terminal mental model
+  and the editor's existing full-width `.runlog`.
+- **Execute gate** rendered as a `.gate` card: plan → dry-run summary → confirm. Execute disabled
+  until a clean dry-run exists for the current plan fingerprint; any blocker keeps it disabled.
+
 ## UI safety surfaces (render, don't bypass)
 - **Execute is a deliberate 2-step:** plan → show the dry-run **summary of the real serialized plan**
   (the canonical artifact, per the shared contract — not a JS simulation) → explicit confirm →
