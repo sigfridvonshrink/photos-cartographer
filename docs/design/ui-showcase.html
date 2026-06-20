@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cartographer — design tokens showcase</title>
+<link rel="stylesheet" href="../../cartographer/editor/web/tokens.css">
+<style>
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.45 var(--ui); padding: 24px; }
+  h1 { font: 600 18px var(--ui); margin: 0 0 2px; }
+  .lede { color: var(--muted); font-size: 13px; margin: 0 0 22px; max-width: 70ch; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; align-items: start; }
+  .cap { font: 600 10px var(--ui); text-transform: uppercase; letter-spacing: .09em; color: var(--faint); margin: 0 0 8px; }
+  .demo { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 0; overflow: hidden; margin-bottom: 18px; }
+  .demo > .pad { padding: 14px; }
+
+  /* topbar */
+  .topbar { display: flex; align-items: center; gap: 12px; padding: 9px 14px; background: var(--surface); border-bottom: 1px solid var(--line); }
+  .topbar .title { font: 600 14px var(--ui); }
+  .ws { font: 12px var(--mono); color: var(--muted); }
+  .grow { flex: 1; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .dot.ok { background: var(--ok); } .dot.run { background: var(--accent); } .dot.bad { background: var(--bad); }
+  .lock { font: 12px var(--mono); color: var(--muted); display: inline-flex; gap: 6px; align-items: center; }
+
+  /* segmented tabs */
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+  .seg button { background: transparent; color: var(--muted); border: 0; padding: 5px 14px; cursor: pointer; font: 13px var(--ui); display: inline-flex; gap: 7px; align-items: center; }
+  .seg button.on { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  .seg button:disabled { opacity: .4; }
+
+  .btn { font: 13px var(--ui); padding: 5px 14px; border-radius: var(--r); cursor: pointer; background: var(--raised); color: var(--fg); border: 1px solid var(--line); }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  .btn:disabled { opacity: .4; }
+
+  /* chips — two tiers */
+  .chip { font: 11px var(--mono); padding: 1px 8px; border-radius: 10px; background: var(--raised); color: var(--muted); white-space: nowrap; }
+  .chip.needs { background: var(--warn-bg); color: var(--warn); }
+  .chip.ok    { background: var(--ok-bg); color: var(--ok); }
+  .chip.invalid { background: var(--bad-bg); color: var(--bad); }
+  .chip.stale { background: var(--stale-bg); color: var(--stale); }
+  /* provenance: recessive — outline, faint, no fill */
+  .chip.quiet { background: transparent; border: 1px solid var(--line); color: var(--faint); }
+  .row-chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+
+  /* worklist rows */
+  .row { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-left: 2px solid transparent; }
+  .row + .row { border-top: 1px solid var(--line-soft); }
+  .row.sel { background: var(--selected); border-left-color: var(--accent); }
+  .row .label { flex: 1; min-width: 0; }
+  .row .label .sub { color: var(--faint); font: 11px var(--mono); }
+  .row .eff { font: 12px var(--mono); color: var(--fg); opacity: .9; }
+
+  /* focal effective-decision block — the hero of the panel */
+  .eff { background: var(--ok-bg); border: 1px solid #2c4434; border-radius: var(--r-lg); padding: 14px 16px; }
+  .eff .lbl { font: 600 10px var(--ui); text-transform: uppercase; letter-spacing: .09em; color: var(--ok); margin: 0 0 6px; }
+  .eff .val { font: 600 20px var(--mono); color: #cde8d3; }
+  .eff .meta { font: 12px var(--mono); color: var(--muted); margin-top: 6px; }
+
+  .pblock { border: 1px solid var(--line); border-radius: var(--r-lg); padding: 10px 12px; background: var(--raised); margin-top: 12px; }
+  .pblock h3 { margin: 0 0 8px; font: 600 10px var(--ui); text-transform: uppercase; letter-spacing: .09em; color: var(--faint); }
+  .kv { display: grid; grid-template-columns: 120px 1fr; gap: 3px 10px; font-size: 13px; }
+  .kv dt { color: var(--muted); } .kv dd { margin: 0; font: 12px var(--mono); color: var(--fg); }
+
+  /* offset spinner (signature control) */
+  .spin { display: inline-flex; align-items: center; gap: 2px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--r); padding: 4px 10px; }
+  .spin .sign { font: 14px var(--mono); color: var(--muted); margin-right: 5px; }
+  .spin .colon { font: 14px var(--mono); color: var(--faint); }
+  .spin .u { text-align: center; padding: 1px 6px; border-radius: 4px; }
+  .spin .u.on { box-shadow: inset 0 0 0 1px var(--accent); }
+  .spin .uv { font: 14px var(--mono); }
+  .spin .ul { display: block; font: 9px var(--ui); color: var(--faint); text-transform: uppercase; letter-spacing: .05em; }
+
+  /* map readout */
+  .mapbar { display: flex; align-items: center; gap: 10px; font: 12px var(--mono); color: var(--muted); margin-top: 8px; }
+  .xhair { width: 22px; height: 22px; position: relative; flex: none; }
+  .xhair::before, .xhair::after { content:""; position:absolute; background:#ff7043; }
+  .xhair::before { left: 50%; top: 0; width: 2px; height: 100%; transform: translateX(-50%); }
+  .xhair::after { top: 50%; left: 0; height: 2px; width: 100%; transform: translateY(-50%); }
+
+  /* console: progress widget */
+  .prog { display: grid; grid-template-columns: 200px 1fr auto; align-items: center; gap: 12px; font: 12px var(--mono); padding: 4px 0; }
+  .prog .pl { color: var(--muted); }
+  .track { height: 8px; background: var(--raised); border-radius: 999px; overflow: hidden; }
+  .fill { height: 100%; background: var(--accent); }
+  .prog .pn { color: var(--fg); white-space: nowrap; }
+  .prog.done .fill { background: var(--ok); }
+
+  /* console: log pane */
+  .logpane { background: var(--bg); border: 1px solid var(--line); border-left: 3px solid var(--ok); border-radius: var(--r); padding: 8px 12px; font: 12px var(--mono); color: var(--muted); white-space: pre-wrap; max-height: 150px; overflow: auto; }
+  .logpane .w { color: var(--warn); }
+  .logpane .o { color: var(--fg); }
+
+  /* console: execute gate */
+  .gate { border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: var(--r-lg); padding: 14px 16px; background: var(--surface); }
+  .gate.warn { border-left-color: var(--warn); }
+  .gate-title { font: 600 13px var(--ui); margin: 0 0 8px; }
+  .gate .sum { font: 12px var(--mono); color: var(--muted); line-height: 1.6; }
+  .gate .act { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; }
+  .note { font-size: 12px; color: var(--faint); margin: 4px 0 0; }
+  .swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+  .sw { width: 46px; height: 46px; border-radius: var(--r); border: 1px solid var(--line); display: flex; align-items: flex-end; justify-content: center; font: 8px var(--mono); color: var(--fg); padding-bottom: 2px; }
+</style>
+</head>
+<body>
+  <h1>Cartographer — design tokens</h1>
+  <p class="lede">Shared instrument language for the decision editor and the operational console: a four-step
+  surface ladder, one accent, semantic state vs. recessive provenance, and JetBrains Mono carrying all data
+  (tabular figures, slashed zero). Everything below is built from <code>tokens.css</code>.</p>
+
+  <div class="grid">
+    <!-- LEFT: editor -->
+    <div>
+      <p class="cap">Editor topbar + phase tabs</p>
+      <div class="demo">
+        <div class="topbar">
+          <span class="title">Cartographer</span>
+          <span class="ws">~/ws/2026-japan</span>
+          <span class="grow"></span>
+          <span class="lock"><span class="dot run"></span> running</span>
+          <div class="seg">
+            <button class="on">Prep</button>
+            <button>Geotag</button>
+            <button>Merge</button>
+            <button>Edit</button>
+          </div>
+        </div>
+        <div class="pad" style="display:flex;gap:10px;align-items:center;">
+          <button class="btn">Reset</button>
+          <button class="btn primary">Save</button>
+          <span class="grow"></span>
+          <span class="chip needs">14 to review</span>
+        </div>
+      </div>
+
+      <p class="cap">Chips — state (act) vs. provenance (recessive)</p>
+      <div class="demo"><div class="pad">
+        <div class="row-chips" style="margin-bottom:10px;">
+          <span class="chip needs">needs review</span>
+          <span class="chip ok">resolved</span>
+          <span class="chip invalid">invalid</span>
+          <span class="chip stale">stale</span>
+        </div>
+        <div class="row-chips">
+          <span class="chip quiet">auto</span>
+          <span class="chip quiet">inherited</span>
+          <span class="chip quiet">reason: track-match</span>
+        </div>
+        <p class="note">State chips carry color; provenance steps back to outline + faint, so the eye lands on what needs action.</p>
+      </div></div>
+
+      <p class="cap">Worklist rows</p>
+      <div class="demo">
+        <div class="row sel">
+          <span class="label">Japan / Kyoto / Fushimi-Inari<span class="sub"> · IMG_0421.JPG</span></span>
+          <span class="eff">+02:00:13</span>
+          <span class="chip ok">ok</span>
+        </div>
+        <div class="row">
+          <span class="label">Japan / Nara<span class="sub"> · IMG_0612.JPG</span></span>
+          <span class="eff">−00:00:07</span>
+          <span class="chip needs">review</span>
+        </div>
+        <div class="row">
+          <span class="label">Japan / Osaka<span class="sub"> · MVI_0733.MP4</span></span>
+          <span class="eff">unset</span>
+          <span class="chip quiet">auto</span>
+        </div>
+      </div>
+
+      <p class="cap">Detail panel — focal decision over demoted evidence</p>
+      <div class="demo"><div class="pad">
+        <div class="eff">
+          <p class="lbl">Effective decision</p>
+          <div class="val">2026-04-12 14:08:51 +09:00</div>
+          <div class="meta">offset +02:00:13 · resolved UTC 05:08:38Z · source: GPX track-match</div>
+        </div>
+        <div class="pblock">
+          <h3>Evidence</h3>
+          <dl class="kv">
+            <dt>Camera time</dt><dd>2026-04-12 12:08:38</dd>
+            <dt>Group</dt><dd>fixed_clock_cameras</dd>
+            <dt>Nearest track pt</dt><dd>34.96714, 135.77272</dd>
+          </dl>
+        </div>
+      </div></div>
+
+      <p class="cap">Signature controls</p>
+      <div class="demo"><div class="pad" style="display:flex;gap:18px;align-items:center;flex-wrap:wrap;">
+        <span class="spin">
+          <span class="sign">+</span>
+          <span class="u on"><span class="uv">02</span><span class="ul">hr</span></span><span class="colon">:</span>
+          <span class="u"><span class="uv">00</span><span class="ul">min</span></span><span class="colon">:</span>
+          <span class="u"><span class="uv">13</span><span class="ul">sec</span></span>
+        </span>
+        <span class="mapbar"><span class="xhair"></span> 34.96714, 135.77272 · ±12 m</span>
+      </div></div>
+    </div>
+
+    <!-- RIGHT: console -->
+    <div>
+      <p class="cap">Console — per-phase actions</p>
+      <div class="demo"><div class="pad" style="display:flex;gap:10px;align-items:center;">
+        <button class="btn primary">Plan</button>
+        <button class="btn">Dry-run</button>
+        <button class="btn" disabled>Execute</button>
+        <span class="grow"></span>
+        <span class="chip ok">plan ✓ 3120 files</span>
+      </div></div>
+
+      <p class="cap">Console — progress channel (latest-wins widgets)</p>
+      <div class="demo"><div class="pad">
+        <div class="prog">
+          <span class="pl">hashing files</span>
+          <span class="track"><span class="fill" style="width:45.8%"></span></span>
+          <span class="pn">4123/9000 · 45.8% · IMG_0421.jpg</span>
+        </div>
+        <div class="prog done">
+          <span class="pl">extracting metadata</span>
+          <span class="track"><span class="fill" style="width:100%"></span></span>
+          <span class="pn">done</span>
+        </div>
+      </div></div>
+
+      <p class="cap">Console — log channel (scrolling, lossless)</p>
+      <div class="demo"><div class="pad">
+        <div class="logpane"><span class="o">Lock acquired: .photos-ingest/photos-00-workspace-guard</span>
+Starting planning – scanning inventory…
+Quarantine footprint: 0 files, 0 bytes across 0 plan(s).
+<span class="w">⚠ Warning: ffmpeg not found — video fingerprinting degraded</span>
+Plan saved to .photos-ingest/photos-10-prep-plan.json</div>
+      </div></div>
+
+      <p class="cap">Console — execute gate (the 2-step safety surface)</p>
+      <div class="demo"><div class="pad">
+        <div class="gate">
+          <p class="gate-title">Confirm execute</p>
+          <div class="sum">Dry-run of prep-20260620-1 — 412 operation(s):
+  move 380 · mkdir 12 · quarantine 20
+  no-op / already-correct 2708 · blockers 0 · warnings 3
+
+Moves irreplaceable originals. No-clobber enforced.</div>
+          <div class="act">
+            <button class="btn">Cancel</button>
+            <button class="btn primary">Execute 412 operations</button>
+          </div>
+        </div>
+        <p class="note">Execute stays disabled until a clean dry-run exists for the current plan; any blocker keeps it off.</p>
+      </div></div>
+
+      <p class="cap">Surface ladder + semantics</p>
+      <div class="demo"><div class="pad">
+        <div class="swatches">
+          <span class="sw" style="background:var(--bg)">bg</span>
+          <span class="sw" style="background:var(--surface)">surf</span>
+          <span class="sw" style="background:var(--raised)">raised</span>
+          <span class="sw" style="background:var(--selected)">sel</span>
+          <span class="sw" style="background:var(--accent);color:var(--accent-ink)">acc</span>
+          <span class="sw" style="background:var(--ok-bg);color:var(--ok)">ok</span>
+          <span class="sw" style="background:var(--warn-bg);color:var(--warn)">warn</span>
+          <span class="sw" style="background:var(--bad-bg);color:var(--bad)">bad</span>
+          <span class="sw" style="background:var(--stale-bg);color:var(--stale)">stale</span>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</body>
+</html>
