@@ -48,6 +48,7 @@ from .photos_utils import (
     journal_path, take_zfs_snapshot, _move_no_clobber, write_db_snapshot, reseal_archival_package,
     write_sealed_marker, WorkspaceLock, LibraryLock,
 )
+from .reporting import get_reporter
 
 # Geotag / prep artifacts merge READS (never writes — shared contract §13.0a).
 HANDOFF_ARTIFACT = "photos-11-handoff.json"
@@ -516,6 +517,7 @@ class MergeWorkflow:
         return stale
 
     def do_plan(self, ws, library_root):
+        reporter = get_reporter()
         # Don't re-plan over a merge that has already been (partly) applied but not sealed. A prior
         # execute — whether it ended `partial` (a blocker left in by-dest) or `success` but crashed
         # before the seal — already moved some finalized photos into the library (their by-dest
@@ -527,12 +529,12 @@ class MergeWorkflow:
         # merge; a `rejected` summary moved nothing, so re-planning after it is safe and allowed.)
         if os.path.exists(merge_plan_path(ws)) and \
                 _json_get(merge_summary_path(ws), "status") in ("partial", "success"):
-            print(f"A prior merge is in flight but not sealed ({MERGE_SUMMARY_ARTIFACT} present on an "
+            reporter.log(f"A prior merge is in flight but not sealed ({MERGE_SUMMARY_ARTIFACT} present on an "
                   "unsealed workspace): some photos are already in the library. Run `execute` to resume "
                   f"the saved {MERGE_PLAN_ARTIFACT} — it finishes any remaining moves, writes a log "
                   "covering every file, and seals. Re-planning now would drop the already-moved files "
                   f"from the merge log. (To re-plan from scratch instead, remove {MERGE_SUMMARY_ARTIFACT} "
-                  "first.)", file=sys.stderr)
+                  "first.)")
             return 2
         cache = WorkspaceCache(ws)
         try:
@@ -542,45 +544,46 @@ class MergeWorkflow:
         mpp = merge_plan_path(ws)
         _, _mp_bak = write_versioned_json(mpp, plan)
         t = plan["totals"]
-        print(f"Wrote {MERGE_PLAN_ARTIFACT}: plan {plan['plan_id']} — {t['placed_new']} new, "
+        reporter.log(f"Wrote {MERGE_PLAN_ARTIFACT}: plan {plan['plan_id']} — {t['placed_new']} new, "
               f"{t['already_present']} already-present, {t['renamed_for_library']} renamed, "
-              f"{t['blocked']} blocked.")
-        print(f"  Plan saved to {mpp}")
+              f"{t['blocked']} blocked.", stream="stdout")
+        reporter.log(f"  Plan saved to {mpp}", stream="stdout")
         if _mp_bak:
-            print(f"  Previous plan backed up to {_mp_bak}")
-        print("  Review it, `dry-run` to display, then `execute`.")
+            reporter.log(f"  Previous plan backed up to {_mp_bak}", stream="stdout")
+        reporter.log("  Review it, `dry-run` to display, then `execute`.", stream="stdout")
         for b in plan["blockers"]:
-            print(f"  Blocker: {b}", file=sys.stderr)
+            reporter.error(f"  Blocker: {b}")
         return 0
 
     def do_dry_run(self, ws):
+        reporter = get_reporter()
         p = merge_plan_path(ws)
         if not os.path.exists(p):
-            print(f"No {MERGE_PLAN_ARTIFACT} — run `plan` first.", file=sys.stderr)
+            reporter.log(f"No {MERGE_PLAN_ARTIFACT} — run `plan` first.")
             return 2
         with open(p) as f:
             plan = json.load(f)
         stale = self.revalidate_plan_deps(ws, plan)
         if stale:
-            print("\nThe saved merge plan is stale — re-run `plan`:", file=sys.stderr)
+            reporter.log("\nThe saved merge plan is stale — re-run `plan`:")
             for s in stale:
-                print(f"  - {s}", file=sys.stderr)
+                reporter.log(f"  - {s}")
             return 2
         # Dry-run validates the REAL saved plan and reports a SUMMARY; the full exact plan is the
         # saved artifact at `p`, so there is no need to dump every move to the terminal.
         n = sum(len(d.get("files", [])) for d in (plan.get("destinations") or {}).values())
         t = plan.get("totals", {})
-        print(f"Dry-run: validated plan {plan.get('plan_id')} — {n} move(s).")
-        print(f"  new: {t.get('placed_new', 0)}, already-present: {t.get('already_present', 0)}, "
-              f"renamed: {t.get('renamed_for_library', 0)}, blocked: {t.get('blocked', 0)}")
+        reporter.log(f"Dry-run: validated plan {plan.get('plan_id')} — {n} move(s).", stream="stdout")
+        reporter.log(f"  new: {t.get('placed_new', 0)}, already-present: {t.get('already_present', 0)}, "
+              f"renamed: {t.get('renamed_for_library', 0)}, blocked: {t.get('blocked', 0)}", stream="stdout")
         _bl = plan.get("blockers") or []
         if _bl:
-            print(f"  BLOCKERS: {len(_bl)} — execute will refuse:")
+            reporter.log(f"  BLOCKERS: {len(_bl)} — execute will refuse:", stream="stdout")
             for b in _bl[:20]:
-                print(f"    - {b}")
+                reporter.log(f"    - {b}", stream="stdout")
             if len(_bl) > 20:
-                print(f"    … and {len(_bl) - 20} more")
-        print(f"  Full plan: {p}")
+                reporter.log(f"    … and {len(_bl) - 20} more", stream="stdout")
+        reporter.log(f"  Full plan: {p}", stream="stdout")
         return 0
 
     # --- execute: place-then-remove, journal, resume, concurrency (§10.3/§11) ---
@@ -850,34 +853,35 @@ class MergeWorkflow:
         }
 
     def do_execute(self, ws, library_root, jobs):
+        reporter = get_reporter()
         now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         execution_id = sha256_text(f"{now_iso}|{os.getpid()}")[:12]
         jobs = jobs or CONFIG.get("jobs") or 4
         result = self.execute_plan(ws, library_root, jobs, now_iso, execution_id)
         st = result["status"]
         if st == "no_plan":
-            print(f"No {MERGE_PLAN_ARTIFACT} — run `plan` first.", file=sys.stderr)
+            reporter.log(f"No {MERGE_PLAN_ARTIFACT} — run `plan` first.")
             return 2
         if st == "rejected":
-            print("\nExecution rejected — the merge plan is stale; re-run `plan`:", file=sys.stderr)
+            reporter.error("\nExecution rejected — the merge plan is stale; re-run `plan`:")
             for s in result.get("stale", []):
-                print(f"  - {s}", file=sys.stderr)
+                reporter.log(f"  - {s}")
             return 2
         t = result["summary"]["totals"]
-        print(f"Executed {MERGE_PLAN_ARTIFACT}: status={st} — {t['placed_new']} placed, "
+        reporter.log(f"Executed {MERGE_PLAN_ARTIFACT}: status={st} — {t['placed_new']} placed, "
               f"{t['already_present']} already-present, {t['renamed_for_library']} renamed, "
               f"{t['blocked']} blocked ({t['removed_from_by_dest']} removed from by-dest). "
-              f"Wrote {MERGE_SUMMARY_ARTIFACT}.")
+              f"Wrote {MERGE_SUMMARY_ARTIFACT}.", stream="stdout")
         if st != "success":
             for b in result.get("blocked", []):
                 if b.get("blocker"):
-                    print(f"  Blocker: {b['blocker']}", file=sys.stderr)
-            print("Blocked files were left in by-dest; resolve them and re-run `execute`.", file=sys.stderr)
+                    reporter.error(f"  Blocker: {b['blocker']}")
+            reporter.log("Blocked files were left in by-dest; resolve them and re-run `execute`.")
             return 3
-        print(f"Wrote {MERGE_LOG_ARTIFACT} and {MERGE_DB_SNAPSHOT}; re-sealed the archive "
+        reporter.log(f"Wrote {MERGE_LOG_ARTIFACT} and {MERGE_DB_SNAPSHOT}; re-sealed the archive "
               f"(photos-35-archive-manifest.json); sealed the workspace (photos-00-sealed.json). "
               "No library file was renamed or overwritten — the workspace is now terminal; "
-              "process more media in a fresh workspace.")
+              "process more media in a fresh workspace.", stream="stdout")
         return 0
 
     # --- filesystem helpers (mirrors of geotag's; merge is read-only here) ---
@@ -989,65 +993,65 @@ def do_init_library(path_arg, ws):
       no workspace, no path -> error (nothing to bless, no config to read)
 
     Returns a process exit code."""
+    reporter = get_reporter()
     in_ws = _in_workspace(ws)
 
     if path_arg is None:
         if not in_ws:
-            print("init-library needs a library path when run outside a workspace "
+            reporter.log("init-library needs a library path when run outside a workspace "
                   "(there is no workspace config to read). Pass the library directory, e.g. "
-                  "`photos-cartographer merge init-library /srv/library`.", file=sys.stderr)
+                  "`photos-cartographer merge init-library /srv/library`.")
             return 2
         cfg_p = config_path(ws)
         try:
             with open(cfg_p) as f:
                 cfg = json.load(f)
         except Exception as e:
-            print(f"Workspace config could not be read: {e}", file=sys.stderr)
+            reporter.log(f"Workspace config could not be read: {e}")
             return 2
         library_root = ((cfg.get("merge") or {}).get("library_root") or "")
         if not library_root:
-            print("No merge.library_root is set in photos-00-config.json — pass a path "
-                  "(`photos-cartographer merge init-library <path>`) or set it in config first.", file=sys.stderr)
+            reporter.log("No merge.library_root is set in photos-00-config.json — pass a path "
+                  "(`photos-cartographer merge init-library <path>`) or set it in config first.")
             return 2
         try:
             validate_merge_config(cfg, ws)          # validates library_root (existing, outside ws)
         except ValueError as e:
-            print(str(e), file=sys.stderr)
+            reporter.log(str(e))
             return 2
         pre = is_library(library_root)
         marker = write_library_marker(library_root)
-        print(f"Library {'already blessed' if pre else 'blessed'}: {library_root} "
-              f"({os.path.basename(marker)}). Already named in config; no config change.")
+        reporter.log(f"Library {'already blessed' if pre else 'blessed'}: {library_root} "
+              f"({os.path.basename(marker)}). Already named in config; no config change.", stream="stdout")
         return 0
 
     # A path was given: resolve to an absolute path and validate it.
     resolved = os.path.abspath(os.path.expanduser(path_arg))
     if not os.path.isdir(resolved):
-        print(f"init-library: {resolved} is not an existing directory.", file=sys.stderr)
+        reporter.log(f"init-library: {resolved} is not an existing directory.")
         return 2
 
     if not in_ws:
         pre = is_library(resolved)
         marker = write_library_marker(resolved)
-        print(f"Library {'already blessed' if pre else 'blessed'}: {resolved} "
+        reporter.log(f"Library {'already blessed' if pre else 'blessed'}: {resolved} "
               f"({os.path.basename(marker)}). Not run from a workspace, so config was not updated — "
               "re-run this from a workspace if you also want it recorded in that workspace's "
-              "photos-00-config.json.")
+              "photos-00-config.json.", stream="stdout")
         return 0
 
     # In a workspace with an explicit path: bless AND record library_root in config (under the lock).
     ws_real = os.path.realpath(os.path.abspath(ws))
     lib_real = os.path.realpath(resolved)
     if lib_real == ws_real or lib_real.startswith(ws_real + os.sep):
-        print(f"init-library: {resolved} must resolve outside the workspace (it must not be the "
-              "workspace or any path inside it).", file=sys.stderr)
+        reporter.log(f"init-library: {resolved} must resolve outside the workspace (it must not be the "
+              "workspace or any path inside it).")
         return 2
     lock = WorkspaceLock(ws)
     if not lock.acquire():
         owner = lock.read_owner() or {}
         detail = f" (pid {owner.get('pid')}, since {owner.get('started_at')})" if owner else ""
-        print(f"Workspace is locked by an in-progress run{detail}; try again when it finishes.",
-              file=sys.stderr)
+        reporter.log(f"Workspace is locked by an in-progress run{detail}; try again when it finishes.")
         return 1
     try:
         cfg_p = config_path(ws)
@@ -1055,7 +1059,7 @@ def do_init_library(path_arg, ws):
             with open(cfg_p) as f:
                 cfg = json.load(f)
         except Exception as e:
-            print(f"Workspace config could not be read: {e}", file=sys.stderr)
+            reporter.log(f"Workspace config could not be read: {e}")
             return 2
         # §4.1 item 2: the setup command writes the single library_root key — and ONLY that key. Don't
         # seed placement/collision policy (prep is the config seeder; merge reads those with defaults).
@@ -1065,13 +1069,13 @@ def do_init_library(path_arg, ws):
         try:
             validate_merge_config(cfg, ws)
         except ValueError as e:
-            print(str(e), file=sys.stderr)
+            reporter.log(str(e))
             return 2
         pre = is_library(resolved)
         marker = write_library_marker(resolved)
         write_json_artifact(cfg_p, cfg)             # the one narrow config write (library_root only)
-        print(f"Library {'already blessed' if pre else 'blessed'} and recorded: {resolved} "
-              f"({os.path.basename(marker)}). Wrote merge.library_root into photos-00-config.json.")
+        reporter.log(f"Library {'already blessed' if pre else 'blessed'} and recorded: {resolved} "
+              f"({os.path.basename(marker)}). Wrote merge.library_root into photos-00-config.json.", stream="stdout")
         return 0
     finally:
         lock.release()
@@ -1080,24 +1084,24 @@ def do_init_library(path_arg, ws):
 def _run_locked_workflow(command, ws, jobs=None):
     """plan / dry-run / execute: acquire the workspace lock, validate config + the library marker via
     preflight, then acquire the library lock, then dispatch."""
+    reporter = get_reporter()
     run_lock = WorkspaceLock(ws)
     if not run_lock.acquire():
         owner = run_lock.read_owner() or {}
         detail = f" (pid {owner.get('pid')}, since {owner.get('started_at')})" if owner else ""
-        print(f"Workspace is locked by an in-progress run{detail}; try again when it finishes.",
-              file=sys.stderr)
+        reporter.log(f"Workspace is locked by an in-progress run{detail}; try again when it finishes.")
         return 1
-    print(f"Lock acquired: {run_lock.lock_path}", file=sys.stderr)
+    reporter.log(f"Lock acquired: {run_lock.lock_path}")
     try:
         wf = MergeWorkflow(ws)
         blockers, warnings, info = wf.preflight()
         for w in warnings:
-            print(f"  Warning: {w}", file=sys.stderr)
+            reporter.warn(f"  Warning: {w}")
         if blockers:
-            print("\nMerge cannot proceed:", file=sys.stderr)
+            reporter.error("\nMerge cannot proceed:")
             for b in blockers:
-                print(f"  - {b}", file=sys.stderr)
-            print("\nNo files were merged.", file=sys.stderr)
+                reporter.log(f"  - {b}")
+            reporter.log("\nNo files were merged.")
             return 2
 
         # Preflight confirmed the .photos-library marker — safe to take the library-side lock now
@@ -1107,13 +1111,13 @@ def _run_locked_workflow(command, ws, jobs=None):
         if not lib_lock.acquire():
             owner = lib_lock.read_owner() or {}
             detail = f" (pid {owner.get('pid')}, since {owner.get('started_at')})" if owner else ""
-            print(f"Library {library_root} is locked by another merge{detail}; try again when it "
-                  "finishes.", file=sys.stderr)
+            reporter.log(f"Library {library_root} is locked by another merge{detail}; try again when it "
+                  "finishes.")
             return 1
-        print(f"Library lock acquired: {lib_lock.lock_path}", file=sys.stderr)
+        reporter.log(f"Library lock acquired: {lib_lock.lock_path}")
         try:
-            print(f"Preflight passed: {info.get('by_dest_photos', 0)} by-dest photo(s) ready to merge "
-                  f"into {library_root}.", file=sys.stderr)
+            reporter.log(f"Preflight passed: {info.get('by_dest_photos', 0)} by-dest photo(s) ready to merge "
+                  f"into {library_root}.")
             if command == "plan":
                 return wf.do_plan(ws, library_root)
             if command == "dry-run":
@@ -1125,8 +1129,7 @@ def _run_locked_workflow(command, ws, jobs=None):
         # Clean Ctrl-C: plan/dry-run never mutate and execute is journalled/idempotent, so moved
         # files are confirmed and the next run resumes from the diff (§8.3). Exit quietly with the
         # conventional 130 instead of a traceback; the `finally` blocks still release both locks.
-        print("\nInterrupted; aborting. Moved files are journalled — safe to rerun.",
-              file=sys.stderr)
+        reporter.log("\nInterrupted; aborting. Moved files are journalled — safe to rerun.")
         return 130
     finally:
         run_lock.release()

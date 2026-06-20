@@ -53,6 +53,7 @@ from .photos_utils import (
     prep_log_path, prep_db_snapshot_path, write_db_snapshot, take_zfs_snapshot,
     WorkspaceLock, ProgressCoordinator,
 )
+from .reporting import get_reporter
 
 TIME_DECISIONS_ARTIFACT = "photos-21-time-decisions.json"
 DRIFT_VALIDATION_ARTIFACT = "photos-22-gps-drift-validation.json"
@@ -2350,27 +2351,27 @@ def add_arguments(parser):
 
 def run(args):
     workspace_root = os.getcwd()
+    reporter = get_reporter()
 
     # Whole-run workspace lock (shared contract §2): one lock across every phase; fail-fast.
     run_lock = WorkspaceLock(workspace_root)
     if not run_lock.acquire():
         owner = run_lock.read_owner() or {}
         detail = f" (pid {owner.get('pid')}, since {owner.get('started_at')})" if owner else ""
-        print(f"Workspace is locked by an in-progress run{detail}; try again when it finishes.",
-              file=sys.stderr)
+        reporter.log(f"Workspace is locked by an in-progress run{detail}; try again when it finishes.")
         sys.exit(1)
-    print(f"Lock acquired: {run_lock.lock_path}", file=sys.stderr)
+    reporter.log(f"Lock acquired: {run_lock.lock_path}")
     try:
         if args.command == "plan":
             wf = GeotagWorkflow(workspace_root)
             blockers, warnings, info = wf.preflight()
             for w in warnings:
-                print(f"  Warning: {w}", file=sys.stderr)
+                reporter.warn(f"  Warning: {w}")
             if blockers:
-                print("\nGeotag cannot proceed:", file=sys.stderr)
+                reporter.error("\nGeotag cannot proceed:")
                 for b in blockers:
-                    print(f"  - {b}", file=sys.stderr)
-                print("\nNo geotag JSON was written.", file=sys.stderr)
+                    reporter.log(f"  - {b}")
+                reporter.log("\nNo geotag JSON was written.")
                 sys.exit(2)
 
             # Stages 2–4: build the in-memory model geotag reasons over.
@@ -2382,12 +2383,12 @@ def run(args):
             groups, unknown = wf.recognize_camera_groups(files)
 
             if unknown:
-                print("\nGeotag cannot proceed: unknown camera group(s). In photos-00-config.json "
+                reporter.error("\nGeotag cannot proceed: unknown camera group(s). In photos-00-config.json "
                       "under camera_time_and_timezone_policy.device_groups, REPLACE both arrays below "
                       "(phones = smartphone, auto timezone; fixed_clock_cameras = camera with a manual "
                       "clock), then re-run. Each array is the complete final list (your known groups plus "
                       "the new one(s)); the new group(s) appear in BOTH — keep each in only ONE array and "
-                      "delete it from the other:\n", file=sys.stderr)
+                      "delete it from the other:\n")
                 dg = (CONFIG.get("camera_time_and_timezone_policy") or {}).get("device_groups") or {}
                 labels = ("phones", "fixed_clock_cameras")
                 for i, label in enumerate(labels):
@@ -2396,10 +2397,10 @@ def run(args):
                     tail = "," if i < len(labels) - 1 else ""
                     if merged:
                         items = ",\n".join(f"    {json.dumps(k)}" for k in merged)
-                        print(f'  "{label}": [\n{items}\n  ]{tail}', file=sys.stderr)
+                        reporter.log(f'  "{label}": [\n{items}\n  ]{tail}')
                     else:
-                        print(f'  "{label}": []{tail}', file=sys.stderr)
-                print("\nNo geotag JSON was written.", file=sys.stderr)
+                        reporter.log(f'  "{label}": []{tail}')
+                reporter.log("\nNo geotag JSON was written.")
                 sys.exit(2)
 
             gpx = wf.load_gpx()      # disk-heavy: only after the in-memory checks above have passed
@@ -2408,9 +2409,10 @@ def run(args):
             for g in groups.values():
                 by_class[g["camera_group_class"]] = by_class.get(g["camera_group_class"], 0) + 1
             cls_summary = ", ".join(f"{n} {c}" for c, n in sorted(by_class.items())) or "none"
-            print(f"Model built: {len(files)} photo(s) across {n_dest} destination(s); "
+            reporter.log(f"Model built: {len(files)} photo(s) across {n_dest} destination(s); "
                   f"{len(groups)} camera group(s) ({cls_summary}); "
-                  f"GPX {gpx.status} ({len(gpx.points)} point(s), fp {(gpx.fingerprint or '')[:12]}).")
+                  f"GPX {gpx.status} ({len(gpx.points)} point(s), fp {(gpx.fingerprint or '')[:12]}).",
+                  stream="stdout")
 
             # Stages 5–6: time decisions (photos-21). Regenerate from current inputs while
             # preserving authored decisions (§9); a sanity-validation failure on a preserved value
@@ -2425,27 +2427,26 @@ def run(args):
                     prior = None
             artifact, td_blockers = wf.build_time_decisions(files, groups, prior, gpx)
             if td_blockers:
-                print("\nGeotag cannot proceed: invalid value(s) in photos-21-time-decisions.json:",
-                      file=sys.stderr)
+                reporter.error("\nGeotag cannot proceed: invalid value(s) in photos-21-time-decisions.json:")
                 for b in td_blockers:
-                    print(f"  - {b}", file=sys.stderr)
-                print("\nFix the field(s) and re-run; the artifact was left unchanged.", file=sys.stderr)
+                    reporter.log(f"  - {b}")
+                reporter.log("\nFix the field(s) and re-run; the artifact was left unchanged.")
                 sys.exit(2)
             # Back up any prior hand-edited decision file before regenerating it (incremental -NNN),
             # so an authored decision is always recoverable.
             _, _td_bak = write_versioned_json(tdp, artifact)
             if _td_bak:
-                print(f"  Previous {TIME_DECISIONS_ARTIFACT} backed up to {_td_bak}", file=sys.stderr)
+                reporter.log(f"  Previous {TIME_DECISIONS_ARTIFACT} backed up to {_td_bak}")
             need_tz = sum(1 for d in artifact["destinations"].values()
                           if d["destination_timezone"]["requires_user_input"])
             need_off = sum(1 for d in artifact["destinations"].values()
                            for c in d["camera_group_time_decisions"].values() if c["requires_user_input"])
             if artifact["requires_user_input"]:
-                print(f"Wrote {TIME_DECISIONS_ARTIFACT}: status={artifact['status']} "
+                reporter.log(f"Wrote {TIME_DECISIONS_ARTIFACT}: status={artifact['status']} "
                       f"({need_tz} timezone + {need_off} clock-offset decision(s) need input). "
-                      "Edit the user_decision fields and re-run.")
+                      "Edit the user_decision fields and re-run.", stream="stdout")
             else:
-                print(f"Wrote {TIME_DECISIONS_ARTIFACT}: status=complete — all time decisions resolved.")
+                reporter.log(f"Wrote {TIME_DECISIONS_ARTIFACT}: status=complete — all time decisions resolved.", stream="stdout")
 
                 # Stage 7: time decisions are complete -> resolve UTC under the CURRENT offsets
                 # (rows0). This drives drift detection (§22a) and, once 22 is clean, is recomputed
@@ -2466,23 +2467,22 @@ def run(args):
                         prior_drift = None
                 drift_artifact, drift_blockers = wf.build_drift_validation(files, artifact, rows0, gpx, prior_drift)
                 if drift_blockers:
-                    print(f"\nGeotag cannot proceed: invalid value(s) in {DRIFT_VALIDATION_ARTIFACT}:",
-                          file=sys.stderr)
+                    reporter.error(f"\nGeotag cannot proceed: invalid value(s) in {DRIFT_VALIDATION_ARTIFACT}:")
                     for b in drift_blockers:
-                        print(f"  - {b}", file=sys.stderr)
-                    print("\nFix the field(s) and re-run; the artifact was left unchanged.", file=sys.stderr)
+                        reporter.log(f"  - {b}")
+                    reporter.log("\nFix the field(s) and re-run; the artifact was left unchanged.")
                     sys.exit(2)
                 _, _dv_bak = write_versioned_json(dvp, drift_artifact)
                 if _dv_bak:
-                    print(f"  Previous {DRIFT_VALIDATION_ARTIFACT} backed up to {_dv_bak}", file=sys.stderr)
+                    reporter.log(f"  Previous {DRIFT_VALIDATION_ARTIFACT} backed up to {_dv_bak}")
                 need_drift = sum(1 for d in drift_artifact["destinations"].values()
                                  for c in d["drift_decisions"].values() if c["requires_user_input"])
                 if drift_artifact["requires_user_input"]:
-                    print(f"Wrote {DRIFT_VALIDATION_ARTIFACT}: status={drift_artifact['status']} "
+                    reporter.log(f"Wrote {DRIFT_VALIDATION_ARTIFACT}: status={drift_artifact['status']} "
                           f"({need_drift} GPS-drift bucket(s) need confirmation). "
-                          "Confirm each (a zero-scrub must be set explicitly) and re-run.")
+                          "Confirm each (a zero-scrub must be set explicitly) and re-run.", stream="stdout")
                 elif drift_artifact["destinations"]:
-                    print(f"Wrote {DRIFT_VALIDATION_ARTIFACT}: status=complete — all GPS-drift buckets confirmed.")
+                    reporter.log(f"Wrote {DRIFT_VALIDATION_ARTIFACT}: status=complete — all GPS-drift buckets confirmed.", stream="stdout")
 
                 if not drift_artifact["requires_user_input"]:
                     # Stage 7b: re-resolve UTC consuming 22's validated offsets, persist the cache,
@@ -2505,8 +2505,8 @@ def run(args):
                         cache.close()
                     fp = resolved_utc_fingerprint(rows, input_fps)
                     n_valid = sum(1 for r in rows if r["resolved_utc_status"] == "valid")
-                    print(f"Resolved UTC for {n_valid}/{len(rows)} photo(s) "
-                          f"(resolved_utc_cache_fingerprint {fp[:12]}).")
+                    reporter.log(f"Resolved UTC for {n_valid}/{len(rows)} photo(s) "
+                          f"(resolved_utc_cache_fingerprint {fp[:12]}).", stream="stdout")
 
                     # Stage 8: GPS decisions (photos-23). Regenerate from the resolved rows + GPX,
                     # preserving authored GPS decisions; a bad authored coord leaves the artifact as-is.
@@ -2520,21 +2520,21 @@ def run(args):
                             prior_gps = None
                     gps_artifact, gps_blockers = wf.build_gps_decisions(files, rows, gpx, prior_gps, fp)
                     if gps_blockers:
-                        print("\nGeotag cannot proceed: invalid value(s) in "
-                              f"{GPS_DECISIONS_ARTIFACT}:", file=sys.stderr)
+                        reporter.error("\nGeotag cannot proceed: invalid value(s) in "
+                              f"{GPS_DECISIONS_ARTIFACT}:")
                         for b in gps_blockers:
-                            print(f"  - {b}", file=sys.stderr)
-                        print("\nFix the field(s) and re-run; the artifact was left unchanged.", file=sys.stderr)
+                            reporter.log(f"  - {b}")
+                        reporter.log("\nFix the field(s) and re-run; the artifact was left unchanged.")
                         sys.exit(2)
                     _, _gd_bak = write_versioned_json(gdp, gps_artifact)
                     if _gd_bak:
-                        print(f"  Previous {GPS_DECISIONS_ARTIFACT} backed up to {_gd_bak}", file=sys.stderr)
+                        reporter.log(f"  Previous {GPS_DECISIONS_ARTIFACT} backed up to {_gd_bak}")
                     tot = {k: sum(d["gps_decisions"]["summary"][k] for d in gps_artifact["destinations"].values())
                            for k in ("automatic_gpx_interpolation", "automatic_gpx_extrapolation",
                                      "preserve_native_gps", "blocked")}
-                    print(f"Wrote {GPS_DECISIONS_ARTIFACT}: status={gps_artifact['status']} "
+                    reporter.log(f"Wrote {GPS_DECISIONS_ARTIFACT}: status={gps_artifact['status']} "
                           f"({tot['preserve_native_gps']} native, {tot['automatic_gpx_interpolation']} interp, "
-                          f"{tot['automatic_gpx_extrapolation']} extrap, {tot['blocked']} blocked).")
+                          f"{tot['automatic_gpx_extrapolation']} extrap, {tot['blocked']} blocked).", stream="stdout")
 
                     # Stage 9: assemble photos-24 only when ALL decision artifacts are complete (§28).
                     if (artifact["status"] == "complete" and drift_artifact["status"] == "complete"
@@ -2544,71 +2544,70 @@ def run(args):
                         epp = executable_plan_path(workspace_root)
                         _, _ep_bak = write_versioned_json(epp, plan)
                         n_ops = sum(d["summary"]["operations_total"] for d in plan["destinations"].values())
-                        print(f"Wrote {EXECUTABLE_PLAN_ARTIFACT}: status={plan['status']} "
-                              f"(plan {plan['plan_id']}, {n_ops} operation(s)).")
-                        print(f"  Plan saved to {epp}")
+                        reporter.log(f"Wrote {EXECUTABLE_PLAN_ARTIFACT}: status={plan['status']} "
+                              f"(plan {plan['plan_id']}, {n_ops} operation(s)).", stream="stdout")
+                        reporter.log(f"  Plan saved to {epp}", stream="stdout")
                         if _ep_bak:
-                            print(f"  Previous plan backed up to {_ep_bak}")
-                        print("  Review it, then run `execute` to apply.")
+                            reporter.log(f"  Previous plan backed up to {_ep_bak}", stream="stdout")
+                        reporter.log("  Review it, then run `execute` to apply.", stream="stdout")
 
         elif args.command == "execute":
             wf = GeotagWorkflow(workspace_root)
             blockers, warnings, info = wf.preflight(for_execute=True)
             for w in warnings:
-                print(f"  Warning: {w}", file=sys.stderr)
+                reporter.warn(f"  Warning: {w}")
             if blockers:
-                print("\nExecution cannot proceed:", file=sys.stderr)
+                reporter.error("\nExecution cannot proceed:")
                 for b in blockers:
-                    print(f"  - {b}", file=sys.stderr)
+                    reporter.log(f"  - {b}")
                 sys.exit(2)
             if not os.path.exists(executable_plan_path(workspace_root)):
-                print(f"No {EXECUTABLE_PLAN_ARTIFACT} — run `run` first to plan.", file=sys.stderr)
+                reporter.log(f"No {EXECUTABLE_PLAN_ARTIFACT} — run `run` first to plan.")
                 sys.exit(2)
             now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             execution_id = sha256_text(f"{now_iso}|{os.getpid()}")[:12]
             jobs = args.jobs or CONFIG.get("jobs") or 4
             summary = wf.execute_plan(jobs, now_iso, execution_id)
             if summary.get("status") == "rejected":
-                print("\nExecution rejected — the plan is stale; re-run `run` to replan:", file=sys.stderr)
+                reporter.error("\nExecution rejected — the plan is stale; re-run `run` to replan:")
                 for s in summary["stale"]:
-                    print(f"  - {s}", file=sys.stderr)
+                    reporter.log(f"  - {s}")
                 sys.exit(2)
             t = summary["totals"]
-            print(f"Executed {EXECUTABLE_PLAN_ARTIFACT}: status={summary['status']} "
+            reporter.log(f"Executed {EXECUTABLE_PLAN_ARTIFACT}: status={summary['status']} "
                   f"({t['metadata_time_writes']} time, {t['metadata_gps_writes']} gps, "
                   f"{t['renames']} rename(s); {len(summary['fingerprint_mismatches'])} fingerprint "
-                  f"mismatch(es), {len(summary['failures'])} failure(s)). Wrote {EXECUTION_SUMMARY_ARTIFACT}.")
+                  f"mismatch(es), {len(summary['failures'])} failure(s)). Wrote {EXECUTION_SUMMARY_ARTIFACT}.",
+                  stream="stdout")
             if summary["status"] != "success":
-                print(f"Review {EXECUTION_SUMMARY_ARTIFACT} and re-run `execute` once resolved.",
-                      file=sys.stderr)
+                reporter.log(f"Review {EXECUTION_SUMMARY_ARTIFACT} and re-run `execute` once resolved.")
                 sys.exit(3)
 
         elif args.command == "finalize":
             wf = GeotagWorkflow(workspace_root)
             blockers, warnings, info = wf.preflight(for_execute=True)
             for w in warnings:
-                print(f"  Warning: {w}", file=sys.stderr)
+                reporter.warn(f"  Warning: {w}")
             if blockers:
-                print("\nFinalize cannot proceed:", file=sys.stderr)
+                reporter.error("\nFinalize cannot proceed:")
                 for b in blockers:
-                    print(f"  - {b}", file=sys.stderr)
+                    reporter.log(f"  - {b}")
                 sys.exit(2)
             now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             fin_blockers = wf.finalize_package(now_iso)
             if fin_blockers:
-                print("\nCannot finalize — geotag has not ended successfully:", file=sys.stderr)
+                reporter.error("\nCannot finalize — geotag has not ended successfully:")
                 for b in fin_blockers:
-                    print(f"  - {b}", file=sys.stderr)
+                    reporter.log(f"  - {b}")
                 sys.exit(2)
-            print(f"Finalized: wrote {COMPLETE_LOG_ARTIFACT}, {GEOTAG_DB_SNAPSHOT}, and "
+            reporter.log(f"Finalized: wrote {COMPLETE_LOG_ARTIFACT}, {GEOTAG_DB_SNAPSHOT}, and "
                   f"{ARCHIVE_MANIFEST_ARTIFACT} to {CONTROL_DIR}/. The archival package is ready to "
-                  "copy to permanent storage (geotag does not seal or merge).")
+                  "copy to permanent storage (geotag does not seal or merge).", stream="stdout")
     except KeyboardInterrupt:
         # Clean Ctrl-C: planning never mutates and execute is journalled/idempotent, so applied
         # files are confirmed and the next run resumes from the diff (§29.1a). Exit quietly with
         # the conventional 130 instead of a traceback; the `finally` still releases the lock.
-        print("\nInterrupted; aborting. Applied files are journalled — safe to rerun.",
-              file=sys.stderr)
+        reporter.log("\nInterrupted; aborting. Applied files are journalled — safe to rerun.")
         sys.exit(130)
     finally:
         run_lock.release()
