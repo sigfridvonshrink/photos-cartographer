@@ -1,0 +1,79 @@
+/* Shared design tokens for the decision editor and (later) the operational console.
+ *
+ * One source of truth for palette, type, surfaces, focus, and motion so both UIs read as the same
+ * instrument. Components reference these vars; never hard-code a hex or a font stack downstream.
+ *
+ * Identity: a precision instrument for reviewing time/GPS decisions on irreplaceable originals —
+ * darkroom-dim surfaces, one disciplined accent, and a characterful mono (JetBrains Mono: slashed
+ * zero + tabular figures) carrying the data, where unambiguous coordinates/offsets/timestamps matter.
+ */
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("vendor/fonts/jetbrains-mono-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("vendor/fonts/jetbrains-mono-latin-600-normal.woff2") format("woff2");
+}
+
+:root {
+  /* Surface ladder — four derived steps instead of a dozen bespoke near-blacks. */
+  --bg:        #16191f;   /* app background (deepest) */
+  --surface:   #1e222a;   /* panels, topbar */
+  --raised:    #272c35;   /* cards, chips, inputs */
+  --selected:  #2c3a4e;   /* selected row / active option (accent-tinted) */
+  --line:      #333a45;   /* hairlines */
+  --line-soft: #2a303a;   /* quieter internal dividers */
+
+  /* Text */
+  --fg:    #e6e8eb;
+  --muted: #9aa3af;
+  --faint: #6b7480;       /* provenance/captions — deliberately recessive */
+
+  /* One accent. */
+  --accent:     #4f9cf9;
+  --accent-ink: #07121f;  /* text on the accent fill */
+
+  /* Semantic state (the colors that mean "act") */
+  --ok:     #6cc06c;  --ok-bg:    #1d2a22;
+  --warn:   #e0a85e;  --warn-bg:  #33270f;
+  --bad:    #ef8aa0;  --bad-bg:   #3a1f28;  --bad-line: #c0556a;
+  --stale:  #e07ec0;  --stale-bg: #3a2034;
+
+  /* Type */
+  --ui:   system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Shape + focus */
+  --r:    6px;
+  --r-lg: 8px;
+  --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+}
+
+/* Numbers are data here: never let them jitter or render an ambiguous zero. */
+code, kbd, pre, samp,
+[class*="mono"], .eff, .eff-val, .kv dd, .tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Quality floor: a visible keyboard ring everywhere, and honor reduced motion. */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--r);
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
