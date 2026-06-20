@@ -40,6 +40,7 @@ import errno
 # CONFIGURATION BLOCK
 # ==============================================================================
 from .photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, selected_gpx_root, missing_managed_folders, FOLDER_ROLES
+from .reporting import get_reporter
 from .photos_utils import (_move_no_clobber, _move_link_unlink, _get_renameat2,
                           WorkspaceCache, WorkspaceLock, ContentHasher,
                           CACHE_SCHEMA_VERSION, FINGERPRINT_ALGORITHM_VERSION,
@@ -227,8 +228,8 @@ def _append_quarantine_manifest(manifest_dir, entry):
                       f"-{uuid.uuid4().hex[:6]}")
             try:
                 os.replace(manifest_path, backup)
-                print(f"Warning: quarantine manifest {manifest_path} was unreadable ({e}); preserved "
-                      f"it as {os.path.basename(backup)} and started a fresh manifest.", file=sys.stderr)
+                get_reporter().warn(f"Warning: quarantine manifest {manifest_path} was unreadable ({e}); preserved "
+                                    f"it as {os.path.basename(backup)} and started a fresh manifest.")
             except OSError:
                 pass
             existing = []
@@ -646,7 +647,7 @@ class PlanExecutor:
                     plan.summary["performance_and_cache"]["dependency_validation_status"] = "success"
                 self.coordinator.finish_phase()
             except ValueError as e:
-                print(f"Preflight validation failed: {e}")
+                get_reporter().error(f"Preflight validation failed: {e}", stream="stdout")
                 raise
 
             # 2. Start Journal (version-stamped so a stale/foreign journal is detectable, §5)
@@ -674,7 +675,8 @@ class PlanExecutor:
                     if snap["required"]:
                         journal.finish_journal("aborted_before_mutation")
                         raise RuntimeError(f"ZFS snapshot required but failed: {snap['stderr']}")
-                    print(f"Warning: {snap['stderr'] or 'ZFS snapshot failed'}; skipping snapshot.")
+                    get_reporter().warn(f"Warning: {snap['stderr'] or 'ZFS snapshot failed'}; skipping snapshot.",
+                                        stream="stdout")
 
             # 4. Execute Operations
             if plan.command != 'prep':
@@ -837,7 +839,7 @@ class PlanExecutor:
                 # managed folders (prep Section 3.1 / 7). Empty-dir removal loses no media. Any dump
                 # dir that could NOT be removed is reported (never left silently).
                 for _rel, _why in self._prune_empty_dirs():
-                    print(f"Warning: left the dump folder {_rel}/ in place — {_why}", file=sys.stderr)
+                    get_reporter().warn(f"Warning: left the dump folder {_rel}/ in place — {_why}")
 
                 # Update summary with db effects
                 if plan.summary and "performance_and_cache" in plan.summary:
@@ -1149,7 +1151,7 @@ class PlanExecutor:
                         if plan.summary and "performance_and_cache" in plan.summary:
                             plan.summary["performance_and_cache"]["prep_log_written"] = True
                         for _w in log_warnings:
-                            print(f"  Warning: {_w}", file=sys.stderr)
+                            get_reporter().warn(f"  Warning: {_w}")
                     except Exception as e:
                         if os.path.exists(ltmp):
                             try:
@@ -1823,7 +1825,7 @@ class WorkspacePrepWorkflow:
                        f"config does not list — they will be set aside in 1-strays. Add '.{e}' to the right "
                        f"media_extensions class in photos-00-config.json and re-run prep to organize them.")
                 warnings.append(msg)
-                print(f"  Notice: {msg}", file=sys.stderr)
+                get_reporter().log(f"  Notice: {msg}")
 
         self.coordinator.finish_phase()
         self.coordinator.start_phase("planning - building duplicate groups")
@@ -2446,9 +2448,10 @@ def prune_quarantine(workspace_root, plan_ids=None, older_than_days=None, do_del
     import shutil
     from datetime import timedelta
     from .photos_utils import quarantine_dir
+    reporter = get_reporter()
     base = quarantine_dir(workspace_root)
     if not os.path.isdir(base):
-        print("No quarantine directory; nothing to prune.")
+        reporter.log("No quarantine directory; nothing to prune.", stream="stdout")
         return
 
     all_dirs = [e.name for e in os.scandir(base) if e.is_dir()]
@@ -2459,7 +2462,7 @@ def prune_quarantine(workspace_root, plan_ids=None, older_than_days=None, do_del
             if pid in all_dirs:
                 selected.add(pid)
             else:
-                print(f"Warning: plan-id not found in quarantine: {pid}", file=sys.stderr)
+                reporter.warn(f"Warning: plan-id not found in quarantine: {pid}")
     if older_than_days is not None:
         cutoff = datetime.now(timezone.utc) - timedelta(days=older_than_days)
         for d in all_dirs:
@@ -2480,14 +2483,15 @@ def prune_quarantine(workspace_root, plan_ids=None, older_than_days=None, do_del
         files_n, bytes_n = _quarantine_dir_footprint(os.path.join(base, d))
         total_files += files_n
         total_bytes += bytes_n
-        print(f"{'Removing' if do_delete else 'Would remove'} {d}: {files_n} files, {bytes_n} bytes")
+        reporter.log(f"{'Removing' if do_delete else 'Would remove'} {d}: {files_n} files, {bytes_n} bytes",
+                     stream="stdout")
         if do_delete:
             safe = RootGuard.resolve_and_check_path(base, d)  # containment within quarantine
             shutil.rmtree(safe)
-    print(f"{'Removed' if do_delete else 'Would remove'} total: "
-          f"{len(selected)} plan(s), {total_files} files, {total_bytes} bytes")
+    reporter.log(f"{'Removed' if do_delete else 'Would remove'} total: "
+                 f"{len(selected)} plan(s), {total_files} files, {total_bytes} bytes", stream="stdout")
     if not do_delete:
-        print("(dry-run; pass --yes to delete)")
+        reporter.log("(dry-run; pass --yes to delete)", stream="stdout")
 
 
 import argparse
@@ -2543,6 +2547,11 @@ def run(args):
 
     workspace_root = os.getcwd()
 
+    # Scrolling status goes through the reporting seam (cartographer/reporting.py). The active
+    # reporter is the module global (default TtySink renders identically to the former direct
+    # prints); a caller — tests, the future web console — can inject one before calling run().
+    reporter = get_reporter()
+
     # Workspace lifecycle (prep Section 3.1): a workspace is INITIALIZED once the root sentinel
     # photos-00-workspace-guard exists. An uninitialized workspace (no guard) is the deliberate
     # entry point — prep initializes it (plan/execute detect this via guard-absence and create the
@@ -2555,9 +2564,9 @@ def run(args):
     if not run_lock.acquire():
         owner = run_lock.read_owner() or {}
         detail = f" (pid {owner.get('pid')}, since {owner.get('started_at')})" if owner else ""
-        print(f"Workspace is locked by an in-progress run{detail}; try again when it finishes.", file=sys.stderr)
+        reporter.error(f"Workspace is locked by an in-progress run{detail}; try again when it finishes.")
         sys.exit(1)
-    print(f"Lock acquired: {run_lock.lock_path}", file=sys.stderr)
+    reporter.log(f"Lock acquired: {run_lock.lock_path}")
 
     try:
         # Sealed/terminal-workspace guard (prep Section 6.2 item 1 / shared 13.7): a successful
@@ -2565,15 +2574,14 @@ def run(args):
         # operations (plan/dry-run/execute); prune-quarantine is a separate maintenance command.
         from .photos_utils import is_sealed, folder_name as _folder_name
         if args.command in ("plan", "dry-run", "execute") and is_sealed(workspace_root):
-            print("Workspace is SEALED (already merged): prep will not run. Nothing was touched.",
-                  file=sys.stderr)
+            reporter.error("Workspace is SEALED (already merged): prep will not run. Nothing was touched.")
             _src = os.path.join(workspace_root, _folder_name('sources'))
             _root_files = [f for f in os.listdir(workspace_root)
                            if os.path.isfile(os.path.join(workspace_root, f)) and not f.startswith('.')]
             _src_entries = os.listdir(_src) if os.path.isdir(_src) else []
             if _root_files or _src_entries:
-                print("  A likely new dump is present (files at the root or in 0-sources). A sealed "
-                      "workspace is final — move new media into a fresh workspace.", file=sys.stderr)
+                reporter.log("  A likely new dump is present (files at the root or in 0-sources). A sealed "
+                             "workspace is final — move new media into a fresh workspace.")
             sys.exit(2)
 
         if args.command == "plan":
@@ -2585,14 +2593,14 @@ def run(args):
             from .photos_utils import missing_tools
             miss = missing_tools(["exiftool"])
             if miss:
-                print(f"Required external tool not found on PATH: {', '.join(miss)}. "
-                      "Install exiftool and re-run `photos-cartographer prep plan`.", file=sys.stderr)
+                reporter.error(f"Required external tool not found on PATH: {', '.join(miss)}. "
+                               "Install exiftool and re-run `photos-cartographer prep plan`.")
                 sys.exit(3)
             soft = missing_tools(["magick", "ffmpeg"])
             if soft:
-                print(f"Warning: {', '.join(soft)} not found on PATH — content fingerprinting will be "
-                      "degraded (affected files reported as fingerprint-failed): "
-                      "magick→images, ffmpeg→videos.", file=sys.stderr)
+                reporter.warn(f"Warning: {', '.join(soft)} not found on PATH — content fingerprinting will be "
+                              "degraded (affected files reported as fingerprint-failed): "
+                              "magick→images, ffmpeg→videos.")
 
             cache = WorkspaceCache(workspace_root, read_only=True)
             workflow = WorkspacePrepWorkflow(workspace_root, cache)
@@ -2600,9 +2608,8 @@ def run(args):
             cache.close()
 
             _qf = plan.summary.get("quarantine_footprint", {}) or {}
-            print(f"Quarantine footprint: {_qf.get('total_files', 0)} files, "
-                  f"{_qf.get('total_bytes', 0)} bytes across {_qf.get('plan_id_dirs', 0)} plan(s).",
-                  file=sys.stderr)
+            reporter.log(f"Quarantine footprint: {_qf.get('total_files', 0)} files, "
+                         f"{_qf.get('total_bytes', 0)} bytes across {_qf.get('plan_id_dirs', 0)} plan(s).")
 
             # Auto-save to the canonical control-dir path; a prior plan is backed up under an
             # incremental -NNN suffix (never clobbered), and we tell the operator both locations so
@@ -2610,9 +2617,9 @@ def run(args):
             from .photos_utils import prep_plan_path, write_versioned_json
             pp = prep_plan_path(workspace_root)
             _sha, _bak = write_versioned_json(pp, asdict(plan))
-            print(f"Plan saved to {pp}")
+            reporter.log(f"Plan saved to {pp}", stream="stdout")
             if _bak:
-                print(f"  Previous plan backed up to {_bak}")
+                reporter.log(f"  Previous plan backed up to {_bak}", stream="stdout")
 
             # Surface blockers immediately: the plan is still saved (for inspection), but it cannot be
             # executed as-is, so don't let "Plan saved" read as all-clear — print each blocker and exit
@@ -2620,17 +2627,17 @@ def run(args):
             # 0-sources/" — which prep never auto-removes; the operator must move it into 0-sources or
             # delete it.) dry-run/execute would otherwise be where the operator first learns of it.
             if plan.blockers:
-                print(f"\nThis plan CANNOT be executed — {len(plan.blockers)} blocker(s) must be "
-                      "resolved first:", file=sys.stderr)
+                reporter.error(f"\nThis plan CANNOT be executed — {len(plan.blockers)} blocker(s) must be "
+                               "resolved first:")
                 for b in plan.blockers:
-                    print(f"  - {b}", file=sys.stderr)
+                    reporter.error(f"  - {b}")
                 sys.exit(2)
 
         elif args.command == "dry-run":
             from .photos_utils import prep_plan_path, PREP_PLAN_ARTIFACT
             pp = prep_plan_path(workspace_root)
             if not os.path.exists(pp):
-                print(f"No {PREP_PLAN_ARTIFACT} found — run `plan` first.", file=sys.stderr)
+                reporter.error(f"No {PREP_PLAN_ARTIFACT} found — run `plan` first.")
                 sys.exit(2)
             with open(pp, "r") as f:
                 plan_data = json.load(f)
@@ -2643,7 +2650,7 @@ def run(args):
             try:
                 PlanValidator.validate_plan_preflight(plan, workspace_root)
             except ValueError as e:
-                print(f"Preflight validation failed: {e}", file=sys.stderr)
+                reporter.error(f"Preflight validation failed: {e}")
                 sys.exit(1)
 
             # Dry-run is not a simulation: it validates the REAL saved plan (no virtual-filesystem
@@ -2652,29 +2659,31 @@ def run(args):
             op_counts = {}
             for op in plan.operations:
                 op_counts[op.type] = op_counts.get(op.type, 0) + 1
-            print(f"Dry-run: validated plan {plan.plan_id} — {len(plan.operations)} operation(s).")
+            reporter.log(f"Dry-run: validated plan {plan.plan_id} — {len(plan.operations)} operation(s).",
+                         stream="stdout")
             for t in sorted(op_counts):
-                print(f"  {t}: {op_counts[t]}")
-            print(f"  no-op / already-correct files: {plan.summary.get('no_op_files', 0)}")
+                reporter.log(f"  {t}: {op_counts[t]}", stream="stdout")
+            reporter.log(f"  no-op / already-correct files: {plan.summary.get('no_op_files', 0)}",
+                         stream="stdout")
             if plan.warnings:
-                print(f"  warnings: {len(plan.warnings)}")
+                reporter.log(f"  warnings: {len(plan.warnings)}", stream="stdout")
                 for w in plan.warnings[:20]:
-                    print(f"    - {w}")
+                    reporter.log(f"    - {w}", stream="stdout")
                 if len(plan.warnings) > 20:
-                    print(f"    … and {len(plan.warnings) - 20} more")
+                    reporter.log(f"    … and {len(plan.warnings) - 20} more", stream="stdout")
             if plan.blockers:
-                print(f"  BLOCKERS: {len(plan.blockers)} — execute will refuse:")
+                reporter.log(f"  BLOCKERS: {len(plan.blockers)} — execute will refuse:", stream="stdout")
                 for b in plan.blockers[:20]:
-                    print(f"    - {b}")
+                    reporter.log(f"    - {b}", stream="stdout")
                 if len(plan.blockers) > 20:
-                    print(f"    … and {len(plan.blockers) - 20} more")
-            print(f"  Full plan: {pp}")
+                    reporter.log(f"    … and {len(plan.blockers) - 20} more", stream="stdout")
+            reporter.log(f"  Full plan: {pp}", stream="stdout")
 
         elif args.command == "execute":
             from .photos_utils import prep_plan_path, PREP_PLAN_ARTIFACT
             pp = prep_plan_path(workspace_root)
             if not os.path.exists(pp):
-                print(f"No {PREP_PLAN_ARTIFACT} found — run `plan` first.", file=sys.stderr)
+                reporter.error(f"No {PREP_PLAN_ARTIFACT} found — run `plan` first.")
                 sys.exit(2)
             with open(pp, "r") as f:
                 plan_data = json.load(f)
@@ -2685,7 +2694,7 @@ def run(args):
             try:
                 executor.execute(plan)
             except Exception as e:
-                print(f"Execution failed: {e}", file=sys.stderr)
+                reporter.error(f"Execution failed: {e}")
                 sys.exit(1)
 
         elif args.command == "prune-quarantine":
@@ -2701,15 +2710,14 @@ def run(args):
         # Clean Ctrl-C: planning never mutates and execute is journalled/idempotent, so an
         # interrupted run leaves nothing partially applied. Exit quietly with the conventional
         # 130 instead of dumping a traceback. The `finally` below still releases the lock.
-        print("\nInterrupted; aborting. Nothing was partially applied — safe to rerun.",
-              file=sys.stderr)
+        reporter.log("\nInterrupted; aborting. Nothing was partially applied — safe to rerun.")
         sys.exit(130)
     except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
+        reporter.error(f"Error: {e}")
         sys.exit(1)
     finally:
         run_lock.release()
-        print("Lock released.", file=sys.stderr)
+        reporter.log("Lock released.")
 
 
 def main(argv=None):
