@@ -174,14 +174,20 @@ def test_deterministic_plan_with_jobs(mock_read, mock_popen, workspace):
 
 
 def test_progress_coordinator():
-    coord = utils.ProgressCoordinator(quiet=True)
-    coord.start_phase("test", total_items=10)
-    coord.increment_completed()
-    coord.increment("some_metric", 5)
-    coord.finish_phase()
+    # ProgressCoordinator now emits events to the active Reporter; counters stay on the coordinator
+    # (they feed the run summary), progress is observed via a CaptureSink.
+    from cartographer.reporting import Reporter, CaptureSink, use_reporter, FINISH
+    cap = CaptureSink()
+    with use_reporter(Reporter([cap])):
+        coord = utils.ProgressCoordinator()
+        coord.start_phase("test", total_items=10)
+        coord.increment_completed()
+        coord.increment("some_metric", 5)
+        coord.finish_phase()
 
-    assert coord.completed_items == 1
     assert coord.counters["some_metric"] == 5
+    finish = cap.progress()[-1]
+    assert finish.state == FINISH and finish.cur == 1
 
 @patch("subprocess.Popen")
 @patch("photos_1_prep.PlanValidator.validate_plan_preflight")

@@ -1659,145 +1659,74 @@ import threading
 import time
 
 class ProgressCoordinator:
+    """Back-compat adapter over the reporting seam (cartographer/reporting.py).
+
+    Preserves the historical imperative API (start_phase / increment / increment_completed /
+    set_detail / finish_phase / print_summary) used across the phase modules, but **emits structured
+    events to the active Reporter** instead of printing directly. All rendering now lives in
+    ``TtySink``, which reproduces this class's former output byte-for-byte. New code should prefer
+    ``Reporter.progress()`` / ``track()`` (see docs/design/web-console.md); this adapter exists so the
+    existing call sites keep working unchanged while output flows through the one seam.
+    """
+
     def __init__(self, quiet=None):
+        # Retained only for back-compat reads (e.g. the summary's progress_mode). Rendering quiet now
+        # lives in the TtySink (which derives it from the same sys.stderr.isatty()).
         self.is_tty = sys.stderr.isatty()
-        if quiet is None:
-            self.quiet = not self.is_tty
-        else:
-            self.quiet = quiet
-            if quiet:
-                self.is_tty = False
+        self.quiet = (not self.is_tty) if quiet is None else bool(quiet)
         self.counters = {}
         self._lock = threading.Lock()
-        self.current_phase = ""
-        self.total_items = 0
-        self.completed_items = 0
-        self.start_time = time.time()
-        self.last_print_time = 0
-        self._detail = ""              # optional per-item label appended to the progress line
+        self._task_id = None
+        self._label = ""
+        self._total = 0
+        self._completed = 0
+        self._detail = ""
+
+    @staticmethod
+    def _reporter():
+        from .reporting import get_reporter
+        return get_reporter()
 
     def start_phase(self, phase_name: str, total_items: int = 0):
-        with self._lock:
-            self.current_phase = phase_name
-            self.total_items = total_items
-            self.completed_items = 0
-            self.start_time = time.time()
-            self._detail = ""
-            if not self.quiet:
-                if self.is_tty:
-                    print(f"\r\033[KStarting {phase_name}...", end="", file=sys.stderr)
-                else:
-                    print(f"Starting {phase_name}...", file=sys.stderr)
+        from .reporting import ProgressEvent, START
+        self._label = phase_name
+        self._total = total_items
+        self._completed = 0
+        self._detail = ""
+        self._task_id = self._reporter()._next_task_id()
+        self._reporter().emit(ProgressEvent(self._task_id, phase_name, START, 0, total_items or None))
 
     def increment(self, counter_name: str, amount: int = 1):
         with self._lock:
             self.counters[counter_name] = self.counters.get(counter_name, 0) + amount
 
     def increment_completed(self, amount: int = 1):
-        with self._lock:
-            self.completed_items += amount
-            self._render_progress()
+        from .reporting import ProgressEvent, UPDATE
+        self._completed += amount
+        self._reporter().emit(ProgressEvent(self._task_id, self._label, UPDATE, self._completed,
+                                            self._total or None, self._detail, force=False))
 
     def set_detail(self, detail: str = ""):
         """Set the per-item label shown on the progress line (e.g. the destination being worked on)
         and render it immediately, so a long single item announces itself before its work begins."""
-        with self._lock:
-            self._detail = detail or ""
-            self._render_progress(force=True)
-
-    def _render_progress(self, force: bool = False):
-        if self.quiet:
-            return
-
-        now = time.time()
-        suffix = f" — {self._detail}" if self._detail else ""
-        if self.is_tty:
-            if force or now - self.last_print_time > 0.1:
-                self.last_print_time = now
-                pct = ""
-                if self.total_items > 0:
-                    pct = f" ({self.completed_items / self.total_items * 100:.1f}%)"
-                print(f"\r\033[K{self.current_phase}: {self.completed_items}/{self.total_items}{pct}{suffix} ...", end="", file=sys.stderr)
-                sys.stderr.flush()
-        else:
-            if force or now - self.last_print_time > 10.0:
-                self.last_print_time = now
-                pct = ""
-                if self.total_items > 0:
-                    pct = f" ({self.completed_items / self.total_items * 100:.1f}%)"
-                print(f"{self.current_phase}: {self.completed_items}/{self.total_items}{pct}{suffix} ...", file=sys.stderr)
+        from .reporting import ProgressEvent, UPDATE
+        self._detail = detail or ""
+        self._reporter().emit(ProgressEvent(self._task_id, self._label, UPDATE, self._completed,
+                                            self._total or None, self._detail, force=True))
 
     def finish_phase(self):
-        with self._lock:
-            if not self.quiet:
-                elapsed = time.time() - self.start_time
-                if self.is_tty:
-                    print(f"\r\033[KFinished {self.current_phase} in {elapsed:.2f}s", file=sys.stderr)
-                else:
-                    print(f"Finished {self.current_phase} in {elapsed:.2f}s", file=sys.stderr)
+        from .reporting import ProgressEvent, FINISH
+        self._reporter().emit(ProgressEvent(self._task_id or "t0", self._label, FINISH,
+                                            self._completed, self._total or None, self._detail))
 
     def print_summary(self, plan_summary=None):
-        # The run summary is a deliverable (prep Section 19), not transient progress, so
-        # it prints even when live progress is quiet/redirected.
+        # The run summary is a deliverable (prep Section 19), not transient progress, so it prints
+        # even when live progress is quiet/redirected. The TtySink owns the rendering (report path,
+        # quiet-suppressed flat fallback) — identical to the former in-class logic.
+        from .reporting import SummaryEvent
         report = (plan_summary or {}).get("report")
-        if report:
-            self._print_report(report, plan_summary)
-            return
-        if self.quiet:
-            return
-        # Fallback: the older flat performance list (no structured report present).
-        print("\n--- Performance Summary ---", file=sys.stderr)
-        if plan_summary and "performance_and_cache" in plan_summary:
-            pc = plan_summary["performance_and_cache"]
-            fields = [
-                "jobs_requested", "progress_mode", "worker_crashes", "worker_restarts",
-                "metadata_extracted", "metadata_reused", "metadata_failed",
-                "hashes_computed", "hashes_reused", "hashes_failed",
-                "db_effects_seen", "db_upserts_applied", "db_removes_applied", "db_renames_applied",
-                "dependency_validation_status", "handoff_written_after_successful_validation"
-            ]
-            for f in fields:
-                print(f"  {f}: {pc.get(f, 0 if 'applied' in f or 'failed' in f or 'crashes' in f or 'reused' in f or 'computed' in f or 'restarts' in f or 'seen' in f or 'extracted' in f else False)}", file=sys.stderr)
-        else:
-            for k, v in sorted(self.counters.items()):
-                print(f"  {k}: {v}", file=sys.stderr)
-        print("---------------------------", file=sys.stderr)
-
-    def _print_report(self, r, plan_summary=None):
-        """Render the prep run report (prep Section 19) as labelled categories."""
-        pc = (plan_summary or {}).get("performance_and_cache", {}) or {}
-        qf = r.get("quarantine_footprint", {}) or {}
-        out = sys.stderr
-        print("\n=== Prep run summary ===", file=out)
-        print(f"  Media operations planned/executed : {r.get('media_operations', 0)}  "
-              f"(cache ops: {r.get('cache_operations', 0)})", file=out)
-        print(f"  No-op / already-correct           : {r.get('no_op_already_correct', 0)}", file=out)
-        print(f"  Recognized moves (carried forward): {r.get('recognized_moves', 0)}", file=out)
-        print(f"  By-dest files scanned read-only   : {r.get('by_dest_files_scanned_read_only', 0)}  "
-              f"(mutated: {r.get('by_dest_mutated', 0)})", file=out)
-        print(f"  Duplicates -> quarantine          : {r.get('duplicates_against_mutable', 0)} vs mutable, "
-              f"{r.get('duplicates_against_by_dest', 0)} vs by-dest", file=out)
-        print(f"  Metadata reused/extracted/carried/failed : "
-              f"{r.get('metadata_reused', 0)}/{r.get('metadata_extracted', 0)}/"
-              f"{r.get('metadata_carried_forward', 0)}/{r.get('metadata_failed', 0)}  "
-              f"(extractor {r.get('extractor', '?')} {r.get('extractor_version', '?')}, "
-              f"field-set v{r.get('field_set_version', '?')})", file=out)
-        print(f"  Cache effects applied (upsert/remove/rename): "
-              f"{pc.get('db_upserts_applied', 0)}/{pc.get('db_removes_applied', 0)}/"
-              f"{pc.get('db_renames_applied', 0)}", file=out)
-        print(f"  Camera groups / native-GPS / missing-timestamp : "
-              f"{r.get('camera_groups_found', 0)} / {r.get('native_gps_files', 0)} / "
-              f"{r.get('missing_timestamp_files', 0)}", file=out)
-        print(f"  Blockers / warnings               : {r.get('blockers', 0)} / {r.get('warnings', 0)}", file=out)
-        print(f"  Dependency validation             : {pc.get('dependency_validation_status', 'n/a')}  "
-              f"(handoff written after validation: {pc.get('handoff_written_after_successful_validation', False)})",
-              file=out)
-        print(f"  End-of-prep audit record          : prep-log {pc.get('prep_log_written', False)}, "
-              f"DB snapshot {pc.get('prep_db_snapshot_written', False)}", file=out)
-        print(f"  Quarantine footprint              : {qf.get('total_files', 0)} files, "
-              f"{qf.get('total_bytes', 0)} bytes across {qf.get('plan_id_dirs', 0)} plan(s) "
-              f"(never auto-deleted)", file=out)
-        print("========================", file=out)
+        self._reporter().emit(SummaryEvent(report=report, plan_summary=plan_summary,
+                                           counters=dict(self.counters)))
 
 
 # ============================================================================
