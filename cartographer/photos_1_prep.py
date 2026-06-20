@@ -2384,7 +2384,7 @@ class WorkspacePrepWorkflow:
             "cli_options_fingerprint": cli_options_fingerprint,
             "performance_and_cache": {
                 "jobs_requested": execution_config.get("jobs_requested", 1),
-                "progress_mode": "quiet" if getattr(self.coordinator, "quiet", False) else getattr(self.coordinator, "get_progress_mode", lambda: "plain")(),
+                "progress_mode": "quiet" if self.coordinator.quiet else "plain",
                 "worker_crashes": self.coordinator.counters.get("worker_crashes", 0),
                 "worker_restarts": self.coordinator.counters.get("worker_restarts", 0),
                 "metadata_extracted": self.coordinator.counters.get("metadata_extracted", 0),
