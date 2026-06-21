@@ -221,6 +221,25 @@ def test_locked_workspace_fails_fast(tmp_path, monkeypatch, capsys):
         fcntl.flock(fd, fcntl.LOCK_UN); os.close(fd)
 
 
+def test_dry_run_mutates_nothing_on_disk(tmp_path, monkeypatch, capsys):
+    """Dry-run is validation, not simulation, and is strictly read-only: it loads the saved plan,
+    validates it against an in-memory DB, and prints a summary. Snapshot the whole control dir + a
+    seeded quarantine, run dry-run, assert every on-disk byte is identical (cache, plan, quarantine)."""
+    ws = _ws(tmp_path)
+    qd = ws / ".photos-ingest-quarantine" / "20260101T000000Z-abc123"
+    qd.mkdir(parents=True); (qd / "d.jpg").write_bytes(b"recoverable")
+    assert _main(monkeypatch, ws, "plan") == 0                  # writes photos-10 + cache
+
+    def snap(root):
+        return {os.path.relpath(os.path.join(r, f), root): open(os.path.join(r, f), "rb").read()
+                for r, _dn, fns in os.walk(root) for f in fns if not f.endswith(".lock")}
+
+    before = snap(str(ws / ".photos-ingest")) | snap(str(ws / ".photos-ingest-quarantine"))
+    assert _main(monkeypatch, ws, "dry-run") == 0
+    after = snap(str(ws / ".photos-ingest")) | snap(str(ws / ".photos-ingest-quarantine"))
+    assert after == before                                      # dry-run wrote nothing to disk
+
+
 def test_locked_workspace_failfast_produces_no_artifact(tmp_path, monkeypatch, capsys):
     """Lock contention is fail-fast and pre-mutation: a `plan` that can't take the workspace lock
     produces NO plan artifact and NO journal — the run never got past lock acquisition."""

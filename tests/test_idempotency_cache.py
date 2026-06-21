@@ -256,6 +256,42 @@ def test_no_special_reimport_path_from_missing_metadata(tmp_path):
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
+def test_prep_execute_cache_writes_only_from_main_thread(mock_meta, tmp_path):
+    """Single-writer cache: prep applies its plan in one sequential op loop, so every DB write lands on
+    the main thread even with jobs=4 (the concurrency in prep is read-only metadata extraction during
+    planning, never DB writes). Probe upsert_file and assert no worker-thread write."""
+    import threading
+    ws = setup_workspace(tmp_path)
+
+    def mock_hash_image(filepath):
+        import hashlib
+        with open(filepath, "rb") as f:
+            return {"status": "valid", "strategy": "sha256-v1", "value": hashlib.sha256(f.read()).hexdigest()}
+
+    photos_ingest.ContentHasher.fingerprint_image = mock_hash_image
+    photos_ingest.CONFIG["jobs"] = 4                              # ask for concurrency
+
+    cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
+    plan1 = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
+    assert any(op.type == "db_upsert" for op in plan1.operations)
+
+    threads = []
+    orig = photos_ingest.WorkspaceCache.upsert_file
+
+    def spy(self, *a, **k):
+        threads.append(threading.current_thread().name)
+        return orig(self, *a, **k)
+
+    photos_ingest.WorkspaceCache.upsert_file = spy
+    try:
+        photos_ingest.PlanExecutor(str(ws)).execute(plan1, str(ws / ".photos-ingest/journal.json"))
+    finally:
+        photos_ingest.WorkspaceCache.upsert_file = orig
+    assert threads, "expected at least one cache upsert"
+    assert all(t == "MainThread" for t in threads), threads
+
+
+@mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
 def test_handoff_manifest_generated(mock_meta, tmp_path):
     ws = setup_workspace(tmp_path)
 
