@@ -46,7 +46,7 @@ from .photos_utils import (
     verify_json_dependency, json_dependency, write_json_artifact, write_versioned_json, is_library, write_library_marker,
     library_marker_path, allocate_suffix, suffix_root, max_suffix, ContentHasher, WorkspaceCache,
     journal_path, take_zfs_snapshot, _move_no_clobber, write_db_snapshot, reseal_archival_package,
-    write_sealed_marker, WorkspaceLock, LibraryLock,
+    write_sealed_marker, WorkspaceLock, LibraryLock, XDEV_TMP_PREFIX, XDEV_TMP_SUFFIX,
 )
 from .reporting import get_reporter
 
@@ -755,6 +755,11 @@ class MergeWorkflow:
             return {"status": "rejected", "plan_id": plan.get("plan_id"), "stale": [reason],
                     "snapshot": snapshot}
 
+        # Sweep crash-orphaned cross-fs copy temps (<XDEV_TMP_PREFIX>*<XDEV_TMP_SUFFIX>) left by a
+        # prior INTERRUPTED run from the dirs this plan targets. Safe: the library lock makes concurrent
+        # merges impossible, so any such temp is debris from a crash, never another run's live copy.
+        swept = self._sweep_orphan_temps(plan, library_root)
+
         jpath = journal_path(ws, plan["plan_id"])
         journal = {}
         if os.path.exists(jpath):
@@ -794,7 +799,8 @@ class MergeWorkflow:
         status = merge_execution_status(results)
         finished_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         summary = self._build_summary(ws, plan, library_root, results, snapshot, status,
-                                      now_iso, execution_id, jobs, finished_at=finished_at)
+                                      now_iso, execution_id, jobs, finished_at=finished_at,
+                                      orphans_swept=swept)
         write_json_artifact(merge_summary_path(ws), summary)
         finalized = None
         if status == "success":
@@ -849,7 +855,7 @@ class MergeWorkflow:
                 "archive_manifest": "photos-35-archive-manifest.json", "manifest_sha256": manifest_sha}
 
     def _build_summary(self, ws, plan, library_root, results, snapshot, status, now_iso,
-                       execution_id, jobs, finished_at=None, extra_failures=None):
+                       execution_id, jobs, finished_at=None, extra_failures=None, orphans_swept=0):
         kinds = {"placed_new": 0, "already_present": 0, "renamed_for_library": 0, "blocked": 0}
         newly = already_done = 0
         failures = list(extra_failures or [])
@@ -890,8 +896,35 @@ class MergeWorkflow:
             "resume": {"newly_moved": newly, "already_done_skipped": already_done},
             "failures": failures, "destinations": dests, "status": status, "snapshot": snapshot,
             "run_metadata": {"execution_id": execution_id, "started_at": now_iso,
-                             "finished_at": finished_at or now_iso, "jobs": jobs},
+                             "finished_at": finished_at or now_iso, "jobs": jobs,
+                             "orphan_temps_swept": orphans_swept},
         }
+
+    def _sweep_orphan_temps(self, plan, library_root):
+        """Remove crash-orphaned cross-fs copy temps (<XDEV_TMP_PREFIX>*<XDEV_TMP_SUFFIX>) from the
+        library dirs this plan targets (+ the library root). Called at the start of execute, under the
+        library lock — so a leftover temp is always debris from an interrupted prior run, never a live
+        copy from a concurrent merge (the lock forbids one). Best-effort; returns the count removed."""
+        dirs = {library_root}
+        for dd in plan.get("destinations", {}).values():
+            for f in dd.get("files", []):
+                t = f.get("library_target")
+                if t:
+                    dirs.add(os.path.dirname(t))
+        n = 0
+        for d in dirs:
+            try:
+                entries = os.listdir(d)
+            except OSError:
+                continue
+            for name in entries:
+                if name.startswith(XDEV_TMP_PREFIX) and name.endswith(XDEV_TMP_SUFFIX):
+                    try:
+                        os.remove(os.path.join(d, name))
+                        n += 1
+                    except OSError:
+                        pass
+        return n
 
     def do_execute(self, ws, library_root, jobs):
         reporter = get_reporter()
