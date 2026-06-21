@@ -391,6 +391,29 @@ def test_snapshot_and_revalidation_precede_the_parallel_move_pass(tmp_path, monk
     assert events.count("move") == 3                              # all three files still placed
 
 
+def test_merge_journal_writes_only_from_the_main_thread(tmp_path, monkeypatch):
+    """Single-writer journal (§8.3): under -j4 the merge confirmation journal is persisted ONLY by the
+    main thread; worker threads move files but never touch the journal. Probe every journal write."""
+    import threading
+    ws, lib = _ws(tmp_path,
+                  [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
+                   {"fp": "B", "dest": "Trip", "final_name": "b.jpg"},
+                   {"fp": "C", "dest": "Spain", "final_name": "c.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    orig = merge.write_json_artifact
+    journal_threads = []
+
+    def spy(path, obj, *a, **k):
+        if isinstance(obj, dict) and "journal_version" in obj:
+            journal_threads.append(threading.current_thread().name)
+        return orig(path, obj, *a, **k)
+
+    monkeypatch.setattr(merge, "write_json_artifact", spy)
+    assert merge._run_locked_workflow("execute", str(ws), jobs=4) == 0
+    assert journal_threads, "expected at least one journal write"
+    assert all(t == "MainThread" for t in journal_threads), journal_threads
+
+
 def test_execute_without_plan_errors(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     assert merge._run_locked_workflow("execute", str(ws)) == 2     # no photos-30

@@ -211,6 +211,27 @@ def test_execute_j1_and_jN_produce_identical_summary_and_tree(tmp_path, monkeypa
     assert t1 == t4 == ["2024-07-03--14-00-00.arw", "2024-07-03--15-00-00.arw"]  # identical tree
 
 
+def test_journal_writes_only_from_the_main_thread(tmp_path, monkeypatch):
+    """Single-writer journal (§8.3): the confirmation journal is persisted ONLY by the main thread —
+    worker threads apply per-file ops but never touch the journal. Probe every journal write under -j4
+    and assert each originated on MainThread."""
+    import threading
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _mock_tools(monkeypatch, ws)
+    orig = cal.write_json_artifact
+    journal_threads = []
+
+    def spy(path, obj, *a, **k):
+        if isinstance(obj, dict) and "journal_version" in obj:           # a journal write
+            journal_threads.append(threading.current_thread().name)
+        return orig(path, obj, *a, **k)
+
+    monkeypatch.setattr(cal, "write_json_artifact", spy)
+    assert _execute_jobs(monkeypatch, ws, 4) == 0
+    assert journal_threads, "expected at least one journal write"
+    assert all(t == "MainThread" for t in journal_threads), journal_threads
+
+
 def test_geotag_leaves_config_byte_identical(tmp_path, monkeypatch):
     """Geotag never writes the workspace config (photos-00-config.json is hand-edited, authoritative).
     Snapshot its bytes, drive the full plan + execute, assert byte-for-byte identical (the geotag half
