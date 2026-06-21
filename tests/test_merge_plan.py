@@ -203,6 +203,37 @@ def test_plan_renamed_incoming_append_at_max_plus_one(tmp_path, monkeypatch):
     assert f["library_target"] == os.path.join(str(lib), "Trip", "ts-003.jpg")
 
 
+def test_plan_two_incoming_case_variants_resolve_at_plan_time(tmp_path, monkeypatch):
+    """Case-insensitive no-clobber (§7.2): two incoming photos whose final names differ ONLY in case
+    target the same (empty) library dir. On a case-insensitive library they would collide; the plan
+    resolves it now — one placed_new, the other suffix-renamed — instead of letting the second surface
+    as an EEXIST blocker at execute."""
+    ws, lib, fp = _build_ws(tmp_path, [
+        {"fp": "A", "dest": "Trip", "final_name": "image.jpg"},
+        {"fp": "B", "dest": "Trip", "final_name": "IMAGE.JPG"}])
+    _patch_fp(monkeypatch, fp)
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    plan = _plan_of(ws)
+    assert plan["totals"]["placed_new"] == 1 and plan["totals"]["renamed_for_library"] == 1
+    names = sorted(f["resolved_name"].lower() for f in _files(plan))
+    assert names == ["image-001.jpg", "image.jpg"]              # one kept, one suffixed (no case clash)
+    assert len({n.lower() for n in names}) == 2                 # the two targets are case-distinct
+
+
+def test_plan_incoming_renamed_around_case_variant_already_in_library(tmp_path, monkeypatch):
+    """An incoming name whose case-variant already sits in the library is suffix-renamed at plan time
+    (it would clobber on a case-insensitive library), even though no EXACT-case file exists to compare."""
+    ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "photo.jpg"}],
+                            library_files=[{"fp": "X", "dest": "Trip", "name": "PHOTO.JPG"}])
+    _patch_fp(monkeypatch, fp)
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    plan = _plan_of(ws)
+    assert plan["totals"] == {"placed_new": 0, "already_present": 0, "renamed_for_library": 1, "blocked": 0}
+    [f] = _files(plan)
+    assert f["disposition"] == "renamed_incoming" and f["resolved_name"] == "photo-001.jpg"
+    assert f["library_collision"]["reason"] == "case-insensitive name clash"
+
+
 def test_plan_rename_accounts_for_incoming_suffix(tmp_path, monkeypatch):
     # Incoming already carries -004; library max is -002 -> max(004,002)+1 = 005.
     ws, lib, fp = _build_ws(
