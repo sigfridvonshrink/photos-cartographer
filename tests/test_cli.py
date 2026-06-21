@@ -165,6 +165,35 @@ def test_prune_quarantine_is_the_sole_op_allowed_on_a_sealed_workspace(tmp_path,
     assert not qd.exists()                                       # delete worked on the sealed ws
 
 
+def test_prep_plan_never_auto_deletes_quarantine(tmp_path, monkeypatch, capsys):
+    """Quarantine is recoverable and is NEVER auto-purged: an ordinary prep `plan` leaves a populated
+    quarantine completely intact (only the explicit `prune-quarantine` command may remove it)."""
+    ws = _ws(tmp_path)
+    qd = ws / ".photos-ingest-quarantine" / "20260101T000000Z-abc123"
+    qd.mkdir(parents=True)
+    (qd / "dup.jpg").write_bytes(b"recoverable")
+    assert _main(monkeypatch, ws, "plan") == 0
+    assert qd.exists() and (qd / "dup.jpg").read_bytes() == b"recoverable"   # untouched by plan
+
+
+def test_prune_quarantine_preserves_managed_folders(tmp_path, monkeypatch, capsys):
+    """prune-quarantine removes only quarantine contents — the managed 0-6 tree (incl. 6-photos-by-dest)
+    is never touched by a prune run."""
+    ws = _ws(tmp_path)
+    (ws / "6-photos-by-dest" / "Trip").mkdir(parents=True)
+    (ws / "6-photos-by-dest" / "Trip" / "keep.jpg").write_bytes(b"keep")
+    qd = ws / ".photos-ingest-quarantine" / "20260101T000000Z-abc123"
+    qd.mkdir(parents=True)
+    (qd / "dup.jpg").write_bytes(b"dup")
+    assert _main(monkeypatch, ws, "prune-quarantine",
+                 "--plan-id", "20260101T000000Z-abc123", "--yes") == 0
+    assert not qd.exists()                                       # quarantine pruned
+    for d in ("0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
+              "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"):
+        assert (ws / d).is_dir(), d                              # managed folders survive
+    assert (ws / "6-photos-by-dest" / "Trip" / "keep.jpg").read_bytes() == b"keep"
+
+
 # --- error exits -------------------------------------------------------------
 
 def test_locked_workspace_fails_fast(tmp_path, monkeypatch, capsys):
