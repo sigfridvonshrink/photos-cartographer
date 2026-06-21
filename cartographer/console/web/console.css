@@ -31,6 +31,7 @@ body { margin: 0; height: 100vh; display: flex; flex-direction: column;
 
 main { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding: 14px; }
 .actions { display: flex; align-items: center; gap: 10px; }
+.action-buttons { display: flex; gap: 10px; }
 
 .cap { font: 600 10px var(--ui); text-transform: uppercase; letter-spacing: .09em; color: var(--faint); margin: 0 0 8px; }
 .progress { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 10px 12px; flex: none; }
