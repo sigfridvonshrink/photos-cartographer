@@ -8,14 +8,21 @@ const logEl = $("#log");
 const progList = $("#prog-list");
 const tasks = new Map();   // task_id -> { root, pl, fill, pn }
 
-// Per-phase commands. 'execute' (prep only, for now) goes through the confirm gate, not a direct run.
+// Per-phase commands. 'execute' goes through the confirm gate (per-phase), never a direct run.
 const PHASE_CMDS = {
   prep: [["plan", "Plan", "primary"], ["dry-run", "Dry-run", ""], ["execute", "Execute", "gate"]],
-  geotag: [["plan", "Plan", "primary"]],
-  merge: [["plan", "Plan", "primary"], ["dry-run", "Dry-run", ""]],
+  geotag: [["plan", "Plan", "primary"], ["execute", "Execute", "gate"]],
+  merge: [["plan", "Plan", "primary"], ["dry-run", "Dry-run", ""], ["execute", "Execute", "gate"]],
+};
+// What each phase's execute actually touches — shown in the gate so the user knows the stakes.
+const GATE_WARN = {
+  prep: "Moves irreplaceable originals. No-clobber enforced; duplicates are quarantined, never deleted.",
+  geotag: "Writes GPS/time metadata into the originals. Journalled and idempotent — safe to rerun.",
+  merge: "Moves files into the permanent library and seals the workspace. No-clobber enforced.",
 };
 let currentPhase = "prep";
-let planId = null;         // prep plan_id being reviewed in the gate
+let planId = null;         // plan_id being reviewed in the gate
+let gatePhase = "prep";    // the phase the open gate is for (tab could change underneath)
 
 // --- log + progress rendering --------------------------------------------
 function addLog(e) {
@@ -165,15 +172,16 @@ async function trigger(command) {
 const overlay = $("#gate-overlay");
 
 async function openGate() {
+  const phase = currentPhase;
   let s;
-  try { s = await (await fetch("/api/plan-summary")).json(); } catch { return; }
+  try { s = await (await fetch(`/api/plan-summary?phase=${encodeURIComponent(phase)}`)).json(); } catch { return; }
   if (!s.exists || (s.blockers && s.blockers.length)) { await refreshState(); return; }
-  const ops = Object.entries(s.op_counts || {}).sort().map(([t, n]) => `${t} ${n}`).join(" · ") || "none";
-  $("#gate-sum").textContent =
-    `Plan ${s.plan_id} — ${s.operations} operation(s):\n  ${ops}\n  ` +
-    `no-op / already-correct ${s.no_op} · warnings ${s.warnings} · blockers 0`;
-  $("#gate-go").textContent = `Execute ${s.operations} operation${s.operations === 1 ? "" : "s"}`;
+  gatePhase = phase;
   planId = s.plan_id;
+  $("#gate-title").textContent = `Confirm ${phase} execute`;
+  $("#gate-sum").textContent = `Plan ${s.plan_id}\n${(s.lines || []).join("\n")}`;
+  $("#gate-warn").textContent = GATE_WARN[phase] || "This mutates workspace state.";
+  $("#gate-go").textContent = `Execute ${s.operations} operation${s.operations === 1 ? "" : "s"}`;
   overlay.hidden = false;
 }
 
@@ -185,7 +193,7 @@ async function confirmExecute() {
     await fetch("/api/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phase: "prep", command: "execute", confirm: true, plan_id: planId }),
+      body: JSON.stringify({ phase: gatePhase, command: "execute", confirm: true, plan_id: planId }),
     });
   } catch { /* state poll reflects reality */ }
   await refreshState();
