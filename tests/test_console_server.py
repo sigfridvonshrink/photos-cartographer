@@ -40,14 +40,20 @@ def test_asset_rejects_path_traversal_and_missing():
 def test_runnable_set_covers_all_phases_execute_via_gate():
     for pair in (("prep", "plan"), ("prep", "dry-run"), ("prep", "execute"),
                  ("geotag", "plan"), ("geotag", "execute"),
-                 ("merge", "plan"), ("merge", "dry-run"), ("merge", "execute")):
+                 ("merge", "init-library"), ("merge", "plan"), ("merge", "dry-run"), ("merge", "execute")):
         assert pair in server._RUNNABLE
     assert ("geotag", "dry-run") not in server._RUNNABLE     # geotag has no dry-run subcommand
-    assert ("merge", "init-library") not in server._RUNNABLE  # needs a path arg — not wired yet
 
 
 def test_make_target_builds_a_callable_without_running():
     assert callable(server._make_target("prep", "execute"))
+    assert callable(server._make_target("merge", "init-library", ["/srv/library"]))   # optional path arg
+
+
+def test_init_library_action_runnable_anytime(tmp_path):
+    # init-library is a one-time setup step — offered even with no prep/geotag/merge plan yet
+    a = server._state(str(tmp_path))["actions"]
+    assert a["merge/init-library"]["ok"] is True
 
 
 # --- plan summary ---------------------------------------------------------

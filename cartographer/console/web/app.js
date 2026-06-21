@@ -12,7 +12,8 @@ const tasks = new Map();   // task_id -> { root, pl, fill, pn }
 const PHASE_CMDS = {
   prep: [["plan", "Plan", "primary"], ["dry-run", "Dry-run", ""], ["execute", "Execute", "gate"]],
   geotag: [["plan", "Plan", "primary"], ["execute", "Execute", "gate"]],
-  merge: [["plan", "Plan", "primary"], ["dry-run", "Dry-run", ""], ["execute", "Execute", "gate"]],
+  merge: [["init-library", "Init library", "initlib"], ["plan", "Plan", "primary"],
+          ["dry-run", "Dry-run", ""], ["execute", "Execute", "gate"]],
 };
 // What each phase's execute actually touches — shown in the gate so the user knows the stakes.
 const GATE_WARN = {
@@ -99,7 +100,7 @@ function renderActions() {
     b.className = "btn" + (kind === "primary" ? " primary" : "");
     b.textContent = label;
     b.dataset.cmd = cmd;
-    b.onclick = kind === "gate" ? openGate : () => trigger(cmd);
+    b.onclick = kind === "gate" ? openGate : kind === "initlib" ? openInitLib : () => trigger(cmd);
     wrap.appendChild(b);
   }
 }
@@ -213,6 +214,28 @@ async function confirmExecute() {
 $("#gate-cancel").onclick = closeGate;
 $("#gate-go").onclick = confirmExecute;
 overlay.onclick = (e) => { if (e.target === overlay) closeGate(); };
+
+// --- init-library (optional path) -----------------------------------------
+const initOverlay = $("#initlib-overlay");
+function openInitLib() { $("#initlib-path").value = ""; initOverlay.hidden = false; $("#initlib-path").focus(); }
+function closeInitLib() { initOverlay.hidden = true; }
+async function confirmInitLib() {
+  const path = $("#initlib-path").value.trim();
+  closeInitLib();
+  try {
+    await fetch("/api/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phase: "merge", command: "init-library", path: path || undefined }),
+    });
+  } catch { /* state poll reflects reality */ }
+  await refreshState();
+  pollWhileRunning();
+}
+$("#initlib-cancel").onclick = closeInitLib;
+$("#initlib-go").onclick = confirmInitLib;
+initOverlay.onclick = (e) => { if (e.target === initOverlay) closeInitLib(); };
+
 $("#clear").onclick = () => { logEl.textContent = ""; };
 
 // Reflect external changes (a terminal re-plan, an editor save, another run finishing) without a
