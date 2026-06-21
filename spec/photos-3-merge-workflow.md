@@ -107,7 +107,7 @@ Validate the plan against current library + by-dest state.
 Execute only the validated plan: MOVE files (place no-clobber + atomic, then remove the by-dest source).
 Journal every move (library placement, then source removal).
 Update SQLite (the library-file fingerprint cache only, populated during planning); each file's library destination is recorded in photos-31/photos-35, not the database.
-Write photos-31-merge-summary.json and photos-35-merge-log.json (copied forward from photos-26) only after success.
+Write photos-31-merge-summary.json on the terminal outcome — success, partial, or a snapshot-abort rejection (for audit); never from a stale-plan rejection or a precondition failure. Write photos-35-merge-log.json (copied forward from photos-26), the end-of-merge DB snapshot, and the re-seal only on overall success.
 ```
 
 Invariants that hold at every gate:
@@ -120,7 +120,7 @@ Invariants that hold at every gate:
 6. a by-dest source is removed only after its verified copy is in the library; un-merged files stay in by-dest;
 7. merge writes only its own 3X artifacts and copies the `photos-26` log forward rather than editing it (shared contract Section 13.0a);
 8. all human-authored config is sanity-validated before use (Section 4; shared contract Section 14);
-9. no summary/log is written from a stale or partial run.
+9. no summary is written from a stale-plan rejection or a precondition failure — but a partial run, and a snapshot-abort rejection, do write a summary (for audit, Section 9.1 item 8); the merge log, the end-of-merge DB snapshot, and the re-seal are written only on overall success.
 
 Execution never re-derives placement decisions. It applies only the moves already recorded in the validated plan.
 
@@ -276,7 +276,7 @@ The whole merge run — `plan`, `dry-run`, and `execute` — runs under the work
 4. apply only the planned **moves**, each verified no-clobber **at execute time** and performed atomically or atomic-equivalent across filesystems (Section 11; shared contract Section 15): for each file, immediately before placing, confirm the library target is not occupied (re-checking, since the library may have changed since planning), place under the plan's recorded safe-alternative name for a genuine collision discovered only now, never onto an occupied target, and — once the library copy is verified in place — **remove the by-dest source**. A library file is never renamed or overwritten;
 5. journal every move's **confirmed completion**, persisted incrementally as each file finishes (single-writer, main thread), so a re-run can re-derive per file — from the filesystem plus the recorded content fingerprint — whether it is not-yet-placed, placed-but-source-not-removed, or fully moved, and apply only the outstanding work (Section 8);
 6. the only SQLite merge writes is the **library-file fingerprint cache**, and it is populated during *planning* (Section 10.1) — execute adds no database rows. Each file's library destination is the durable record of `photos-31-merge-summary.json` and the merge log `photos-35-merge-log.json` (Section 9), **not** a SQLite table: those JSON artifacts already carry, per file, where it landed and whether it was renamed, so a write-only destination table would have no reader (merge is terminal, and its own resume derives state from the filesystem + journal, not the database). The fingerprint cache is captured in the end-of-merge DB snapshot (step 8) as usual;
-7. write `photos-31-merge-summary.json` and the merge transformation log `photos-35-merge-log.json` (copied forward from `photos-26-complete-log.json` and extended — never editing `photos-26`, shared contract Section 13.0a) only on overall success (Section 9);
+7. write `photos-31-merge-summary.json` on the terminal outcome (success/partial, or a snapshot-abort rejection for audit; never from a stale-plan rejection or a precondition failure — Section 9.1 item 8), and write the merge transformation log `photos-35-merge-log.json` (copied forward from `photos-26-complete-log.json` and extended — never editing `photos-26`, shared contract Section 13.0a) only on overall success (Section 9);
 8. capture the end-of-merge database backup snapshot `photos-35-merge-ingest.db` on overall success — a consistent, atomic copy of the live `photos-00-ingest.db` (shared contract Section 13.4a);
 9. **re-seal the archival package** on overall success — re-assemble the package (shared contract Section 13.2) to include the merge log, the merge summary, and the end-of-merge DB snapshot, and re-write its self-describing manifest with the updated SHA-256s (shared contract Section 13.6). This is automatic, not a separate command;
 10. **mark the workspace terminal (sealed)** on overall success — record the durable terminal/sealed marker (merge run id, `library_root`) as a **separate `photos-00-sealed.json` file alongside the workspace guard** (shared contract Sections 5.1, 13.7), after which prep and geotag refuse to process new media in this workspace (prune-quarantine excepted, shared contract Section 13.7 item 2);
@@ -437,10 +437,12 @@ The merge workflow is:
    Already-in-library files: remove the by-dest source (no library write).
    Blockers: leave in by-dest. Journal both sub-steps per file.
 9. Update SQLite (the library-file fingerprint cache only, from planning); record each file's library destination in photos-31/photos-35, not the database.
-10. Write photos-31-merge-summary.json and photos-35-merge-log.json (copied
-    forward from photos-26-complete-log.json and extended — never editing it),
+10. Write photos-31-merge-summary.json (on the terminal outcome — success/partial,
+    or a snapshot-abort rejection for audit; not on a stale-plan rejection or a
+    precondition failure). Then, only on overall success: write photos-35-merge-log.json
+    (copied forward from photos-26-complete-log.json and extended — never editing it),
     capture the end-of-merge DB snapshot (photos-35-merge-ingest.db), RE-SEAL
-    the archival package, and SEAL the workspace terminal — all on success.
+    the archival package, and SEAL the workspace terminal.
 ```
 
 The most important rules are:
