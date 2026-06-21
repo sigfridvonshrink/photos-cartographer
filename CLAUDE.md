@@ -127,6 +127,14 @@ entry (`python -m cartographer.photos_1_prep …`) sharing the same `add_argumen
   fixtures tour). Phases share the plan/validate/execute contract; workspace = cwd. The original `prep` / `geotag` /
   `refresh-library` / `merge` monolith they were split from has been removed; `refresh-library` was
   deliberately dropped in favor of on-demand fingerprinting in merge (see its workflow spec).
+- `photos-cartographer console` — the operational console (a local web server at `cartographer/console/`):
+  run **and monitor** phases from a browser over the **cwd workspace**. It only *triggers* phase
+  `run()`s (in-process, single-slot) and *observes* their status via the reporting seam streamed over
+  SSE — one mutation path, never re-implemented in the web layer. Bound to `127.0.0.1` by default
+  (tunnel over SSH for remote; see `docs/design/web-console.md`). **In progress** (v2.1): prep
+  `plan` / `dry-run` monitoring only; execute + the confirm gate, the geotag/merge tabs, and the
+  folded-in editor are still to come. Built on the shared event/sink seam (`cartographer/reporting.py`)
+  and the shared design tokens (`cartographer/editor/web/tokens.css`).
 - **Canonical plan persistence (all phases):** each phase's plan/decision artifact lives at a fixed
   control-dir path (`photos-10-prep-plan.json`, geotag `photos-21`/`22`/`23`, `photos-30-merge-plan.json`).
   The planning command writes it there and prints the location; the validate/apply commands read it from
