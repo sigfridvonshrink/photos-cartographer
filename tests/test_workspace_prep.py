@@ -399,6 +399,52 @@ def test_nested_directory_symlink_in_managed_folder_blocked(tmp_path, monkeypatc
     assert any("Forbidden symlink detected" in b and "nested" in b for b in plan.blockers), plan.blockers
 
 
+def test_init_does_not_move_a_dump_folder_named_like_a_managed_folder(tmp_path, monkeypatch):
+    """Reserved-name guard (prep §6.2): on an INIT run a base entry whose name collides with a managed
+    folder (e.g. an as-arrived dump dir named `5-photos-by-date`) is treated AS that managed folder —
+    NEVER inventoried as a dump and moved beneath itself into 0-sources/5-photos-by-date (a silent
+    data-shuffling hazard). Assert no init-move op relocates it under 0-sources."""
+    import photos_utils as utils
+    monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
+    monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image",
+                        lambda p: {"status": "valid", "value": "sig", "strategy": "image-content-hash-v1",
+                                   "engine_version": "t"})
+    photos_ingest.CONFIG["jobs"] = 1
+    ws = tmp_path / "ws"; ws.mkdir(); (ws / ".photos-ingest").mkdir()   # uninitialized: init run
+    managed = ws / "5-photos-by-date"; managed.mkdir()                  # base dir named like a managed folder
+    (managed / "photo.jpg").write_bytes(b"M")
+
+    cache = photos_ingest.WorkspaceCache(str(ws), in_memory=True)
+    plan = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
+    cache.close()
+
+    # It is never moved beneath itself: no op relocates the folder (or its file) into 0-sources/...
+    assert not any((op.destination or "").startswith("0-sources/5-photos-by-date")
+                   for op in plan.operations), [op.destination for op in plan.operations]
+    assert not any((op.source or "") == "5-photos-by-date" for op in plan.operations)
+    assert not any("not a managed" in b or "Misplaced" in b for b in plan.blockers), plan.blockers
+
+
+def test_initialized_root_dotfile_is_a_misplaced_entry_hard_block(tmp_path, monkeypatch):
+    """Root strictness (prep §6.2 item 2): on an INITIALIZED workspace the root holds only the managed
+    folders + control dirs. A plain root dotfile (e.g. `.DS_Store`) is a misplaced dump and a hard
+    block — the dot-prefix earns no exemption for files (only dot DIRS are control/skip dirs)."""
+    import photos_utils as utils
+    monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
+    monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image",
+                        lambda p: {"status": "valid", "value": "sig", "strategy": "image-content-hash-v1",
+                                   "engine_version": "t"})
+    photos_ingest.CONFIG["jobs"] = 1
+    ws = _empty_initialized_ws(tmp_path)
+    (ws / ".DS_Store").write_bytes(b"junk")                             # a plain root dotfile
+
+    cache = photos_ingest.WorkspaceCache(str(ws), in_memory=True)
+    plan = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
+    cache.close()
+    assert any("Misplaced entry at workspace root" in b and ".DS_Store" in b
+               for b in plan.blockers), plan.blockers
+
+
 def test_gpx_root_inside_managed_tree_is_skipped(tmp_path, monkeypatch, seed_from_live_config):
     """Defensive GPX skip (shared contract §8.2): a gpx_root misconfigured to resolve inside a managed
     folder must be skipped during scanning so the GPX tracks are never organized / swept to strays —
