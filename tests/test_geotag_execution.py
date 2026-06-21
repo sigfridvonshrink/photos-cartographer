@@ -141,7 +141,8 @@ def test_exiftool_failure_records_failure(tmp_path, monkeypatch):
     _mock_tools(monkeypatch, ws, write_ok=False)
     assert _execute(monkeypatch, ws) == 3
     s = _summary(ctl)
-    assert s["status"] == "partial" and len(s["failures"]) == 2 and s["totals"]["metadata_time_writes"] == 0
+    # every write fails and nothing is applied/already-satisfied -> total failure (§29.2 item 7)
+    assert s["status"] == "failed" and len(s["failures"]) == 2 and s["totals"]["metadata_time_writes"] == 0
 
 
 # --- resume / idempotency ----------------------------------------------------

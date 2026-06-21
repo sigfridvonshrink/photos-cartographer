@@ -973,6 +973,19 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, l
     return photos
 
 
+def geotag_execution_status(newly, skipped_n, failures, mismatches, blockers):
+    """Terminal status of a geotag execution (§29.2 item 7): `success` (no failures, mismatches, or
+    blockers); `failed` (degraded by failures/blockers with nothing applied this run, nothing
+    already-satisfied, and no held-back mismatch — i.e. nothing was achieved); otherwise `partial`.
+    A non-empty mismatch list always forces `partial` (a write occurred but is held back, §29.1a),
+    never `failed`. Pre-mutation aborts are `rejected`, decided elsewhere."""
+    if not (failures or mismatches or blockers):
+        return "success"
+    if mismatches or newly > 0 or skipped_n > 0:
+        return "partial"
+    return "failed"
+
+
 class GeotagWorkflow:
     """Stages 1–11: validate the workspace, build the model, produce photos-21/22 decision artifacts,
     compute resolved UTC, assemble photos-24-executable-plan.json (when decisions are complete),
@@ -2237,7 +2250,7 @@ class GeotagWorkflow:
         for dest, dd in plan["destinations"].items():
             per_dest[dest]["no_ops"] = len(dd.get("no_ops") or [])
         totals["no_ops"] = sum(len(dd.get("no_ops") or []) for dd in plan["destinations"].values())
-        status = "success" if not (failures or mismatches or blockers) else "partial"
+        status = geotag_execution_status(newly, skipped_n, failures, mismatches, blockers)
         return {
             "artifact_type": "execution_summary", "artifact_name": EXECUTION_SUMMARY_ARTIFACT,
             "schema_version": 1, "plan_id": plan["plan_id"],
