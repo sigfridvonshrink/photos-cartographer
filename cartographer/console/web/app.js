@@ -127,23 +127,24 @@ async function refreshState() {
   lock.textContent = running ? `● running: ${s.job.label}` : "● idle";
   lock.style.color = running ? "var(--accent)" : "var(--muted)";
 
-  const ph = (s.phases && s.phases[currentPhase]) || {};
-  // status chip for the current phase
-  const ps = $("#phase-status");
-  if (currentPhase === "prep") {
-    if (!ph.plan_exists) { ps.textContent = "no plan yet"; ps.className = "chip"; }
-    else if (ph.blockers) { ps.textContent = `plan · ${ph.blockers} blocker(s)`; ps.className = "chip"; }
-    else { ps.textContent = "plan ✓ ready"; ps.className = "chip ok"; }
-    planId = ph.plan_id || null;
-  } else {
-    ps.textContent = ph.plan_exists ? "planned ✓" : "not planned yet";
-    ps.className = ph.plan_exists ? "chip ok" : "chip";
-  }
+  if (s.sealed) { lock.textContent = "● sealed"; lock.style.color = "var(--muted)"; }
+  else if (!running && s.lock_owner) { lock.textContent = "● locked (another run)"; lock.style.color = "var(--warn)"; }
 
-  // button enablement
+  const ph = (s.phases && s.phases[currentPhase]) || {};
+  // status chip for the current phase (plan-exists / blockers / staleness / ready)
+  const ps = $("#phase-status");
+  if (!ph.plan_exists) { ps.textContent = "no plan yet"; ps.className = "chip"; }
+  else if (ph.blockers) { ps.textContent = `plan · ${ph.blockers} blocker(s)`; ps.className = "chip"; }
+  else if (ph.stale) { ps.textContent = "plan stale — re-plan"; ps.className = "chip"; }
+  else { ps.textContent = "plan ✓ ready"; ps.className = "chip ok"; }
+  planId = ph.plan_id || null;
+
+  // button enablement from the server's per-command affordance (precondition + staleness + sealed/lock)
+  const acts = s.actions || {};
   for (const b of document.querySelectorAll("#action-buttons button")) {
-    if (b.dataset.cmd === "execute") b.disabled = running || !ph.executable;   // prep gate
-    else b.disabled = running;
+    const act = acts[`${currentPhase}/${b.dataset.cmd}`] || { ok: !running, reason: "" };
+    b.disabled = !act.ok;
+    b.title = act.ok ? "" : act.reason;
   }
   return running;
 }
@@ -204,6 +205,12 @@ $("#gate-cancel").onclick = closeGate;
 $("#gate-go").onclick = confirmExecute;
 overlay.onclick = (e) => { if (e.target === overlay) closeGate(); };
 $("#clear").onclick = () => { logEl.textContent = ""; };
+
+// Reflect external changes (a terminal re-plan, an editor save, another run finishing) without a
+// page reload: a slow idle heartbeat + an immediate refetch whenever the tab regains focus.
+setInterval(refreshState, 5000);
+window.addEventListener("focus", refreshState);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshState(); });
 
 renderActions();
 refreshState();

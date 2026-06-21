@@ -7,7 +7,8 @@ from cartographer import photos_utils as U
 from cartographer.console import server
 
 
-def _write_plan(workspace, *, plan_id="prep-1", operations=(), blockers=(), no_op=0, warnings=()):
+def _write_plan(workspace, *, plan_id="prep-1", operations=(), blockers=(), no_op=0, warnings=(),
+                depends_on=None):
     pp = U.prep_plan_path(workspace)
     os.makedirs(os.path.dirname(pp), exist_ok=True)
     with open(pp, "w") as f:
@@ -15,6 +16,7 @@ def _write_plan(workspace, *, plan_id="prep-1", operations=(), blockers=(), no_o
                    "operations": [{"type": t} for t in operations],
                    "blockers": list(blockers),
                    "warnings": list(warnings),
+                   "depends_on": depends_on or {},
                    "summary": {"no_op_files": no_op}}, f)
     return pp
 
@@ -116,3 +118,50 @@ def test_state_reports_all_three_phases(tmp_path):
         assert st["phases"][ph]["plan_exists"] is False and st["phases"][ph]["executable"] is False
     for r in ("geotag/execute", "merge/execute", "merge/dry-run"):
         assert r in st["runnable"]
+
+
+# --- staleness gating (uses the shared plan_dependencies_fresh helper) -----
+
+_STALE_DEP = {"upstream": {"dependency_type": "json_artifact", "artifact_name": "u.json",
+                          "artifact_path": ".photos-ingest/u.json", "sha256": "deadbeef"}}
+
+
+def test_stale_plan_flagged_and_execute_refused(tmp_path):
+    ws = str(tmp_path)
+    _write_plan(ws, operations=["move"], depends_on=_STALE_DEP)   # upstream missing -> stale
+    s = server._plan_summary(ws, "prep", server._current_fingerprints(ws))
+    assert s["stale"]                                            # flagged stale
+    st = server._state(ws)
+    assert st["phases"]["prep"]["stale"] > 0
+    assert st["phases"]["prep"]["executable"] is False           # stale -> not executable
+    assert "stale" in server._execute_guard(ws, "prep", {"confirm": True})   # gate refuses
+
+
+# --- per-command affordance (actions): pipeline order, sealed, lock --------
+
+def test_actions_enforce_pipeline_order(tmp_path):
+    ws = str(tmp_path)
+    a = server._state(ws)["actions"]
+    assert a["prep/plan"]["ok"] is True
+    assert a["prep/dry-run"]["ok"] is False and "prep plan" in a["prep/dry-run"]["reason"]
+    assert a["geotag/plan"]["ok"] is False        # prep not executed (no handoff)
+    assert a["merge/plan"]["ok"] is False          # geotag not finalized
+    _write_plan(ws, operations=["move"])           # clean prep plan
+    a2 = server._state(ws)["actions"]
+    assert a2["prep/dry-run"]["ok"] is True and a2["prep/execute"]["ok"] is True
+
+
+def test_geotag_plan_opens_once_prep_handoff_exists(tmp_path):
+    ws = str(tmp_path)
+    assert server._state(ws)["actions"]["geotag/plan"]["ok"] is False
+    hp = U.handoff_path(ws)
+    os.makedirs(os.path.dirname(hp), exist_ok=True)
+    open(hp, "w").write("{}")
+    assert server._state(ws)["actions"]["geotag/plan"]["ok"] is True
+
+
+def test_actions_all_blocked_when_sealed(tmp_path, monkeypatch):
+    monkeypatch.setattr(server.U, "is_sealed", lambda ws: True)
+    a = server._state(str(tmp_path))["actions"]
+    assert all(not v["ok"] for v in a.values())
+    assert "sealed" in a["prep/plan"]["reason"]
