@@ -17,26 +17,31 @@
       <button data-phase="prep" class="on">Prep</button>
       <button data-phase="geotag">Geotag</button>
       <button data-phase="merge">Merge</button>
-      <button data-phase="edit" disabled title="coming in v2.4">Edit</button>
+      <button data-phase="edit">Edit</button>
     </div>
   </header>
 
   <main>
-    <div class="actions">
-      <span id="phase-status" class="chip">—</span>
-      <span class="grow"></span>
-      <span id="action-buttons" class="action-buttons"></span>
+    <div id="phase-view">
+      <div class="actions">
+        <span id="phase-status" class="chip">—</span>
+        <span class="grow"></span>
+        <span id="action-buttons" class="action-buttons"></span>
+      </div>
+
+      <section class="progress">
+        <p class="cap">Progress</p>
+        <div id="prog-list" class="prog-list"><p class="idle">No active task.</p></div>
+      </section>
+
+      <section class="logwrap">
+        <p class="cap">Log <button id="clear" class="mini">clear</button></p>
+        <pre id="log" class="log" aria-live="polite"></pre>
+      </section>
     </div>
 
-    <section class="progress">
-      <p class="cap">Progress</p>
-      <div id="prog-list" class="prog-list"><p class="idle">No active task.</p></div>
-    </section>
-
-    <section class="logwrap">
-      <p class="cap">Log <button id="clear" class="mini">clear</button></p>
-      <pre id="log" class="log" aria-live="polite"></pre>
-    </section>
+    <!-- decision editor, folded in (v2.4): the existing editor SPA served at /edit/ on this origin -->
+    <iframe id="edit-frame" class="edit-frame" title="decision editor" hidden></iframe>
   </main>
 
   <div id="gate-overlay" class="gate-overlay" hidden>
