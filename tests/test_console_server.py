@@ -35,10 +35,15 @@ def test_asset_rejects_path_traversal_and_missing():
 
 # --- runnable set + target ------------------------------------------------
 
-def test_runnable_set_includes_execute_but_only_prep():
+def test_runnable_set_planning_for_all_phases_execute_only_prep():
     assert ("prep", "plan") in server._RUNNABLE
     assert ("prep", "dry-run") in server._RUNNABLE
-    assert ("prep", "execute") in server._RUNNABLE          # allowed — but only via the gate
+    assert ("prep", "execute") in server._RUNNABLE          # via the gate
+    assert ("geotag", "plan") in server._RUNNABLE
+    assert ("merge", "plan") in server._RUNNABLE
+    assert ("merge", "dry-run") in server._RUNNABLE
+    # mutating geotag/merge execute is deferred to v2.3.1 (each needs its own gate)
+    assert ("geotag", "execute") not in server._RUNNABLE
     assert ("merge", "execute") not in server._RUNNABLE
 
 
@@ -92,3 +97,10 @@ def test_state_executable_flag_tracks_plan(tmp_path):
     s2 = server._state(str(tmp_path))
     assert s2["phases"]["prep"]["executable"] is True and s2["phases"]["prep"]["blockers"] == 0
     assert "prep/execute" in s2["runnable"]
+
+
+def test_state_reports_geotag_and_merge_plan_hints(tmp_path):
+    st = server._state(str(tmp_path))
+    assert st["phases"]["geotag"]["plan_exists"] is False    # nothing planned yet
+    assert st["phases"]["merge"]["plan_exists"] is False
+    assert "geotag/plan" in st["runnable"] and "merge/dry-run" in st["runnable"]
