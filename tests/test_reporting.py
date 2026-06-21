@@ -4,10 +4,12 @@ import io
 
 import pytest
 
+import queue as _queue
+
 from cartographer.reporting import (
     START, UPDATE, FINISH,
     LogEvent, ProgressEvent, SummaryEvent,
-    CaptureSink, TtySink, Reporter,
+    CaptureSink, TtySink, WebSink, Reporter, event_to_dict,
     get_reporter, set_reporter, use_reporter,
 )
 
@@ -136,6 +138,61 @@ def test_ttysink_log_routes_stdout_vs_stderr(capsys):
     captured = capsys.readouterr()
     assert captured.out.strip() == "to-out"
     assert captured.err.strip() == "to-err"
+
+
+# --- WebSink (broadcast + late-join snapshot, for SSE) --------------------
+
+def test_event_to_dict_tags_kind():
+    assert event_to_dict(LogEvent("hi", "warn", "stdout")) == {
+        "kind": "log", "msg": "hi", "level": "warn", "stream": "stdout"}
+    p = event_to_dict(ProgressEvent("t1", "hash", UPDATE, 3, 9, "f.jpg"))
+    assert p["kind"] == "progress" and p["task_id"] == "t1" and p["cur"] == 3 and p["total"] == 9
+
+
+def test_websink_broadcasts_to_all_subscribers():
+    w = WebSink()
+    qa, _ = w.subscribe()
+    qb, _ = w.subscribe()
+    w.handle(LogEvent("x"))
+    assert qa.get_nowait()["msg"] == "x"
+    assert qb.get_nowait()["msg"] == "x"
+
+
+def test_websink_snapshot_has_recent_log_and_live_progress():
+    w = WebSink()
+    r = Reporter([w])
+    r.log("first")
+    with r.progress("hashing", total=9) as p:
+        p.advance(3)
+        # mid-task: a late subscriber should see the live progress snapshot + the log so far
+        _, snap = w.subscribe()
+        assert any(e["msg"] == "first" for e in snap["log"])
+        live = [e for e in snap["progress"] if e["label"] == "hashing"]
+        assert live and live[0]["cur"] == 3 and live[0]["state"] != FINISH
+    # after the task finishes, it drops out of the live-progress snapshot
+    assert all(e["label"] != "hashing" for e in w.snapshot()["progress"])
+
+
+def test_websink_drops_oldest_when_subscriber_queue_full():
+    w = WebSink(queue_max=2)
+    q, _ = w.subscribe()
+    for i in range(5):
+        w.handle(LogEvent(f"m{i}"))          # 5 into a size-2 queue -> keep the newest 2
+    drained = []
+    try:
+        while True:
+            drained.append(q.get_nowait()["msg"])
+    except _queue.Empty:
+        pass
+    assert drained == ["m3", "m4"]           # producer never blocked; oldest dropped
+
+
+def test_websink_unsubscribe_stops_delivery():
+    w = WebSink()
+    q, _ = w.subscribe()
+    w.unsubscribe(q)
+    w.handle(LogEvent("after"))
+    assert q.qsize() == 0
 
 
 # --- module-global active reporter ----------------------------------------
