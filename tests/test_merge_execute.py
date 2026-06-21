@@ -118,6 +118,19 @@ def _src(ws, dest, name):
     return os.path.join(str(ws), "6-photos-by-dest", dest, name)
 
 
+def _tree(root):
+    """{relpath: bytes} for every file under `root` — a byte-level snapshot for mutation checks.
+    Lock files (`*.lock`) are transient lock-acquire artifacts, not data, so they are excluded."""
+    out = {}
+    for dp, _dn, fns in os.walk(root):
+        for fn in fns:
+            if fn.endswith(".lock"):
+                continue
+            ap = os.path.join(dp, fn)
+            out[os.path.relpath(ap, root)] = open(ap, "rb").read()
+    return out
+
+
 # --- the four dispositions ---------------------------------------------------
 
 def test_execute_placed_new_moves_into_library(tmp_path):
@@ -340,6 +353,49 @@ def test_execute_rejects_stale_plan(tmp_path):
     open(p24, "w").write(json.dumps({"status": "success", "touched": True}))   # dep changed
     assert merge._run_locked_workflow("execute", str(ws)) == 2
     assert not os.path.exists(os.path.join(str(ws.parent), "ws-lib", "Trip"))  # nothing moved
+
+
+# --- no-mutation consequences of non-executing paths (Tier 3) ----------------
+
+def test_plan_mutates_nothing_no_terminal_artifacts(tmp_path):
+    """Planning never mutates: after `plan`, by-dest + library are byte-identical and NONE of the
+    execute-only artifacts (photos-31 summary, photos-35 log/db/manifest, journal, seal) exist."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    before_bd, before_lib = _tree(str(ws / "6-photos-by-dest")), _tree(str(lib))
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert _tree(str(ws / "6-photos-by-dest")) == before_bd      # staging untouched
+    assert _tree(str(lib)) == before_lib                         # library untouched
+    ctl = ws / ".photos-ingest"
+    assert not os.path.exists(merge.merge_summary_path(str(ws)))  # no photos-31
+    assert not utils.is_sealed(str(ws))                          # no seal
+    for n in ("photos-35-merge-log.json", "photos-35-merge-ingest.db"):
+        assert not os.path.exists(ctl / n), n
+
+
+def test_stale_plan_rejection_writes_no_summary(tmp_path):
+    """A stale-plan rejection is a pre-mutation abort: it must write NO photos-31 summary at all
+    (distinct from a required-snapshot abort, which records a `rejected` summary) and move nothing."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    before_lib = _tree(str(lib))
+    # Mutate a recorded dependency after planning -> the saved plan is stale.
+    open(os.path.join(str(ws), ".photos-ingest", "photos-25-execution-summary.json"), "w").write(
+        json.dumps({"status": "success", "touched": True}))
+    assert merge._run_locked_workflow("execute", str(ws)) == 2
+    assert not os.path.exists(merge.merge_summary_path(str(ws)))  # NO summary on stale rejection
+    assert _tree(str(lib)) == before_lib                          # library untouched
+    assert open(_src(ws, "Trip", "a.jpg"), "rb").read() == _fp_bytes("A")
+
+
+def test_precondition_failure_writes_no_summary_and_no_placement(tmp_path):
+    """A preflight blocker stops merge before execute: no photos-31 summary, library byte-unchanged.
+    Here the prep handoff is missing — a precondition the preflight gathers and refuses on."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    before_lib = _tree(str(lib))
+    os.remove(os.path.join(str(ws), ".photos-ingest", "photos-11-handoff.json"))  # break a precondition
+    assert merge._run_locked_workflow("execute", str(ws)) == 2    # preflight blocker -> rc 2
+    assert not os.path.exists(merge.merge_summary_path(str(ws)))  # no summary written
+    assert _tree(str(lib)) == before_lib                          # nothing placed
 
 
 # --- Increment 5: terminal finalization (full-success only) -------------------

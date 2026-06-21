@@ -445,6 +445,32 @@ def test_initialized_root_dotfile_is_a_misplaced_entry_hard_block(tmp_path, monk
                for b in plan.blockers), plan.blockers
 
 
+def test_plan_is_non_mutating(tmp_path, monkeypatch):
+    """Planning NEVER mutates the workspace: workflow.plan() derives operations but applies none —
+    0-sources is byte-identical afterwards and no journal/handoff artifact is written (those are
+    execute-only)."""
+    import photos_utils as utils
+    monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
+    monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image", mock_hash_image)
+    photos_ingest.CONFIG["jobs"] = 1
+    ws = setup_workspace(tmp_path)
+
+    def snap(d):
+        return {os.path.relpath(os.path.join(r, f), d): open(os.path.join(r, f), "rb").read()
+                for r, _dn, fns in os.walk(d) for f in fns}
+
+    before = snap(str(ws / "0-sources"))
+    cache = photos_ingest.WorkspaceCache(str(ws), in_memory=True)
+    plan = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
+    cache.close()
+
+    assert len(plan.operations) > 0                              # there WAS work to do
+    assert snap(str(ws / "0-sources")) == before                # ...but the inbox is untouched
+    cd = ws / ".photos-ingest"
+    assert not (cd / "journal.json").exists()                   # no journal (execute-only)
+    assert not (cd / "photos-11-handoff.json").exists()         # no handoff (execute-only)
+
+
 def test_gpx_root_inside_managed_tree_is_skipped(tmp_path, monkeypatch, seed_from_live_config):
     """Defensive GPX skip (shared contract §8.2): a gpx_root misconfigured to resolve inside a managed
     folder must be skipped during scanning so the GPX tracks are never organized / swept to strays —
