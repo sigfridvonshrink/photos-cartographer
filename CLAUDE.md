@@ -135,9 +135,10 @@ entry (`python -m cartographer.photos_1_prep …`) sharing the same `add_argumen
   `dry-run` monitoring (v2.1) + prep `execute` behind a **2-step confirm gate** (v2.2 — Execute is
   enabled only when a clean, blocker-free saved plan exists, and the server re-checks
   confirmation + no-blockers + plan_id before running; the gate summarizes the *real* plan artifact,
-  not a simulation), plus **geotag/merge tabs** with their planning/monitoring commands (geotag
-  `plan`; merge `plan` / `dry-run`) (v2.3). Still to come: geotag/merge `execute` behind their own
-  per-phase gates (v2.3.1) and the folded-in editor (v2.4). Built on the shared event/sink seam
+  not a simulation), the **geotag/merge tabs** with planning/monitoring (v2.3), and **execute behind a
+  per-phase confirm gate for all three phases** (v2.3.1 — each gate summarizes that phase's own plan
+  artifact: prep photos-10, geotag photos-24, merge photos-30). Still to come: the folded-in editor
+  (v2.4) and merge `init-library` (needs a path argument). Built on the shared event/sink seam
   (`cartographer/reporting.py`) and design tokens (`cartographer/editor/web/tokens.css`).
 - **Canonical plan persistence (all phases):** each phase's plan/decision artifact lives at a fixed
   control-dir path (`photos-10-prep-plan.json`, geotag `photos-21`/`22`/`23`, `photos-30-merge-plan.json`).
