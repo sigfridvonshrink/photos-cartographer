@@ -71,6 +71,25 @@
     </div>
   </div>
 
+  <div id="prune-overlay" class="gate-overlay" hidden>
+    <div class="gate" role="dialog" aria-modal="true" aria-labelledby="prune-title">
+      <p class="gate-title" id="prune-title">Prune quarantine</p>
+      <div class="gate-sum">Quarantine is recoverable and never auto-deleted. <strong>Dry-run</strong>
+        lists what would be removed and changes nothing. <strong>Delete</strong> permanently removes the
+        selected quarantine — choose plan id(s) or tick <em>all</em> first. (Allowed even on a sealed
+        workspace; the core still validates.)</div>
+      <input id="prune-ids" class="initlib-input" type="text"
+             placeholder="plan id(s), space/comma separated  (blank = whole footprint for dry-run)">
+      <label class="prune-all"><input id="prune-all" type="checkbox"> delete ALL quarantine</label>
+      <div id="prune-err" class="gate-warn"></div>
+      <div class="gate-act">
+        <button id="prune-cancel" class="btn">Cancel</button>
+        <button id="prune-dry" class="btn">Dry-run</button>
+        <button id="prune-del" class="btn primary">Delete</button>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="app.js"></script>
 </body>
 </html>
