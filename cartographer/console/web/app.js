@@ -94,7 +94,7 @@ es.onmessage = (ev) => {
 function renderActions() {
   const wrap = $("#action-buttons");
   wrap.innerHTML = "";
-  for (const [cmd, label, kind] of PHASE_CMDS[currentPhase]) {
+  for (const [cmd, label, kind] of (PHASE_CMDS[currentPhase] || [])) {
     const b = document.createElement("button");
     b.className = "btn" + (kind === "primary" ? " primary" : "");
     b.textContent = label;
@@ -108,6 +108,15 @@ function setPhase(phase) {
   if (phase === currentPhase) return;
   currentPhase = phase;
   for (const t of document.querySelectorAll("#tabs button")) t.classList.toggle("on", t.dataset.phase === phase);
+  // The Edit tab is the folded-in decision editor (an iframe at /edit/), not a phase view.
+  const isEdit = phase === "edit";
+  $("#phase-view").hidden = isEdit;
+  const frame = $("#edit-frame");
+  frame.hidden = !isEdit;
+  if (isEdit) {
+    if (!frame.getAttribute("src")) frame.setAttribute("src", "/edit/");   // lazy-load once
+    return;
+  }
   renderActions();
   refreshState();
 }

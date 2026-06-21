@@ -22,8 +22,10 @@ import os
 import socket
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlparse
 
 from .. import photos_utils as U
+from ..editor import server as _editor
 from ..reporting import Reporter, WebSink, set_reporter
 from .jobs import JobRunner
 
@@ -358,11 +360,31 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/state":
             return self._send(200, _state(self.workspace))
         if path == "/api/plan-summary":
-            from urllib.parse import parse_qs, urlparse
             phase = (parse_qs(urlparse(self.path).query).get("phase") or ["prep"])[0]
             return self._send(200, _plan_summary(self.workspace, phase, _current_fingerprints(self.workspace)))
         if path == "/api/events":
             return self._serve_events()
+        # Folded-in decision editor (v2.4): its API is delegated to the editor's own functions on the
+        # cwd workspace; its assets are served under /edit/ so the whole thing lives on one origin
+        # (the single SSH tunnel still suffices). The editor's /api/* paths don't collide with ours.
+        if path == "/api/artifacts":
+            return self._send(200, _editor._load_artifacts(self.workspace))
+        if path == "/api/photo":
+            rel = (parse_qs(urlparse(self.path).query).get("path") or [""])[0]
+            data = _editor._photo_preview(self.workspace, rel)
+            if data is None:
+                return self._send(404, {"error": "no preview available"})
+            return self._send(200, data, "image/jpeg")
+        if path in ("/edit", "/edit/"):
+            data = _read_pkg("cartographer.editor", "web", ["index.html"])
+            return self._send(200, data, "text/html; charset=utf-8") if data is not None \
+                else self._send(404, {"error": "editor assets missing"})
+        if path.startswith("/edit/"):
+            parts = [p for p in path[len("/edit/"):].split("/") if p not in ("", ".")]
+            data = _read_pkg("cartographer.editor", "web", parts)
+            if data is None:
+                return self._send(404, {"error": f"not found: {path}"})
+            return self._send(200, data, _CONTENT_TYPES.get(os.path.splitext(path)[1], "application/octet-stream"))
         if path == "/":
             path = "/index.html"
         data = _asset(path)
@@ -372,13 +394,18 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path.split("?", 1)[0]
-        if path != "/api/run":
+        if path not in ("/api/run", "/api/save", "/api/rerun"):
             return self._send(404, {"error": "not found"})
         try:
             n = int(self.headers.get("Content-Length") or 0)
             payload = json.loads(self.rfile.read(n) or b"{}")
         except (ValueError, OSError) as e:
             return self._send(400, {"ok": False, "error": f"bad request: {e}"})
+        # Folded-in editor writes (decision edits) + its geotag re-run, delegated to the editor.
+        if path == "/api/save":
+            return self._send(200, _editor._save(self.workspace, payload))
+        if path == "/api/rerun":
+            return self._send(200, _editor._rerun(self.workspace))
         phase, command = payload.get("phase"), payload.get("command")
         if (phase, command) not in _RUNNABLE:
             return self._send(403, {"ok": False,

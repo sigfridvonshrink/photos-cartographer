@@ -29,7 +29,10 @@ body { margin: 0; height: 100vh; display: flex; flex-direction: column;
 .chip.ok { background: var(--ok-bg); color: var(--ok); }
 .chip.run { background: var(--ok-bg); color: var(--accent); }
 
-main { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding: 14px; }
+main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+#phase-view { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding: 14px; }
+#phase-view[hidden] { display: none; }
+.edit-frame { flex: 1; min-height: 0; width: 100%; border: 0; background: var(--bg); }
 .actions { display: flex; align-items: center; gap: 10px; }
 .action-buttons { display: flex; gap: 10px; }
 
