@@ -73,6 +73,7 @@ es.onmessage = (ev) => {
 };
 
 let pollTimer = null;
+let planId = null;          // plan_id the user is reviewing in the gate
 async function refreshState() {
   let s;
   try { s = await (await fetch("/api/state")).json(); } catch { return false; }
@@ -81,13 +82,54 @@ async function refreshState() {
   const lock = $("#lock");
   lock.textContent = running ? `● running: ${s.job.label}` : "● idle";
   lock.style.color = running ? "var(--accent)" : "var(--muted)";
+  const prep = (s.phases && s.phases.prep) || {};
   $("#btn-plan").disabled = running;
   $("#btn-dry").disabled = running;
+  // Execute is enabled only when a parseable, blocker-free plan exists and nothing is running.
+  $("#btn-exec").disabled = running || !prep.executable;
+  planId = prep.plan_id || null;
   const ps = $("#phase-status");
-  if (s.phases && s.phases.prep && s.phases.prep.plan_exists) { ps.textContent = "plan ✓"; ps.className = "chip ok"; }
-  else { ps.textContent = "no plan yet"; ps.className = "chip"; }
+  if (!prep.plan_exists) { ps.textContent = "no plan yet"; ps.className = "chip"; }
+  else if (prep.blockers) { ps.textContent = `plan · ${prep.blockers} blocker(s)`; ps.className = "chip"; }
+  else { ps.textContent = "plan ✓ ready"; ps.className = "chip ok"; }
   return running;
 }
+
+// --- execute confirm gate -------------------------------------------------
+const overlay = $("#gate-overlay");
+
+async function openGate() {
+  let s;
+  try { s = await (await fetch("/api/plan-summary")).json(); } catch { return; }
+  if (!s.exists || (s.blockers && s.blockers.length)) { await refreshState(); return; }
+  const ops = Object.entries(s.op_counts || {}).sort().map(([t, n]) => `${t} ${n}`).join(" · ") || "none";
+  $("#gate-sum").textContent =
+    `Plan ${s.plan_id} — ${s.operations} operation(s):\n  ${ops}\n  ` +
+    `no-op / already-correct ${s.no_op} · warnings ${s.warnings} · blockers 0`;
+  $("#gate-go").textContent = `Execute ${s.operations} operation${s.operations === 1 ? "" : "s"}`;
+  planId = s.plan_id;
+  overlay.hidden = false;
+}
+
+function closeGate() { overlay.hidden = true; }
+
+async function confirmExecute() {
+  closeGate();
+  try {
+    await fetch("/api/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phase: "prep", command: "execute", confirm: true, plan_id: planId }),
+    });
+  } catch { /* state poll reflects reality */ }
+  await refreshState();
+  pollWhileRunning();
+}
+
+$("#btn-exec").onclick = openGate;
+$("#gate-cancel").onclick = closeGate;
+$("#gate-go").onclick = confirmExecute;
+overlay.onclick = (e) => { if (e.target === overlay) closeGate(); };   // click backdrop to cancel
 
 function pollWhileRunning() {
   clearTimeout(pollTimer);

@@ -5,8 +5,9 @@ phase runs (in-process, single-slot via JobRunner) and streams their status to t
 (via WebSink). One mutation path: every action calls the phase's own ``run()``; the web layer never
 re-implements a move/plan. Operates on the cwd workspace, like every other phase.
 
-v2.1 scope: prep ``plan`` / ``dry-run`` (both non-mutating) + live monitoring. ``execute`` and the
-2-step gate land in v2.2; geotag/merge tabs and the folded-in editor follow.
+Scope so far: prep ``plan`` / ``dry-run`` + live monitoring (v2.1), and prep ``execute`` behind the
+explicit 2-step confirm gate (v2.2 — see ``_execute_guard`` / ``_plan_summary``). geotag/merge tabs
+and the folded-in editor follow.
 
 Static assets are package data (``cartographer/console/web``) read via importlib.resources, so they
 resolve identically from a checkout and from inside the zipapp. The shared design system
@@ -32,8 +33,9 @@ _CONTENT_TYPES = {
     ".woff2": "font/woff2", ".svg": "image/svg+xml", ".png": "image/png",
 }
 
-# v2.1: only these (phase, command) pairs may be triggered — both non-mutating. execute is gated to v2.2.
-_ALLOWED = {("prep", "plan"), ("prep", "dry-run")}
+# (phase, command) pairs the console may trigger. prep plan/dry-run are non-mutating; prep execute is
+# mutating and goes through the explicit 2-step gate (_execute_guard) — never a one-click run.
+_RUNNABLE = {("prep", "plan"), ("prep", "dry-run"), ("prep", "execute")}
 
 WEB = WebSink()
 JOBS = JobRunner()
@@ -96,24 +98,79 @@ def _make_target(phase, command):
     return target
 
 
+def _plan_summary(workspace):
+    """Summarize the REAL saved prep plan artifact (photos-10-prep-plan.json) — op counts, no-op,
+    warnings, blockers. This is what the execute gate shows: a summary of the actual serialized plan
+    execution will consume (per the shared contract, dry-run is not a simulation), not a JS guess."""
+    pp = U.prep_plan_path(workspace)
+    if not os.path.exists(pp):
+        return {"exists": False}
+    try:
+        with open(pp) as f:
+            plan = json.load(f)
+    except (OSError, ValueError) as e:
+        return {"exists": True, "error": f"could not read plan: {e}", "blockers": ["unreadable plan"]}
+    ops = plan.get("operations", []) or []
+    counts = {}
+    for op in ops:
+        t = op.get("type", "?")
+        counts[t] = counts.get(t, 0) + 1
+    summary = plan.get("summary", {}) or {}
+    return {
+        "exists": True,
+        "plan_id": plan.get("plan_id"),
+        "operations": len(ops),
+        "op_counts": counts,
+        "no_op": summary.get("no_op_files", 0),
+        "warnings": len(plan.get("warnings", []) or []),
+        "blockers": list(plan.get("blockers", []) or []),
+    }
+
+
+def _execute_guard(workspace, payload):
+    """Server-side enforcement of the 2-step gate. Returns an error string to refuse, or None to
+    allow. Execute is refused unless the client explicitly confirmed, a saved plan exists with no
+    blockers, and (if supplied) the reviewed plan_id still matches — so a plan can't change out from
+    under the confirmation. The core (prep execute) re-validates everything besides (fingerprint,
+    no-clobber, lock); this is the deliberate gate on top, not a replacement."""
+    if not payload.get("confirm"):
+        return "execute requires explicit confirmation"
+    s = _plan_summary(workspace)
+    if not s.get("exists"):
+        return "no saved plan — run plan first"
+    if s.get("error"):
+        return s["error"]
+    if s.get("blockers"):
+        return f"plan has {len(s['blockers'])} blocker(s) — resolve them and re-plan"
+    pid = payload.get("plan_id")
+    if pid and pid != s.get("plan_id"):
+        return "the plan changed since you reviewed it — re-open the gate"
+    return None
+
+
 def _state(workspace):
-    """Transient state for the dashboard chrome: workspace flags, lock, current job, per-phase hints.
-    Cheap, best-effort — never the source of truth."""
-    prep_plan = U.prep_plan_path(workspace)
+    """Transient state for the chrome: workspace flags, lock, current job, per-phase hints. Cheap,
+    best-effort — never the source of truth."""
     lock = U.WorkspaceLock(workspace)
-    owner = None
     try:
         owner = lock.read_owner()
     except Exception:
         owner = None
+    ps = _plan_summary(workspace)
     return {
         "workspace": os.path.abspath(workspace),
         "sealed": bool(U.is_sealed(workspace)),
         "lock_owner": owner,
         "job": JOBS.status(),
-        "allowed": sorted("/".join(p) for p in _ALLOWED),
+        "runnable": sorted("/".join(p) for p in _RUNNABLE),
         "phases": {
-            "prep": {"plan_exists": os.path.exists(prep_plan)},
+            "prep": {
+                "plan_exists": bool(ps.get("exists")),
+                "plan_id": ps.get("plan_id"),
+                "blockers": len(ps.get("blockers", []) or []),
+                # executable = a plan exists, parses, and has no blockers (mirrors the gate's check)
+                "executable": bool(ps.get("exists") and not ps.get("blockers") and not ps.get("error")),
+            },
         },
     }
 
@@ -169,6 +226,8 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.split("?", 1)[0]
         if path == "/api/state":
             return self._send(200, _state(self.workspace))
+        if path == "/api/plan-summary":
+            return self._send(200, _plan_summary(self.workspace))
         if path == "/api/events":
             return self._serve_events()
         if path == "/":
@@ -188,11 +247,15 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError, OSError) as e:
             return self._send(400, {"ok": False, "error": f"bad request: {e}"})
         phase, command = payload.get("phase"), payload.get("command")
-        if (phase, command) not in _ALLOWED:
+        if (phase, command) not in _RUNNABLE:
             return self._send(403, {"ok": False,
                                     "error": f"{phase}/{command} not runnable from the console yet"})
         if JOBS.running:
             return self._send(409, {"ok": False, "error": "a run is already in progress"})
+        if (phase, command) == ("prep", "execute"):
+            err = _execute_guard(self.workspace, payload)
+            if err:
+                return self._send(409, {"ok": False, "error": err})
         started = JOBS.start(f"{phase} {command}", _make_target(phase, command))
         return self._send(200 if started else 409,
                           {"ok": started, "error": None if started else "a run is already in progress"})
