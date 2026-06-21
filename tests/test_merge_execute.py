@@ -341,6 +341,56 @@ def test_execute_jobs_determinism(tmp_path):
     assert _comparable(_summary(ws1)) == _comparable(_summary(ws2))
 
 
+def test_execute_jobs_identical_library_file_tree(tmp_path):
+    """Beyond the summary, the placed LIBRARY file tree is byte-identical under -j1 vs -j4 — the
+    move pass has no concurrency-dependent semantics (relative paths + bytes match exactly)."""
+    photos = [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
+              {"fp": "B", "dest": "Trip", "final_name": "b.jpg"},
+              {"fp": "C", "dest": "Spain", "final_name": "c.jpg"}]
+    ws1, lib1 = _ws(tmp_path, photos, name="t1")
+    ws2, lib2 = _ws(tmp_path, photos, name="t2")
+    assert merge._run_locked_workflow("plan", str(ws1)) == 0
+    assert merge._run_locked_workflow("plan", str(ws2)) == 0
+    assert merge._run_locked_workflow("execute", str(ws1), jobs=1) == 0
+    assert merge._run_locked_workflow("execute", str(ws2), jobs=4) == 0
+    assert _tree(str(lib1)) == _tree(str(lib2))                    # identical placed tree (ignores *.lock)
+
+
+def test_snapshot_and_revalidation_precede_the_parallel_move_pass(tmp_path, monkeypatch):
+    """Sequencing (§10.3): the move-set is fixed BEFORE any concurrent placement — dependency
+    revalidation and the pre-mutation snapshot both complete before the FIRST per-file move runs,
+    even under -j4. Probe the call order via wrappers."""
+    ws, lib = _ws(tmp_path,
+                  [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
+                   {"fp": "B", "dest": "Trip", "final_name": "b.jpg"},
+                   {"fp": "C", "dest": "Spain", "final_name": "c.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+
+    events = []
+    orig_reval = merge.MergeWorkflow.revalidate_plan_deps
+    orig_snap = merge.take_zfs_snapshot
+    orig_move = merge.MergeWorkflow._move_file
+
+    def reval(self, *a, **k):
+        events.append("revalidate"); return orig_reval(self, *a, **k)
+
+    def snap(*a, **k):
+        events.append("snapshot"); return orig_snap(*a, **k)
+
+    def move(self, *a, **k):
+        events.append("move"); return orig_move(self, *a, **k)
+
+    monkeypatch.setattr(merge.MergeWorkflow, "revalidate_plan_deps", reval)
+    monkeypatch.setattr(merge, "take_zfs_snapshot", snap)
+    monkeypatch.setattr(merge.MergeWorkflow, "_move_file", move)
+    assert merge._run_locked_workflow("execute", str(ws), jobs=4) == 0
+
+    first_move = events.index("move")
+    assert events.index("revalidate") < first_move                # move-set fixed before any placement
+    assert events.index("snapshot") < first_move
+    assert events.count("move") == 3                              # all three files still placed
+
+
 def test_execute_without_plan_errors(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     assert merge._run_locked_workflow("execute", str(ws)) == 2     # no photos-30
