@@ -56,6 +56,21 @@
     </div>
   </div>
 
+  <div id="initlib-overlay" class="gate-overlay" hidden>
+    <div class="gate" role="dialog" aria-modal="true" aria-labelledby="initlib-title">
+      <p class="gate-title" id="initlib-title">Bless library directory</p>
+      <div class="gate-sum">Marks a directory as the permanent library (writes a <code>.photos-library</code>
+        marker). Leave blank to use the configured <code>merge.library_root</code>; give a path to bless
+        it and record it in the workspace config.</div>
+      <input id="initlib-path" class="initlib-input" type="text"
+             placeholder="/srv/pictures/5-finished  (blank = use configured library_root)">
+      <div class="gate-act">
+        <button id="initlib-cancel" class="btn">Cancel</button>
+        <button id="initlib-go" class="btn primary">Bless library</button>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="app.js"></script>
 </body>
 </html>
