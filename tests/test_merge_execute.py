@@ -398,6 +398,41 @@ def test_precondition_failure_writes_no_summary_and_no_placement(tmp_path):
     assert _tree(str(lib)) == before_lib                          # nothing placed
 
 
+def test_execute_applies_saved_plan_verbatim_no_rederive(tmp_path):
+    """Execute consumes the saved photos-30 disposition/target VERBATIM — it never re-derives the
+    placement from the handoff/scan. Doctor the saved target name; execute must place the file under
+    the DOCTORED name, not re-compute the original."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    pp = merge.merge_plan_path(str(ws))
+    plan = json.loads(open(pp).read())
+    rec = plan["destinations"]["Trip"]["files"][0]
+    assert rec["disposition"] == "placed_new"
+    rec["library_target"] = os.path.join(str(lib), "Trip", "DOCTORED.jpg")   # doctor the saved target
+    rec["resolved_name"] = "DOCTORED.jpg"
+    open(pp, "w").write(json.dumps(plan))
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    assert open(os.path.join(str(lib), "Trip", "DOCTORED.jpg"), "rb").read() == _fp_bytes("A")  # verbatim
+    assert not os.path.exists(os.path.join(str(lib), "Trip", "a.jpg"))       # NOT re-derived
+
+
+def test_partial_run_journal_holds_only_confirmed_moves(tmp_path):
+    """After a partial run (one placed, one blocked), the merge journal records ONLY the confirmed
+    move — the blocked file is absent, so the next run resumes from the true diff (§8.3)."""
+    ws, lib = _ws(tmp_path,
+                  [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
+                   {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
+                  library_files=[{"fp": "FAIL", "dest": "Trip", "name": "b.jpg"}])  # b's lib file unreadable
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 3            # partial -> rc 3
+    s = _summary(ws)
+    assert s["status"] == "partial"
+    plan_id = json.loads(open(merge.merge_plan_path(str(ws))).read())["plan_id"]
+    journal = (json.load(open(merge.journal_path(str(ws), plan_id))) or {}).get("operations", {})
+    assert journal == {"6-photos-by-dest/Trip/a.jpg": "confirmed"}        # only the placed file
+    assert "6-photos-by-dest/Trip/b.jpg" not in journal                  # blocked file absent
+
+
 # --- Increment 5: terminal finalization (full-success only) -------------------
 
 def _ctl(ws, name):
