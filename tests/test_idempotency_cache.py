@@ -135,6 +135,48 @@ def test_prep_idempotency_and_by_dest_accounting(mock_meta, tmp_path):
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
+def test_prep_replans_from_filesystem_when_journal_corrupt_or_deleted(mock_meta, tmp_path):
+    """The prep journal is EVIDENCE, not a resume script: prep re-plans from the filesystem (+ cache)
+    as truth. After a successful run, corrupting then deleting the journal must NOT change the re-plan
+    — it still derives 0 operations from the on-disk state and never reads the journal to resume."""
+    ws = setup_workspace(tmp_path)
+
+    def mock_hash_image(filepath):
+        import hashlib
+        with open(filepath, "rb") as f:
+            v = hashlib.sha256(f.read()).hexdigest()
+        return {"status": "valid", "strategy": "sha256-v1", "value": v}
+
+    photos_ingest.ContentHasher.fingerprint_image = mock_hash_image
+    photos_ingest.CONFIG["jobs"] = 1
+
+    cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
+    workflow = photos_ingest.WorkspacePrepWorkflow(str(ws), cache)
+    plan1 = workflow.plan()
+    executor = photos_ingest.PlanExecutor(str(ws))
+    journal_path = str(ws / ".photos-ingest/journal.json")
+    executor.execute(plan1, journal_path)
+
+    # Corrupt the journal to garbage — a resume-from-journal design would choke on this.
+    with open(journal_path, "w") as f:
+        f.write("}{ this is not json")
+    cache2 = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
+    plan2 = photos_ingest.WorkspacePrepWorkflow(str(ws), cache2).plan()
+    assert len(plan2.operations) == 0, "corrupt journal must not change the filesystem-derived plan"
+
+    # Delete the journal entirely — re-plan still derives the same empty diff from disk + cache.
+    os.remove(journal_path)
+    cache3 = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
+    plan3 = photos_ingest.WorkspacePrepWorkflow(str(ws), cache3).plan()
+    assert len(plan3.operations) == 0, "deleted journal must not resurrect already-applied operations"
+
+    # State is intact regardless of the journal: the moved/by-dest files are still in place.
+    assert (ws / "6-photos-by-dest" / "vacation" / "img1.jpg").read_text() == "already_dest"
+    assert any(f.startswith("5-photos-by-date/2023-01-01/2023-01-01--12-00-00-001")
+               for f in cache3.get_all_files().keys())
+
+
+@mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
 def test_handoff_manifest_generated(mock_meta, tmp_path):
     ws = setup_workspace(tmp_path)
 
