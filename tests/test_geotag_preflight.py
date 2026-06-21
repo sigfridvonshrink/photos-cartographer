@@ -124,6 +124,7 @@ def test_missing_handoff_blocks(tmp_path):
 
 # --- by-dest scope gates -----------------------------------------------------
 
+@pytest.mark.spec("reprep-geotag-no-fix-1")
 def test_reprep_gate_blocks_and_geotag_never_records_the_move(tmp_path):
     """Geotag does NO move recognition: a by-dest photo absent from the handoff (prep not re-run after
     the move) trips the re-prep gate. Geotag refuses and FIXES NOTHING — it never edits the handoff to

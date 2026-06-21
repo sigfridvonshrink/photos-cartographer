@@ -117,6 +117,7 @@ _FORWARD_PLUS_GPS_REVERT = {"metadata_time_write", "metadata_gps_write", "gps_ma
                             "rename_no_clobber", "revert_manual_gps"}
 
 
+@pytest.mark.spec("time-name-never-reverted-1")
 def test_withdraw_reverts_gps_only_never_time_name_or_destination(tmp_path):
     """Withdrawing a decision reverts GPS ONLY — geotag has no time/filename revert op at all (time
     writes + renames are forward-idempotent), and it NEVER relocates a photo across destinations. After

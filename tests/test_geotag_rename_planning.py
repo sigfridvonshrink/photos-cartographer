@@ -73,6 +73,7 @@ def test_already_correctly_named_is_no_rename():
     assert _names(rows) == [("2024-07-03--14-12-21.jpg", "2024-07-03--14-12-21.jpg", False)]
 
 
+@pytest.mark.spec("move-reevaluate-dest-1")
 def test_move_between_destinations_reevaluates_under_new_tz_no_carry():
     """Moving a photo to a new destination re-evaluates its name under the NEW dest's timezone — the
     old destination's local time is never carried. geotag re-derives every run from the handoff (it

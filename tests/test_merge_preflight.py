@@ -402,6 +402,7 @@ def test_locked_workflow_exits_2_on_blocker(tmp_path):
 
 # --- Tier 3: no-mutation / never-follows consequences ------------------------
 
+@pytest.mark.spec("merge-marker-check-before-liblock-1")
 def test_marker_check_precedes_library_lock_no_lockfile_dropped(tmp_path):
     """§12 lock order: the .photos-library marker is validated BEFORE the library-side lock is taken.
     Against a marker-less library_root, the run blocks (rc 2) and must NEVER have created the
@@ -412,6 +413,7 @@ def test_marker_check_precedes_library_lock_no_lockfile_dropped(tmp_path):
     assert not os.path.exists(merge.merge_plan_path(str(ws)))     # and nothing planned
 
 
+@pytest.mark.spec("gate-no-symlinks-by-dest-1")
 def test_bydest_symlink_blocks_run_and_is_never_followed(tmp_path):
     """A symlink anywhere under 6-photos-by-dest blocks the whole run (rc 2) and is NEVER followed:
     its external target is not inventoried/planned and stays untouched. (Preflight only detects the
@@ -426,6 +428,7 @@ def test_bydest_symlink_blocks_run_and_is_never_followed(tmp_path):
     assert list(lib.iterdir()) == [lib / ".photos-library"]    # library untouched (marker only)
 
 
+@pytest.mark.spec("merge-config-validated-1")
 def test_invalid_merge_policy_blocks_with_no_summary_no_placement(tmp_path):
     """A bad merge.placement_policy/collision_policy is caught in the merge data path (validate_merge
     _config) and surfaces as a preflight blocker: rc 2, no plan, no photos-31 summary, no placement."""
@@ -439,6 +442,7 @@ def test_invalid_merge_policy_blocks_with_no_summary_no_placement(tmp_path):
     assert list(lib.iterdir()) == [lib / ".photos-library"]    # nothing placed
 
 
+@pytest.mark.spec("merge-sealed-newdump-warn-1")
 def test_sealed_new_dump_left_in_place_and_library_untouched(tmp_path):
     """The merge sealed-workspace path warns about a new dump but relocates nothing: the dumped file
     stays byte-identical in 0-sources and the library is untouched (only its marker)."""
@@ -450,6 +454,7 @@ def test_sealed_new_dump_left_in_place_and_library_untouched(tmp_path):
     assert list(lib.iterdir()) == [lib / ".photos-library"]    # library untouched
 
 
+@pytest.mark.spec("lock-covers-whole-run-1")
 def test_lock_contention_covers_execute_not_just_plan(tmp_path):
     """The whole-run lock covers EXECUTE, not only plan: with the workspace lock held by another run,
     `execute` fails fast (rc 1) and writes no summary / places nothing."""

@@ -40,6 +40,12 @@ jobs:
           coverage report
           coverage report --fail-under=80
 
+      # Spec-clause coverage gate: every clause registered in spec/spec-clauses.json must still have a
+      # test tagged @pytest.mark.spec(...). Catches a safety anti-behavior losing its test — which
+      # line/branch coverage can't. Collection-only, fast.
+      - name: Check spec-clause coverage
+        run: python3 tools/spec-coverage
+
       # The decision-editor front-end (web/app.js) is plain ES modules with no build/deps; its pure
       # logic is unit-tested with Node's built-in runner (node:test), no npm install.
       - name: Run decision-editor front-end tests

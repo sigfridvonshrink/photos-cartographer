@@ -179,6 +179,7 @@ def test_execute_unfingerprintable_library_blocks_and_keeps_source(tmp_path):
     assert s["totals"]["blocked"] == 1 and s["failures"]
 
 
+@pytest.mark.spec("merge-execute-occupied-different-blocker-1")
 def test_execute_occupied_by_different_content_at_execute_blocks_no_clobber(tmp_path):
     """TOCTOU clobber guard: target FREE at plan (placed_new), then a *different-content* file appears
     at the planned target before execute. The execute-time recheck must refuse — rc 3, source left in
@@ -198,6 +199,7 @@ def test_execute_occupied_by_different_content_at_execute_blocks_no_clobber(tmp_
     assert s["failures"]
 
 
+@pytest.mark.spec("merge-snapshot-required-aborts-1")
 def test_execute_required_snapshot_failure_aborts_before_any_placement(tmp_path, monkeypatch):
     """snapshots_required + the library pre-mutation snapshot fails -> abort BEFORE any move:
     status rejected (rc 2), nothing placed, source untouched in by-dest, library empty, workspace
@@ -216,6 +218,7 @@ def test_execute_required_snapshot_failure_aborts_before_any_placement(tmp_path,
     assert s["totals"]["placed_new"] == 0 and s["totals"]["blocked"] == 0
 
 
+@pytest.mark.spec("merge-prep-consistency-1")
 def test_plan_blocks_when_bydest_photo_absent_from_finalized_set(tmp_path):
     """Prep-consistency (precondition 4): a photo physically under 6-photos-by-dest but NOT in the
     finalized record (handoff predates the latest move into by-dest) -> 're-run prep' blocker at plan,
@@ -229,6 +232,7 @@ def test_plan_blocks_when_bydest_photo_absent_from_finalized_set(tmp_path):
     assert not (lib / "Trip").exists()                                 # nothing placed
 
 
+@pytest.mark.spec("merge-config-readonly-1")
 def test_config_is_byte_identical_across_plan_dryrun_execute(tmp_path):
     """Merge never writes the workspace config (photos-00-config.json is hand-edited, authoritative).
     Snapshot its bytes, run the full plan -> dry-run -> execute cycle, assert byte-for-byte identical."""
@@ -357,6 +361,7 @@ def test_execute_sweeps_crash_orphaned_cross_fs_temps(tmp_path):
     assert _summary(ws)["run_metadata"]["orphan_temps_swept"] >= 1
 
 
+@pytest.mark.spec("exec-concurrency-no-semantic-change-1")
 def test_execute_jobs_identical_library_file_tree(tmp_path):
     """Beyond the summary, the placed LIBRARY file tree is byte-identical under -j1 vs -j4 — the
     move pass has no concurrency-dependent semantics (relative paths + bytes match exactly)."""
@@ -372,6 +377,7 @@ def test_execute_jobs_identical_library_file_tree(tmp_path):
     assert _tree(str(lib1)) == _tree(str(lib2))                    # identical placed tree (ignores *.lock)
 
 
+@pytest.mark.spec("merge-moveset-fixed-before-concurrency-1")
 def test_snapshot_and_revalidation_precede_the_parallel_move_pass(tmp_path, monkeypatch):
     """Sequencing (§10.3): the move-set is fixed BEFORE any concurrent placement — dependency
     revalidation and the pre-mutation snapshot both complete before the FIRST per-file move runs,
@@ -407,6 +413,7 @@ def test_snapshot_and_revalidation_precede_the_parallel_move_pass(tmp_path, monk
     assert events.count("move") == 3                              # all three files still placed
 
 
+@pytest.mark.spec("exec-single-writer-journal-1")
 def test_merge_journal_writes_only_from_the_main_thread(tmp_path, monkeypatch):
     """Single-writer journal (§8.3): under -j4 the merge confirmation journal is persisted ONLY by the
     main thread; worker threads move files but never touch the journal. Probe every journal write."""
@@ -446,6 +453,7 @@ def test_execute_rejects_stale_plan(tmp_path):
 
 # --- no-mutation consequences of non-executing paths (Tier 3) ----------------
 
+@pytest.mark.spec("merge-planning-nonmutating-1")
 def test_plan_mutates_nothing_no_terminal_artifacts(tmp_path):
     """Planning never mutates: after `plan`, by-dest + library are byte-identical and NONE of the
     execute-only artifacts (photos-31 summary, photos-35 log/db/manifest, journal, seal) exist."""
@@ -461,6 +469,7 @@ def test_plan_mutates_nothing_no_terminal_artifacts(tmp_path):
         assert not os.path.exists(ctl / n), n
 
 
+@pytest.mark.spec("merge-no-stale-summary-1")
 def test_stale_plan_rejection_writes_no_summary(tmp_path):
     """A stale-plan rejection is a pre-mutation abort: it must write NO photos-31 summary at all
     (distinct from a required-snapshot abort, which records a `rejected` summary) and move nothing."""
@@ -476,6 +485,7 @@ def test_stale_plan_rejection_writes_no_summary(tmp_path):
     assert open(_src(ws, "Trip", "a.jpg"), "rb").read() == _fp_bytes("A")
 
 
+@pytest.mark.spec("merge-precond-fail-no-output-1")
 def test_precondition_failure_writes_no_summary_and_no_placement(tmp_path):
     """A preflight blocker stops merge before execute: no photos-31 summary, library byte-unchanged.
     Here the prep handoff is missing — a precondition the preflight gathers and refuses on."""
@@ -487,6 +497,7 @@ def test_precondition_failure_writes_no_summary_and_no_placement(tmp_path):
     assert _tree(str(lib)) == before_lib                          # nothing placed
 
 
+@pytest.mark.spec("merge-execute-no-rederive-1")
 def test_execute_applies_saved_plan_verbatim_no_rederive(tmp_path):
     """Execute consumes the saved photos-30 disposition/target VERBATIM — it never re-derives the
     placement from the handoff/scan. Doctor the saved target name; execute must place the file under
@@ -505,6 +516,7 @@ def test_execute_applies_saved_plan_verbatim_no_rederive(tmp_path):
     assert not os.path.exists(os.path.join(str(lib), "Trip", "a.jpg"))       # NOT re-derived
 
 
+@pytest.mark.spec("merge-journal-confirmed-only-1")
 def test_partial_run_journal_holds_only_confirmed_moves(tmp_path):
     """After a partial run (one placed, one blocked), the merge journal records ONLY the confirmed
     move — the blocked file is absent, so the next run resumes from the true diff (§8.3)."""
