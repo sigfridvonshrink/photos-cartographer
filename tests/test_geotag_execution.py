@@ -188,6 +188,7 @@ def _execute_jobs(monkeypatch, ws, n):
         return e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
 
 
+@pytest.mark.spec("exec-concurrency-no-semantic-change-1")
 def test_execute_j1_and_jN_produce_identical_summary_and_tree(tmp_path, monkeypatch):
     """Concurrency is a performance knob with NO semantic effect: executing the SAME geotag plan under
     -j1 vs -j4 yields a byte-identical photos-25 summary (modulo the volatile run_metadata, which by
@@ -211,6 +212,7 @@ def test_execute_j1_and_jN_produce_identical_summary_and_tree(tmp_path, monkeypa
     assert t1 == t4 == ["2024-07-03--14-00-00.arw", "2024-07-03--15-00-00.arw"]  # identical tree
 
 
+@pytest.mark.spec("exec-single-writer-journal-1")
 def test_journal_writes_only_from_the_main_thread(tmp_path, monkeypatch):
     """Single-writer journal (§8.3): the confirmation journal is persisted ONLY by the main thread —
     worker threads apply per-file ops but never touch the journal. Probe every journal write under -j4
@@ -232,6 +234,7 @@ def test_journal_writes_only_from_the_main_thread(tmp_path, monkeypatch):
     assert all(t == "MainThread" for t in journal_threads), journal_threads
 
 
+@pytest.mark.spec("config-merge-readonly-1")
 def test_geotag_leaves_config_byte_identical(tmp_path, monkeypatch):
     """Geotag never writes the workspace config (photos-00-config.json is hand-edited, authoritative).
     Snapshot its bytes, drive the full plan + execute, assert byte-for-byte identical (the geotag half

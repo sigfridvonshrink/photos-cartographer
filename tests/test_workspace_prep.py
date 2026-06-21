@@ -20,6 +20,7 @@ import sqlite3
 import shutil
 import importlib.machinery
 import importlib.util
+import pytest
 from unittest import mock
 from pathlib import Path
 
@@ -399,6 +400,7 @@ def test_nested_directory_symlink_in_managed_folder_blocked(tmp_path, monkeypatc
     assert any("Forbidden symlink detected" in b and "nested" in b for b in plan.blockers), plan.blockers
 
 
+@pytest.mark.spec("prep-reserved-names-not-moved-1")
 def test_init_does_not_move_a_dump_folder_named_like_a_managed_folder(tmp_path, monkeypatch):
     """Reserved-name guard (prep §6.2): on an INIT run a base entry whose name collides with a managed
     folder (e.g. an as-arrived dump dir named `5-photos-by-date`) is treated AS that managed folder —
@@ -425,6 +427,7 @@ def test_init_does_not_move_a_dump_folder_named_like_a_managed_folder(tmp_path, 
     assert not any("not a managed" in b or "Misplaced" in b for b in plan.blockers), plan.blockers
 
 
+@pytest.mark.spec("prep-root-block-strict-dotfiles-1")
 def test_initialized_root_dotfile_is_a_misplaced_entry_hard_block(tmp_path, monkeypatch):
     """Root strictness (prep §6.2 item 2): on an INITIALIZED workspace the root holds only the managed
     folders + control dirs. A plain root dotfile (e.g. `.DS_Store`) is a misplaced dump and a hard
@@ -445,6 +448,7 @@ def test_initialized_root_dotfile_is_a_misplaced_entry_hard_block(tmp_path, monk
                for b in plan.blockers), plan.blockers
 
 
+@pytest.mark.spec("prep-plan-nonmutating-1")
 def test_plan_is_non_mutating(tmp_path, monkeypatch):
     """Planning NEVER mutates the workspace: workflow.plan() derives operations but applies none —
     0-sources is byte-identical afterwards and no journal/handoff artifact is written (those are
