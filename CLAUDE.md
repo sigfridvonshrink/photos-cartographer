@@ -145,8 +145,9 @@ entry (`python -m cartographer.photos_1_prep …`) sharing the same `add_argumen
   subset of the per-phase stale checks (quick ⊆ deep, same authoritative hash), and the **decision
   editor folded in as the 4th tab** (v2.4 — served through the console origin at `/edit/` as an
   iframe, with the editor's `/api/*` delegated to its own functions on the cwd workspace; one origin
-  so the single SSH tunnel still suffices, and **zero editor changes**). Still to come: merge
-  `init-library` (needs a path argument). Built on the shared event/sink seam
+  so the single SSH tunnel still suffices, and **zero editor changes**), and merge **`init-library`**
+  with an optional-path prompt (blank → bless the configured `library_root`; given → bless + record).
+  All phase commands are now driveable from the console. Built on the shared event/sink seam
   (`cartographer/reporting.py`) and design tokens (`cartographer/editor/web/tokens.css`).
 - **Canonical plan persistence (all phases):** each phase's plan/decision artifact lives at a fixed
   control-dir path (`photos-10-prep-plan.json`, geotag `photos-21`/`22`/`23`, `photos-30-merge-plan.json`).

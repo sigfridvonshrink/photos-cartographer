@@ -41,7 +41,7 @@ _CONTENT_TYPES = {
 _RUNNABLE = {
     ("prep", "plan"), ("prep", "dry-run"), ("prep", "execute"),
     ("geotag", "plan"), ("geotag", "execute"),
-    ("merge", "plan"), ("merge", "dry-run"), ("merge", "execute"),
+    ("merge", "init-library"), ("merge", "plan"), ("merge", "dry-run"), ("merge", "execute"),
 }
 
 WEB = WebSink()
@@ -91,14 +91,15 @@ def _phase_module(phase):
     return None
 
 
-def _make_target(phase, command):
-    """Build the zero-arg job callable for (phase, command): parse the phase's own argv so defaults
-    match the CLI exactly, then call its run(). run() reads cwd as the workspace and may sys.exit()
+def _make_target(phase, command, extra=None):
+    """Build the zero-arg job callable for (phase, command [, extra argv]): parse the phase's own argv
+    so defaults match the CLI exactly, then call its run(). `extra` carries positional args (e.g. the
+    optional library path for merge init-library). run() reads cwd as the workspace and may sys.exit()
     (the JobRunner catches that)."""
     mod = _phase_module(phase)
     parser = argparse.ArgumentParser()
     mod.add_arguments(parser)
-    args = parser.parse_args([command])
+    args = parser.parse_args([command, *(extra or [])])
 
     def target():
         mod.run(args)
@@ -267,6 +268,7 @@ def _runnable_actions(workspace, phases, sealed, busy):
     g("prep/execute", pe["executable"], "needs a clean, blocker-free, fresh prep plan")
     g("geotag/plan", prep_done, "run prep execute first")
     g("geotag/execute", ge["executable"], "needs a clean, fresh geotag plan")
+    g("merge/init-library", True)        # one-time setup, runnable anytime (unless sealed/busy)
     g("merge/plan", geotag_done, "finish geotag (finalize) first")
     g("merge/dry-run", me["plan_exists"], "run merge plan first")
     g("merge/execute", me["executable"], "needs a clean, fresh merge plan")
@@ -416,7 +418,12 @@ class Handler(BaseHTTPRequestHandler):
             err = _execute_guard(self.workspace, phase, payload)
             if err:
                 return self._send(409, {"ok": False, "error": err})
-        started = JOBS.start(f"{phase} {command}", _make_target(phase, command))
+        extra = []
+        if command == "init-library":
+            p = (payload.get("path") or "").strip()
+            if p:
+                extra = [p]                  # else: blank → bless the configured library_root
+        started = JOBS.start(f"{phase} {command}", _make_target(phase, command, extra))
         return self._send(200 if started else 409,
                           {"ok": started, "error": None if started else "a run is already in progress"})
 
