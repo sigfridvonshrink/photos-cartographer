@@ -147,6 +147,24 @@ def test_sealed_workspace_warns_on_new_dump(tmp_path, monkeypatch, capsys):
     assert "new dump" in capsys.readouterr().err.lower()
 
 
+def test_prune_quarantine_is_the_sole_op_allowed_on_a_sealed_workspace(tmp_path, monkeypatch, capsys):
+    """The seal blocks ONLY plan/dry-run/execute; prune-quarantine is the sole maintenance op that
+    still runs on a sealed (terminal) workspace — quarantine cleanup must survive the seal. Assert it
+    is NOT refused with exit-2 SEALED, and that the --yes delete actually clears the quarantine."""
+    ws = _ws(tmp_path)
+    (ws / ".photos-ingest" / "photos-00-sealed.json").write_text('{"sealed": true}')
+    qd = ws / ".photos-ingest-quarantine" / "20260101T000000Z-abc123"
+    qd.mkdir(parents=True)
+    (qd / "x.jpg").write_bytes(b"dup")
+    assert _main(monkeypatch, ws, "prune-quarantine") == 0       # runs despite the seal (not exit-2)
+    out = capsys.readouterr()
+    assert "dry-run" in out.out and qd.exists()                  # default dry-run preserved it
+    assert "SEALED" not in out.err                               # never hit the seal guard
+    assert _main(monkeypatch, ws, "prune-quarantine",
+                 "--plan-id", "20260101T000000Z-abc123", "--yes") == 0
+    assert not qd.exists()                                       # delete worked on the sealed ws
+
+
 # --- error exits -------------------------------------------------------------
 
 def test_locked_workspace_fails_fast(tmp_path, monkeypatch, capsys):

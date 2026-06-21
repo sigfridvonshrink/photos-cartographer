@@ -15,6 +15,7 @@
 import os
 import sys
 import json
+import shutil
 import sqlite3
 from pathlib import Path
 
@@ -174,6 +175,84 @@ def test_prep_replans_from_filesystem_when_journal_corrupt_or_deleted(mock_meta,
     assert (ws / "6-photos-by-dest" / "vacation" / "img1.jpg").read_text() == "already_dest"
     assert any(f.startswith("5-photos-by-date/2023-01-01/2023-01-01--12-00-00-001")
                for f in cache3.get_all_files().keys())
+
+
+@mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
+def test_restored_quarantine_file_reflows_as_a_normal_dump(mock_meta, tmp_path):
+    """No un-quarantine path: a file dragged back out of quarantine into 0-sources is re-evaluated as
+    an ordinary fresh dump under a NEW plan_id — there is no special 'restore' handling that skips
+    dedup. Here the restored file is still a duplicate of a by-dest photo, so it is quarantined AGAIN."""
+    ws = setup_workspace(tmp_path)
+
+    def mock_hash_image(filepath):
+        import hashlib
+        with open(filepath, "rb") as f:
+            v = hashlib.sha256(f.read()).hexdigest()
+        return {"status": "valid", "strategy": "sha256-v1", "value": v}
+
+    photos_ingest.ContentHasher.fingerprint_image = mock_hash_image
+    photos_ingest.CONFIG["jobs"] = 1
+
+    cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
+    plan1 = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
+    assert any(op.type == "quarantine_move" and "dup_img" in (op.source or "")
+               for op in plan1.operations), "dup_img should quarantine on the first run"
+    executor = photos_ingest.PlanExecutor(str(ws))
+    executor.execute(plan1, str(ws / ".photos-ingest/journal.json"))
+
+    # The dup now lives under the recoverable quarantine. Operator drags it back into the inbox.
+    qfiles = list((ws / ".photos-ingest-quarantine").rglob("*.jpg"))
+    assert qfiles, "the duplicate must have been quarantined by execute"
+    shutil.move(str(qfiles[0]), str(ws / "0-sources" / "dup_img.jpg"))
+
+    # Re-prep: the restored file is treated as a normal dump and re-evaluated (still a dup -> quarantine
+    # again), under a fresh plan_id. No restore shortcut un-quarantined it.
+    cache2 = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
+    plan2 = photos_ingest.WorkspacePrepWorkflow(str(ws), cache2).plan()
+    assert plan2.plan_id != plan1.plan_id
+    assert any(op.type == "quarantine_move" and "dup_img" in (op.source or "")
+               for op in plan2.operations), [(o.type, o.source) for o in plan2.operations]
+
+
+def test_no_special_reimport_path_from_missing_metadata(tmp_path):
+    """2-missing-metadata is a holding bay, not a re-entry point: prep never reprocesses a file sitting
+    there in place. A file still missing a date stays put (no op); the way to re-import is to move it to
+    0-sources, where it routes like any ordinary dump — here, to 5-photos-by-date by its (now present)
+    date. No 2-missing-metadata-specific rescue path."""
+    ws = tmp_path / "ws"; ws.mkdir()
+    (ws / ".photos-ingest").mkdir(); (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
+    for d in ("0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
+              "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"):
+        (ws / d).mkdir()
+    (ws / "2-missing-metadata" / "still_broken.jpg").write_text("nodate")   # left behind, no date
+    (ws / "0-sources" / "fixed.jpg").write_text("hasdate")                  # moved back to the inbox
+
+    def meta(folders, max_workers=4, progress_coordinator=None):
+        res = {}
+        for folder in folders:
+            for f in os.listdir(folder):
+                p = os.path.join(folder, f)
+                res[p] = {"DateTimeOriginal": "2023:05:05 09:00:00"} if "fixed" in f else {}
+        return res, set()
+
+    def mock_hash_image(filepath):
+        import hashlib
+        with open(filepath, "rb") as f:
+            return {"status": "valid", "strategy": "sha256-v1", "value": hashlib.sha256(f.read()).hexdigest()}
+
+    photos_ingest.ContentHasher.fingerprint_image = mock_hash_image
+    photos_ingest.CONFIG["jobs"] = 1
+    with mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=meta):
+        cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
+        plan = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
+
+    # The re-imported file routes normally to 5-photos-by-date by its date.
+    assert any(op.type == "move_no_clobber" and "fixed.jpg" in (op.source or "")
+               and (op.destination or "").startswith("5-photos-by-date/")
+               for op in plan.operations), [(o.type, o.source, o.destination) for o in plan.operations]
+    # The file still sitting in 2-missing-metadata is NOT reprocessed in place (no special rescue).
+    assert not any("still_broken.jpg" in (op.source or "") for op in plan.operations), \
+        [(o.type, o.source) for o in plan.operations]
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
