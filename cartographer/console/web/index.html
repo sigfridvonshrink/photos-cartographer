@@ -15,8 +15,8 @@
     <span id="lock" class="lock"></span>
     <div class="seg" id="tabs">
       <button data-phase="prep" class="on">Prep</button>
-      <button data-phase="geotag" disabled title="coming in v2.3">Geotag</button>
-      <button data-phase="merge" disabled title="coming in v2.3">Merge</button>
+      <button data-phase="geotag">Geotag</button>
+      <button data-phase="merge">Merge</button>
       <button data-phase="edit" disabled title="coming in v2.4">Edit</button>
     </div>
   </header>
@@ -25,9 +25,7 @@
     <div class="actions">
       <span id="phase-status" class="chip">—</span>
       <span class="grow"></span>
-      <button id="btn-plan" class="btn primary">Plan</button>
-      <button id="btn-dry" class="btn">Dry-run</button>
-      <button id="btn-exec" class="btn" disabled title="review the plan, then confirm">Execute</button>
+      <span id="action-buttons" class="action-buttons"></span>
     </div>
 
     <section class="progress">

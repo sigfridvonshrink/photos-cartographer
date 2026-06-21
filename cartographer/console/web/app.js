@@ -1,12 +1,23 @@
-// Console front-end. Triggers prep runs and renders the live event stream (SSE). No framework.
+// Console front-end. Triggers phase runs and renders the live event stream (SSE). No framework.
 // The two event channels map straight to the two regions: log -> the scrolling pane, progress ->
-// the latest-wins widgets. Status is cosmetic; correctness always comes from the artifacts.
+// the latest-wins widgets. One run at a time, so the log/progress show the current/last run for
+// whichever phase tab you're on. Status is cosmetic; correctness always comes from the artifacts.
 
 const $ = (s) => document.querySelector(s);
 const logEl = $("#log");
 const progList = $("#prog-list");
 const tasks = new Map();   // task_id -> { root, pl, fill, pn }
 
+// Per-phase commands. 'execute' (prep only, for now) goes through the confirm gate, not a direct run.
+const PHASE_CMDS = {
+  prep: [["plan", "Plan", "primary"], ["dry-run", "Dry-run", ""], ["execute", "Execute", "gate"]],
+  geotag: [["plan", "Plan", "primary"]],
+  merge: [["plan", "Plan", "primary"], ["dry-run", "Dry-run", ""]],
+};
+let currentPhase = "prep";
+let planId = null;         // prep plan_id being reviewed in the gate
+
+// --- log + progress rendering --------------------------------------------
 function addLog(e) {
   const div = document.createElement("div");
   div.textContent = e.msg;
@@ -14,7 +25,7 @@ function addLog(e) {
   else if (e.level === "error") div.className = "e";
   const atBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 40;
   logEl.appendChild(div);
-  if (atBottom) logEl.scrollTop = logEl.scrollHeight;   // follow the tail unless the user scrolled up
+  if (atBottom) logEl.scrollTop = logEl.scrollHeight;
 }
 
 function progRow() {
@@ -72,8 +83,34 @@ es.onmessage = (ev) => {
   else if (m.kind === "progress") upsertProgress(m);
 };
 
+// --- phase tabs + actions -------------------------------------------------
+function renderActions() {
+  const wrap = $("#action-buttons");
+  wrap.innerHTML = "";
+  for (const [cmd, label, kind] of PHASE_CMDS[currentPhase]) {
+    const b = document.createElement("button");
+    b.className = "btn" + (kind === "primary" ? " primary" : "");
+    b.textContent = label;
+    b.dataset.cmd = cmd;
+    b.onclick = kind === "gate" ? openGate : () => trigger(cmd);
+    wrap.appendChild(b);
+  }
+}
+
+function setPhase(phase) {
+  if (phase === currentPhase) return;
+  currentPhase = phase;
+  for (const t of document.querySelectorAll("#tabs button")) t.classList.toggle("on", t.dataset.phase === phase);
+  renderActions();
+  refreshState();
+}
+
+for (const t of document.querySelectorAll("#tabs button")) {
+  if (!t.disabled) t.onclick = () => setPhase(t.dataset.phase);
+}
+
+// --- state + polling ------------------------------------------------------
 let pollTimer = null;
-let planId = null;          // plan_id the user is reviewing in the gate
 async function refreshState() {
   let s;
   try { s = await (await fetch("/api/state")).json(); } catch { return false; }
@@ -82,20 +119,49 @@ async function refreshState() {
   const lock = $("#lock");
   lock.textContent = running ? `● running: ${s.job.label}` : "● idle";
   lock.style.color = running ? "var(--accent)" : "var(--muted)";
-  const prep = (s.phases && s.phases.prep) || {};
-  $("#btn-plan").disabled = running;
-  $("#btn-dry").disabled = running;
-  // Execute is enabled only when a parseable, blocker-free plan exists and nothing is running.
-  $("#btn-exec").disabled = running || !prep.executable;
-  planId = prep.plan_id || null;
+
+  const ph = (s.phases && s.phases[currentPhase]) || {};
+  // status chip for the current phase
   const ps = $("#phase-status");
-  if (!prep.plan_exists) { ps.textContent = "no plan yet"; ps.className = "chip"; }
-  else if (prep.blockers) { ps.textContent = `plan · ${prep.blockers} blocker(s)`; ps.className = "chip"; }
-  else { ps.textContent = "plan ✓ ready"; ps.className = "chip ok"; }
+  if (currentPhase === "prep") {
+    if (!ph.plan_exists) { ps.textContent = "no plan yet"; ps.className = "chip"; }
+    else if (ph.blockers) { ps.textContent = `plan · ${ph.blockers} blocker(s)`; ps.className = "chip"; }
+    else { ps.textContent = "plan ✓ ready"; ps.className = "chip ok"; }
+    planId = ph.plan_id || null;
+  } else {
+    ps.textContent = ph.plan_exists ? "planned ✓" : "not planned yet";
+    ps.className = ph.plan_exists ? "chip ok" : "chip";
+  }
+
+  // button enablement
+  for (const b of document.querySelectorAll("#action-buttons button")) {
+    if (b.dataset.cmd === "execute") b.disabled = running || !ph.executable;   // prep gate
+    else b.disabled = running;
+  }
   return running;
 }
 
-// --- execute confirm gate -------------------------------------------------
+function pollWhileRunning() {
+  clearTimeout(pollTimer);
+  pollTimer = setTimeout(async () => {
+    const running = await refreshState();
+    if (running) pollWhileRunning();
+  }, 1200);
+}
+
+async function trigger(command) {
+  try {
+    await fetch("/api/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phase: currentPhase, command }),
+    });
+  } catch { /* state poll will reflect reality */ }
+  await refreshState();
+  pollWhileRunning();
+}
+
+// --- execute confirm gate (prep) ------------------------------------------
 const overlay = $("#gate-overlay");
 
 async function openGate() {
@@ -126,33 +192,10 @@ async function confirmExecute() {
   pollWhileRunning();
 }
 
-$("#btn-exec").onclick = openGate;
 $("#gate-cancel").onclick = closeGate;
 $("#gate-go").onclick = confirmExecute;
-overlay.onclick = (e) => { if (e.target === overlay) closeGate(); };   // click backdrop to cancel
-
-function pollWhileRunning() {
-  clearTimeout(pollTimer);
-  pollTimer = setTimeout(async () => {
-    const running = await refreshState();
-    if (running) pollWhileRunning();
-  }, 1200);
-}
-
-async function trigger(command) {
-  try {
-    await fetch("/api/run", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phase: "prep", command }),
-    });
-  } catch { /* ignore; state poll will reflect reality */ }
-  await refreshState();
-  pollWhileRunning();
-}
-
-$("#btn-plan").onclick = () => trigger("plan");
-$("#btn-dry").onclick = () => trigger("dry-run");
+overlay.onclick = (e) => { if (e.target === overlay) closeGate(); };
 $("#clear").onclick = () => { logEl.textContent = ""; };
 
+renderActions();
 refreshState();
