@@ -159,10 +159,10 @@ def test_execute_unfingerprintable_library_blocks_and_keeps_source(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
                   library_files=[{"fp": "FAIL", "dest": "Trip", "name": "a.jpg"}])
     assert merge._run_locked_workflow("plan", str(ws)) == 0
-    assert merge._run_locked_workflow("execute", str(ws)) == 3          # partial
+    assert merge._run_locked_workflow("execute", str(ws)) == 3          # blocked -> rc 3
     assert os.path.exists(_src(ws, "Trip", "a.jpg"))                    # left in by-dest
     s = _summary(ws)
-    assert s["status"] == "partial"
+    assert s["status"] == "failed"                                      # the only file blocked -> nothing placed
     assert s["totals"]["blocked"] == 1 and s["failures"]
 
 
@@ -344,14 +344,31 @@ def test_partial_run_does_not_seal_or_finalize(tmp_path):
 def test_re_plan_after_partial_is_refused(tmp_path):
     # Re-planning over a partially-applied merge is refused (resume via execute), so an already-moved
     # file can never be dropped from the merge log a later execute writes. The saved plan is untouched.
-    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
-                  library_files=[{"fp": "FAIL", "dest": "Trip", "name": "a.jpg"}])
+    # Genuine mixed partial: a.jpg places (target free, source removed), b.jpg blocks (unfingerprintable
+    # collision) — so a real moved file exists to protect.
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
+                             {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
+                  library_files=[{"fp": "FAIL", "dest": "Trip", "name": "b.jpg"}])
     assert merge._run_locked_workflow("plan", str(ws)) == 0
-    assert merge._run_locked_workflow("execute", str(ws)) == 3          # partial
+    assert merge._run_locked_workflow("execute", str(ws)) == 3          # 1 placed, 1 blocked -> partial
     assert _summary(ws)["status"] == "partial"
+    assert not os.path.exists(_src(ws, "Trip", "a.jpg"))               # a.jpg was moved (source gone)
     plan_before = open(merge.merge_plan_path(str(ws))).read()
     assert merge._run_locked_workflow("plan", str(ws)) == 2             # re-plan refused
     assert open(merge.merge_plan_path(str(ws))).read() == plan_before   # plan untouched
+
+
+def test_re_plan_after_failed_is_refused(tmp_path):
+    # An all-blocked run is `failed` (nothing placed) — but it still entered the execute phase and left
+    # an unsealed summary, so it's in-flight: re-plan is refused, resume via execute (same as partial).
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
+                  library_files=[{"fp": "FAIL", "dest": "Trip", "name": "a.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 3          # the only file blocked -> failed
+    assert _summary(ws)["status"] == "failed"
+    plan_before = open(merge.merge_plan_path(str(ws))).read()
+    assert merge._run_locked_workflow("plan", str(ws)) == 2             # re-plan still refused
+    assert open(merge.merge_plan_path(str(ws))).read() == plan_before
 
 
 def test_re_plan_allowed_when_no_partial(tmp_path):

@@ -100,6 +100,17 @@ def merge_db_snapshot_path(ws):
     return _cd(ws, MERGE_DB_SNAPSHOT)
 
 
+def merge_execution_status(results):
+    """Terminal status of a merge execution from per-file results (§9.1 item 8):
+    `success` (nothing blocked), `failed` (ran but nothing was placed — every file blocked), or
+    `partial` (some placed, some blocked). Pre-mutation aborts are `rejected`, decided elsewhere."""
+    blocked = any(r["final_kind"] == "blocked" for r in results)
+    if not blocked:
+        return "success"
+    placed = any(r["final_kind"] != "blocked" for r in results)
+    return "partial" if placed else "failed"
+
+
 class MergeWorkflow:
     """Library-merge workflow: preflight (§3), plan/dry-run/execute, and — on full success only — the
     terminal outputs (summary, merge log, DB snapshot, archive re-seal, workspace seal, §9.4)."""
@@ -518,17 +529,18 @@ class MergeWorkflow:
 
     def do_plan(self, ws, library_root):
         reporter = get_reporter()
-        # Don't re-plan over a merge that has already been (partly) applied but not sealed. A prior
-        # execute — whether it ended `partial` (a blocker left in by-dest) or `success` but crashed
-        # before the seal — already moved some finalized photos into the library (their by-dest
-        # sources are gone). Re-planning would `continue` past them (build_merge_plan) and omit them
-        # from the merge log a later execute writes — and an already-placed *renamed* file can't be
-        # reliably re-located on a fresh plan. The correct resume is `execute`, which reuses the saved
-        # photos-30 (still complete) and finishes/seals. (do_plan is only reached on an UNSEALED
-        # workspace — precondition 0 blocks a sealed one — so a present summary means an in-flight
-        # merge; a `rejected` summary moved nothing, so re-planning after it is safe and allowed.)
+        # Don't re-plan over a merge that entered the execute phase but is not sealed. Any such run —
+        # `partial`/`failed` (blockers left in by-dest) or `success` but crashed before the seal — is
+        # an IN-FLIGHT merge: a `success`/`partial` one already moved some finalized photos into the
+        # library (their by-dest sources are gone), and re-planning would `continue` past them
+        # (build_merge_plan) and omit them from the merge log a later execute writes — an already-placed
+        # *renamed* file can't be reliably re-located on a fresh plan. The correct resume is `execute`,
+        # which reuses the saved photos-30 (still complete) and finishes/seals. (do_plan is only reached
+        # on an UNSEALED workspace — precondition 0 blocks a sealed one — so a present summary means an
+        # in-flight merge. A `rejected` summary is a PRE-mutation abort that never entered the move
+        # phase and moved nothing, so re-planning after it is safe and allowed.)
         if os.path.exists(merge_plan_path(ws)) and \
-                _json_get(merge_summary_path(ws), "status") in ("partial", "success"):
+                _json_get(merge_summary_path(ws), "status") in ("partial", "failed", "success"):
             reporter.log(f"A prior merge is in flight but not sealed ({MERGE_SUMMARY_ARTIFACT} present on an "
                   "unsealed workspace): some photos are already in the library. Run `execute` to resume "
                   f"the saved {MERGE_PLAN_ARTIFACT} — it finishes any remaining moves, writes a log "
@@ -750,7 +762,7 @@ class MergeWorkflow:
             PersistentMagickWorker.cleanup_all()      # close the per-thread magick workers (verify pass)
 
         results.sort(key=lambda r: r["by_dest_source"])
-        status = "success" if not any(r["final_kind"] == "blocked" for r in results) else "partial"
+        status = merge_execution_status(results)
         finished_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         summary = self._build_summary(ws, plan, library_root, results, snapshot, status,
                                       now_iso, execution_id, jobs, finished_at=finished_at)
