@@ -113,7 +113,42 @@ def _read_plan(path):
         return None, {"exists": True, "error": f"could not read plan: {e}", "blockers": ["unreadable plan"]}
 
 
-def _prep_summary(workspace):
+def _current_fingerprints(workspace):
+    """Current values for the CHEAP artifact-dep freshness check (`plan_dependencies_fresh`). The
+    costly geotag GPX fingerprint is deliberately omitted — that's the phase's deep check, run at
+    execute. Keys match what the phases record in `depends_on`."""
+    fps = {
+        "folders_fingerprint": U.folders_fingerprint(),
+        "media_extensions_fingerprint": U.media_extensions_fingerprint(),
+    }
+    try:
+        fps["config_fingerprint"] = U.sha256_file(U.config_path(workspace))
+    except OSError:
+        pass
+    try:
+        fps["filename_format_fingerprint"] = U.sha256_text(U.CONFIG["filename_timestamp_format"])
+        fps["camera_group_fingerprint"] = U.sha256_text(
+            json.dumps(U.CONFIG.get("camera_time_and_timezone_policy") or {}, sort_keys=True))
+    except Exception:
+        pass
+    try:
+        hp = U.handoff_path(workspace)
+        if os.path.exists(hp):
+            with open(hp) as f:
+                fps["handoff"] = U.handoff_content_fingerprint(json.load(f))
+    except (OSError, ValueError):
+        pass
+    return fps
+
+
+def _staleness(workspace, plan, cur):
+    """Cheap stale reasons for a loaded plan's deps (empty if cur not supplied)."""
+    if cur is None:
+        return []
+    return U.plan_dependencies_fresh(workspace, plan.get("depends_on") or {}, cur)
+
+
+def _prep_summary(workspace, cur=None):
     plan, miss = _read_plan(U.prep_plan_path(workspace))
     if plan is None:
         return miss
@@ -126,13 +161,14 @@ def _prep_summary(workspace):
     op_line = " · ".join(f"{t} {n}" for t, n in sorted(counts.items())) or "none"
     return {
         "exists": True, "plan_id": plan.get("plan_id"), "operations": len(ops), "blockers": blockers,
+        "stale": _staleness(workspace, plan, cur),
         "lines": [f"{len(ops)} operation(s):", f"  {op_line}",
                   f"  no-op / already-correct {summ.get('no_op_files', 0)} · "
                   f"warnings {len(plan.get('warnings', []) or [])} · blockers {len(blockers)}"],
     }
 
 
-def _geotag_summary(workspace):
+def _geotag_summary(workspace, cur=None):
     from ..photos_2_geotag import executable_plan_path
     plan, miss = _read_plan(executable_plan_path(workspace))
     if plan is None:
@@ -142,12 +178,13 @@ def _geotag_summary(workspace):
     blockers = list(plan.get("blockers", []) or [])
     return {
         "exists": True, "plan_id": plan.get("plan_id"), "operations": ops, "blockers": blockers,
+        "stale": _staleness(workspace, plan, cur),
         "lines": [f"{ops} time/GPS write(s) across {len(dests)} destination(s)",
                   f"  status {plan.get('status', '?')} · blockers {len(blockers)}"],
     }
 
 
-def _merge_summary(workspace):
+def _merge_summary(workspace, cur=None):
     from ..photos_3_merge import merge_plan_path
     plan, miss = _read_plan(merge_plan_path(workspace))
     if plan is None:
@@ -157,6 +194,7 @@ def _merge_summary(workspace):
     placed = t.get("placed_new", 0)
     return {
         "exists": True, "plan_id": plan.get("plan_id"), "operations": placed, "blockers": blockers,
+        "stale": _staleness(workspace, plan, cur),
         "lines": [f"{placed} new · {t.get('already_present', 0)} already-present · "
                   f"{t.get('renamed_for_library', 0)} renamed · {t.get('blocked', 0)} blocked into the "
                   f"permanent library", f"  blockers {len(blockers)}"],
@@ -166,61 +204,104 @@ def _merge_summary(workspace):
 _SUMMARIZERS = {"prep": _prep_summary, "geotag": _geotag_summary, "merge": _merge_summary}
 
 
-def _plan_summary(workspace, phase="prep"):
+def _plan_summary(workspace, phase="prep", cur=None):
     """Summarize the REAL saved plan artifact for `phase` (per the shared contract, the gate shows a
     summary of the actual serialized plan execution will consume — not a JS simulation). Common shape:
-    exists / plan_id / operations / blockers / lines (human summary lines for the gate). Each phase
-    reads its own artifact (prep photos-10, geotag photos-24, merge photos-30)."""
+    exists / plan_id / operations / blockers / stale / lines. Each phase reads its own artifact (prep
+    photos-10, geotag photos-24, merge photos-30). Pass `cur` (current fingerprints) to fill `stale`."""
     fn = _SUMMARIZERS.get(phase)
-    return fn(workspace) if fn else {"exists": False}
+    return fn(workspace, cur) if fn else {"exists": False}
 
 
 def _execute_guard(workspace, phase, payload):
     """Server-side enforcement of the 2-step gate for any phase's execute. Returns an error string to
     refuse, or None to allow. Refused unless the client explicitly confirmed, a saved plan exists with
-    no blockers, and (if supplied) the reviewed plan_id still matches. The phase's own execute still
-    re-validates everything besides (fingerprint, no-clobber, the whole-run lock) — this is the
-    deliberate gate on top, not a replacement."""
+    no blockers, is not stale (cheap dep check), and (if supplied) the reviewed plan_id still matches.
+    The phase's own execute still re-validates everything besides (full fingerprint incl. GPX,
+    no-clobber, the whole-run lock) — this is the deliberate gate on top, not a replacement."""
     if not payload.get("confirm"):
         return "execute requires explicit confirmation"
-    s = _plan_summary(workspace, phase)
+    s = _plan_summary(workspace, phase, _current_fingerprints(workspace))
     if not s.get("exists"):
         return "no saved plan — run plan first"
     if s.get("error"):
         return s["error"]
     if s.get("blockers"):
         return f"plan has {len(s['blockers'])} blocker(s) — resolve them and re-plan"
+    if s.get("stale"):
+        return f"plan is stale ({s['stale'][0]}) — re-plan"
     pid = payload.get("plan_id")
     if pid and pid != s.get("plan_id"):
         return "the plan changed since you reviewed it — re-open the gate"
     return None
 
 
+def _runnable_actions(workspace, phases, sealed, busy):
+    """Per-command affordance from VISIBLE artifacts (not a deep validation): {cmd: {ok, reason}}.
+    Encodes the sequential pipeline (prep → geotag → merge) + plan-exists/executable/staleness, plus
+    the sealed and run-in-progress global stops. The core still validates in depth and refuses; this
+    only stops the UI offering actions that can't currently make sense."""
+    out = {}
+
+    def g(cmd, ok, reason=""):
+        out[cmd] = {"ok": bool(ok), "reason": "" if ok else reason}
+
+    if sealed:
+        for c in _RUNNABLE:
+            g("/".join(c), False, "workspace is sealed (already merged)")
+        return out
+    if busy:
+        for c in _RUNNABLE:
+            g("/".join(c), False, "a run is in progress")
+        return out
+
+    from ..photos_2_geotag import complete_log_path
+    pe, ge, me = phases["prep"], phases["geotag"], phases["merge"]
+    prep_done = os.path.exists(U.handoff_path(workspace))         # prep executed → handoff written
+    geotag_done = os.path.exists(complete_log_path(workspace))    # geotag finalized → complete log
+
+    g("prep/plan", True)
+    g("prep/dry-run", pe["plan_exists"], "run prep plan first")
+    g("prep/execute", pe["executable"], "needs a clean, blocker-free, fresh prep plan")
+    g("geotag/plan", prep_done, "run prep execute first")
+    g("geotag/execute", ge["executable"], "needs a clean, fresh geotag plan")
+    g("merge/plan", geotag_done, "finish geotag (finalize) first")
+    g("merge/dry-run", me["plan_exists"], "run merge plan first")
+    g("merge/execute", me["executable"], "needs a clean, fresh merge plan")
+    return out
+
+
 def _state(workspace):
-    """Transient state for the chrome: workspace flags, lock, current job, and per-phase hints derived
-    from each phase's saved plan (plan_exists / plan_id / blockers / executable). Cheap, best-effort —
-    never the source of truth."""
+    """Transient state for the chrome: workspace flags, lock, current job, per-phase hints (incl.
+    staleness) and per-command affordance (`actions`). Cheap, best-effort — never the source of truth."""
     lock = U.WorkspaceLock(workspace)
     try:
         owner = lock.read_owner()
     except Exception:
         owner = None
+    sealed = bool(U.is_sealed(workspace))
+    cur = _current_fingerprints(workspace)
     phases = {}
     for ph in ("prep", "geotag", "merge"):
-        s = _plan_summary(workspace, ph)
+        s = _plan_summary(workspace, ph, cur)
+        stale = list(s.get("stale", []) or [])
         phases[ph] = {
             "plan_exists": bool(s.get("exists")),
             "plan_id": s.get("plan_id"),
             "blockers": len(s.get("blockers", []) or []),
-            # executable = a plan exists, parses, and has no blockers (mirrors the gate's check)
-            "executable": bool(s.get("exists") and not s.get("blockers") and not s.get("error")),
+            "stale": len(stale),
+            # executable = a plan exists, parses, has no blockers, and is not stale (mirrors the gate)
+            "executable": bool(s.get("exists") and not s.get("blockers")
+                               and not s.get("error") and not stale),
         }
+    busy = JOBS.running or bool(owner)
     return {
         "workspace": os.path.abspath(workspace),
-        "sealed": bool(U.is_sealed(workspace)),
+        "sealed": sealed,
         "lock_owner": owner,
         "job": JOBS.status(),
         "runnable": sorted("/".join(p) for p in _RUNNABLE),
+        "actions": _runnable_actions(workspace, phases, sealed, busy),
         "phases": phases,
     }
 
@@ -279,7 +360,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/plan-summary":
             from urllib.parse import parse_qs, urlparse
             phase = (parse_qs(urlparse(self.path).query).get("phase") or ["prep"])[0]
-            return self._send(200, _plan_summary(self.workspace, phase))
+            return self._send(200, _plan_summary(self.workspace, phase, _current_fingerprints(self.workspace)))
         if path == "/api/events":
             return self._serve_events()
         if path == "/":
