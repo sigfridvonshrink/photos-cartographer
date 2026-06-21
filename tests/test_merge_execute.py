@@ -358,17 +358,17 @@ def test_re_plan_after_partial_is_refused(tmp_path):
     assert open(merge.merge_plan_path(str(ws))).read() == plan_before   # plan untouched
 
 
-def test_re_plan_after_failed_is_refused(tmp_path):
-    # An all-blocked run is `failed` (nothing placed) — but it still entered the execute phase and left
-    # an unsealed summary, so it's in-flight: re-plan is refused, resume via execute (same as partial).
+def test_re_plan_after_failed_is_allowed(tmp_path):
+    # An all-blocked run is `failed` — nothing was placed, every source is still in by-dest. Like a
+    # `rejected` run, it moved nothing, so re-planning is allowed (no moved file to drop from the log);
+    # the re-plan refusal applies only to runs that actually moved files (partial/success).
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
                   library_files=[{"fp": "FAIL", "dest": "Trip", "name": "a.jpg"}])
     assert merge._run_locked_workflow("plan", str(ws)) == 0
     assert merge._run_locked_workflow("execute", str(ws)) == 3          # the only file blocked -> failed
     assert _summary(ws)["status"] == "failed"
-    plan_before = open(merge.merge_plan_path(str(ws))).read()
-    assert merge._run_locked_workflow("plan", str(ws)) == 2             # re-plan still refused
-    assert open(merge.merge_plan_path(str(ws))).read() == plan_before
+    assert os.path.exists(_src(ws, "Trip", "a.jpg"))                    # nothing moved — source remains
+    assert merge._run_locked_workflow("plan", str(ws)) == 0             # re-plan allowed
 
 
 def test_re_plan_allowed_when_no_partial(tmp_path):
