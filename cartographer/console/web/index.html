@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cartographer console</title>
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="console.css">
+</head>
+<body>
+  <header id="topbar">
+    <strong class="title">Cartographer</strong>
+    <span id="workspace" class="ws"></span>
+    <span class="grow"></span>
+    <span id="lock" class="lock"></span>
+    <div class="seg" id="tabs">
+      <button data-phase="prep" class="on">Prep</button>
+      <button data-phase="geotag" disabled title="coming in v2.3">Geotag</button>
+      <button data-phase="merge" disabled title="coming in v2.3">Merge</button>
+      <button data-phase="edit" disabled title="coming in v2.4">Edit</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="actions">
+      <span id="phase-status" class="chip">—</span>
+      <span class="grow"></span>
+      <button id="btn-plan" class="btn primary">Plan</button>
+      <button id="btn-dry" class="btn">Dry-run</button>
+      <button id="btn-exec" class="btn" disabled title="execute + the confirm gate land in v2.2">Execute</button>
+    </div>
+
+    <section class="progress">
+      <p class="cap">Progress</p>
+      <div id="prog-list" class="prog-list"><p class="idle">No active task.</p></div>
+    </section>
+
+    <section class="logwrap">
+      <p class="cap">Log <button id="clear" class="mini">clear</button></p>
+      <pre id="log" class="log" aria-live="polite"></pre>
+    </section>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,51 @@
+/* Console layout. Visual language comes from tokens.css (shared with the editor); this file is only
+   the console's own structure. Per the agreed UI: tabs, an actions bar, a compact progress strip, and
+   a full-width log pane that grows (the log has wide lines and is the thing you watch). */
+* { box-sizing: border-box; }
+body { margin: 0; height: 100vh; display: flex; flex-direction: column;
+  font: 14px/1.45 var(--ui); color: var(--fg); background: var(--bg); }
+.grow { flex: 1; }
+
+#topbar { display: flex; align-items: center; gap: 12px; padding: 8px 14px;
+  background: var(--surface); border-bottom: 1px solid var(--line); }
+#topbar .title { font: 600 14px var(--ui); }
+.ws { font: 12px var(--mono); color: var(--muted); }
+.lock { font: 12px var(--mono); color: var(--muted); }
+
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.seg button { background: transparent; color: var(--muted); border: 0; padding: 5px 14px; cursor: pointer; font: 13px var(--ui); }
+.seg button.on { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.seg button:disabled { opacity: .4; cursor: default; }
+
+.btn { font: 13px var(--ui); padding: 5px 14px; border-radius: var(--r); cursor: pointer;
+  background: var(--raised); color: var(--fg); border: 1px solid var(--line); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.btn:disabled { opacity: .4; cursor: default; }
+.mini { font: 11px var(--ui); background: transparent; color: var(--muted); border: 1px solid var(--line);
+  border-radius: 4px; padding: 1px 7px; cursor: pointer; }
+.mini:hover { color: var(--fg); }
+
+.chip { font: 11px var(--mono); padding: 1px 8px; border-radius: 10px; background: var(--raised); color: var(--muted); }
+.chip.ok { background: var(--ok-bg); color: var(--ok); }
+.chip.run { background: var(--ok-bg); color: var(--accent); }
+
+main { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding: 14px; }
+.actions { display: flex; align-items: center; gap: 10px; }
+
+.cap { font: 600 10px var(--ui); text-transform: uppercase; letter-spacing: .09em; color: var(--faint); margin: 0 0 8px; }
+.progress { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 10px 12px; flex: none; }
+.prog-list { display: flex; flex-direction: column; gap: 8px; }
+.prog-list .idle { margin: 0; color: var(--faint); font: 12px var(--mono); }
+.prog-row { display: grid; grid-template-columns: 220px 1fr auto; align-items: center; gap: 12px; font: 12px var(--mono); }
+.prog-row .pl { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.track { height: 8px; background: var(--raised); border-radius: 999px; overflow: hidden; }
+.fill { height: 100%; background: var(--accent); transition: width .2s linear; }
+.prog-row .pn { color: var(--fg); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.logwrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.log { flex: 1; min-height: 0; overflow: auto; margin: 0; padding: 8px 12px;
+  background: var(--bg); border: 1px solid var(--line); border-left: 3px solid var(--ok); border-radius: var(--r);
+  font: 12px var(--mono); white-space: pre-wrap; word-break: break-word; color: var(--muted);
+  font-variant-numeric: tabular-nums; }
+.log .w { color: var(--warn); }
+.log .e { color: var(--bad); }
