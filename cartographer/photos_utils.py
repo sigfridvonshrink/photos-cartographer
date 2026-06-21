@@ -1826,6 +1826,13 @@ def _rename_no_clobber_same_fs(src: str, dest: str):
         # renameat2 not supported on this kernel/fs — fall through to the hardlink fallback.
     _move_link_unlink(src, dest)                         # raises FileExistsError / OSError(EXDEV)
 
+# Recognizable, deterministic prefix/suffix for the cross-fs copy temp (shared contract §15.3). A
+# crash mid-copy leaves a `<prefix>*<suffix>` orphan in the DESTINATION dir; because merge holds the
+# library lock (only one merge per library at a time), merge can safely sweep these on the next run.
+XDEV_TMP_PREFIX = ".tmp-xdev-"
+XDEV_TMP_SUFFIX = ".part"
+
+
 def _move_cross_fs_no_clobber(src: str, dest: str, verify=None):
     """Cross-filesystem no-clobber move (shared contract §15.3) — the fallback when a plain move
     cannot cross filesystems (EXDEV). Copy src to a temporary name on the DESTINATION filesystem,
@@ -1836,7 +1843,7 @@ def _move_cross_fs_no_clobber(src: str, dest: str, verify=None):
     `verify(src, tmp)` runs before the copy is exposed under the final name and must raise to abort;
     it defaults to a byte-size equality check. (The merge phase, §11, can pass a fingerprint check.)"""
     dest_dir = os.path.dirname(dest) or "."
-    fd, tmp = tempfile.mkstemp(dir=dest_dir, prefix=".tmp-xdev-", suffix=".part")
+    fd, tmp = tempfile.mkstemp(dir=dest_dir, prefix=XDEV_TMP_PREFIX, suffix=XDEV_TMP_SUFFIX)
     os.close(fd)
     try:
         shutil.copyfile(src, tmp)                       # contents

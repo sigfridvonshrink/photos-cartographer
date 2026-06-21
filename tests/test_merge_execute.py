@@ -341,6 +341,22 @@ def test_execute_jobs_determinism(tmp_path):
     assert _comparable(_summary(ws1)) == _comparable(_summary(ws2))
 
 
+def test_execute_sweeps_crash_orphaned_cross_fs_temps(tmp_path):
+    """A prior interrupted run can leave a cross-fs copy temp (.tmp-xdev-*.part) in a library dir.
+    Because merge holds the library lock (no concurrent merge), execute safely sweeps such orphans
+    from the dirs it targets before placing — they never accumulate in the precious library tree."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    (lib / "Trip").mkdir(parents=True, exist_ok=True)
+    orphan = lib / "Trip" / (utils.XDEV_TMP_PREFIX + "deadbeef" + utils.XDEV_TMP_SUFFIX)
+    orphan.write_bytes(b"half-copied debris")
+    keep = lib / "Trip" / "unrelated.txt"; keep.write_bytes(b"keep")   # a non-temp file is never touched
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    assert not orphan.exists()                                         # crash debris swept
+    assert keep.read_bytes() == b"keep"                               # ordinary files untouched
+    assert _summary(ws)["run_metadata"]["orphan_temps_swept"] >= 1
+
+
 def test_execute_jobs_identical_library_file_tree(tmp_path):
     """Beyond the summary, the placed LIBRARY file tree is byte-identical under -j1 vs -j4 — the
     move pass has no concurrency-dependent semantics (relative paths + bytes match exactly)."""
