@@ -510,6 +510,10 @@ def serve(workspace, port, host):
     if bound != port:
         print(f"  (port {port} was busy — using {bound})")
     print(f"  open  http://{link_host}:{bound}/")
+    hint = U.ssh_tunnel_hint(bound, host)
+    if hint:
+        print("  loopback-only — from your local machine, tunnel then open the URL above:")
+        print(f"    {hint}")
     print("  (Ctrl-C to stop)", flush=True)
     try:
         server.serve_forever()
