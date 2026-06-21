@@ -437,3 +437,28 @@ def test_invalid_merge_policy_blocks_with_no_summary_no_placement(tmp_path):
     assert not os.path.exists(merge.merge_plan_path(str(ws)))   # no plan
     assert not os.path.exists(merge.merge_summary_path(str(ws)))  # no summary
     assert list(lib.iterdir()) == [lib / ".photos-library"]    # nothing placed
+
+
+def test_sealed_new_dump_left_in_place_and_library_untouched(tmp_path):
+    """The merge sealed-workspace path warns about a new dump but relocates nothing: the dumped file
+    stays byte-identical in 0-sources and the library is untouched (only its marker)."""
+    ws, lib = _make(tmp_path, sources_files=("newdump.jpg",))
+    (ws / "0-sources" / "newdump.jpg").write_bytes(b"keepme")
+    (_ctl(ws) / "photos-00-sealed.json").write_text('{"sealed": true, "merged_run_id": "r1"}')
+    assert merge._run_locked_workflow("plan", str(ws)) == 2     # SEALED blocker
+    assert (ws / "0-sources" / "newdump.jpg").read_bytes() == b"keepme"   # left in place
+    assert list(lib.iterdir()) == [lib / ".photos-library"]    # library untouched
+
+
+def test_lock_contention_covers_execute_not_just_plan(tmp_path):
+    """The whole-run lock covers EXECUTE, not only plan: with the workspace lock held by another run,
+    `execute` fails fast (rc 1) and writes no summary / places nothing."""
+    ws, lib = _make(tmp_path)
+    held = utils.WorkspaceLock(str(ws))
+    assert held.acquire() is True
+    try:
+        assert merge._run_locked_workflow("execute", str(ws)) == 1   # refused under contention
+    finally:
+        held.release()
+    assert not os.path.exists(merge.merge_summary_path(str(ws)))  # nothing executed
+    assert list(lib.iterdir()) == [lib / ".photos-library"]

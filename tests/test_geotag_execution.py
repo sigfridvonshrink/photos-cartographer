@@ -211,6 +211,18 @@ def test_execute_j1_and_jN_produce_identical_summary_and_tree(tmp_path, monkeypa
     assert t1 == t4 == ["2024-07-03--14-00-00.arw", "2024-07-03--15-00-00.arw"]  # identical tree
 
 
+def test_geotag_leaves_config_byte_identical(tmp_path, monkeypatch):
+    """Geotag never writes the workspace config (photos-00-config.json is hand-edited, authoritative).
+    Snapshot its bytes, drive the full plan + execute, assert byte-for-byte identical (the geotag half
+    of config-merge-readonly; the merge half is covered in test_merge_execute)."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)                   # _ready_ws already ran `plan` twice
+    cfg_p = ctl / "photos-00-config.json"
+    before = cfg_p.read_bytes()
+    _mock_tools(monkeypatch, ws)
+    assert _execute(monkeypatch, ws) == 0
+    assert cfg_p.read_bytes() == before                          # config untouched across plan+execute
+
+
 # --- stale rejection ---------------------------------------------------------
 
 def test_stale_plan_is_rejected_without_mutation(tmp_path, monkeypatch):
