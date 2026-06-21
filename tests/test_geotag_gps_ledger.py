@@ -113,6 +113,31 @@ def test_withdrawn_override_plans_revert(tmp_path):
     assert rv[0]["writes"] == {"GPSLatitude": "", "GPSLongitude": "", "GPSProcessingMethod": ""}  # clear
 
 
+_FORWARD_PLUS_GPS_REVERT = {"metadata_time_write", "metadata_gps_write", "gps_marker_write",
+                            "rename_no_clobber", "revert_manual_gps"}
+
+
+def test_withdraw_reverts_gps_only_never_time_name_or_destination(tmp_path):
+    """Withdrawing a decision reverts GPS ONLY — geotag has no time/filename revert op at all (time
+    writes + renames are forward-idempotent), and it NEVER relocates a photo across destinations. After
+    a withdraw: a revert_manual_gps is planned, every op stays in the file's own destination, and any
+    rename only changes the basename (an in-dest rename, never a cross-dest move)."""
+    rel = f"{BYDEST}/T/a.jpg"
+    f = _model(rel, f"{BYDEST}/T", native=True)                       # now non-manual -> withdraw
+    wf, t, g, gpx = _plan_wf(tmp_path, [f])
+    ledger = [{"content_fingerprint": "fp-" + rel, "relative_path": rel,
+               "pre_state": {"present": False}, "captured_at": "t0"}]
+    plan, _ = wf.build_executable_plan([f], [_row(rel)], t, g, gpx, "rfp", ledger)
+    ops = [o for dd in plan["destinations"].values() for o in dd["operations"]]
+    types = {o["type"] for o in ops}
+    assert "revert_manual_gps" in types                              # GPS is reverted
+    assert types <= _FORWARD_PLUS_GPS_REVERT                         # no time/name REVERT op exists
+    for o in ops:
+        assert os.path.dirname(o["relative_path"]) == f"{BYDEST}/T"  # stays in its destination
+        if o["type"] == "rename_no_clobber":
+            assert "/" not in o["to"]                                # basename-only -> in-dest rename
+
+
 def test_still_manual_no_revert(tmp_path):
     rel = f"{BYDEST}/T/a.jpg"
     f = _model(rel, f"{BYDEST}/T")                                     # no native GPS
