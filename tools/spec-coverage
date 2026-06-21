@@ -68,40 +68,45 @@ def main():
         clauses = json.load(f)["clauses"]
     tagged = _collect_tagged()
 
-    rows = [(c, tagged.get(c["id"], [])) for c in clauses]
-    uncovered = [c["id"] for c, tests in rows if not tests]
+    # The registry is the living clause INDEX (every spec clause + its spec pointer). The GATE applies
+    # only to `must_cover` clauses — the curated safety subset that must keep a test. Other clauses are
+    # tracked (and may carry a test) but not gated; tagging more of them grows the gated set over time.
+    must = [c for c in clauses if c.get("must_cover")]
+    uncovered = [c["id"] for c in must if not tagged.get(c["id"])]
     registered_ids = {c["id"] for c in clauses}
-    extra = sorted(cid for cid in tagged if cid not in registered_ids)  # tagged but not registered
+    extra = sorted(cid for cid in tagged if cid not in registered_ids)   # tagged but not in the index
+    tagged_total = sum(1 for c in clauses if tagged.get(c["id"]))
 
     if args.json:
         print(json.dumps({
-            "total": len(clauses), "covered": len(clauses) - len(uncovered),
-            "uncovered": uncovered, "extra_untracked": extra,
+            "clauses_total": len(clauses), "must_cover": len(must),
+            "must_cover_covered": len(must) - len(uncovered), "uncovered_must_cover": uncovered,
+            "tagged_total": tagged_total, "extra_untracked": extra,
             "coverage": {c["id"]: tagged.get(c["id"], []) for c in clauses},
         }, indent=2))
         return 1 if uncovered else 0
 
     if args.verbose:
-        for c, tests in sorted(rows, key=lambda r: (not r[1], r[0]["area"], r[0]["id"])):
-            mark = "ok " if tests else "GAP"
-            print(f"  [{mark}] {c['id']:46} ({c['area']}, {c['criticality']})  {len(tests)} test(s)")
-            for t in tests:
-                print(f"          {t}")
+        for c in sorted(clauses, key=lambda c: (not c.get("must_cover"), c["area"], c["id"])):
+            tests = tagged.get(c["id"], [])
+            flag = "GATE" if c.get("must_cover") else "    "
+            mark = "ok " if tests else ("GAP" if c.get("must_cover") else "-  ")
+            sp = c.get("spec", {})
+            print(f"  [{flag} {mark}] {c['id']:46} ({c['area']}, {c['criticality']}) "
+                  f"{sp.get('file', '?')} §{sp.get('section', '?')}  {len(tests)} test(s)")
 
-    covered = len(clauses) - len(uncovered)
-    print(f"\nspec-coverage: {covered}/{len(clauses)} registered clauses have a test "
-          f"({len(tagged)} clause id(s) tagged across the suite).")
+    print(f"\nspec-coverage: {len(clauses)} clauses indexed; {tagged_total} have a test. "
+          f"Gate: {len(must) - len(uncovered)}/{len(must)} must-cover clauses covered.")
     if extra:
-        print(f"  note: {len(extra)} tagged clause(s) not in the registry (extra coverage): "
-              + ", ".join(extra))
+        print(f"  note: {len(extra)} tagged clause(s) not in the index: " + ", ".join(extra))
     if uncovered:
-        print(f"\nFAIL — {len(uncovered)} registered clause(s) lost their test:")
+        print(f"\nFAIL — {len(uncovered)} must-cover clause(s) lost their test:")
         for cid in uncovered:
             print(f"  - {cid}")
-        print("\nRe-tag a test with @pytest.mark.spec(\"<id>\"), or remove the clause from "
+        print("\nRe-tag a test with @pytest.mark.spec(\"<id>\"), or clear must_cover in "
               "spec/spec-clauses.json if it was intentionally dropped.")
         return 1
-    print("All registered spec clauses are covered. ✓")
+    print("All must-cover spec clauses are covered. ✓")
     return 0
 
 
