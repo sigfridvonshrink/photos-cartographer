@@ -12,12 +12,14 @@ python3 cartographer/editor/generate_examples.py
 The generator self-verifies that **every distinct decision-cell state** appears across the fixtures
 (it fails loudly if one is missing). Structure is documented in `../decision-json-reference.md`.
 
-## The seven fixtures
+## The nine fixtures
 
 | File | Status | Focus |
 |------|--------|-------|
 | `photos-21-time-decisions.requires-input.json` | `requires_user_input` | A realistic trip, unresolved: `config_default` timezones; a GPX **auto-resolved** offset; an **inherited** offset; a **manual-required** offset. |
 | `photos-21-time-decisions.complete.json` | `complete` | The same after editing: **manual** / **inherited** / **accepted** timezones; offsets resolved via GPX-auto, **accepted-inherited**, and **manual**. |
+| `photos-22-gps-drift-validation.requires-input.json` | `requires_user_input` | Per-camera **drift** validation awaiting review — a proposed clock-drift offset to confirm against the track segment. |
+| `photos-22-gps-drift-validation.complete.json` | `complete` | The drift cell resolved: an `effective_drift_offset` (`gps_drift_validated`) over the matched frames + track segment. |
 | `photos-23-gps-decisions.requires-input.json` | `requires_user_input` | Per-destination summaries; **blocked** files surfaced as `review_items` (`no_reliable_gps_source`). |
 | `photos-23-gps-decisions.complete.json` | `complete` | Every GPS category — preserve-native, interpolation, **extrapolation**, **manual** & **inherited** folder fallback — and the two review resolutions (`manual_locked`, `accepted_unlocated`). |
 | `photos-21-time-decisions.offset-variants.json` | `complete` | The GPX-offset proposal/resolution variants: `confidence` **high** (point) / **medium** (segment) / **review_required** (conflicting anchors); effective sources **gpx_anchor_accepted** (single anchor), **manual_real_utc**, and **manual**. |
@@ -39,6 +41,8 @@ by the real edit→re-run round-trip, so they also illustrate the loop the edito
 - **GPS categories:** preserve-native, GPX interpolation, GPX extrapolation, folder fallback
   (manual + inherited+accepted); review reasons `no_reliable_gps_source`, `manual_locked`,
   `accepted_unlocated`.
+- **GPS-drift validation (`photos-22`):** a per-camera drift cell `requires_user_input` (proposed
+  offset awaiting review) and resolved (`effective_drift_offset`, source `gps_drift_validated`).
 - **Cell flags:** `requires_user_input` true/false; `stale_user_decision` true.
 - **Structure:** a by-dest-root destination; a phone-only destination (no offset cells); destination
   hierarchy with parent→child inheritance of timezone, offset, and fallback.

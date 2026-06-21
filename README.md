@@ -193,7 +193,7 @@ per-phase specs:
 | [`photos-1-prep-workflow.md`](spec/photos-1-prep-workflow.md) | **Phase 1 — prep:** consolidation, extension normalization, dedup/quarantine, date-organization, cache/handoff. |
 | [`photos-2-geotag-workflow.md`](spec/photos-2-geotag-workflow.md) | **Phase 2 — geotag:** timezone resolution, automatic camera-clock-offset inference, and track-based GPS placement. |
 | [`photos-3-merge-workflow.md`](spec/photos-3-merge-workflow.md) | **Phase 3 — merge:** safe merge of the finalized working set into the permanent folder-based library. |
-| [`photos-shared-contract.md`](spec/photos-shared-contract.md) | Facts all phases share: the run lock, the `.photos-ingest/` control directory, `photos-00-config.json`, the registry, formats, `gpx_root`, and the end-to-end operator loop. |
+| [`photos-shared-contract.md`](spec/photos-shared-contract.md) | Facts all phases share: the run lock, the `.photos-ingest/` control directory, `photos-00-config.json`, formats, `gpx_root`, and the end-to-end operator loop. |
 
 ## Requirements
 
@@ -214,7 +214,7 @@ its map tiles and place search use OpenStreetMap/Nominatim at runtime and degrad
 
 - `cartographer/` — the pipeline package: `photos_1_prep.py` / `photos_2_geotag.py` /
   `photos_3_merge.py` (the three phases) + `photos_utils.py` (shared `CONFIG` + utilities) + `cli.py`
-  (the combined `photos-cartographer` entry) + `editor/` (the locally-served Time/Drift/GPS decision app — a map-based web UI — that drives the worklist above).
+  (the combined `photos-cartographer` entry) + `editor/` (the locally-served Time/Drift/GPS decision app — a map-based web UI — that drives the worklist above) + `console/` (the operational web console: run and monitor every phase from a browser over the cwd workspace).
   Run a phase with `python3 -m cartographer <phase> <subcommand>` (from the repo root),
   or build the self-contained `photos-cartographer` zipapp with `tools/build-pyz`.
 - `spec/` — the authoritative specifications. `tests/` — the test suite.
@@ -223,19 +223,21 @@ its map tiles and place search use OpenStreetMap/Nominatim at runtime and degrad
 ## Tests and coverage
 
 The geotag phase — the one that writes time and GPS into irreplaceable originals — is the most heavily tested,
-at **98.4% line / 96.8% branch** coverage. Across the whole codebase the suite covers **90.9% of lines and
-86.8% of branches**; the lighter areas are the merge phase and the editor's local server, neither of which
-writes metadata into the photos.
+at **98.4% line / 96.9% branch** coverage. Across the whole codebase the suite covers **88.9% of lines and
+85.0% of branches**; the lighter areas are the two local web servers (the console and the editor), neither of
+which writes metadata into the photos — they are thin affordance layers over the same plan/validate/execute
+core that the heavily-tested phases provide.
 
 | Component | Line | Branch |
 |---|---:|---:|
-| prep (`photos_1_prep`) | 89.8% | 83.1% |
-| geotag (`photos_2_geotag`) | 98.4% | 96.8% |
-| merge (`photos_3_merge`) | 84.4% | 80.9% |
-| shared (`photos_utils`) | 89.6% | 84.3% |
-| cli | 87.5% | 75.0% |
-| editor server | 78.8% | 76.7% |
-| **Total** | **90.9%** | **86.8%** |
+| prep (`photos_1_prep`) | 90.0% | 83.3% |
+| geotag (`photos_2_geotag`) | 98.4% | 96.9% |
+| merge (`photos_3_merge`) | 86.4% | 83.6% |
+| shared (`photos_utils`) | 89.4% | 84.7% |
+| cli | 87.9% | 75.0% |
+| console server | 57.3% | 46.7% |
+| editor server | 77.8% | 75.0% |
+| **Total** | **88.9%** | **85.0%** |
 
 Run the suite from the repository root (`conftest.py` puts the repo root on `sys.path`):
 
