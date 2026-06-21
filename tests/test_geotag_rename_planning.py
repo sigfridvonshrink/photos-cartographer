@@ -73,6 +73,20 @@ def test_already_correctly_named_is_no_rename():
     assert _names(rows) == [("2024-07-03--14-12-21.jpg", "2024-07-03--14-12-21.jpg", False)]
 
 
+def test_move_between_destinations_reevaluates_under_new_tz_no_carry():
+    """Moving a photo to a new destination re-evaluates its name under the NEW dest's timezone — the
+    old destination's local time is never carried. geotag re-derives every run from the handoff (it
+    keeps no cross-run resolution cache), so the same resolved UTC under Brussels vs Tokyo yields
+    different destination-local names."""
+    utc = "2024-07-03T12:00:00Z"
+    in_brussels = cal.plan_renames([_f("6-photos-by-dest/Brussels/a.arw", utc, "Europe/Brussels")], FMT)
+    in_tokyo = cal.plan_renames([_f("6-photos-by-dest/Tokyo/a.arw", utc, "Asia/Tokyo")], FMT)
+    assert _names(in_brussels) == [("a.arw", "2024-07-03--14-00-00.arw", True)]   # +2 (summer)
+    assert _names(in_tokyo) == [("a.arw", "2024-07-03--21-00-00.arw", True)]      # +9, re-evaluated
+    # the Tokyo name carries nothing from the Brussels evaluation
+    assert in_tokyo[0]["planned_name"] != in_brussels[0]["planned_name"]
+
+
 def test_collision_gets_suffix():
     rows = cal.plan_renames([_f("6-photos-by-dest/T/a.jpg", "2024-07-03T12:12:21Z"),
                              _f("6-photos-by-dest/T/b.jpg", "2024-07-03T12:12:21Z")], FMT)
