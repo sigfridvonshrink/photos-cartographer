@@ -5,9 +5,11 @@ phase runs (in-process, single-slot via JobRunner) and streams their status to t
 (via WebSink). One mutation path: every action calls the phase's own ``run()``; the web layer never
 re-implements a move/plan. Operates on the cwd workspace, like every other phase.
 
-Scope so far: prep ``plan`` / ``dry-run`` + live monitoring (v2.1), and prep ``execute`` behind the
-explicit 2-step confirm gate (v2.2 — see ``_execute_guard`` / ``_plan_summary``). geotag/merge tabs
-and the folded-in editor follow.
+Scope: all three phases' plan / dry-run / monitoring + every ``execute`` behind the explicit 2-step
+confirm gate (``_execute_guard`` / ``_plan_summary``), the folded-in decision editor, and — for full
+CLI parity (v2.5) — geotag ``finalize`` (non-destructive package bundling, a plain run) and prep
+``prune-quarantine`` (the sole op a sealed workspace permits; its destructive ``--yes`` delete is gated
+by ``_prune_guard``). Every phase command is now driveable from the console.
 
 Static assets are package data (``cartographer/console/web``) read via importlib.resources, so they
 resolve identically from a checkout and from inside the zipapp. The shared design system
@@ -36,11 +38,13 @@ _CONTENT_TYPES = {
 }
 
 # (phase, command) pairs the console may trigger. Non-mutating planning/validation for all three
-# phases; prep execute is mutating and goes through the explicit 2-step gate (_execute_guard) — never
-# a one-click run. geotag/merge execute (each needing its own gate) is deferred to v2.3.1.
+# phases; every phase's `execute` is mutating and goes through the explicit 2-step gate
+# (_execute_guard) — never a one-click run. The set now covers ALL CLI commands (v2.5 — full parity):
+# geotag `finalize` (non-destructive package bundling, a plain run) and prep `prune-quarantine` (the
+# sole op allowed on a sealed workspace; its destructive --yes delete is gated by _prune_guard).
 _RUNNABLE = {
-    ("prep", "plan"), ("prep", "dry-run"), ("prep", "execute"),
-    ("geotag", "plan"), ("geotag", "execute"),
+    ("prep", "plan"), ("prep", "dry-run"), ("prep", "execute"), ("prep", "prune-quarantine"),
+    ("geotag", "plan"), ("geotag", "execute"), ("geotag", "finalize"),
     ("merge", "init-library"), ("merge", "plan"), ("merge", "dry-run"), ("merge", "execute"),
 }
 
@@ -114,6 +118,15 @@ def _read_plan(path):
             return json.load(f), None
     except (OSError, ValueError) as e:
         return None, {"exists": True, "error": f"could not read plan: {e}", "blockers": ["unreadable plan"]}
+
+
+def _json_status(path):
+    """The `status` field of a JSON artifact, or None if absent/unreadable — a cheap visible-state read."""
+    try:
+        with open(path) as f:
+            return (json.load(f) or {}).get("status")
+    except (OSError, ValueError):
+        return None
 
 
 def _current_fingerprints(workspace):
@@ -239,6 +252,36 @@ def _execute_guard(workspace, phase, payload):
     return None
 
 
+def _prune_extra(payload):
+    """Build the prune-quarantine argv from a payload `prune` block: selectors (plan_ids / all /
+    older_than_days) and the destructive `delete` (→ --yes). No `delete` ⇒ a safe dry-run (no --yes)."""
+    pr = payload.get("prune") or {}
+    extra = []
+    for pid in (pr.get("plan_ids") or []):
+        extra += ["--plan-id", str(pid)]
+    if pr.get("older_than_days") is not None:
+        extra += ["--older-than-days", str(int(pr["older_than_days"]))]
+    if pr.get("all"):
+        extra += ["--all"]
+    if pr.get("delete"):
+        extra += ["--yes"]
+    return extra
+
+
+def _prune_guard(payload):
+    """Gate the DESTRUCTIVE quarantine delete. A dry-run (no `delete`) is always allowed. A delete
+    requires explicit confirmation AND a selector (a plan id, --all, or older-than-days) so the UI can
+    never one-click an unscoped purge. The core still validates; this is the deliberate gate on top."""
+    pr = payload.get("prune") or {}
+    if not pr.get("delete"):
+        return None                                  # dry-run: safe, no confirmation needed
+    if not payload.get("confirm"):
+        return "quarantine delete requires explicit confirmation"
+    if not (pr.get("plan_ids") or pr.get("all") or pr.get("older_than_days") is not None):
+        return "select what to prune (a plan id, all, or older-than-days) before deleting"
+    return None
+
+
 def _runnable_actions(workspace, phases, sealed, busy):
     """Per-command affordance from VISIBLE artifacts (not a deep validation): {cmd: {ok, reason}}.
     Encodes the sequential pipeline (prep → geotag → merge) + plan-exists/executable/staleness, plus
@@ -249,25 +292,33 @@ def _runnable_actions(workspace, phases, sealed, busy):
     def g(cmd, ok, reason=""):
         out[cmd] = {"ok": bool(ok), "reason": "" if ok else reason}
 
-    if sealed:
-        for c in _RUNNABLE:
-            g("/".join(c), False, "workspace is sealed (already merged)")
-        return out
     if busy:
         for c in _RUNNABLE:
             g("/".join(c), False, "a run is in progress")
         return out
+    if sealed:
+        # A sealed workspace is terminal: everything is refused EXCEPT prune-quarantine, the sole
+        # maintenance op the seal permits (mirrors prep's own carve-out — see _prune_guard / the
+        # seal-prune-exception behavior). Quarantine cleanup must survive the seal.
+        for c in _RUNNABLE:
+            g("/".join(c), c == ("prep", "prune-quarantine"),
+              "" if c == ("prep", "prune-quarantine") else "workspace is sealed (already merged)")
+        return out
 
-    from ..photos_2_geotag import complete_log_path
+    from ..photos_2_geotag import complete_log_path, execution_summary_path
     pe, ge, me = phases["prep"], phases["geotag"], phases["merge"]
     prep_done = os.path.exists(U.handoff_path(workspace))         # prep executed → handoff written
     geotag_done = os.path.exists(complete_log_path(workspace))    # geotag finalized → complete log
+    geotag_executed = _json_status(execution_summary_path(workspace)) == "success"  # ready to finalize
 
     g("prep/plan", True)
     g("prep/dry-run", pe["plan_exists"], "run prep plan first")
     g("prep/execute", pe["executable"], "needs a clean, blocker-free, fresh prep plan")
+    g("prep/prune-quarantine", True)     # maintenance, runnable anytime (the destructive delete is gated)
     g("geotag/plan", prep_done, "run prep execute first")
     g("geotag/execute", ge["executable"], "needs a clean, fresh geotag plan")
+    g("geotag/finalize", geotag_executed and not geotag_done,
+      "finalized already" if geotag_done else "geotag execute must succeed first")
     g("merge/init-library", True)        # one-time setup, runnable anytime (unless sealed/busy)
     g("merge/plan", geotag_done, "finish geotag (finalize) first")
     g("merge/dry-run", me["plan_exists"], "run merge plan first")
@@ -423,6 +474,11 @@ class Handler(BaseHTTPRequestHandler):
             p = (payload.get("path") or "").strip()
             if p:
                 extra = [p]                  # else: blank → bless the configured library_root
+        elif command == "prune-quarantine":
+            err = _prune_guard(payload)      # gate the destructive --yes delete (dry-run is free)
+            if err:
+                return self._send(409, {"ok": False, "error": err})
+            extra = _prune_extra(payload)
         started = JOBS.start(f"{phase} {command}", _make_target(phase, command, extra))
         return self._send(200 if started else 409,
                           {"ok": started, "error": None if started else "a run is already in progress"})
