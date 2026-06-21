@@ -529,18 +529,18 @@ class MergeWorkflow:
 
     def do_plan(self, ws, library_root):
         reporter = get_reporter()
-        # Don't re-plan over a merge that entered the execute phase but is not sealed. Any such run —
-        # `partial`/`failed` (blockers left in by-dest) or `success` but crashed before the seal — is
-        # an IN-FLIGHT merge: a `success`/`partial` one already moved some finalized photos into the
-        # library (their by-dest sources are gone), and re-planning would `continue` past them
-        # (build_merge_plan) and omit them from the merge log a later execute writes — an already-placed
-        # *renamed* file can't be reliably re-located on a fresh plan. The correct resume is `execute`,
-        # which reuses the saved photos-30 (still complete) and finishes/seals. (do_plan is only reached
-        # on an UNSEALED workspace — precondition 0 blocks a sealed one — so a present summary means an
-        # in-flight merge. A `rejected` summary is a PRE-mutation abort that never entered the move
-        # phase and moved nothing, so re-planning after it is safe and allowed.)
+        # Refuse re-plan only over a merge that actually MOVED files but is not sealed — i.e. status
+        # `partial` (some placed, a blocker left in by-dest) or `success` (all placed, crashed before
+        # the seal). Such a run already moved finalized photos into the library (their by-dest sources
+        # are gone), and re-planning would `continue` past them (build_merge_plan) and omit them from
+        # the merge log a later execute writes — an already-placed *renamed* file can't be reliably
+        # re-located on a fresh plan. The correct resume is `execute`, which reuses the saved photos-30
+        # and finishes/seals. A `failed` (all blocked → nothing placed) or `rejected` (pre-mutation
+        # abort) summary moved NOTHING — every source is still in by-dest — so re-planning after it is
+        # safe and allowed (and if upstream inputs changed, execute's staleness check forces a re-plan
+        # anyway). do_plan is only reached on an UNSEALED workspace (precondition 0 blocks a sealed one).
         if os.path.exists(merge_plan_path(ws)) and \
-                _json_get(merge_summary_path(ws), "status") in ("partial", "failed", "success"):
+                _json_get(merge_summary_path(ws), "status") in ("partial", "success"):
             reporter.log(f"A prior merge is in flight but not sealed ({MERGE_SUMMARY_ARTIFACT} present on an "
                   "unsealed workspace): some photos are already in the library. Run `execute` to resume "
                   f"the saved {MERGE_PLAN_ARTIFACT} — it finishes any remaining moves, writes a log "
