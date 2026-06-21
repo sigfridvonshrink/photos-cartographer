@@ -129,7 +129,7 @@ def test_helper_matches_merge_for_each_single_mutation(tmp_path):
     # 3. config changes
     scenarios.append(("config", None, {**cur, "config_fingerprint": "DIFFERENT"}))
 
-    for name, mutate, helper_cur in scenarios:
+    for name, _mutate, _hc in scenarios:
         merge2, ws2, handoff2, plan2, cur2 = _merge_setup(tmp_path / name)
         # rebuild helper_cur relative to this fresh setup, applying the same delta
         hc = dict(cur2)
@@ -148,3 +148,89 @@ def test_helper_matches_merge_for_each_single_mutation(tmp_path):
         h = U.plan_dependencies_fresh(ws2, plan2["depends_on"], hc)
         assert (len(m) > 0) and (len(h) > 0), f"{name}: merge={m} helper={h}"   # both detect stale
         assert len(m) == len(h) == 1, f"{name}: merge={m} helper={h}"           # exactly the one dep
+
+
+# --- equivalence with the real GeotagWorkflow.revalidate_plan --------------
+# geotag's deep check is a SUPERSET of the shared artifact-dep subset: it also revalidates against
+# the GPX index (gpx_fingerprint), the planned operations (plan-tampered), and plan status — none of
+# which the cheap helper covers. So we assert agreement on the shared subset, and explicitly document
+# that gpx is out of the helper's scope (quick ⊆ deep: the helper never reports stale where geotag
+# reports fresh; geotag may report stale where the helper — by design — stays quiet).
+
+def _geotag_setup(tmp_path):
+    import photos_2_geotag as geo
+    ws = str(tmp_path)
+    os.makedirs(os.path.join(ws, U.CONTROL_DIR), exist_ok=True)
+    with open(U.config_path(ws), "w") as f:
+        json.dump({"x": 1}, f)
+    deps = {}
+    for key, pth in (("time_decisions", geo.time_decisions_path(ws)),
+                     ("drift_validation", geo.drift_validation_path(ws)),
+                     ("gps_decisions", geo.gps_decisions_path(ws))):
+        with open(pth, "w") as f:
+            json.dump({"k": key}, f)
+        deps[key] = U.json_dependency(os.path.basename(pth), ws, pth)
+    handoff = {"inventory": ["a"], "run_metadata": {"ignore": 1}}
+    hp = U.handoff_path(ws)
+    with open(hp, "w") as f:
+        json.dump(handoff, f)
+    deps["handoff"] = {"dependency_type": "handoff_content", "artifact_name": os.path.basename(hp),
+                       "artifact_path": os.path.relpath(hp, ws),
+                       "content_fingerprint": U.handoff_content_fingerprint(handoff)}
+    cam = json.dumps(U.CONFIG.get("camera_time_and_timezone_policy") or {}, sort_keys=True)
+    deps["config_fingerprint"] = U.sha256_file(U.config_path(ws))
+    deps["filename_format_fingerprint"] = U.sha256_text(U.CONFIG["filename_timestamp_format"])
+    deps["folders_fingerprint"] = U.folders_fingerprint()
+    deps["media_extensions_fingerprint"] = U.media_extensions_fingerprint()
+    deps["camera_group_fingerprint"] = U.sha256_text(cam)
+    deps["gpx_fingerprint"] = "GPXFP"
+    deps["planned_operation_fingerprint"] = U.sha256_text(json.dumps([], sort_keys=True))
+    plan = {"status": "ready", "destinations": {}, "depends_on": deps}
+    self_obj = SimpleNamespace(workspace_root=ws,
+                               _verify_handoff_dependency=geo.GeotagWorkflow._verify_handoff_dependency)
+    gpx = SimpleNamespace(fingerprint="GPXFP")
+    cur = {  # the cheap shared subset the helper compares (no gpx, no planned-op, no status)
+        "handoff": U.handoff_content_fingerprint(handoff),
+        "config_fingerprint": U.sha256_file(U.config_path(ws)),
+        "filename_format_fingerprint": U.sha256_text(U.CONFIG["filename_timestamp_format"]),
+        "folders_fingerprint": U.folders_fingerprint(),
+        "media_extensions_fingerprint": U.media_extensions_fingerprint(),
+        "camera_group_fingerprint": U.sha256_text(cam),
+    }
+    return geo, ws, self_obj, gpx, plan, cur
+
+
+def _geo_verdict(geo, self_obj, plan, gpx):
+    return geo.GeotagWorkflow.revalidate_plan(self_obj, plan, gpx)
+
+
+def test_helper_matches_geotag_when_fresh(tmp_path):
+    geo, ws, self_obj, gpx, plan, cur = _geotag_setup(tmp_path)
+    assert _geo_verdict(geo, self_obj, plan, gpx) == []                  # geotag deep: fresh
+    assert U.plan_dependencies_fresh(ws, plan["depends_on"], cur) == []  # helper: fresh — agree
+
+
+def test_helper_matches_geotag_on_shared_dep_mutations(tmp_path):
+    # config change (shared scalar) — both flag
+    geo, ws, self_obj, gpx, plan, cur = _geotag_setup(tmp_path / "cfg")
+    with open(U.config_path(ws), "w") as f:
+        json.dump({"x": 999}, f)
+    hc = {**cur, "config_fingerprint": U.sha256_file(U.config_path(ws))}
+    assert _geo_verdict(geo, self_obj, plan, gpx)                        # geotag flags
+    assert U.plan_dependencies_fresh(ws, plan["depends_on"], hc)         # helper flags
+
+    # a json decision artifact changes (shared) — both flag, on the same dep
+    geo2, ws2, so2, gpx2, plan2, cur2 = _geotag_setup(tmp_path / "json")
+    with open(geo2.gps_decisions_path(ws2), "w") as f:
+        json.dump({"k": "CHANGED"}, f)
+    assert any("gps_decisions" in r for r in _geo_verdict(geo2, so2, plan2, gpx2))
+    assert any("gps_decisions" in r for r in U.plan_dependencies_fresh(ws2, plan2["depends_on"], cur2))
+
+
+def test_helper_is_strict_subset_gpx_out_of_scope(tmp_path):
+    # gpx changes: the deep check catches it; the cheap helper deliberately omits gpx → stays quiet.
+    # This is quick ⊆ deep (affordance only): the console can't promise execute will succeed, only
+    # that no CHEAP staleness exists — the core's deep check still runs at execute.
+    geo, ws, self_obj, gpx, plan, cur = _geotag_setup(tmp_path)
+    assert any("gpx" in r for r in _geo_verdict(geo, self_obj, plan, SimpleNamespace(fingerprint="DIFFERENT")))
+    assert U.plan_dependencies_fresh(ws, plan["depends_on"], cur) == []
