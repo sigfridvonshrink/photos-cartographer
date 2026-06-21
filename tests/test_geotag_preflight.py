@@ -124,6 +124,21 @@ def test_missing_handoff_blocks(tmp_path):
 
 # --- by-dest scope gates -----------------------------------------------------
 
+def test_reprep_gate_blocks_and_geotag_never_records_the_move(tmp_path):
+    """Geotag does NO move recognition: a by-dest photo absent from the handoff (prep not re-run after
+    the move) trips the re-prep gate. Geotag refuses and FIXES NOTHING — it never edits the handoff to
+    record the moved file, and by-dest is left byte-identical. Re-recording is prep's job, not geotag's."""
+    ws = _ws(tmp_path, bydest=("6-photos-by-dest/Trip/a.jpg",), handoff_files=[])  # a.jpg unrecorded
+    ho_p = ws / ".photos-ingest" / "photos-11-handoff.json"
+    bd = ws / "6-photos-by-dest" / "Trip" / "a.jpg"
+    ho_before, bd_before = ho_p.read_bytes(), bd.read_bytes()
+    blockers, _, _ = _pf(ws)
+    assert any("prep has not yet recorded" in b for b in blockers), blockers
+    assert ho_p.read_bytes() == ho_before                       # handoff NOT auto-edited by geotag
+    assert bd.read_bytes() == bd_before                         # by-dest untouched
+    assert json.loads(ho_p.read_text())["files"] == []          # the move was never recorded
+
+
 def test_0sources_nonempty_blocks(tmp_path):
     ws = _ws(tmp_path)
     (ws / "0-sources" / "leftover.jpg").write_bytes(b"x")
