@@ -27,7 +27,7 @@
       <span class="grow"></span>
       <button id="btn-plan" class="btn primary">Plan</button>
       <button id="btn-dry" class="btn">Dry-run</button>
-      <button id="btn-exec" class="btn" disabled title="execute + the confirm gate land in v2.2">Execute</button>
+      <button id="btn-exec" class="btn" disabled title="review the plan, then confirm">Execute</button>
     </div>
 
     <section class="progress">
@@ -40,6 +40,19 @@
       <pre id="log" class="log" aria-live="polite"></pre>
     </section>
   </main>
+
+  <div id="gate-overlay" class="gate-overlay" hidden>
+    <div class="gate" role="dialog" aria-modal="true" aria-labelledby="gate-title">
+      <p class="gate-title" id="gate-title">Confirm execute</p>
+      <div id="gate-sum" class="gate-sum"></div>
+      <p class="gate-warn">Moves irreplaceable originals. No-clobber enforced; duplicates are
+        quarantined, never deleted.</p>
+      <div class="gate-act">
+        <button id="gate-cancel" class="btn">Cancel</button>
+        <button id="gate-go" class="btn primary">Execute</button>
+      </div>
+    </div>
+  </div>
 
   <script type="module" src="app.js"></script>
 </body>
