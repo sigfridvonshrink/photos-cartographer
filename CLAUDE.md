@@ -13,7 +13,7 @@ Top-level layout (the package lives at the repo root):
   `README.md`).
 - **`docs/`** — user-facing guides (`quickstart.md`, `concepts.md`, `editor.md`), linked from `README.md`.
   These are user docs; `spec/` remains the behavioral source of truth.
-- **`tools/`** — build + test helpers (`build-pyz`, `coverage`, `jstest`).
+- **`tools/`** — build + test helpers (`build-pyz`, `coverage`, `jstest`, `spec-coverage`).
 - **`.githooks/`** — local pre-commit / pre-push hooks. `.github/workflows/` — CI.
 
 See `README.md` for the overview.
@@ -61,6 +61,11 @@ tools/coverage -k merge        # subset (report % will be partial)
 
 # Decision-editor front-end unit tests (web/app.js pure logic) — Node's built-in runner, no deps.
 tools/jstest                   # node --test over cartographer/editor/tests/*.test.mjs
+
+# Spec-clause coverage gate: every clause in spec/spec-clauses.json must keep >=1 test tagged
+# @pytest.mark.spec("<id>"). Collection-only (fast); exits non-zero if a clause lost its test. CI runs
+# it. Complements line/branch coverage — it tracks the SPEC behaviours/anti-behaviours, not lines.
+tools/spec-coverage            # report + gate; --verbose for the per-clause table
 ```
 
 `tests/conftest.py` imports the package modules once and **aliases them under their historical
