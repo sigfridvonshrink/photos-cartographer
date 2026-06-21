@@ -33,9 +33,14 @@ _CONTENT_TYPES = {
     ".woff2": "font/woff2", ".svg": "image/svg+xml", ".png": "image/png",
 }
 
-# (phase, command) pairs the console may trigger. prep plan/dry-run are non-mutating; prep execute is
-# mutating and goes through the explicit 2-step gate (_execute_guard) — never a one-click run.
-_RUNNABLE = {("prep", "plan"), ("prep", "dry-run"), ("prep", "execute")}
+# (phase, command) pairs the console may trigger. Non-mutating planning/validation for all three
+# phases; prep execute is mutating and goes through the explicit 2-step gate (_execute_guard) — never
+# a one-click run. geotag/merge execute (each needing its own gate) is deferred to v2.3.1.
+_RUNNABLE = {
+    ("prep", "plan"), ("prep", "dry-run"), ("prep", "execute"),
+    ("geotag", "plan"),
+    ("merge", "plan"), ("merge", "dry-run"),
+}
 
 WEB = WebSink()
 JOBS = JobRunner()
@@ -171,8 +176,26 @@ def _state(workspace):
                 # executable = a plan exists, parses, and has no blockers (mirrors the gate's check)
                 "executable": bool(ps.get("exists") and not ps.get("blockers") and not ps.get("error")),
             },
+            # geotag/merge: a plan-exists hint for the status chip; their execute (and per-phase gate)
+            # is v2.3.1, so no executable flag yet.
+            "geotag": {"plan_exists": _phase_planned(workspace, "geotag")},
+            "merge": {"plan_exists": _phase_planned(workspace, "merge")},
         },
     }
+
+
+def _phase_planned(workspace, phase):
+    """Best-effort: has this phase produced its planning artifact yet (for the status chip)?"""
+    try:
+        if phase == "geotag":
+            from ..photos_2_geotag import gps_decisions_path
+            return os.path.exists(gps_decisions_path(workspace))
+        if phase == "merge":
+            from ..photos_3_merge import merge_plan_path
+            return os.path.exists(merge_plan_path(workspace))
+    except Exception:
+        return False
+    return False
 
 
 class Handler(BaseHTTPRequestHandler):
