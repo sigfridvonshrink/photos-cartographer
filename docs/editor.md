@@ -21,8 +21,9 @@ Like every phase, `edit` operates on the **current-directory workspace** (no wor
 argument). It refuses to run if the cwd isn't an initialized workspace. It serves on port **8765** by
 default (climbing to the next free port if busy) and binds all interfaces, so you can reach it from a
 laptop browser while SSH'd into a server — it prints a clickable `http://<host>:8765/` link. Use
-`--host 127.0.0.1` for local-only, `--port N` to choose a port. A lock prevents two editors on the same
-workspace at once. Stop it with Ctrl-C.
+`--host 127.0.0.1` for local-only, `--port N` to choose a port. When bound to loopback (`--host
+127.0.0.1`), startup also prints a ready-to-copy `ssh -L …` tunnel command for reaching it from your
+local machine. A lock prevents two editors on the same workspace at once. Stop it with Ctrl-C.
 
 ### Demo mode — zero setup
 
