@@ -398,3 +398,42 @@ def test_locked_workflow_exits_2_on_blocker(tmp_path):
     ll = utils.LibraryLock(str(lib))
     assert ll.acquire() is True
     ll.release()
+
+
+# --- Tier 3: no-mutation / never-follows consequences ------------------------
+
+def test_marker_check_precedes_library_lock_no_lockfile_dropped(tmp_path):
+    """§12 lock order: the .photos-library marker is validated BEFORE the library-side lock is taken.
+    Against a marker-less library_root, the run blocks (rc 2) and must NEVER have created the
+    .photos-merge.lock dotfile in the library — the lock is reached only after the marker passes."""
+    ws, lib = _make(tmp_path, bless_lib=False)                  # library_root exists but is unblessed
+    assert merge._run_locked_workflow("plan", str(ws)) == 2
+    assert not os.path.exists(utils.library_lock_path(str(lib)))  # no lock dropped on a marker-less lib
+    assert not os.path.exists(merge.merge_plan_path(str(ws)))     # and nothing planned
+
+
+def test_bydest_symlink_blocks_run_and_is_never_followed(tmp_path):
+    """A symlink anywhere under 6-photos-by-dest blocks the whole run (rc 2) and is NEVER followed:
+    its external target is not inventoried/planned and stays untouched. (Preflight only detects the
+    link via islink; this asserts the safety consequence end-to-end.)"""
+    external = tmp_path / "external"; external.mkdir()
+    (external / "victim.jpg").write_bytes(b"PRECIOUS")
+    ws, lib = _make(tmp_path)
+    os.symlink(str(external), str(ws / "6-photos-by-dest" / "Trip" / "link"))
+    assert merge._run_locked_workflow("plan", str(ws)) == 2
+    assert not os.path.exists(merge.merge_plan_path(str(ws)))   # nothing planned
+    assert (external / "victim.jpg").read_bytes() == b"PRECIOUS"  # target never followed/touched
+    assert list(lib.iterdir()) == [lib / ".photos-library"]    # library untouched (marker only)
+
+
+def test_invalid_merge_policy_blocks_with_no_summary_no_placement(tmp_path):
+    """A bad merge.placement_policy/collision_policy is caught in the merge data path (validate_merge
+    _config) and surfaces as a preflight blocker: rc 2, no plan, no photos-31 summary, no placement."""
+    ws, lib = _make(tmp_path)
+    cfg = json.loads((_ctl(ws) / "photos-00-config.json").read_text())
+    cfg["merge"]["placement_policy"] = "definitely-not-a-policy"
+    (_ctl(ws) / "photos-00-config.json").write_text(json.dumps(cfg))
+    assert merge._run_locked_workflow("plan", str(ws)) == 2
+    assert not os.path.exists(merge.merge_plan_path(str(ws)))   # no plan
+    assert not os.path.exists(merge.merge_summary_path(str(ws)))  # no summary
+    assert list(lib.iterdir()) == [lib / ".photos-library"]    # nothing placed
