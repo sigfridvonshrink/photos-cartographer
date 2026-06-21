@@ -1,8 +1,14 @@
-# Design note — operational web console (DRAFT / discussion)
+# Design note — operational web console (historical design record)
 
-**Status:** exploratory. Nothing here is committed to the spec. This captures a design
-conversation so it can be resumed later. `spec/` remains the behavioral source of truth;
-this note is *not* authoritative.
+**Status:** **implemented** (`cartographer console`, v2.1–v2.5) — this note is now the *historical*
+design conversation that led to it, kept for rationale. `spec/` remains the behavioral source of
+truth; this note is *not* authoritative, and some specifics below were superseded by the
+implementation. Notably, as shipped: the console binds `127.0.0.1` by default and its port is
+**8766** (the editor uses 8765; the SSH/port examples below predate that split and show 8765); there
+is **no `--open` flag** — instead, on loopback startup the server prints a ready-to-copy `ssh -L`
+tunnel command (`photos_utils.ssh_tunnel_hint`) and you open the printed URL on your laptop; and the
+editor is folded in as a 4th tab at `/edit/`. All eleven phase commands (incl. geotag `finalize` and
+prep `prune-quarantine`) are driveable from the console.
 
 ## Goal
 
