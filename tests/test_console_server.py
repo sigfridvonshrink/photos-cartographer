@@ -35,16 +35,13 @@ def test_asset_rejects_path_traversal_and_missing():
 
 # --- runnable set + target ------------------------------------------------
 
-def test_runnable_set_planning_for_all_phases_execute_only_prep():
-    assert ("prep", "plan") in server._RUNNABLE
-    assert ("prep", "dry-run") in server._RUNNABLE
-    assert ("prep", "execute") in server._RUNNABLE          # via the gate
-    assert ("geotag", "plan") in server._RUNNABLE
-    assert ("merge", "plan") in server._RUNNABLE
-    assert ("merge", "dry-run") in server._RUNNABLE
-    # mutating geotag/merge execute is deferred to v2.3.1 (each needs its own gate)
-    assert ("geotag", "execute") not in server._RUNNABLE
-    assert ("merge", "execute") not in server._RUNNABLE
+def test_runnable_set_covers_all_phases_execute_via_gate():
+    for pair in (("prep", "plan"), ("prep", "dry-run"), ("prep", "execute"),
+                 ("geotag", "plan"), ("geotag", "execute"),
+                 ("merge", "plan"), ("merge", "dry-run"), ("merge", "execute")):
+        assert pair in server._RUNNABLE
+    assert ("geotag", "dry-run") not in server._RUNNABLE     # geotag has no dry-run subcommand
+    assert ("merge", "init-library") not in server._RUNNABLE  # needs a path arg — not wired yet
 
 
 def test_make_target_builds_a_callable_without_running():
@@ -53,37 +50,52 @@ def test_make_target_builds_a_callable_without_running():
 
 # --- plan summary ---------------------------------------------------------
 
-def test_plan_summary_absent_then_counts_ops(tmp_path):
-    assert server._plan_summary(str(tmp_path)) == {"exists": False}
+def test_prep_plan_summary_absent_then_lines(tmp_path):
+    assert server._plan_summary(str(tmp_path), "prep") == {"exists": False}
     _write_plan(str(tmp_path), operations=["move", "move", "mkdir"], no_op=7, warnings=["w"])
-    s = server._plan_summary(str(tmp_path))
-    assert s["exists"] and s["plan_id"] == "prep-1" and s["operations"] == 3
-    assert s["op_counts"] == {"move": 2, "mkdir": 1}
-    assert s["no_op"] == 7 and s["warnings"] == 1 and s["blockers"] == []
+    s = server._plan_summary(str(tmp_path), "prep")
+    assert s["exists"] and s["plan_id"] == "prep-1" and s["operations"] == 3 and s["blockers"] == []
+    body = "\n".join(s["lines"])
+    assert "move 2" in body and "mkdir 1" in body and "no-op / already-correct 7" in body
 
 
-# --- execute gate ---------------------------------------------------------
+def test_geotag_and_merge_plan_summaries(tmp_path):
+    from cartographer.photos_2_geotag import executable_plan_path
+    from cartographer.photos_3_merge import merge_plan_path
+    import os as _os
+    g = executable_plan_path(str(tmp_path)); _os.makedirs(_os.path.dirname(g), exist_ok=True)
+    json.dump({"plan_id": "g1", "status": "ready", "blockers": [],
+               "destinations": {"A": {"operations": [1, 2]}, "B": {"operations": [3]}}}, open(g, "w"))
+    gs = server._plan_summary(str(tmp_path), "geotag")
+    assert gs["exists"] and gs["plan_id"] == "g1" and gs["operations"] == 3   # 2 + 1 ops
+
+    m = merge_plan_path(str(tmp_path))
+    json.dump({"plan_id": "m1", "blockers": [],
+               "totals": {"placed_new": 5, "already_present": 2, "renamed_for_library": 1, "blocked": 0},
+               "destinations": {}}, open(m, "w"))
+    ms = server._plan_summary(str(tmp_path), "merge")
+    assert ms["exists"] and ms["plan_id"] == "m1" and ms["operations"] == 5   # placed_new
+
+
+# --- execute gate (generic, per phase) ------------------------------------
 
 def test_execute_guard_requires_confirmation(tmp_path):
     _write_plan(str(tmp_path), operations=["move"])
-    assert server._execute_guard(str(tmp_path), {}) == "execute requires explicit confirmation"
+    assert server._execute_guard(str(tmp_path), "prep", {}) == "execute requires explicit confirmation"
 
 
 def test_execute_guard_allows_clean_confirmed_plan(tmp_path):
     _write_plan(str(tmp_path), plan_id="p9", operations=["move"])
-    assert server._execute_guard(str(tmp_path), {"confirm": True}) is None
-    assert server._execute_guard(str(tmp_path), {"confirm": True, "plan_id": "p9"}) is None
+    assert server._execute_guard(str(tmp_path), "prep", {"confirm": True}) is None
+    assert server._execute_guard(str(tmp_path), "prep", {"confirm": True, "plan_id": "p9"}) is None
 
 
 def test_execute_guard_refuses_blockers_missing_and_changed_plan(tmp_path):
-    # no plan yet
-    assert "no saved plan" in server._execute_guard(str(tmp_path), {"confirm": True})
-    # plan with a blocker
+    assert "no saved plan" in server._execute_guard(str(tmp_path), "prep", {"confirm": True})
     _write_plan(str(tmp_path), plan_id="p9", operations=["move"], blockers=["nonconforming"])
-    assert "blocker" in server._execute_guard(str(tmp_path), {"confirm": True})
-    # clean plan but the reviewed id no longer matches
+    assert "blocker" in server._execute_guard(str(tmp_path), "prep", {"confirm": True})
     _write_plan(str(tmp_path), plan_id="p10", operations=["move"])
-    assert "changed" in server._execute_guard(str(tmp_path), {"confirm": True, "plan_id": "p9"})
+    assert "changed" in server._execute_guard(str(tmp_path), "prep", {"confirm": True, "plan_id": "p9"})
 
 
 # --- state ----------------------------------------------------------------
@@ -96,11 +108,11 @@ def test_state_executable_flag_tracks_plan(tmp_path):
     _write_plan(str(tmp_path), operations=["move"])
     s2 = server._state(str(tmp_path))
     assert s2["phases"]["prep"]["executable"] is True and s2["phases"]["prep"]["blockers"] == 0
-    assert "prep/execute" in s2["runnable"]
 
 
-def test_state_reports_geotag_and_merge_plan_hints(tmp_path):
+def test_state_reports_all_three_phases(tmp_path):
     st = server._state(str(tmp_path))
-    assert st["phases"]["geotag"]["plan_exists"] is False    # nothing planned yet
-    assert st["phases"]["merge"]["plan_exists"] is False
-    assert "geotag/plan" in st["runnable"] and "merge/dry-run" in st["runnable"]
+    for ph in ("prep", "geotag", "merge"):
+        assert st["phases"][ph]["plan_exists"] is False and st["phases"][ph]["executable"] is False
+    for r in ("geotag/execute", "merge/execute", "merge/dry-run"):
+        assert r in st["runnable"]

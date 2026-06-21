@@ -38,8 +38,8 @@ _CONTENT_TYPES = {
 # a one-click run. geotag/merge execute (each needing its own gate) is deferred to v2.3.1.
 _RUNNABLE = {
     ("prep", "plan"), ("prep", "dry-run"), ("prep", "execute"),
-    ("geotag", "plan"),
-    ("merge", "plan"), ("merge", "dry-run"),
+    ("geotag", "plan"), ("geotag", "execute"),
+    ("merge", "plan"), ("merge", "dry-run"), ("merge", "execute"),
 }
 
 WEB = WebSink()
@@ -103,44 +103,87 @@ def _make_target(phase, command):
     return target
 
 
-def _plan_summary(workspace):
-    """Summarize the REAL saved prep plan artifact (photos-10-prep-plan.json) — op counts, no-op,
-    warnings, blockers. This is what the execute gate shows: a summary of the actual serialized plan
-    execution will consume (per the shared contract, dry-run is not a simulation), not a JS guess."""
-    pp = U.prep_plan_path(workspace)
-    if not os.path.exists(pp):
-        return {"exists": False}
+def _read_plan(path):
+    if not os.path.exists(path):
+        return None, {"exists": False}
     try:
-        with open(pp) as f:
-            plan = json.load(f)
+        with open(path) as f:
+            return json.load(f), None
     except (OSError, ValueError) as e:
-        return {"exists": True, "error": f"could not read plan: {e}", "blockers": ["unreadable plan"]}
+        return None, {"exists": True, "error": f"could not read plan: {e}", "blockers": ["unreadable plan"]}
+
+
+def _prep_summary(workspace):
+    plan, miss = _read_plan(U.prep_plan_path(workspace))
+    if plan is None:
+        return miss
     ops = plan.get("operations", []) or []
     counts = {}
     for op in ops:
-        t = op.get("type", "?")
-        counts[t] = counts.get(t, 0) + 1
-    summary = plan.get("summary", {}) or {}
+        counts[op.get("type", "?")] = counts.get(op.get("type", "?"), 0) + 1
+    summ = plan.get("summary", {}) or {}
+    blockers = list(plan.get("blockers", []) or [])
+    op_line = " · ".join(f"{t} {n}" for t, n in sorted(counts.items())) or "none"
     return {
-        "exists": True,
-        "plan_id": plan.get("plan_id"),
-        "operations": len(ops),
-        "op_counts": counts,
-        "no_op": summary.get("no_op_files", 0),
-        "warnings": len(plan.get("warnings", []) or []),
-        "blockers": list(plan.get("blockers", []) or []),
+        "exists": True, "plan_id": plan.get("plan_id"), "operations": len(ops), "blockers": blockers,
+        "lines": [f"{len(ops)} operation(s):", f"  {op_line}",
+                  f"  no-op / already-correct {summ.get('no_op_files', 0)} · "
+                  f"warnings {len(plan.get('warnings', []) or [])} · blockers {len(blockers)}"],
     }
 
 
-def _execute_guard(workspace, payload):
-    """Server-side enforcement of the 2-step gate. Returns an error string to refuse, or None to
-    allow. Execute is refused unless the client explicitly confirmed, a saved plan exists with no
-    blockers, and (if supplied) the reviewed plan_id still matches — so a plan can't change out from
-    under the confirmation. The core (prep execute) re-validates everything besides (fingerprint,
-    no-clobber, lock); this is the deliberate gate on top, not a replacement."""
+def _geotag_summary(workspace):
+    from ..photos_2_geotag import executable_plan_path
+    plan, miss = _read_plan(executable_plan_path(workspace))
+    if plan is None:
+        return miss
+    dests = plan.get("destinations", {}) or {}
+    ops = sum(len(d.get("operations", []) or []) for d in dests.values())
+    blockers = list(plan.get("blockers", []) or [])
+    return {
+        "exists": True, "plan_id": plan.get("plan_id"), "operations": ops, "blockers": blockers,
+        "lines": [f"{ops} time/GPS write(s) across {len(dests)} destination(s)",
+                  f"  status {plan.get('status', '?')} · blockers {len(blockers)}"],
+    }
+
+
+def _merge_summary(workspace):
+    from ..photos_3_merge import merge_plan_path
+    plan, miss = _read_plan(merge_plan_path(workspace))
+    if plan is None:
+        return miss
+    t = plan.get("totals", {}) or {}
+    blockers = list(plan.get("blockers", []) or [])
+    placed = t.get("placed_new", 0)
+    return {
+        "exists": True, "plan_id": plan.get("plan_id"), "operations": placed, "blockers": blockers,
+        "lines": [f"{placed} new · {t.get('already_present', 0)} already-present · "
+                  f"{t.get('renamed_for_library', 0)} renamed · {t.get('blocked', 0)} blocked into the "
+                  f"permanent library", f"  blockers {len(blockers)}"],
+    }
+
+
+_SUMMARIZERS = {"prep": _prep_summary, "geotag": _geotag_summary, "merge": _merge_summary}
+
+
+def _plan_summary(workspace, phase="prep"):
+    """Summarize the REAL saved plan artifact for `phase` (per the shared contract, the gate shows a
+    summary of the actual serialized plan execution will consume — not a JS simulation). Common shape:
+    exists / plan_id / operations / blockers / lines (human summary lines for the gate). Each phase
+    reads its own artifact (prep photos-10, geotag photos-24, merge photos-30)."""
+    fn = _SUMMARIZERS.get(phase)
+    return fn(workspace) if fn else {"exists": False}
+
+
+def _execute_guard(workspace, phase, payload):
+    """Server-side enforcement of the 2-step gate for any phase's execute. Returns an error string to
+    refuse, or None to allow. Refused unless the client explicitly confirmed, a saved plan exists with
+    no blockers, and (if supplied) the reviewed plan_id still matches. The phase's own execute still
+    re-validates everything besides (fingerprint, no-clobber, the whole-run lock) — this is the
+    deliberate gate on top, not a replacement."""
     if not payload.get("confirm"):
         return "execute requires explicit confirmation"
-    s = _plan_summary(workspace)
+    s = _plan_summary(workspace, phase)
     if not s.get("exists"):
         return "no saved plan — run plan first"
     if s.get("error"):
@@ -154,48 +197,32 @@ def _execute_guard(workspace, payload):
 
 
 def _state(workspace):
-    """Transient state for the chrome: workspace flags, lock, current job, per-phase hints. Cheap,
-    best-effort — never the source of truth."""
+    """Transient state for the chrome: workspace flags, lock, current job, and per-phase hints derived
+    from each phase's saved plan (plan_exists / plan_id / blockers / executable). Cheap, best-effort —
+    never the source of truth."""
     lock = U.WorkspaceLock(workspace)
     try:
         owner = lock.read_owner()
     except Exception:
         owner = None
-    ps = _plan_summary(workspace)
+    phases = {}
+    for ph in ("prep", "geotag", "merge"):
+        s = _plan_summary(workspace, ph)
+        phases[ph] = {
+            "plan_exists": bool(s.get("exists")),
+            "plan_id": s.get("plan_id"),
+            "blockers": len(s.get("blockers", []) or []),
+            # executable = a plan exists, parses, and has no blockers (mirrors the gate's check)
+            "executable": bool(s.get("exists") and not s.get("blockers") and not s.get("error")),
+        }
     return {
         "workspace": os.path.abspath(workspace),
         "sealed": bool(U.is_sealed(workspace)),
         "lock_owner": owner,
         "job": JOBS.status(),
         "runnable": sorted("/".join(p) for p in _RUNNABLE),
-        "phases": {
-            "prep": {
-                "plan_exists": bool(ps.get("exists")),
-                "plan_id": ps.get("plan_id"),
-                "blockers": len(ps.get("blockers", []) or []),
-                # executable = a plan exists, parses, and has no blockers (mirrors the gate's check)
-                "executable": bool(ps.get("exists") and not ps.get("blockers") and not ps.get("error")),
-            },
-            # geotag/merge: a plan-exists hint for the status chip; their execute (and per-phase gate)
-            # is v2.3.1, so no executable flag yet.
-            "geotag": {"plan_exists": _phase_planned(workspace, "geotag")},
-            "merge": {"plan_exists": _phase_planned(workspace, "merge")},
-        },
+        "phases": phases,
     }
-
-
-def _phase_planned(workspace, phase):
-    """Best-effort: has this phase produced its planning artifact yet (for the status chip)?"""
-    try:
-        if phase == "geotag":
-            from ..photos_2_geotag import gps_decisions_path
-            return os.path.exists(gps_decisions_path(workspace))
-        if phase == "merge":
-            from ..photos_3_merge import merge_plan_path
-            return os.path.exists(merge_plan_path(workspace))
-    except Exception:
-        return False
-    return False
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -250,7 +277,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/state":
             return self._send(200, _state(self.workspace))
         if path == "/api/plan-summary":
-            return self._send(200, _plan_summary(self.workspace))
+            from urllib.parse import parse_qs, urlparse
+            phase = (parse_qs(urlparse(self.path).query).get("phase") or ["prep"])[0]
+            return self._send(200, _plan_summary(self.workspace, phase))
         if path == "/api/events":
             return self._serve_events()
         if path == "/":
@@ -275,8 +304,8 @@ class Handler(BaseHTTPRequestHandler):
                                     "error": f"{phase}/{command} not runnable from the console yet"})
         if JOBS.running:
             return self._send(409, {"ok": False, "error": "a run is already in progress"})
-        if (phase, command) == ("prep", "execute"):
-            err = _execute_guard(self.workspace, payload)
+        if command == "execute":
+            err = _execute_guard(self.workspace, phase, payload)
             if err:
                 return self._send(409, {"ok": False, "error": err})
         started = JOBS.start(f"{phase} {command}", _make_target(phase, command))
