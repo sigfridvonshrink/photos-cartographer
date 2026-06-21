@@ -30,9 +30,11 @@ file/web sink is deferred to v2.
 
 from __future__ import annotations
 
+import queue
 import sys
 import threading
 import time
+from collections import deque
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Callable, Iterable, Iterator, List, Optional
@@ -113,6 +115,73 @@ class CaptureSink(Sink):
 
     def progress(self) -> List[ProgressEvent]:
         return [e for e in self.events if isinstance(e, ProgressEvent)]
+
+
+def event_to_dict(event) -> dict:
+    """Serialize an event to a JSON-ready dict tagged with ``kind`` (for the web sink / SSE)."""
+    if isinstance(event, LogEvent):
+        return {"kind": "log", "msg": event.msg, "level": event.level, "stream": event.stream}
+    if isinstance(event, ProgressEvent):
+        return {"kind": "progress", "task_id": event.task_id, "label": event.label,
+                "state": event.state, "cur": event.cur, "total": event.total,
+                "detail": event.detail, "status": event.status}
+    if isinstance(event, SummaryEvent):
+        return {"kind": "summary", "report": event.report, "plan_summary": event.plan_summary,
+                "counters": event.counters}
+    return {"kind": "unknown"}
+
+
+class WebSink(Sink):
+    """Fans events to any number of SSE subscribers, and keeps just enough state for a client that
+    connects mid-run to catch up: a bounded recent-log buffer (lossless within the window) plus the
+    latest snapshot per live progress task (finished tasks are dropped). Status is ephemeral — this
+    holds no durable truth (that's the artifacts/journals); a dropped event only costs a cosmetic
+    update. Per-subscriber queues are bounded and **drop-oldest** so a slow browser can never stall
+    the producer (the worker thread emitting events)."""
+
+    def __init__(self, log_buffer: int = 500, queue_max: int = 2000) -> None:
+        self._subs: set = set()
+        self._lock = threading.Lock()
+        self._log = deque(maxlen=log_buffer)   # recent LogEvent dicts, for late join
+        self._progress: dict = {}              # task_id -> latest progress dict (live tasks only)
+        self._queue_max = queue_max
+
+    def handle(self, event) -> None:
+        msg = event_to_dict(event)
+        with self._lock:
+            if msg["kind"] == "log":
+                self._log.append(msg)
+            elif msg["kind"] == "progress":
+                if msg["state"] == FINISH:
+                    self._progress.pop(msg["task_id"], None)
+                else:
+                    self._progress[msg["task_id"]] = msg
+            for q in self._subs:
+                try:
+                    q.put_nowait(msg)
+                except queue.Full:
+                    try:
+                        q.get_nowait()      # drop oldest, then enqueue the newest
+                        q.put_nowait(msg)
+                    except queue.Empty:
+                        pass
+
+    def subscribe(self):
+        """Register a subscriber. Returns ``(q, snapshot)`` — a fresh queue of future events and the
+        catch-up snapshot (recent log + live progress) to render before draining the queue."""
+        q: "queue.Queue" = queue.Queue(maxsize=self._queue_max)
+        with self._lock:
+            self._subs.add(q)
+            snapshot = {"log": list(self._log), "progress": list(self._progress.values())}
+        return q, snapshot
+
+    def unsubscribe(self, q) -> None:
+        with self._lock:
+            self._subs.discard(q)
+
+    def snapshot(self) -> dict:
+        with self._lock:
+            return {"log": list(self._log), "progress": list(self._progress.values())}
 
 
 class TtySink(Sink):
