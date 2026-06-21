@@ -310,6 +310,8 @@ Merge **moves** files into the library, but the library frequently lives on a di
 
 Crash safety follows from the ordering: a crash before step 3 completes leaves the file in by-dest and at most a discardable temporary in the library (never a half-copied file under the final name); a crash between steps 3 and 4 leaves the file **in both** the library (complete, verified) and by-dest — which resume resolves by recognizing the verified library copy and completing the source removal (Section 8). The file is therefore never lost and never left half-present under its final name. A library file is never deleted or overwritten at any step.
 
+The step-1 temporary uses a **recognizable, deterministic name** (`.tmp-xdev-*.part`). The crash above can therefore leave an orphaned temp in a library directory; since the library lock (Section 12) admits at most one merge per library, such an orphan is always debris from an interrupted prior run, never a live copy. Merge accordingly **sweeps stale `.tmp-xdev-*.part` temps from the directories the plan targets at the start of execute** (before the place pass), recording the count in the summary's `run_metadata` (Section 9.1). This is hygiene for the permanent library, not a safety requirement — the orphan never bears a final name, so it can neither be mistaken for nor clobber a real file regardless.
+
 A failed move (copy error, verification mismatch, unexpected occupied target with differing content, permission error) leaves the library unchanged for that item **and leaves the source in by-dest** (it becomes an un-merged leftover), is recorded as a failure/blocker (Section 9.1 item 7), and is never journaled as a completed move — so resume does not treat it as done (shared contract Section 15 item 4).
 
 ---
