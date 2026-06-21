@@ -1,0 +1,109 @@
+#!/usr/bin/env python3
+# Copyright 2026 sigfridvonshrink
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""spec-coverage — report which curated spec clauses still have a test, and gate on regressions.
+
+Cross-references the clause registry (spec/spec-clauses.json) against the live test suite's
+`@pytest.mark.spec("<clause-id>")` tags (gathered by a collection-only pytest pass, via the
+`--spec-dump` hook in tests/conftest.py). Prints a covered/uncovered report and EXITS NON-ZERO if any
+registered clause has lost its test — a regression gate the line/branch coverage report can't provide.
+
+This is a MAP, not a quality score: a tag asserts a test EXISTS for a clause, not that it is a good
+test — the real assertion lives in the test body. Run from anywhere:
+
+    tools/spec-coverage              # summary + any uncovered (gate: non-zero if uncovered)
+    tools/spec-coverage --verbose    # full per-clause table
+    tools/spec-coverage --json       # machine-readable result
+"""
+import argparse
+import json
+import os
+import subprocess
+import sys
+import tempfile
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REGISTRY = os.path.join(ROOT, "spec", "spec-clauses.json")
+
+
+def _collect_tagged():
+    """{clause_id: [test nodeids]} from a collection-only pytest pass (no tests run)."""
+    fd, dump = tempfile.mkstemp(prefix="spec-cov-", suffix=".json")
+    os.close(fd)
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-m", "pytest", "--collect-only", "-q", "-p", "no:cacheprovider",
+             f"--spec-dump={dump}"],
+            cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        if not os.path.exists(dump) or os.path.getsize(dump) == 0:
+            sys.stderr.write("spec-coverage: collection produced no dump — pytest output:\n")
+            sys.stderr.write(proc.stdout[-2000:] + "\n")
+            sys.exit(2)
+        with open(dump) as f:
+            return json.load(f)
+    finally:
+        if os.path.exists(dump):
+            os.remove(dump)
+
+
+def main():
+    ap = argparse.ArgumentParser(description="Report + gate spec-clause test coverage.")
+    ap.add_argument("--verbose", action="store_true", help="list every clause and its test(s)")
+    ap.add_argument("--json", action="store_true", help="emit the result as JSON")
+    args = ap.parse_args()
+
+    with open(REGISTRY) as f:
+        clauses = json.load(f)["clauses"]
+    tagged = _collect_tagged()
+
+    rows = [(c, tagged.get(c["id"], [])) for c in clauses]
+    uncovered = [c["id"] for c, tests in rows if not tests]
+    registered_ids = {c["id"] for c in clauses}
+    extra = sorted(cid for cid in tagged if cid not in registered_ids)  # tagged but not registered
+
+    if args.json:
+        print(json.dumps({
+            "total": len(clauses), "covered": len(clauses) - len(uncovered),
+            "uncovered": uncovered, "extra_untracked": extra,
+            "coverage": {c["id"]: tagged.get(c["id"], []) for c in clauses},
+        }, indent=2))
+        return 1 if uncovered else 0
+
+    if args.verbose:
+        for c, tests in sorted(rows, key=lambda r: (not r[1], r[0]["area"], r[0]["id"])):
+            mark = "ok " if tests else "GAP"
+            print(f"  [{mark}] {c['id']:46} ({c['area']}, {c['criticality']})  {len(tests)} test(s)")
+            for t in tests:
+                print(f"          {t}")
+
+    covered = len(clauses) - len(uncovered)
+    print(f"\nspec-coverage: {covered}/{len(clauses)} registered clauses have a test "
+          f"({len(tagged)} clause id(s) tagged across the suite).")
+    if extra:
+        print(f"  note: {len(extra)} tagged clause(s) not in the registry (extra coverage): "
+              + ", ".join(extra))
+    if uncovered:
+        print(f"\nFAIL — {len(uncovered)} registered clause(s) lost their test:")
+        for cid in uncovered:
+            print(f"  - {cid}")
+        print("\nRe-tag a test with @pytest.mark.spec(\"<id>\"), or remove the clause from "
+              "spec/spec-clauses.json if it was intentionally dropped.")
+        return 1
+    print("All registered spec clauses are covered. ✓")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

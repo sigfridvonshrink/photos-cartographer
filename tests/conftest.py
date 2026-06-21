@@ -59,3 +59,27 @@ def seed_from_live_config(monkeypatch):
     """
     monkeypatch.setattr(photos_utils, "default_config",
                         lambda: {k: v for k, v in photos_utils.CONFIG.items() if k != "jobs"})
+
+
+# --- spec-coverage map dump (see tools/spec-coverage) -----------------------
+# A collection-only hook: when `--spec-dump=PATH` is passed, write a JSON map of
+# {spec_clause_id: [test nodeids]} gathered from every collected test's `@pytest.mark.spec(...)`
+# markers, then the tool cross-refs it against spec/spec-clauses.json. Zero cost in normal runs.
+def pytest_addoption(parser):
+    parser.addoption("--spec-dump", default=None,
+                     help="(spec-coverage) write the spec-clause -> test-nodeid map as JSON to this path")
+
+
+def pytest_collection_finish(session):
+    path = session.config.getoption("--spec-dump")
+    if not path:
+        return
+    import json as _json
+    mapping = {}
+    for item in session.items:
+        for mark in item.iter_markers(name="spec"):
+            for clause in mark.args:
+                mapping.setdefault(str(clause), set()).add(item.nodeid)
+    out = {k: sorted(v) for k, v in mapping.items()}
+    with open(path, "w") as f:
+        _json.dump(out, f, indent=2, sort_keys=True)

@@ -147,6 +147,7 @@ def test_sealed_workspace_warns_on_new_dump(tmp_path, monkeypatch, capsys):
     assert "new dump" in capsys.readouterr().err.lower()
 
 
+@pytest.mark.spec("seal-new-dump-warn-1")
 def test_sealed_new_dump_is_left_exactly_in_place(tmp_path, monkeypatch, capsys):
     """The sealed-workspace new-dump path only WARNS — it never relocates the dumped file. After the
     refusal the file is byte-identical at its original 0-sources path (the operator must move it to a
@@ -160,6 +161,7 @@ def test_sealed_new_dump_is_left_exactly_in_place(tmp_path, monkeypatch, capsys)
     assert os.listdir(ws / "0-sources") == ["newdump.jpg"]     # nothing relocated
 
 
+@pytest.mark.spec("seal-prune-exception-1")
 def test_prune_quarantine_is_the_sole_op_allowed_on_a_sealed_workspace(tmp_path, monkeypatch, capsys):
     """The seal blocks ONLY plan/dry-run/execute; prune-quarantine is the sole maintenance op that
     still runs on a sealed (terminal) workspace — quarantine cleanup must survive the seal. Assert it
@@ -178,6 +180,7 @@ def test_prune_quarantine_is_the_sole_op_allowed_on_a_sealed_workspace(tmp_path,
     assert not qd.exists()                                       # delete worked on the sealed ws
 
 
+@pytest.mark.spec("prep-quarantine-no-auto-delete-1")
 def test_prep_plan_never_auto_deletes_quarantine(tmp_path, monkeypatch, capsys):
     """Quarantine is recoverable and is NEVER auto-purged: an ordinary prep `plan` leaves a populated
     quarantine completely intact (only the explicit `prune-quarantine` command may remove it)."""
@@ -189,6 +192,7 @@ def test_prep_plan_never_auto_deletes_quarantine(tmp_path, monkeypatch, capsys):
     assert qd.exists() and (qd / "dup.jpg").read_bytes() == b"recoverable"   # untouched by plan
 
 
+@pytest.mark.spec("prep-prune-no-managed-1")
 def test_prune_quarantine_preserves_managed_folders(tmp_path, monkeypatch, capsys):
     """prune-quarantine removes only quarantine contents — the managed 0-6 tree (incl. 6-photos-by-dest)
     is never touched by a prune run."""
@@ -221,6 +225,7 @@ def test_locked_workspace_fails_fast(tmp_path, monkeypatch, capsys):
         fcntl.flock(fd, fcntl.LOCK_UN); os.close(fd)
 
 
+@pytest.mark.spec("prep-dryrun-mutates-nothing-1")
 def test_dry_run_mutates_nothing_on_disk(tmp_path, monkeypatch, capsys):
     """Dry-run is validation, not simulation, and is strictly read-only: it loads the saved plan,
     validates it against an in-memory DB, and prints a summary. Snapshot the whole control dir + a
@@ -240,6 +245,7 @@ def test_dry_run_mutates_nothing_on_disk(tmp_path, monkeypatch, capsys):
     assert after == before                                      # dry-run wrote nothing to disk
 
 
+@pytest.mark.spec("lock-failfast-1")
 def test_locked_workspace_failfast_produces_no_artifact(tmp_path, monkeypatch, capsys):
     """Lock contention is fail-fast and pre-mutation: a `plan` that can't take the workspace lock
     produces NO plan artifact and NO journal — the run never got past lock acquisition."""

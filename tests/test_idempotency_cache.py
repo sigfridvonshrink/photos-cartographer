@@ -17,6 +17,7 @@ import sys
 import json
 import shutil
 import sqlite3
+import pytest
 from pathlib import Path
 
 # photos_1_prep is loaded once by conftest.py into sys.modules
@@ -136,6 +137,7 @@ def test_prep_idempotency_and_by_dest_accounting(mock_meta, tmp_path):
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
+@pytest.mark.spec("prep-no-journal-replay-1")
 def test_prep_replans_from_filesystem_when_journal_corrupt_or_deleted(mock_meta, tmp_path):
     """The prep journal is EVIDENCE, not a resume script: prep re-plans from the filesystem (+ cache)
     as truth. After a successful run, corrupting then deleting the journal must NOT change the re-plan
@@ -178,6 +180,7 @@ def test_prep_replans_from_filesystem_when_journal_corrupt_or_deleted(mock_meta,
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
+@pytest.mark.spec("prep-quarantine-restore-normal-1")
 def test_restored_quarantine_file_reflows_as_a_normal_dump(mock_meta, tmp_path):
     """No un-quarantine path: a file dragged back out of quarantine into 0-sources is re-evaluated as
     an ordinary fresh dump under a NEW plan_id — there is no special 'restore' handling that skips
@@ -214,6 +217,7 @@ def test_restored_quarantine_file_reflows_as_a_normal_dump(mock_meta, tmp_path):
                for op in plan2.operations), [(o.type, o.source) for o in plan2.operations]
 
 
+@pytest.mark.spec("prep-missing-metadata-no-special-path-1")
 def test_no_special_reimport_path_from_missing_metadata(tmp_path):
     """2-missing-metadata is a holding bay, not a re-entry point: prep never reprocesses a file sitting
     there in place. A file still missing a date stays put (no op); the way to re-import is to move it to
@@ -256,6 +260,7 @@ def test_no_special_reimport_path_from_missing_metadata(tmp_path):
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
+@pytest.mark.spec("prep-cache-single-writer-1")
 def test_prep_execute_cache_writes_only_from_main_thread(mock_meta, tmp_path):
     """Single-writer cache: prep applies its plan in one sequential op loop, so every DB write lands on
     the main thread even with jobs=4 (the concurrency in prep is read-only metadata extraction during

@@ -206,6 +206,10 @@ asserted") cluster are now closed.
 
 ### Still open (lower-value tail)
 
-The remaining Section-4 source-grep brittleness and test-name approximations were not chased. A
-**living spec-coverage mechanism** (test↔clause markers + a `tools/spec-coverage` report, so this
-audit stops being a point-in-time snapshot) is the proposed next step.
+The remaining Section-4 source-grep brittleness and test-name approximations were not chased.
+
+A **living spec-coverage mechanism** now exists (PR #218): the clauses above are registered in
+`spec/spec-clauses.json`, each Tier-1/2/3 test is tagged `@pytest.mark.spec("<id>")`, and
+`tools/spec-coverage` (run in CI) fails if any registered clause loses its test — so this audit is no
+longer purely a point-in-time snapshot for the clauses it has been seeded with. Growing the registry
+beyond the curated must-cover set toward the full 446-clause surface is the remaining work.
