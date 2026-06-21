@@ -18,6 +18,7 @@ all external tools), so the executor logic is driven deterministically. From con
 """
 import json
 import os
+import shutil
 import sys
 from datetime import datetime, timezone
 
@@ -173,6 +174,41 @@ def test_accept_fingerprint_change_finalizes(tmp_path, monkeypatch):
     (ctl / "photos-25-execution-summary.json").write_text(json.dumps(s))
     assert _execute(monkeypatch, ws) == 0
     assert _summary(ctl)["status"] == "success"
+
+
+# --- concurrency equality (Tier 3) -------------------------------------------
+
+def _execute_jobs(monkeypatch, ws, n):
+    """Run geotag `execute` with an explicit -j N (top-level arg, before the subcommand)."""
+    monkeypatch.chdir(str(ws))
+    monkeypatch.setattr(sys, "argv", ["photos-2-geotag", "-j", str(n), "execute"])
+    try:
+        cal.main(); return 0
+    except SystemExit as e:
+        return e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
+
+
+def test_execute_j1_and_jN_produce_identical_summary_and_tree(tmp_path, monkeypatch):
+    """Concurrency is a performance knob with NO semantic effect: executing the SAME geotag plan under
+    -j1 vs -j4 yields a byte-identical photos-25 summary (modulo the volatile run_metadata, which by
+    design records jobs/timestamps/execution_id) and an identical on-disk file tree. The plan is built
+    once and copied to two workspaces so plan_id/artifacts are identical and only -j differs."""
+    base = tmp_path / "base"; base.mkdir()
+    ws_a, ctl_a = _ready_ws(base, monkeypatch)                   # one fully-planned workspace
+    ws_b = tmp_path / "b-ws"
+    shutil.copytree(str(ws_a), str(ws_b))                        # exact copy -> same plan_id + artifacts
+
+    def run(ws, n):
+        _mock_tools(monkeypatch, ws)                             # rebind fingerprint mock to this ws path
+        assert _execute_jobs(monkeypatch, ws, n) == 0
+        summ = json.load(open(ws / ".photos-ingest" / "photos-25-execution-summary.json"))
+        summ.pop("run_metadata", None)                          # volatile: jobs/timestamps/execution_id
+        return summ, sorted(os.listdir(ws / "6-photos-by-dest" / "T"))
+
+    s1, t1 = run(ws_a, 1)
+    s4, t4 = run(ws_b, 4)
+    assert s1 == s4                                              # identical summary (sans run_metadata)
+    assert t1 == t4 == ["2024-07-03--14-00-00.arw", "2024-07-03--15-00-00.arw"]  # identical tree
 
 
 # --- stale rejection ---------------------------------------------------------
