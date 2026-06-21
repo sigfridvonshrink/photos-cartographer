@@ -131,7 +131,8 @@ entry (`python -m cartographer.photos_1_prep …`) sharing the same `add_argumen
   run **and monitor** phases from a browser over the **cwd workspace**. It only *triggers* phase
   `run()`s (in-process, single-slot) and *observes* their status via the reporting seam streamed over
   SSE — one mutation path, never re-implemented in the web layer. Bound to `127.0.0.1` by default
-  (tunnel over SSH for remote; see `docs/design/web-console.md`). **In progress**: prep `plan` /
+  (on loopback startup it prints a copy-paste `ssh -L` tunnel command — `photos_utils.ssh_tunnel_hint`;
+  see `docs/design/web-console.md`). Built incrementally: prep `plan` /
   `dry-run` monitoring (v2.1) + prep `execute` behind a **2-step confirm gate** (v2.2 — Execute is
   enabled only when a clean, blocker-free saved plan exists, and the server re-checks
   confirmation + no-blockers + plan_id before running; the gate summarizes the *real* plan artifact,
@@ -146,9 +147,13 @@ entry (`python -m cartographer.photos_1_prep …`) sharing the same `add_argumen
   editor folded in as the 4th tab** (v2.4 — served through the console origin at `/edit/` as an
   iframe, with the editor's `/api/*` delegated to its own functions on the cwd workspace; one origin
   so the single SSH tunnel still suffices, and **zero editor changes**), and merge **`init-library`**
-  with an optional-path prompt (blank → bless the configured `library_root`; given → bless + record).
-  All phase commands are now driveable from the console. Built on the shared event/sink seam
-  (`cartographer/reporting.py`) and design tokens (`cartographer/editor/web/tokens.css`).
+  with an optional-path prompt (blank → bless the configured `library_root`; given → bless + record),
+  and **full CLI parity** (v2.5 — geotag **`finalize`** as a plain run, enabled only after a successful
+  geotag execute and before finalize; prep **`prune-quarantine`** with a dry-run/delete dialog, the
+  destructive delete gated by `_prune_guard` and the action kept enabled even on a sealed workspace as
+  the sole sealed-allowed op). **All eleven phase commands are now driveable from the console.** Built
+  on the shared event/sink seam (`cartographer/reporting.py`) and design tokens
+  (`cartographer/editor/web/tokens.css`).
 - **Canonical plan persistence (all phases):** each phase's plan/decision artifact lives at a fixed
   control-dir path (`photos-10-prep-plan.json`, geotag `photos-21`/`22`/`23`, `photos-30-merge-plan.json`).
   The planning command writes it there and prints the location; the validate/apply commands read it from

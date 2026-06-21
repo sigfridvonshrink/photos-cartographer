@@ -1,8 +1,8 @@
 # Coverage config for the active pipeline. The metadata/hash pools and the calibration executor run
 # in worker threads, so concurrency=thread is required to trace them. The report targets the
-# production code of every phase — the `cartographer` package (prep / geotag / merge / utils)
-# and the decision-editor server. Run via `tools/coverage`, or as CI does:
-# `coverage run -m pytest && coverage report`.
+# production code of every phase — the `cartographer` package (prep / geotag / merge / utils) and the
+# two local web servers (the decision editor and the operational console). Run via `tools/coverage`,
+# or as CI does: `coverage run -m pytest && coverage report`.
 [run]
 branch = true
 concurrency = thread
@@ -11,5 +11,6 @@ concurrency = thread
 include =
     */cartographer/*.py
     */cartographer/editor/server.py
+    */cartographer/console/server.py
 show_missing = true
 precision = 0
