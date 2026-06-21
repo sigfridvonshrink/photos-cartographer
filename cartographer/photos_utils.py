@@ -440,6 +440,45 @@ def verify_json_dependency(dep: dict, ws: str) -> bool:
     except OSError:
         return False
 
+
+def plan_dependencies_fresh(ws: str, depends_on: dict, current_fingerprints: dict = None) -> list:
+    """Cheap, read-only freshness check of a saved plan's recorded `depends_on` against current state.
+    Returns a list of stale reasons — empty means fresh *by these checks*.
+
+    This is the shared **artifact-dependency** subset of the per-phase staleness checks (the part that
+    is cheap and identical across phases), so a read-only consumer (e.g. the console) and a phase's
+    deep revalidation can agree without duplicating it — and without the consumer triggering the
+    phase's expensive/unique work (e.g. geotag's GPX rebuild). For each entry in `depends_on`:
+
+    - a **json_artifact** dep is re-read and re-hashed via :func:`verify_json_dependency` (always
+      checked — small files, cheap; §6 exact-bytes, no mtime shortcut);
+    - a **handoff_content** dep is checked iff the caller supplied the current fingerprint under that
+      key in `current_fingerprints` (comparing to the recorded `content_fingerprint`);
+    - any **scalar fingerprint** (config/folders/media-extensions/…) is checked iff the caller
+      supplied its current value under that key in `current_fingerprints`.
+
+    Scalar/handoff deps the caller does NOT supply a current value for are deliberately **not**
+    checked — the caller chooses scope (the console omits the costly ones; a phase's deep check
+    supplies all). Thus this is the QUICK subset: a non-empty result is authoritatively stale; an
+    empty result means "no cheap staleness" — the phase's deep revalidation (status, GPX, planned-op
+    and schema fingerprints, plus this) still runs at execute and may find more. It never reports
+    fresh where these checks would report stale (quick ⊆ deep). Pure: no writes, no mutation.
+    """
+    cur = current_fingerprints or {}
+    stale = []
+    for key, val in (depends_on or {}).items():
+        if isinstance(val, dict) and val.get("dependency_type") == "json_artifact":
+            if not verify_json_dependency(val, ws):
+                stale.append(f"{key} changed or missing")
+        elif isinstance(val, dict) and val.get("dependency_type") == "handoff_content":
+            if key in cur and cur[key] != val.get("content_fingerprint"):
+                stale.append(f"{key} content fingerprint changed")
+        elif not isinstance(val, dict):                      # scalar fingerprint
+            if key in cur and cur[key] != val:
+                stale.append(f"{key} changed")
+    return stale
+
+
 def write_json_artifact(path: str, obj: dict) -> str:
     """Atomically write a numbered artifact as deterministic, pretty-printed, sorted JSON
     (temp → atomic rename). Returns its SHA-256. Artifacts must be byte-deterministic for a given
