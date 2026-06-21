@@ -166,6 +166,68 @@ def test_execute_unfingerprintable_library_blocks_and_keeps_source(tmp_path):
     assert s["totals"]["blocked"] == 1 and s["failures"]
 
 
+def test_execute_occupied_by_different_content_at_execute_blocks_no_clobber(tmp_path):
+    """TOCTOU clobber guard: target FREE at plan (placed_new), then a *different-content* file appears
+    at the planned target before execute. The execute-time recheck must refuse — rc 3, source left in
+    by-dest, the irreplaceable library byte UNCHANGED. (The identical-content sibling is covered above
+    by ...renamed/already-present; this dangerous different-content path was previously unexercised.)"""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0             # planned as placed_new (lib empty)
+    target = lib / "Trip" / "a.jpg"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(_fp_bytes("X"))                                  # different content appears post-plan
+    assert merge._run_locked_workflow("execute", str(ws)) == 3          # no-clobber refuses -> rc 3
+    assert open(target, "rb").read() == _fp_bytes("X")                  # library byte UNCHANGED (no clobber)
+    assert open(_src(ws, "Trip", "a.jpg"), "rb").read() == _fp_bytes("A")  # source preserved in by-dest
+    s = _summary(ws)
+    assert s["status"] == "failed"
+    assert s["totals"]["blocked"] == 1 and s["totals"]["placed_new"] == 0
+    assert s["failures"]
+
+
+def test_execute_required_snapshot_failure_aborts_before_any_placement(tmp_path, monkeypatch):
+    """snapshots_required + the library pre-mutation snapshot fails -> abort BEFORE any move:
+    status rejected (rc 2), nothing placed, source untouched in by-dest, library empty, workspace
+    NOT sealed. The required-snapshot guard is the merge spec §10.3-step-3 promise."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    monkeypatch.setattr(merge, "take_zfs_snapshot", lambda *a, **k: {
+        "required": True, "ok": False, "snapshot_name": "lib@merge-x", "command": "zfs snapshot",
+        "exit_code": 1, "stdout": "", "stderr": "pool busy"})
+    assert merge._run_locked_workflow("execute", str(ws)) == 2          # rejected -> rc 2
+    assert open(_src(ws, "Trip", "a.jpg"), "rb").read() == _fp_bytes("A")  # source untouched
+    assert not os.path.exists(os.path.join(str(lib), "Trip", "a.jpg"))  # nothing placed
+    assert not utils.is_sealed(str(ws))                                 # no seal
+    s = _summary(ws)
+    assert s["status"] == "rejected"
+    assert s["totals"]["placed_new"] == 0 and s["totals"]["blocked"] == 0
+
+
+def test_plan_blocks_when_bydest_photo_absent_from_finalized_set(tmp_path):
+    """Prep-consistency (precondition 4): a photo physically under 6-photos-by-dest but NOT in the
+    finalized record (handoff predates the latest move into by-dest) -> 're-run prep' blocker at plan,
+    rc 2, NO plan artifact written, nothing placed. Guards against merging an unrecorded file."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    stray = ws / "6-photos-by-dest" / "Trip" / "stray.jpg"               # on disk, absent from handoff
+    stray.write_bytes(_fp_bytes("Z"))
+    assert merge._run_locked_workflow("plan", str(ws)) == 2              # preflight blocker -> rc 2
+    assert not os.path.exists(merge.merge_plan_path(str(ws)))           # no plan written
+    assert stray.exists()                                               # left untouched
+    assert not (lib / "Trip").exists()                                 # nothing placed
+
+
+def test_config_is_byte_identical_across_plan_dryrun_execute(tmp_path):
+    """Merge never writes the workspace config (photos-00-config.json is hand-edited, authoritative).
+    Snapshot its bytes, run the full plan -> dry-run -> execute cycle, assert byte-for-byte identical."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    cfg_p = os.path.join(str(ws), ".photos-ingest", "photos-00-config.json")
+    before = open(cfg_p, "rb").read()
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("dry-run", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    assert open(cfg_p, "rb").read() == before                           # config byte-identical
+
+
 # --- resume (state-derivation, §8.3) -----------------------------------------
 
 def test_execute_resume_after_crash_before_seal(tmp_path, monkeypatch):
