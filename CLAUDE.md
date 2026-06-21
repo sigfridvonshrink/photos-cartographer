@@ -142,9 +142,12 @@ entry (`python -m cartographer.photos_1_prep …`) sharing the same `add_argumen
   plan-exists, blockers, sealed/lock, and cross-phase staleness via the shared
   `photos_utils.plan_dependencies_fresh` helper; idle + window-focus polling keeps it current).
   Affordance only — the core still validates in depth and refuses; the helper is the cheap shared
-  subset of the per-phase stale checks (quick ⊆ deep, same authoritative hash). Still to come: the
-  folded-in editor (v2.4) and merge `init-library` (needs a path argument). Built on the shared
-  event/sink seam (`cartographer/reporting.py`) and design tokens (`cartographer/editor/web/tokens.css`).
+  subset of the per-phase stale checks (quick ⊆ deep, same authoritative hash), and the **decision
+  editor folded in as the 4th tab** (v2.4 — served through the console origin at `/edit/` as an
+  iframe, with the editor's `/api/*` delegated to its own functions on the cwd workspace; one origin
+  so the single SSH tunnel still suffices, and **zero editor changes**). Still to come: merge
+  `init-library` (needs a path argument). Built on the shared event/sink seam
+  (`cartographer/reporting.py`) and design tokens (`cartographer/editor/web/tokens.css`).
 - **Canonical plan persistence (all phases):** each phase's plan/decision artifact lives at a fixed
   control-dir path (`photos-10-prep-plan.json`, geotag `photos-21`/`22`/`23`, `photos-30-merge-plan.json`).
   The planning command writes it there and prints the location; the validate/apply commands read it from

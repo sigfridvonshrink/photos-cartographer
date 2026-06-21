@@ -165,3 +165,14 @@ def test_actions_all_blocked_when_sealed(tmp_path, monkeypatch):
     a = server._state(str(tmp_path))["actions"]
     assert all(not v["ok"] for v in a.values())
     assert "sealed" in a["prep/plan"]["reason"]
+
+
+# --- folded-in editor (v2.4) ----------------------------------------------
+
+def test_editor_is_folded_in():
+    # editor assets are reachable as package data (the console serves them under /edit/)
+    assert server._read_pkg("cartographer.editor", "web", ["index.html"])[:9] == b"<!doctype"
+    assert server._read_pkg("cartographer.editor", "web", ["app.js"]) is not None
+    # editor API functions are wired for delegation through the console origin
+    for fn in ("_load_artifacts", "_save", "_rerun", "_photo_preview"):
+        assert callable(getattr(server._editor, fn))
