@@ -25,7 +25,8 @@ import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REGISTRY = os.path.join(ROOT, "spec", "spec-clauses.json")
-_REQUIRED = {"id", "area", "criticality", "anti", "title"}
+SPEC_DIR = os.path.join(ROOT, "spec")
+_REQUIRED = {"id", "area", "criticality", "anti", "title", "spec"}
 
 
 def _clauses():
@@ -43,15 +44,36 @@ def test_registry_is_well_formed():
         assert not missing, f"{c.get('id', '?')} is missing fields: {missing}"
         assert c["criticality"] in ("high", "med", "low"), c
         assert isinstance(c["anti"], bool)
+        assert {"file", "section"} <= c["spec"].keys(), f"{c['id']} spec needs file+section"
 
 
-def test_every_registered_clause_is_tagged_somewhere():
-    """Text-scan tests/ for `mark.spec("<id>")` — so the suite itself fails if a registered clause
-    loses its tag, even without running the standalone tools/spec-coverage gate."""
+def test_every_clause_spec_pointer_resolves_to_a_real_heading():
+    """The sync guard: each clause's spec pointer (file + section) must resolve to an actual `## N` /
+    `### N.N` heading in that spec file — so the registry can't silently drift when a spec section is
+    renumbered or removed. Caches each spec file's heading set."""
+    headings = {}
+    for path in glob.glob(os.path.join(SPEC_DIR, "*.md")):
+        with open(path) as f:
+            headings[os.path.basename(path)] = set(
+                re.findall(r'^#{2,3}\s+([0-9]+[0-9a-z]*(?:\.[0-9a-z]+)*)', f.read(), re.M))
+    bad = []
+    for c in _clauses():
+        sp = c["spec"]
+        if sp["file"] not in headings:
+            bad.append(f"{c['id']}: spec file {sp['file']!r} not found")
+        elif str(sp["section"]) not in headings[sp["file"]]:
+            bad.append(f"{c['id']}: section {sp['section']!r} not a heading in {sp['file']}")
+    assert not bad, "spec pointers that don't resolve (registry drifted from specs):\n  " + "\n  ".join(bad)
+
+
+def test_every_must_cover_clause_is_tagged_somewhere():
+    """Text-scan tests/ for `mark.spec("<id>")` — so the suite itself fails if a MUST-COVER clause
+    loses its tag, even without running the standalone tools/spec-coverage gate. (Non-must-cover
+    clauses are part of the index but not gated.)"""
     tagged = set()
     pat = re.compile(r'mark\.spec\("([^"]+)"\)')
     for path in glob.glob(os.path.join(ROOT, "tests", "*.py")):
         with open(path) as f:
             tagged.update(pat.findall(f.read()))
-    untagged = [c["id"] for c in _clauses() if c["id"] not in tagged]
-    assert not untagged, f"registered clauses with no @pytest.mark.spec tag: {untagged}"
+    untagged = [c["id"] for c in _clauses() if c.get("must_cover") and c["id"] not in tagged]
+    assert not untagged, f"must-cover clauses with no @pytest.mark.spec tag: {untagged}"
