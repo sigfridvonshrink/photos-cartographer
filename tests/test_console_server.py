@@ -50,6 +50,65 @@ def test_make_target_builds_a_callable_without_running():
     assert callable(server._make_target("merge", "init-library", ["/srv/library"]))   # optional path arg
 
 
+# --- full CLI parity: geotag finalize + prep prune-quarantine (v2.5) -------
+
+def test_runnable_set_has_full_cli_parity():
+    # Every phase command is now driveable from the console — the two that were CLI-only are present.
+    assert ("geotag", "finalize") in server._RUNNABLE
+    assert ("prep", "prune-quarantine") in server._RUNNABLE
+    assert server._RUNNABLE == {
+        ("prep", "plan"), ("prep", "dry-run"), ("prep", "execute"), ("prep", "prune-quarantine"),
+        ("geotag", "plan"), ("geotag", "execute"), ("geotag", "finalize"),
+        ("merge", "init-library"), ("merge", "plan"), ("merge", "dry-run"), ("merge", "execute")}
+
+
+def test_make_target_builds_finalize_and_prune_callables():
+    assert callable(server._make_target("geotag", "finalize"))
+    assert callable(server._make_target("prep", "prune-quarantine",
+                                        ["--plan-id", "20260101T000000Z-abc", "--yes"]))
+
+
+def test_prune_extra_builds_argv_dry_run_vs_delete():
+    assert server._prune_extra({}) == []                                    # nothing selected = dry-run
+    assert server._prune_extra({"prune": {"plan_ids": ["p1", "p2"]}}) == \
+        ["--plan-id", "p1", "--plan-id", "p2"]                              # dry-run, no --yes
+    assert server._prune_extra({"prune": {"all": True, "delete": True}}) == ["--all", "--yes"]
+    assert server._prune_extra({"prune": {"older_than_days": 30, "delete": True}}) == \
+        ["--older-than-days", "30", "--yes"]
+
+
+def test_prune_guard_allows_dry_run_but_gates_destructive_delete():
+    assert server._prune_guard({"prune": {"plan_ids": ["p1"]}}) is None     # dry-run: always allowed
+    # a delete needs confirmation AND a selector — never a one-click unscoped purge
+    assert "confirmation" in server._prune_guard({"prune": {"all": True, "delete": True}})
+    assert "select" in server._prune_guard({"confirm": True, "prune": {"delete": True}})
+    assert server._prune_guard({"confirm": True, "prune": {"all": True, "delete": True}}) is None
+    assert server._prune_guard({"confirm": True, "prune": {"plan_ids": ["p1"], "delete": True}}) is None
+
+
+def test_prune_quarantine_is_the_only_action_enabled_when_sealed(tmp_path, monkeypatch):
+    monkeypatch.setattr(server.U, "is_sealed", lambda ws: True)
+    a = server._state(str(tmp_path))["actions"]
+    assert a["prep/prune-quarantine"]["ok"] is True and a["prep/prune-quarantine"]["reason"] == ""
+    assert a["prep/plan"]["ok"] is False and a["geotag/finalize"]["ok"] is False
+
+
+def test_finalize_action_enabled_only_after_successful_execute_and_before_finalize(tmp_path):
+    from cartographer.photos_2_geotag import execution_summary_path, complete_log_path
+    ctl = tmp_path / ".photos-ingest"; ctl.mkdir()
+    # before geotag execute: finalize is not offered
+    assert server._state(str(tmp_path))["actions"]["geotag/finalize"]["ok"] is False
+    # geotag executed successfully -> finalize becomes available
+    with open(execution_summary_path(str(tmp_path)), "w") as f:
+        json.dump({"status": "success", "plan_id": "cal-1"}, f)
+    assert server._state(str(tmp_path))["actions"]["geotag/finalize"]["ok"] is True
+    # once finalized (complete-log written) -> no longer offered
+    with open(complete_log_path(str(tmp_path)), "w") as f:
+        json.dump({"photos": {}}, f)
+    fin = server._state(str(tmp_path))["actions"]["geotag/finalize"]
+    assert fin["ok"] is False and "already" in fin["reason"]
+
+
 def test_init_library_action_runnable_anytime(tmp_path):
     # init-library is a one-time setup step — offered even with no prep/geotag/merge plan yet
     a = server._state(str(tmp_path))["actions"]
@@ -166,10 +225,12 @@ def test_geotag_plan_opens_once_prep_handoff_exists(tmp_path):
     assert server._state(ws)["actions"]["geotag/plan"]["ok"] is True
 
 
-def test_actions_all_blocked_when_sealed(tmp_path, monkeypatch):
+def test_actions_all_blocked_when_sealed_except_prune(tmp_path, monkeypatch):
     monkeypatch.setattr(server.U, "is_sealed", lambda ws: True)
     a = server._state(str(tmp_path))["actions"]
-    assert all(not v["ok"] for v in a.values())
+    # prune-quarantine is the SOLE op a sealed workspace permits; everything else is refused.
+    assert a["prep/prune-quarantine"]["ok"] is True
+    assert all(not v["ok"] for k, v in a.items() if k != "prep/prune-quarantine")
     assert "sealed" in a["prep/plan"]["reason"]
 
 

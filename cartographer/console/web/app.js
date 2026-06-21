@@ -8,10 +8,12 @@ const logEl = $("#log");
 const progList = $("#prog-list");
 const tasks = new Map();   // task_id -> { root, pl, fill, pn }
 
-// Per-phase commands. 'execute' goes through the confirm gate (per-phase), never a direct run.
+// Per-phase commands. 'execute' goes through the confirm gate (per-phase), never a direct run;
+// 'prune-quarantine' opens its own dialog (dry-run is free, the --yes delete is confirmed).
 const PHASE_CMDS = {
-  prep: [["plan", "Plan", "primary"], ["dry-run", "Dry-run", ""], ["execute", "Execute", "gate"]],
-  geotag: [["plan", "Plan", "primary"], ["execute", "Execute", "gate"]],
+  prep: [["plan", "Plan", "primary"], ["dry-run", "Dry-run", ""], ["execute", "Execute", "gate"],
+         ["prune-quarantine", "Prune quarantine", "prune"]],
+  geotag: [["plan", "Plan", "primary"], ["execute", "Execute", "gate"], ["finalize", "Finalize", ""]],
   merge: [["init-library", "Init library", "initlib"], ["plan", "Plan", "primary"],
           ["dry-run", "Dry-run", ""], ["execute", "Execute", "gate"]],
 };
@@ -100,7 +102,8 @@ function renderActions() {
     b.className = "btn" + (kind === "primary" ? " primary" : "");
     b.textContent = label;
     b.dataset.cmd = cmd;
-    b.onclick = kind === "gate" ? openGate : kind === "initlib" ? openInitLib : () => trigger(cmd);
+    b.onclick = kind === "gate" ? openGate : kind === "initlib" ? openInitLib
+      : kind === "prune" ? openPrune : () => trigger(cmd);
     wrap.appendChild(b);
   }
 }
@@ -235,6 +238,37 @@ async function confirmInitLib() {
 $("#initlib-cancel").onclick = closeInitLib;
 $("#initlib-go").onclick = confirmInitLib;
 initOverlay.onclick = (e) => { if (e.target === initOverlay) closeInitLib(); };
+
+// --- prune-quarantine (dry-run is free; the --yes delete is confirmed) -----
+const pruneOverlay = $("#prune-overlay");
+function openPrune() { $("#prune-ids").value = ""; $("#prune-all").checked = false; pruneOverlay.hidden = false; }
+function closePrune() { pruneOverlay.hidden = true; }
+function _pruneSel(deleteFlag) {
+  const ids = $("#prune-ids").value.split(/[\s,]+/).filter(Boolean);
+  const all = $("#prune-all").checked;
+  const prune = { delete: deleteFlag };
+  if (ids.length) prune.plan_ids = ids;
+  if (all) prune.all = true;
+  return prune;
+}
+async function runPrune(deleteFlag) {
+  // A delete needs a selector; a dry-run lists the whole footprint with none.
+  const prune = _pruneSel(deleteFlag);
+  if (deleteFlag && !prune.plan_ids && !prune.all) { $("#prune-err").textContent = "select plan id(s) or 'all' to delete"; return; }
+  closePrune();
+  try {
+    await fetch("/api/run", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phase: "prep", command: "prune-quarantine", confirm: deleteFlag, prune }),
+    });
+  } catch { /* state poll reflects reality */ }
+  await refreshState();
+  pollWhileRunning();
+}
+$("#prune-cancel").onclick = closePrune;
+$("#prune-dry").onclick = () => { $("#prune-err").textContent = ""; runPrune(false); };
+$("#prune-del").onclick = () => { $("#prune-err").textContent = ""; runPrune(true); };
+pruneOverlay.onclick = (e) => { if (e.target === pruneOverlay) closePrune(); };
 
 $("#clear").onclick = () => { logEl.textContent = ""; };
 
