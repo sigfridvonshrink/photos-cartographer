@@ -46,7 +46,7 @@ from .photos_utils import (
     verify_json_dependency, json_dependency, write_json_artifact, write_versioned_json, is_library, write_library_marker,
     library_marker_path, allocate_suffix, suffix_root, max_suffix, ContentHasher, WorkspaceCache,
     journal_path, take_zfs_snapshot, _move_no_clobber, write_db_snapshot, reseal_archival_package,
-    write_sealed_marker, WorkspaceLock, LibraryLock,
+    write_sealed_marker, WorkspaceLock, LibraryLock, XDEV_TMP_PREFIX, XDEV_TMP_SUFFIX,
 )
 from .reporting import get_reporter
 
@@ -409,6 +409,36 @@ class MergeWorkflow:
                 occ_lower[lib_dest] = {n.lower() for n in names}
             return occ_names[lib_dest], occ_lower[lib_dest]
 
+        # Running per-dir CASE-FOLDED claimed names: existing library files plus every name this run has
+        # allocated so far. Seeds the case-insensitive no-clobber check (§7.2) at PLAN time so two
+        # incoming files differing only in case — or one whose case-variant already sits in the library —
+        # are resolved by a clean suffix here, not left to surface as an EEXIST blocker at execute on a
+        # case-insensitive library. (Distinct from `occ_lower`, which the suffix allocator seeds with the
+        # whole incoming batch and so cannot tell a file from its own siblings.)
+        claimed_lower = {}
+
+        def _claimed(lib_dest):
+            if lib_dest not in claimed_lower:
+                d = os.path.join(library_root, lib_dest) if lib_dest else library_root
+                claimed_lower[lib_dest] = {n.lower() for n in (os.listdir(d) if os.path.isdir(d) else [])}
+            return claimed_lower[lib_dest]
+
+        def _alloc_renamed(e, collision):
+            """Suffix-allocate a safe destination name (append-at-max+1, case-insensitive) and return
+            the renamed_incoming rec fields. Used for a different-content collision AND a case-only
+            name clash with a sibling/library file."""
+            names, lower = _occ(e["lib_dest"])
+            stem, dot, ext = e["final_name"].rpartition(".")
+            root = suffix_root(stem if dot else e["final_name"])
+            new_name = allocate_suffix(root, ext if dot else "", lower, start_idx=max_suffix(root, names) + 1)
+            names.append(new_name)
+            _claimed(e["lib_dest"]).add(new_name.lower())
+            new_target = (os.path.join(library_root, e["lib_dest"], new_name) if e["lib_dest"]
+                          else os.path.join(library_root, new_name))
+            return {"disposition": "renamed_incoming", "library_target": new_target,
+                    "resolved_name": new_name, "renamed_for_library": True,
+                    "renamed_from": e["final_name"], "library_collision": collision}
+
         dests, blockers = {}, []
         totals = {"placed_new": 0, "already_present": 0, "renamed_for_library": 0, "blocked": 0}
         for e in entries:
@@ -420,10 +450,19 @@ class MergeWorkflow:
                    "preconditions": {"size": st.st_size, "mtime_ns": st.st_mtime_ns,
                                      "content_fingerprint": e["content_fingerprint"]}}
             target = e["library_target"]
+            cl = _claimed(e["lib_dest"])
+            case_taken = e["final_name"].lower() in cl                # library/sibling case-variant exists
             if not os.path.exists(target):
-                rec.update({"disposition": "placed_new", "library_target": target,
-                            "resolved_name": e["final_name"], "renamed_for_library": False})
-                totals["placed_new"] += 1
+                if not case_taken:
+                    rec.update({"disposition": "placed_new", "library_target": target,
+                                "resolved_name": e["final_name"], "renamed_for_library": False})
+                    totals["placed_new"] += 1
+                    cl.add(e["final_name"].lower())
+                else:
+                    # No exact-case file to fingerprint: the clash is a name-case collision (would
+                    # clobber on a case-insensitive library), not a content collision — rename around it.
+                    rec.update(_alloc_renamed(e, {"path": None, "reason": "case-insensitive name clash"}))
+                    totals["renamed_for_library"] += 1
             else:
                 lib_fp, fp_err = self._library_fingerprint(target, cache)
                 if lib_fp is None:
@@ -437,19 +476,9 @@ class MergeWorkflow:
                     rec.update({"disposition": "already_present", "library_target": target,
                                 "resolved_name": e["final_name"], "renamed_for_library": False})
                     totals["already_present"] += 1
+                    cl.add(e["final_name"].lower())
                 else:
-                    names, lower = _occ(e["lib_dest"])
-                    stem, dot, ext = e["final_name"].rpartition(".")
-                    root = suffix_root(stem if dot else e["final_name"])
-                    start = max_suffix(root, names) + 1
-                    new_name = allocate_suffix(root, ext if dot else "", lower, start_idx=start)
-                    names.append(new_name)
-                    new_target = (os.path.join(library_root, e["lib_dest"], new_name) if e["lib_dest"]
-                                  else os.path.join(library_root, new_name))
-                    rec.update({"disposition": "renamed_incoming", "library_target": new_target,
-                                "resolved_name": new_name, "renamed_for_library": True,
-                                "renamed_from": e["final_name"],
-                                "library_collision": {"path": target, "fingerprint": lib_fp}})
+                    rec.update(_alloc_renamed(e, {"path": target, "fingerprint": lib_fp}))
                     totals["renamed_for_library"] += 1
             dests.setdefault(e["lib_dest"], {"files": []})["files"].append(rec)
 
@@ -726,6 +755,11 @@ class MergeWorkflow:
             return {"status": "rejected", "plan_id": plan.get("plan_id"), "stale": [reason],
                     "snapshot": snapshot}
 
+        # Sweep crash-orphaned cross-fs copy temps (<XDEV_TMP_PREFIX>*<XDEV_TMP_SUFFIX>) left by a
+        # prior INTERRUPTED run from the dirs this plan targets. Safe: the library lock makes concurrent
+        # merges impossible, so any such temp is debris from a crash, never another run's live copy.
+        swept = self._sweep_orphan_temps(plan, library_root)
+
         jpath = journal_path(ws, plan["plan_id"])
         journal = {}
         if os.path.exists(jpath):
@@ -765,7 +799,8 @@ class MergeWorkflow:
         status = merge_execution_status(results)
         finished_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         summary = self._build_summary(ws, plan, library_root, results, snapshot, status,
-                                      now_iso, execution_id, jobs, finished_at=finished_at)
+                                      now_iso, execution_id, jobs, finished_at=finished_at,
+                                      orphans_swept=swept)
         write_json_artifact(merge_summary_path(ws), summary)
         finalized = None
         if status == "success":
@@ -820,7 +855,7 @@ class MergeWorkflow:
                 "archive_manifest": "photos-35-archive-manifest.json", "manifest_sha256": manifest_sha}
 
     def _build_summary(self, ws, plan, library_root, results, snapshot, status, now_iso,
-                       execution_id, jobs, finished_at=None, extra_failures=None):
+                       execution_id, jobs, finished_at=None, extra_failures=None, orphans_swept=0):
         kinds = {"placed_new": 0, "already_present": 0, "renamed_for_library": 0, "blocked": 0}
         newly = already_done = 0
         failures = list(extra_failures or [])
@@ -861,8 +896,35 @@ class MergeWorkflow:
             "resume": {"newly_moved": newly, "already_done_skipped": already_done},
             "failures": failures, "destinations": dests, "status": status, "snapshot": snapshot,
             "run_metadata": {"execution_id": execution_id, "started_at": now_iso,
-                             "finished_at": finished_at or now_iso, "jobs": jobs},
+                             "finished_at": finished_at or now_iso, "jobs": jobs,
+                             "orphan_temps_swept": orphans_swept},
         }
+
+    def _sweep_orphan_temps(self, plan, library_root):
+        """Remove crash-orphaned cross-fs copy temps (<XDEV_TMP_PREFIX>*<XDEV_TMP_SUFFIX>) from the
+        library dirs this plan targets (+ the library root). Called at the start of execute, under the
+        library lock — so a leftover temp is always debris from an interrupted prior run, never a live
+        copy from a concurrent merge (the lock forbids one). Best-effort; returns the count removed."""
+        dirs = {library_root}
+        for dd in plan.get("destinations", {}).values():
+            for f in dd.get("files", []):
+                t = f.get("library_target")
+                if t:
+                    dirs.add(os.path.dirname(t))
+        n = 0
+        for d in dirs:
+            try:
+                entries = os.listdir(d)
+            except OSError:
+                continue
+            for name in entries:
+                if name.startswith(XDEV_TMP_PREFIX) and name.endswith(XDEV_TMP_SUFFIX):
+                    try:
+                        os.remove(os.path.join(d, name))
+                        n += 1
+                    except OSError:
+                        pass
+        return n
 
     def do_execute(self, ws, library_root, jobs):
         reporter = get_reporter()
