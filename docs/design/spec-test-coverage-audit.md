@@ -208,8 +208,16 @@ asserted") cluster are now closed.
 
 The remaining Section-4 source-grep brittleness and test-name approximations were not chased.
 
-A **living spec-coverage mechanism** now exists (PR #218): the clauses above are registered in
-`spec/spec-clauses.json`, each Tier-1/2/3 test is tagged `@pytest.mark.spec("<id>")`, and
-`tools/spec-coverage` (run in CI) fails if any registered clause loses its test — so this audit is no
-longer purely a point-in-time snapshot for the clauses it has been seeded with. Growing the registry
-beyond the curated must-cover set toward the full 446-clause surface is the remaining work.
+A **living spec-coverage mechanism** now exists (PR #218): each Tier-1/2/3 test is tagged
+`@pytest.mark.spec("<id>")`, and `tools/spec-coverage` (run in CI) fails if any **must-cover** clause
+loses its test — so this audit is no longer purely a point-in-time snapshot.
+
+The registry `spec/spec-clauses.json` was then **grown into a living clause index** (PR #220): a
+spec-enumeration workflow extracted **~664 behavioral clauses** across the four spec files (prep 208 /
+shared 157 / geotag 172 / merge 127; ~312 anti-behaviours), each carrying a **spec pointer**
+(`file` + section heading) that `tests/test_spec_coverage_registry.py` keeps in sync (it fails if a
+pointer stops resolving to a real heading — drift protection). The curated **35 `must_cover`** clauses
+(this audit's Tier-1/2/3 set) remain the CI-gated subset, with their canonical ids preserved inside the
+larger index. The index is the denominator; tagging more tests grows the gated subset over time. (The
+~664 enumeration is a derived approximation — broader and more granular than this audit's 446 — and
+supersedes nothing here; it is the machine-readable companion that stays synced to the specs.)
