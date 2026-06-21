@@ -1138,6 +1138,37 @@ def require_tools(tools, context="") -> None:
         raise MissingToolError(miss, context=context)
 
 
+_LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "::1")   # "" / 0.0.0.0 are bind-all, not loopback
+
+
+def ssh_tunnel_hint(port: int, host: str) -> "str | None":
+    """A copy-paste ``ssh -L`` command to reach a LOOPBACK-bound web server from a local machine, or
+    None when the server is not loopback-bound (it's directly reachable — no tunnel needed).
+
+    The remote ``user@host`` is taken from the SSH connection that opened this session when available
+    (``SSH_CONNECTION`` — its 3rd field is the address the client connected to, i.e. the host AS THE
+    CLIENT SEES US, so the client's own ssh config / keys for that host apply), else from the
+    environment user + the machine's hostname. Best-effort: a hint, never authoritative."""
+    if host not in _LOOPBACK_HOSTS:
+        return None
+    import getpass
+    try:
+        user = os.environ.get("USER") or os.environ.get("LOGNAME") or getpass.getuser()
+    except Exception:
+        user = "user"
+    server_addr = None
+    conn = os.environ.get("SSH_CONNECTION") or ""
+    parts = conn.split()
+    if len(parts) >= 3:
+        server_addr = parts[2]                       # the address the client used to reach this host
+    if not server_addr:
+        try:
+            server_addr = socket.gethostname() or "HOST"
+        except Exception:
+            server_addr = "HOST"
+    return f"ssh -L {port}:127.0.0.1:{port} {user}@{server_addr}"
+
+
 _MAGICK_COMMAND = None
 def get_magick_command() -> list:
     """Return ['magick'] if ImageMagick v7's `magick` (which supports the persistent `-script -` mode)

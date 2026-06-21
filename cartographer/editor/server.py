@@ -42,6 +42,8 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
+from .. import photos_utils
+
 try:
     import fcntl  # POSIX advisory locking (Linux — the pipeline already relies on it)
 except ImportError:
@@ -472,6 +474,10 @@ def serve(workspace, port=8765, host="0.0.0.0"):
     if bound_port != port:
         print(f"  (port {port} was busy — using {bound_port})")
     print(f"  open  http://{link_host}:{bound_port}/")
+    hint = photos_utils.ssh_tunnel_hint(bound_port, host)
+    if hint:
+        print("  loopback-only — from your local machine, tunnel then open the URL above:")
+        print(f"    {hint}")
     print("  (Ctrl-C to stop)", flush=True)  # flush so the link shows at once even when piped
     try:
         srv.serve_forever()
