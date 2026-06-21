@@ -147,6 +147,19 @@ def test_sealed_workspace_warns_on_new_dump(tmp_path, monkeypatch, capsys):
     assert "new dump" in capsys.readouterr().err.lower()
 
 
+def test_sealed_new_dump_is_left_exactly_in_place(tmp_path, monkeypatch, capsys):
+    """The sealed-workspace new-dump path only WARNS — it never relocates the dumped file. After the
+    refusal the file is byte-identical at its original 0-sources path (the operator must move it to a
+    fresh workspace themselves; prep touches nothing)."""
+    ws = _ws(tmp_path)
+    (ws / ".photos-ingest" / "photos-00-sealed.json").write_text('{"sealed": true}')
+    dump = ws / "0-sources" / "newdump.jpg"
+    dump.write_bytes(b"original-bytes")
+    assert _main(monkeypatch, ws, "plan") == 2
+    assert dump.read_bytes() == b"original-bytes"               # left exactly where it is
+    assert os.listdir(ws / "0-sources") == ["newdump.jpg"]     # nothing relocated
+
+
 def test_prune_quarantine_is_the_sole_op_allowed_on_a_sealed_workspace(tmp_path, monkeypatch, capsys):
     """The seal blocks ONLY plan/dry-run/execute; prune-quarantine is the sole maintenance op that
     still runs on a sealed (terminal) workspace — quarantine cleanup must survive the seal. Assert it
@@ -206,6 +219,21 @@ def test_locked_workspace_fails_fast(tmp_path, monkeypatch, capsys):
         assert code != 0 and "locked" in capsys.readouterr().err.lower()
     finally:
         fcntl.flock(fd, fcntl.LOCK_UN); os.close(fd)
+
+
+def test_locked_workspace_failfast_produces_no_artifact(tmp_path, monkeypatch, capsys):
+    """Lock contention is fail-fast and pre-mutation: a `plan` that can't take the workspace lock
+    produces NO plan artifact and NO journal — the run never got past lock acquisition."""
+    ws = _ws(tmp_path)
+    lock = ws / ".photos-ingest" / "photos-00-workspace.lock"
+    fd = os.open(str(lock), os.O_RDWR | os.O_CREAT, 0o644)
+    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    try:
+        assert _main(monkeypatch, ws, "plan") == 1
+    finally:
+        fcntl.flock(fd, fcntl.LOCK_UN); os.close(fd)
+    assert not os.path.exists(utils.prep_plan_path(str(ws)))    # no plan written
+    assert not (ws / ".photos-ingest" / "journal.json").exists()  # no journal written
 
 
 def test_execute_without_saved_plan_exits_nonzero(tmp_path, monkeypatch, capsys):
