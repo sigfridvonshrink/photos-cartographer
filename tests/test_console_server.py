@@ -7,6 +7,16 @@ from cartographer import photos_utils as U
 from cartographer.console import server
 
 
+def _init_ws(workspace):
+    """Mark a workspace initialized by writing the guard sentinel — most console affordances are only
+    offered once the workspace exists (an uninitialized cwd offers prep/plan only)."""
+    g = U.guard_path(workspace)
+    os.makedirs(os.path.dirname(g), exist_ok=True)
+    with open(g, "w") as f:
+        json.dump({"initialized": True}, f)
+    return workspace
+
+
 def _write_plan(workspace, *, plan_id="prep-1", operations=(), blockers=(), no_op=0, warnings=(),
                 depends_on=None):
     pp = U.prep_plan_path(workspace)
@@ -86,7 +96,19 @@ def test_prune_guard_allows_dry_run_but_gates_destructive_delete():
     assert server._prune_guard({"confirm": True, "prune": {"plan_ids": ["p1"], "delete": True}}) is None
 
 
+def test_only_prep_plan_enabled_when_uninitialized(tmp_path):
+    # Fresh cwd, no guard: the console opens but offers prep/plan only — it is prep's own entry point,
+    # and the rest stays disabled (with a guiding reason) until the workspace is initialized.
+    a = server._state(str(tmp_path))["actions"]
+    assert server._state(str(tmp_path))["initialized"] is False
+    assert a["prep/plan"]["ok"] is True and a["prep/plan"]["reason"] == ""
+    for cmd in ("prep/execute", "geotag/plan", "merge/init-library", "prep/prune-quarantine"):
+        assert a[cmd]["ok"] is False
+    assert "initialize" in a["geotag/plan"]["reason"]
+
+
 def test_prune_quarantine_is_the_only_action_enabled_when_sealed(tmp_path, monkeypatch):
+    _init_ws(str(tmp_path))
     monkeypatch.setattr(server.U, "is_sealed", lambda ws: True)
     a = server._state(str(tmp_path))["actions"]
     assert a["prep/prune-quarantine"]["ok"] is True and a["prep/prune-quarantine"]["reason"] == ""
@@ -96,6 +118,7 @@ def test_prune_quarantine_is_the_only_action_enabled_when_sealed(tmp_path, monke
 def test_finalize_action_enabled_only_after_successful_execute_and_before_finalize(tmp_path):
     from cartographer.photos_2_geotag import execution_summary_path, complete_log_path
     ctl = tmp_path / ".photos-ingest"; ctl.mkdir()
+    _init_ws(str(tmp_path))
     # before geotag execute: finalize is not offered
     assert server._state(str(tmp_path))["actions"]["geotag/finalize"]["ok"] is False
     # geotag executed successfully -> finalize becomes available
@@ -111,6 +134,7 @@ def test_finalize_action_enabled_only_after_successful_execute_and_before_finali
 
 def test_init_library_action_runnable_anytime(tmp_path):
     # init-library is a one-time setup step — offered even with no prep/geotag/merge plan yet
+    _init_ws(str(tmp_path))
     a = server._state(str(tmp_path))["actions"]
     assert a["merge/init-library"]["ok"] is True
 
@@ -205,7 +229,7 @@ def test_stale_plan_flagged_and_execute_refused(tmp_path):
 # --- per-command affordance (actions): pipeline order, sealed, lock --------
 
 def test_actions_enforce_pipeline_order(tmp_path):
-    ws = str(tmp_path)
+    ws = _init_ws(str(tmp_path))
     a = server._state(ws)["actions"]
     assert a["prep/plan"]["ok"] is True
     assert a["prep/dry-run"]["ok"] is False and "prep plan" in a["prep/dry-run"]["reason"]
@@ -217,7 +241,7 @@ def test_actions_enforce_pipeline_order(tmp_path):
 
 
 def test_geotag_plan_opens_once_prep_handoff_exists(tmp_path):
-    ws = str(tmp_path)
+    ws = _init_ws(str(tmp_path))
     assert server._state(ws)["actions"]["geotag/plan"]["ok"] is False
     hp = U.handoff_path(ws)
     os.makedirs(os.path.dirname(hp), exist_ok=True)
@@ -226,6 +250,7 @@ def test_geotag_plan_opens_once_prep_handoff_exists(tmp_path):
 
 
 def test_actions_all_blocked_when_sealed_except_prune(tmp_path, monkeypatch):
+    _init_ws(str(tmp_path))
     monkeypatch.setattr(server.U, "is_sealed", lambda ws: True)
     a = server._state(str(tmp_path))["actions"]
     # prune-quarantine is the SOLE op a sealed workspace permits; everything else is refused.
