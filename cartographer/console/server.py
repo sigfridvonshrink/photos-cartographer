@@ -107,7 +107,12 @@ def _make_target(phase, command, extra=None, pre=None):
     args = parser.parse_args([*(pre or []), command, *(extra or [])])
 
     def target():
-        mod.run(args)
+        try:
+            mod.run(args)
+        finally:
+            # Whatever happened (success, sys.exit, exception, interrupt), leave the progress area
+            # empty: finish any progress task the phase left open. The log history stays.
+            WEB.clear_progress()
     return target
 
 
