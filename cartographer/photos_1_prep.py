@@ -2562,6 +2562,33 @@ def _prep_nothing_to_do(workspace_root, reporter) -> bool:
     return True
 
 
+def _emit_first_run_config_notice(workspace_root, plan, reporter):
+    """On the FIRST prep plan — the run that seeds `photos-00-config.json` from the built-in defaults —
+    prompt the operator (loudly, but advisory, not a blocker) to review and tune the config before
+    trusting the plan. The seeded defaults decide how every file is classified; in particular
+    `media_extensions` decides what is treated as a photo/video (organized) vs everything else (set
+    aside inert in strays), with big downstream consequences. Cites how many files THIS plan would
+    sideline as non-media, so the warning is concrete rather than abstract. CLI + console both see it
+    (it goes through the shared reporter)."""
+    from .photos_utils import folder_name, config_path
+    strays = folder_name('strays')
+    strays_n = sum(1 for op in plan.operations
+                   if op.destination and op.destination.startswith(strays + '/'))
+    reporter.warn("")
+    reporter.warn("⚠  FIRST RUN — the workspace config was just created with DEFAULT values:")
+    reporter.warn(f"     {config_path(workspace_root)}")
+    reporter.warn("   These defaults decide how every file is classified. In particular `media_extensions` "
+                  f"decides what is treated as a photo/video (organized) vs everything else (set aside "
+                  f"inert in {strays}) — wrong defaults silently misfile real media.")
+    reporter.warn(f"   This plan would set aside {strays_n} file(s) as non-media into {strays}.")
+    if strays_n:
+        reporter.warn("   → If any of those are really photos/videos, add their extension to the right "
+                      "media_extensions class in the config, then RE-RUN `prep plan`.")
+    reporter.warn("   Take a good look at the config now and tune it — it has big consequences downstream "
+                  "(time / place / library layout). Then re-run `prep plan` before dry-run / execute.")
+    reporter.warn("")
+
+
 def run(args):
     CONFIG["jobs"] = getattr(args, "jobs", 4)
 
@@ -2622,6 +2649,12 @@ def run(args):
                               "degraded (affected files reported as fingerprint-failed): "
                               "magick→images, ffmpeg→videos.")
 
+            # Whether the workspace config already existed BEFORE this plan — `plan()` seeds it from
+            # defaults on first run, so a previously-absent config means this is the first plan and the
+            # operator should review the (default) config before trusting the plan (notice below).
+            from .photos_utils import config_path as _config_path
+            _config_was_seeded = not os.path.exists(_config_path(workspace_root))
+
             cache = WorkspaceCache(workspace_root, read_only=True)
             workflow = WorkspacePrepWorkflow(workspace_root, cache)
             plan = workflow.plan()
@@ -2640,6 +2673,11 @@ def run(args):
             reporter.log(f"Plan saved to {pp}", stream="stdout")
             if _bak:
                 reporter.log(f"  Previous plan backed up to {_bak}", stream="stdout")
+
+            # First plan on this workspace: the config was just seeded with defaults — prompt the
+            # operator to review/tune it (esp. media_extensions) before trusting the plan. Advisory.
+            if _config_was_seeded:
+                _emit_first_run_config_notice(workspace_root, plan, reporter)
 
             # Surface blockers immediately: the plan is still saved (for inspection), but it cannot be
             # executed as-is, so don't let "Plan saved" read as all-clear — print each blocker and exit
