@@ -158,6 +158,28 @@ def _stale_plan(ws):
         '{"plan_id": "stale", "command": "prep", "operations": []}')
 
 
+@pytest.mark.spec("prep-dryrun-empty-sources-nothing-to-do-1")
+def test_dry_run_on_prepped_workspace_with_empty_sources_is_nothing_to_do(tmp_path, monkeypatch):
+    # dry-run shares execute's fast-stop: an already-prepped, empty-0-sources workspace has nothing to
+    # validate, so it stops with "nothing to do" rather than summarizing the stale plan.
+    prep.CONFIG["zfs"] = {"enabled": False}
+    ws = _initialized(tmp_path)
+    _stale_plan(ws)
+    validated = []
+    monkeypatch.setattr(prep.PlanValidator, "validate_plan_preflight",
+                        staticmethod(lambda *a, **k: validated.append(1)))
+    monkeypatch.chdir(ws)
+    from cartographer.reporting import Reporter, CaptureSink, use_reporter
+    cap = CaptureSink()
+    args = types.SimpleNamespace(command="dry-run", jobs=1)
+    with use_reporter(Reporter([cap])):
+        with pytest.raises(SystemExit) as ei:
+            prep.run(args)
+    assert ei.value.code == 0 and validated == []              # stopped before validating the plan
+    src = utils.folder_name("sources")
+    assert any("Nothing to do" in e.msg and f"{src} is empty" in e.msg for e in cap.logs())
+
+
 @pytest.mark.spec("prep-execute-empty-sources-nothing-to-do-1")
 def test_execute_on_prepped_workspace_with_empty_sources_is_nothing_to_do(tmp_path, monkeypatch):
     # After a successful prep, 0-sources is the empty steady end-state (shared contract §6). With a

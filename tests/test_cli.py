@@ -87,6 +87,7 @@ def test_plan_surfaces_blockers_and_exits_nonzero(tmp_path, monkeypatch, capsys)
 
 def test_plan_dryrun_execute_roundtrip(tmp_path, monkeypatch, capsys):
     ws = _ws(tmp_path)
+    (ws / "0-sources" / "note.txt").write_text("stray")       # real work so it isn't a nothing-to-do
     assert _main(monkeypatch, ws, "plan") == 0                # writes canonical plan
     assert os.path.exists(utils.prep_plan_path(str(ws)))
     assert "Plan saved to" in capsys.readouterr().out
@@ -97,6 +98,7 @@ def test_plan_dryrun_execute_roundtrip(tmp_path, monkeypatch, capsys):
 @pytest.mark.spec("prep-dryrun-not-simulation-1", "prep-dryrun-summary-not-dump-1")
 def test_dry_run_summarizes_not_dumps(tmp_path, monkeypatch, capsys):
     ws = _ws(tmp_path)
+    (ws / "0-sources" / "note.txt").write_text("stray")       # a real plan to summarize (not nothing-to-do)
     assert _main(monkeypatch, ws, "plan") == 0
     capsys.readouterr()
     assert _main(monkeypatch, ws, "dry-run") == 0
@@ -274,6 +276,7 @@ def test_dry_run_mutates_nothing_on_disk(tmp_path, monkeypatch, capsys):
     validates it against an in-memory DB, and prints a summary. Snapshot the whole control dir + a
     seeded quarantine, run dry-run, assert every on-disk byte is identical (cache, plan, quarantine)."""
     ws = _ws(tmp_path)
+    (ws / "0-sources" / "note.txt").write_text("stray")        # real plan so dry-run actually summarizes
     qd = ws / ".photos-ingest-quarantine" / "20260101T000000Z-abc123"
     qd.mkdir(parents=True); (qd / "d.jpg").write_bytes(b"recoverable")
     assert _main(monkeypatch, ws, "plan") == 0                  # writes photos-10 + cache
