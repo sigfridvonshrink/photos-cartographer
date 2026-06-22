@@ -571,9 +571,9 @@
         "file": "photos-2-geotag-workflow.md",
         "section": "22a.3"
       },
-      "coverage": "incidental",
-      "must_cover": false,
-      "omit_reason": "build_drift_validation takes photos-21 read-only but no test asserts photos-21 stays unmutated after a drift confirmation"
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_time_decisions.py::test_build_drift_validation_leaves_photos21_byte_unmutated"
     },
     {
       "id": "geotag-drift-recompute-utc-1",
@@ -2181,9 +2181,9 @@
         "file": "photos-2-geotag-workflow.md",
         "section": "22.1"
       },
-      "coverage": "incidental",
-      "must_cover": false,
-      "omit_reason": "resolved_utc_fingerprint takes only specific inputs (not whole config) but no test exercises an unrelated config edit leaving UTC fresh"
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_resolved_utc.py::test_unrelated_config_edit_replans_but_does_not_restale_resolved_utc"
     },
     {
       "id": "geotag-validate-every-consume-1",
@@ -2223,9 +2223,9 @@
         "file": "photos-2-geotag-workflow.md",
         "section": "19.1"
       },
-      "coverage": "incidental",
-      "must_cover": false,
-      "omit_reason": "match_frame_to_gpx takes no timezone (implicitly tz-independent) but no test asserts the destination timezone is unused in matching"
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_offset_inference.py::test_clock_error_window_is_timezone_independent"
     },
     {
       "id": "geotag-withdraw-revert-1",
@@ -3077,9 +3077,9 @@
         "file": "photos-3-merge-workflow.md",
         "section": "14"
       },
-      "coverage": "incidental",
-      "must_cover": false,
-      "omit_reason": "test_dev_subfolder_blocks shows a dev subfolder blocks merge, but no test asserts merge never performs the breakout itself"
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_merge_execute.py::test_merge_never_performs_jpg_tif_development_breakout"
     },
     {
       "id": "merge-noop-reprep-does-not-trip-currency-1",
@@ -3105,9 +3105,9 @@
         "file": "photos-3-merge-workflow.md",
         "section": "2.1"
       },
-      "coverage": "incidental",
-      "must_cover": false,
-      "omit_reason": "plan reuses prep's content_fingerprint value but no test asserts merge never re-fingerprints by-dest"
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_merge_plan.py::test_plan_reuses_handoff_fingerprint_never_refingerprints_by_dest"
     },
     {
       "id": "merge-plan-built-from-finalized-record-1",
@@ -3833,9 +3833,9 @@
         "file": "photos-1-prep-workflow.md",
         "section": "6.2"
       },
-      "coverage": "incidental",
-      "must_cover": false,
-      "omit_reason": "blockers surface in plan.blockers across many tests but no test asserts the never-silently-skip principle itself"
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_workspace_prep.py::test_a_blocker_is_reported_textually_and_never_silently_skipped"
     },
     {
       "id": "prep-by-dest-readonly-1",
@@ -3945,9 +3945,9 @@
         "file": "photos-1-prep-workflow.md",
         "section": "10"
       },
-      "coverage": "incidental",
-      "must_cover": false,
-      "omit_reason": "plan_is_non_mutating shows planning writes nothing but no test isolates cache-update-from-validated-plan derivation"
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_idempotency_cache.py::test_cache_rows_written_during_execution_not_planning"
     },
     {
       "id": "prep-cache-upsert-stale-1",
@@ -4309,9 +4309,9 @@
         "file": "photos-1-prep-workflow.md",
         "section": "6.2"
       },
-      "coverage": "incidental",
-      "must_cover": false,
-      "omit_reason": "idempotency reruns run with empty 0-sources without a missing-folder block but it is not the asserted subject"
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_workspace_prep.py::test_empty_sources_is_steady_end_state_not_a_missing_folder_block"
     },
     {
       "id": "prep-end-self-sufficient-record-1",
@@ -4701,9 +4701,9 @@
         "file": "photos-1-prep-workflow.md",
         "section": "16"
       },
-      "coverage": "incidental",
-      "must_cover": false,
-      "omit_reason": "handoff written only on success is tested but the never-edited-in-place property is not asserted"
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_handoff.py::test_handoff_is_rewritten_fresh_each_run_never_edited_in_place"
     },
     {
       "id": "prep-handoff-only-on-success-1",
@@ -4799,9 +4799,9 @@
         "file": "photos-1-prep-workflow.md",
         "section": "3.1"
       },
-      "coverage": "incidental",
-      "must_cover": false,
-      "omit_reason": "init test creates structure and leaves base folders-only, but exclusion of managed folders from the move is not directly asserted (reserved-names test covers the name-collision variant)"
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_workspace_prep.py::test_init_move_excludes_managed_folders_and_control_dirs"
     },
     {
       "id": "prep-init-moves-base-into-sources-1",
@@ -4883,9 +4883,9 @@
         "file": "photos-1-prep-workflow.md",
         "section": "16.1"
       },
-      "coverage": "incidental",
-      "must_cover": false,
-      "omit_reason": "log is produced from the run in tests but no assertion isolates the no-new-authority derivation"
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_prep_log.py::test_prep_log_entries_are_derived_from_the_validated_plan"
     },
     {
       "id": "prep-log-fail-if-history-insufficient-1",
@@ -5191,9 +5191,9 @@
         "file": "photos-1-prep-workflow.md",
         "section": "8"
       },
-      "coverage": "incidental",
-      "must_cover": false,
-      "omit_reason": "existing-flat-file migration re-derives from metadata but no test asserts non-conforming names are never parsed for meaning"
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_prep_log.py::test_nonconforming_name_is_ignored_timestamp_comes_from_metadata"
     },
     {
       "id": "prep-no-perform-bydest-move-1",
@@ -5233,9 +5233,9 @@
         "file": "photos-1-prep-workflow.md",
         "section": "13"
       },
-      "coverage": "incidental",
-      "must_cover": false,
-      "omit_reason": "idempotency rerun yields zero ops but no test isolates already-normalized extension non-renaming"
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_workspace_prep.py::test_already_lowercase_extension_gets_no_rename_op"
     },
     {
       "id": "prep-no-requarantine-1",
@@ -5583,9 +5583,9 @@
         "file": "photos-1-prep-workflow.md",
         "section": "15"
       },
-      "coverage": "incidental",
-      "must_cover": false,
-      "omit_reason": "restore test relies on quarantine not being scanned but exclusion is not the asserted subject"
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_idempotency_cache.py::test_quarantine_subtree_is_excluded_from_the_scan"
     },
     {
       "id": "prep-quarantine-extra-copies-1",
@@ -6129,9 +6129,9 @@
         "file": "photos-1-prep-workflow.md",
         "section": "3.2"
       },
-      "coverage": "incidental",
-      "must_cover": false,
-      "omit_reason": "seeding is exercised but no test asserts prep never re-writes the config after seeding"
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_control_dir.py::test_prep_seeds_config_once_then_never_rewrites_it"
     },
     {
       "id": "prep-sources-empty-after-stage5-1",
@@ -6647,9 +6647,9 @@
         "file": "photos-shared-contract.md",
         "section": "6"
       },
-      "coverage": "incidental",
-      "must_cover": false,
-      "omit_reason": "geotag reads handoff camera_group_key on happy paths; no dedicated never-recomputes assertion"
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_model.py::test_geotag_reuses_handoff_camera_group_key_never_recomputes"
     },
     {
       "id": "camera-known-when-classified-1",
@@ -6717,9 +6717,9 @@
         "file": "photos-shared-contract.md",
         "section": "4.2"
       },
-      "coverage": "incidental",
-      "must_cover": false,
-      "omit_reason": "surgical staleness tested at fingerprint level; no test asserts a non-time edit leaves resolved-UTC cache intact"
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_resolved_utc.py::test_unrelated_config_edit_replans_but_does_not_restale_resolved_utc"
     },
     {
       "id": "config-ext-one-class-1",
@@ -7319,9 +7319,9 @@
         "file": "photos-shared-contract.md",
         "section": "8"
       },
-      "coverage": "incidental",
-      "must_cover": false,
-      "omit_reason": "only the in-tree defensive skip is directly asserted; general unawareness exercised on happy paths"
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_strays.py::test_gpx_in_sources_is_an_ordinary_stray_never_parsed"
     },
     {
       "id": "gpx-root-outside-tree-1",

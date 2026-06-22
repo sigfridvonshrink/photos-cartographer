@@ -160,6 +160,38 @@ def test_camera_group_classification(tmp_path, monkeypatch):
     assert unknown == ["CANON|R5|999"]
 
 
+@pytest.mark.spec("camera-geotag-reuses-1")
+def test_geotag_reuses_handoff_camera_group_key_never_recomputes(tmp_path):
+    """Shared §6: geotag reuses prep's camera_group_key from the handoff and never recomputes camera
+    identity. The handoff carries a SENTINEL group key that the identity fields (Make/Model/serial)
+    could never compose — if geotag recomputed from CAMERA_IDENTITY_FIELDS it would land on a
+    different key. build_file_model and recognize_camera_groups must use the handoff's key verbatim."""
+    sentinel = "PREP-ASSIGNED|opaque-token"
+    # parsed identity that a recomputation WOULD turn into "SN-12345|SONY|ILCE-6400" (≠ sentinel)
+    parsed = {"DateTimeOriginal": "2024:07:03 14:12:08",
+              "selected_source_naive_timestamp": "2024:07:03 14:12:08",
+              "selected_source_timestamp_tag": "DateTimeOriginal",
+              "camera_group_key": sentinel, "has_timestamp": True,
+              "BodySerialNumber": "SN-12345", "Make": "SONY", "Model": "ILCE-6400"}
+    rec = {"relative_path": "6-photos-by-dest/Trip/a.arw", "media_class": "image",
+           "folder_class": "6-photos-by-dest", "size": 1, "mtime_ns": 1,
+           "content_hash": json.dumps({"value": "fp", "status": "valid"}),
+           "metadata_status": {"camera_group_key": sentinel, "has_timestamp": True,
+                               "has_native_gps": False, "field_set_version": 1,
+                               "parsed_json": json.dumps(parsed)}}
+    wf = _wf(tmp_path, [rec])
+    files = wf.build_file_model()
+    assert files[0]["camera_group_key"] == sentinel                  # handoff value, not recomputed
+    # the identity fields are surfaced (for display) but were NOT used to derive the key
+    assert files[0]["camera_identity"]["BodySerialNumber"] == "SN-12345"
+    assert sentinel != "SN-12345|SONY|ILCE-6400"
+    policy = utils.CONFIG["camera_time_and_timezone_policy"]
+    policy["device_groups"] = {"fixed_clock_cameras": [sentinel], "phones": []}
+    groups, unknown = wf.recognize_camera_groups(files)
+    assert list(groups) == [sentinel] and unknown == []              # grouped by the handoff key
+    assert groups[sentinel]["camera_group_class"] == "camera"
+
+
 # --- run integration (main) --------------------------------------------------
 
 def _full_ws(tmp_path, *, device_groups, bydest_key="SONY|ILCE-6400|123"):

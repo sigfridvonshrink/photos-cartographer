@@ -19,6 +19,7 @@ SHA-256 dependency block (spec §17–§21). The GPX offset inference is Phase 3
 import json
 import os
 import sys
+from datetime import datetime, timezone
 
 import pytest
 
@@ -209,3 +210,61 @@ def test_timezone_proposal_inherits_nearest_resolved_ancestor():
     utils.CONFIG["camera_time_and_timezone_policy"]["default_folder_timezone"] = None
     blank = wf._timezone_decision("6-photos-by-dest/Belgium", {}, blk, None)
     assert blank["effective_iana_timezone"] == "" and blank["requires_user_input"] is True
+
+
+# --- §22a.3: the drift offset lives in photos-22, never edits photos-21 ------
+
+DRIFT_DEST = "6-photos-by-dest/D"
+
+
+def _drift_wf(tmp_path):
+    ws = tmp_path / "ws"
+    (ws / ".photos-ingest").mkdir(parents=True, exist_ok=True)
+    (ws / ".photos-ingest" / "photos-11-handoff.json").write_text("{}")
+    wf = cal.GeotagWorkflow(str(ws))
+    wf._gpx_fingerprint = "fp"
+    return wf
+
+
+def _drift_gpx(points):
+    idx = cal.GPXIndex("")
+    idx.points = [cal.GPXPoint(lat, lon, t, "trip.gpx", i) for i, (lat, lon, t) in enumerate(points)]
+    return idx
+
+
+@pytest.mark.spec("geotag-drift-not-mutate-21-1")
+def test_build_drift_validation_leaves_photos21_byte_unmutated(tmp_path):
+    """§22a.3: building photos-22 (GPS-drift validation) refines a manual/tz-derived offset, but the
+    validated drift offset is recorded in photos-22 — building it must NOT touch the photos-21
+    time-decisions artifact it reads. Set up a manual-offset bucket with no native-GPS anchor and GPX
+    coverage (the drift trigger), write photos-21 to disk as the real run does, then build photos-22
+    and assert photos-21 is byte-for-byte identical."""
+    wf = _drift_wf(tmp_path)
+    files = [{"relative_path": f"{DRIFT_DEST}/a.arw", "destination": DRIFT_DEST,
+              "camera_group_key": CAM, "native_gps": None, "has_native_gps": False,
+              "has_timestamp": True, "source_naive_time": "2024:07:03 14:00:00",
+              "source_time_tag": "DateTimeOriginal", "camera_identity": {}}]
+    groups = {CAM: {"camera_group_class": "camera"}}
+    gpx = _drift_gpx([(50.0, 4.0, datetime(2024, 7, 3, 12, 0, 0, tzinfo=timezone.utc))])
+    utils.CONFIG["camera_time_and_timezone_policy"]["default_folder_timezone"] = "Europe/Brussels"
+    prior = {"destinations": {DRIFT_DEST: {
+        "destination_timezone": {"user_decision": {"accept_proposed_timezone": True}},
+        "camera_group_time_decisions": {CAM: {"user_decision": {"manual_offset_seconds": 0}}}}}}
+    art, blk = wf.build_time_decisions(files, groups, prior, gpx)
+    assert not blk
+    # build_drift_validation hashes the on-disk photos-21 (the real run writes it first).
+    tdp = cal.time_decisions_path(wf.workspace_root)
+    utils.write_json_artifact(tdp, art)
+    before = open(tdp, "rb").read()
+
+    rows0 = cal.compute_resolved_utc(files, groups, art)
+    drift, dblk = wf.build_drift_validation(files, art, rows0, gpx, None)
+    assert not dblk
+    assert CAM in drift["destinations"][DRIFT_DEST]["drift_decisions"]   # it IS a drift case
+    # the offset to refine lives in photos-22, not photos-21:
+    assert drift["destinations"][DRIFT_DEST]["drift_decisions"][CAM]["proposal"]["current_offset_seconds"] == 0
+
+    assert open(tdp, "rb").read() == before                             # photos-21 untouched
+    # the in-memory photos-21 cell is likewise not mutated by the drift build
+    assert art["destinations"][DRIFT_DEST]["camera_group_time_decisions"][CAM][
+        "effective_time_anchor"] == {"offset_seconds": 0, "source": "manual"}

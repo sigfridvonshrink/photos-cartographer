@@ -137,6 +137,39 @@ def test_strays_scan_skipped_on_next_run(tmp_path, monkeypatch):
     assert os.path.exists(landed)                                # the stray is left untouched
 
 
+@pytest.mark.spec("gpx-prep-unaware-1")
+def test_gpx_in_sources_is_an_ordinary_stray_never_parsed(tmp_path, monkeypatch):
+    """Shared contract §8: GPX is geotag's alone — prep is GPX-unaware. With gpx_root at its default
+    (outside the managed tree), a `.gpx` dropped into 0-sources is just an `other`-class file: prep
+    moves it inert into 1-strays (structure preserved), never parses/fingerprints/organizes it as GPX.
+    Probe the fingerprint seam to prove the .gpx is never fingerprinted, and assert it is not cached."""
+    _install(monkeypatch)
+    # gpx_root is left at its default (outside 0-6), so the .gpx is encountered only as an inbox dump.
+    seen = {"n": 0}
+    orig = prep.ContentHasher.fingerprint_image
+
+    def spy(p):
+        if p.endswith(".gpx"):
+            seen["n"] += 1
+        return orig(p)
+    monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", spy)
+
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "track1.gpx").write_text("<gpx><trkpt lat='1' lon='2'/></gpx>")
+    (ws / "0-sources" / "photo.jpg").write_bytes(b"img")
+    plan = _plan(ws)
+    # The .gpx routes as a non-media stray (same disposition as notes.txt), not as parsed GPX.
+    stray_dest = {op.source: op.destination for op in plan.operations
+                  if op.reason and "stray" in op.reason}
+    assert "0-sources/track1.gpx" in stray_dest
+    assert stray_dest["0-sources/track1.gpx"].endswith("/track1.gpx")
+    _run(ws)
+    assert seen["n"] == 0                                          # never fingerprinted / parsed as GPX
+    assert glob.glob(str(ws / "1-strays" / "*" / "track1.gpx"))    # moved inert into 1-strays
+    assert not any(".gpx" in p for p in _cached_paths(ws))         # untracked in the cache
+    assert any("5-photos-by-date" in p for p in _cached_paths(ws)) # the real photo organized normally
+
+
 def test_mixed_media_and_stray(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
