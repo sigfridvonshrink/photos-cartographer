@@ -82,6 +82,7 @@ def _edit(ws, fn):
 
 # --- first run ---------------------------------------------------------------
 
+@pytest.mark.spec("geotag-timezone-every-destination-1")
 def test_first_run_writes_artifact_requiring_input(tmp_path, monkeypatch):
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []})
@@ -108,6 +109,7 @@ def test_smartphone_group_gets_no_offset_cell(tmp_path, monkeypatch):
 
 # --- rerun preservation + completion -----------------------------------------
 
+@pytest.mark.spec("authored-fields-not-overwritten-1", "geotag-decision-fields-precreated-1", "geotag-preserve-user-decisions-1", "loop-geotag-rerun-safe-1")
 def test_rerun_preserves_decisions_and_completes(tmp_path, monkeypatch):
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []}, default_tz="Europe/Brussels")
@@ -126,6 +128,7 @@ def test_rerun_preserves_decisions_and_completes(tmp_path, monkeypatch):
     assert art["status"] == "complete" and art["requires_user_input"] is False
 
 
+@pytest.mark.spec("geotag-recalc-only-affected-1")
 def test_determinism_unchanged_rerun_is_byte_identical(tmp_path, monkeypatch):
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []})
@@ -137,6 +140,7 @@ def test_determinism_unchanged_rerun_is_byte_identical(tmp_path, monkeypatch):
 
 # --- validation (§9.2) -------------------------------------------------------
 
+@pytest.mark.spec("geotag-invalid-preserved-1", "geotag-validation-hard-blocker-1", "validate-everything-authored-1", "validate-preserve-invalid-1", "validate-timezone-1")
 def test_bad_timezone_blocks_and_leaves_artifact(tmp_path, monkeypatch, capsys):
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []})
@@ -149,6 +153,7 @@ def test_bad_timezone_blocks_and_leaves_artifact(tmp_path, monkeypatch, capsys):
     assert (ws / ".photos-ingest" / cal.TIME_DECISIONS_ARTIFACT).read_bytes() == before   # untouched
 
 
+@pytest.mark.spec("geotag-sanity-validate-1", "validate-locate-no-repair-1")
 def test_bad_offset_blocks(tmp_path, monkeypatch, capsys):
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []})
@@ -161,6 +166,7 @@ def test_bad_offset_blocks(tmp_path, monkeypatch, capsys):
 
 # --- dependency block --------------------------------------------------------
 
+@pytest.mark.spec("geotag-dep-cascade-1", "geotag-rehash-before-use-1")
 def test_depends_on_reverifies(tmp_path, monkeypatch):
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []})
@@ -171,6 +177,7 @@ def test_depends_on_reverifies(tmp_path, monkeypatch):
     assert not utils.verify_json_dependency(dep, str(ws))             # change detected
 
 
+@pytest.mark.spec("geotag-timezone-autoresolve-1", "geotag-timezone-inherit-priority-1", "geotag-timezone-unresolved-requires-input-1")
 def test_timezone_proposal_inherits_nearest_resolved_ancestor():
     """A destination's timezone proposal prefers the nearest RESOLVED ancestor's timezone over the
     generic global default; an inherited (or config-default) proposal auto-resolves without per-

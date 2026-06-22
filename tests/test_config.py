@@ -95,6 +95,7 @@ def test_rerun_does_not_rewrite_config(tmp_path, monkeypatch):
     assert raw1 == raw2  # prep is the sole writer and seeds only once
 
 
+@pytest.mark.spec("config-file-authoritative-1")
 def test_handwritten_config_is_authoritative(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -112,6 +113,7 @@ def test_handwritten_config_is_authoritative(tmp_path, monkeypatch):
     assert any("5-photos-by-date/2023-01-02/20230102__030405" in d for d in dests), dests
 
 
+@pytest.mark.spec("config-hashed-cascade-1")
 def test_config_fingerprint_is_file_sha_and_in_handoff(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)

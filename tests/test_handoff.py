@@ -23,6 +23,7 @@ import os
 
 import photos_1_prep as prep
 import photos_utils as utils
+import pytest
 
 
 def _ws(tmp_path):
@@ -72,6 +73,7 @@ def _handoff(ws):
         return json.load(f)
 
 
+@pytest.mark.spec("prep-handoff-run-metadata-segregated-1")
 def test_execution_id_present_and_distinct(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -101,6 +103,7 @@ def test_real_duplicate_evidence_against_mutable(tmp_path, monkeypatch):
     assert diag["blockers"] == []
 
 
+@pytest.mark.spec("prep-dup-against-bydest-quarantine-mutable-1")
 def test_conflict_attributed_to_by_dest_folder(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -116,6 +119,7 @@ def test_conflict_attributed_to_by_dest_folder(tmp_path, monkeypatch):
     assert trip["conflicts_or_duplicates"][0]["original_path"] == "0-sources/dup.jpg"
 
 
+@pytest.mark.spec("camera-prep-computes-key-1")
 def test_grouping_facts_identity_and_device_class(tmp_path, monkeypatch, seed_from_live_config):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -130,6 +134,7 @@ def test_grouping_facts_identity_and_device_class(tmp_path, monkeypatch, seed_fr
     assert g["device_class"] == "phone"
 
 
+@pytest.mark.spec("camera-known-when-classified-1")
 def test_unknown_device_class_when_not_configured(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -139,6 +144,7 @@ def test_unknown_device_class_when_not_configured(tmp_path, monkeypatch):
     assert g["device_class"] == "unknown"
 
 
+@pytest.mark.spec("prep-handoff-deterministic-1")
 def test_handoff_written_sorted_and_deterministic(tmp_path, monkeypatch):
     """The handoff must be byte-deterministic for a given workspace state (shared contract §4):
     routed through write_json_artifact (sort_keys), so its SHA-256 — which geotag records as a
@@ -154,6 +160,7 @@ def test_handoff_written_sorted_and_deterministic(tmp_path, monkeypatch):
     assert raw == json.dumps(obj, indent=2, sort_keys=True)
 
 
+@pytest.mark.spec("handoff-verified-by-content-1", "prep-handoff-content-fingerprint-pins-1")
 def test_handoff_content_fingerprint_ignores_run_metadata_and_audit():
     """The content fingerprint is byte-stable across no-op reruns: it excludes run_metadata,
     diagnostics, the execution-journal pointer, itself, and the NESTED per-run audit (cache_freshness
@@ -180,6 +187,7 @@ def test_handoff_content_fingerprint_ignores_run_metadata_and_audit():
         {**base, "camera_groups": [{"group_key": "g2", "cache_freshness": {"metadata_extracted_ok": 1}}]}) != fp1
 
 
+@pytest.mark.spec("dep-handoff-dual-key-1", "handoff-runonly-refresh-no-restale-1", "prep-noop-rerun-stable-fingerprint-1")
 def test_handoff_content_fingerprint_stable_across_real_noop_rerun(tmp_path, monkeypatch):
     """End-to-end (§16.2): a second prep run that changes nothing organized produces the SAME handoff
     content_fingerprint, even though run_metadata + cache-freshness counts differ run to run."""

@@ -8,6 +8,7 @@ import os
 from types import SimpleNamespace
 
 import photos_utils as U
+import pytest
 
 
 def _art(ws, name, body):
@@ -27,6 +28,7 @@ def test_empty_depends_on_is_fresh(tmp_path):
     assert U.plan_dependencies_fresh(str(tmp_path), None) == []
 
 
+@pytest.mark.spec("dep-cascade-reject-stale-1", "dep-hash-sensitive-1")
 def test_json_artifact_dep_fresh_changed_missing(tmp_path):
     ws = str(tmp_path)
     dep = {"photos-24-executable-plan.json": _art(ws, "photos-24-executable-plan.json", {"v": 1})}

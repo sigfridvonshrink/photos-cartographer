@@ -18,6 +18,7 @@ geotag recomputes after EXIF writes). The default path is a persistent `magick -
 mocked, as the rest of the suite mocks external tools. From conftest.py.
 """
 import photos_utils as utils
+import pytest
 
 
 def test_content_hasher_is_shared():
@@ -34,6 +35,7 @@ def test_fingerprint_image_missing_imagemagick(monkeypatch):
     assert "ImageMagick not found" in r["error"]
 
 
+@pytest.mark.spec("prep-persistent-external-workers-1")
 def test_fingerprint_image_uses_persistent_worker(monkeypatch):
     """Default path: the per-thread persistent magick worker returns the signature."""
     monkeypatch.setattr(utils, "get_magick_command", lambda: ["magick"])
@@ -51,6 +53,7 @@ def test_fingerprint_image_uses_persistent_worker(monkeypatch):
                    "value": "sig-abc123", "engine_version": "magick-test"}
 
 
+@pytest.mark.spec("prep-worker-crash-safe-retry-1")
 def test_fingerprint_image_worker_crash_fails_after_retry(monkeypatch):
     """A worker that keeps crashing is restarted, retried once, then reported failed (never confirmed)."""
     monkeypatch.setattr(utils, "get_magick_command", lambda: ["magick"])
@@ -91,6 +94,7 @@ def test_fingerprint_image_falls_back_to_per_file_identify(monkeypatch):
                    "value": "sig-abc123", "engine_version": "magick-test"}
 
 
+@pytest.mark.spec("prep-persistent-driver-reset-state-1")
 def test_persistent_magick_worker_protocol(monkeypatch):
     """signature() sends the `-read ... -print %# ... {ready}` script and returns the line before
     the {ready} sentinel."""

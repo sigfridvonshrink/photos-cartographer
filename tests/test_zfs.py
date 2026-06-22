@@ -84,11 +84,13 @@ def test_validate_config_accepts_valid_zfs():
     {"zfs": {"enabled": "yes"}},                         # not a bool
     {"zfs": "nope"},                                     # not an object
 ])
+@pytest.mark.spec("prep-config-validate-zfs-prefix-1")
 def test_validate_config_rejects_illegal(bad):
     with pytest.raises(ValueError):
         utils.validate_config(bad)
 
 
+@pytest.mark.spec("validate-zfs-prefix-1")
 def test_load_or_seed_config_rejects_illegal_zfs(tmp_path):
     ws = _ws(tmp_path)
     cfg = utils.config_path(str(ws))
@@ -129,6 +131,7 @@ def _plan(ws):
     return plan
 
 
+@pytest.mark.spec("prep-execute-snapshot-1", "snapshot-keyed-by-plan-1")
 def test_snapshot_taken_with_detected_dataset_and_prefix(tmp_path, monkeypatch, seed_from_live_config):
     _mock_media(monkeypatch)
     monkeypatch.setattr(utils, "detect_zfs_dataset", lambda p: "pool/ws")
@@ -146,6 +149,7 @@ def test_snapshot_taken_with_detected_dataset_and_prefix(tmp_path, monkeypatch, 
     assert snap["snapshot_name"] == f"pool/ws@photos-cartographer-prep-{plan.plan_id}"
 
 
+@pytest.mark.spec("snapshot-required-fatal-1")
 def test_required_snapshot_with_no_dataset_aborts(tmp_path, monkeypatch, seed_from_live_config):
     _mock_media(monkeypatch)
     monkeypatch.setattr(utils, "detect_zfs_dataset", lambda p: None)   # workspace not on zfs
@@ -161,11 +165,13 @@ def test_required_snapshot_with_no_dataset_aborts(tmp_path, monkeypatch, seed_fr
 
 # --- the shared take_zfs_snapshot helper (used by prep + geotag) --------
 
+@pytest.mark.spec("snapshot-disabled-default-1")
 def test_take_zfs_snapshot_disabled(monkeypatch):
     monkeypatch.setitem(utils.CONFIG, "zfs", {"enabled": False})
     assert utils.take_zfs_snapshot("/ws", "pid", "prep") is None
 
 
+@pytest.mark.spec("snapshot-not-required-proceeds-1")
 def test_take_zfs_snapshot_no_dataset(monkeypatch):
     monkeypatch.setitem(utils.CONFIG, "zfs", {"enabled": True, "snapshots_required": False,
                                               "datasets": {"workspace": "auto"}})

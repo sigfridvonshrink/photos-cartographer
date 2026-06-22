@@ -33,6 +33,7 @@ def test_default_folders_are_the_0_6_names():
     }
 
 
+@pytest.mark.spec("config-folder-roles-not-config-1")
 def test_accessors_round_trip():
     assert utils.folder_name("photos_by_dest") == "6-photos-by-dest"
     assert utils.folder_role("6-photos-by-dest") == "photos_by_dest"
@@ -44,6 +45,7 @@ def test_accessors_round_trip():
     ]
 
 
+@pytest.mark.spec("prep-retain-by-folder-priority-1")
 def test_dedup_priority_orders_by_dest_highest_strays_excluded():
     p = lambda path: utils.dedup_priority(path)
     assert p("6-photos-by-dest/x") < p("5-photos-by-date/x") < p("4-videos-by-date/x") \
