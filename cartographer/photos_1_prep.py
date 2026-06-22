@@ -1591,15 +1591,13 @@ class WorkspacePrepWorkflow:
 
         metadata_plan_status = {}
 
-        execution_config = {
-            "jobs_requested": CONFIG.get("jobs", 4),
-            "jobs_semantic": False
-        }
-        # Fingerprint only output-affecting CLI options; the jobs/parallelism knob is
-        # non-semantic, so the fingerprint stays stable across -j values (determinism).
-        cli_options_fingerprint = OperationPlanner._hash_dict(
-            {k: v for k, v in execution_config.items() if k not in ("jobs_requested", "jobs_semantic")}
-        ).value
+        # The -j/--jobs count is a transient, machine-dependent runtime knob: it is NOT recorded in the
+        # plan (nor in the config file, nor the handoff), so a plan is byte-identical across job counts
+        # and portable between machines — there is no requirement to run a given workspace on the same
+        # machine each time (determinism, prep spec §17.3). execution_config holds only OUTPUT-AFFECTING
+        # CLI options — none today — so its fingerprint is stable.
+        execution_config = {}
+        cli_options_fingerprint = OperationPlanner._hash_dict(execution_config).value
 
         def process_file(rel_path: str):
             if rel_path in carried_forward:
@@ -2383,7 +2381,6 @@ class WorkspacePrepWorkflow:
             "execution_config": execution_config,
             "cli_options_fingerprint": cli_options_fingerprint,
             "performance_and_cache": {
-                "jobs_requested": execution_config.get("jobs_requested", 1),
                 "progress_mode": "quiet" if self.coordinator.quiet else "plain",
                 "worker_crashes": self.coordinator.counters.get("worker_crashes", 0),
                 "worker_restarts": self.coordinator.counters.get("worker_restarts", 0),

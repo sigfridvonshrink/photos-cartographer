@@ -4836,7 +4836,7 @@
       "area": "prep",
       "criticality": "low",
       "anti": false,
-      "title": "Job count is run metadata, not a semantic dependency",
+      "title": "Job count is a transient runtime knob, not recorded in the plan (non-semantic)",
       "spec": {
         "file": "photos-1-prep-workflow.md",
         "section": "17"
