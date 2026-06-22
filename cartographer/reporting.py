@@ -146,6 +146,18 @@ class WebSink(Sink):
         self._progress: dict = {}              # task_id -> latest progress dict (live tasks only)
         self._queue_max = queue_max
 
+    def _fanout_locked(self, msg) -> None:
+        """Push one event dict to every subscriber (caller holds ``self._lock``). Bounded, drop-oldest."""
+        for q in self._subs:
+            try:
+                q.put_nowait(msg)
+            except queue.Full:
+                try:
+                    q.get_nowait()      # drop oldest, then enqueue the newest
+                    q.put_nowait(msg)
+                except queue.Empty:
+                    pass
+
     def handle(self, event) -> None:
         msg = event_to_dict(event)
         with self._lock:
@@ -156,15 +168,17 @@ class WebSink(Sink):
                     self._progress.pop(msg["task_id"], None)
                 else:
                     self._progress[msg["task_id"]] = msg
-            for q in self._subs:
-                try:
-                    q.put_nowait(msg)
-                except queue.Full:
-                    try:
-                        q.get_nowait()      # drop oldest, then enqueue the newest
-                        q.put_nowait(msg)
-                    except queue.Empty:
-                        pass
+            self._fanout_locked(msg)
+
+    def clear_progress(self) -> None:
+        """Finish any still-open progress tasks: emit a synthetic FINISH for each live task (so
+        subscribers drop the row) and forget it. A safety net the console calls when a run ends, so the
+        progress area is always empty afterwards — regardless of whether a phase balanced every
+        ``start_phase`` with a ``finish_phase`` or the run was interrupted. Log history is untouched."""
+        with self._lock:
+            for msg in list(self._progress.values()):
+                self._fanout_locked({**msg, "state": FINISH, "status": "ok"})
+            self._progress.clear()
 
     def subscribe(self):
         """Register a subscriber. Returns ``(q, snapshot)`` — a fresh queue of future events and the
