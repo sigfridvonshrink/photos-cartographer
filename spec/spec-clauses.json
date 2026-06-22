@@ -4258,6 +4258,20 @@
       "omit_reason": "execute-without-plan is tested but no test exercises dry-run with no saved plan"
     },
     {
+      "id": "prep-dryrun-empty-sources-nothing-to-do-1",
+      "area": "prep",
+      "criticality": "low",
+      "anti": false,
+      "title": "dry-run on an initialized workspace with an empty 0-sources stops fast with 'nothing to do' (shares execute's fast-path)",
+      "spec": {
+        "file": "photos-1-prep-workflow.md",
+        "section": "14.2"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_lifecycle.py::test_dry_run_on_prepped_workspace_with_empty_sources_is_nothing_to_do"
+    },
+    {
       "id": "prep-dryrun-not-simulation-1",
       "area": "prep",
       "criticality": "med",
