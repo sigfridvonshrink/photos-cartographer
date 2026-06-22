@@ -27,6 +27,13 @@ let currentPhase = "prep";
 let planId = null;         // plan_id being reviewed in the gate
 let gatePhase = "prep";    // the phase the open gate is for (tab could change underneath)
 let currentJobLabel = null;// label of the running job (e.g. "prep execute"), for the Stop confirm
+let jobsSeeded = false;    // seed the Jobs (-j) box from the server default exactly once
+
+// Current Jobs (-j) value to attach to a run, or undefined to let the phase use its own default.
+function jobsValue() {
+  const v = parseInt($("#jobs-input").value, 10);
+  return Number.isFinite(v) && v >= 1 ? v : undefined;
+}
 
 // --- log + progress rendering --------------------------------------------
 function addLog(e) {
@@ -151,6 +158,8 @@ async function refreshState() {
   let s;
   try { s = await (await fetch("/api/state")).json(); } catch { return false; }
   $("#workspace").textContent = s.workspace || "";
+  // Seed the Jobs (-j) box once from the server's default (cpu_count-1); never clobber a user edit.
+  if (!jobsSeeded && s.default_jobs) { $("#jobs-input").value = s.default_jobs; jobsSeeded = true; }
   $("#init-banner").hidden = s.initialized !== false;   // show only when explicitly uninitialized
   const running = s.job && s.job.state === "running";
   currentJobLabel = (s.job && s.job.label) || null;
@@ -214,7 +223,7 @@ async function trigger(command) {
     await fetch("/api/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phase: currentPhase, command }),
+      body: JSON.stringify({ phase: currentPhase, command, jobs: jobsValue() }),
     });
   } catch { /* state poll will reflect reality */ }
   await refreshState();
@@ -246,7 +255,7 @@ async function confirmExecute() {
     await fetch("/api/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phase: gatePhase, command: "execute", confirm: true, plan_id: planId }),
+      body: JSON.stringify({ phase: gatePhase, command: "execute", confirm: true, plan_id: planId, jobs: jobsValue() }),
     });
   } catch { /* state poll reflects reality */ }
   await refreshState();
@@ -268,7 +277,7 @@ async function confirmInitLib() {
     await fetch("/api/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phase: "merge", command: "init-library", path: path || undefined }),
+      body: JSON.stringify({ phase: "merge", command: "init-library", path: path || undefined, jobs: jobsValue() }),
     });
   } catch { /* state poll reflects reality */ }
   await refreshState();
@@ -298,7 +307,7 @@ async function runPrune(deleteFlag) {
   try {
     await fetch("/api/run", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phase: "prep", command: "prune-quarantine", confirm: deleteFlag, prune }),
+      body: JSON.stringify({ phase: "prep", command: "prune-quarantine", confirm: deleteFlag, prune, jobs: jobsValue() }),
     });
   } catch { /* state poll reflects reality */ }
   await refreshState();

@@ -12,6 +12,11 @@
     <strong class="title">Cartographer</strong>
     <span id="workspace" class="ws"></span>
     <span class="grow"></span>
+    <label class="jobs-box" for="jobs-input"
+           title="Parallel worker threads (-j) for every phase: prep scanning and geotag/merge execution. Defaults to one fewer than the server machine's CPU threads. Applies to the next run you start.">
+      Jobs <span class="mono">-j</span>
+      <input id="jobs-input" type="number" min="1" max="256" step="1" inputmode="numeric">
+    </label>
     <span id="lock" class="lock"></span>
     <div class="seg" id="tabs">
       <button data-phase="prep" class="on">Prep</button>
