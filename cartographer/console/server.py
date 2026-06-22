@@ -95,15 +95,16 @@ def _phase_module(phase):
     return None
 
 
-def _make_target(phase, command, extra=None):
+def _make_target(phase, command, extra=None, pre=None):
     """Build the zero-arg job callable for (phase, command [, extra argv]): parse the phase's own argv
-    so defaults match the CLI exactly, then call its run(). `extra` carries positional args (e.g. the
-    optional library path for merge init-library). run() reads cwd as the workspace and may sys.exit()
-    (the JobRunner catches that)."""
+    so defaults match the CLI exactly, then call its run(). `pre` carries phase-level options that must
+    precede the subcommand (e.g. ['-j', '8'] — `-j` lives on the parent parser, so it is rejected after
+    the command); `extra` carries the subcommand's own positionals/flags (e.g. the optional library path
+    for merge init-library). run() reads cwd as the workspace and may sys.exit() (JobRunner catches)."""
     mod = _phase_module(phase)
     parser = argparse.ArgumentParser()
     mod.add_arguments(parser)
-    args = parser.parse_args([command, *(extra or [])])
+    args = parser.parse_args([*(pre or []), command, *(extra or [])])
 
     def target():
         mod.run(args)
@@ -252,6 +253,30 @@ def _execute_guard(workspace, phase, payload):
     return None
 
 
+_JOBS_MAX = 256
+
+
+def _default_jobs():
+    """Console default for -j: one fewer than the logical CPUs of the machine running the SERVER (where
+    the work actually happens), floored at 1. The user can override it per the in-page Jobs box."""
+    try:
+        return max(1, (os.cpu_count() or 2) - 1)
+    except Exception:
+        return 1
+
+
+def _jobs_argv(jobs):
+    """['-j', N] for a valid client-supplied jobs count, else [] (fall back to the phase default). A
+    non-int / out-of-range value is ignored rather than erroring — it's an affordance, not a contract."""
+    try:
+        j = int(jobs)
+    except (TypeError, ValueError):
+        return []
+    if 1 <= j <= _JOBS_MAX:
+        return ["-j", str(j)]
+    return []
+
+
 def _prune_extra(payload):
     """Build the prune-quarantine argv from a payload `prune` block: selectors (plan_ids / all /
     older_than_days) and the destructive `delete` (→ --yes). No `delete` ⇒ a safe dry-run (no --yes)."""
@@ -364,6 +389,7 @@ def _state(workspace):
     return {
         "workspace": os.path.abspath(workspace),
         "initialized": initialized,
+        "default_jobs": _default_jobs(),
         "sealed": sealed,
         "lock_owner": owner,
         "job": JOBS.status(),
@@ -504,7 +530,11 @@ class Handler(BaseHTTPRequestHandler):
             if err:
                 return self._send(409, {"ok": False, "error": err})
             extra = _prune_extra(payload)
-        started = JOBS.start(f"{phase} {command}", _make_target(phase, command, extra))
+        # Parallelism: -j lives on each phase's PARENT parser, so it must precede the subcommand — pass
+        # it as `pre`, not in `extra`. Sent whenever the client supplies a valid count (clamped); phases
+        # that don't parallelize accept-and-ignore it.
+        pre = _jobs_argv(payload.get("jobs"))
+        started = JOBS.start(f"{phase} {command}", _make_target(phase, command, extra, pre))
         return self._send(200 if started else 409,
                           {"ok": started, "error": None if started else "a run is already in progress"})
 
