@@ -13,9 +13,9 @@ The aim is **100% geolocation coverage for the least possible effort**: every ph
 allow, rough or manual where they don't — so a map view in a library like Immich shows the whole trip, not
 just the frames that came with a location baked in.
 
-![A full run — prep, the geotag time → drift → GPS edit loop, then merge](docs/screenshots/hero.gif)
+![The decision editor — settling timezones, then clock drift on the track, then GPS on a map](docs/screenshots/hero.gif)
 
-*One run, end to end, in the browser.* **▶ [See it step by step, in screenshots →](docs/walkthrough.md)**
+*The decision editor: time → drift → GPS.* **▶ [See the full run, step by step →](docs/walkthrough.md)**
 
 It is built for **irreplaceable originals and large batches**: a whole holiday, several cameras and phones,
 thousands of RAW and JPEG frames — resolved in one reviewable pass instead of photo-by-photo, then merged
