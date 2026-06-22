@@ -94,6 +94,20 @@
     </div>
   </div>
 
+  <div id="down-overlay" class="gate-overlay" hidden>
+    <div class="gate" role="alertdialog" aria-modal="true" aria-labelledby="down-title">
+      <p class="gate-title" id="down-title">Server connection lost</p>
+      <div class="gate-sum">The console server isn't responding — it may have been stopped (Ctrl-C in the
+        terminal) or the SSH tunnel dropped. Any run already in progress keeps going on the server; the
+        artifacts/journals remain the source of truth. <strong>Retry</strong> once it's back up, or close
+        this page.</div>
+      <div class="gate-act">
+        <button id="down-close" class="btn">Close page</button>
+        <button id="down-retry" class="btn primary">Retry</button>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="app.js"></script>
 </body>
 </html>

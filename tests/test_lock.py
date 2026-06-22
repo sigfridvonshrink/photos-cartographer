@@ -91,3 +91,25 @@ def test_cross_process_exclusion_and_owner_report(tmp_path):
     lock2 = prep.WorkspaceLock(str(tmp_path))
     assert lock2.acquire() is True
     lock2.release()
+
+
+def test_held_owner_distinguishes_live_lock_from_stale_owner_file(tmp_path):
+    # No lock file yet -> never locked.
+    lock = prep.WorkspaceLock(str(tmp_path))
+    assert lock.held_owner() is None
+
+    # A finished run leaves the owner file populated but the flock free: read_owner still reports the
+    # stale identity, held_owner correctly reports None (the bug that wedged every console button).
+    assert lock.acquire() is True
+    lock.release()
+    assert lock.read_owner() is not None          # stale identity persists on disk
+    assert lock.held_owner() is None              # ...but nobody holds it now
+
+    # While genuinely held (live flock), held_owner reports the holder.
+    assert lock.acquire() is True
+    try:
+        held = lock.held_owner()
+        assert held and held["pid"] == os.getpid()
+    finally:
+        lock.release()
+    assert lock.held_owner() is None              # released again
