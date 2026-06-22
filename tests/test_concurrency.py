@@ -93,8 +93,10 @@ def test_deterministic_plan_with_jobs(mock_read, mock_popen, workspace):
     cache4 = prep.WorkspaceCache(workspace)
     workflow4 = prep.WorkspacePrepWorkflow(workspace, cache4)
     plan4 = workflow4.plan()
-    assert plan4.summary["execution_config"]["jobs_requested"] == 4
-    assert plan4.summary["execution_config"]["jobs_semantic"] is False
+    # The job count is a transient, machine-dependent runtime knob and is NOT recorded in the plan
+    # (spec §17 item 6) — neither summary carries a jobs field.
+    assert "jobs_requested" not in plan4.summary["execution_config"]
+    assert "jobs_requested" not in plan4.summary["performance_and_cache"]
 
 
     d1 = json.loads(plan1.to_json())
@@ -108,11 +110,8 @@ def test_deterministic_plan_with_jobs(mock_read, mock_popen, workspace):
         "absolute_path",
         "duration_seconds",
         "progress",
-        # jobs count is a concurrency knob recorded in the plan summary
-        # (execution_config / performance_and_cache); it legitimately varies
-        # between the jobs=1 and jobs=4 runs and is asserted separately above.
-        "jobs_requested",
-        "jobs_semantic",
+        # NOTE: jobs is deliberately NOT scrubbed here — it is no longer recorded in the plan, so the
+        # jobs=1 and jobs=4 plans are byte-identical once the genuinely volatile keys above are removed.
     }
 
     def stable_dict_sort_key(d):
@@ -315,8 +314,8 @@ def test_cli_jobs_argparse(workspace):
 
     with open(canonical, "r") as f:
         plan_data_1 = json.load(f)
-    assert plan_data_1["summary"]["execution_config"]["jobs_requested"] == 1
-    assert plan_data_1["summary"]["execution_config"]["jobs_semantic"] is False
+    # -j is accepted but not persisted to the plan (machine-independent plan, spec §17 item 6).
+    assert "jobs_requested" not in plan_data_1["summary"]["execution_config"]
 
     res = subprocess.run(
         [*mod, "--jobs", "2", "plan"],
@@ -325,8 +324,7 @@ def test_cli_jobs_argparse(workspace):
 
     with open(canonical, "r") as f:
         plan_data_2 = json.load(f)
-    assert plan_data_2["summary"]["execution_config"]["jobs_requested"] == 2
-    assert plan_data_2["summary"]["execution_config"]["jobs_semantic"] is False
+    assert "jobs_requested" not in plan_data_2["summary"]["execution_config"]
     # the re-plan backed the first plan up rather than clobbering it
     assert os.path.exists(os.path.join(workspace, ".photos-ingest", "photos-10-prep-plan-001.json"))
 
@@ -515,7 +513,7 @@ def test_progress_summary_fields(mock_read_metadata_concurrently, mock_hash_imag
 
     pc = plan.summary.get("performance_and_cache", {})
     assert pc
-    assert pc["jobs_requested"] > 0
+    assert "jobs_requested" not in pc          # job count is not recorded in the plan (spec §17 item 6)
     assert pc["progress_mode"] == "quiet"
     assert pc["dependency_validation_status"] == "pending"
     assert pc["handoff_written_after_successful_validation"] is False

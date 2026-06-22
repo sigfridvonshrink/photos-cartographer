@@ -265,7 +265,7 @@ class TtySink(Sink):
         if e.plan_summary and "performance_and_cache" in e.plan_summary:
             pc = e.plan_summary["performance_and_cache"]
             fields = [
-                "jobs_requested", "progress_mode", "worker_crashes", "worker_restarts",
+                "progress_mode", "worker_crashes", "worker_restarts",
                 "metadata_extracted", "metadata_reused", "metadata_failed",
                 "hashes_computed", "hashes_reused", "hashes_failed",
                 "db_effects_seen", "db_upserts_applied", "db_removes_applied", "db_renames_applied",

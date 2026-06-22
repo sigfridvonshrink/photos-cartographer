@@ -147,6 +147,6 @@ def test_progress_coordinator_non_quiet_paths():
     c.finish_phase()
     assert c.counters.get("files_scanned") == 1
     # flat performance summary (has performance_and_cache, no structured report)
-    c.print_summary({"performance_and_cache": {"jobs_requested": 4, "metadata_extracted": 2}})
+    c.print_summary({"performance_and_cache": {"metadata_extracted": 2}})
     # counters fallback (no performance_and_cache, no report)
     c.print_summary({})
