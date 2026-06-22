@@ -29,7 +29,11 @@ The managed folders, by number:
 `prep` does the mechanical work — consolidate, normalize, deduplicate (to a recoverable quarantine,
 never deleted), and date-organize — landing photos in `5-photos-by-date/`. **You** then move photos
 into `6-photos-by-dest/`; that curation is the one creative step the tool can't do for you, and it's
-what every later phase reasons about.
+what every later phase reasons about. It is **load-bearing, not cosmetic**: a photo's destination is
+the only signal that fixes its timezone, its clock-offset correction, its GPS fallback, and its final
+library location — so a wrong folder silently produces a wrong time or place, not just a misfiled photo.
+(A `prep` re-run after sorting is mandatory so the move is recognized before geotag — see the lifecycle
+below.)
 
 After a workspace is **merged** into your library it is **sealed**: every phase refuses to touch it,
 and new photos require a fresh workspace.
