@@ -49,6 +49,7 @@ def test_revert_tags():
         "GPSLatitude": "", "GPSLongitude": "", "GPSProcessingMethod": ""}     # clears the added GPS
 
 
+@pytest.mark.spec("geotag-change-overwrite-original-pinned-1", "geotag-prestate-capture-1", "geotag-prestate-immutable-1")
 def test_ledger_cache_pin_once_get_consume(tmp_path):
     (tmp_path / ".photos-ingest").mkdir()
     c = cal.GeotagCache(str(tmp_path))
@@ -102,6 +103,7 @@ def _reverts(plan):
             if o["type"] == "revert_manual_gps"]
 
 
+@pytest.mark.spec("geotag-withdraw-revert-1")
 def test_withdrawn_override_plans_revert(tmp_path):
     f = _model(f"{BYDEST}/T/a.jpg", f"{BYDEST}/T", native=True)        # now preserve_native (non-manual)
     wf, t, g, gpx = _plan_wf(tmp_path, [f])
@@ -117,7 +119,7 @@ _FORWARD_PLUS_GPS_REVERT = {"metadata_time_write", "metadata_gps_write", "gps_ma
                             "rename_no_clobber", "revert_manual_gps"}
 
 
-@pytest.mark.spec("time-name-never-reverted-1")
+@pytest.mark.spec("authored-withdraw-undoes-1", "geotag-recompute-inplace-1", "time-name-never-reverted-1")
 def test_withdraw_reverts_gps_only_never_time_name_or_destination(tmp_path):
     """Withdrawing a decision reverts GPS ONLY — geotag has no time/filename revert op at all (time
     writes + renames are forward-idempotent), and it NEVER relocates a photo across destinations. After
@@ -149,6 +151,7 @@ def test_still_manual_no_revert(tmp_path):
     assert _reverts(plan) == []                                        # re-asserted, not reverted
 
 
+@pytest.mark.spec("geotag-disappeared-entry-kept-1")
 def test_vanished_file_kept_no_revert(tmp_path):
     f = _model(f"{BYDEST}/T/a.jpg", f"{BYDEST}/T", native=True)
     wf, t, g, gpx = _plan_wf(tmp_path, [f])
@@ -223,6 +226,68 @@ def _edit(ctl, name, fn):
     p = ctl / name; a = json.load(open(p)); fn(a); p.write_text(json.dumps(a))
 
 
+def _drive_ready(monkeypatch, ws, ctl):
+    """Drive _exec_ws to a ready photos-24 (timezone + folder-fallback accepted), c.arw -> manual."""
+    _run(monkeypatch, ws, "plan")
+    _edit(ctl, "photos-21-time-decisions.json", lambda a: a["destinations"][f"{BYDEST}/T"]
+          ["destination_timezone"]["user_decision"].update({"accept_proposed_timezone": True}))
+    _run(monkeypatch, ws, "plan")
+    _edit(ctl, "photos-23-gps-decisions.json", lambda b: b["destinations"][f"{BYDEST}/T"]
+          ["folder_fallback"]["user_decision"].update({"fallback_lat": 48.85, "fallback_lon": 2.35}))
+    _run(monkeypatch, ws, "plan")
+    assert (ctl / "photos-24-executable-plan.json").exists()
+
+
+@pytest.mark.spec("geotag-automated-gps-no-revert-1")
+def test_automated_gps_stores_no_prestate_and_emits_no_revert(tmp_path, monkeypatch):
+    """§24.1 (anti): automated GPS (here the two native-GPS frames -> preserve_native) is never made
+    reversible — it pins NO pre-state to the ledger and the plan emits NO revert op for it. Only the
+    MANUAL frame (c, folder-fallback) is reversible. (a/b are automated; c is the single manual lock.)"""
+    ws, ctl = _exec_ws(tmp_path, monkeypatch)
+    _mock_tools(monkeypatch, ws)
+    _drive_ready(monkeypatch, ws, ctl)
+    plan = json.load(open(ctl / "photos-24-executable-plan.json"))
+    # As built (no withdrawal), the plan carries no revert op at all — automated GPS is never rolled back.
+    assert not any(o["type"] == "revert_manual_gps"
+                   for dd in plan["destinations"].values() for o in dd["operations"])
+    assert _run(monkeypatch, ws, "execute") == 0
+    # Only the manual frame pinned a pre-state; the automated native frames a/b pinned nothing.
+    db = cal.GeotagCache(str(ws)); pinned = {e["relative_path"] for e in db.ledger_all()}; db.close()
+    assert pinned == {f"{BYDEST}/T/c.arw"}
+    assert f"{BYDEST}/T/a.arw" not in pinned and f"{BYDEST}/T/b.arw" not in pinned
+
+
+@pytest.mark.spec("geotag-prestate-before-write-1")
+def test_manual_gps_prestate_pinned_before_the_gps_write(tmp_path, monkeypatch):
+    """§29.1a: a manual GPS override's pre-state is committed to the ledger BEFORE the GPS write that
+    overwrites it. Order-probe both seams during execute and assert the pin precedes the GPS write."""
+    ws, ctl = _exec_ws(tmp_path, monkeypatch)
+    _mock_tools(monkeypatch, ws)                                # sets _exiftool_write to a passthrough mock
+    _drive_ready(monkeypatch, ws, ctl)
+    events = []
+    orig_pin = cal.GeotagCache.ledger_pin
+    orig_write = cal.GeotagWorkflow._exiftool_write             # the mock installed by _mock_tools
+
+    def pin_spy(self, fp, rel, pre, at):
+        events.append(("pin", rel))
+        return orig_pin(self, fp, rel, pre, at)
+
+    def write_spy(self, abs_path, tags):
+        if "GPSLatitude" in tags:                              # the GPS write (vs a pure time write)
+            events.append(("gps_write", os.path.relpath(abs_path, str(ws))))
+        return orig_write(self, abs_path, tags)
+
+    monkeypatch.setattr(cal.GeotagCache, "ledger_pin", pin_spy)
+    monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", write_spy)
+    assert _run(monkeypatch, ws, "execute") == 0
+    labels = [e[0] for e in events]
+    assert "pin" in labels and "gps_write" in labels, events
+    assert labels.index("pin") < labels.index("gps_write"), events     # captured before overwritten
+    assert events[labels.index("pin")][1] == f"{BYDEST}/T/c.arw"       # the manual frame
+    assert events[labels.index("gps_write")][1] == f"{BYDEST}/T/c.arw"
+
+
+@pytest.mark.spec("geotag-manual-gps-reversible-1", "geotag-prestate-absent-1", "geotag-rerunnable-after-execute-1")
 def test_full_pin_then_withdraw_reverts_and_consumes(tmp_path, monkeypatch):
     ws, ctl = _exec_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)

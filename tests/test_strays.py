@@ -24,6 +24,7 @@ import sqlite3
 
 import photos_1_prep as prep
 import photos_utils as utils
+import pytest
 
 MANAGED = ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
            "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"]
@@ -80,6 +81,7 @@ def _cached_paths(ws):
         conn.close()
 
 
+@pytest.mark.spec("prep-sources-empty-after-stage5-1", "prep-strays-per-run-subfolder-1")
 def test_stray_moved_structure_preserved(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -98,6 +100,7 @@ def test_stray_moved_structure_preserved(tmp_path, monkeypatch):
     assert list((ws / "0-sources").iterdir()) == []               # inbox left empty
 
 
+@pytest.mark.spec("prep-other-not-fingerprinted-1", "prep-strays-inert-1")
 def test_stray_not_fingerprinted_and_not_cached(tmp_path, monkeypatch):
     # If fingerprint_image were called on the stray it would raise (so we'd notice).
     _install(monkeypatch)
@@ -120,6 +123,7 @@ def test_stray_not_fingerprinted_and_not_cached(tmp_path, monkeypatch):
     assert any("5-photos-by-date" in p for p in cached)          # the real photo is
 
 
+@pytest.mark.spec("prep-scan-skips-control-subtrees-1", "prep-strays-excluded-from-scan-1")
 def test_strays_scan_skipped_on_next_run(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -144,6 +148,7 @@ def test_mixed_media_and_stray(tmp_path, monkeypatch):
     assert list((ws / "0-sources").iterdir()) == []
 
 
+@pytest.mark.spec("prep-stray-media-warning-1")
 def test_stray_media_detection_warns_only_for_media_mime(tmp_path, monkeypatch):
     # An unlisted RAW (.raf) and a real non-media (.txt) both land in strays. exiftool sees the .raf as
     # image/*, the .txt as text/plain -> only the .raf gets the "add to media_extensions" hint.
@@ -160,6 +165,7 @@ def test_stray_media_detection_warns_only_for_media_mime(tmp_path, monkeypatch):
     assert not any(".txt" in w for w in plan.warnings)
 
 
+@pytest.mark.spec("prep-stray-media-warning-advisory-1")
 def test_stray_media_detection_silent_when_exiftool_absent(tmp_path, monkeypatch):
     # exiftool unavailable (probe returns None) -> no stray-media warning, never blocks.
     _install(monkeypatch)

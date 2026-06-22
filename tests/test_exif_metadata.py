@@ -77,6 +77,7 @@ def create_mock_metadata_reader(monkeypatch):
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read)
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", lambda *a, **k: {"status": "valid", "strategy": "image-content-hash-v1", "value": "dummycontenthash"})
 
+@pytest.mark.spec("prep-cache-metadata-fields-1", "prep-cache-upsert-stale-1", "prep-passive-metadata-cache-1")
 def test_metadata_cache_creation_and_staleness(workspace, monkeypatch):
     create_mock_metadata_reader(monkeypatch)
 
@@ -131,6 +132,7 @@ def test_metadata_cache_creation_and_staleness(workspace, monkeypatch):
     assert upsert_fx2["data"]["metadata"]["has_native_gps"] is False
     assert upsert_fx2["data"]["metadata"]["field_set_version"] == 2
 
+@pytest.mark.spec("prep-passive-grouping-facts-1")
 def test_handoff_manifest_enrichment(workspace, monkeypatch):
     create_mock_metadata_reader(monkeypatch)
 
@@ -187,6 +189,7 @@ def test_handoff_manifest_enrichment(workspace, monkeypatch):
     assert df["cache_freshness"]["metadata_extracted_ok"] == 1
 
 
+@pytest.mark.spec("prep-metadata-freshness-inputs-1")
 def test_metadata_extractor_version_refreshes(workspace, monkeypatch):
     create_mock_metadata_reader(monkeypatch)
 
@@ -342,6 +345,7 @@ def test_schema_migration(workspace):
     cache.upsert_file(data)
 
 
+@pytest.mark.spec("prep-timestamp-priority-1")
 def test_parse_exiftool_item_timestamp_source_fallback():
     """selected_source_naive_timestamp prefers DateTimeOriginal, then CreateDate, then ModifyDate,
     else None (photos_utils Section 8)."""

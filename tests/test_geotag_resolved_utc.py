@@ -50,6 +50,7 @@ def _one(file, art=None):
 
 # --- the computation, branch by branch --------------------------------------
 
+@pytest.mark.spec("geotag-offset-per-group-dest-1")
 def test_camera_offset():
     r = _one(_file("6-photos-by-dest/B/a.arw", CAM, "2024:07:03 14:12:08"))
     assert r["resolved_utc"] == "2024-07-03T12:12:21Z" and r["resolved_utc_status"] == "valid"
@@ -57,6 +58,7 @@ def test_camera_offset():
     assert r["time_decision_scope"] == f"{CAM}|6-photos-by-dest/B"
 
 
+@pytest.mark.spec("geotag-no-utc-incomplete-tz-1")
 def test_camera_offset_missing_is_unresolved():
     r = _one(_file("6-photos-by-dest/B/a.arw", CAM, "2024:07:03 14:12:08"), _art(offset=None))
     assert r["resolved_utc"] is None and r["resolved_utc_status"] == "unresolved"
@@ -76,6 +78,7 @@ def test_smartphone_destination_timezone_dst():
     assert winter["resolved_utc"] == "2024-01-03T13:00:00Z"
 
 
+@pytest.mark.spec("geotag-resolved-utc-needs-both-1")
 def test_smartphone_no_offset_no_timezone_is_unresolved():
     r = _one(_file("6-photos-by-dest/B/n.jpg", PHONE, "2024:07:03 14:00:00"), _art(tz=""))
     assert r["resolved_utc"] is None and r["time_rule_used"] == "timezone_missing"
@@ -127,6 +130,7 @@ def test_cache_round_trips_and_replaces(tmp_path):
     c.close()
 
 
+@pytest.mark.spec("geotag-utc-fingerprint-1")
 def test_fingerprint_stable_and_sensitive():
     rows = _rows()
     inp = {"photos_21_sha256": "abc", "gpx_fingerprint": "g"}
@@ -139,6 +143,86 @@ def test_fingerprint_stable_and_sensitive():
 
 # --- end-to-end through run -------------------------------------------------
 
+@pytest.mark.spec("geotag-utc-after-validation-1")
+def test_resolved_utc_cache_created_only_after_photos21_complete(tmp_path, monkeypatch, capsys):
+    """§22: the resolved-UTC cache is written ONLY after upstream validation — specifically once
+    photos-21 is complete. Here the GPX anchor auto-resolves the camera offset, but with no default
+    folder timezone the destination timezone REQUIRES user input, so photos-21 is incomplete on the
+    first run and NO resolved-UTC cache is produced (even though the camera UTC is computable from the
+    offset alone). Accepting the timezone makes photos-21 complete -> only then is the cache written."""
+    MANAGED = ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
+               "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"]
+    ws = tmp_path / "ws"; ws.mkdir()
+    for d in MANAGED:
+        (ws / d).mkdir()
+    ctl = ws / ".photos-ingest"; ctl.mkdir()
+    (ctl / "photos-00-workspace-guard").touch()
+    gpx_dir = tmp_path / "gpx"; gpx_dir.mkdir()
+    (gpx_dir / "t.gpx").write_text(
+        '<gpx xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>'
+        '<trkpt lat="50.8467" lon="4.3525"><time>2024-07-03T12:12:21Z</time></trkpt>'
+        '<trkpt lat="50.8480" lon="4.3540"><time>2024-07-03T12:13:21Z</time></trkpt>'
+        '</trkseg></trk></gpx>')
+    cfg = {k: v for k, v in utils.CONFIG.items() if k != "jobs"}
+    cfg["gpx_root"] = str(gpx_dir)
+    # NOTE: no default_folder_timezone -> the destination timezone requires user input.
+    cfg["camera_time_and_timezone_policy"] = dict(
+        cfg["camera_time_and_timezone_policy"], device_groups={"fixed_clock_cameras": [CAM], "phones": []},
+        multi_anchor_auto_apply=True)
+    (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
+
+    def rec(rel, lat, lon, dto):
+        parsed = {"DateTimeOriginal": dto, "selected_source_naive_timestamp": dto,
+                  "selected_source_timestamp_tag": "DateTimeOriginal", "camera_group_key": CAM,
+                  "has_timestamp": True, "has_native_gps": True, "GPSLatitude": lat, "GPSLongitude": lon}
+        return {"relative_path": rel, "media_class": "image", "folder_class": "6-photos-by-dest",
+                "size": 1, "mtime_ns": 1, "content_hash": json.dumps({"value": "fp" + rel, "status": "valid"}),
+                "metadata_status": {"camera_group_key": CAM, "has_timestamp": True, "has_native_gps": True,
+                                    "field_set_version": 1, "parsed_json": json.dumps(parsed)}}
+    files = [rec("6-photos-by-dest/B/a.arw", 50.8467, 4.3525, "2024:07:03 14:12:08"),
+             rec("6-photos-by-dest/B/b.arw", 50.8480, 4.3540, "2024:07:03 14:13:08")]
+    for f in files:
+        p = ws / f["relative_path"]; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"x")
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"files": files, "cache_fingerprint": "pcf"}))
+
+    def run():
+        monkeypatch.chdir(str(ws))
+        monkeypatch.setattr(sys, "argv", ["photos-2-geotag", "plan"])
+        try:
+            cal.main()
+        except SystemExit as e:
+            assert e.code in (0, None)
+
+    def cache_rows():
+        conn = sqlite3.connect(str(ctl / "photos-00-ingest.db"))
+        try:
+            if not conn.execute("SELECT name FROM sqlite_master WHERE type='table' "
+                                "AND name='resolved_utc_cache'").fetchone():
+                return None
+            return conn.execute("SELECT relative_path, resolved_utc FROM resolved_utc_cache "
+                                "ORDER BY relative_path").fetchall()
+        finally:
+            conn.close()
+
+    # First run: timezone requires input -> photos-21 incomplete -> NO resolved-UTC cache.
+    run()
+    tz = json.load(open(ctl / "photos-21-time-decisions.json"))[
+        "destinations"]["6-photos-by-dest/B"]["destination_timezone"]
+    assert tz["requires_user_input"] is True
+    assert not cache_rows()                                    # cache not created before validation
+
+    # Supply the missing timezone (a manual entry, since there is no proposal to accept) -> photos-21
+    # complete -> the cache is created only now.
+    a = json.load(open(ctl / "photos-21-time-decisions.json"))
+    a["destinations"]["6-photos-by-dest/B"]["destination_timezone"][
+        "user_decision"]["manual_iana_timezone"] = "Europe/Brussels"
+    (ctl / "photos-21-time-decisions.json").write_text(json.dumps(a))
+    run()
+    assert cache_rows() == [("6-photos-by-dest/B/a.arw", "2024-07-03T12:12:21Z"),
+                            ("6-photos-by-dest/B/b.arw", "2024-07-03T12:13:21Z")]
+
+
+@pytest.mark.spec("geotag-compute-resolved-utc-1")
 def test_run_populates_cache_when_complete(tmp_path, monkeypatch, capsys):
     MANAGED = ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
                "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"]

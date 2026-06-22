@@ -23,10 +23,12 @@ import json
 import os
 
 import photos_utils as utils
+import pytest
 
 
 # --- LibraryLock (shared contract §15.2 / merge §12) ---------------------------
 
+@pytest.mark.spec("merge-library-lock-is-dotfile-cross-workspace-1")
 def test_library_lock_keyed_to_root_records_owner(tmp_path):
     lib = tmp_path / "library"
     lib.mkdir()
@@ -66,6 +68,7 @@ def test_workspace_lock_still_works_after_refactor(tmp_path):
 
 # --- Library identity marker + init-library writer -----------------------------
 
+@pytest.mark.spec("lib-marker-only-identity-1")
 def test_library_marker_path_and_identity(tmp_path):
     lib = tmp_path / "library"
     lib.mkdir()
@@ -90,6 +93,7 @@ def test_write_library_marker_is_idempotent_no_clobber(tmp_path):
 
 # --- Workspace seal marker writer (merge §9.4 / shared §13.7) -------------------
 
+@pytest.mark.spec("merge-seal-separate-file-not-guard-field-1", "seal-marker-separate-file-1")
 def test_write_sealed_marker(tmp_path):
     ws = tmp_path / "ws"
     ws.mkdir()
@@ -108,6 +112,7 @@ def _fp(value="abc123"):
             "engine_version": "im-7.1"}
 
 
+@pytest.mark.spec("merge-cache-library-fingerprint-in-workspace-db-1", "merge-fingerprint-cached-onfly-1")
 def test_library_fingerprint_cache_roundtrip_and_staleness(tmp_path):
     cache = utils.WorkspaceCache(str(tmp_path), in_memory=True)
     try:
@@ -141,6 +146,7 @@ def test_validate_merge_config_accepts_valid(tmp_path):
     utils.validate_merge_config(_cfg(lib), str(ws))      # no raise
 
 
+@pytest.mark.spec("merge-validate-library-root-path-1")
 def test_validate_merge_config_rejects_bad_inputs(tmp_path):
     import pytest
     ws = tmp_path / "ws"; ws.mkdir()
@@ -161,6 +167,7 @@ def test_validate_merge_config_rejects_bad_inputs(tmp_path):
         utils.validate_merge_config(_cfg(lib, collision="overwrite"), str(ws))
 
 
+@pytest.mark.spec("lib-root-validated-outside-1")
 def test_validate_merge_config_rejects_library_inside_workspace(tmp_path):
     import pytest
     ws = tmp_path / "ws"; ws.mkdir()
@@ -210,6 +217,7 @@ def test_max_suffix():
     assert utils.max_suffix("FOO", ["foo-005.arw"]) == 5
 
 
+@pytest.mark.spec("fname-allocation-per-phase-1")
 def test_append_at_max_plus_one_integration():
     # The merge collision-rename composition: root + max(library, incoming) + 1.
     lib_names = ["ts.arw", "ts-002.arw"]
@@ -222,6 +230,7 @@ def test_append_at_max_plus_one_integration():
 
 # --- Archive re-seal (merge §9.4 / shared §13.6) -------------------------------
 
+@pytest.mark.spec("archive-artifact-ownership-1", "merge-reseal-no-rederive-1", "merge-reseal-reads-not-rederive-geotag-1")
 def test_reseal_writes_own_manifest_and_never_touches_the_25(tmp_path):
     ws = tmp_path / "ws"
     cd = utils.ensure_control_dir(str(ws))

@@ -28,6 +28,7 @@ from datetime import datetime, timezone
 
 import photos_2_geotag as cal
 import photos_utils as utils
+import pytest
 
 BYDEST = "6-photos-by-dest"
 CAM = "SONY|ILCE-6400|123"
@@ -83,6 +84,7 @@ def _drift(wf, files, time_art, gpx, prior=None):
 
 # --- Trigger matrix ---------------------------------------------------------
 
+@pytest.mark.spec("geotag-drift-trigger-1")
 def test_manual_offset_no_anchor_with_coverage_triggers(tmp_path):
     wf = _wf(tmp_path)
     files = [_file(f"{DEST}/a.arw", "2024:07:03 14:00:00")]               # no native gps
@@ -206,6 +208,7 @@ def test_unconfirmed_bucket_blocks(tmp_path):
     assert drift["requires_user_input"] is True                          # inaction blocks
 
 
+@pytest.mark.spec("geotag-drift-untouched-blocks-1")
 def test_zero_scrub_must_be_explicit(tmp_path):
     _, files, _, _, drift, blk = _triggered(tmp_path, {"confirmed": True, "corrected_offset_seconds": ""})
     assert not blk
@@ -215,6 +218,7 @@ def test_zero_scrub_must_be_explicit(tmp_path):
     assert drift["status"] == "complete"
 
 
+@pytest.mark.spec("geotag-drift-recompute-utc-1")
 def test_correction_changes_resolved_utc(tmp_path):
     _, files, art, _, drift, blk = _triggered(tmp_path, {"confirmed": True, "corrected_offset_seconds": -3600})
     assert not blk
@@ -241,6 +245,7 @@ def test_non_numeric_correction_blocks(tmp_path):
     assert blk and "corrected_offset_seconds" in blk[0]
 
 
+@pytest.mark.spec("geotag-drift-corrected-validated-1")
 def test_out_of_range_correction_blocks(tmp_path):
     *_, blk = _triggered(tmp_path, {"confirmed": True, "corrected_offset_seconds": 99999})
     assert blk
@@ -248,6 +253,7 @@ def test_out_of_range_correction_blocks(tmp_path):
 
 # --- Preservation / fingerprint cascade -------------------------------------
 
+@pytest.mark.spec("geotag-drift-confirmation-preserved-1")
 def test_confirmation_preserved_across_rebuild(tmp_path):
     wf, files, art, gpx, drift, _ = _triggered(tmp_path, {"confirmed": True, "corrected_offset_seconds": -120})
     # feed the built artifact back as prior -> the confirmation survives a regenerate
@@ -323,6 +329,7 @@ def _edit(ctl, name, fn):
     p = ctl / name; a = json.load(open(p)); fn(a); p.write_text(json.dumps(a))
 
 
+@pytest.mark.spec("geotag-drift-gate-blocks-1", "geotag-drift-gate-position-1")
 def test_e2e_drift_gate_blocks_then_resumes(tmp_path, monkeypatch):
     ws, ctl = _e2e_ws(tmp_path)
     dvp = ctl / "photos-22-gps-drift-validation.json"

@@ -71,9 +71,10 @@ def test_every_must_cover_clause_is_tagged_somewhere():
     loses its tag, even without running the standalone tools/spec-coverage gate. (Non-must-cover
     clauses are part of the index but not gated.)"""
     tagged = set()
-    pat = re.compile(r'mark\.spec\("([^"]+)"\)')
+    call = re.compile(r'mark\.spec\(([^)]*)\)')          # whole marker call (may carry multiple ids)
     for path in glob.glob(os.path.join(ROOT, "tests", "*.py")):
         with open(path) as f:
-            tagged.update(pat.findall(f.read()))
+            for argblock in call.findall(f.read()):
+                tagged.update(re.findall(r'"([^"]+)"', argblock))
     untagged = [c["id"] for c in _clauses() if c.get("must_cover") and c["id"] not in tagged]
     assert not untagged, f"must-cover clauses with no @pytest.mark.spec tag: {untagged}"

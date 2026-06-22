@@ -48,6 +48,7 @@ def _rename(fp, to):
     return {"type": "rename_no_clobber", "to": to, "preconditions": {"content_fingerprint": fp}}
 
 
+@pytest.mark.spec("merge-plan-built-from-finalized-record-1")
 def test_enumerate_joins_prerename_handoff_to_final_name():
     # Handoff carries the PRE-rename name; the rename op (keyed by fingerprint) gives the final name.
     wf, cp = _wf([_ho("6-photos-by-dest/Trip/IMG_1.arw", "A")],
@@ -69,6 +70,7 @@ def test_enumerate_robust_to_postrename_handoff():
     assert e["library_target"] == "/lib/Trip/2024-07-03--14-12-21.arw"
 
 
+@pytest.mark.spec("merge-preserve-geotag-final-name-1")
 def test_enumerate_unrenamed_file_keeps_its_name():
     wf, cp = _wf([_ho("6-photos-by-dest/Trip/keep.jpg", "A")], [])
     [e] = wf.enumerate_finalized(cp, "/lib")
@@ -76,6 +78,7 @@ def test_enumerate_unrenamed_file_keeps_its_name():
     assert e["library_target"] == "/lib/Trip/keep.jpg"
 
 
+@pytest.mark.spec("merge-map-preserve-destination-structure-1")
 def test_enumerate_root_level_destination():
     wf, cp = _wf([_ho("6-photos-by-dest/top.jpg", "A")], [])
     [e] = wf.enumerate_finalized(cp, "/lib")
@@ -173,6 +176,7 @@ def test_plan_placed_new(tmp_path, monkeypatch):
     assert f["preconditions"]["content_fingerprint"] == "A"
 
 
+@pytest.mark.spec("merge-same-content-already-present-remove-source-1")
 def test_plan_already_present(tmp_path, monkeypatch):
     # Library already holds identical content at the target -> already_present (remove source, no write).
     ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
@@ -186,6 +190,7 @@ def test_plan_already_present(tmp_path, monkeypatch):
     assert f["renamed_for_library"] is False
 
 
+@pytest.mark.spec("merge-suffix-append-at-max-plus-1-1")
 def test_plan_renamed_incoming_append_at_max_plus_one(tmp_path, monkeypatch):
     # Different content at the target; library also has root-002 -> incoming becomes root-003.
     ws, lib, fp = _build_ws(
@@ -203,6 +208,7 @@ def test_plan_renamed_incoming_append_at_max_plus_one(tmp_path, monkeypatch):
     assert f["library_target"] == os.path.join(str(lib), "Trip", "ts-003.jpg")
 
 
+@pytest.mark.spec("merge-allocation-treats-existing-and-batch-occupied-1")
 def test_plan_two_incoming_case_variants_resolve_at_plan_time(tmp_path, monkeypatch):
     """Case-insensitive no-clobber (§7.2): two incoming photos whose final names differ ONLY in case
     target the same (empty) library dir. On a case-insensitive library they would collide; the plan
@@ -246,6 +252,7 @@ def test_plan_rename_accounts_for_incoming_suffix(tmp_path, monkeypatch):
     assert f["resolved_name"] == "ts-005.jpg"
 
 
+@pytest.mark.spec("merge-unfingerprintable-library-file-blocker-1")
 def test_plan_unfingerprintable_library_file_blocks_item(tmp_path, monkeypatch):
     # Collision but the library file can't be fingerprinted -> per-item blocker, left in by-dest.
     ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
@@ -259,6 +266,7 @@ def test_plan_unfingerprintable_library_file_blocks_item(tmp_path, monkeypatch):
     assert f["disposition"] == "blocked"
 
 
+@pytest.mark.spec("merge-deterministic-rerun-same-targets-names-1", "merge-mapping-deterministic-1")
 def test_plan_is_deterministic(tmp_path, monkeypatch):
     ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
                                        {"fp": "B", "dest": "Spain", "final_name": "b.jpg"}])
@@ -269,6 +277,7 @@ def test_plan_is_deterministic(tmp_path, monkeypatch):
     assert _plan_of(ws)["plan_id"] == first
 
 
+@pytest.mark.spec("dryrun-summary-not-dump-1", "merge-dryrun-summarizes-real-plan-1")
 def test_dry_run_summarizes_validated_plan(tmp_path, monkeypatch, capsys):
     ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     _patch_fp(monkeypatch, fp)
@@ -283,6 +292,7 @@ def test_dry_run_summarizes_validated_plan(tmp_path, monkeypatch, capsys):
         json.loads(out)
 
 
+@pytest.mark.spec("merge-dryrun-requires-saved-plan-1")
 def test_dry_run_without_plan_errors(tmp_path, monkeypatch):
     ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     _patch_fp(monkeypatch, fp)
@@ -300,6 +310,7 @@ def test_dry_run_rejects_stale_plan(tmp_path, monkeypatch):
     assert merge._run_locked_workflow("dry-run", str(ws)) == 2
 
 
+@pytest.mark.spec("config-folderset-ext-restale-1")
 def test_merge_plan_records_folder_and_extension_fingerprints(tmp_path, monkeypatch):
     ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     _patch_fp(monkeypatch, fp)

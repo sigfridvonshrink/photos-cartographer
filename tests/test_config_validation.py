@@ -63,6 +63,7 @@ def _pol(**overrides):
     (_pol(device_groups="nope"), "device_groups must be an object"),           # device_groups not a dict
     (_cfg(zfs={"datasets": "nope"}), "zfs.datasets must be an object"),         # zfs.datasets not a dict
 ])
+@pytest.mark.spec("config-values-validated-1", "prep-config-validate-gpx-malformed-1", "prep-config-validate-timestamp-format-1", "validate-enum-structure-1", "validate-filename-format-1", "validate-numeric-thresholds-1", "validate-paths-1")
 def test_validate_config_rejects(cfg, needle):
     with pytest.raises(ValueError) as ei:
         utils.validate_config(cfg)
@@ -133,6 +134,7 @@ def test_config_without_merge_block_still_valid():
     utils.validate_config({"gpx_root": ""})        # legacy config (no merge key) is accepted
 
 
+@pytest.mark.spec("prep-config-validation-failure-blocks-1")
 def test_load_or_seed_config_rejects_bad_value(tmp_path):
     ws = tmp_path / "ws"
     (ws / ".photos-ingest").mkdir(parents=True)
@@ -173,12 +175,14 @@ def test_media_extensions_default_seeded_and_valid():
     (_mx(image=["j pg"], raw=["arw"], video=["mp4"]), "canonical bare extension"), # whitespace
     (_mx(image=[5], raw=["arw"], video=["mp4"]), "must be a non-empty string"),    # wrong type
 ])
+@pytest.mark.spec("prep-config-validate-numeric-lists-1")
 def test_media_extensions_rejects_bad(cfg, needle):
     with pytest.raises(ValueError) as ei:
         utils.validate_config(cfg)
     assert needle in str(ei.value), str(ei.value)
 
 
+@pytest.mark.spec("config-ext-one-class-1", "prep-classify-by-extension-1", "prep-reads-config-authoritative-1")
 def test_classification_follows_config_after_load(tmp_path, monkeypatch):
     # A user adds .webp to the image list; after load_or_seed_config it classifies as image, not stray.
     ws = tmp_path / "ws"
@@ -196,6 +200,7 @@ def test_classification_follows_config_after_load(tmp_path, monkeypatch):
         utils._refresh_media_class_map()                       # restore global for other tests
 
 
+@pytest.mark.spec("config-surgical-staleness-1", "prep-extension-lists-config-1")
 def test_field_fingerprints_change_with_their_area():
     base_fol, base_ext = utils.folders_fingerprint(), utils.media_extensions_fingerprint()
     c = copy.deepcopy(utils.CONFIG); c["media_extensions"]["video"].append("webm")

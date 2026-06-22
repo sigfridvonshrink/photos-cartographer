@@ -27,8 +27,10 @@ import time
 
 import photos_1_prep as prep
 import photos_utils as utils
+import pytest
 
 
+@pytest.mark.spec("lock-stale-detectable-1")
 def test_acquire_records_owner_identity(tmp_path):
     lock = prep.WorkspaceLock(str(tmp_path))
     assert lock.acquire() is True
@@ -42,6 +44,7 @@ def test_acquire_records_owner_identity(tmp_path):
         lock.release()
 
 
+@pytest.mark.spec("lock-release-on-exit-error-1")
 def test_release_frees_the_lock(tmp_path):
     l1 = prep.WorkspaceLock(str(tmp_path))
     assert l1.acquire() is True
@@ -51,6 +54,7 @@ def test_release_frees_the_lock(tmp_path):
     l2.release()
 
 
+@pytest.mark.spec("lock-mutual-exclusion-1")
 def test_cross_process_exclusion_and_owner_report(tmp_path):
     utils.ensure_control_dir(str(tmp_path))
     lock_path = utils.lock_path(str(tmp_path))

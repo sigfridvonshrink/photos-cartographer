@@ -76,6 +76,7 @@ def _seed_quarantine(ws):
 
 # --- band-misplacement guard -------------------------------------------------
 
+@pytest.mark.spec("prep-band-misplacement-blocks-1", "prep-video-only-in-videos-band-1")
 def test_band_guard_blocks_video_under_photo_band(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -136,6 +137,7 @@ def test_prune_yes_without_selector_or_all_refuses(tmp_path, monkeypatch):
 
 # --- footprint ---------------------------------------------------------------
 
+@pytest.mark.spec("prep-quarantine-footprint-reported-1")
 def test_footprint_reports_quarantine(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -191,6 +193,7 @@ def _dump_dotfile_ops(plan):
                   if op.type == "quarantine_move" and op.verification.get("kind") == "dump_dotfile")
 
 
+@pytest.mark.spec("ctrl-dotfiles-swept-quarantine-1", "prep-hidden-dump-sweep-1", "prep-no-sweep-non-dump-dotfiles-1")
 def test_0sources_dotfiles_quarantined(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -216,6 +219,7 @@ def test_0sources_dotfiles_quarantined(tmp_path, monkeypatch):
     assert ".DS_Store" in moved and "t.jpg" in moved
 
 
+@pytest.mark.spec("prep-init-sweeps-hidden-to-quarantine-1")
 def test_init_root_dotfiles_quarantined(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = tmp_path / "ws"; ws.mkdir()                           # uninitialized (no guard / no 0-6)

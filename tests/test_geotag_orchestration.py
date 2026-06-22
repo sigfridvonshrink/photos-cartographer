@@ -52,6 +52,7 @@ def _run(monkeypatch, ws):
 
 # --- main(): lock + config/handoff error paths ------------------------------
 
+@pytest.mark.spec("geotag-lock-failfast-1")
 def test_lock_contention_exits_1(tmp_path, monkeypatch, capsys):
     ws, ctl = _init_ws(tmp_path)
     (ctl / "photos-00-config.json").write_text(json.dumps({k: v for k, v in utils.CONFIG.items() if k != "jobs"}))
@@ -252,6 +253,7 @@ def test_recognize_camera_groups_records_timestamps(tmp_path):
     assert groups[CAM]["missing_timestamp"] == 1
 
 
+@pytest.mark.spec("geotag-sealed-newdump-warn-1")
 def test_sealed_workspace_with_dump_warns_and_blocks(tmp_path, monkeypatch, capsys):
     ws, ctl = _init_ws(tmp_path)
     (ctl / "photos-00-config.json").write_text(json.dumps({k: v for k, v in utils.CONFIG.items() if k != "jobs"}))
@@ -268,6 +270,7 @@ def test_sealed_workspace_with_dump_warns_and_blocks(tmp_path, monkeypatch, caps
     assert any("SEALED" in b for b in blk) and not warn
 
 
+@pytest.mark.spec("geotag-gpx-after-recognition-1")
 def test_unknown_group_aborts_before_gpx_ingest(tmp_path, monkeypatch):
     # In-memory camera-group recognition runs BEFORE disk-heavy GPX ingestion, so an unknown-group
     # abort costs no GPX I/O (the next run re-ingests GPX only once recognition passes).
@@ -281,6 +284,7 @@ def test_unknown_group_aborts_before_gpx_ingest(tmp_path, monkeypatch):
     assert called == []                        # GPX ingest never reached
 
 
+@pytest.mark.spec("geotag-unknown-group-snippets-1")
 def test_unknown_group_template_is_valid_full_json(tmp_path, monkeypatch, capsys):
     # The cut/paste template must be VALID JSON (no trailing comma -> the ",]" reader-rejection bug)
     # and the COMPLETE final list: each array carries the operator's known groups plus the new one.

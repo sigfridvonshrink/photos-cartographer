@@ -24,6 +24,7 @@ import os
 
 import photos_1_prep as prep
 import photos_utils as utils
+import pytest
 
 MANAGED = ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
            "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"]
@@ -71,6 +72,7 @@ def _log(ws):
         return json.load(f)
 
 
+@pytest.mark.spec("log-keyed-by-fingerprint-1", "prep-log-per-photo-fingerprint-keyed-1", "prep-log-records-journey-1")
 def test_media_journey_keyed_by_fingerprint(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -88,6 +90,7 @@ def test_media_journey_keyed_by_fingerprint(tmp_path, monkeypatch):
     assert all(s.get("run") for s in entry["journey"])     # each step attributed to its run
 
 
+@pytest.mark.spec("prep-log-records-quarantine-dups-1", "prep-quarantine-recoverable-manifest-1")
 def test_quarantined_duplicate_recorded(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -105,6 +108,54 @@ def test_quarantined_duplicate_recorded(tmp_path, monkeypatch):
     assert dq[0]["retained_counterpart"]                              # the kept file at dedup time
 
 
+@pytest.mark.spec("prep-no-timestamp-correction-1")
+def test_prep_organizes_by_raw_naive_timestamp_no_tz_or_utc_shift(tmp_path, monkeypatch):
+    """§7.6 (anti): prep organizes by the RAW camera-naive timestamp and never timezone/UTC-corrects
+    it (that is geotag's job). Use a late-evening naive time that ANY tz/UTC conversion would push to
+    a different date+hour; assert the file lands under that EXACT raw date and time."""
+    _install(monkeypatch)
+    def meta(folders, max_workers=4, progress_coordinator=None):
+        res = {}
+        for fo in folders:
+            for fn in os.listdir(fo):
+                res[os.path.join(fo, fn)] = {"DateTimeOriginal": "2023:03:26 23:45:00",
+                                             "extraction_status": "extracted_ok", "raw_payload": "{}"}
+        return res, set()
+    monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", meta)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "x.jpg").write_bytes(b"AAAA")
+    _run(ws)
+    entry = next(iter(_log(ws)["photos"].values()))
+    # raw 2023:03:26 23:45:00 -> exact same date folder + civil time, no shift to 21:45 / 03-27 / etc.
+    assert entry["final_path"] == "5-photos-by-date/2023-03-26/2023-03-26--23-45-00.jpg"
+
+
+@pytest.mark.spec("prep-log-self-sufficient-1")
+def test_prep_log_is_complete_and_standalone_without_geotag_or_merge(tmp_path, monkeypatch):
+    """§16.1: the prep log (photos-15) is complete and self-sufficient even if geotag/merge never run.
+    After a prep-only run, NO geotag (photos-2x) / merge (photos-3x) artifact exists, yet photos-15
+    already records the file's full, non-partial journey ending at its organized destination."""
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    _run(ws)
+    ctl = ws / ".photos-ingest"
+    # prep ran in isolation: no downstream phase artifacts were produced.
+    later = [n for n in os.listdir(ctl)
+             if n.startswith("photos-2") or n.startswith("photos-3")]
+    assert later == [], later
+    # ...yet the prep log is on disk and self-sufficient: a complete (non-partial) per-photo journey.
+    assert os.path.exists(utils.prep_log_path(str(ws)))
+    photos = _log(ws)["photos"]
+    assert len(photos) == 1
+    entry = next(iter(photos.values()))
+    assert not entry.get("partial")                                   # complete, nothing missing
+    assert entry["final_path"].startswith("5-photos-by-date/")        # full journey to its destination
+    actions = [s["action"] for s in entry["journey"]]
+    assert "organized" in actions and "provisional_rename" in actions
+    assert all(s.get("run") for s in entry["journey"])                # every step attributed to its run
+
+
 def test_strays_and_other_not_logged(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -116,6 +167,7 @@ def test_strays_and_other_not_logged(tmp_path, monkeypatch):
     assert not any("notes" in json.dumps(e) for e in photos.values())
 
 
+@pytest.mark.spec("prep-log-incremental-1")
 def test_noop_rerun_leaves_log_byte_identical(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -126,6 +178,7 @@ def test_noop_rerun_leaves_log_byte_identical(tmp_path, monkeypatch):
     assert open(utils.prep_log_path(str(ws)), "rb").read() == first
 
 
+@pytest.mark.spec("log-entry-append-only-1")
 def test_recognized_move_appends_moved_to_by_dest(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -146,6 +199,7 @@ def test_recognized_move_appends_moved_to_by_dest(tmp_path, monkeypatch):
     assert sum(1 for s in entry["journey"] if s["action"] == "organized") == 1
 
 
+@pytest.mark.spec("log-human-readable-json-1", "prep-prep-log-on-success-1")
 def test_log_is_deterministic_and_in_control_dir(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -158,6 +212,7 @@ def test_log_is_deterministic_and_in_control_dir(tmp_path, monkeypatch):
     assert list(_log(ws)["photos"]) == sorted(_log(ws)["photos"])  # fingerprint-sorted
 
 
+@pytest.mark.spec("log-fail-if-insufficient-1", "prep-log-fail-if-history-insufficient-1")
 def test_missing_history_warns_and_marks_partial(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
