@@ -27,21 +27,27 @@ before it can touch a photo.
 
 ## How it works in one minute
 
-A clean **prep → geotag → merge** pipeline. Geotag resolves everything it can on its own, in an order chosen
-so each supplied answer unlocks the most automatic work downstream:
+A clean **prep → geotag → merge** pipeline built around the one decision only you can make. Geotag resolves
+everything *it* can on its own, in an order chosen so each supplied answer unlocks the most automatic work
+downstream:
 
 1. **Prep** — consolidate the dump, normalize extensions, detect duplicates (quarantined, never deleted), and
-   date-organize everything. Photos are then dragged into destination folders (`2026/France/Paris/Louvre`, …).
-2. **Timezone** — establish each destination's timezone, from the photos' own evidence where possible,
+   date-organize everything.
+2. **Sort** *(the one step only you can do)* — drag photos from `5-photos-by-date` into a destination tree
+   (`2026/France/Paris/Louvre`, …). This isn't just tidiness: a photo's destination decides its **timezone**,
+   its **clock-offset correction**, its **GPS fallback**, and **where it lands in the library** — so a wrong
+   folder means a wrong time or place. A `prep` re-run after sorting is **mandatory** (it recognizes the moves,
+   stat-only, so geotag sees them). Then geotag takes over:
+3. **Timezone** — establish each destination's timezone, from the photos' own evidence where possible,
    otherwise asked **once** and cascaded down the folder tree.
-3. **Clock offset** — infer each camera's clock error by matching its already-located frames against the GPX
+4. **Clock offset** — infer each camera's clock error by matching its already-located frames against the GPX
    track, then solve the rest from that. A wrong-timezone or drifting clock is corrected automatically; only
    the cameras the data can't disambiguate need a confirmation.
-4. **Place** — geotag every frame the track can cover: **direct matches**, **interpolation** between track
+5. **Place** — geotag every frame the track can cover: **direct matches**, **interpolation** between track
    points, and **bounded extrapolation** off the ends. Each write is tagged with its method.
-5. **Remainder** — whatever no evidence can locate is collected into a short, explicit worklist of what's
+6. **Remainder** — whatever no evidence can locate is collected into a short, explicit worklist of what's
    actually left to decide.
-6. **Merge** — move the finalized set into the permanent folder-based library, with a full transformation log.
+7. **Merge** — move the finalized set into the permanent folder-based library, with a full transformation log.
 
 Every run is a **plan that can be dry-run and inspected**; only a validated plan ever writes. Re-runs act on
 the diff and are resumable after a crash.
