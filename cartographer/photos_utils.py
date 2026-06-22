@@ -330,6 +330,32 @@ def prep_plan_path(ws: str) -> str:
 def handoff_path(ws: str) -> str:
     return os.path.join(ws, CONTROL_DIR, "photos-11-handoff.json")
 
+
+def by_dest_reprep_pending(ws: str, handoff: dict):
+    """An example by-dest photo/raw the handoff has NOT recorded — or a by-date photo the handoff still
+    lists but that is gone from disk — else None. Non-None means the user moved files into/within
+    `6-photos-by-dest` since the last prep, so the handoff is stale and a re-prep (`prep plan` then
+    `prep execute`) is needed before geotag. The cheap, exact signal shared by geotag's re-prep gate and
+    prep's nothing-to-do guard, so the two never disagree about whether prep still has work to do."""
+    recorded = {f.get("relative_path") for f in (handoff.get("files") or [])}
+    by_dest = folder_name('photos_by_dest')
+    base = os.path.join(ws, by_dest)
+    if os.path.isdir(base):
+        for root, _dirs, files in os.walk(base):
+            for f in sorted(files):
+                if f.startswith('.'):
+                    continue
+                rel = os.path.relpath(os.path.join(root, f), ws)
+                if rel not in recorded and media_class_for_ext(os.path.splitext(f)[1]) in ("image", "raw"):
+                    return rel
+    by_date = folder_name('photos_by_date')
+    for f in (handoff.get("files") or []):
+        rel = f.get("relative_path") or ""
+        if rel.startswith(by_date + "/") and f.get("media_class") in ("image", "raw") \
+                and not os.path.exists(os.path.join(ws, rel)):
+            return rel
+    return None
+
 def prep_log_path(ws: str) -> str:
     """End-of-prep transformation log (prep §16.1 / shared §13.3)."""
     return os.path.join(ws, CONTROL_DIR, "photos-15-prep-log.json")
