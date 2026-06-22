@@ -13,6 +13,10 @@ The aim is **100% geolocation coverage for the least possible effort**: every ph
 allow, rough or manual where they don't — so a map view in a library like Immich shows the whole trip, not
 just the frames that came with a location baked in.
 
+![A full run — prep, the geotag time → drift → GPS edit loop, then merge](docs/screenshots/hero.gif)
+
+*One run, end to end, in the browser.* **▶ [See it step by step, in screenshots →](docs/walkthrough.md)**
+
 It is built for **irreplaceable originals and large batches**: a whole holiday, several cameras and phones,
 thousands of RAW and JPEG frames — resolved in one reviewable pass instead of photo-by-photo, then merged
 cleanly into a permanent **folder-based photo library** (digiKam, or anything that reads a plain folder tree).
@@ -66,28 +70,19 @@ the diff and are resumable after a crash.
 
 The authoritative behavioral specifications live in [`spec/`](spec/) (see *How it works (the detail)* below).
 
-## Decide in the browser, recorded in writing
+## Decide in the browser
 
-When the pipeline needs a decision, it's made in a **small single-page web app the pipeline serves locally**
-(`photos-cartographer edit`) — no build step, no CDN, works offline. It isn't a JSON editor: it shows a worklist of
-only the open decisions, each with its proposal and the evidence behind it, and writes the choice back into
-the durable decision records geotag reads. The loop is **edit → Save → re-run → reload**: save in the app,
-re-run geotag to recompute everything downstream, reload the refreshed decisions. It only ever touches the
-`user_decision` field and validates each entry before saving, so geotag never rejects what was written.
+When the pipeline needs a decision it serves a **small local web app** (`photos-cartographer edit`) — no build
+step, no CDN, offline-capable. It shows a worklist of only the open decisions, each with its proposal and the
+evidence, and writes your choice into the durable records geotag reads (the **edit → Save → re-run → reload**
+loop; it only ever touches the `user_decision` field). Three views: **Time** (timezones, inherited down the
+destination tree), **Drift** (scroll a photo along its GPX track until it lines up — the app reads the corrected
+clock offset off the track), and **GPS** (place a shot on an interactive map, paste a `lat, lon`, or set one
+fallback a whole destination inherits). Clicking on a map and recording every decision in writing are the same
+act — and because each re-run re-reads the records, nothing is lost or entered twice.
 
-It has a view for each kind of decision:
-
-- **Time** — a destination tree where each folder's timezone and clock offset can be accepted or overridden.
-  A child shows the value it would inherit from its parent, badged with where that came from, and updates live
-  when the parent is edited.
-- **Drift** — for a camera whose offset isn't anchored to the track, **scroll a photo along its GPX segment**
-  under a fixed crosshair until it lines up; the app reads the corrected clock offset off the track.
-- **GPS** — for any shot the tracks couldn't place, an **interactive map beside the photo**: pan a crosshair,
-  paste a `lat, lon` straight from Google Maps, or search a place by name. Copy a location once and paste it
-  onto the next shot, or shift-select a run of photos and place them all at a single point.
-
-So the ease of clicking and dragging on a map and the auditability of *every decision recorded in writing* are
-the same act — and because re-running re-reads those records, nothing decided is lost or entered twice.
+→ See the **[walkthrough](docs/walkthrough.md)** for the editor in action and the
+**[editor guide](docs/editor.md)** for depth.
 
 ## Why it's different from GeoSetter, HoudahGeo, gpscorrelate, darktable
 
@@ -105,90 +100,33 @@ If the offsets are already known and clicking each photo onto a map is fine, the
 a pile of mixed-clock photos that need *correct placement with the least possible effort*, that is what this
 is for.
 
-## Every change is non-destructive **and** traceable
-
-Photos are irreplaceable, so the whole design is **plan → validate → execute**, and every mutation is
-explainable from the record afterward:
-
-- **No mutation outside a plan.** Planning never touches files; execution applies only a validated plan whose
-  preconditions still hold. The dry-run *is* the real plan, serialized and shown.
-- **No clobber, no delete.** No operation overwrites existing media; duplicates are moved to a recoverable
-  quarantine, never auto-removed.
-- **Idempotent & resumable.** Re-runs act only on the diff; a crash mid-run is recoverable; already-placed
-  files are recognized and skipped, not re-written.
-- **Every GPS write records how it was derived.** Each photo's journey log (below) captures the full
-  five-way provenance of its coordinates, and GPX- or manually-placed writes additionally carry a
-  `GPSProcessingMethod` EXIF marker for downstream tools:
-  - **native** — the camera's or phone's own GPS, preserved untouched (left exactly as-is, no marker written);
-  - **GPX direct match** — a track point within seconds of the shot;
-  - **GPX interpolation** — computed between the two surrounding track points;
-  - **GPX extrapolation** — a bounded estimate just past the ends of a track;
-  - **manual** — hand-entered coordinates, or a confirmed per-folder fallback.
-
-  (The EXIF marker is coarser than the log: every GPX-derived write shares `GPSProcessingMethod=interpolated`,
-  manual writes use `manual_locked` / `manual_fallback`, and native GPS is left untouched — the precise
-  five-way derivation lives in the per-photo journey log.)
-- **Manual coordinates are reversible.** A pinned pre-state ledger remembers what each file held before an
-  override, so withdrawing a manual GPS decision restores the original — or clears the tag entirely if the
-  file had no GPS to begin with. (Automated placements are simply recomputed from current inputs.)
-- **A human-readable journey log per photo.** Finalize writes a per-file, content-fingerprint-keyed JSON log
-  of every transformation between ingestion and final placement — clock offset applied, resolved UTC,
-  timezone chosen, GPS method, every rename — each step linked to the decision that caused it. The merge step
-  carries it forward with the final library path.
-
 ## Designed to ask for the least
 
-Every other tool treats geotagging as a **manual operation performed by hand** — supply the offset, supply the
-coordinates. Even the advanced ones leave a camera's clock offset to be *calculated* manually, when many of
-those offsets could be derived automatically from a single correct input. photos-cartographer treats
-geotagging as a **constraint-propagation problem** and converges on the **minimal sufficient set of human
-decisions** — and it **orders the questions so each answer unlocks the most automatic work downstream**,
-shrinking not just *repeated* questions but the *total number* of them. It never asks for the geolocating to be
-done by hand, never asks for a value the data can derive, only for the inputs the data truly can't supply —
-each at the point where it resolves the most — and never twice for the same fact.
+It treats geotagging as a **constraint-propagation problem**: resolve everything the data can, then ask only
+for the **minimal set of human decisions** — *ordered so each answer unlocks the most automatic work
+downstream*. Timezone first (often from the photos themselves), then infer each camera's clock offset against
+the tracks, then place everything placeable, then a short worklist of the true remainder. Decisions are
+**reused, not re-asked**: a value set on a parent destination **cascades** to its children unless overridden,
+and manual coordinates/offsets are remembered across re-runs. So one well-placed answer high in the tree can
+let the pipeline solve every camera on its own — and **leaving a cell untouched *is* accepting it**, so the
+common case costs zero clicks. → **[Concepts](docs/concepts.md)** for the full model.
 
-So it works as a funnel that resolves everything it can before asking anything:
-
-1. **Timezone first.** Establish each destination's timezone — from the photos' own evidence where possible,
-   otherwise once by hand.
-2. **Then clock offsets.** Infer each camera's clock error against the GPX tracks; only the cameras the data
-   can't disambiguate need a confirmation.
-3. **Then place everything placeable.** Geotag every frame the tracks can cover — direct matches, interpolation
-   between points, bounded extrapolation off the ends.
-4. **Then resolve only the true remainder.** What no evidence can locate is collected into a short, explicit
-   worklist: the minimum that's actually left.
-
-Every decision is also **reused, not re-asked.** A timezone set once feeds the offset and placement steps
-downstream. A decision made on a parent destination **cascades recursively** to its children unless they
-override it. A manual coordinate or confirmed offset is remembered across re-runs. So input is requested only
-for what is *truly undetermined* — and the moment something becomes derivable from an earlier answer, it isn't
-asked again.
-
-This is why the *order* matters: a single well-placed answer high in the funnel — one timezone, one confirmed
-anchor — can let the pipeline solve **every** camera's clock offset on its own, where a traditional tool would
-require each offset to be worked out and typed in by hand.
-
-**Propagation is opt-out, not opt-in.** Set a fact once near the top of the folder tree — a trip's timezone, a
-city's GPS fallback — and it flows down to every destination beneath it *automatically*, because a place nested
-inside another can scarcely sit in a different timezone than its parent. Each child **auto-adopts** the
-inherited value — it doesn't block and doesn't ask, it just shows where the value came from — and a child is
-overridden **only when the inherited value is visibly wrong** (an override then re-roots the chain from that
-point down). **Leaving a cell untouched *is* the decision to accept it**, so the common case costs zero clicks.
-It stays safe, too, because every value remains overridable and is validated before use, and a value is
-auto-adopted only where the folder geometry makes it a sound default.
-
-## Safety model
+## Safety: non-destructive and traceable
 
 Photos are irreplaceable, so the whole design is **plan → validate → execute**:
 
 - **No mutation outside a plan.** Planning never touches files; execution applies only a validated plan whose
-  preconditions still hold.
-- **Dry-run is the real plan**, serialized and shown — not a separate simulation path.
-- **No clobber** — no operation overwrites existing media; destinations are reserved first.
-- **Quarantine, not delete** — duplicates are moved to a recoverable quarantine, never auto-removed.
-- **Idempotent & resumable** — reruns act only on the diff; a crash mid-run is recoverable.
-- **Provenance-preserving** — identity is a decoded-pixel fingerprint, invariant under in-place metadata
-  writes and renames, so each file's full history stays attached to it across every transformation.
+  preconditions still hold. **The dry-run *is* the real plan**, serialized and shown — not a separate simulation.
+- **No clobber; quarantine, not delete.** No operation overwrites existing media; duplicates move to a
+  recoverable quarantine, never auto-removed.
+- **Idempotent & resumable.** Re-runs act only on the diff; a crash mid-run is recoverable; already-placed
+  files are recognized and skipped.
+- **Stable identity.** Each photo's identity is a decoded-pixel fingerprint, invariant under in-place metadata
+  writes and renames — so its full history stays attached across every transformation.
+- **Reversible & traceable.** A pre-state ledger remembers what each file held before a manual override, so a
+  decision can be withdrawn; and finalize writes a per-photo **journey log** — every clock offset, resolved
+  UTC, timezone, GPS method (native / GPX direct-match / interpolation / extrapolation / manual) and rename,
+  each linked to the decision that caused it, carried forward by merge with the final library path.
 
 ## How it works (the detail)
 
