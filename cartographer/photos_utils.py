@@ -1496,6 +1496,24 @@ class PersistentExifToolWorker:
 atexit.register(PersistentExifToolWorker.cleanup_all)
 
 
+def kill_active_children():
+    """Force-kill every live persistent worker subprocess (exiftool + magick). Used to INTERRUPT a
+    running job from the console: a phase thread blocked on a worker read returns at once, so a pending
+    async KeyboardInterrupt can fire and the phase unwinds exactly like a terminal Ctrl-C. Best-effort
+    and idempotent; each worker's own close()/atexit cleanup still runs afterwards."""
+    for cls in (PersistentExifToolWorker, PersistentMagickWorker):
+        try:
+            with cls._lock:
+                insts = list(cls._instances)
+        except Exception:
+            insts = []
+        for w in insts:
+            try:
+                w.process.kill()
+            except Exception:
+                pass
+
+
 import threading
 import queue
 

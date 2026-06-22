@@ -459,7 +459,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path.split("?", 1)[0]
-        if path not in ("/api/run", "/api/save", "/api/rerun"):
+        if path not in ("/api/run", "/api/cancel", "/api/save", "/api/rerun"):
             return self._send(404, {"error": "not found"})
         try:
             n = int(self.headers.get("Content-Length") or 0)
@@ -471,6 +471,19 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, _editor._save(self.workspace, payload))
         if path == "/api/rerun":
             return self._send(200, _editor._rerun(self.workspace))
+        if path == "/api/cancel":
+            # Interrupt the running job (Ctrl-C equivalent). Cancelling a MUTATING execute needs an
+            # explicit confirm (mirrors the execute gate); plan/dry-run/etc. stop immediately. The run
+            # is journalled/idempotent, so an interrupt leaves nothing partially applied.
+            st = JOBS.status()
+            if not JOBS.running:
+                return self._send(409, {"ok": False, "error": "no run in progress"})
+            if (st.get("label") or "").endswith("execute") and not payload.get("confirm"):
+                return self._send(409, {"ok": False,
+                                        "error": "interrupting a mutating execute requires confirmation"})
+            ok = JOBS.cancel()
+            return self._send(200 if ok else 409,
+                              {"ok": ok, "error": None if ok else "no run in progress"})
         phase, command = payload.get("phase"), payload.get("command")
         if (phase, command) not in _RUNNABLE:
             return self._send(403, {"ok": False,
