@@ -151,6 +151,48 @@ def test_dump_in_sources_works_on_initialized(tmp_path, monkeypatch):
     assert not plan.blockers, plan.blockers
 
 
+# --- first-run config-review notice ------------------------------------------
+
+def test_first_plan_warns_to_review_seeded_config_with_strays_count(tmp_path, monkeypatch):
+    # The first plan seeds photos-00-config.json from defaults. Prompt the operator (loudly, advisory)
+    # to review it — naming media_extensions and citing how many files this plan would sideline.
+    _install(monkeypatch)
+    ws = _initialized(tmp_path)                       # guard + folders, but NO config yet
+    (ws / "0-sources" / "note.txt").write_text("x")   # a non-media file -> a strays move in the plan
+    monkeypatch.chdir(ws)
+    from cartographer.reporting import Reporter, CaptureSink, use_reporter
+    cap = CaptureSink()
+    with use_reporter(Reporter([cap])):
+        try:
+            prep.run(types.SimpleNamespace(command="plan", jobs=1))
+        except SystemExit:
+            pass
+    blob = "\n".join(e.msg for e in cap.logs() if e.level == "warn")
+    assert "FIRST RUN" in blob and "media_extensions" in blob
+    assert "set aside" in blob and "non-media" in blob          # the concrete strays-count line
+
+
+def test_second_plan_does_not_repeat_config_notice(tmp_path, monkeypatch):
+    # Once the config exists (any later plan), the first-run notice must not fire again.
+    _install(monkeypatch)
+    ws = _initialized(tmp_path)
+    (ws / "0-sources" / "note.txt").write_text("x")
+    monkeypatch.chdir(ws)
+    from cartographer.reporting import Reporter, CaptureSink, use_reporter
+    for _ in range(1):                                 # first plan seeds the config
+        try:
+            prep.run(types.SimpleNamespace(command="plan", jobs=1))
+        except SystemExit:
+            pass
+    cap = CaptureSink()
+    with use_reporter(Reporter([cap])):
+        try:
+            prep.run(types.SimpleNamespace(command="plan", jobs=1))
+        except SystemExit:
+            pass
+    assert not any("FIRST RUN" in e.msg for e in cap.logs())
+
+
 # --- re-execute on an already-prepped workspace ------------------------------
 
 def _stale_plan(ws):
