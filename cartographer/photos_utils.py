@@ -1041,13 +1041,23 @@ def take_zfs_snapshot(ws: str, snapshot_id: str, label: str, *, target_path=None
     cmd = ["zfs", "snapshot", snap]
     try:
         res = subprocess.run(cmd, capture_output=True, text=True, check=True, stdin=subprocess.DEVNULL)
-        return {"required": required, "snapshot_name": snap, "command": " ".join(cmd),
-                "exit_code": res.returncode, "stdout": res.stdout, "stderr": res.stderr,
-                "ok": res.returncode == 0}
+        rec = {"required": required, "snapshot_name": snap, "command": " ".join(cmd),
+               "exit_code": res.returncode, "stdout": res.stdout, "stderr": res.stderr,
+               "ok": res.returncode == 0}
     except Exception as e:
-        return {"required": required, "snapshot_name": snap, "command": " ".join(cmd),
-                "exit_code": getattr(e, "returncode", -1), "stdout": getattr(e, "stdout", "") or "",
-                "stderr": getattr(e, "stderr", "") or str(e), "ok": False}
+        rec = {"required": required, "snapshot_name": snap, "command": " ".join(cmd),
+               "exit_code": getattr(e, "returncode", -1), "stdout": getattr(e, "stdout", "") or "",
+               "stderr": getattr(e, "stderr", "") or str(e), "ok": False}
+    # Surface a log line whenever a snapshot is actually taken, naming it — one place so EVERY phase
+    # (prep/geotag/merge) that snapshots before mutating reports it. Failures are left to the caller
+    # (it warns or aborts per `required`); the durable record still goes to the journal/summary.
+    if rec["ok"]:
+        try:
+            from .reporting import get_reporter
+            get_reporter().log(f"ZFS snapshot taken: {snap}")
+        except Exception:
+            pass
+    return rec
 
 FIELD_SET_VERSION = 1
 METADATA_SCHEMA_VERSION = 1
