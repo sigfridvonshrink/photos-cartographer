@@ -199,6 +199,42 @@ def test_websink_clear_progress_finishes_open_tasks():
     assert any(m["kind"] == "log" and m["msg"] == "scanning" for m in msgs)
 
 
+def test_websink_emits_finished_log_on_progress_finish():
+    # CLI parity: when a progress task finishes, the console gets a durable "Finished <label> in <X>s"
+    # log line (TtySink prints the same). It reaches live subscribers and the late-join snapshot.
+    w = WebSink()
+    q, _ = w.subscribe()
+    w.handle(ProgressEvent("t1", "extracting metadata", START, 0, 3))
+    w.handle(ProgressEvent("t1", "extracting metadata", UPDATE, 2, 3))
+    w.handle(ProgressEvent("t1", "extracting metadata", FINISH, 3, 3))
+    msgs = []
+    try:
+        while True:
+            msgs.append(q.get_nowait())
+    except _queue.Empty:
+        pass
+    fin = [m for m in msgs if m["kind"] == "log" and m["msg"].startswith("Finished extracting metadata in ")]
+    assert len(fin) == 1 and fin[0]["msg"].endswith("s")
+    # and it's in the snapshot log for a late joiner
+    assert any(e["kind"] == "log" and e["msg"].startswith("Finished extracting metadata in ")
+               for e in w.snapshot()["log"])
+
+
+def test_websink_clear_progress_does_not_emit_finished_log():
+    # Abandoned tasks finished by the run-end safety net must NOT get a (misleading) duration log.
+    w = WebSink()
+    q, _ = w.subscribe()
+    w.handle(ProgressEvent("t1", "building duplicate groups", START, 0, 0))
+    w.clear_progress()
+    msgs = []
+    try:
+        while True:
+            msgs.append(q.get_nowait())
+    except _queue.Empty:
+        pass
+    assert not any(m["kind"] == "log" and m["msg"].startswith("Finished") for m in msgs)
+
+
 def test_websink_clear_progress_noop_when_empty():
     w = WebSink()
     w.clear_progress()                       # nothing open -> no error, nothing to finish
