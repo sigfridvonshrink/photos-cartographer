@@ -2,6 +2,9 @@
    the console's own structure. Per the agreed UI: tabs, an actions bar, a compact progress strip, and
    a full-width log pane that grows (the log has wide lines and is the thing you watch). */
 * { box-sizing: border-box; }
+/* Dark UI: render native controls (number-input spinners, scrollbars) in the dark scheme so they
+   match the palette instead of the browser's light default; accent the controls with our blue. */
+:root { color-scheme: dark; accent-color: var(--accent); }
 body { margin: 0; height: 100vh; display: flex; flex-direction: column;
   font: 14px/1.45 var(--ui); color: var(--fg); background: var(--bg); }
 .grow { flex: 1; }
@@ -14,7 +17,7 @@ body { margin: 0; height: 100vh; display: flex; flex-direction: column;
 .jobs-box { display: inline-flex; align-items: center; gap: 6px; font: 12px var(--ui); color: var(--muted);
   cursor: help; }
 .jobs-box .mono { font: 11px var(--mono); color: var(--faint); }
-.jobs-box input { width: 4.5em; padding: 3px 4px 3px 8px; font: 12px var(--mono); color: var(--fg);
+.jobs-box input { width: 5em; padding: 3px 10px 3px 8px; font: 12px var(--mono); color: var(--fg);
   background: var(--raised); border: 1px solid var(--line); border-radius: var(--r); text-align: right; }
 
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
