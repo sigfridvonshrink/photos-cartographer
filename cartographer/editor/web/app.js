@@ -716,19 +716,18 @@ function controls(ref) {
     wrap.append(driftControls(ref));
   } else if (ref.kind === "fallback") {
     const hasProp = p.proposal_source === "inherited";
-    wrap.append(checkbox(hasProp ? `accept inherited (${p.proposed_fallback.lat}, ${p.proposed_fallback.lon})` : "accept inherited — none", u.accept_proposal, (v) => edit(ref, "accept_proposal", v), !hasProp));
-    wrap.append(coordField(ref));
+    const cb = checkbox(hasProp ? `accept inherited (${p.proposed_fallback.lat}, ${p.proposed_fallback.lon})` : "accept inherited — none",
+      u.accept_proposal, (v) => edit(ref, "accept_proposal", v), !hasProp);
     // The folder fallback is optional. Once authored (a manual coord OR an accepted inherited value)
-    // there was no way to take it back; offer an explicit reset to NONE — clears both the coordinate
-    // and the accept flag in one action, so effective_fallback becomes null and descendants re-inherit
-    // from above. (To inherit instead of none, re-tick "accept inherited" afterwards.)
+    // there was no way to take it back; offer an explicit reset to NONE right beside the checkbox —
+    // clears the coordinate AND the accept flag in one action, so effective_fallback becomes null and
+    // descendants re-inherit from above. (To inherit instead of none, re-tick "accept inherited".)
     const authored = !!u.accept_proposal
       || (u.fallback_lat !== "" && u.fallback_lat != null) || (u.fallback_lon !== "" && u.fallback_lon != null);
-    if (authored) {
-      wrap.append(el("div", { class: "ctl-field" },
-        el("button", { class: "mini", onclick: () => editMany(ref, { fallback_lat: "", fallback_lon: "", accept_proposal: false }) },
-          "clear — no fallback")));
-    }
+    const row = el("div", { class: "ctl-row" }, cb);
+    if (authored) row.append(el("button", { class: "mini", title: "remove this folder fallback (back to none)",
+      onclick: () => editMany(ref, { fallback_lat: "", fallback_lon: "", accept_proposal: false }) }, "clear"));
+    wrap.append(row, coordField(ref));
   } else {
     wrap.append(coordField(ref));
     wrap.append(checkbox("leave unlocated (accept no GPS)", u.accept_unlocated, (v) => edit(ref, "accept_unlocated", v)));
@@ -1028,7 +1027,10 @@ function renderPanel() {
   const scroll = el("div", { class: "panel-scroll" });
   if (isScrub) scroll.append(scrubBlock(ref));
   if (isGpsCoord) scroll.append(mapBlock(ref));   // the review photo is now a thumbnail in "Your decision" + a hover preview in the worklist
-  if (c.proposal && ref.kind !== "drift") scroll.append(ref.kind === "offset" ? offsetProposalBlock(ref, c.proposal) : jsonBlock("Proposal", c.proposal));
+  // No raw "Proposal" JSON box for fallback — the inherited proposal is already shown in the
+  // "accept inherited (lat, lon)" checkbox label, so the JSON dump was redundant clutter.
+  if (c.proposal && ref.kind !== "drift" && ref.kind !== "fallback")
+    scroll.append(ref.kind === "offset" ? offsetProposalBlock(ref, c.proposal) : jsonBlock("Proposal", c.proposal));
   p.replaceChildren(top, scroll);
 }
 
