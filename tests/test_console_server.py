@@ -60,6 +60,34 @@ def test_make_target_builds_a_callable_without_running():
     assert callable(server._make_target("merge", "init-library", ["/srv/library"]))   # optional path arg
 
 
+def test_jobs_argv_validates_and_clamps():
+    assert server._jobs_argv(8) == ["-j", "8"]
+    assert server._jobs_argv("4") == ["-j", "4"]      # numeric string accepted
+    assert server._jobs_argv(1) == ["-j", "1"]
+    assert server._jobs_argv(None) == []              # unset -> phase default
+    assert server._jobs_argv(0) == []                 # below range -> ignored
+    assert server._jobs_argv(server._JOBS_MAX + 1) == []
+    assert server._jobs_argv("nope") == []
+
+
+def test_default_jobs_is_at_least_one():
+    assert server._default_jobs() >= 1
+
+
+def test_state_exposes_default_jobs(tmp_path):
+    assert server._state(str(tmp_path))["default_jobs"] == server._default_jobs()
+
+
+def test_make_target_accepts_jobs_before_subcommand_for_all_phases():
+    # -j lives on each phase's parent parser, so it must precede the subcommand. _make_target parses
+    # eagerly, so a wrong placement would SystemExit here rather than return a callable.
+    assert callable(server._make_target("prep", "plan", None, ["-j", "8"]))
+    assert callable(server._make_target("geotag", "execute", None, ["-j", "2"]))
+    assert callable(server._make_target("merge", "execute", None, ["-j", "3"]))
+    # composes with a subcommand positional (merge init-library path)
+    assert callable(server._make_target("merge", "init-library", ["/srv/library"], ["-j", "5"]))
+
+
 # --- full CLI parity: geotag finalize + prep prune-quarantine (v2.5) -------
 
 def test_runnable_set_has_full_cli_parity():
