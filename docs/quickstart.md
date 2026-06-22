@@ -120,6 +120,10 @@ requirement, not advice: prep recognizes the moves (stat-only, no re-reading pix
 forward, and refreshes the handoff geotag depends on. Skip it and geotag hard-stops, telling you to
 re-run prep.
 
+The plan → dry-run → execute rhythm still applies; for this quick path the `dry-run` step is skipped,
+but `photos-cartographer prep dry-run` is available between plan and execute if you want to inspect the
+recognized moves first.
+
 ---
 
 ## 4. Geotag — the iterative loop

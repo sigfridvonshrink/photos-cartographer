@@ -20,7 +20,7 @@ just the frames that came with a location baked in.
 It is built for **irreplaceable originals and large batches**: a whole holiday, several cameras and phones,
 thousands of RAW and JPEG frames — resolved in one reviewable pass instead of photo-by-photo, then merged
 cleanly into a permanent **folder-based photo library** (digiKam, or anything that reads a plain folder tree).
-Almost all of the code that writes into those originals — the geotag phase — is exercised by a thorough
+Almost all of the code that writes time/GPS metadata into photo files — the geotag phase — is exercised by a thorough
 automated test suite (figures in [`COVERAGE.md`](COVERAGE.md)), so a change that would misbehave is caught
 before it can touch a photo.
 
