@@ -121,7 +121,9 @@ could. It cascades downward like the timezone (badged `inherited ⟵ <ancestor>`
 timezone it is **never auto-applied and never blocks**: an inherited fallback is a proposal you *may*
 confirm. A fallback you author **re-roots the chain** for descendants. It ranks last in placement (after
 native GPS, per-file manual locks, and GPX), and is recorded as a manual (reversible) write so it's
-always clear it wasn't measured.
+always clear it wasn't measured. A fallback you set — manual or accepted-inherited — can be taken back
+with **Clear** (resets the folder to *no fallback*; descendants then re-inherit from above, or tick
+*accept inherited* to adopt the parent's instead).
 
 **Placing individual photos** on the map beside the photo:
 

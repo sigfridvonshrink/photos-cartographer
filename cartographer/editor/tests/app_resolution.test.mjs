@@ -41,6 +41,16 @@ test("wouldResolve: each of the three offset modes is independently sufficient",
   mk({});                                                                       assert.equal(app.wouldResolve(ref), false);
 });
 
+test("clearing a folder fallback (the Clear button payload) resolves to none", () => {
+  const dest = "6-photos-by-dest/Belgium", ref = { file: "gps", dest, kind: "fallback" };
+  const mk = (ud, proposal = {}) => setWork(
+    { gps: { destinations: { [dest]: { folder_fallback: { user_decision: ud, proposal } } } } });
+  mk({ fallback_lat: 50.5, fallback_lon: 4.2 });                              assert.equal(app.wouldResolve(ref), true);   // manual
+  mk({ accept_proposal: true }, { proposed_fallback: { lat: 50, lon: 4 } }); assert.equal(app.wouldResolve(ref), true);   // accept inherited
+  // The Clear button writes exactly this — clears coord AND the accept flag -> effective none:
+  mk({ fallback_lat: "", fallback_lon: "", accept_proposal: false });        assert.equal(app.wouldResolve(ref), false);
+});
+
 test("previewTz / previewFallback inherit from the nearest resolved ancestor", () => {
   setWork({
     time: { destinations: {
