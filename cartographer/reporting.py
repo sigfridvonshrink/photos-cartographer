@@ -73,10 +73,17 @@ class ProgressEvent:
     detail: str = ""
     force: bool = False
     status: str = "ok"           # ok | aborted (at FINISH)
+    duration: Optional[float] = None   # seconds; stamped by Reporter.emit at FINISH (the one timer)
 
     @property
     def done(self) -> bool:
         return self.state == FINISH
+
+
+def finished_line(label: str, duration: Optional[float]) -> str:
+    """The one rendering of a finished progress task: 'Finished <label> in <X>s'. Shared by the
+    terminal sink (inline) and the web sink (a log line) so the wording/format lives in one place."""
+    return f"Finished {label} in {(duration or 0.0):.2f}s"
 
 
 @dataclass
@@ -124,7 +131,7 @@ def event_to_dict(event) -> dict:
     if isinstance(event, ProgressEvent):
         return {"kind": "progress", "task_id": event.task_id, "label": event.label,
                 "state": event.state, "cur": event.cur, "total": event.total,
-                "detail": event.detail, "status": event.status}
+                "detail": event.detail, "status": event.status, "duration": event.duration}
     if isinstance(event, SummaryEvent):
         return {"kind": "summary", "report": event.report, "plan_summary": event.plan_summary,
                 "counters": event.counters}
@@ -160,15 +167,25 @@ class WebSink(Sink):
 
     def handle(self, event) -> None:
         msg = event_to_dict(event)
+        finish_log = None
         with self._lock:
             if msg["kind"] == "log":
                 self._log.append(msg)
             elif msg["kind"] == "progress":
+                tid = msg["task_id"]
                 if msg["state"] == FINISH:
-                    self._progress.pop(msg["task_id"], None)
+                    self._progress.pop(tid, None)
+                    # Record what happened to each progress task as a durable log line — CLI parity:
+                    # TtySink prints the same on finish; the console pane lacked it. The duration was
+                    # already stamped by Reporter.emit (one timer), and the wording is shared.
+                    finish_log = {"kind": "log", "msg": finished_line(msg["label"], msg.get("duration")),
+                                  "level": "info", "stream": "stderr"}
                 else:
-                    self._progress[msg["task_id"]] = msg
+                    self._progress[tid] = msg
             self._fanout_locked(msg)
+            if finish_log is not None:
+                self._log.append(finish_log)          # also visible in the late-join snapshot
+                self._fanout_locked(finish_log)
 
     def clear_progress(self) -> None:
         """Finish any still-open progress tasks: emit a synthetic FINISH for each live task (so
@@ -215,7 +232,6 @@ class TtySink(Sink):
             if quiet:
                 self.is_tty = False
         self._lock = threading.Lock()
-        self._start_time: dict = {}
         self._last_print: dict = {}
 
     def handle(self, event) -> None:
@@ -237,7 +253,6 @@ class TtySink(Sink):
             return
         with self._lock:
             if e.state == START:
-                self._start_time[e.task_id] = time.time()
                 self._last_print[e.task_id] = 0.0
                 if self.is_tty:
                     print(f"\r\033[KStarting {e.label}...", end="", file=self.stream)
@@ -259,13 +274,12 @@ class TtySink(Sink):
                     else:
                         print(f"{e.label}: {e.cur}/{total}{pct}{suffix} ...", file=self.stream)
             elif e.state == FINISH:
-                start = self._start_time.pop(e.task_id, time.time())
                 self._last_print.pop(e.task_id, None)
-                elapsed = time.time() - start
+                line = finished_line(e.label, e.duration)   # duration stamped by Reporter.emit
                 if self.is_tty:
-                    print(f"\r\033[KFinished {e.label} in {elapsed:.2f}s", file=self.stream)
+                    print(f"\r\033[K{line}", file=self.stream)
                 else:
-                    print(f"Finished {e.label} in {elapsed:.2f}s", file=self.stream)
+                    print(line, file=self.stream)
 
     # -- summary ----------------------------------------------------------
     def _summary(self, e: SummaryEvent) -> None:
@@ -372,9 +386,21 @@ class Reporter:
         self.counters: dict = {}
         self._lock = threading.Lock()
         self._task_seq = 0
+        self._task_start: dict = {}   # task_id -> START time; the single source of finish durations
 
     # -- fan-out ----------------------------------------------------------
     def emit(self, event) -> None:
+        # Time each progress task here, once, so every sink renders the SAME duration without each
+        # tracking start times itself. START records the clock; FINISH stamps elapsed onto the event.
+        if isinstance(event, ProgressEvent):
+            if event.state == START:
+                with self._lock:
+                    self._task_start[event.task_id] = time.time()
+            elif event.state == FINISH and event.duration is None:
+                with self._lock:
+                    t0 = self._task_start.pop(event.task_id, None)
+                if t0 is not None:
+                    event.duration = time.time() - t0
         for sink in self.sinks:
             sink.handle(event)
 
