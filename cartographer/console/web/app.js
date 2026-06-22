@@ -84,7 +84,22 @@ function applySnapshot(s) {
   setIdleIfEmpty();
 }
 
+// --- live connection + server-down detection ------------------------------
+// EventSource silently auto-reconnects, so a stopped server would otherwise look like a frozen page.
+// Surface it: on error we start a short grace timer (ride out transient blips / tunnel hiccups); if the
+// stream hasn't reopened by then, show the "server connection lost" dialog with Retry / Close.
+let downTimer = null;
+function showDown() { $("#down-overlay").hidden = false; }
+function hideDown() { $("#down-overlay").hidden = true; }
+$("#down-retry").onclick = () => location.reload();
+$("#down-close").onclick = () => { window.close(); hideDown(); /* if close is blocked, just dismiss */ };
+
 const es = new EventSource("/api/events");
+es.onopen = () => { clearTimeout(downTimer); downTimer = null; hideDown(); };
+es.onerror = () => {
+  // readyState CLOSED = terminal; CONNECTING = auto-retrying. Either way, confirm with a grace window.
+  if (downTimer === null) downTimer = setTimeout(showDown, 4000);
+};
 es.onmessage = (ev) => {
   let m;
   try { m = JSON.parse(ev.data); } catch { return; }

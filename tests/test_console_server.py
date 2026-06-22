@@ -209,6 +209,18 @@ def test_state_reports_all_three_phases(tmp_path):
         assert r in st["runnable"]
 
 
+def test_stale_lock_file_does_not_wedge_actions(tmp_path):
+    # A finished/interrupted CLI run leaves the owner file populated but the flock free. The console
+    # must NOT treat that as an in-progress run — Plan (and the rest) must stay enabled.
+    _init_ws(str(tmp_path))
+    lock = U.WorkspaceLock(str(tmp_path))
+    assert lock.acquire() is True
+    lock.release()                                   # flock free, owner file still on disk
+    st = server._state(str(tmp_path))
+    assert st["lock_owner"] is None                  # not reported as locked
+    assert st["actions"]["prep/plan"]["ok"] is True  # Plan clickable again
+
+
 # --- staleness gating (uses the shared plan_dependencies_fresh helper) -----
 
 _STALE_DEP = {"upstream": {"dependency_type": "json_artifact", "artifact_name": "u.json",

@@ -338,7 +338,10 @@ def _state(workspace):
     staleness) and per-command affordance (`actions`). Cheap, best-effort — never the source of truth."""
     lock = U.WorkspaceLock(workspace)
     try:
-        owner = lock.read_owner()
+        # held_owner (not read_owner): only report a holder if the flock is LIVE. read_owner reflects
+        # the last writer and is never cleared, so a finished/interrupted CLI run would otherwise look
+        # like an in-progress one and wedge every button (incl. Plan).
+        owner = lock.held_owner()
     except Exception:
         owner = None
     sealed = bool(U.is_sealed(workspace))

@@ -15,11 +15,33 @@
 import pytest
 import os
 import json
+import shutil
 import sqlite3
 from unittest.mock import patch, MagicMock
 
 # photos_1_prep is loaded once by conftest.py into sys.modules
 import photos_1_prep as prep
+import photos_utils as utils
+
+requires_exiftool = pytest.mark.skipif(
+    shutil.which("exiftool") is None, reason="exiftool not available"
+)
+
+
+@requires_exiftool
+def test_exiftool_worker_registry_and_cleanup_close_dead_children_quietly(capfd):
+    # A worker registers itself; close() deregisters it. cleanup_all() (the atexit hook) closes every
+    # live worker. Crucially, closing a worker whose child has already died (an interrupted run) must
+    # NOT leave a pipe to flush at GC — i.e. no "Exception ignored ... BrokenPipeError" noise.
+    w = utils.PersistentExifToolWorker()
+    assert w in utils.PersistentExifToolWorker._instances
+    w.process.kill()                                  # simulate the child dying on a Ctrl-C
+    utils.PersistentExifToolWorker.cleanup_all()      # what atexit runs at shutdown
+    assert w.closed is True
+    assert w not in utils.PersistentExifToolWorker._instances   # close(remove=True) deregistered it
+    # The kill()'d child's broken stdin must have been closed cleanly — no deferred GC complaint.
+    err = capfd.readouterr().err
+    assert "Exception ignored" not in err and "BrokenPipe" not in err
 
 @pytest.fixture
 def workspace(tmp_path):
