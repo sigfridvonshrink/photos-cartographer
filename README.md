@@ -16,9 +16,9 @@ just the frames that came with a location baked in.
 It is built for **irreplaceable originals and large batches**: a whole holiday, several cameras and phones,
 thousands of RAW and JPEG frames — resolved in one reviewable pass instead of photo-by-photo, then merged
 cleanly into a permanent **folder-based photo library** (digiKam, or anything that reads a plain folder tree).
-Almost all of the code that writes into those originals — the geotag phase — is exercised by an automated test
-suite (**98% of lines, 97% of branches**), so a change that would misbehave is caught before it can touch a
-photo.
+Almost all of the code that writes into those originals — the geotag phase — is exercised by a thorough
+automated test suite (figures in [`COVERAGE.md`](COVERAGE.md)), so a change that would misbehave is caught
+before it can touch a photo.
 
 > **Searches that might land here:** how to *geotag photos with no GPS from a GPX track*,
 > *correlate photos to a GPS track when the camera time is wrong*, *batch/bulk geotag thousands of RAW photos
