@@ -70,12 +70,16 @@ def test_jobs_argv_validates_and_clamps():
     assert server._jobs_argv("nope") == []
 
 
-def test_default_jobs_is_at_least_one():
+def test_default_jobs_is_at_least_one_and_below_cpu_count():
+    assert server._cpu_count() >= 1
     assert server._default_jobs() >= 1
+    assert server._default_jobs() <= server._cpu_count()      # default is cpu-1 (or 1), never above cpu
 
 
-def test_state_exposes_default_jobs(tmp_path):
-    assert server._state(str(tmp_path))["default_jobs"] == server._default_jobs()
+def test_state_exposes_default_jobs_and_cpu_count(tmp_path):
+    st = server._state(str(tmp_path))
+    assert st["default_jobs"] == server._default_jobs()
+    assert st["cpu_count"] == server._cpu_count()
 
 
 def test_make_target_accepts_jobs_before_subcommand_for_all_phases():

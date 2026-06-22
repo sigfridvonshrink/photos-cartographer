@@ -14,7 +14,7 @@ body { margin: 0; height: 100vh; display: flex; flex-direction: column;
 .jobs-box { display: inline-flex; align-items: center; gap: 6px; font: 12px var(--ui); color: var(--muted);
   cursor: help; }
 .jobs-box .mono { font: 11px var(--mono); color: var(--faint); }
-.jobs-box input { width: 3.2em; padding: 3px 6px; font: 12px var(--mono); color: var(--fg);
+.jobs-box input { width: 4.5em; padding: 3px 4px 3px 8px; font: 12px var(--mono); color: var(--fg);
   background: var(--raised); border: 1px solid var(--line); border-radius: var(--r); text-align: right; }
 
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }

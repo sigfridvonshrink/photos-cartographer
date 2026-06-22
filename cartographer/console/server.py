@@ -256,13 +256,18 @@ def _execute_guard(workspace, phase, payload):
 _JOBS_MAX = 256
 
 
-def _default_jobs():
-    """Console default for -j: one fewer than the logical CPUs of the machine running the SERVER (where
-    the work actually happens), floored at 1. The user can override it per the in-page Jobs box."""
+def _cpu_count():
+    """Logical CPUs of the machine running the SERVER (the Jobs box's upper bound), floored at 1."""
     try:
-        return max(1, (os.cpu_count() or 2) - 1)
+        return max(1, os.cpu_count() or 2)
     except Exception:
         return 1
+
+
+def _default_jobs():
+    """Console default for -j: one fewer than the server machine's logical CPUs, floored at 1. The user
+    can override it via the in-page Jobs box (up to the CPU count)."""
+    return max(1, _cpu_count() - 1)
 
 
 def _jobs_argv(jobs):
@@ -390,6 +395,7 @@ def _state(workspace):
         "workspace": os.path.abspath(workspace),
         "initialized": initialized,
         "default_jobs": _default_jobs(),
+        "cpu_count": _cpu_count(),
         "sealed": sealed,
         "lock_owner": owner,
         "job": JOBS.status(),
