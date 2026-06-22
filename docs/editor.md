@@ -88,6 +88,8 @@ A recursive tree of your destinations. For each one you settle two things:
 Container folders (those holding only sub-destinations) appear badged `container` — you author
 decisions on them purely to propagate downward.
 
+![Time view — the destination tree, with a timezone and its inherited badge](screenshots/carto-15-geotag-edit-time-02.png)
+
 ---
 
 ## Drift view
@@ -109,6 +111,8 @@ fixed crosshair until it lines up:
 Confirming refines the offset without altering your Time decision; the corrected offset feeds the
 recomputed UTC on the next run.
 
+![Drift view — sliding a photo along its GPX track under a fixed crosshair to recover the clock offset](screenshots/carto-22-geotag-edit-drift-track.png)
+
 ---
 
 ## GPS view
@@ -125,6 +129,8 @@ always clear it wasn't measured. A fallback you set — manual or accepted-inher
 with **Clear** (resets the folder to *no fallback*; descendants then re-inherit from above, or tick
 *accept inherited* to adopt the parent's instead).
 
+![GPS view — a per-destination folder fallback](screenshots/carto-25-geotag-edit-gps-fallback.png)
+
 **Placing individual photos** on the map beside the photo:
 
 - **Paste `lat, lon`** straight from Google Maps into the coordinate field — it commits on paste and
@@ -135,6 +141,8 @@ with **Clear** (resets the folder to *no fallback*; descendants then re-inherit 
 - **Copy / paste a location** between photos — "copy location" stashes the coordinate (and writes
   `lat, lon` to your system clipboard); "paste" applies it to the current photo. Consecutive nearby
   shots open centred where you last placed one.
+
+![GPS view — placing a photo on the interactive map beside it](screenshots/carto-26-geotag-edit-gps-per-photo.png)
 
 **Place many at once with shift-click:** click a photo to select it (and set an anchor), then
 **shift-click** another *in the same destination* to select the contiguous run between them. One
