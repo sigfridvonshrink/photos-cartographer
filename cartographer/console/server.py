@@ -317,6 +317,18 @@ def _prune_guard(payload):
     return None
 
 
+def _library_blessed(workspace):
+    """True if the workspace's configured `merge.library_root` is a blessed library (carries the
+    `.photos-library` marker). Merge plan hard-requires it, so the console gates on it too — and an
+    `init-library` that blesses it then flips merge/plan on. Cheap, best-effort (a marker stat)."""
+    try:
+        with open(U.config_path(workspace)) as f:
+            lib = ((json.load(f) or {}).get("merge") or {}).get("library_root")
+    except (OSError, ValueError):
+        return False
+    return bool(lib) and U.is_library(lib)
+
+
 def _runnable_actions(workspace, phases, sealed, busy, initialized=True):
     """Per-command affordance from VISIBLE artifacts (not a deep validation): {cmd: {ok, reason}}.
     Encodes the sequential pipeline (prep → geotag → merge) + plan-exists/executable/staleness, plus
@@ -364,7 +376,13 @@ def _runnable_actions(workspace, phases, sealed, busy, initialized=True):
     g("geotag/finalize", geotag_executed and not geotag_done,
       "finalized already" if geotag_done else "geotag execute must succeed first")
     g("merge/init-library", True)        # one-time setup, runnable anytime (unless sealed/busy)
-    g("merge/plan", geotag_done, "finish geotag (finalize) first")
+    # merge plan needs BOTH geotag finalized AND a blessed library (the phase hard-blocks without the
+    # library — §3 precond 5), so gate on both and name whichever is missing. This makes init-library a
+    # visible enabler of merge/plan instead of letting it be clicked into a runtime "not a blessed
+    # library" failure.
+    library_ok = _library_blessed(workspace)
+    g("merge/plan", geotag_done and library_ok,
+      "finish geotag (finalize) first" if not geotag_done else "bless the library first — run merge init-library")
     g("merge/dry-run", me["plan_exists"], "run merge plan first")
     g("merge/execute", me["executable"], "needs a clean, fresh merge plan")
     return out

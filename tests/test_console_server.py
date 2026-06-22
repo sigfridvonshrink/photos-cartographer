@@ -285,6 +285,24 @@ def test_stale_plan_flagged_and_execute_refused(tmp_path):
 
 # --- per-command affordance (actions): pipeline order, sealed, lock --------
 
+def test_merge_plan_needs_geotag_finalized_and_blessed_library(tmp_path):
+    from cartographer.photos_2_geotag import complete_log_path
+    ws = _init_ws(str(tmp_path))
+    # geotag not finalized yet -> merge/plan blocked on geotag
+    assert "geotag" in server._state(ws)["actions"]["merge/plan"]["reason"]
+    open(complete_log_path(ws), "w").close()                 # geotag finalized
+    # config points library_root at an UNblessed dir -> merge/plan now blocked on the library
+    lib = tmp_path / "lib"; lib.mkdir()
+    cfg = {k: v for k, v in U.default_config().items() if k != "jobs"}
+    cfg["merge"]["library_root"] = str(lib)
+    with open(U.config_path(ws), "w") as f:
+        json.dump(cfg, f)
+    mp = server._state(ws)["actions"]["merge/plan"]
+    assert mp["ok"] is False and "bless the library" in mp["reason"]
+    U.write_library_marker(str(lib))                         # init-library blesses it
+    assert server._state(ws)["actions"]["merge/plan"]["ok"] is True
+
+
 def test_actions_enforce_pipeline_order(tmp_path):
     ws = _init_ws(str(tmp_path))
     a = server._state(ws)["actions"]
