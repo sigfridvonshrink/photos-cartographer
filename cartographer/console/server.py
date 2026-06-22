@@ -326,9 +326,11 @@ def _runnable_actions(workspace, phases, sealed, busy, initialized=True):
         for c in _RUNNABLE:
             g("/".join(c), False, "a run is in progress")
         return out
-    if not initialized:
-        # Uninitialized cwd: prep plan is the only meaningful action (it initializes the workspace).
-        # Everything else stays disabled until the guard sentinel exists.
+    if not initialized and not phases["prep"]["plan_exists"]:
+        # TRULY fresh cwd: no guard sentinel AND no prep plan yet — prep plan is the only meaningful
+        # action. NOTE the guard is written by prep EXECUTE, not plan, so once a plan exists we must
+        # fall through to the normal logic (which enables prep dry-run/execute off the saved plan);
+        # otherwise a freshly-planned-but-not-yet-executed workspace would wrongly stay locked down.
         for c in _RUNNABLE:
             g("/".join(c), c == ("prep", "plan"),
               "initialize the workspace first — run prep plan")

@@ -139,6 +139,19 @@ def test_only_prep_plan_enabled_when_uninitialized(tmp_path):
     assert "initialize" in a["geotag/plan"]["reason"]
 
 
+def test_prep_dryrun_execute_unlock_after_plan_even_without_guard(tmp_path):
+    # Prep `plan` builds a usable plan but does NOT write the guard sentinel (prep `execute` does). So a
+    # freshly-planned-but-not-executed workspace is still "uninitialized" yet must offer prep dry-run /
+    # execute off the saved plan — the short-circuit only applies when there is NO plan.
+    ws = str(tmp_path)
+    assert server._state(ws)["initialized"] is False        # no guard
+    _write_plan(ws, operations=["move"])                    # clean prep plan, no blockers/staleness
+    a = server._state(ws)["actions"]
+    assert a["prep/dry-run"]["ok"] is True
+    assert a["prep/execute"]["ok"] is True                  # not the "initialize first" reason anymore
+    assert "initialize" not in a["prep/execute"]["reason"]
+
+
 def test_prune_quarantine_is_the_only_action_enabled_when_sealed(tmp_path, monkeypatch):
     _init_ws(str(tmp_path))
     monkeypatch.setattr(server.U, "is_sealed", lambda ws: True)
