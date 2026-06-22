@@ -90,6 +90,7 @@ def mock_read_metadata_concurrently(folders, max_workers=4, progress_coordinator
 
 @mock.patch('photos_1_prep.ContentHasher.fingerprint_image', side_effect=mock_hash_image)
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
+@pytest.mark.spec("prep-normalize-extension-case-1", "prep-paired-jpeg-excluded-dedup-1")
 def test_prep_workflow_plan_and_execute(mock_meta, mock_hash_img, tmp_path, monkeypatch):
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
@@ -175,6 +176,7 @@ def test_prep_workflow_plan_and_execute(mock_meta, mock_hash_img, tmp_path, monk
     assert not any("__photos_ingest_tmp_extnorm__" in p for p in db_paths)
     cache_conn.close()
 
+@pytest.mark.spec("prep-deterministic-order-1", "prep-same-names-same-input-1")
 def test_deterministic_temp_names(tmp_path, monkeypatch):
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
@@ -221,6 +223,7 @@ def test_source_changed_after_plan_abort(mock_meta, mock_hash_img, tmp_path, mon
     with pytest.raises(ValueError, match="Precondition failed: size changed"):
         executor.execute(plan, journal_path)
 
+@pytest.mark.spec("prep-forbidden-sidecar-blocks-1")
 def test_sidecar_blocking(tmp_path, monkeypatch):
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
@@ -246,6 +249,7 @@ def test_sidecar_blocking(tmp_path, monkeypatch):
         executor.execute(plan, journal_path)
 
 
+@pytest.mark.spec("prep-unknown-fingerprint-no-dup-1")
 def test_hash_failure_preservation(tmp_path, monkeypatch):
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
@@ -280,6 +284,7 @@ def test_hash_failure_preservation(tmp_path, monkeypatch):
         op_types = [op.type for op in plan.operations]
         assert "quarantine_move" not in op_types
 
+@pytest.mark.spec("struct-symlinks-barred-1")
 def test_symlink_blocking(tmp_path, monkeypatch):
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
@@ -302,6 +307,7 @@ def test_symlink_blocking(tmp_path, monkeypatch):
     assert any("Forbidden symlink detected" in b for b in plan.blockers)
 
 
+@pytest.mark.spec("prep-root-symlink-barred-1", "struct-uninit-exception-1")
 def test_directory_symlink_at_root_blocked_during_init(tmp_path, monkeypatch):
     """A directory symlink at the root of an UNINITIALIZED workspace must be flagged as a forbidden
     symlink at PLAN time, never followed. os.path.isdir() follows a directory symlink, so the old
@@ -381,6 +387,7 @@ def test_symlinked_managed_folder_blocked(tmp_path, monkeypatch):
     assert not any(op.source and "e.jpg" in (op.source or "") for op in plan.operations)
 
 
+@pytest.mark.spec("prep-symlink-managed-blocks-1")
 def test_nested_directory_symlink_in_managed_folder_blocked(tmp_path, monkeypatch):
     """os.walk does not descend into a subdirectory symlink (so it never escapes), but it must still
     be FLAGGED as forbidden rather than silently ignored."""
@@ -475,6 +482,7 @@ def test_plan_is_non_mutating(tmp_path, monkeypatch):
     assert not (cd / "photos-11-handoff.json").exists()         # no handoff (execute-only)
 
 
+@pytest.mark.spec("gpx-prep-defensive-skip-1", "prep-gpx-inside-tree-skip-1")
 def test_gpx_root_inside_managed_tree_is_skipped(tmp_path, monkeypatch, seed_from_live_config):
     """Defensive GPX skip (shared contract §8.2): a gpx_root misconfigured to resolve inside a managed
     folder must be skipped during scanning so the GPX tracks are never organized / swept to strays —
@@ -591,6 +599,7 @@ def _mock_for_plan(monkeypatch):
     photos_ingest.CONFIG["jobs"] = 1
 
 
+@pytest.mark.spec("prep-missing-folder-blocks-1", "struct-no-silent-rebuild-1")
 def test_missing_managed_folder_on_activated_workspace_hard_stops(tmp_path, monkeypatch):
     """An activated workspace (guard present) missing managed 0-6 folder(s) is non-conforming — prep
     hard-stops with a blocker rather than silently recreating them (which could mask lost media)."""

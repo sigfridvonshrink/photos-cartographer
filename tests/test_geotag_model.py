@@ -58,6 +58,7 @@ def _wf(tmp_path, handoff_files):
 
 # --- Stage 2: by-dest file model --------------------------------------------
 
+@pytest.mark.spec("geotag-destination-definition-1")
 def test_file_model_builds_by_dest_photos(tmp_path):
     wf = _wf(tmp_path, [_hfile("6-photos-by-dest/Belgium/Brussels/a.arw", gps=(50.84, 4.35))])
     files = wf.build_file_model()
@@ -71,6 +72,7 @@ def test_file_model_builds_by_dest_photos(tmp_path):
     assert f["planned_filename"] is None
 
 
+@pytest.mark.spec("geotag-inmemory-bydest-only-1", "geotag-never-touch-video-1", "geotag-scope-bydest-only-1")
 def test_file_model_excludes_non_bydest_and_videos(tmp_path):
     wf = _wf(tmp_path, [
         _hfile("6-photos-by-dest/T/a.jpg"),
@@ -185,6 +187,7 @@ def _main(monkeypatch, ws):
         return e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
 
 
+@pytest.mark.spec("geotag-first-artifact-21-1")
 def test_run_known_group_builds_model(tmp_path, monkeypatch, capsys):
     ws = _full_ws(tmp_path, device_groups={"fixed_clock_cameras": ["SONY|ILCE-6400|123"], "phones": []})
     code = _main(monkeypatch, ws)
@@ -195,6 +198,7 @@ def test_run_known_group_builds_model(tmp_path, monkeypatch, capsys):
     assert os.path.exists(ws / ".photos-ingest" / "photos-21-time-decisions.json")
 
 
+@pytest.mark.spec("geotag-incomplete-classification-block-1")
 def test_run_unknown_group_prints_snippet_and_exits(tmp_path, monkeypatch, capsys):
     ws = _full_ws(tmp_path, device_groups={"fixed_clock_cameras": [], "phones": []})
     code = _main(monkeypatch, ws)

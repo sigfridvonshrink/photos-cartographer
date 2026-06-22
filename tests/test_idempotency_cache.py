@@ -79,6 +79,7 @@ def mock_read_metadata_concurrently(folders, max_workers=4, progress_coordinator
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
+@pytest.mark.spec("idem-no-op-run-1", "prep-by-dest-readonly-1", "prep-no-requarantine-1", "prep-report-no-op-facts-1", "prep-reuse-cache-unchanged-1", "prep-second-run-zero-mutations-1", "prep-tolerate-populated-folders-1", "prep-unchanged-no-op-1")
 def test_prep_idempotency_and_by_dest_accounting(mock_meta, tmp_path):
     ws = setup_workspace(tmp_path)
 
@@ -137,7 +138,87 @@ def test_prep_idempotency_and_by_dest_accounting(mock_meta, tmp_path):
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("prep-no-journal-replay-1")
+@pytest.mark.spec("prep-execute-no-rederive-1")
+def test_execute_applies_only_recorded_operations_no_rederive(mock_meta, tmp_path):
+    """§4 (anti): execute applies ONLY the recorded plan operations; it never re-derives the
+    organization from the filesystem. Drop the new_img move op from the saved plan before executing:
+    if execute re-derived it would still move new_img to 2-missing-metadata. Instead new_img stays
+    EXACTLY where it is (0-sources, untouched), while the operations that REMAIN in the plan (the
+    dup_img quarantine) still apply — proving execute is plan-driven, not a fresh derivation."""
+    ws = setup_workspace(tmp_path)
+
+    def mock_hash_image(filepath):
+        import hashlib
+        with open(filepath, "rb") as f:
+            return {"status": "valid", "strategy": "sha256-v1", "value": hashlib.sha256(f.read()).hexdigest()}
+
+    photos_ingest.ContentHasher.fingerprint_image = mock_hash_image
+    photos_ingest.CONFIG["jobs"] = 1
+
+    cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
+    plan1 = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
+    moves = [op for op in plan1.operations
+             if op.type == "move_no_clobber" and "new_img.jpg" in (op.source or "")]
+    assert len(moves) == 1                                       # the op we will REMOVE from the plan
+    before = (ws / "0-sources" / "new_img.jpg").read_bytes()
+    # Drop the new_img move op; keep the rest (dup_img quarantine, by-dest db_upsert).
+    plan1.operations = [op for op in plan1.operations if op not in moves]
+
+    photos_ingest.PlanExecutor(str(ws)).execute(plan1, str(ws / ".photos-ingest/journal.json"))
+
+    # new_img was NOT re-derived/moved — it is byte-identical at its original 0-sources path.
+    assert (ws / "0-sources" / "new_img.jpg").exists()
+    assert (ws / "0-sources" / "new_img.jpg").read_bytes() == before
+    assert not (ws / "2-missing-metadata" / "new_img.jpg").exists()
+    assert not any(p.name == "new_img.jpg"
+                   for p in (ws / "5-photos-by-date").rglob("*"))   # not organized either
+    # the operations that REMAINED in the plan still applied: dup_img was quarantined.
+    assert list((ws / ".photos-ingest-quarantine").rglob("dup_img.jpg"))
+
+
+@mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
+@pytest.mark.spec("prep-path-conflict-bydest-no-clobber-1")
+def test_chronological_destination_collision_allocates_safe_name_no_clobber(mock_meta, tmp_path):
+    """§11.2 (anti): a 0-sources file whose computed chronological destination in 5-photos-by-date
+    collides with an EXISTING path must not clobber. setup_workspace seeds
+    5-photos-by-date/2023-01-01/2023-01-01--12-00-00.jpg = "already_date" and a 0-sources file
+    (new_img, "new_source") that resolves to the same date/name. Prep must (a) plan a
+    move_no_clobber to a suffixed name, never the occupied target, and (b) on execute, land the
+    incoming under the safe -001 name while the colliding original stays byte-unchanged."""
+    ws = setup_workspace(tmp_path)
+
+    def mock_hash_image(filepath):
+        import hashlib
+        with open(filepath, "rb") as f:
+            return {"status": "valid", "strategy": "sha256-v1", "value": hashlib.sha256(f.read()).hexdigest()}
+
+    photos_ingest.ContentHasher.fingerprint_image = mock_hash_image
+    photos_ingest.CONFIG["jobs"] = 1
+
+    occupied = ws / "5-photos-by-date" / "2023-01-01" / "2023-01-01--12-00-00.jpg"
+    assert occupied.read_text() == "already_date"                 # the existing colliding target
+
+    cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
+    plan1 = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
+
+    # The plan moves new_img to a SAFE suffixed name, never onto the occupied path.
+    mv = [op for op in plan1.operations
+          if op.type == "move_no_clobber" and "new_img.jpg" in (op.source or "")]
+    assert len(mv) == 1, [(o.type, o.source, o.destination) for o in plan1.operations]
+    dest = mv[0].destination
+    assert dest.startswith("5-photos-by-date/2023-01-01/2023-01-01--12-00-00-001"), dest
+    assert dest != "5-photos-by-date/2023-01-01/2023-01-01--12-00-00.jpg"   # never the occupied name
+
+    photos_ingest.PlanExecutor(str(ws)).execute(plan1, str(ws / ".photos-ingest/journal.json"))
+
+    # The incoming landed under the safe name with its OWN content; the original is untouched.
+    safe = ws / dest
+    assert safe.exists() and safe.read_text() == "new_source"     # incoming placed safely
+    assert occupied.read_text() == "already_date"                 # colliding original NOT clobbered
+
+
+@mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
+@pytest.mark.spec("prep-filesystem-source-of-truth-1", "prep-no-journal-replay-1", "prep-replan-not-resume-1")
 def test_prep_replans_from_filesystem_when_journal_corrupt_or_deleted(mock_meta, tmp_path):
     """The prep journal is EVIDENCE, not a resume script: prep re-plans from the filesystem (+ cache)
     as truth. After a successful run, corrupting then deleting the journal must NOT change the re-plan
@@ -180,7 +261,62 @@ def test_prep_replans_from_filesystem_when_journal_corrupt_or_deleted(mock_meta,
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("prep-quarantine-restore-normal-1")
+@pytest.mark.spec("prep-evidence-before-quarantine-1")
+def test_quarantine_manifest_written_before_the_file_is_moved(mock_meta, tmp_path):
+    """§14.3: the manifest evidence entry for a quarantined file is written BEFORE the file is moved
+    into quarantine, so a crash never strands a file in quarantine with no record of why. Probe by
+    wrapping both _append_quarantine_manifest and the move primitive _move_no_clobber to log a label
+    in call order; setup_workspace's dup_img is the quarantined file. Assert the manifest append for
+    the run precedes the quarantine move."""
+    ws = setup_workspace(tmp_path)
+
+    def mock_hash_image(filepath):
+        import hashlib
+        with open(filepath, "rb") as f:
+            return {"status": "valid", "strategy": "sha256-v1", "value": hashlib.sha256(f.read()).hexdigest()}
+
+    photos_ingest.ContentHasher.fingerprint_image = mock_hash_image
+    photos_ingest.CONFIG["jobs"] = 1
+
+    cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
+    plan1 = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
+    assert any(op.type == "quarantine_move" and "dup_img" in (op.source or "")
+               for op in plan1.operations), "dup_img must quarantine"
+
+    events = []                                                   # ordered (label, payload) trace
+    orig_manifest = photos_ingest._append_quarantine_manifest
+    orig_move = photos_ingest._move_no_clobber
+
+    def manifest_spy(manifest_dir, entry):
+        events.append(("manifest", entry))
+        return orig_manifest(manifest_dir, entry)
+
+    def move_spy(src, dest):
+        # the quarantine move targets the recoverable quarantine subtree
+        label = "quarantine_move" if ".photos-ingest-quarantine" in dest else "move"
+        events.append((label, dest))
+        return orig_move(src, dest)
+
+    monkeypatch_ctx = pytest.MonkeyPatch()
+    monkeypatch_ctx.setattr(photos_ingest, "_append_quarantine_manifest", manifest_spy)
+    monkeypatch_ctx.setattr(photos_ingest, "_move_no_clobber", move_spy)
+    try:
+        photos_ingest.PlanExecutor(str(ws)).execute(plan1, str(ws / ".photos-ingest/journal.json"))
+    finally:
+        monkeypatch_ctx.undo()
+
+    labels = [e[0] for e in events]
+    assert "manifest" in labels and "quarantine_move" in labels, labels
+    # evidence-before-move: the manifest append precedes the quarantine move for that file
+    assert labels.index("manifest") < labels.index("quarantine_move"), labels
+    # and exactly one quarantine move occurred (dup_img), each preceded by its evidence write
+    assert labels.count("quarantine_move") == 1
+    # the file did land in quarantine (the move actually ran after the evidence)
+    assert list((ws / ".photos-ingest-quarantine").rglob("dup_img.jpg"))
+
+
+@mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
+@pytest.mark.spec("prep-quarantine-restore-normal-1", "prep-restored-requarantine-if-dup-1")
 def test_restored_quarantine_file_reflows_as_a_normal_dump(mock_meta, tmp_path):
     """No un-quarantine path: a file dragged back out of quarantine into 0-sources is re-evaluated as
     an ordinary fresh dump under a NEW plan_id — there is no special 'restore' handling that skips
@@ -297,6 +433,7 @@ def test_prep_execute_cache_writes_only_from_main_thread(mock_meta, tmp_path):
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
+@pytest.mark.spec("prep-handoff-min-contents-1")
 def test_handoff_manifest_generated(mock_meta, tmp_path):
     ws = setup_workspace(tmp_path)
 
@@ -347,6 +484,7 @@ def test_handoff_manifest_generated(mock_meta, tmp_path):
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
+@pytest.mark.spec("prep-block-on-stale-dependency-1", "prep-bydest-precondition-recorded-1", "prep-execute-revalidates-rejects-stale-1", "prep-handoff-only-on-success-1")
 def test_stale_cache_upsert_fails(mock_meta, tmp_path):
     ws = setup_workspace(tmp_path)
 
@@ -514,6 +652,7 @@ def test_stale_already_cached_file_aborts(mock_meta, tmp_path):
     assert (ws / "5-photos-by-date" / "2023-01-01" / "2023-01-01--12-00-00-001.jpg").exists()
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
+@pytest.mark.spec("prep-ghost-prune-1")
 def test_stale_ghost_prune_reappeared_file_aborts_before_cache_remove(mock_meta, tmp_path):
     ws = tmp_path / "workspace"
     ws.mkdir()

@@ -62,11 +62,12 @@ tools/coverage -k merge        # subset (report % will be partial)
 # Decision-editor front-end unit tests (web/app.js pure logic) — Node's built-in runner, no deps.
 tools/jstest                   # node --test over cartographer/editor/tests/*.test.mjs
 
-# Spec-clause coverage. spec/spec-clauses.json is a living INDEX of ~664 spec clauses (one per
+# Spec-clause coverage. spec/spec-clauses.json is a living INDEX of ~609 spec clauses (one per
 # behaviour, each with a spec pointer file+section kept in sync by a test). The GATE applies to the
-# curated `must_cover` subset (the audit's safety set): each must keep >=1 test tagged
-# @pytest.mark.spec("<id>"). Collection-only (fast); exits non-zero if a must-cover clause lost its
-# test. CI runs it. Complements line/branch coverage — it tracks SPEC behaviours, not lines.
+# `must_cover` subset (~497 — every clause a genuine test asserts): each must keep >=1 test tagged
+# @pytest.mark.spec("<id>"). The other clauses carry an `omit_reason` (incidental happy-path / none /
+# crash-injection / cross-cutting principle). Collection-only (fast); exits non-zero if a must-cover
+# clause lost its test. CI runs it. Complements line/branch coverage — tracks SPEC behaviours, not lines.
 tools/spec-coverage            # report + gate; --verbose for the per-clause table
 ```
 

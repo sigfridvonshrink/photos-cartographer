@@ -25,6 +25,7 @@ import os
 
 import photos_1_prep as prep
 import photos_utils as utils
+import pytest
 
 
 def _ws(tmp_path):
@@ -65,6 +66,7 @@ def _plan(ws):
     return prep.WorkspacePrepWorkflow(str(ws), prep.WorkspaceCache(str(ws), in_memory=True)).plan()
 
 
+@pytest.mark.spec("prep-date-name-format-1", "prep-day-subfolder-grouping-1")
 def test_photo_lands_in_day_subfolder(tmp_path, monkeypatch):
     _mock(monkeypatch, lambda f: "2023:07:04 14:30:05")
     ws = _ws(tmp_path)
@@ -74,6 +76,7 @@ def test_photo_lands_in_day_subfolder(tmp_path, monkeypatch):
     assert list((ws / "0-sources").iterdir()) == []
 
 
+@pytest.mark.spec("prep-route-by-class-timestamp-1", "prep-videos-date-organized-1")
 def test_video_lands_in_day_subfolder(tmp_path, monkeypatch):
     _mock(monkeypatch, lambda f: "2023:07:04 14:30:05")
     ws = _ws(tmp_path)
@@ -82,6 +85,7 @@ def test_video_lands_in_day_subfolder(tmp_path, monkeypatch):
     assert (ws / "4-videos-by-date" / "2023-07-04" / "2023-07-04--14-30-05.mp4").exists()
 
 
+@pytest.mark.spec("prep-missing-metadata-flat-1")
 def test_untimestamped_stays_flat_in_missing_metadata(tmp_path, monkeypatch):
     _mock(monkeypatch, lambda f: None)
     ws = _ws(tmp_path)
@@ -90,6 +94,7 @@ def test_untimestamped_stays_flat_in_missing_metadata(tmp_path, monkeypatch):
     assert (ws / "2-missing-metadata" / "UNKN_nodate.jpg").exists()        # flat, no day folder
 
 
+@pytest.mark.spec("prep-collision-resolved-in-memory-1", "prep-suffix-bare-first-lowest-free-1")
 def test_same_day_collides_other_day_does_not(tmp_path, monkeypatch):
     # a.jpg and b.jpg share a timestamp (same day -> collision -> suffix); c.jpg is another day (no
     # collision -> bare), proving the day folder alone separates same-name files across days.
@@ -108,6 +113,7 @@ def test_same_day_collides_other_day_does_not(tmp_path, monkeypatch):
     }, dests
 
 
+@pytest.mark.spec("prep-relocate-misfiled-bydate-1")
 def test_existing_flat_file_is_migrated_into_day_folder(tmp_path, monkeypatch):
     _mock(monkeypatch, lambda f: "2023:07:04 14:30:05")
     ws = _ws(tmp_path)
@@ -122,6 +128,7 @@ def test_existing_flat_file_is_migrated_into_day_folder(tmp_path, monkeypatch):
     assert (ws / "5-photos-by-date" / "2023-07-04" / "2023-07-04--14-30-05.jpg").exists()
 
 
+@pytest.mark.spec("prep-files-in-managed-left-1", "prep-recognize-correct-location-1")
 def test_conforming_file_is_a_noop(tmp_path, monkeypatch):
     _mock(monkeypatch, lambda f: "2023:07:04 14:30:05")
     ws = _ws(tmp_path)

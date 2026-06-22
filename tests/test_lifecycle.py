@@ -77,6 +77,7 @@ def _guard(ws):
 
 # --- initialization ----------------------------------------------------------
 
+@pytest.mark.spec("prep-init-creates-structure-1", "prep-init-moves-base-into-sources-1", "prep-post-init-base-folders-only-1")
 def test_init_creates_structure_and_moves_dump_structure_preserved(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _bare(tmp_path)
@@ -105,6 +106,7 @@ def test_init_creates_structure_and_moves_dump_structure_preserved(tmp_path, mon
     assert not _plan(ws).blockers
 
 
+@pytest.mark.spec("prep-crash-init-reenters-harmlessly-1", "prep-crash-safe-rerun-1", "prep-sentinel-written-last-1")
 def test_guard_written_last_then_reentry_is_clean(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _bare(tmp_path)
@@ -122,6 +124,7 @@ def test_guard_written_last_then_reentry_is_clean(tmp_path, monkeypatch):
 
 # --- root-file block (initialized) -------------------------------------------
 
+@pytest.mark.spec("prep-root-entry-blocks-1", "struct-base-folders-only-1")
 def test_loose_root_file_blocks_initialized(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _initialized(tmp_path)
@@ -149,6 +152,7 @@ def test_dump_in_sources_works_on_initialized(tmp_path, monkeypatch):
 
 # --- no-flatten --------------------------------------------------------------
 
+@pytest.mark.spec("prep-no-flatten-sources-1")
 def test_no_flatten_organizes_subtree_without_consolidation(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _initialized(tmp_path)
@@ -162,6 +166,7 @@ def test_no_flatten_organizes_subtree_without_consolidation(tmp_path, monkeypatc
     assert org and org[0].destination.startswith("5-photos-by-date/"), org
 
 
+@pytest.mark.spec("prep-organized-output-unique-path-1")
 def test_no_flatten_same_name_distinct_subtrees_both_survive(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _initialized(tmp_path)

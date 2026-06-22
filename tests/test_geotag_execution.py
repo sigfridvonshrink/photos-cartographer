@@ -115,6 +115,7 @@ def _summary(ctl):
 
 # --- clean apply -------------------------------------------------------------
 
+@pytest.mark.spec("geotag-write-summary-1")
 def test_clean_execute_applies_and_renames(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)
@@ -126,6 +127,7 @@ def test_clean_execute_applies_and_renames(tmp_path, monkeypatch):
     assert names == ["2024-07-03--14-00-00.arw", "2024-07-03--15-00-00.arw"]
 
 
+@pytest.mark.spec("geotag-postwrite-fingerprint-verify-1")
 def test_content_changed_write_flags_mismatch(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws, content_changed=True)
@@ -137,6 +139,7 @@ def test_content_changed_write_flags_mismatch(tmp_path, monkeypatch):
     assert os.path.exists(ws / "6-photos-by-dest" / "T" / "a.arw")
 
 
+@pytest.mark.spec("geotag-no-partial-persistence-1", "geotag-summary-status-1", "geotag-tool-failure-not-silent-1")
 def test_exiftool_failure_records_failure(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws, write_ok=False)
@@ -148,6 +151,7 @@ def test_exiftool_failure_records_failure(tmp_path, monkeypatch):
 
 # --- resume / idempotency ----------------------------------------------------
 
+@pytest.mark.spec("geotag-rerun-noop-1")
 def test_resume_skips_confirmed_ops(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)
@@ -163,6 +167,7 @@ def test_resume_skips_confirmed_ops(tmp_path, monkeypatch):
 
 # --- reconciliation ----------------------------------------------------------
 
+@pytest.mark.spec("geotag-accept-fingerprint-change-1")
 def test_accept_fingerprint_change_finalizes(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws, content_changed=True)
@@ -188,7 +193,7 @@ def _execute_jobs(monkeypatch, ws, n):
         return e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
 
 
-@pytest.mark.spec("exec-concurrency-no-semantic-change-1")
+@pytest.mark.spec("exec-concurrency-no-semantic-change-1", "geotag-concurrency-determinism-1", "geotag-deterministic-aggregation-1")
 def test_execute_j1_and_jN_produce_identical_summary_and_tree(tmp_path, monkeypatch):
     """Concurrency is a performance knob with NO semantic effect: executing the SAME geotag plan under
     -j1 vs -j4 yields a byte-identical photos-25 summary (modulo the volatile run_metadata, which by
@@ -212,7 +217,7 @@ def test_execute_j1_and_jN_produce_identical_summary_and_tree(tmp_path, monkeypa
     assert t1 == t4 == ["2024-07-03--14-00-00.arw", "2024-07-03--15-00-00.arw"]  # identical tree
 
 
-@pytest.mark.spec("exec-single-writer-journal-1")
+@pytest.mark.spec("exec-single-writer-journal-1", "geotag-single-writer-1")
 def test_journal_writes_only_from_the_main_thread(tmp_path, monkeypatch):
     """Single-writer journal (§8.3): the confirmation journal is persisted ONLY by the main thread —
     worker threads apply per-file ops but never touch the journal. Probe every journal write under -j4
@@ -234,6 +239,29 @@ def test_journal_writes_only_from_the_main_thread(tmp_path, monkeypatch):
     assert all(t == "MainThread" for t in journal_threads), journal_threads
 
 
+@pytest.mark.spec("geotag-artifacts-not-in-bydest-1")
+def test_geotag_writes_no_artifacts_into_by_dest(tmp_path, monkeypatch):
+    """§8.1 (anti): geotag's artifacts (photos-2*.json, plan/summary/journal) live ONLY under
+    .photos-ingest/ — NEVER inside the scanned media tree 6-photos-by-dest. Drive a full plan +
+    execute, then walk 6-photos-by-dest and assert no geotag artifact file landed there."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)                   # _ready_ws ran `plan` twice
+    _mock_tools(monkeypatch, ws)
+    assert _execute(monkeypatch, ws) == 0                        # full execute writes photos-24/25 + journal
+    # the artifacts exist where they belong (control dir), proving the run actually produced them
+    assert (ctl / "photos-24-executable-plan.json").exists()
+    assert (ctl / "photos-25-execution-summary.json").exists()
+    # ...but NONE of them (or any json/photos-* artifact) leaked into the media tree
+    leaked = []
+    for dp, _dn, fns in os.walk(ws / "6-photos-by-dest"):
+        for fn in fns:
+            if fn.startswith("photos-2") or fn.endswith(".json") or "journal" in fn:
+                leaked.append(os.path.join(dp, fn))
+    assert leaked == [], leaked
+    # the only files under by-dest are the renamed media frames
+    names = sorted(os.listdir(ws / "6-photos-by-dest" / "T"))
+    assert names == ["2024-07-03--14-00-00.arw", "2024-07-03--15-00-00.arw"]
+
+
 @pytest.mark.spec("config-merge-readonly-1")
 def test_geotag_leaves_config_byte_identical(tmp_path, monkeypatch):
     """Geotag never writes the workspace config (photos-00-config.json is hand-edited, authoritative).
@@ -249,6 +277,7 @@ def test_geotag_leaves_config_byte_identical(tmp_path, monkeypatch):
 
 # --- stale rejection ---------------------------------------------------------
 
+@pytest.mark.spec("geotag-file-exists-not-executable-1", "geotag-reject-stale-before-mutation-1")
 def test_stale_plan_is_rejected_without_mutation(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)
@@ -259,6 +288,7 @@ def test_stale_plan_is_rejected_without_mutation(tmp_path, monkeypatch):
     assert not (ctl / "photos-25-execution-summary.json").exists()
 
 
+@pytest.mark.spec("geotag-execute-requires-valid-plan-1")
 def test_missing_plan_errors(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     os.remove(ctl / "photos-24-executable-plan.json")
@@ -335,6 +365,7 @@ def _op(oid, typ, rel, **extra):
             "preconditions": extra.pop("pre", {}), **extra}
 
 
+@pytest.mark.spec("geotag-no-mtime-reliance-1", "geotag-resume-rederive-1")
 def test_apply_file_precondition_and_resume_branches(tmp_path, monkeypatch):
     wf = cal.GeotagWorkflow(str(tmp_path))
     p = tmp_path / "f.arw"; p.write_bytes(b"data")
@@ -371,6 +402,7 @@ def test_apply_file_rename_skip_and_failure(tmp_path, monkeypatch):
     assert r["failed"] == ["oR"] and "rename failed" in r["blocker"]
 
 
+@pytest.mark.spec("geotag-filename-change-invalidates-plan-1", "geotag-no-stale-execution-1")
 def test_revalidate_detects_each_stale_input(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     wf = cal.GeotagWorkflow(str(ws)); wf.preflight(for_execute=True)
@@ -397,6 +429,7 @@ def test_corrupt_journal_is_ignored(tmp_path, monkeypatch):
     assert _summary(ctl)["status"] == "success"
 
 
+@pytest.mark.spec("geotag-execute-no-new-rename-1", "geotag-execute-noclobber-recheck-1")
 def test_rename_target_occupied_at_execute_blocks(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)
@@ -408,6 +441,7 @@ def test_rename_target_occupied_at_execute_blocks(tmp_path, monkeypatch):
     assert (ws / "6-photos-by-dest" / "T" / "a.arw").exists()      # not clobbered/renamed
 
 
+@pytest.mark.spec("geotag-skip-satisfied-1")
 def test_apply_file_already_renamed_resumes_without_journal(tmp_path):
     """A crashed prior run that already renamed the file (source gone, planned target present) is
     detected by state and skipped on resume — even with an empty/lost journal — rather than blocking
@@ -440,6 +474,7 @@ def test_execute_on_sealed_workspace_warns_and_blocks(tmp_path, monkeypatch):
     assert _execute(monkeypatch, ws) == 2                             # sealed -> blocked (exit 2)
 
 
+@pytest.mark.spec("geotag-summary-contents-1")
 def test_summary_keeps_run_metadata_separate(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)
@@ -467,6 +502,7 @@ def _mock_zfs(monkeypatch, *, fail=False):
     monkeypatch.setattr(_sp, "run", run)
 
 
+@pytest.mark.spec("geotag-snapshot-phase-label-1")
 def test_execute_records_zfs_snapshot(tmp_path, monkeypatch):
     zfs = {"enabled": True, "snapshots_required": True, "snapshot_prefix": "px-",
            "datasets": {"workspace": "auto"}}
@@ -477,6 +513,7 @@ def test_execute_records_zfs_snapshot(tmp_path, monkeypatch):
     assert s["snapshot"]["ok"] and s["snapshot"]["snapshot_name"] == f"pool/ws@px-geotag-{s['plan_id']}"
 
 
+@pytest.mark.spec("geotag-snapshot-required-abort-1")
 def test_execute_aborts_when_required_snapshot_fails(tmp_path, monkeypatch):
     zfs = {"enabled": True, "snapshots_required": True, "snapshot_prefix": "px-",
            "datasets": {"workspace": "auto"}}
@@ -491,6 +528,56 @@ def test_execute_aborts_when_required_snapshot_fails(tmp_path, monkeypatch):
     assert s["blockers"] and "snapshot failed" in s["blockers"][0]
 
 
+@pytest.mark.spec("geotag-execute-no-recalc-1")
+def test_execute_applies_recorded_plan_verbatim_no_recalc(tmp_path, monkeypatch):
+    """§2 (anti): execute applies the recorded photos-24 plan VERBATIM and never recalculates a
+    decision. Doctor a saved rename target to a value the planner would never derive (re-stamping
+    ONLY the plan's own planned-operation fingerprint so the staleness gate still passes — every
+    actual decision is untouched), then assert execute renames the file to the DOCTORED target, not
+    the local-time name it would have recomputed."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _mock_tools(monkeypatch, ws)
+    pp = ctl / "photos-24-executable-plan.json"
+    plan = json.load(open(pp))
+    doctored = False
+    for dd in plan["destinations"].values():
+        for op in dd["operations"]:
+            if op["type"] == "rename_no_clobber" and op["relative_path"].endswith("/a.arw"):
+                op["to"] = "DOCTORED.arw"
+                doctored = True
+    assert doctored, "expected a planned rename for a.arw to doctor"
+    # Re-stamp ONLY the planned-operation fingerprint (the same flatten revalidate_plan uses) so the
+    # tampered plan is accepted by the staleness gate — proving execute applies what is SAVED, not a
+    # fresh derivation. No other recorded decision is changed.
+    all_ops = [o for d in plan["destinations"].values() for o in d["operations"]]
+    plan["depends_on"]["planned_operation_fingerprint"] = cal.sha256_text(json.dumps(all_ops, sort_keys=True))
+    pp.write_text(json.dumps(plan))
+    assert _execute(monkeypatch, ws) == 0
+    # Applied VERBATIM: the doctored target exists; the name execute WOULD have re-derived does not.
+    assert (ws / "6-photos-by-dest" / "T" / "DOCTORED.arw").exists()
+    assert not (ws / "6-photos-by-dest" / "T" / "2024-07-03--14-00-00.arw").exists()
+    assert _summary(ctl)["status"] == "success"
+
+
+@pytest.mark.spec("geotag-drift-withdrawal-rejects-plan-1")
+def test_execute_rejects_when_drift_validation_changed_after_planning(tmp_path, monkeypatch):
+    """§22a.4 (anti): photos-22 (the GPS-drift confirmation) is a recorded plan dependency, so an
+    execute whose drift artifact changed after planning is rejected before ANY mutation — the drift
+    confirmation can't be withdrawn out from under a saved plan."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _mock_tools(monkeypatch, ws)
+    dvp = ctl / "photos-22-gps-drift-validation.json"
+    assert dvp.exists()                                     # the dependency the plan recorded
+    art = json.load(open(dvp))
+    art["withdrawn_after_planning"] = True                  # mutate the recorded drift dependency
+    dvp.write_text(json.dumps(art))
+    before = sorted(os.listdir(ws / "6-photos-by-dest" / "T"))
+    assert _execute(monkeypatch, ws) == 2                   # rejected as stale
+    assert sorted(os.listdir(ws / "6-photos-by-dest" / "T")) == before   # nothing mutated
+    assert not (ctl / "photos-25-execution-summary.json").exists()       # pre-mutation abort, no summary
+
+
+@pytest.mark.spec("geotag-resume-safe-1")
 def test_resume_after_journal_lost_skips_applied_files(tmp_path, monkeypatch):
     """Crash-resume (§29.1.3): a full execute renames + writes the files; deleting the journal
     (simulating a crash before its flush) and re-executing must detect the already-applied files at
@@ -510,6 +597,7 @@ def test_resume_after_journal_lost_skips_applied_files(tmp_path, monkeypatch):
     assert not s["blockers"] and not s["failures"]                    # not blocked on the renamed files
 
 
+@pytest.mark.spec("geotag-journal-every-op-1")
 def test_journal_persisted_incrementally_during_run(tmp_path, monkeypatch):
     """The journal is flushed per-file as the run proceeds (not only at the end), so a crash mid-run
     leaves a journal that records the already-applied files."""
@@ -528,6 +616,7 @@ def test_journal_persisted_incrementally_during_run(tmp_path, monkeypatch):
     assert len(flushes) >= 2 and flushes == sorted(flushes) and flushes[-1] > flushes[0]
 
 
+@pytest.mark.spec("geotag-artifacts-per-destination-1")
 def test_summary_grouped_by_destination(tmp_path, monkeypatch):
     """photos-24 carries a per-destination operation breakdown (§29.2 item 4) that sums to the global
     totals."""
@@ -542,6 +631,7 @@ def test_summary_grouped_by_destination(tmp_path, monkeypatch):
     assert sum(v["renames"] for v in s["destinations"].values()) == s["totals"]["renames"]
 
 
+@pytest.mark.spec("geotag-handoff-content-fingerprint-1")
 def test_noop_reprep_does_not_restale_plan(tmp_path, monkeypatch):
     """A no-op prep re-run refreshes only the handoff's run_metadata (and its byte layout); geotag
     depends on the handoff CONTENT fingerprint, so the plan must NOT restale — but a real content change

@@ -88,6 +88,7 @@ def test_point_match_offset_sign():
     assert c2["offset_seconds"] == 21
 
 
+@pytest.mark.spec("geotag-anchor-matching-1")
 def test_point_just_past_threshold_then_segment_or_none():
     far = _gpx([_pt(50.0, 4.0, _utc(12, 0, 0)), _pt(50.0, 4.001, _utc(12, 0, 30))])
     # a frame ~111 m from both points (beyond 30 m) but the segment between them is far too ->
@@ -168,6 +169,7 @@ def test_proposal_skips_unmatched_frames():
 WCFG = dict(CFG, gpx_anchor_max_clock_error_seconds=172800.0)   # 2-day window
 
 
+@pytest.mark.spec("geotag-clock-error-window-1")
 def test_window_rejects_same_place_other_year():
     # the SAME spot has a point this trip and one 13 years earlier; the old one would win on distance
     # (a tie at 0 m, listed first) but is out of the window, so the recent point anchors instead.
@@ -186,6 +188,7 @@ def test_window_out_of_window_is_skipped_with_reason():
     assert cal._frame_skip_reason(far, gpx, WCFG) == "no_nearby_track"
 
 
+@pytest.mark.spec("geotag-consensus-cluster-1")
 def test_consensus_majority_beats_closer_minority():
     # three frames agree on +3600; a fourth exact match says 0 -> the crowd wins, the loner conflicts
     gpx = _gpx([_pt(50.0, 4.0, _utc(15, 0, 0)), _pt(51.0, 5.0, _utc(15, 0, 0)),
@@ -237,6 +240,7 @@ def test_cell_multi_anchor_auto_resolves(monkeypatch):
     assert cell["effective_time_anchor"]["source"] == "gpx_anchor_auto"
 
 
+@pytest.mark.spec("geotag-autoresolve-config-gated-1")
 def test_cell_single_anchor_conservative_then_flag(monkeypatch):
     gpx = _gpx([_pt(50.0, 4.0, _utc(12, 0, 0))])
     frames = [_frame(50.0, 4.0, "2024:07:03 14:00:00")]
@@ -246,6 +250,7 @@ def test_cell_single_anchor_conservative_then_flag(monkeypatch):
     assert cell2["requires_user_input"] is False and cell2["decision_mode"] == "auto_resolved"
 
 
+@pytest.mark.spec("geotag-conflict-triggers-review-1")
 def test_cell_conflict_requires_input_even_with_autoapply(monkeypatch):
     gpx = _gpx([_pt(50.0, 4.0, _utc(12, 0, 0)), _pt(51.0, 5.0, _utc(9, 0, 0))])
     frames = [_frame(50.0, 4.0, "2024:07:03 14:00:00"), _frame(51.0, 5.0, "2024:07:03 14:00:00")]
@@ -277,6 +282,7 @@ def test_cell_manual_offset_and_bad_offset(monkeypatch):
     assert blk and bad["effective_time_anchor"] == ""
 
 
+@pytest.mark.spec("geotag-no-proposal-requires-input-1")
 def test_cell_no_anchor_is_manual_required(monkeypatch):
     cell, _ = _cell({}, [], _gpx([]))
     assert cell["proposal"] == {"proposal_source": "manual_required"} and cell["requires_user_input"]
@@ -365,6 +371,7 @@ def _tzcell(prior_ud, *, tz, rep_naive, frames=None, date=None):
     return cell, blockers
 
 
+@pytest.mark.spec("geotag-tz-derived-offset-calc-1")
 def test_timezone_naive_offset_is_dst_aware():
     assert cal._timezone_naive_offset("2024:07:03 14:00:00", "Europe/Brussels")[0] == -7200   # summer +2
     assert cal._timezone_naive_offset("2024:01:03 14:00:00", "Europe/Brussels")[0] == -3600   # winter +1
@@ -375,6 +382,7 @@ def test_timezone_naive_offset_is_dst_aware():
         assert cal._timezone_naive_offset(*bad) is None
 
 
+@pytest.mark.spec("geotag-bucket-proposal-priority-1", "geotag-timezone-derived-confirmable-1")
 def test_cell_timezone_derived_when_no_anchor():
     cell, _ = _tzcell({}, tz="Europe/Brussels", rep_naive="2024:07:03 14:00:00")
     p = cell["proposal"]
