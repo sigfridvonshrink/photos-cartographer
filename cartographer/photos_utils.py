@@ -1377,9 +1377,14 @@ class ContentHasher:
 
 
 class PersistentExifToolWorker:
+    _instances = []
+    _lock = threading.Lock()
+
     def __init__(self):
         self.closed = False
         self._start_process()
+        with PersistentExifToolWorker._lock:
+            PersistentExifToolWorker._instances.append(self)
 
     def _start_process(self):
         # Defense-in-depth: phase preflights already hard-require exiftool, but a raw Popen of a
@@ -1396,23 +1401,49 @@ class PersistentExifToolWorker:
         )
 
     def restart(self):
-        self.close()
+        self.close(remove=False)        # keep our slot in _instances across the restart
         self._start_process()
         self.closed = False
 
-    def close(self):
+    def close(self, remove=True):
         if not self.closed:
+            # Graceful stop, but the child may already be dead (an interrupted run). Keep the write/flush
+            # ISOLATED from the close: if a shared try caught the broken-pipe flush it would SKIP the
+            # close, leaving the TextIOWrapper to flush again at GC during interpreter shutdown and print
+            # "Exception ignored ... BrokenPipeError". So always close BOTH pipes (stdin and stdout) in
+            # their own try, regardless of the flush outcome.
             try:
                 self.process.stdin.write("-stay_open\nFalse\n")
                 self.process.stdin.flush()
-                self.process.stdin.close()
             except Exception:
                 pass
+            for stream in (self.process.stdin, self.process.stdout):
+                try:
+                    stream.close()
+                except Exception:
+                    pass
             try:
                 self.process.wait(timeout=2)
             except Exception:
                 self.process.kill()
             self.closed = True
+        if remove:
+            with PersistentExifToolWorker._lock:
+                if self in PersistentExifToolWorker._instances:
+                    PersistentExifToolWorker._instances.remove(self)
+
+    @classmethod
+    def cleanup_all(cls):
+        """Close every live worker at interpreter exit (registered via atexit, like the magick pool).
+        Without this, a run interrupted mid-scan (Ctrl-C) leaves exiftool `-stay_open` children whose
+        stdin pipes flush on GC during shutdown, printing 'Exception ignored ... BrokenPipeError'."""
+        with cls._lock:
+            instances = list(cls._instances)
+        for w in instances:
+            try:
+                w.close()
+            except Exception:
+                pass
 
     def read_metadata(self, folder_path: str) -> Dict[str, Any]:
         if self.closed:
@@ -1460,6 +1491,27 @@ class PersistentExifToolWorker:
         except json.JSONDecodeError:
             pass
         return {}
+
+
+atexit.register(PersistentExifToolWorker.cleanup_all)
+
+
+def kill_active_children():
+    """Force-kill every live persistent worker subprocess (exiftool + magick). Used to INTERRUPT a
+    running job from the console: a phase thread blocked on a worker read returns at once, so a pending
+    async KeyboardInterrupt can fire and the phase unwinds exactly like a terminal Ctrl-C. Best-effort
+    and idempotent; each worker's own close()/atexit cleanup still runs afterwards."""
+    for cls in (PersistentExifToolWorker, PersistentMagickWorker):
+        try:
+            with cls._lock:
+                insts = list(cls._instances)
+        except Exception:
+            insts = []
+        for w in insts:
+            try:
+                w.process.kill()
+            except Exception:
+                pass
 
 
 import threading
@@ -2255,12 +2307,37 @@ class _FlockLock:
         return True
 
     def read_owner(self):
-        """Best-effort read of the lock file's recorded owner identity (or None)."""
+        """Best-effort read of the lock file's recorded owner identity (or None). Reflects the LAST
+        holder — `release()` never clears it — so a non-None result does NOT mean the lock is currently
+        held. Use it only on a *failed* acquire (where the holder is provably live). For a liveness
+        question ("is anyone holding this right now?") use `held_owner`."""
         try:
             with open(self.lock_path, 'r') as f:
                 return json.loads(f.read() or "null")
         except Exception:
             return None
+
+    def held_owner(self):
+        """Owner identity ONLY if the lock is actually held by a live process right now, else None.
+        Probes with a non-blocking flock on a *separate* fd: if we can take it, nobody holds it (the
+        owner file is stale from a finished/interrupted run) — we release immediately and report None.
+        If the flock fails the lock is genuinely held, so we return the recorded owner. Read-only: the
+        momentary probe never disturbs a real holder (it keeps its own fd) and mutates nothing. This is
+        the check a monitor (e.g. the console) wants — `read_owner` alone misreports a stale file as
+        locked."""
+        try:
+            fd = os.open(self.lock_path, os.O_RDWR)   # no O_CREAT: a missing file means never-locked
+        except OSError:
+            return None
+        try:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError:
+                return self.read_owner()              # contended -> a live process holds it
+            fcntl.flock(fd, fcntl.LOCK_UN)            # we took it -> it was free; let go, report None
+            return None
+        finally:
+            os.close(fd)
 
     def release(self):
         """Releases the lock. Does NOT delete the file to avoid inode race conditions."""

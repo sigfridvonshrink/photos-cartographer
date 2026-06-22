@@ -26,6 +26,7 @@ const GATE_WARN = {
 let currentPhase = "prep";
 let planId = null;         // plan_id being reviewed in the gate
 let gatePhase = "prep";    // the phase the open gate is for (tab could change underneath)
+let currentJobLabel = null;// label of the running job (e.g. "prep execute"), for the Stop confirm
 
 // --- log + progress rendering --------------------------------------------
 function addLog(e) {
@@ -84,7 +85,22 @@ function applySnapshot(s) {
   setIdleIfEmpty();
 }
 
+// --- live connection + server-down detection ------------------------------
+// EventSource silently auto-reconnects, so a stopped server would otherwise look like a frozen page.
+// Surface it: on error we start a short grace timer (ride out transient blips / tunnel hiccups); if the
+// stream hasn't reopened by then, show the "server connection lost" dialog with Retry / Close.
+let downTimer = null;
+function showDown() { $("#down-overlay").hidden = false; }
+function hideDown() { $("#down-overlay").hidden = true; }
+$("#down-retry").onclick = () => location.reload();
+$("#down-close").onclick = () => { window.close(); hideDown(); /* if close is blocked, just dismiss */ };
+
 const es = new EventSource("/api/events");
+es.onopen = () => { clearTimeout(downTimer); downTimer = null; hideDown(); };
+es.onerror = () => {
+  // readyState CLOSED = terminal; CONNECTING = auto-retrying. Either way, confirm with a grace window.
+  if (downTimer === null) downTimer = setTimeout(showDown, 4000);
+};
 es.onmessage = (ev) => {
   let m;
   try { m = JSON.parse(ev.data); } catch { return; }
@@ -137,8 +153,11 @@ async function refreshState() {
   $("#workspace").textContent = s.workspace || "";
   $("#init-banner").hidden = s.initialized !== false;   // show only when explicitly uninitialized
   const running = s.job && s.job.state === "running";
+  currentJobLabel = (s.job && s.job.label) || null;
+  $("#stop-btn").hidden = !running;                      // Stop is offered only while a job runs
   const lock = $("#lock");
-  lock.textContent = running ? `● running: ${s.job.label}` : "● idle";
+  lock.textContent = running ? `● running: ${s.job.label}`
+    : (s.job && s.job.state === "cancelled") ? `● cancelled: ${s.job.label}` : "● idle";
   lock.style.color = running ? "var(--accent)" : "var(--muted)";
 
   if (s.sealed) { lock.textContent = "● sealed"; lock.style.color = "var(--muted)"; }
@@ -170,6 +189,25 @@ function pollWhileRunning() {
     if (running) pollWhileRunning();
   }, 1200);
 }
+
+async function stopRun() {
+  // Stop = interrupt the running job (Ctrl-C equivalent). A mutating execute is confirmed first; the
+  // run is journalled/idempotent so an interrupt leaves nothing partially applied — safe to rerun.
+  const isExec = (currentJobLabel || "").endsWith("execute");
+  if (isExec && !confirm(
+        "Interrupt this execute? It mutates originals, but the run is journalled and resumable — "
+        + "nothing is left partially applied, and you can rerun to finish.")) return;
+  try {
+    await fetch("/api/cancel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirm: isExec }),
+    });
+  } catch { /* state poll will reflect reality */ }
+  await refreshState();
+  pollWhileRunning();
+}
+$("#stop-btn").onclick = stopRun;
 
 async function trigger(command) {
   try {

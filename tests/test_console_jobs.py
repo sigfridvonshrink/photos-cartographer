@@ -58,3 +58,48 @@ def test_single_slot_rejects_concurrent_start():
     assert r.start("second", lambda: None) is False   # rejected while one is in flight
     release.append(1)
     _wait(r)
+
+
+def test_cancel_is_noop_when_idle():
+    r = JobRunner()
+    assert r.cancel() is False                         # nothing running -> nothing to interrupt
+
+
+def test_cancel_interrupts_a_running_job_via_keyboardinterrupt():
+    # A job that does NOT special-case Ctrl-C surfaces the interrupt as KeyboardInterrupt.
+    r = JobRunner()
+    import threading
+    started = threading.Event()
+    def loop():
+        started.set()
+        while True:
+            time.sleep(0.02)
+    assert r.start("prep plan", loop) is True
+    assert started.wait(2)
+    assert r.cancel() is True
+    st = _wait(r)
+    assert st["state"] == "cancelled"
+
+
+def test_cancel_marks_cancelled_even_when_phase_exits_130():
+    # Real phases catch KeyboardInterrupt and sys.exit(130); the cancel flag (not the code) is what
+    # tells the runner it was an interrupt rather than a genuine failure.
+    r = JobRunner()
+    import threading
+    started = threading.Event()
+    def phase_like():
+        started.set()
+        try:
+            while True:
+                time.sleep(0.02)
+        except KeyboardInterrupt:
+            sys.exit(130)
+    assert r.start("geotag execute", phase_like) is True
+    assert started.wait(2)
+    assert r.cancel() is True
+    st = _wait(r)
+    assert st["state"] == "cancelled" and st["exit"] == 130
+    # an UNcancelled sys.exit(130) is still a failure (not mislabelled cancelled)
+    r2 = JobRunner()
+    r2.start("x", lambda: sys.exit(130))
+    assert _wait(r2)["state"] == "failed"
