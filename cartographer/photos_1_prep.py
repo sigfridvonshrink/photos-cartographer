@@ -2544,6 +2544,24 @@ def add_arguments(parser):
     parser.set_defaults(_run=run, _parser=parser)
 
 
+def _prep_nothing_to_do(workspace_root, reporter) -> bool:
+    """True (after logging a friendly notice) when this workspace is already prepped — initialized
+    (guard present) and `0-sources` holds no files, the empty steady end-state (shared contract §6).
+    Both `dry-run` and `execute` use this to stop fast (exit 0) instead of replaying a now-stale saved
+    plan, whose moves were already applied and would otherwise collide with the files they produced
+    (the confusing case-insensitive-clobber error). Returns False — and logs nothing — otherwise."""
+    from .photos_utils import guard_path, folder_name
+    src = os.path.join(workspace_root, folder_name('sources'))
+    if not os.path.exists(guard_path(workspace_root)):
+        return False
+    if os.path.isdir(src) and any(fs for _dp, _dn, fs in os.walk(src) if fs):
+        return False
+    name = folder_name('sources')
+    reporter.log(f"Nothing to do: {name} is empty — this workspace is already prepped. "
+                 f"Add media to {name} and re-run `prep plan` to ingest more.", stream="stdout")
+    return True
+
+
 def run(args):
     CONFIG["jobs"] = getattr(args, "jobs", 4)
 
@@ -2641,6 +2659,10 @@ def run(args):
             if not os.path.exists(pp):
                 reporter.error(f"No {PREP_PLAN_ARTIFACT} found — run `plan` first.")
                 sys.exit(2)
+            # Same fast, friendly stop as execute: an already-prepped workspace with an empty 0-sources
+            # has nothing to validate — the saved plan is stale (its moves are already applied).
+            if _prep_nothing_to_do(workspace_root, reporter):
+                sys.exit(0)
             with open(pp, "r") as f:
                 plan_data = json.load(f)
             plan = Plan.from_dict(plan_data)
@@ -2682,24 +2704,14 @@ def run(args):
             reporter.log(f"  Full plan: {pp}", stream="stdout")
 
         elif args.command == "execute":
-            from .photos_utils import prep_plan_path, PREP_PLAN_ARTIFACT, guard_path, folder_name
+            from .photos_utils import prep_plan_path, PREP_PLAN_ARTIFACT
             pp = prep_plan_path(workspace_root)
             if not os.path.exists(pp):
                 reporter.error(f"No {PREP_PLAN_ARTIFACT} found — run `plan` first.")
                 sys.exit(2)
-            # Fast, friendly stop for an already-prepped workspace. A saved plan exists, but an empty
-            # 0-sources is the normal steady end-state (shared contract §6) — there is nothing to
-            # ingest. That plan was built against the PRE-execute filesystem; replaying it now would
-            # just collide with the files it already moved (the confusing "case-insensitive clobber"
-            # error). So if this workspace is initialized (a prior prep execute wrote the guard) and
-            # 0-sources holds no files, say "nothing to do" and stop — add media + re-`plan` to ingest.
-            _src = os.path.join(workspace_root, folder_name('sources'))
-            _src_has_files = os.path.isdir(_src) and any(fs for _dp, _dn, fs in os.walk(_src) if fs)
-            if os.path.exists(guard_path(workspace_root)) and not _src_has_files:
-                _src_name = folder_name('sources')
-                reporter.log(f"Nothing to do: {_src_name} is empty — this workspace is already prepped. "
-                             f"Add media to {_src_name} and run `prep plan` before `execute`.",
-                             stream="stdout")
+            # Fast, friendly stop on an already-prepped workspace (empty 0-sources) — shared with
+            # dry-run, gated on a plan existing so a missing plan still takes the "run plan first" path.
+            if _prep_nothing_to_do(workspace_root, reporter):
                 sys.exit(0)
             with open(pp, "r") as f:
                 plan_data = json.load(f)
