@@ -176,6 +176,33 @@ def test_plan_placed_new(tmp_path, monkeypatch):
     assert f["preconditions"]["content_fingerprint"] == "A"
 
 
+@pytest.mark.spec("merge-only-no-reorganize-1")
+def test_plan_reuses_handoff_fingerprint_never_refingerprints_by_dest(tmp_path, monkeypatch):
+    """§2.1 (anti): merge reuses prep's recorded content_fingerprint for each by-dest file and never
+    re-fingerprints / re-organizes / re-dedups by-dest content. The handoff records fp "HANDOFF_ONLY"
+    while the on-disk by-dest bytes are unrelated — if merge recomputed the by-dest fingerprint the
+    plan's precondition would differ. Assert (a) the plan's per-file content_fingerprint is the
+    handoff's recorded value verbatim, and (b) the by-dest file is NEVER passed to the (only)
+    fingerprint seam — only library collision targets ever are, and here the library is empty."""
+    ws, lib, fp = _build_ws(tmp_path, [{"fp": "HANDOFF_ONLY", "dest": "Trip", "final_name": "a.jpg"}])
+    fingerprinted = []
+    fake = merge.MergeWorkflow._fingerprint_library_file  # the fake the helper would install...
+
+    def spy(self, abs_path):
+        fingerprinted.append(abs_path)
+        return fake(self, abs_path)
+    _patch_fp(monkeypatch, fp)                              # installs the empty-library fake
+    inner = merge.MergeWorkflow._fingerprint_library_file
+    monkeypatch.setattr(merge.MergeWorkflow, "_fingerprint_library_file",
+                        lambda self, p: fingerprinted.append(p) or inner(self, p))
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    [f] = _files(_plan_of(ws))
+    # (a) the plan carries prep's recorded fingerprint verbatim — not a recompute of the by-dest bytes.
+    assert f["preconditions"]["content_fingerprint"] == "HANDOFF_ONLY"
+    # (b) no by-dest file was ever fingerprinted (only library collision targets are, and lib is empty).
+    assert not any("6-photos-by-dest" in p for p in fingerprinted), fingerprinted
+
+
 @pytest.mark.spec("merge-same-content-already-present-remove-source-1")
 def test_plan_already_present(tmp_path, monkeypatch):
     # Library already holds identical content at the target -> already_present (remove source, no write).

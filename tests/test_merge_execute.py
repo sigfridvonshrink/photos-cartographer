@@ -202,6 +202,25 @@ def test_execute_occupied_by_different_content_at_execute_blocks_no_clobber(tmp_
     assert s["failures"]
 
 
+@pytest.mark.spec("merge-nongoal-no-jpg-tif-breakout-1")
+def test_merge_never_performs_jpg_tif_development_breakout(tmp_path):
+    """§14 item 7 (anti): the jpg/tif development breakout is a later library-side processing phase,
+    NOT merge's job. test_dev_subfolder_blocks proves a PRE-EXISTING dev subfolder blocks the run;
+    this proves merge never CREATES one itself. A plain by-dest photo is placed FLAT under its
+    destination (Trip/a.jpg) — merge spawns no `jpg/` or `tif/` development subfolder anywhere in the
+    library, and does no such content reorganization."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    # The photo landed FLAT at its destination, not broken out into a development subfolder.
+    assert open(os.path.join(str(lib), "Trip", "a.jpg"), "rb").read() == _fp_bytes("A")
+    assert not os.path.exists(os.path.join(str(lib), "Trip", "jpg", "a.jpg"))
+    assert not os.path.exists(os.path.join(str(lib), "Trip", "tif"))
+    # No `jpg`/`tif` development subfolder was created ANYWHERE in the library tree.
+    for dp, dns, _fns in os.walk(str(lib)):
+        assert "jpg" not in dns and "tif" not in dns, (dp, dns)
+
+
 @pytest.mark.spec("merge-no-mutate-by-dest-content-or-name-1")
 def test_merge_never_mutates_by_dest_name_or_content_only_library_renames(tmp_path):
     """§2.4 (anti): merge never mutates by-dest content or a file's name; ONLY a library collision

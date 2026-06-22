@@ -179,6 +179,28 @@ def test_window_rejects_same_place_other_year():
     assert c is not None and c["offset_seconds"] == -7200        # 2024 point, not a ~13-year "offset"
 
 
+@pytest.mark.spec("geotag-window-tz-independent-1")
+def test_clock_error_window_is_timezone_independent():
+    """§19.1: the clock-error matching window reads the frame's naive time AS UTC; the destination
+    timezone is never used to bound matching. The matcher takes no timezone, and decorating the frame
+    + cfg with a destination timezone leaves the match identical. Discriminating: the window is tight
+    (3h) so if the naive time were re-read through a destination tz (Tokyo +9 / Honolulu -10, hours
+    off) the GPX point would fall outside the window and the match would vanish — it does not."""
+    import inspect
+    tight = dict(CFG, gpx_anchor_max_clock_error_seconds=10800.0)        # 3h window
+    gpx_pts = [_pt(50.0, 4.0, _utc(12, 0, 0))]
+    # frame naive 14:00 read as UTC is 2h from the 12:00Z point -> inside the 3h window.
+    tokyo = dict(_frame(50.0, 4.0, "2024:07:03 14:00:00"), destination_timezone="Asia/Tokyo")
+    honolulu = dict(_frame(50.0, 4.0, "2024:07:03 14:00:00"), destination_timezone="Pacific/Honolulu")
+    c_tok = cal.match_frame_to_gpx(tokyo, _gpx(list(gpx_pts)), dict(tight, default_folder_timezone="Asia/Tokyo"))
+    c_hon = cal.match_frame_to_gpx(honolulu, _gpx(list(gpx_pts)), dict(tight, default_folder_timezone="Pacific/Honolulu"))
+    assert c_tok is not None and c_hon == c_tok                          # same match regardless of dest tz
+    assert c_tok["offset_seconds"] == -7200                              # 12:00Z - 14:00 naive, no tz shift
+    # the matcher's signature carries no timezone parameter at all
+    params = inspect.signature(cal.match_frame_to_gpx).parameters
+    assert "tz" not in params and "timezone" not in params
+
+
 def test_window_out_of_window_is_skipped_with_reason():
     gpx = _gpx([_pt(50.0, 4.0, datetime(2011, 7, 3, 12, 0, 0, tzinfo=timezone.utc))])   # only the old point
     frame = _frame(50.0, 4.0, "2024:07:03 14:00:00")

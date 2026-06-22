@@ -203,6 +203,33 @@ def test_handoff_content_fingerprint_stable_across_real_noop_rerun(tmp_path, mon
     assert h2["run_metadata"]["execution_id"] != h1["run_metadata"]["execution_id"]   # the run DID change
 
 
+@pytest.mark.spec("prep-handoff-non-editable-1")
+def test_handoff_is_rewritten_fresh_each_run_never_edited_in_place(tmp_path, monkeypatch):
+    """§16: the handoff is written deterministically and NEVER edited in place — each successful run
+    rewrites it wholesale. Inject a sentinel key into the on-disk handoff, then re-run prep: a
+    non-editable rewrite drops the sentinel entirely (it is regenerated, not merged/appended), and the
+    fresh write is reflected by a new run_metadata.execution_id."""
+    _mock(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    _run(ws)
+    h1 = _handoff(ws)
+    exec1 = h1["run_metadata"]["execution_id"]
+
+    # Operator/tool tampers with the handoff on disk between runs.
+    tampered = {**h1, "INJECTED_SENTINEL": "should-not-survive"}
+    with open(utils.handoff_path(str(ws)), "w") as f:
+        json.dump(tampered, f)
+
+    _run(ws)                                                         # a second (no-op) prep run
+    h2 = _handoff(ws)
+    # Rewritten fresh, not edited in place: the injected key is gone, and the run id advanced.
+    assert "INJECTED_SENTINEL" not in h2
+    assert h2["run_metadata"]["execution_id"] != exec1
+    # The deterministic content is unchanged (no-op), proving a clean regeneration of the same state.
+    assert h2["content_fingerprint"] == h1["content_fingerprint"]
+
+
 def test_handoff_roundtrip_assertion_catches_unstable_fingerprint(tmp_path, monkeypatch):
     """If the just-written handoff would NOT re-read to the same content_fingerprint (a non-round-trip-
     stable field crept in), prep fails loudly rather than shipping a forever-stale handoff (§16)."""
