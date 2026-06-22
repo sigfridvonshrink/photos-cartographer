@@ -2545,17 +2545,28 @@ def add_arguments(parser):
 
 
 def _prep_nothing_to_do(workspace_root, reporter) -> bool:
-    """True (after logging a friendly notice) when this workspace is already prepped — initialized
-    (guard present) and `0-sources` holds no files, the empty steady end-state (shared contract §6).
-    Both `dry-run` and `execute` use this to stop fast (exit 0) instead of replaying a now-stale saved
-    plan, whose moves were already applied and would otherwise collide with the files they produced
-    (the confusing case-insensitive-clobber error). Returns False — and logs nothing — otherwise."""
-    from .photos_utils import guard_path, folder_name
+    """True (after logging a friendly notice) when this workspace is already prepped AND there is
+    genuinely nothing to apply — initialized (guard present), `0-sources` empty (the steady end-state,
+    shared contract §6), AND no pending by-date→by-dest move the handoff hasn't recorded yet. Both
+    `dry-run` and `execute` use this to stop fast (exit 0) instead of replaying a now-stale saved plan
+    (which would clobber the files it already moved). Returns False — logging nothing — otherwise.
+
+    The by-dest check is essential: after the user moves photos into `6-photos-by-dest`, `0-sources` is
+    empty but prep MUST still re-run to record the move and refresh the handoff (geotag refuses until it
+    does). Treating that as "nothing to do" would wedge the mandatory re-prep."""
+    from .photos_utils import guard_path, folder_name, handoff_path, by_dest_reprep_pending
     src = os.path.join(workspace_root, folder_name('sources'))
     if not os.path.exists(guard_path(workspace_root)):
         return False
     if os.path.isdir(src) and any(fs for _dp, _dn, fs in os.walk(src) if fs):
         return False
+    try:
+        with open(handoff_path(workspace_root)) as f:
+            _handoff = json.load(f)
+    except (OSError, ValueError):
+        _handoff = {}
+    if by_dest_reprep_pending(workspace_root, _handoff) is not None:
+        return False                    # a by-dest move still needs recording — not nothing-to-do
     name = folder_name('sources')
     reporter.log(f"Nothing to do: {name} is empty — this workspace is already prepped. "
                  f"Add media to {name} and re-run `prep plan` to ingest more.", stream="stdout")
