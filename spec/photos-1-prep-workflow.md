@@ -480,7 +480,11 @@ The plan is written to the **canonical control-directory path `photos-10-prep-pl
 
 ### 14.3 Execute
 
-`execute` reads the saved `photos-10-prep-plan.json` from the canonical control-dir path (no flag; if absent, it stops and directs the operator to run `plan` first) and applies the validated plan. It must:
+`execute` reads the saved `photos-10-prep-plan.json` from the canonical control-dir path (no flag; if absent, it stops and directs the operator to run `plan` first) and applies the validated plan.
+
+As a friendly fast-path, when a saved plan **is** present but the workspace is already **initialized** (sentinel present) and `0-sources/` holds **no files** — the normal empty steady end-state of an already-prepped workspace (Section 18) — there is nothing to ingest. Execute then stops immediately with a *nothing to do* notice and exits cleanly (success), rather than replaying the now-stale saved plan, whose moves were already applied and would otherwise collide with the files they produced (a confusing case-insensitive-clobber error). The notice directs the operator to add media to `0-sources/` and re-`plan` before executing. (This check is gated on a plan existing — a *missing* plan still takes the "run `plan` first" path above; and it is the gentle special case of the stale-plan rejection in item 2 below, which still applies when `0-sources/` is non-empty but the plan no longer matches the filesystem.)
+
+It must:
 
 1. run under the workspace lock, which is already held — acquired once at process startup and held for the whole run (shared contract `photos-shared-contract.md` Section 2); this step does not re-acquire or re-verify it. Detect whether the workspace is initialized via the root sentinel `photos-00-workspace-guard`: on an **initialized** workspace the sentinel is present; on an **uninitialized** workspace this is an **init run** (Section 7.1) — there is no sentinel yet, the planned operations include creating the control directory and the full `0`–`6` structure and moving the base dump into `0-sources/`, and the sentinel is written at the very end (step 11);
 2. revalidate every recorded dependency and per-file precondition; reject the plan before any mutation if stale, missing, or unverifiable, or if the plan was produced by a different tool/version/schema;

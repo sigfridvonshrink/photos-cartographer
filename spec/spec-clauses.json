@@ -4356,6 +4356,20 @@
       "test": "tests/test_cli.py::test_execute_without_saved_plan_exits_nonzero"
     },
     {
+      "id": "prep-execute-empty-sources-nothing-to-do-1",
+      "area": "prep",
+      "criticality": "low",
+      "anti": false,
+      "title": "execute on an initialized workspace with an empty 0-sources stops fast with 'nothing to do' instead of replaying a stale plan",
+      "spec": {
+        "file": "photos-1-prep-workflow.md",
+        "section": "14.3"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_lifecycle.py::test_execute_on_prepped_workspace_with_empty_sources_is_nothing_to_do"
+    },
+    {
       "id": "prep-execute-no-rederive-1",
       "area": "prep",
       "criticality": "high",

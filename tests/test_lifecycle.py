@@ -20,6 +20,7 @@ metadata, fast. photos_1_prep / photos_utils come from conftest.py.
 """
 import glob
 import os
+import types
 
 import pytest
 
@@ -148,6 +149,75 @@ def test_dump_in_sources_works_on_initialized(tmp_path, monkeypatch):
     (ws / "0-sources" / "a.jpg").write_bytes(b"img")
     plan = _plan(ws)
     assert not plan.blockers, plan.blockers
+
+
+# --- re-execute on an already-prepped workspace ------------------------------
+
+def _stale_plan(ws):
+    (ws / ".photos-ingest" / "photos-10-prep-plan.json").write_text(
+        '{"plan_id": "stale", "command": "prep", "operations": []}')
+
+
+@pytest.mark.spec("prep-execute-empty-sources-nothing-to-do-1")
+def test_execute_on_prepped_workspace_with_empty_sources_is_nothing_to_do(tmp_path, monkeypatch):
+    # After a successful prep, 0-sources is the empty steady end-state (shared contract §6). With a
+    # (now-stale) saved plan present, re-running execute must stop fast with "nothing to do" rather
+    # than replaying it into a case-insensitive clobber error — and NOT reach the executor.
+    prep.CONFIG["zfs"] = {"enabled": False}
+    ws = _initialized(tmp_path)                                 # guard present, 0-sources empty
+    _stale_plan(ws)                                             # a plan lingers, as after the first run
+    ran = []
+    monkeypatch.setattr(prep.PlanExecutor, "execute", lambda self, *a, **k: ran.append(1))
+    monkeypatch.chdir(ws)
+    from cartographer.reporting import Reporter, CaptureSink, use_reporter
+    cap = CaptureSink()
+    args = types.SimpleNamespace(command="execute", jobs=1)
+    with use_reporter(Reporter([cap])):
+        with pytest.raises(SystemExit) as ei:
+            prep.run(args)
+    assert ei.value.code == 0 and ran == []                    # nothing to do = clean success, no execute
+    src = utils.folder_name("sources")                          # message uses the CONFIGURED name
+    assert any("Nothing to do" in e.msg and f"{src} is empty" in e.msg for e in cap.logs())
+
+
+def test_execute_with_media_in_sources_does_not_short_circuit(tmp_path, monkeypatch):
+    # The fast-stop must NOT fire when 0-sources holds files — there is real work, so execute proceeds
+    # past the guard into the executor (stubbed here) and emits no "nothing to do".
+    prep.CONFIG["zfs"] = {"enabled": False}
+    ws = _initialized(tmp_path)
+    (ws / "0-sources" / "new.jpg").write_bytes(b"img")          # pending media
+    _stale_plan(ws)
+    ran = []
+    monkeypatch.setattr(prep.Plan, "from_dict", staticmethod(lambda d: object()))
+    monkeypatch.setattr(prep.PlanExecutor, "execute", lambda self, *a, **k: ran.append(1))
+    monkeypatch.chdir(ws)
+    from cartographer.reporting import Reporter, CaptureSink, use_reporter
+    cap = CaptureSink()
+    args = types.SimpleNamespace(command="execute", jobs=1)
+    with use_reporter(Reporter([cap])):
+        try:
+            prep.run(args)
+        except SystemExit:
+            pass
+    assert ran == [1]                                           # reached the executor (guard skipped)
+    assert not any("Nothing to do" in e.msg for e in cap.logs())
+
+
+def test_execute_without_plan_runs_plan_first_even_on_empty_sources(tmp_path, monkeypatch):
+    # No saved plan: the "run plan first" stop still wins (the fast-stop is gated on a plan existing),
+    # preserving the existing contract.
+    prep.CONFIG["zfs"] = {"enabled": False}
+    ws = _initialized(tmp_path)                                 # initialized, empty 0-sources, NO plan
+    monkeypatch.chdir(ws)
+    from cartographer.reporting import Reporter, CaptureSink, use_reporter
+    cap = CaptureSink()
+    args = types.SimpleNamespace(command="execute", jobs=1)
+    with use_reporter(Reporter([cap])):
+        with pytest.raises(SystemExit) as ei:
+            prep.run(args)
+    assert ei.value.code == 2
+    assert any("run `plan` first" in e.msg for e in cap.logs())
+    assert not any("Nothing to do" in e.msg for e in cap.logs())
 
 
 # --- no-flatten --------------------------------------------------------------
