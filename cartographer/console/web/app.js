@@ -28,12 +28,23 @@ let planId = null;         // plan_id being reviewed in the gate
 let gatePhase = "prep";    // the phase the open gate is for (tab could change underneath)
 let currentJobLabel = null;// label of the running job (e.g. "prep execute"), for the Stop confirm
 let jobsSeeded = false;    // seed the Jobs (-j) box from the server default exactly once
+let cpuCount = 256;        // server machine's CPU count = the Jobs box upper bound (set from state)
 
 // Current Jobs (-j) value to attach to a run, or undefined to let the phase use its own default.
 function jobsValue() {
   const v = parseInt($("#jobs-input").value, 10);
   return Number.isFinite(v) && v >= 1 ? v : undefined;
 }
+
+// Mouse wheel over the Jobs box nudges the count, bounded [1, CPU count]. preventDefault so the page
+// doesn't scroll while adjusting.
+$(".jobs-box").addEventListener("wheel", (e) => {
+  e.preventDefault();
+  const input = $("#jobs-input");
+  const cur = parseInt(input.value, 10) || cpuCount;
+  const next = Math.min(cpuCount, Math.max(1, cur + (e.deltaY < 0 ? 1 : -1)));
+  input.value = next;
+}, { passive: false });
 
 // --- log + progress rendering --------------------------------------------
 function addLog(e) {
@@ -159,6 +170,8 @@ async function refreshState() {
   try { s = await (await fetch("/api/state")).json(); } catch { return false; }
   $("#workspace").textContent = s.workspace || "";
   // Seed the Jobs (-j) box once from the server's default (cpu_count-1); never clobber a user edit.
+  // Record the CPU count as the upper bound (input max + wheel clamp).
+  if (s.cpu_count) { cpuCount = s.cpu_count; $("#jobs-input").max = cpuCount; }
   if (!jobsSeeded && s.default_jobs) { $("#jobs-input").value = s.default_jobs; jobsSeeded = true; }
   $("#init-banner").hidden = s.initialized !== false;   // show only when explicitly uninitialized
   const running = s.job && s.job.state === "running";
