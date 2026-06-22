@@ -2359,6 +2359,11 @@ class WorkspacePrepWorkflow:
             EXTRACTION_OPTIONS_FINGERPRINT
         )
 
+        # Close the final planning phase ("building duplicate groups") opened above — without this its
+        # progress task never gets a FINISH event, so a live observer (the console) would leave the row
+        # stuck on screen with a count of 0.
+        self.coordinator.finish_phase()
+
         return Plan(
             plan_version=PLAN_SCHEMA_VERSION,
             plan_id=plan_id_for_quarantine,

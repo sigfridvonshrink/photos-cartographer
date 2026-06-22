@@ -173,6 +173,38 @@ def test_websink_snapshot_has_recent_log_and_live_progress():
     assert all(e["label"] != "hashing" for e in w.snapshot()["progress"])
 
 
+def test_websink_clear_progress_finishes_open_tasks():
+    # A phase that opened a progress task but never finished it (or an interrupted run) leaves a live
+    # task. clear_progress() must emit a FINISH for it (so subscribers drop the row) and forget it,
+    # while leaving the log history intact.
+    w = WebSink()
+    q, _ = w.subscribe()
+    w.handle(LogEvent("scanning"))
+    w.handle(ProgressEvent("t1", "building duplicate groups", START, 0, 0))   # opened, never finished
+    assert any(e["label"] == "building duplicate groups" for e in w.snapshot()["progress"])
+
+    w.clear_progress()
+    # live progress is now empty...
+    assert w.snapshot()["progress"] == []
+    # ...and a FINISH for the open task was broadcast to the subscriber
+    msgs = []
+    try:
+        while True:
+            msgs.append(q.get_nowait())
+    except _queue.Empty:
+        pass
+    fin = [m for m in msgs if m["kind"] == "progress" and m["task_id"] == "t1" and m["state"] == FINISH]
+    assert len(fin) == 1
+    # the log history survives
+    assert any(m["kind"] == "log" and m["msg"] == "scanning" for m in msgs)
+
+
+def test_websink_clear_progress_noop_when_empty():
+    w = WebSink()
+    w.clear_progress()                       # nothing open -> no error, nothing to finish
+    assert w.snapshot()["progress"] == []
+
+
 def test_websink_drops_oldest_when_subscriber_queue_full():
     w = WebSink(queue_max=2)
     q, _ = w.subscribe()
