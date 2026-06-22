@@ -42,14 +42,14 @@ index can't silently drift from the specs.
 | | Count |
 |---|---:|
 | Clauses indexed | 609 |
-| **`must_cover` (CI-gated)** | **497** |
-| Omitted (tracked, not gated) | 112 |
+| **`must_cover` (CI-gated)** | **515** |
+| Omitted (tracked, not gated) | 94 |
 
 `must_cover` is the gated subset — every clause a genuine test asserts; each must keep a test tagged
-`@pytest.mark.spec("<id>")`, enforced in CI by `tools/spec-coverage`. Gated clauses by area: prep 151,
-shared 125, geotag 139, merge 82.
+`@pytest.mark.spec("<id>")`, enforced in CI by `tools/spec-coverage`. Gated clauses by area: prep 161,
+shared 128, geotag 142, merge 84.
 
-The 112 omitted clauses each carry an `omit_reason`: **73** are `incidental` (exercised by happy-path
+The 94 omitted clauses each carry an `omit_reason`: **55** are `incidental` (exercised by happy-path
 tests but with no dedicated assertion) and **39** are `none`. Only **8** omitted clauses are
 HIGH-criticality, each for a documented reason — crash-injection atomicity (out of scope; see the
 audit doc §4), cross-cutting principles asserted only in aggregate, flock lock-takeover (OS-released,

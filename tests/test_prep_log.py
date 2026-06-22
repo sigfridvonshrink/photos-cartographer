@@ -156,6 +156,51 @@ def test_prep_log_is_complete_and_standalone_without_geotag_or_merge(tmp_path, m
     assert all(s.get("run") for s in entry["journey"])                # every step attributed to its run
 
 
+@pytest.mark.spec("prep-no-parse-nonconforming-name-1")
+def test_nonconforming_name_is_ignored_timestamp_comes_from_metadata(tmp_path, monkeypatch):
+    """§8: prep never parses meaning from a non-conforming filename — it re-ingests the file and takes
+    the timestamp from metadata. A file whose name MISLEADINGLY encodes 2099 but whose EXIF
+    DateTimeOriginal is 2023:01:02 must be organized under the EXIF date (2023-01-02), with a
+    provisional name derived from metadata — the bogus '2099' in the name is never honoured."""
+    _install(monkeypatch)                                            # meta -> DateTimeOriginal 2023:01:02 03:04:05
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "IMG_20991231_2359.jpg").write_bytes(b"AAAA")   # name lies about the date
+    _run(ws)
+    entry = next(iter(_log(ws)["photos"].values()))
+    # Date + provisional name come from EXIF metadata, not the filename.
+    assert entry["final_path"] == "5-photos-by-date/2023-01-02/2023-01-02--03-04-05.jpg"
+    assert "2099" not in entry["final_path"]                        # the misleading name was not parsed
+
+
+@pytest.mark.spec("prep-log-derived-no-new-authority-1")
+def test_prep_log_entries_are_derived_from_the_validated_plan(tmp_path, monkeypatch):
+    """§16.1 item 4: the prep log is DERIVED from the validated plan + journals and introduces no new
+    authority — its facts trace back to plan operations. Assert the logged final destination equals a
+    destination the plan actually planned, and the extension-normalization step's 'from' name matches
+    the plan's rename source — the log records nothing the plan/journal did not establish."""
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "IMG.JPG").write_bytes(b"AAAA")             # uppercase ext -> a rename op
+    cache = prep.WorkspaceCache(str(ws))
+    plan = prep.WorkspacePrepWorkflow(str(ws), cache).plan()
+    cache.close()
+    prep.PlanExecutor(str(ws)).execute(plan)
+
+    op_dests = {op.destination for op in plan.operations if op.destination}
+    op_srcs = {op.source for op in plan.operations if op.source}
+    planned_names = {os.path.basename(p) for p in op_dests | op_srcs}
+    entry = next(iter(_log(ws)["photos"].values()))
+    # The log's terminal location is one the plan actually planned — not a fact the log invented.
+    assert entry["final_path"] in op_dests, (entry["final_path"], sorted(op_dests))
+    # The extension-normalization step's 'from' name is the plan's rename source — derived, not new.
+    norm = [s for s in entry["journey"] if s["action"] == "extension_normalized"]
+    assert norm and norm[0]["from"] == "IMG.JPG"
+    assert "IMG.JPG" in planned_names, sorted(planned_names)
+    # The provisional rename's target filename is the basename of a path the plan planned.
+    prov = [s for s in entry["journey"] if s["action"] == "provisional_rename"]
+    assert prov and os.path.basename(prov[0]["to"]) in planned_names, (prov, sorted(planned_names))
+
+
 def test_strays_and_other_not_logged(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)

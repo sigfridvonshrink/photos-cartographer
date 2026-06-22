@@ -101,6 +101,28 @@ def test_journals_are_per_run_and_retained(tmp_path, monkeypatch):
     assert os.path.exists(utils.journal_path(str(ws), p2.plan_id))
 
 
+@pytest.mark.spec("prep-sole-config-writer-1")
+def test_prep_seeds_config_once_then_never_rewrites_it(tmp_path, monkeypatch):
+    """§3.2: prep is the SOLE writer of photos-00-config.json and only SEEDS it once — it never edits
+    it thereafter. After the first run seeds the config, a second prep run leaves the on-disk
+    photos-00-config.json byte-for-byte identical (no rewrite, no reformat, no fingerprint churn)."""
+    _mock(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_text("aaa")
+    prep.CONFIG["jobs"] = 1
+    cfg_p = ws / ".photos-ingest" / "photos-00-config.json"
+
+    p1 = prep.WorkspacePrepWorkflow(str(ws), prep.WorkspaceCache(str(ws))).plan()
+    prep.PlanExecutor(str(ws)).execute(p1)
+    assert cfg_p.exists()                                            # seeded on the first run
+    after_seed = cfg_p.read_bytes()
+
+    (ws / "0-sources" / "b.jpg").write_text("bbb")                  # genuine new work for the 2nd run
+    p2 = prep.WorkspacePrepWorkflow(str(ws), prep.WorkspaceCache(str(ws))).plan()
+    prep.PlanExecutor(str(ws)).execute(p2)
+    assert cfg_p.read_bytes() == after_seed                         # config never rewritten after seeding
+
+
 def test_backup_existing_artifact_uses_incremental_suffix(tmp_path):
     """The shared backup primitive (used by every phase's canonical plan/decision save) renames a
     pre-existing artifact aside under the `-NNN` suffix and never clobbers it."""

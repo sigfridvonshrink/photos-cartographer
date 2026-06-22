@@ -615,6 +615,97 @@ def test_missing_managed_folder_on_activated_workspace_hard_stops(tmp_path, monk
                for b in plan.blockers), plan.blockers
 
 
+@pytest.mark.spec("prep-empty-sources-not-missing-1")
+def test_empty_sources_is_steady_end_state_not_a_missing_folder_block(tmp_path, monkeypatch):
+    """§6.2 (item 7, final clause): an EMPTY 0-sources is the normal steady end-state (Section 18),
+    NOT a missing-folder condition. On an initialized workspace whose 0-sources is present but empty
+    (every managed folder intact), prep plans cleanly — zero operations, and crucially NO
+    'non-conforming'/'missing folder' blocker naming 0-sources. (Distinct from
+    test_missing_managed_folder..., which DELETES folders; here 0-sources exists and is just empty.)"""
+    _mock_for_plan(monkeypatch)
+    ws = _empty_initialized_ws(tmp_path)                              # all 0-6 present; 0-sources empty
+    assert list((ws / "0-sources").iterdir()) == []                  # genuinely empty inbox
+    cache = photos_ingest.WorkspaceCache(str(ws), in_memory=True)
+    plan = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
+    cache.close()
+    assert plan.blockers == [], plan.blockers                        # emptiness never blocks
+    assert not any("missing" in b.lower() or "non-conforming" in b.lower() for b in plan.blockers)
+    assert not any("0-sources" in b for b in plan.blockers)
+    assert len(plan.operations) == 0                                 # nothing to do — a clean no-op
+
+
+@pytest.mark.spec("prep-blockers-reported-not-skipped-1")
+def test_a_blocker_is_reported_textually_and_never_silently_skipped(tmp_path, monkeypatch):
+    """§6.2 final line ('Blockers are reported textually; the workflow does not silently skip them').
+    With a forbidden sidecar present alongside a perfectly organizable photo, prep must (a) SURFACE the
+    blocker as descriptive text in plan.blockers and (b) refuse the whole run at execute — it never
+    silently drops the blocker and proceeds to organize the valid photo. Asserts the never-skip
+    principle itself, not merely that some blocker string appears."""
+    _mock_for_plan(monkeypatch)
+    ws = _empty_initialized_ws(tmp_path)
+    (ws / "0-sources" / "good.jpg").write_bytes(b"img")              # would organize on its own
+    (ws / "0-sources" / "good.xmp").touch()                         # forbidden sidecar -> hard block
+    cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
+    plan = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
+    # (a) reported textually — a descriptive, non-empty message, not a silently-dropped condition.
+    assert plan.blockers and any("sidecar" in b.lower() for b in plan.blockers), plan.blockers
+    assert all(isinstance(b, str) and b.strip() for b in plan.blockers)
+    # (b) never silently skipped: the run is refused wholesale; the otherwise-valid photo is NOT moved.
+    with pytest.raises(ValueError, match="Plan contains blockers and cannot be executed"):
+        photos_ingest.PlanExecutor(str(ws)).execute(plan, str(ws / ".photos-ingest/journal.json"))
+    assert (ws / "0-sources" / "good.jpg").exists()                 # untouched — blocker not skipped past
+    assert not any(p.suffix == ".jpg" for p in (ws / "5-photos-by-date").rglob("*"))
+
+
+@pytest.mark.spec("prep-init-excludes-managed-from-move-1")
+def test_init_move_excludes_managed_folders_and_control_dirs(tmp_path, monkeypatch):
+    """§3.1: init's base-dump consolidation moves genuine root dumps into 0-sources but EXCLUDES the
+    managed 0-6 folders and the control/dot directories (.photos-ingest, .git). A real root dump file
+    IS moved (proving the init move ran), while a pre-existing managed folder (with media already in
+    it) and a .git dir are NEVER relocated beneath 0-sources. (The reserved-names test covers a dump
+    dir NAMED like a managed folder; this covers actually-present managed + control dirs.)"""
+    _mock_for_plan(monkeypatch)
+    ws = tmp_path / "ws"; ws.mkdir(); (ws / ".photos-ingest").mkdir()      # uninitialized -> init run
+    (ws / "dump.jpg").write_bytes(b"D")                                    # a genuine root dump
+    managed = ws / "5-photos-by-date"; managed.mkdir()                     # a present managed folder...
+    (managed / "old.jpg").write_bytes(b"O")                               # ...with media already inside
+    (ws / ".git").mkdir(); (ws / ".git" / "HEAD").write_bytes(b"ref")     # a control/dot dir
+
+    cache = photos_ingest.WorkspaceCache(str(ws), in_memory=True)
+    plan = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
+    cache.close()
+
+    # The genuine root dump IS consolidated into 0-sources (the init move fired).
+    assert any(op.type == "move_no_clobber" and op.source == "dump.jpg"
+               and op.destination == "0-sources/dump.jpg" for op in plan.operations), \
+        [(o.type, o.source, o.destination) for o in plan.operations]
+    # ...but no managed folder or control dir is moved beneath 0-sources.
+    assert not any((op.destination or "").startswith("0-sources/5-photos-by-date")
+                   for op in plan.operations)
+    assert not any((op.destination or "").startswith("0-sources/.git") for op in plan.operations)
+    assert not any((op.source or "").split("/")[0] in ("5-photos-by-date", ".git")
+                   and op.reason and "Initialize" in op.reason for op in plan.operations)
+
+
+@pytest.mark.spec("prep-no-renormalize-extensions-1")
+def test_already_lowercase_extension_gets_no_rename_op(tmp_path, monkeypatch):
+    """§13 item 3: prep does not re-normalize an already-normalized extension. A file already named
+    with a lowercase `.jpg` must produce NO extension-normalization rename op (no two-step temp
+    rename, no rename_no_clobber on it) — distinct from the idempotency rerun, which asserts the whole
+    plan is empty rather than isolating the extension non-renaming."""
+    _mock_for_plan(monkeypatch)
+    ws = _empty_initialized_ws(tmp_path)
+    (ws / "0-sources" / "already.jpg").write_bytes(b"img")           # extension already normalized
+    cache = photos_ingest.WorkspaceCache(str(ws), in_memory=True)
+    plan = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
+    cache.close()
+    # No extension-normalization machinery touched it: no temp-extnorm op, no rename of already.jpg.
+    assert not any("__photos_ingest_tmp_extnorm__" in (op.destination or "")
+                   for op in plan.operations), [op.destination for op in plan.operations]
+    assert not any(op.type == "rename_no_clobber" and "already.jpg" in (op.source or "")
+                   for op in plan.operations), [(o.type, o.source) for o in plan.operations]
+
+
 def test_missing_folder_during_init_is_exempt(tmp_path, monkeypatch):
     """An uninitialized workspace (no guard) is exempt — prep's first run CREATES the 0-6 structure."""
     _mock_for_plan(monkeypatch)

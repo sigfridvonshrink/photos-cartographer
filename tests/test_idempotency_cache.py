@@ -138,6 +138,71 @@ def test_prep_idempotency_and_by_dest_accounting(mock_meta, tmp_path):
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
+@pytest.mark.spec("prep-cache-update-from-validated-plan-1")
+def test_cache_rows_written_during_execution_not_planning(mock_meta, tmp_path):
+    """§10: cache updates derive from the validated plan and apply during EXECUTION, never
+    speculatively during planning. With a fresh (empty) cache, planning derives db_upsert operations
+    but writes NO file_cache rows; only execute applies them. Assert the identity cache is empty right
+    after plan() and populated only after execute()."""
+    ws = setup_workspace(tmp_path)
+
+    def mock_hash_image(filepath):
+        import hashlib
+        with open(filepath, "rb") as f:
+            return {"status": "valid", "strategy": "sha256-v1", "value": hashlib.sha256(f.read()).hexdigest()}
+
+    photos_ingest.ContentHasher.fingerprint_image = mock_hash_image
+    photos_ingest.CONFIG["jobs"] = 1
+
+    cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
+    plan1 = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
+    # The plan DERIVED cache effects (db_upsert ops) but planning applied none of them.
+    assert any(op.type == "db_upsert" for op in plan1.operations)
+    assert cache.get_all_files() == {}, "planning must not write cache rows"
+
+    photos_ingest.PlanExecutor(str(ws)).execute(plan1, str(ws / ".photos-ingest/journal.json"))
+    # Execution applied the validated plan's effects: the cache is now populated.
+    after = photos_ingest.WorkspaceCache(str(ws), in_memory=False).get_all_files()
+    assert after, "execution must apply the validated plan's cache updates"
+
+
+@mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
+@pytest.mark.spec("prep-quarantine-excluded-scan-1")
+def test_quarantine_subtree_is_excluded_from_the_scan(mock_meta, tmp_path):
+    """§15: the quarantine directory is excluded from the scan, so a rerun neither re-organizes nor
+    re-quarantines its contents. A media file sitting under .photos-ingest-quarantine/<id>/ is never
+    inventoried: no operation references it and it never enters the cache, while a real 0-sources
+    photo is organized normally."""
+    ws = tmp_path / "ws"; ws.mkdir()
+    (ws / ".photos-ingest").mkdir(); (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
+    for d in ("0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
+              "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"):
+        (ws / d).mkdir()
+    qfile = ws / ".photos-ingest-quarantine" / "old-run" / "0-sources" / "parked.jpg"
+    qfile.parent.mkdir(parents=True)
+    qfile.write_bytes(b"already_quarantined")
+    (ws / "0-sources" / "new.jpg").write_bytes(b"fresh_dump")
+
+    def mock_hash_image(filepath):
+        import hashlib
+        with open(filepath, "rb") as f:
+            return {"status": "valid", "strategy": "sha256-v1", "value": hashlib.sha256(f.read()).hexdigest()}
+
+    photos_ingest.ContentHasher.fingerprint_image = mock_hash_image
+    photos_ingest.CONFIG["jobs"] = 1
+
+    cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
+    plan = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
+    # The quarantined file is never inventoried: no op touches it, no re-quarantine, no re-organize.
+    assert not any("parked.jpg" in (op.source or "") or "parked.jpg" in (op.destination or "")
+                   for op in plan.operations), [(o.type, o.source, o.destination) for o in plan.operations]
+    photos_ingest.PlanExecutor(str(ws)).execute(plan, str(ws / ".photos-ingest/journal.json"))
+    cached = photos_ingest.WorkspaceCache(str(ws), in_memory=False).get_all_files()
+    assert not any("parked.jpg" in p or ".photos-ingest-quarantine" in p for p in cached), cached
+    assert qfile.read_bytes() == b"already_quarantined"          # left untouched in quarantine
+
+
+@mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
 @pytest.mark.spec("prep-execute-no-rederive-1")
 def test_execute_applies_only_recorded_operations_no_rederive(mock_meta, tmp_path):
     """§4 (anti): execute applies ONLY the recorded plan operations; it never re-derives the

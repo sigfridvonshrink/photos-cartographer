@@ -18,10 +18,13 @@ offset, smartphone native offset, destination-timezone fallback (DST-correct), a
 branches; plus the SQLite cache round-trip and the deterministic fingerprint. From conftest.py.
 """
 import json
+import re
 import sqlite3
 import sys
 
 import pytest
+
+from photos_utils import sha256_file
 
 import photos_2_geotag as cal
 import photos_utils as utils
@@ -291,3 +294,70 @@ def test_run_populates_cache_when_complete(tmp_path, monkeypatch, capsys):
     rows = cache_rows()
     assert rows == [("6-photos-by-dest/B/a.arw", "2024-07-03T12:12:21Z", "camera_group_offset"),
                     ("6-photos-by-dest/B/b.arw", "2024-07-03T12:13:21Z", "camera_group_offset")]
+
+
+@pytest.mark.spec("geotag-utc-not-restaled-by-unrelated-config-1", "config-edit-outside-timepolicy-1")
+def test_unrelated_config_edit_replans_but_does_not_restale_resolved_utc(tmp_path, monkeypatch, capsys):
+    """§22.1 / shared §4.2: a config edit OUTSIDE the time-policy subset re-plans but must NOT restale
+    already-resolved UTC. The resolved-UTC cache fingerprint is built from time-relevant inputs only
+    (photos-21 sha, the camera-time-policy fingerprint, GPX, prep cache, field-set/key versions) — not
+    a whole-config hash. Here we edit `merge.library_root` (a merge-phase key, untouched by geotag) and
+    re-run: photos-21 stays byte-identical and the resolved_utc_cache_fingerprint is unchanged."""
+    MANAGED = ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
+               "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"]
+    ws = tmp_path / "ws"; ws.mkdir()
+    for d in MANAGED:
+        (ws / d).mkdir()
+    ctl = ws / ".photos-ingest"; ctl.mkdir()
+    (ctl / "photos-00-workspace-guard").touch()
+    gpx_dir = tmp_path / "gpx"; gpx_dir.mkdir()
+    (gpx_dir / "t.gpx").write_text(
+        '<gpx xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>'
+        '<trkpt lat="50.8467" lon="4.3525"><time>2024-07-03T12:12:21Z</time></trkpt>'
+        '<trkpt lat="50.8480" lon="4.3540"><time>2024-07-03T12:13:21Z</time></trkpt>'
+        '</trkseg></trk></gpx>')
+    cfg = {k: v for k, v in utils.CONFIG.items() if k != "jobs"}
+    cfg["gpx_root"] = str(gpx_dir)
+    cfg["camera_time_and_timezone_policy"] = dict(
+        cfg["camera_time_and_timezone_policy"], device_groups={"fixed_clock_cameras": [CAM], "phones": []},
+        default_folder_timezone="Europe/Brussels", multi_anchor_auto_apply=True)
+    config_path = ctl / "photos-00-config.json"
+    config_path.write_text(json.dumps(cfg))
+
+    def rec(rel, lat, lon, dto):
+        parsed = {"DateTimeOriginal": dto, "selected_source_naive_timestamp": dto,
+                  "selected_source_timestamp_tag": "DateTimeOriginal", "camera_group_key": CAM,
+                  "has_timestamp": True, "has_native_gps": True, "GPSLatitude": lat, "GPSLongitude": lon}
+        return {"relative_path": rel, "media_class": "image", "folder_class": "6-photos-by-dest",
+                "size": 1, "mtime_ns": 1, "content_hash": json.dumps({"value": "fp" + rel, "status": "valid"}),
+                "metadata_status": {"camera_group_key": CAM, "has_timestamp": True, "has_native_gps": True,
+                                    "field_set_version": 1, "parsed_json": json.dumps(parsed)}}
+    files = [rec("6-photos-by-dest/B/a.arw", 50.8467, 4.3525, "2024:07:03 14:12:08"),
+             rec("6-photos-by-dest/B/b.arw", 50.8480, 4.3540, "2024:07:03 14:13:08")]
+    for f in files:
+        p = ws / f["relative_path"]; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"x")
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"files": files, "cache_fingerprint": "pcf"}))
+
+    def run_fingerprint():
+        monkeypatch.chdir(str(ws))
+        monkeypatch.setattr(sys, "argv", ["photos-2-geotag", "plan"])
+        try:
+            cal.main()
+        except SystemExit as e:
+            assert e.code in (0, None)
+        out = capsys.readouterr().out
+        m = re.search(r"resolved_utc_cache_fingerprint ([0-9a-f]+)", out)
+        assert m, out
+        return m.group(1)
+
+    fp_before = run_fingerprint()
+    tdp = ctl / "photos-21-time-decisions.json"
+    sha_before = sha256_file(str(tdp))
+
+    # Edit a config key well OUTSIDE the time-policy subset (merge-phase only; geotag never reads it).
+    cfg["merge"] = dict(cfg["merge"], library_root="/somewhere/completely/different")
+    config_path.write_text(json.dumps(cfg))
+
+    fp_after = run_fingerprint()
+    assert fp_after == fp_before                          # resolved UTC NOT restaled
+    assert sha256_file(str(tdp)) == sha_before            # photos-21 byte-identical (not restaled)
