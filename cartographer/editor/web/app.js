@@ -196,6 +196,10 @@ function cellStatus(cell) {
   if (cell.requires_user_input) return ["needs", "needs input"];
   if (cell.stale_user_decision) return ["stale", "stale"];
   if (cell.decision_mode === "auto_resolved") return ["auto", "auto"];
+  // The folder fallback is OPTIONAL (requires_user_input is always false), so "resolved" must mean it
+  // actually has an effective value — otherwise an unset fallback wrongly reads as resolved and that
+  // tag propagates to descendants. `effective_fallback` is the field unique to the fallback cell.
+  if ("effective_fallback" in cell) return cell.effective_fallback ? ["ok", "resolved"] : ["none", "none"];
   return ["ok", "resolved"];
 }
 const chip = (k, t) => el("span", { class: `chip ${k}` }, t);
@@ -220,6 +224,7 @@ function statusChip(ref) {
   if (isDirty(ref)) {                          // a pending edit supersedes the last run's status
     if (refInvalid(ref)) return null;          // the ✗ invalid chip (tags) already speaks
     if (wouldResolve(ref)) return chip("ok", "resolved");
+    if (ref.kind === "fallback") return chip("none", "none");  // a cleared/empty working fallback is "none", not the old base status
   }
   const s = cellStatus(baseCell(ref));
   return s ? chip(s[0], s[1]) : null;

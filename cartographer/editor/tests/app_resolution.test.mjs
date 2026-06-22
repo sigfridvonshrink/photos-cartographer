@@ -26,6 +26,9 @@ test("cellStatus maps the system flags", () => {
   assert.deepEqual(app.cellStatus({ decision_mode: "auto_resolved" }), ["auto", "auto"]);
   assert.deepEqual(app.cellStatus({}), ["ok", "resolved"]);
   assert.equal(app.cellStatus(null), null);
+  // The optional folder fallback: "resolved" only with an effective value, else "none" (not resolved).
+  assert.deepEqual(app.cellStatus({ effective_fallback: { lat: 1, lon: 2 } }), ["ok", "resolved"]);
+  assert.deepEqual(app.cellStatus({ effective_fallback: null }), ["none", "none"]);
 });
 
 test("wouldResolve: each of the three offset modes is independently sufficient", () => {
