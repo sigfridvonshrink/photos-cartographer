@@ -173,7 +173,10 @@ async function refreshState() {
   // Record the CPU count as the upper bound (input max + wheel clamp).
   if (s.cpu_count) { cpuCount = s.cpu_count; $("#jobs-input").max = cpuCount; }
   if (!jobsSeeded && s.default_jobs) { $("#jobs-input").value = s.default_jobs; jobsSeeded = true; }
-  $("#init-banner").hidden = s.initialized !== false;   // show only when explicitly uninitialized
+  // Show the "not initialized" banner only for a TRULY fresh workspace: no guard AND no prep plan yet.
+  // Prep plan doesn't write the guard (execute does), so once a plan exists the banner would be stale.
+  const planned = !!(s.phases && s.phases.prep && s.phases.prep.plan_exists);
+  $("#init-banner").hidden = !(s.initialized === false && !planned);
   const running = s.job && s.job.state === "running";
   currentJobLabel = (s.job && s.job.label) || null;
   $("#stop-btn").hidden = !running;                      // Stop is offered only while a job runs
