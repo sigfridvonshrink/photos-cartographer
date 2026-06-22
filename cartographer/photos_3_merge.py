@@ -384,7 +384,7 @@ class MergeWorkflow:
         if unrecorded:
             blockers.append(f"{by_dest} contains {len(unrecorded)} photo(s) the finalized record does "
                             f"not recognize (e.g. {unrecorded[0]}) — the handoff predates the latest "
-                            "move into by-dest. Re-run prep to refresh the handoff — `photos-cartographer prep execute` (run `photos-cartographer prep plan` first only if 0-sources still holds a dump) — then merge.")
+                            f"move into {by_dest}. Re-run prep to refresh the handoff — `photos-cartographer prep execute` (run `photos-cartographer prep plan` first only if {folder_name('sources')} still holds a dump) — then merge.")
 
     # --- plan builder (merge spec §6 mapping, §7 collision, §10.1 plan) -------
 
