@@ -7,7 +7,7 @@ This pipeline mutates irreplaceable originals, so coverage is tracked on **two a
    (`tools/spec-coverage` over `spec/spec-clauses.json`). Line/branch can't tell you whether a
    *must-refuse / no-clobber / leaves-untouched* obligation is actually asserted; this can.
 
-Figures below are a snapshot; regenerate with the commands shown. The suite is **826 tests**.
+Figures below are a snapshot; regenerate with the commands shown. The suite is **863 tests**.
 
 ## Line / branch coverage
 
@@ -17,14 +17,15 @@ same plan/validate/execute core the phases provide, neither of which writes meta
 
 | Component | Line | Branch |
 |---|---:|---:|
-| prep (`photos_1_prep`) | 90.0% | 83.3% |
+| prep (`photos_1_prep`) | 90.1% | 83.6% |
 | geotag (`photos_2_geotag`) | 98.4% | 96.9% |
 | merge (`photos_3_merge`) | 86.4% | 83.6% |
-| shared (`photos_utils`) | 89.4% | 84.7% |
+| shared (`photos_utils`) | 88.8% | 84.7% |
+| reporting (`reporting`) | 93.2% | 71.9% |
 | cli | 87.9% | 75.0% |
-| console server | 57.3% | 46.7% |
+| console server | 57.5% | 47.0% |
 | editor server | 77.8% | 75.0% |
-| **Total** | **88.9%** | **85.0%** |
+| **Total** | **88.9%** | **84.6%** |
 
 Regenerate (branch coverage; report scoped to the production code via `.coveragerc`):
 
@@ -41,12 +42,12 @@ index can't silently drift from the specs.
 
 | | Count |
 |---|---:|
-| Clauses indexed | 609 |
-| **`must_cover` (CI-gated)** | **515** |
+| Clauses indexed | 611 |
+| **`must_cover` (CI-gated)** | **517** |
 | Omitted (tracked, not gated) | 94 |
 
 `must_cover` is the gated subset — every clause a genuine test asserts; each must keep a test tagged
-`@pytest.mark.spec("<id>")`, enforced in CI by `tools/spec-coverage`. Gated clauses by area: prep 161,
+`@pytest.mark.spec("<id>")`, enforced in CI by `tools/spec-coverage`. Gated clauses by area: prep 163,
 shared 128, geotag 142, merge 84.
 
 The 94 omitted clauses each carry an `omit_reason`: **55** are `incidental` (exercised by happy-path
