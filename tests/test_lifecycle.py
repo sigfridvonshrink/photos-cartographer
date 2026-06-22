@@ -267,6 +267,47 @@ def test_execute_with_media_in_sources_does_not_short_circuit(tmp_path, monkeypa
     assert not any("Nothing to do" in e.msg for e in cap.logs())
 
 
+def test_execute_with_pending_by_dest_move_is_not_nothing_to_do(tmp_path, monkeypatch):
+    # Regression: after a by-date->by-dest move, 0-sources is empty BUT the handoff is stale, so prep
+    # must still run to record the move (geotag refuses until it does). The fast-stop must NOT fire.
+    prep.CONFIG["zfs"] = {"enabled": False}
+    ws = _initialized(tmp_path)
+    _stale_plan(ws)
+    (ws / ".photos-ingest" / "photos-11-handoff.json").write_text('{"files": []}')  # records nothing
+    dest = ws / "6-photos-by-dest" / "2026" / "Bruges"
+    dest.mkdir(parents=True)
+    (dest / "shot.jpg").write_bytes(b"img")             # an unrecorded by-dest photo -> move pending
+    ran = []
+    monkeypatch.setattr(prep.Plan, "from_dict", staticmethod(lambda d: object()))
+    monkeypatch.setattr(prep.PlanExecutor, "execute", lambda self, *a, **k: ran.append(1))
+    monkeypatch.chdir(ws)
+    from cartographer.reporting import Reporter, CaptureSink, use_reporter
+    cap = CaptureSink()
+    with use_reporter(Reporter([cap])):
+        try:
+            prep.run(types.SimpleNamespace(command="execute", jobs=1))
+        except SystemExit:
+            pass
+    assert ran == [1]                                   # reached the executor — handoff gets refreshed
+    assert not any("Nothing to do" in e.msg for e in cap.logs())
+
+
+def test_by_dest_reprep_pending_helper(tmp_path):
+    ws = str(tmp_path)
+    os.makedirs(os.path.join(ws, "6-photos-by-dest", "A"))
+    open(os.path.join(ws, "6-photos-by-dest", "A", "p.jpg"), "wb").close()
+    # not recorded -> pending (returns the offender)
+    assert utils.by_dest_reprep_pending(ws, {"files": []}) == "6-photos-by-dest/A/p.jpg"
+    # recorded -> not pending
+    assert utils.by_dest_reprep_pending(
+        ws, {"files": [{"relative_path": "6-photos-by-dest/A/p.jpg", "media_class": "image"}]}) is None
+    # a by-date photo the handoff lists but is gone from disk -> pending
+    assert utils.by_dest_reprep_pending(
+        ws, {"files": [{"relative_path": "6-photos-by-dest/A/p.jpg", "media_class": "image"},
+                       {"relative_path": "5-photos-by-date/2026-01-01/gone.jpg", "media_class": "image"}]}) \
+        == "5-photos-by-date/2026-01-01/gone.jpg"
+
+
 def test_execute_without_plan_runs_plan_first_even_on_empty_sources(tmp_path, monkeypatch):
     # No saved plan: the "run plan first" stop still wins (the fast-stop is gated on a plan existing),
     # preserving the existing contract.

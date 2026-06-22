@@ -1203,21 +1203,16 @@ class GeotagWorkflow:
         return sorted(dev_found), nonphoto
 
     def _check_reprep_gate(self, handoff, by_dest, by_date, blockers):
-        recorded = {f.get("relative_path") for f in (handoff.get("files") or [])}
-        unrecorded = [rel for rel, mc in self._scan_media(by_dest)
-                      if mc in ("image", "raw") and rel not in recorded]
-        missing_bydate = [f["relative_path"] for f in (handoff.get("files") or [])
-                          if (f.get("relative_path") or "").startswith(by_date + "/")
-                          and f.get("media_class") in ("image", "raw")
-                          and not os.path.exists(os.path.join(self.workspace_root, f["relative_path"]))]
-        if unrecorded or missing_bydate:
-            ex = (unrecorded or missing_bydate)[0]
+        # Shared with prep's nothing-to-do guard so the two never disagree on whether a move is pending.
+        from .photos_utils import by_dest_reprep_pending
+        ex = by_dest_reprep_pending(self.workspace_root, handoff)
+        if ex:
             blockers.append(
                 f"{by_dest} contains photos prep has not yet recorded (the handoff predates your most "
-                f"recent move from {by_date} into {by_dest}; e.g. {ex}). Re-run prep to refresh the handoff so it records the moved files: "
-                "`photos-cartographer prep execute` (it re-records the moved files — no re-fingerprint, no re-read — "
-                f"and rewrites the handoff/cache; run `photos-cartographer prep plan` first only if {folder_name('sources')} still "
-                "holds a dump). Then geotag can proceed.")
+                f"recent move from {by_date} into {by_dest}; e.g. {ex}). Re-run prep to record the move "
+                "and refresh the handoff: run `photos-cartographer prep plan` then "
+                "`photos-cartographer prep execute` (the move is recognized stat-only — no re-fingerprint, "
+                "no re-read). Then geotag can proceed.")
 
     # --- Stage 2: in-memory by-dest file model (geotag spec §14) --------
 
