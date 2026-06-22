@@ -193,6 +193,36 @@ def test_take_zfs_snapshot_phase_labels_are_distinct(monkeypatch):
     assert p["snapshot_name"] != c["snapshot_name"] and p["ok"] and c["ok"]
 
 
+def test_take_zfs_snapshot_logs_name_on_success(monkeypatch):
+    # A successful snapshot emits a log line naming it — one place so every phase reports it.
+    from cartographer.reporting import Reporter, CaptureSink, use_reporter
+    monkeypatch.setitem(utils.CONFIG, "zfs", {"enabled": True, "snapshots_required": False,
+                                              "snapshot_prefix": "px-", "datasets": {"workspace": "auto"}})
+    monkeypatch.setattr(utils, "detect_zfs_dataset", lambda p: "pool/ws")
+    monkeypatch.setattr(subprocess, "run",
+                        lambda *a, **k: types.SimpleNamespace(returncode=0, stdout="", stderr=""))
+    cap = CaptureSink()
+    with use_reporter(Reporter([cap])):
+        utils.take_zfs_snapshot("/ws", "PID", "merge")
+    msgs = [e.msg for e in cap.logs()]
+    assert any("ZFS snapshot taken" in m and "pool/ws@px-merge-PID" in m for m in msgs)
+
+
+def test_take_zfs_snapshot_no_log_when_disabled_or_failed(monkeypatch):
+    # No snapshot taken -> no "taken" log line (disabled = None; failure is the caller's to surface).
+    from cartographer.reporting import Reporter, CaptureSink, use_reporter
+    monkeypatch.setitem(utils.CONFIG, "zfs", {"enabled": True, "snapshots_required": False,
+                                              "datasets": {"workspace": "auto"}})
+    monkeypatch.setattr(utils, "detect_zfs_dataset", lambda p: "pool/ws")
+    def boom(*a, **k):
+        raise subprocess.CalledProcessError(1, "zfs", stderr="pool busy")
+    monkeypatch.setattr(subprocess, "run", boom)
+    cap = CaptureSink()
+    with use_reporter(Reporter([cap])):
+        utils.take_zfs_snapshot("/ws", "PID", "prep")
+    assert not any("ZFS snapshot taken" in e.msg for e in cap.logs())
+
+
 def test_take_zfs_snapshot_failure_is_recorded_not_raised(monkeypatch):
     monkeypatch.setitem(utils.CONFIG, "zfs", {"enabled": True, "snapshots_required": True,
                                               "datasets": {"workspace": "auto"}})
