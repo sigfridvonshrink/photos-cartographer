@@ -30,7 +30,10 @@ import sys
 
 SRC_FILES = ["cartographer/photos_1_prep.py", "cartographer/photos_2_geotag.py",
              "cartographer/photos_3_merge.py", "cartographer/photos_utils.py",
-             "cartographer/cli.py"]
+             "cartographer/cli.py",
+             # Web layer: real consumers of shared utils (e.g. plan_dependencies_fresh,
+             # ssh_tunnel_hint) live here, so the sweep sees their production callers.
+             "cartographer/console/server.py", "cartographer/editor/server.py"]
 TESTS_DIR = "tests"
 
 # Names that are legitimately definition-only / entry points, not "test-only production code".

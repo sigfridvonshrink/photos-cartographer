@@ -135,6 +135,7 @@ async function refreshState() {
   let s;
   try { s = await (await fetch("/api/state")).json(); } catch { return false; }
   $("#workspace").textContent = s.workspace || "";
+  $("#init-banner").hidden = s.initialized !== false;   // show only when explicitly uninitialized
   const running = s.job && s.job.state === "running";
   const lock = $("#lock");
   lock.textContent = running ? `● running: ${s.job.label}` : "● idle";

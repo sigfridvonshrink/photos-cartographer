@@ -282,7 +282,7 @@ def _prune_guard(payload):
     return None
 
 
-def _runnable_actions(workspace, phases, sealed, busy):
+def _runnable_actions(workspace, phases, sealed, busy, initialized=True):
     """Per-command affordance from VISIBLE artifacts (not a deep validation): {cmd: {ok, reason}}.
     Encodes the sequential pipeline (prep → geotag → merge) + plan-exists/executable/staleness, plus
     the sealed and run-in-progress global stops. The core still validates in depth and refuses; this
@@ -295,6 +295,13 @@ def _runnable_actions(workspace, phases, sealed, busy):
     if busy:
         for c in _RUNNABLE:
             g("/".join(c), False, "a run is in progress")
+        return out
+    if not initialized:
+        # Uninitialized cwd: prep plan is the only meaningful action (it initializes the workspace).
+        # Everything else stays disabled until the guard sentinel exists.
+        for c in _RUNNABLE:
+            g("/".join(c), c == ("prep", "plan"),
+              "initialize the workspace first — run prep plan")
         return out
     if sealed:
         # A sealed workspace is terminal: everything is refused EXCEPT prune-quarantine, the sole
@@ -335,6 +342,7 @@ def _state(workspace):
     except Exception:
         owner = None
     sealed = bool(U.is_sealed(workspace))
+    initialized = os.path.exists(U.guard_path(workspace))
     cur = _current_fingerprints(workspace)
     phases = {}
     for ph in ("prep", "geotag", "merge"):
@@ -352,11 +360,12 @@ def _state(workspace):
     busy = JOBS.running or bool(owner)
     return {
         "workspace": os.path.abspath(workspace),
+        "initialized": initialized,
         "sealed": sealed,
         "lock_owner": owner,
         "job": JOBS.status(),
         "runnable": sorted("/".join(p) for p in _RUNNABLE),
-        "actions": _runnable_actions(workspace, phases, sealed, busy),
+        "actions": _runnable_actions(workspace, phases, sealed, busy, initialized),
         "phases": phases,
     }
 
@@ -494,11 +503,14 @@ CONSOLE_BLURB = (
 
 
 def serve(workspace, port, host):
-    if not os.path.exists(U.guard_path(workspace)):
-        print(f"{os.path.abspath(workspace)} is not an initialized workspace "
-              f"(no {os.path.basename(U.guard_path(workspace))}). Run `photos-cartographer prep plan` "
-              f"to initialize it first.", file=sys.stderr)
-        return 2
+    initialized = os.path.exists(U.guard_path(workspace))
+    # An uninitialized cwd is allowed: the console opens with only prep/plan enabled (it is prep's own
+    # entry point — see _runnable_actions), so the operator can initialize from the browser. The CLI
+    # still prints a heads-up so launching in the wrong directory is obvious.
+    if not initialized:
+        print(f"note: {os.path.abspath(workspace)} is not initialized yet "
+              f"(no {os.path.basename(U.guard_path(workspace))}). Opening the console — only "
+              f"`prep plan` is enabled; run it to initialize, then the rest unlocks.", file=sys.stderr)
     # The console's active reporter is the WebSink: phase run()s (and the coordinator) emit through
     # get_reporter() to it, and the browser receives the stream over SSE.
     set_reporter(Reporter([WEB]))
