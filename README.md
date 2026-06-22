@@ -222,22 +222,9 @@ its map tiles and place search use OpenStreetMap/Nominatim at runtime and degrad
 
 ## Tests and coverage
 
-The geotag phase — the one that writes time and GPS into irreplaceable originals — is the most heavily tested,
-at **98.4% line / 96.9% branch** coverage. Across the whole codebase the suite covers **88.9% of lines and
-85.0% of branches**; the lighter areas are the two local web servers (the console and the editor), neither of
-which writes metadata into the photos — they are thin affordance layers over the same plan/validate/execute
-core that the heavily-tested phases provide.
-
-| Component | Line | Branch |
-|---|---:|---:|
-| prep (`photos_1_prep`) | 90.0% | 83.3% |
-| geotag (`photos_2_geotag`) | 98.4% | 96.9% |
-| merge (`photos_3_merge`) | 86.4% | 83.6% |
-| shared (`photos_utils`) | 89.4% | 84.7% |
-| cli | 87.9% | 75.0% |
-| console server | 57.3% | 46.7% |
-| editor server | 77.8% | 75.0% |
-| **Total** | **88.9%** | **85.0%** |
+The geotag phase — the one that writes time and GPS into irreplaceable originals — is the most heavily
+tested (98.4% line / 96.9% branch). Coverage is tracked on two axes — line/branch and **spec-clause**
+(which behavioral clauses in `spec/` have a dedicated test) — both reported in **[`COVERAGE.md`](COVERAGE.md)**.
 
 Run the suite from the repository root (`conftest.py` puts the repo root on `sys.path`):
 
@@ -245,7 +232,7 @@ Run the suite from the repository root (`conftest.py` puts the repo root on `sys
 python3 -m pytest -q
 ```
 
-See `CLAUDE.md` for the full build/test/CLI contract and the seeded config defaults.
+See `AGENTS.md` for the full build/test/CLI contract and the seeded config defaults.
 
 ## Why this exists
 

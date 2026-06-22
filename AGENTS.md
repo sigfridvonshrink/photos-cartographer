@@ -1,6 +1,8 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for contributors and coding agents working in this repository: the build/test/CLI contract,
+the seeded config defaults, and the non-negotiable safety rules. The specs in `spec/` remain the
+behavioral source of truth.
 
 ## What this repo is
 
@@ -70,6 +72,9 @@ tools/jstest                   # node --test over cartographer/editor/tests/*.te
 # clause lost its test. CI runs it. Complements line/branch coverage — tracks SPEC behaviours, not lines.
 tools/spec-coverage            # report + gate; --verbose for the per-clause table
 ```
+
+Current coverage figures (line/branch + spec-clause) live in `COVERAGE.md` at the repo root; the
+commands above regenerate them. The clause-by-clause audit is `docs/design/spec-test-coverage-audit.md`.
 
 `tests/conftest.py` imports the package modules once and **aliases them under their historical
 short names** in `sys.modules` (`photos_1_prep` → `cartographer.photos_1_prep`, likewise
