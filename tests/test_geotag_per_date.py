@@ -22,6 +22,7 @@ file's own date bucket. From conftest.py.
 """
 import photos_2_geotag as cal
 import photos_utils as utils
+import pytest
 
 BYDEST = "6-photos-by-dest"
 CAM = "SONY|ILCE-6400|123"
@@ -73,6 +74,7 @@ def test_single_date_keeps_bare_group_key(tmp_path):
     assert "date" not in cells[CAM]
 
 
+@pytest.mark.spec("geotag-offset-per-date-bucket-1")
 def test_multi_date_splits_into_per_day_buckets(tmp_path):
     _tz()
     wf = _wf(tmp_path)
@@ -88,6 +90,7 @@ def test_multi_date_splits_into_per_day_buckets(tmp_path):
     assert winter["proposal"]["proposed_offset_seconds"] == -3600
 
 
+@pytest.mark.spec("geotag-bucket-no-inherit-1")
 def test_per_bucket_manual_decision_is_independent(tmp_path):
     _tz()
     wf = _wf(tmp_path)

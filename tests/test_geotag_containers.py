@@ -26,6 +26,7 @@ Clock OFFSETS, by contrast, do NOT inherit or aggregate (§10.2): a container ex
 import photos_2_geotag as cal
 import photos_utils as utils
 from datetime import datetime, timezone
+import pytest
 
 BYDEST = "6-photos-by-dest"
 CAM = "SONY|ILCE-6400|123"
@@ -60,6 +61,7 @@ def _gfile(rel, dest):
 
 # --- enumeration -------------------------------------------------------------
 
+@pytest.mark.spec("geotag-container-destination-1")
 def test_container_materialized_with_no_offset_cells(tmp_path):
     wf = _wf(tmp_path)
     # CAM lives under Trip/Day1; CAM2 lives two levels down under Trip/Day2/Sub.
@@ -77,6 +79,7 @@ def test_container_materialized_with_no_offset_cells(tmp_path):
     assert set(d[f"{BYDEST}/Trip/Day2/Sub"]["camera_group_time_decisions"]) == {CAM2}
 
 
+@pytest.mark.spec("geotag-container-no-block-1")
 def test_containers_never_block(tmp_path):
     wf = _wf(tmp_path)
     files = [_tfile(f"{BYDEST}/Trip/Day1/a.arw", f"{BYDEST}/Trip/Day1")]
@@ -88,6 +91,7 @@ def test_containers_never_block(tmp_path):
 
 # --- auto-resolve + propagation ----------------------------------------------
 
+@pytest.mark.spec("geotag-timezone-inherit-parentfirst-1")
 def test_container_timezone_autoresolves_from_default(tmp_path):
     utils.CONFIG["camera_time_and_timezone_policy"]["default_folder_timezone"] = "Europe/Brussels"
     wf = _wf(tmp_path)
@@ -103,6 +107,7 @@ def test_container_timezone_autoresolves_from_default(tmp_path):
     assert leaf["requires_user_input"] is False
 
 
+@pytest.mark.spec("geotag-container-no-offset-1", "geotag-offset-no-rollup-1")
 def test_child_offset_decision_is_not_pooled_upward(tmp_path):
     wf = _wf(tmp_path)
     files = [_tfile(f"{BYDEST}/Trip/Day1/a.arw", f"{BYDEST}/Trip/Day1")]

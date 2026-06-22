@@ -27,6 +27,7 @@ def test_photos_1_prep_exists():
 def test_photos_utils_exists():
     assert os.path.exists('cartographer/photos_utils.py')
 
+@pytest.mark.spec("prep-no-geotag-command-1")
 def test_no_geotag_command():
     parser = mock.MagicMock()
     # we just want to ensure that 'geotag' is not mentioned in the argparse setup or the file content as an active command path
@@ -37,12 +38,14 @@ def test_no_geotag_command():
         assert 'add_parser("refresh-library"' not in content
         assert 'add_parser("merge"' not in content
 
+@pytest.mark.spec("prep-no-geotag-json-1")
 def test_no_geotag_json_generation():
     with open('cartographer/photos_1_prep.py', 'r') as f:
         content = f.read()
         assert 'class GeotagGenerator' not in content
         assert 'class GeotagWorkflow' not in content
 
+@pytest.mark.spec("prep-no-time-gps-correction-1")
 def test_prep_plans_contain_no_time_metadata():
     with open('cartographer/photos_1_prep.py', 'r') as f:
         content = f.read()
@@ -55,6 +58,7 @@ def test_by_dest_read_only():
     assert 'class WorkspacePrepWorkflow:' in dir(photos_1_prep) or hasattr(photos_1_prep, 'WorkspacePrepWorkflow')
 
 
+@pytest.mark.spec("prep-allowed-op-types-1")
 def test_execute_rejects_forbidden_operation_types(tmp_path):
     # If we pass an invalid op.type, execution should raise ValueError
     executor = photos_1_prep.PlanExecutor(str(tmp_path))
@@ -144,6 +148,7 @@ def test_by_dest_duplicate_does_not_mutate_behavior():
                 assert op.source == '0-sources/duplicate.jpg'
 
 @mock.patch("photos_1_prep.ContentHasher.fingerprint_image")
+@pytest.mark.spec("prep-bydest-never-quarantined-1")
 def test_by_dest_duplicate_does_not_mutate_behavior_with_hashes(mock_hash_image, tmp_path):
     ws = tmp_path / "workspace"
     ws.mkdir()

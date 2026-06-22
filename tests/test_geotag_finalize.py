@@ -34,6 +34,7 @@ MANAGED = ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
 
 # --- shared write_db_snapshot helper ----------------------------------------
 
+@pytest.mark.spec("db-snapshot-consistent-1", "geotag-finalize-db-snapshot-1")
 def test_write_db_snapshot_is_a_valid_copy(tmp_path):
     src = tmp_path / "live.db"
     conn = sqlite3.connect(str(src))
@@ -54,6 +55,7 @@ def _file(rel, fp, *, native=False, group=CAM):
             "camera_group_key": group, "has_native_gps": native}
 
 
+@pytest.mark.spec("archive-complete-each-phase-1", "geotag-finalize-complete-log-1", "log-decision-provenance-1")
 def test_complete_log_superset_and_geotag_steps():
     prep = {"fpA": {"content_fingerprint": "fpA", "journey": [{"phase": "prep", "action": "organized"}]}}
     files = [_file(f"{BYDEST}/T/a.arw", "fpA", native=True)]
@@ -81,6 +83,7 @@ def test_complete_log_skips_unfingerprinted_and_offsetless():
     assert [s["action"] for s in photos["fpB"]["journey"]] == ["resolved_utc"]   # offset skipped
 
 
+@pytest.mark.spec("geotag-three-gps-origins-1", "log-records-gps-revert-1")
 def test_complete_log_gps_written_and_reverted():
     files = [_file(f"{BYDEST}/T/m.jpg", "fpM"), _file(f"{BYDEST}/T/r.jpg", "fpR")]
     rows = [{"relative_path": f"{BYDEST}/T/m.jpg", "resolved_utc": "2024-07-03T12:00:00Z"},
@@ -178,6 +181,7 @@ def test_finalize_refuses_before_execute(tmp_path, monkeypatch):
     assert not (ctl / "photos-26-complete-log.json").exists()
 
 
+@pytest.mark.spec("geotag-finalize-requires-success-1")
 def test_finalize_refuses_partial_execution(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _to_executed(monkeypatch, ws, ctl)
@@ -195,6 +199,7 @@ def test_finalize_refuses_plan_id_mismatch(tmp_path, monkeypatch):
     assert _run(monkeypatch, ws, "finalize") == 2
 
 
+@pytest.mark.spec("archive-finalize-explicit-1", "archive-finalize-nondestructive-1", "archive-no-cross-phase-write-1", "archive-package-contents-1", "archive-self-describing-manifest-1", "db-durable-artifact-1", "geotag-finalize-manifest-1", "geotag-finalize-nondestructive-1")
 def test_finalize_assembles_package_and_is_nondestructive(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _to_executed(monkeypatch, ws, ctl)
@@ -220,6 +225,40 @@ def test_finalize_assembles_package_and_is_nondestructive(tmp_path, monkeypatch)
     for name, rec in manifest["contents"].items():
         assert rec["sha256"] == utils.sha256_file(str(ctl / name)), name
     assert "photos-26-complete-log.json" in manifest["contents"] and "photos-00-ingest.db" in manifest["contents"]
+
+
+@pytest.mark.spec("geotag-finalize-no-merge-1")
+def test_finalize_bundles_archive_but_performs_no_merge(tmp_path, monkeypatch):
+    """§31 (anti): finalize assembles the archival package (photos-26 complete-log + DB + manifest)
+    but NEVER merges into a library — it produces no merge artifacts and moves no media. Snapshot the
+    by-dest frames, run finalize, assert the package appears, NO merge artifact (photos-31/photos-35)
+    is written, and every by-dest media file is byte-unchanged (finalize moved nothing)."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)                                # renames applied by execute
+    before = {}
+    for dp, _dn, fns in os.walk(ws / BYDEST):
+        for fn in fns:
+            ap = os.path.join(dp, fn)
+            before[os.path.relpath(ap, str(ws / BYDEST))] = open(ap, "rb").read()
+    assert before, "expected media frames staged under by-dest"
+
+    assert _run(monkeypatch, ws, "finalize") == 0
+    # the archival package was assembled (geotag's own terminal artifact)
+    assert (ctl / "photos-26-complete-log.json").exists()
+    assert (ctl / "photos-26-archive-manifest.json").exists()
+    # ...but NO merge artifacts of any kind were produced by finalize
+    for n in ("photos-31-merge-summary.json", "photos-30-merge-plan.json",
+              "photos-35-merge-log.json", "photos-35-merge-ingest.db",
+              "photos-35-archive-manifest.json", "photos-00-sealed.json"):
+        assert not (ctl / n).exists(), n
+    assert not list(ctl.glob("photos-35-*"))
+    # finalize is non-destructive on media: the by-dest frames are byte-for-byte unchanged
+    after = {}
+    for dp, _dn, fns in os.walk(ws / BYDEST):
+        for fn in fns:
+            ap = os.path.join(dp, fn)
+            after[os.path.relpath(ap, str(ws / BYDEST))] = open(ap, "rb").read()
+    assert after == before
 
 
 def test_finalize_refuses_without_summary(tmp_path, monkeypatch):

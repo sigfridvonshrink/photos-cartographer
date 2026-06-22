@@ -85,6 +85,7 @@ def test_hash_image_valid_on_real_fullsize_jpeg_and_raw():
 
 
 @requires_magick
+@pytest.mark.spec("prep-fingerprint-decoded-content-1")
 def test_hash_image_valid_and_version_bound():
     r = prep.ContentHasher.fingerprint_image(CAM_SMALL)
     assert r["status"] == "valid" and r["value"]
@@ -101,6 +102,7 @@ def test_pixel_signature_distinct_for_different_photos():
 
 @requires_magick
 @requires_exiftool
+@pytest.mark.spec("prep-fingerprint-invariant-metadata-1")
 def test_pixel_signature_is_exif_invariant(tmp_path):
     # Copy the JPEG, mutate EXIF (date + GPS) on the copy without touching pixels;
     # the pixel signature must be unchanged. This is the property geotag relies
@@ -154,6 +156,7 @@ def test_real_jpeg_organizes_with_spec_filename_and_no_blocker(tmp_path):
 
 @requires_magick
 @requires_exiftool
+@pytest.mark.spec("prep-fingerprint-failure-blocks-1")
 def test_unreadable_image_blocks_with_hash_failure(tmp_path):
     # Negative path: a file that magick cannot decode must surface a §6.2/§11.3
     # hash-failure blocker, not silently pass.
@@ -168,6 +171,7 @@ def test_unreadable_image_blocks_with_hash_failure(tmp_path):
 
 @requires_magick
 @requires_exiftool
+@pytest.mark.spec("prep-quarantine-extra-copies-1")
 def test_byte_identical_images_dedup_with_real_hasher(tmp_path):
     ws = _make_ws(tmp_path)
     shutil.copy(CAM_SMALL, ws / "0-sources" / "a.jpg")
@@ -183,6 +187,7 @@ def test_byte_identical_images_dedup_with_real_hasher(tmp_path):
 @pytest.mark.slow
 @requires_magick
 @requires_exiftool
+@pytest.mark.spec("prep-separate-redundant-jpeg-1")
 def test_raw_jpeg_pair_separates_redundant_jpeg(tmp_path):
     # Uses the real RAW (slow). The JPEG sibling only needs the same basename.
     if prep.ContentHasher.fingerprint_image(CAM_RAW)["status"] != "valid":

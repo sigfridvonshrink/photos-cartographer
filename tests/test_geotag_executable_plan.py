@@ -64,6 +64,7 @@ def test_time_write_honors_flags():
     ("gpx_extrapolation", "recompute_automated", "interpolated"),
     ("manual_locked", "apply_manual", "manual_locked"),
     ("manual_fallback", "apply_manual", "manual_fallback")])
+@pytest.mark.spec("geotag-fallback-is-manual-1")
 def test_gps_write_and_marker(cat, origin, marker):
     ops = cal.plan_file_ops(_file(), UTC, "Europe/Brussels", cat, {"lat": 50.0, "lon": 4.0}, None,
                             _pol(write_corrected_metadata_times=False))
@@ -144,6 +145,7 @@ def _row(rel, status="valid", utc=UTC):
             "resolved_utc_status": status}
 
 
+@pytest.mark.spec("geotag-flattened-deps-1", "geotag-json-dep-sha256-1", "geotag-plan-deps-1")
 def test_plan_ready_with_ops_and_full_depends_on(tmp_path):
     files = [_model(f"{BYDEST}/T/a.arw", f"{BYDEST}/T", native=True)]
     wf, t, g = _wf(tmp_path, files=files)
@@ -161,6 +163,7 @@ def test_plan_ready_with_ops_and_full_depends_on(tmp_path):
     assert dep["time_decisions"]["sha256"] and dep["resolved_utc_cache_fingerprint"] == "rfp"
 
 
+@pytest.mark.spec("geotag-gps-after-utc-1")
 def test_unresolved_utc_blocks(tmp_path):
     files = [_model(f"{BYDEST}/T/a.arw", f"{BYDEST}/T")]
     wf, t, g = _wf(tmp_path, files=files)
@@ -169,6 +172,7 @@ def test_unresolved_utc_blocks(tmp_path):
     assert any("no valid resolved UTC" in b for b in blk)
 
 
+@pytest.mark.spec("geotag-plan-preconditions-1")
 def test_incomplete_decisions_block(tmp_path):
     files = [_model(f"{BYDEST}/T/a.arw", f"{BYDEST}/T", native=True)]
     rows = [_row(f"{BYDEST}/T/a.arw")]
@@ -177,6 +181,51 @@ def test_incomplete_decisions_block(tmp_path):
     assert plan["status"] == "blocked" and any("photos-23-gps-decisions" in b for b in blk)
     _, blk2 = wf.build_executable_plan(files, rows, dict(t, status="requires_user_input"), g, _gpx(), "rfp")
     assert any("photos-21-time-decisions" in b for b in blk2)
+
+
+@pytest.mark.spec("geotag-order-time-gps-rename-1")
+def test_time_first_gps_and_rename_gated_on_resolved_time(tmp_path):
+    """§2: order is time first, GPS/rename last. With a valid resolved UTC a native frame gets a time
+    write AND a rename whose target is the destination-LOCAL civil time (derived from the resolved
+    UTC + tz) — proving the rename consumes resolved time. With the SAME file but UNRESOLVED time the
+    plan is blocked and produces NO ops at all (no time, no GPS, no rename): everything downstream is
+    gated on time being solved first."""
+    rel = f"{BYDEST}/T/a.arw"
+    files = [_model(rel, f"{BYDEST}/T", native=True)]
+    wf, t, g = _wf(tmp_path, files=files)                          # tz Europe/Brussels
+    ok, blk = wf.build_executable_plan(files, [_row(rel)], t, g, _gpx(), "rfp")
+    assert not blk and ok["status"] == "ready"
+    ops = ok["destinations"][f"{BYDEST}/T"]["operations"]
+    assert any(o["type"] == "metadata_time_write" for o in ops)    # time solved -> written
+    ren = next(o for o in ops if o["type"] == "rename_no_clobber")
+    # resolved UTC 12:12:21Z in Brussels summer (+2) -> local 14:12:21 -> that is the rename target
+    assert ren["to"] == "2024-07-03--14-12-21.arw"
+    # unresolved time -> blocked, and NOT a single op (GPS/rename never run before time is solved)
+    bad, bblk = wf.build_executable_plan(files, [_row(rel, status="unresolved")], t, g, _gpx(), "rfp")
+    assert bad["status"] == "blocked" and bblk
+    assert bad["destinations"][f"{BYDEST}/T"]["operations"] == []
+
+
+@pytest.mark.spec("geotag-24-rederive-auto-gps-1")
+def test_automatic_gps_rederived_from_inputs_not_photos23_text(tmp_path):
+    """§25 (anti): photos-24 re-derives every AUTOMATIC GPS decision from its own validated inputs —
+    never by trusting what photos-23 records. A native frame's automatic decision is preserve_native
+    (no GPS write). Inject a CONTRARY manual lock into photos-23 for that frame: if photos-24 parroted
+    photos-23 it would emit a GPS write — instead it re-derives preserve_native from the file's own
+    native-GPS input, so the ops are byte-identical and still carry zero GPS writes."""
+    rel = f"{BYDEST}/T/a.arw"
+    files = [_model(rel, f"{BYDEST}/T", native=True)]
+    rows = [_row(rel)]
+    wf, t, g = _wf(tmp_path, files=files)
+    p1, _ = wf.build_executable_plan(files, rows, t, g, _gpx(), "rfp")
+    assert p1["destinations"][f"{BYDEST}/T"]["summary"]["metadata_gps_writes"] == 0
+    g2 = copy.deepcopy(g)                                          # photos-23 now claims a manual GPS lock
+    g2["destinations"][f"{BYDEST}/T"]["gps_decisions"]["review_items"] = [
+        {"relative_path": rel, "user_decision": {"manual_lat": 1.0, "manual_lon": 2.0}}]
+    p2, _ = wf.build_executable_plan(files, rows, t, g2, _gpx(), "rfp")
+    # re-derived, not read from photos-23: still preserve_native -> zero GPS writes, identical ops.
+    assert p2["destinations"][f"{BYDEST}/T"]["summary"]["metadata_gps_writes"] == 0
+    assert p1["destinations"][f"{BYDEST}/T"]["operations"] == p2["destinations"][f"{BYDEST}/T"]["operations"]
 
 
 def test_plan_deterministic_and_fingerprint_sensitive(tmp_path):

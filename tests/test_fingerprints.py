@@ -24,6 +24,7 @@ import sqlite3
 
 import photos_1_prep as prep
 import photos_utils as utils
+import pytest
 
 
 def _ws(tmp_path):
@@ -67,6 +68,7 @@ def _run(ws):
 
 # --- #20 fingerprint/version coverage ---------------------------------------
 
+@pytest.mark.spec("prep-fingerprint-algo-recorded-1")
 def test_cache_meta_records_versions(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -92,6 +94,7 @@ def test_journal_is_version_stamped(tmp_path, monkeypatch):
     assert dep["cli_options_fingerprint"]
 
 
+@pytest.mark.spec("prep-artifacts-carry-depends-on-1", "prep-record-min-fingerprints-1")
 def test_handoff_depends_on_coverage(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -108,6 +111,7 @@ def test_handoff_depends_on_coverage(tmp_path, monkeypatch):
 
 # --- Phase D: fingerprint/hash terminology (§9.1) ---------------------------
 
+@pytest.mark.spec("dep-fingerprint-invariant-1", "prep-byte-sha-artifacts-only-1")
 def test_media_carries_fingerprint_and_no_byte_hash(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)

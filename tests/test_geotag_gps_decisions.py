@@ -66,6 +66,7 @@ def _dd(art, dest):
 
 # --- classifier branch by branch --------------------------------------------
 
+@pytest.mark.spec("geotag-fallback-rank-1")
 def test_classify_all_branches():
     g = _gpx()
     cfg = utils.CONFIG
@@ -83,12 +84,14 @@ def test_classify_all_branches():
 
 @pytest.mark.parametrize("lat, lon, ok", [(50, 4, True), (-90, 180, True), (91, 0, False),
                                           (0, 181, False), ("x", 0, False), (0, True, False)])
+@pytest.mark.spec("validate-coords-offsets-1")
 def test_valid_coord(lat, lon, ok):
     assert cal._valid_coord(lat, lon) is ok
 
 
 # --- the summary artifact ----------------------------------------------------
 
+@pytest.mark.spec("geotag-23-paths-only-review-1", "gpx-geotag-fingerprint-cascade-1")
 def test_summary_counts_and_review_items(tmp_path):
     wf = _wf(tmp_path)
     d = f"{BYDEST}/Trip"
@@ -118,6 +121,7 @@ def test_extrapolation_counts_in_summary(tmp_path):
     assert art["status"] == "complete"
 
 
+@pytest.mark.spec("geotag-always-produce-decision-artifact-1")
 def test_all_automatic_is_complete(tmp_path):
     wf = _wf(tmp_path)
     d = f"{BYDEST}/Trip"
@@ -164,6 +168,7 @@ def _with_fallback(parent, lat, lon):
             {"fallback_lat": lat, "fallback_lon": lon}}}}}
 
 
+@pytest.mark.spec("geotag-fallback-inherit-1")
 def test_child_inherits_parent_fallback_as_proposal(tmp_path):
     wf = _wf(tmp_path)
     p, c = f"{BYDEST}/Trip", f"{BYDEST}/Trip/Sub"
@@ -188,6 +193,7 @@ def test_accepting_inherited_fallback_resolves_child_block(tmp_path):
     assert _dd(art, c)["gps_decisions"]["summary"]["automatic_folder_fallback"] == 1   # b resolved
 
 
+@pytest.mark.spec("geotag-fallback-parentfirst-1")
 def test_manual_fallback_reroots_and_grandchild_skips_unconfirmed(tmp_path):
     wf = _wf(tmp_path)
     p, c, gc = f"{BYDEST}/Trip", f"{BYDEST}/Trip/Sub", f"{BYDEST}/Trip/Sub/Deep"
@@ -218,6 +224,7 @@ def test_sibling_fallback_does_not_leak(tmp_path):
     assert _dd(art, b)["folder_fallback"]["proposal"] == {"proposal_source": "manual_required"}
 
 
+@pytest.mark.spec("geotag-stale-decision-preserved-1")
 def test_accept_with_no_proposal_is_stale(tmp_path):
     wf = _wf(tmp_path)
     d = f"{BYDEST}/Trip"

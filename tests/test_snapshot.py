@@ -23,6 +23,7 @@ import sqlite3
 
 import photos_1_prep as prep
 import photos_utils as utils
+import pytest
 
 MANAGED = ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
            "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"]
@@ -69,6 +70,7 @@ def _snap(ws):
     return utils.prep_db_snapshot_path(str(ws))
 
 
+@pytest.mark.spec("prep-db-backup-on-success-1")
 def test_snapshot_written_and_matches_live_cache(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -83,6 +85,7 @@ def test_snapshot_written_and_matches_live_cache(tmp_path, monkeypatch):
     assert snap_rows == live_rows and len(snap_rows) >= 1
 
 
+@pytest.mark.spec("db-snapshot-atomic-replace-1", "db-snapshot-per-phase-1")
 def test_snapshot_leaves_no_temp_and_refreshes_on_rerun(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -98,6 +101,7 @@ def test_snapshot_leaves_no_temp_and_refreshes_on_rerun(tmp_path, monkeypatch):
     assert not glob.glob(str(ws / ".photos-ingest" / ".tmp-snapshot*"))
 
 
+@pytest.mark.spec("db-snapshot-skip-on-failure-1")
 def test_failed_run_leaves_prior_snapshot_intact(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)

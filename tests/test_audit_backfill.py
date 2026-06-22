@@ -246,6 +246,7 @@ def test_redundant_jpeg_only_separated_from_source(tmp_path, monkeypatch):
     assert [op.source for op in seps] == ["0-sources/shot.jpg"], [op.source for op in seps]
 
 
+@pytest.mark.spec("camera-version-detectable-1")
 def test_camera_group_key_version_staleness_refreshes(tmp_path, monkeypatch):
     _install(monkeypatch, meta_for=lambda f: {"DateTimeOriginal": "2023:01:02 03:04:05",
                                               "Make": "M", "Model": "D"})
