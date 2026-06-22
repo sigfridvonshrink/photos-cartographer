@@ -79,6 +79,11 @@ together, which is exactly the unit the next two concepts operate on.
 > Moving a photo between destinations is a real input change: it's re-evaluated under the new
 > destination's timezone *and* clock offset on the next run.
 
+The editor surfaces this tree directly — each destination a row, container folders badged, decisions
+inheriting downward:
+
+![The destination tree in the editor](screenshots/carto-14-geotag-edit-time-01.png)
+
 ---
 
 ## Camera groups
@@ -151,6 +156,11 @@ photos-cartographer forces you to close that gap: a dedicated **drift-validation
 and GPS) makes you confirm each at-risk bucket against the track before any GPS is placed. Crucially,
 **inaction is not consent** — an untouched at-risk bucket *blocks* the run; you must actively affirm
 even "the offset is fine, no change." This is the load-bearing safety rule of the time→GPS ordering.
+
+Drift validation in the editor: slide a photo along its GPX track until it lines up, and the corrected
+offset is read straight off the track.
+
+![Drift validation — scrubbing a photo along the track](screenshots/carto-22-geotag-edit-drift-track.png)
 
 ---
 
