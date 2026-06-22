@@ -20,6 +20,8 @@ body { margin: 0; height: 100vh; display: flex; flex-direction: column;
 .btn { font: 13px var(--ui); padding: 5px 14px; border-radius: var(--r); cursor: pointer;
   background: var(--raised); color: var(--fg); border: 1px solid var(--line); }
 .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.btn.danger { color: var(--warn); border-color: var(--warn); }
+.btn.danger:hover { background: var(--warn-bg); }
 .btn:disabled { opacity: .4; cursor: default; }
 .mini { font: 11px var(--ui); background: transparent; color: var(--muted); border: 1px solid var(--line);
   border-radius: 4px; padding: 1px 7px; cursor: pointer; }
