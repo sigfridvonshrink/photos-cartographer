@@ -1820,8 +1820,8 @@ class WorkspacePrepWorkflow:
             mime = exiftool_mime_type(sample)
             if mime and (mime.startswith('image/') or mime.startswith('video/')):
                 msg = (f"Dump contains .{e} files that exiftool sees as media ({mime}) but media_extensions "
-                       f"config does not list — they will be set aside in 1-strays. Add '.{e}' to the right "
-                       f"media_extensions class in photos-00-config.json and re-run prep to organize them.")
+                       f"config does not list — they will be set aside in {folder_name('strays')}. Add '.{e}' to the "
+                       f"right media_extensions class in photos-00-config.json and re-run prep to organize them.")
                 warnings.append(msg)
                 get_reporter().log(f"  Notice: {msg}")
 
@@ -2582,8 +2582,8 @@ def run(args):
                            if os.path.isfile(os.path.join(workspace_root, f)) and not f.startswith('.')]
             _src_entries = os.listdir(_src) if os.path.isdir(_src) else []
             if _root_files or _src_entries:
-                reporter.log("  A likely new dump is present (files at the root or in 0-sources). A sealed "
-                             "workspace is final — move new media into a fresh workspace.")
+                reporter.log(f"  A likely new dump is present (files at the root or in {_folder_name('sources')}). "
+                             "A sealed workspace is final — move new media into a fresh workspace.")
             sys.exit(2)
 
         if args.command == "plan":
@@ -2682,11 +2682,25 @@ def run(args):
             reporter.log(f"  Full plan: {pp}", stream="stdout")
 
         elif args.command == "execute":
-            from .photos_utils import prep_plan_path, PREP_PLAN_ARTIFACT
+            from .photos_utils import prep_plan_path, PREP_PLAN_ARTIFACT, guard_path, folder_name
             pp = prep_plan_path(workspace_root)
             if not os.path.exists(pp):
                 reporter.error(f"No {PREP_PLAN_ARTIFACT} found — run `plan` first.")
                 sys.exit(2)
+            # Fast, friendly stop for an already-prepped workspace. A saved plan exists, but an empty
+            # 0-sources is the normal steady end-state (shared contract §6) — there is nothing to
+            # ingest. That plan was built against the PRE-execute filesystem; replaying it now would
+            # just collide with the files it already moved (the confusing "case-insensitive clobber"
+            # error). So if this workspace is initialized (a prior prep execute wrote the guard) and
+            # 0-sources holds no files, say "nothing to do" and stop — add media + re-`plan` to ingest.
+            _src = os.path.join(workspace_root, folder_name('sources'))
+            _src_has_files = os.path.isdir(_src) and any(fs for _dp, _dn, fs in os.walk(_src) if fs)
+            if os.path.exists(guard_path(workspace_root)) and not _src_has_files:
+                _src_name = folder_name('sources')
+                reporter.log(f"Nothing to do: {_src_name} is empty — this workspace is already prepped. "
+                             f"Add media to {_src_name} and run `prep plan` before `execute`.",
+                             stream="stdout")
+                sys.exit(0)
             with open(pp, "r") as f:
                 plan_data = json.load(f)
             plan = Plan.from_dict(plan_data)

@@ -1216,7 +1216,7 @@ class GeotagWorkflow:
                 f"{by_dest} contains photos prep has not yet recorded (the handoff predates your most "
                 f"recent move from {by_date} into {by_dest}; e.g. {ex}). Re-run prep to refresh the handoff so it records the moved files: "
                 "`photos-cartographer prep execute` (it re-records the moved files — no re-fingerprint, no re-read — "
-                "and rewrites the handoff/cache; run `photos-cartographer prep plan` first only if 0-sources still "
+                f"and rewrites the handoff/cache; run `photos-cartographer prep plan` first only if {folder_name('sources')} still "
                 "holds a dump). Then geotag can proceed.")
 
     # --- Stage 2: in-memory by-dest file model (geotag spec §14) --------
