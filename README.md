@@ -54,6 +54,9 @@ the diff and are resumable after a crash.
 
 ## Documentation
 
+- **[See it work (walkthrough)](docs/walkthrough.md)** — the **full run end to end, in screenshots**: prep →
+  sort → geotag's time → drift → GPS edit loop → merge, with a flow diagram. Start here to see what it
+  actually does.
 - **[Quick start](docs/quickstart.md)** — download → prerequisites → the full end-to-end run (prep, sort into
   destinations, the geotag time → drift → GPS loop, execute, merge).
 - **[Concepts](docs/concepts.md)** — the *why*: camera groups, per-day clock offsets, the by-dest tree, clock
