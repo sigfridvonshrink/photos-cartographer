@@ -27,6 +27,17 @@ let currentPhase = "prep";
 let planId = null;         // plan_id being reviewed in the gate
 let gatePhase = "prep";    // the phase the open gate is for (tab could change underneath)
 let currentJobLabel = null;// label of the running job (e.g. "prep execute"), for the Stop confirm
+let prevRunning = false;   // last poll's running flag — to detect a job just finishing
+
+// Reload the folded-in decision editor (Edit tab) so it re-reads the latest decision JSONs. Called
+// when a geotag plan finishes — the plan it just wrote is what the editor edits. No-op until the
+// iframe has been opened at least once (it loads fresh on first switch anyway).
+function reloadEditFrame() {
+  const frame = $("#edit-frame");
+  if (!frame.getAttribute("src")) return;
+  try { frame.contentWindow.location.reload(); }
+  catch { frame.setAttribute("src", "/edit/"); }   // cross-origin guard / fallback
+}
 let jobsSeeded = false;    // seed the Jobs (-j) box from the server default exactly once
 let cpuCount = 256;        // server machine's CPU count = the Jobs box upper bound (set from state)
 
@@ -178,6 +189,13 @@ async function refreshState() {
   const planned = !!(s.phases && s.phases.prep && s.phases.prep.plan_exists);
   $("#init-banner").hidden = !(s.initialized === false && !planned);
   const running = s.job && s.job.state === "running";
+  // A geotag plan just finished → its new decision JSONs are what the Edit tab reads; reload the iframe
+  // so it isn't stale (closes the edit → re-plan → reload loop when re-planning from the console).
+  if (prevRunning && !running && s.job && s.job.label === "geotag plan"
+      && (s.job.state === "done" || s.job.state === "failed")) {   // blockers still write decisions to edit
+    reloadEditFrame();
+  }
+  prevRunning = running;
   currentJobLabel = (s.job && s.job.label) || null;
   $("#stop-btn").hidden = !running;                      // Stop is offered only while a job runs
   const lock = $("#lock");
