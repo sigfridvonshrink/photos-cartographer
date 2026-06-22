@@ -2,6 +2,9 @@
    the console's own structure. Per the agreed UI: tabs, an actions bar, a compact progress strip, and
    a full-width log pane that grows (the log has wide lines and is the thing you watch). */
 * { box-sizing: border-box; }
+/* Dark UI: render native controls (number-input spinners, scrollbars) in the dark scheme so they
+   match the palette instead of the browser's light default; accent the controls with our blue. */
+:root { color-scheme: dark; accent-color: var(--accent); }
 body { margin: 0; height: 100vh; display: flex; flex-direction: column;
   font: 14px/1.45 var(--ui); color: var(--fg); background: var(--bg); }
 .grow { flex: 1; }
