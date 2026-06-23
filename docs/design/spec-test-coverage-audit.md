@@ -190,7 +190,7 @@ asserted") cluster are now closed.
 - **Merge hardening** (PR #215) — case-insensitive name clashes resolved at *plan* time (strengthens
   §7.2; converts a latent execute-time `EEXIST` blocker into a clean rename); crash-orphaned cross-fs
   temps swept at execute start under the library lock (named `.tmp-xdev-*.part` prefix), spec'd in
-  shared-contract §15.3 + merge §11.
+  shared-contract §15 (item 3) + merge §11.
 
 ### Explicitly NOT done (decided out of scope)
 

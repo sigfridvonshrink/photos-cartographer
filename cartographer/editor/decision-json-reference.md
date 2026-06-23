@@ -355,7 +355,7 @@ photos-21 offset cell it refines — bare `<camera_group_key>` or `<camera_group
 
 ### 5a.3 `date`
 
-Present only when the bucket is per-date (the group spans >1 naive day in this destination, §10.2);
+Present only when the bucket is per-date (the group spans >1 naive day in this destination, geotag §10.2);
 omitted for a single-date bucket.
 
 ---
