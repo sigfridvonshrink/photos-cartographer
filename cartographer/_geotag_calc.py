@@ -452,7 +452,7 @@ def _local_to_utc(naive, tz):
 
 
 def drift_offset_overrides(drift_artifact):
-    """Map a COMPLETE photos-23 to `{(destination, bucket_key): validated_offset_seconds}` for every
+    """Map a COMPLETE photos-22 to `{(destination, bucket_key): validated_offset_seconds}` for every
     confirmed bucket, so compute_resolved_utc can re-resolve those photos under the operator-validated
     offset (§22a). The bucket_key matches the photos-21 cell key it was built from."""
     out = {}
@@ -468,7 +468,7 @@ def compute_resolved_utc(files, groups, artifact, offset_overrides=None):
     """Resolve every by-dest photo to real UTC from the completed time decisions (§22). Camera
     groups use their (group, destination) effective offset (absolute camera->UTC correction);
     smartphones use their own EXIF offset, else the destination timezone. `offset_overrides`
-    (from photos-23, §22a) replaces a bucket's offset with the operator-validated one. Returns
+    (from photos-22, §22a) replaces a bucket's offset with the operator-validated one. Returns
     per-file rows (the §22 fields), path-sorted and deterministic."""
     dests = artifact.get("destinations") or {}
     overrides = offset_overrides or {}

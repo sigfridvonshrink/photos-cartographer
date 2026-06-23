@@ -131,8 +131,8 @@ CONFIG = {
     # (geotag spec Section 7.1). Their presence anywhere under 6-photos-by-dest hard-stops
     # geotag (development must not start before time/GPS are fixed). Consumed by geotag.
     "destination_distribution_subfolders": ["jpg", "tif"],
-    # Library-merge settings (shared contract Section 4.3 item 7). Seeded by prep for
-    # forward-compatibility but CONSUMED by the future merge phase, which does the deep
+    # Library-merge settings (shared contract Section 4.3 item 7). Seeded by prep and
+    # CONSUMED by the merge phase, which does the deep
     # validation — library_root must be an existing directory outside the managed 0-6 tree, and
     # the policy values are enum-checked there (merge spec Section 4). Prep only type-validates.
     "merge": {
@@ -321,7 +321,7 @@ def db_path(ws: str) -> str:
 PREP_PLAN_ARTIFACT = "photos-10-prep-plan.json"
 
 def prep_plan_path(ws: str) -> str:
-    """The prep-phase plan artifact (prep §14.2), written by `plan` and consumed by `dry-run`/`execute`
+    """The prep-phase plan artifact (prep §14.1), written by `plan` and consumed by `dry-run`/`execute`
     from this canonical control-dir path — no flag tells the phase where to look. `photos-10-` precedes
     the `photos-11-handoff.json` it leads to. Re-planning backs up any prior plan via
     backup_existing_artifact (the shared `-NNN` suffix), so a superseded plan stays recoverable."""
@@ -561,8 +561,8 @@ def ensure_control_dir(ws: str) -> str:
 # The permanent library at library_root is final and owned: it carries NONE of the workspace
 # scaffolding (no 0-6 folders, no guard, no lifecycle). Its sole identity is a single dotfile
 # marker in its root; its lock is another dotfile (merge spec §4/§12, shared contract §15.1/§15.2).
-# These names + helpers are consumed by the merge phase (photos-3-merge, built in later
-# increments); prep/geotag neither read nor write them.
+# These names + helpers are consumed by the merge phase (photos-3-merge); prep/geotag
+# neither read nor write them.
 LIBRARY_MARKER = ".photos-library"
 LIBRARY_LOCK = ".photos-merge.lock"
 
@@ -847,8 +847,8 @@ def validate_config(cfg: dict):
     """Validate human-authored config before it is accepted — input a human writes is
     sanity-validated (types, ranges, paths, formats), not merely parsed as JSON. Raises
     ValueError with a clear 'config: <path> ...' message on any violation; missing keys
-    default and unknown keys are ignored. The same validate-on-load discipline will extend
-    to geotag decision JSON once that phase exists ([[validate-human-input]])."""
+    default and unknown keys are ignored. The same validate-on-load discipline applies
+    to the geotag decision JSON ([[validate-human-input]])."""
     if not isinstance(cfg, dict):
         raise ValueError("config: top level must be a JSON object.")
 
