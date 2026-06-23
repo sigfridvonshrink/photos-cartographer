@@ -1366,6 +1366,57 @@ class WorkspacePrepWorkflow:
                 warnings.append(msg)
                 get_reporter().log(f"  Notice: {msg}")
 
+    def _build_run_report(self, operations, no_op_count, metadata_plan_status, all_db_files,
+                          carried_forward, by_dest_files, blockers, warnings, qf,
+                          current_exiftool_version, current_field_set_version):
+        """Assemble the user-visible run report (prep §19) — pure read-only re-presentation of data
+        already on hand (operation/metadata/camera-group/GPS counts). Returns the report dict. Verbatim
+        lift from plan(); no state mutated."""
+        # User-visible run report (prep Section 19), re-presenting data already on hand.
+        import collections as _collections
+        _media_op_types = {"mkdir", "move_no_clobber", "rename_no_clobber", "quarantine_move"}
+        _q_ops = [op for op in operations if op.type == "quarantine_move"]
+        _dup_by_dest = sum(1 for op in _q_ops
+                           if str((op.verification or {}).get("retained_counterpart", "")).startswith(folder_name('photos_by_dest') + "/"))
+        _md_counts = _collections.Counter(metadata_plan_status.values())
+        _cg_keys = set()
+        _native_gps = 0
+        _missing_ts = 0
+        for _f in all_db_files:
+            _md = _f.get("metadata") or {}
+            _k = _md.get("camera_group_key")
+            if _k and _k != "unknown":
+                _cg_keys.add(_k)
+            if _md.get("has_native_gps"):
+                _native_gps += 1
+            if _md.get("has_timestamp") is False:
+                _missing_ts += 1
+        report = {
+            "media_operations": sum(1 for op in operations if op.type in _media_op_types),
+            "cache_operations": sum(1 for op in operations if op.type in ("db_upsert", "db_remove")),
+            "no_op_already_correct": no_op_count,
+            "recognized_moves": len(carried_forward),
+            "by_dest_files_scanned_read_only": len(by_dest_files),
+            "by_dest_mutated": 0,
+            "duplicates_against_by_dest": _dup_by_dest,
+            "duplicates_against_mutable": len(_q_ops) - _dup_by_dest,
+            "metadata_reused": _md_counts.get("reused_from_cache", 0),
+            "metadata_extracted": _md_counts.get("extracted_ok", 0),
+            "metadata_carried_forward": _md_counts.get("carried_forward", 0),
+            "metadata_failed": _md_counts.get("extraction_failed", 0),
+            "metadata_not_applicable": _md_counts.get("not_applicable", 0),
+            "camera_groups_found": len(_cg_keys),
+            "native_gps_files": _native_gps,
+            "missing_timestamp_files": _missing_ts,
+            "blockers": len(blockers),
+            "warnings": len(warnings),
+            "quarantine_footprint": qf,
+            "extractor": "exiftool",
+            "extractor_version": current_exiftool_version,
+            "field_set_version": current_field_set_version,
+        }
+        return report
+
     def _recognize_exiftool_leftovers(self, files, warnings):
         """Recognize orphaned exiftool intermediates/backups (`<media>_exiftool_tmp` / `<media>_original`)
         left by a hard-killed geotag write — pull them out of the media inventory (quarantined below,
@@ -2269,49 +2320,9 @@ class WorkspacePrepWorkflow:
         from .photos_utils import quarantine_footprint
         qf = quarantine_footprint(self.workspace_root)
 
-        # User-visible run report (prep Section 19), re-presenting data already on hand.
-        import collections as _collections
-        _media_op_types = {"mkdir", "move_no_clobber", "rename_no_clobber", "quarantine_move"}
-        _q_ops = [op for op in operations if op.type == "quarantine_move"]
-        _dup_by_dest = sum(1 for op in _q_ops
-                           if str((op.verification or {}).get("retained_counterpart", "")).startswith(folder_name('photos_by_dest') + "/"))
-        _md_counts = _collections.Counter(metadata_plan_status.values())
-        _cg_keys = set()
-        _native_gps = 0
-        _missing_ts = 0
-        for _f in all_db_files:
-            _md = _f.get("metadata") or {}
-            _k = _md.get("camera_group_key")
-            if _k and _k != "unknown":
-                _cg_keys.add(_k)
-            if _md.get("has_native_gps"):
-                _native_gps += 1
-            if _md.get("has_timestamp") is False:
-                _missing_ts += 1
-        report = {
-            "media_operations": sum(1 for op in operations if op.type in _media_op_types),
-            "cache_operations": sum(1 for op in operations if op.type in ("db_upsert", "db_remove")),
-            "no_op_already_correct": no_op_count,
-            "recognized_moves": len(carried_forward),
-            "by_dest_files_scanned_read_only": len(by_dest_files),
-            "by_dest_mutated": 0,
-            "duplicates_against_by_dest": _dup_by_dest,
-            "duplicates_against_mutable": len(_q_ops) - _dup_by_dest,
-            "metadata_reused": _md_counts.get("reused_from_cache", 0),
-            "metadata_extracted": _md_counts.get("extracted_ok", 0),
-            "metadata_carried_forward": _md_counts.get("carried_forward", 0),
-            "metadata_failed": _md_counts.get("extraction_failed", 0),
-            "metadata_not_applicable": _md_counts.get("not_applicable", 0),
-            "camera_groups_found": len(_cg_keys),
-            "native_gps_files": _native_gps,
-            "missing_timestamp_files": _missing_ts,
-            "blockers": len(blockers),
-            "warnings": len(warnings),
-            "quarantine_footprint": qf,
-            "extractor": "exiftool",
-            "extractor_version": current_exiftool_version,
-            "field_set_version": current_field_set_version,
-        }
+        report = self._build_run_report(operations, no_op_count, metadata_plan_status, all_db_files,
+                                        carried_forward, by_dest_files, blockers, warnings, qf,
+                                        current_exiftool_version, current_field_set_version)
 
         # Record passive file state dependencies for idempotency and staleness protection
         workspace_file_preconditions = []
