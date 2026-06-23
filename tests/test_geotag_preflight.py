@@ -223,6 +223,82 @@ def test_missing_by_date_photo_demands_reprep(tmp_path):
     assert any("has not yet recorded" in b for b in blockers), blockers
 
 
+# --- §13.1 auto re-prep for a clean by-dest move -----------------------------
+
+import types as _types
+
+
+class _CollectRep:
+    def __init__(self): self.logs, self.errors = [], []
+    def log(self, msg, **k): self.logs.append(msg)
+    def warn(self, msg, **k): pass
+    def error(self, msg, **k): self.errors.append(msg)
+
+
+def _autoreprep(ws, monkeypatch, *, command="plan", jobs=4, fail=None):
+    """Drive the pre-lock auto-reprep helper with prep.run stubbed; return (prep commands it ran, reporter)."""
+    import photos_1_prep as prep
+    calls = []
+    def fake_prep_run(a):
+        calls.append(a.command)
+        if fail is not None and a.command == fail:
+            raise SystemExit(2)
+    monkeypatch.setattr(prep, "run", fake_prep_run)
+    rep = _CollectRep()
+    cal._auto_reprep_for_clean_move(_types.SimpleNamespace(command=command, jobs=jobs), str(ws), rep)
+    return calls, rep
+
+
+@pytest.mark.spec("geotag-auto-reprep-clean-move-1")
+def test_auto_reprep_runs_prep_plan_then_execute_for_clean_move(tmp_path, monkeypatch):
+    """A clean by-dest move (0-sources empty + an unrecorded by-dest photo) makes geotag plan auto-run the
+    REAL prep phases — plan then execute, in order — before locking, so the operator goes straight to
+    geotag. prep does the mutation; geotag only orchestrates."""
+    ws = _ws(tmp_path, bydest=("6-photos-by-dest/Trip/a.jpg",), handoff_files=[])   # a.jpg unrecorded
+    calls, rep = _autoreprep(ws, monkeypatch)
+    assert calls == ["plan", "execute"], calls
+    assert any("running prep plan + execute" in m for m in rep.logs), rep.logs
+
+
+def test_auto_reprep_skips_when_nothing_pending(tmp_path, monkeypatch):
+    calls, _ = _autoreprep(_ws(tmp_path), monkeypatch)               # a.jpg recorded → nothing pending
+    assert calls == []
+
+
+@pytest.mark.spec("geotag-auto-reprep-sources-nonempty-skip-1")
+def test_auto_reprep_skips_when_sources_nonempty(tmp_path, monkeypatch):
+    """0-sources holding a dump is the cheapest hard gate — auto-reprep must NOT silently ingest it; it
+    bows out and leaves the in-lock scope gate to report the unprocessed dump."""
+    ws = _ws(tmp_path, bydest=("6-photos-by-dest/Trip/a.jpg",), handoff_files=[])
+    (ws / "0-sources" / "newdump.jpg").write_bytes(b"x")
+    calls, _ = _autoreprep(ws, monkeypatch)
+    assert calls == []
+
+
+def test_auto_reprep_skips_when_sealed(tmp_path, monkeypatch):
+    ws = _ws(tmp_path, sealed=True, bydest=("6-photos-by-dest/Trip/a.jpg",), handoff_files=[])
+    assert _autoreprep(ws, monkeypatch)[0] == []
+
+
+def test_auto_reprep_skips_when_uninitialized(tmp_path, monkeypatch):
+    ws = _ws(tmp_path, guard=False, bydest=("6-photos-by-dest/Trip/a.jpg",), handoff_files=[])
+    assert _autoreprep(ws, monkeypatch)[0] == []
+
+
+def test_auto_reprep_skips_for_non_plan_command(tmp_path, monkeypatch):
+    ws = _ws(tmp_path, bydest=("6-photos-by-dest/Trip/a.jpg",), handoff_files=[])
+    assert _autoreprep(ws, monkeypatch, command="execute")[0] == []
+
+
+def test_auto_reprep_propagates_prep_failure(tmp_path, monkeypatch):
+    """If the auto prep fails (e.g. an ambiguous move it can't record), geotag stops — never proceeds on a
+    half-done state."""
+    ws = _ws(tmp_path, bydest=("6-photos-by-dest/Trip/a.jpg",), handoff_files=[])
+    with pytest.raises(SystemExit) as ei:
+        _autoreprep(ws, monkeypatch, fail="plan")
+    assert ei.value.code == 2
+
+
 # --- main() / lock / exit codes ----------------------------------------------
 
 def _main(monkeypatch, ws):
