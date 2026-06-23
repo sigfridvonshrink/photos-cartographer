@@ -1124,6 +1124,19 @@ class JournalWriter:
                 f.write(self.journal.to_json())
 
 
+class _PlanState:
+    """Mutable carrier for plan()'s op-building cluster — the shared state threaded across the
+    op-building steps. Its fields ALIAS plan()'s locals (same objects) during the incremental
+    migration, so a migrated step (mutating st.X) and a not-yet-migrated inline block (mutating the
+    bare local) act on the same object."""
+    def __init__(self, operations, current_paths, by_dest_paths, global_destinations, media_mutated_originals):
+        self.operations = operations
+        self.current_paths = current_paths
+        self.by_dest_paths = by_dest_paths
+        self.global_destinations = global_destinations
+        self.media_mutated_originals = media_mutated_originals
+
+
 class WorkspacePrepWorkflow:
     def __init__(self, workspace_root: str, cache: WorkspaceCache):
         self.workspace_root = workspace_root
@@ -1718,6 +1731,44 @@ class WorkspacePrepWorkflow:
                 })
         return ghost_prunes
 
+    def _plan_init_moves(self, st, db_files):
+        """Init move (prep §7.1): on an init run, move each base-dump entry into 0-sources with
+        its structure preserved (no flatten), case-insensitively collision-suffixed. Mutates the
+        op-building cluster carried on `st`. Verbatim from plan() with `<cluster> -> st.<cluster>`."""
+        for f in db_files:
+            rel_path = st.current_paths[f['relative_path']]
+            # Init move (prep Section 7.1): move each base-entry file into 0-sources with its
+            # STRUCTURE PRESERVED — no flatten (MyDump/sub/a.jpg -> 0-sources/MyDump/sub/a.jpg).
+            # On an initialized workspace, base entries are hard-blocked at scan, so this fires
+            # only on an init run (no-flatten holds afterward).
+            if rel_path.split('/')[0] not in self.managed_folders:
+                _sources = folder_name('sources')
+                dest_base = os.path.join(_sources, rel_path)
+                dest = dest_base
+                # Avoid collisions case-insensitively, suffixing within the preserved subdir
+                while dest.lower() in [v.lower() for k,v in st.current_paths.items() if k != f['relative_path']] or dest.lower() in st.global_destinations:
+                    name, ext = os.path.splitext(os.path.basename(dest))
+                    dest = os.path.join(os.path.dirname(dest_base), self._allocate_suffix(name, ext.lstrip('.'), st.global_destinations))
+
+                st.global_destinations.add(dest.lower())
+                if rel_path != dest:
+                    st.media_mutated_originals.add(f["relative_path"])
+
+                    st.operations.append(Operation(
+
+                        operation_id=f"op-{uuid.uuid4().hex[:8]}",
+
+                        type="move_no_clobber",
+
+                        reason="Initialize: move base dump into sources",
+                        source=rel_path,
+                        destination=dest,
+                        preconditions={"size": f["size"], "mtime_ns": f["mtime_ns"]},
+                        verification={},
+                        database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(f, relative_path=dest, absolute_path=os.path.join(self.workspace_root, dest))}]
+                    ))
+                    st.current_paths[f['relative_path']] = dest
+
     def plan(self) -> Plan:
         operations = []
         blockers = []
@@ -1894,39 +1945,8 @@ class WorkspacePrepWorkflow:
         for p in by_dest_paths.keys():
             global_destinations.add(p)
 
-        for f in db_files:
-            rel_path = current_paths[f['relative_path']]
-            # Init move (prep Section 7.1): move each base-entry file into 0-sources with its
-            # STRUCTURE PRESERVED — no flatten (MyDump/sub/a.jpg -> 0-sources/MyDump/sub/a.jpg).
-            # On an initialized workspace, base entries are hard-blocked at scan, so this fires
-            # only on an init run (no-flatten holds afterward).
-            if rel_path.split('/')[0] not in self.managed_folders:
-                _sources = folder_name('sources')
-                dest_base = os.path.join(_sources, rel_path)
-                dest = dest_base
-                # Avoid collisions case-insensitively, suffixing within the preserved subdir
-                while dest.lower() in [v.lower() for k,v in current_paths.items() if k != f['relative_path']] or dest.lower() in global_destinations:
-                    name, ext = os.path.splitext(os.path.basename(dest))
-                    dest = os.path.join(os.path.dirname(dest_base), self._allocate_suffix(name, ext.lstrip('.'), global_destinations))
-
-                global_destinations.add(dest.lower())
-                if rel_path != dest:
-                    media_mutated_originals.add(f["relative_path"])
-
-                    operations.append(Operation(
-
-                        operation_id=f"op-{uuid.uuid4().hex[:8]}",
-
-                        type="move_no_clobber",
-
-                        reason="Initialize: move base dump into sources",
-                        source=rel_path,
-                        destination=dest,
-                        preconditions={"size": f["size"], "mtime_ns": f["mtime_ns"]},
-                        verification={},
-                        database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(f, relative_path=dest, absolute_path=os.path.join(self.workspace_root, dest))}]
-                    ))
-                    current_paths[f['relative_path']] = dest
+        st = _PlanState(operations, current_paths, by_dest_paths, global_destinations, media_mutated_originals)
+        self._plan_init_moves(st, db_files)
 
         for f in db_files:
             rel_path = current_paths[f['relative_path']]
