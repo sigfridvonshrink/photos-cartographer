@@ -1540,6 +1540,11 @@ class WorkspacePrepWorkflow:
                 _carried["metadata"] = _old_md
                 carried_forward[_new_path] = {"source": _old_path, "db_file": _carried}
 
+        # by-dest files that LOOK moved (new under by-dest, uncached) but failed the unique bijective
+        # match (ambiguous, basename changed, or stat reset) — they will re-fingerprint. Tagged
+        # `moved-unmatched` so this exact, easy-to-miss cause is visible in the re-hash diagnostics.
+        moved_unmatched = set(_new_by_dest) - set(carried_forward)
+
         from .photos_utils import MetadataReader, ProgressCoordinator, get_exiftool_version, get_imagemagick_version, FIELD_SET_VERSION, EXTRACTION_OPTIONS_FINGERPRINT, METADATA_SCHEMA_VERSION, CAMERA_GROUP_KEY_VERSION
         current_exiftool_version = get_exiftool_version()
         current_magick_version = get_imagemagick_version()
@@ -1655,7 +1660,8 @@ class WorkspacePrepWorkflow:
                 "blockers": [],
                 "metadata_plan_status": None,
                 "db_file": None,
-                "cache_reused": False
+                "cache_reused": False,
+                "rehash_reason": None,
             }
 
             if cached and cached['size'] == stat.st_size and cached['mtime_ns'] == stat.st_mtime_ns and md_fresh and content_hash_fresh:
@@ -1672,6 +1678,23 @@ class WorkspacePrepWorkflow:
                 result["cache_reused"] = True
                 result["db_file"] = new_cached
                 return result
+
+            # Re-fingerprint diagnostics: this file fell through the freshness gate and (if media) will be
+            # decoded. Classify WHY so an unexpected re-hash is visible — `new` (first ingest, expected),
+            # else a previously-cached file restaled by `moved-unmatched` (a by-dest move that missed the
+            # bijective match), `size-changed`, `mtime-changed`, `metadata-stale` (an exiftool/field-set/
+            # camera-group-key stamp moved), or `engine-changed` (ImageMagick/ffmpeg version bump).
+            if media_class in ('image', 'raw', 'video'):
+                if cached is None:
+                    result["rehash_reason"] = "moved-unmatched" if rel_path in moved_unmatched else "new"
+                elif cached['size'] != stat.st_size:
+                    result["rehash_reason"] = "size-changed"
+                elif cached['mtime_ns'] != stat.st_mtime_ns:
+                    result["rehash_reason"] = "mtime-changed"
+                elif not md_fresh:
+                    result["rehash_reason"] = "metadata-stale"
+                else:
+                    result["rehash_reason"] = "engine-changed"
 
             # Media is identified ONLY by its decoded-content fingerprint (image/raw -> identify,
             # video -> ffmpeg stream MD5). It is never byte-hashed: a whole-file SHA-256 is reserved
@@ -1778,13 +1801,40 @@ class WorkspacePrepWorkflow:
 
         # 2. Build metadata_plan_status, warnings and db_files sequentially and deterministically on the main thread
         all_db_files = []
-        for res in worker_results:
+        rehash_reasons = {}          # reason -> count, over media files that were re-fingerprinted this run
+        rehash_samples = []          # first 5 UNEXPECTED re-hashes (path, reason) — a sample for investigation
+        for res in worker_results:   # worker_results is sorted by path, so the sample is deterministic
             rel_path = res["relative_path"]
             metadata_plan_status[rel_path] = res["metadata_plan_status"]
             warnings.extend(res["warnings"])
             if "blockers" in res and res["blockers"]:
                 blockers.extend(res["blockers"])
             all_db_files.append(res["db_file"])
+            _rr = res.get("rehash_reason")
+            if _rr:
+                rehash_reasons[_rr] = rehash_reasons.get(_rr, 0) + 1
+                if _rr != "new" and len(rehash_samples) < 5:
+                    rehash_samples.append((rel_path, _rr))
+
+        # Re-hash diagnostics (prep §17.4): always-on when any media was re-fingerprinted. Split the
+        # EXPECTED new-file hashes from previously-cached files that re-hashed, name the reason buckets,
+        # and show a small first-N sample of the unexpected ones (a flag would be useless — by the time
+        # you know you want it, the re-hash already happened). The full per-reason counts go to the run
+        # report (performance_and_cache.rehash_summary).
+        _total_rehash = sum(rehash_reasons.values())
+        _new_rehash = rehash_reasons.get("new", 0)
+        _unexpected_rehash = _total_rehash - _new_rehash
+        if _total_rehash:
+            _by = ", ".join(f"{k} {v}" for k, v in sorted(rehash_reasons.items()) if k != "new")
+            get_reporter().log(
+                f"Re-fingerprinted {_total_rehash} media file(s): {_new_rehash} new (expected), "
+                + (f"{_unexpected_rehash} previously-cached re-hashed — {_by}." if _unexpected_rehash
+                   else "0 previously-cached re-hashed."))
+            if rehash_samples:
+                get_reporter().log(f"  First {len(rehash_samples)} unexpected re-hash(es) "
+                                   "(incomplete — sample for investigation):")
+                for _p, _r in rehash_samples:
+                    get_reporter().log(f"    {_r}: {_p}")
 
         db_files = [f for f in all_db_files if not f['relative_path'].startswith(folder_name('photos_by_dest') + '/')]
         by_dest_files = [f for f in all_db_files if f['relative_path'].startswith(folder_name('photos_by_dest') + '/')]
@@ -2400,7 +2450,14 @@ class WorkspacePrepWorkflow:
                 "db_removes_applied": 0,
                 "db_renames_applied": 0,
                 "dependency_validation_status": "pending",
-                "handoff_written_after_successful_validation": False
+                "handoff_written_after_successful_validation": False,
+                "rehash_summary": {
+                    "total": _total_rehash,
+                    "new_expected": _new_rehash,
+                    "unexpected": _unexpected_rehash,
+                    "by_reason": rehash_reasons,
+                    "sample": [{"path": p, "reason": r} for p, r in rehash_samples],
+                },
             }
         },
             blockers=blockers,

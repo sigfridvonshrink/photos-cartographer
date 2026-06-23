@@ -193,3 +193,84 @@ def test_content_change_is_rescanned_not_carried(tmp_path, monkeypatch):
     plan2 = _plan(ws)
     assert plan2.summary["recognized_moves"] == 0
     assert len(hash_calls) >= 1              # rescanned, not carried
+
+
+# --- §17.4 re-hash diagnostics ------------------------------------------------
+
+def _rehash(plan):
+    return plan.summary["performance_and_cache"]["rehash_summary"]
+
+
+@pytest.mark.spec("prep-rehash-diagnostics-1")
+def test_rehash_summary_flags_mtime_changed(tmp_path, monkeypatch):
+    """A previously-cached file whose mtime changed is re-fingerprinted and reported as an UNEXPECTED
+    re-hash, reason `mtime-changed`, with the file in the first-N sample and the counts in the run report."""
+    hash_calls = []
+    _install_mocks(monkeypatch, hash_calls)
+    ws = _ws(tmp_path)
+    organized = _seed_one(ws)
+    os.utime(organized, ns=(10**18, 10**18))       # bump mtime_ns far forward; EXIF date drives the folder
+    hash_calls.clear()
+    rs = _rehash(_plan(ws))
+    assert hash_calls and any(organized in c for c in hash_calls)    # actually re-fingerprinted
+    assert rs["by_reason"] == {"mtime-changed": 1}
+    assert rs["total"] == 1 and rs["unexpected"] == 1 and rs["new_expected"] == 0
+    rel = os.path.relpath(organized, str(ws))
+    assert rs["sample"] == [{"path": rel, "reason": "mtime-changed"}]
+
+
+def test_rehash_summary_flags_moved_unmatched(tmp_path, monkeypatch):
+    """An uncached file under by-dest that did NOT carry forward (no unique bijective source match) is
+    re-fingerprinted and tagged `moved-unmatched` — the easy-to-miss by-dest-move cause."""
+    hash_calls = []
+    _install_mocks(monkeypatch, hash_calls)
+    ws = _ws(tmp_path)
+    _seed_one(ws)                                  # an unrelated cached file
+    (ws / "6-photos-by-dest" / "Trip").mkdir(parents=True)
+    (ws / "6-photos-by-dest" / "Trip" / "loose.jpg").write_bytes(b"NEWBYDEST")   # uncached, no source
+    rs = _rehash(_plan(ws))
+    assert rs["by_reason"].get("moved-unmatched") == 1
+    assert any(s["reason"] == "moved-unmatched" and s["path"].endswith("Trip/loose.jpg")
+               for s in rs["sample"])
+
+
+def test_rehash_summary_new_files_are_expected_and_not_sampled(tmp_path, monkeypatch):
+    """A brand-new 0-sources file hashes as `new` (expected) — counted, but kept out of the sample."""
+    hash_calls = []
+    _install_mocks(monkeypatch, hash_calls)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "fresh.jpg").write_bytes(b"FRESH")
+    prep.CONFIG["jobs"] = 1
+    rs = _rehash(_plan(ws))
+    assert rs["new_expected"] >= 1 and rs["unexpected"] == 0
+    assert rs["sample"] == []
+
+
+def test_no_rehash_when_unchanged_workspace_replanned(tmp_path, monkeypatch):
+    """Re-planning an unchanged, already-cached workspace re-fingerprints nothing: total 0, empty sample.
+    (Pin the magick version to the spy's engine_version so the cached pixel signature is fresh — otherwise
+    the mock's `engine_version` mismatch would itself restale every image, exactly the `engine-changed`
+    path.)"""
+    hash_calls = []
+    _install_mocks(monkeypatch, hash_calls)
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "t")   # match the spy's engine_version
+    ws = _ws(tmp_path)
+    _seed_one(ws)
+    hash_calls.clear()
+    rs = _rehash(_plan(ws))
+    assert hash_calls == []
+    assert rs["total"] == 0 and rs["sample"] == []
+
+
+def test_rehash_summary_flags_engine_changed(tmp_path, monkeypatch):
+    """A magick version bump restales every cached pixel signature → `engine-changed` (the mass-rescan
+    cause). Seed at version 't', re-plan at 't2'."""
+    hash_calls = []
+    _install_mocks(monkeypatch, hash_calls)
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "t")
+    ws = _ws(tmp_path)
+    _seed_one(ws)
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "t2")  # engine upgraded
+    hash_calls.clear()
+    rs = _rehash(_plan(ws))
+    assert rs["by_reason"] == {"engine-changed": 1} and rs["unexpected"] == 1
