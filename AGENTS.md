@@ -108,6 +108,11 @@ There is no build step and no linter config; runtime deps are system tools (`exi
 
 ### Release history
 
+- **v1.3.1** — bug fix: the unknown-camera-group config snippet emitted its `device_groups` arrays in
+  the wrong order (`phones` before `fixed_clock_cameras`), but the seeded config stores them sorted
+  (`fixed_clock_cameras` first), so a first-run whole-block paste-over dropped the comma between the two
+  arrays and produced invalid config. The snippet now follows the config file's own `device_groups` key
+  order (geotag §16). Patch only.
 - **v1.3.0** — **geotag auto-re-preps a clean by-dest move** (§13.1.1: after sorting into
   `6-photos-by-dest`, go straight to geotag — when `0-sources` is empty it runs the real `prep plan` +
   `execute` for you before locking; a non-empty `0-sources` is still the hard gate) and **always-on
