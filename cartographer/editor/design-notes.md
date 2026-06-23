@@ -30,8 +30,8 @@ is **advisory**; the loop is **edit → Save → re-run `photos-cartographer geo
   **no framework**. **Leaflet** (the map) is the only vendored library, under `web/vendor/` (no CDN at
   runtime, no build step, works offline).
 - Rationale: matches the repo's Python/CLI, no-build, system-deps-only ethos; zero new package managers.
-- **Front-end tests**: the pure logic in `app.js` (validation, offset⟷UTC/local date math, the §6
-  resolution rules, inheritance previews) is unit-tested with **Node's built-in runner** (`node:test`,
+- **Front-end tests**: the pure logic in `app.js` (validation, offset⟷UTC/local date math, the
+  decision-json-reference §6 resolution rules, inheritance previews) is unit-tested with **Node's built-in runner** (`node:test`,
   no npm) in `tests/*.test.mjs` — run via `tools/jstest`, also in CI and the pre-push hook. `app.js`
   exports those functions and guards its auto-start (`if (typeof document !== "undefined") main()`) so it
   imports cleanly in Node. The server is tested in Python (`tests/test_serve.py`); DOM-building
@@ -106,7 +106,7 @@ then the proposal evidence last; non-coord cells just show the proposal.
   time correction (`22 Mar 2026 · 13:25:21 → 13:24:18 (Europe/Brussels)`).
 - **Status is edit-aware.** The status chip normally reflects the last geotag run (`needs input` /
   `stale` / `auto` / `resolved`), but a **pending edit supersedes it**: once your working decision would
-  resolve the cell (mirroring the §6 resolution rules) it shows `resolved` next to the `edited` chip
+  resolve the cell (mirroring the decision-json-reference §6 resolution rules) it shows `resolved` next to the `edited` chip
   rather than the now-stale `needs input` — advisory until Re-run, like the effective-outcome preview.
 - **Specialized controls:**
   - **Timezone:** a full IANA-zone **drop-down**; accepting the proposal mirrors it into the field and
@@ -197,5 +197,5 @@ then the proposal evidence last; non-coord cells just show the proposal.
    with no own decision shows, badged `inherited ⟵ <ancestor>`, the value it would inherit from its
    nearest resolved ancestor, updating as you edit ancestors — display-only, authoritative on the next
    Re-run. (Offsets do **not** inherit — they are per-date buckets resolved from a GPX self-anchor or the
-   destination timezone, §4.4 — so the live inheritance preview is scoped to timezones and the folder
+   destination timezone, decision-json-reference §4.4 — so the live inheritance preview is scoped to timezones and the folder
    fallback, the two facts that actually cascade.)

@@ -177,7 +177,7 @@ its map tiles and place search use OpenStreetMap/Nominatim at runtime and degrad
 ## Tests and coverage
 
 The geotag phase — the one that writes time and GPS into irreplaceable originals — is the most heavily
-tested (98.4% line / 96.9% branch). Coverage is tracked on two axes — line/branch and **spec-clause**
+tested (~98% line / ~97% branch). Coverage is tracked on two axes — line/branch and **spec-clause**
 (which behavioral clauses in `spec/` have a dedicated test) — both reported in **[`COVERAGE.md`](COVERAGE.md)**.
 
 Run the suite from the repository root (`conftest.py` puts the repo root on `sys.path`):
