@@ -1269,6 +1269,46 @@ class WorkspacePrepWorkflow:
         moved_unmatched = set(_new_by_dest) - set(carried_forward)
         return carried_forward, moved_unmatched
 
+    def _check_band_and_stray_media(self, all_db_files, blockers, warnings):
+        """Band-misplacement guard + stray-media detection (prep §6.1 / §6.2 item 6). Appends to the
+        passed `blockers`/`warnings` lists (and logs the stray notices). Verbatim lift from plan() —
+        same iteration order, so the appended order is unchanged."""
+        # Band-misplacement guard (prep Section 6.1 / 6.2 item 6): photos and videos live in
+        # separate bands. A video under the photo bands (5-photos-by-date / 6-photos-by-dest),
+        # or an image/raw under the video band (4-videos-by-date), is a hand-introduced break
+        # prep never creates itself — hard-block, do not proceed.
+        _photo_bands = (folder_name('photos_by_date'), folder_name('photos_by_dest'))
+        _video_band = folder_name('videos_by_date')
+        for f in all_db_files:
+            top = f['relative_path'].split('/')[0]
+            mc = f.get('media_class')
+            if top in _photo_bands and mc == 'video':
+                blockers.append(f"Band misplacement: video under {top}: {f['relative_path']}")
+            elif top == _video_band and mc in ('image', 'raw'):
+                blockers.append(f"Band misplacement: {mc} under {_video_band}: {f['relative_path']}")
+
+        # Stray-media detection (prep Section 6.1): a dump file prep is about to set aside as a stray
+        # (class `other`, in 0-sources) whose extension exiftool reports as image/* or video/* is most
+        # likely a media format the workspace's media_extensions config doesn't list. Probe each
+        # DISTINCT stray extension once (not per file) and warn — non-blocking — so the operator can add
+        # it to media_extensions and re-run to organize those files instead of parking them in 1-strays.
+        from .photos_utils import exiftool_mime_type
+        _sources_top = folder_name('sources')
+        _stray_ext_sample = {}
+        for f in all_db_files:
+            if f.get('media_class') == 'other' and f['relative_path'].split('/')[0] == _sources_top:
+                e = os.path.splitext(f['relative_path'])[1].lower().lstrip('.')
+                if e and e not in _stray_ext_sample:
+                    _stray_ext_sample[e] = f['absolute_path']
+        for e, sample in sorted(_stray_ext_sample.items()):
+            mime = exiftool_mime_type(sample)
+            if mime and (mime.startswith('image/') or mime.startswith('video/')):
+                msg = (f"Dump contains .{e} files that exiftool sees as media ({mime}) but media_extensions "
+                       f"config does not list — they will be set aside in {folder_name('strays')}. Add '.{e}' to the "
+                       f"right media_extensions class in photos-00-config.json and re-run prep to organize them.")
+                warnings.append(msg)
+                get_reporter().log(f"  Notice: {msg}")
+
     def plan(self) -> Plan:
         operations = []
         blockers = []
@@ -1731,41 +1771,7 @@ class WorkspacePrepWorkflow:
         db_files = [f for f in all_db_files if not f['relative_path'].startswith(folder_name('photos_by_dest') + '/')]
         by_dest_files = [f for f in all_db_files if f['relative_path'].startswith(folder_name('photos_by_dest') + '/')]
 
-        # Band-misplacement guard (prep Section 6.1 / 6.2 item 6): photos and videos live in
-        # separate bands. A video under the photo bands (5-photos-by-date / 6-photos-by-dest),
-        # or an image/raw under the video band (4-videos-by-date), is a hand-introduced break
-        # prep never creates itself — hard-block, do not proceed.
-        _photo_bands = (folder_name('photos_by_date'), folder_name('photos_by_dest'))
-        _video_band = folder_name('videos_by_date')
-        for f in all_db_files:
-            top = f['relative_path'].split('/')[0]
-            mc = f.get('media_class')
-            if top in _photo_bands and mc == 'video':
-                blockers.append(f"Band misplacement: video under {top}: {f['relative_path']}")
-            elif top == _video_band and mc in ('image', 'raw'):
-                blockers.append(f"Band misplacement: {mc} under {_video_band}: {f['relative_path']}")
-
-        # Stray-media detection (prep Section 6.1): a dump file prep is about to set aside as a stray
-        # (class `other`, in 0-sources) whose extension exiftool reports as image/* or video/* is most
-        # likely a media format the workspace's media_extensions config doesn't list. Probe each
-        # DISTINCT stray extension once (not per file) and warn — non-blocking — so the operator can add
-        # it to media_extensions and re-run to organize those files instead of parking them in 1-strays.
-        from .photos_utils import exiftool_mime_type
-        _sources_top = folder_name('sources')
-        _stray_ext_sample = {}
-        for f in all_db_files:
-            if f.get('media_class') == 'other' and f['relative_path'].split('/')[0] == _sources_top:
-                e = os.path.splitext(f['relative_path'])[1].lower().lstrip('.')
-                if e and e not in _stray_ext_sample:
-                    _stray_ext_sample[e] = f['absolute_path']
-        for e, sample in sorted(_stray_ext_sample.items()):
-            mime = exiftool_mime_type(sample)
-            if mime and (mime.startswith('image/') or mime.startswith('video/')):
-                msg = (f"Dump contains .{e} files that exiftool sees as media ({mime}) but media_extensions "
-                       f"config does not list — they will be set aside in {folder_name('strays')}. Add '.{e}' to the "
-                       f"right media_extensions class in photos-00-config.json and re-run prep to organize them.")
-                warnings.append(msg)
-                get_reporter().log(f"  Notice: {msg}")
+        self._check_band_and_stray_media(all_db_files, blockers, warnings)
 
         self.coordinator.finish_phase()
         self.coordinator.start_phase("planning - building duplicate groups")
