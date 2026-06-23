@@ -1892,6 +1892,40 @@ class WorkspacePrepWorkflow:
                             st.current_paths[f['relative_path']] = dest
         return paired_jpgs
 
+    def _plan_content_groups(self, db_files, by_dest_files, paired_jpgs, blockers):
+        """Content-fingerprint grouping (prep §6/§9): group media by (content_hash, media_class)
+        for dedup, skipping paired JPGs and non-media; a missing/invalid fingerprint on a mutable
+        file is a blocker (by-dest is exempt). Appends to `blockers`; returns content_groups.
+        Verbatim lift from plan() (no op-building cluster touched)."""
+        content_groups = {}
+        for f in db_files + by_dest_files:
+            if f['relative_path'] in paired_jpgs:
+                continue
+            # Non-media (other-class) is never fingerprinted and never content-deduplicated; it is
+            # routed to 1-strays below. The absence of a fingerprint on `other` is never a blocker
+            # (prep Section 9 / 3.2).
+            if f['media_class'] == 'other':
+                continue
+
+            ch_str = f['content_hash']           # media identity == the content fingerprint
+            if not ch_str:
+                if f['relative_path'].startswith(folder_name('photos_by_dest') + '/'):
+                    pass
+                else:
+                    blockers.append(f"Hash failure for {f['relative_path']}")
+                continue
+
+            ch_dict = json.loads(ch_str)
+            if ch_dict.get("status") != "valid":
+                if f['relative_path'].startswith(folder_name('photos_by_dest') + '/'):
+                    pass
+                else:
+                    blockers.append(f"Hash failure for {f['relative_path']}: {ch_dict.get('error')}")
+                continue
+
+            content_groups.setdefault((ch_str, f['media_class']), []).append(f)
+        return content_groups
+
     def plan(self) -> Plan:
         operations = []
         blockers = []
@@ -2076,33 +2110,7 @@ class WorkspacePrepWorkflow:
         paired_jpgs = self._plan_redundant_jpgs(st, db_files)
 
 
-        content_groups = {}
-        for f in db_files + by_dest_files:
-            if f['relative_path'] in paired_jpgs:
-                continue
-            # Non-media (other-class) is never fingerprinted and never content-deduplicated; it is
-            # routed to 1-strays below. The absence of a fingerprint on `other` is never a blocker
-            # (prep Section 9 / 3.2).
-            if f['media_class'] == 'other':
-                continue
-
-            ch_str = f['content_hash']           # media identity == the content fingerprint
-            if not ch_str:
-                if f['relative_path'].startswith(folder_name('photos_by_dest') + '/'):
-                    pass
-                else:
-                    blockers.append(f"Hash failure for {f['relative_path']}")
-                continue
-
-            ch_dict = json.loads(ch_str)
-            if ch_dict.get("status") != "valid":
-                if f['relative_path'].startswith(folder_name('photos_by_dest') + '/'):
-                    pass
-                else:
-                    blockers.append(f"Hash failure for {f['relative_path']}: {ch_dict.get('error')}")
-                continue
-
-            content_groups.setdefault((ch_str, f['media_class']), []).append(f)
+        content_groups = self._plan_content_groups(db_files, by_dest_files, paired_jpgs, blockers)
 
         quarantined = set()
         plan_id_for_quarantine = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:6]}"
