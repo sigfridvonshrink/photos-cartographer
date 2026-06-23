@@ -54,14 +54,15 @@ area** (the only thing that scrolls) that, for a GPS coord cell, orders the **ma
 under the pinned decision so a paste/edit's jump-to-zoom is visible without scrolling — then the photo,
 then the proposal evidence last; non-coord cells just show the proposal.
 
-- **Two views, switchable mid-edit** (one shared model): **Time** defaults to a **recursive destination
+- **Three views, switchable mid-edit** (one shared model): **Time**, **Drift**, and **GPS** (Drift — the
+  third — is detailed in its own bullet below). **Time** defaults to a **recursive destination
   tree** — a parent shows its descendants' proposals; you can override any node; inheriting cells are
   badged "inherited from `<ancestor>`" and overrides badged "overridden"; a **live, advisory** inheritance
   preview updates children when you override a parent (the rule mirrored is just "nearest **resolved**
   ancestor → child with no own decision"; badged *preview*, authoritative on re-run). **GPS** defaults to
   a **worklist** of review items (+ per-destination fallback); automatic-only destinations collapse to a
-  counts row. Either view is switchable to the other. File-less **container** destinations (parents with
-  no media of their own, Section 10.1 of the time spec) appear in both views badged `container` —
+  counts row. Any view is switchable to any other. File-less **container** destinations (parents with
+  no media of their own, Section 10.1 of the time spec) appear in the time tree and the GPS worklist badged `container` —
   editable propagation points that hold defaults for their children and never sit on the to-do list.
 - **GPS-depends-on-time gate.** GPS placement is derived from each photo's resolved UTC, and the pipeline
   only (re)generates `photos-23` once **every** time decision is resolved. The editor surfaces that gate:
@@ -160,7 +161,11 @@ then the proposal evidence last; non-coord cells just show the proposal.
     A **place-search box** under the map (geocoding via **Nominatim/OpenStreetMap**,
     Google-Maps style) **relocates** the map to a named place — manual submit only (Enter/button, never
     per-keystroke, to respect Nominatim's ≤1 req/s policy); picking a result moves the view but does **not**
-    set the decision (the operator still picks under the crosshair).
+    set the decision (the operator still picks under the crosshair). The **folder fallback** is optional:
+    an inherited one is a proposal you accept (the checkbox), a manual one re-roots inheritance for
+    descendants, and a **Clear** button (beside the accept checkbox) resets the cell to *no fallback*
+    (effective `null`) — so a fallback can always be taken back; an unset fallback reads `none`, not
+    `resolved`.
     - *Built with vendored Leaflet (`web/vendor/leaflet/`, no CDN/build); two **runtime** OpenStreetMap
       dependencies — map **tiles** and the **Nominatim** geocoder — degrade gracefully when offline.*
     - *The earlier idea of drawing the **GPX track / anchors / ghost marker** is not realised here: a GPS
