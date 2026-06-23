@@ -1524,6 +1524,184 @@ class WorkspacePrepWorkflow:
                                 files.append(rel_path)
         files.sort()
 
+    def _process_file(self, rel_path, _ctx):
+        """Per-file worker (runs in the fingerprint/metadata thread pool): decide reuse-vs-rehash via
+        the freshness gate, fingerprint media if stale, attach metadata, and return the per-file result.
+        Was a closure in plan(); now a method taking the captured plan() locals as a context tuple (all
+        read-only inside) so the body is unchanged. (Verbatim lift, de-indented.)"""
+        (carried_forward, existing_cache, existing_metadata, current_metadata_context,
+         current_exiftool_version, current_magick_version, current_field_set_version,
+         current_extraction_options_fingerprint, failed_metadata_folders, metadata_results,
+         moved_unmatched) = _ctx
+        from .photos_utils import METADATA_SCHEMA_VERSION, CAMERA_GROUP_KEY_VERSION
+        if rel_path in carried_forward:
+            # Recognized move into by-dest: carry the cached identity forward; do
+            # not re-read the file beyond the stat already taken during recognition.
+            return {
+                "relative_path": rel_path,
+                "warnings": [],
+                "blockers": [],
+                "metadata_plan_status": "carried_forward",
+                "db_file": carried_forward[rel_path]["db_file"],
+                "cache_reused": True,
+            }
+        abs_path = os.path.join(self.workspace_root, rel_path)
+        stat = os.stat(abs_path)
+        ext = os.path.splitext(rel_path)[1].lower().lstrip('.')
+
+        cached = existing_cache.get(rel_path)
+        cached_md = existing_metadata.get(rel_path)
+
+        file_record = {
+            'relative_path': rel_path,
+            'size': stat.st_size,
+            'mtime_ns': stat.st_mtime_ns,
+        }
+        if cached and cached.get('content_hash'):
+            file_record['content_hash'] = cached.get('content_hash')
+
+        from .photos_utils import media_class_for_ext
+        media_class = media_class_for_ext(ext)
+
+        # Check metadata freshness
+        from .photos_utils import is_metadata_cache_fresh
+        md_fresh = is_metadata_cache_fresh(file_record, cached_md, current_metadata_context)
+
+        # Content-hash (pixel signature) freshness: an image/raw content hash is
+        # bound to the ImageMagick version that produced it. If magick changed,
+        # the cached signature is stale and must be recomputed.
+        content_hash_fresh = True
+        if media_class in ('image', 'raw') and cached and cached.get('content_hash'):
+            try:
+                _ch = json.loads(cached['content_hash'])
+                _ev = _ch.get('engine_version')
+                # Only the version-bound pixel signature can be restaled by an engine
+                # change; a record with no recorded engine_version (legacy/mocked) is
+                # judged solely by size/mtime, not falsely restaled.
+                if _ch.get('status') == 'valid' and _ev is not None and _ev != current_magick_version:
+                    content_hash_fresh = False
+            except Exception:
+                content_hash_fresh = False
+
+        result = {
+            "relative_path": rel_path,
+            "warnings": [],
+            "blockers": [],
+            "metadata_plan_status": None,
+            "db_file": None,
+            "cache_reused": False,
+            "rehash_reason": None,
+        }
+
+        if cached and cached['size'] == stat.st_size and cached['mtime_ns'] == stat.st_mtime_ns and md_fresh and content_hash_fresh:
+            # Do not mutate the original cached dict here in the worker thread
+            new_cached = dict(cached)
+            new_cached['last_seen_ns'] = int(datetime.now(timezone.utc).timestamp() * 1e9)
+            new_cached['metadata'] = cached_md
+
+            if media_class == "other":
+                result["metadata_plan_status"] = "not_applicable"
+            else:
+                result["metadata_plan_status"] = "reused_from_cache"
+
+            result["cache_reused"] = True
+            result["db_file"] = new_cached
+            return result
+
+        # Re-fingerprint diagnostics: this file fell through the freshness gate and (if media) will be
+        # decoded. Classify WHY so an unexpected re-hash is visible — `new` (first ingest, expected),
+        # else a previously-cached file restaled by `moved-unmatched` (a by-dest move that missed the
+        # bijective match), `size-changed`, `mtime-changed`, `metadata-stale` (an exiftool/field-set/
+        # camera-group-key stamp moved), or `engine-changed` (ImageMagick/ffmpeg version bump).
+        if media_class in ('image', 'raw', 'video'):
+            if cached is None:
+                result["rehash_reason"] = "moved-unmatched" if rel_path in moved_unmatched else "new"
+            elif cached['size'] != stat.st_size:
+                result["rehash_reason"] = "size-changed"
+            elif cached['mtime_ns'] != stat.st_mtime_ns:
+                result["rehash_reason"] = "mtime-changed"
+            elif not md_fresh:
+                result["rehash_reason"] = "metadata-stale"
+            else:
+                result["rehash_reason"] = "engine-changed"
+
+        # Media is identified ONLY by its decoded-content fingerprint (image/raw -> identify,
+        # video -> ffmpeg stream MD5). It is never byte-hashed: a whole-file SHA-256 is reserved
+        # for artifacts and would change under the EXIF/GPS rewrites a fingerprint must survive
+        # (shared contract Section 9.1). Non-media (other-class) is not fingerprinted at all
+        # (prep Section 9) — it is moved inert to 1-strays and never enters a content decision.
+        file_hash_res = None
+        content_hash_res = None
+        if media_class in ['image', 'raw']:
+            content_hash_res = ContentHasher.fingerprint_image(abs_path)
+        elif media_class == 'video':
+            content_hash_res = ContentHasher.fingerprint_video(abs_path)
+
+        parent_folder = os.path.dirname(abs_path)
+
+        if parent_folder in failed_metadata_folders:
+            meta = {}
+            meta["extraction_status"] = "extraction_failed"
+            meta["extraction_error"] = "folder_metadata_extraction_failed"
+            result["metadata_plan_status"] = "extraction_failed"
+            result["blockers"].append(
+                f"Metadata tool execution failed completely for {rel_path}"
+            )
+        elif abs_path in metadata_results:
+            meta = metadata_results[abs_path]
+            if meta.get("extraction_status"):
+                result["metadata_plan_status"] = meta["extraction_status"]
+            else:
+                result["metadata_plan_status"] = "extracted_ok"
+        else:
+            meta = {}
+            if media_class == "other":
+                meta["extraction_status"] = "not_applicable"
+                result["metadata_plan_status"] = "not_applicable"
+            else:
+                meta["extraction_status"] = "extraction_failed"
+                meta["extraction_error"] = "missing_from_exiftool_batch_result"
+                result["metadata_plan_status"] = "extraction_failed"
+                result["warnings"].append(f"Metadata extraction failed or returned empty for {rel_path}")
+
+        md_record = None
+        if meta.get("extraction_status") == "extraction_failed":
+            if cached_md and is_metadata_cache_fresh(file_record, cached_md, current_metadata_context):
+                md_record = cached_md
+            else:
+                md_record = None
+                result["blockers"].append(f"Metadata extraction failed and no valid cache exists for {rel_path}")
+        else:
+            md_record = {
+                "extractor": "exiftool",
+                "extractor_version": current_exiftool_version,
+                "field_set_version": current_field_set_version,
+                "extraction_options_fingerprint": current_extraction_options_fingerprint,
+                "metadata_schema_version": METADATA_SCHEMA_VERSION,
+                "camera_group_key_version": CAMERA_GROUP_KEY_VERSION,
+                "camera_group_key": meta.get("camera_group_key", "unknown"),
+                "has_native_gps": meta.get("has_native_gps", False),
+                "has_timestamp": meta.get("has_timestamp", False),
+                "extraction_status": meta.get("extraction_status", "extracted_ok"),
+                "extraction_error": meta.get("extraction_error", None),
+                "parsed_json": json.dumps({k:v for k,v in meta.items() if k != "raw_payload"}),
+                "raw_payload": meta.get("raw_payload", "{}")
+            }
+
+        result["db_file"] = {
+            "relative_path": rel_path,
+            "absolute_path": abs_path,
+            "size": stat.st_size,
+            "mtime_ns": stat.st_mtime_ns,
+            "inode": stat.st_ino,
+            "media_class": media_class,
+            "hash": json.dumps(file_hash_res) if file_hash_res else None,
+            "content_hash": json.dumps(content_hash_res) if content_hash_res else None,
+            "last_seen_ns": int(datetime.now(timezone.utc).timestamp() * 1e9),
+            "metadata": md_record
+        }
+        return result
+
     def plan(self) -> Plan:
         operations = []
         blockers = []
@@ -1652,181 +1830,16 @@ class WorkspacePrepWorkflow:
         execution_config = {}
         cli_options_fingerprint = OperationPlanner._hash_dict(execution_config).value
 
-        def process_file(rel_path: str):
-            if rel_path in carried_forward:
-                # Recognized move into by-dest: carry the cached identity forward; do
-                # not re-read the file beyond the stat already taken during recognition.
-                return {
-                    "relative_path": rel_path,
-                    "warnings": [],
-                    "blockers": [],
-                    "metadata_plan_status": "carried_forward",
-                    "db_file": carried_forward[rel_path]["db_file"],
-                    "cache_reused": True,
-                }
-            abs_path = os.path.join(self.workspace_root, rel_path)
-            stat = os.stat(abs_path)
-            ext = os.path.splitext(rel_path)[1].lower().lstrip('.')
-
-            cached = existing_cache.get(rel_path)
-            cached_md = existing_metadata.get(rel_path)
-
-            file_record = {
-                'relative_path': rel_path,
-                'size': stat.st_size,
-                'mtime_ns': stat.st_mtime_ns,
-            }
-            if cached and cached.get('content_hash'):
-                file_record['content_hash'] = cached.get('content_hash')
-
-            from .photos_utils import media_class_for_ext
-            media_class = media_class_for_ext(ext)
-
-            # Check metadata freshness
-            from .photos_utils import is_metadata_cache_fresh
-            md_fresh = is_metadata_cache_fresh(file_record, cached_md, current_metadata_context)
-
-            # Content-hash (pixel signature) freshness: an image/raw content hash is
-            # bound to the ImageMagick version that produced it. If magick changed,
-            # the cached signature is stale and must be recomputed.
-            content_hash_fresh = True
-            if media_class in ('image', 'raw') and cached and cached.get('content_hash'):
-                try:
-                    _ch = json.loads(cached['content_hash'])
-                    _ev = _ch.get('engine_version')
-                    # Only the version-bound pixel signature can be restaled by an engine
-                    # change; a record with no recorded engine_version (legacy/mocked) is
-                    # judged solely by size/mtime, not falsely restaled.
-                    if _ch.get('status') == 'valid' and _ev is not None and _ev != current_magick_version:
-                        content_hash_fresh = False
-                except Exception:
-                    content_hash_fresh = False
-
-            result = {
-                "relative_path": rel_path,
-                "warnings": [],
-                "blockers": [],
-                "metadata_plan_status": None,
-                "db_file": None,
-                "cache_reused": False,
-                "rehash_reason": None,
-            }
-
-            if cached and cached['size'] == stat.st_size and cached['mtime_ns'] == stat.st_mtime_ns and md_fresh and content_hash_fresh:
-                # Do not mutate the original cached dict here in the worker thread
-                new_cached = dict(cached)
-                new_cached['last_seen_ns'] = int(datetime.now(timezone.utc).timestamp() * 1e9)
-                new_cached['metadata'] = cached_md
-
-                if media_class == "other":
-                    result["metadata_plan_status"] = "not_applicable"
-                else:
-                    result["metadata_plan_status"] = "reused_from_cache"
-
-                result["cache_reused"] = True
-                result["db_file"] = new_cached
-                return result
-
-            # Re-fingerprint diagnostics: this file fell through the freshness gate and (if media) will be
-            # decoded. Classify WHY so an unexpected re-hash is visible — `new` (first ingest, expected),
-            # else a previously-cached file restaled by `moved-unmatched` (a by-dest move that missed the
-            # bijective match), `size-changed`, `mtime-changed`, `metadata-stale` (an exiftool/field-set/
-            # camera-group-key stamp moved), or `engine-changed` (ImageMagick/ffmpeg version bump).
-            if media_class in ('image', 'raw', 'video'):
-                if cached is None:
-                    result["rehash_reason"] = "moved-unmatched" if rel_path in moved_unmatched else "new"
-                elif cached['size'] != stat.st_size:
-                    result["rehash_reason"] = "size-changed"
-                elif cached['mtime_ns'] != stat.st_mtime_ns:
-                    result["rehash_reason"] = "mtime-changed"
-                elif not md_fresh:
-                    result["rehash_reason"] = "metadata-stale"
-                else:
-                    result["rehash_reason"] = "engine-changed"
-
-            # Media is identified ONLY by its decoded-content fingerprint (image/raw -> identify,
-            # video -> ffmpeg stream MD5). It is never byte-hashed: a whole-file SHA-256 is reserved
-            # for artifacts and would change under the EXIF/GPS rewrites a fingerprint must survive
-            # (shared contract Section 9.1). Non-media (other-class) is not fingerprinted at all
-            # (prep Section 9) — it is moved inert to 1-strays and never enters a content decision.
-            file_hash_res = None
-            content_hash_res = None
-            if media_class in ['image', 'raw']:
-                content_hash_res = ContentHasher.fingerprint_image(abs_path)
-            elif media_class == 'video':
-                content_hash_res = ContentHasher.fingerprint_video(abs_path)
-
-            parent_folder = os.path.dirname(abs_path)
-
-            if parent_folder in failed_metadata_folders:
-                meta = {}
-                meta["extraction_status"] = "extraction_failed"
-                meta["extraction_error"] = "folder_metadata_extraction_failed"
-                result["metadata_plan_status"] = "extraction_failed"
-                result["blockers"].append(
-                    f"Metadata tool execution failed completely for {rel_path}"
-                )
-            elif abs_path in metadata_results:
-                meta = metadata_results[abs_path]
-                if meta.get("extraction_status"):
-                    result["metadata_plan_status"] = meta["extraction_status"]
-                else:
-                    result["metadata_plan_status"] = "extracted_ok"
-            else:
-                meta = {}
-                if media_class == "other":
-                    meta["extraction_status"] = "not_applicable"
-                    result["metadata_plan_status"] = "not_applicable"
-                else:
-                    meta["extraction_status"] = "extraction_failed"
-                    meta["extraction_error"] = "missing_from_exiftool_batch_result"
-                    result["metadata_plan_status"] = "extraction_failed"
-                    result["warnings"].append(f"Metadata extraction failed or returned empty for {rel_path}")
-
-            md_record = None
-            if meta.get("extraction_status") == "extraction_failed":
-                if cached_md and is_metadata_cache_fresh(file_record, cached_md, current_metadata_context):
-                    md_record = cached_md
-                else:
-                    md_record = None
-                    result["blockers"].append(f"Metadata extraction failed and no valid cache exists for {rel_path}")
-            else:
-                md_record = {
-                    "extractor": "exiftool",
-                    "extractor_version": current_exiftool_version,
-                    "field_set_version": current_field_set_version,
-                    "extraction_options_fingerprint": current_extraction_options_fingerprint,
-                    "metadata_schema_version": METADATA_SCHEMA_VERSION,
-                    "camera_group_key_version": CAMERA_GROUP_KEY_VERSION,
-                    "camera_group_key": meta.get("camera_group_key", "unknown"),
-                    "has_native_gps": meta.get("has_native_gps", False),
-                    "has_timestamp": meta.get("has_timestamp", False),
-                    "extraction_status": meta.get("extraction_status", "extracted_ok"),
-                    "extraction_error": meta.get("extraction_error", None),
-                    "parsed_json": json.dumps({k:v for k,v in meta.items() if k != "raw_payload"}),
-                    "raw_payload": meta.get("raw_payload", "{}")
-                }
-
-            result["db_file"] = {
-                "relative_path": rel_path,
-                "absolute_path": abs_path,
-                "size": stat.st_size,
-                "mtime_ns": stat.st_mtime_ns,
-                "inode": stat.st_ino,
-                "media_class": media_class,
-                "hash": json.dumps(file_hash_res) if file_hash_res else None,
-                "content_hash": json.dumps(content_hash_res) if content_hash_res else None,
-                "last_seen_ns": int(datetime.now(timezone.utc).timestamp() * 1e9),
-                "metadata": md_record
-            }
-            return result
-
         self.coordinator.start_phase("planning - hashing files", len(files))
 
         worker_results = []
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=CONFIG.get('jobs', 4)) as executor:
-                future_to_file = {executor.submit(process_file, f): f for f in files}
+                _ctx = (carried_forward, existing_cache, existing_metadata, current_metadata_context,
+                        current_exiftool_version, current_magick_version, current_field_set_version,
+                        current_extraction_options_fingerprint, failed_metadata_folders, metadata_results,
+                        moved_unmatched)
+                future_to_file = {executor.submit(self._process_file, f, _ctx): f for f in files}
                 try:
                     for future in concurrent.futures.as_completed(future_to_file):
                         worker_results.append(future.result())
