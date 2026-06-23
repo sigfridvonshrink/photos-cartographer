@@ -1269,6 +1269,63 @@ class WorkspacePrepWorkflow:
         moved_unmatched = set(_new_by_dest) - set(carried_forward)
         return carried_forward, moved_unmatched
 
+    def _aggregate_worker_results(self, worker_results, metadata_plan_status, blockers, warnings):
+        """Sort + aggregate the per-file worker results on the main thread (deterministic). Appends to the
+        passed metadata_plan_status / blockers / warnings; emits the §17.4 re-hash diagnostics. Returns
+        (all_db_files, db_files, by_dest_files, rehash_summary) — the last is the dict that goes verbatim
+        into performance_and_cache. Verbatim lift from plan(); iteration order unchanged."""
+        # 1. Collect and sort all worker results by workspace-relative path
+        worker_results.sort(key=lambda x: x['relative_path'])
+
+        # 2. Build metadata_plan_status, warnings and db_files sequentially and deterministically on the main thread
+        all_db_files = []
+        rehash_reasons = {}          # reason -> count, over media files that were re-fingerprinted this run
+        rehash_samples = []          # first 5 UNEXPECTED re-hashes (path, reason) — a sample for investigation
+        for res in worker_results:   # worker_results is sorted by path, so the sample is deterministic
+            rel_path = res["relative_path"]
+            metadata_plan_status[rel_path] = res["metadata_plan_status"]
+            warnings.extend(res["warnings"])
+            if "blockers" in res and res["blockers"]:
+                blockers.extend(res["blockers"])
+            all_db_files.append(res["db_file"])
+            _rr = res.get("rehash_reason")
+            if _rr:
+                rehash_reasons[_rr] = rehash_reasons.get(_rr, 0) + 1
+                if _rr != "new" and len(rehash_samples) < 5:
+                    rehash_samples.append((rel_path, _rr))
+
+        # Re-hash diagnostics (prep §17.4): always-on when any media was re-fingerprinted. Split the
+        # EXPECTED new-file hashes from previously-cached files that re-hashed, name the reason buckets,
+        # and show a small first-N sample of the unexpected ones (a flag would be useless — by the time
+        # you know you want it, the re-hash already happened). The full per-reason counts go to the run
+        # report (performance_and_cache.rehash_summary).
+        _total_rehash = sum(rehash_reasons.values())
+        _new_rehash = rehash_reasons.get("new", 0)
+        _unexpected_rehash = _total_rehash - _new_rehash
+        if _total_rehash:
+            _by = ", ".join(f"{k} {v}" for k, v in sorted(rehash_reasons.items()) if k != "new")
+            get_reporter().log(
+                f"Re-fingerprinted {_total_rehash} media file(s): {_new_rehash} new (expected), "
+                + (f"{_unexpected_rehash} previously-cached re-hashed — {_by}." if _unexpected_rehash
+                   else "0 previously-cached re-hashed."))
+            if rehash_samples:
+                get_reporter().log(f"  First {len(rehash_samples)} unexpected re-hash(es) "
+                                   "(incomplete — sample for investigation):")
+                for _p, _r in rehash_samples:
+                    get_reporter().log(f"    {_r}: {_p}")
+
+        db_files = [f for f in all_db_files if not f['relative_path'].startswith(folder_name('photos_by_dest') + '/')]
+        by_dest_files = [f for f in all_db_files if f['relative_path'].startswith(folder_name('photos_by_dest') + '/')]
+
+        rehash_summary = {
+            "total": _total_rehash,
+            "new_expected": _new_rehash,
+            "unexpected": _unexpected_rehash,
+            "by_reason": rehash_reasons,
+            "sample": [{"path": p, "reason": r} for p, r in rehash_samples],
+        }
+        return all_db_files, db_files, by_dest_files, rehash_summary
+
     def _check_band_and_stray_media(self, all_db_files, blockers, warnings):
         """Band-misplacement guard + stray-media detection (prep §6.1 / §6.2 item 6). Appends to the
         passed `blockers`/`warnings` lists (and logs the stray notices). Verbatim lift from plan() —
@@ -1728,48 +1785,8 @@ class WorkspacePrepWorkflow:
             from .photos_utils import PersistentMagickWorker
             PersistentMagickWorker.cleanup_all()       # close the per-thread magick workers
 
-        # 1. Collect and sort all worker results by workspace-relative path
-        worker_results.sort(key=lambda x: x['relative_path'])
-
-        # 2. Build metadata_plan_status, warnings and db_files sequentially and deterministically on the main thread
-        all_db_files = []
-        rehash_reasons = {}          # reason -> count, over media files that were re-fingerprinted this run
-        rehash_samples = []          # first 5 UNEXPECTED re-hashes (path, reason) — a sample for investigation
-        for res in worker_results:   # worker_results is sorted by path, so the sample is deterministic
-            rel_path = res["relative_path"]
-            metadata_plan_status[rel_path] = res["metadata_plan_status"]
-            warnings.extend(res["warnings"])
-            if "blockers" in res and res["blockers"]:
-                blockers.extend(res["blockers"])
-            all_db_files.append(res["db_file"])
-            _rr = res.get("rehash_reason")
-            if _rr:
-                rehash_reasons[_rr] = rehash_reasons.get(_rr, 0) + 1
-                if _rr != "new" and len(rehash_samples) < 5:
-                    rehash_samples.append((rel_path, _rr))
-
-        # Re-hash diagnostics (prep §17.4): always-on when any media was re-fingerprinted. Split the
-        # EXPECTED new-file hashes from previously-cached files that re-hashed, name the reason buckets,
-        # and show a small first-N sample of the unexpected ones (a flag would be useless — by the time
-        # you know you want it, the re-hash already happened). The full per-reason counts go to the run
-        # report (performance_and_cache.rehash_summary).
-        _total_rehash = sum(rehash_reasons.values())
-        _new_rehash = rehash_reasons.get("new", 0)
-        _unexpected_rehash = _total_rehash - _new_rehash
-        if _total_rehash:
-            _by = ", ".join(f"{k} {v}" for k, v in sorted(rehash_reasons.items()) if k != "new")
-            get_reporter().log(
-                f"Re-fingerprinted {_total_rehash} media file(s): {_new_rehash} new (expected), "
-                + (f"{_unexpected_rehash} previously-cached re-hashed — {_by}." if _unexpected_rehash
-                   else "0 previously-cached re-hashed."))
-            if rehash_samples:
-                get_reporter().log(f"  First {len(rehash_samples)} unexpected re-hash(es) "
-                                   "(incomplete — sample for investigation):")
-                for _p, _r in rehash_samples:
-                    get_reporter().log(f"    {_r}: {_p}")
-
-        db_files = [f for f in all_db_files if not f['relative_path'].startswith(folder_name('photos_by_dest') + '/')]
-        by_dest_files = [f for f in all_db_files if f['relative_path'].startswith(folder_name('photos_by_dest') + '/')]
+        all_db_files, db_files, by_dest_files, rehash_summary = self._aggregate_worker_results(
+            worker_results, metadata_plan_status, blockers, warnings)
 
         self._check_band_and_stray_media(all_db_files, blockers, warnings)
 
@@ -2349,13 +2366,7 @@ class WorkspacePrepWorkflow:
                 "db_renames_applied": 0,
                 "dependency_validation_status": "pending",
                 "handoff_written_after_successful_validation": False,
-                "rehash_summary": {
-                    "total": _total_rehash,
-                    "new_expected": _new_rehash,
-                    "unexpected": _unexpected_rehash,
-                    "by_reason": rehash_reasons,
-                    "sample": [{"path": p, "reason": r} for p, r in rehash_samples],
-                },
+                "rehash_summary": rehash_summary,
             }
         },
             blockers=blockers,
