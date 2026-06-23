@@ -1449,7 +1449,7 @@ class WorkspacePrepWorkflow:
         return _kept, exiftool_leftovers
 
     def _scan_inventory(self, files, blockers):
-        """Inventory walk (prep §6 / §0): scan the workspace root + managed folders, bar symlinks,
+        """Inventory walk (prep §6 / §7.1): scan the workspace root + managed folders, bar symlinks,
         skip control / strays / gpx subtrees, and build the sorted `files` list; append
         forbidden-symlink and misplaced-entry blockers. Mutates the passed `files` / `blockers`.
         Verbatim lift from plan()."""
@@ -2328,7 +2328,7 @@ class WorkspacePrepWorkflow:
         # The -j/--jobs count is a transient, machine-dependent runtime knob: it is NOT recorded in the
         # plan (nor in the config file, nor the handoff), so a plan is byte-identical across job counts
         # and portable between machines — there is no requirement to run a given workspace on the same
-        # machine each time (determinism, prep spec §17.3). execution_config holds only OUTPUT-AFFECTING
+        # machine each time (determinism, prep spec §17 items 3/6). execution_config holds only OUTPUT-AFFECTING
         # CLI options — none today — so its fingerprint is stable.
         execution_config = {}
         cli_options_fingerprint = OperationPlanner._hash_dict(execution_config).value
@@ -2625,7 +2625,7 @@ def add_arguments(parser):
 def _prep_nothing_to_do(workspace_root, reporter) -> bool:
     """True (after logging a friendly notice) when this workspace is already prepped AND there is
     genuinely nothing to apply — initialized (guard present), `0-sources` empty (the steady end-state,
-    shared contract §6), AND no pending by-date→by-dest move the handoff hasn't recorded yet. Both
+    prep §18), AND no pending by-date→by-dest move the handoff hasn't recorded yet. Both
     `dry-run` and `execute` use this to stop fast (exit 0) instead of replaying a now-stale saved plan
     (which would clobber the files it already moved). Returns False — logging nothing — otherwise.
 

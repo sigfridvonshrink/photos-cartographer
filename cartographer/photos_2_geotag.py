@@ -22,10 +22,10 @@ the same plan/validate/execute, fingerprinted-dependency, authored-decisions dis
 
 It implements the full geotag workflow (Stages 1–11): the preflight lifecycle/by-dest gates
 (§7/§13), the in-memory by-dest model (Stage 2), the GPX index (§15), camera-group recognition
-(§16), the time- and GPS-decision artifacts `photos-21`/`photos-23` (§18/§23), resolved-UTC
-computation (§22), the executable plan `photos-24` (§28), `execute` of that plan into `photos-25`
-(§29), and `finalize` of the archival package `photos-26` + DB snapshot + manifest (§31). Subcommands:
-`run` (plan), `execute`, `finalize`.
+(§16), the time/drift/GPS-decision artifacts `photos-21`/`photos-22`/`photos-23` (§20/§22a/§25),
+resolved-UTC computation (§22), the executable plan `photos-24` (§28), `execute` of that plan into
+`photos-25` (§29), and `finalize` of the archival package `photos-26` + DB snapshot + manifest (§31).
+Subcommands: `plan`, `execute`, `finalize`.
 
 The script sits beside `photos_utils.py` and imports the shared infrastructure from it.
 """
@@ -174,14 +174,13 @@ class GeotagCache:
 
 
 # ============================================================================
-# Stage 8 — GPS placement from the GPX track at a photo's resolved UTC
-# (geotag §23/§25). Pure helpers (no I/O), exhaustively unit-tested.
-# The GPX placement (apply_gpx_placement) and the interpolation/extrapolation
-# engine, consolidated here as pure helpers.
+# GeotagWorkflow — the geotag orchestrator (Stages 1–11), the I/O + decision-
+# artifact layer. The pure GPS-placement helpers it calls (place_gps,
+# _interp/_extrapolate, classify_gps) now live in _geotag_calc.py (geotag §23/§25).
 # ============================================================================
 
 class GeotagWorkflow:
-    """Stages 1–11: validate the workspace, build the model, produce photos-21/22 decision artifacts,
+    """Stages 1–11: validate the workspace, build the model, produce photos-21/22/23 decision artifacts,
     compute resolved UTC, assemble photos-24-executable-plan.json (when decisions are complete),
     execute it into photos-25 (§29), and finalize the archival package photos-26 (§31)."""
 
@@ -294,7 +293,7 @@ class GeotagWorkflow:
         by_dest = folder_name('photos_by_dest')
         # §7.1 development-started guard — PRESENCE-STRICT and re-checked at execute/finalize too, not
         # just planning: the mere existence of a jpg/tif distribution subfolder under by-dest (even an
-        # empty one) hard-stops. A breakout begun between `run` and `execute` moves no planned file, so
+        # empty one) hard-stops. A breakout begun between `plan` and `execute` moves no planned file, so
         # the per-op media preconditions (§29) would not catch it; this existence check is what does.
         dev_found, nonphoto = self._scan_by_dest(by_dest)
         if dev_found:
@@ -744,9 +743,9 @@ class GeotagWorkflow:
             "camera_group_key_version": CAMERA_GROUP_KEY_VERSION,
         }
 
-    # --- Stage 7a: GPS-drift validation (photos-23, §22a) -------------------
+    # --- Stage 7a: GPS-drift validation (photos-22, §22a) -------------------
     # The highest-danger gap: a (group, dest, date) bucket whose clock offset is manual/timezone-
-    # derived (NOT a GPX self-anchor) and that has NO native-GPS anchor is placed in phase 22 purely
+    # derived (NOT a GPX self-anchor) and that has NO native-GPS anchor is placed in phase 23 purely
     # from its resolved UTC — a wrong offset silently lands the whole batch at the wrong track point.
     # 22 flags every such bucket that GPX *could* validate, blocks until the operator explicitly
     # confirms each (a zero-scrub "offset was right" must be actively confirmed, never implied), and
@@ -755,7 +754,7 @@ class GeotagWorkflow:
     _DRIFT_TRIGGER_SOURCES = ("timezone_accepted", "manual", "manual_real_utc")
 
     def build_drift_validation(self, files, time_artifact, rows0, gpx, prior):
-        """Build/regenerate photos-23 from the COMPLETE photos-21 + the resolved UTC under the
+        """Build/regenerate photos-22 from the COMPLETE photos-21 + the resolved UTC under the
         current offsets (`rows0`). One review item per at-risk bucket (manual/tz-derived offset, no
         native-GPS anchor, and GPX coverage over its plausible time window). Authored confirmations
         are preserved across reruns; a confirmation whose bucket no longer triggers is stale-flagged.
@@ -790,7 +789,7 @@ class GeotagWorkflow:
                        if (window is None or (lo - timedelta(seconds=window)) <= p.time_utc
                            <= (hi + timedelta(seconds=window)))]
                 if not seg:
-                    continue                                  # no GPX coverage -> phase 22 fallback/lost, not 22
+                    continue                                  # no GPX coverage -> phase 23 fallback/lost
                 cells[bucket] = self._drift_cell(dest, bucket, cell, seg, frames,
                                                  prior_cells.get(bucket) or {}, blockers, date=date)
             if cells:
@@ -1466,7 +1465,7 @@ class GeotagWorkflow:
         mutates an artifact, photo, or the live DB). Returns blockers (empty = package written)."""
         ws = self.workspace_root
         if not os.path.exists(executable_plan_path(ws)):
-            return [f"No {EXECUTABLE_PLAN_ARTIFACT} — run `run` then `execute` first."]
+            return [f"No {EXECUTABLE_PLAN_ARTIFACT} — run `plan` then `execute` first."]
         if not os.path.exists(execution_summary_path(ws)):
             return [f"No {EXECUTION_SUMMARY_ARTIFACT} — `execute` the plan first."]
         plan = json.load(open(executable_plan_path(ws)))
@@ -1552,7 +1551,7 @@ def add_arguments(parser):
 
 
 def _auto_reprep_for_clean_move(args, workspace_root, reporter):
-    """Geotag §13.1 — auto re-prep for a clean by-dest move, run BEFORE geotag takes the whole-run lock.
+    """Geotag §13.1.1 — auto re-prep for a clean by-dest move, run BEFORE geotag takes the whole-run lock.
 
     The common operator flow is: move photos from by-date into the by-dest tree, then go straight to
     geotag. That move leaves the handoff stale (geotag derives each file's calibration `destination`
@@ -1606,7 +1605,7 @@ def run(args):
     workspace_root = os.getcwd()
     reporter = get_reporter()
 
-    # §13.1: auto re-prep a clean by-dest move so the operator can go straight to geotag. Runs BEFORE
+    # §13.1.1: auto re-prep a clean by-dest move so the operator can go straight to geotag. Runs BEFORE
     # the lock (prep takes its own); the in-lock _check_reprep_gate stays as the re-validation fallback.
     _auto_reprep_for_clean_move(args, workspace_root, reporter)
 
@@ -1710,7 +1709,7 @@ def run(args):
                 # with the operator-validated offsets before anything downstream consumes it.
                 rows0 = compute_resolved_utc(files, groups, artifact)
 
-                # Stage 7a: GPS-drift validation (photos-23, §22a) — the gate before phase 22. A
+                # Stage 7a: GPS-drift validation (photos-22, §22a) — the gate before phase 23. A
                 # manual/timezone-derived offset with no native-GPS anchor is placed purely from its
                 # resolved UTC, so a wrong offset silently mis-places the whole batch; 22 makes the
                 # operator confirm each such bucket (a zero-scrub must be explicit) before GPS is built.
@@ -1819,7 +1818,7 @@ def run(args):
                     reporter.log(f"  - {b}")
                 sys.exit(2)
             if not os.path.exists(executable_plan_path(workspace_root)):
-                reporter.log(f"No {EXECUTABLE_PLAN_ARTIFACT} — run `run` first to plan.")
+                reporter.log(f"No {EXECUTABLE_PLAN_ARTIFACT} — run `plan` first.")
                 sys.exit(2)
             now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             execution_id = sha256_text(f"{now_iso}|{os.getpid()}")[:12]
