@@ -1702,6 +1702,22 @@ class WorkspacePrepWorkflow:
         }
         return result
 
+    def _build_ghost_prunes(self):
+        """Build the ghost-prune list — a `remove` cache effect for every cached row whose file no longer
+        exists on disk (e.g. by-date sources moved into by-dest, deletions). Returns the list; it is
+        emitted later as a db_remove op. Verbatim lift from plan()."""
+        ghost_prunes = []
+        for row in self.cache.get_all_files().values():
+            if not os.path.exists(os.path.join(self.workspace_root, row['relative_path'])):
+                ghost_prunes.append({
+                    "action": "remove",
+                    "relative_path": row['relative_path'],
+                    "preconditions": {
+                        "must_be_missing": True
+                    }
+                })
+        return ghost_prunes
+
     def plan(self) -> Plan:
         operations = []
         blockers = []
@@ -1865,16 +1881,7 @@ class WorkspacePrepWorkflow:
         self.coordinator.finish_phase()
         self.coordinator.start_phase("planning - building duplicate groups")
 
-        ghost_prunes = []
-        for row in self.cache.get_all_files().values():
-            if not os.path.exists(os.path.join(self.workspace_root, row['relative_path'])):
-                ghost_prunes.append({
-                    "action": "remove",
-                    "relative_path": row['relative_path'],
-                    "preconditions": {
-                        "must_be_missing": True
-                    }
-                })
+        ghost_prunes = self._build_ghost_prunes()
 
 
 
