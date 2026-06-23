@@ -1366,44 +1366,11 @@ class WorkspacePrepWorkflow:
                 warnings.append(msg)
                 get_reporter().log(f"  Notice: {msg}")
 
-    def plan(self) -> Plan:
-        operations = []
-        blockers = []
-        warnings = []
-        files = []
-        self._all_physical_lower_for_plan = None
-        media_mutated_originals = set()
-
-        # Seed photos-00-config.json on first run, then read it as authoritative, before
-        # any config-dependent value is used or fingerprinted (shared contract Section 4 / prep Section 3).
-        from .photos_utils import load_or_seed_config
-        self._config_fingerprint = load_or_seed_config(self.workspace_root)
-
-        # Workspace lifecycle (prep Section 3.1): INITIALIZED once the root sentinel exists.
-        from .photos_utils import guard_path, FOLDER_ROLES
-        self._initializing = not os.path.exists(guard_path(self.workspace_root))
-        if self._initializing:
-            # Plan creation of the full 0-6 structure (idempotent mkdir; the sentinel is written
-            # last by execute, prep Section 14.3 step 11).
-            for _r in FOLDER_ROLES:
-                operations.append(Operation(
-                    operation_id=f"op-{uuid.uuid4().hex[:8]}",
-                    type="mkdir", reason="Initialize workspace structure",
-                    source=None, destination=folder_name(_r),
-                    preconditions={}, verification={}, database_effects_after_verification=[]))
-        else:
-            # Activated workspace (guard present): the full 0-6 structure must already exist. A managed
-            # folder that is missing or no longer a directory means the root is non-conforming — almost
-            # always an inadvertent user deletion, which may have taken irreplaceable media with it — so
-            # HARD STOP rather than silently recreating it and masking the loss.
-            _missing = missing_managed_folders(self.workspace_root)
-            if _missing:
-                blockers.append(
-                    "Workspace is non-conforming: missing managed folder(s): "
-                    f"{', '.join(_missing)}. They were likely removed inadvertently; restore them (or "
-                    "move the remaining media into a fresh workspace) before running — prep will not "
-                    "recreate them.")
-
+    def _scan_inventory(self, files, blockers):
+        """Inventory walk (prep §6 / §0): scan the workspace root + managed folders, bar symlinks,
+        skip control / strays / gpx subtrees, and build the sorted `files` list; append
+        forbidden-symlink and misplaced-entry blockers. Mutates the passed `files` / `blockers`.
+        Verbatim lift from plan()."""
         self.coordinator.start_phase("planning - scanning inventory")
         # 0. Inventory, lifecycle guards, symlink check
         _managed_set = set(self.managed_folders)
@@ -1487,6 +1454,46 @@ class WorkspacePrepWorkflow:
                             else:
                                 files.append(rel_path)
         files.sort()
+
+    def plan(self) -> Plan:
+        operations = []
+        blockers = []
+        warnings = []
+        files = []
+        self._all_physical_lower_for_plan = None
+        media_mutated_originals = set()
+
+        # Seed photos-00-config.json on first run, then read it as authoritative, before
+        # any config-dependent value is used or fingerprinted (shared contract Section 4 / prep Section 3).
+        from .photos_utils import load_or_seed_config
+        self._config_fingerprint = load_or_seed_config(self.workspace_root)
+
+        # Workspace lifecycle (prep Section 3.1): INITIALIZED once the root sentinel exists.
+        from .photos_utils import guard_path, FOLDER_ROLES
+        self._initializing = not os.path.exists(guard_path(self.workspace_root))
+        if self._initializing:
+            # Plan creation of the full 0-6 structure (idempotent mkdir; the sentinel is written
+            # last by execute, prep Section 14.3 step 11).
+            for _r in FOLDER_ROLES:
+                operations.append(Operation(
+                    operation_id=f"op-{uuid.uuid4().hex[:8]}",
+                    type="mkdir", reason="Initialize workspace structure",
+                    source=None, destination=folder_name(_r),
+                    preconditions={}, verification={}, database_effects_after_verification=[]))
+        else:
+            # Activated workspace (guard present): the full 0-6 structure must already exist. A managed
+            # folder that is missing or no longer a directory means the root is non-conforming — almost
+            # always an inadvertent user deletion, which may have taken irreplaceable media with it — so
+            # HARD STOP rather than silently recreating it and masking the loss.
+            _missing = missing_managed_folders(self.workspace_root)
+            if _missing:
+                blockers.append(
+                    "Workspace is non-conforming: missing managed folder(s): "
+                    f"{', '.join(_missing)}. They were likely removed inadvertently; restore them (or "
+                    "move the remaining media into a fresh workspace) before running — prep will not "
+                    "recreate them.")
+
+        self._scan_inventory(files, blockers)
 
         # Hidden (dot-prefixed) files arriving in a dump (.DS_Store, .thumbnails/, editor temp) are
         # recoverable junk; collect them from the dump areas (root on init, 0-sources inbox) for
