@@ -628,6 +628,16 @@ Expensive work (fingerprinting, metadata extraction) may run concurrently under 
 
 Long-running execution is visible: phase-level log lines (lock, validate, scan, fingerprint, extract, dedup, apply, cache update, handoff, release) and live aggregate progress for concurrent fingerprinting/metadata, with in-place updates on a TTY and periodic plain lines when output is redirected. Progress output is never the only record of a mutation — the journal is durable; progress is transient and never a dependency.
 
+### 17.4 Re-hash diagnostics
+
+Re-fingerprinting a media file (a full ImageMagick / `ffmpeg` decode) is the dominant cost of a plan, and the cache is path-keyed (Section 10), so an unexpected re-hash is easy to incur and easy to miss. When **any** media file is re-fingerprinted in a run, prep emits an always-on diagnostic that makes the cause visible:
+
+- a one-line summary splitting **expected** new-file hashes from **previously-cached** files that re-hashed, the latter broken down by reason: `new` (first ingest, expected), `moved-unmatched` (an uncached file under `6-photos-by-dest` that failed the unique bijective move match of Section 10.1 — an ambiguous, renamed, or stat-reset move), `size-changed`, `mtime-changed`, `metadata-stale` (an exiftool / field-set / options / schema / camera-group-key stamp moved, Section 9), or `engine-changed` (the ImageMagick / `ffmpeg` version bound to a cached signature changed, Section 10);
+- a small first-N sample of the **unexpected** (previously-cached) re-hashes — path + reason — explicitly labelled incomplete and for investigation. There is deliberately no opt-in flag: a re-hash is only observed after the fact, so the sample must be unconditional;
+- the full per-reason counts and the sample in the run report under `performance_and_cache.rehash_summary` (machine-readable, diffable across runs).
+
+This is **observability only** — it never changes which files are re-hashed, nor the plan itself.
+
 ---
 
 ## 18. End state and handoff to geotag
