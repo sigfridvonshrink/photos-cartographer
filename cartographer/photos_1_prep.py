@@ -1973,6 +1973,52 @@ class WorkspacePrepWorkflow:
                               "plan_id": plan_id_for_quarantine, "kind": "dump_dotfile"},
                 database_effects_after_verification=[]))
 
+    def _plan_dedup(self, st, content_groups, quarantined, plan_id_for_quarantine):
+        """Content dedup (prep §6/§12): within each (content_hash, media_class) group keep the
+        highest-priority file and quarantine the rest (evidence-before-quarantine quarantine_move,
+        recoverable; by-dest never mutated). Records each quarantined rel-path in `quarantined`
+        (read later by the organize step). Mutates the op-building cluster on `st`. Verbatim from
+        plan() with `<cluster> -> st.<cluster>`."""
+        for (ch_str, mc), group in content_groups.items():
+            if len(group) > 1:
+                def priority(item):
+                    p = st.current_paths.get(item['relative_path'], item['relative_path'])
+                    return dedup_priority(p)
+
+                group.sort(key=priority)
+                retained = group[0]
+
+                for dup in group[1:]:
+                    rel_path = st.current_paths.get(dup['relative_path'], dup['relative_path'])
+                    if rel_path.startswith(folder_name('photos_by_dest') + '/'):
+                        # Never mutate by-dest
+                        continue
+
+                    quarantine_dest = os.path.join(".photos-ingest-quarantine", plan_id_for_quarantine, rel_path)
+                    manifest_payload = {
+                        "original_path": rel_path,
+                        "quarantine_path": quarantine_dest,
+                        "retained_counterpart": st.current_paths.get(retained['relative_path'], retained['relative_path']),
+                        "duplicate_evidence": json.loads(ch_str),
+                        "plan_id": plan_id_for_quarantine,
+                    }
+                    st.media_mutated_originals.add(dup["relative_path"])
+
+                    st.operations.append(Operation(
+
+                        operation_id=f"op-{uuid.uuid4().hex[:8]}",
+
+                        type="quarantine_move",
+                        reason=f"Duplicate of {st.current_paths.get(retained['relative_path'], retained['relative_path'])}",
+                        source=rel_path,
+                        destination=quarantine_dest,
+                        preconditions={"size": dup["size"], "mtime_ns": dup["mtime_ns"]},
+                        verification=manifest_payload,
+                        database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(dup, relative_path=quarantine_dest, absolute_path=os.path.join(self.workspace_root, quarantine_dest))}]
+                    ))
+                    quarantined.add(dup['relative_path'])
+                    st.current_paths[dup['relative_path']] = quarantine_dest
+
     def plan(self) -> Plan:
         operations = []
         blockers = []
@@ -2164,45 +2210,7 @@ class WorkspacePrepWorkflow:
 
         self._plan_quarantine_artifacts(st, exiftool_leftovers, dump_dotfiles, plan_id_for_quarantine)
 
-        for (ch_str, mc), group in content_groups.items():
-            if len(group) > 1:
-                def priority(item):
-                    p = current_paths.get(item['relative_path'], item['relative_path'])
-                    return dedup_priority(p)
-
-                group.sort(key=priority)
-                retained = group[0]
-
-                for dup in group[1:]:
-                    rel_path = current_paths.get(dup['relative_path'], dup['relative_path'])
-                    if rel_path.startswith(folder_name('photos_by_dest') + '/'):
-                        # Never mutate by-dest
-                        continue
-
-                    quarantine_dest = os.path.join(".photos-ingest-quarantine", plan_id_for_quarantine, rel_path)
-                    manifest_payload = {
-                        "original_path": rel_path,
-                        "quarantine_path": quarantine_dest,
-                        "retained_counterpart": current_paths.get(retained['relative_path'], retained['relative_path']),
-                        "duplicate_evidence": json.loads(ch_str),
-                        "plan_id": plan_id_for_quarantine,
-                    }
-                    media_mutated_originals.add(dup["relative_path"])
-
-                    operations.append(Operation(
-
-                        operation_id=f"op-{uuid.uuid4().hex[:8]}",
-
-                        type="quarantine_move",
-                        reason=f"Duplicate of {current_paths.get(retained['relative_path'], retained['relative_path'])}",
-                        source=rel_path,
-                        destination=quarantine_dest,
-                        preconditions={"size": dup["size"], "mtime_ns": dup["mtime_ns"]},
-                        verification=manifest_payload,
-                        database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(dup, relative_path=quarantine_dest, absolute_path=os.path.join(self.workspace_root, quarantine_dest))}]
-                    ))
-                    quarantined.add(dup['relative_path'])
-                    current_paths[dup['relative_path']] = quarantine_dest
+        self._plan_dedup(st, content_groups, quarantined, plan_id_for_quarantine)
 
         # Pass 1: seed the per-run suffix index with EVERY already-conforming name first, so a
         # newly-organized (or re-located) file never collides with an existing one regardless of
