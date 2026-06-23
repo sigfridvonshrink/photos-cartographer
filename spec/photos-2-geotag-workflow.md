@@ -816,7 +816,7 @@ For each group, the workflow determines:
 8. whether the group has native GPS on some/all files;
 9. whether the group has missing or ambiguous timestamp metadata.
 
-If unknown camera groups are found, the workflow should output directly pasteable config snippets (for the workspace config `photos-00-config.json`) as textual output.
+If unknown camera groups are found, the workflow should output directly pasteable config snippets (for the workspace config `photos-00-config.json`) as textual output. The two arrays (`fixed_clock_cameras` and `phones`) are emitted **in the config file's own `device_groups` key order** — the seed is written sorted, so `fixed_clock_cameras` precedes `phones` — so that a whole-block paste-over of both arrays preserves the comma between them; emitting them in the reverse order would drop that inter-array comma.
 
 If camera group classification is incomplete:
 

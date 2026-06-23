@@ -303,7 +303,10 @@ def test_unknown_group_template_is_valid_full_json(tmp_path, monkeypatch, capsys
 
     assert _run(monkeypatch, ws) == 2
     err = capsys.readouterr().err
-    block = err[err.index('  "phones":'):err.index("\n\nNo geotag")]
+    # The block is emitted in the config's key order (fixed_clock_cameras first, then phones), so a
+    # whole-block paste-over keeps the inter-array comma; slice from the first array.
+    block = err[err.index('  "fixed_clock_cameras":'):err.index("\n\nNo geotag")]
+    assert block.index('"fixed_clock_cameras"') < block.index('"phones"')
     tmpl = json.loads("{" + block + "}")                     # parses iff no trailing comma
     assert NEW in tmpl["phones"]                             # new group offered in both arrays
     assert NEW in tmpl["fixed_clock_cameras"]

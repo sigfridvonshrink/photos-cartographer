@@ -1646,7 +1646,14 @@ def run(args):
                       "the new one(s)); the new group(s) appear in BOTH — keep each in only ONE array and "
                       "delete it from the other:\n")
                 dg = (CONFIG.get("camera_time_and_timezone_policy") or {}).get("device_groups") or {}
-                labels = ("phones", "fixed_clock_cameras")
+                # Emit the two arrays in the config file's OWN key order (the seed is written
+                # sort_keys=True, so fixed_clock_cameras precedes phones) — a whole-block paste-over then
+                # keeps the inter-array comma intact instead of pasting them in the reverse order and
+                # dropping it. Ensure both standard arrays appear even if the config omits one.
+                labels = [k for k in dg if k in ("fixed_clock_cameras", "phones")]
+                for _k in ("fixed_clock_cameras", "phones"):
+                    if _k not in labels:
+                        labels.append(_k)
                 for i, label in enumerate(labels):
                     existing = list(dg.get(label) or [])
                     merged = existing + [k for k in unknown if k not in existing]
