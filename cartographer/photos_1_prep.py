@@ -2374,14 +2374,16 @@ class WorkspacePrepWorkflow:
 
 
 
-        current_paths = {f['relative_path']: f['relative_path'] for f in db_files}
-        by_dest_paths = {f['relative_path'].lower(): f['relative_path'] for f in by_dest_files}
-
-        global_destinations = set()
-        for p in by_dest_paths.keys():
-            global_destinations.add(p)
-
-        st = _PlanState(operations, current_paths, by_dest_paths, global_destinations, media_mutated_originals)
+        # The op-building cluster now lives on `st` (the _plan_* steps mutate it in order). operations +
+        # media_mutated_originals were seeded at the top of plan(); the path/destination maps are built
+        # here and handed straight to the carrier — no separate bare locals to drift out of sync.
+        _by_dest_paths = {f['relative_path'].lower(): f['relative_path'] for f in by_dest_files}
+        st = _PlanState(
+            operations,
+            {f['relative_path']: f['relative_path'] for f in db_files},
+            _by_dest_paths,
+            set(_by_dest_paths),
+            media_mutated_originals)
         self._plan_init_moves(st, db_files)
 
         self._plan_extension_case(st, db_files)
@@ -2409,18 +2411,18 @@ class WorkspacePrepWorkflow:
 
         self._plan_cache_effects(st, all_db_files, carried_forward, existing_cache, existing_metadata, current_metadata_context, ghost_prunes)
 
-        no_op_count = len(files) - len(media_mutated_originals)
+        no_op_count = len(files) - len(st.media_mutated_originals)
         from .photos_utils import quarantine_footprint
         qf = quarantine_footprint(self.workspace_root)
 
-        report = self._build_run_report(operations, no_op_count, metadata_plan_status, all_db_files,
+        report = self._build_run_report(st.operations, no_op_count, metadata_plan_status, all_db_files,
                                         carried_forward, by_dest_files, blockers, warnings, qf,
                                         current_exiftool_version, current_field_set_version)
 
         # Record passive file state dependencies for idempotency and staleness protection
         workspace_file_preconditions = []
         for f in all_db_files:
-            if f["relative_path"] not in media_mutated_originals:
+            if f["relative_path"] not in st.media_mutated_originals:
                 workspace_file_preconditions.append({
                     "relative_path": f["relative_path"],
                     "size": f["size"],
@@ -2454,7 +2456,7 @@ class WorkspacePrepWorkflow:
             summary={
             "message": "Prep Plan generated",
             "no_op_files": no_op_count,
-            "operations_planned": len(operations),
+            "operations_planned": len(st.operations),
             "recognized_moves": len(carried_forward),
             "quarantine_footprint": qf,
             "report": report,
