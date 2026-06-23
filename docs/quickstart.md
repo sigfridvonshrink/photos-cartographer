@@ -1,6 +1,6 @@
 # Quick start
 
-End-to-end: from a downloaded executable to a geotagged shoot merged into your library. If a term here
+End-to-end: from a downloaded executable to a map-complete shoot — or a whole dump — merged into your library. If a term here
 is unfamiliar (camera group, destination, drift), the [concepts guide](concepts.md) explains the *why*;
 the [editor guide](editor.md) covers the browser UI in depth.
 
