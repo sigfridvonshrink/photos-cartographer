@@ -730,7 +730,17 @@ no re-read) and refresh the handoff/cache, then geotag can proceed.
 No geotag JSON was written.
 ```
 
-Geotag never performs the move recognition itself and never writes to the cache, handoff, or by-dest to "fix" this — recognizing moves and refreshing the handoff is prep's responsibility alone (prep Section 10.1). Geotag's only action is to detect the gap and direct the user to re-run prep.
+Geotag never performs the move recognition itself and never writes to the cache, handoff, or by-dest to "fix" this — recognizing moves and refreshing the handoff is prep's responsibility alone (prep Section 10.1). Geotag's only action is to detect the gap and either direct the user to re-run prep or, in the bounded case of Section 13.1.1, run the real prep phases for them.
+
+### 13.1.1 Convenience: auto re-prep for a clean by-date → by-dest move
+
+Because *move → re-run prep → geotag* is the overwhelmingly common flow, geotag MAY run the prep re-organization for the operator instead of hard-stopping — but only by invoking the **real prep phases**, never by recognizing the move itself. Before geotag acquires the whole-run lock, when **all** of the following hold it runs `prep plan` then `prep execute` (each taking and releasing the whole-run lock in turn — hence this must precede geotag's own lock), announces what and why, then continues into planning:
+
+- the workspace is initialized and not sealed;
+- `0-sources` is **empty** — so the prep run is the `stat`-only move refresh (`by_dest_mutated: 0`, no media moved). A non-empty `0-sources` is an unprocessed dump: the cheapest hard gate, left to the Section 13 scope blocker so the operator ingests it knowingly — geotag never silently ingests a dump via auto re-prep;
+- the re-prep detection above (unrecorded by-dest media, or a handoff by-date photo now gone) is the one thing pending.
+
+This preserves every invariant: prep — not geotag — performs the move recognition and is the sole writer of the cache/handoff and its content fingerprint; the run stays plan/validate/execute; and the in-lock blocker of Section 13.1 remains in force as the re-validation fallback — a race, an ambiguous move prep cannot record `stat`-only, or any residual still hard-stops, and an auto-prep that fails (non-zero exit) aborts geotag so nothing is geotagged on a half-done state. When the conditions are not all met, geotag falls through to the Section 13.1 hard-stop exactly as before. The convenience is in *who types the prep command*, not in *what enforces the contract*. (This applies to `geotag plan`; `geotag execute` validates against the plan's own dependency fingerprints and does not re-prep.)
 
 ---
 

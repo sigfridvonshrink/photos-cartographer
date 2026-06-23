@@ -47,7 +47,7 @@ from .photos_utils import (
     validate_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
     folders_fingerprint, media_extensions_fingerprint,
     selected_gpx_root, CAMERA_IDENTITY_FIELDS, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
-    missing_managed_folders,
+    missing_managed_folders, by_dest_reprep_pending,
     json_dependency, verify_json_dependency, handoff_content_fingerprint, write_json_artifact, write_versioned_json, db_path, ensure_control_dir,
     journal_path, ContentHasher, _move_no_clobber,
     prep_log_path, prep_db_snapshot_path, write_db_snapshot, take_zfs_snapshot,
@@ -2357,9 +2357,64 @@ def add_arguments(parser):
     parser.set_defaults(_run=run, _parser=parser)
 
 
+def _auto_reprep_for_clean_move(args, workspace_root, reporter):
+    """Geotag §13.1 — auto re-prep for a clean by-dest move, run BEFORE geotag takes the whole-run lock.
+
+    The common operator flow is: move photos from by-date into the by-dest tree, then go straight to
+    geotag. That move leaves the handoff stale (geotag derives each file's calibration `destination`
+    from the handoff), so geotag would otherwise hard-stop and tell you to re-run prep by hand. Instead,
+    for the *clean* case — workspace initialized, `0-sources` already empty (so this is the stat-only
+    move refresh: no media is moved, `by_dest_mutated: 0`), and a by-date→by-dest move is the one thing
+    the handoff hasn't recorded — run the real prep phases (`plan` then `execute`) for the operator,
+    announcing what and why. Everything else is left untouched for the in-lock gates to report:
+    sealed/uninitialized, a non-empty `0-sources` dump (the cheapest hard gate — a bigger op the
+    operator should launch knowingly), or nothing pending. prep takes and releases its own whole-run
+    lock, so this MUST run pre-lock to avoid self-deadlock; geotag's own `_check_reprep_gate` then
+    re-validates under the lock as the fallback (a race or a non-clean move still hard-stops)."""
+    if args.command != "plan":
+        return
+    if is_sealed(workspace_root) or not os.path.exists(guard_path(workspace_root)):
+        return
+    sources = folder_name('sources')
+    src = os.path.join(workspace_root, sources)
+    if os.path.isdir(src) and os.listdir(src):
+        return                          # 0-sources holds a dump — cheapest hard gate; left to the scope gate
+    ho_p = handoff_path(workspace_root)
+    if not os.path.exists(ho_p):
+        return
+    try:
+        with open(ho_p) as f:
+            handoff = json.load(f)
+    except (OSError, ValueError):
+        return                          # unreadable handoff — let the normal flow surface it under the lock
+    example = by_dest_reprep_pending(workspace_root, handoff)
+    if not example:
+        return                          # nothing pending — straight to geotag
+    by_dest = folder_name('photos_by_dest')
+    reporter.log(f"{by_dest}/ has photo(s) prep hasn't recorded yet (e.g. {example}), and {sources}/ is "
+                 f"empty — recording your move before geotag: running prep plan + execute "
+                 f"(stat-only, no media moved)…")
+    import types
+    from . import photos_1_prep
+    for cmd in ("plan", "execute"):
+        prep_args = types.SimpleNamespace(command=cmd, jobs=getattr(args, "jobs", 4))
+        try:
+            photos_1_prep.run(prep_args)
+        except SystemExit as e:
+            if e.code not in (0, None):
+                reporter.error(f"Auto prep {cmd} did not succeed (exit {e.code}). Resolve it and re-run "
+                               "geotag — nothing was geotagged.")
+                sys.exit(2)
+    reporter.log("Re-prep complete; continuing with geotag.")
+
+
 def run(args):
     workspace_root = os.getcwd()
     reporter = get_reporter()
+
+    # §13.1: auto re-prep a clean by-dest move so the operator can go straight to geotag. Runs BEFORE
+    # the lock (prep takes its own); the in-lock _check_reprep_gate stays as the re-validation fallback.
+    _auto_reprep_for_clean_move(args, workspace_root, reporter)
 
     # Whole-run workspace lock (shared contract §2): one lock across every phase; fail-fast.
     run_lock = WorkspaceLock(workspace_root)
