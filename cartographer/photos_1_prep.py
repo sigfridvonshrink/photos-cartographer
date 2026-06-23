@@ -1225,6 +1225,50 @@ class WorkspacePrepWorkflow:
         out.sort()
         return out
 
+    def _recognize_carried_moves(self, files, existing_cache, existing_metadata):
+        """Move-aware cache identity (prep §10.1 / 10.2). Recognize a file the user moved from by-date
+        into 6-photos-by-dest (or re-sorted between destinations inside by-dest) by a cache-only
+        bijective (size, mtime_ns, basename) stat match, and carry its cached hash + metadata forward
+        to the new path instead of re-hashing / re-extracting it. By-dest is read-only, so there is no
+        filesystem operation: the old (now-missing) row is dropped by ghost-prune and the carried row is
+        upserted at the new path. Returns (carried_forward, moved_unmatched). Pure helper — computes the
+        two maps; mutates no plan state. (Extracted verbatim from plan().)"""
+        import collections as _collections
+        _present = set(files)
+        _missing_rows = {p: r for p, r in existing_cache.items() if p not in _present}
+        _new_by_dest = [f for f in files
+                        if f.startswith(folder_name('photos_by_dest') + '/') and f not in existing_cache]
+        _src_idx = _collections.defaultdict(list)
+        for _p, _r in _missing_rows.items():
+            _src_idx[(_r['size'], _r['mtime_ns'], os.path.basename(_p).lower())].append(_p)
+        _tgt_idx = _collections.defaultdict(list)
+        _tgt_stat = {}
+        for _f in _new_by_dest:
+            _st = os.stat(os.path.join(self.workspace_root, _f))
+            _tgt_stat[_f] = _st
+            _tgt_idx[(_st.st_size, _st.st_mtime_ns, os.path.basename(_f).lower())].append(_f)
+        carried_forward = {}  # new_by_dest_path -> {"source": old_path, "db_file": carried_db}
+        for _key, _tgts in _tgt_idx.items():
+            _srcs = _src_idx.get(_key, [])
+            if len(_tgts) == 1 and len(_srcs) == 1:  # bijective unique match only
+                _old_path, _new_path = _srcs[0], _tgts[0]
+                _old_row = existing_cache[_old_path]
+                _old_md = existing_metadata.get(_old_path)
+                _st = _tgt_stat[_new_path]
+                _carried = dict(_old_row,
+                                relative_path=_new_path,
+                                absolute_path=os.path.join(self.workspace_root, _new_path),
+                                size=_st.st_size, mtime_ns=_st.st_mtime_ns, inode=_st.st_ino,
+                                last_seen_ns=int(datetime.now(timezone.utc).timestamp() * 1e9))
+                _carried["metadata"] = _old_md
+                carried_forward[_new_path] = {"source": _old_path, "db_file": _carried}
+
+        # by-dest files that LOOK moved (new under by-dest, uncached) but failed the unique bijective
+        # match (ambiguous, basename changed, or stat reset) — they will re-fingerprint. Tagged
+        # `moved-unmatched` so this exact, easy-to-miss cause is visible in the re-hash diagnostics.
+        moved_unmatched = set(_new_by_dest) - set(carried_forward)
+        return carried_forward, moved_unmatched
+
     def plan(self) -> Plan:
         operations = []
         blockers = []
@@ -1390,47 +1434,8 @@ class WorkspacePrepWorkflow:
         existing_cache = self.cache.get_all_files()
         existing_metadata = self.cache.get_all_metadata()
 
-        # --- Move-aware cache identity (prep Section 10.1 / 10.2) ------------------
-        # Recognize a file the user moved from by-date into 6-photos-by-dest (or
-        # re-sorted between destinations inside by-dest) by a cache-only stat match,
-        # and carry its cached hash + metadata forward to the new path instead of
-        # re-hashing / re-extracting it. By-dest is read-only, so there is no
-        # filesystem operation: the old (now-missing) row is dropped by ghost-prune
-        # and the carried row is upserted at the new path.
-        import collections as _collections
-        _present = set(files)
-        _missing_rows = {p: r for p, r in existing_cache.items() if p not in _present}
-        _new_by_dest = [f for f in files
-                        if f.startswith(folder_name('photos_by_dest') + '/') and f not in existing_cache]
-        _src_idx = _collections.defaultdict(list)
-        for _p, _r in _missing_rows.items():
-            _src_idx[(_r['size'], _r['mtime_ns'], os.path.basename(_p).lower())].append(_p)
-        _tgt_idx = _collections.defaultdict(list)
-        _tgt_stat = {}
-        for _f in _new_by_dest:
-            _st = os.stat(os.path.join(self.workspace_root, _f))
-            _tgt_stat[_f] = _st
-            _tgt_idx[(_st.st_size, _st.st_mtime_ns, os.path.basename(_f).lower())].append(_f)
-        carried_forward = {}  # new_by_dest_path -> {"source": old_path, "db_file": carried_db}
-        for _key, _tgts in _tgt_idx.items():
-            _srcs = _src_idx.get(_key, [])
-            if len(_tgts) == 1 and len(_srcs) == 1:  # bijective unique match only
-                _old_path, _new_path = _srcs[0], _tgts[0]
-                _old_row = existing_cache[_old_path]
-                _old_md = existing_metadata.get(_old_path)
-                _st = _tgt_stat[_new_path]
-                _carried = dict(_old_row,
-                                relative_path=_new_path,
-                                absolute_path=os.path.join(self.workspace_root, _new_path),
-                                size=_st.st_size, mtime_ns=_st.st_mtime_ns, inode=_st.st_ino,
-                                last_seen_ns=int(datetime.now(timezone.utc).timestamp() * 1e9))
-                _carried["metadata"] = _old_md
-                carried_forward[_new_path] = {"source": _old_path, "db_file": _carried}
-
-        # by-dest files that LOOK moved (new under by-dest, uncached) but failed the unique bijective
-        # match (ambiguous, basename changed, or stat reset) — they will re-fingerprint. Tagged
-        # `moved-unmatched` so this exact, easy-to-miss cause is visible in the re-hash diagnostics.
-        moved_unmatched = set(_new_by_dest) - set(carried_forward)
+        carried_forward, moved_unmatched = self._recognize_carried_moves(
+            files, existing_cache, existing_metadata)
 
         from .photos_utils import MetadataReader, ProgressCoordinator, get_exiftool_version, get_imagemagick_version, FIELD_SET_VERSION, EXTRACTION_OPTIONS_FINGERPRINT, METADATA_SCHEMA_VERSION, CAMERA_GROUP_KEY_VERSION
         current_exiftool_version = get_exiftool_version()
