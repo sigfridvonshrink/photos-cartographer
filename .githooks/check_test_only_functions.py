@@ -30,6 +30,8 @@ import sys
 
 SRC_FILES = ["cartographer/photos_1_prep.py", "cartographer/photos_2_geotag.py",
              "cartographer/photos_3_merge.py", "cartographer/photos_utils.py",
+             # Extracted submodules (façade re-exports them; their defs must still be guarded).
+             "cartographer/_geotag_calc.py",
              "cartographer/cli.py",
              # Web layer: real consumers of shared utils (e.g. plan_dependencies_fresh,
              # ssh_tunnel_hint) live here, so the sweep sees their production callers.
