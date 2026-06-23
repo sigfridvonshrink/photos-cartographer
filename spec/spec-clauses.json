@@ -1500,6 +1500,34 @@
       "test": "tests/test_geotag_preflight.py::test_missing_by_date_photo_demands_reprep"
     },
     {
+      "id": "geotag-auto-reprep-clean-move-1",
+      "area": "geotag",
+      "criticality": "high",
+      "anti": false,
+      "title": "For a clean by-dest move (0-sources empty, move pending) geotag plan auto-runs the real prep plan then execute before locking, instead of hard-stopping",
+      "spec": {
+        "file": "photos-2-geotag-workflow.md",
+        "section": "13.1.1"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_preflight.py::test_auto_reprep_runs_prep_plan_then_execute_for_clean_move"
+    },
+    {
+      "id": "geotag-auto-reprep-sources-nonempty-skip-1",
+      "area": "geotag",
+      "criticality": "high",
+      "anti": true,
+      "title": "Auto re-prep never fires when 0-sources holds a dump (geotag never silently ingests an unprocessed dump); it defers to the scope blocker",
+      "spec": {
+        "file": "photos-2-geotag-workflow.md",
+        "section": "13.1.1"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_preflight.py::test_auto_reprep_skips_when_sources_nonempty"
+    },
+    {
       "id": "geotag-preserve-user-decisions-1",
       "area": "geotag",
       "criticality": "high",
