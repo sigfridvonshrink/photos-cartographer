@@ -1769,6 +1769,86 @@ class WorkspacePrepWorkflow:
                     ))
                     st.current_paths[f['relative_path']] = dest
 
+    def _plan_extension_case(self, st, db_files):
+        """Extension-case normalization (prep §6): a file whose extension is not lowercase is
+        renamed to lowercase via a two-step temp rename (no-clobber, case-insensitive-collision
+        safe). Mutates the op-building cluster on `st`. Verbatim from plan() with `<cluster> ->
+        st.<cluster>`."""
+        for f in db_files:
+            rel_path = st.current_paths[f['relative_path']]
+            basename = os.path.basename(rel_path)
+            name, ext = os.path.splitext(basename)
+            if ext and ext != ext.lower():
+                new_ext = ext.lower()
+                final_name = f"{name}{new_ext}"
+                final_rel = os.path.join(os.path.dirname(rel_path), final_name)
+
+                if final_rel.lower() in [v.lower() for k, v in st.current_paths.items() if k != f['relative_path']] or final_rel.lower() in st.global_destinations:
+                    final_name = self._allocate_suffix(name, new_ext.lstrip('.'), st.global_destinations)
+                    final_rel = os.path.join(os.path.dirname(rel_path), final_name)
+
+# Generate a deterministic temp name strictly through allocation
+                # Create a specific start name
+                temp_name_base = f"{name}.__photos_ingest_tmp_extnorm__"
+                temp_name = f"{temp_name_base}{new_ext}"
+                idx = 1
+
+                # Full physical inventory check for case-insensitive collisions (re-evaluate every plan())
+                try:
+                    all_physical_lower = getattr(self, "_all_physical_lower_for_plan", None)
+                    if all_physical_lower is None:
+                        raise AttributeError
+                except AttributeError:
+                    all_physical_lower = set()
+                    for root, _, filenames in os.walk(self.workspace_root):
+                        for fn in filenames:
+                            all_physical_lower.add(os.path.relpath(os.path.join(root, fn), self.workspace_root).lower())
+                    self._all_physical_lower_for_plan = all_physical_lower
+
+                while True:
+                    temp_rel = os.path.join(os.path.dirname(rel_path), temp_name)
+                    temp_rel_lower = temp_rel.lower()
+
+                    if temp_rel_lower not in [v.lower() for k, v in st.current_paths.items() if k != f['relative_path']] and temp_rel_lower not in st.global_destinations and temp_rel_lower not in all_physical_lower and not os.path.exists(os.path.join(self.workspace_root, temp_rel)):
+                        break
+                    temp_name = f"{temp_name_base}-{idx:03d}{new_ext}"
+                    idx += 1
+                self._all_physical_lower_for_plan.add(temp_rel.lower())
+
+                st.global_destinations.add(temp_rel.lower())
+                st.global_destinations.add(final_rel.lower())
+
+                if rel_path != final_rel:
+                    st.media_mutated_originals.add(f["relative_path"])
+
+                    st.operations.append(Operation(
+
+                        operation_id=f"op-{uuid.uuid4().hex[:8]}",
+
+                        type="rename_no_clobber",
+                        reason="Normalize extension case (temp)",
+                        source=rel_path,
+                        destination=temp_rel,
+                        preconditions={"size": f["size"], "mtime_ns": f["mtime_ns"]},
+                        verification={},
+                        database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(f, relative_path=temp_rel, absolute_path=os.path.join(self.workspace_root, temp_rel))}]
+                    ))
+                    st.media_mutated_originals.add(f["relative_path"])
+
+                    st.operations.append(Operation(
+
+                        operation_id=f"op-{uuid.uuid4().hex[:8]}",
+
+                        type="rename_no_clobber",
+                        reason="Normalize extension case",
+                        source=temp_rel,
+                        destination=final_rel,
+                        preconditions={},
+                        verification={},
+                        database_effects_after_verification=[{"action": "remove", "relative_path": temp_rel}, {"action": "upsert", "data": dict(f, relative_path=final_rel, absolute_path=os.path.join(self.workspace_root, final_rel))}]
+                    ))
+                    st.current_paths[f['relative_path']] = final_rel
+
     def plan(self) -> Plan:
         operations = []
         blockers = []
@@ -1948,80 +2028,7 @@ class WorkspacePrepWorkflow:
         st = _PlanState(operations, current_paths, by_dest_paths, global_destinations, media_mutated_originals)
         self._plan_init_moves(st, db_files)
 
-        for f in db_files:
-            rel_path = current_paths[f['relative_path']]
-            basename = os.path.basename(rel_path)
-            name, ext = os.path.splitext(basename)
-            if ext and ext != ext.lower():
-                new_ext = ext.lower()
-                final_name = f"{name}{new_ext}"
-                final_rel = os.path.join(os.path.dirname(rel_path), final_name)
-
-                if final_rel.lower() in [v.lower() for k, v in current_paths.items() if k != f['relative_path']] or final_rel.lower() in global_destinations:
-                    final_name = self._allocate_suffix(name, new_ext.lstrip('.'), global_destinations)
-                    final_rel = os.path.join(os.path.dirname(rel_path), final_name)
-
-# Generate a deterministic temp name strictly through allocation
-                # Create a specific start name
-                temp_name_base = f"{name}.__photos_ingest_tmp_extnorm__"
-                temp_name = f"{temp_name_base}{new_ext}"
-                idx = 1
-
-                # Full physical inventory check for case-insensitive collisions (re-evaluate every plan())
-                try:
-                    all_physical_lower = getattr(self, "_all_physical_lower_for_plan", None)
-                    if all_physical_lower is None:
-                        raise AttributeError
-                except AttributeError:
-                    all_physical_lower = set()
-                    for root, _, filenames in os.walk(self.workspace_root):
-                        for fn in filenames:
-                            all_physical_lower.add(os.path.relpath(os.path.join(root, fn), self.workspace_root).lower())
-                    self._all_physical_lower_for_plan = all_physical_lower
-
-                while True:
-                    temp_rel = os.path.join(os.path.dirname(rel_path), temp_name)
-                    temp_rel_lower = temp_rel.lower()
-
-                    if temp_rel_lower not in [v.lower() for k, v in current_paths.items() if k != f['relative_path']] and temp_rel_lower not in global_destinations and temp_rel_lower not in all_physical_lower and not os.path.exists(os.path.join(self.workspace_root, temp_rel)):
-                        break
-                    temp_name = f"{temp_name_base}-{idx:03d}{new_ext}"
-                    idx += 1
-                self._all_physical_lower_for_plan.add(temp_rel.lower())
-
-                global_destinations.add(temp_rel.lower())
-                global_destinations.add(final_rel.lower())
-
-                if rel_path != final_rel:
-                    media_mutated_originals.add(f["relative_path"])
-
-                    operations.append(Operation(
-
-                        operation_id=f"op-{uuid.uuid4().hex[:8]}",
-
-                        type="rename_no_clobber",
-                        reason="Normalize extension case (temp)",
-                        source=rel_path,
-                        destination=temp_rel,
-                        preconditions={"size": f["size"], "mtime_ns": f["mtime_ns"]},
-                        verification={},
-                        database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(f, relative_path=temp_rel, absolute_path=os.path.join(self.workspace_root, temp_rel))}]
-                    ))
-                    media_mutated_originals.add(f["relative_path"])
-
-                    operations.append(Operation(
-
-                        operation_id=f"op-{uuid.uuid4().hex[:8]}",
-
-                        type="rename_no_clobber",
-                        reason="Normalize extension case",
-                        source=temp_rel,
-                        destination=final_rel,
-                        preconditions={},
-                        verification={},
-                        database_effects_after_verification=[{"action": "remove", "relative_path": temp_rel}, {"action": "upsert", "data": dict(f, relative_path=final_rel, absolute_path=os.path.join(self.workspace_root, final_rel))}]
-                    ))
-                    current_paths[f['relative_path']] = final_rel
+        self._plan_extension_case(st, db_files)
 
         base_groups = {}
         for f in db_files:
