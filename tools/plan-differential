@@ -1,0 +1,124 @@
+#!/usr/bin/env python3
+# Copyright 2026 sigfridvonshrink
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); see LICENSE.
+"""Differential / determinism harness for `prep plan`.
+
+Builds a small corpus of workspaces that exercise the distinct plan() code paths (init+organize,
+extension-case normalization, content dedup/quarantine, stray set-aside, by-dest move recognition +
+exiftool leftover), runs `prep plan`, and compares the **normalized** plan artifact — every run-volatile
+field stripped (operation_id, plan_id, execution_id, created_at, last_seen_ns, inode, file ctime/atime/
+mtime in raw metadata, and the timestamped quarantine/stray batch-dir ids), so what remains is the
+deterministic plan content.
+
+Two modes:
+  tools/plan-differential                 # determinism: each workspace planned TWICE on the current
+                                          # tree must yield an identical normalized plan.
+  tools/plan-differential --against REF   # differential: build the corpus once, then plan it on the
+                                          # current tree AND on a git worktree of REF; assert identical.
+                                          # Use this as the gate for a plan()-touching refactor:
+                                          #   tools/plan-differential --against main   (from the branch)
+
+Exit 0 = all identical; non-zero on any mismatch or build error. Needs magick + exiftool on PATH.
+"""
+import argparse, hashlib, os, re, shutil, subprocess, sys, tempfile
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+_VOL = [
+    (re.compile(r'"operation_id":\s*"op-[0-9a-f]+"'), '"operation_id":"X"'),
+    (re.compile(r'"last_seen_ns":\s*\d+'), '"last_seen_ns":0'),
+    (re.compile(r'"inode":\s*\d+'), '"inode":0'),
+    (re.compile(r'"created_at"\s*:\s*"[^"]*"'), '"created_at":"X"'),
+    (re.compile(r'"plan_id"\s*:\s*"[^"]*"'), '"plan_id":"X"'),
+    (re.compile(r'"execution_id"\s*:\s*"[^"]*"'), '"execution_id":"X"'),
+    (re.compile(r'File(Access|InodeChange|Modify)Date[^,}]*'), 'FDATE'),
+    (re.compile(r'\d{8}T\d{6}Z-[0-9a-f]+'), 'BATCHID'),    # quarantine / stray batch dirs (plan-id named)
+]
+
+def _run(ws, cmd, root):
+    return subprocess.run([sys.executable, "-m", "cartographer", "prep", cmd], cwd=ws,
+                          env=dict(os.environ, PYTHONPATH=root), capture_output=True, text=True)
+
+def _norm(ws):
+    p = os.path.join(ws, ".photos-ingest", "photos-10-prep-plan.json")
+    if not os.path.exists(p):
+        return None
+    s = open(p).read().replace(os.path.abspath(ws), "WS").replace(ws, "WS")
+    for rx, rep in _VOL:
+        s = rx.sub(rep, s)
+    return hashlib.sha256(s.encode()).hexdigest()
+
+def _jpg(path, color, dt):
+    subprocess.run(["magick", "-size", "48x48", "xc:" + color, path], check=True, capture_output=True)
+    subprocess.run(["exiftool", "-q", "-overwrite_original", "-Make=SONY", "-Model=ILCE-7",
+                    "-DateTimeOriginal=" + dt, path], check=True, capture_output=True)
+
+def _ws(d):
+    os.makedirs(os.path.join(d, "0-sources")); return d
+
+def c_simple(d):
+    _ws(d); _jpg(d + "/0-sources/a.jpg", "red", "2026:01:01 08:00:00"); _jpg(d + "/0-sources/b.jpg", "blue", "2026:01:02 09:00:00")
+def c_extcase(d):
+    _ws(d); _jpg(d + "/0-sources/c.JPG", "green", "2026:02:01 08:00:00")
+def c_dup(d):
+    _ws(d); _jpg(d + "/0-sources/x.jpg", "white", "2026:03:01 08:00:00"); shutil.copy(d + "/0-sources/x.jpg", d + "/0-sources/x_copy.jpg")
+def c_stray(d):
+    _ws(d); _jpg(d + "/0-sources/p.jpg", "red", "2026:04:01 08:00:00"); open(d + "/0-sources/notes.txt", "w").write("hi")
+def c_move(d):
+    _ws(d); _jpg(d + "/0-sources/m1.jpg", "red", "2026:05:01 08:00:00"); _jpg(d + "/0-sources/m2.jpg", "blue", "2026:05:02 09:00:00")
+    _run(d, "plan", REPO); _run(d, "execute", REPO)          # setup uses the current tree (execute is not under refactor)
+    import glob
+    os.makedirs(d + "/6-photos-by-dest/Trip", exist_ok=True)
+    fs = sorted(glob.glob(d + "/5-photos-by-date/**/*.jpg", recursive=True))
+    shutil.move(fs[0], d + "/6-photos-by-dest/Trip/" + os.path.basename(fs[0]))
+    open(fs[1] + "_original", "w").write("leftover")
+    _jpg(d + "/6-photos-by-dest/Trip/loose.jpg", "green", "2026:05:03 10:00:00")
+
+CASES = {"simple": c_simple, "extcase": c_extcase, "dup": c_dup, "stray": c_stray, "move": c_move}
+
+def build_corpus(root):
+    for name, fn in CASES.items():
+        snap = os.path.join(root, name + "_snap"); os.makedirs(snap); fn(snap)
+
+def plan_copy(snap, root):
+    work = snap + "_run-" + os.path.basename(os.path.dirname(root) or "x") + "-" + str(abs(hash(root)) % 10000)
+    shutil.rmtree(work, ignore_errors=True); shutil.copytree(snap, work)
+    _run(work, "plan", root); return _norm(work)
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--against", metavar="GITREF", help="compare current tree vs a worktree of GITREF")
+    args = ap.parse_args()
+    if shutil.which("magick") is None or shutil.which("exiftool") is None:
+        print("plan-differential: needs magick + exiftool on PATH", file=sys.stderr); return 2
+    tmp = tempfile.mkdtemp(prefix="plan-diff-"); ok = True
+    try:
+        build_corpus(tmp)
+        roots = {"current": REPO}
+        wt = None
+        if args.against:
+            wt = os.path.join(tmp, "_wt"); 
+            subprocess.run(["git", "-C", REPO, "worktree", "add", "-q", "--detach", wt, args.against], check=True)
+            roots[args.against] = wt
+        labels = list(roots)
+        print(f"=== plan-differential: {' vs '.join(labels)} (normalized plan over {len(CASES)} workspaces) ===")
+        for name in CASES:
+            snap = os.path.join(tmp, name + "_snap")
+            hs = {lab: plan_copy(snap, root) for lab, root in roots.items()}
+            if args.against:
+                same = hs[labels[0]] and hs[labels[0]] == hs[labels[1]]
+            else:                                              # determinism: plan twice on current
+                h2 = plan_copy(snap, REPO); same = hs["current"] and hs["current"] == h2
+            tag = "IDENTICAL" if same else ("ERROR" if not all(hs.values()) else "DIFFERENT")
+            print(f"  {name}: {tag}  " + " ".join(f"{k}={(v or 'NONE')[:12]}" for k, v in hs.items()))
+            ok = ok and same
+        print("RESULT:", "ALL IDENTICAL ✓" if ok else "MISMATCH ✗")
+    finally:
+        if wt:
+            subprocess.run(["git", "-C", REPO, "worktree", "remove", "--force", wt], capture_output=True)
+        shutil.rmtree(tmp, ignore_errors=True)
+    return 0 if ok else 1
+
+if __name__ == "__main__":
+    sys.exit(main())
