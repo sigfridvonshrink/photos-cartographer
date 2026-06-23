@@ -13,7 +13,8 @@ Top-level layout (the package lives at the repo root):
 - **`cartographer/`** — the pipeline package: prep / geotag / merge phases + the decision editor.
 - **`tests/`** — the test suite. **`spec/`** — the authoritative workflow specs (with their own
   `README.md`).
-- **`docs/`** — user-facing guides (`quickstart.md`, `concepts.md`, `editor.md`), linked from `README.md`.
+- **`docs/`** — user-facing guides (`walkthrough.md` — the screenshot tour, `quickstart.md`,
+  `concepts.md`, `editor.md`) plus `screenshots/`, linked from `README.md`.
   These are user docs; `spec/` remains the behavioral source of truth.
 - **`tools/`** — build + test helpers (`build-pyz`, `coverage`, `jstest`, `spec-coverage`).
 - **`.githooks/`** — local pre-commit / pre-push hooks. `.github/workflows/` — CI.
@@ -64,9 +65,9 @@ tools/coverage -k merge        # subset (report % will be partial)
 # Decision-editor front-end unit tests (web/app.js pure logic) — Node's built-in runner, no deps.
 tools/jstest                   # node --test over cartographer/editor/tests/*.test.mjs
 
-# Spec-clause coverage. spec/spec-clauses.json is a living INDEX of ~609 spec clauses (one per
+# Spec-clause coverage. spec/spec-clauses.json is a living INDEX of the spec clauses (one per
 # behaviour, each with a spec pointer file+section kept in sync by a test). The GATE applies to the
-# `must_cover` subset (~497 — every clause a genuine test asserts): each must keep >=1 test tagged
+# `must_cover` subset (every clause a genuine test asserts): each must keep >=1 test tagged
 # @pytest.mark.spec("<id>"). The other clauses carry an `omit_reason` (incidental happy-path / none /
 # crash-injection / cross-cutting principle). Collection-only (fast); exits non-zero if a must-cover
 # clause lost its test. CI runs it. Complements line/branch coverage — tracks SPEC behaviours, not lines.
