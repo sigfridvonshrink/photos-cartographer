@@ -1,4 +1,4 @@
-"""Operational console server (web-console design, v2.1).
+"""Operational console server (web-console design, v2.5).
 
 A local web server that drives the SAME plan/validate/execute core the CLI drives — it only triggers
 phase runs (in-process, single-slot via JobRunner) and streams their status to the browser over SSE

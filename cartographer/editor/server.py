@@ -22,13 +22,14 @@ It launches nothing — it prints a clickable link using the machine's own IP an
 interface (default 0.0.0.0), so you can open the editor in your laptop's browser while SSH'd into the
 machine. Ctrl-C stops it cleanly (releasing the port).
 
-It reads `./.photos-ingest/photos-21*/photos-23*` decision JSON from the current-directory workspace
+It reads `./.photos-ingest/photos-21*/photos-22*/photos-23*` decision JSON from the current-directory workspace
 (refusing to run if the cwd is not an initialized workspace); `--demo` runs read-only on the bundled
 example fixtures instead. The app edits `user_decision` and saves it back
 (POST /api/save writes only `user_decision`, round-tripping the rest; disabled in demo). GET
 /api/photo returns a downscaled JPEG preview for the map picker (path-safe; 404 in demo). POST
 /api/rerun self-invokes `photos-cartographer geotag plan` against the workspace and returns its exit code +
-output tail; the client reloads on success. See design-notes.md.
+output tail; the standalone editor's own UI does not drive it (the loop is an explicit terminal re-run +
+reload — the endpoint exists for the console fold-in). See design-notes.md.
 """
 import argparse
 import errno
