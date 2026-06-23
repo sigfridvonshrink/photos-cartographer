@@ -1366,6 +1366,24 @@ class WorkspacePrepWorkflow:
                 warnings.append(msg)
                 get_reporter().log(f"  Notice: {msg}")
 
+    def _recognize_exiftool_leftovers(self, files, warnings):
+        """Recognize orphaned exiftool intermediates/backups (`<media>_exiftool_tmp` / `<media>_original`)
+        left by a hard-killed geotag write — pull them out of the media inventory (quarantined below,
+        recoverable) rather than mis-inventorying them as `other`. A leftover under read-only by-dest is
+        left untouched (only warned). Returns (kept_files, exiftool_leftovers). Verbatim lift from plan()."""
+        from .photos_utils import exiftool_artifact_base
+        _bydest_prefix = folder_name('photos_by_dest') + '/'
+        exiftool_leftovers = []
+        _kept = []
+        for rel in files:
+            if exiftool_artifact_base(os.path.basename(rel)) is None:
+                _kept.append(rel)
+            elif rel.startswith(_bydest_prefix):
+                warnings.append(f"Exiftool leftover under read-only by-dest left untouched: {rel}")
+            else:
+                exiftool_leftovers.append(rel)
+        return _kept, exiftool_leftovers
+
     def _scan_inventory(self, files, blockers):
         """Inventory walk (prep §6 / §0): scan the workspace root + managed folders, bar symlinks,
         skip control / strays / gpx subtrees, and build the sorted `files` list; append
@@ -1501,24 +1519,7 @@ class WorkspacePrepWorkflow:
         # never touched (see _collect_dump_dotfiles).
         dump_dotfiles = self._collect_dump_dotfiles(blockers)
 
-        # Recognize orphaned exiftool intermediates/backups (`<media>_exiftool_tmp` / `<media>_original`)
-        # left by a hard-killed geotag write (a clean SIGINT is self-cleaned by exiftool). They are
-        # partial/superseded artifacts — never the live original (the rename is atomic) — so they are
-        # pulled out of the media inventory here and quarantined below (recoverable, never deleted),
-        # rather than being mis-inventoried as `other` and parked forever in 1-strays. By-dest is
-        # read-only staging: a leftover there is left untouched (only flagged) to honor that invariant.
-        from .photos_utils import exiftool_artifact_base
-        _bydest_prefix = folder_name('photos_by_dest') + '/'
-        exiftool_leftovers = []
-        _kept = []
-        for rel in files:
-            if exiftool_artifact_base(os.path.basename(rel)) is None:
-                _kept.append(rel)
-            elif rel.startswith(_bydest_prefix):
-                warnings.append(f"Exiftool leftover under read-only by-dest left untouched: {rel}")
-            else:
-                exiftool_leftovers.append(rel)
-        files = _kept
+        files, exiftool_leftovers = self._recognize_exiftool_leftovers(files, warnings)
 
         self.coordinator.increment("files_scanned", len(files))
         self.coordinator.finish_phase()
