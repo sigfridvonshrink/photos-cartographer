@@ -2019,6 +2019,109 @@ class WorkspacePrepWorkflow:
                     quarantined.add(dup['relative_path'])
                     st.current_paths[dup['relative_path']] = quarantine_dest
 
+    def _plan_organize(self, st, db_files, quarantined, plan_id_for_quarantine):
+        """Organize pass (prep §7.6/§8): classify each non-quarantined file as already-conforming
+        (no-op) vs to-organize vs non-media stray; move strays into 1-strays/<plan-id>/ and place
+        each to-organize file into its date band (`band/YYYY-MM-DD/`, or missing-metadata for the
+        untimestamped) with a collision-suffixed name. Mutates the op-building cluster on `st`.
+        Verbatim from plan() with `<cluster> -> st.<cluster>`."""
+        global_index = set()
+        to_organize = []
+        strays_to_move = []
+        _managed = set(managed_folder_names(CONFIG))
+        _sources = folder_name('sources')
+        _sources_prefix = _sources + '/'
+        _by_date_bands = {folder_name('photos_by_date'), folder_name('videos_by_date')}
+
+        for f in db_files:
+            if f['relative_path'] in quarantined: continue
+            rel_path = st.current_paths[f['relative_path']]
+            # Non-media (other-class): never date-organized. Move it out of the 0-sources inbox
+            # into 1-strays/<plan-id>/<rel> (structure preserved), inert and untracked (prep
+            # Section 3.2 / 7.6), so 0-sources is left empty. Other-class outside the inbox (it
+            # should not occur) is left untouched.
+            if f['media_class'] == 'other':
+                if rel_path.startswith(_sources_prefix):
+                    strays_to_move.append((f, rel_path))
+                continue
+            top = rel_path.split('/', 1)[0]
+            if top != _sources and top in _managed:    # already in a managed band
+                if top in _by_date_bands:
+                    # By-date files must live under a `band/YYYY-MM-DD/` day folder. One already there
+                    # (matching its own timestamp) is conforming -> no-op; a flat or wrong-day file is
+                    # re-located into the correct day folder (Section 7.6 migration).
+                    dt = self._file_datetime(f)
+                    parts = rel_path.split('/')
+                    if dt is not None and len(parts) == 3 and parts[1] == dt.strftime("%Y-%m-%d"):
+                        global_index.add(os.path.basename(rel_path).lower())   # conforming day placement
+                    else:
+                        to_organize.append((f, rel_path))
+                else:
+                    global_index.add(os.path.basename(rel_path).lower())       # by-dest / missing-metadata / redundant-jpgs
+            else:
+                to_organize.append((f, rel_path))
+
+        for f, rel_path in strays_to_move:
+            rel_under = rel_path[len(_sources_prefix):]
+            dest = os.path.join(folder_name('strays'), plan_id_for_quarantine, rel_under)
+            st.media_mutated_originals.add(f["relative_path"])
+            st.operations.append(Operation(
+                operation_id=f"op-{uuid.uuid4().hex[:8]}",
+                type="move_no_clobber",
+                reason="Move non-media stray out of sources",
+                source=rel_path,
+                destination=dest,
+                preconditions={"size": f["size"], "mtime_ns": f["mtime_ns"]},
+                verification={},
+                database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}]))
+            st.current_paths[f['relative_path']] = dest
+
+        # Pass 2: place each file still in 0-sources (or being re-located from a non-conforming by-date
+        # spot) into its destination directory and allocate its name against that directory's index.
+        for f, rel_path in to_organize:
+            dt = self._file_datetime(f)
+            base, ext = os.path.splitext(os.path.basename(rel_path))
+            ext = ext.lstrip('.')
+
+            if dt is not None:
+                target_folder = (folder_name('videos_by_date') if f['media_class'] == 'video'
+                                 else folder_name('photos_by_date'))
+                prefix = dt.strftime(CONFIG["filename_timestamp_format"])
+                # Group by-date media into a YYYY-MM-DD/ day subfolder; the filename keeps the full
+                # timestamp (Section 8). The day uses the date portion of the source-naive timestamp.
+                target_dir = os.path.join(target_folder, dt.strftime("%Y-%m-%d"))
+            else:
+                target_dir = folder_name('missing_metadata')   # untimestamped -> flat, no day folder
+                prefix = f"UNKN_{base}"
+
+            # §7.2: the first file at a given timestamp gets the bare name; the -NNN suffix appears only
+            # on a genuine collision (matches geotag's final naming, so an uncorrected file's
+            # provisional and final names coincide — §7.3). A same-named file can only be in this same
+            # day folder, so the global index is exact (see Pass 1).
+            final_name = self._allocate_suffix(prefix, ext, global_index, bare_first=True)
+            dest = os.path.join(target_dir, final_name)
+
+            st.media_mutated_originals.add(f["relative_path"])
+
+
+            st.operations.append(Operation(
+
+
+                operation_id=f"op-{uuid.uuid4().hex[:8]}",
+
+
+                type="move_no_clobber",
+
+
+                reason="Chronological Organization",
+                source=rel_path,
+                destination=dest,
+                preconditions={"size": f["size"], "mtime_ns": f["mtime_ns"]},
+                verification={},
+                database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(f, relative_path=dest, absolute_path=os.path.join(self.workspace_root, dest))}]
+            ))
+            st.current_paths[f['relative_path']] = dest
+
     def plan(self) -> Plan:
         operations = []
         blockers = []
@@ -2219,102 +2322,7 @@ class WorkspacePrepWorkflow:
         # if they share the full timestamp — i.e. the same day, hence the same `YYYY-MM-DD/` folder.
         # Two files in different day folders can never collide on name, so a global basename set is
         # exactly equivalent to per-folder scoping.
-        global_index = set()
-        to_organize = []
-        strays_to_move = []
-        _managed = set(managed_folder_names(CONFIG))
-        _sources = folder_name('sources')
-        _sources_prefix = _sources + '/'
-        _by_date_bands = {folder_name('photos_by_date'), folder_name('videos_by_date')}
-
-        for f in db_files:
-            if f['relative_path'] in quarantined: continue
-            rel_path = current_paths[f['relative_path']]
-            # Non-media (other-class): never date-organized. Move it out of the 0-sources inbox
-            # into 1-strays/<plan-id>/<rel> (structure preserved), inert and untracked (prep
-            # Section 3.2 / 7.6), so 0-sources is left empty. Other-class outside the inbox (it
-            # should not occur) is left untouched.
-            if f['media_class'] == 'other':
-                if rel_path.startswith(_sources_prefix):
-                    strays_to_move.append((f, rel_path))
-                continue
-            top = rel_path.split('/', 1)[0]
-            if top != _sources and top in _managed:    # already in a managed band
-                if top in _by_date_bands:
-                    # By-date files must live under a `band/YYYY-MM-DD/` day folder. One already there
-                    # (matching its own timestamp) is conforming -> no-op; a flat or wrong-day file is
-                    # re-located into the correct day folder (Section 7.6 migration).
-                    dt = self._file_datetime(f)
-                    parts = rel_path.split('/')
-                    if dt is not None and len(parts) == 3 and parts[1] == dt.strftime("%Y-%m-%d"):
-                        global_index.add(os.path.basename(rel_path).lower())   # conforming day placement
-                    else:
-                        to_organize.append((f, rel_path))
-                else:
-                    global_index.add(os.path.basename(rel_path).lower())       # by-dest / missing-metadata / redundant-jpgs
-            else:
-                to_organize.append((f, rel_path))
-
-        for f, rel_path in strays_to_move:
-            rel_under = rel_path[len(_sources_prefix):]
-            dest = os.path.join(folder_name('strays'), plan_id_for_quarantine, rel_under)
-            media_mutated_originals.add(f["relative_path"])
-            operations.append(Operation(
-                operation_id=f"op-{uuid.uuid4().hex[:8]}",
-                type="move_no_clobber",
-                reason="Move non-media stray out of sources",
-                source=rel_path,
-                destination=dest,
-                preconditions={"size": f["size"], "mtime_ns": f["mtime_ns"]},
-                verification={},
-                database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}]))
-            current_paths[f['relative_path']] = dest
-
-        # Pass 2: place each file still in 0-sources (or being re-located from a non-conforming by-date
-        # spot) into its destination directory and allocate its name against that directory's index.
-        for f, rel_path in to_organize:
-            dt = self._file_datetime(f)
-            base, ext = os.path.splitext(os.path.basename(rel_path))
-            ext = ext.lstrip('.')
-
-            if dt is not None:
-                target_folder = (folder_name('videos_by_date') if f['media_class'] == 'video'
-                                 else folder_name('photos_by_date'))
-                prefix = dt.strftime(CONFIG["filename_timestamp_format"])
-                # Group by-date media into a YYYY-MM-DD/ day subfolder; the filename keeps the full
-                # timestamp (Section 8). The day uses the date portion of the source-naive timestamp.
-                target_dir = os.path.join(target_folder, dt.strftime("%Y-%m-%d"))
-            else:
-                target_dir = folder_name('missing_metadata')   # untimestamped -> flat, no day folder
-                prefix = f"UNKN_{base}"
-
-            # §7.2: the first file at a given timestamp gets the bare name; the -NNN suffix appears only
-            # on a genuine collision (matches geotag's final naming, so an uncorrected file's
-            # provisional and final names coincide — §7.3). A same-named file can only be in this same
-            # day folder, so the global index is exact (see Pass 1).
-            final_name = self._allocate_suffix(prefix, ext, global_index, bare_first=True)
-            dest = os.path.join(target_dir, final_name)
-
-            media_mutated_originals.add(f["relative_path"])
-
-
-            operations.append(Operation(
-
-
-                operation_id=f"op-{uuid.uuid4().hex[:8]}",
-
-
-                type="move_no_clobber",
-
-
-                reason="Chronological Organization",
-                source=rel_path,
-                destination=dest,
-                preconditions={"size": f["size"], "mtime_ns": f["mtime_ns"]},
-                verification={},
-                database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(f, relative_path=dest, absolute_path=os.path.join(self.workspace_root, dest))}]
-            ))
-            current_paths[f['relative_path']] = dest
+        self._plan_organize(st, db_files, quarantined, plan_id_for_quarantine)
 
         cache_upserts = []
         for f in all_db_files:
