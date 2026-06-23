@@ -1926,6 +1926,53 @@ class WorkspacePrepWorkflow:
             content_groups.setdefault((ch_str, f['media_class']), []).append(f)
         return content_groups
 
+    def _plan_quarantine_artifacts(self, st, exiftool_leftovers, dump_dotfiles, plan_id_for_quarantine):
+        """Quarantine the scan-recognized non-media artifacts (prep §15): orphaned exiftool
+        intermediates/backups and hidden dump dotfiles — evidence-before-quarantine quarantine_move
+        ops, recoverable, never deleted (no cache row, empty db effects). Mutates st.operations.
+        Verbatim from plan() with `operations -> st.operations`."""
+        # Quarantine the orphaned exiftool artifacts recognized during the scan. They were never
+        # hashed/inventoried (excluded from `files`), so there is no cache row to remove (empty db
+        # effects); the move records evidence-before-quarantine like any other quarantine_move, so the
+        # artifact is recoverable, never deleted. A precondition stat guards against the file changing
+        # between plan and execute.
+        for rel in exiftool_leftovers:
+            try:
+                _st = os.stat(os.path.join(self.workspace_root, rel))
+            except OSError:
+                continue   # vanished between scan and planning — nothing to quarantine
+            q_dest = os.path.join(".photos-ingest-quarantine", plan_id_for_quarantine, rel)
+            st.operations.append(Operation(
+                operation_id=f"op-{uuid.uuid4().hex[:8]}",
+                type="quarantine_move",
+                reason="Orphaned exiftool intermediate/backup from an interrupted metadata write",
+                source=rel,
+                destination=q_dest,
+                preconditions={"size": _st.st_size, "mtime_ns": _st.st_mtime_ns},
+                verification={"original_path": rel, "quarantine_path": q_dest,
+                              "plan_id": plan_id_for_quarantine, "kind": "exiftool_leftover"},
+                database_effects_after_verification=[]))
+
+        # Quarantine hidden dump files (same recoverable, evidence-before-quarantine discipline). Like
+        # the exiftool leftovers, they never entered the media inventory, so there is no cache row to
+        # remove. Their emptied dot-dir skeletons are pruned by _prune_empty_dirs on success.
+        for rel in dump_dotfiles:
+            try:
+                _st = os.stat(os.path.join(self.workspace_root, rel))
+            except OSError:
+                continue   # vanished between scan and planning — nothing to quarantine
+            q_dest = os.path.join(".photos-ingest-quarantine", plan_id_for_quarantine, rel)
+            st.operations.append(Operation(
+                operation_id=f"op-{uuid.uuid4().hex[:8]}",
+                type="quarantine_move",
+                reason="Hidden dump file (recoverable; not organized as media)",
+                source=rel,
+                destination=q_dest,
+                preconditions={"size": _st.st_size, "mtime_ns": _st.st_mtime_ns},
+                verification={"original_path": rel, "quarantine_path": q_dest,
+                              "plan_id": plan_id_for_quarantine, "kind": "dump_dotfile"},
+                database_effects_after_verification=[]))
+
     def plan(self) -> Plan:
         operations = []
         blockers = []
@@ -2115,47 +2162,7 @@ class WorkspacePrepWorkflow:
         quarantined = set()
         plan_id_for_quarantine = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:6]}"
 
-        # Quarantine the orphaned exiftool artifacts recognized during the scan. They were never
-        # hashed/inventoried (excluded from `files`), so there is no cache row to remove (empty db
-        # effects); the move records evidence-before-quarantine like any other quarantine_move, so the
-        # artifact is recoverable, never deleted. A precondition stat guards against the file changing
-        # between plan and execute.
-        for rel in exiftool_leftovers:
-            try:
-                _st = os.stat(os.path.join(self.workspace_root, rel))
-            except OSError:
-                continue   # vanished between scan and planning — nothing to quarantine
-            q_dest = os.path.join(".photos-ingest-quarantine", plan_id_for_quarantine, rel)
-            operations.append(Operation(
-                operation_id=f"op-{uuid.uuid4().hex[:8]}",
-                type="quarantine_move",
-                reason="Orphaned exiftool intermediate/backup from an interrupted metadata write",
-                source=rel,
-                destination=q_dest,
-                preconditions={"size": _st.st_size, "mtime_ns": _st.st_mtime_ns},
-                verification={"original_path": rel, "quarantine_path": q_dest,
-                              "plan_id": plan_id_for_quarantine, "kind": "exiftool_leftover"},
-                database_effects_after_verification=[]))
-
-        # Quarantine hidden dump files (same recoverable, evidence-before-quarantine discipline). Like
-        # the exiftool leftovers, they never entered the media inventory, so there is no cache row to
-        # remove. Their emptied dot-dir skeletons are pruned by _prune_empty_dirs on success.
-        for rel in dump_dotfiles:
-            try:
-                _st = os.stat(os.path.join(self.workspace_root, rel))
-            except OSError:
-                continue   # vanished between scan and planning — nothing to quarantine
-            q_dest = os.path.join(".photos-ingest-quarantine", plan_id_for_quarantine, rel)
-            operations.append(Operation(
-                operation_id=f"op-{uuid.uuid4().hex[:8]}",
-                type="quarantine_move",
-                reason="Hidden dump file (recoverable; not organized as media)",
-                source=rel,
-                destination=q_dest,
-                preconditions={"size": _st.st_size, "mtime_ns": _st.st_mtime_ns},
-                verification={"original_path": rel, "quarantine_path": q_dest,
-                              "plan_id": plan_id_for_quarantine, "kind": "dump_dotfile"},
-                database_effects_after_verification=[]))
+        self._plan_quarantine_artifacts(st, exiftool_leftovers, dump_dotfiles, plan_id_for_quarantine)
 
         for (ch_str, mc), group in content_groups.items():
             if len(group) > 1:
