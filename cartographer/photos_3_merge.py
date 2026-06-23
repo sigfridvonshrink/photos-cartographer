@@ -410,7 +410,8 @@ class MergeWorkflow:
             return occ_names[lib_dest], occ_lower[lib_dest]
 
         # Running per-dir CASE-FOLDED claimed names: existing library files plus every name this run has
-        # allocated so far. Seeds the case-insensitive no-clobber check (§7.2) at PLAN time so two
+        # allocated so far. Seeds the case-insensitive no-clobber check (shared contract §15.1; suffix
+        # convention §7.2) at PLAN time so two
         # incoming files differing only in case — or one whose case-variant already sits in the library —
         # are resolved by a clean suffix here, not left to surface as an EEXIST blocker at execute on a
         # case-insensitive library. (Distinct from `occ_lower`, which the suffix allocator seeds with the
