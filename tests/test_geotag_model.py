@@ -230,10 +230,14 @@ def test_run_known_group_builds_model(tmp_path, monkeypatch, capsys):
     assert os.path.exists(ws / ".photos-ingest" / "photos-21-time-decisions.json")
 
 
-@pytest.mark.spec("geotag-incomplete-classification-block-1")
+@pytest.mark.spec("geotag-incomplete-classification-block-1", "geotag-unknown-group-snippet-config-order-1")
 def test_run_unknown_group_prints_snippet_and_exits(tmp_path, monkeypatch, capsys):
     ws = _full_ws(tmp_path, device_groups={"fixed_clock_cameras": [], "phones": []})
     code = _main(monkeypatch, ws)
-    err = capsys.readouterr().err
+    cap = capsys.readouterr()
+    blob = cap.out + cap.err
     assert code == 2
-    assert "unknown camera group" in err and '"SONY|ILCE-6400|123"' in err
+    assert "unknown camera group" in blob and '"SONY|ILCE-6400|123"' in blob
+    # The two arrays must be emitted in the config file's own key order — fixed_clock_cameras before
+    # phones (the sort_keys=True seed order) — so a whole-block paste-over keeps the inter-array comma.
+    assert blob.index('"fixed_clock_cameras"') < blob.index('"phones"')

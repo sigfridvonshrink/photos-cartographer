@@ -1052,6 +1052,20 @@
       "test": "tests/test_geotag_model.py::test_run_unknown_group_prints_snippet_and_exits"
     },
     {
+      "id": "geotag-unknown-group-snippet-config-order-1",
+      "area": "geotag",
+      "criticality": "low",
+      "anti": false,
+      "title": "The unknown-group config snippet emits the device_groups arrays in the config file's own key order (fixed_clock_cameras before phones) so a whole-block paste-over keeps the inter-array comma",
+      "spec": {
+        "file": "photos-2-geotag-workflow.md",
+        "section": "16"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_model.py::test_run_unknown_group_prints_snippet_and_exits"
+    },
+    {
       "id": "geotag-incomplete-structure-hardstop-1",
       "area": "geotag",
       "criticality": "high",
