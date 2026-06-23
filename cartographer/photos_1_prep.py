@@ -2122,6 +2122,89 @@ class WorkspacePrepWorkflow:
             ))
             st.current_paths[f['relative_path']] = dest
 
+    def _plan_cache_effects(self, st, all_db_files, carried_forward, existing_cache, existing_metadata, current_metadata_context, ghost_prunes):
+        """Cache effects (prep §5/§16): a db_upsert op reconciling unchanged-state cache rows
+        (skipping mutated/carried/relocated files and rows already fresh) plus the recognized-move
+        carried upserts, and a db_remove op for the ghost prunes. Mutates st.operations. Verbatim
+        from plan() with `<cluster> -> st.<cluster>`."""
+        cache_upserts = []
+        for f in all_db_files:
+            original_rel = f["relative_path"]
+            planned_rel = st.current_paths.get(original_rel, original_rel)
+
+            if original_rel in st.media_mutated_originals:
+                continue
+
+            # Recognized moves are persisted by their own carried upsert below (the old
+            # row is dropped by ghost-prune), not by the unchanged-state reconciliation.
+            if original_rel in carried_forward:
+                continue
+
+            if planned_rel != original_rel:
+                continue
+
+            cached = existing_cache.get(planned_rel)
+            cached_md = existing_metadata.get(planned_rel)
+
+            file_record = {
+                'relative_path': planned_rel,
+                'size': f['size'],
+                'mtime_ns': f['mtime_ns']
+            }
+            if cached and cached.get('content_hash'):
+                file_record['content_hash'] = cached.get('content_hash')
+
+            from .photos_utils import is_metadata_cache_fresh
+            md_fresh = is_metadata_cache_fresh(file_record, cached_md, current_metadata_context)
+
+            if (cached and cached["size"] == f["size"] and cached["mtime_ns"] == f["mtime_ns"]
+                    and md_fresh and cached.get("content_hash") == f.get("content_hash")):
+                continue
+
+            cache_upserts.append({
+                "action": "upsert",
+                "data": dict(f, relative_path=planned_rel, absolute_path=os.path.join(self.workspace_root, planned_rel)),
+                "preconditions": {
+                    "size": f["size"],
+                    "mtime_ns": f["mtime_ns"]
+                }
+            })
+
+        # Persist recognized moves: upsert the carried row at the new by-dest path
+        # (the file exists there, so the executor's upsert precondition holds). The old
+        # row's removal is handled by ghost-prune (its path is now missing).
+        for _new_path, _cf in carried_forward.items():
+            _cdb = _cf["db_file"]
+            cache_upserts.append({
+                "action": "upsert",
+                "data": _cdb,
+                "preconditions": {"size": _cdb["size"], "mtime_ns": _cdb["mtime_ns"]},
+            })
+
+        if cache_upserts:
+            st.operations.append(Operation(
+                operation_id=f"op-{uuid.uuid4().hex[:8]}",
+                type="db_upsert",
+                reason="Cache unchanged state",
+                source=None,
+                destination=None,
+                preconditions={},
+                verification={},
+                database_effects_after_verification=cache_upserts
+            ))
+
+        if ghost_prunes:
+            st.operations.append(Operation(
+                operation_id=f"op-{uuid.uuid4().hex[:8]}",
+                type="db_remove",
+                reason="Prune ghosts",
+                source=None,
+                destination=None,
+                preconditions={},
+                verification={},
+                database_effects_after_verification=ghost_prunes
+            ))
+
     def plan(self) -> Plan:
         operations = []
         blockers = []
@@ -2324,83 +2407,7 @@ class WorkspacePrepWorkflow:
         # exactly equivalent to per-folder scoping.
         self._plan_organize(st, db_files, quarantined, plan_id_for_quarantine)
 
-        cache_upserts = []
-        for f in all_db_files:
-            original_rel = f["relative_path"]
-            planned_rel = current_paths.get(original_rel, original_rel)
-
-            if original_rel in media_mutated_originals:
-                continue
-
-            # Recognized moves are persisted by their own carried upsert below (the old
-            # row is dropped by ghost-prune), not by the unchanged-state reconciliation.
-            if original_rel in carried_forward:
-                continue
-
-            if planned_rel != original_rel:
-                continue
-
-            cached = existing_cache.get(planned_rel)
-            cached_md = existing_metadata.get(planned_rel)
-
-            file_record = {
-                'relative_path': planned_rel,
-                'size': f['size'],
-                'mtime_ns': f['mtime_ns']
-            }
-            if cached and cached.get('content_hash'):
-                file_record['content_hash'] = cached.get('content_hash')
-
-            from .photos_utils import is_metadata_cache_fresh
-            md_fresh = is_metadata_cache_fresh(file_record, cached_md, current_metadata_context)
-
-            if (cached and cached["size"] == f["size"] and cached["mtime_ns"] == f["mtime_ns"]
-                    and md_fresh and cached.get("content_hash") == f.get("content_hash")):
-                continue
-
-            cache_upserts.append({
-                "action": "upsert",
-                "data": dict(f, relative_path=planned_rel, absolute_path=os.path.join(self.workspace_root, planned_rel)),
-                "preconditions": {
-                    "size": f["size"],
-                    "mtime_ns": f["mtime_ns"]
-                }
-            })
-
-        # Persist recognized moves: upsert the carried row at the new by-dest path
-        # (the file exists there, so the executor's upsert precondition holds). The old
-        # row's removal is handled by ghost-prune (its path is now missing).
-        for _new_path, _cf in carried_forward.items():
-            _cdb = _cf["db_file"]
-            cache_upserts.append({
-                "action": "upsert",
-                "data": _cdb,
-                "preconditions": {"size": _cdb["size"], "mtime_ns": _cdb["mtime_ns"]},
-            })
-
-        if cache_upserts:
-            operations.append(Operation(
-                operation_id=f"op-{uuid.uuid4().hex[:8]}",
-                type="db_upsert",
-                reason="Cache unchanged state",
-                source=None,
-                destination=None,
-                preconditions={},
-                verification={},
-                database_effects_after_verification=cache_upserts
-            ))
-
-        if ghost_prunes:
-            operations.append(Operation(
-                operation_id=f"op-{uuid.uuid4().hex[:8]}",
-                type="db_remove",
-                reason="Prune ghosts",
-                source=None,
-                destination=None,
-                preconditions={},
-                verification={},
-                database_effects_after_verification=ghost_prunes
-            ))
+        self._plan_cache_effects(st, all_db_files, carried_forward, existing_cache, existing_metadata, current_metadata_context, ghost_prunes)
 
         no_op_count = len(files) - len(media_mutated_originals)
         from .photos_utils import quarantine_footprint
