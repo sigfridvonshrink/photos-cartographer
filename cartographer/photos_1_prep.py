@@ -1849,6 +1849,49 @@ class WorkspacePrepWorkflow:
                     ))
                     st.current_paths[f['relative_path']] = final_rel
 
+    def _plan_redundant_jpgs(self, st, db_files):
+        """RAW+JPG pairing (prep §6): when a RAW and its same-stem JPG share a folder, move the
+        JPG to 3-redundant-jpgs (the RAW is the keeper). Returns paired_jpgs (the set of paired
+        JPG rel-paths, consumed by the dedup step). Mutates the op-building cluster on `st`.
+        Verbatim from plan() with `<cluster> -> st.<cluster>` + a trailing return."""
+        base_groups = {}
+        for f in db_files:
+            rel_path = st.current_paths[f['relative_path']]
+            basename = os.path.basename(rel_path)
+            name, _ = os.path.splitext(basename)
+            folder = os.path.dirname(rel_path)
+            base_groups.setdefault((folder, name), []).append(f)
+
+        paired_jpgs = set()
+        # print("BASE GROUPS:", list(base_groups.keys()))
+        for (folder, name), group in base_groups.items():
+            has_raw = any(f['media_class'] == 'raw' for f in group)
+            has_jpg = any(f['media_class'] == 'image' and f['relative_path'].lower().endswith('.jpg') for f in group)
+            if has_raw and has_jpg:
+                for f in group:
+                    if f['media_class'] == 'image':
+                        rel_path = st.current_paths[f['relative_path']]
+                        paired_jpgs.add(f['relative_path'])
+                        if rel_path.startswith(folder_name('sources') + "/"):
+                            dest = os.path.join(folder_name('redundant_jpgs'), os.path.basename(rel_path))
+                            st.media_mutated_originals.add(f["relative_path"])
+
+                            st.operations.append(Operation(
+
+                                operation_id=f"op-{uuid.uuid4().hex[:8]}",
+
+                                type="move_no_clobber",
+
+                                reason="Separate redundant JPG",
+                                source=rel_path,
+                                destination=dest,
+                                preconditions={"size": f["size"], "mtime_ns": f["mtime_ns"]},
+                                verification={},
+                                database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(f, relative_path=dest, absolute_path=os.path.join(self.workspace_root, dest))}]
+                            ))
+                            st.current_paths[f['relative_path']] = dest
+        return paired_jpgs
+
     def plan(self) -> Plan:
         operations = []
         blockers = []
@@ -2030,42 +2073,7 @@ class WorkspacePrepWorkflow:
 
         self._plan_extension_case(st, db_files)
 
-        base_groups = {}
-        for f in db_files:
-            rel_path = current_paths[f['relative_path']]
-            basename = os.path.basename(rel_path)
-            name, _ = os.path.splitext(basename)
-            folder = os.path.dirname(rel_path)
-            base_groups.setdefault((folder, name), []).append(f)
-
-        paired_jpgs = set()
-        # print("BASE GROUPS:", list(base_groups.keys()))
-        for (folder, name), group in base_groups.items():
-            has_raw = any(f['media_class'] == 'raw' for f in group)
-            has_jpg = any(f['media_class'] == 'image' and f['relative_path'].lower().endswith('.jpg') for f in group)
-            if has_raw and has_jpg:
-                for f in group:
-                    if f['media_class'] == 'image':
-                        rel_path = current_paths[f['relative_path']]
-                        paired_jpgs.add(f['relative_path'])
-                        if rel_path.startswith(folder_name('sources') + "/"):
-                            dest = os.path.join(folder_name('redundant_jpgs'), os.path.basename(rel_path))
-                            media_mutated_originals.add(f["relative_path"])
-
-                            operations.append(Operation(
-
-                                operation_id=f"op-{uuid.uuid4().hex[:8]}",
-
-                                type="move_no_clobber",
-
-                                reason="Separate redundant JPG",
-                                source=rel_path,
-                                destination=dest,
-                                preconditions={"size": f["size"], "mtime_ns": f["mtime_ns"]},
-                                verification={},
-                                database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(f, relative_path=dest, absolute_path=os.path.join(self.workspace_root, dest))}]
-                            ))
-                            current_paths[f['relative_path']] = dest
+        paired_jpgs = self._plan_redundant_jpgs(st, db_files)
 
 
         content_groups = {}
