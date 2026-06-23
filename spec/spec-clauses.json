@@ -4482,6 +4482,20 @@
       "omit_reason": "progress coordinator emits events in tests but the execution log-line visibility is not directly asserted"
     },
     {
+      "id": "prep-rehash-diagnostics-1",
+      "area": "prep",
+      "criticality": "med",
+      "anti": false,
+      "title": "When any media is re-fingerprinted, prep reports an always-on summary splitting expected new hashes from unexpected previously-cached re-hashes by reason, with a first-N sample and counts in the run report",
+      "spec": {
+        "file": "photos-1-prep-workflow.md",
+        "section": "17.4"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_move_aware.py::test_rehash_summary_flags_mtime_changed"
+    },
+    {
       "id": "prep-extension-lists-config-1",
       "area": "prep",
       "criticality": "med",
