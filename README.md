@@ -1,23 +1,28 @@
 # photos-cartographer
 
-**Automatic, safe, whole-trip photo geotagging from GPX tracks — even when the camera's clock was wrong.**
+**Put a whole photo library — or a single trip's dump — on the map, with the least manual work.**
+
+*Native GPS where you have it, GPX tracks where they help, minimal, manual cascading fallbacks everywhere else.*
 
 photos-cartographer takes an unorganized dump of photos and videos, cleans and date-organizes it, then
-**figures out where every shot was taken** by correlating each frame against a set of GPS tracks (GPX) —
-*first inferring and correcting each camera's clock error automatically*, so a camera set to the wrong
-timezone or drifting by minutes still lands on the right point of the track. Nothing is deleted and nothing is
-changed without a plan that can be inspected first, and **every coordinate it writes is recorded with how it was
-derived** — native, track direct-match / interpolated / extrapolated, or manual.
+**places every shot on the map** by making the most of every real location it can find: it keeps the
+**native GPS** your camera/phone already wrote, **correlates the rest to GPX tracks** — *first inferring and
+correcting each camera's clock error automatically*, so a camera set to the wrong timezone or drifting by
+minutes still lands on the right point of the track — and **cascades a manual folder-level fallback** over
+whatever's left. Even a library with no tracks at all still gets a complete map, from a handful of
+manually-set, inherited folder pins. Nothing is deleted and nothing is changed without a plan that can be
+inspected first, and **every coordinate it writes is recorded with how it was derived** — native, track
+direct-match / interpolated / extrapolated, or manual.
 
 The aim is **100% geolocation coverage for the least possible effort**: every photo placed — precise where the tracks
-allow, rough or manual where they don't — so a map view in a library like Immich shows the whole trip, not
-just the frames that came with a location baked in.
+allow, rough or manual where they don't — so a map view in a library like Immich shows your **whole library**,
+not just the frames that came with a location baked in.
 
 ![The decision editor — settling timezones, then clock drift on the track, then GPS on a map](docs/screenshots/hero.gif)
 
 *The decision editor: time → drift → GPS.* **▶ [See the full run, step by step →](docs/walkthrough.md)**
 
-It is built for **irreplaceable originals and large batches**: a whole holiday, several cameras and phones,
+It is built for **irreplaceable originals and large batches**: a whole holiday or a years-deep library, several cameras and phones,
 thousands of RAW and JPEG frames — resolved in one reviewable pass instead of photo-by-photo, then merged
 cleanly into a permanent **folder-based photo library** (digiKam, or anything that reads a plain folder tree).
 Almost all of the code that writes time/GPS metadata into photo files — the geotag phase — is exercised by a thorough
@@ -26,7 +31,9 @@ before it can touch a photo.
 
 > **Searches that might land here:** how to *geotag photos with no GPS from a GPX track*,
 > *correlate photos to a GPS track when the camera time is wrong*, *batch/bulk geotag thousands of RAW photos
-> non-destructively*, *auto-detect a camera clock offset / timezone for geotagging*, or a scriptable
+> non-destructively*, *auto-detect a camera clock offset / timezone for geotagging*, *geolocate a whole
+> photo library / put every photo on the map (map-complete library)*, *rough or approximate geotag without
+> a GPX track*, *cascading folder-level location*, or a scriptable
 > **GeoSetter / HoudahGeo / gpscorrelate / darktable alternative** for an entire trip at once.
 
 ## How it works in one minute
@@ -49,8 +56,8 @@ downstream:
    the cameras the data can't disambiguate need a confirmation.
 5. **Place** — geotag every frame the track can cover: **direct matches**, **interpolation** between track
    points, and **bounded extrapolation** off the ends. Each write is tagged with its method.
-6. **Remainder** — whatever no evidence can locate is collected into a short, explicit worklist of what's
-   actually left to decide.
+6. **Remainder** — whatever no evidence can locate is collected into a short, explicit worklist: place it by
+   hand, or inherit a destination's **manual folder-level fallback**, so nothing is left off the map.
 7. **Merge** — move the finalized set into the permanent folder-based library, with a full transformation log.
 
 Every run is a **plan that can be dry-run and inspected**; only a validated plan ever writes. Re-runs act on

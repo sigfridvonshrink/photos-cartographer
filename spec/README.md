@@ -1,4 +1,4 @@
-# Photos pipeline — geotag and time-correct a shoot from your GPS track
+# Photos pipeline — geotag and time-correct a whole library or trip dump from your GPS tracks
 
 *Engineered for safety: non-destructive, idempotent, and resumable — no photo is ever lost or
 overwritten, and nothing is mutated without a validated plan.*
@@ -6,7 +6,8 @@ overwritten, and nothing is mutated without a validated plan.*
 If you shoot with a **GPS logger running** (in my case UltraGPSLogger on my mobile) and want your photos
 to end up correctly geotagged afterwards — including the frames the camera never tagged itself —
 this is for you. Drop all your track files into one folder and the pipeline matches each photo
-against the right point across the whole set; you don't sort tracks per shoot.
+against the right point across the whole set; you don't sort tracks per shoot. No track for some of it?
+It still gets you there — minimal, manual folder-level locations cascade over the rest.
 
 It does three things, carefully:
 
