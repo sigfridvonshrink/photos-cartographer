@@ -108,6 +108,25 @@ There is no build step and no linter config; runtime deps are system tools (`exi
 
 ### Release history
 
+- **v1.3.0** — **geotag auto-re-preps a clean by-dest move** (§13.1.1: after sorting into
+  `6-photos-by-dest`, go straight to geotag — when `0-sources` is empty it runs the real `prep plan` +
+  `execute` for you before locking; a non-empty `0-sources` is still the hard gate) and **always-on
+  re-hash diagnostics** (prep §17.4: when any media is re-fingerprinted, a per-reason summary —
+  `moved-unmatched`/`mtime-changed`/`engine-changed`/… — splits expected new hashes from unexpected
+  previously-cached ones, with a first-N sample + `performance_and_cache.rehash_summary` in the run
+  report). Plus a screenshot-driven docs overhaul (`docs/walkthrough.md` + the hero GIF + a USP reframe)
+  and a large **internal maintainability refactor** — the geotag pure-calc layer extracted to
+  `_geotag_calc.py`, prep models to `_prep_models.py` (façade re-exports keep the import/patch surface),
+  and `WorkspacePrepWorkflow.plan()` decomposed into ordered `_plan_*` steps over a `_PlanState` carrier
+  — all behaviour-unchanged, gated by the new `tools/plan-differential` harness. Additive/internal; no
+  CLI or workspace break.
+- **v1.2.0** — the **operational web console** (`photos-cartographer console`): run *and monitor* every
+  one of the eleven phase commands from a browser over the cwd workspace, with the decision editor folded
+  in as the 4th tab — built on the shared **reporting event/sink seam** (`cartographer/reporting.py`),
+  with execute behind a per-phase confirm gate and precondition/staleness-aware action enablement. Plus
+  the **`-j`/jobs** control, **spec-clause coverage tooling** (`tools/spec-coverage` + the clause index),
+  and assorted prep/console robustness fixes (Stop/interrupt, stale-lock probe, nothing-to-do fast-stop,
+  first-run config notice). Additive; the CLI and existing workspaces are unchanged.
 - **v1.1.1** — docs fix: correct the destination model in `docs/concepts.md` (an intermediate folder
   may hold photos *and* sub-destinations; only folders with no direct media are `container` nodes).
   Docs-only; the binary is unchanged from v1.1.0 (docs are not bundled).
