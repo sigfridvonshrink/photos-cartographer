@@ -273,3 +273,9 @@ The pipeline is **specification-driven**: behavior is defined by `spec/*.md` —
 per-phase workflows (prep / geotag / merge) plus `photos-shared-contract.md`. When changing pipeline
 behavior, update the governing spec; the markdown is authoritative, not just the code, so reconcile
 differences between a script and its spec rather than treating the existing code as ground truth.
+
+The specs carry **behaviour only** — never output wording, UI, log lines, or implementation/comfort
+detail. Affordance decisions (the console/editor and their sub-decisions, output phrasing, and
+deliberately-rejected options) are logged in `docs/design/decisions.md`; a local affordance with one
+code site is logged by a comment at that site plus a regression test. So: behaviour → `spec/`,
+code-level affordance → comment + test, standing/rejected affordance → `docs/design/decisions.md`.
