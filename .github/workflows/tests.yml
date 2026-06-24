@@ -16,8 +16,9 @@ jobs:
           python-version: "3.13"
 
       # Most tests mock the external tools, but the real-tool integration tests
-      # (test_calibration_execution_real.py) drive the actual exiftool + ImageMagick to validate
-      # the executor's safety assumption (an EXIF write preserves the decoded-content fingerprint).
+      # (test_geotag_execution_real.py, test_merge_exif_preservation.py) drive the actual exiftool +
+      # ImageMagick to validate the executor's safety assumption (an EXIF write preserves the
+      # decoded-content fingerprint).
       # Those tests skip when the tools are absent, so installing them here is what exercises them.
       - name: Install system tools
         run: |
