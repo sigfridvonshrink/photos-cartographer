@@ -217,20 +217,6 @@ If `5-photos-by-date/` still contains photos, geotag must block before creating 
 
 The reason is to push the user to complete prep and place the current batch of files into `6-photos-by-dest` before geotagging that batch. This is a per-run gate, not a once-ever deadline: more files can be added and geotagged in a later cycle (shared contract `photos-shared-contract.md` Section 10), but each geotag run requires `5-photos-by-date` to be empty at the time it runs.
 
-The workflow may print a textual message such as:
-
-```text
-Geotag cannot proceed.
-
-Reason:
-5-photos-by-date still contains photos.
-
-Geotag only operates on 6-photos-by-dest.
-Move/place remaining by-date files into by-dest through the prep workflow before geotagging.
-
-No geotag JSON was written.
-```
-
 ### 7.0a Assumption: each destination is time-coherent for a camera
 
 Geotag assumes that **a camera's clock error is constant within one destination on one day** — every photo from one camera within one destination *on the same naive calendar date* shares one true clock offset. Clock corrections therefore vary **between** destinations and **between days within a destination** (a place revisited on different days or seasons), never within a single day's shoot. The user typically sets the camera to local time each morning, so the offset is a per-day fact; a destination spanning more than one naive date splits into per-day offset buckets (Section 10.2 rule 4).
@@ -249,46 +235,11 @@ Breaking a destination's media out into format-specific subfolders (by default `
 
 Therefore, before geotag may proceed, the workflow must verify that no such distribution subfolder exists anywhere under `6-photos-by-dest`. The check is strict: the mere existence of a folder whose name matches `destination_distribution_subfolders` triggers the hard-stop, **even if that folder is empty**. The workflow must not attempt to decide whether the folder "really" holds development output — presence alone is the signal. On detecting one, the workflow must hard-stop before creating any geotag JSON artifact: it means development has already begun and would be invalidated by the time/GPS corrections geotag is about to plan. This presence check is **re-evaluated at every invocation — `plan`, `execute`, and `finalize` alike**, not only at planning: a breakout begun *between* `plan` and `execute` moves no planned file, so the per-operation media preconditions (Section 29) would not catch it; the existence check is the only thing that does, so `execute`/`finalize` hard-stop on it before any mutation or bundling.
 
-The workflow may print a textual message such as:
-
-```text
-Geotag cannot proceed.
-
-Reason:
-A jpg/ or tif/ development subfolder was found under 6-photos-by-dest:
-  6-photos-by-dest/2025/France/Paris/Louvre/jpg
-
-This means photo development/processing has already started.
-Geotag must run BEFORE development, because it rewrites
-timestamps, GPS, and filenames that development depends on.
-
-Stop and roll back the development breakout (remove the jpg/tif subfolders
-and restore the undistributed destination) before geotagging.
-
-No geotag JSON was written.
-```
-
 ### 7.2 By-dest must contain only photos
 
 `6-photos-by-dest` is the user-curated **staging area** that geotag operates on: the user organizes a dump into destination folders here, geotag corrects time/GPS and finalizes names, and the result is then **merged into** the user's permanent library (e.g. digiKam) elsewhere. The workspace is not the library — it is transient working space for one or more dumps — but by-dest is structured to merge cleanly into the library, so it must contain **only photo files** (`image`/`raw` classes): the photos the user actively moved from by-date. It must not contain `other`-class non-media files, stray sidecars, notes, archives, or any non-media artifact — and it must not contain **videos** (Section 7.3); videos stay in `4-videos-by-date`.
 
 Before geotag may proceed, the workflow must verify that under `6-photos-by-dest` (recursively) there is no `other`-class non-media file **and no `video`-class file** — only `image`/`raw` photo files are permitted. Media classes are the project's `image`/`raw`/`video` extensions; `other` is non-media, and `video` belongs in `4-videos-by-date`, not by-dest (Section 7.3). The pipeline's own control artifacts are not affected because they never live under `6-photos-by-dest` — the numbered geotag artifacts are written to `.photos-ingest/` (Section 8.1), and `gpx_root` resolves outside the managed tree (shared contract Section 8). If any non-photo file (non-media or video) is found under by-dest, geotag must hard-stop before creating any geotag JSON artifact and report the offending path(s); it does not silently ignore or skip the file, because its presence means by-dest is not the clean photo-only set that geotag and the later merge into the library assume.
-
-The workflow may print a textual message such as:
-
-```text
-Geotag cannot proceed.
-
-Reason:
-A non-photo file was found under 6-photos-by-dest:
-  6-photos-by-dest/Japan/Kyoto/notes.txt        (non-media)
-  6-photos-by-dest/Japan/Kyoto/clip.mp4         (video — belongs in 4-videos-by-date)
-
-6-photos-by-dest must contain only photo files moved in from by-date.
-Remove or relocate non-photo files (and any videos) before geotagging.
-
-No geotag JSON was written.
-```
 
 **Symlinks under by-dest are barred, including nested directory symlinks.** A symlink anywhere under `6-photos-by-dest` — a file symlink, or a **nested directory symlink** — is forbidden for the same escape reason it is forbidden elsewhere in the managed tree (shared contract `photos-shared-contract.md` Section 5.3; prep `photos-1-prep-workflow.md` Section 6.2 item 3): the pipeline never follows or organizes a link. Because `6-photos-by-dest` is **read-only for prep** yet still **scanned by prep as a managed folder**, prep is the gatekeeper that detects and blocks such a symlink, and the mandatory re-prep after any by-dest change (Section 13.1; shared contract Section 10) means a link that slipped in is caught at the prep run that must precede geotag — geotag consumes prep's handoff, which is built only when prep found no forbidden symlink. Geotag itself bars symlinks at the **workspace root** (Section 13) and never follows a link when reading by-dest; it relies on prep's symlink guard for nested links *inside* by-dest rather than re-walking the tree to re-flag them.
 
@@ -660,7 +611,7 @@ Geotag may be invoked without assuming upstream prep artifacts are valid.
 The workspace lock is acquired at process startup, before preflight (shared contract `photos-shared-contract.md` Section 2); if another pipeline run holds it, geotag exits fail-fast without scanning, planning, or writing anything. Immediately after, geotag applies the same startup guards every script does (shared contract Section 13.7; prep Section 6.2):
 
 - **Sealed workspace → hard-stop, sealed means sealed.** If a **terminal/sealed marker** from a prior successful merge is present (shared contract Section 13.7), geotag **hard-stops immediately, mutating nothing and touching nothing**, and directs the user to a fresh workspace — a merged workspace is done. There is no recovery utility. If files are seen at the **workspace root** or in **`0-sources`**, geotag additionally warns that a likely new dump was detected and that, because this workspace is sealed, the dump must be moved into a **fresh workspace** by hand; it leaves the dump exactly where it is.
-- **Uninitialized → run prep first.** If the workspace has no root sentinel `photos-00-workspace-guard` (it was never initialized, shared contract Section 5; prep Section 3.1), geotag hard-stops with "not an initialized workspace — run prep first" (only prep's init path consumes an as-arrived dump).
+- **Uninitialized → run prep first.** If the workspace has no root sentinel `photos-00-workspace-guard` (it was never initialized, shared contract Section 5; prep Section 3.1), geotag hard-stops, reporting that the workspace is not initialized and that prep must run first (only prep's init path consumes an as-arrived dump).
 - **Misplaced entry at the workspace root → hard-stop (strict).** On an initialized workspace the base must hold only the managed folders and control/dot directories; any misplaced root entry blocks — a **loose file** (dotfiles included), a **non-managed folder** (a stray dump folder belongs *inside* `0-sources`, not loose at the base), or a **symlink** (barred outright rather than followed, since following it would escape the workspace). Dumps belong in `0-sources` (shared contract Section 5.3; prep Section 6.2 items 2–3). Geotag matches prep here so a misplaced dump is caught no matter which phase the operator runs next.
 - **Incomplete managed folder structure → hard-stop.** If any of the managed `0`–`6` folders is missing on an initialized workspace, the structure was disturbed out-of-band; geotag hard-stops and directs the operator to restore it and re-run prep, rather than proceeding against a damaged workspace (shared contract Section 5.3; prep Section 6.2 item 7). Folder creation is prep's init-only job; geotag never creates or repairs the structure.
 
@@ -692,15 +643,6 @@ If validation fails, the workflow prints a textual stale-state report and produc
 
 Separately from staleness, every human-authored value geotag consumes — the config it reads and the decision fields it loads — is **sanity-validated before use** (Section 9.2; shared contract `photos-shared-contract.md` Section 14). An invalid value (e.g. a non-resolvable timezone, an out-of-range coordinate, a malformed `zfs` snapshot prefix, or a structurally broken decision object) is a hard blocker located to the offending field; geotag produces no downstream artifact and mutates nothing until the user fixes it. Validation detects invalid *content*; the dependency cascade detects *change* — both run.
 
-Example:
-
-```text
-Geotag cannot proceed.
-Reason: by-dest cache records are stale.
-Next action: rerun photos-1-prep for cache refresh / prep completion.
-No geotag JSON was written.
-```
-
 ### 13.1 Geotag requires a prep run after the latest by-date → by-dest move
 
 Prep recognizes a user's by-date → by-dest move and folds it into the handoff/cache only on its *next run* (prep `photos-1-prep-workflow.md` Section 10.1). Geotag consumes the handoff and operates on by-dest. Therefore:
@@ -714,21 +656,7 @@ Detection (cache/handoff vs. filesystem, `stat`-level, no media re-read):
 1. one or more media files exist under `6-photos-by-dest` that the handoff/cache does not record at their current by-dest path (unrecorded by-dest media); and/or
 2. one or more photos the handoff records under `5-photos-by-date` are now missing from there (consistent with having been moved into by-dest). (Videos in `4-videos-by-date` are not part of this check — they are never moved into by-dest, Section 7.3.)
 
-When either condition holds, geotag hard-stops before creating any geotag JSON artifact and emits the targeted blocker:
-
-```text
-Geotag cannot proceed.
-
-Reason:
-6-photos-by-dest contains photos that prep has not yet recorded
-(the handoff predates your most recent move from by-date into by-dest).
-
-Next action:
-Re-run photos-1-prep. It will recognize the moved files (no re-fingerprint,
-no re-read) and refresh the handoff/cache, then geotag can proceed.
-
-No geotag JSON was written.
-```
+When either condition holds, geotag hard-stops before creating any geotag JSON artifact and emits the targeted blocker, distinct from a generic hash mismatch, whose remedy is to re-run prep.
 
 Geotag never performs the move recognition itself and never writes to the cache, handoff, or by-dest to "fix" this — recognizing moves and refreshing the handoff is prep's responsibility alone (prep Section 10.1). Geotag's only action is to detect the gap and either direct the user to re-run prep or, in the bounded case of Section 13.1.1, run the real prep phases for them.
 
@@ -816,7 +744,7 @@ For each group, the workflow determines:
 8. whether the group has native GPS on some/all files;
 9. whether the group has missing or ambiguous timestamp metadata.
 
-If unknown camera groups are found, the workflow should output directly pasteable config snippets (for the workspace config `photos-00-config.json`) as textual output. The two arrays (`fixed_clock_cameras` and `phones`) are emitted **in the config file's own `device_groups` key order** — the seed is written sorted, so `fixed_clock_cameras` precedes `phones` — so that a whole-block paste-over of both arrays preserves the comma between them; emitting them in the reverse order would drop that inter-array comma.
+If unknown camera groups are found, the workflow should output a directly pasteable config snippet (for the workspace config `photos-00-config.json`, under `device_groups`) so the user can classify each unknown group into `fixed_clock_cameras` or `phones`.
 
 If camera group classification is incomplete:
 
@@ -1890,7 +1818,7 @@ Workspace sealed (prior successful merge)
      this workspace is done; move it to a fresh workspace; left untouched"
 
 Workspace not initialized (no root sentinel)
-  -> geotag hard-stops: "not an initialized workspace — run prep first" (Section 13)
+  -> geotag hard-stops because the workspace is not initialized (Section 13)
 
 Loose file at the workspace root (initialized workspace)
   -> geotag hard-stops (strict: any root file, dotfiles included; Section 13)
@@ -2018,7 +1946,7 @@ The workflow should produce user-facing outputs at each blocked or decision poin
 Important textual outputs include:
 
 1. sealed-workspace hard-stop (with new-dump warning if files sit at the root or in `0-sources`, Section 13);
-2. not-initialized hard-stop ("run prep first", Section 13);
+2. not-initialized hard-stop (Section 13);
 3. misplaced-root-entry hard-stop — loose file, non-managed folder, or symlink at the root (strict, Section 13);
 3a. incomplete-structure hard-stop — a missing managed `0`–`6` folder; restore it and re-run prep (Section 13);
 4. `0-sources`-not-empty blocker (re-run prep, Section 13);
