@@ -109,6 +109,14 @@ There is no build step and no linter config; runtime deps are system tools (`exi
 
 ### Release history
 
+- **v1.4.0** — every phase command closes its output with a single `Next: …` line stating the operator's
+  next action for the state it produced: the next command on success (prep `plan` → `dry-run`/`execute`;
+  a complete geotag plan → `geotag execute`; geotag `finalize` → `merge init-library`/`plan`; merge
+  `execute` → a sealed workspace), or the corrective action when it stops on a blocker, a stale plan,
+  decisions still needing the editor, or an unmet precondition. Emitted from the shared phase `run()`, so
+  the CLI and the console show identical guidance (`reporting.emit_next_step`). The hints are an
+  affordance, not part of the behavioural contract — the specs stay silent on output wording (see
+  `docs/design/decisions.md`). Additive; no CLI or workspace break.
 - **v1.3.1** — bug fix: the unknown-camera-group config snippet emitted its `device_groups` arrays in
   the wrong order (`phones` before `fixed_clock_cameras`), but the seeded config stores them sorted
   (`fixed_clock_cameras` first), so a first-run whole-block paste-over dropped the comma between the two
