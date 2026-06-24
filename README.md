@@ -65,6 +65,10 @@ the diff and are resumable after a crash.
 
 ## Documentation
 
+- **[Is this for you? — and why it's built this way](docs/who-is-this-for.md)** — the seven roots (three
+  facts about photos, four design choices) and the architecture they force. Read it **forward** to decide
+  fit, or **down** to see the design rationale. Start here if you're weighing whether the tool matches your
+  situation.
 - **[See it work (walkthrough)](docs/walkthrough.md)** — the **full run end to end, in screenshots**: prep →
   sort → geotag's time → drift → GPS edit loop → merge, with a flow diagram. Start here to see what it
   actually does.
@@ -106,6 +110,9 @@ Those tools are excellent **interactive correlators**, but they share two assump
 If the offsets are already known and clicking each photo onto a map is fine, the classic tools are great. For
 a pile of mixed-clock photos that need *correct placement with the least possible effort*, that is what this
 is for.
+
+**Still deciding?** [Who is this for?](docs/who-is-this-for.md) distills it to the fewest questions that
+settle fit — three facts about photos, four design choices — and traces the architecture they force.
 
 ## Designed to ask for the least
 
