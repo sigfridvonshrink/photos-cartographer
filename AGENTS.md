@@ -13,8 +13,9 @@ Top-level layout (the package lives at the repo root):
 - **`cartographer/`** — the pipeline package: prep / geotag / merge phases + the decision editor.
 - **`tests/`** — the test suite. **`spec/`** — the authoritative workflow specs (with their own
   `README.md`).
-- **`docs/`** — user-facing guides (`walkthrough.md` — the screenshot tour, `quickstart.md`,
-  `concepts.md`, `editor.md`) plus `screenshots/`, linked from `README.md`.
+- **`docs/`** — user-facing guides (`who-is-this-for.md` — fit + the design rationale (the seven roots),
+  `walkthrough.md` — the screenshot tour, `quickstart.md`, `concepts.md`, `editor.md`) plus
+  `screenshots/`, linked from `README.md`.
   These are user docs; `spec/` remains the behavioral source of truth.
 - **`tools/`** — build + test helpers (`build-pyz`, `coverage`, `jstest`, `spec-coverage`).
 - **`.githooks/`** — local pre-commit / pre-push hooks. `.github/workflows/` — CI.
