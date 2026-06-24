@@ -53,7 +53,7 @@ from .photos_utils import (
     prep_log_path, prep_db_snapshot_path, write_db_snapshot, take_zfs_snapshot,
     WorkspaceLock, ProgressCoordinator,
 )
-from .reporting import get_reporter
+from .reporting import get_reporter, emit_next_step
 
 TIME_DECISIONS_ARTIFACT = "photos-21-time-decisions.json"
 DRIFT_VALIDATION_ARTIFACT = "photos-22-gps-drift-validation.json"
@@ -1619,6 +1619,7 @@ def run(args):
     reporter.log(f"Lock acquired: {run_lock.lock_path}")
     try:
         if args.command == "plan":
+            _plan_ready = False    # set once the executable plan (photos-24) is assembled
             wf = GeotagWorkflow(workspace_root)
             blockers, warnings, info = wf.preflight()
             for w in warnings:
@@ -1628,6 +1629,7 @@ def run(args):
                 for b in blockers:
                     reporter.log(f"  - {b}")
                 reporter.log("\nNo geotag JSON was written.")
+                emit_next_step(reporter, "resolve the blocker(s) above, then re-run `geotag plan`.")
                 sys.exit(2)
 
             # Stages 2–4: build the in-memory model geotag reasons over.
@@ -1664,6 +1666,8 @@ def run(args):
                     else:
                         reporter.log(f'  "{label}": []{tail}')
                 reporter.log("\nNo geotag JSON was written.")
+                emit_next_step(reporter, "paste the array(s) above into photos-00-config.json, then "
+                                         "re-run `geotag plan`.")
                 sys.exit(2)
 
             gpx = wf.load_gpx()      # disk-heavy: only after the in-memory checks above have passed
@@ -1812,7 +1816,13 @@ def run(args):
                         reporter.log(f"  Plan saved to {epp}", stream="stdout")
                         if _ep_bak:
                             reporter.log(f"  Previous plan backed up to {_ep_bak}", stream="stdout")
-                        reporter.log("  Review it, then run `execute` to apply.", stream="stdout")
+                        _plan_ready = True
+                        emit_next_step(reporter, "`geotag execute` to apply the plan.")
+
+            if not _plan_ready:
+                emit_next_step(reporter, "open the editor (`photos-cartographer edit`) to settle the "
+                                         "worklist, then re-run `geotag plan`; when it reports the plan is "
+                                         "complete, `geotag execute`.")
 
         elif args.command == "execute":
             wf = GeotagWorkflow(workspace_root)
@@ -1823,18 +1833,21 @@ def run(args):
                 reporter.error("\nExecution cannot proceed:")
                 for b in blockers:
                     reporter.log(f"  - {b}")
+                emit_next_step(reporter, "resolve the blocker(s) above, then re-run `geotag execute`.")
                 sys.exit(2)
             if not os.path.exists(executable_plan_path(workspace_root)):
                 reporter.log(f"No {EXECUTABLE_PLAN_ARTIFACT} — run `plan` first.")
+                emit_next_step(reporter, "`geotag plan` first to build the executable plan.")
                 sys.exit(2)
             now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             execution_id = sha256_text(f"{now_iso}|{os.getpid()}")[:12]
             jobs = args.jobs or CONFIG.get("jobs") or 4
             summary = wf.execute_plan(jobs, now_iso, execution_id)
             if summary.get("status") == "rejected":
-                reporter.error("\nExecution rejected — the plan is stale; re-run `run` to replan:")
+                reporter.error("\nExecution rejected — the plan is stale; re-run `geotag plan` to replan:")
                 for s in summary["stale"]:
                     reporter.log(f"  - {s}")
+                emit_next_step(reporter, "re-run `geotag plan` to rebuild the plan, then `geotag execute`.")
                 sys.exit(2)
             t = summary["totals"]
             reporter.log(f"Executed {EXECUTABLE_PLAN_ARTIFACT}: status={summary['status']} "
@@ -1844,7 +1857,10 @@ def run(args):
                   stream="stdout")
             if summary["status"] != "success":
                 reporter.log(f"Review {EXECUTION_SUMMARY_ARTIFACT} and re-run `execute` once resolved.")
+                emit_next_step(reporter, f"review {EXECUTION_SUMMARY_ARTIFACT}, resolve the issues, then "
+                                         "re-run `geotag execute`.")
                 sys.exit(3)
+            emit_next_step(reporter, "`geotag finalize` to seal the geotag phase.")
 
         elif args.command == "finalize":
             wf = GeotagWorkflow(workspace_root)
@@ -1855,6 +1871,7 @@ def run(args):
                 reporter.error("\nFinalize cannot proceed:")
                 for b in blockers:
                     reporter.log(f"  - {b}")
+                emit_next_step(reporter, "resolve the blocker(s) above, then re-run `geotag finalize`.")
                 sys.exit(2)
             now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             fin_blockers = wf.finalize_package(now_iso)
@@ -1862,10 +1879,14 @@ def run(args):
                 reporter.error("\nCannot finalize — geotag has not ended successfully:")
                 for b in fin_blockers:
                     reporter.log(f"  - {b}")
+                emit_next_step(reporter, "run `geotag execute` to a successful finish first, then "
+                                         "`geotag finalize`.")
                 sys.exit(2)
             reporter.log(f"Finalized: wrote {COMPLETE_LOG_ARTIFACT}, {GEOTAG_DB_SNAPSHOT}, and "
                   f"{ARCHIVE_MANIFEST_ARTIFACT} to {CONTROL_DIR}/. The archival package is ready to "
                   "copy to permanent storage (geotag does not seal or merge).", stream="stdout")
+            emit_next_step(reporter, "bless the library with `merge init-library` (if not already), then "
+                                     "`merge plan` → `merge dry-run` → `merge execute`.")
     except KeyboardInterrupt:
         # Clean Ctrl-C: planning never mutates and execute is journalled/idempotent, so applied
         # files are confirmed and the next run resumes from the diff (§29.1a). Exit quietly with
