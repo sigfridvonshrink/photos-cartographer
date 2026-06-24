@@ -36,6 +36,21 @@ before it can touch a photo.
 > a GPX track*, *cascading folder-level location*, or a scriptable
 > **GeoSetter / HoudahGeo / gpscorrelate / darktable alternative** for an entire trip at once.
 
+## Is it for you? Four choices
+
+It rests on four deliberate choices. Agree with them and it's probably for you; don't, and it isn't — simple.
+
+1. **Photos are irreplaceable, so they deserve care** — no original is ever lost or silently altered;
+   correctness beats convenience.
+2. **A local, owned, folder-based library** — a plain directory tree on disk (digiKam, Immich, anything
+   that reads folders), not a cloud service or a proprietary catalog.
+3. **Ask only what the data can't settle** — everything derivable is resolved automatically; you're asked
+   only the human judgment calls that are absolutely needed, each made easy to answer.
+4. **Every photo on the map, even when GPS is scarce** — precise where the tracks allow, rough or manual
+   where they don't; a *map-complete* library, not just the frames that came with a pin.
+
+The reasoning — and the architecture these four force — is **[Who is this for?](docs/who-is-this-for.md)**.
+
 ## How it works in one minute
 
 A clean **prep → geotag → merge** pipeline built around the one decision only you can make. Geotag resolves
