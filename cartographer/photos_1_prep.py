@@ -40,7 +40,7 @@ import errno
 # CONFIGURATION BLOCK
 # ==============================================================================
 from .photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, selected_gpx_root, missing_managed_folders, FOLDER_ROLES
-from .reporting import get_reporter
+from .reporting import get_reporter, emit_next_step
 from .photos_utils import (_move_no_clobber, _move_link_unlink, _get_renameat2,
                           WorkspaceCache, WorkspaceLock, ContentHasher,
                           CACHE_SCHEMA_VERSION, FINGERPRINT_ALGORITHM_VERSION,
@@ -2648,8 +2648,9 @@ def _prep_nothing_to_do(workspace_root, reporter) -> bool:
     if by_dest_reprep_pending(workspace_root, _handoff) is not None:
         return False                    # a by-dest move still needs recording — not nothing-to-do
     name = folder_name('sources')
-    reporter.log(f"Nothing to do: {name} is empty — this workspace is already prepped. "
-                 f"Add media to {name} and re-run `prep plan` to ingest more.", stream="stdout")
+    reporter.log(f"Nothing to do: {name} is empty — this workspace is already prepped.", stream="stdout")
+    emit_next_step(reporter, f"sort photos into {folder_name('photos_by_dest')}, then `geotag plan` — or "
+                             f"add media to {name} and re-run `prep plan` to ingest more.")
     return True
 
 
@@ -2780,7 +2781,10 @@ def run(args):
                                "resolved first:")
                 for b in plan.blockers:
                     reporter.error(f"  - {b}")
+                emit_next_step(reporter, "fix the blocker(s) above, then re-run `prep plan`.")
                 sys.exit(2)
+
+            emit_next_step(reporter, "`prep dry-run` to review the plan, or `prep execute` to apply.")
 
         elif args.command == "dry-run":
             from .photos_utils import prep_plan_path, PREP_PLAN_ARTIFACT
@@ -2804,6 +2808,7 @@ def run(args):
                 PlanValidator.validate_plan_preflight(plan, workspace_root)
             except ValueError as e:
                 reporter.error(f"Preflight validation failed: {e}")
+                emit_next_step(reporter, "re-run `prep plan` to rebuild the plan against the current state.")
                 sys.exit(1)
 
             # Dry-run is not a simulation: it validates the REAL saved plan (no virtual-filesystem
@@ -2831,6 +2836,10 @@ def run(args):
                 if len(plan.blockers) > 20:
                     reporter.log(f"    … and {len(plan.blockers) - 20} more", stream="stdout")
             reporter.log(f"  Full plan: {pp}", stream="stdout")
+            if plan.blockers:
+                emit_next_step(reporter, "fix the blocker(s) shown above, then re-run `prep plan`.")
+            else:
+                emit_next_step(reporter, "`prep execute` to apply the plan.")
 
         elif args.command == "execute":
             from .photos_utils import prep_plan_path, PREP_PLAN_ARTIFACT
@@ -2852,7 +2861,23 @@ def run(args):
                 executor.execute(plan)
             except Exception as e:
                 reporter.error(f"Execution failed: {e}")
+                emit_next_step(reporter, "resolve the error above and re-run `prep execute` "
+                                         "(execute is idempotent — safe to re-run).")
                 sys.exit(1)
+
+            # Next step depends on whether sorting is still pending: an empty by-dest means this was a
+            # first ingest (sort, re-prep, then geotag); a populated by-dest means the move is recorded
+            # and geotag can run.
+            from .photos_utils import media_class_for_ext as _mc
+            _bd = folder_name('photos_by_dest')
+            _bd_has_media = any(_mc(os.path.splitext(fn)[1]) in ("image", "raw")
+                                for _root, _dirs, _fs in os.walk(os.path.join(workspace_root, _bd))
+                                for fn in _fs)
+            if _bd_has_media:
+                emit_next_step(reporter, f"`geotag plan` (or sort more photos into {_bd} first).")
+            else:
+                emit_next_step(reporter, f"sort photos from {folder_name('photos_by_date')} into {_bd}, then "
+                                         f"re-run `prep plan` + `prep execute`, then `geotag plan`.")
 
         elif args.command == "prune-quarantine":
             prune_quarantine(
@@ -2862,6 +2887,11 @@ def run(args):
                 do_delete=getattr(args, "yes", False),
                 prune_all=getattr(args, "prune_all", False),
             )
+            if getattr(args, "yes", False):
+                emit_next_step(reporter, "quarantine pruned — continue with the pipeline "
+                                         "(`geotag plan` if prep is complete).")
+            else:
+                emit_next_step(reporter, "re-run with `--yes` to actually delete the listed quarantine.")
 
     except KeyboardInterrupt:
         # Clean Ctrl-C: planning never mutates and execute is journalled/idempotent, so an

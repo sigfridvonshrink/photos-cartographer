@@ -48,7 +48,7 @@ from .photos_utils import (
     journal_path, take_zfs_snapshot, _move_no_clobber, write_db_snapshot, reseal_archival_package,
     write_sealed_marker, WorkspaceLock, LibraryLock, XDEV_TMP_PREFIX, XDEV_TMP_SUFFIX,
 )
-from .reporting import get_reporter
+from .reporting import get_reporter, emit_next_step
 
 # Geotag / prep artifacts merge READS (never writes — shared contract §13.0a).
 HANDOFF_ARTIFACT = "photos-11-handoff.json"
@@ -577,6 +577,7 @@ class MergeWorkflow:
                   "covering every file, and seals. Re-planning now would drop the already-moved files "
                   f"from the merge log. (To re-plan from scratch instead, remove {MERGE_SUMMARY_ARTIFACT} "
                   "first.)")
+            emit_next_step(reporter, "`merge execute` to resume the in-flight merge and seal.")
             return 2
         cache = WorkspaceCache(ws)
         try:
@@ -592,9 +593,13 @@ class MergeWorkflow:
         reporter.log(f"  Plan saved to {mpp}", stream="stdout")
         if _mp_bak:
             reporter.log(f"  Previous plan backed up to {_mp_bak}", stream="stdout")
-        reporter.log("  Review it, `dry-run` to display, then `execute`.", stream="stdout")
         for b in plan["blockers"]:
             reporter.error(f"  Blocker: {b}")
+        if plan["blockers"]:
+            emit_next_step(reporter, "resolve the blocker(s) above, then re-run `merge plan`.")
+        else:
+            emit_next_step(reporter, "`merge dry-run` to review the plan, or `merge execute` to merge "
+                                     "into the library.")
         return 0
 
     def do_dry_run(self, ws):
@@ -602,6 +607,7 @@ class MergeWorkflow:
         p = merge_plan_path(ws)
         if not os.path.exists(p):
             reporter.log(f"No {MERGE_PLAN_ARTIFACT} — run `plan` first.")
+            emit_next_step(reporter, "`merge plan` first to build the plan.")
             return 2
         with open(p) as f:
             plan = json.load(f)
@@ -610,6 +616,7 @@ class MergeWorkflow:
             reporter.log("\nThe saved merge plan is stale — re-run `plan`:")
             for s in stale:
                 reporter.log(f"  - {s}")
+            emit_next_step(reporter, "re-run `merge plan` to rebuild, then `merge dry-run`.")
             return 2
         # Dry-run validates the REAL saved plan and reports a SUMMARY; the full exact plan is the
         # saved artifact at `p`, so there is no need to dump every move to the terminal.
@@ -626,6 +633,10 @@ class MergeWorkflow:
             if len(_bl) > 20:
                 reporter.log(f"    … and {len(_bl) - 20} more", stream="stdout")
         reporter.log(f"  Full plan: {p}", stream="stdout")
+        if _bl:
+            emit_next_step(reporter, "resolve the blocker(s) shown, then re-run `merge plan`.")
+        else:
+            emit_next_step(reporter, "`merge execute` to merge into the library.")
         return 0
 
     # --- execute: place-then-remove, journal, resume, concurrency (§10.3/§11) ---
@@ -936,11 +947,13 @@ class MergeWorkflow:
         st = result["status"]
         if st == "no_plan":
             reporter.log(f"No {MERGE_PLAN_ARTIFACT} — run `plan` first.")
+            emit_next_step(reporter, "`merge plan` first to build the plan.")
             return 2
         if st == "rejected":
             reporter.error("\nExecution rejected — the merge plan is stale; re-run `plan`:")
             for s in result.get("stale", []):
                 reporter.log(f"  - {s}")
+            emit_next_step(reporter, "re-run `merge plan` to rebuild, then `merge execute`.")
             return 2
         t = result["summary"]["totals"]
         reporter.log(f"Executed {MERGE_PLAN_ARTIFACT}: status={st} — {t['placed_new']} placed, "
@@ -952,11 +965,14 @@ class MergeWorkflow:
                 if b.get("blocker"):
                     reporter.error(f"  Blocker: {b['blocker']}")
             reporter.log("Blocked files were left in by-dest; resolve them and re-run `execute`.")
+            emit_next_step(reporter, "resolve the blocked file(s) above, then re-run `merge execute`.")
             return 3
         reporter.log(f"Wrote {MERGE_LOG_ARTIFACT} and {MERGE_DB_SNAPSHOT}; re-sealed the archive "
               f"(photos-35-archive-manifest.json); sealed the workspace (photos-00-sealed.json). "
               "No library file was renamed or overwritten — the workspace is now terminal; "
               "process more media in a fresh workspace.", stream="stdout")
+        emit_next_step(reporter, "done — this workspace is sealed (terminal). Start a fresh workspace to "
+                                 "process more media.")
         return 0
 
     # --- filesystem helpers (mirrors of geotag's; merge is read-only here) ---
@@ -1098,6 +1114,7 @@ def do_init_library(path_arg, ws):
         marker = write_library_marker(library_root)
         reporter.log(f"Library {'already blessed' if pre else 'blessed'}: {library_root} "
               f"({os.path.basename(marker)}). Already named in config; no config change.", stream="stdout")
+        emit_next_step(reporter, "`merge plan` to map the by-dest photos to library targets.")
         return 0
 
     # A path was given: resolve to an absolute path and validate it.
@@ -1113,6 +1130,8 @@ def do_init_library(path_arg, ws):
               f"({os.path.basename(marker)}). Not run from a workspace, so config was not updated — "
               "re-run this from a workspace if you also want it recorded in that workspace's "
               "photos-00-config.json.", stream="stdout")
+        emit_next_step(reporter, "from your workspace, `merge plan` to map the by-dest photos to library "
+                                 "targets.")
         return 0
 
     # In a workspace with an explicit path: bless AND record library_root in config (under the lock).
@@ -1151,6 +1170,7 @@ def do_init_library(path_arg, ws):
         write_json_artifact(cfg_p, cfg)             # the one narrow config write (library_root only)
         reporter.log(f"Library {'already blessed' if pre else 'blessed'} and recorded: {resolved} "
               f"({os.path.basename(marker)}). Wrote merge.library_root into photos-00-config.json.", stream="stdout")
+        emit_next_step(reporter, "`merge plan` to map the by-dest photos to library targets.")
         return 0
     finally:
         lock.release()
@@ -1177,6 +1197,8 @@ def _run_locked_workflow(command, ws, jobs=None):
             for b in blockers:
                 reporter.log(f"  - {b}")
             reporter.log("\nNo files were merged.")
+            emit_next_step(reporter, "resolve the blocker(s) above — usually `geotag finalize`, then "
+                                     f"`merge init-library` to bless the library — and re-run `merge {command}`.")
             return 2
 
         # Preflight confirmed the .photos-library marker — safe to take the library-side lock now
