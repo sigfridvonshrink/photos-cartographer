@@ -483,6 +483,13 @@ def get_reporter() -> Reporter:
     return _REPORTER
 
 
+def emit_next_step(reporter, text: str) -> None:
+    """Print the closing 'what to do next' guidance — the last line of a phase command, so the operator
+    is never left guessing the next move. A single uniform `Next: …` line, on stdout, shared by the CLI
+    and the console (both drive the same phase `run()`)."""
+    reporter.log(f"\nNext: {text}", stream="stdout")
+
+
 def set_reporter(reporter: Optional[Reporter]) -> Optional[Reporter]:
     """Install ``reporter`` as the active one; return the previous one (for restore)."""
     global _REPORTER
