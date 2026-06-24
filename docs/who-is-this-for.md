@@ -44,7 +44,7 @@ point: these are potholes, not opinions one has to adopt.
 | F2 | **Camera clocks drift — independently, and from day to day.** | Each body's clock is wrong by its own amount, and that amount changes between days (drift, manual resets to local time in the morning, missed DST). There is no single global offset to find. | The import that landed an hour early; the shots an hour off after a border; a day's frames scattered because the clock was never set — blamed on negligence or forgetfulness, not on a category. |
 | F3 | **GPX coverage is partial.** | The logger's tracks reach *some* of the library, never all of it — so the track alone can never place every frame; the rest needs fallbacks. | The half-tagged library; the map view with holes where phone-sync missed; the frames that came with a pin and the many that didn't. |
 
-Then, given those facts, four **choices** (`Px`) — the genuine opinion, where a different author
+Then, given those facts, four **choices** (`Px`) — the arguable part, where a different author
 could have gone another way. These are the part one can argue with.
 
 **Choices (`Px`) — the whole of the opinion:**
@@ -236,7 +236,7 @@ could have chosen differently and the premises would not have objected:
 - **The downstream library, not the tree.** A *hierarchical* destination tree is **forced**,
   not chosen: the timezone / offset / GPS-fallback cascade rides on the folder nesting, so a
   flat or tag-based layout would make inheritance impossible and drive the per-photo workload
-  straight back up. What is genuinely free is only *which* folder-based library consumes the
+  straight back up. What is actually free is only *which* folder-based library consumes the
   result — digiKam, or any other — and the cosmetic naming of the levels.
 - **Defaults that are offered, not imposed.** Folder names (`0-sources … 6-photos-by-dest`)
   are configurable, not hardcoded — the seven-stage *structure* is the invariant, the *labels*
@@ -265,7 +265,7 @@ a handful of clear commitments, with everything else following as consequence.
 ## The dependency graph: what's chosen, what's true, what follows
 
 The same structure once more, sorted by *kind* rather than by mechanism. On the left, the whole
-of the opinion — four genuine **choices** (`Px`). On the right of them, three **facts** (`Fx`)
+of the opinion — four **choices** (`Px`). On the right of them, three **facts** (`Fx`)
 that no one gets to choose at all. Both feed the **forced consequences**, and exactly one of those
 consequences (*multi-session*) is itself a cause, feeding the record machinery downstream of it.
 Read it and the headline is plain: of seven roots, only four are arguable, and the rest of the
