@@ -240,8 +240,8 @@ could have chosen differently and the premises would not have objected:
   result — digiKam, or any other — and the cosmetic naming of the levels.
 - **Defaults that are offered, not imposed.** Folder names (`0-sources … 6-photos-by-dest`)
   are configurable, not hardcoded — the seven-stage *structure* is the invariant, the *labels*
-  are the operator's. This is the clearest evidence that the rigidity is structural where it must
-  be and accommodating where it can afford to be.
+  are the operator's. The rigidity is structural where it must be and accommodating where it
+  can afford to be.
 
 These are real choices but only details.
 
