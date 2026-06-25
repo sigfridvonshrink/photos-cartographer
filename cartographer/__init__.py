@@ -18,4 +18,7 @@ The three phases (prep / geotag / merge) plus the shared utilities, packaged so 
 shipped as self-contained zipapp executables. Each phase module exposes `main()`.
 """
 
+# Source sentinel only. Release builds inject the git tag here via `tools/build-pyz --version`,
+# rewriting it in the built artifact alone — the source tree keeps this placeholder (see AGENTS.md
+# "Releases"). A released binary's `--version` reports the tag, e.g. 1.4.0, not this value.
 __version__ = "0.1.0"
