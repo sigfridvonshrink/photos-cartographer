@@ -1,5 +1,9 @@
 # photos-cartographer
 
+[![Latest release](https://img.shields.io/github/v/release/sigfridvonshrink/photos-cartographer?label=release)](https://github.com/sigfridvonshrink/photos-cartographer/releases/latest)
+[![Download](https://img.shields.io/badge/download-latest%20build-blue)](https://github.com/sigfridvonshrink/photos-cartographer/releases/latest)
+[![License](https://img.shields.io/github/license/sigfridvonshrink/photos-cartographer)](LICENSE)
+
 **Put a whole photo library — or a single trip's dump — on the map, with the least manual work.**
 
 *Native GPS where you have it, GPX tracks where they help, minimal, manual cascading fallbacks everywhere else.*
