@@ -2,8 +2,8 @@
 
 The ideas behind photos-cartographer — *why* the pipeline is shaped the way it is. Read this once and
 the [quick start](quickstart.md) and the [editor guide](editor.md) will make sense. For the safety
-model and the tool comparison, see the [main README](../README.md) and the authoritative specs in
-[`spec/`](../spec/).
+model see the [main README](../README.md) and the authoritative specs in [`spec/`](../spec/); for the
+tool comparison, [How this compares](comparison.md).
 
 ---
 

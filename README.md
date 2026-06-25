@@ -124,7 +124,8 @@ Those tools are excellent **interactive correlators**, but they share two assump
 
 If the offsets are already known and clicking each photo onto a map is fine, the classic tools are great. For
 a pile of mixed-clock photos that need *correct placement with the least possible effort*, that is what this
-is for.
+is for. → For the **full tool-by-tool comparison** (HoudahGeo, GeoSetter, Geolignment, gpscorrelate,
+darktable, exiftool, Lightroom, cloud), see **[How this compares](docs/comparison.md)**.
 
 **Still deciding?** [Who is this for?](docs/who-is-this-for.md) distills it to the fewest questions that
 settle fit — three facts about photos, four design choices — and traces the architecture they force.
@@ -161,8 +162,8 @@ Photos are irreplaceable, so the whole design is **plan → validate → execute
 
 The pipeline is **specification-driven** — behavior is defined by the documents in
 [`spec/`](spec/), and the code follows them. Start with
-**[`spec/README.md`](spec/README.md)** for the architecture and the full motivation/safety model, then the
-per-phase specs:
+**[`spec/README.md`](spec/README.md)** for how the specs are organized and the spec discipline, then the
+shared contract and the per-phase specs:
 
 | Document | Scope |
 |---|---|
