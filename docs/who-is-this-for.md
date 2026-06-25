@@ -255,7 +255,9 @@ debate. (The other use — deciding whether the tool fits at all — is settled 
 recognise the facts, share the choices, or stop.)
 
 This document is the **roots and rationale**; for the **mechanics** they produce — camera groups,
-per-day clock offsets, the by-dest tree, what cascades — see [Concepts](concepts.md).
+per-day clock offsets, the by-dest tree, what cascades — see [Concepts](concepts.md). For where the
+existing tools sit relative to these roots — and why the niche is empty — see
+[How this compares](comparison.md).
 
 The strictness buys safety on irreplaceable originals and an audit trail that outlives the software —
 a handful of clear commitments, with everything else following as consequence.
