@@ -22,6 +22,10 @@ The aim is **100% geolocation coverage for the least possible effort**: every ph
 allow, rough or manual where they don't — so a map view in a library like Immich shows your **whole library**,
 not just the frames that came with a location baked in.
 
+But, also, **nothing** is worse than making an irreversible mess of your photo archive. I have been there.
+This is why this script is terminally paranoid about safety: dry runs, no-clobber moves, stale-plan rejection,
+crash recovery, idempotent re-runs, dependency fingerprints, provenance logs and behaviour test coverage are included.
+
 ![The decision editor — settling timezones, then clock drift on the track, then GPS on a map](docs/screenshots/hero.gif)
 
 *The decision editor: time → drift → GPS.* **▶ [See the full run, step by step →](docs/walkthrough.md)**
