@@ -7,7 +7,7 @@ This pipeline mutates irreplaceable originals, so coverage is tracked on **two a
    (`tools/spec-coverage` over `spec/spec-clauses.json`). Line/branch can't tell you whether a
    *must-refuse / no-clobber / leaves-untouched* obligation is actually asserted; this can.
 
-Figures below are a snapshot; regenerate with the commands shown. The suite is **882 tests**.
+Figures below are a snapshot; regenerate with the commands shown. The suite is **885 tests**.
 
 ## Line / branch coverage
 
@@ -17,17 +17,17 @@ same plan/validate/execute core the phases provide, neither of which writes meta
 
 | Component | Line | Branch |
 |---|---:|---:|
-| prep (`photos_1_prep`) | 90.3% | 84.0% |
+| prep (`photos_1_prep`) | 90.2% | 84.1% |
 | prep models (`_prep_models`) | 100.0% | 100.0% |
-| geotag (`photos_2_geotag`) | 97.9% | 96.0% |
+| geotag (`photos_2_geotag`) | 97.8% | 95.9% |
 | geotag calc (`_geotag_calc`) | 99.6% | 98.1% |
-| merge (`photos_3_merge`) | 86.4% | 83.6% |
+| merge (`photos_3_merge`) | 86.5% | 83.5% |
 | shared (`photos_utils`) | 88.9% | 85.0% |
 | reporting (`reporting`) | 93.6% | 74.3% |
 | cli | 87.9% | 75.0% |
 | console server | 58.3% | 47.0% |
 | editor server | 77.8% | 75.0% |
-| **Total** | **89.2%** | **84.8%** |
+| **Total** | **89.3%** | **84.8%** |
 
 Regenerate (branch coverage; report scoped to the production code via `.coveragerc`):
 
