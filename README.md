@@ -229,9 +229,10 @@ archive and shared as-is, in case it's useful to anyone with the same problem.
 ## AI disclosure
 
 The **design and specifications are mine**; the **implementation is AI-written**. The design documents
-were turned into the behavior specifications in [`spec/`](spec/), and every clause is backed by an
-automated test that runs in CI on each change — so the AI-written code is held to a human-authored spec
-and verified mechanically. Full statement: **[`AI-DISCLOSURE.md`](AI-DISCLOSURE.md)**.
+were turned into the behavior specifications in [`spec/`](spec/), whose clauses are indexed: each
+CI-gated clause is backed by a test, and the remaining omissions are tracked explicitly — so the
+AI-written code is held to a human-authored spec and verified mechanically. Full statement:
+**[`AI-DISCLOSURE.md`](AI-DISCLOSURE.md)**.
 
 ## License
 
