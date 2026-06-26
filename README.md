@@ -226,6 +226,13 @@ a map one at a time, and still ending up with gaps. It does the tedious parts au
 what it truly can't work out, so geotagging a whole trip stops being a chore. It's made first for my own
 archive and shared as-is, in case it's useful to anyone with the same problem.
 
+## AI disclosure
+
+The **design and specifications are mine**; the **implementation is AI-written**. The design documents
+were turned into the behavior specifications in [`spec/`](spec/), and every clause is backed by an
+automated test that runs in CI on each change — so the AI-written code is held to a human-authored spec
+and verified mechanically. Full statement: **[`AI-DISCLOSURE.md`](AI-DISCLOSURE.md)**.
+
 ## License
 
 Apache License 2.0 — see [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE). The bundled Leaflet library keeps
