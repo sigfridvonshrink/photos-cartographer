@@ -60,19 +60,11 @@ don't touch, and this script does not apply. The **choices** (`Px`) are a differ
 — those are values, and people may disagree: a cloud library over an owned folder tree,
 or no appetite for a plan-driven pipeline. Disagree with a choice and the script again is useless.
 
-> **Note on what is *not* a root.** "The decisions are complex" and "the decisions are
-> far-reaching" might look like facts to put here. They are not. **Complexity is derived** —
-> it follows from F2 (drift that is per-camera and per-day is what makes the correct answer
-> intricate). **Reach is chosen** — a decision is far-reaching only because the cascade makes
-> it so, and that is a deliberate trade under P3: *one far-reaching decision in place of many
-> short-reaching ones.* Both appear below as consequences, not premises.
-
-> **Note on other non-roots: Linux and open-source.** This is built and run on Linux, but Linux is
+> **Note on some non-roots: Linux and open-source.** This is built and run on Linux, but Linux is
 > not a root — the design is plain Python shelling out to `exiftool`, ImageMagick, and `ffmpeg`,
-> all cross-platform, so it would port with little structural change. It is where the tool
-> *lives*, not a premise the architecture leans on. Open-source is likewise a downstream
-> expression of the "local, owned" ethos (P1, P2), not a structural driver. Neither forces
-> anything below.
+> all cross-platform, so it would port with little structural change. Open-source is likewise a
+> downstream expression of the "local, owned" ethos (P1, P2), not a structural driver. Neither
+> forces anything below.
 
 ---
 
@@ -135,20 +127,20 @@ This choice fights F3: tracks cover only *part* of the library, but the output m
 ### From F1 + P4 — total coverage at scale becomes a multi-session job
 
 This is a **two-level chain**: a fact and a choice together force an intermediate consequence,
-and that consequence — not either root directly — forces the record machinery. It is the part
-most easily mistaken for an arbitrary choice.
+and that consequence forces the record machinery. It is the part most easily mistaken for an
+arbitrary choice.
 
 Neither root does it alone. Scale (F1) without the 100%-coverage goal (P4) is fast: prep is
 automated, one keeps the native-GPS frames, lets the track cover the easy matches, and stops —
 plausibly one sitting, because the long tail is never chased. The goal without scale is also
-trivial: placing ten photos completely takes minutes. Only the **product** — total coverage
-*across a large, mixed batch* — produces a long tail of per-(camera, destination, day) offset
-confirmations and hand-placed remainder that cannot be finished in one sitting.
+trivial: placing ten photos completely takes minutes. Only *total coverage across a large,
+mixed batch* produces a long tail of per-(camera, destination, day) offset confirmations and
+hand-placed remainder that cannot be finished in one sitting.
 
 Note: not all of that elapsed time is P4's. The album **sort** into a destination tree is owed
 to **P2** — one would drag photos into folders even with no geotagging at all — so P2 contributes
 session-spanning human time on its own. What F1 + P4 *specifically* add is the **long tail of
-confirmations and manual placement** that has no automated escape. Either way, the job spans
+confirmations and manual placement** that has no automated escape. Either way, the job likely spans
 multiple sessions.
 
 **Intermediate consequence — a multi-session job.** The machine cannot hold one's decisions in
@@ -217,7 +209,7 @@ Green = chosen, amber = given.
   discrete inspectable checkpoints is forced (P1+F3); the specific cut points are judgment.
 - **The consensus-clustering details** of clock-offset inference — clustering rather than
   averaging is forced by robustness, but the spread thresholds, the tie-breaks, and the
-  confidence grades are tuned choices.
+  confidence grades are choices.
 - **The downstream library, not the tree.** A *hierarchical* destination tree is **forced**,
   not chosen: the timezone / offset / GPS-fallback cascade rides on the folder nesting, so a
   flat or tag-based layout would make inheritance impossible and drive the per-photo workload
