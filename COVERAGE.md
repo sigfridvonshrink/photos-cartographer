@@ -7,7 +7,7 @@ This pipeline mutates irreplaceable originals, so coverage is tracked on **two a
    (`tools/spec-coverage` over `spec/spec-clauses.json`). Line/branch can't tell you whether a
    *must-refuse / no-clobber / leaves-untouched* obligation is actually asserted; this can.
 
-Figures below are a snapshot; regenerate with the commands shown. The suite is **885 tests**.
+Figures below are a snapshot; regenerate with the commands shown. The suite has **885 tests**.
 
 ## Line / branch coverage
 
