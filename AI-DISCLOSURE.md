@@ -9,7 +9,7 @@ specifications, and the code was written by an AI coding assistant working again
 
 The specifications are the source of truth, not the generated code. The behavioral clauses in
 [`spec/`](spec/) are indexed; each CI-gated clause is backed by a test that runs on every push and
-pull request, and the remaining clauses carry an explicit, tracked omission reason (see
+pull request, and the remaining clauses carry explicit and tracked omission reasons (see
 [`COVERAGE.md`](COVERAGE.md)). So the AI-written implementation is held to a human-authored
 specification and verified mechanically — the gate fails if a covered clause loses its test, before
 a regression can touch a photo.
