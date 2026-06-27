@@ -1,0 +1,33 @@
+#!/bin/sh
+# Copyright 2026 sigfridvonshrink
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Reject any commit that attributes authorship to Claude / Anthropic / an AI assistant.
+# A single such trailer leaking into a PR commit got the "claude" account permanently linked as a
+# repo contributor on GitHub (via the noreply@anthropic.com co-author email) — this is the backstop
+# so it can never recur. Enable for your clone with:  git config core.hooksPath .githooks
+# Bypass for a single commit with:  git commit --no-verify
+msg_file="$1"
+
+# Strip comment lines (git's scissors/template comments) before scanning.
+if grep -v '^#' "$msg_file" \
+     | grep -iEq 'co-authored-by:.*(anthropic|claude)|@anthropic\.com|generated with .*claude'; then
+    echo "commit-msg: rejected — the message attributes authorship to Claude/Anthropic." >&2
+    echo "            Remove the Co-Authored-By / 'Generated with Claude' trailer." >&2
+    echo "            (the noreply@anthropic.com co-author email links the 'claude' GitHub account" >&2
+    echo "             as a repo contributor; this repo forbids AI attribution)." >&2
+    echo "            Bypass intentionally with: git commit --no-verify" >&2
+    exit 1
+fi
+exit 0
