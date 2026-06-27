@@ -1,9 +1,9 @@
 # See it work — a full run, end to end
 
-This is **one real run** on a real trip dump, start to finish, in pictures — a dump turned into a
-map-complete library. Every step is a screenshot
-from the browser console (the same phases run from the command line — see the [quick start](quickstart.md)).
-Concepts are introduced as they come up, each linked to the deeper explanation in [Concepts](concepts.md).
+This is **a real run** on a real trip dump, start to finish, in pictures — a dump turned into a
+map-complete library. Every step is a screenshot from the browser console (the same phases run from
+the command line — see the [quick start](quickstart.md)). Concepts are introduced as they come up,
+each linked to the deeper explanation in [Concepts](concepts.md).
 
 The shape of the whole thing: **prep** (organize the dump) → **you sort** photos into destinations →
 **re-prep** → **geotag** (infer time, fix the clock, place on the map) → **merge** into your permanent
