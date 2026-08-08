@@ -109,6 +109,21 @@ There is no build step and no linter config; runtime deps are system tools (`exi
 
 ### Release history
 
+- **v1.5.0** — **a plan no longer throws its decode work away.** Cache rows are written by `execute`
+  only (planning never mutates the cache — `plan` opens it read-only), so a plan that was never executed
+  discarded every fingerprint it computed and the next plan re-decoded the whole workspace: hours on a
+  real library whenever the operator re-plans first (a config edit, a corrected folder, an interrupted
+  run). Planning now keeps those observations in a **decode memo** in its own database
+  (`.photos-ingest/photos-00-plan-memo.db`, prep §10.3 — new), consulted only where the cache misses and
+  always outranked by it. Entries are laid *under* the cache and split back into their file and metadata
+  parts, so both freshness gates apply the same size/mtime/engine/field-set tests they apply to a cache
+  row — there is no memo-specific reuse path; move recognition still runs against executed state alone;
+  and a missing or corrupt memo degrades to re-decoding rather than failing a plan. A 39-file re-plan
+  drops from 4.5s to 0.2s with an identical plan. Alongside it, the §17.4 re-hash report accounts for
+  memo reuse and names the cause when a re-plan re-hashes with nothing carried over, and the dead
+  `camera_time_and_timezone_policy.enabled` config flag (seeded and validated, never read) is gone from
+  the seed template. Additive; no CLI or workspace break — existing workspaces gain a memo on their next
+  plan, and configs carrying the removed flag are unaffected.
 - **v1.4.0** — every phase command closes its output with a single `Next: …` line stating the operator's
   next action for the state it produced: the next command on success (prep `plan` → `dry-run`/`execute`;
   a complete geotag plan → `geotag execute`; geotag `finalize` → `merge init-library`/`plan`; merge
