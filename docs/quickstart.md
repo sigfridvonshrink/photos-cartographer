@@ -53,7 +53,7 @@ Pick an empty working folder (separate from your permanent library), drop your r
 
 ```bash
 cd /path/to/working-folder       # your dump can already be sitting here
-photos-cartographer prep plan    # plan the work (writes nothing yet)
+photos-cartographer prep plan    # plan the work (no photo is moved or changed)
 photos-cartographer prep dry-run # inspect the exact plan that execute will run
 photos-cartographer prep execute # apply it
 ```
@@ -89,6 +89,10 @@ It never reclassifies on its own; you decide, edit the config, and re-run `prep`
 
 Config edits are **fingerprinted**: changing the extension or folder settings restales exactly the
 downstream stages that depend on them, so a later re-run recomputes what's needed and nothing else.
+
+Re-planning is cheap even before you execute anything: a plan remembers the fingerprints it computed,
+so tuning the config and running `prep plan` again reuses them instead of re-reading every photo. Only
+`prep execute` makes them permanent, so run it once the plan looks right.
 
 ---
 
