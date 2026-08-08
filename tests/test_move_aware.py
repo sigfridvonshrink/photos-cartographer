@@ -274,3 +274,38 @@ def test_rehash_summary_flags_engine_changed(tmp_path, monkeypatch):
     hash_calls.clear()
     rs = _rehash(_plan(ws))
     assert rs["by_reason"] == {"engine-changed": 1} and rs["unexpected"] == 1
+
+
+def test_rehash_summary_flags_replan_over_an_unexecuted_plan(tmp_path, monkeypatch):
+    """Cache rows are written by execute only, so re-planning a workspace whose earlier plan was never
+    executed re-hashes as `new` unless the decode memo (§10.3) covers it. When the memo cannot — it was
+    cleared, or predates this workspace — that reads like a first ingest, so the summary records the real
+    cause (`unpersisted_prior_plan`) rather than leaving the operator to infer it."""
+    hash_calls = []
+    _install_mocks(monkeypatch, hash_calls)
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "t")   # match the spy's engine_version
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "fresh.jpg").write_bytes(b"FRESH")
+    prep.CONFIG["jobs"] = 1
+
+    rs1 = _rehash(_plan(ws))                       # first-ever plan: genuinely new, no prior artifact
+    assert rs1["new_expected"] >= 1 and rs1["unpersisted_prior_plan"] is False
+
+    # The plan artifact is written by the CLI's run(), not by plan() — stand it in directly.
+    open(utils.prep_plan_path(str(ws)), "w").write("{}")
+    hash_calls.clear()
+    rs2 = _rehash(_plan(ws))                       # re-plan: the memo carries the unexecuted work over
+    assert hash_calls == [] and rs2["total"] == 0 and rs2["memo_reused"] >= 1
+    assert rs2["unpersisted_prior_plan"] is True   # the cache is still empty, and the summary says so
+
+    os.remove(utils.plan_memo_db_path(str(ws)))    # memo cleared: nothing left to carry the work over
+    hash_calls.clear()
+    rs3 = _rehash(_plan(ws))
+    assert hash_calls                              # the same file really is hashed again
+    assert rs3["new_expected"] >= 1 and rs3["memo_reused"] == 0
+    assert rs3["unpersisted_prior_plan"] is True
+
+    # Executing persists the fingerprints in the cache itself; the flag goes quiet for good.
+    prep.PlanExecutor(str(ws)).execute(_plan(ws))
+    rs4 = _rehash(_plan(ws))
+    assert rs4["total"] == 0 and rs4["unpersisted_prior_plan"] is False
