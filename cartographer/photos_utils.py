@@ -109,7 +109,6 @@ CONFIG = {
     "photo_anchor_interpolation_max_gap_seconds": 1800.0,
     "photo_anchor_extrapolation_max_seconds": 300.0,
     "camera_time_and_timezone_policy": {
-        "enabled": False,
         "default_folder_timezone": "",
         "device_groups": {
             "phones": [],
@@ -952,7 +951,7 @@ def validate_config(cfg: dict):
     if pol is not None:
         if not isinstance(pol, dict):
             raise ValueError("config: camera_time_and_timezone_policy must be an object.")
-        for bk in ("enabled", "single_anchor_auto_apply", "multi_anchor_auto_apply",
+        for bk in ("single_anchor_auto_apply", "multi_anchor_auto_apply",
                    "write_corrected_metadata_times", "write_corrected_offset_tags",
                    "write_corrected_filename_times"):
             if bk in pol:

@@ -52,7 +52,7 @@ def _pol(**overrides):
     (_cfg(gpx_interpolation_max_distance_meters="far"), "must be a number"),     # wrong type
     (_cfg(gpx_root="a\x00b"), "NUL byte"),                                       # bad path
     (_cfg(zfs={"snapshot_prefix": "bad name!"}), "snapshot_prefix"),             # illegal zfs prefix
-    (_pol(enabled="yes"), "enabled must be a boolean"),                          # non-bool flag
+    (_pol(single_anchor_auto_apply="yes"), "must be a boolean"),                 # non-bool flag
     (_pol(default_folder_timezone="Mars/Phobos"), "valid IANA timezone"),        # bad tz
     (_pol(manual_segment_template_count=1.5), "must be an integer"),             # non-int count
     (_pol(phone_gpx_max_distance_meters=-5), "phone_gpx_max_distance_meters"),   # negative
