@@ -269,8 +269,11 @@ Defined in `spec/photos-shared-contract.md`:
   (`6-photos-by-dest` is read-only staging that merge joins into the permanent digiKam library — it is
   *not* the library).
 - All control/artifact files live in a single `.photos-ingest/` control directory (config, guard
-  sentinel `photos-00-workspace-guard`, handoff manifest, decision JSONs, journals, default `gpx/` root).
-  Prep skips this subtree wholesale, so artifacts can never be mistaken for media.
+  sentinel `photos-00-workspace-guard`, handoff manifest, decision JSONs, journals, the SQLite cache
+  `photos-00-ingest.db`, default `gpx/` root). Prep skips this subtree wholesale, so artifacts can never
+  be mistaken for media. One file there is **scratch, not record**: `photos-00-plan-memo.db`, the
+  plan-time decode memo (prep §10.3) — re-derivable fingerprints of files at the paths they were read
+  from, written outside the plan/execute op model, never journalled or archived, safe to delete.
 - `photos-00-config.json` is the **workspace config**: seeded on first prep run from the in-code template
   `photos_utils.CONFIG`, then authoritative and hand-edited thereafter.
 - A whole-run lock covers planning *and* execution so runs never overlap.

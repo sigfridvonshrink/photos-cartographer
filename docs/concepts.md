@@ -12,7 +12,8 @@ tool comparison, [How this compares](comparison.md).
 All work happens inside a **workspace**: a transient working area, separate from your permanent photo
 library. A workspace is *initialized* the first time you run `prep` in a folder — that creates the
 managed structure and a hidden control directory `.photos-ingest/` (config, decision files, journals,
-the SQLite cache; `prep` skips this subtree wholesale, so it can never be mistaken for a photo).
+the SQLite cache, and a disposable memo of the fingerprints planning computed; `prep` skips this subtree
+wholesale, so it can never be mistaken for a photo).
 
 The managed folders, by number:
 
