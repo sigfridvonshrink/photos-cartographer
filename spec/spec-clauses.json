@@ -1,5 +1,5 @@
 {
-  "_note": "Living spec-clause index for tools/spec-coverage. Each clause: a spec pointer (file+section, kept in sync by tests/test_spec_coverage_registry.py) and a coverage status. `must_cover` = the CI-gated subset (a test tagged @pytest.mark.spec(\"<id>\") must exist) \u2014 every clause a genuine test asserts. `coverage`=incidental/none clauses are tracked but omitted from the gate with an `omit_reason` (happy-path-only, cross-cutting principle, or untested). A map of which spec behaviours have a dedicated test, not a quality score.",
+  "_note": "Living spec-clause index for tools/spec-coverage. Each clause: a spec pointer (file+section, kept in sync by tests/test_spec_coverage_registry.py) and a coverage status. `must_cover` = the CI-gated subset (a test tagged @pytest.mark.spec(\"<id>\") must exist) — every clause a genuine test asserts. `coverage`=incidental/none clauses are tracked but omitted from the gate with an `omit_reason` (happy-path-only, cross-cutting principle, or untested). A map of which spec behaviours have a dedicated test, not a quality score.",
   "clauses": [
     {
       "id": "geotag-23-paths-only-review-1",
@@ -8596,6 +8596,90 @@
       "coverage": "covered",
       "must_cover": true,
       "test": "tests/test_zfs.py::test_load_or_seed_config_rejects_illegal_zfs"
+    },
+    {
+      "id": "prep-plan-memo-reuse-1",
+      "area": "prep",
+      "criticality": "med",
+      "anti": false,
+      "title": "A re-plan reuses fingerprints the previous (unexecuted) plan computed, from the decode memo",
+      "spec": {
+        "file": "photos-1-prep-workflow.md",
+        "section": "10.3"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_plan_memo.py::test_replan_without_execute_reuses_fingerprints"
+    },
+    {
+      "id": "prep-plan-memo-not-the-cache-1",
+      "area": "prep",
+      "criticality": "high",
+      "anti": true,
+      "title": "The decode memo is a separate store: planning still writes no workspace-cache row",
+      "spec": {
+        "file": "photos-1-prep-workflow.md",
+        "section": "10.3"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_plan_memo.py::test_plan_does_not_write_the_workspace_cache"
+    },
+    {
+      "id": "prep-plan-memo-subordinate-1",
+      "area": "prep",
+      "criticality": "med",
+      "anti": false,
+      "title": "A cache row always outranks a memo entry for the same path",
+      "spec": {
+        "file": "photos-1-prep-workflow.md",
+        "section": "10.3"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_plan_memo.py::test_executed_cache_wins_over_the_memo"
+    },
+    {
+      "id": "prep-plan-memo-freshness-1",
+      "area": "prep",
+      "criticality": "high",
+      "anti": true,
+      "title": "A memo entry faces the same freshness tests as a cache row and is rejected when stale",
+      "spec": {
+        "file": "photos-1-prep-workflow.md",
+        "section": "10.3"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_plan_memo.py::test_changed_file_is_not_reused_from_the_memo"
+    },
+    {
+      "id": "prep-plan-memo-disposable-1",
+      "area": "prep",
+      "criticality": "high",
+      "anti": true,
+      "title": "A lost or corrupt decode memo costs only re-decoding and never fails the plan",
+      "spec": {
+        "file": "photos-1-prep-workflow.md",
+        "section": "10.3"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_plan_memo.py::test_a_broken_memo_degrades_instead_of_failing_the_plan"
+    },
+    {
+      "id": "prep-plan-memo-pruned-1",
+      "area": "prep",
+      "criticality": "low",
+      "anti": false,
+      "title": "Memo entries for paths a planning run no longer observes are dropped",
+      "spec": {
+        "file": "photos-1-prep-workflow.md",
+        "section": "10.3"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_plan_memo.py::test_memo_drops_paths_it_no_longer_sees"
     }
   ]
 }

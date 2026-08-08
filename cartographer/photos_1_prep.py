@@ -42,7 +42,7 @@ import errno
 from .photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, selected_gpx_root, missing_managed_folders, FOLDER_ROLES
 from .reporting import get_reporter, emit_next_step
 from .photos_utils import (_move_no_clobber, _move_link_unlink, _get_renameat2,
-                          WorkspaceCache, WorkspaceLock, ContentHasher,
+                          WorkspaceCache, WorkspaceLock, ContentHasher, PlanFingerprintMemo,
                           CACHE_SCHEMA_VERSION, FINGERPRINT_ALGORITHM_VERSION,
                           allocate_suffix)
 
@@ -1715,6 +1715,63 @@ class WorkspacePrepWorkflow:
         }
         return result
 
+    def _overlay_plan_memo(self, existing_cache, existing_metadata):
+        """Lay the plan-time decode memo (prep §10.3) UNDER the workspace cache: memo rows fill in paths
+        the cache has no row for, cache rows always win. Returns (files, metadata, memo_hit_count).
+
+        Splitting each memo record back into its file part and its metadata-row part means every
+        downstream freshness check — the metadata-scan decision and the per-file reuse gate — sees a
+        memo-sourced entry in exactly the shape a cache-sourced one has, and applies the same
+        size/mtime/engine/field-set tests to it. There is no memo-specific reuse path to keep in sync.
+
+        A memo failure is never fatal: it is an accelerator, so a missing/locked/corrupt memo database
+        degrades to the pre-memo behaviour (decode everything) rather than failing the plan."""
+        try:
+            memo = PlanFingerprintMemo(self.workspace_root)
+            try:
+                records = memo.load()
+            finally:
+                memo.close()
+        except Exception as e:
+            get_reporter().warn(f"Plan memo unavailable ({e}); fingerprints will be recomputed.")
+            return existing_cache, existing_metadata, set()
+
+        memo_files, memo_metadata = {}, {}
+        for rel_path, rec in records.items():
+            if rel_path in existing_cache:
+                continue                                  # the executed state is authoritative
+            md = rec.get("metadata")
+            memo_files[rel_path] = dict(
+                {k: v for k, v in rec.items() if k != "metadata"},
+                absolute_path=os.path.join(self.workspace_root, rel_path))
+            if md:
+                # metadata_cache rows carry the identity columns that upsert_file adds on write; a memo
+                # stores the extractor's own dict, so re-attach them or is_metadata_cache_fresh rejects
+                # every memo row on a size/mtime/content_hash mismatch against None.
+                memo_metadata[rel_path] = dict(md, relative_path=rel_path, size=rec.get("size"),
+                                               mtime_ns=rec.get("mtime_ns"),
+                                               content_hash=rec.get("content_hash"))
+        if not memo_files:
+            return existing_cache, existing_metadata, set()
+        return ({**memo_files, **existing_cache},
+                {**memo_metadata, **existing_metadata},
+                set(memo_files))
+
+    def _save_plan_memo(self, all_db_files):
+        """Persist this run's observations to the decode memo (prep §10.3) and drop paths it no longer
+        saw. Every entry is a file observed at its CURRENT path — nothing here anticipates a planned
+        move, which is what keeps this outside the plan/execute op model (prep §5): there is no
+        speculative post-move state on disk, only a record of bytes already read."""
+        try:
+            memo = PlanFingerprintMemo(self.workspace_root)
+            try:
+                return memo.replace_all([f for f in all_db_files if f])
+            finally:
+                memo.close()
+        except Exception as e:
+            get_reporter().warn(f"Plan memo not written ({e}); the next plan will re-fingerprint.")
+            return 0
+
     def _build_ghost_prunes(self):
         """Build the ghost-prune list — a `remove` cache effect for every cached row whose file no longer
         exists on disk (e.g. by-date sources moved into by-dest, deletions). Returns the list; it is
@@ -2274,6 +2331,12 @@ class WorkspacePrepWorkflow:
         carried_forward, moved_unmatched = self._recognize_carried_moves(
             files, existing_cache, existing_metadata)
 
+        # Plan-time decode memo (prep §10.3). Move recognition above deliberately runs against the
+        # EXECUTED state only — a memo row proves nothing about where prep has put a file — so the
+        # overlay happens after it, and cache rows always win over memo rows.
+        existing_cache, existing_metadata, memo_paths = self._overlay_plan_memo(
+            existing_cache, existing_metadata)
+
         from .photos_utils import MetadataReader, ProgressCoordinator, get_exiftool_version, get_imagemagick_version, FIELD_SET_VERSION, EXTRACTION_OPTIONS_FINGERPRINT, METADATA_SCHEMA_VERSION, CAMERA_GROUP_KEY_VERSION
         current_exiftool_version = get_exiftool_version()
         current_magick_version = get_imagemagick_version()
@@ -2362,6 +2425,18 @@ class WorkspacePrepWorkflow:
 
         all_db_files, db_files, by_dest_files, rehash_summary = self._aggregate_worker_results(
             worker_results, metadata_plan_status, blockers, warnings)
+
+        # Remember what this run decoded, so a re-plan before execute does not pay for it again.
+        # Count what the memo actually SAVED: an overlaid path still has to clear the same freshness
+        # gate as a cache row, so candidates offered != decodes avoided.
+        memo_hits = sum(1 for r in worker_results
+                        if r.get("cache_reused") and r["relative_path"] in memo_paths)
+        memo_rows = self._save_plan_memo(all_db_files)
+        rehash_summary["memo_reused"] = memo_hits
+        rehash_summary["memo_rows"] = memo_rows
+        if memo_hits:
+            get_reporter().log(f"Reused {memo_hits} fingerprint(s) from the previous plan "
+                               "(not yet executed, so not in the cache).")
 
         self._check_band_and_stray_media(all_db_files, blockers, warnings)
 
