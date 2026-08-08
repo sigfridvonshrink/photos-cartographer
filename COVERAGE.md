@@ -7,7 +7,7 @@ This pipeline mutates irreplaceable originals, so coverage is tracked on **two a
    (`tools/spec-coverage` over `spec/spec-clauses.json`). Line/branch can't tell you whether a
    *must-refuse / no-clobber / leaves-untouched* obligation is actually asserted; this can.
 
-Figures below are a snapshot; regenerate with the commands shown. The suite has **885 tests**.
+Figures below are a snapshot; regenerate with the commands shown. The suite has **895 tests**.
 
 ## Line / branch coverage
 
@@ -17,17 +17,17 @@ same plan/validate/execute core the phases provide, neither of which writes meta
 
 | Component | Line | Branch |
 |---|---:|---:|
-| prep (`photos_1_prep`) | 90.2% | 84.1% |
+| prep (`photos_1_prep`) | 90.5% | 84.1% |
 | prep models (`_prep_models`) | 100.0% | 100.0% |
 | geotag (`photos_2_geotag`) | 97.8% | 95.9% |
 | geotag calc (`_geotag_calc`) | 99.6% | 98.1% |
 | merge (`photos_3_merge`) | 86.5% | 83.5% |
-| shared (`photos_utils`) | 88.9% | 85.0% |
+| shared (`photos_utils`) | 89.0% | 85.4% |
 | reporting (`reporting`) | 93.6% | 74.3% |
 | cli | 87.9% | 75.0% |
 | console server | 58.3% | 47.0% |
 | editor server | 77.8% | 75.0% |
-| **Total** | **89.3%** | **84.8%** |
+| **Total** | **89.3%** | **84.9%** |
 
 Regenerate (branch coverage; report scoped to the production code via `.coveragerc`):
 
@@ -44,12 +44,12 @@ index can't silently drift from the specs.
 
 | | Count |
 |---|---:|
-| Clauses indexed | 614 |
-| **`must_cover` (CI-gated)** | **520** |
+| Clauses indexed | 620 |
+| **`must_cover` (CI-gated)** | **526** |
 | Omitted (tracked, not gated) | 94 |
 
 `must_cover` is the gated subset — every clause a genuine test asserts; each must keep a test tagged
-`@pytest.mark.spec("<id>")`, enforced in CI by `tools/spec-coverage`. Gated clauses by area: prep 164,
+`@pytest.mark.spec("<id>")`, enforced in CI by `tools/spec-coverage`. Gated clauses by area: prep 170,
 shared 128, geotag 144, merge 84.
 
 The 94 omitted clauses each carry an `omit_reason`: **55** are `incidental` (exercised by happy-path
