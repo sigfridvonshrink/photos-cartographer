@@ -1282,7 +1282,8 @@ class WorkspacePrepWorkflow:
         moved_unmatched = set(_new_by_dest) - set(carried_forward)
         return carried_forward, moved_unmatched
 
-    def _aggregate_worker_results(self, worker_results, metadata_plan_status, blockers, warnings):
+    def _aggregate_worker_results(self, worker_results, metadata_plan_status, blockers, warnings,
+                                  unpersisted_prior_plan=False, memo_paths=frozenset()):
         """Sort + aggregate the per-file worker results on the main thread (deterministic). Appends to the
         passed metadata_plan_status / blockers / warnings; emits the §17.4 re-hash diagnostics. Returns
         (all_db_files, db_files, by_dest_files, rehash_summary) — the last is the dict that goes verbatim
@@ -1307,6 +1308,14 @@ class WorkspacePrepWorkflow:
                 if _rr != "new" and len(rehash_samples) < 5:
                     rehash_samples.append((rel_path, _rr))
 
+        # What the decode memo actually SAVED (prep §10.3 / §17.4): an entry the memo offered still has
+        # to clear the freshness gate, so entries offered and decodes avoided are different numbers.
+        memo_hits = sum(1 for res in worker_results
+                        if res.get("cache_reused") and res["relative_path"] in memo_paths)
+        if memo_hits:
+            get_reporter().log(f"Reused {memo_hits} fingerprint(s) from the previous plan "
+                               "(not yet executed, so not in the cache).")
+
         # Re-hash diagnostics (prep §17.4): always-on when any media was re-fingerprinted. Split the
         # EXPECTED new-file hashes from previously-cached files that re-hashed, name the reason buckets,
         # and show a small first-N sample of the unexpected ones (a flag would be useless — by the time
@@ -1326,6 +1335,16 @@ class WorkspacePrepWorkflow:
                                    "(incomplete — sample for investigation):")
                 for _p, _r in rehash_samples:
                     get_reporter().log(f"    {_r}: {_p}")
+            # A cache-less re-plan counts every file as `new`, which reads like a first ingest when it
+            # is really work being redone. Name the cause instead of leaving the operator to infer it.
+            # The decode memo (§10.3) normally absorbs this, so by the time the note fires the memo has
+            # missed too — it was cleared, or this is the first plan since the memo was introduced.
+            if unpersisted_prior_plan and _new_rehash and not memo_hits:
+                get_reporter().log(
+                    "  These count as new because nothing was carried over: a previous plan exists but "
+                    "was never executed, so its fingerprints never reached the cache (only `execute` "
+                    "writes it), and the plan memo did not cover them either. Running `execute` makes "
+                    "this plan's fingerprints permanent; re-planning first reuses them from the memo.")
 
         db_files = [f for f in all_db_files if not f['relative_path'].startswith(folder_name('photos_by_dest') + '/')]
         by_dest_files = [f for f in all_db_files if f['relative_path'].startswith(folder_name('photos_by_dest') + '/')]
@@ -1336,6 +1355,8 @@ class WorkspacePrepWorkflow:
             "unexpected": _unexpected_rehash,
             "by_reason": rehash_reasons,
             "sample": [{"path": p, "reason": r} for p, r in rehash_samples],
+            "unpersisted_prior_plan": bool(unpersisted_prior_plan),
+            "memo_reused": memo_hits,
         }
         return all_db_files, db_files, by_dest_files, rehash_summary
 
@@ -2328,6 +2349,13 @@ class WorkspacePrepWorkflow:
         existing_cache = self.cache.get_all_files()
         existing_metadata = self.cache.get_all_metadata()
 
+        # Cache rows are written by EXECUTE only (planning never mutates, prep §5). So a plan that was
+        # never executed throws its fingerprints away, and the next plan re-hashes everything as `new`
+        # — technically accurate per file, but misleading at the run level. An empty cache alongside an
+        # existing plan artifact is exactly that situation; record it so the §17.4 summary can say so.
+        from .photos_utils import prep_plan_path
+        unpersisted_prior_plan = (not existing_cache) and os.path.exists(prep_plan_path(self.workspace_root))
+
         carried_forward, moved_unmatched = self._recognize_carried_moves(
             files, existing_cache, existing_metadata)
 
@@ -2424,19 +2452,10 @@ class WorkspacePrepWorkflow:
             PersistentMagickWorker.cleanup_all()       # close the per-thread magick workers
 
         all_db_files, db_files, by_dest_files, rehash_summary = self._aggregate_worker_results(
-            worker_results, metadata_plan_status, blockers, warnings)
+            worker_results, metadata_plan_status, blockers, warnings, unpersisted_prior_plan, memo_paths)
 
         # Remember what this run decoded, so a re-plan before execute does not pay for it again.
-        # Count what the memo actually SAVED: an overlaid path still has to clear the same freshness
-        # gate as a cache row, so candidates offered != decodes avoided.
-        memo_hits = sum(1 for r in worker_results
-                        if r.get("cache_reused") and r["relative_path"] in memo_paths)
-        memo_rows = self._save_plan_memo(all_db_files)
-        rehash_summary["memo_reused"] = memo_hits
-        rehash_summary["memo_rows"] = memo_rows
-        if memo_hits:
-            get_reporter().log(f"Reused {memo_hits} fingerprint(s) from the previous plan "
-                               "(not yet executed, so not in the cache).")
+        rehash_summary["memo_rows"] = self._save_plan_memo(all_db_files)
 
         self._check_band_and_stray_media(all_db_files, blockers, warnings)
 
