@@ -378,7 +378,7 @@ Reuse rules (apply to the fingerprinted media classes — photos and videos; `ot
 
 The cache must distinguish: same content at a new path because of a move; same path with changed content; different path and different content; duplicate content already in by-dest; duplicate content already quarantined.
 
-Each planned move/rename carries enough to update the cache row without re-fingerprinting after the move: source path, destination path, source size, source mtime, source fingerprint if known, the post-move expected path, the post-move cache action, and the dependency facts proving the carried-forward fingerprint is still valid. Cache updates are derived from the validated plan and applied during execution, never speculatively during planning.
+Each planned move/rename carries enough to update the cache row without re-fingerprinting after the move: source path, destination path, source size, source mtime, source fingerprint if known, the post-move expected path, the post-move cache action, and the dependency facts proving the carried-forward fingerprint is still valid. Cache updates are derived from the validated plan and applied during execution, never speculatively during planning. What planning must not write is **anticipated** state — a row describing where a file will be once an operation succeeds. A record of bytes already read at the path they were read from is not anticipated state, and Section 10.3 permits exactly that, in a separate store.
 
 ### 10.1 Recognizing manual moves from by-date into by-dest
 
@@ -404,6 +404,24 @@ This makes the round trip cheap: after the user sorts the by-date working set in
 The user may also move an already-placed file from one destination to another inside `6-photos-by-dest` (e.g. correcting a mis-sort: `Belgium/Brussels` → `Belgium/Bruges`). Prep must recognize this the same cache-only way: a previously cached by-dest file is now missing from its cached by-dest path, and an uncached by-dest file with matching `stat` and basename now exists at a different by-dest path. On a unique match, prep carries the cached identity forward to the new by-dest path, drops the old row, and updates the handoff to record the new destination — performing **no** filesystem operation (by-dest is read-only).
 
 This matters because a file's **destination is a geotag input**: the destination civil timezone is destination-scoped (geotag `photos-2-geotag-workflow.md` Section 18). When prep moves a file's recorded destination, the handoff changes, which (via the dependency cascade) restales the affected destination decisions so geotag **re-evaluates** the moved file under its new destination rather than silently keeping the old destination's timezone (geotag Section 18.1). As with all by-dest moves, the mandatory re-prep after the move applies (shared contract `photos-shared-contract.md` Section 10), and the same ambiguity safety as Section 10.1 holds (ambiguous matches are treated as new files and rescanned).
+
+### 10.3 Plan-time decode memo
+
+Re-fingerprinting is the dominant cost of a plan (Section 17.4), and cache rows are written by execute only (Section 10, Section 14.3). A plan that is never executed therefore discards every fingerprint it computed, so the next plan re-decodes the whole workspace — a cost measured in hours on a real library, paid whenever the operator re-plans before executing (a config edit, a corrected folder, an interrupted run).
+
+Prep must retain the fingerprints and metadata a planning run computed, in a **decode memo** that is distinct from the workspace cache:
+
+1. the memo is a **separate store** from the workspace cache, so the cache remains writable by execute alone and keeps its single meaning — the state of the executed workspace;
+2. a memo entry is an **observation, not a claim about prep's actions**: it records that a file at a given workspace-relative path, with a given size and mtime, fingerprinted to a given value under a given engine/field-set context. It asserts nothing about where prep has put anything, so it is not the anticipated state Section 10 forbids;
+3. the memo is **subordinate to the cache**: it is consulted only for paths the cache has no row for, and a cache row always wins;
+4. a memo entry is accepted only if it passes the **same freshness tests as a cache row** (Section 9 reuse rules, Section 12.1 metadata freshness). A stale entry is rejected and the file re-fingerprinted, exactly as for a stale cache row;
+5. move recognition (Sections 10.1, 10.2) runs against the **executed state only** — a memo entry never establishes that a file moved;
+6. the memo is **disposable**: losing, deleting, or failing to read it costs only the decode work it was saving and must never fail a plan, block, or change its operations;
+7. the memo tracks the current workspace rather than accumulating indefinitely: entries for paths a planning run no longer observes are dropped.
+
+Only entries that could actually be reused are worth storing — an entry lacking either a content fingerprint or a metadata record can never satisfy the all-or-nothing freshness gate.
+
+The memo changes cost, never outcome: the plan a run produces is the same whether its fingerprints were computed, reused from the cache, or reused from the memo.
 
 ---
 
@@ -636,6 +654,8 @@ Re-fingerprinting a media file (a full ImageMagick / `ffmpeg` decode) is the dom
 - the per-reason counts are recorded in the run report under `performance_and_cache.rehash_summary` (machine-readable, diffable across runs).
 
 The diagnostic is unconditional — a re-hash is only observable after the fact. This is **observability only** — it never changes which files are re-hashed, nor the plan itself.
+
+The same report accounts for fingerprints **reused from the plan-time decode memo** (Section 10.3), which are decodes the run avoided rather than performed. Reuse is counted where it actually happened: an entry the memo offered still has to clear the freshness gate, so entries offered and decodes avoided are different numbers and the report states the latter.
 
 ---
 
