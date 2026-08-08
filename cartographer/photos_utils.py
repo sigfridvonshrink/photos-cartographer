@@ -317,6 +317,16 @@ def config_path(ws: str) -> str:
 def db_path(ws: str) -> str:
     return os.path.join(ws, CONTROL_DIR, "photos-00-ingest.db")
 
+def plan_memo_db_path(ws: str) -> str:
+    """The plan-time decode memo (prep §10.3) — a SEPARATE database from the workspace cache.
+
+    Separate on purpose: `plan` opens `db_path` READ-ONLY, which is what makes "planning never mutates
+    the cache" true by construction rather than by discipline, and that must stay true. The memo is not
+    the cache: it records nothing about what prep has *done*, only the fingerprint prep *observed* for a
+    file sitting at a given path, so it can be deleted at any moment with no loss beyond the decode cost
+    it was saving."""
+    return os.path.join(ws, CONTROL_DIR, "photos-00-plan-memo.db")
+
 PREP_PLAN_ARTIFACT = "photos-10-prep-plan.json"
 
 def prep_plan_path(ws: str) -> str:
@@ -2004,6 +2014,98 @@ def _move_no_clobber(src: str, dest: str, verify=None):
             _move_cross_fs_no_clobber(src, dest, verify=verify)
         else:
             raise                                       # incl. FileExistsError (EEXIST): no-clobber
+
+class PlanFingerprintMemo:
+    """Plan-time decode memo (prep §10.3): the fingerprint + metadata prep observed for a file at a
+    given path, remembered across planning runs so a re-plan does not decode the same unchanged bytes
+    twice.
+
+    Why it exists: cache rows are written by EXECUTE only — planning never mutates the workspace cache
+    (prep §5), and `plan` enforces that by opening it read-only. A plan that is never executed therefore
+    used to discard every fingerprint it computed, so the next plan re-decoded the entire workspace. On a
+    real library that is hours of ImageMagick/ffmpeg work thrown away because the operator re-planned
+    before executing (a config edit, a corrected folder, an interrupted run).
+
+    Why it does not weaken the rule: the memo lives in its own database file (`plan_memo_db_path`), so
+    the workspace cache stays read-only during planning and keeps its single meaning — the state of the
+    EXECUTED workspace. A memo row makes no claim about what prep has done: it says only "at this path,
+    a file of this size and mtime fingerprinted to this value". It is consulted only when the cache
+    misses, and only through the same size/mtime/engine/field-set freshness checks a cache row faces, so
+    a stale row is rejected exactly as a stale cache row is. Deleting the file is always safe.
+
+    The (path, size, mtime_ns) key inherits the workspace cache's own identity assumption: a different
+    file that lands at the same path with a byte-identical size AND nanosecond-identical mtime would be
+    mistaken for the original. That is the pre-existing risk model of `file_cache`, not a new one."""
+
+    def __init__(self, workspace_root: str, in_memory: bool = False):
+        self.db_path = ":memory:" if in_memory else plan_memo_db_path(workspace_root)
+        if not in_memory:
+            ensure_control_dir(workspace_root)
+        self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        self.conn.row_factory = sqlite3.Row
+        self._lock = threading.Lock()
+        with self.conn:
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS plan_fingerprint_memo (
+                    relative_path TEXT PRIMARY KEY,
+                    size INTEGER,
+                    mtime_ns INTEGER,
+                    record_json TEXT,
+                    seen_ns INTEGER
+                )
+            """)
+
+    def load(self) -> Dict[str, dict]:
+        """Every memo row as {relative_path: record}, where a record is the observed file dict (the same
+        shape prep hands to `WorkspaceCache.upsert_file`, `metadata` sub-dict included). A row whose JSON
+        no longer parses is dropped rather than raised on — the memo is disposable by design."""
+        with self._lock:
+            cur = self.conn.cursor()
+            try:
+                cur.execute("SELECT relative_path, size, mtime_ns, record_json FROM plan_fingerprint_memo")
+                rows = cur.fetchall()
+            except sqlite3.DatabaseError:
+                return {}
+        out = {}
+        for row in rows:
+            try:
+                rec = json.loads(row["record_json"])
+            except Exception:
+                continue
+            if isinstance(rec, dict) and rec.get("size") == row["size"] and rec.get("mtime_ns") == row["mtime_ns"]:
+                out[row["relative_path"]] = rec
+        return out
+
+    def replace_all(self, records: List[dict]) -> int:
+        """Record this run's observations and drop every path not observed, so the memo tracks the
+        workspace instead of growing forever. Returns the number of rows written.
+
+        Only COMPLETE observations are stored — a content fingerprint AND a metadata record. Non-media
+        has no decode to save, and a file whose metadata extraction failed could never satisfy the reuse
+        gate anyway (freshness is all-or-nothing), so storing it would buy nothing while relabelling its
+        re-hash reason from `new` to `metadata-stale`. Skipping it keeps the memo to rows that can
+        actually be reused."""
+        rows = []
+        for rec in records:
+            if not rec or not rec.get("relative_path") or not rec.get("content_hash"):
+                continue
+            if not rec.get("metadata"):
+                continue
+            stored = {k: v for k, v in rec.items() if k != "absolute_path"}   # path is machine-specific
+            rows.append({"relative_path": rec["relative_path"], "size": rec.get("size"),
+                         "mtime_ns": rec.get("mtime_ns"), "record_json": json.dumps(stored, sort_keys=True),
+                         "seen_ns": int(datetime.now(timezone.utc).timestamp() * 1e9)})
+        with self._lock, self.conn:
+            self.conn.execute("DELETE FROM plan_fingerprint_memo")
+            self.conn.executemany("""
+                INSERT INTO plan_fingerprint_memo (relative_path, size, mtime_ns, record_json, seen_ns)
+                VALUES (:relative_path, :size, :mtime_ns, :record_json, :seen_ns)
+            """, rows)
+        return len(rows)
+
+    def close(self):
+        self.conn.close()
+
 
 class WorkspaceCache:
     """
