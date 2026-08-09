@@ -7,7 +7,7 @@ This pipeline mutates irreplaceable originals, so coverage is tracked on **two a
    (`tools/spec-coverage` over `spec/spec-clauses.json`). Line/branch can't tell you whether a
    *must-refuse / no-clobber / leaves-untouched* obligation is actually asserted; this can.
 
-Figures below are a snapshot; regenerate with the commands shown. The suite has **895 tests**.
+Figures below are a snapshot; regenerate with the commands shown. The suite has **903 tests**.
 
 ## Line / branch coverage
 
@@ -44,13 +44,13 @@ index can't silently drift from the specs.
 
 | | Count |
 |---|---:|
-| Clauses indexed | 620 |
-| **`must_cover` (CI-gated)** | **526** |
+| Clauses indexed | 621 |
+| **`must_cover` (CI-gated)** | **527** |
 | Omitted (tracked, not gated) | 94 |
 
 `must_cover` is the gated subset — every clause a genuine test asserts; each must keep a test tagged
 `@pytest.mark.spec("<id>")`, enforced in CI by `tools/spec-coverage`. Gated clauses by area: prep 170,
-shared 128, geotag 144, merge 84.
+shared 128, geotag 145, merge 84.
 
 The 94 omitted clauses each carry an `omit_reason`: **55** are `incidental` (exercised by happy-path
 tests but with no dedicated assertion) and **39** are `none`. Only **8** omitted clauses are

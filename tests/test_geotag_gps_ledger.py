@@ -44,9 +44,21 @@ def test_handoff_pre_state():
 
 def test_revert_tags():
     assert cal._revert_tags({"present": True, "GPSLatitude": 1, "GPSLongitude": 2, "GPSProcessingMethod": "m"}) == {
-        "GPSLatitude": 1, "GPSLongitude": 2, "GPSProcessingMethod": "m"}
-    assert cal._revert_tags({"present": False}) == {
-        "GPSLatitude": "", "GPSLongitude": "", "GPSProcessingMethod": ""}     # clears the added GPS
+        "GPSLatitude": 1, "GPSLatitudeRef": "N", "GPSLongitude": 2, "GPSLongitudeRef": "E",
+        "GPSProcessingMethod": "m"}
+    assert cal._revert_tags({"present": False}) == {                          # clears the added GPS
+        "GPSLatitude": "", "GPSLatitudeRef": "", "GPSLongitude": "", "GPSLongitudeRef": "",
+        "GPSProcessingMethod": ""}
+
+
+@pytest.mark.spec("geotag-gps-write-complete-fix-1")
+def test_revert_tags_carry_hemisphere_refs():
+    """§28.1: a restored coordinate carries the refs its sign implies, and a clear drops them too —
+    a ref left behind without its coordinate is a torn fix."""
+    south_west = cal._revert_tags({"present": True, "GPSLatitude": -33.9, "GPSLongitude": -70.6})
+    assert (south_west["GPSLatitudeRef"], south_west["GPSLongitudeRef"]) == ("S", "W")
+    assert set(cal._revert_tags({"present": False})) == {
+        "GPSLatitude", "GPSLatitudeRef", "GPSLongitude", "GPSLongitudeRef", "GPSProcessingMethod"}
 
 
 @pytest.mark.spec("geotag-change-overwrite-original-pinned-1", "geotag-prestate-capture-1", "geotag-prestate-immutable-1")
@@ -112,7 +124,8 @@ def test_withdrawn_override_plans_revert(tmp_path):
     plan, _ = wf.build_executable_plan([f], [_row(f["relative_path"])], t, g, gpx, "rfp", ledger)
     rv = _reverts(plan)
     assert len(rv) == 1 and rv[0]["content_fingerprint"] == "fp-" + f["relative_path"]
-    assert rv[0]["writes"] == {"GPSLatitude": "", "GPSLongitude": "", "GPSProcessingMethod": ""}  # clear
+    assert rv[0]["writes"] == {"GPSLatitude": "", "GPSLatitudeRef": "", "GPSLongitude": "",       # clear
+                               "GPSLongitudeRef": "", "GPSProcessingMethod": ""}
 
 
 _FORWARD_PLUS_GPS_REVERT = {"metadata_time_write", "metadata_gps_write", "gps_marker_write",
