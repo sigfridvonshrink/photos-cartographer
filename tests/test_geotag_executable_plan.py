@@ -69,9 +69,26 @@ def test_gps_write_and_marker(cat, origin, marker):
     ops = cal.plan_file_ops(_file(), UTC, "Europe/Brussels", cat, {"lat": 50.0, "lon": 4.0}, None,
                             _pol(write_corrected_metadata_times=False))
     gw = next(o for o in ops if o["type"] == "metadata_gps_write")
-    assert gw["writes"] == {"GPSLatitude": 50.0, "GPSLongitude": 4.0} and gw["gps_origin"] == origin
+    assert gw["writes"] == {"GPSLatitude": 50.0, "GPSLatitudeRef": "N",
+                            "GPSLongitude": 4.0, "GPSLongitudeRef": "E"}
+    assert gw["gps_origin"] == origin
     mk = next(o for o in ops if o["type"] == "gps_marker_write")
     assert mk["writes"]["GPSProcessingMethod"] == marker
+
+
+@pytest.mark.parametrize("lat, lon, refs", [
+    (50.0, 4.0, ("N", "E")), (-33.9, -70.6, ("S", "W")),
+    (-1.29, 36.82, ("S", "E")), (14.6, -90.5, ("N", "W")), (0.0, 0.0, ("N", "E"))])
+@pytest.mark.spec("geotag-gps-write-complete-fix-1")
+def test_gps_write_carries_hemisphere_refs(lat, lon, refs):
+    """§28.1: EXIF coordinates are unsigned magnitudes — a write without GPSLatitudeRef/
+    GPSLongitudeRef reads as NO location to a conforming reader, and flips the hemisphere of a
+    southern/western position for a lenient one. The refs ship in the same operation."""
+    ops = cal.plan_file_ops(_file(), UTC, "Europe/Brussels", "gpx_interpolation", {"lat": lat, "lon": lon},
+                            None, _pol(write_corrected_metadata_times=False))
+    gw = next(o for o in ops if o["type"] == "metadata_gps_write")
+    assert (gw["writes"]["GPSLatitudeRef"], gw["writes"]["GPSLongitudeRef"]) == refs
+    assert (gw["writes"]["GPSLatitude"], gw["writes"]["GPSLongitude"]) == (lat, lon)
 
 
 def test_no_gps_write_for_preserve_or_no_change_or_missing_coord():
