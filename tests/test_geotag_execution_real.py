@@ -53,6 +53,29 @@ def test_exif_write_preserves_content_fingerprint(tmp_path):
     assert got == "2024:07:03 14:12:21"                               # EXIF really written
 
 
+@pytest.mark.parametrize("lat, lon, refs", [(50.8467, 4.3525, ("N", "E")), (-33.9, -70.6, ("S", "W"))])
+@pytest.mark.spec("geotag-gps-write-complete-fix-1")
+def test_planned_gps_write_lands_a_readable_fix(tmp_path, lat, lon, refs):
+    """§28.1 against the real binary: the tags `plan_file_ops` plans must land a fix a conforming
+    reader can use. Coordinate-only writes were readable to exiftool's lenient composite but carried
+    no GPSLatitudeRef/GPSLongitudeRef, so exiv2/digiKam saw NO location — and `-n` stored a negative
+    coordinate as its magnitude, flipping the hemisphere. Assert the raw ref tags AND the signed
+    round-trip, since the composite alone would pass even with the refs missing."""
+    img = tmp_path / "img.jpg"; shutil.copy(FIXTURE, img)
+    ops = cal.plan_file_ops({"relative_path": "img.jpg", "content_fingerprint": "fp", "size": 1, "mtime_ns": 1},
+                            "2024-07-03T12:12:21Z", "Europe/Brussels", "gpx_interpolation",
+                            {"lat": lat, "lon": lon}, None, utils.CONFIG)
+    writes = next(o for o in ops if o["type"] == "metadata_gps_write")["writes"]
+    assert cal.GeotagWorkflow(str(tmp_path))._exiftool_write(str(img), writes)
+
+    raw = subprocess.run(["exiftool", "-n", "-s3", "-EXIF:GPSLatitudeRef", "-EXIF:GPSLongitudeRef", str(img)],
+                         capture_output=True, text=True).stdout.split()
+    assert tuple(raw) == refs                                  # the hemisphere is on the file itself
+    back = json.loads(subprocess.run(["exiftool", "-n", "-j", "-GPSLatitude", "-GPSLongitude", str(img)],
+                                     capture_output=True, text=True).stdout)[0]
+    assert (round(back["GPSLatitude"], 4), round(back["GPSLongitude"], 4)) == (round(lat, 4), round(lon, 4))
+
+
 def _run(monkeypatch, ws, cmd):
     monkeypatch.chdir(str(ws))
     monkeypatch.setattr(sys, "argv", ["photos-2-geotag", cmd])

@@ -702,6 +702,20 @@
       "test": "tests/test_geotag_gps_decisions.py::test_child_inherits_parent_fallback_as_proposal"
     },
     {
+      "id": "geotag-gps-write-complete-fix-1",
+      "area": "geotag",
+      "criticality": "high",
+      "anti": false,
+      "title": "Every planned GPS write carries the hemisphere reference fields with the coordinate (and clears them with it), so the fix is readable and the hemisphere is never flipped",
+      "spec": {
+        "file": "photos-2-geotag-workflow.md",
+        "section": "28.1"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_execution_real.py::test_planned_gps_write_lands_a_readable_fix"
+    },
+    {
       "id": "geotag-fallback-is-manual-1",
       "area": "geotag",
       "criticality": "med",
