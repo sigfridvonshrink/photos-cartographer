@@ -1266,7 +1266,7 @@ The mechanism is a **pre-state ledger** in SQLite, archived with the database (s
 
    **The "previous coordinates present" pre-state is a completeness case, intentionally unreachable via `apply_manual`.** A manual override (locked or fallback) is only ever *selected* for a file that has **no native GPS**: `classify_gps` returns `preserve_native` for any file that already carries native GPS **before** it ever consults the manual coordinates (Section 23 resolution order; Section 25.3 — preserve-native wins). So an `apply_manual` operation never targets a file whose GPS field was occupied, and the pre-state captured on first application is therefore **always the "absent" sentinel**, never a set of previous coordinates. The crucial corollary: if a file *did* already hold GPS — including the case where a manual coordinate written on an earlier run has since been **re-folded into the file's native EXIF** (e.g. the file was re-imported with that GPS baked in) — it now **reads as native GPS and is preserved, not overridden**, so it is never an `apply_manual` target in the first place. The "previous GPS coordinates were present" branch above is thus kept only for **completeness and robustness** (it keeps the ledger correct should that precedence ever be relaxed); under the current rules the ledger only ever pins, and reverts to, "absent" — withdrawal *clears* the GPS the override added rather than restoring a prior coordinate. Consistent with this, the pinned pre-state is the GPS value **prep recorded in its scan/handoff** (which the executor pins before the write), not a fresh execute-time re-read — for a file with no native GPS the two coincide at "absent."
 
-2. **Withdraw → restore.** If, before a later run, the user **removes** the manual GPS decision, the next run's plan must include an explicit **revert operation** that drives the field back to the pinned pre-state: write the previous coordinates back, or — if the pre-state was "absent" — **clear** the GPS the override added. Withdrawal therefore *undoes*; it does not merely stop re-asserting. ("Tag a file that had no GPS, then withdraw" correctly leaves the file with no GPS, not with the tagged value.)
+2. **Withdraw → restore.** If, before a later run, the user **removes** the manual GPS decision, the next run's plan must include an explicit **revert operation** that drives the field back to the pinned pre-state: write the previous coordinates back, or — if the pre-state was "absent" — **clear** the GPS the override added. Either way the hemisphere reference fields move with the coordinates (Section 28.1). Withdrawal therefore *undoes*; it does not merely stop re-asserting. ("Tag a file that had no GPS, then withdraw" correctly leaves the file with no GPS, not with the tagged value.)
 
 3. **Change → overwrite, original stays pinned.** If the user **changes** the manual GPS to a new value, the executor overwrites to the new value; the pinned pre-state is unchanged, so a later full withdrawal still restores the true original.
 
@@ -1674,6 +1674,18 @@ It must depend on:
 10. metadata field-set version;
 11. filename-format config fingerprint;
 12. planned operation fingerprint.
+
+### 28.1 A GPS write must be a complete EXIF fix
+
+EXIF records latitude and longitude as **unsigned magnitudes**; the hemisphere is carried by the separate `GPSLatitudeRef` (`N`/`S`) and `GPSLongitudeRef` (`E`/`W`) fields. A coordinate written without its reference field is not an under-specified fix, it is an **unreadable** one: a spec-conforming reader reports the file as having no location at all, and a lenient one assumes the northern/eastern hemisphere — placing a southern or western position on the wrong side of the equator or the meridian.
+
+Therefore every planned GPS coordinate write must carry the matching reference fields, derived from the sign of the planned coordinate, in the same operation:
+
+1. a write that **sets** a position writes latitude, longitude, and both reference fields together;
+2. a revert that **restores** a pinned pre-state's coordinates likewise restores both reference fields, derived from the restored coordinates;
+3. a revert that **clears** GPS (an "absent" pre-state, Section 24.1) clears the reference fields along with the coordinates — a reference field left behind without its coordinate is a torn fix.
+
+This applies to every GPS write origin without exception (*apply manual*, *recompute automated*, *revert manual*). Reference fields are part of the coordinate value, not optional decoration, so they are never planned or applied as a separate operation from the coordinate they describe.
 
 ---
 

@@ -109,6 +109,18 @@ There is no build step and no linter config; runtime deps are system tools (`exi
 
 ### Release history
 
+- **v1.5.1** — bug fix: **a planned GPS write now lands a readable fix.** EXIF stores latitude and
+  longitude as unsigned magnitudes with the hemisphere in the separate `GPSLatitudeRef`/`GPSLongitudeRef`
+  fields, but the plan's `metadata_gps_write` carried the coordinates alone — so every geotagged photo
+  read as having NO location to exiv2/digiKam, PIL, and Lightroom (exiftool's lenient composite still
+  showed a number, which masked it), and because `exiftool -n` stores a negative coordinate as its
+  magnitude, a southern or western position would have been written into the opposite hemisphere. GPS
+  writes now emit all four tags together, derived from the coordinate's sign, and a manual-override
+  revert restores or clears the refs alongside the coordinates (geotag §28.1 — new). Note for an
+  affected workspace: a re-plan alone does not repair it — the coordinate-only files now read as native
+  GPS (`has_native_gps` keys on coordinate presence), so `classify_gps` returns `preserve_native` and
+  plans no write; recover from the pre-execute snapshot, then re-plan and re-execute. Patch only; no CLI
+  or workspace break, and plans restale normally on the changed operation fingerprint.
 - **v1.5.0** — **a plan no longer throws its decode work away.** Cache rows are written by `execute`
   only (planning never mutates the cache — `plan` opens it read-only), so a plan that was never executed
   discarded every fingerprint it computed and the next plan re-decoded the whole workspace: hours on a

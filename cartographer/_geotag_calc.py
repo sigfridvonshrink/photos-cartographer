@@ -74,6 +74,7 @@ __all__ = [
     'classify_gps',
     '_MANUAL_GPS_CATEGORIES',
     '_handoff_pre_state',
+    '_coordinate_tags',
     '_revert_tags',
     '_walk_ancestors',
     '_nearest_ancestor',
@@ -649,13 +650,28 @@ def _handoff_pre_state(native_gps):
     return {"present": False}
 
 
+def _coordinate_tags(lat, lon):
+    """The complete EXIF coordinate tag set for a signed decimal position (§28.1).
+
+    EXIF stores latitude/longitude as UNSIGNED magnitudes; the hemisphere lives in the separate
+    GPSLatitudeRef/GPSLongitudeRef tags. Writing the coordinate alone leaves the fix half-written:
+    exiftool does not derive the ref, and a reader that follows the spec (exiv2/digiKam, PIL,
+    Lightroom) reports NO location at all. Worse, `exiftool -n` stores a negative coordinate as its
+    absolute value, so a southern/western position silently reads back in the opposite hemisphere.
+    Always emit all four tags together."""
+    return {"GPSLatitude": lat, "GPSLatitudeRef": "N" if lat >= 0 else "S",
+            "GPSLongitude": lon, "GPSLongitudeRef": "E" if lon >= 0 else "W"}
+
+
 def _revert_tags(pre_state):
     """The exiftool tag writes that restore a pinned pre-state: the prior coordinates, or empty
-    values that CLEAR the GPS the override added when prep saw no native GPS (§24.1.2)."""
+    values that CLEAR the GPS the override added when prep saw no native GPS (§24.1.2). Clearing
+    drops the hemisphere refs too — a ref left behind without its coordinate is a torn fix."""
     if pre_state.get("present"):
-        return {"GPSLatitude": pre_state["GPSLatitude"], "GPSLongitude": pre_state["GPSLongitude"],
+        return {**_coordinate_tags(pre_state["GPSLatitude"], pre_state["GPSLongitude"]),
                 "GPSProcessingMethod": pre_state.get("GPSProcessingMethod") or ""}
-    return {"GPSLatitude": "", "GPSLongitude": "", "GPSProcessingMethod": ""}
+    return {"GPSLatitude": "", "GPSLatitudeRef": "", "GPSLongitude": "", "GPSLongitudeRef": "",
+            "GPSProcessingMethod": ""}
 
 
 def _walk_ancestors(dest):
@@ -812,7 +828,7 @@ def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename, cfg):
 
     if gps_category in _GPS_OP_ORIGIN and gps_coord is not None:
         ops.append(_make_op("metadata_gps_write", rel, f"gps:{gps_category}",
-                            {"writes": {"GPSLatitude": gps_coord["lat"], "GPSLongitude": gps_coord["lon"]},
+                            {"writes": _coordinate_tags(gps_coord["lat"], gps_coord["lon"]),
                              "gps_origin": _GPS_OP_ORIGIN[gps_category]}, pre))
         ops.append(_make_op("gps_marker_write", rel, "gps provenance",
                             {"writes": {"GPSProcessingMethod": _GPS_OP_MARKER[gps_category]}}, pre))
