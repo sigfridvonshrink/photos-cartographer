@@ -109,6 +109,15 @@ There is no build step and no linter config; runtime deps are system tools (`exi
 
 ### Release history
 
+- **v1.5.2** — bug fix: **GPX track-point times with fractional seconds now parse** (#301). A `<time>`
+  is read as a full `xsd:dateTime` — fractional seconds optional, `Z` or a numeric offset — so Garmin's
+  `…:SS.000Z` loads alongside `…:SSZ`. Previously a `Z`-suffixed time went through a strict
+  whole-seconds format, every point of such a file was rejected, and the GPX set reported as `empty`.
+  `geotag plan` also prints the GPX load warnings now (at most 10, then a remainder count): the parser
+  recorded one per rejected point but nothing surfaced them, which is why a fully rejected file read as
+  silently empty (geotag §15). Patch only; no CLI or workspace break — a track that previously loaded
+  empty now yields points, so its GPX fingerprint changes and existing geotag plans restale; re-run
+  `geotag plan`.
 - **v1.5.1** — bug fix: **a planned GPS write now lands a readable fix.** EXIF stores latitude and
   longitude as unsigned magnitudes with the hemisphere in the separate `GPSLatitudeRef`/`GPSLongitudeRef`
   fields, but the plan's `metadata_gps_write` carried the coordinates alone — so every geotagged photo
