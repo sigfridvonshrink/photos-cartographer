@@ -63,6 +63,7 @@ EXECUTION_SUMMARY_ARTIFACT = "photos-25-execution-summary.json"
 COMPLETE_LOG_ARTIFACT = "photos-26-complete-log.json"
 GEOTAG_DB_SNAPSHOT = "photos-26-geotag-ingest.db"
 ARCHIVE_MANIFEST_ARTIFACT = "photos-26-archive-manifest.json"
+GPX_WARNINGS_SHOWN = 10     # geotag plan prints at most this many GPX load warnings, then a count
 
 
 
@@ -1680,6 +1681,14 @@ def run(args):
                   f"{len(groups)} camera group(s) ({cls_summary}); "
                   f"GPX {gpx.status} ({len(gpx.points)} point(s), fp {(gpx.fingerprint or '')[:12]}).",
                   stream="stdout")
+            # Surface why GPX points were dropped, so an unparseable track never reads as a silently
+            # "empty" one. Capped: one bad file can reject every one of its thousands of trkpts.
+            if gpx.warnings:
+                reporter.warn(f"GPX loading reported {len(gpx.warnings)} warning(s):")
+                for w in gpx.warnings[:GPX_WARNINGS_SHOWN]:
+                    reporter.warn(f"  - {w}")
+                if len(gpx.warnings) > GPX_WARNINGS_SHOWN:
+                    reporter.warn(f"  ... and {len(gpx.warnings) - GPX_WARNINGS_SHOWN} more.")
 
             # Stages 5–6: time decisions (photos-21). Regenerate from current inputs while
             # preserving authored decisions (§9); a sanity-validation failure on a preserved value
