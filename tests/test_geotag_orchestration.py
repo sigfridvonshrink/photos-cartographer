@@ -221,6 +221,7 @@ def test_complete_run_writes_photos22_then_bad_coord_aborts(tmp_path, monkeypatc
     assert (ctl / "photos-23-gps-decisions.json").read_bytes() == before     # left unchanged
 
 
+@pytest.mark.spec("geotag-gpx-rejected-points-reported-1")
 def test_plan_reports_gpx_load_warnings_capped(tmp_path, monkeypatch, capsys):
     # GPX points rejected at load are reported, not silently dropped (an all-rejected track must not
     # read as merely "empty"), and the list is capped with a remainder count.
