@@ -1024,6 +1024,34 @@
       "omit_reason": "dep blocks carry gpx_fingerprint but no test asserts it is recorded even for an artifact that used no GPX evidence"
     },
     {
+      "id": "geotag-gpx-time-xsd-datetime-1",
+      "area": "geotag",
+      "criticality": "high",
+      "anti": false,
+      "title": "A GPX track-point time is read as a full xsd:dateTime: fractional seconds optional, Z or a numeric offset, normalized to UTC",
+      "spec": {
+        "file": "photos-2-geotag-workflow.md",
+        "section": "15"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_model.py::test_gpx_parser_accepts_fractional_and_whole_seconds"
+    },
+    {
+      "id": "geotag-gpx-rejected-points-reported-1",
+      "area": "geotag",
+      "criticality": "med",
+      "anti": false,
+      "title": "GPX points skipped at load are warned per file and point, and the warnings reach the operator (never a silent empty track)",
+      "spec": {
+        "file": "photos-2-geotag-workflow.md",
+        "section": "15"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_orchestration.py::test_plan_reports_gpx_load_warnings_capped"
+    },
+    {
       "id": "geotag-gpx-unavailable-recorded-1",
       "area": "geotag",
       "criticality": "low",
