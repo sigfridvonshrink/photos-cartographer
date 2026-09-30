@@ -132,6 +132,7 @@ def test_gpx_parser_skips_bad_trkpts(tmp_path):
     assert len(idx.warnings) >= 3                                                   # the rejects warned
 
 
+@pytest.mark.spec("geotag-gpx-time-xsd-datetime-1")
 def test_gpx_parser_accepts_fractional_and_whole_seconds(tmp_path):
     # xsd:dateTime allows optional fractional seconds: Garmin writes `...:SS.000Z`, others `...:SSZ`.
     # Both forms (and a fractional offset-suffixed one) parse; mixing them in one track is fine.
