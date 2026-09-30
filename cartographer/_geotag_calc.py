@@ -196,15 +196,16 @@ class GPXIndex:
                     idx += 1
                     continue
                 ts = time_elem.text.strip()
-                if ts.endswith("Z"):
-                    dt = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
-                else:
-                    dt = datetime.fromisoformat(ts)
-                    if dt.tzinfo is None:
-                        self.warnings.append(f"GPX time without timezone in {rel} at trkpt {idx}")
-                        idx += 1
-                        continue
-                    dt = dt.astimezone(timezone.utc)
+                # xsd:dateTime: fractional seconds are optional (Garmin writes `...:SS.000Z`), and a
+                # `Z` suffix is spelled out as +00:00 so fromisoformat takes it on every Python 3.
+                if ts[-1:] in ("Z", "z"):
+                    ts = ts[:-1] + "+00:00"
+                dt = datetime.fromisoformat(ts)
+                if dt.tzinfo is None:
+                    self.warnings.append(f"GPX time without timezone in {rel} at trkpt {idx}")
+                    idx += 1
+                    continue
+                dt = dt.astimezone(timezone.utc)
                 self.points.append(GPXPoint(lat, lon, dt, rel, idx))
             except ValueError as e:
                 self.warnings.append(f"Bad trkpt in {rel} at index {idx}: {e}")

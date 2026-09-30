@@ -221,6 +221,20 @@ def test_complete_run_writes_photos22_then_bad_coord_aborts(tmp_path, monkeypatc
     assert (ctl / "photos-23-gps-decisions.json").read_bytes() == before     # left unchanged
 
 
+def test_plan_reports_gpx_load_warnings_capped(tmp_path, monkeypatch, capsys):
+    # GPX points rejected at load are reported, not silently dropped (an all-rejected track must not
+    # read as merely "empty"), and the list is capped with a remainder count.
+    ws, ctl = _completable_ws(tmp_path)
+    n_bad = cal.GPX_WARNINGS_SHOWN + 3
+    bad = "".join(f'<trkpt lat="50.0" lon="4.0"><time>not-a-time-{i}</time></trkpt>' for i in range(n_bad))
+    (tmp_path / "gpx" / "bad.gpx").write_text(f"<gpx><trk><trkseg>{bad}</trkseg></trk></gpx>")
+    _run(monkeypatch, ws)
+    err = capsys.readouterr().err
+    assert f"GPX loading reported {n_bad} warning(s)" in err
+    assert err.count("Bad trkpt in bad.gpx") == cal.GPX_WARNINGS_SHOWN
+    assert "... and 3 more." in err
+
+
 def test_complete_run_tolerates_corrupt_prior_gps_artifact(tmp_path, monkeypatch):
     ws, ctl = _completable_ws(tmp_path)
     _run(monkeypatch, ws); _accept_tz(ctl); _run(monkeypatch, ws)             # produce both artifacts
