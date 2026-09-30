@@ -18,6 +18,7 @@
 import json
 import os
 import sys
+from datetime import datetime, timezone
 
 import pytest
 
@@ -129,6 +130,26 @@ def test_gpx_parser_skips_bad_trkpts(tmp_path):
     assert idx.status == "usable" and len(idx.points) == 1                          # only the valid one
     assert idx.points[0].time_utc.hour == 10                                        # 12:00:04+02:00 -> 10:00:04Z
     assert len(idx.warnings) >= 3                                                   # the rejects warned
+
+
+def test_gpx_parser_accepts_fractional_and_whole_seconds(tmp_path):
+    # xsd:dateTime allows optional fractional seconds: Garmin writes `...:SS.000Z`, others `...:SSZ`.
+    # Both forms (and a fractional offset-suffixed one) parse; mixing them in one track is fine.
+    root = tmp_path / "gpx"; root.mkdir()
+    (root / "garmin.gpx").write_text(
+        '<gpx xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>'
+        '<trkpt lat="50.0" lon="4.0"><time>2024-07-03T12:00:00Z</time></trkpt>'
+        '<trkpt lat="50.1" lon="4.1"><time>2024-07-03T12:00:01.000Z</time></trkpt>'
+        '<trkpt lat="50.2" lon="4.2"><time>2024-07-03T12:00:02.250Z</time></trkpt>'
+        '<trkpt lat="50.3" lon="4.3"><time>2024-07-03T14:00:03.500+02:00</time></trkpt>'
+        '</trkseg></trk></gpx>')
+    idx = cal.GPXIndex(str(root)).build()
+    assert idx.status == "usable" and idx.warnings == []
+    assert [p.time_utc for p in idx.points] == [
+        datetime(2024, 7, 3, 12, 0, 0, tzinfo=timezone.utc),
+        datetime(2024, 7, 3, 12, 0, 1, tzinfo=timezone.utc),
+        datetime(2024, 7, 3, 12, 0, 2, 250000, tzinfo=timezone.utc),
+        datetime(2024, 7, 3, 12, 0, 3, 500000, tzinfo=timezone.utc)]
 
 
 def test_gpx_unreadable_file_warns_and_skips(tmp_path):
