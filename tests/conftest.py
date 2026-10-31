@@ -65,12 +65,40 @@ def seed_from_live_config(monkeypatch):
 # A collection-only hook: when `--spec-dump=PATH` is passed, write a JSON map of
 # {spec_clause_id: [test nodeids]} gathered from every collected test's `@pytest.mark.spec(...)`
 # markers, then the tool cross-refs it against spec/spec-clauses.json. Zero cost in normal runs.
+#
+# `--spec-marks=PATH` writes the same marks for the spec corpus (spec/_ext/corpus.py), one record per marked test.
 def pytest_addoption(parser):
     parser.addoption("--spec-dump", default=None,
                      help="(spec-coverage) write the spec-clause -> test-nodeid map as JSON to this path")
+    parser.addoption("--spec-marks", default=None,
+                     help="(the spec corpus) write every spec mark -- ids, test id, title, location -- as JSON here")
+
+
+def _spec_marks(session):
+    """One record per marked test: the ids its marks name, the test id one of them declares with `test="TST-..."`,
+    a title (the docstring's first paragraph, else the function name) and where the test is."""
+    import inspect
+    records = []
+    for item in session.items:
+        marks = list(item.iter_markers(name="spec"))
+        if not marks:
+            continue
+        ids = sorted({str(i) for m in marks for i in m.args})
+        tests = sorted({m.kwargs["test"] for m in marks if "test" in m.kwargs})
+        doc = inspect.getdoc(getattr(item, "function", None)) or ""
+        title = doc.split("\n\n")[0].replace("\n", " ").strip() or item.name.replace("_", " ")
+        path, line, _ = item.location
+        records.append({"nodeid": item.nodeid, "file": path, "line": line + 1, "ids": ids,
+                        "test": tests[0] if len(tests) == 1 else None, "tests": tests, "title": title})
+    return records
 
 
 def pytest_collection_finish(session):
+    marks_path = session.config.getoption("--spec-marks")
+    if marks_path:
+        import json as _json
+        with open(marks_path, "w") as f:
+            _json.dump(_spec_marks(session), f, indent=1, sort_keys=True)
     path = session.config.getoption("--spec-dump")
     if not path:
         return

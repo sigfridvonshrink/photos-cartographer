@@ -1,0 +1,23 @@
+#!/bin/sh
+# tools/spec-build -- THE GATE: render the spec corpus (spec/) and fail on any warning. On success, spec/needs.json is
+# rewritten from the build's own export, sorted, so its diff shows exactly which items an edit changed. Commit it with
+# the edit; never hand-edit it.
+# First time: python3 -m venv spec/.venv && spec/.venv/bin/pip install -r spec/requirements.txt
+set -eu
+cd "$(dirname "$0")/.."
+PY=spec/.venv/bin/python
+[ -x "$PY" ] || { echo "tools/spec-build: no spec/.venv -- see the first-time line in this script" >&2; exit 2; }
+"$PY" -m sphinx -b html -W --keep-going -q -E spec spec/_build/html
+"$PY" - <<'PYEOF'
+import json
+with open("spec/_build/html/needs.json") as f:
+    data = json.load(f)
+for version in data.get("versions", {}).values():
+    version.pop("created", None)
+    version.pop("creator", None)
+data.pop("created", None)
+with open("spec/needs.json", "w") as f:
+    json.dump(data, f, indent=1, sort_keys=True, ensure_ascii=False)
+    f.write("\n")
+PYEOF
+echo "tools/spec-build: corpus clean; spec/needs.json written"

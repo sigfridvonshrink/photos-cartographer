@@ -51,6 +51,20 @@ else
 fi
 
 # The photos-cartographer executable must build and run (dist is gitignored, not committed).
+if [ -x spec/.venv/bin/python ]; then
+    echo "pre-push: building the spec corpus (warnings fail it)..."
+    if ! tools/spec-build >/dev/null || ! git diff --quiet spec/needs.json || ! python3 tools/spec-ledger check >/dev/null; then
+        echo
+        echo "pre-push: the spec corpus FAILED, or spec/needs.json is not committed — push aborted"
+        echo "          (run 'tools/spec-build' and 'tools/spec-ledger check' to see details)."
+        echo "          (override with 'git push --no-verify')"
+        exit 1
+    fi
+    echo "pre-push: spec corpus clean."
+else
+    echo "pre-push: no spec/.venv — skipping the spec corpus (CI builds it; see tools/spec-build)."
+fi
+
 echo "pre-push: checking the photos-cartographer build assembles and runs..."
 if ! python3 tools/build-pyz --check; then
     echo

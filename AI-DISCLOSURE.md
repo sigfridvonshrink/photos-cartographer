@@ -14,6 +14,11 @@ pull request, and the remaining clauses carry explicit and tracked omission reas
 specification and verified mechanically — the gate fails if a covered clause loses its test, before
 a regression can touch a photo.
 
+The specifications are being restructured, with AI assistance, into a sphinx-needs corpus — what the tool
+guarantees, why, and how the build does it, as linked items (see [`spec/README.md`](spec/README.md)). The words and the
+decisions remain mine: every converted sentence is recorded verbatim beside where it went, and an item counts as part of
+the specification only once I have ruled it.
+
 In short:
 
 - **Human (me):** the design, the safety guarantees, the specifications, and the tests' intent.

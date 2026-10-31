@@ -55,3 +55,29 @@ jobs:
       # The single-file `photos-cartographer` executable must build and run (dist is gitignored).
       - name: Check photos-cartographer builds and runs
         run: python3 tools/build-pyz --check
+
+  # The spec corpus (spec/): the build fails on any warning -- a dangling link, an item that must be verified and no
+  # test verifies, a malformed item -- and the committed spec/needs.json must be what the build writes. The ledger
+  # check proves every converted sentence of the old specs is accounted for.
+  spec-corpus:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install the corpus build
+        run: |
+          python -m venv spec/.venv
+          spec/.venv/bin/pip install -r spec/requirements.txt
+
+      - name: Build the corpus (warnings fail it)
+        run: tools/spec-build
+
+      - name: spec/needs.json is up to date
+        run: git diff --exit-code spec/needs.json
+
+      - name: Every converted sentence is accounted for
+        run: python3 tools/spec-ledger check
