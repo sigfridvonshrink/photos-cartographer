@@ -2,6 +2,18 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-10-31 — the granularity ruled; the philosophy to enter the corpus as facts and choices
+
+On the granularity — one item per obligation a test can pass or fail on its own, a refinement or an exception its
+own item (`RUL-stale_lock_recovered` refined by `RUL-stale_takeover_conservative`): *"Also the granularity is ok"*.
+On the philosophy's home — `docs/who-is-this-for.md`'s root layer as corpus items, its facts and choices as two new
+kinds, `FCT` and `CHC`, each entailment a rationale that follows from them: *"FCT and CHC yes. Anything else?"* Proposed
+in answer, not yet ruled: `ASM` (an assumption a user can break, geotag §7.0a) and `EXM` (a worked example, prep §21,
+merge §13) as kinds; the non-goals as `anti` rules; the summaries mapped in the ledger to the items they restate;
+`choice_kind` on `CHC`, `forced` on `RAT`, a `follows_from` link and the F/P numbers as aliases; gate checks on link
+direction, on roots nothing follows from and on forced rationale tracing to no root; the philosophy graph generated
+by `needflow`; and the corpus, not the user guide, owning the F/P tables.
+
 ## 2026-10-31 — the sample reviewed: the style ruled, the phases defined
 
 Vasile, on the sample's five questions: the intent rewritten in SHALL form, naming no tool or file, the rationale kept
