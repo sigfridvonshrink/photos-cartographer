@@ -204,6 +204,7 @@ its map tiles and place search use OpenStreetMap/Nominatim at runtime and degrad
   or build the self-contained `photos-cartographer` zipapp with `tools/build-pyz`.
 - `spec/` — the authoritative specifications. `tests/` — the test suite.
   `tools/` — build + test helpers. `.githooks/` — pre-commit / pre-push.
+- [`BACKLOG.md`](BACKLOG.md) — what is open. [`HISTORY.md`](HISTORY.md) — why, and every release.
 
 ## Tests and coverage
 
