@@ -25,10 +25,18 @@ the heating one"*, with the justifications *"captured and tagged, even if they a
   rules); `build/` — how this build meets each of them (construction requirements, each `realises` what it implements).
 - **The justifications as items** (a rationale kind that `justifies` the items it argues for), so nothing narrative
   is lost and every piece is findable. Operator guidance goes to `docs/`, history to `HISTORY.md`.
+- **The roots of the rationale:** the user guide's three facts and four choices are items, `FCT` and `CHC`, in
+  `rationale/philosophy.md`; nothing follows from them. Every other rationale `follows_from` a root or another
+  rationale, and says whether it is `forced` or a judgement; the build fails on a root nothing follows from and on a
+  forced rationale whose chain reaches no root. The guide keeps the test of fit and names the roots by id.
+- **The other kinds and the levels' direction:** an assumption a user can break is an `ASM`, which rules `assumes`; a
+  worked example is an `EXM`, which `illustrates`; a non-goal is an `anti` rule; a summary gets no items, its ledger
+  rows naming the items it restates. Intent never links to the build, and no link but `follows_from` names a
+  rationale — the build fails on either.
 - **Kinds and ids** as heating's (`KIND-name`), extended wherever cartographer needs more; every item `seed` until
   Vasile rules it.
 - **Nothing lost:** every sentence of today's specs lands in exactly one place — an item, the rationale, `docs/`,
-  `HISTORY.md` — or is dropped with a recorded reason; a word-for-word check proves it (heating's `textcheck.py`). The
+  `HISTORY.md` — or is dropped with a recorded reason; a word-for-word ledger proves it (`tools/spec-ledger`). The
   old clause ids map onto the new items, so no test breaks mid-move, and the clause index retires when the last
   document is converted.
 - **The gate:** the build fails on any warning — a dangling link, an item citing another without a link field, a must-

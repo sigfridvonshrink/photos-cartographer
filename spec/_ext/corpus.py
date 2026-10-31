@@ -21,7 +21,11 @@
 - **The checks**, each a warning, which fails the build:
   - a mark naming an id that is neither an item nor an alias;
   - an item whose `verify` is `required` that no test verifies;
-  - an alias claimed by two items.
+  - an alias claimed by two items;
+  - a link against the levels' direction: an intent item naming a build item; a rationale named by any link but
+    `follows_from` (a rationale is never binding); a `follows_from` from anything but a rationale;
+  - a fact or a choice nothing follows from;
+  - a rationale marked `forced: yes` whose `follows_from` chain reaches no fact or choice.
 """
 import json
 import os
@@ -152,7 +156,53 @@ def _required_are_verified(app, env):
                     type="corpus", subtype="verify")
 
 
+LINK_TYPES = ("uses", "refines", "excepts", "upholds", "realises", "justifies", "follows_from", "assumes", "illustrates",
+              "verifies")
+ROOTS = ("fct", "chc")
+
+
+def _level(need):
+    return need["docname"].split("/", 1)[0] if need.get("docname") else None
+
+
+def _links_hold(app, env):
+    from sphinx_needs.data import SphinxNeedsData
+    view = SphinxNeedsData(env).get_needs_view()
+    bad = []
+    for need in view.values():
+        for link in LINK_TYPES:
+            for target_id in need.get(link) or []:
+                target = view.get(target_id)
+                if target is None:
+                    continue  # a dead link: sphinx-needs reports it
+                if _level(need) == "intent" and _level(target) == "build":
+                    bad.append(f"{need['id']} ({link}) names build item {target_id}: intent never depends on the build")
+                if target["type"] == "rat" and link != "follows_from":
+                    bad.append(f"{need['id']} ({link}) names rationale {target_id}: a rationale is never binding")
+                if link == "follows_from" and need["type"] != "rat":
+                    bad.append(f"{need['id']} follows from {target_id}: only a rationale follows from anything")
+    followed = {t for need in view.values() for t in need.get("follows_from") or []}
+    for need in view.values():
+        if need["type"] in ROOTS and need["id"] not in followed:
+            bad.append(f"{need['id']}: nothing follows from this {'fact' if need['type'] == 'fct' else 'choice'}")
+
+    def reaches_root(need_id, seen):
+        need = view.get(need_id)
+        if need is None or need_id in seen:
+            return False
+        if need["type"] in ROOTS:
+            return True
+        return any(reaches_root(t, seen | {need_id}) for t in need.get("follows_from") or [])
+
+    for need in view.values():
+        if need["type"] == "rat" and need.get("forced") == "yes" and not reaches_root(need["id"], set()):
+            bad.append(f"{need['id']} is forced but follows from no fact or choice")
+    for line in sorted(bad):
+        LOG.warning(line, type="corpus", subtype="links")
+
+
 def setup(app):
     app.connect("builder-inited", _write_tests_page)
     app.connect("env-check-consistency", _required_are_verified)
+    app.connect("env-check-consistency", _links_hold)
     return {"parallel_read_safe": False, "parallel_write_safe": True}
