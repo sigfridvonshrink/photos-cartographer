@@ -78,7 +78,7 @@
 4.3	### 4.3 Config areas	dropped	a heading; now DEF-config_areas
 4.3	Config areas relevant across phases include, at least:	DEF-config_areas	
 4.3	1. the `zfs` snapshot block and `snapshots_required` (Section 3);	DEF-config_areas BLD-config_keys	
-4.3	2. the workspace control directory (Section 5);	BLD-config_keys	
+4.3	2. the workspace control directory (Section 5);	RUL-control_directory_fixed BLD-control_directory_fixed	ruled: the location is fixed, not a setting
 4.3	3. camera-group **classification**:	DEF-config_areas	
 4.3	`camera_time_and_timezone_policy.device_groups` (`phones`, `fixed_clock_cameras`) (Section 6) — the only camera-grouping value that lives in config.	RUL-camera_classes_not_derivation BLD-config_keys	
 4.3	The derivation *version*, `CAMERA_GROUP_KEY_VERSION`, is **not** a config field: it is a code constant that versions how `camera_group_key` is computed and participates in the dependency fingerprints (Section 6, Section 9), so a change to the derivation is detectable.	RUL-camera_classes_not_derivation BLD-config_keys RAT-derivation_version_is_code	
