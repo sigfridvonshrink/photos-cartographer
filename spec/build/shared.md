@@ -3,6 +3,17 @@
 How this build meets [the shared intent](../intent/shared.md): the files, names, tools and steps. Each item `realises`
 the intent it implements. *Why* a choice was made is in [the rationale](../rationale/shared.md).
 
+## 0. The pipeline
+
+:::{bld} The phases are three commands
+:id: BLD-phase_commands
+:status: seed
+:realises: DEF-prep, DEF-geotag, DEF-merge
+
+The phases SHALL be the commands `photos-cartographer prep`, `geotag` and `merge` — named in the specs, and in their
+records, `photos-1-prep`, `photos-2-geotag` and `photos-3-merge`.
+:::
+
 ## 1. One run at a time
 
 :::{bld} The lock follows the workspace guard

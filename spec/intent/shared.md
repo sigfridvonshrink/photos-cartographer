@@ -4,6 +4,55 @@ The facts all three phases — prep, geotag and merge — must agree on. Each it
 that names none binds them all. *Why* each holds is in [the rationale](../rationale/shared.md); *how this build meets
 it*, in [the build](../build/shared.md).
 
+## 0. The pipeline
+
+:::{def} The workspace
+:id: DEF-workspace
+:status: seed
+
+A **workspace** is the transient place one ingest happens in: a dump of media enters it, the phases work on it in
+turn, and merge empties it into the library. Every run acts on exactly one workspace.
+:::
+
+:::{def} The library
+:id: DEF-library
+:status: seed
+:uses: DEF-workspace
+
+The **library** is the permanent, curated collection the media ends in — outside every workspace, and written only by
+merge.
+:::
+
+:::{def} Prep
+:id: DEF-prep
+:status: seed
+:uses: DEF-workspace
+
+**Prep**, the first phase, takes an unorganized dump and makes it a clean working set: it consolidates the dump,
+normalizes extensions, sets duplicates aside (recoverably, never deleting), organizes the media by date, and hands
+geotag what it found.
+:::
+
+:::{def} Geotag
+:id: DEF-geotag
+:status: seed
+:uses: DEF-prep
+
+**Geotag**, the second phase, resolves each photo to its true time, inferring and correcting each camera's clock
+offset; places the photos that carry no position along the recorded tracks; and renames each by its corrected local
+time.
+:::
+
+:::{def} Merge
+:id: DEF-merge
+:status: seed
+:uses: DEF-geotag, DEF-library
+
+**Merge**, the third phase, runs after a workspace has been geotagged and finalized: it moves the finalized media,
+sorted by destination, into the library — never renaming or overwriting anything already there — and then seals the
+workspace.
+:::
+
 ## 1. One run at a time
 
 :::{inv} One run at a time
@@ -136,7 +185,7 @@ Snapshots SHALL be off unless the workspace's configuration turns them on.
 
 :::{rul} Only the snapshot depends on the filesystem
 :id: RUL-filesystem_agnostic
-:status: seed
+:status: ruled
 :criticality: med
 :verify: none
 :omit_reason: a design constraint over the whole code; the gap audit (backlog item 2) checks it

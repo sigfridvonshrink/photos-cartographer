@@ -2,6 +2,17 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-10-31 — the sample reviewed: the style ruled, the phases defined
+
+Vasile, on the sample's five questions: the intent rewritten in SHALL form, naming no tool or file, the rationale kept
+verbatim — *"yes"*; *only the snapshot depends on the filesystem*, made a rule from what the old spec gave as
+reasoning — *"is a rule"* (`RUL-filesystem_agnostic`, the first item `ruled`); the build items carried over from the
+old text and checked against the code by the gap audit — *"OK"*. On the old §1 being dropped as structure: *"the phases
+and philosophy still need to exist somewhere IMO"* — so the phases, the workspace and the library are now definitions
+(`DEF-prep`, `DEF-geotag`, `DEF-merge`, `DEF-workspace`, `DEF-library`), and the command names a build item; the
+philosophy's home is open (`docs/who-is-this-for.md`'s root layer, proposed as rationale). On the granularity: *"where
+should I look for a good example?"*
+
 ## 2026-10-31 — the corpus scaffold, and the shared contract §1–§3 as a sample
 
 Vasile: *"please get started then"*. Built, item 1's first step:
