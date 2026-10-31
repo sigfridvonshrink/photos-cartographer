@@ -29,7 +29,9 @@ build apart, the justifications as tagged items, every item `seed` until ruled. 
 - the disclosure — *"we can keep the specs as today, and describe the sphinx-needs adoption as ai-aided or something
   like that"*;
 - the tests — *"isn't (b) more precise and less prone to drift?"* (heating's `# @test` comment markers, against
-  keeping `@pytest.mark.spec`): open, item 1.
+  keeping `@pytest.mark.spec`). Not more precise, and more prone to drift: a comment can be separated from its test by
+  an edit and a stray comma drops it, while a mark is part of the function; but its explicit, stable id is an advantage
+  the existing mark lacks. Vasile: *"updated (a) then."* — the existing mark, extended with an explicit test id.
 
 ## 2026-09-30 — v1.5.2
 

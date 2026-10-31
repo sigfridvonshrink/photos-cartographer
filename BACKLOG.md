@@ -37,10 +37,10 @@ the heating one"*, with the justifications *"captured and tagged, even if they a
 - **AI-DISCLOSURE.md** keeps *the specs are mine* and says the sphinx-needs restructuring is AI-aided, `ruled`
   recording Vasile's approval item by item.
 
-**Open:** how a test names what it verifies — heating's `# @test` comment markers (codelinks; explicit, stable ids;
-parity with heating; a marker is a comment, which an edit can separate from its test, and a stray comma drops it
-silently) or the existing `@pytest.mark.spec(…)` extended with an explicit test id (bound to the function, parsed by
-Python; 360 tags already in place).
+- **The tests as items:** each test declares what it verifies in its existing `@pytest.mark.spec(…)`, extended with an
+  explicit, stable test id — `@pytest.mark.spec("INV-no_clobber", test="TST-…")` — and the build makes `TST` items of
+  them from pytest's own collection. A mark is part of the function, so it cannot be left behind by an edit, and Python
+  parses it.
 
 **Order:** the corpus scaffold and its gate; then one document at a time — the shared contract first (the others lean
 on it), then prep, merge, geotag — each proposed section by section and ruled by Vasile.
