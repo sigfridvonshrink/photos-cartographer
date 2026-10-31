@@ -458,7 +458,7 @@ def test_execute_jobs_identical_library_file_tree(tmp_path):
     assert _tree(str(lib1)) == _tree(str(lib2))                    # identical placed tree (ignores *.lock)
 
 
-@pytest.mark.spec("merge-moveset-fixed-before-concurrency-1", "snapshot-timing-1")
+@pytest.mark.spec("merge-moveset-fixed-before-concurrency-1", "snapshot-timing-1", test="TST-merge_execute-snapshot_and_revalidation_precede_the_parallel_move_pass")
 def test_snapshot_and_revalidation_precede_the_parallel_move_pass(tmp_path, monkeypatch):
     """Sequencing (§10.3): the move-set is fixed BEFORE any concurrent placement — dependency
     revalidation and the pre-mutation snapshot both complete before the FIRST per-file move runs,

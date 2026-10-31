@@ -73,7 +73,19 @@ tools/jstest                   # node --test over cartographer/editor/tests/*.te
 # crash-injection / cross-cutting principle). Collection-only (fast); exits non-zero if a must-cover
 # clause lost its test. CI runs it. Complements line/branch coverage — tracks SPEC behaviours, not lines.
 tools/spec-coverage            # report + gate; --verbose for the per-clause table
+
+# The spec corpus (spec/ as one Sphinx project, sphinx-needs items: intent / rationale / build, and the tests
+# as items from their marks). THE GATE: fails on any warning; on success rewrites spec/needs.json -- commit it.
+# The specs move into it one document at a time (BACKLOG item 1); until then spec-clauses.json and
+# tools/spec-coverage keep gating the clauses not yet converted.
+python3 -m venv spec/.venv && spec/.venv/bin/pip install -r spec/requirements.txt   # first time
+tools/spec-build
+tools/spec-ledger check        # every sentence of a converted spec section is accounted for, verbatim
 ```
+
+A test names what it verifies with `@pytest.mark.spec(<ids>..., test="TST-<module>-<name>")`: the ids are corpus
+items (or the clause-index ids an item lists in its `aliases`), and `test=` is the test's own stable id, which makes it
+an item of the corpus. Keep the id when a test is renamed.
 
 Current coverage figures (line/branch + spec-clause) live in `COVERAGE.md` at the repo root; the
 commands above regenerate them. The clause-by-clause audit is `docs/design/spec-test-coverage-audit.md`.

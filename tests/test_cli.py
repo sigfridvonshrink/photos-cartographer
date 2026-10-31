@@ -291,7 +291,7 @@ def test_dry_run_mutates_nothing_on_disk(tmp_path, monkeypatch, capsys):
     assert after == before                                      # dry-run wrote nothing to disk
 
 
-@pytest.mark.spec("lock-covers-planning-1", "lock-failfast-1")
+@pytest.mark.spec("lock-covers-planning-1", "lock-failfast-1", test="TST-cli-locked_workspace_failfast_produces_no_artifact")
 def test_locked_workspace_failfast_produces_no_artifact(tmp_path, monkeypatch, capsys):
     """Lock contention is fail-fast and pre-mutation: a `plan` that can't take the workspace lock
     produces NO plan artifact and NO journal — the run never got past lock acquisition."""
