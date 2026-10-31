@@ -307,7 +307,7 @@ def test_plan_blocks_when_bydest_photo_absent_from_finalized_set(tmp_path):
     assert not (lib / "Trip").exists()                                 # nothing placed
 
 
-@pytest.mark.spec("config-prep-sole-writer-1", "merge-config-readonly-1")
+@pytest.mark.spec("config-prep-sole-writer-1", "merge-config-readonly-1", test="TST-merge_execute-config_is_byte_identical_across_plan_dryrun_execute")
 def test_config_is_byte_identical_across_plan_dryrun_execute(tmp_path):
     """Merge never writes the workspace config (photos-00-config.json is hand-edited, authoritative).
     Snapshot its bytes, run the full plan -> dry-run -> execute cycle, assert byte-for-byte identical."""

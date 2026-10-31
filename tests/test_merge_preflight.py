@@ -283,7 +283,7 @@ def _fresh_ws_and_lib(tmp_path):
     return ws, lib
 
 
-@pytest.mark.spec("config-initlib-writes-libroot-only-1", "merge-init-library-inside-with-path-writes-config-1")
+@pytest.mark.spec("config-initlib-writes-libroot-only-1", "merge-init-library-inside-with-path-writes-config-1", test="TST-merge_preflight-init_library_in_workspace_with_path_blesses_and_writes_config")
 def test_init_library_in_workspace_with_path_blesses_and_writes_config(tmp_path):
     ws = tmp_path / "ws"
     ws.mkdir()

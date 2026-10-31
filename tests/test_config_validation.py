@@ -63,7 +63,7 @@ def _pol(**overrides):
     (_pol(device_groups="nope"), "device_groups must be an object"),           # device_groups not a dict
     (_cfg(zfs={"datasets": "nope"}), "zfs.datasets must be an object"),         # zfs.datasets not a dict
 ])
-@pytest.mark.spec("config-values-validated-1", "prep-config-validate-gpx-malformed-1", "prep-config-validate-timestamp-format-1", "validate-enum-structure-1", "validate-filename-format-1", "validate-numeric-thresholds-1", "validate-paths-1")
+@pytest.mark.spec("config-values-validated-1", "prep-config-validate-gpx-malformed-1", "prep-config-validate-timestamp-format-1", "validate-enum-structure-1", "validate-filename-format-1", "validate-numeric-thresholds-1", "validate-paths-1", test="TST-config_validation-validate_config_rejects")
 def test_validate_config_rejects(cfg, needle):
     with pytest.raises(ValueError) as ei:
         utils.validate_config(cfg)
@@ -182,7 +182,7 @@ def test_media_extensions_rejects_bad(cfg, needle):
     assert needle in str(ei.value), str(ei.value)
 
 
-@pytest.mark.spec("config-ext-one-class-1", "prep-classify-by-extension-1", "prep-reads-config-authoritative-1")
+@pytest.mark.spec("config-ext-one-class-1", "prep-classify-by-extension-1", "prep-reads-config-authoritative-1", test="TST-config_validation-classification_follows_config_after_load")
 def test_classification_follows_config_after_load(tmp_path, monkeypatch):
     # A user adds .webp to the image list; after load_or_seed_config it classifies as image, not stray.
     ws = tmp_path / "ws"
@@ -200,7 +200,7 @@ def test_classification_follows_config_after_load(tmp_path, monkeypatch):
         utils._refresh_media_class_map()                       # restore global for other tests
 
 
-@pytest.mark.spec("config-surgical-staleness-1", "prep-extension-lists-config-1")
+@pytest.mark.spec("config-surgical-staleness-1", "prep-extension-lists-config-1", test="TST-config_validation-field_fingerprints_change_with_their_area")
 def test_field_fingerprints_change_with_their_area():
     base_fol, base_ext = utils.folders_fingerprint(), utils.media_extensions_fingerprint()
     c = copy.deepcopy(utils.CONFIG); c["media_extensions"]["video"].append("webm")

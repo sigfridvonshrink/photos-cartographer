@@ -262,7 +262,7 @@ def test_geotag_writes_no_artifacts_into_by_dest(tmp_path, monkeypatch):
     assert names == ["2024-07-03--14-00-00.arw", "2024-07-03--15-00-00.arw"]
 
 
-@pytest.mark.spec("config-merge-readonly-1")
+@pytest.mark.spec("config-merge-readonly-1", test="TST-geotag_execution-geotag_leaves_config_byte_identical")
 def test_geotag_leaves_config_byte_identical(tmp_path, monkeypatch):
     """Geotag never writes the workspace config (photos-00-config.json is hand-edited, authoritative).
     Snapshot its bytes, drive the full plan + execute, assert byte-for-byte identical (the geotag half

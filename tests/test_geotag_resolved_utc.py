@@ -296,7 +296,7 @@ def test_run_populates_cache_when_complete(tmp_path, monkeypatch, capsys):
                     ("6-photos-by-dest/B/b.arw", "2024-07-03T12:13:21Z", "camera_group_offset")]
 
 
-@pytest.mark.spec("geotag-utc-not-restaled-by-unrelated-config-1", "config-edit-outside-timepolicy-1")
+@pytest.mark.spec("geotag-utc-not-restaled-by-unrelated-config-1", "config-edit-outside-timepolicy-1", test="TST-geotag_resolved_utc-unrelated_config_edit_replans_but_does_not_restale_resolved_utc")
 def test_unrelated_config_edit_replans_but_does_not_restale_resolved_utc(tmp_path, monkeypatch, capsys):
     """§22.1 / shared §4.2: a config edit OUTSIDE the time-policy subset re-plans but must NOT restale
     already-resolved UTC. The resolved-UTC cache fingerprint is built from time-relevant inputs only

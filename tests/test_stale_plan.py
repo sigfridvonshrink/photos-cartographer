@@ -66,7 +66,7 @@ def _build_plan(ws):
     return plan
 
 
-@pytest.mark.spec("config-wholehash-coarse-replan-1")
+@pytest.mark.spec("config-wholehash-coarse-replan-1", test="TST-stale_plan-config_change_rejects_plan_at_execute")
 def test_config_change_rejects_plan_at_execute(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
