@@ -286,7 +286,7 @@ A **decoded-pixel fingerprint** (ImageMagick/ffmpeg), not file bytes, as each ph
 :id: RAT-total_coverage_cascade
 :status: seed
 :forced: yes
-:follows_from: CHC-total_placement
+:follows_from: CHC-total_placement, FCT-partial_track_coverage
 
 This choice fights F3: tracks cover only *part* of the library, but the output must be *whole*. That gap is what forces
 the fallback machinery to exist: without P4, tracks alone would be the entire story and everything below would be

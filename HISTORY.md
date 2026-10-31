@@ -2,6 +2,17 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-10-31 — the philosophy's links: two ruled, one reopened
+
+On the per-(camera group, destination, day) offset following from clock drift alone: *"1 ok"*. On the total-coverage
+cascade, drawn from 100% placement alone though its text says it *"fights F3"* (the sentence is in the guide's first
+upload, `23882e5`; no earlier draft survives): *"if GPS had full coverage, there would have been no need for cascade,
+and if there was no need for 100% coverage, the incomplete GPS would be enough. So the cascade follows from *both*"* —
+it now follows from 100% placement and from partial GPX coverage. On the per-coordinate method tag, linked to the
+total-coverage cascade and the consolidated log: *"total coverage by itself does NOT justify adding the precision.
+Imagine I find a new track that I misplaced. If I am to apply it, I will need the precision for each photo which will
+allow me to know if I should replace or not."* Its links are open until Vasile confirms the reading.
+
 ## 2026-10-31 — the philosophy in the corpus; the remaining kinds and the gates ruled
 
 Vasile, on the proposals (ASM, EXM, non-goals as anti rules, summaries in the ledger only, `choice_kind`, `forced`,
