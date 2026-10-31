@@ -2,6 +2,13 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-10-31 — the method tag carries the traceability into the library
+
+Asked whether the guide's *"via the traceability the multi-session reality forces"* should stay, the link to the
+consolidated log having been dropped: *"By "traceability the multi-session reality forces" I meant that every decision
+must be traced, and by incorporating the precision, I allow it even in the final library."* The tag follows from the
+consolidated log again, beside the total-coverage cascade, and his meaning is in its text.
+
 ## 2026-10-31 — the per-coordinate method tag: kept for later refinement
 
 Proposed: the tag lets a re-run with a newly found track replace a rough pin only by a more precise one, so it follows
