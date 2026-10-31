@@ -2,6 +2,31 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-10-31 — the corpus scaffold, and the shared contract §1–§3 as a sample
+
+Vasile: *"please get started then"*. Built, item 1's first step:
+- **Three levels, one Sphinx project**: `spec/intent/`, `spec/rationale/`, `spec/build/`, each to hold the four
+  documents; sphinx-needs 9.1 (heating runs 8.5; 9.1 wants a `type` in every field schema). Kinds `DEF` `INV` `RUL`
+  `RAT` `BLD` `TST`; links `uses` `refines` `excepts` `upholds` `realises` `justifies` `verifies`; fields `status`,
+  `criticality`, `anti`, `verify` (`required` · `incidental` · `none` with `omit_reason`), `aliases`.
+- **The tests as items, from pytest's own collection**, not from comment markers: `--spec-marks` in `conftest.py`
+  dumps every mark; `spec/_ext/corpus.py` writes the `tst` items before the build reads. A parametrized test is one
+  item. `add_need` was not used: it is deprecated in 9.1, and a deprecation warning would fail the gate.
+- **Aliases for the move**: each item lists the clause ids it replaces, resolved when the tests page is written, so
+  the suite's marks keep their clause ids and `tools/spec-coverage` keeps gating the clauses not yet converted. Only the
+  marks of converted tests gain `test="TST-…"`.
+- **The gate** is `tools/spec-build` (`spec/build/` being the build level): warnings fail it — proved by a must-verify
+  item with no test and by a test naming a missing item, both exit 1 — and `spec/needs.json` comes out byte-identical
+  build to build.
+- **The ledger**: each converted sentence of an old spec, verbatim, with where it went (`tools/spec-ledger`); a
+  missing sentence fails it. `defer:<part>` holds a sentence whose items belong to a part not yet converted.
+
+The sample, every item `seed`: §2 (the lock) and §3 (the snapshots) as 16 intent items, 5 rationale, 5 build, 10
+tests linked; §1 (purpose and status) is document structure and scope narration, dropped with reasons, but for one
+line of history and the merge phase's definition, deferred to merge. Two items have no clause behind them: the rule
+that only the snapshot may depend on a filesystem (from a sentence the old spec gave as reasoning) and that merge
+snapshots the library.
+
 ## 2026-10-31 — BACKLOG and HISTORY; the spec to become a sphinx-needs corpus
 
 Vasile: *"Move cartographer to sphinx-needs from the current manual requirements setup. And build the same
