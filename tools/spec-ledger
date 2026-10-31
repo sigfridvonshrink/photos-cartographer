@@ -26,10 +26,21 @@ listed, and none may remain when the move is done), or `dropped` (with a `note` 
 every sentence of every section the ledger covers appears in it exactly once, every id in `to` is an item of the built
 corpus (spec/needs.json), and every `dropped` has a note.
 
-    tools/spec-ledger check                        # every ledger against its old spec and the corpus
-    tools/spec-ledger template OLD.md SECTION...   # print the rows to fill in for those sections
+A ledger may convert a document that is not an old spec, or one that changes as it is converted (a user guide whose
+content moves into the corpus): its first line then names the source, a frozen copy of that document as it was when
+its conversion began, kept under spec/conversion/sources/ and never edited,
+
+    # source: conversion/sources/who-is-this-for.md
+
+and the check reads that file (the path is relative to spec/). A source whose headings are not numbered is keyed by the
+heading's text, and what precedes its first heading by `preamble`. A fenced code block is one unit, written as its
+opening fence and a digest of its content -- `` ```mermaid [sha1:0123abcd, 37 lines] ``.
+
+    tools/spec-ledger check                           # every ledger against its source and the corpus
+    tools/spec-ledger template SOURCE [SECTION...]    # print the rows to fill in (every section when none is named)
 """
 import glob
+import hashlib
 import json
 import os
 import re
@@ -39,6 +50,26 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SPEC = os.path.join(ROOT, "spec")
 LEDGERS = os.path.join(SPEC, "conversion")
 HEADING = re.compile(r"^(#{2,4})\s+([0-9]+[0-9a-z]*(?:\.[0-9a-z]+)*)\.?\s")
+TEXT_HEADING = re.compile(r"^(#{2,4})\s+(.+?)\s*$")
+SOURCE = re.compile(r"^#\s*source:\s*(\S+)\s*$")
+
+
+def _fences(text):
+    """The text with each fenced code block replaced by one line: its opening fence and a digest of its content."""
+    out, block = [], None
+    for line in text.split("\n"):
+        if block is None and line.lstrip().startswith("```"):
+            block = [line.strip()]
+        elif block is not None and line.strip() == "```":
+            body = "\n".join(block[1:])
+            digest = hashlib.sha1(body.encode("utf-8")).hexdigest()[:8]
+            out += ["", f"{block[0]} [sha1:{digest}, {len(block) - 1} lines]", ""]
+            block = None
+        elif block is not None:
+            block.append(line)
+        else:
+            out.append(line)
+    return "\n".join(out)
 
 
 def _units(text):
@@ -46,9 +77,17 @@ def _units(text):
     out = []
     for block in re.split(r"\n\s*\n", text):
         block = block.strip()
-        if not block or set(block) <= set("-") or block.startswith("```"):
+        if not block or set(block) <= set("-"):
+            continue
+        if block.startswith("```"):
+            out.append(block)  # a code block, already one line
             continue
         lines = block.split("\n")
+        if len(lines) == 1 and block.startswith("#"):
+            out.append(block)  # a heading, whole
+            continue
+        if all(l.lstrip().startswith(">") for l in lines):
+            lines = lines[:1] + [re.sub(r"^\s*>\s?", "", l) for l in lines[1:]]  # a quote's markers, once
         if all(l.lstrip().startswith("|") for l in lines):
             out += [l.strip() for l in lines if not re.match(r"^\|[\s:|-]+\|$", l.strip())]
             continue
@@ -72,23 +111,45 @@ def _units(text):
     return out
 
 
-def sections(path):
-    """{section number: [sentences]} of an old spec; a heading's own text is its first sentence."""
-    result, current, body = {}, None, []
+def sections(text, numbered=True):
+    """{section: [sentences]} of a source; a heading's own text is its first sentence. Numbered: a section is a heading
+    number, and unnumbered headings belong to the section around them. Not numbered: a section is a heading's text."""
+    result, current, body = {}, (None if numbered else "preamble"), []
 
     def flush():
         if current is not None:
             result.setdefault(current, []).extend(_units("\n".join(body)))
 
-    for line in open(path, encoding="utf-8"):
-        m = HEADING.match(line)
+    for line in _fences(text).split("\n"):
+        m = HEADING.match(line) if numbered else TEXT_HEADING.match(line)
         if m:
             flush()
             current, body = m.group(2), [line.strip()]
         elif current is not None:
-            body.append(line.rstrip("\n"))
+            body.append(line)
     flush()
     return result
+
+
+def _source(ledger, stem):
+    """(sections, label) of what a ledger converts: its `# source:` line's file, or spec/<stem>.md."""
+    first = open(ledger, encoding="utf-8").readline()
+    m = SOURCE.match(first)
+    if not m:
+        with open(os.path.join(SPEC, stem + ".md"), encoding="utf-8") as f:
+            return sections(f.read()), stem
+    path = m.group(1)
+    with open(os.path.join(SPEC, path), encoding="utf-8") as f:
+        text = f.read()
+    return sections(text, numbered=_numbered(text)), path
+
+
+def _numbered(text):
+    return any(HEADING.match(line) for line in text.split("\n"))
+
+
+def _order(sec):
+    return [(0, int(p), "") if p.isdigit() else (1, 0, p) for p in re.split(r"[.]", sec)]
 
 
 def _corpus_ids():
@@ -102,7 +163,7 @@ def check():
     bad, deferred = [], []
     for ledger in sorted(glob.glob(os.path.join(LEDGERS, "*.tsv"))):
         stem = os.path.splitext(os.path.basename(ledger))[0]
-        old = sections(os.path.join(SPEC, stem + ".md"))
+        old, stem = _source(ledger, stem)
         rows = [line.rstrip("\n").split("\t") for line in open(ledger, encoding="utf-8")]
         rows = [r for r in rows if r and r[0] and not r[0].startswith("#")]
         seen = {}
@@ -125,7 +186,7 @@ def check():
                         bad.append(f"{stem}:{n}: §{sec} dropped with no note")
                 elif t not in ids:
                     bad.append(f"{stem}:{n}: §{sec} goes to {t}, which is not a corpus item")
-        for sec in sorted({s for s, _ in seen}, key=lambda s: [int(p) if p.isdigit() else p for p in re.split(r"[.]", s)]):
+        for sec in sorted({s for s, _ in seen}, key=_order):
             for sentence in old.get(sec, []):
                 count = seen.get((sec, sentence), 0)
                 if count != 1:
@@ -144,9 +205,11 @@ def check():
 
 
 def template(path, wanted):
-    old = sections(path)
+    with open(path, encoding="utf-8") as f:
+        text = f.read()
+    old = sections(text, numbered=_numbered(text))
     for sec in old:
-        if sec in wanted or any(sec.startswith(x + ".") for x in wanted):
+        if not wanted or sec in wanted or any(sec.startswith(x + ".") for x in wanted):
             for sentence in old[sec]:
                 print(f"{sec}\t{sentence}\t\t")
     return 0
@@ -155,7 +218,7 @@ def template(path, wanted):
 if __name__ == "__main__":
     if sys.argv[1:2] == ["check"]:
         sys.exit(check())
-    if sys.argv[1:2] == ["template"] and len(sys.argv) > 3:
+    if sys.argv[1:2] == ["template"] and len(sys.argv) > 2:
         sys.exit(template(sys.argv[2], sys.argv[3:]))
     print(__doc__)
     sys.exit(2)
