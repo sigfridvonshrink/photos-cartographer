@@ -347,6 +347,7 @@ The configuration SHALL be part of the archival record the workspace leaves behi
 :anti: yes
 :verify: required
 :aliases: config-in-control-dir-skipped-1
+:refines: RUL-control_records_never_media
 
 No phase SHALL treat the configuration as media: none SHALL inventory or organize it, and none SHALL fold it into what
 identifies the media.
@@ -469,4 +470,286 @@ configurable; an extension not listed SHALL be `other`; and an extension SHALL b
 
 Every value of the configuration that comes from the user SHALL be validated before it is used (§14 of the shared
 contract), as part of reading the configuration — never as a separate, optional pass.
+:::
+
+## 4. The control records, apart from the media
+
+:::{def} The control records
+:id: DEF-control_records
+:status: seed
+:uses: DEF-workspace
+
+A workspace's **control records** are everything cartographer keeps in it besides the media: the configuration, the
+plans and the decisions, the journals, the end-of-phase records and the databases.
+:::
+
+:::{rul} The control records are kept together, apart from the media
+:id: RUL-control_records_together
+:status: seed
+:criticality: med
+:verify: required
+:aliases: ctrl-all-in-photos-ingest-1
+:uses: DEF-control_records
+
+Every control record SHALL be kept in the workspace's one place for them. None SHALL sit among the media or at the
+workspace's top level.
+:::
+
+:::{rul} The control records' place is never searched for media
+:id: RUL-control_records_never_media
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: ctrl-prep-skips-wholesale-1
+:refines: RUL-control_records_together
+
+No phase SHALL take a control record for media. The place they are kept SHALL be left out of every inventory of media as
+a whole — not file by file.
+:::
+
+:::{def} The strays folder
+:id: DEF-strays_folder
+:status: seed
+:uses: DEF-prep
+
+The **strays folder** is a media-tree folder at the workspace's top level. It holds the files that are not media which
+prep moved out of the inbox, one subfolder for each run, their structure kept. It is neither a control record nor any
+phase's output.
+:::
+
+:::{rul} What prep never inventories
+:id: RUL-not_inventoried
+:status: seed
+:criticality: med
+:verify: incidental
+:aliases: ctrl-skip-set-1
+:refines: RUL-control_records_never_media
+:uses: DEF-strays_folder
+
+Prep SHALL leave out of its inventory of media, each as a whole: the control records' place, the quarantine, a
+version-control directory, and the strays folder with everything in it; and every hidden file. Prep SHALL write into the
+strays folder but never scan it, and nothing SHALL process its contents again.
+:::
+
+:::{rul} Hidden files in a dump are quarantined
+:id: RUL-dump_hidden_files_quarantined
+:status: seed
+:criticality: med
+:verify: required
+:aliases: ctrl-dotfiles-swept-quarantine-1
+
+Hidden files that arrive in a dump area — the workspace's top level on the run that initializes it, or the inbox — SHALL
+be moved to the recoverable quarantine, not merely left out.
+:::
+
+:::{rul} Each plan has one fixed place
+:id: RUL-plan_at_fixed_place
+:status: seed
+:criticality: med
+:verify: required
+:aliases: plan-canonical-path-1
+
+Each phase's plan, and each of its decision records, SHALL have one fixed place among the control records. The phase's
+planning SHALL write it there, and its dry run and its execution SHALL read it from there.
+:::
+
+:::{rul} No command is told where a plan is
+:id: RUL-no_plan_location_option
+:status: seed
+:criticality: med
+:anti: yes
+:verify: none
+:omit_reason: no test asserts it (backlog item 3)
+:aliases: plan-no-path-flag-1
+:refines: RUL-plan_at_fixed_place
+
+No command SHALL take an option saying where to put a plan or where to find one; the fixed place is the contract.
+:::
+
+:::{rul} Planning says where it saved the plan
+:id: RUL-planning_names_its_plan
+:status: seed
+:criticality: low
+:verify: none
+:omit_reason: no test asserts it (backlog item 3)
+:aliases: plan-prints-path-1
+
+A planning command SHALL tell the user where it saved the plan.
+:::
+
+:::{rul} No plan, no dry run and no execution
+:id: RUL-no_plan_no_run
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: plan-missing-stops-1
+
+A dry run or an execution that finds no plan in its place SHALL stop, and tell the user to plan first.
+:::
+
+:::{rul} A dry run summarises the real plan
+:id: RUL-dry_run_summarises_the_real_plan
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: dryrun-summary-not-dump-1
+
+A dry run SHALL validate the saved plan that execution would carry out, and report a summary of it — the operations by
+kind, the blockers, and where the full plan is — computed from that plan, never from a separate simulation, and never
+the whole plan.
+:::
+
+:::{rul} Re-planning sets the prior plan aside
+:id: RUL-replanning_keeps_the_prior
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: plan-replan-no-clobber-1
+
+Re-planning SHALL never overwrite a plan or a decision record. When what it makes differs from what is saved, the saved
+one SHALL first be set aside, recoverably, and the user told where.
+:::
+
+:::{rul} An unchanged re-plan writes nothing
+:id: RUL-unchanged_replan_writes_nothing
+:status: seed
+:criticality: med
+:verify: none
+:omit_reason: no test asserts it (backlog item 3)
+:aliases: plan-unchanged-no-backup-1
+:refines: RUL-replanning_keeps_the_prior
+
+A re-plan whose result is identical to what is saved SHALL write nothing and set nothing aside.
+:::
+
+:::{rul} Geotag verifies the handoff by its content
+:id: RUL-handoff_verified_by_content
+:status: seed
+:criticality: med
+:verify: required
+:aliases: handoff-verified-by-content-1
+
+Geotag SHALL verify prep's handoff before using it, though it lives among the control records: by recomputing the
+fingerprint of its content and comparing it with the one its dependencies recorded — by its content, not its exact
+bytes.
+:::
+
+:::{rul} Refreshing what describes the run restales nothing
+:id: RUL-run_only_refresh_restales_nothing
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: handoff-runonly-refresh-no-restale-1
+:refines: RUL-handoff_verified_by_content
+
+A rewrite of the handoff that changes only what describes the run, not its content, SHALL NOT make anything downstream
+stale.
+:::
+
+:::{inv} A disturbed workspace is never processed silently
+:id: INV-undisturbed_shape
+:status: seed
+:criticality: high
+:anti: yes
+:verify: incidental
+
+No phase SHALL process an initialized workspace whose shape was disturbed from outside cartographer — an entry at its
+top level that does not belong there, a symbolic link among its files, a managed folder missing — without stopping.
+:::
+
+:::{rul} Only prep builds the structure, once
+:id: RUL-structure_built_once
+:status: seed
+:criticality: med
+:anti: yes
+:verify: incidental
+:upholds: INV-undisturbed_shape
+
+Prep SHALL create the full structure of managed folders exactly once, when it initializes the workspace, and SHALL never
+remove one. No other phase SHALL create or repair the workspace's structure; the folders merge creates in the library
+are placement, not structure.
+:::
+
+:::{rul} The top level holds only what belongs there
+:id: RUL-top_level_only_managed
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: struct-base-folders-only-1
+:upholds: INV-undisturbed_shape
+
+The top level of an initialized workspace SHALL hold only the managed folders, the control records' place, the
+quarantine and hidden entries. Any other entry — a file, a folder, a link — SHALL be a misplaced dump, and block every
+phase alike. The inbox SHALL be the only place a dump belongs.
+:::
+
+:::{rul} A new workspace's first dump is at its top level
+:id: RUL-first_dump_at_top_level
+:status: seed
+:criticality: med
+:verify: required
+:aliases: struct-uninit-exception-1
+:refines: RUL-top_level_only_managed
+
+On a workspace not yet initialized, files and folders at the top level SHALL be the first dump, and SHALL start
+initialization. A symbolic link there SHALL still block.
+:::
+
+:::{rul} No symbolic link is followed, and any link blocks
+:id: RUL-no_links
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: struct-symlinks-barred-1
+:upholds: INV-undisturbed_shape
+
+No phase SHALL follow or organize a symbolic link. A link anywhere among the managed files SHALL block — a link to a
+file anywhere; a link to a folder inside a dump or a managed folder, whose mere presence blocks though it is never
+entered; a managed folder that is itself a link, before it is walked; a link at the top level — never be skipped
+silently. The phase SHALL name the link and produce no executable plan and no artifact after it.
+:::
+
+:::{rul} Prep checks the whole tree; the others check the top level
+:id: RUL-who_checks_for_links
+:status: seed
+:criticality: med
+:verify: incidental
+:refines: RUL-no_links
+
+Prep SHALL check for links across the whole tree it walks, the destination tree included though prep never changes it.
+Geotag and merge SHALL check the top level themselves, and SHALL consume only a handoff prep built with no link present.
+:::
+
+:::{rul} A missing managed folder blocks, and is never rebuilt
+:id: RUL-missing_folder_blocks
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: struct-no-silent-rebuild-1
+:upholds: INV-undisturbed_shape
+
+On an initialized workspace, a missing managed folder SHALL block every phase. It SHALL NOT be recreated outside
+initialization, and no phase SHALL organize media into a structure it had to rebuild. The block SHALL name the missing
+folders, say that something is wrong, and tell the user to restore them and run again; an empty folder restores one.
+An empty inbox SHALL be normal — the steady state, not a missing folder.
+:::
+
+:::{rul} The shape is checked first
+:id: RUL-shape_checked_first
+:status: seed
+:criticality: med
+:verify: incidental
+:aliases: struct-guards-at-startup-1
+:upholds: INV-undisturbed_shape
+
+Each phase SHALL check the workspace's shape at its start — right after the lock and the seal check, before it scans,
+plans or changes anything.
 :::

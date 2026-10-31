@@ -158,3 +158,127 @@ lowercase, no leading dot (prep §6.1). `CAMERA_GROUP_KEY_VERSION` SHALL be a co
 Validating the configuration SHALL check, among others, that a path resolves sanely, that a ZFS snapshot prefix is a
 syntactically valid snapshot component, and that an IANA timezone is a real zone.
 :::
+
+## 4. The control records, apart from the media
+
+:::{bld} The control directory's contents
+:id: BLD-control_directory_contents
+:status: seed
+:realises: DEF-control_records, RUL-control_records_together
+
+The control records SHALL be these files in `.photos-ingest/` (shared §13 for the archival and database ones):
+
+```text
+.photos-ingest/
+  photos-00-config.json            workspace configuration (seeded by prep, Section 4)
+  photos-00-workspace-guard        workspace root sentinel: marks the workspace as INITIALIZED (written last by prep on init, prep photos-1-prep-workflow.md Section 3.1)
+  photos-00-sealed.json            terminal/sealed marker, written by a successful merge ALONGSIDE the guard (a separate file, not a field inside the guard) — its presence seals the workspace (Section 13.7)
+  photos-00-ingest.db              SQLite identity/metadata cache + derived caches (live working DB, Section 13.4)
+  photos-00-plan-memo.db           prep-phase scratch: plan-time decode memo (disposable, NOT part of the record, prep photos-1-prep-workflow.md Section 10.3)
+  photos-15-prep-ingest.db         prep-phase artifact: DB backup snapshot, end of prep (Section 13.4a)
+  journal-*.json                   execution journals
+  photos-10-prep-plan.json         prep-phase artifact: prep plan (written by `plan`, consumed by `dry-run`/`execute`; see "Canonical plan persistence" below)
+  photos-11-handoff.json           prep-phase artifact: handoff manifest
+  photos-15-prep-log.json          prep-phase artifact: end-of-prep audit log (Section 13.3 / prep 16.1)
+  photos-21-time-decisions.json    geotag-phase artifact
+  photos-22-gps-drift-validation.json  geotag-phase artifact: GPS-drift validation gate (§22a)
+  photos-23-gps-decisions.json     geotag-phase artifact
+  photos-24-executable-plan.json   geotag-phase artifact
+  photos-25-execution-summary.json geotag-phase artifact
+  photos-26-complete-log.json      geotag-phase artifact: full transformation log (prep+geotag, at finalize, Section 13.3)
+  photos-26-geotag-ingest.db    geotag-phase artifact: DB backup snapshot, end of geotag (Section 13.4a)
+  photos-31-merge-summary.json     merge-phase artifact: library-merge summary (Section 13.5)
+  photos-35-merge-log.json         merge-phase artifact: full transformation log (prep+geotag+merge, Section 13.3)
+  photos-35-merge-ingest.db        merge-phase artifact: DB backup snapshot, end of merge (Section 13.4a)
+  gpx/                             gpx_root, when configured to live here (Section 8)
+```
+
+The section numbers in it are the shared contract's.
+:::
+
+:::{bld} An artifact's first digit names the phase that made it
+:id: BLD-artifact_numbering
+:status: seed
+:realises: DEF-control_records
+
+The numbered artifacts SHALL follow this scheme:
+
+```text
+0X  workspace infrastructure (phase-neutral): config, guard, live database
+1X  prep-phase artifacts        (currently: 10 = prep plan, 11 = handoff, 15 = prep audit log + prep DB snapshot)
+2X  geotag-phase artifacts (currently: 21–25; 25 = complete log + geotag DB snapshot)
+3X  merge-phase artifacts        (currently: 31 = merge summary, 35 = merge log + merge DB snapshot)
+```
+
+The first digit SHALL mean only the producing phase. The second SHALL be a sequence number within the phase with no
+further meaning: an absent number is not reserved, not headroom and not missing, and nothing is to be inferred from a
+gap. Sibling end-of-phase records that differ only by extension MAY share a number — `photos-15-prep-log.json` and
+`photos-15-prep-ingest.db` are both the end-of-prep record, one the human-readable log and one the database image;
+likewise `photos-26-complete-log.json` and `photos-26-geotag-ingest.db`. The full filename — number, name and
+extension — SHALL be the identifier, never the number alone; `photos-0X-*` (and `1X`, `2X`, `3X`) names a band. The
+bands are unrelated to the numbered media folders `0-sources`…`6-photos-by-dest`.
+:::
+
+:::{bld} What prep skips
+:id: BLD-prep_skip_set
+:status: seed
+:realises: RUL-not_inventoried, RUL-control_records_never_media, RUL-config_never_media, DEF-strays_folder
+
+Prep SHALL skip `.photos-ingest/`, `.photos-ingest-quarantine/` and `.git` as whole subtrees, every dot-prefixed file,
+and the strays folder `1-strays/` with all its `<plan-id>` subfolders (prep §3, §3.2). The strays of a run SHALL go to
+`1-strays/<plan-id>/`. Hidden dotfiles in a dump area SHALL be swept to the quarantine (prep §3, §15).
+:::
+
+:::{bld} The plans' fixed paths
+:id: BLD-canonical_plan_paths
+:status: seed
+:realises: RUL-plan_at_fixed_place, RUL-no_plan_location_option, RUL-planning_names_its_plan, RUL-no_plan_no_run
+
+The plan and decision artifacts SHALL be prep's `photos-10-prep-plan.json`, geotag's `photos-21`, `photos-23` and
+`photos-24`, and merge's `photos-30-merge-plan.json`, in `.photos-ingest/`. Every phase's `plan` SHALL write its file
+there and print the path; `dry-run` and `execute` SHALL read it there; no command SHALL take a path flag for it.
+:::
+
+:::{bld} A superseded plan goes aside under `-NNN`
+:id: BLD-plan_backups
+:status: seed
+:realises: RUL-replanning_keeps_the_prior, RUL-unchanged_replan_writes_nothing
+
+A differing re-plan SHALL first rename the existing artifact under the shared incremental `-NNN` suffix (shared §7.2) —
+`photos-10-prep-plan-001.json`, say — and announce where; byte-identical content SHALL write nothing and back up
+nothing. A plan carrying a fresh plan id differs every run, so re-planning it always preserves the prior plan. The
+per-run journals SHALL keep their `journal-<run_id>.json` naming; this convention governs the plan and decision
+artifacts.
+:::
+
+:::{bld} The handoff's two hashes
+:id: BLD-handoff_hashes
+:status: seed
+:realises: RUL-handoff_verified_by_content, RUL-run_only_refresh_restales_nothing
+
+The handoff SHALL be `photos-11-handoff.json` in `.photos-ingest/`. Geotag SHALL recompute its `content_fingerprint` —
+the content-scoped staleness key prep stamps on it (prep §16.2) — and compare it with the value in geotag's dependency
+block (geotag §4). Its whole-file SHA-256 SHALL be kept as an integrity and archival hash (shared §13), never the
+dependency check.
+:::
+
+:::{bld} The workspace's top level
+:id: BLD-top_level_entries
+:status: seed
+:realises: RUL-top_level_only_managed, RUL-first_dump_at_top_level, RUL-structure_built_once
+
+The top level of an initialized workspace SHALL hold exactly the managed folders `0-sources`…`6-photos-by-dest` and
+`.photos-ingest/`, `.photos-ingest-quarantine/`, `.git` and other dotfiles and dot-directories; the inbox SHALL be
+`0-sources/`. Prep applies the guard (prep §3.1), geotag at startup (geotag §13), merge as its precondition 0a (merge
+§3).
+:::
+
+:::{bld} Where each phase applies the shape guards
+:id: BLD-shape_guards_by_phase
+:status: seed
+:realises: RUL-no_links, RUL-who_checks_for_links, RUL-missing_folder_blocks, RUL-shape_checked_first
+
+Links: prep across the tree it walks (prep §6.2 item 3); geotag and merge at the workspace root at startup (geotag §13;
+merge precondition 0a), and through the handoff (geotag §7.2; merge precondition 3). Missing managed folders: prep §6.2
+item 7, geotag §13, merge precondition 0c.
+:::

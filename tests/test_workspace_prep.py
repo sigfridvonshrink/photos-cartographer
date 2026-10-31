@@ -284,7 +284,7 @@ def test_hash_failure_preservation(tmp_path, monkeypatch):
         op_types = [op.type for op in plan.operations]
         assert "quarantine_move" not in op_types
 
-@pytest.mark.spec("struct-symlinks-barred-1")
+@pytest.mark.spec("struct-symlinks-barred-1", test="TST-workspace_prep-symlink_blocking")
 def test_symlink_blocking(tmp_path, monkeypatch):
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
@@ -307,7 +307,7 @@ def test_symlink_blocking(tmp_path, monkeypatch):
     assert any("Forbidden symlink detected" in b for b in plan.blockers)
 
 
-@pytest.mark.spec("prep-root-symlink-barred-1", "struct-uninit-exception-1")
+@pytest.mark.spec("prep-root-symlink-barred-1", "struct-uninit-exception-1", test="TST-workspace_prep-directory_symlink_at_root_blocked_during_init")
 def test_directory_symlink_at_root_blocked_during_init(tmp_path, monkeypatch):
     """A directory symlink at the root of an UNINITIALIZED workspace must be flagged as a forbidden
     symlink at PLAN time, never followed. os.path.isdir() follows a directory symlink, so the old
@@ -599,7 +599,7 @@ def _mock_for_plan(monkeypatch):
     photos_ingest.CONFIG["jobs"] = 1
 
 
-@pytest.mark.spec("prep-missing-folder-blocks-1", "struct-no-silent-rebuild-1")
+@pytest.mark.spec("prep-missing-folder-blocks-1", "struct-no-silent-rebuild-1", test="TST-workspace_prep-missing_managed_folder_on_activated_workspace_hard_stops")
 def test_missing_managed_folder_on_activated_workspace_hard_stops(tmp_path, monkeypatch):
     """An activated workspace (guard present) missing managed 0-6 folder(s) is non-conforming — prep
     hard-stops with a blocker rather than silently recreating them (which could mask lost media)."""

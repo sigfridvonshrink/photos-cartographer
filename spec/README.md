@@ -31,7 +31,7 @@ no tool, file or database; [`rationale/`](rationale/) — why, the justification
 links; the tests are items too, from their `@pytest.mark.spec(..., test="TST-...")` marks. `tools/spec-build` renders
 it and fails on any warning; `spec/needs.json` is its committed export. Each old document's sentences are recorded,
 verbatim, with where each went, in [`conversion/`](conversion/) — `tools/spec-ledger check` proves none was lost.
-Converted so far: the shared contract §1–§4 (under review), and the user guide's roots and what they force,
+Converted so far: the shared contract §1–§5 (under review), and the user guide's roots and what they force,
 [`rationale/philosophy.md`](rationale/philosophy.md) — facts (`FCT`) and choices (`CHC`) nothing follows from, and the
 rationale that follows from them. Until a document is converted, the one below stays authoritative.
 

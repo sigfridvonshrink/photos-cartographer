@@ -160,7 +160,7 @@ def test_handoff_written_sorted_and_deterministic(tmp_path, monkeypatch):
     assert raw == json.dumps(obj, indent=2, sort_keys=True)
 
 
-@pytest.mark.spec("handoff-verified-by-content-1", "prep-handoff-content-fingerprint-pins-1")
+@pytest.mark.spec("handoff-verified-by-content-1", "prep-handoff-content-fingerprint-pins-1", test="TST-handoff-handoff_content_fingerprint_ignores_run_metadata_and_audit")
 def test_handoff_content_fingerprint_ignores_run_metadata_and_audit():
     """The content fingerprint is byte-stable across no-op reruns: it excludes run_metadata,
     diagnostics, the execution-journal pointer, itself, and the NESTED per-run audit (cache_freshness
@@ -187,7 +187,7 @@ def test_handoff_content_fingerprint_ignores_run_metadata_and_audit():
         {**base, "camera_groups": [{"group_key": "g2", "cache_freshness": {"metadata_extracted_ok": 1}}]}) != fp1
 
 
-@pytest.mark.spec("dep-handoff-dual-key-1", "handoff-runonly-refresh-no-restale-1", "prep-noop-rerun-stable-fingerprint-1")
+@pytest.mark.spec("dep-handoff-dual-key-1", "handoff-runonly-refresh-no-restale-1", "prep-noop-rerun-stable-fingerprint-1", test="TST-handoff-handoff_content_fingerprint_stable_across_real_noop_rerun")
 def test_handoff_content_fingerprint_stable_across_real_noop_rerun(tmp_path, monkeypatch):
     """End-to-end (§16.2): a second prep run that changes nothing organized produces the SAME handoff
     content_fingerprint, even though run_metadata + cache-freshness counts differ run to run."""
