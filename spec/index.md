@@ -15,6 +15,7 @@ intent/shared
 :maxdepth: 2
 :caption: Why
 
+rationale/philosophy
 rationale/shared
 ```
 

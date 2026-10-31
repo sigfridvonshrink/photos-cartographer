@@ -25,14 +25,15 @@ Three phases over a transient **workspace**, each on the same plan → validate 
 ## The corpus — the specs as sphinx-needs items (the move is in progress)
 
 The specs are being restructured into **one Sphinx corpus** of [sphinx-needs](https://sphinx-needs.readthedocs.io/)
-items, in three levels with the same four documents each: [`intent/`](intent/) — what cartographer guarantees, naming
+items, in three levels with the same four documents each (and the rationale's `philosophy`, the roots): [`intent/`](intent/) — what cartographer guarantees, naming
 no tool, file or database; [`rationale/`](rationale/) — why, the justifications, tagged and never normative;
 [`build/`](build/) — how this build meets the intent. Each item has an id, a status (`seed` until ruled) and typed
 links; the tests are items too, from their `@pytest.mark.spec(..., test="TST-...")` marks. `tools/spec-build` renders
 it and fails on any warning; `spec/needs.json` is its committed export. Each old document's sentences are recorded,
 verbatim, with where each went, in [`conversion/`](conversion/) — `tools/spec-ledger check` proves none was lost.
-Converted so far: the shared contract §1–§3 (a sample, under review). Until a document is converted, the one below
-stays authoritative.
+Converted so far: the shared contract §1–§3 (a sample, under review), and the user guide's roots and what they force,
+[`rationale/philosophy.md`](rationale/philosophy.md) — facts (`FCT`) and choices (`CHC`) nothing follows from, and the
+rationale that follows from them. Until a document is converted, the one below stays authoritative.
 
 ## The documents
 

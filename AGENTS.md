@@ -13,7 +13,7 @@ Top-level layout (the package lives at the repo root):
 - **`cartographer/`** — the pipeline package: prep / geotag / merge phases + the decision editor.
 - **`tests/`** — the test suite. **`spec/`** — the authoritative workflow specs (with their own
   `README.md`).
-- **`docs/`** — user-facing guides (`who-is-this-for.md` — fit + the design rationale (the seven roots),
+- **`docs/`** — user-facing guides (`who-is-this-for.md` — fit, naming the seven roots; their rationale is `spec/rationale/philosophy.md`,
   `walkthrough.md` — the screenshot tour, `quickstart.md`, `concepts.md`, `editor.md`) plus
   `screenshots/`, linked from `README.md`.
   These are user docs; `spec/` remains the behavioral source of truth.

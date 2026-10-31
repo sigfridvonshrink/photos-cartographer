@@ -70,6 +70,7 @@ jobs:
 
       - name: Install the corpus build
         run: |
+          sudo apt-get update -q && sudo apt-get install -y --no-install-recommends graphviz
           python -m venv spec/.venv
           spec/.venv/bin/pip install -r spec/requirements.txt
 
