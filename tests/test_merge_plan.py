@@ -353,3 +353,20 @@ def test_merge_plan_records_folder_and_extension_fingerprints(tmp_path, monkeypa
     for k in ("folders_fingerprint", "media_extensions_fingerprint"):
         doctored = {**plan, "depends_on": {**dep, k: "WRONG"}}
         assert any(k in s for s in wf.revalidate_plan_deps(str(ws), doctored)), k
+
+
+@pytest.mark.spec("RUL-any_config_change_replans", test="TST-merge_plan-any_config_edit_restales_the_merge_plan")
+def test_any_config_edit_restales_the_merge_plan(tmp_path, monkeypatch):
+    ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    _patch_fp(monkeypatch, fp)
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    plan = json.load(open(os.path.join(str(ws), ".photos-ingest", "photos-30-merge-plan.json")))
+    wf = merge.MergeWorkflow(str(ws))
+    wf.handoff = json.load(open(utils.handoff_path(str(ws))))
+    assert wf.revalidate_plan_deps(str(ws), plan) == []
+    # An edit in an area merge does not read: the whole-file fingerprint still restales its plan.
+    cfg_path = utils.config_path(str(ws))
+    cfg = json.load(open(cfg_path))
+    cfg["gpx_direct_match_max_seconds"] = cfg.get("gpx_direct_match_max_seconds", 60.0) + 1
+    open(cfg_path, "w").write(json.dumps(cfg))
+    assert "config changed" in wf.revalidate_plan_deps(str(ws), plan)

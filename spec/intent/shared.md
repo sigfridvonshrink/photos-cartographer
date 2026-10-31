@@ -262,7 +262,7 @@ what is processed under it, and it is an input the user authors.
 
 :::{rul} One configuration, read by every phase
 :id: RUL-one_configuration
-:status: seed
+:status: ruled
 :criticality: med
 :verify: incidental
 :aliases: config-single-shared-1
@@ -380,13 +380,13 @@ the camera-time policy SHALL NOT make stale the true times already resolved.
 
 :::{rul} Any configuration change restales the plan
 :id: RUL-any_config_change_replans
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: config-wholehash-coarse-replan-1
 
-Any change to the configuration, in whatever area, SHALL make geotag's executable plan stale, and SHALL stop prep from
-executing a plan made before it.
+Any change to the configuration, in whatever area, SHALL make stale every plan made before it — prep's plan, geotag's
+executable plan and merge's plan — and none of them SHALL be executed.
 :::
 
 :::{rul} A change to the folder names or the media classes restales the plans
@@ -399,6 +399,18 @@ executing a plan made before it.
 
 A change to the managed folders' names, or to which extensions are which class of media, SHALL make stale geotag's
 executable plan and merge's plan.
+:::
+
+:::{rul} Where the control records live is fixed
+:id: RUL-control_directory_fixed
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: none
+:omit_reason: no test asserts it yet
+
+Where a workspace keeps its control records — its configuration among them — SHALL be fixed, the same in every
+workspace. No setting SHALL move it.
 :::
 
 :::{def} What the configuration sets

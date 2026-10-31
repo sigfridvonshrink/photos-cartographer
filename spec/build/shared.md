@@ -111,8 +111,9 @@ dependencies of geotag's executable plan and of merge's plan.
 :status: seed
 :realises: RUL-any_config_change_replans, RUL-costly_results_survive_unrelated_edits
 
-The whole-file fingerprint SHALL be carried in the executable plan's `depends_on` (geotag §28, in the flattened
-dependency set of geotag §5). The costly caches SHALL be keyed on their own areas instead: resolved UTC on the
+The whole-file fingerprint SHALL be carried in the `depends_on` of geotag's executable plan (geotag §28, in the
+flattened dependency set of geotag §5) and of merge's plan, `config_fingerprint`, and each SHALL be refused when it no
+longer matches the file. The costly caches SHALL be keyed on their own areas instead: resolved UTC on the
 time-policy subset (geotag §22.1), the renames on the filename-format fingerprint.
 :::
 
@@ -125,12 +126,21 @@ Prep SHALL re-plan from the filesystem each run and guard execution with the who
 or extension fingerprint of its own.
 :::
 
+:::{bld} The control directory is always `.photos-ingest/`
+:id: BLD-control_directory_fixed
+:status: seed
+:realises: RUL-control_directory_fixed
+
+The control directory SHALL be `.photos-ingest/` at the workspace root, in every workspace. No configuration key SHALL
+name it.
+:::
+
 :::{bld} The configuration's keys
 :id: BLD-config_keys
 :status: seed
 :realises: DEF-config_areas, RUL-folder_names_not_roles, RUL-camera_classes_not_derivation, RUL-extension_one_class
 
-The areas SHALL be, at least: the `zfs` block and `snapshots_required` (§2 above); the control directory (shared §5);
+The areas SHALL be, at least: the `zfs` block and `snapshots_required` (§2 above);
 `camera_time_and_timezone_policy.device_groups`, with `phones` and `fixed_clock_cameras` (shared §6); `filename_timestamp_format`
 (shared §7); `gpx_root` and the GPX thresholds, such as `gpx_direct_match_max_seconds`, `gpx_interpolation_max_gap_seconds` and
 `gpx_interpolation_max_distance_meters` (shared §8); the camera-time policy flags, such as `single_anchor_auto_apply` and

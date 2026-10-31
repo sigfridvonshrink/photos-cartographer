@@ -2,6 +2,15 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-10-31 — the shared contract §4, the configuration: four points ruled
+
+Proposed as intent §3, its rationale and build. Vasile, on whether any configuration edit should restale merge's plan
+too, or only a change to the folder names or the extensions: *"any edit also restale merge’s plan"* — merge already
+carried and checked the whole-file hash, untested; a test now asserts it. On the control directory, listed as a config
+area though no key sets it: *"the location is fixed - make it explicitly fixed in the corpus."* On "no setting that
+governs a run comes from outside the workspace", generalised from *"not an ambient in-code global"*: *"agree"*. On
+linking the shared rationale into the philosophy batch by batch or at the end: *"done one pass at the end"*.
+
 ## 2026-10-31 — the method tag carries the traceability into the library
 
 Asked whether the guide's *"via the traceability the multi-session reality forces"* should stay, the link to the

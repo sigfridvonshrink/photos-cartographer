@@ -51,7 +51,8 @@ the heating one"*, with the justifications *"captured and tagged, even if they a
   parses it.
 
 **Order:** the corpus scaffold and its gate; then one document at a time — the shared contract first (the others lean
-on it), then prep, merge, geotag — each proposed section by section and ruled by Vasile.
+on it), then prep, merge, geotag — each proposed section by section and ruled by Vasile; and last, one pass that gives every
+converted document's rationale its `follows_from` links into the philosophy.
 
 **Done looks like:** the four specs converted and ruled; `spec/spec-clauses.json` and its registry test retired; the
 gate green in CI; the corpus on Pages; `AGENTS.md`, `spec/README.md` and `COVERAGE.md` describing the corpus.
