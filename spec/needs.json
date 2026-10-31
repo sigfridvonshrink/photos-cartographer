@@ -1372,7 +1372,8 @@
      "external_url": null,
      "follows_from": [],
      "follows_from_back": [
-      "RAT-recoverable_core"
+      "RAT-recoverable_core",
+      "RAT-total_coverage_cascade"
      ],
      "forced": null,
      "has_dead_links": false,
@@ -4296,7 +4297,8 @@
      "external_css": "external_link",
      "external_url": null,
      "follows_from": [
-      "CHC-total_placement"
+      "CHC-total_placement",
+      "FCT-partial_track_coverage"
      ],
      "follows_from_back": [
       "RAT-coordinate_carries_its_method",

@@ -55,7 +55,7 @@ or no appetite for a plan-driven pipeline. Disagree with a choice and the script
 
 Everything below the roots is their consequence, and [the philosophy](https://github.com/sigfridvonshrink/photos-cartographer/blob/main/spec/rationale/philosophy.md) records each step as an item that names
 what it follows from: from P1, the non-destructive core; from F2 + P3, the per-(camera group, destination, day) offset,
-the format + editor split and the minimal, cascading asks; from P1 + F3, the recoverable core; from P4, the
+the format + editor split and the minimal, cascading asks; from P1 + F3, the recoverable core; from P4 + F3, the
 total-coverage cascade; from F1 + P4, the multi-session job and the durable record it forces. Each says the concrete
 mechanism it puts in the code; the graph there is drawn from the links, and the specification's build fails if a
 consequence marked forced traces back to no root. Only the seven roots are independent; everything below the first
