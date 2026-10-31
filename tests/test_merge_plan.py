@@ -337,7 +337,7 @@ def test_dry_run_rejects_stale_plan(tmp_path, monkeypatch):
     assert merge._run_locked_workflow("dry-run", str(ws)) == 2
 
 
-@pytest.mark.spec("config-folderset-ext-restale-1")
+@pytest.mark.spec("config-folderset-ext-restale-1", test="TST-merge_plan-merge_plan_records_folder_and_extension_fingerprints")
 def test_merge_plan_records_folder_and_extension_fingerprints(tmp_path, monkeypatch):
     ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     _patch_fp(monkeypatch, fp)

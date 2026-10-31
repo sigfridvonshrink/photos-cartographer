@@ -63,7 +63,7 @@ def test_invalid_external_is_a_hard_error(tmp_path, monkeypatch):
         u.default_config()
 
 
-@pytest.mark.spec("config-seeded-by-prep-1")
+@pytest.mark.spec("config-seeded-by-prep-1", test="TST-config_defaults-seed_uses_default_config")
 def test_seed_uses_default_config(tmp_path, monkeypatch):
     cfg = json.loads(json.dumps(u.DEFAULT_CONFIG)); cfg["gpx_root"] = "/seeded/from/external"
     p = tmp_path / "ext.json"; p.write_text(json.dumps(cfg))

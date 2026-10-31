@@ -248,3 +248,213 @@ always does, on the journal, the recoverable quarantine, never overwriting, and 
 
 Prep's and geotag's snapshot SHALL cover the workspace; merge's SHALL cover the library, where its changes land.
 :::
+
+## 3. One configuration, kept in the workspace
+
+:::{def} The configuration
+:id: DEF-configuration
+:status: seed
+:uses: DEF-workspace
+
+A workspace's **configuration** is the one record of the settings its runs read. It is kept in the workspace, beside
+what is processed under it, and it is an input the user authors.
+:::
+
+:::{rul} One configuration, read by every phase
+:id: RUL-one_configuration
+:status: seed
+:criticality: med
+:verify: incidental
+:aliases: config-single-shared-1
+
+All three phases SHALL read their settings from the workspace's one configuration, each the settings it needs. No phase
+SHALL keep settings of its own, and no setting that governs a run SHALL come from outside the workspace.
+:::
+
+:::{rul} Prep seeds the configuration once
+:id: RUL-config_seeded_once
+:status: seed
+:criticality: med
+:verify: required
+:aliases: config-seeded-by-prep-1
+
+A prep run that finds no configuration SHALL create one from the seed defaults. A prep run that finds one SHALL use it as
+it is.
+:::
+
+:::{rul} The workspace's configuration governs it, not the defaults
+:id: RUL-config_authoritative
+:status: seed
+:criticality: med
+:verify: required
+:aliases: config-file-authoritative-1
+:refines: RUL-config_seeded_once
+
+The seed defaults SHALL serve only to seed a new workspace. Once a workspace's configuration exists, it SHALL govern
+every run in that workspace, whatever the defaults later become.
+:::
+
+:::{rul} Who writes the configuration
+:id: RUL-config_writers
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: config-prep-sole-writer-1, config-merge-readonly-1
+
+The configuration SHALL be written only when prep seeds it, when the user edits it by hand, and by the library setup
+below. Geotag SHALL never write it. Merge's planning, dry run and execution SHALL leave it unchanged.
+:::
+
+:::{rul} The library setup records one setting
+:id: RUL-library_setup_writes_one_setting
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: config-initlib-writes-libroot-only-1
+:refines: RUL-config_writers
+
+Merge's one-time library setup, run inside a workspace and given a library, MAY record in the configuration which
+library this workspace merges into — that setting, and no other.
+:::
+
+:::{rul} The configuration is a dependency of what is made under it
+:id: RUL-config_in_dependencies
+:status: seed
+:criticality: med
+:verify: required
+:aliases: config-hashed-cascade-1
+
+The configuration SHALL be a dependency of what is derived under it, like every other artifact, so that a change to it
+never changes a run without being detected. A digest of its whole content SHALL be recorded for integrity.
+:::
+
+:::{rul} The configuration is part of the permanent record
+:id: RUL-config_archived
+:status: seed
+:criticality: med
+:verify: none
+:omit_reason: carried by the archival package's items, when §13 of the shared contract is converted
+
+The configuration SHALL be part of the archival record the workspace leaves behind.
+:::
+
+:::{rul} The configuration is never media
+:id: RUL-config_never_media
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: config-in-control-dir-skipped-1
+
+No phase SHALL treat the configuration as media: none SHALL inventory or organize it, and none SHALL fold it into what
+identifies the media.
+:::
+
+:::{rul} A change to one area restales only what depends on it
+:id: RUL-staleness_by_area
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: config-surgical-staleness-1
+
+A change to one area of the configuration SHALL make stale only what depends on that area. A change to the track
+thresholds restales placement and the plans, not the renames; a change to the filename format restales the renames,
+not placement.
+:::
+
+:::{rul} Costly results survive edits they do not depend on
+:id: RUL-costly_results_survive_unrelated_edits
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: config-edit-outside-timepolicy-1
+:refines: RUL-staleness_by_area
+
+A result that is costly to rebuild SHALL be made stale only by the areas it depends on. A configuration change outside
+the camera-time policy SHALL NOT make stale the true times already resolved.
+:::
+
+:::{rul} Any configuration change restales the plan
+:id: RUL-any_config_change_replans
+:status: seed
+:criticality: med
+:verify: required
+:aliases: config-wholehash-coarse-replan-1
+
+Any change to the configuration, in whatever area, SHALL make geotag's executable plan stale, and SHALL stop prep from
+executing a plan made before it.
+:::
+
+:::{rul} A change to the folder names or the media classes restales the plans
+:id: RUL-organization_settings_restale
+:status: seed
+:criticality: med
+:verify: required
+:aliases: config-folderset-ext-restale-1
+:refines: RUL-staleness_by_area
+
+A change to the managed folders' names, or to which extensions are which class of media, SHALL make stale geotag's
+executable plan and merge's plan.
+:::
+
+:::{def} What the configuration sets
+:id: DEF-config_areas
+:status: seed
+:uses: DEF-configuration
+
+The configuration sets, at least: the snapshot policy; which camera groups are phones and which have fixed clocks; the
+filename timestamp format; where the tracks are and the thresholds for matching photos to them; the camera-time policy;
+the library and how merge places files in it; the managed folders' names; and which extensions are which class of
+media. Each area's detail is in the items of its own section.
+:::
+
+:::{rul} The user names the folders; their roles are fixed
+:id: RUL-folder_names_not_roles
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: config-folder-roles-not-config-1
+
+The configuration SHALL set the managed folders' names. Their roles, and the structure they form, SHALL NOT be
+configurable, and every phase SHALL find a managed folder by its role, never by its name.
+:::
+
+:::{rul} The user classifies camera groups; how they are derived is fixed
+:id: RUL-camera_classes_not_derivation
+:status: seed
+:criticality: med
+:anti: yes
+:verify: none
+:omit_reason: no test asserts it (backlog item 3)
+:aliases: config-camerakey-version-not-config-1
+
+The configuration SHALL say which camera groups are phones and which have fixed clocks — the only part of camera
+grouping it sets. How a camera group is derived, and the version of that derivation, SHALL NOT be configurable.
+:::
+
+:::{rul} Each extension is one class of media
+:id: RUL-extension_one_class
+:status: seed
+:criticality: med
+:verify: required
+:aliases: config-ext-one-class-1
+
+The configuration SHALL list which extensions are images, raw files and videos. The classes themselves SHALL NOT be
+configurable; an extension not listed SHALL be `other`; and an extension SHALL be in exactly one class.
+:::
+
+:::{rul} Every value the user supplies is checked before use
+:id: RUL-config_validated_before_use
+:status: seed
+:criticality: med
+:verify: required
+:aliases: config-values-validated-1
+
+Every value of the configuration that comes from the user SHALL be validated before it is used (§14 of the shared
+contract), as part of reading the configuration — never as a separate, optional pass.
+:::

@@ -64,3 +64,87 @@ block not configured, it proceeds without one.
 The three phases SHALL take their snapshots through one mechanism — prep §14.3, geotag §29 and merge §10.3 invoke it,
 and none redefines it.
 :::
+
+## 3. One configuration, kept in the workspace
+
+:::{bld} The configuration is `photos-00-config.json`, in the control directory
+:id: BLD-config_file
+:status: seed
+:realises: DEF-configuration, RUL-one_configuration, RUL-config_never_media
+
+The configuration SHALL be the JSON file `photos-00-config.json` in the workspace's control directory, `.photos-ingest/`,
+which prep skips wholesale (§5 of the shared contract) — never an in-code global.
+:::
+
+:::{bld} Prep seeds from a template a deployment may replace
+:id: BLD-config_seed_template
+:status: seed
+:realises: RUL-config_seeded_once, RUL-config_authoritative
+
+Prep SHALL seed the configuration from a default template. A deployment MAY supply its own seed defaults; how it does
+so is the deployment's concern, not the specification's.
+:::
+
+:::{bld} `init-library` may write `library_root`
+:id: BLD-init_library_writes_library_root
+:status: seed
+:realises: RUL-library_setup_writes_one_setting
+
+The setup command `init-library` (merge §4), run inside a workspace with an explicit library path, MAY write the
+`library_root` key into the configuration, and only that key. It is not part of merge's data path.
+:::
+
+:::{bld} Field-scoped fingerprints, and one whole-file SHA-256
+:id: BLD-config_fingerprints
+:status: seed
+:realises: RUL-staleness_by_area, RUL-config_in_dependencies, RUL-organization_settings_restale
+
+Two things SHALL be derived from the configuration: field-scoped fingerprints — the filename format, the camera-time and
+timezone policy, the GPX thresholds, the camera-group-key version, the snapshot policy, the folder-name set, the
+media-extension lists, and others — which drive staleness; and one SHA-256 of the whole file, for integrity and
+provenance, recorded in the archival manifest. The folder-set and media-extension fingerprints SHALL be among the
+dependencies of geotag's executable plan and of merge's plan.
+:::
+
+:::{bld} The whole-file hash is in the executable plan's dependencies
+:id: BLD-whole_hash_in_the_plan
+:status: seed
+:realises: RUL-any_config_change_replans, RUL-costly_results_survive_unrelated_edits
+
+The whole-file fingerprint SHALL be carried in the executable plan's `depends_on` (geotag §28, in the flattened
+dependency set of geotag §5). The costly caches SHALL be keyed on their own areas instead: resolved UTC on the
+time-policy subset (geotag §22.1), the renames on the filename-format fingerprint.
+:::
+
+:::{bld} Prep guards execution with the whole-file hash
+:id: BLD-prep_guards_with_the_whole_hash
+:status: seed
+:realises: RUL-any_config_change_replans
+
+Prep SHALL re-plan from the filesystem each run and guard execution with the whole-file hash; it SHALL keep no folder
+or extension fingerprint of its own.
+:::
+
+:::{bld} The configuration's keys
+:id: BLD-config_keys
+:status: seed
+:realises: DEF-config_areas, RUL-folder_names_not_roles, RUL-camera_classes_not_derivation, RUL-extension_one_class
+
+The areas SHALL be, at least: the `zfs` block and `snapshots_required` (§2 above); the control directory (shared §5);
+`camera_time_and_timezone_policy.device_groups`, with `phones` and `fixed_clock_cameras` (shared §6); `filename_timestamp_format`
+(shared §7); `gpx_root` and the GPX thresholds, such as `gpx_direct_match_max_seconds`, `gpx_interpolation_max_gap_seconds` and
+`gpx_interpolation_max_distance_meters` (shared §8); the camera-time policy flags, such as `single_anchor_auto_apply` and
+`multi_anchor_auto_apply` (geotag); `library_root` and merge's collision and placement policy (merge; shared §13.5); `folders`,
+a role→name map of the numbered managed folders `0-sources`…`6-photos-by-dest` (shared §5, prep §3), whose code finds each
+folder by its role; and `media_extensions`, mapping `image`, `raw` and `video` to lists of canonical extensions —
+lowercase, no leading dot (prep §6.1). `CAMERA_GROUP_KEY_VERSION` SHALL be a code constant, never a configuration field.
+:::
+
+:::{bld} What validating the configuration checks
+:id: BLD-config_values_checked
+:status: seed
+:realises: RUL-config_validated_before_use
+
+Validating the configuration SHALL check, among others, that a path resolves sanely, that a ZFS snapshot prefix is a
+syntactically valid snapshot component, and that an IANA timezone is a real zone.
+:::

@@ -33,7 +33,7 @@ def test_default_folders_are_the_0_6_names():
     }
 
 
-@pytest.mark.spec("config-folder-roles-not-config-1")
+@pytest.mark.spec("config-folder-roles-not-config-1", test="TST-folders-accessors_round_trip")
 def test_accessors_round_trip():
     assert utils.folder_name("photos_by_dest") == "6-photos-by-dest"
     assert utils.folder_role("6-photos-by-dest") == "photos_by_dest"

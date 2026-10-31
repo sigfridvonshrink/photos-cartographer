@@ -60,7 +60,7 @@ def _mock(monkeypatch):
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", meta)
 
 
-@pytest.mark.spec("config-in-control-dir-skipped-1", "ctrl-all-in-photos-ingest-1", "plan-canonical-path-1")
+@pytest.mark.spec("config-in-control-dir-skipped-1", "ctrl-all-in-photos-ingest-1", "plan-canonical-path-1", test="TST-control_dir-control_files_land_under_control_dir")
 def test_control_files_land_under_control_dir(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
