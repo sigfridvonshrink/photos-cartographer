@@ -327,13 +327,17 @@ manual.
 :id: RAT-coordinate_carries_its_method
 :status: seed
 :forced: yes
-:follows_from: RAT-total_coverage_cascade, RAT-consolidated_log
+:follows_from: RAT-total_coverage_cascade
 
 Completeness means precision now *varies* across the library — so each placement must declare how trustworthy it is
 (via the **traceability** the multi-session reality forces — see below).
 
 **Every coordinate carries its derivation method** — native / GPX direct-match / interpolated / extrapolated / manual
 — so a rough pin is never mistaken for a precise one.
+
+*Why it is kept:* "I still want to be able to know, at a later date, how that GPS position was assigned - maybe I want
+to refine it by image/place recognition for example." A new track needs no tag: it changes the GPX folder, which makes
+the GPS decisions stale, and they are regenerated.
 :::
 
 ### From F1 + P4 — total coverage at scale becomes a multi-session job

@@ -2,6 +2,16 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-10-31 — the per-coordinate method tag: kept for later refinement
+
+Proposed: the tag lets a re-run with a newly found track replace a rough pin only by a more precise one, so it follows
+from the recoverable core; and a rule for it, for the gap audit. Vasile: *"yes, you get it, but I think the stale gpx
+point makes it not needed, at least not for that reason. However, I still want to be able to know, at a later date, how
+that GPS position was assigned - maybe I want to refine it by image/place recognition for example."* On the rule:
+*"I don't think that is a gap. The algorithm should do it by its own, and you are right that stale gpx will
+regenerate positions"*. The tag now follows from the total-coverage cascade alone, the link to the consolidated log
+dropped, and Vasile's reason is in its text; no rule, no audit item.
+
 ## 2026-10-31 — the philosophy's links: two ruled, one reopened
 
 On the per-(camera group, destination, day) offset following from clock drift alone: *"1 ok"*. On the total-coverage
