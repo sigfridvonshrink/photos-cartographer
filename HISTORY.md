@@ -2,6 +2,27 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-10-31 — the philosophy in the corpus; the remaining kinds and the gates ruled
+
+Vasile, on the proposals (ASM, EXM, non-goals as anti rules, summaries in the ledger only, `choice_kind`, `forced`,
+`follows_from`, the F/P numbers as aliases, the direction and root gates, `needflow`, the corpus owning the tables):
+*"All yes"*. Built:
+- **`rationale/philosophy.md`**: 3 `FCT`, 4 `CHC`, and 33 rationale items — each table row of the guide's entailment
+  one item, under a node for each consequence the guide's diagram names (non-destructive core, recoverable core,
+  format + editor split, minimal cascading asks, total-coverage cascade, multi-session job, durable record), whose
+  text is that node's mechanism list or the section's own introduction. The links follow the diagram's edges. Three
+  links are readings, for Vasile to confirm: the per-(camera group, destination, day) offset follows from F2 alone (the
+  diagram routes no edge to it); the total-coverage cascade from P4 alone, as drawn, though its text says it *"fights
+  F3"*; the per-coordinate method tag also from the consolidated log, which its text names. Linux and open-source are
+  one item, as the guide's note is one.
+- **The guide** keeps its framing, the test of fit and *"Using this document"*, names the roots by id, and points to
+  the corpus for the rest; both diagrams are gone from it, the corpus's `needflow` drawing the graph from the links.
+- **The ledger** reads a frozen copy of the guide (`spec/conversion/sources/`), not a commit: CI checks out shallow,
+  and a squash merge would lose the commit. The same will serve each old spec once it is converted and removed.
+- **The gates** were proved by breaking the corpus: an intent item naming a build item, a rule naming a rationale, a
+  rule with `follows_from`, a fact nothing follows from, and a forced rationale whose chain loops without a root each
+  failed the build.
+
 ## 2026-10-31 — the granularity ruled; the philosophy to enter the corpus as facts and choices
 
 On the granularity — one item per obligation a test can pass or fail on its own, a refinement or an exception its
