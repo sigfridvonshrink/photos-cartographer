@@ -125,7 +125,7 @@ def test_guard_written_last_then_reentry_is_clean(tmp_path, monkeypatch):
 
 # --- root-file block (initialized) -------------------------------------------
 
-@pytest.mark.spec("prep-root-entry-blocks-1", "struct-base-folders-only-1")
+@pytest.mark.spec("prep-root-entry-blocks-1", "struct-base-folders-only-1", test="TST-lifecycle-loose_root_file_blocks_initialized")
 def test_loose_root_file_blocks_initialized(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _initialized(tmp_path)

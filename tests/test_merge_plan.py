@@ -304,7 +304,7 @@ def test_plan_is_deterministic(tmp_path, monkeypatch):
     assert _plan_of(ws)["plan_id"] == first
 
 
-@pytest.mark.spec("dryrun-summary-not-dump-1", "merge-dryrun-summarizes-real-plan-1")
+@pytest.mark.spec("dryrun-summary-not-dump-1", "merge-dryrun-summarizes-real-plan-1", test="TST-merge_plan-dry_run_summarizes_validated_plan")
 def test_dry_run_summarizes_validated_plan(tmp_path, monkeypatch, capsys):
     ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     _patch_fp(monkeypatch, fp)

@@ -193,7 +193,7 @@ def _dump_dotfile_ops(plan):
                   if op.type == "quarantine_move" and op.verification.get("kind") == "dump_dotfile")
 
 
-@pytest.mark.spec("ctrl-dotfiles-swept-quarantine-1", "prep-hidden-dump-sweep-1", "prep-no-sweep-non-dump-dotfiles-1")
+@pytest.mark.spec("ctrl-dotfiles-swept-quarantine-1", "prep-hidden-dump-sweep-1", "prep-no-sweep-non-dump-dotfiles-1", test="TST-guards_quarantine-0sources_dotfiles_quarantined")
 def test_0sources_dotfiles_quarantined(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)

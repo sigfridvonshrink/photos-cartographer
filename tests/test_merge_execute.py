@@ -549,7 +549,7 @@ def test_merge_journal_writes_only_from_the_main_thread(tmp_path, monkeypatch):
     assert all(t == "MainThread" for t in journal_threads), journal_threads
 
 
-@pytest.mark.spec("plan-missing-stops-1")
+@pytest.mark.spec("plan-missing-stops-1", test="TST-merge_execute-execute_without_plan_errors")
 def test_execute_without_plan_errors(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     assert merge._run_locked_workflow("execute", str(ws)) == 2     # no photos-30

@@ -114,3 +114,94 @@ the photo and video bands — are pipeline logic, so the user sets the names and
 The version of the camera-group derivation takes part in the dependency fingerprints, so a change to the derivation is
 detectable; it versions the code that computes the key, so only the code can set it.
 :::
+
+## 4. The control records, apart from the media
+
+:::{rat} One skipped place instead of a list of names
+:id: RAT-one_skipped_place
+:status: seed
+:justifies: RUL-control_records_together, RUL-control_records_never_media
+
+Skipping the control directory wholesale means a control or artifact file can never be mistaken for a photo. There is
+no per-file "ignore list" to maintain — consolidating everything in one skipped directory replaces the basename
+registry that earlier designs needed.
+:::
+
+:::{rat} A dump leaves no hidden litter
+:id: RAT-no_hidden_litter
+:status: seed
+:justifies: RUL-dump_hidden_files_quarantined
+
+Hidden dotfiles are swept to the recoverable quarantine, not merely skipped, so a dump leaves no hidden litter.
+:::
+
+:::{rat} The plan is reviewed where it lies
+:id: RAT-plan_reviewed_where_it_lies
+:status: seed
+:justifies: RUL-planning_names_its_plan, RUL-dry_run_summarises_the_real_plan
+
+The planning command prints the path it saved to so the operator can review the artifact without hunting for it. And
+because the full plan is a persisted artifact, the dry run summarizes the on-disk plan instead of printing all of it —
+still not a simulation.
+:::
+
+:::{rat} A superseded plan stays recoverable; an unchanged one adds nothing
+:id: RAT-superseded_plans_recoverable
+:status: seed
+:justifies: RUL-replanning_keeps_the_prior, RUL-unchanged_replan_writes_nothing
+
+Setting the prior artifact aside keeps a superseded plan and any authored decisions recoverable; writing nothing on an
+unchanged re-run means the iterative decision-editing loop does not accumulate redundant backups.
+:::
+
+:::{rat} The handoff is invisible to the scan, yet verified
+:id: RAT-handoff_by_content
+:status: seed
+:justifies: RUL-handoff_verified_by_content, RUL-run_only_refresh_restales_nothing
+
+Living in the skipped directory is independent of the handoff's role as a dependency: it is invisible to prep's media
+scan yet fully verified as a dependency by geotag — verified by content, not by exact bytes, so a run-only refresh of
+it does not restale downstream.
+:::
+
+:::{rat} Every phase relies on the shape when it scans
+:id: RAT-phases_rely_on_the_shape
+:status: seed
+:justifies: INV-undisturbed_shape, RUL-shape_checked_first
+
+The structural facts are shared by every phase because each relies on them when it scans, and a violation of any one
+means the workspace was disturbed out-of-band. The guards compose with — but are distinct from — input validation, which
+checks *authored values*, and the dependency cascade, which checks *change*: these check the *shape of the workspace
+itself*.
+:::
+
+:::{rat} A followed link escapes the managed tree
+:id: RAT-a_link_escapes_the_tree
+:status: seed
+:justifies: RUL-no_links
+
+Following a symbolic link would let a planned read or write reach a target **outside** the managed tree — a pipeline
+escape that breaks the no-clobber and "originals never lost" guarantees and the closed-world assumption the content
+fingerprint and de-duplication rest on.
+:::
+
+:::{rat} Prep is the gatekeeper for links under the destination tree
+:id: RAT-prep_gatekeeps_links
+:status: seed
+:justifies: RUL-who_checks_for_links
+
+The destination tree is read-only for prep yet still scanned by it, so prep is also the gatekeeper for links that
+appear there; and the mandatory re-prep after any change to it means geotag and merge only ever consume a handoff prep
+built with no forbidden link present.
+:::
+
+:::{rat} A rebuilt structure could mask a loss
+:id: RAT-rebuild_masks_loss
+:status: seed
+:justifies: RUL-missing_folder_blocks, RUL-structure_built_once
+
+Since prep creates the structure once and never removes a folder, a missing one is evidence the structure was deleted
+or moved out-of-band — not a state any phase produces. Silently rebuilding it could mask a real loss: a deleted folder
+may have taken organized media with it. Recovering lost media — from an optional pre-mutation snapshot, say — is the
+operator's task.
+:::
