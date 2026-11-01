@@ -550,17 +550,25 @@ class GeotagWorkflow:
                 g = groups.get(group) or {}
                 if g.get("camera_group_class") != "camera":
                     continue                       # smartphones are solved per-file; no offset cell
-                gframes = [f for f in by_dest[dest] if f["camera_group_key"] == group and not f.get("geotag_marker")]
-                if not gframes:
-                    continue                       # every time here is corrected already: no offset to ask
+                # Days are counted over every photo of the group here, corrected ones too, so a bucket keeps
+                # its key as photos arrive; only the photos not yet corrected are asked about or offset.
+                gframes = [f for f in by_dest[dest] if f["camera_group_key"] == group]
                 dates = sorted({d for f in gframes if (d := _naive_date(f.get("source_naive_time")))})
                 for date in (dates if len(dates) > 1 else [None]):
-                    sel = gframes if date is None else [f for f in gframes if _naive_date(f.get("source_naive_time")) == date]
-                    anchor_frames = [f for f in sel if f.get("has_native_gps") and not f.get("geotag_marker")]
+                    sel = [f for f in gframes if not f.get("geotag_marker")
+                           and (date is None or _naive_date(f.get("source_naive_time")) == date)]
+                    bucket = group if date is None else f"{group}@{date}"
+                    prior_cell = prior_cells.get(bucket) or {}
+                    if not sel:
+                        # every time in this bucket is corrected already: nothing to ask, but a resolved
+                        # answer is kept for photos of the same camera and day that arrive later
+                        if prior_cell.get("effective_time_anchor"):
+                            cells[bucket] = prior_cell
+                        continue
+                    anchor_frames = [f for f in sel if f.get("has_native_gps")]
                     rep_naive = min((f.get("source_naive_time") for f in sel
                                      if _parse_camera_naive(f.get("source_naive_time"))), default=None)
-                    bucket = group if date is None else f"{group}@{date}"
-                    cells[bucket] = self._offset_cell(dest, group, g, prior_cells.get(bucket) or {},
+                    cells[bucket] = self._offset_cell(dest, group, g, prior_cell,
                                                       anchor_frames, gpx, blockers, tz=tz, rep_naive=rep_naive, date=date)
             destinations[dest] = {
                 "destination_path": dest,
@@ -698,6 +706,13 @@ class GeotagWorkflow:
                (n == 1 and policy.get("single_anchor_auto_apply", False)):
                 effective = {"offset_seconds": proposal["proposed_offset_seconds"], "source": "gpx_anchor_auto"}
                 decision_mode = "auto_resolved"
+        if effective == "" and not stale and manual_off in ("", None) and not manual_utc and not accept:
+            # An offset found from the camera's own GPS stays this camera's offset for the day when the
+            # photos that gave it are corrected and later ones bring no anchor. A user's answer needs
+            # no such keeping: it is preserved as their decision, and withdrawing it takes effect.
+            earlier = prior_cell.get("effective_time_anchor")
+            if isinstance(earlier, dict) and earlier.get("source") == "gpx_anchor_auto":
+                effective, decision_mode = earlier, "kept_from_earlier"
 
         cell = {
             "camera_group": key,
@@ -786,6 +801,11 @@ class GeotagWorkflow:
                 group, date = cell.get("camera_group"), cell.get("date")
                 frames = [f for f in by_dest_group.get((dest, group), [])
                           if date is None or _naive_date(f.get("source_naive_time")) == date]
+                if not frames:
+                    # every photo here is corrected already: keep the confirmation for later arrivals
+                    if (prior_cells.get(bucket) or {}).get("effective_drift_offset"):
+                        cells[bucket] = prior_cells[bucket]
+                    continue
                 if any(f.get("has_native_gps") and match_frame_to_gpx(f, gpx, cfg) for f in frames):
                     continue                                  # has a native-GPS anchor -> reliably placeable
                 times = [t for f in frames if (t := _parse_utc(resolved_by_path.get(f["relative_path"])))]
