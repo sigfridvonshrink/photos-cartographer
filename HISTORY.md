@@ -2,6 +2,14 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-01 — a camera's offset for a day is kept for later photos
+
+Once every photo of a camera on a day was corrected, its offset question went away, and photos of that camera and day
+arriving later were asked it again. Vasile: *"earlier answer kept, because if the same camera same day then its offset
+is obviously the same."* The bucket keeps its resolved decision and its drift confirmation through runs where it has
+nothing to correct; an offset found from the camera's own GPS stays when later photos bring no anchor; a bucket's days
+are counted over all the camera's photos there, so its key holds.
+
 ## 2026-11-01 — geotag's marker: a corrected time is never corrected twice
 
 The contract said geotag recognises its own GPS "via the `GPSProcessingMethod` marker"; the code did not read the

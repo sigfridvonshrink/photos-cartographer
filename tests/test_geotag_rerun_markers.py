@@ -175,19 +175,18 @@ def test_manual_offset_is_not_applied_twice(tmp_path, monkeypatch):
     _plan(monkeypatch, ws)
     assert _ops(ws) == {}                                    # time, fix and name all held already
     t = json.loads((ws / ".photos-ingest" / cal.TIME_DECISIONS_ARTIFACT).read_text())
-    assert t["destinations"][T]["camera_group_time_decisions"] == {}   # no offset left to ask
+    cell = t["destinations"][T]["camera_group_time_decisions"][CAM]          # nothing asked, answer kept
+    assert cell["effective_time_anchor"]["offset_seconds"] == SLOW and not cell["requires_user_input"]
 
 
-@pytest.mark.spec("geotag-marker-time-corrected-1", "RUL-geotag_rerun_keeps_settled", test="TST-geotag_rerun_markers-new_photo_joins_corrected_ones")
+@pytest.mark.spec("geotag-marker-time-corrected-1", "geotag-offset-kept-1", "RUL-geotag_rerun_keeps_settled", test="TST-geotag_rerun_markers-new_photo_joins_corrected_ones")
 def test_new_photo_joins_corrected_ones(tmp_path, monkeypatch):
-    """The offset is asked for and applied to the new, uncorrected photo alone."""
+    """Same camera, same day: the earlier answer — offset and drift confirmation — is kept through a
+    run where every photo was already corrected, and applied to the new photo alone."""
     ws = _first_round(tmp_path, monkeypatch)
+    _plan(monkeypatch, ws)                                   # every photo corrected: nothing asked
     ho = json.loads((ws / ".photos-ingest" / "photos-11-handoff.json").read_text())
     _write_handoff(ws, ho["files"] + [_rec(ws, f"{T}/c.arw", "2024:07:03 14:50:00")])
-    _plan(monkeypatch, ws)
-    _set_offset(ws, SLOW)
-    _plan(monkeypatch, ws)
-    _confirm_drift(ws, SLOW)
     _plan(monkeypatch, ws)
     ops = _ops(ws)
     assert list(ops) == [f"{T}/c.arw"]
@@ -225,6 +224,22 @@ def test_own_gps_camera_is_marked_time_only(tmp_path, monkeypatch):
     _executed_and_reprepped(ws)
     _plan(monkeypatch, ws)
     assert _ops(ws) == {}
+
+
+@pytest.mark.spec("geotag-offset-kept-1", test="TST-geotag_rerun_markers-gps_derived_offset_is_kept_for_later_photos")
+def test_gps_derived_offset_is_kept_for_later_photos(tmp_path, monkeypatch):
+    """An offset found from the camera's own GPS stays the camera's offset for the day once those
+    photos are corrected, so a later photo without GPS needs no answer."""
+    ws = _ws(tmp_path, [lambda ws: _rec(ws, f"{T}/a.arw", "2024:07:03 13:50:00", gps=(50.0, 4.0)),
+                        lambda ws: _rec(ws, f"{T}/b.arw", "2024:07:03 14:40:00", gps=(50.005, 4.0))])
+    _plan(monkeypatch, ws)
+    _executed_and_reprepped(ws)
+    ho = json.loads((ws / ".photos-ingest" / "photos-11-handoff.json").read_text())
+    _write_handoff(ws, ho["files"] + [_rec(ws, f"{T}/c.arw", "2024:07:03 14:50:00")])
+    _plan(monkeypatch, ws)
+    ops = _ops(ws)
+    assert list(ops) == [f"{T}/c.arw"]
+    assert ops[f"{T}/c.arw"]["writes"]["DateTimeOriginal"] == "2024:07:03 15:00:00"
 
 
 @pytest.mark.spec("geotag-device-marker-native-1", test="TST-geotag_rerun_markers-a_devices_own_marker_is_native")

@@ -1668,6 +1668,20 @@
       "test": "tests/test_geotag_rerun_markers.py::test_manual_offset_is_not_applied_twice"
     },
     {
+      "id": "geotag-offset-kept-1",
+      "area": "geotag",
+      "criticality": "high",
+      "anti": false,
+      "title": "A camera's resolved offset for a day is kept for photos arriving later: an all-corrected bucket keeps its decision and drift confirmation, a GPS-derived offset stays when later photos bring no anchor",
+      "spec": {
+        "file": "photos-2-geotag-workflow.md",
+        "section": "28.2"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_rerun_markers.py::test_gps_derived_offset_is_kept_for_later_photos"
+    },
+    {
       "id": "geotag-prestate-before-write-1",
       "area": "geotag",
       "criticality": "high",
