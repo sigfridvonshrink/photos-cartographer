@@ -296,7 +296,7 @@ def _e2e_ws(tmp_path):
     cfg["gpx_root"] = str(gpx)
     cfg["camera_time_and_timezone_policy"] = dict(
         cfg["camera_time_and_timezone_policy"], device_groups={"fixed_clock_cameras": [CAM], "phones": []},
-        default_folder_timezone="Europe/Brussels", write_corrected_filename_times=False)
+        default_folder_timezone="Europe/Brussels")
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
 
     def rec(rel, dto):

@@ -120,9 +120,6 @@ CONFIG = {
         "phone_gpx_conflict_threshold_seconds": 300,
         "dst_conflict_tolerance_seconds": 120,
         "phone_gpx_max_distance_meters": 250,
-        "write_corrected_metadata_times": True,
-        "write_corrected_offset_tags": True,
-        "write_corrected_filename_times": True,
         "manual_segment_template_count": 2
     },
     "filename_timestamp_format": "%Y-%m-%d--%H-%M-%S",
@@ -976,9 +973,7 @@ def validate_config(cfg: dict, workspace_root: str = None):
     if pol is not None:
         if not isinstance(pol, dict):
             raise ValueError("config: camera_time_and_timezone_policy must be an object.")
-        for bk in ("single_anchor_auto_apply", "multi_anchor_auto_apply",
-                   "write_corrected_metadata_times", "write_corrected_offset_tags",
-                   "write_corrected_filename_times"):
+        for bk in ("single_anchor_auto_apply", "multi_anchor_auto_apply"):
             if bk in pol:
                 _check_bool(f"camera_time_and_timezone_policy.{bk}", pol[bk])
         for nk in ("phone_gpx_agreement_tolerance_seconds", "phone_gpx_conflict_threshold_seconds",

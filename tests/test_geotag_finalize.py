@@ -126,8 +126,7 @@ def _ready_ws(tmp_path, monkeypatch):
     cfg["gpx_root"] = str(gpx)
     cfg["camera_time_and_timezone_policy"] = dict(
         cfg["camera_time_and_timezone_policy"], device_groups={"fixed_clock_cameras": [CAM], "phones": []},
-        default_folder_timezone="Europe/Brussels", multi_anchor_auto_apply=True,
-        write_corrected_filename_times=False)
+        default_folder_timezone="Europe/Brussels", multi_anchor_auto_apply=True)
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
     # a prep log to carry forward
     (ctl / "photos-15-prep-log.json").write_text(json.dumps({"schema_version": 1, "tool": "photos-1-prep",

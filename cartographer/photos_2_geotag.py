@@ -1103,7 +1103,7 @@ class GeotagWorkflow:
                 cat, coord = classify_gps(f, _parse_utc(ru) if ru else None, gpx, cfg,
                                           eff_fb, reviews.get(rel))
                 cat_by_rel[rel] = (cat, dest, f)
-                fops = plan_file_ops(f, ru, tz, cat, coord, renames.get(rel), cfg)
+                fops = plan_file_ops(f, ru, tz, cat, coord, renames.get(rel))
                 if fops:
                     ops.extend(fops)
                 else:
