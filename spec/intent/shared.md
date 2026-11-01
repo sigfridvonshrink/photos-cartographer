@@ -741,3 +741,159 @@ An empty inbox SHALL be normal — the steady state, not a missing folder.
 Each phase SHALL check the workspace's shape at its start — right after the lock and the seal check, before it scans,
 plans or changes anything.
 :::
+
+## 5. Camera groups, derived once
+
+:::{def} A camera group
+:id: DEF-camera_group
+:status: seed
+
+A **camera group** is the photos one camera or device took, identified by a key derived from the device-identity
+metadata the files carry.
+:::
+
+:::{rul} Prep derives the camera group
+:id: RUL-prep_derives_camera_group
+:status: seed
+:criticality: med
+:verify: required
+:aliases: camera-prep-computes-key-1
+:uses: DEF-camera_group
+
+Prep SHALL derive each file's camera group from its device-identity metadata, and record it both in what it hands
+geotag and in its own records.
+:::
+
+:::{rul} Geotag reuses prep's camera group
+:id: RUL-geotag_reuses_camera_group
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: camera-geotag-reuses-1
+:refines: RUL-prep_derives_camera_group
+
+Geotag SHALL use the camera group prep derived, and SHALL NOT derive a file's identity again.
+:::
+
+:::{rul} The derivation carries a version
+:id: RUL-camera_group_derivation_versioned
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: camera-version-detectable-1
+:refines: RUL-prep_derives_camera_group
+
+How camera groups are derived SHALL carry a version, which SHALL take part in the checks of freshness and of
+dependencies, so that a change to the derivation is detected and old and new groups are never silently mixed.
+:::
+
+:::{rul} A camera group is known once it is classified
+:id: RUL-known_when_classified
+:status: seed
+:criticality: low
+:verify: required
+:aliases: camera-known-when-classified-1
+:uses: RUL-camera_classes_not_derivation
+
+A camera group SHALL be known when the configuration classes it as a phone or as a camera with a fixed clock, and
+unknown otherwise.
+:::
+
+## 6. One filename format
+
+:::{def} A timestamp name
+:id: DEF-timestamp_name
+:status: seed
+:uses: DEF-prep, DEF-geotag
+
+A file's **timestamp name** is the name prep and geotag give it from its timestamp, in the one format the configuration
+sets, followed by a differentiating suffix when that name is taken.
+:::
+
+:::{rul} One format, set by the configuration
+:id: RUL-one_filename_format
+:status: seed
+:criticality: med
+:verify: incidental
+:aliases: fname-single-shared-key-1
+:uses: DEF-timestamp_name
+
+Prep and geotag SHALL name files from a timestamp in one format for the whole pipeline, not one for each phase, set by
+the configuration; neither SHALL hard-code it.
+:::
+
+:::{rul} A taken name gets a suffix, never clobbering
+:id: RUL-suffix_no_clobber
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: fname-suffix-noclobber-1
+
+A file whose timestamp name is already taken SHALL get a zero-padded differentiating suffix, allocated deterministically
+and without clobbering: against every name on disk and every name planned in the run, compared without regard to case,
+so that two files never collide.
+:::
+
+:::{rul} Which free name each phase takes
+:id: RUL-suffix_choice_by_phase
+:status: seed
+:criticality: med
+:verify: required
+:aliases: fname-allocation-per-phase-1
+:refines: RUL-suffix_no_clobber
+
+Prep and geotag SHALL take the first free name — the name with no suffix when it is free, otherwise the lowest free
+suffix — by one identical rule. Merge SHALL take the suffix above the highest already used for that name, never a lower
+one that has come free.
+:::
+
+:::{rul} Prep's name is provisional
+:id: RUL-prep_name_provisional
+:status: seed
+:criticality: med
+:verify: incidental
+:aliases: fname-prep-provisional-1
+
+Prep SHALL derive a file's name from its raw timestamp, as the camera recorded it, for organizing and ordering only.
+The name SHALL be provisional: prep SHALL NOT correct it, resolve its timezone or convert it to UTC.
+:::
+
+:::{rul} Geotag's name is final
+:id: RUL-geotag_name_final
+:status: seed
+:criticality: med
+:verify: required
+:aliases: fname-geotag-final-1
+
+Geotag SHALL recompute a file's name from its corrected local time at the destination — its resolved true time, in the
+destination's civil timezone — and rename it to that final name.
+:::
+
+:::{rul} An uncorrected file keeps its name
+:id: RUL-uncorrected_keeps_its_name
+:status: seed
+:criticality: med
+:verify: required
+:aliases: fname-uncorrected-no-rename-1
+:uses: RUL-prep_name_provisional, RUL-geotag_name_final
+
+A file's name SHALL change between prep and geotag only when its timestamp is corrected. Geotag SHALL plan no rename for
+a file whose time is not corrected.
+:::
+
+:::{rul} A name off the format is an ordinary dump
+:id: RUL-nonconforming_name_is_a_dump
+:status: seed
+:criticality: med
+:anti: yes
+:verify: none
+:omit_reason: no test asserts it (backlog item 3)
+:aliases: fname-nonconforming-redumped-1
+
+A file in the workspace whose name does not follow the format SHALL be treated as any other dump — taken in and named
+by the pipeline — never specially migrated or matched against patterns. No phase SHALL read meaning from a file's name:
+its timestamp SHALL come from its metadata.
+:::

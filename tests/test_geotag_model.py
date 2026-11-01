@@ -182,7 +182,7 @@ def test_camera_group_classification(tmp_path, monkeypatch):
     assert unknown == ["CANON|R5|999"]
 
 
-@pytest.mark.spec("camera-geotag-reuses-1")
+@pytest.mark.spec("camera-geotag-reuses-1", test="TST-geotag_model-geotag_reuses_handoff_camera_group_key_never_recomputes")
 def test_geotag_reuses_handoff_camera_group_key_never_recomputes(tmp_path):
     """Shared §6: geotag reuses prep's camera_group_key from the handoff and never recomputes camera
     identity. The handoff carries a SENTINEL group key that the identity fields (Make/Model/serial)
