@@ -1820,7 +1820,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "Each log SHALL be pretty-printed JSON with sorted keys, its `photos` keyed by the content fingerprint (`content_fingerprint`),\neach entry carrying `final_path` and a `journey` of steps, each step naming its `phase` and `action`, a move or rename\nits `from` and `to` — the first step's `from` being the photo's path in the dump — and, where a decision caused it, a\n`because` naming the decision exactly: a clock offset its `photos-21` cell, with its day where the camera's photos\nthere span days (`camera_group_time_decisions.<group>@<date>`), or the `photos-22` drift confirmation whose validated\noffset replaced it; a timezone its destination's cell; a manual position the photo's pin among `photos-23`'s review\nitems or the destination's folder fallback, with the destination it was accepted from. Geotag's steps SHALL be\n`clock_offset_applied` (its `offset_seconds` with an `offset_description` in words, such as \"camera clock 1 h 55 min\nahead of UTC\"), `resolved_utc`, `timezone_resolved`, `time_written`, `gps_written` (with its origin, method and,\nfor a manual position, the pinned pre-state), `gps_reverted`, `gps_preserved` and `final_rename`, each naming its `run`;\nfinalize SHALL take them from every executed pass — each superseded `photos-24` whose journal shows it ran, oldest\nfirst, matched by fingerprint — before the current plan's, from the provenance each time write carries (geotag §31). Each run's journal SHALL be kept as\nits own `journal-<run>.json`; prep marks its log partial and warns when its history cannot rebuild a journey (prep\n§16.1).",
+     "content": "Each log SHALL be pretty-printed JSON with sorted keys, its `photos` keyed by the content fingerprint (`content_fingerprint`),\neach entry carrying `final_path` and a `journey` of steps, each step naming its `phase` and `action`, a move or rename\nits `from` and `to` — the first step's `from` being the photo's path in the dump — and, where a decision caused it, a\n`because` naming the decision exactly: a clock offset its `photos-21` cell, with its day where the camera's photos\nthere span days (`camera_group_time_decisions.<group>@<date>`), or the `photos-22` drift confirmation whose validated\noffset replaced it; a timezone its destination's cell; a manual position the photo's pin among `photos-23`'s review\nitems or the destination's folder fallback, with the destination it was accepted from. Geotag's steps SHALL be\n`clock_offset_applied` (its `offset_seconds` with an `offset_description` in words, such as \"camera clock 1 h 55 min\nahead of UTC\"), `resolved_utc`, `timezone_resolved`, `time_written`, `gps_written` (with its origin, method and,\nfor a manual position, the pinned pre-state), `gps_reverted`, `gps_preserved` and `final_rename`, each naming its `run`;\nfinalize SHALL take them from every executed pass — each superseded `photos-24` whose journal shows it ran, oldest\nfirst, matched by fingerprint — before the current plan's, from the provenance each time write carries (geotag §31). Each run's journal SHALL be kept as\nits own `journal-<run>.json`, and each geotag execution SHALL keep the decision records its plan depended on, verified\nby hash, in `executed/<plan id>/`, which a step's `because_record` and `because_record_sha256` name; prep marks its log partial and warns when its history cannot rebuild a journey (prep\n§16.1).",
      "criticality": null,
      "docname": "build/shared",
      "doctype": ".md",
@@ -15651,7 +15651,7 @@
       "Shared — what every phase guarantees"
      ],
      "signature": null,
-     "status": "seed",
+     "status": "ruled",
      "style": null,
      "tags": [],
      "template": null,
@@ -15666,7 +15666,8 @@
      "uses_back": [],
      "verifies": [],
      "verifies_back": [
-      "TST-control_dir-journals_are_per_run_and_retained"
+      "TST-control_dir-journals_are_per_run_and_retained",
+      "TST-geotag_rerun_markers-the_log_keeps_every_geotag_pass"
      ],
      "verify": "required"
     },
@@ -25432,7 +25433,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "`tests/test_geotag_rerun_markers.py:422`\n\nAlso marked with clause-index ids not yet converted: `log-every-geotag-pass-1`",
+     "content": "`tests/test_geotag_rerun_markers.py:422`\n\nAlso marked with clause-index ids not yet converted: `log-decision-version-kept-1`, `log-every-geotag-pass-1`",
      "criticality": null,
      "docname": "_generated/tests",
      "doctype": ".md",
@@ -25491,6 +25492,7 @@
      "uses": [],
      "uses_back": [],
      "verifies": [
+      "RUL-history_retained",
       "RUL-log_entry_grows",
       "RUL-partial_history_shown"
      ],

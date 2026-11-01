@@ -393,6 +393,7 @@
 13.3a	This is a retention requirement, not a prescription of format.	RUL-history_retained	the format is build
 13.3a	Concretely:	dropped	an introduction to the list
 13.3a	1. Per-run journals are not discarded or truncated to a single run: either journals accumulate (e.g. one `journal-<run>.json` per run, all retained) or an equivalent durable per-file history is maintained in `photos-00-ingest.db`.	RUL-history_retained BLD-log_format	
+13.3a	Each geotag execution also keeps the exact decision records its plan was made from (`executed/<plan id>/`), so a step's decision stays findable in the version it followed after the live record is edited.	RUL-history_retained BLD-log_format	
 13.3a	The choice is an implementation detail; what is required is that each phase can recover, for every file it is responsible for, the ordered set of transformations it underwent and the decisions/inputs behind them.	RUL-history_retained	
 13.3a	2. The minimum that must be recoverable per file: the prep actions (normalization, organization, dedup/quarantine, provisional naming); for geotagged files the move into by-dest and the geotag actions (clock offset, resolved UTC, timezone, GPS placement and method, any manual-GPS apply/change/revert with pre-state, final naming); for merged files the library destination and any anti-collision rename — each attributable to the run and decision that caused it.	RUL-history_retained	
 13.3a	3. Anything beyond that minimum may be pruned.	RUL-history_retained	
