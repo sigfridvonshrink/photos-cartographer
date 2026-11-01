@@ -651,3 +651,25 @@ def test_noop_reprep_does_not_restale_plan(tmp_path, monkeypatch):
     ho["cache_fingerprint"] = "CHANGED-INVENTORY"                         # a real content change
     u.write_json_artifact(str(ctl / "photos-11-handoff.json"), ho)
     assert any("handoff" in s for s in wf.revalidate_plan(plan, gpx))     # now stale
+
+
+@pytest.mark.spec("RUL-cause_locatable", "authored-locatable-cause-1", test="TST-geotag_execution-every_write_traces_back_to_its_decision")
+def test_every_write_traces_back_to_its_decision(tmp_path, monkeypatch):
+    """From the journal of what ran, each confirmed operation is found in the plan, and the plan names
+    by hash the decision records it was made from, which hold the decision for that photo's destination."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _mock_tools(monkeypatch, ws)
+    assert _execute(monkeypatch, ws) == 0
+    plan = json.load(open(ctl / "photos-24-executable-plan.json"))
+    journal = json.load(open(utils.journal_path(str(ws), plan["plan_id"])))
+    ops = {o["operation_id"]: o for d in plan["destinations"].values() for o in d["operations"]}
+    confirmed = [oid for oid, st in journal["operations"].items() if st == "confirmed"]
+    assert confirmed and set(confirmed) <= set(ops)                       # journal -> plan
+    dep = plan["depends_on"]
+    for name in ("time_decisions", "gps_decisions"):                      # plan -> the records, by hash
+        assert dep[name]["sha256"] == utils.sha256_file(str(ws / dep[name]["artifact_path"]))
+    times = json.load(open(ws / dep["time_decisions"]["artifact_path"]))
+    for oid in confirmed:                                                 # record -> the decision
+        dest = os.path.dirname(ops[oid]["relative_path"])
+        tz = times["destinations"][dest]["destination_timezone"]
+        assert tz["user_decision"]["accept_proposed_timezone"] is True and tz["effective_iana_timezone"]
