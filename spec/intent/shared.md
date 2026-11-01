@@ -567,17 +567,6 @@ planning SHALL write it there, and its dry run and its execution SHALL read it f
 No command SHALL take an option saying where to put a plan or where to find one; the fixed place is the contract.
 :::
 
-:::{rul} Planning says where it saved the plan
-:id: RUL-planning_names_its_plan
-:status: seed
-:criticality: low
-:verify: none
-:omit_reason: no test asserts it (backlog item 3)
-:aliases: plan-prints-path-1
-
-A planning command SHALL tell the user where it saved the plan.
-:::
-
 :::{rul} No plan, no dry run and no execution
 :id: RUL-no_plan_no_run
 :status: seed
@@ -597,9 +586,8 @@ A dry run or an execution that finds no plan in its place SHALL stop, and tell t
 :verify: required
 :aliases: dryrun-summary-not-dump-1
 
-A dry run SHALL validate the saved plan that execution would carry out, and report a summary of it — the operations by
-kind, the blockers, and where the full plan is — computed from that plan, never from a separate simulation, and never
-the whole plan.
+A dry run SHALL validate the saved plan that execution would carry out, and report on that plan — never on a separate
+simulation.
 :::
 
 :::{rul} Re-planning sets the prior plan aside
@@ -653,7 +641,7 @@ stale.
 
 :::{inv} A disturbed workspace is never processed silently
 :id: INV-undisturbed_shape
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: incidental
@@ -667,7 +655,7 @@ top level that does not belong there, a symbolic link among its files, a managed
 :status: seed
 :criticality: med
 :anti: yes
-:verify: incidental
+:verify: required
 :upholds: INV-undisturbed_shape
 
 Prep SHALL create the full structure of managed folders exactly once, when it initializes the workspace, and SHALL never
@@ -720,7 +708,7 @@ silently. The phase SHALL name the link and produce no executable plan and no ar
 :id: RUL-who_checks_for_links
 :status: seed
 :criticality: med
-:verify: incidental
+:verify: required
 :refines: RUL-no_links
 
 Prep SHALL check for links across the whole tree it walks, the destination tree included though prep never changes it.

@@ -103,6 +103,7 @@ def test_nonmanaged_root_folder_blocks(tmp_path):
     assert any("Misplaced folder at the workspace root" in b for b in blockers), blockers
 
 
+@pytest.mark.spec("RUL-who_checks_for_links", test="TST-geotag_preflight-directory_symlink_at_root_blocks")
 def test_directory_symlink_at_root_blocks(tmp_path):
     """A symlink at the root is barred outright as a forbidden symlink (§13), never followed —
     checked before the structural/misplaced-folder guards."""
@@ -369,3 +370,13 @@ def test_dot_named_root_symlink_blocked(tmp_path):
     os.symlink(str(tmp_path), str(ws / ".evil"))
     blockers, _, _ = _pf(ws)
     assert any("Forbidden symlink at the workspace root" in b for b in blockers), blockers
+
+
+@pytest.mark.spec("RUL-structure_built_once", test="TST-geotag_preflight-geotag_never_repairs_a_missing_folder")
+def test_geotag_never_repairs_a_missing_folder(tmp_path):
+    import shutil
+    ws = _ws(tmp_path)
+    shutil.rmtree(ws / "4-videos-by-date")
+    blockers, _, _ = _pf(ws)
+    assert blockers
+    assert not (ws / "4-videos-by-date").exists()             # blocked, never recreated

@@ -121,6 +121,7 @@ def test_uninitialized_blocks(tmp_path):
     assert any("Not an initialized workspace" in b for b in blockers), blockers
 
 
+@pytest.mark.spec("RUL-who_checks_for_links", test="TST-merge_preflight-root_symlink_blocks")
 def test_root_symlink_blocks(tmp_path):
     ws, _ = _make(tmp_path)
     os.symlink(str(tmp_path), str(ws / "evil"))
@@ -486,3 +487,11 @@ def test_lock_contention_covers_execute_not_just_plan(tmp_path):
         held.release()
     assert not os.path.exists(merge.merge_summary_path(str(ws)))  # nothing executed
     assert list(lib.iterdir()) == [lib / ".photos-library"]
+
+
+@pytest.mark.spec("RUL-structure_built_once", test="TST-merge_preflight-merge_never_repairs_a_missing_folder")
+def test_merge_never_repairs_a_missing_folder(tmp_path):
+    ws, _ = _make(tmp_path)
+    os.rmdir(str(ws / "4-videos-by-date"))
+    assert merge._run_locked_workflow("plan", str(ws)) == 2
+    assert not (ws / "4-videos-by-date").exists()             # blocked, never recreated
