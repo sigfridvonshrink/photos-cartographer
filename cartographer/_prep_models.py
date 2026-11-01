@@ -89,7 +89,7 @@ PREP_ALLOWED_OPERATION_TYPES = {
 
 # Plan serialization/schema version. A plan whose version differs from this is from a
 # different tool/schema and is rejected at execute time (prep Section 14.3.2).
-PLAN_SCHEMA_VERSION = 1
+PLAN_SCHEMA_VERSION = 2
 
 
 # ==============================================================================
@@ -130,6 +130,7 @@ class Plan:
     warnings: List[str]
     operations: List[Operation]
     workspace_file_preconditions: List[Dict[str, Any]] = field(default_factory=list)
+    inventory: List[str] = field(default_factory=list)   # every path the plan's scan found (prep §14.3)
     metadata_dependencies: Dict[str, Any] = field(default_factory=dict)
 
     def to_json(self) -> str:

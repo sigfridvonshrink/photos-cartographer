@@ -433,6 +433,35 @@ class PlanValidator:
 
                 checked_sources.add(op.source)
 
+        # 4. Inventory (prep §14.3 item 2): a file that appeared anywhere prep scans since planning is
+        # unplanned — the plan neither moves nor records it — so the plan is stale and a new plan
+        # incorporates it. (A planned file that vanished already fails its precondition above.)
+        current, scan_blockers = _rescan_inventory(current_workspace)
+        if scan_blockers:
+            raise ValueError(f"Stale plan: the workspace changed since planning: {scan_blockers[0]}")
+        appeared = sorted(set(current) - set(plan.inventory))
+        if appeared:
+            raise ValueError(f"Stale plan: {len(appeared)} file(s) appeared since planning ({_first_few(appeared)}); "
+                             "re-plan to include them.")
+
+
+def _first_few(paths, n=3):
+    shown = ", ".join(paths[:n])
+    return shown if len(paths) <= n else f"{shown}, and {len(paths) - n} more"
+
+
+def _rescan_inventory(workspace_root):
+    """Re-run prep's inventory scan (the media scan plus the dump dotfiles bound for quarantine) without
+    planning anything: (sorted paths, blockers). The plan records the same list as `inventory`."""
+    from .photos_utils import load_or_seed_config, guard_path
+    load_or_seed_config(workspace_root)
+    wf = WorkspacePrepWorkflow(workspace_root, cache=None)
+    wf._initializing = not os.path.exists(guard_path(workspace_root))
+    files, blockers = [], []
+    wf._scan_inventory(files, blockers)
+    return sorted(files + wf._collect_dump_dotfiles(blockers)), blockers
+
+
 class PlanExecutor:
     def __init__(self, workspace_root: str):
         self.workspace_root = workspace_root
@@ -1474,7 +1503,6 @@ class WorkspacePrepWorkflow:
         skip control / strays / gpx subtrees, and build the sorted `files` list; append
         forbidden-symlink and misplaced-entry blockers. Mutates the passed `files` / `blockers`.
         Verbatim lift from plan()."""
-        self.coordinator.start_phase("planning - scanning inventory")
         # 0. Inventory, lifecycle guards, symlink check
         _managed_set = set(self.managed_folders)
         _strays = folder_name('strays')
@@ -2316,6 +2344,7 @@ class WorkspacePrepWorkflow:
                     "move the remaining media into a fresh workspace) before running — prep will not "
                     "recreate them.")
 
+        self.coordinator.start_phase("planning - scanning inventory")
         self._scan_inventory(files, blockers)
 
         # Hidden (dot-prefixed) files arriving in a dump (.DS_Store, .thumbnails/, editor temp) are
@@ -2323,6 +2352,8 @@ class WorkspacePrepWorkflow:
         # quarantine below rather than leaving them to litter the workspace. The control dirs are
         # never touched (see _collect_dump_dotfiles).
         dump_dotfiles = self._collect_dump_dotfiles(blockers)
+        # Everything scanned, recorded so execute can refuse a workspace that changed since (prep §14.3).
+        inventory = sorted(files + dump_dotfiles)
 
         files, exiftool_leftovers = self._recognize_exiftool_leftovers(files, warnings)
 
@@ -2576,6 +2607,7 @@ class WorkspacePrepWorkflow:
             warnings=warnings,
             operations=operations,
             workspace_file_preconditions=workspace_file_preconditions,
+            inventory=inventory,
             metadata_dependencies={
                 "extractor": "exiftool",
                 "extractor_version": get_exiftool_version(),

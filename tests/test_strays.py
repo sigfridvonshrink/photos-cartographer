@@ -170,6 +170,24 @@ def test_track_file_blocks_prep_and_stays_put(tmp_path, monkeypatch):
     assert not glob.glob(str(ws / "1-strays" / "**" / "*.gpx"), recursive=True)
 
 
+@pytest.mark.spec("RUL-track_files_block_prep", test="TST-strays-every_track_format_blocks_prep")
+@pytest.mark.parametrize("name", ["route.kml", "ride.FIT", "run.tcx", "log.nmea"])
+def test_every_track_format_blocks_prep(tmp_path, monkeypatch, name):
+    """Shared contract §8: a track in any format, not only the GPX geotag reads, is never media — it
+    blocks the plan and stays in the dump, never parked in 1-strays."""
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / name).write_text("track")
+    (ws / "0-sources" / "photo.jpg").write_bytes(b"img")
+    plan = _plan(ws)
+    assert any(f"0-sources/{name}" in b for b in plan.blockers), plan.blockers
+    assert not [op for op in plan.operations if name in (op.source or "") + (op.destination or "")]
+    with pytest.raises(ValueError, match="blockers"):
+        prep.PlanExecutor(str(ws)).execute(plan)
+    assert (ws / "0-sources" / name).exists()
+    assert not glob.glob(str(ws / "1-strays" / "**" / name), recursive=True)
+
+
 def test_mixed_media_and_stray(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)

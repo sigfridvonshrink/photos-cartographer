@@ -180,9 +180,16 @@ def selected_gpx_root() -> str:
     root = CONFIG.get("gpx_root") or ""
     return os.path.realpath(os.path.abspath(root)) if root else ""
 
+# Track formats (shared contract §8): a file in one of these is a track, never media. Geotag reads only GPX.
+TRACK_EXTENSIONS = (".gpx", ".kml", ".fit", ".tcx", ".nmea")
+
 def is_track_file(name: str) -> bool:
-    """A GPX track file, by name (shared contract §8). Geotag reads these under gpx_root; anywhere prep
-    inventories, one is a blocker, never media."""
+    """A track file in any format, by name (shared contract §8): anywhere prep inventories, one is a
+    blocker, never media."""
+    return name.lower().endswith(TRACK_EXTENSIONS)
+
+def is_gpx_file(name: str) -> bool:
+    """A GPX track file, by name — the one track format geotag reads under gpx_root."""
     return name.lower().endswith(".gpx")
 
 # Media classification by extension (prep Section 6.1). The ext->class map is DERIVED from the active
