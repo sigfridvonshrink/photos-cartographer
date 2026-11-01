@@ -165,6 +165,24 @@ def test_bare_timestamp_name_used_when_free(tmp_path, monkeypatch):
     assert (ws / "5-photos-by-date" / "2023-01-02" / "2023-01-02--03-04-05-001.jpg").exists()   # untouched
 
 
+@pytest.mark.spec("RUL-suffix_choice_by_phase", test="TST-audit_backfill-first_free_suffix_fills_a_gap")
+def test_first_free_suffix_fills_a_gap(tmp_path, monkeypatch):
+    # Prep takes the FIRST free name, not the one above the highest used: with the bare name and -002
+    # already on disk, a new file at the same timestamp takes the free -001 (merge alone appends at
+    # max+1). Both residents are untouched.
+    _install(monkeypatch, meta_for=lambda f: {"DateTimeOriginal": "2023:01:02 03:04:05"})
+    ws = _ws(tmp_path)
+    day = ws / "5-photos-by-date" / "2023-01-02"
+    day.mkdir()
+    (day / "2023-01-02--03-04-05.jpg").write_bytes(b"bare")
+    (day / "2023-01-02--03-04-05-002.jpg").write_bytes(b"two")
+    (ws / "0-sources" / "new.jpg").write_bytes(b"new")
+    plan = _plan(ws)
+    org = [op for op in _moves(plan) if op.source == "0-sources/new.jpg"]
+    assert org and org[0].destination == "5-photos-by-date/2023-01-02/2023-01-02--03-04-05-001.jpg", org[0].destination
+    assert not [op for op in _moves(plan) if op.source.startswith("5-photos-by-date/")]
+
+
 def test_same_timestamp_collision_suffixes_after_bare(tmp_path, monkeypatch):
     # Two fresh files at the SAME timestamp: the first takes the bare name, the second collides and
     # gets -001 (bare-first then the differentiating suffix, §7.2).

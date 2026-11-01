@@ -839,7 +839,7 @@ so that two files never collide.
 
 :::{rul} Which free name each phase takes
 :id: RUL-suffix_choice_by_phase
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: fname-allocation-per-phase-1
