@@ -1266,7 +1266,7 @@ The mechanism is a **pre-state ledger** in SQLite, archived with the database (s
    - an explicit **"absent" sentinel** meaning the file had no GPS before the override.
    This pinned value is the **true original**: it is written once and never overwritten by subsequent runs of the same or a changed decision, so it always represents the state before the pipeline first touched the file's GPS via a manual decision.
 
-   **The "previous coordinates present" pre-state is a completeness case, intentionally unreachable via `apply_manual`.** A manual override (locked or fallback) is only ever *selected* for a file that has **no native GPS**: `classify_gps` returns `preserve_native` for any file that already carries native GPS **before** it ever consults the manual coordinates (Section 23 resolution order; Section 25.3 — preserve-native wins). So an `apply_manual` operation never targets a file whose GPS field was occupied, and the pre-state captured on first application is therefore **always the "absent" sentinel**, never a set of previous coordinates. The crucial corollary: if a file *did* already hold GPS — including the case where a manual coordinate written on an earlier run has since been **re-folded into the file's native EXIF** (e.g. the file was re-imported with that GPS baked in) — it now **reads as native GPS and is preserved, not overridden**, so it is never an `apply_manual` target in the first place. The "previous GPS coordinates were present" branch above is thus kept only for **completeness and robustness** (it keeps the ledger correct should that precedence ever be relaxed); under the current rules the ledger only ever pins, and reverts to, "absent" — withdrawal *clears* the GPS the override added rather than restoring a prior coordinate. Consistent with this, the pinned pre-state is the GPS value **prep recorded in its scan/handoff** (which the executor pins before the write), not a fresh execute-time re-read — for a file with no native GPS the two coincide at "absent."
+   **The "previous coordinates present" pre-state holds only a position geotag itself wrote, never a native one.** A manual override (locked or fallback) is only ever *selected* for a file that has **no native GPS**: `classify_gps` returns `preserve_native` for any file that carries native GPS **before** it ever consults the manual coordinates (Section 23 resolution order; Section 25.3 — preserve-native wins). A position geotag wrote is not native — it carries a position marker (Section 28.2) — so a file geotag once placed can later be pinned by hand, and its pre-state is then that earlier geotag position; a file that never had one pins the "absent" sentinel. A file whose GPS is the device's own, with no geotag marker, reads as native and is preserved, never overridden. Withdrawal therefore either *clears* the GPS the override added or restores geotag's earlier position, which the same run then places again (the revert is applied before that run's own writes for the file). The pinned pre-state is the GPS value **prep recorded in its scan/handoff** (which the executor pins before the write), not a fresh execute-time re-read.
 
 2. **Withdraw → restore.** If, before a later run, the user **removes** the manual GPS decision, the next run's plan must include an explicit **revert operation** that drives the field back to the pinned pre-state: write the previous coordinates back, or — if the pre-state was "absent" — **clear** the GPS the override added. Either way the hemisphere reference fields move with the coordinates (Section 28.1). Withdrawal therefore *undoes*; it does not merely stop re-asserting. ("Tag a file that had no GPS, then withdraw" correctly leaves the file with no GPS, not with the tagged value.)
 
@@ -1688,6 +1688,23 @@ Therefore every planned GPS coordinate write must carry the matching reference f
 3. a revert that **clears** GPS (an "absent" pre-state, Section 24.1) clears the reference fields along with the coordinates — a reference field left behind without its coordinate is a torn fix.
 
 This applies to every GPS write origin without exception (*apply manual*, *recompute automated*, *revert manual*). Reference fields are part of the coordinate value, not optional decoration, so they are never planned or applied as a separate operation from the coordinate they describe.
+
+### 28.2 Geotag's markers: what a re-run reads back
+
+Geotag records what it did to a file in the file's `GPSProcessingMethod`, with one of its own values:
+
+1. `interpolated` (a position from the tracks, interpolated or extrapolated), `manual_locked` (a per-file manual position) or `manual_fallback` (the destination's folder fallback) — the **position markers**, written with every GPS write;
+2. `time_only` — written when geotag corrects a file's time and writes no position: the file keeps its own position, or has none.
+
+Only these values are geotag's. Any other value — a phone writes its own, such as `GPS`, `NETWORK` or `fused` — is the device's, and the GPS beside it is native.
+
+Read back on a later run:
+
+1. **any geotag marker means the time is already corrected.** The file's time is destination-local civil time with its offset tag beside it; geotag resolves it from those, applies no clock offset to it, and does not use it as a clock-offset anchor or in a drift check. A camera group's offset is proposed, asked for and applied over the files that carry no geotag marker alone, so photos added later are corrected without disturbing those already corrected;
+2. **a position marker means the position is geotag's, not native.** Geotag ignores it and places the file again through the ordinary order (Section 23), overwriting the position with the one it now derives; a file that ends without a position (accepted unlocated) has geotag's old position cleared and is marked `time_only`, so the old position is never read back as native;
+3. **no geotag marker means the file is as the device left it**: a position is native and preserved, and the time is corrected as for any new file — a camera's by its group offset, a phone's by its own offset or the destination timezone.
+
+A write the file already holds is not planned: a time, a position and its marker, or a name the file already carries is a no-op, so a re-run with nothing changed writes nothing. The marker records a corrected time only when geotag writes corrected times (`write_corrected_metadata_times`); with that switched off, a marked file's time is still taken as corrected.
 
 ---
 

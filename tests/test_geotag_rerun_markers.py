@@ -1,0 +1,263 @@
+# Copyright 2026 sigfridvonshrink
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""Geotag's own GPSProcessingMethod markers on a re-run (geotag §30, shared contract §10.1).
+
+A geotag marker means the file's time is already corrected; a position marker also means its
+position is geotag's, ignored until placed again. A device's own GPSProcessingMethod value is native.
+Execution is simulated: each plan's writes are folded into the handoff the way a re-prep would read
+them back, so the re-run sees what the files hold. From conftest.py.
+"""
+import json
+import os
+import sys
+
+import pytest
+
+import photos_2_geotag as cal
+import photos_utils as utils
+
+CAM = "SONY|ILCE-6400|123"
+PHONE = "Google|Pixel|p1"
+MANAGED = ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
+           "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"]
+T = "6-photos-by-dest/T"
+SLOW = -6600       # the camera reads local (+02:00) time ten minutes slow: naive + SLOW = UTC
+
+
+def _rec(ws, rel, dto, *, key=CAM, gps=None, method=None):
+    parsed = {"DateTimeOriginal": dto, "selected_source_naive_timestamp": dto,
+              "selected_source_timestamp_tag": "DateTimeOriginal", "camera_group_key": key, "has_timestamp": True}
+    if gps:
+        parsed.update(GPSLatitude=gps[0], GPSLongitude=gps[1], has_native_gps=True)
+    if method:
+        parsed["GPSProcessingMethod"] = method
+    p = ws / rel
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_bytes(b"img-" + rel.encode())
+    st = p.stat()
+    return {"relative_path": rel, "media_class": "image", "folder_class": "6-photos-by-dest",
+            "size": st.st_size, "mtime_ns": st.st_mtime_ns,
+            "content_hash": json.dumps({"value": "fp-" + os.path.basename(rel), "status": "valid"}),
+            "metadata_status": {"camera_group_key": key, "has_timestamp": True, "has_native_gps": bool(gps),
+                                "field_set_version": 1, "parsed_json": json.dumps(parsed)}}
+
+
+def _ws(tmp_path, recs):
+    ws = tmp_path / "ws"; ws.mkdir()
+    for d in MANAGED:
+        (ws / d).mkdir()
+    ctl = ws / ".photos-ingest"; ctl.mkdir()
+    (ctl / "photos-00-workspace-guard").touch()
+    gpx = tmp_path / "gpx"; gpx.mkdir()
+    (gpx / "t.gpx").write_text(                  # 12:00Z-13:00Z, a point every ten minutes
+        '<gpx xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>'
+        + "".join(f'<trkpt lat="{50 + i / 1000:.3f}" lon="4.0"><time>2024-07-03T12:{i}0:00Z</time></trkpt>'
+                  for i in range(6))
+        + '<trkpt lat="50.006" lon="4.0"><time>2024-07-03T13:00:00Z</time></trkpt>'
+        '</trkseg></trk></gpx>')
+    cfg = {k: v for k, v in utils.CONFIG.items() if k != "jobs"}
+    cfg["gpx_root"] = str(gpx)
+    cfg["camera_time_and_timezone_policy"] = dict(
+        cfg["camera_time_and_timezone_policy"], device_groups={"fixed_clock_cameras": [CAM], "phones": [PHONE]},
+        default_folder_timezone="Europe/Brussels", multi_anchor_auto_apply=True)
+    (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
+    _write_handoff(ws, [r(ws) for r in recs])
+    return ws
+
+
+def _write_handoff(ws, files):
+    ho = {"run_metadata": {"plan_id": "prep-1", "execution_id": "exec-1"}, "files": files,
+          "cache_fingerprint": "pcf"}
+    ho["content_fingerprint"] = utils.handoff_content_fingerprint(ho)
+    (ws / ".photos-ingest" / "photos-11-handoff.json").write_text(json.dumps(ho))
+
+
+def _plan(monkeypatch, ws):
+    monkeypatch.chdir(str(ws))
+    monkeypatch.setattr(sys, "argv", ["photos-2-geotag", "plan"])
+    try:
+        cal.main()
+    except SystemExit:
+        pass
+
+
+def _set_offset(ws, offset, bucket=CAM):
+    p = ws / ".photos-ingest" / cal.TIME_DECISIONS_ARTIFACT
+    a = json.loads(p.read_text())
+    a["destinations"][T]["camera_group_time_decisions"][bucket]["user_decision"]["manual_offset_seconds"] = offset
+    p.write_text(json.dumps(a))
+
+
+def _confirm_drift(ws, offset, bucket=CAM):
+    """Confirm the GPS-drift check a manual offset with track coverage triggers (§22a)."""
+    p = ws / ".photos-ingest" / "photos-22-gps-drift-validation.json"
+    a = json.loads(p.read_text())
+    a["destinations"][T]["drift_decisions"][bucket]["user_decision"].update(
+        confirmed=True, corrected_offset_seconds=offset)
+    p.write_text(json.dumps(a))
+
+
+def _ops(ws):
+    """{relative_path: {"writes": merged tag writes, "types": [...], "to": rename target}} of photos-24."""
+    plan = json.loads((ws / ".photos-ingest" / "photos-24-executable-plan.json").read_text())
+    assert plan["status"] == "ready", plan.get("blockers")
+    out = {}
+    for d in plan["destinations"].values():
+        for op in sorted(d["operations"], key=lambda o: o["type"] != "revert_manual_gps"):
+            e = out.setdefault(op["relative_path"], {"writes": {}, "types": [], "to": None})
+            e["types"].append(op["type"])
+            e["writes"].update(op.get("writes") or {})
+            if op["type"] == "rename_no_clobber":
+                e["to"] = op["to"]
+    return out
+
+
+def _executed_and_reprepped(ws):
+    """Fold photos-24's writes and renames into the handoff, as a re-prep reads the files back."""
+    ops = _ops(ws)
+    ho = json.loads((ws / ".photos-ingest" / "photos-11-handoff.json").read_text())
+    for f in ho["files"]:
+        e = ops.get(f["relative_path"])
+        if not e:
+            continue
+        ms = f["metadata_status"]
+        parsed = json.loads(ms["parsed_json"])
+        for k, v in e["writes"].items():
+            if k in ("GPSLatitudeRef", "GPSLongitudeRef"):
+                continue
+            if v == "":
+                parsed.pop(k, None)
+            else:
+                parsed[k] = v
+        parsed["selected_source_naive_timestamp"] = parsed["DateTimeOriginal"]
+        has = parsed.get("GPSLatitude") is not None
+        parsed["has_native_gps"] = ms["has_native_gps"] = has
+        ms["parsed_json"] = json.dumps(parsed)
+        if e["to"]:
+            old = ws / f["relative_path"]
+            f["relative_path"] = os.path.join(os.path.dirname(f["relative_path"]), e["to"])
+            os.rename(old, ws / f["relative_path"])
+        st = (ws / f["relative_path"]).stat()
+        f["size"], f["mtime_ns"] = st.st_size, st.st_mtime_ns
+    _write_handoff(ws, ho["files"])
+
+
+def _first_round(tmp_path, monkeypatch):
+    """A camera without GPS, ten minutes slow, placed from the track under a manual offset."""
+    ws = _ws(tmp_path, [lambda ws: _rec(ws, f"{T}/a.arw", "2024:07:03 14:20:00")])
+    _plan(monkeypatch, ws)
+    _set_offset(ws, SLOW)
+    _plan(monkeypatch, ws)
+    _confirm_drift(ws, SLOW)
+    _plan(monkeypatch, ws)
+    a = _ops(ws)[f"{T}/a.arw"]
+    assert a["writes"]["DateTimeOriginal"] == "2024:07:03 14:30:00"      # 12:30Z, Brussels summer
+    assert a["writes"]["GPSLatitude"] == pytest.approx(50.003) and a["writes"]["GPSProcessingMethod"] == "interpolated"
+    _executed_and_reprepped(ws)
+    return ws
+
+
+@pytest.mark.spec("loop-geotag-rerun-safe-1", "geotag-marker-time-corrected-1", "geotag-held-write-noop-1", "RUL-geotag_rerun_keeps_settled", test="TST-geotag_rerun_markers-manual_offset_is_not_applied_twice")
+def test_manual_offset_is_not_applied_twice(tmp_path, monkeypatch):
+    ws = _first_round(tmp_path, monkeypatch)
+    _plan(monkeypatch, ws)
+    assert _ops(ws) == {}                                    # time, fix and name all held already
+    t = json.loads((ws / ".photos-ingest" / cal.TIME_DECISIONS_ARTIFACT).read_text())
+    assert t["destinations"][T]["camera_group_time_decisions"] == {}   # no offset left to ask
+
+
+@pytest.mark.spec("geotag-marker-time-corrected-1", "RUL-geotag_rerun_keeps_settled", test="TST-geotag_rerun_markers-new_photo_joins_corrected_ones")
+def test_new_photo_joins_corrected_ones(tmp_path, monkeypatch):
+    """The offset is asked for and applied to the new, uncorrected photo alone."""
+    ws = _first_round(tmp_path, monkeypatch)
+    ho = json.loads((ws / ".photos-ingest" / "photos-11-handoff.json").read_text())
+    _write_handoff(ws, ho["files"] + [_rec(ws, f"{T}/c.arw", "2024:07:03 14:50:00")])
+    _plan(monkeypatch, ws)
+    _set_offset(ws, SLOW)
+    _plan(monkeypatch, ws)
+    _confirm_drift(ws, SLOW)
+    _plan(monkeypatch, ws)
+    ops = _ops(ws)
+    assert list(ops) == [f"{T}/c.arw"]
+    assert ops[f"{T}/c.arw"]["writes"]["DateTimeOriginal"] == "2024:07:03 15:00:00"
+
+
+@pytest.mark.spec("geotag-position-marker-not-native-1", "RUL-geotag_rerun_keeps_settled", test="TST-geotag_rerun_markers-geotag_position_is_placed_again")
+def test_geotag_position_is_placed_again(tmp_path, monkeypatch):
+    """A position geotag wrote is not the file's own: the re-run places the file from the track again
+    and overwrites a fix that no longer agrees, and it is never a clock anchor."""
+    ws = _ws(tmp_path, [lambda ws: _rec(ws, f"{T}/2024-07-03--14-30-00.arw", "2024:07:03 14:30:00",
+                                        gps=(40.0, 3.0), method="interpolated")])
+    p = ws / ".photos-ingest" / "photos-11-handoff.json"
+    ho = json.loads(p.read_text())
+    parsed = json.loads(ho["files"][0]["metadata_status"]["parsed_json"])
+    parsed["OffsetTimeOriginal"] = "+02:00"
+    ho["files"][0]["metadata_status"]["parsed_json"] = json.dumps(parsed)
+    _write_handoff(ws, ho["files"])
+    _plan(monkeypatch, ws)
+    e = _ops(ws)[f"{T}/2024-07-03--14-30-00.arw"]
+    assert e["types"] == ["metadata_gps_write", "gps_marker_write"]          # no time write, no rename
+    assert e["writes"]["GPSLatitude"] == pytest.approx(50.003)
+
+
+@pytest.mark.spec("geotag-time-only-marker-1", "RUL-geotag_rerun_keeps_settled", test="TST-geotag_rerun_markers-own_gps_camera_is_marked_time_only")
+def test_own_gps_camera_is_marked_time_only(tmp_path, monkeypatch):
+    """A camera with its own GPS has its time corrected from that GPS, keeps the position, and is
+    marked time_only; the re-run then neither corrects it again nor uses it as an anchor."""
+    ws = _ws(tmp_path, [lambda ws: _rec(ws, f"{T}/a.arw", "2024:07:03 13:50:00", gps=(50.0, 4.0)),
+                        lambda ws: _rec(ws, f"{T}/b.arw", "2024:07:03 14:40:00", gps=(50.005, 4.0))])
+    _plan(monkeypatch, ws)
+    a = _ops(ws)[f"{T}/a.arw"]
+    assert a["writes"] == {"DateTimeOriginal": "2024:07:03 14:00:00", "OffsetTimeOriginal": "+02:00",
+                           "GPSProcessingMethod": "time_only"}
+    _executed_and_reprepped(ws)
+    _plan(monkeypatch, ws)
+    assert _ops(ws) == {}
+
+
+@pytest.mark.spec("geotag-device-marker-native-1", test="TST-geotag_rerun_markers-a_devices_own_marker_is_native")
+def test_a_devices_own_marker_is_native(tmp_path, monkeypatch):
+    """A phone's own GPSProcessingMethod is not geotag's: its position is kept and its time is not
+    taken as corrected."""
+    assert cal.geotag_marker("fused") is None and cal.geotag_marker(" interpolated ") == "interpolated"
+    ws = _ws(tmp_path, [lambda ws: _rec(ws, f"{T}/p.jpg", "2024:07:03 14:30:00", key=PHONE,
+                                        gps=(48.0, 2.0), method="fused")])
+    _plan(monkeypatch, ws)
+    p = _ops(ws)[f"{T}/p.jpg"]
+    assert "GPSLatitude" not in p["writes"]                                   # native position kept
+    assert p["writes"]["DateTimeOriginal"] == "2024:07:03 14:30:00"
+
+
+@pytest.mark.spec("geotag-position-marker-not-native-1", test="TST-geotag_rerun_markers-unlocated_geotag_position_is_cleared")
+def test_unlocated_geotag_position_is_cleared(tmp_path, monkeypatch):
+    """A file geotag once placed, now off the track and accepted as unlocated, loses geotag's old
+    fix: kept, it would read as the file's own next time."""
+    ws = _ws(tmp_path, [lambda ws: _rec(ws, f"{T}/2024-07-03--18-00-00.arw", "2024:07:03 18:00:00",
+                                        gps=(40.0, 3.0), method="interpolated")])
+    p = ws / ".photos-ingest" / "photos-11-handoff.json"
+    ho = json.loads(p.read_text())
+    parsed = json.loads(ho["files"][0]["metadata_status"]["parsed_json"])
+    parsed["OffsetTimeOriginal"] = "+02:00"
+    ho["files"][0]["metadata_status"]["parsed_json"] = json.dumps(parsed)
+    _write_handoff(ws, ho["files"])
+    _plan(monkeypatch, ws)
+    g = ws / ".photos-ingest" / "photos-23-gps-decisions.json"
+    a = json.loads(g.read_text())
+    for ri in a["destinations"][T]["gps_decisions"]["review_items"]:
+        ri["user_decision"]["accept_unlocated"] = True
+    g.write_text(json.dumps(a))
+    _plan(monkeypatch, ws)
+    e = _ops(ws)[f"{T}/2024-07-03--18-00-00.arw"]
+    assert e["writes"]["GPSLatitude"] == "" and e["writes"]["GPSProcessingMethod"] == "time_only"

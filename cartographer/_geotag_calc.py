@@ -46,6 +46,11 @@ from .photos_utils import (
 from .reporting import get_reporter
 
 __all__ = [
+    'POSITION_MARKERS',
+    'TIME_ONLY_MARKER',
+    'GEOTAG_MARKERS',
+    'geotag_marker',
+    'time_only_marker_op',
     'haversine',
     'GPXPoint',
     'GPXIndex',
@@ -482,7 +487,18 @@ def compute_resolved_utc(files, groups, artifact, offset_overrides=None):
         cls = (groups.get(key) or {}).get("camera_group_class")
         naive = _parse_camera_naive(f.get("source_naive_time"))
         resolved, status, rule, offset_used, prov = None, "unresolved", "missing_timestamp", None, None
-        if naive is not None:
+        if naive is not None and f.get("geotag_marker"):
+            # geotag corrected this time already: it is destination-local, offset tag beside it
+            own_off = _parse_iso_offset((f.get("raw_times") or {}).get("OffsetTimeOriginal"))
+            if own_off is not None:
+                offset_used, resolved = own_off, naive - timedelta(seconds=own_off)
+                status, rule = "valid", "geotag_corrected"
+            elif tz:
+                resolved = _local_to_utc(naive, tz)
+                status, rule, prov = "valid", "geotag_corrected", tz
+            else:
+                status, rule = "unresolved", "timezone_missing"
+        elif naive is not None:
             if cls == "camera":
                 # per-date offset bucket: a destination split over >1 naive date keys cells
                 # `group@YYYY-MM-DD`; the single-date common case keeps the bare `group` key.
@@ -786,6 +802,19 @@ _GPS_OP_ORIGIN = {"gpx_interpolation": "recompute_automated", "gpx_extrapolation
                   "manual_locked": "apply_manual", "manual_fallback": "apply_manual"}
 _GPS_OP_MARKER = {"gpx_interpolation": "interpolated", "gpx_extrapolation": "interpolated",
                   "manual_locked": "manual_locked", "manual_fallback": "manual_fallback"}
+# Geotag's own GPSProcessingMethod values. Any of them means geotag already corrected the file's
+# time; a position marker also means the position is geotag's, so a re-run ignores it and places the
+# file again. `time_only` marks a corrected time beside a position geotag did not write (the
+# camera's own, or none). Any other value is the device's own and the GPS is native.
+POSITION_MARKERS = ("interpolated", "manual_locked", "manual_fallback")
+TIME_ONLY_MARKER = "time_only"
+GEOTAG_MARKERS = POSITION_MARKERS + (TIME_ONLY_MARKER,)
+
+
+def geotag_marker(processing_method):
+    """The geotag marker a GPSProcessingMethod value carries, or None for a device's own value."""
+    v = processing_method.strip() if isinstance(processing_method, str) else None
+    return v if v in GEOTAG_MARKERS else None
 
 
 def _local_time_and_offset(resolved_utc, tz):
@@ -819,20 +848,36 @@ def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename, cfg):
            "size": file.get("size"), "mtime_ns": file.get("mtime_ns")}
     ops = []
 
+    held = file.get("raw_times") or {}
+    marker = file.get("geotag_marker")
+    time_corrected = bool(marker)                 # geotag wrote this file's time on an earlier run
     if pol.get("write_corrected_metadata_times", True):
         dto, off = _local_time_and_offset(resolved_utc, tz)
         if dto is not None:
             writes = {"DateTimeOriginal": dto}
             if pol.get("write_corrected_offset_tags", True) and off:
                 writes["OffsetTimeOriginal"] = off
-            ops.append(_make_op("metadata_time_write", rel, "corrected capture time", {"writes": writes}, pre))
+            time_corrected = True
+            if any(held.get(k) != v for k, v in writes.items()):     # already held -> nothing to write
+                ops.append(_make_op("metadata_time_write", rel, "corrected capture time", {"writes": writes}, pre))
 
     if gps_category in _GPS_OP_ORIGIN and gps_coord is not None:
-        ops.append(_make_op("metadata_gps_write", rel, f"gps:{gps_category}",
-                            {"writes": _coordinate_tags(gps_coord["lat"], gps_coord["lon"]),
-                             "gps_origin": _GPS_OP_ORIGIN[gps_category]}, pre))
-        ops.append(_make_op("gps_marker_write", rel, "gps provenance",
-                            {"writes": {"GPSProcessingMethod": _GPS_OP_MARKER[gps_category]}}, pre))
+        new_marker = _GPS_OP_MARKER[gps_category]
+        ng = file.get("native_gps") or {}
+        same_fix = (marker == new_marker and isinstance(ng.get("lat"), (int, float))
+                    and isinstance(ng.get("lon"), (int, float))
+                    and round(ng["lat"], 6) == round(gps_coord["lat"], 6)
+                    and round(ng["lon"], 6) == round(gps_coord["lon"], 6))
+        if not same_fix:                          # a re-placed file already holding this fix: no write
+            ops.append(_make_op("metadata_gps_write", rel, f"gps:{gps_category}",
+                                {"writes": _coordinate_tags(gps_coord["lat"], gps_coord["lon"]),
+                                 "gps_origin": _GPS_OP_ORIGIN[gps_category]}, pre))
+            ops.append(_make_op("gps_marker_write", rel, "gps provenance",
+                                {"writes": {"GPSProcessingMethod": new_marker}}, pre))
+    elif marker in POSITION_MARKERS:
+        ops.append(time_only_marker_op(file, clear_position=True))   # geotag's old fix: not kept
+    elif time_corrected and marker != TIME_ONLY_MARKER:
+        ops.append(time_only_marker_op(file))
 
     if pol.get("write_corrected_filename_times", True) and rename and rename.get("rename"):
         ops.append(_make_op("rename_no_clobber", rel, "destination-local timestamp name",
@@ -845,6 +890,17 @@ def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename, cfg):
 # Prep's per-photo log carried forward + geotag steps appended. A derived
 # consolidation of artifacts already written — no new authority.
 # ============================================================================
+
+def time_only_marker_op(file, clear_position=False):
+    """The marker write recording that geotag corrected `file`'s time and wrote no position; with
+    `clear_position`, also clearing a position an earlier geotag run wrote and this one does not."""
+    pre = {"content_fingerprint": file.get("content_fingerprint"),
+           "size": file.get("size"), "mtime_ns": file.get("mtime_ns")}
+    writes = {"GPSProcessingMethod": TIME_ONLY_MARKER}
+    if clear_position:
+        writes = {**_revert_tags({"present": False}), **writes}
+    return _make_op("gps_marker_write", file["relative_path"], "time provenance", {"writes": writes}, pre)
+
 
 def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, ledger):
     """photos-26-complete-log.json's `photos` (§13.3): a deep copy of prep's per-photo, content-

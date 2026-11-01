@@ -1588,7 +1588,7 @@
       "area": "geotag",
       "criticality": "med",
       "anti": false,
-      "title": "apply_manual only targets files with no native GPS (preserve-native wins), so the captured pre-state is in practice always the absent sentinel",
+      "title": "apply_manual only targets files with no native GPS (preserve-native wins), so the captured pre-state is the absent sentinel or an earlier geotag position, never a native one",
       "spec": {
         "file": "photos-2-geotag-workflow.md",
         "section": "24.1"
@@ -1596,6 +1596,76 @@
       "coverage": "covered",
       "must_cover": true,
       "test": "tests/test_geotag_gps_ledger.py::test_full_pin_then_withdraw_reverts_and_consumes"
+    },
+    {
+      "id": "geotag-marker-time-corrected-1",
+      "area": "geotag",
+      "criticality": "high",
+      "anti": true,
+      "title": "A file carrying a geotag marker has its time corrected already: no clock offset is applied to it, it is no anchor and in no drift check, and a group's offset is asked for and applied over unmarked files alone",
+      "spec": {
+        "file": "photos-2-geotag-workflow.md",
+        "section": "28.2"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_rerun_markers.py::test_manual_offset_is_not_applied_twice"
+    },
+    {
+      "id": "geotag-position-marker-not-native-1",
+      "area": "geotag",
+      "criticality": "high",
+      "anti": true,
+      "title": "A position geotag wrote (a position marker) is not native: the file is placed again and the position overwritten; one ending without a position has geotag's old one cleared",
+      "spec": {
+        "file": "photos-2-geotag-workflow.md",
+        "section": "28.2"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_rerun_markers.py::test_geotag_position_is_placed_again"
+    },
+    {
+      "id": "geotag-device-marker-native-1",
+      "area": "geotag",
+      "criticality": "high",
+      "anti": true,
+      "title": "Only geotag's own GPSProcessingMethod values are markers; a device's own value leaves the GPS native",
+      "spec": {
+        "file": "photos-2-geotag-workflow.md",
+        "section": "28.2"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_rerun_markers.py::test_a_devices_own_marker_is_native"
+    },
+    {
+      "id": "geotag-time-only-marker-1",
+      "area": "geotag",
+      "criticality": "med",
+      "anti": false,
+      "title": "A file whose time geotag corrects without writing a position is marked time_only",
+      "spec": {
+        "file": "photos-2-geotag-workflow.md",
+        "section": "28.2"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_rerun_markers.py::test_own_gps_camera_is_marked_time_only"
+    },
+    {
+      "id": "geotag-held-write-noop-1",
+      "area": "geotag",
+      "criticality": "med",
+      "anti": false,
+      "title": "A time, position and marker, or name the file already holds is not planned again: a re-run with nothing changed writes nothing",
+      "spec": {
+        "file": "photos-2-geotag-workflow.md",
+        "section": "28.2"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_rerun_markers.py::test_manual_offset_is_not_applied_twice"
     },
     {
       "id": "geotag-prestate-before-write-1",

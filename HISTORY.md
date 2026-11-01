@@ -2,6 +2,29 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-01 — geotag's marker: a corrected time is never corrected twice
+
+The contract said geotag recognises its own GPS "via the `GPSProcessingMethod` marker"; the code did not read the
+marker at all. Once prep had read a file again, any position counted as the device's own, and the camera's offset was
+applied to a time geotag had already corrected. An offset re-derived from the camera's own GPS came out the same, but
+a manual or validated offset moved the photo a second time: a test now shows the old code renaming a photo from 14:30
+to 14:40 on a re-run. Vasile: *"If a photo is reprocessed, its GPSProcessingMethod should be interpreted as "no GPS".
+In other words, GPSProcessingMethod should cause the script to ignore its position until its position is (re)calculated,
+at which time its position should be overwritten with the recalculated position. In addition, GPSProcessingMethod being
+there should mean that the photo has the right datetime already (so (re)processing should not update it). And if it
+does not have GPSProcessingMethod but has GPS, then it's datetime is anyway used as is AFAICR. This should also, I
+think, cover new photos - if they have GPS and no GPSProcessingMethod, it's OK, if they don't have GPS then their
+datetime must be fixed."* Phones write the field themselves; asked which values count: *"only geotag’s own values"*. A
+camera with its own GPS has its time corrected from that GPS, which "used as is" did not cover; asked whether to keep
+correcting it: *"yes"*. Such a photo, and one accepted as unlocated, had its time corrected with nothing written to say
+so; offered a new marker value or a record kept in the workspace: *"New marker value please. And I think it can go in
+GPSProcessingMethod, too"* — it is `time_only`. A photo geotag once placed and now places nowhere has geotag's old
+position cleared, so it is never read back as its own. A write the file already holds is no longer planned, so a re-run
+with nothing changed writes nothing.
+
+The §10 items had all been marked ruled; only those ruled on keep it — the gates, development, the automatic re-prep
+and the re-run recognition — as the earlier batches did.
+
 ## 2026-11-01 — the shared contract §10, the operator loop: five points ruled
 
 Proposed as intent §9, its rationale and build. The empty inbox as a fifth gate on geotag, which the code applied and
