@@ -64,6 +64,15 @@ def test_allocate_name_suffix_progression():
     assert cal._allocate_name("2024-07-03--14-00-00", ".jpg", occ) == "2024-07-03--14-00-00-002.jpg"
 
 
+@pytest.mark.spec("RUL-suffix_choice_by_phase", test="TST-geotag_rename_planning-first_free_suffix_fills_a_gap")
+def test_first_free_suffix_fills_a_gap():
+    # Geotag takes the FIRST free name, by the same rule as prep: with the bare name and -002 taken,
+    # the next is -001, never -003 (merge alone appends at max+1).
+    occ = {"2024-07-03--14-00-00.jpg", "2024-07-03--14-00-00-002.jpg"}
+    assert cal._allocate_name("2024-07-03--14-00-00", ".jpg", occ) == "2024-07-03--14-00-00-001.jpg"
+    assert cal._allocate_name("2024-07-03--14-00-00", ".jpg", occ) == "2024-07-03--14-00-00-003.jpg"
+
+
 def test_allocate_name_case_insensitive():
     occ = {"stamp.jpg"}
     assert cal._allocate_name("STAMP", ".JPG", occ) == "STAMP-001.JPG"                # collides with stamp.jpg

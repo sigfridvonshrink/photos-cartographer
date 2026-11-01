@@ -2,6 +2,14 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-01 — the shared contract §6–§7, camera groups and the filename format: three points ruled
+
+Proposed as intent §5 and §6, their rationale and build. The old key name `geotag_filename_timestamp_format`, which no
+code reads, sent to history rather than kept as an alias rule: *"yes"*. Which free name each phase takes — prep and
+geotag the first free, merge the one above the highest used — tested for merge's half only: *"yes"*, prep's and
+geotag's half get their own test — each now fills a gap below a higher suffix. The §1 two-phase passage, marked history
+in the sample but never written here, now beside the old key name: *"ok"*.
+
 ## 2026-11-01 — what the shared contract recorded of its own past
 
 Two passages of the shared contract are history, not specification, and leave it for here as they were written. From §1:
