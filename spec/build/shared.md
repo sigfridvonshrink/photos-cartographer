@@ -470,7 +470,7 @@ the files already right. Each phase's own consequences are in its spec: prep §1
 
 :::{bld} Where the decisions live, and how a change is traced
 :id: BLD-decision_records
-:status: seed
+:status: ruled
 :realises: RUL-user_writes_decisions, RUL-cause_locatable, RUL-decision_revisable, RUL-withdrawal_undoes
 
 The decisions SHALL live in the `user_decision` fields of geotag's `photos-21`, `photos-22` and `photos-23`, each field

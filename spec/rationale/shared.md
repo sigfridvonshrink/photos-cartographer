@@ -438,7 +438,7 @@ its own terms, so the principle cannot drift between them.
 
 :::{rat} A user who distrusts opaque mutation can always ask why
 :id: RAT-why_did_this_change
-:status: seed
+:status: ruled
 :justifies: INV-every_change_from_the_record, RUL-cause_locatable, RUL-decision_revisable
 
 For irreplaceable photos, a user who distrusts opaque, automatic change must always be able to answer *why did this
@@ -448,7 +448,7 @@ record that the change can be traced back to, and revising the record revises th
 
 :::{rat} A time and a name are recomputed, not reverted
 :id: RAT-time_name_recomputed
-:status: seed
+:status: ruled
 :justifies: RUL-withdrawal_undoes
 
 A file's time and name are not rolled back when a decision is withdrawn but recomputed in place: reverting them would
@@ -457,7 +457,7 @@ un-position a file the user has already organized.
 
 :::{rat} One principle, stated once
 :id: RAT-one_authorship_principle
-:status: seed
+:status: ruled
 :justifies: INV-every_change_from_the_record
 
 The three phases share one stance on authorship, stated once; each phase states only how it meets it.
