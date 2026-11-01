@@ -110,7 +110,7 @@ def test_smartphone_group_gets_no_offset_cell(tmp_path, monkeypatch):
 
 # --- rerun preservation + completion -----------------------------------------
 
-@pytest.mark.spec("authored-fields-not-overwritten-1", "geotag-decision-fields-precreated-1", "geotag-preserve-user-decisions-1", "loop-geotag-rerun-safe-1", test="TST-geotag_time_decisions-rerun_preserves_decisions_and_completes")
+@pytest.mark.spec("authored-fields-not-overwritten-1", "geotag-decision-fields-precreated-1", "geotag-preserve-user-decisions-1", "loop-geotag-rerun-safe-1", "RUL-decision_kept", test="TST-geotag_time_decisions-rerun_preserves_decisions_and_completes")
 def test_rerun_preserves_decisions_and_completes(tmp_path, monkeypatch):
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []}, default_tz="Europe/Brussels")
@@ -147,7 +147,7 @@ def test_rerun_after_success_admitted_until_sealed(tmp_path, monkeypatch):
     assert not (ctl / cal.TIME_DECISIONS_ARTIFACT).exists()
 
 
-@pytest.mark.spec("RUL-rerun_does_what_changed", "loop-rerun-may-need-decisions-1", test="TST-geotag_time_decisions-new_destination_asks_only_its_own_decisions")
+@pytest.mark.spec("RUL-rerun_does_what_changed", "loop-rerun-may-need-decisions-1", "RUL-decision_kept", test="TST-geotag_time_decisions-new_destination_asks_only_its_own_decisions")
 def test_new_destination_asks_only_its_own_decisions(tmp_path, monkeypatch):
     """Media added to a new destination asks for that destination's decisions alone; every settled
     decision elsewhere stays as the user left it."""

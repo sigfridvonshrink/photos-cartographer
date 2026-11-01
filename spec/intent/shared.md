@@ -1130,11 +1130,11 @@ not been merged.
 :verify: required
 :aliases: loop-geotag-rerun-safe-1
 :refines: RUL-geotag_rerunnable
+:uses: RUL-decision_kept, RUL-mutate_on_difference
 
-A geotag re-run SHALL keep every decision the user made whose target is unchanged, and SHALL recognise in each file what
-an earlier run wrote there: a time geotag corrected SHALL NOT be corrected again, and a position geotag wrote SHALL be
-derived again and replaced, never kept as the file's own. A file SHALL be written only where it holds something other
-than what the run derives, so one already holding its corrected time, its position and its final name is left as it is.
+A geotag re-run SHALL recognise in each file what an earlier run wrote there: a time geotag corrected SHALL NOT be
+corrected again, and a position geotag wrote SHALL be derived again and replaced, never kept as the file's own. The
+user's decisions, and files already right, it keeps as every run does.
 :::
 
 :::{rul} Geotag's gates are the present state, not its history
@@ -1252,8 +1252,19 @@ work to be safe, and none SHALL leave a file in a state other than its inputs re
 :refines: INV-change_only_what_needs
 
 Work already done and still valid SHALL be reused, not repeated: a file's content and metadata SHALL be read, and the
-tracks parsed, only for inputs that are new or have changed, and a decision the user made SHALL be kept while its target
-is unchanged.
+tracks parsed, only for inputs that are new or have changed.
+:::
+
+:::{rul} A decision is kept while its target is unchanged
+:id: RUL-decision_kept
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: INV-change_only_what_needs
+
+A decision the user made SHALL be kept, by every phase and through every run, while what it decides about is
+unchanged.
 :::
 
 :::{rul} Only what depends on a change is made again
@@ -1271,15 +1282,15 @@ is.
 
 :::{rul} A file is changed only where it differs
 :id: RUL-mutate_on_difference
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
 :aliases: idem-mutate-on-real-diff-1
 :refines: INV-change_only_what_needs
 
-A file SHALL be moved, renamed or written only where its current state differs from what the run requires of it. A file
-already in its place, with its name and its metadata, SHALL produce no operation.
+In every phase and every run, a file SHALL be moved, renamed or written only where its current state differs from what
+the run requires of it. A file already in its place, with its name and its metadata, SHALL produce no operation.
 :::
 
 :::{rul} A run over unchanged inputs changes nothing

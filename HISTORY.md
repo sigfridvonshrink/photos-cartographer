@@ -14,6 +14,13 @@ it, and a JPEG's whole EXIF block must fit in 64 KB; values to 1,000 characters 
 JPEG and an ARW, and exiv2 read `fused+carto-time` back from both. Of the suffixes offered: *"+carto-time is ok"*. The
 bare position markers stay as they were; the suffix is appended once to whatever the field holds.
 
+## 2026-11-01 — decisions kept, and files changed only where they differ, in every phase
+
+Shown the re-run rule of intent §9 whole, which the new §10 rules overlapped twice, Vasile: *"why not just mandate "A
+decision the user made SHALL be kept while its target is unchanged" covering everything? and Written only where it
+differs could also be made globally applicable?"* Both are §10 rules for every phase and run; the re-run rule keeps only
+what is geotag's own — recognising what an earlier run wrote.
+
 ## 2026-11-01 — the shared contract §11, idempotency: three points ruled
 
 Proposed as intent §10, its rationale and build. A no-op run giving "the same plan", where each new plan carries a fresh
