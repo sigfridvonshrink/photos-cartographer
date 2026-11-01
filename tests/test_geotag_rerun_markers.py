@@ -211,16 +211,16 @@ def test_geotag_position_is_placed_again(tmp_path, monkeypatch):
     assert e["writes"]["GPSLatitude"] == pytest.approx(50.003)
 
 
-@pytest.mark.spec("geotag-time-only-marker-1", "RUL-geotag_rerun_keeps_settled", test="TST-geotag_rerun_markers-own_gps_camera_is_marked_time_only")
-def test_own_gps_camera_is_marked_time_only(tmp_path, monkeypatch):
+@pytest.mark.spec("geotag-time-only-marker-1", "RUL-geotag_rerun_keeps_settled", test="TST-geotag_rerun_markers-own_gps_camera_is_marked_time_fixed")
+def test_own_gps_camera_is_marked_time_fixed(tmp_path, monkeypatch):
     """A camera with its own GPS has its time corrected from that GPS, keeps the position, and is
-    marked time_only; the re-run then neither corrects it again nor uses it as an anchor."""
+    marked time-fixed; the re-run then neither corrects it again nor uses it as an anchor."""
     ws = _ws(tmp_path, [lambda ws: _rec(ws, f"{T}/a.arw", "2024:07:03 13:50:00", gps=(50.0, 4.0)),
                         lambda ws: _rec(ws, f"{T}/b.arw", "2024:07:03 14:40:00", gps=(50.005, 4.0))])
     _plan(monkeypatch, ws)
     a = _ops(ws)[f"{T}/a.arw"]
     assert a["writes"] == {"DateTimeOriginal": "2024:07:03 14:00:00", "OffsetTimeOriginal": "+02:00",
-                           "GPSProcessingMethod": "time_only"}
+                           "GPSProcessingMethod": "+carto-time"}
     _executed_and_reprepped(ws)
     _plan(monkeypatch, ws)
     assert _ops(ws) == {}
@@ -245,14 +245,26 @@ def test_gps_derived_offset_is_kept_for_later_photos(tmp_path, monkeypatch):
 @pytest.mark.spec("geotag-device-marker-native-1", test="TST-geotag_rerun_markers-a_devices_own_marker_is_native")
 def test_a_devices_own_marker_is_native(tmp_path, monkeypatch):
     """A phone's own GPSProcessingMethod is not geotag's: its position is kept and its time is not
-    taken as corrected."""
+    taken as corrected. Geotag's time mark is appended to the phone's value, never replacing it, and
+    read back the phone's GPS is still native while its time is fixed."""
     assert cal.geotag_marker("fused") is None and cal.geotag_marker(" interpolated ") == "interpolated"
+    assert cal.geotag_marker("fused+carto-time") == cal.geotag_marker("+carto-time") == "+carto-time"
+    assert cal.with_time_fixed("fused") == cal.with_time_fixed("fused+carto-time") == "fused+carto-time"
+    assert cal.with_time_fixed("") == cal.with_time_fixed(None) == "+carto-time"
     ws = _ws(tmp_path, [lambda ws: _rec(ws, f"{T}/p.jpg", "2024:07:03 14:30:00", key=PHONE,
                                         gps=(48.0, 2.0), method="fused")])
     _plan(monkeypatch, ws)
     p = _ops(ws)[f"{T}/p.jpg"]
     assert "GPSLatitude" not in p["writes"]                                   # native position kept
     assert p["writes"]["DateTimeOriginal"] == "2024:07:03 14:30:00"
+    assert p["writes"]["GPSProcessingMethod"] == "fused+carto-time"
+    _executed_and_reprepped(ws)
+    wf = cal.GeotagWorkflow(str(ws))
+    wf.handoff = json.loads((ws / ".photos-ingest" / "photos-11-handoff.json").read_text())
+    (f,) = wf.build_file_model()                                    # renamed by now
+    assert f["has_native_gps"] and f["geotag_marker"] == "+carto-time"
+    _plan(monkeypatch, ws)
+    assert _ops(ws) == {}
 
 
 @pytest.mark.spec("geotag-position-marker-not-native-1", test="TST-geotag_rerun_markers-unlocated_geotag_position_is_cleared")
@@ -275,4 +287,4 @@ def test_unlocated_geotag_position_is_cleared(tmp_path, monkeypatch):
     g.write_text(json.dumps(a))
     _plan(monkeypatch, ws)
     e = _ops(ws)[f"{T}/2024-07-03--18-00-00.arw"]
-    assert e["writes"]["GPSLatitude"] == "" and e["writes"]["GPSProcessingMethod"] == "time_only"
+    assert e["writes"]["GPSLatitude"] == "" and e["writes"]["GPSProcessingMethod"] == "+carto-time"

@@ -47,10 +47,10 @@ from .reporting import get_reporter
 
 __all__ = [
     'POSITION_MARKERS',
-    'TIME_ONLY_MARKER',
-    'GEOTAG_MARKERS',
+    'TIME_FIXED_SUFFIX',
     'geotag_marker',
-    'time_only_marker_op',
+    'with_time_fixed',
+    'time_fixed_marker_op',
     'haversine',
     'GPXPoint',
     'GPXIndex',
@@ -802,19 +802,27 @@ _GPS_OP_ORIGIN = {"gpx_interpolation": "recompute_automated", "gpx_extrapolation
                   "manual_locked": "apply_manual", "manual_fallback": "apply_manual"}
 _GPS_OP_MARKER = {"gpx_interpolation": "interpolated", "gpx_extrapolation": "interpolated",
                   "manual_locked": "manual_locked", "manual_fallback": "manual_fallback"}
-# Geotag's own GPSProcessingMethod values. Any of them means geotag already corrected the file's
-# time; a position marker also means the position is geotag's, so a re-run ignores it and places the
-# file again. `time_only` marks a corrected time beside a position geotag did not write (the
-# camera's own, or none). Any other value is the device's own and the GPS is native.
+# What geotag records in GPSProcessingMethod. A bare position marker means geotag set the position
+# and so fixed the time too; a re-run ignores the position and places the file again. The suffix,
+# appended to whatever the field held (the device's own value, or nothing), means geotag fixed the
+# time and kept the device's GPS or has set none. Anything else is the device's own: GPS native.
 POSITION_MARKERS = ("interpolated", "manual_locked", "manual_fallback")
-TIME_ONLY_MARKER = "time_only"
-GEOTAG_MARKERS = POSITION_MARKERS + (TIME_ONLY_MARKER,)
+TIME_FIXED_SUFFIX = "+carto-time"
 
 
 def geotag_marker(processing_method):
-    """The geotag marker a GPSProcessingMethod value carries, or None for a device's own value."""
-    v = processing_method.strip() if isinstance(processing_method, str) else None
-    return v if v in GEOTAG_MARKERS else None
+    """What geotag's mark in a GPSProcessingMethod value says: the bare position marker, the suffix
+    (time fixed, no geotag position), or None for a device's own value or none."""
+    v = processing_method.strip() if isinstance(processing_method, str) else ""
+    if v in POSITION_MARKERS:
+        return v
+    return TIME_FIXED_SUFFIX if v.endswith(TIME_FIXED_SUFFIX) else None
+
+
+def with_time_fixed(processing_method):
+    """`processing_method` with the time-fixed suffix appended once (the device's value is kept)."""
+    v = processing_method.strip() if isinstance(processing_method, str) else ""
+    return v if v.endswith(TIME_FIXED_SUFFIX) else v + TIME_FIXED_SUFFIX
 
 
 def _local_time_and_offset(resolved_utc, tz):
@@ -836,6 +844,19 @@ def _make_op(typ, rel, reason, semantic, preconditions):
           "type": typ, "relative_path": rel, "reason": reason, "preconditions": preconditions}
     op.update(semantic)
     return op
+
+
+def time_fixed_marker_op(file, clear_position=False):
+    """The marker write recording that geotag fixed `file`'s time and wrote no position: the suffix
+    appended to the device's own GPSProcessingMethod. With `clear_position`, the position an earlier
+    geotag run wrote is cleared, and with it its marker, leaving the suffix alone."""
+    pre = {"content_fingerprint": file.get("content_fingerprint"),
+           "size": file.get("size"), "mtime_ns": file.get("mtime_ns")}
+    if clear_position:
+        writes = {**_revert_tags({"present": False}), "GPSProcessingMethod": TIME_FIXED_SUFFIX}
+    else:
+        writes = {"GPSProcessingMethod": with_time_fixed(file.get("processing_method"))}
+    return _make_op("gps_marker_write", file["relative_path"], "time provenance", {"writes": writes}, pre)
 
 
 def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename):
@@ -873,9 +894,9 @@ def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename):
             ops.append(_make_op("gps_marker_write", rel, "gps provenance",
                                 {"writes": {"GPSProcessingMethod": new_marker}}, pre))
     elif marker in POSITION_MARKERS:
-        ops.append(time_only_marker_op(file, clear_position=True))   # geotag's old fix: not kept
-    elif time_corrected and marker != TIME_ONLY_MARKER:
-        ops.append(time_only_marker_op(file))
+        ops.append(time_fixed_marker_op(file, clear_position=True))  # geotag's old fix: not kept
+    elif time_corrected and marker != TIME_FIXED_SUFFIX:
+        ops.append(time_fixed_marker_op(file))
 
     if rename and rename.get("rename"):
         ops.append(_make_op("rename_no_clobber", rel, "destination-local timestamp name",
@@ -888,17 +909,6 @@ def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename):
 # Prep's per-photo log carried forward + geotag steps appended. A derived
 # consolidation of artifacts already written — no new authority.
 # ============================================================================
-
-def time_only_marker_op(file, clear_position=False):
-    """The marker write recording that geotag corrected `file`'s time and wrote no position; with
-    `clear_position`, also clearing a position an earlier geotag run wrote and this one does not."""
-    pre = {"content_fingerprint": file.get("content_fingerprint"),
-           "size": file.get("size"), "mtime_ns": file.get("mtime_ns")}
-    writes = {"GPSProcessingMethod": TIME_ONLY_MARKER}
-    if clear_position:
-        writes = {**_revert_tags({"present": False}), **writes}
-    return _make_op("gps_marker_write", file["relative_path"], "time provenance", {"writes": writes}, pre)
-
 
 def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, ledger):
     """photos-26-complete-log.json's `photos` (§13.3): a deep copy of prep's per-photo, content-

@@ -1644,14 +1644,14 @@
       "area": "geotag",
       "criticality": "med",
       "anti": false,
-      "title": "A file whose time geotag corrects without writing a position is marked time_only",
+      "title": "A file whose time geotag fixes without writing a position gets +carto-time appended to its GPSProcessingMethod, the device's own value kept",
       "spec": {
         "file": "photos-2-geotag-workflow.md",
         "section": "28.2"
       },
       "coverage": "covered",
       "must_cover": true,
-      "test": "tests/test_geotag_rerun_markers.py::test_own_gps_camera_is_marked_time_only"
+      "test": "tests/test_geotag_rerun_markers.py::test_own_gps_camera_is_marked_time_fixed"
     },
     {
       "id": "geotag-held-write-noop-1",
