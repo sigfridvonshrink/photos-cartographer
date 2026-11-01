@@ -395,3 +395,20 @@ def test_new_dump_after_successful_geotag_is_organized(tmp_path, monkeypatch):
     assert not plan.blockers, plan.blockers
     moves = [op for op in plan.operations if op.type == "move_no_clobber" and op.source.endswith("b.jpg")]
     assert len(moves) == 1 and "5-photos-by-date" in moves[0].destination
+
+
+@pytest.mark.spec("RUL-prep_takes_no_decision", test="TST-lifecycle-prep_takes_no_decision")
+def test_prep_takes_no_decision(tmp_path, monkeypatch):
+    """Prep asks nothing and carries no decision field: it organizes from the workspace and its config."""
+    _install(monkeypatch)
+    ws = _initialized(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"img")
+    monkeypatch.setattr("builtins.input", lambda *a: pytest.fail("prep asked the user something"))
+    plan = _plan(ws)
+    assert not plan.blockers
+    assert "user_decision" not in plan.to_json()
+    prep.PlanExecutor(str(ws)).execute(plan)
+    records = glob.glob(str(ws / ".photos-ingest" / "photos-1*.json"))
+    assert records                                                        # the plan, the handoff, the log
+    for rec in records:
+        assert "user_decision" not in open(rec).read(), rec

@@ -1348,7 +1348,7 @@ create every field a decision needs, so the user fills in values, never structur
 :id: RUL-prep_takes_no_decision
 :status: seed
 :criticality: med
-:verify: incidental
+:verify: required
 :uses: DEF-prep
 
 Prep SHALL ask the user for no decision: it SHALL organize from the state of the workspace and its configuration alone.
@@ -1358,7 +1358,7 @@ Prep SHALL ask the user for no decision: it SHALL organize from the state of the
 :id: RUL-cause_locatable
 :status: seed
 :criticality: med
-:verify: incidental
+:verify: required
 :aliases: authored-locatable-cause-1
 :uses: DEF-decision, DEF-dependency_cascade
 
