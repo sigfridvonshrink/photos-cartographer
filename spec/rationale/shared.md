@@ -462,3 +462,27 @@ un-position a file the user has already organized.
 
 The three phases share one stance on authorship, stated once; each phase states only how it meets it.
 :::
+
+## 12. The record of what was done, kept beyond the workspace
+
+:::{rat} The workspace is transient; the record must not be
+:id: RAT-record_outlives_workspace
+:status: seed
+:justifies: RUL-record_whole_each_phase
+
+The decisions drive a run, but their lasting value is as the record of what was done to the archive and why — and the
+workspace is transient: it is merged and set aside, or set aside at any phase boundary without ever advancing. Decisions
+are kept for the future only if preserved beyond it, in one known place, rather than scattered in per-file sidecars or,
+as with tools that change files and forget, not recorded at all. Since a workspace may stop at any phase, the record
+must be whole at each.
+:::
+
+:::{rat} A record no later phase can silently alter
+:id: RAT-records_attributable
+:status: seed
+:justifies: RUL-phase_writes_own_records, RUL-carry_forward_by_copy
+
+With each phase writing only its own records and carrying earlier ones forward by copy, every phase's output stays a
+stable record attributable to it, which no later phase can silently change: complete at its boundary, and evident if
+tampered with by what came after. That is why the log is three files, one per phase, not one changed in place.
+:::

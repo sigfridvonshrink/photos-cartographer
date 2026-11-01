@@ -230,7 +230,7 @@ def test_append_at_max_plus_one_integration():
 
 # --- Archive re-seal (merge §9.4 / shared §13.6) -------------------------------
 
-@pytest.mark.spec("archive-artifact-ownership-1", "merge-reseal-no-rederive-1", "merge-reseal-reads-not-rederive-geotag-1")
+@pytest.mark.spec("archive-artifact-ownership-1", "merge-reseal-no-rederive-1", "merge-reseal-reads-not-rederive-geotag-1", test="TST-merge_primitives-reseal_writes_own_manifest_and_never_touches_the_25")
 def test_reseal_writes_own_manifest_and_never_touches_the_25(tmp_path):
     ws = tmp_path / "ws"
     cd = utils.ensure_control_dir(str(ws))

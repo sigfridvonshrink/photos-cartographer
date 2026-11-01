@@ -303,3 +303,42 @@
 12	The retention half of this — keeping that record in one durable place that outlives the transient workspace — is defined in Section 13 (the archival package).	defer:shared-13	the record's retention is the archival package's
 12	The phase specs implement this via geotag Sections 9 and 20 (authored, preserved decision fields) and the journal/fingerprint discipline of prep Section 14.3 and geotag Sections 4–6 and 29; merge adds no human-decision fields but its placement is the same deterministic-rule-on-recorded-inputs kind, recorded the same way (`photos-3-merge-workflow.md` Sections 8–9).	BLD-decision_records	the pointers to the phases' own sections
 12	This section is the single statement of the principle they share.	RAT-one_authorship_principle	
+13	## 13. Archival package: the permanent record that outlives the workspace	dropped	a heading; the corpus's documents carry their own
+13	The decision artifacts drive a run, but their value is also long-term: they are the record of *what was done to this archive and why*.	RAT-record_outlives_workspace	
+13	The workspace, however, is transient (Section 10) — it may be merged into the permanent library and then torn down or reused, or it may simply be set aside at any phase boundary without ever advancing.	RAT-record_outlives_workspace	
+13	So authored decisions (Section 12) are only truly "saved for the future" if they are **preserved beyond the workspace**, consolidated in one known place rather than scattered across per-file sidecars or — as with tools that mutate and forget — left unrecorded.	RAT-record_outlives_workspace	
+13	This section defines the **archival package**: a single, portable bundle that is the complete, durable record of a dump's journey through the pipeline.	DEF-archival_package	
+13	It is what the user keeps when the workspace goes away.	DEF-archival_package	
+13.0	### 13.0 A complete audit record at the end of every phase	dropped	a heading; the corpus's documents carry their own
+13.0	The pipeline's recording guarantee is **recurring, not terminal**: at the end of *each* phase the workspace holds a complete, self-sufficient, human-readable audit record of everything done to the files **so far**, and that record stands on its own whether or not any later phase ever runs.	RUL-record_whole_each_phase	
+13.0	```text [sha1:52f073e5, 6 lines]	RUL-record_whole_each_phase	the diagram of the record growing phase by phase
+13.0	Concretely:	dropped	an introduction to the list; each part is its own item
+13.0	1. **Each phase brings the record up to date through its own work.** The per-photo **transformation log** is the human-readable spine, realized as one file per phase in the artifact-numbering scheme (Section 5): prep writes `photos-15-prep-log.json` (prep `photos-1-prep-workflow.md` Section 16.1); geotag's finalize produces `photos-26-complete-log.json` by **copying the prep log forward under its own phase name and extending the copy** (Section 13.3); merge produces `photos-35-merge-log.json` by copying the geotag log forward and extending it (Section 13.5).	DEF-transformation_log RUL-record_whole_each_phase BLD-phase_logs	
+13.0	Each step is **additive and owned**: a phase writes only its own phase-named log and never rewrites or invalidates an earlier phase's file (Section 13.0a) — it copies the predecessor forward and appends.	RUL-phase_writes_own_records RUL-carry_forward_by_copy	
+13.0	(Geotag does not re-derive prep's history; it consumes `photos-15-prep-log.json` and the prep journals as the prep portion of each journey.)	RUL-carry_forward_by_copy BLD-phase_logs	the prep portion comes from the prep log; the prep journals are not read for it
+13.0	2. **The SQLite database** (Section 13.4) is a live durable record updated by each phase, complete-as-of-now at every phase boundary; and at the end of each phase a **point-in-time backup snapshot** of it is captured and retained (`photos-15-prep-ingest.db`, `photos-26-geotag-ingest.db`, `photos-35-merge-ingest.db`, Section 13.4a), so a full DB image is preserved as of each phase, not just the last.	defer:shared-13.4	
+13.0	3. **The per-phase job artifacts** — prep's handoff/summary, geotag's decision/plan/execution-summary artifacts, merge's summary — each describe what their phase did and remain on disk.	BLD-phase_logs	
+13.0	4. **No later phase is a prerequisite for an earlier phase's record being whole.** A workspace prepped but never geotagged has a complete prep audit record; one geotagged and finalized but never merged has a complete prep+geotag record; merge only *adds* the library destination.	RUL-record_whole_each_phase	
+13.0	An absent later phase reads as "not advanced past phase N," never as "incomplete record."	RUL-record_whole_each_phase	
+13.0	The **archival package** (Sections 13.1–13.2) is the bundling of this record for retention.	DEF-archival_package	
+13.0	It is conventionally assembled at the finalize step (after geotag), because that is when a dump is usually "done"; but the *guarantee* that a complete audit record exists is not tied to finalize — it holds at every phase boundary.	defer:shared-13.1	
+13.0	The subsections below specify the package and the cumulative log;	dropped	a pointer to the subsections, which are their own items
+13.0	Section 13.5 specifies merge's additive extension.	dropped	a pointer to the subsections, which are their own items
+13.0a	### 13.0a Phase artifact ownership: no phase clobbers another phase's artifacts	dropped	a heading; the corpus's documents carry their own
+13.0a	Each numbered artifact is **owned by the single phase whose number it carries** (Section 5), and only that phase ever writes it.	RUL-phase_writes_own_records	
+13.0a	A phase may freely create, overwrite, or (for its own audit log) extend its **own** phase-named artifacts across its runs; it must **never** overwrite, truncate, mutate, or extend an artifact belonging to a different phase.	RUL-phase_writes_own_records	
+13.0a	The rule, stated once:	dropped	an introduction to the rule that follows
+13.0a	```text [sha1:f5df8111, 4 lines]	RUL-phase_writes_own_records RUL-carry_forward_by_copy BLD-record_ownership	
+13.0a	This is why the transformation log is three separate files rather than one mutated in place (Section 13.3): geotag does not edit prep's `photos-15-prep-log.json` — it copies it to `photos-26-complete-log.json` and extends that; merge does not edit `photos-26-complete-log.json` — it copies it to `photos-35-merge-log.json` and extends that.	RAT-records_attributable	
+13.0a	The same ownership holds for every artifact:	dropped	an introduction to the list; the list is build
+13.0a	1. **Prep (1X)** owns and writes `photos-11-handoff.json`, `photos-15-prep-log.json`, `photos-15-prep-ingest.db`.	BLD-record_ownership	
+13.0a	It is also the sole writer of the *live* SQLite cache/identity rows (Section 13.4) and the seeded `photos-00-config.json` (Section 4) — but those are phase-neutral 0X infrastructure with their own single-writer rules, not another phase's numbered artifact.	BLD-record_ownership	
+13.0a	2. **Geotag (2X)** owns and writes `photos-21`–`photos-26` (including `photos-26-complete-log.json` and `photos-26-geotag-ingest.db`).	BLD-record_ownership	
+13.0a	It reads prep's 1X artifacts read-only and never modifies them.	RUL-phase_writes_own_records	
+13.0a	(It writes only its own disjoint live-DB regions, Section 13.4.)	defer:shared-13.4	
+13.0a	3. **Merge (3X)** owns and writes `photos-31-merge-summary.json`, `photos-35-merge-log.json`, `photos-35-merge-ingest.db`.	BLD-record_ownership	
+13.0a	It reads geotag's and prep's artifacts read-only and never modifies them.	RUL-phase_writes_own_records	
+13.0a	(It writes only its own disjoint live-DB regions, Section 13.4.)	defer:shared-13.4	
+13.0a	Re-running a phase may legitimately refresh **its own** artifacts (a re-prep updates `photos-15-*`; geotag reruns update `photos-2X-*`); it still never touches another phase's.	RUL-phase_writes_own_records	
+13.0a	The benefit is that each phase's outputs are a stable, attributable record that a later phase cannot silently alter — combined with the per-phase completeness guarantee above, every phase's artifacts are both complete and tamper-evident with respect to later phases.	RAT-records_attributable	
+13.0a	(The archival package bundles copies of all phases' artifacts, Section 13.2; bundling is a read, not a write, so it does not violate ownership.)	BLD-record_ownership	
