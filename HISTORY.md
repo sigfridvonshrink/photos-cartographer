@@ -2,6 +2,11 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-01 — two more track formats
+
+`.fit` is also the extension of FITS astronomy images, which would then block prep: *"I don't use FITS"*. Asked whether
+zipped KML and IGC flight logs should block like the other track formats: *"add kmz and .igc"* — they do.
+
 ## 2026-11-01 — a prep plan goes stale when a file appears; every track format blocks
 
 Before this, a file added between prep's plan and its execute went unnoticed: execute checked only the files the plan
