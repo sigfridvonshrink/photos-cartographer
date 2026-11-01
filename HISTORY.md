@@ -14,6 +14,11 @@ it, and a JPEG's whole EXIF block must fit in 64 KB; values to 1,000 characters 
 JPEG and an ARW, and exiv2 read `fused+carto-time` back from both. Of the suffixes offered: *"+carto-time is ok"*. The
 bare position markers stay as they were; the suffix is appended once to whatever the field holds.
 
+## 2026-11-01 — the shared contract §12, authored decisions: ruled
+
+Proposed as intent §11, its rationale and build; with the original-values ledger the code keeps the batch's last two
+rules — a wrong decision fixed in the record, a withdrawn one undone. Vasile: *"all ruled"*.
+
 ## 2026-11-01 — every photo's own values kept, so a decision can always be revised
 
 Converting the shared contract §12 found the marker rule had made a clock offset a one-way door: once executed, a

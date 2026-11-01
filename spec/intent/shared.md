@@ -1310,7 +1310,7 @@ NOT treat earlier work as an error.
 
 :::{def} A decision
 :id: DEF-decision
-:status: seed
+:status: ruled
 :uses: DEF-geotag
 
 A **decision** is a value the user records in one of geotag's records for the tool to act on — a destination's
@@ -1320,7 +1320,7 @@ tool *proposes*; the user *decides*.
 
 :::{inv} Every change follows from the record
 :id: INV-every_change_from_the_record
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: incidental
@@ -1333,7 +1333,7 @@ inputs — never from a choice the tool makes on its own. An execution SHALL act
 
 :::{rul} The user writes the decisions; the tool lays out their fields
 :id: RUL-user_writes_decisions
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -1346,7 +1346,7 @@ create every field a decision needs, so the user fills in values, never structur
 
 :::{rul} Prep takes no decision
 :id: RUL-prep_takes_no_decision
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :uses: DEF-prep
@@ -1356,7 +1356,7 @@ Prep SHALL ask the user for no decision: it SHALL organize from the state of the
 
 :::{rul} The cause of every change can be found
 :id: RUL-cause_locatable
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: authored-locatable-cause-1
@@ -1368,7 +1368,7 @@ through the plan, to the record of what ran — so a wrong result points at a re
 
 :::{rul} A wrong decision is fixed in the record
 :id: RUL-decision_revisable
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -1381,7 +1381,7 @@ never need the mutated files repaired by hand.
 
 :::{rul} Withdrawing a decision undoes it
 :id: RUL-withdrawal_undoes
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: authored-withdraw-undoes-1
