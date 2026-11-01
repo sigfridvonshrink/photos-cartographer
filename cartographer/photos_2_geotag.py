@@ -451,8 +451,11 @@ class GeotagWorkflow:
                 "native_gps": ({"lat": parsed.get("GPSLatitude"), "lon": parsed.get("GPSLongitude"),
                                 "processing_method": parsed.get("GPSProcessingMethod")}
                                if (md.get("has_native_gps") or parsed.get("has_native_gps")) else None),
+                # A position geotag wrote is not the file's own: a re-run places the file again.
                 "has_native_gps": bool(md.get("has_native_gps") if md.get("has_native_gps") is not None
-                                       else parsed.get("has_native_gps")),
+                                       else parsed.get("has_native_gps"))
+                                  and geotag_marker(parsed.get("GPSProcessingMethod")) not in POSITION_MARKERS,
+                "geotag_marker": geotag_marker(parsed.get("GPSProcessingMethod")),
                 "metadata_field_set_version": md.get("field_set_version", FIELD_SET_VERSION),
                 "folder_class": rec.get("folder_class"),
                 "planned_filename": None,                    # set during the rename lookahead (Phase 6)
@@ -547,11 +550,13 @@ class GeotagWorkflow:
                 g = groups.get(group) or {}
                 if g.get("camera_group_class") != "camera":
                     continue                       # smartphones are solved per-file; no offset cell
-                gframes = [f for f in by_dest[dest] if f["camera_group_key"] == group]
+                gframes = [f for f in by_dest[dest] if f["camera_group_key"] == group and not f.get("geotag_marker")]
+                if not gframes:
+                    continue                       # every time here is corrected already: no offset to ask
                 dates = sorted({d for f in gframes if (d := _naive_date(f.get("source_naive_time")))})
                 for date in (dates if len(dates) > 1 else [None]):
                     sel = gframes if date is None else [f for f in gframes if _naive_date(f.get("source_naive_time")) == date]
-                    anchor_frames = [f for f in sel if f.get("native_gps")]
+                    anchor_frames = [f for f in sel if f.get("has_native_gps") and not f.get("geotag_marker")]
                     rep_naive = min((f.get("source_naive_time") for f in sel
                                      if _parse_camera_naive(f.get("source_naive_time"))), default=None)
                     bucket = group if date is None else f"{group}@{date}"
@@ -765,7 +770,8 @@ class GeotagWorkflow:
         window = cfg.get("gpx_anchor_max_clock_error_seconds")
         by_dest_group = {}
         for f in files:
-            by_dest_group.setdefault((f["destination"], f["camera_group_key"]), []).append(f)
+            if not f.get("geotag_marker"):                # a corrected time has no drift left to check
+                by_dest_group.setdefault((f["destination"], f["camera_group_key"]), []).append(f)
         resolved_by_path = {r["relative_path"]: r["resolved_utc"] for r in rows0
                             if r["resolved_utc_status"] == "valid"}
         prior_dests = ((prior or {}).get("destinations")) or {}
@@ -780,7 +786,7 @@ class GeotagWorkflow:
                 group, date = cell.get("camera_group"), cell.get("date")
                 frames = [f for f in by_dest_group.get((dest, group), [])
                           if date is None or _naive_date(f.get("source_naive_time")) == date]
-                if any(f.get("native_gps") and match_frame_to_gpx(f, gpx, cfg) for f in frames):
+                if any(f.get("has_native_gps") and match_frame_to_gpx(f, gpx, cfg) for f in frames):
                     continue                                  # has a native-GPS anchor -> reliably placeable
                 times = [t for f in frames if (t := _parse_utc(resolved_by_path.get(f["relative_path"])))]
                 if not times:
@@ -1255,7 +1261,9 @@ class GeotagWorkflow:
                 return res
 
         # metadata + revert-manual-GPS ops both produce a single batched, idempotent exiftool tag write
-        write_ops = [o for o in ops if o["type"] in self._META_OP_TYPES or o["type"] == "revert_manual_gps"]
+        # A revert goes first, so this run's own writes for the file land on top of the restored state.
+        write_ops = sorted((o for o in ops if o["type"] in self._META_OP_TYPES or o["type"] == "revert_manual_gps"),
+                           key=lambda o: o["type"] != "revert_manual_gps")
         if write_ops:
             tags = {}
             for o in write_ops:

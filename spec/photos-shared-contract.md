@@ -341,7 +341,7 @@ This section is the authoritative end-to-end view of how an operator drives all 
 Geotag is not a terminal, run-once phase. It may be re-run any number of times — including after a prior successful execution — to absorb media added later, **up until the workspace is merged**. Merge seals the workspace (Section 13.7), and a sealed workspace accepts no further prep or geotag; the freedom to re-run geotag exists across the prep→geotag cycles of a single workspace's life, and ends when that workspace's batch is merged into the library. (More media after a merge means a fresh workspace, Section 13.7 / 10.4.) The re-runnability before sealing is safe because:
 
 1. human decisions (timezones, accepted anchors, manual offsets, manual GPS) live in the `photos-2X` geotag JSON and are preserved across regeneration where their logical target is unchanged (cal Section 9);
-2. GPS that geotag applied is recognizable on rerun (e.g. via the `GPSProcessingMethod` marker), so already-placed files are no-ops, not re-writes;
+2. what geotag wrote is recognizable on rerun by its own `GPSProcessingMethod` marker (geotag Section 28.2): a marked file's time is already corrected and gets no second offset, a position geotag wrote is placed again rather than kept as native, and a write the file already holds is a no-op;
 3. renames are computed from destination-local civil time, so an already-finalized file recomputes to the same name and is a no-op (cal Section 27).
 
 What bounds the freedom is a small, fixed set of gating preconditions, not a "has geotag run before?" flag. Geotag may proceed whenever, and only when:

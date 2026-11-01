@@ -1034,7 +1034,7 @@ dependency. Prep's handoff is the one exception: it is checked by its content.
 
 :::{def} The managed folders
 :id: DEF-managed_folders
-:status: ruled
+:status: seed
 :uses: DEF-workspace, DEF-strays_folder
 
 The **managed folders** are the workspace's media folders, each with a fixed role: the **inbox**, where a dump arrives;
@@ -1045,7 +1045,7 @@ library.
 
 :::{def} The operator loop
 :id: DEF-operator_loop
-:status: ruled
+:status: seed
 :uses: DEF-prep, DEF-geotag, DEF-merge, DEF-managed_folders
 
 The **operator loop** is how the user drives the three phases through one workspace's life: prep organizes a dump; the
@@ -1056,7 +1056,7 @@ record; merge moves it into the library. Each phase's own loop is in its own spe
 
 :::{def} Finalize
 :id: DEF-finalize
-:status: ruled
+:status: seed
 :uses: DEF-geotag
 
 **Finalize** is geotag's closing command, given once the user judges the workspace's media done: it assembles the
@@ -1065,7 +1065,7 @@ workspace's permanent record and its complete transformation log.
 
 :::{def} Development
 :id: DEF-development
-:status: ruled
+:status: seed
 :uses: DEF-library
 
 **Development** is the later processing of photos into distribution copies — the JPEG and TIFF breakout — kept in
@@ -1074,7 +1074,7 @@ subfolders of a destination.
 
 :::{rul} Prep leaves the inbox empty
 :id: RUL-prep_empties_inbox
-:status: ruled
+:status: seed
 :criticality: med
 :verify: required
 :uses: DEF-managed_folders
@@ -1085,7 +1085,7 @@ time to missing metadata, and every file of no media class to the strays folder.
 
 :::{rul} Only photos are sorted into photos by destination
 :id: RUL-sort_photos_only
-:status: ruled
+:status: seed
 :criticality: med
 :anti: yes
 :verify: required
@@ -1098,7 +1098,7 @@ Geotag SHALL refuse to run while it holds anything else.
 
 :::{rul} Prep records every sort before geotag plans
 :id: RUL-prep_records_sort
-:status: ruled
+:status: seed
 :criticality: high
 :anti: yes
 :verify: required
@@ -1112,7 +1112,7 @@ identity forward without reading it again.
 
 :::{rul} Geotag may be re-run until merge
 :id: RUL-geotag_rerunnable
-:status: ruled
+:status: seed
 :criticality: med
 :verify: required
 :aliases: loop-geotag-rerunnable-1
@@ -1124,15 +1124,17 @@ not been merged.
 
 :::{rul} A re-run changes nothing already settled
 :id: RUL-geotag_rerun_keeps_settled
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
 :aliases: loop-geotag-rerun-safe-1
 :refines: RUL-geotag_rerunnable
 
-A geotag re-run SHALL keep every decision the user made whose target is unchanged, SHALL NOT write a position again into
-a file that already holds one, and SHALL leave a file that already has its final name with that name.
+A geotag re-run SHALL keep every decision the user made whose target is unchanged, and SHALL recognise in each file what
+an earlier run wrote there: a time geotag corrected SHALL NOT be corrected again, and a position geotag wrote SHALL be
+derived again and replaced, never kept as the file's own. A file SHALL be written only where it holds something other
+than what the run derives, so one already holding its corrected time, its position and its final name is left as it is.
 :::
 
 :::{rul} Geotag's gates are the present state, not its history
@@ -1152,7 +1154,7 @@ of prep and sort cycles before geotagging.
 
 :::{rul} A re-run does as much as what changed requires
 :id: RUL-rerun_does_what_changed
-:status: ruled
+:status: seed
 :criticality: low
 :verify: required
 :aliases: loop-rerun-may-need-decisions-1
@@ -1166,7 +1168,7 @@ the change affects.
 
 :::{rul} More dumps may follow until merge
 :id: RUL-more_dumps_until_merge
-:status: ruled
+:status: seed
 :criticality: med
 :verify: required
 :uses: DEF-operator_loop, DEF-merge
@@ -1177,7 +1179,7 @@ resumes from prep.
 
 :::{rul} Finalize is its own command, and merge requires it
 :id: RUL-finalize_explicit
-:status: ruled
+:status: seed
 :criticality: med
 :anti: yes
 :verify: required
@@ -1190,7 +1192,7 @@ has not been finalized.
 
 :::{rul} Merge takes only the finalized, current set
 :id: RUL-merge_takes_finalized_current
-:status: ruled
+:status: seed
 :criticality: high
 :anti: yes
 :verify: required
@@ -1204,7 +1206,7 @@ set. A refresh that changes only what describes a prep run SHALL NOT count as a 
 
 :::{rul} Merge ends the workspace
 :id: RUL-merge_is_terminal
-:status: ruled
+:status: seed
 :criticality: high
 :anti: yes
 :verify: required

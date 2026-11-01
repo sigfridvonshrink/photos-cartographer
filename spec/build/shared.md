@@ -418,7 +418,7 @@ saying so, before it plans.
 
 :::{bld} Where the loop's gates are checked
 :id: BLD-loop_gates
-:status: ruled
+:status: seed
 :realises: RUL-geotag_gates, RUL-sort_photos_only, RUL-development_after_merge
 
 `geotag plan` SHALL check every gate. `geotag execute` and `finalize` SHALL check the development gate and the
@@ -429,11 +429,15 @@ workspace's shape, and validate against the plan's own dependencies instead of t
 
 :::{bld} How a re-run recognises what is settled
 :id: BLD-rerun_recognition
-:status: seed
+:status: ruled
 :realises: RUL-geotag_rerun_keeps_settled
 
-A file that carries a position when prep reads it — the one geotag wrote among them — SHALL be classified
-`preserve_native`, and no position is written to it. Each position geotag writes SHALL carry a `GPSProcessingMethod`
-marker: `interpolated`, `manual_locked` or `manual_fallback`. Names SHALL be recomputed from the destination's local
-time, and a file already so named gets no rename (geotag §27).
+Geotag SHALL record what it wrote in the file's `GPSProcessingMethod`, with one of its own values: `interpolated`,
+`manual_locked` or `manual_fallback` beside each position it writes, and `time_only` when it corrects the time and writes
+no position. Any other value is the device's own, and the GPS beside it native. On a re-run, a file carrying one of
+geotag's values SHALL be resolved from its own time and offset tag with no clock offset, SHALL be no clock anchor and in
+no drift check, and a camera group's offset cells SHALL be built from its unmarked files alone. A file with a position
+marker SHALL count as having no native GPS and be placed again; one now placed nowhere has geotag's position cleared and
+is marked `time_only`. A write SHALL be planned only where the file does not already hold its value, and names are
+recomputed from the destination's local time, a file already so named getting no rename (geotag §27, §28.2).
 :::

@@ -145,8 +145,9 @@ def test_exiftool_failure_records_failure(tmp_path, monkeypatch):
     _mock_tools(monkeypatch, ws, write_ok=False)
     assert _execute(monkeypatch, ws) == 3
     s = _summary(ctl)
-    # every write fails and nothing is applied/already-satisfied -> total failure (§29.2 item 7)
-    assert s["status"] == "failed" and len(s["failures"]) == 2 and s["totals"]["metadata_time_writes"] == 0
+    # every write fails and nothing is applied/already-satisfied -> total failure (§29.2 item 7);
+    # two files, each a time write and its time_only marker
+    assert s["status"] == "failed" and len(s["failures"]) == 4 and s["totals"]["metadata_time_writes"] == 0
 
 
 # --- resume / idempotency ----------------------------------------------------
@@ -159,9 +160,9 @@ def test_resume_skips_confirmed_ops(tmp_path, monkeypatch):
     # second run: everything already confirmed -> skipped, nothing newly applied
     assert _execute(monkeypatch, ws) == 0
     s = _summary(ctl)
-    assert s["resume"]["newly_applied"] == 0 and s["resume"]["already_satisfied_skipped"] == 4
+    assert s["resume"]["newly_applied"] == 0 and s["resume"]["already_satisfied_skipped"] == 6
     # skips are also broken down per destination (§29.2 item 4) and sum to the global skip count
-    assert s["destinations"]["6-photos-by-dest/T"]["skipped"] == 4
+    assert s["destinations"]["6-photos-by-dest/T"]["skipped"] == 6
     assert sum(d["skipped"] for d in s["destinations"].values()) == s["resume"]["already_satisfied_skipped"]
 
 
