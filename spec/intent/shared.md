@@ -1440,7 +1440,7 @@ rewrite or extend its own records across its runs; it SHALL read every other pha
 
 :::{rul} An earlier record is carried forward by copying it
 :id: RUL-carry_forward_by_copy
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required

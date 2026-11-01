@@ -14,6 +14,12 @@ it, and a JPEG's whole EXIF block must fit in 64 KB; values to 1,000 characters 
 JPEG and an ARW, and exiv2 read `fused+carto-time` back from both. Of the suffixes offered: *"+carto-time is ok"*. The
 bare position markers stay as they were; the suffix is appended once to whatever the field holds.
 
+## 2026-11-01 — finalize copies prep's log; what it reads is not specified
+
+Answered: the intent states the result, not the sources, except that an earlier record is copied forward rather than
+derived again — one account per phase, which a history rebuilt from the journals could contradict. The journals stay,
+for resuming and auditing, and go into the archival package. Vasile: *"agree"*.
+
 ## 2026-11-01 — the shared contract §13.0–§13.0a, the per-phase record: two points ruled
 
 Proposed as intent §12, its rationale and build. Ownership stated by number band, the contract's per-phase file lists

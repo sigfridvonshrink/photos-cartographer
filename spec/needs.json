@@ -10807,7 +10807,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "With each phase writing only its own records and carrying earlier ones forward by copy, every phase's output stays a\nstable record attributable to it, which no later phase can silently change: complete at its boundary, and evident if\ntampered with by what came after. That is why the log is three files, one per phase, not one changed in place.",
+     "content": "With each phase writing only its own records and carrying earlier ones forward by copy, every phase's output stays a\nstable record attributable to it, which no later phase can silently change: complete at its boundary, and evident if\ntampered with by what came after. That is why the log is three files, one per phase, not one changed in place. And a\nphase that copies its predecessor's record, rather than deriving that history again from other sources, keeps one\naccount of each phase: a second, rebuilt account could disagree with the first.",
      "criticality": null,
      "docname": "rationale/shared",
      "doctype": ".md",
@@ -12596,7 +12596,7 @@
       "Shared — what every phase guarantees"
      ],
      "signature": null,
-     "status": "seed",
+     "status": "ruled",
      "style": null,
      "tags": [],
      "template": null,
