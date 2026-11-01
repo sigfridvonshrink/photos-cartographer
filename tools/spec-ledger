@@ -187,10 +187,10 @@ def check():
                 elif t not in ids:
                     bad.append(f"{stem}:{n}: §{sec} goes to {t}, which is not a corpus item")
         for sec in sorted({s for s, _ in seen}, key=_order):
-            for sentence in old.get(sec, []):
-                count = seen.get((sec, sentence), 0)
-                if count != 1:
-                    bad.append(f"{stem}: §{sec} sentence {'missing' if not count else 'listed twice'}: {sentence[:90]}")
+            for sentence in dict.fromkeys(old.get(sec, [])):
+                count, want = seen.get((sec, sentence), 0), old[sec].count(sentence)   # a sentence the spec repeats is listed as often
+                if count != want:
+                    bad.append(f"{stem}: §{sec} sentence {'missing' if count < want else 'listed twice'}: {sentence[:90]}")
             for (s, sentence) in seen:
                 if s == sec and sentence not in old.get(sec, []):
                     bad.append(f"{stem}: §{sec} lists a sentence the old spec does not have: {sentence[:90]}")
