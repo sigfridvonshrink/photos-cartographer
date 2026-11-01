@@ -79,7 +79,7 @@ def mock_read_metadata_concurrently(folders, max_workers=4, progress_coordinator
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("idem-no-op-run-1", "prep-by-dest-readonly-1", "prep-no-requarantine-1", "prep-report-no-op-facts-1", "prep-reuse-cache-unchanged-1", "prep-second-run-zero-mutations-1", "prep-tolerate-populated-folders-1", "prep-unchanged-no-op-1")
+@pytest.mark.spec("idem-no-op-run-1", "prep-by-dest-readonly-1", "prep-no-requarantine-1", "prep-report-no-op-facts-1", "prep-reuse-cache-unchanged-1", "prep-second-run-zero-mutations-1", "prep-tolerate-populated-folders-1", "prep-unchanged-no-op-1", test="TST-idempotency_cache-prep_idempotency_and_by_dest_accounting")
 def test_prep_idempotency_and_by_dest_accounting(mock_meta, tmp_path):
     ws = setup_workspace(tmp_path)
 

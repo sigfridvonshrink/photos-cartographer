@@ -413,3 +413,24 @@ Distribution copies made before geotag's time and position corrections would be 
 corrections would invalidate them. Nor is the workspace a place for processing image files at all: that work belongs
 to the library. A development folder's presence alone is the signal; nothing guesses whether it really holds output.
 :::
+
+## 10. Change only what needs changing
+
+:::{rat} Redoing settled work buys no safety
+:id: RAT-no_redo_to_be_safe
+:status: seed
+:justifies: INV-change_only_what_needs
+
+Settled work done again "to be safe" makes nothing safer: a file written with what it already holds gains nothing and
+risks a failed write, and reading a library's content again costs hours. What is still valid is the record of what was
+done; repeating it only adds chances to go wrong.
+:::
+
+:::{rat} One principle, stated once
+:id: RAT-one_idempotency_principle
+:status: seed
+:justifies: INV-change_only_what_needs
+
+The three phases share one sense of idempotency, stated once for all of them; each phase states only what it means in
+its own terms, so the principle cannot drift between them.
+:::

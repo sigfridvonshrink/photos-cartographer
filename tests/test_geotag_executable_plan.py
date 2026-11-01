@@ -46,6 +46,7 @@ def test_time_write_carries_its_offset():
     assert w == {"DateTimeOriginal": "2024:07:03 14:12:21", "OffsetTimeOriginal": "+02:00"}
 
 
+@pytest.mark.spec("RUL-mutate_on_difference", test="TST-geotag_executable_plan-a_time_the_file_holds_is_not_written_again")
 def test_a_time_the_file_holds_is_not_written_again():
     f = dict(_file(), raw_times={"DateTimeOriginal": "2024:07:03 14:12:21", "OffsetTimeOriginal": "+02:00"})
     assert "metadata_time_write" not in _types(

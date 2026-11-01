@@ -169,7 +169,7 @@ def _first_round(tmp_path, monkeypatch):
     return ws
 
 
-@pytest.mark.spec("loop-geotag-rerun-safe-1", "geotag-marker-time-corrected-1", "geotag-held-write-noop-1", "RUL-geotag_rerun_keeps_settled", test="TST-geotag_rerun_markers-manual_offset_is_not_applied_twice")
+@pytest.mark.spec("loop-geotag-rerun-safe-1", "geotag-marker-time-corrected-1", "geotag-held-write-noop-1", "RUL-geotag_rerun_keeps_settled", "RUL-no_op_run", test="TST-geotag_rerun_markers-manual_offset_is_not_applied_twice")
 def test_manual_offset_is_not_applied_twice(tmp_path, monkeypatch):
     ws = _first_round(tmp_path, monkeypatch)
     _plan(monkeypatch, ws)

@@ -1228,3 +1228,69 @@ library SHALL accept merges from many workspaces.
 Development SHALL happen in the library, after merge. A development subfolder anywhere in photos by destination —
 even an empty one — SHALL stop geotag's planning, execution and finalize, and merge.
 :::
+
+## 10. Change only what needs changing
+
+:::{inv} A run changes only what its inputs require
+:id: INV-change_only_what_needs
+:status: seed
+:criticality: high
+:anti: yes
+:verify: incidental
+:uses: DEF-prep, DEF-geotag, DEF-merge
+
+Every phase SHALL change only what its inputs actually require, as far as the work allows: no phase SHALL redo settled
+work to be safe, and none SHALL leave a file in a state other than its inputs require.
+:::
+
+:::{rul} Valid work is reused
+:id: RUL-reuse_valid_work
+:status: seed
+:criticality: med
+:verify: required
+:aliases: idem-reuse-not-recompute-1
+:refines: INV-change_only_what_needs
+
+Work already done and still valid SHALL be reused, not repeated: a file's content and metadata SHALL be read, and the
+tracks parsed, only for inputs that are new or have changed, and a decision the user made SHALL be kept while its target
+is unchanged.
+:::
+
+:::{rul} Only what depends on a change is made again
+:id: RUL-remake_only_what_depends
+:status: seed
+:criticality: med
+:verify: required
+:aliases: idem-recompute-staleness-only-1
+:uses: DEF-dependency_cascade
+:refines: INV-change_only_what_needs
+
+When an input changes, only the records that depend on it SHALL be made again; every other record SHALL be left as it
+is.
+:::
+
+:::{rul} A file is changed only where it differs
+:id: RUL-mutate_on_difference
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: idem-mutate-on-real-diff-1
+:refines: INV-change_only_what_needs
+
+A file SHALL be moved, renamed or written only where its current state differs from what the run requires of it. A file
+already in its place, with its name and its metadata, SHALL produce no operation.
+:::
+
+:::{rul} A run over unchanged inputs changes nothing
+:id: RUL-no_op_run
+:status: seed
+:criticality: med
+:verify: required
+:aliases: idem-no-op-run-1
+:refines: INV-change_only_what_needs
+
+A phase run over a workspace whose relevant state has not changed SHALL change nothing, and SHALL produce the same result
+— the same operations, fingerprints and names. It SHALL report the work it reused and the files already right, and SHALL
+NOT treat earlier work as an error.
+:::
