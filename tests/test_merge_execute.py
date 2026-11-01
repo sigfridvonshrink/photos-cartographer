@@ -772,3 +772,24 @@ def test_sealed_workspace_rerun_hardstops(tmp_path):
     before = open(os.path.join(str(lib), "Trip", "a.jpg"), "rb").read()
     assert merge._run_locked_workflow("execute", str(ws)) == 2          # sealed -> preflight blocker
     assert open(os.path.join(str(lib), "Trip", "a.jpg"), "rb").read() == before   # untouched
+
+
+@pytest.mark.spec("RUL-merge_is_terminal", test="TST-merge_execute-library_takes_a_second_workspace_after_the_first_is_sealed")
+def test_library_takes_a_second_workspace_after_the_first_is_sealed(tmp_path):
+    """Merge ends its workspace — sealed, it refuses to merge again — and more media reaches the same
+    library through a fresh workspace."""
+    ws1, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}], name="w1")
+    assert merge._run_locked_workflow("plan", str(ws1)) == 0
+    assert merge._run_locked_workflow("execute", str(ws1)) == 0
+    assert utils.is_sealed(str(ws1))
+    assert merge._run_locked_workflow("plan", str(ws1)) == 2
+
+    ws2, _ = _ws(tmp_path, [{"fp": "B", "dest": "Trip", "final_name": "b.jpg"}], name="w2")
+    cfg_p = ws2 / ".photos-ingest" / "photos-00-config.json"
+    cfg = json.loads(cfg_p.read_text())
+    cfg["merge"]["library_root"] = str(lib)
+    cfg_p.write_text(json.dumps(cfg))
+    assert merge._run_locked_workflow("plan", str(ws2)) == 0
+    assert merge._run_locked_workflow("execute", str(ws2)) == 0
+    assert utils.is_sealed(str(ws2))
+    assert sorted(os.listdir(os.path.join(str(lib), "Trip"))) == ["a.jpg", "b.jpg"]

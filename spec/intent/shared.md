@@ -1034,7 +1034,7 @@ dependency. Prep's handoff is the one exception: it is checked by its content.
 
 :::{def} The managed folders
 :id: DEF-managed_folders
-:status: seed
+:status: ruled
 :uses: DEF-workspace, DEF-strays_folder
 
 The **managed folders** are the workspace's media folders, each with a fixed role: the **inbox**, where a dump arrives;
@@ -1045,7 +1045,7 @@ library.
 
 :::{def} The operator loop
 :id: DEF-operator_loop
-:status: seed
+:status: ruled
 :uses: DEF-prep, DEF-geotag, DEF-merge, DEF-managed_folders
 
 The **operator loop** is how the user drives the three phases through one workspace's life: prep organizes a dump; the
@@ -1056,7 +1056,7 @@ record; merge moves it into the library. Each phase's own loop is in its own spe
 
 :::{def} Finalize
 :id: DEF-finalize
-:status: seed
+:status: ruled
 :uses: DEF-geotag
 
 **Finalize** is geotag's closing command, given once the user judges the workspace's media done: it assembles the
@@ -1065,7 +1065,7 @@ workspace's permanent record and its complete transformation log.
 
 :::{def} Development
 :id: DEF-development
-:status: seed
+:status: ruled
 :uses: DEF-library
 
 **Development** is the later processing of photos into distribution copies — the JPEG and TIFF breakout — kept in
@@ -1074,7 +1074,7 @@ subfolders of a destination.
 
 :::{rul} Prep leaves the inbox empty
 :id: RUL-prep_empties_inbox
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :uses: DEF-managed_folders
@@ -1085,7 +1085,7 @@ time to missing metadata, and every file of no media class to the strays folder.
 
 :::{rul} Only photos are sorted into photos by destination
 :id: RUL-sort_photos_only
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -1098,7 +1098,7 @@ Geotag SHALL refuse to run while it holds anything else.
 
 :::{rul} Prep records every sort before geotag plans
 :id: RUL-prep_records_sort
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -1112,9 +1112,9 @@ identity forward without reading it again.
 
 :::{rul} Geotag may be re-run until merge
 :id: RUL-geotag_rerunnable
-:status: seed
+:status: ruled
 :criticality: med
-:verify: incidental
+:verify: required
 :aliases: loop-geotag-rerunnable-1
 :uses: DEF-geotag, DEF-merge
 
@@ -1137,7 +1137,7 @@ a file that already holds one, and SHALL leave a file that already has its final
 
 :::{rul} Geotag's gates are the present state, not its history
 :id: RUL-geotag_gates
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -1152,9 +1152,9 @@ of prep and sort cycles before geotagging.
 
 :::{rul} A re-run does as much as what changed requires
 :id: RUL-rerun_does_what_changed
-:status: seed
+:status: ruled
 :criticality: low
-:verify: incidental
+:verify: required
 :aliases: loop-rerun-may-need-decisions-1
 :uses: DEF-dependency_cascade
 :refines: RUL-geotag_rerunnable
@@ -1166,9 +1166,9 @@ the change affects.
 
 :::{rul} More dumps may follow until merge
 :id: RUL-more_dumps_until_merge
-:status: seed
+:status: ruled
 :criticality: med
-:verify: incidental
+:verify: required
 :uses: DEF-operator_loop, DEF-merge
 
 A new dump SHALL be accepted into the inbox at any point before merge, after a successful geotag too; the loop then
@@ -1177,7 +1177,7 @@ resumes from prep.
 
 :::{rul} Finalize is its own command, and merge requires it
 :id: RUL-finalize_explicit
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -1190,7 +1190,7 @@ has not been finalized.
 
 :::{rul} Merge takes only the finalized, current set
 :id: RUL-merge_takes_finalized_current
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -1204,10 +1204,10 @@ set. A refresh that changes only what describes a prep run SHALL NOT count as a 
 
 :::{rul} Merge ends the workspace
 :id: RUL-merge_is_terminal
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
-:verify: incidental
+:verify: required
 :uses: DEF-merge, DEF-workspace
 
 Merge SHALL be the last phase run in a workspace: once it succeeds, more media SHALL go to a fresh workspace, and the
@@ -1216,7 +1216,7 @@ library SHALL accept merges from many workspaces.
 
 :::{rul} Development happens in the library, after merge
 :id: RUL-development_after_merge
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required

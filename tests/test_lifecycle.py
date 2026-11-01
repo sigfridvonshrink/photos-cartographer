@@ -377,3 +377,21 @@ def test_prep_builds_the_structure_once_and_never_removes_a_folder(tmp_path, mon
     assert any("2-missing-metadata" in b for b in blocked.blockers), blocked.blockers
     assert not any(op.type == "mkdir" and op.destination == "2-missing-metadata" for op in blocked.operations)
     assert not (ws / "2-missing-metadata").exists()
+
+
+@pytest.mark.spec("RUL-more_dumps_until_merge", test="TST-lifecycle-new_dump_after_successful_geotag_is_organized")
+def test_new_dump_after_successful_geotag_is_organized(tmp_path, monkeypatch):
+    """A dump arriving after geotag executed and finalized is prep's again: the loop resumes from prep."""
+    _install(monkeypatch)
+    ws = _initialized(tmp_path)
+    ctl = ws / ".photos-ingest"
+    (ctl / "photos-25-execution-summary.json").write_text('{"status": "success"}')
+    (ctl / "photos-26-complete-log.json").write_text('{"photos": {}}')
+    (ctl / "photos-26-archive-manifest.json").write_text('{"artifact_name": "m"}')
+    (ws / "6-photos-by-dest" / "Trip").mkdir()
+    (ws / "6-photos-by-dest" / "Trip" / "a.jpg").write_bytes(b"geotagged")
+    (ws / "0-sources" / "b.jpg").write_bytes(b"later")
+    plan = _plan(ws)
+    assert not plan.blockers, plan.blockers
+    moves = [op for op in plan.operations if op.type == "move_no_clobber" and op.source.endswith("b.jpg")]
+    assert len(moves) == 1 and "5-photos-by-date" in moves[0].destination

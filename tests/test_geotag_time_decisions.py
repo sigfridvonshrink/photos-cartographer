@@ -129,6 +129,53 @@ def test_rerun_preserves_decisions_and_completes(tmp_path, monkeypatch):
     assert art["status"] == "complete" and art["requires_user_input"] is False
 
 
+@pytest.mark.spec("RUL-geotag_rerunnable", "loop-geotag-rerunnable-1", test="TST-geotag_time_decisions-rerun_after_success_admitted_until_sealed")
+def test_rerun_after_success_admitted_until_sealed(tmp_path, monkeypatch):
+    """A successful execution and a finalize leave geotag re-runnable; only merge's seal stops it."""
+    ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
+             device_groups={"fixed_clock_cameras": [CAM], "phones": []}, default_tz="Europe/Brussels")
+    ctl = ws / ".photos-ingest"
+    (ctl / "photos-25-execution-summary.json").write_text('{"status": "success"}')
+    (ctl / "photos-26-complete-log.json").write_text('{"photos": {}}')
+    (ctl / "photos-26-archive-manifest.json").write_text('{"artifact_name": "m"}')
+    assert _run(monkeypatch, ws) == 0
+    first = _artifact(ws)
+    assert _run(monkeypatch, ws) == 0 and _artifact(ws) == first
+    (ctl / "photos-00-sealed.json").write_text('{"sealed": true, "merged_run_id": "r1"}')
+    (ctl / cal.TIME_DECISIONS_ARTIFACT).unlink()
+    assert _run(monkeypatch, ws) == 2
+    assert not (ctl / cal.TIME_DECISIONS_ARTIFACT).exists()
+
+
+@pytest.mark.spec("RUL-rerun_does_what_changed", "loop-rerun-may-need-decisions-1", test="TST-geotag_time_decisions-new_destination_asks_only_its_own_decisions")
+def test_new_destination_asks_only_its_own_decisions(tmp_path, monkeypatch):
+    """Media added to a new destination asks for that destination's decisions alone; every settled
+    decision elsewhere stays as the user left it."""
+    ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
+             device_groups={"fixed_clock_cameras": [CAM], "phones": []}, default_tz="Europe/Brussels")
+    _run(monkeypatch, ws)
+    def fill(art):
+        d = art["destinations"]["6-photos-by-dest/Brussels"]
+        d["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
+        d["camera_group_time_decisions"][CAM]["user_decision"]["manual_offset_seconds"] = -7187
+    _edit(ws, fill)
+    assert _run(monkeypatch, ws) == 0 and _artifact(ws)["status"] == "complete"
+    settled = _artifact(ws)["destinations"]["6-photos-by-dest/Brussels"]
+
+    ho_p = ws / ".photos-ingest" / "photos-11-handoff.json"
+    ho = json.loads(ho_p.read_text())
+    ho["files"].append(_hfile("6-photos-by-dest/Rome/b.jpg"))
+    ho_p.write_text(json.dumps(ho))
+    (ws / "6-photos-by-dest" / "Rome").mkdir()
+    (ws / "6-photos-by-dest" / "Rome" / "b.jpg").write_bytes(b"img")
+    assert _run(monkeypatch, ws) == 0
+    art = _artifact(ws)
+    assert art["destinations"]["6-photos-by-dest/Brussels"] == settled
+    rome = art["destinations"]["6-photos-by-dest/Rome"]
+    assert rome["camera_group_time_decisions"][CAM]["requires_user_input"]
+    assert art["status"] == "requires_user_input"
+
+
 @pytest.mark.spec("geotag-recalc-only-affected-1")
 def test_determinism_unchanged_rerun_is_byte_identical(tmp_path, monkeypatch):
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],

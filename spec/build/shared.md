@@ -405,7 +405,7 @@ configuration.
 
 :::{bld} The loop's commands
 :id: BLD-loop_commands
-:status: seed
+:status: ruled
 :realises: DEF-operator_loop, DEF-finalize, RUL-prep_records_sort
 
 The loop SHALL run as: `prep plan`, `dry-run`, `execute`; the sort, by hand; the prep commands again; `geotag plan`, the
@@ -418,7 +418,7 @@ saying so, before it plans.
 
 :::{bld} Where the loop's gates are checked
 :id: BLD-loop_gates
-:status: seed
+:status: ruled
 :realises: RUL-geotag_gates, RUL-sort_photos_only, RUL-development_after_merge
 
 `geotag plan` SHALL check every gate. `geotag execute` and `finalize` SHALL check the development gate and the

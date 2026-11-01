@@ -2,6 +2,18 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-01 — the shared contract §10, the operator loop: five points ruled
+
+Proposed as intent §9, its rationale and build. The empty inbox as a fifth gate on geotag, which the code applied and
+the contract did not list: *"yes"*. Development barred from photos by destination at every point up to and including
+merge, where the contract said only "before geotag is settled": *"Yes. The script does not admit someone processing
+image files."* — his reason joins the rationale. Geotag's plan running prep itself when the only unrecorded change is a
+sort: *"yes, the idea is that if plan knows that after it there should be a re-prep, then why bother the user."* The
+four loop rules exercised only in passing — re-runnable until merge, a re-run does what changed, more dumps until
+merge, merge ends the workspace: *"yes they should get 4 tests"*. The decision editor, which had no sealed check and
+could still change a merged workspace's decisions: *"it should."* — it now refuses to open a sealed workspace, and a
+save reaching it through the console writes nothing. How a re-run recognises what geotag already wrote stays open.
+
 ## 2026-11-01 — two more track formats
 
 `.fit` is also the extension of FITS astronomy images, which would then block prep: *"I don't use FITS"*. Asked whether
