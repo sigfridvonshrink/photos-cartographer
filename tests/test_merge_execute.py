@@ -691,7 +691,7 @@ def test_merge_log_copies_photos25_forward_and_appends(tmp_path):
     assert log["tool"] == "photos-3-merge"
     journey = log["photos"]["A"]["journey"]
     assert journey[0]["phase"] == "geotag"                      # carried forward
-    assert journey[-1] == {"phase": "merge", "action": "placed",
+    assert journey[-1] == {"phase": "merge", "action": "placed", "from": "6-photos-by-dest/Trip/a.jpg",
                            "library_path": os.path.join(str(lib), "Trip", "a.jpg"),
                            "renamed_for_library": False}
     # photos-25 itself must be byte-unchanged (never edited).

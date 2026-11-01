@@ -527,8 +527,9 @@ re-seal does the same into `photos-35-archive-manifest.json` and `photos-35-arch
 :realises: RUL-log_entry_grows, RUL-log_keyed_by_fingerprint, RUL-log_cites_decisions, RUL-log_records_gps_reverts, RUL-log_human_readable, RUL-history_retained, RUL-partial_history_shown
 
 Each log SHALL be pretty-printed JSON with sorted keys, its `photos` keyed by the content fingerprint (`content_fingerprint`),
-each entry carrying `final_path` and a `journey` of steps, each step naming its `phase` and `action` and, where a decision
-caused it, a `because` pointing into the decision record (`photos-21 destinations.<dest>...`). Geotag's steps SHALL be
+each entry carrying `final_path` and a `journey` of steps, each step naming its `phase` and `action`, a move or rename
+its `from` and `to` — the first step's `from` being the photo's path in the dump — and, where a decision caused it, a
+`because` pointing into the decision record (`photos-21 destinations.<dest>...`). Geotag's steps SHALL be
 `clock_offset_applied`, `resolved_utc`, `timezone_resolved`, `time_written`, `gps_written` (with its origin, method and,
 for a manual position, the pinned pre-state), `gps_reverted`, `gps_preserved` and `final_rename`, each naming its `run`;
 finalize SHALL take them from every executed pass — each superseded `photos-24` whose journal shows it ran, oldest

@@ -168,12 +168,13 @@ def build_prep_log(prior_photos, operations, cache_files, quarantine_evidence, i
             frm = pending_extnorm.pop(origin, os.path.basename(src))
             j["steps"].append(_step("extension_normalized", **{"from": frm, "to": os.path.basename(dst)}))
         elif "Initialize: move base dump into sources" in reason:
-            j["steps"].append(_step("consolidated_into_sources", to=dst))
+            j["steps"].append(_step("consolidated_into_sources", **{"from": src, "to": dst}))
         elif "Separate redundant JPG" in reason:
-            j["steps"].append(_step("redundant_jpeg_separated", to=dst))
+            j["steps"].append(_step("redundant_jpeg_separated", **{"from": src, "to": dst}))
         elif "Chronological Organization" in reason:
-            j["steps"].append(_step("organized", to=dst.split('/', 1)[0] + "/"))
-            j["steps"].append(_step("provisional_rename", to=os.path.basename(dst)))
+            # every move and rename names where the photo came from as well as where it went (§13.3)
+            j["steps"].append(_step("organized", **{"from": src, "to": dst.split('/', 1)[0] + "/"}))
+            j["steps"].append(_step("provisional_rename", **{"from": os.path.basename(src), "to": os.path.basename(dst)}))
         path_origin[dst] = origin
         j["current"] = dst
 
@@ -237,7 +238,8 @@ def build_prep_log(prior_photos, operations, cache_files, quarantine_evidence, i
             journey = list(prior.get("journey", [])) + run_steps
             if not run_steps and current and current != prior.get("final_path"):
                 # Recognized by-date -> by-dest move (carried-forward identity, no plan op).
-                journey.append({"phase": "user", "action": "moved_to_by_dest", "to": current, "run": run_id})
+                journey.append({"phase": "user", "action": "moved_to_by_dest", "from": prior.get("final_path"),
+                                "to": current, "run": run_id})
             entry = {**prior, "final_path": current or prior.get("final_path"), "journey": journey}
         else:
             entry = {"content_fingerprint": fp, "final_path": current, "journey": run_steps}

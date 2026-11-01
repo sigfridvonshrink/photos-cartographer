@@ -840,6 +840,7 @@ class MergeWorkflow:
             entry.setdefault("journey", []).append({
                 "phase": "merge",
                 "action": "already_present" if r["final_kind"] == "already_present" else "placed",
+                "from": r["by_dest_source"],
                 "library_path": r["library_path"],
                 "renamed_for_library": r["final_kind"] == "renamed_for_library"})
         return {"schema_version": 1, "tool": "photos-3-merge", "artifact_name": MERGE_LOG_ARTIFACT,
