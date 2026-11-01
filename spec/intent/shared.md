@@ -946,9 +946,9 @@ before any phase uses it.
 :verify: required
 :uses: DEF-tracks, DEF-strays_folder
 
-A track file found anywhere prep inventories — in the dump or in a managed folder — SHALL block prep's plan. Prep SHALL
-leave it where it is: never moving it, to the strays folder or anywhere else, and never treating it as a file of no
-media class.
+A track file — a recorded position log in any of the usual formats, whether or not geotag reads that format — found
+anywhere prep inventories, in the dump or in a managed folder, SHALL block prep's plan. Prep SHALL leave it where it is:
+never moving it, to the strays folder or anywhere else, and never treating it as a file of no media class.
 :::
 
 :::{rul} The tracks are a dependency of what geotag derives from them

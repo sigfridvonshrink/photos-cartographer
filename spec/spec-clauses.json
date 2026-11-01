@@ -4482,6 +4482,20 @@
       "test": "tests/test_idempotency_cache.py::test_stale_cache_upsert_fails"
     },
     {
+      "id": "prep-execute-rejects-new-file-1",
+      "area": "prep",
+      "criticality": "high",
+      "anti": true,
+      "title": "A file that appeared anywhere prep scans after planning makes the plan stale: execute rejects it before any mutation",
+      "spec": {
+        "file": "photos-1-prep-workflow.md",
+        "section": "14.3"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_stale_plan.py::test_new_file_since_planning_rejects_plan"
+    },
+    {
       "id": "prep-execute-snapshot-1",
       "area": "prep",
       "criticality": "high",

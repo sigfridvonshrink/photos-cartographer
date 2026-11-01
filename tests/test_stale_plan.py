@@ -103,3 +103,72 @@ def test_unchanged_config_executes(tmp_path, monkeypatch):
     plan = _build_plan(ws)
     prep.PlanExecutor(str(ws)).execute(plan)  # same config it was built from -> passes
     assert list(os.scandir(ws / "5-photos-by-date")), "the file should have been organized"
+
+
+@pytest.mark.spec("prep-execute-rejects-new-file-1", test="TST-stale_plan-new_file_since_planning_rejects_plan")
+@pytest.mark.parametrize("rel", ["0-sources/b.jpg", "0-sources/sub/b.jpg", "0-sources/.DS_Store",
+                                 "5-photos-by-date/2023-01-02/b.jpg", "6-photos-by-dest/Rome/b.jpg"])
+def test_new_file_since_planning_rejects_plan(tmp_path, monkeypatch, rel):
+    """Prep §14.3 item 2: a file that appears anywhere prep scans between plan and execute is unplanned,
+    so the plan is stale — refused before any mutation, the planned file and the newcomer left in place."""
+    _mock(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    plan = _build_plan(ws)
+    assert not plan.blockers, plan.blockers
+    (ws / rel).parent.mkdir(parents=True, exist_ok=True)
+    (ws / rel).write_bytes(b"BBBB")
+    with pytest.raises(ValueError, match=r"appeared since planning \(" + rel.replace(".", r"\.")):
+        prep.PlanExecutor(str(ws)).execute(plan)
+    assert os.path.exists(ws / "0-sources" / "a.jpg")
+    assert os.path.exists(ws / rel)
+
+
+@pytest.mark.spec("prep-execute-rejects-new-file-1", test="TST-stale_plan-track_file_since_planning_rejects_plan")
+def test_track_file_since_planning_rejects_plan(tmp_path, monkeypatch):
+    """A track dropped in after planning is refused like at planning: the rescan blocks on it."""
+    _mock(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    plan = _build_plan(ws)
+    (ws / "0-sources" / "t.gpx").write_text("<gpx/>")
+    with pytest.raises(ValueError, match="Track file in the workspace: 0-sources/t.gpx"):
+        prep.PlanExecutor(str(ws)).execute(plan)
+    assert os.path.exists(ws / "0-sources" / "t.gpx")
+
+
+@pytest.mark.spec("prep-execute-rejects-new-file-1", "prep-plan-memo-reuse-1",
+                  test="TST-stale_plan-replan_incorporates_new_file_reading_only_it")
+def test_replan_incorporates_new_file_reading_only_it(tmp_path, monkeypatch):
+    """After the refusal a new plan takes the newcomer in, fingerprinting only it: the refused plan's
+    fingerprints are reused from the memo (prep §10.3). Metadata is read a folder at a time, so a file
+    is re-read only when it shares a folder with one that needs reading; here they are apart."""
+    _mock(monkeypatch)
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "t")   # match the mock's engine_version
+    read, hashed = [], []
+    meta = utils.MetadataReader.read_metadata_concurrently
+
+    def spy_meta(folders, max_workers=4, progress_coordinator=None):
+        res, failed = meta(folders, max_workers, progress_coordinator)
+        read.extend(os.path.basename(p) for p in res)
+        return res, failed
+    monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", spy_meta)
+    fp = prep.ContentHasher.fingerprint_image
+    monkeypatch.setattr(prep.ContentHasher, "fingerprint_image",
+                        lambda p: (hashed.append(os.path.basename(p)), fp(p))[1])
+
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "trip1").mkdir()
+    (ws / "0-sources" / "trip1" / "a.jpg").write_bytes(b"AAAA")
+    plan = _build_plan(ws)
+    (ws / "0-sources" / "trip2").mkdir()
+    (ws / "0-sources" / "trip2" / "b.jpg").write_bytes(b"BBBB")
+    with pytest.raises(ValueError, match="appeared since planning"):
+        prep.PlanExecutor(str(ws)).execute(plan)
+
+    read.clear(); hashed.clear()
+    plan = _build_plan(ws)
+    assert "0-sources/trip2/b.jpg" in plan.inventory
+    assert read == ["b.jpg"] and hashed == ["b.jpg"]
+    prep.PlanExecutor(str(ws)).execute(plan)
+    assert not os.listdir(ws / "0-sources")

@@ -2,6 +2,17 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-01 — a prep plan goes stale when a file appears; every track format blocks
+
+Before this, a file added between prep's plan and its execute went unnoticed: execute checked only the files the plan
+had found, the newcomer stayed in the dump, and only geotag's plan and merge refused afterwards. Asked whether only the
+dump should count or every place prep scans: *"every place prep scans"* — the plan now records everything its scan
+found, and execute refuses a plan when a file has appeared since, or when the scan would now block. Asked whether
+geotag's execute and finalize, which do not check the dump, should refuse too: *"leave them as they are"*. Asked whether
+track formats other than GPX should block like it: *"forgot about these - yes, and add nmea, too."* — `.kml`, `.fit`,
+`.tcx` and `.nmea` now block prep wherever it scans; geotag still reads only GPX. A new plan reuses the refused plan's
+fingerprints; metadata is read a folder at a time, so a known file that shares a folder with a new one is read again.
+
 ## 2026-11-01 — the shared contract §8–§9, the tracks and the dependency cascade: four points ruled
 
 Proposed as intent §7 and §8, their rationale and build. The tracks' fingerprint recorded as a dependency always and in

@@ -211,7 +211,7 @@ def test_quiet_plan_executor_execution(mock_validate, mock_popen, workspace):
 
     plan = prep.Plan(
         plan_id="test_plan_id",
-        plan_version=1,
+        plan_version=prep.PLAN_SCHEMA_VERSION,
         command="prep",
         created_at="now",
         workspace_root=workspace,
