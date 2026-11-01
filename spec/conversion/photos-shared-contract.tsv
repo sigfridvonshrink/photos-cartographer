@@ -357,7 +357,7 @@
 13.2	The latest-phase log is the authoritative full record; the earlier ones are each phase's own standalone record (Section 13.0a).	RUL-log_entry_grows	
 13.2	All present are bundled.	RUL-package_contents	
 13.2	5. **Every run's journal** (`journal-<run>.json`), the history the logs are built from (Section 13.3a).	RUL-package_contents RUL-history_retained	
-13.2	The package is self-describing: its manifest records the workspace identity, the plan/execution ids it corresponds to, and every file it holds with its SHA-256, so its integrity is verifiable later.	RUL-package_self_describing BLD-archive_manifest	
+13.2	The package is self-describing: its manifest records the workspace identity — the id of the prep run that initialized the workspace, which no rename of its folder changes, with the folder's name beside it — the plan/execution ids it corresponds to, and every file it holds with its SHA-256, so its integrity is verifiable later.	RUL-package_self_describing BLD-archive_manifest	
 13.2	(When merge re-seals the package, Section 13.6, it re-bundles to include the merge artifacts — `photos-31-merge-summary.json`, `photos-35-merge-log.json`, `photos-35-merge-ingest.db` — and refreshes the manifest.)	defer:shared-13.6	
 13.3	### 13.3 The transformation log (`photos-26-complete-log.json`)	dropped	a heading; the corpus's documents carry their own
 13.3	The transformation log answers, for any photo, "what happened to this file and why?" — in one place.	DEF-transformation_log	

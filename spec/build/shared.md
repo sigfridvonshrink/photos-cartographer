@@ -514,7 +514,8 @@ cache and identity rows while geotag and merge write only their own regions of i
 `geotag finalize` SHALL write `photos-26-complete-log.json` and the database snapshot `photos-26-geotag-ingest.db`, then
 list every file of the control directory but the transient ones — locks, `.tmp-` files, SQLite's `-journal` files, the
 plan memo `photos-00-plan-memo.db` and any `*-archive.tar.gz` — with its SHA-256 and path in
-`photos-26-archive-manifest.json`, recording the workspace folder's name and the plan and execution ids, and archive
+`photos-26-archive-manifest.json`, recording the workspace's identity — the init run id prep wrote in the guard — with
+the folder's name beside it, and the plan and execution ids, and archive
 those files and the manifest into `photos-26-archive.tar.gz` in the control directory, by a temporary name and an
 atomic rename. It SHALL write nothing else, and requires a ready plan whose execution succeeded (geotag §31). Merge's
 re-seal does the same into `photos-35-archive-manifest.json` and `photos-35-archive.tar.gz` (§13.6).

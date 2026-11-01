@@ -476,7 +476,7 @@ The archival package is **one archive file in the control directory** — `photo
 4. **The per-phase transformation logs** — every phase log present (`photos-15-prep-log.json`, `photos-26-complete-log.json`, and, if merge has run, `photos-35-merge-log.json`, Section 13.3), each a complete record through its phase and each a superset of the one before. The latest-phase log is the authoritative full record; the earlier ones are each phase's own standalone record (Section 13.0a). All present are bundled.
 5. **Every run's journal** (`journal-<run>.json`), the history the logs are built from (Section 13.3a).
 
-The package is self-describing: its manifest records the workspace identity, the plan/execution ids it corresponds to, and every file it holds with its SHA-256, so its integrity is verifiable later. (When merge re-seals the package, Section 13.6, it re-bundles to include the merge artifacts — `photos-31-merge-summary.json`, `photos-35-merge-log.json`, `photos-35-merge-ingest.db` — and refreshes the manifest.)
+The package is self-describing: its manifest records the workspace identity — the id of the prep run that initialized the workspace, which no rename of its folder changes, with the folder's name beside it — the plan/execution ids it corresponds to, and every file it holds with its SHA-256, so its integrity is verifiable later. (When merge re-seals the package, Section 13.6, it re-bundles to include the merge artifacts — `photos-31-merge-summary.json`, `photos-35-merge-log.json`, `photos-35-merge-ingest.db` — and refreshes the manifest.)
 
 ### 13.3 The transformation log (`photos-26-complete-log.json`)
 

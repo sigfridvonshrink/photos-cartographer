@@ -382,6 +382,16 @@ def prep_db_snapshot_path(ws: str) -> str:
     """End-of-prep DB backup snapshot (shared §13.4a)."""
     return os.path.join(ws, CONTROL_DIR, "photos-15-prep-ingest.db")
 
+def workspace_id(ws: str):
+    """The workspace's own identity: the id of the prep run that initialized it, which prep records in
+    the guard (prep §3.1) and nothing changes after — unlike the folder's name. None if unreadable."""
+    try:
+        with open(guard_path(ws)) as f:
+            return (json.load(f) or {}).get("initialized_by_run")
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
 def _not_archived(name: str) -> bool:
     """A control-directory file the archival package does not carry: transient (a lock, a temp file,
     SQLite's rollback journal), the plan memo (scratch, shared contract §13.4), or an archive itself."""
@@ -733,6 +743,7 @@ def reseal_archival_package(ws: str, *, workspace_name: str, plan_id: str, execu
         "artifact_name": MERGE_ARCHIVE_MANIFEST,
         "schema_version": 1,
         "workspace": workspace_name,
+        "workspace_id": workspace_id(ws),
         "plan_id": plan_id,
         "execution_id": execution_id,
         "merge_run_id": merge_run_id,

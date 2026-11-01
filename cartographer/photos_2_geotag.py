@@ -51,7 +51,7 @@ from .photos_utils import (
     json_dependency, verify_json_dependency, handoff_content_fingerprint, write_json_artifact, write_versioned_json, db_path, ensure_control_dir,
     journal_path, ContentHasher, _move_no_clobber,
     prep_log_path, prep_db_snapshot_path, write_db_snapshot, take_zfs_snapshot,
-    control_archive_members, write_control_archive,
+    control_archive_members, write_control_archive, workspace_id,
     WorkspaceLock, ProgressCoordinator,
 )
 from .reporting import get_reporter, emit_next_step
@@ -1592,7 +1592,8 @@ class GeotagWorkflow:
         return {
             "artifact_type": "archive_manifest", "artifact_name": ARCHIVE_MANIFEST_ARTIFACT,
             "schema_version": 1,
-            "workspace": os.path.basename(os.path.abspath(ws)),
+            "workspace": os.path.basename(os.path.abspath(ws)),       # for a person to read
+            "workspace_id": workspace_id(ws),                          # the identity (§13.2)
             "plan_id": plan.get("plan_id"),
             "execution_id": (summary.get("run_metadata") or {}).get("execution_id"),
             "contents": contents,
