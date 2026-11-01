@@ -5097,6 +5097,7 @@
      "realises_back": [],
      "refines": [],
      "refines_back": [
+      "RUL-decision_kept",
       "RUL-mutate_on_difference",
       "RUL-no_op_run",
       "RUL-remake_only_what_depends",
@@ -12465,6 +12466,88 @@
      ],
      "verify": "required"
     },
+    "RUL-decision_kept": {
+     "aliases": null,
+     "anti": "yes",
+     "arch": {},
+     "assumes": [],
+     "assumes_back": [],
+     "choice_kind": null,
+     "completion": null,
+     "constraints": [],
+     "constraints_error": null,
+     "constraints_passed": true,
+     "constraints_results": {},
+     "content": "A decision the user made SHALL be kept, by every phase and through every run, while what it decides about is\nunchanged.",
+     "criticality": "high",
+     "docname": "intent/shared",
+     "doctype": ".md",
+     "duration": null,
+     "excepts": [],
+     "excepts_back": [],
+     "external_css": "external_link",
+     "external_url": null,
+     "follows_from": [],
+     "follows_from_back": [],
+     "forced": null,
+     "has_dead_links": false,
+     "has_forbidden_dead_links": false,
+     "id": "RUL-decision_kept",
+     "illustrates": [],
+     "illustrates_back": [],
+     "is_external": false,
+     "is_import": false,
+     "is_modified": false,
+     "jinja_content": false,
+     "justifies": [],
+     "justifies_back": [],
+     "layout": null,
+     "lineno": 1258,
+     "links": [],
+     "links_back": [],
+     "modifications": 0,
+     "nodeid": null,
+     "omit_reason": null,
+     "parent_need": null,
+     "parent_needs": [],
+     "parent_needs_back": [],
+     "parts": {},
+     "post_content": null,
+     "post_template": null,
+     "pre_content": null,
+     "pre_template": null,
+     "realises": [],
+     "realises_back": [],
+     "refines": [
+      "INV-change_only_what_needs"
+     ],
+     "refines_back": [],
+     "section_name": "10. Change only what needs changing",
+     "sections": [
+      "10. Change only what needs changing",
+      "Shared — what every phase guarantees"
+     ],
+     "signature": null,
+     "status": "ruled",
+     "style": null,
+     "tags": [],
+     "template": null,
+     "title": "A decision is kept while its target is unchanged",
+     "type": "rul",
+     "type_name": "Rule",
+     "upholds": [],
+     "upholds_back": [],
+     "uses": [],
+     "uses_back": [
+      "RUL-geotag_rerun_keeps_settled"
+     ],
+     "verifies": [],
+     "verifies_back": [
+      "TST-geotag_time_decisions-new_destination_asks_only_its_own_decisions",
+      "TST-geotag_time_decisions-rerun_preserves_decisions_and_completes"
+     ],
+     "verify": "required"
+    },
     "RUL-development_after_merge": {
      "aliases": "loop-dev-before-geotag-blocks-1",
      "anti": "yes",
@@ -13453,7 +13536,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "A geotag re-run SHALL keep every decision the user made whose target is unchanged, and SHALL recognise in each file what\nan earlier run wrote there: a time geotag corrected SHALL NOT be corrected again, and a position geotag wrote SHALL be\nderived again and replaced, never kept as the file's own. A file SHALL be written only where it holds something other\nthan what the run derives, so one already holding its corrected time, its position and its final name is left as it is.",
+     "content": "A geotag re-run SHALL recognise in each file what an earlier run wrote there: a time geotag corrected SHALL NOT be\ncorrected again, and a position geotag wrote SHALL be derived again and replaced, never kept as the file's own. The\nuser's decisions, and files already right, it keeps as every run does.",
      "criticality": "high",
      "docname": "intent/shared",
      "doctype": ".md",
@@ -13518,7 +13601,10 @@
      "type_name": "Rule",
      "upholds": [],
      "upholds_back": [],
-     "uses": [],
+     "uses": [
+      "RUL-decision_kept",
+      "RUL-mutate_on_difference"
+     ],
      "uses_back": [],
      "verifies": [],
      "verifies_back": [
@@ -14775,7 +14861,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "A file SHALL be moved, renamed or written only where its current state differs from what the run requires of it. A file\nalready in its place, with its name and its metadata, SHALL produce no operation.",
+     "content": "In every phase and every run, a file SHALL be moved, renamed or written only where its current state differs from what\nthe run requires of it. A file already in its place, with its name and its metadata, SHALL produce no operation.",
      "criticality": "med",
      "docname": "intent/shared",
      "doctype": ".md",
@@ -14799,7 +14885,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1272,
+     "lineno": 1283,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -14827,7 +14913,7 @@
       "Shared — what every phase guarantees"
      ],
      "signature": null,
-     "status": "seed",
+     "status": "ruled",
      "style": null,
      "tags": [],
      "template": null,
@@ -14837,7 +14923,9 @@
      "upholds": [],
      "upholds_back": [],
      "uses": [],
-     "uses_back": [],
+     "uses_back": [
+      "RUL-geotag_rerun_keeps_settled"
+     ],
      "verifies": [],
      "verifies_back": [
       "TST-geotag_executable_plan-a_time_the_file_holds_is_not_written_again",
@@ -14966,7 +15054,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1285,
+     "lineno": 1296,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -16014,7 +16102,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1259,
+     "lineno": 1270,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -16320,7 +16408,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "Work already done and still valid SHALL be reused, not repeated: a file's content and metadata SHALL be read, and the\ntracks parsed, only for inputs that are new or have changed, and a decision the user made SHALL be kept while its target\nis unchanged.",
+     "content": "Work already done and still valid SHALL be reused, not repeated: a file's content and metadata SHALL be read, and the\ntracks parsed, only for inputs that are new or have changed.",
      "criticality": "med",
      "docname": "intent/shared",
      "doctype": ".md",
@@ -21620,6 +21708,7 @@
      "uses": [],
      "uses_back": [],
      "verifies": [
+      "RUL-decision_kept",
       "RUL-rerun_does_what_changed"
      ],
      "verifies_back": [],
@@ -21772,6 +21861,7 @@
      "uses": [],
      "uses_back": [],
      "verifies": [
+      "RUL-decision_kept",
       "RUL-geotag_rerun_keeps_settled"
      ],
      "verifies_back": [],
@@ -25421,7 +25511,7 @@
      "verify": null
     }
    },
-   "needs_amount": 322,
+   "needs_amount": 323,
    "needs_schema": {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "properties": {
