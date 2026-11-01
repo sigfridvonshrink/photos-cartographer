@@ -2,6 +2,15 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-01 — what the shared contract recorded of its own past
+
+Two passages of the shared contract are history, not specification, and leave it for here as they were written. From §1:
+*"Most of this contract was written for the two-phase (prep + geotag) pipeline and continues to govern it; where a fact
+applies only to merge, that is called out explicitly (e.g. Sections 5, 10, 13, the library facts in Section 15)."* From
+§7.1: *"The geotag specification historically referred to this key as `geotag_filename_timestamp_format`. It is the
+**same** key as `filename_timestamp_format` defined here; the phase-neutral name is authoritative because the key is
+shared, and any remaining phase-specific name is an alias for it."* No code reads the old name.
+
 ## 2026-11-01 — the shared contract §5, the control directory: four points ruled
 
 Proposed as intent §4, its rationale and build. The numbering block disagreed with the listing and the code (geotag

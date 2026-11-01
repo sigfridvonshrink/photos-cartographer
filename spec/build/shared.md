@@ -286,3 +286,49 @@ Links: prep across the tree it walks (prep §6.2 item 3); geotag and merge at th
 merge precondition 0a), and through the handoff (geotag §7.2; merge precondition 3). Missing managed folders: prep §6.2
 item 7, geotag §13, merge precondition 0c.
 :::
+
+## 5. Camera groups, derived once
+
+:::{bld} `camera_group_key` and its version
+:id: BLD-camera_group_key
+:status: seed
+:realises: DEF-camera_group, RUL-prep_derives_camera_group, RUL-geotag_reuses_camera_group, RUL-camera_group_derivation_versioned, RUL-known_when_classified
+
+The key SHALL be `camera_group_key`, computed by prep from the serial, make, model and owner fields and emitted in both
+the handoff manifest and SQLite (prep §12); geotag consumes and classifies it (geotag §16). Its derivation SHALL be
+versioned by `CAMERA_GROUP_KEY_VERSION`, part of the metadata-freshness and dependency fingerprints. A group SHALL be
+known when its key is listed under `camera_time_and_timezone_policy.device_groups` — `phones` (mobile) or
+`fixed_clock_cameras` (fixed-clock).
+:::
+
+## 6. One filename format
+
+:::{bld} `filename_timestamp_format`
+:id: BLD-filename_timestamp_format
+:status: seed
+:realises: RUL-one_filename_format, DEF-timestamp_name
+
+The format SHALL be the configuration key `filename_timestamp_format`, default `"%Y-%m-%d--%H-%M-%S"`, which gives a
+timestamp of the form `YYYY-MM-DD--HH-MM-SS`. Both phases SHALL read it; it takes part in the dependency cascade (shared
+§9) through the filename-format fingerprint, and a change to it restales prep's by-date organization and geotag's
+executable rename plan.
+:::
+
+:::{bld} The `-NNN` suffix
+:id: BLD-name_suffix
+:status: seed
+:realises: RUL-suffix_no_clobber, RUL-suffix_choice_by_phase
+
+The names SHALL be `<timestamp>.ext` for the first file with a free base name, `<timestamp>-001.ext` for the first
+collision, `<timestamp>-002.ext` for the second, and so on. Each phase specifies its allocation where it plans its
+renames: prep §8 and §7.3, geotag §27, merge §7.
+:::
+
+:::{bld} Geotag's final name, step by step
+:id: BLD-geotag_final_name
+:status: seed
+:realises: RUL-geotag_name_final
+
+Geotag SHALL compute the final name as resolved UTC → the destination's civil timezone → a local naive datetime → the
+format.
+:::

@@ -119,7 +119,7 @@ def test_conflict_attributed_to_by_dest_folder(tmp_path, monkeypatch):
     assert trip["conflicts_or_duplicates"][0]["original_path"] == "0-sources/dup.jpg"
 
 
-@pytest.mark.spec("camera-prep-computes-key-1")
+@pytest.mark.spec("camera-prep-computes-key-1", test="TST-handoff-grouping_facts_identity_and_device_class")
 def test_grouping_facts_identity_and_device_class(tmp_path, monkeypatch, seed_from_live_config):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -134,7 +134,7 @@ def test_grouping_facts_identity_and_device_class(tmp_path, monkeypatch, seed_fr
     assert g["device_class"] == "phone"
 
 
-@pytest.mark.spec("camera-known-when-classified-1")
+@pytest.mark.spec("camera-known-when-classified-1", test="TST-handoff-unknown_device_class_when_not_configured")
 def test_unknown_device_class_when_not_configured(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)

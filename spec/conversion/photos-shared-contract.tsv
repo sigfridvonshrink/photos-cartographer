@@ -155,3 +155,44 @@
 5.3	An *empty* `0-sources/` is normal — the steady end-state, not a missing folder.)	RUL-missing_folder_blocks	
 5.3	These guards are structural, evaluated at each phase's startup right after the lock and the seal check (Section 2, Section 13.7), before any scan, plan, or mutation.	RUL-shape_checked_first	
 5.3	They compose with — but are distinct from — the input-validation discipline (Section 14, which checks *authored values*) and the dependency cascade (Section 9, which checks *change*): these check the *shape of the workspace itself*.	RAT-phases_rely_on_the_shape	
+6	## 6. Camera-group identity (`camera_group_key`)	dropped	a heading; its items are in intent §5, Camera groups, derived once
+6	Both phases identify a camera/device by a single derived key so grouping is computed once (by prep) and reused (by geotag), never reinvented.	DEF-camera_group RAT-grouping_computed_once	
+6	1. Prep computes `camera_group_key` from device-identity metadata (serial/make/model/owner fields) and emits it in both the handoff manifest and SQLite.	RUL-prep_derives_camera_group BLD-camera_group_key	
+6	2. The derivation is versioned by `CAMERA_GROUP_KEY_VERSION`; the version participates in metadata-freshness and dependency fingerprints so a change to the derivation is detectable rather than silently mixing old and new keys.	RUL-camera_group_derivation_versioned BLD-camera_group_key	
+6	3. Geotag reuses prep's `camera_group_key` rather than recomputing identity.	RUL-geotag_reuses_camera_group	
+6	Mobile vs fixed-clock *classification* is a separate config concern, governed by `camera_time_and_timezone_policy.device_groups` (`phones` = mobile, `fixed_clock_cameras` = fixed-clock) in the shared config (Section 4).	RUL-camera_classes_not_derivation BLD-camera_group_key	
+6	A group is "known" when its key is listed under one of those classes.	RUL-known_when_classified BLD-camera_group_key	
+6	`photos-1-prep-workflow.md` (Section 12) emits the key;	BLD-camera_group_key	
+6	`photos-2-geotag-workflow.md` (Section 16) consumes and classifies it.	BLD-camera_group_key	
+7	## 7. Filename timestamp format	dropped	a heading; its items are in intent §6, One filename format
+7	Both phases name files from a timestamp using a **single shared, config-driven format**.	RUL-one_filename_format DEF-timestamp_name	
+7	There is one format key for the whole pipeline, not one per phase, so the provisional names prep assigns and the final names geotag assigns are guaranteed to share the same textual shape and can never drift apart.	RUL-one_filename_format RAT-one_format_no_drift	
+7.1	### 7.1 The shared key	dropped	a heading; its items are in intent §6, One filename format
+7.1	The format lives in the shared configuration (Section 4) under a phase-neutral key:	RUL-one_filename_format BLD-filename_timestamp_format	
+7.1	```text [sha1:96357205, 1 lines]	BLD-filename_timestamp_format	
+7.1	The default produces a timestamp component of the form:	BLD-filename_timestamp_format	
+7.1	```text [sha1:10ed321c, 1 lines]	BLD-filename_timestamp_format	
+7.1	The format is never hard-coded in either phase; both read this key, and the key participates in the dependency cascade (Section 9).	RUL-one_filename_format RUL-config_in_dependencies BLD-filename_timestamp_format	
+7.1	Changing it makes any artifact whose names depend on it stale — in prep, the by-date organization; in geotag, the executable rename plan.	RUL-staleness_by_area BLD-filename_timestamp_format	
+7.1	> The geotag specification historically referred to this key as `geotag_filename_timestamp_format`.	history	an earlier name of the key; no code reads it
+7.1	It is the **same** key as `filename_timestamp_format` defined here; the phase-neutral name is authoritative because the key is shared, and any remaining phase-specific name is an alias for it.	history	an earlier name of the key; no code reads it
+7.2	### 7.2 The differentiating suffix	dropped	a heading; its items are in intent §6, One filename format
+7.2	A file whose timestamp component collides with one already taken receives a zero-padded differentiating suffix, allocated deterministically and no-clobber:	RUL-suffix_no_clobber DEF-timestamp_name	
+7.2	```text [sha1:a18a313e, 3 lines]	BLD-name_suffix	
+7.2	The suffix (`-NNN`) is allocated **no-clobber against a per-run, case-insensitive occupied-name set** — every on-disk and planned name is treated as occupied for the duration of the allocation loop — so two files never collide.	RUL-suffix_no_clobber	
+7.2	*Which* free name is chosen differs by phase, and deliberately so:	RUL-suffix_choice_by_phase	
+7.2	- **Prep and geotag** take the **first free** name: the bare `<timestamp>.ext` when available, otherwise the lowest free `-NNN`.	RUL-suffix_choice_by_phase	
+7.2	Bare-first is what makes an uncorrected file's provisional (prep) and final (geotag) names coincide, so geotag plans no needless rename (Section 7.3); the two phases use the identical rule so they never disagree on a name.	RAT-bare_first	
+7.2	- **Merge** instead **appends at `max+1`** (the next index above the highest already in use for that root name), never reusing a freed-up lower number, because the library is append-only and a re-run must reproduce the same name (merge spec `photos-3-merge-workflow.md` Section 7).	RUL-suffix_choice_by_phase RAT-merge_appends	
+7.2	Suffix allocation rules are specified per phase where the renames are planned (prep Section 8 / Section 7.3; geotag Section 27; merge spec Section 7).	BLD-name_suffix	
+7.3	### 7.3 Provisional (prep) vs. final (geotag) timestamps	dropped	a heading; its items are in intent §6, One filename format
+7.3	Both phases use the same format, but the **value** differs by phase and that difference is intentional:	RAT-same_shape_different_value	
+7.3	1. **Prep** derives the timestamp from the *raw, camera-naive* source timestamp, purely for organization and ordering.	RUL-prep_name_provisional	
+7.3	The resulting by-date name is **provisional** — prep does not correct, timezone-resolve, or UTC-convert it.	RUL-prep_name_provisional	
+7.3	2. **Geotag** recomputes the timestamp from *corrected, destination-local civil time* (resolved UTC → destination civil timezone → local naive datetime → this format) and rewrites the name to its **final** value.	RUL-geotag_name_final BLD-geotag_final_name	
+7.3	Because the shape is identical, a file's name changes between phases only when its timestamp is genuinely corrected; an uncorrected file's provisional and final names coincide, so geotag plans no needless rename for it.	RUL-uncorrected_keeps_its_name RAT-same_shape_different_value	
+7.4	### 7.4 Both phases use the same format; non-conforming names are dumps	dropped	a heading; its items are in intent §6, One filename format
+7.4	Both prep and geotag read the same `filename_timestamp_format` and emit the same name shape, so a file's provisional (prep) and final (geotag) names differ only when the timestamp is actually corrected (Section 7.3).	RUL-one_filename_format RUL-uncorrected_keeps_its_name	
+7.4	There is no format divergence to reconcile.	RAT-one_format_no_drift	
+7.4	A file already in the workspace whose name does **not** match the convention is not specially migrated or pattern-matched — it is simply treated as an ordinary dump: re-ingested and named by the pipeline like any other incoming file.	RUL-nonconforming_name_is_a_dump	
+7.4	The pipeline never tries to parse meaning out of a non-conforming existing filename; the timestamp comes from metadata, not from the name.	RUL-nonconforming_name_is_a_dump	

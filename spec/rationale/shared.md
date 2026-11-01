@@ -203,3 +203,53 @@ or moved out-of-band — not a state any phase produces. Silently rebuilding it 
 may have taken organized media with it. Recovering lost media — from an optional pre-mutation snapshot, say — is the
 operator's task.
 :::
+
+## 5. Camera groups, derived once
+
+:::{rat} Grouping computed once is never reinvented
+:id: RAT-grouping_computed_once
+:status: seed
+:justifies: RUL-prep_derives_camera_group, RUL-geotag_reuses_camera_group
+
+One derived key identifies a camera or device so that grouping is computed once, by prep, and reused by geotag — never
+reinvented.
+:::
+
+## 6. One filename format
+
+:::{rat} One key, so the names cannot drift apart
+:id: RAT-one_format_no_drift
+:status: seed
+:justifies: RUL-one_filename_format
+
+With one format key for the whole pipeline, the provisional names prep assigns and the final names geotag assigns are
+guaranteed to share the same textual shape and can never drift apart; there is no format divergence to reconcile.
+:::
+
+:::{rat} The same shape, a different value, on purpose
+:id: RAT-same_shape_different_value
+:status: seed
+:justifies: RUL-prep_name_provisional, RUL-geotag_name_final, RUL-uncorrected_keeps_its_name
+
+Both phases use the same format, but the **value** differs by phase and that difference is intentional. Because the
+shape is identical, a file's name changes between phases only when its timestamp is genuinely corrected; an uncorrected
+file's provisional and final names coincide, so geotag plans no needless rename for it.
+:::
+
+:::{rat} The first free name makes the two names coincide
+:id: RAT-bare_first
+:status: seed
+:justifies: RUL-suffix_choice_by_phase, RUL-uncorrected_keeps_its_name
+
+Bare-first is what makes an uncorrected file's provisional (prep) and final (geotag) names coincide, so geotag plans no
+needless rename; the two phases use the identical rule so they never disagree on a name.
+:::
+
+:::{rat} The library is append-only
+:id: RAT-merge_appends
+:status: seed
+:justifies: RUL-suffix_choice_by_phase
+
+Merge appends at `max+1` rather than reusing a freed-up lower number because the library is append-only and a re-run
+must reproduce the same name.
+:::
