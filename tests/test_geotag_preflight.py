@@ -144,7 +144,7 @@ def test_reprep_gate_blocks_and_geotag_never_records_the_move(tmp_path):
     assert json.loads(ho_p.read_text())["files"] == []          # the move was never recorded
 
 
-@pytest.mark.spec("geotag-sources-empty-gate-1")
+@pytest.mark.spec("geotag-sources-empty-gate-1", "RUL-geotag_gates", test="TST-geotag_preflight-0sources_nonempty_blocks")
 def test_0sources_nonempty_blocks(tmp_path):
     ws = _ws(tmp_path)
     (ws / "0-sources" / "leftover.jpg").write_bytes(b"x")
@@ -152,7 +152,7 @@ def test_0sources_nonempty_blocks(tmp_path):
     assert any("0-sources/ is not empty" in b for b in blockers), blockers
 
 
-@pytest.mark.spec("geotag-bydate-empty-gate-1", "loop-geotag-gating-preconditions-1")
+@pytest.mark.spec("geotag-bydate-empty-gate-1", "loop-geotag-gating-preconditions-1", test="TST-geotag_preflight-photo_left_in_by_date_blocks")
 def test_photo_left_in_by_date_blocks(tmp_path):
     ws = _ws(tmp_path)
     (ws / "5-photos-by-date" / "2023-01-01--00-00-00.jpg").write_bytes(b"x")
@@ -160,7 +160,7 @@ def test_photo_left_in_by_date_blocks(tmp_path):
     assert any("5-photos-by-date/ still contains" in b for b in blockers), blockers
 
 
-@pytest.mark.spec("geotag-development-check-strict-empty-1", "loop-dev-before-geotag-blocks-1")
+@pytest.mark.spec("geotag-development-check-strict-empty-1", "loop-dev-before-geotag-blocks-1", test="TST-geotag_preflight-dev_subfolder_blocks")
 def test_dev_subfolder_blocks(tmp_path):
     ws = _ws(tmp_path)
     (ws / "6-photos-by-dest" / "Trip" / "jpg").mkdir()       # empty dev subfolder still blocks
@@ -168,7 +168,7 @@ def test_dev_subfolder_blocks(tmp_path):
     assert any("Development has already started" in b for b in blockers), blockers
 
 
-@pytest.mark.spec("geotag-development-check-all-phases-1")
+@pytest.mark.spec("geotag-development-check-all-phases-1", "RUL-development_after_merge", test="TST-geotag_preflight-dev_subfolder_blocks_at_execute")
 def test_dev_subfolder_blocks_at_execute(tmp_path):
     # §7.1 is presence-strict AND re-checked at execute/finalize: an empty jpg/tif subfolder created
     # between `run` and `execute` must hard-stop execution (the per-op preconditions cannot catch it,
@@ -188,7 +188,7 @@ def test_execute_preflight_still_skips_planning_scope_gates(tmp_path):
     assert not any("0-sources/ is not empty" in b for b in blockers), blockers
 
 
-@pytest.mark.spec("geotag-bydest-no-video-1", "loop-sort-photo-only-1")
+@pytest.mark.spec("geotag-bydest-no-video-1", "loop-sort-photo-only-1", test="TST-geotag_preflight-video_in_by_dest_blocks")
 def test_video_in_by_dest_blocks(tmp_path):
     ws = _ws(tmp_path)
     (ws / "6-photos-by-dest" / "Trip" / "clip.mp4").write_bytes(b"v")
@@ -196,7 +196,7 @@ def test_video_in_by_dest_blocks(tmp_path):
     assert any("must contain only photos" in b and "video" in b for b in blockers), blockers
 
 
-@pytest.mark.spec("geotag-bydest-photo-only-1")
+@pytest.mark.spec("geotag-bydest-photo-only-1", "RUL-geotag_gates", "RUL-sort_photos_only", test="TST-geotag_preflight-other_file_in_by_dest_blocks")
 def test_other_file_in_by_dest_blocks(tmp_path):
     ws = _ws(tmp_path)
     (ws / "6-photos-by-dest" / "Trip" / "notes.txt").write_text("hi")
@@ -206,7 +206,7 @@ def test_other_file_in_by_dest_blocks(tmp_path):
 
 # --- §13.1 re-prep-after-move gate -------------------------------------------
 
-@pytest.mark.spec("geotag-targeted-reprep-blocker-1", "loop-no-behind-preps-back-1")
+@pytest.mark.spec("geotag-targeted-reprep-blocker-1", "loop-no-behind-preps-back-1", test="TST-geotag_preflight-unrecorded_by_dest_photo_demands_reprep")
 def test_unrecorded_by_dest_photo_demands_reprep(tmp_path):
     ws = _ws(tmp_path)                                        # a.jpg recorded
     (ws / "6-photos-by-dest" / "Trip" / "b.jpg").write_bytes(b"img")   # NOT in the handoff

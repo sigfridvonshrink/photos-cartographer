@@ -400,3 +400,40 @@ A photo's fingerprint SHALL be ImageMagick `identify`'s signature — a SHA-256 
 the `ffmpeg` stream MD5 (prep §9). A hash SHALL be a SHA-256 over the exact bytes of a numbered JSON record or the
 configuration.
 :::
+
+## 9. One loop across the phases
+
+:::{bld} The loop's commands
+:id: BLD-loop_commands
+:status: seed
+:realises: DEF-operator_loop, DEF-finalize, RUL-prep_records_sort
+
+The loop SHALL run as: `prep plan`, `dry-run`, `execute`; the sort, by hand; the prep commands again; `geotag plan`, the
+decision editor (`edit`) for what it asks, and `geotag plan` again until `photos-24-executable-plan.json` is ready;
+`geotag execute`, which writes `photos-25-execution-summary.json`; `geotag finalize`, which writes
+`photos-26-complete-log.json` and the archival package; and `merge plan`, `dry-run`, `execute`. When the only change
+prep has not recorded is a sort and the inbox is empty, `geotag plan` SHALL run prep's `plan` and `execute` itself,
+saying so, before it plans.
+:::
+
+:::{bld} Where the loop's gates are checked
+:id: BLD-loop_gates
+:status: seed
+:realises: RUL-geotag_gates, RUL-sort_photos_only, RUL-development_after_merge
+
+`geotag plan` SHALL check every gate. `geotag execute` and `finalize` SHALL check the development gate and the
+workspace's shape, and validate against the plan's own dependencies instead of the scope and re-prep gates (geotag §7,
+§13.1). Merge's preflight SHALL check the inbox, the development gate and that photos by destination holds only photos
+(merge §3). A development subfolder SHALL be one named in `destination_distribution_subfolders`.
+:::
+
+:::{bld} How a re-run recognises what is settled
+:id: BLD-rerun_recognition
+:status: seed
+:realises: RUL-geotag_rerun_keeps_settled
+
+A file that carries a position when prep reads it — the one geotag wrote among them — SHALL be classified
+`preserve_native`, and no position is written to it. Each position geotag writes SHALL carry a `GPSProcessingMethod`
+marker: `interpolated`, `manual_locked` or `manual_fallback`. Names SHALL be recomputed from the destination's local
+time, and a file already so named gets no rename (geotag §27).
+:::
