@@ -332,3 +332,61 @@ renames: prep §8 and §7.3, geotag §27, merge §7.
 Geotag SHALL compute the final name as resolved UTC → the destination's civil timezone → a local naive datetime → the
 format.
 :::
+
+## 7. The tracks, kept outside the managed folders
+
+:::{bld} `gpx_root`
+:id: BLD-gpx_root
+:status: seed
+:realises: DEF-tracks, RUL-tracks_outside_managed_folders
+
+The tracks' location SHALL be the configuration key `gpx_root`: a path, absolute or relative to the workspace, resolved
+through links before use; empty means no tracks. It MAY be anywhere outside `0-sources` … `6-photos-by-dest` — on any
+disk, or under the control directory, such as `.photos-ingest/gpx/`, which prep's skip of `.photos-ingest/` already keeps
+out of the scan. Geotag reads every `*.gpx` file beneath it. The value and the matching thresholds are read by geotag;
+their detail is geotag §15 and §19.
+:::
+
+:::{bld} Prep's skip of a `gpx_root` inside the tree
+:id: BLD-gpx_skip
+:status: seed
+:realises: RUL-tracks_skipped_if_inside
+
+Prep SHALL resolve `gpx_root` the same way and skip it as a whole subtree wherever it falls in the managed tree — a
+managed folder itself, or a folder nested in one — as it skips `.photos-ingest-quarantine/` (prep §3). A `gpx_root`
+outside the tree, or empty, SHALL make the skip a no-op.
+:::
+
+:::{bld} The GPX fingerprint
+:id: BLD-gpx_fingerprint
+:status: seed
+:realises: RUL-tracks_in_dependencies
+
+The GPX fingerprint SHALL be a SHA-256 over the resolved `gpx_root`, a version tag, and, in sorted order, each `*.gpx`
+file's path relative to the root and the SHA-256 of its bytes. An empty `gpx_root`, and a `gpx_root` that is not a
+directory, SHALL each give a fixed value of their own, the second with a warning. It SHALL be recorded as
+`gpx_fingerprint` in the `depends_on` of `photos-21-time-decisions.json`, `photos-22-gps-drift-validation.json`,
+`photos-23-gps-decisions.json` and `photos-24-executable-plan.json`, and checked before each is used.
+:::
+
+## 8. Nothing used once what it came from has changed
+
+:::{bld} Each phase's dependencies, in full
+:id: BLD-phase_dependencies
+:status: seed
+:realises: INV-no_stale_use
+
+Each phase SHALL record a record's dependencies in its `depends_on` block and check them before use, as its own spec
+states in full: prep §5; geotag §3–§6; merge §10.3. The cascade consumes media by content fingerprints, records by byte
+hashes, and the field-scoped configuration fingerprints (shared §4.2) that keep staleness surgical.
+:::
+
+:::{bld} How a fingerprint and a hash are computed
+:id: BLD-fingerprint_and_hash
+:status: seed
+:realises: DEF-fingerprint, DEF-hash, RUL-fingerprint_survives_mutation, RUL-hash_detects_any_change
+
+A photo's fingerprint SHALL be ImageMagick `identify`'s signature — a SHA-256 of the normalized pixel stream; a video's,
+the `ffmpeg` stream MD5 (prep §9). A hash SHALL be a SHA-256 over the exact bytes of a numbered JSON record or the
+configuration.
+:::

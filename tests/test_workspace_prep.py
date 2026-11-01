@@ -482,7 +482,7 @@ def test_plan_is_non_mutating(tmp_path, monkeypatch):
     assert not (cd / "photos-11-handoff.json").exists()         # no handoff (execute-only)
 
 
-@pytest.mark.spec("gpx-prep-defensive-skip-1", "prep-gpx-inside-tree-skip-1")
+@pytest.mark.spec("gpx-prep-defensive-skip-1", "prep-gpx-inside-tree-skip-1", test="TST-workspace_prep-gpx_root_inside_managed_tree_is_skipped")
 def test_gpx_root_inside_managed_tree_is_skipped(tmp_path, monkeypatch, seed_from_live_config):
     """Defensive GPX skip (shared contract §8.2): a gpx_root misconfigured to resolve inside a managed
     folder must be skipped during scanning so the GPX tracks are never organized / swept to strays —

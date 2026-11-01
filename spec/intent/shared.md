@@ -620,6 +620,7 @@ A re-plan whose result is identical to what is saved SHALL write nothing and set
 :criticality: med
 :verify: required
 :aliases: handoff-verified-by-content-1
+:refines: RUL-hash_detects_any_change
 
 Geotag SHALL verify prep's handoff before using it, though it lives among the control records: by recomputing the
 fingerprint of its content and comparing it with the one its dependencies recorded — by its content, not its exact
@@ -632,7 +633,7 @@ bytes.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: handoff-runonly-refresh-no-restale-1
+:aliases: handoff-runonly-refresh-no-restale-1, dep-handoff-dual-key-1
 :refines: RUL-handoff_verified_by_content
 
 A rewrite of the handoff that changes only what describes the run, not its content, SHALL NOT make anything downstream
@@ -896,4 +897,136 @@ a file whose time is not corrected.
 A file in the workspace whose name does not follow the format SHALL be treated as any other dump — taken in and named
 by the pipeline — never specially migrated or matched against patterns. No phase SHALL read meaning from a file's name:
 its timestamp SHALL come from its metadata.
+:::
+
+## 7. The tracks, kept outside the managed folders
+
+:::{def} The tracks
+:id: DEF-tracks
+:status: seed
+:uses: DEF-geotag, DEF-configuration
+
+A workspace's **tracks** are the recorded position logs geotag reads as evidence: to propose time anchors, and to place
+photos along them by interpolation or extrapolation. The configuration says where they are.
+:::
+
+:::{rul} Only geotag reads the tracks
+:id: RUL-tracks_geotag_only
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: gpx-prep-unaware-1
+:uses: DEF-tracks
+
+Geotag SHALL be the only phase that reads the tracks: it scans their location, parses them, fingerprints them and uses
+them as evidence. Prep SHALL NOT read, parse, fingerprint or move them, nor otherwise act on them. A track file found in
+the dump is not one of the tracks: prep SHALL treat it as any file of no media class.
+:::
+
+:::{rul} The tracks lie outside the managed folders
+:id: RUL-tracks_outside_managed_folders
+:status: seed
+:criticality: med
+:verify: none
+:omit_reason: a placement the configuration chooses; nothing checks it, and prep's skip covers the case where it is wrong
+:aliases: gpx-root-outside-tree-1
+:uses: DEF-tracks
+
+The tracks' location SHALL be outside the managed folders. Where outside them is the configuration's choice, not part
+of this contract.
+:::
+
+:::{rul} Tracks configured inside are skipped
+:id: RUL-tracks_skipped_if_inside
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: gpx-prep-defensive-skip-1
+:refines: RUL-tracks_outside_managed_folders
+:uses: RUL-not_inventoried
+
+If the tracks' location is configured inside the managed folders, prep SHALL leave it out of its inventory as a whole,
+as it does the quarantine, so that the tracks are never organized even then. The media beside them SHALL be organized as
+usual.
+:::
+
+:::{rul} The tracks are a dependency of what geotag derives from them
+:id: RUL-tracks_in_dependencies
+:status: seed
+:criticality: med
+:verify: required
+:aliases: gpx-geotag-fingerprint-cascade-1
+:uses: DEF-tracks, DEF-dependency_cascade
+
+Geotag SHALL record the tracks' fingerprint as a dependency of every record it derives with them — the time decisions,
+the drift validation, the GPS decisions and the executable plan — so that a change to the tracks makes those records
+stale.
+:::
+
+## 8. Nothing used once what it came from has changed
+
+:::{def} A fingerprint
+:id: DEF-fingerprint
+:status: seed
+
+A media file's **fingerprint** is the identity of its decoded content — a photo's pixels, a video's streams. Unqualified,
+*fingerprint* means this.
+:::
+
+:::{def} A hash
+:id: DEF-hash
+:status: seed
+
+A record's **hash** is a digest of its exact bytes — of a numbered record, or of the configuration. Unqualified, *hash*
+means this.
+:::
+
+:::{def} The dependency cascade
+:id: DEF-dependency_cascade
+:status: seed
+:uses: DEF-fingerprint, DEF-hash, DEF-config_areas
+
+The **dependency cascade** is how the phases keep a record from being used once what it was made from has changed: each
+record carries what it depends on — media by their fingerprints, other records by their hashes, and settings by the
+fingerprints of the configuration areas it reads — and each use checks them first. Its full name, the
+*dependency-fingerprint/hash cascade*, says that it tracks both kinds of identity.
+:::
+
+:::{inv} No record is used once what it came from has changed
+:id: INV-no_stale_use
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: dep-cascade-reject-stale-1
+:uses: DEF-dependency_cascade
+
+No phase SHALL use a record once anything it was derived from has changed. Each phase SHALL validate what it derives
+from, then create the record, record those dependencies in it, and refuse its use downstream when any of them has
+changed.
+:::
+
+:::{rul} A fingerprint survives what the pipeline does to a file
+:id: RUL-fingerprint_survives_mutation
+:status: seed
+:criticality: med
+:verify: required
+:aliases: dep-fingerprint-invariant-1
+:uses: DEF-fingerprint
+
+A media file's fingerprint SHALL stay the same when the pipeline rewrites its metadata or its position, or renames it.
+:::
+
+:::{rul} A hash changes with any byte
+:id: RUL-hash_detects_any_change
+:status: seed
+:criticality: med
+:verify: required
+:aliases: dep-hash-sensitive-1
+:uses: DEF-hash
+
+A record's hash SHALL change on any change to its bytes, and SHALL be what checks a record or the configuration as a
+dependency. Prep's handoff is the one exception: it is checked by its content.
 :::

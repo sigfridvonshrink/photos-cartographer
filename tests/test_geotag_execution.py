@@ -402,7 +402,7 @@ def test_apply_file_rename_skip_and_failure(tmp_path, monkeypatch):
     assert r["failed"] == ["oR"] and "rename failed" in r["blocker"]
 
 
-@pytest.mark.spec("geotag-filename-change-invalidates-plan-1", "geotag-no-stale-execution-1")
+@pytest.mark.spec("geotag-filename-change-invalidates-plan-1", "geotag-no-stale-execution-1", "RUL-tracks_in_dependencies", "INV-no_stale_use", test="TST-geotag_execution-revalidate_detects_each_stale_input")
 def test_revalidate_detects_each_stale_input(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     wf = cal.GeotagWorkflow(str(ws)); wf.preflight(for_execute=True)

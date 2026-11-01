@@ -137,7 +137,7 @@ def test_strays_scan_skipped_on_next_run(tmp_path, monkeypatch):
     assert os.path.exists(landed)                                # the stray is left untouched
 
 
-@pytest.mark.spec("gpx-prep-unaware-1")
+@pytest.mark.spec("gpx-prep-unaware-1", test="TST-strays-gpx_in_sources_is_an_ordinary_stray_never_parsed")
 def test_gpx_in_sources_is_an_ordinary_stray_never_parsed(tmp_path, monkeypatch):
     """Shared contract §8: GPX is geotag's alone — prep is GPX-unaware. With gpx_root at its default
     (outside the managed tree), a `.gpx` dropped into 0-sources is just an `other`-class file: prep

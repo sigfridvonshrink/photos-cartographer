@@ -102,7 +102,7 @@ def test_pixel_signature_distinct_for_different_photos():
 
 @requires_magick
 @requires_exiftool
-@pytest.mark.spec("prep-fingerprint-invariant-metadata-1")
+@pytest.mark.spec("prep-fingerprint-invariant-metadata-1", "RUL-fingerprint_survives_mutation", test="TST-content_hash-pixel_signature_is_exif_invariant")
 def test_pixel_signature_is_exif_invariant(tmp_path):
     # Copy the JPEG, mutate EXIF (date + GPS) on the copy without touching pixels;
     # the pixel signature must be unchanged. This is the property geotag relies

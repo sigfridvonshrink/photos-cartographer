@@ -111,7 +111,7 @@ def test_handoff_depends_on_coverage(tmp_path, monkeypatch):
 
 # --- Phase D: fingerprint/hash terminology (§9.1) ---------------------------
 
-@pytest.mark.spec("dep-fingerprint-invariant-1", "prep-byte-sha-artifacts-only-1")
+@pytest.mark.spec("dep-fingerprint-invariant-1", "prep-byte-sha-artifacts-only-1", test="TST-fingerprints-media_carries_fingerprint_and_no_byte_hash")
 def test_media_carries_fingerprint_and_no_byte_hash(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)

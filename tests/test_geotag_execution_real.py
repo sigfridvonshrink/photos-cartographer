@@ -39,6 +39,7 @@ MANAGED = ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
            "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"]
 
 
+@pytest.mark.spec("RUL-fingerprint_survives_mutation", test="TST-geotag_execution_real-exif_write_preserves_content_fingerprint")
 def test_exif_write_preserves_content_fingerprint(tmp_path):
     """The seam the executor relies on, against the real binaries: write EXIF, fingerprint is stable."""
     img = tmp_path / "img.jpg"; shutil.copy(FIXTURE, img)
