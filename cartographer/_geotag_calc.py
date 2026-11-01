@@ -46,6 +46,7 @@ from .photos_utils import (
 from .reporting import get_reporter
 
 __all__ = [
+    'describe_offset',
     'offset_decision_pointer',
     'manual_gps_pointer',
     'ORIGINAL_KEYS',
@@ -966,6 +967,16 @@ def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename):
 # consolidation of artifacts already written — no new authority.
 # ============================================================================
 
+def describe_offset(seconds):
+    """A clock offset as a person reads it (§13.3 item 5). The offset is what is added to the camera's
+    time to reach UTC, so a negative one means the camera's clock ran ahead of UTC."""
+    if not seconds:
+        return "camera clock on UTC"
+    s = abs(int(seconds))
+    parts = [f"{v} {u}" for v, u in ((s // 3600, "h"), (s % 3600 // 60, "min"), (s % 60, "s")) if v]
+    return f"camera clock {' '.join(parts)} {'ahead of' if seconds < 0 else 'behind'} UTC"
+
+
 def offset_decision_pointer(row, dest, cells):
     """Where the clock offset applied to a photo was decided: its exact (camera group, destination[,
     day]) cell in photos-21, or — when the drift check's validated offset replaced it — the matching
@@ -1008,6 +1019,7 @@ def _earlier_pass_steps(plan, confirmed, pre_by_fp):
             prov = time_op.get("provenance") or {}
             if prov.get("time_rule_used") == "camera_group_offset" and prov.get("utc_offset_used") is not None:
                 steps.append({"phase": "geotag", "action": "clock_offset_applied", "offset_seconds": prov["utc_offset_used"],
+                              "offset_description": describe_offset(prov["utc_offset_used"]),
                               "because": prov.get("because")})
             if prov.get("resolved_utc"):
                 steps.append({"phase": "geotag", "action": "resolved_utc", "value": prov["resolved_utc"]})
@@ -1084,6 +1096,7 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, l
             cells = (t_dests.get(dest) or {}).get("camera_group_time_decisions") or {}
             steps.append({"phase": "geotag", "action": "clock_offset_applied",
                           "offset_seconds": row["utc_offset_used"],
+                          "offset_description": describe_offset(row["utc_offset_used"]),
                           "because": offset_decision_pointer(dict(row, camera_group=row.get("camera_group") or group),
                                                              dest, cells)})
         if row.get("resolved_utc"):

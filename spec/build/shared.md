@@ -533,7 +533,8 @@ its `from` and `to` — the first step's `from` being the photo's path in the du
 there span days (`camera_group_time_decisions.<group>@<date>`), or the `photos-22` drift confirmation whose validated
 offset replaced it; a timezone its destination's cell; a manual position the photo's pin among `photos-23`'s review
 items or the destination's folder fallback, with the destination it was accepted from. Geotag's steps SHALL be
-`clock_offset_applied`, `resolved_utc`, `timezone_resolved`, `time_written`, `gps_written` (with its origin, method and,
+`clock_offset_applied` (its `offset_seconds` with an `offset_description` in words, such as "camera clock 1 h 55 min
+ahead of UTC"), `resolved_utc`, `timezone_resolved`, `time_written`, `gps_written` (with its origin, method and,
 for a manual position, the pinned pre-state), `gps_reverted`, `gps_preserved` and `final_rename`, each naming its `run`;
 finalize SHALL take them from every executed pass — each superseded `photos-24` whose journal shows it ran, oldest
 first, matched by fingerprint — before the current plan's, from the provenance each time write carries (geotag §31). Each run's journal SHALL be kept as
