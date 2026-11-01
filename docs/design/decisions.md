@@ -83,6 +83,11 @@ event/sink seam.
   names are configurable, so blurbs/docstrings/spec are exempt but runtime messages are not (#232).
 - **Self-documenting CLI** — bare `photos-cartographer` prints the role + phase list; bare `<phase>`
   prints that phase's subcommands (the tool is used a few times a year).
+- **A planning command prints the path it saved the plan to**, so the operator can review the artifact
+  without hunting for it. Out of spec; the spec keeps only the plan's fixed place.
+- **`dry-run` prints a concise summary, not the plan** — operation/move counts by type, blockers, and the
+  path to the full plan; the full plan is the saved artifact. Out of spec; the spec keeps that a dry run
+  reports on the real saved plan, never a simulation.
 
 ---
 

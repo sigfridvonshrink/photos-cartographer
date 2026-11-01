@@ -2,6 +2,17 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-01 — the shared contract §5, the control directory: four points ruled
+
+Proposed as intent §4, its rationale and build. The numbering block disagreed with the listing and the code (geotag
+"21–25; 25 = complete log", where both say 26; merge's 30 missing; three files the code writes not listed): *"fix
+numbering block to match code"* — both now match the code. The new invariant, a disturbed workspace never processed
+silently: *"yes"*. The two rules with no clause of their own — prep alone builds the structure, once; prep checks the
+whole tree for links, geotag and merge the top level — verified only in passing: *"they need their own tests"* — four
+new tests, and the existing root-link tests of geotag and merge, now verify them. The printed plan path and the dry-run
+summary's contents, output in a spec that carries none: *"move to design decisions"* — they are in
+`docs/design/decisions.md`; the spec keeps the fixed place and that a dry run reports on the real plan.
+
 ## 2026-10-31 — the shared contract §4, the configuration: four points ruled
 
 Proposed as intent §3, its rationale and build. Vasile, on whether any configuration edit should restale merge's plan

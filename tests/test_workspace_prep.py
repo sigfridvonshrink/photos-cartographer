@@ -715,3 +715,18 @@ def test_missing_folder_during_init_is_exempt(tmp_path, monkeypatch):
     cache.close()
     assert not any("non-conforming" in b for b in plan.blockers)
     assert any(op.type == "mkdir" for op in plan.operations)           # init plans the structure
+
+
+@pytest.mark.spec("RUL-who_checks_for_links", test="TST-workspace_prep-prep_blocks_a_link_under_the_destination_tree")
+def test_prep_blocks_a_link_under_the_destination_tree(tmp_path, monkeypatch):
+    """Prep never changes 6-photos-by-dest, yet it is the gatekeeper for links there: a link under it
+    blocks prep's plan, so no handoff is built while one is present."""
+    _mock_for_plan(monkeypatch)
+    external = tmp_path / "external"; external.mkdir(); (external / "e.jpg").write_bytes(b"E")
+    ws = _empty_initialized_ws(tmp_path)
+    (ws / "6-photos-by-dest" / "Trip").mkdir()
+    os.symlink(str(external), str(ws / "6-photos-by-dest" / "Trip" / "link"))
+    cache = photos_ingest.WorkspaceCache(str(ws), in_memory=True)
+    plan = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
+    cache.close()
+    assert any("Forbidden symlink" in b and "Trip/link" in b for b in plan.blockers), plan.blockers

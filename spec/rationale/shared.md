@@ -135,14 +135,12 @@ registry that earlier designs needed.
 Hidden dotfiles are swept to the recoverable quarantine, not merely skipped, so a dump leaves no hidden litter.
 :::
 
-:::{rat} The plan is reviewed where it lies
-:id: RAT-plan_reviewed_where_it_lies
+:::{rat} The dry run reads the persisted plan
+:id: RAT-dry_run_reads_the_saved_plan
 :status: seed
-:justifies: RUL-planning_names_its_plan, RUL-dry_run_summarises_the_real_plan
+:justifies: RUL-dry_run_summarises_the_real_plan
 
-The planning command prints the path it saved to so the operator can review the artifact without hunting for it. And
-because the full plan is a persisted artifact, the dry run summarizes the on-disk plan instead of printing all of it —
-still not a simulation.
+Because the full plan is a persisted artifact, the dry run reports on the on-disk plan — still not a simulation.
 :::
 
 :::{rat} A superseded plan stays recoverable; an unchanged one adds nothing

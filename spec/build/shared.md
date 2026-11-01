@@ -186,10 +186,13 @@ The control records SHALL be these files in `.photos-ingest/` (shared §13 for t
   photos-24-executable-plan.json   geotag-phase artifact
   photos-25-execution-summary.json geotag-phase artifact
   photos-26-complete-log.json      geotag-phase artifact: full transformation log (prep+geotag, at finalize, Section 13.3)
-  photos-26-geotag-ingest.db    geotag-phase artifact: DB backup snapshot, end of geotag (Section 13.4a)
+  photos-26-geotag-ingest.db       geotag-phase artifact: DB backup snapshot, end of geotag (Section 13.4a)
+  photos-26-archive-manifest.json  geotag-phase artifact: the archival package's manifest, at finalize (Section 13.2)
+  photos-30-merge-plan.json        merge-phase artifact: merge plan (written by `plan`, consumed by `dry-run`/`execute`)
   photos-31-merge-summary.json     merge-phase artifact: library-merge summary (Section 13.5)
   photos-35-merge-log.json         merge-phase artifact: full transformation log (prep+geotag+merge, Section 13.3)
   photos-35-merge-ingest.db        merge-phase artifact: DB backup snapshot, end of merge (Section 13.4a)
+  photos-35-archive-manifest.json  merge-phase artifact: the re-sealed package's manifest, superseding photos-26's (Section 13.6)
   gpx/                             gpx_root, when configured to live here (Section 8)
 ```
 
@@ -206,15 +209,16 @@ The numbered artifacts SHALL follow this scheme:
 ```text
 0X  workspace infrastructure (phase-neutral): config, guard, live database
 1X  prep-phase artifacts        (currently: 10 = prep plan, 11 = handoff, 15 = prep audit log + prep DB snapshot)
-2X  geotag-phase artifacts (currently: 21–25; 25 = complete log + geotag DB snapshot)
-3X  merge-phase artifacts        (currently: 31 = merge summary, 35 = merge log + merge DB snapshot)
+2X  geotag-phase artifacts        (currently: 21–26; 26 = complete log + geotag DB snapshot + archive manifest)
+3X  merge-phase artifacts        (currently: 30 = merge plan, 31 = merge summary, 35 = merge log + merge DB snapshot + archive manifest)
 ```
 
 The first digit SHALL mean only the producing phase. The second SHALL be a sequence number within the phase with no
 further meaning: an absent number is not reserved, not headroom and not missing, and nothing is to be inferred from a
 gap. Sibling end-of-phase records that differ only by extension MAY share a number — `photos-15-prep-log.json` and
 `photos-15-prep-ingest.db` are both the end-of-prep record, one the human-readable log and one the database image;
-likewise `photos-26-complete-log.json` and `photos-26-geotag-ingest.db`. The full filename — number, name and
+likewise `photos-26-complete-log.json`, `photos-26-geotag-ingest.db` and `photos-26-archive-manifest.json`, and the
+three `photos-35` files. The full filename — number, name and
 extension — SHALL be the identifier, never the number alone; `photos-0X-*` (and `1X`, `2X`, `3X`) names a band. The
 bands are unrelated to the numbered media folders `0-sources`…`6-photos-by-dest`.
 :::
@@ -232,11 +236,11 @@ and the strays folder `1-strays/` with all its `<plan-id>` subfolders (prep §3,
 :::{bld} The plans' fixed paths
 :id: BLD-canonical_plan_paths
 :status: seed
-:realises: RUL-plan_at_fixed_place, RUL-no_plan_location_option, RUL-planning_names_its_plan, RUL-no_plan_no_run
+:realises: RUL-plan_at_fixed_place, RUL-no_plan_location_option, RUL-no_plan_no_run
 
 The plan and decision artifacts SHALL be prep's `photos-10-prep-plan.json`, geotag's `photos-21`, `photos-23` and
 `photos-24`, and merge's `photos-30-merge-plan.json`, in `.photos-ingest/`. Every phase's `plan` SHALL write its file
-there and print the path; `dry-run` and `execute` SHALL read it there; no command SHALL take a path flag for it.
+there; `dry-run` and `execute` SHALL read it there; no command SHALL take a path flag for it.
 :::
 
 :::{bld} A superseded plan goes aside under `-NNN`

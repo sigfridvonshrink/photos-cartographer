@@ -352,3 +352,28 @@ def test_no_flatten_same_name_distinct_subtrees_both_survive(tmp_path, monkeypat
     prep.PlanExecutor(str(ws)).execute(_plan(ws))
     organized = glob.glob(str(ws / "5-photos-by-date" / "**" / "*.jpg"), recursive=True)
     assert len(organized) == 2, organized                     # both survive with distinct names
+
+
+@pytest.mark.spec("RUL-structure_built_once", test="TST-lifecycle-prep_builds_the_structure_once_and_never_removes_a_folder")
+def test_prep_builds_the_structure_once_and_never_removes_a_folder(tmp_path, monkeypatch):
+    _install(monkeypatch)
+    ws = _bare(tmp_path)
+    (ws / "photo.jpg").write_bytes(b"img")
+    first = _plan(ws)
+    assert {op.destination for op in first.operations if op.type == "mkdir"} >= set(MANAGED)   # created at init
+    prep.PlanExecutor(str(ws)).execute(first)
+    assert list((ws / "2-missing-metadata").iterdir()) == []   # empty managed folders...
+
+    (ws / "0-sources" / "later.jpg").write_bytes(b"img2")      # a later, non-init run
+    later = _plan(ws)
+    assert not later.blockers, later.blockers
+    assert not {op.destination for op in later.operations if op.type == "mkdir"} & set(MANAGED)
+    prep.PlanExecutor(str(ws)).execute(later)
+    for d in MANAGED:
+        assert (ws / d).is_dir(), d                            # ...are never removed, empty or not
+
+    os.rmdir(ws / "2-missing-metadata")                        # lost out-of-band: blocks, not rebuilt
+    blocked = _plan(ws)
+    assert any("2-missing-metadata" in b for b in blocked.blockers), blocked.blockers
+    assert not any(op.type == "mkdir" and op.destination == "2-missing-metadata" for op in blocked.operations)
+    assert not (ws / "2-missing-metadata").exists()
