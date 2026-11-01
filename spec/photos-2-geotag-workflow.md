@@ -1704,7 +1704,7 @@ Read back on a later run:
 2. **a position marker means the position is geotag's, not native.** Geotag ignores it and places the file again through the ordinary order (Section 23), overwriting the position with the one it now derives; a file that ends without a position (accepted unlocated) has geotag's old position cleared and is marked `time_only`, so the old position is never read back as native;
 3. **no geotag marker means the file is as the device left it**: a position is native and preserved, and the time is corrected as for any new file — a camera's by its group offset, a phone's by its own offset or the destination timezone.
 
-A write the file already holds is not planned: a time, a position and its marker, or a name the file already carries is a no-op, so a re-run with nothing changed writes nothing. The marker records a corrected time only when geotag writes corrected times (`write_corrected_metadata_times`); with that switched off, a marked file's time is still taken as corrected.
+A write the file already holds is not planned: a time, a position and its marker, or a name the file already carries is a no-op, so a re-run with nothing changed writes nothing.
 
 ---
 

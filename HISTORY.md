@@ -2,6 +2,21 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-01 — geotag always writes the corrected time and name; the phone check to the backlog
+
+Three switches in the default configuration — `write_corrected_metadata_times`, `write_corrected_offset_tags` and
+`write_corrected_filename_times` — let geotag skip writing the corrected time, its offset tag, or the timestamp name. No
+spec named them; they came with the repository's 2026-06-08 restructure. With the time switched off geotag still wrote
+its position markers, so a re-run would have taken an uncorrected time for a corrected one. Vasile, recalling them: *"I
+think I remember, it should be a per camera setting and I think that it should be set for real phones - they take their
+time from the network and therefore the time is trustworthy."* That trust is the device classification: a phone's time
+is resolved from its own offset tag, or the destination's timezone, with no offset and no question; the switches were
+global and decided only what was written. On removing them: *"YES"*. Four phone settings nothing reads —
+`phone_gpx_agreement_tolerance_seconds`, `phone_gpx_conflict_threshold_seconds`, `phone_gpx_max_distance_meters`,
+`dst_conflict_tolerance_seconds` — suggest a check of a phone's time against the tracks: *"I want it, it needs to go to
+backlog."* It is item 6; the settings stay for it. An existing workspace's configuration keeps the three switch keys,
+now ignored.
+
 ## 2026-11-01 — a camera's offset for a day is kept for later photos
 
 Once every photo of a camera on a day was corrected, its offset question went away, and photos of that camera and day

@@ -65,7 +65,7 @@ def test_planned_gps_write_lands_a_readable_fix(tmp_path, lat, lon, refs):
     img = tmp_path / "img.jpg"; shutil.copy(FIXTURE, img)
     ops = cal.plan_file_ops({"relative_path": "img.jpg", "content_fingerprint": "fp", "size": 1, "mtime_ns": 1},
                             "2024-07-03T12:12:21Z", "Europe/Brussels", "gpx_interpolation",
-                            {"lat": lat, "lon": lon}, None, utils.CONFIG)
+                            {"lat": lat, "lon": lon}, None)
     writes = next(o for o in ops if o["type"] == "metadata_gps_write")["writes"]
     assert cal.GeotagWorkflow(str(tmp_path))._exiftool_write(str(img), writes)
 

@@ -194,8 +194,7 @@ def _exec_ws(tmp_path, monkeypatch):
     cfg["gpx_root"] = str(gpx)
     cfg["camera_time_and_timezone_policy"] = dict(
         cfg["camera_time_and_timezone_policy"], device_groups={"fixed_clock_cameras": [CAM], "phones": []},
-        default_folder_timezone="Europe/Brussels", multi_anchor_auto_apply=True,
-        write_corrected_filename_times=False)   # no renames -> re-plan after execute works without re-prep
+        default_folder_timezone="Europe/Brussels", multi_anchor_auto_apply=True)
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
 
     def rec(rel, dto, gps=None):
@@ -211,9 +210,9 @@ def _exec_ws(tmp_path, monkeypatch):
                 "content_hash": json.dumps({"value": "fp-" + rel, "status": "valid"}),
                 "metadata_status": {"camera_group_key": CAM, "has_timestamp": True, "has_native_gps": bool(gps),
                                     "field_set_version": 1, "parsed_json": json.dumps(parsed)}}
-    files = [rec(f"{BYDEST}/T/a.arw", "2024:07:03 14:00:00", (50.0, 4.0)),
-             rec(f"{BYDEST}/T/b.arw", "2024:07:03 15:00:00", (51.0, 5.0)),
-             rec(f"{BYDEST}/T/c.arw", "2024:07:03 14:30:00")]            # no GPS -> blocked -> fallback
+    files = [rec(f"{BYDEST}/T/2024-07-03--14-00-00.arw", "2024:07:03 14:00:00", (50.0, 4.0)),
+             rec(f"{BYDEST}/T/2024-07-03--15-00-00.arw", "2024:07:03 15:00:00", (51.0, 5.0)),
+             rec(f"{BYDEST}/T/2024-07-03--14-30-00.arw", "2024:07:03 14:30:00")]            # no GPS -> blocked -> fallback
     (ctl / "photos-11-handoff.json").write_text(json.dumps({"files": files, "cache_fingerprint": "pcf"}))
     return ws, ctl
 
@@ -229,7 +228,7 @@ def _run(monkeypatch, ws, cmd):
 
 def _mock_tools(monkeypatch, ws):
     # the write is content-invariant -> the post-write fingerprint equals the pinned precondition
-    # ("fp-<relative path>"); no renames in this test, so the path is stable.
+    # ("fp-<relative path>"); the files already carry their final names, so no rename moves them.
     monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", lambda self, p, tags: True)
     monkeypatch.setattr(cal.ContentHasher, "fingerprint_image",
                         staticmethod(lambda p: {"value": "fp-" + os.path.relpath(p, str(ws))}))
@@ -266,8 +265,8 @@ def test_automated_gps_stores_no_prestate_and_emits_no_revert(tmp_path, monkeypa
     assert _run(monkeypatch, ws, "execute") == 0
     # Only the manual frame pinned a pre-state; the automated native frames a/b pinned nothing.
     db = cal.GeotagCache(str(ws)); pinned = {e["relative_path"] for e in db.ledger_all()}; db.close()
-    assert pinned == {f"{BYDEST}/T/c.arw"}
-    assert f"{BYDEST}/T/a.arw" not in pinned and f"{BYDEST}/T/b.arw" not in pinned
+    assert pinned == {f"{BYDEST}/T/2024-07-03--14-30-00.arw"}
+    assert f"{BYDEST}/T/2024-07-03--14-00-00.arw" not in pinned and f"{BYDEST}/T/2024-07-03--15-00-00.arw" not in pinned
 
 
 @pytest.mark.spec("geotag-prestate-before-write-1")
@@ -296,8 +295,8 @@ def test_manual_gps_prestate_pinned_before_the_gps_write(tmp_path, monkeypatch):
     labels = [e[0] for e in events]
     assert "pin" in labels and "gps_write" in labels, events
     assert labels.index("pin") < labels.index("gps_write"), events     # captured before overwritten
-    assert events[labels.index("pin")][1] == f"{BYDEST}/T/c.arw"       # the manual frame
-    assert events[labels.index("gps_write")][1] == f"{BYDEST}/T/c.arw"
+    assert events[labels.index("pin")][1] == f"{BYDEST}/T/2024-07-03--14-30-00.arw"       # the manual frame
+    assert events[labels.index("gps_write")][1] == f"{BYDEST}/T/2024-07-03--14-30-00.arw"
 
 
 @pytest.mark.spec("geotag-manual-gps-reversible-1", "geotag-prestate-absent-1", "geotag-rerunnable-after-execute-1")
@@ -315,7 +314,7 @@ def test_full_pin_then_withdraw_reverts_and_consumes(tmp_path, monkeypatch):
     assert _run(monkeypatch, ws, "execute") == 0
     # pre-state pinned (c had no native GPS -> absent), manual GPS written
     db = cal.GeotagCache(str(ws)); pinned = {e["relative_path"]: e["pre_state"] for e in db.ledger_all()}; db.close()
-    assert pinned == {f"{BYDEST}/T/c.arw": {"present": False}}
+    assert pinned == {f"{BYDEST}/T/2024-07-03--14-30-00.arw": {"present": False}}
     t1 = json.load(open(ctl / "photos-25-execution-summary.json"))["totals"]
     assert t1["metadata_gps_writes"] == 1 and t1["manual_gps_pre_states_captured"] == 1
 
@@ -329,7 +328,7 @@ def test_full_pin_then_withdraw_reverts_and_consumes(tmp_path, monkeypatch):
     q = ctl / "photos-23-gps-decisions.json"; b = json.load(open(q))
     b["destinations"][f"{BYDEST}/T"]["folder_fallback"]["user_decision"].update({"fallback_lat": "", "fallback_lon": ""})
     b["destinations"][f"{BYDEST}/T"]["gps_decisions"]["review_items"] = [
-        {"relative_path": f"{BYDEST}/T/c.arw", "user_decision": {"accept_unlocated": True}}]
+        {"relative_path": f"{BYDEST}/T/2024-07-03--14-30-00.arw", "user_decision": {"accept_unlocated": True}}]
     q.write_text(json.dumps(b))
     _run(monkeypatch, ws, "plan")
     plan = json.load(open(ctl / "photos-24-executable-plan.json"))

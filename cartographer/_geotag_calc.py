@@ -838,11 +838,10 @@ def _make_op(typ, rel, reason, semantic, preconditions):
     return op
 
 
-def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename, cfg):
+def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename):
     """The ordered executable operations for one file (§28): corrected-time metadata write, GPS
-    write + provenance marker, and no-clobber rename — each gated by the camera_time policy write
-    flags. Returns [] for a file that needs nothing (a no-op)."""
-    pol = cfg.get("camera_time_and_timezone_policy") or {}
+    write + provenance marker, and no-clobber rename — each only where the file does not already
+    hold it. Returns [] for a file that needs nothing (a no-op)."""
     rel = file["relative_path"]
     pre = {"content_fingerprint": file.get("content_fingerprint"),
            "size": file.get("size"), "mtime_ns": file.get("mtime_ns")}
@@ -851,15 +850,14 @@ def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename, cfg):
     held = file.get("raw_times") or {}
     marker = file.get("geotag_marker")
     time_corrected = bool(marker)                 # geotag wrote this file's time on an earlier run
-    if pol.get("write_corrected_metadata_times", True):
-        dto, off = _local_time_and_offset(resolved_utc, tz)
-        if dto is not None:
-            writes = {"DateTimeOriginal": dto}
-            if pol.get("write_corrected_offset_tags", True) and off:
-                writes["OffsetTimeOriginal"] = off
-            time_corrected = True
-            if any(held.get(k) != v for k, v in writes.items()):     # already held -> nothing to write
-                ops.append(_make_op("metadata_time_write", rel, "corrected capture time", {"writes": writes}, pre))
+    dto, off = _local_time_and_offset(resolved_utc, tz)
+    if dto is not None:
+        writes = {"DateTimeOriginal": dto}
+        if off:
+            writes["OffsetTimeOriginal"] = off
+        time_corrected = True
+        if any(held.get(k) != v for k, v in writes.items()):         # already held -> nothing to write
+            ops.append(_make_op("metadata_time_write", rel, "corrected capture time", {"writes": writes}, pre))
 
     if gps_category in _GPS_OP_ORIGIN and gps_coord is not None:
         new_marker = _GPS_OP_MARKER[gps_category]
@@ -879,7 +877,7 @@ def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename, cfg):
     elif time_corrected and marker != TIME_ONLY_MARKER:
         ops.append(time_only_marker_op(file))
 
-    if pol.get("write_corrected_filename_times", True) and rename and rename.get("rename"):
+    if rename and rename.get("rename"):
         ops.append(_make_op("rename_no_clobber", rel, "destination-local timestamp name",
                             {"from": rename["current_name"], "to": rename["planned_name"]}, pre))
     return ops

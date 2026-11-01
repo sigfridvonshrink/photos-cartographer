@@ -4,7 +4,7 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **5** — 1, 2, 3, 4 and 5.* 🛑 Numbers are never reused; the next is **6**.
+*Open items: **6** — 1, 2, 3, 4, 5 and 6.* 🛑 Numbers are never reused; the next is **7**.
 
 ---
 
@@ -104,3 +104,22 @@ kept out of the repo by `.git/info/exclude`; the branch `origin/chore/commit-msg
 commit) would add it to `main`.
 
 **Question for Vasile:** merge the branch (the hook then guards every clone), or keep it local and delete the branch?
+
+---
+
+### 6. Check a phone's time against the tracks
+
+**Why:** geotag trusts a phone's clock — a phone takes its time from the network — and resolves each phone photo from
+its own offset tag, or failing that from the destination's timezone, with nothing checking it. A phone set to the wrong
+zone, a photo whose offset tag is missing while the phone sat in another zone, or a phone's clock that did drift, would
+pass unseen and misplace every such photo on the track. Vasile wants the check built.
+
+**What exists:** four settings in the default configuration that nothing reads: `phone_gpx_agreement_tolerance_seconds`
+(60), `phone_gpx_conflict_threshold_seconds` (300), `phone_gpx_max_distance_meters` (250) and
+`dst_conflict_tolerance_seconds` (120). Configuration loading checks they are numbers; no spec names them. Their names
+suggest the shape: where a phone photo carries its own position and a track covers it, compare the photo's time with
+the track's time at that position.
+
+**Open:** what the check does on disagreement — inside the agreement tolerance pass silently, beyond the conflict
+threshold block or ask, between them warn? — and what the daylight-saving setting guards. To be settled with Vasile
+before it is specified.
