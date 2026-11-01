@@ -86,7 +86,7 @@ def _media_ops(plan):
             if op.type in ("move_no_clobber", "rename_no_clobber", "quarantine_move")]
 
 
-@pytest.mark.spec("idem-reuse-not-recompute-1", "loop-reprep-mandatory-1", "prep-fingerprint-carry-forward-move-1", "prep-handoff-updated-on-move-only-1", "prep-move-carry-forward-drop-old-1", "prep-move-recognition-before-ghost-1", "prep-move-recognition-no-mutate-bydest-1", "prep-no-perform-bydest-move-1", "prep-recognize-bydate-to-bydest-move-1")
+@pytest.mark.spec("idem-reuse-not-recompute-1", "loop-reprep-mandatory-1", "prep-fingerprint-carry-forward-move-1", "prep-handoff-updated-on-move-only-1", "prep-move-carry-forward-drop-old-1", "prep-move-recognition-before-ghost-1", "prep-move-recognition-no-mutate-bydest-1", "prep-no-perform-bydest-move-1", "prep-recognize-bydate-to-bydest-move-1", test="TST-move_aware-by_date_to_by_dest_move_is_recognized")
 def test_by_date_to_by_dest_move_is_recognized(tmp_path, monkeypatch):
     hash_calls = []
     _install_mocks(monkeypatch, hash_calls)

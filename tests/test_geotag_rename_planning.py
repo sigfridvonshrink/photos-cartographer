@@ -80,7 +80,7 @@ def test_allocate_name_case_insensitive():
 
 # --- plan_renames ------------------------------------------------------------
 
-@pytest.mark.spec("fname-uncorrected-no-rename-1", "geotag-plan-renames-1", "idem-mutate-on-real-diff-1", test="TST-geotag_rename_planning-already_correctly_named_is_no_rename")
+@pytest.mark.spec("fname-uncorrected-no-rename-1", "geotag-plan-renames-1", "idem-mutate-on-real-diff-1", "RUL-geotag_rerun_keeps_settled", test="TST-geotag_rename_planning-already_correctly_named_is_no_rename")
 def test_already_correctly_named_is_no_rename():
     rows = cal.plan_renames([_f("6-photos-by-dest/T/2024-07-03--14-12-21.jpg", "2024-07-03T12:12:21Z")], FMT)
     assert _names(rows) == [("2024-07-03--14-12-21.jpg", "2024-07-03--14-12-21.jpg", False)]

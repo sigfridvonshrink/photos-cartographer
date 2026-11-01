@@ -188,6 +188,7 @@ def test_every_track_format_blocks_prep(tmp_path, monkeypatch, name):
     assert not glob.glob(str(ws / "1-strays" / "**" / name), recursive=True)
 
 
+@pytest.mark.spec("RUL-prep_empties_inbox", test="TST-strays-mixed_media_and_stray")
 def test_mixed_media_and_stray(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)

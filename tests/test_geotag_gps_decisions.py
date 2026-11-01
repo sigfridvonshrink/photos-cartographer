@@ -66,7 +66,7 @@ def _dd(art, dest):
 
 # --- classifier branch by branch --------------------------------------------
 
-@pytest.mark.spec("geotag-fallback-rank-1")
+@pytest.mark.spec("geotag-fallback-rank-1", "RUL-geotag_rerun_keeps_settled", test="TST-geotag_gps_decisions-classify_all_branches")
 def test_classify_all_branches():
     g = _gpx()
     cfg = utils.CONFIG

@@ -196,7 +196,7 @@ def test_missing_geotag_plan_blocks(tmp_path):
     assert any("has not produced an executable plan" in b for b in blockers), blockers
 
 
-@pytest.mark.spec("merge-preconditions-finalized-1")
+@pytest.mark.spec("merge-preconditions-finalized-1", test="TST-merge_preflight-geotag_not_executed_blocks")
 def test_geotag_not_executed_blocks(tmp_path):
     ws, _ = _make(tmp_path, cal_summary=False)
     blockers, _, _ = _pf(ws)
@@ -218,7 +218,7 @@ def test_stale_finalized_record_blocks(tmp_path):
     assert any("re-run geotag and re-finalize" in b.lower() for b in blockers), blockers
 
 
-@pytest.mark.spec("loop-finalize-before-merge-1", "merge-require-finalized-else-run-finalize-1")
+@pytest.mark.spec("loop-finalize-before-merge-1", "merge-require-finalized-else-run-finalize-1", test="TST-merge_preflight-not_finalized_blocks")
 def test_not_finalized_blocks(tmp_path):
     ws, _ = _make(tmp_path, complete_log=False)
     blockers, _, _ = _pf(ws)
@@ -244,6 +244,7 @@ def test_nonmedia_in_bydest_blocks(tmp_path):
     assert any("must contain only photos" in b for b in blockers), blockers
 
 
+@pytest.mark.spec("RUL-development_after_merge", test="TST-merge_preflight-dev_subfolder_blocks")
 def test_dev_subfolder_blocks(tmp_path):
     ws, _ = _make(tmp_path)
     p = ws / "6-photos-by-dest" / "Trip" / "jpg" / "a__std.jpg"

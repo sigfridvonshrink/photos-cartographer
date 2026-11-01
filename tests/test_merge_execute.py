@@ -293,7 +293,7 @@ def test_execute_required_snapshot_failure_aborts_before_any_placement(tmp_path,
     assert s["totals"]["placed_new"] == 0 and s["totals"]["blocked"] == 0
 
 
-@pytest.mark.spec("merge-prep-consistency-1", "merge-revalidates-current-1")
+@pytest.mark.spec("merge-prep-consistency-1", "merge-revalidates-current-1", test="TST-merge_execute-plan_blocks_when_bydest_photo_absent_from_finalized_set")
 def test_plan_blocks_when_bydest_photo_absent_from_finalized_set(tmp_path):
     """Prep-consistency (precondition 4): a photo physically under 6-photos-by-dest but NOT in the
     finalized record (handoff predates the latest move into by-dest) -> 're-run prep' blocker at plan,

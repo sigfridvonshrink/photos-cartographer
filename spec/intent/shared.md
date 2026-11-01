@@ -1029,3 +1029,200 @@ A media file's fingerprint SHALL stay the same when the pipeline rewrites its me
 A record's hash SHALL change on any change to its bytes, and SHALL be what checks a record or the configuration as a
 dependency. Prep's handoff is the one exception: it is checked by its content.
 :::
+
+## 9. One loop across the phases
+
+:::{def} The managed folders
+:id: DEF-managed_folders
+:status: seed
+:uses: DEF-workspace, DEF-strays_folder
+
+The **managed folders** are the workspace's media folders, each with a fixed role: the **inbox**, where a dump arrives;
+the strays folder; **missing metadata**, for media with no capture time; **redundant JPEGs**; **videos by date**;
+**photos by date**; and **photos by destination**, the staging the user sorts photos into and merge empties into the
+library.
+:::
+
+:::{def} The operator loop
+:id: DEF-operator_loop
+:status: seed
+:uses: DEF-prep, DEF-geotag, DEF-merge, DEF-managed_folders
+
+The **operator loop** is how the user drives the three phases through one workspace's life: prep organizes a dump; the
+user sorts photos into photos by destination; prep records the sort; geotag is re-run, the user deciding what it asks,
+until its plan is ready, and executes it; more dumps may follow, each from prep again; finalize closes the workspace's
+record; merge moves it into the library. Each phase's own loop is in its own spec; this is the sequence across them.
+:::
+
+:::{def} Finalize
+:id: DEF-finalize
+:status: seed
+:uses: DEF-geotag
+
+**Finalize** is geotag's closing command, given once the user judges the workspace's media done: it assembles the
+workspace's permanent record and its complete transformation log.
+:::
+
+:::{def} Development
+:id: DEF-development
+:status: seed
+:uses: DEF-library
+
+**Development** is the later processing of photos into distribution copies — the JPEG and TIFF breakout — kept in
+subfolders of a destination.
+:::
+
+:::{rul} Prep leaves the inbox empty
+:id: RUL-prep_empties_inbox
+:status: seed
+:criticality: med
+:verify: required
+:uses: DEF-managed_folders
+
+A prep execution SHALL leave the inbox empty: photos to photos by date, videos to videos by date, media with no capture
+time to missing metadata, and every file of no media class to the strays folder.
+:::
+
+:::{rul} Only photos are sorted into photos by destination
+:id: RUL-sort_photos_only
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: loop-sort-photo-only-1
+:uses: DEF-operator_loop, DEF-managed_folders
+
+Photos by destination SHALL hold only photos: videos stay in videos by date, and no file of no media class belongs there.
+Geotag SHALL refuse to run while it holds anything else.
+:::
+
+:::{rul} Prep records every sort before geotag plans
+:id: RUL-prep_records_sort
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: loop-reprep-mandatory-1, loop-no-behind-preps-back-1
+:uses: DEF-operator_loop, DEF-prep, DEF-geotag
+
+Geotag SHALL NOT plan while photos by destination holds a photo prep has not recorded where it now is. A prep run after
+the latest sort SHALL record the moves from the files' sizes and modification times alone, carrying each moved file's
+identity forward without reading it again.
+:::
+
+:::{rul} Geotag may be re-run until merge
+:id: RUL-geotag_rerunnable
+:status: seed
+:criticality: med
+:verify: incidental
+:aliases: loop-geotag-rerunnable-1
+:uses: DEF-geotag, DEF-merge
+
+Geotag SHALL be re-runnable any number of times — after a successful execution too — for as long as the workspace has
+not been merged.
+:::
+
+:::{rul} A re-run changes nothing already settled
+:id: RUL-geotag_rerun_keeps_settled
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: loop-geotag-rerun-safe-1
+:refines: RUL-geotag_rerunnable
+
+A geotag re-run SHALL keep every decision the user made whose target is unchanged, SHALL NOT write a position again into
+a file that already holds one, and SHALL leave a file that already has its final name with that name.
+:::
+
+:::{rul} Geotag's gates are the present state, not its history
+:id: RUL-geotag_gates
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: loop-geotag-gating-preconditions-1
+:uses: DEF-geotag, DEF-managed_folders
+
+Geotag SHALL proceed when, and only when, the workspace now satisfies its gates: photos by date holds no photo; photos by
+destination holds only photos and no development subfolder; prep has recorded every photo in it; and the inbox is
+empty. Whether, or how often, prep, the sort or geotag ran before SHALL NOT bear on it, so the user may run any number
+of prep and sort cycles before geotagging.
+:::
+
+:::{rul} A re-run does as much as what changed requires
+:id: RUL-rerun_does_what_changed
+:status: seed
+:criticality: low
+:verify: incidental
+:aliases: loop-rerun-may-need-decisions-1
+:uses: DEF-dependency_cascade
+:refines: RUL-geotag_rerunnable
+
+A re-run SHALL redo exactly the work its changed inputs require — new media, an edited setting, changed tracks, a
+withdrawn or altered decision, a refreshed handoff — and no more. It MAY ask for new decisions, but only for the items
+the change affects.
+:::
+
+:::{rul} More dumps may follow until merge
+:id: RUL-more_dumps_until_merge
+:status: seed
+:criticality: med
+:verify: incidental
+:uses: DEF-operator_loop, DEF-merge
+
+A new dump SHALL be accepted into the inbox at any point before merge, after a successful geotag too; the loop then
+resumes from prep.
+:::
+
+:::{rul} Finalize is its own command, and merge requires it
+:id: RUL-finalize_explicit
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: loop-finalize-before-merge-1
+:uses: DEF-finalize, DEF-merge
+
+Finalize SHALL be a command of its own, never a side effect of geotag's execution. Merge SHALL refuse a workspace that
+has not been finalized.
+:::
+
+:::{rul} Merge takes only the finalized, current set
+:id: RUL-merge_takes_finalized_current
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: merge-preconditions-finalized-1, merge-revalidates-current-1
+:uses: DEF-finalize, DEF-merge, DEF-managed_folders
+
+Merge SHALL require that geotag's execution succeeded and the workspace was finalized, and SHALL refuse when photos by
+destination has changed since finalize — so what reaches the library is always the corrected, named, fully recorded
+set. A refresh that changes only what describes a prep run SHALL NOT count as a change.
+:::
+
+:::{rul} Merge ends the workspace
+:id: RUL-merge_is_terminal
+:status: seed
+:criticality: high
+:anti: yes
+:verify: incidental
+:uses: DEF-merge, DEF-workspace
+
+Merge SHALL be the last phase run in a workspace: once it succeeds, more media SHALL go to a fresh workspace, and the
+library SHALL accept merges from many workspaces.
+:::
+
+:::{rul} Development happens in the library, after merge
+:id: RUL-development_after_merge
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: loop-dev-before-geotag-blocks-1
+:uses: DEF-development, DEF-managed_folders
+
+Development SHALL happen in the library, after merge. A development subfolder anywhere in photos by destination —
+even an empty one — SHALL stop geotag's planning, execution and finalize, and merge.
+:::
