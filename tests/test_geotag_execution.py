@@ -146,7 +146,7 @@ def test_exiftool_failure_records_failure(tmp_path, monkeypatch):
     assert _execute(monkeypatch, ws) == 3
     s = _summary(ctl)
     # every write fails and nothing is applied/already-satisfied -> total failure (§29.2 item 7);
-    # two files, each a time write and its time_only marker
+    # two files, each a time write and its time-fixed mark
     assert s["status"] == "failed" and len(s["failures"]) == 4 and s["totals"]["metadata_time_writes"] == 0
 
 

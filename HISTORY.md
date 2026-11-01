@@ -2,6 +2,18 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-01 — a fixed time is a suffix on the device's own value
+
+`time_only` replaced the field's whole value, so a phone's own `GPSProcessingMethod` — `fused`, `GPS` — was lost when
+geotag fixed its time. Vasile: *"why not add a suffix like "_to" maybe to the original content? Maybe make this a rule
+and instead of time_only we use _to everywhere, as an addon (suffix)?"* Asked whether positions should carry it too:
+*"not sure we need the suffix because if the GPS was set, the time must have also been fixed. This also maintains
+compatibility with what I have in my library. So the suffix would mean time fixed and gps kept or not yet set."* Asked
+whether a field length limit restricts the tag: none in practice — EXIF bounds the value only by the segment holding
+it, and a JPEG's whole EXIF block must fit in 64 KB; values to 1,000 characters round-tripped through exiftool in a
+JPEG and an ARW, and exiv2 read `fused+carto-time` back from both. Of the suffixes offered: *"+carto-time is ok"*. The
+bare position markers stay as they were; the suffix is appended once to whatever the field holds.
+
 ## 2026-11-01 — geotag always writes the corrected time and name; the phone check to the backlog
 
 Three switches in the default configuration — `write_corrected_metadata_times`, `write_corrected_offset_tags` and

@@ -456,6 +456,7 @@ class GeotagWorkflow:
                                        else parsed.get("has_native_gps"))
                                   and geotag_marker(parsed.get("GPSProcessingMethod")) not in POSITION_MARKERS,
                 "geotag_marker": geotag_marker(parsed.get("GPSProcessingMethod")),
+                "processing_method": parsed.get("GPSProcessingMethod"),   # the value a time mark extends
                 "metadata_field_set_version": md.get("field_set_version", FIELD_SET_VERSION),
                 "folder_class": rec.get("folder_class"),
                 "planned_filename": None,                    # set during the rename lookahead (Phase 6)

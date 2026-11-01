@@ -432,12 +432,13 @@ workspace's shape, and validate against the plan's own dependencies instead of t
 :status: ruled
 :realises: RUL-geotag_rerun_keeps_settled
 
-Geotag SHALL record what it wrote in the file's `GPSProcessingMethod`, with one of its own values: `interpolated`,
-`manual_locked` or `manual_fallback` beside each position it writes, and `time_only` when it corrects the time and writes
-no position. Any other value is the device's own, and the GPS beside it native. On a re-run, a file carrying one of
-geotag's values SHALL be resolved from its own time and offset tag with no clock offset, SHALL be no clock anchor and in
-no drift check, and a camera group's offset cells SHALL be built from its unmarked files alone. A file with a position
-marker SHALL count as having no native GPS and be placed again; one now placed nowhere has geotag's position cleared and
-is marked `time_only`. A write SHALL be planned only where the file does not already hold its value, and names are
+Geotag SHALL record what it wrote in the file's `GPSProcessingMethod`: the bare value `interpolated`, `manual_locked`
+or `manual_fallback` beside each position it writes, and, when it fixes the time and writes no position, the suffix
+`+carto-time` appended once to whatever the field held, keeping the device's own value. Any other value is the
+device's own, and the GPS beside it native. On a re-run, a file carrying a position marker or the suffix SHALL be
+resolved from its own time and offset tag with no clock offset, SHALL be no clock anchor and in no drift check, and a
+camera group's offset cells SHALL be built from its unmarked files alone. A file with a position marker SHALL count as
+having no native GPS and be placed again; one now placed nowhere has geotag's position and marker cleared and carries
+the suffix alone. A write SHALL be planned only where the file does not already hold its value, and names are
 recomputed from the destination's local time, a file already so named getting no rename (geotag §27, §28.2).
 :::
