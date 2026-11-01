@@ -347,14 +347,22 @@ out of the scan. Geotag reads every `*.gpx` file beneath it. The value and the m
 their detail is geotag §15 and §19.
 :::
 
-:::{bld} Prep's skip of a `gpx_root` inside the tree
-:id: BLD-gpx_skip
+:::{bld} `gpx_root` checked against the managed folders
+:id: BLD-gpx_root_checked
 :status: seed
-:realises: RUL-tracks_skipped_if_inside
+:realises: RUL-tracks_outside_managed_folders
 
-Prep SHALL resolve `gpx_root` the same way and skip it as a whole subtree wherever it falls in the managed tree — a
-managed folder itself, or a folder nested in one — as it skips `.photos-ingest-quarantine/` (prep §3). A `gpx_root`
-outside the tree, or empty, SHALL make the skip a no-op.
+Configuration validation, in every phase, SHALL resolve `gpx_root` against the workspace, through links, and refuse it
+when it is a managed folder, lies inside one, or contains one — the workspace root among them.
+:::
+
+:::{bld} A track file
+:id: BLD-track_file
+:status: seed
+:realises: RUL-track_files_block_prep, DEF-tracks
+
+A track file SHALL be a file named `*.gpx`, in any case — exactly the files geotag reads beneath `gpx_root`. Prep SHALL
+raise one blocker for each it inventories, naming it, and leave it out of the plan (prep §3, §6.1).
 :::
 
 :::{bld} The GPX fingerprint

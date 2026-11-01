@@ -260,7 +260,7 @@ class GeotagWorkflow:
         try:
             with open(cfg_p) as f:
                 cfg = json.load(f)
-            validate_config(cfg)            # sanity-validate human-authored config (§9.2)
+            validate_config(cfg, ws)        # sanity-validate human-authored config (§9.2)
         except ValueError as e:
             blockers.append(f"Invalid workspace config: {e}")
             return blockers, warnings, info

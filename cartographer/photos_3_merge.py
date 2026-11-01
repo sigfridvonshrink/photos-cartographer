@@ -181,7 +181,7 @@ class MergeWorkflow:
         try:
             with open(cfg_p) as f:
                 cfg = json.load(f)
-            validate_config(cfg)
+            validate_config(cfg, ws)
         except ValueError as e:
             blockers.append(f"Invalid workspace config: {e}")
             return blockers, warnings, info

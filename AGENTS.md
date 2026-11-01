@@ -224,8 +224,8 @@ Defined in `spec/photos-shared-contract.md`:
   *not* the library).
 - All control/artifact files live in a single `.photos-ingest/` control directory (config, guard
   sentinel `photos-00-workspace-guard`, handoff manifest, decision JSONs, journals, the SQLite cache
-  `photos-00-ingest.db`, default `gpx/` root). Prep skips this subtree wholesale, so artifacts can never
-  be mistaken for media. One file there is **scratch, not record**: `photos-00-plan-memo.db`, the
+  `photos-00-ingest.db`, and `gpx/` when `gpx_root` is configured to live there). Prep skips this
+  subtree wholesale, so artifacts can never be mistaken for media. One file there is **scratch, not record**: `photos-00-plan-memo.db`, the
   plan-time decode memo (prep §10.3) — re-derivable fingerprints of files at the paths they were read
   from, written outside the plan/execute op model, never journalled or archived, safe to delete.
 - `photos-00-config.json` is the **workspace config**: seeded on first prep run from the in-code template

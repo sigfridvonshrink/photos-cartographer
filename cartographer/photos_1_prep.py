@@ -39,7 +39,7 @@ import errno
 # ==============================================================================
 # CONFIGURATION BLOCK
 # ==============================================================================
-from .photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, selected_gpx_root, missing_managed_folders, FOLDER_ROLES
+from .photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, is_track_file, missing_managed_folders, FOLDER_ROLES
 from .reporting import get_reporter, emit_next_step
 from .photos_utils import (_move_no_clobber, _move_link_unlink, _get_renameat2,
                           WorkspaceCache, WorkspaceLock, ContentHasher, PlanFingerprintMemo,
@@ -1479,12 +1479,6 @@ class WorkspacePrepWorkflow:
         _managed_set = set(self.managed_folders)
         _strays = folder_name('strays')
         _sources = folder_name('sources')
-        # Defensive GPX skip (shared contract §8.2 / prep §3): gpx_root resolves OUTSIDE the managed
-        # 0-6 tree by design (default `.photos-ingest/gpx/`, already skipped as a dotdir). But should
-        # it be MISCONFIGURED to resolve inside a managed folder, prep must skip that subtree so the
-        # GPX tracks are never organized/swept to 1-strays. Resolved to a realpath so a relative or
-        # symlinked gpx_root matches; empty/outside-the-tree resolves to a no-op.
-        _gpx_skip = selected_gpx_root()
         for f in os.listdir(self.workspace_root):
             path = os.path.join(self.workspace_root, f)
             # A symlink at the workspace root is forbidden outright (never followed, prep §6.2 item 2/3;
@@ -1534,9 +1528,6 @@ class WorkspacePrepWorkflow:
             if os.path.islink(folder_path):
                 blockers.append(f"Forbidden symlink detected: {d}")
                 continue
-            # gpx_root misconfigured to BE this managed folder — skip it wholesale (§8.2).
-            if _gpx_skip and os.path.realpath(folder_path) == _gpx_skip:
-                continue
             if os.path.isdir(folder_path):
                 for root, _dirs, filenames in os.walk(folder_path):
                     self._flag_dir_symlinks(root, _dirs, blockers)   # nested dir symlinks are forbidden too
@@ -1545,9 +1536,6 @@ class WorkspacePrepWorkflow:
                     # picked up by _collect_dump_dotfiles for quarantine; elsewhere they are skipped.
                     # (Matches the init dump-folder walk, which also prunes dot-subdirs.)
                     _dirs[:] = [dd for dd in _dirs if not dd.startswith('.')]
-                    if _gpx_skip:                                    # prune a gpx_root subtree nested here (§8.2)
-                        _dirs[:] = [dd for dd in _dirs
-                                    if os.path.realpath(os.path.join(root, dd)) != _gpx_skip]
                     for fname in filenames:
                         if not fname.startswith('.'):
                             path = os.path.join(root, fname)
@@ -1556,6 +1544,13 @@ class WorkspacePrepWorkflow:
                                 blockers.append(f"Forbidden symlink detected: {rel_path}")
                             else:
                                 files.append(rel_path)
+        # A track file is never media (shared contract §8): anywhere prep inventories it, the plan is
+        # blocked and the file left where it is — never parked in 1-strays, where clearing the strays
+        # would delete it. Tracks belong under gpx_root.
+        for rel_path in [f for f in files if is_track_file(f)]:
+            blockers.append(f"Track file in the workspace: {rel_path}. Tracks are never processed as "
+                            "media — move it under gpx_root, then re-plan.")
+            files.remove(rel_path)
         files.sort()
 
     def _process_file(self, rel_path, _ctx):

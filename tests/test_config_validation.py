@@ -130,6 +130,26 @@ def test_merge_block_rejects_bad(merge, needle):
     assert needle in str(ei.value), str(ei.value)
 
 
+@pytest.mark.parametrize("gpx_root", ["0-sources/gpx", "6-photos-by-dest", "1-strays/old", ".", "ABS_INSIDE",
+                                      "LINK_INSIDE"])
+@pytest.mark.spec("RUL-tracks_outside_managed_folders", test="TST-config_validation-gpx_root_overlapping_the_managed_folders_is_refused")
+def test_gpx_root_overlapping_the_managed_folders_is_refused(tmp_path, gpx_root):
+    # Inside a managed folder, a managed folder itself, or containing them (the workspace root): refused,
+    # whether relative, absolute, or reached through a link.
+    ws = tmp_path / "ws"; (ws / "5-photos-by-date").mkdir(parents=True)
+    (tmp_path / "link").symlink_to(ws / "5-photos-by-date")
+    gpx_root = {"ABS_INSIDE": str(ws / "5-photos-by-date" / "gpx"), "LINK_INSIDE": str(tmp_path / "link")}.get(gpx_root, gpx_root)
+    with pytest.raises(ValueError, match="gpx_root .* must lie outside the managed folders"):
+        utils.validate_config(_cfg(gpx_root=gpx_root), str(ws))
+
+
+def test_gpx_root_outside_the_managed_folders_is_accepted(tmp_path):
+    ws = tmp_path / "ws"; ws.mkdir()
+    for root in (".photos-ingest/gpx", str(tmp_path / "tracks"), "", "../tracks"):
+        utils.validate_config(_cfg(gpx_root=root), str(ws))
+    utils.validate_config(_cfg(gpx_root="0-sources/gpx"))       # no workspace given: path syntax only
+
+
 def test_config_without_merge_block_still_valid():
     utils.validate_config({"gpx_root": ""})        # legacy config (no merge key) is accepted
 

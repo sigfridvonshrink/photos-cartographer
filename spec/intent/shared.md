@@ -920,41 +920,40 @@ photos along them by interpolation or extrapolation. The configuration says wher
 :uses: DEF-tracks
 
 Geotag SHALL be the only phase that reads the tracks: it scans their location, parses them, fingerprints them and uses
-them as evidence. Prep SHALL NOT read, parse, fingerprint or move them, nor otherwise act on them. A track file found in
-the dump is not one of the tracks: prep SHALL treat it as any file of no media class.
+them as evidence. Prep SHALL NOT read, parse, fingerprint or move them, nor otherwise act on them.
 :::
 
 :::{rul} The tracks lie outside the managed folders
 :id: RUL-tracks_outside_managed_folders
-:status: seed
-:criticality: med
-:verify: none
-:omit_reason: a placement the configuration chooses; nothing checks it, and prep's skip covers the case where it is wrong
-:aliases: gpx-root-outside-tree-1
-:uses: DEF-tracks
-
-The tracks' location SHALL be outside the managed folders. Where outside them is the configuration's choice, not part
-of this contract.
-:::
-
-:::{rul} Tracks configured inside are skipped
-:id: RUL-tracks_skipped_if_inside
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: gpx-prep-defensive-skip-1
-:refines: RUL-tracks_outside_managed_folders
-:uses: RUL-not_inventoried
+:aliases: gpx-root-outside-tree-1, gpx-prep-defensive-skip-1
+:uses: DEF-tracks
+:refines: RUL-config_validated_before_use
 
-If the tracks' location is configured inside the managed folders, prep SHALL leave it out of its inventory as a whole,
-as it does the quarantine, so that the tracks are never organized even then. The media beside them SHALL be organized as
-usual.
+The tracks' location SHALL lie outside the managed folders — neither inside one nor containing one. Where outside them
+is the configuration's choice, not part of this contract. A configuration that places it otherwise SHALL be refused
+before any phase uses it.
+:::
+
+:::{rul} A track file stops prep, and stays where it is
+:id: RUL-track_files_block_prep
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-tracks, DEF-strays_folder
+
+A track file found anywhere prep inventories — in the dump or in a managed folder — SHALL block prep's plan. Prep SHALL
+leave it where it is: never moving it, to the strays folder or anywhere else, and never treating it as a file of no
+media class.
 :::
 
 :::{rul} The tracks are a dependency of what geotag derives from them
 :id: RUL-tracks_in_dependencies
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: gpx-geotag-fingerprint-cascade-1
@@ -996,7 +995,7 @@ fingerprints of the configuration areas it reads — and each use checks them fi
 
 :::{inv} No record is used once what it came from has changed
 :id: INV-no_stale_use
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required

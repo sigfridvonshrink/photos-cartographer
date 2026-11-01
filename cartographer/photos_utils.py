@@ -180,6 +180,11 @@ def selected_gpx_root() -> str:
     root = CONFIG.get("gpx_root") or ""
     return os.path.realpath(os.path.abspath(root)) if root else ""
 
+def is_track_file(name: str) -> bool:
+    """A GPX track file, by name (shared contract §8). Geotag reads these under gpx_root; anywhere prep
+    inventories, one is a blocker, never media."""
+    return name.lower().endswith(".gpx")
+
 # Media classification by extension (prep Section 6.1). The ext->class map is DERIVED from the active
 # CONFIG's `media_extensions` lists, rebuilt by _refresh_media_class_map() at import and whenever
 # load_or_seed_config swaps in a workspace's authoritative config. `other` is the residual.
@@ -783,7 +788,7 @@ def load_or_seed_config(workspace_root: str) -> str:
         raise ValueError(f"Workspace config {path} is not valid JSON: {e}")
     if not isinstance(loaded, dict):
         raise ValueError(f"Workspace config {path} must be a JSON object.")
-    validate_config(loaded)  # human-authored input is validated before it is accepted
+    validate_config(loaded, workspace_root)  # human-authored input is validated before it is accepted
     # Make the file authoritative; preserve the runtime jobs override.
     jobs = CONFIG.get("jobs")
     CONFIG.clear()
@@ -852,12 +857,13 @@ _GPX_NUMERIC_KEYS = (
     "photo_anchor_interpolation_max_gap_seconds", "photo_anchor_extrapolation_max_seconds",
 )
 
-def validate_config(cfg: dict):
+def validate_config(cfg: dict, workspace_root: str = None):
     """Validate human-authored config before it is accepted — input a human writes is
     sanity-validated (types, ranges, paths, formats), not merely parsed as JSON. Raises
     ValueError with a clear 'config: <path> ...' message on any violation; missing keys
     default and unknown keys are ignored. The same validate-on-load discipline applies
-    to the geotag decision JSON ([[validate-human-input]])."""
+    to the geotag decision JSON ([[validate-human-input]]). Given the workspace, it also
+    refuses a gpx_root that overlaps the managed folders (shared contract §8)."""
     if not isinstance(cfg, dict):
         raise ValueError("config: top level must be a JSON object.")
 
@@ -930,6 +936,8 @@ def validate_config(cfg: dict):
 
     if "gpx_root" in cfg:
         _check_path("gpx_root", cfg["gpx_root"])
+        if workspace_root and cfg["gpx_root"]:
+            _check_gpx_root_outside(cfg, workspace_root)
 
     dds = cfg.get("destination_distribution_subfolders")
     if dds is not None:
@@ -993,6 +1001,20 @@ def validate_config(cfg: dict):
                     if not isinstance(lst, list) or not all(isinstance(x, str) for x in lst):
                         raise ValueError(f"config: camera_time_and_timezone_policy.device_groups.{gk} "
                                          f"must be a list of strings.")
+
+
+def _check_gpx_root_outside(cfg, workspace_root):
+    """gpx_root must lie outside the managed 0-6 folders (shared contract §8): neither inside one nor
+    containing one, so the tracks never sit where prep inventories. Relative paths resolve against the
+    workspace, links are resolved."""
+    root = cfg["gpx_root"]
+    gpx = os.path.realpath(os.path.join(workspace_root, root))
+    for r in FOLDER_ROLES:
+        name = folder_name(r, cfg)
+        folder = os.path.realpath(os.path.join(workspace_root, name))
+        if os.path.commonpath([gpx, folder]) in (gpx, folder):
+            raise ValueError(f"config: gpx_root {root!r} must lie outside the managed folders; "
+                             f"it overlaps {name}/.")
 
 
 # Policy values the merge phase currently supports (merge spec §4 / stage-2 decision: v1 is
