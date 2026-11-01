@@ -1568,7 +1568,9 @@
      "upholds": [],
      "upholds_back": [],
      "uses": [],
-     "uses_back": [],
+     "uses_back": [
+      "BLD-record_ownership"
+     ],
      "verifies": [],
      "verifies_back": [],
      "verify": null
@@ -2602,7 +2604,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "A phase SHALL write only records in its own number band of the numbering scheme: prep `photos-1X`, geotag `photos-2X`,\nmerge `photos-3X`. Prep is also the writer of the seeded configuration and of the database's cache and identity rows,\nphase-neutral infrastructure with its own one-writer rules (§4, §13.4); geotag and merge write only their own regions\nof the database. Bundling copies of every phase's records into the archival package reads them, and is no write.",
+     "content": "A phase SHALL write only records in its own number band of the numbering scheme: prep `photos-1X`, geotag `photos-2X`,\nmerge `photos-3X`. The configuration and the database are phase-neutral, each with its own writers' rule: prep seeds\nthe configuration, which `init-library` may later extend by `library_root` alone (§4), and prep writes the database's\ncache and identity rows while geotag and merge write only their own regions of it (§13.4). Bundling copies of every phase's records into the archival package reads them, and is no write.",
      "criticality": null,
      "docname": "build/shared",
      "doctype": ".md",
@@ -2662,7 +2664,8 @@
      "upholds": [],
      "upholds_back": [],
      "uses": [
-      "BLD-artifact_numbering"
+      "BLD-artifact_numbering",
+      "BLD-init_library_writes_library_root"
      ],
      "uses_back": [],
      "verifies": [],

@@ -498,10 +498,10 @@ decision, plan and execution-summary records, merge's summary — SHALL stay on 
 :id: BLD-record_ownership
 :status: seed
 :realises: RUL-phase_writes_own_records
-:uses: BLD-artifact_numbering
+:uses: BLD-artifact_numbering, BLD-init_library_writes_library_root
 
 A phase SHALL write only records in its own number band of the numbering scheme: prep `photos-1X`, geotag `photos-2X`,
-merge `photos-3X`. Prep is also the writer of the seeded configuration and of the database's cache and identity rows,
-phase-neutral infrastructure with its own one-writer rules (§4, §13.4); geotag and merge write only their own regions
-of the database. Bundling copies of every phase's records into the archival package reads them, and is no write.
+merge `photos-3X`. The configuration and the database are phase-neutral, each with its own writers' rule: prep seeds
+the configuration, which `init-library` may later extend by `library_root` alone (§4), and prep writes the database's
+cache and identity rows while geotag and merge write only their own regions of it (§13.4). Bundling copies of every phase's records into the archival package reads them, and is no write.
 :::
