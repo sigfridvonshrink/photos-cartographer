@@ -1427,7 +1427,7 @@ phase not yet run SHALL read as the workspace not having advanced, never as a re
 
 :::{rul} Each phase writes only its own records
 :id: RUL-phase_writes_own_records
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required

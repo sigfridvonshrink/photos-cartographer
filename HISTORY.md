@@ -14,6 +14,15 @@ it, and a JPEG's whole EXIF block must fit in 64 KB; values to 1,000 characters 
 JPEG and an ARW, and exiv2 read `fused+carto-time` back from both. Of the suffixes offered: *"+carto-time is ok"*. The
 bare position markers stay as they were; the suffix is appended once to whatever the field holds.
 
+## 2026-11-01 — the shared contract §13.0–§13.0a, the per-phase record: two points ruled
+
+Proposed as intent §12, its rationale and build. Ownership stated by number band, the contract's per-phase file lists
+being incomplete (prep's and merge's plans, merge's re-sealed manifest missing): *"ok"*. "Whole at the end of every
+phase", tested only from geotag's side: *"please"* — a prep-only workspace's record now has a test of its own. On the
+contract's finalize reading prep's journals as well as its log, which the code does not: *"only if there's a need - the
+code seems to not need to read the journals, but I am not sure i can exclude them. Do we actually need to specify what
+finalize uses? If yes, why?"*
+
 ## 2026-11-01 — the shared contract §12, authored decisions: ruled
 
 Proposed as intent §11, its rationale and build; with the original-values ledger the code keeps the batch's last two
