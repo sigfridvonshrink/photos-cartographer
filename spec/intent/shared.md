@@ -1391,3 +1391,62 @@ Withdrawing a decision SHALL undo its effect, not merely stop asserting it. A ma
 file back the position it held before, or none if it held none; a position derived by the tool SHALL be derived again; a
 time and a name SHALL be recomputed where the file stands, never moving it out of its destination.
 :::
+
+## 12. The record of what was done, kept beyond the workspace
+
+:::{def} The transformation log
+:id: DEF-transformation_log
+:status: seed
+:uses: DEF-fingerprint
+
+The **transformation log** is the human-readable account, photo by photo and keyed by each photo's fingerprint, of
+everything done to it and why. Each phase keeps its own, carrying the previous phase's forward.
+:::
+
+:::{def} The archival package
+:id: DEF-archival_package
+:status: seed
+:uses: DEF-control_records, DEF-transformation_log
+
+The **archival package** is one portable bundle holding the complete record of a dump's journey through the pipeline —
+what was done to its photos and why. It is what the user keeps when the workspace goes away.
+:::
+
+:::{rul} The record is whole at the end of every phase
+:id: RUL-record_whole_each_phase
+:status: seed
+:criticality: med
+:verify: required
+:aliases: archive-complete-each-phase-1
+:uses: DEF-transformation_log, DEF-control_records
+
+At the end of every phase the workspace SHALL hold a complete, self-sufficient, human-readable record of everything done
+to its files so far: whole whether or not any later phase ever runs, and extended by each phase through its own work. A
+phase not yet run SHALL read as the workspace not having advanced, never as a record incomplete.
+:::
+
+:::{rul} Each phase writes only its own records
+:id: RUL-phase_writes_own_records
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: archive-artifact-ownership-1
+:uses: DEF-control_records
+
+Each numbered record SHALL be written by the phase whose number it carries, and by no other. A phase MAY create,
+rewrite or extend its own records across its runs; it SHALL read every other phase's records read-only.
+:::
+
+:::{rul} An earlier record is carried forward by copying it
+:id: RUL-carry_forward_by_copy
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: archive-no-cross-phase-write-1
+:refines: RUL-phase_writes_own_records
+
+To carry an earlier phase's record forward, a phase SHALL copy it to a record of its own and extend the copy, leaving
+the earlier one untouched; it SHALL NOT derive an earlier phase's history again.
+:::

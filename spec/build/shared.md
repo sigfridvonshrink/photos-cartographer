@@ -480,3 +480,28 @@ plan and the run's journal (prep §14.3; geotag §4–§6, §29). Merge takes no
 recorded inputs, recorded the same way (merge §8–§9). A withdrawn manual position SHALL be restored from the pinned
 pre-state ledger (geotag §24.1); an automatic position is recomputed, never rolled back.
 :::
+
+## 12. The record of what was done, kept beyond the workspace
+
+:::{bld} The per-phase logs and records
+:id: BLD-phase_logs
+:status: seed
+:realises: RUL-record_whole_each_phase, RUL-carry_forward_by_copy
+
+Prep SHALL write `photos-15-prep-log.json` at the end of every prep run (prep §16.1). Geotag's finalize SHALL copy it
+to `photos-26-complete-log.json` and append each photo's geotag steps (§13.3); merge SHALL copy that to
+`photos-35-merge-log.json` and append its own (§13.5). Each phase's job records — prep's handoff and summary, geotag's
+decision, plan and execution-summary records, merge's summary — SHALL stay on disk.
+:::
+
+:::{bld} Which phase writes which record
+:id: BLD-record_ownership
+:status: seed
+:realises: RUL-phase_writes_own_records
+:uses: BLD-artifact_numbering
+
+A phase SHALL write only records in its own number band of the numbering scheme: prep `photos-1X`, geotag `photos-2X`,
+merge `photos-3X`. Prep is also the writer of the seeded configuration and of the database's cache and identity rows,
+phase-neutral infrastructure with its own one-writer rules (§4, §13.4); geotag and merge write only their own regions
+of the database. Bundling copies of every phase's records into the archival package reads them, and is no write.
+:::

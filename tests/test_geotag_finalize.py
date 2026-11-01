@@ -55,7 +55,7 @@ def _file(rel, fp, *, native=False, group=CAM):
             "camera_group_key": group, "has_native_gps": native}
 
 
-@pytest.mark.spec("archive-complete-each-phase-1", "geotag-finalize-complete-log-1", "log-decision-provenance-1")
+@pytest.mark.spec("archive-complete-each-phase-1", "geotag-finalize-complete-log-1", "log-decision-provenance-1", test="TST-geotag_finalize-complete_log_superset_and_geotag_steps")
 def test_complete_log_superset_and_geotag_steps():
     prep = {"fpA": {"content_fingerprint": "fpA", "journey": [{"phase": "prep", "action": "organized"}]}}
     files = [_file(f"{BYDEST}/T/a.arw", "fpA", native=True)]
@@ -198,7 +198,7 @@ def test_finalize_refuses_plan_id_mismatch(tmp_path, monkeypatch):
     assert _run(monkeypatch, ws, "finalize") == 2
 
 
-@pytest.mark.spec("archive-finalize-explicit-1", "archive-finalize-nondestructive-1", "archive-no-cross-phase-write-1", "archive-package-contents-1", "archive-self-describing-manifest-1", "db-durable-artifact-1", "geotag-finalize-manifest-1", "geotag-finalize-nondestructive-1")
+@pytest.mark.spec("archive-finalize-explicit-1", "archive-finalize-nondestructive-1", "archive-no-cross-phase-write-1", "archive-package-contents-1", "archive-self-describing-manifest-1", "db-durable-artifact-1", "geotag-finalize-manifest-1", "geotag-finalize-nondestructive-1", test="TST-geotag_finalize-finalize_assembles_package_and_is_nondestructive")
 def test_finalize_assembles_package_and_is_nondestructive(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _to_executed(monkeypatch, ws, ctl)
