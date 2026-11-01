@@ -1289,6 +1289,23 @@ The plan therefore distinguishes three operation origins for a GPS field — *ap
 
 ---
 
+### 24.2 Every photo's own values, kept before geotag first writes to it (original-values ledger)
+
+Before geotag's first write to a photo in a workspace, execution pins the photo's own values — the capture time and the
+tag it came from, the time's offset tag, its position, and its `GPSProcessingMethod` — exactly as prep's handoff
+recorded them, keyed by content fingerprint, once and never overwritten. A photo that already carries geotag's mark
+(Section 28.2) holds no original values any more and is not pinned.
+
+Every later plan in the workspace decides about a pinned photo from those values — as the device left it — and compares
+the result with what the photo holds now, planning only the writes that differ. A changed decision therefore reaches the
+photo however often geotag has written to it, a withdrawn one undoes its effect, and nothing is corrected twice: a
+changed clock offset corrects the photo's own camera time once, a GPS camera's photos give their camera's offset again
+on every run, and a position derived from the tracks is derived again from the photo's own time. Geotag's mark governs
+only a photo with no pinned values — one corrected in another workspace, or before the ledger existed.
+
+The ledger lives beside the manual-GPS pre-state ledger (Section 24.1) in geotag's region of the workspace database,
+which the archival package's database snapshot carries (shared contract Section 13).
+
 ## 25. Create `photos-23-gps-decisions.json`
 
 Once the GPS-decision stage is reached, the workflow must create:
@@ -1698,9 +1715,10 @@ Geotag records what it did to a file in the file's `GPSProcessingMethod`:
 
 Only these are geotag's. Any other value — a phone writes its own, such as `GPS`, `NETWORK` or `fused` — is the device's, and the GPS beside it is native.
 
-Read back on a later run:
+Read back on a later run, for a photo whose own values are not pinned (Section 24.2) — a pinned photo is decided from
+those instead:
 
-1. **a position marker or the time mark means the time is already corrected.** The file's time is destination-local civil time with its offset tag beside it; geotag resolves it from those, applies no clock offset to it, and does not use it as a clock-offset anchor or in a drift check. A camera group's offset is proposed, asked for and applied over the files that carry no geotag marker alone, so photos added later are corrected without disturbing those already corrected. The camera's offset for a day is the same for every photo it took that day, so an answer once resolved is kept for later arrivals: a bucket whose photos are all corrected keeps its resolved offset decision, and its drift confirmation, unchanged and asks nothing; an offset geotag found from the camera's own GPS stays the bucket's offset when later photos bring no anchor of their own; and a bucket's days are counted over all the group's photos in the destination, corrected ones included, so its key does not change as photos arrive;
+1. **a position marker or the time mark means the time is already corrected.** The file's time is destination-local civil time with its offset tag beside it; geotag resolves it from those, applies no clock offset to it, and does not use it as a clock-offset anchor or in a drift check. A camera group's offset is proposed, asked for and applied over the files that carry no geotag marker alone, so photos added later are corrected without disturbing those already corrected. The camera's offset for a day is the same for every photo it took that day, so an answer once resolved is kept for later arrivals: a bucket whose photos are all corrected keeps its resolved offset decision, and its drift confirmation, and asks nothing — the effective value derived again from the decision on each run, never copied, so the record always says what the decision says; an offset geotag found from the camera's own GPS stays the bucket's offset when later photos bring no anchor of their own; and a bucket's days are counted over all the group's photos in the destination, corrected ones included, so its key does not change as photos arrive;
 2. **a position marker means the position is geotag's, not native.** Geotag ignores it and places the file again through the ordinary order (Section 23), overwriting the position with the one it now derives; a file that ends without a position (accepted unlocated) has geotag's old position and its marker cleared and carries the time mark alone, so the old position is never read back as native; a file with the time mark that geotag later places gets the bare position marker;
 3. **neither means the file is as the device left it**: a position is native and preserved, and the time is corrected as for any new file — a camera's by its group offset, a phone's by its own offset or the destination timezone.
 

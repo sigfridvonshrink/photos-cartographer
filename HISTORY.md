@@ -14,6 +14,21 @@ it, and a JPEG's whole EXIF block must fit in 64 KB; values to 1,000 characters 
 JPEG and an ARW, and exiv2 read `fused+carto-time` back from both. Of the suffixes offered: *"+carto-time is ok"*. The
 bare position markers stay as they were; the suffix is appended once to whatever the field holds.
 
+## 2026-11-01 — every photo's own values kept, so a decision can always be revised
+
+Converting the shared contract §12 found the marker rule had made a clock offset a one-way door: once executed, a
+photo's time counted as correct and geotag never revisited it, so a corrected offset reached nothing, and a bucket of
+corrected photos copied its old record forward, its effective offset left beside a decision that no longer said it.
+Proposed: pin each photo's own camera time before geotag first writes it. Vasile: *"yes, but in the same vein, maybe
+also store the pre-GPS and pre-GPSProcessingMethod so we have the complete original values just in case?"* — the
+original-values ledger pins the capture time and its tag, the offset tag, the position and `GPSProcessingMethod`, once,
+before the first write; later plans decide from them and write only what differs. Geotag's mark now governs only a
+photo with nothing pinned. Asked whether geotag should refuse to plan while a record contradicts its decision: *"how do
+you suggest this is solved? The solution should fix the root cause and, if not possible, at least fix it well, not just
+refuse to run."* The root cause was a derived value copied forward; it is now derived from the decision on every run.
+The two §12 rules with no test of their own — prep takes no decision, every change's cause can be found: *"yes, they
+should if feasible"* — both have one.
+
 ## 2026-11-01 — decisions kept, and files changed only where they differ, in every phase
 
 Shown the re-run rule of intent §9 whole, which the new §10 rules overlapped twice, Vasile: *"why not just mandate "A

@@ -1672,7 +1672,7 @@
       "area": "geotag",
       "criticality": "high",
       "anti": false,
-      "title": "A camera's resolved offset for a day is kept for photos arriving later: an all-corrected bucket keeps its decision and drift confirmation, a GPS-derived offset stays when later photos bring no anchor",
+      "title": "A camera's resolved offset for a day is kept for photos arriving later, derived again from the decision each run; a GPS-derived offset stays when later photos bring no anchor",
       "spec": {
         "file": "photos-2-geotag-workflow.md",
         "section": "28.2"
@@ -1680,6 +1680,20 @@
       "coverage": "covered",
       "must_cover": true,
       "test": "tests/test_geotag_rerun_markers.py::test_gps_derived_offset_is_kept_for_later_photos"
+    },
+    {
+      "id": "geotag-originals-pinned-1",
+      "area": "geotag",
+      "criticality": "high",
+      "anti": true,
+      "title": "Before geotag's first write, a photo's own time, offset tag, position and GPSProcessingMethod are pinned once; later plans decide from them, so a changed decision reaches the photo and nothing is corrected twice",
+      "spec": {
+        "file": "photos-2-geotag-workflow.md",
+        "section": "24.2"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_rerun_markers.py::test_changed_offset_after_execute_reaches_the_photo"
     },
     {
       "id": "geotag-prestate-before-write-1",
@@ -6815,9 +6829,10 @@
         "file": "photos-shared-contract.md",
         "section": "12"
       },
-      "coverage": "incidental",
+      "coverage": "covered",
       "must_cover": false,
-      "omit_reason": "provenance exercised via log 'because' fields but no dedicated end-to-end traceability assertion"
+      "omit_reason": "provenance exercised via log 'because' fields but no dedicated end-to-end traceability assertion",
+      "test": "tests/test_geotag_execution.py::test_every_write_traces_back_to_its_decision"
     },
     {
       "id": "authored-no-autonomous-mutation-1",
