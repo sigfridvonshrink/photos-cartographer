@@ -1453,7 +1453,7 @@ the earlier one untouched; it SHALL NOT derive an earlier phase's history again.
 
 :::{rul} Finalize only reads and records
 :id: RUL-finalize_non_destructive
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -1480,7 +1480,7 @@ run's journal.
 
 :::{rul} The package describes itself
 :id: RUL-package_self_describing
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :aliases: archive-self-describing-manifest-1
