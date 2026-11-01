@@ -83,7 +83,7 @@ def test_complete_log_skips_unfingerprinted_and_offsetless():
     assert [s["action"] for s in photos["fpB"]["journey"]] == ["resolved_utc"]   # offset skipped
 
 
-@pytest.mark.spec("geotag-three-gps-origins-1", "log-records-gps-revert-1")
+@pytest.mark.spec("geotag-three-gps-origins-1", "log-records-gps-revert-1", test="TST-geotag_finalize-complete_log_gps_written_and_reverted")
 def test_complete_log_gps_written_and_reverted():
     files = [_file(f"{BYDEST}/T/m.jpg", "fpM"), _file(f"{BYDEST}/T/r.jpg", "fpR")]
     rows = [{"relative_path": f"{BYDEST}/T/m.jpg", "resolved_utc": "2024-07-03T12:00:00Z"},

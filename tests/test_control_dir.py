@@ -83,7 +83,7 @@ def test_control_files_land_under_control_dir(tmp_path, monkeypatch):
     assert not any(e.endswith(".photos-ingest/journal.json") or e.startswith("journal") for e in root_entries)
 
 
-@pytest.mark.spec("log-retention-across-runs-1")
+@pytest.mark.spec("log-retention-across-runs-1", test="TST-control_dir-journals_are_per_run_and_retained")
 def test_journals_are_per_run_and_retained(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)

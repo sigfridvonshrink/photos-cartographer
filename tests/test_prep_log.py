@@ -72,7 +72,7 @@ def _log(ws):
         return json.load(f)
 
 
-@pytest.mark.spec("log-keyed-by-fingerprint-1", "prep-log-per-photo-fingerprint-keyed-1", "prep-log-records-journey-1")
+@pytest.mark.spec("log-keyed-by-fingerprint-1", "prep-log-per-photo-fingerprint-keyed-1", "prep-log-records-journey-1", test="TST-prep_log-media_journey_keyed_by_fingerprint")
 def test_media_journey_keyed_by_fingerprint(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -223,7 +223,7 @@ def test_noop_rerun_leaves_log_byte_identical(tmp_path, monkeypatch):
     assert open(utils.prep_log_path(str(ws)), "rb").read() == first
 
 
-@pytest.mark.spec("log-entry-append-only-1")
+@pytest.mark.spec("log-entry-append-only-1", test="TST-prep_log-recognized_move_appends_moved_to_by_dest")
 def test_recognized_move_appends_moved_to_by_dest(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -244,7 +244,7 @@ def test_recognized_move_appends_moved_to_by_dest(tmp_path, monkeypatch):
     assert sum(1 for s in entry["journey"] if s["action"] == "organized") == 1
 
 
-@pytest.mark.spec("log-human-readable-json-1", "prep-prep-log-on-success-1")
+@pytest.mark.spec("log-human-readable-json-1", "prep-prep-log-on-success-1", test="TST-prep_log-log_is_deterministic_and_in_control_dir")
 def test_log_is_deterministic_and_in_control_dir(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -257,7 +257,7 @@ def test_log_is_deterministic_and_in_control_dir(tmp_path, monkeypatch):
     assert list(_log(ws)["photos"]) == sorted(_log(ws)["photos"])  # fingerprint-sorted
 
 
-@pytest.mark.spec("log-fail-if-insufficient-1", "prep-log-fail-if-history-insufficient-1")
+@pytest.mark.spec("log-fail-if-insufficient-1", "prep-log-fail-if-history-insufficient-1", test="TST-prep_log-missing_history_warns_and_marks_partial")
 def test_missing_history_warns_and_marks_partial(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
