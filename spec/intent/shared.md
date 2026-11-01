@@ -1567,7 +1567,7 @@ Anything beyond that MAY be pruned.
 
 :::{rul} A history too thin to rebuild is never shown as whole
 :id: RUL-partial_history_shown
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required

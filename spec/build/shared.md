@@ -540,5 +540,7 @@ finalize SHALL take them from every executed pass — each superseded `photos-24
 first, matched by fingerprint — before the current plan's, from the provenance each time write carries (geotag §31). Each run's journal SHALL be kept as
 its own `journal-<run>.json`, and each geotag execution SHALL keep the decision records its plan depended on, verified
 by hash, in `executed/<plan id>/`, which a step's `because_record` and `because_record_sha256` name; prep marks its log partial and warns when its history cannot rebuild a journey (prep
-§16.1).
+§16.1); geotag's finalize marks `partial`, with a note, the entry of a photo carrying geotag's mark whose own values
+the workspace never pinned, and names in the log's `warnings`, the log then `partial`, any pass whose journal is kept
+but whose plan is missing (geotag §31).
 :::

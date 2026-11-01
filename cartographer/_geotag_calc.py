@@ -1130,6 +1130,12 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, l
         if run:
             steps[start:] = [dict(s, run=run) for s in steps[start:]]
         _with_record_hashes(steps[start:], plan)
+        if not f.get("from_originals") and geotag_marker(held_values(f).get("method")):
+            # geotag's mark is on the photo, but this workspace never held its own values: its time was
+            # fixed elsewhere, or that history is lost — say so rather than look whole (§13.3a)
+            entry["partial"] = True
+            entry["note"] = ("geotag's mark is on this photo but no pass in this workspace's record first "
+                             "corrected it: its correction was made elsewhere, or that history is lost")
     return photos
 
 
