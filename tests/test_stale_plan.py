@@ -137,7 +137,7 @@ def test_track_file_since_planning_rejects_plan(tmp_path, monkeypatch):
     assert os.path.exists(ws / "0-sources" / "t.gpx")
 
 
-@pytest.mark.spec("prep-execute-rejects-new-file-1", "prep-plan-memo-reuse-1",
+@pytest.mark.spec("prep-execute-rejects-new-file-1", "prep-plan-memo-reuse-1", "RUL-reuse_valid_work",
                   test="TST-stale_plan-replan_incorporates_new_file_reading_only_it")
 def test_replan_incorporates_new_file_reading_only_it(tmp_path, monkeypatch):
     """After the refusal a new plan takes the newcomer in, fingerprinting only it: the refused plan's

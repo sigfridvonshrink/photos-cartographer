@@ -442,3 +442,23 @@ having no native GPS and be placed again; one now placed nowhere has geotag's po
 the suffix alone. A write SHALL be planned only where the file does not already hold its value, and names are
 recomputed from the destination's local time, a file already so named getting no rename (geotag §27, §28.2).
 :::
+
+## 10. Change only what needs changing
+
+:::{bld} What each phase reuses and skips
+:id: BLD-idempotency
+:status: seed
+:realises: RUL-reuse_valid_work, RUL-remake_only_what_depends, RUL-mutate_on_difference, RUL-no_op_run
+
+Prep SHALL reuse the cached fingerprint and metadata of a file whose size and modification time are unchanged, and
+carry a moved file's identity forward without reading it (prep §10, §13); a plan never executed SHALL leave its
+fingerprints and metadata for the next plan to reuse (prep §10.3). Geotag SHALL reuse its resolved-UTC cache while its
+inputs are unchanged and keep each decision whose target is unchanged (geotag §9, §22.1). Fingerprinting (ImageMagick
+`identify`, `ffmpeg`), metadata extraction (`exiftool`) and GPX parsing SHALL run only for new or changed inputs.
+Staleness SHALL follow the field-scoped fingerprints of the dependency cascade (§9). A file's operation SHALL be planned
+only where the file does not already hold the target: prep does not move or rename a file already in place, geotag
+plans no write a file already holds and recomputes an already-final name to itself (geotag §27, §28.2), and merge
+records a photo already in the library as already present (merge §7). A run's summary SHALL count the cache hits and
+the files already right. Each phase's own consequences are in its spec: prep §13 and §21, geotag §29.1 and §30, merge
+§8.
+:::
