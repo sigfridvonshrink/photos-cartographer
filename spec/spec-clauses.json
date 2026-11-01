@@ -7899,6 +7899,20 @@
       "test": "tests/test_prep_log.py::test_missing_history_warns_and_marks_partial"
     },
     {
+      "id": "log-partial-geotag-history-1",
+      "area": "shared",
+      "criticality": "med",
+      "anti": true,
+      "title": "Finalize marks partial the entry of a marked photo this workspace never first corrected, and names any executed pass whose plan is missing",
+      "spec": {
+        "file": "photos-shared-contract.md",
+        "section": "13.3a"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_rerun_markers.py::test_a_history_too_thin_is_marked_partial"
+    },
+    {
       "id": "log-human-readable-json-1",
       "area": "shared",
       "criticality": "low",

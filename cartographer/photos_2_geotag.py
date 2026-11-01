@@ -1588,8 +1588,15 @@ class GeotagWorkflow:
                 prep_photos = {}
         photos = build_complete_log(prep_photos, files, rows, time_artifact, plan, ledger,
                                     earlier_passes=self._earlier_passes(plan.get("plan_id")))
-        write_json_artifact(complete_log_path(ws),
-                            {"schema_version": 1, "tool": "photos-2-geotag", "photos": photos})
+        self.finalize_warnings = [f"geotag pass {pid} ran (its journal is kept) but its plan is missing: "
+                                  "its steps are not in the log" for pid in self._passes_without_a_plan(plan.get("plan_id"))]
+        self.finalize_warnings += [f"{e.get('final_path') or fp}: {e['note']}" for fp, e in sorted(photos.items())
+                                   if e.get("partial") and e.get("note", "").startswith("geotag's mark")]
+        log = {"schema_version": 1, "tool": "photos-2-geotag", "photos": photos}
+        if self.finalize_warnings:
+            log["partial"] = True
+            log["warnings"] = self.finalize_warnings
+        write_json_artifact(complete_log_path(ws), log)
 
         conn = sqlite3.connect(db_path(ws))
         try:
@@ -1648,6 +1655,29 @@ class GeotagWorkflow:
                 continue
             out.append((plan, {oid for oid, st in ops.items() if st == "confirmed"}))
         return out
+
+    def _passes_without_a_plan(self, current_plan_id):
+        """Ids of geotag passes whose journal shows they ran but whose plan is neither current nor kept
+        — their steps cannot be rebuilt (§13.3a). A geotag journal maps operation ids to their status;
+        prep's lists its operations."""
+        ws = self.workspace_root
+        stem = os.path.splitext(EXECUTABLE_PLAN_ARTIFACT)[0]
+        known = {current_plan_id}
+        for p in glob.glob(os.path.join(ws, CONTROL_DIR, f"{stem}-[0-9][0-9][0-9]*.json")):
+            try:
+                known.add(json.load(open(p)).get("plan_id"))
+            except (OSError, ValueError):
+                continue
+        missing = []
+        for jp in sorted(glob.glob(os.path.join(ws, CONTROL_DIR, "journal-*.json"))):
+            try:
+                j = json.load(open(jp)) or {}
+            except (OSError, ValueError):
+                continue
+            ops = j.get("operations")
+            if isinstance(ops, dict) and any(st == "confirmed" for st in ops.values()) and j.get("plan_id") not in known:
+                missing.append(j.get("plan_id"))
+        return missing
 
     def _archive_manifest(self, plan, summary, now_iso, members):
         ws = self.workspace_root
@@ -2029,6 +2059,8 @@ def run(args):
                 emit_next_step(reporter, "run `geotag execute` to a successful finish first, then "
                                          "`geotag finalize`.")
                 sys.exit(2)
+            for w in getattr(wf, "finalize_warnings", []):
+                reporter.warn(f"  partial record: {w}")
             reporter.log(f"Finalized: wrote {COMPLETE_LOG_ARTIFACT}, {GEOTAG_DB_SNAPSHOT}, and "
                   f"{ARCHIVE_MANIFEST_ARTIFACT} to {CONTROL_DIR}/. The archival package is ready to "
                   "copy to permanent storage (geotag does not seal or merge).", stream="stdout")

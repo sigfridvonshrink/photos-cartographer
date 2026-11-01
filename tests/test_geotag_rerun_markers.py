@@ -446,3 +446,34 @@ def test_the_log_keeps_every_geotag_pass(tmp_path, monkeypatch):
     current = cal.sha256_file(str(ws / ".photos-ingest" / "photos-22-gps-drift-validation.json"))
     assert offsets[0]["because_record_sha256"] != current and offsets[-1]["because_record_sha256"] == current
     assert sum(s["action"] == "gps_written" for s in steps) == 2
+
+
+@pytest.mark.spec("RUL-partial_history_shown", "log-fail-if-insufficient-1", "log-partial-geotag-history-1", test="TST-geotag_rerun_markers-a_history_too_thin_is_marked_partial")
+def test_a_history_too_thin_is_marked_partial(tmp_path, monkeypatch):
+    """Finalize never shows as whole what it cannot rebuild: a photo carrying geotag's mark that no pass
+    here first corrected is marked partial, and a pass whose plan is gone is named in a warning."""
+    ws = _ws(tmp_path, [lambda ws: _rec(ws, f"{T}/2024-07-03--14-30-00.arw", "2024:07:03 14:30:00",
+                                        gps=(40.0, 3.0), method="interpolated")])
+    p = ws / ".photos-ingest" / "photos-11-handoff.json"
+    ho = json.loads(p.read_text())
+    parsed = json.loads(ho["files"][0]["metadata_status"]["parsed_json"])
+    parsed["OffsetTimeOriginal"] = "+02:00"
+    ho["files"][0]["metadata_status"]["parsed_json"] = json.dumps(parsed)
+    _write_handoff(ws, ho["files"])
+    _plan(monkeypatch, ws)
+    _execute(monkeypatch, ws)
+    entry = _finalize(monkeypatch, ws)["fp-2024-07-03--14-30-00.arw"]
+    assert entry["partial"] and "made elsewhere" in entry["note"]
+
+    (tmp_path / "two").mkdir()
+    ws2 = _executed_round(tmp_path / "two", monkeypatch)                 # a pass, then a second one
+    _confirm_drift(ws2, SLOW - 300)
+    _plan(monkeypatch, ws2)
+    _execute(monkeypatch, ws2)
+    first = json.loads(next((ws2 / ".photos-ingest").glob("photos-24-executable-plan-0*.json")).read_text())["plan_id"]
+    for kept in (ws2 / ".photos-ingest").glob("photos-24-executable-plan-0*.json"):
+        kept.unlink()                                                    # the first pass's plan is lost
+    _finalize(monkeypatch, ws2)
+    log = json.loads((ws2 / ".photos-ingest" / "photos-26-complete-log.json").read_text())
+    assert log["partial"] and any(first in w for w in log["warnings"])
+    assert "partial" not in log["photos"]["fp-a.arw"]                    # its own values were pinned here
