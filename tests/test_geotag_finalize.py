@@ -226,6 +226,32 @@ def test_finalize_assembles_package_and_is_nondestructive(tmp_path, monkeypatch)
     assert "photos-26-complete-log.json" in manifest["contents"] and "photos-00-ingest.db" in manifest["contents"]
 
 
+@pytest.mark.spec("RUL-package_contents", "RUL-package_self_describing", "archive-whole-control-dir-1", test="TST-geotag_finalize-finalize_archives_the_whole_control_directory")
+def test_finalize_archives_the_whole_control_directory(tmp_path, monkeypatch):
+    """The package is the whole control directory but its transient files — the drift record and every
+    journal among it — listed with their hashes in the manifest and archived, manifest included, into
+    the control directory itself."""
+    import hashlib
+    import tarfile
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    (ctl / "photos-22-gps-drift-validation.json").write_text('{"status": "complete"}')
+    (ctl / "photos-00-plan-memo.db").write_bytes(b"scratch")
+    assert _run(monkeypatch, ws, "finalize") == 0
+    manifest = json.load(open(ctl / "photos-26-archive-manifest.json"))
+    listed = set(manifest["contents"])
+    assert {"photos-22-gps-drift-validation.json", "photos-00-config.json", "photos-00-ingest.db"} <= listed
+    assert any(n.startswith("journal-") for n in listed)
+    assert not any(n.endswith(".lock") or n.startswith(".tmp-") for n in listed)
+    assert "photos-00-plan-memo.db" not in listed and "photos-26-archive-manifest.json" not in listed
+    with tarfile.open(ctl / "photos-26-archive.tar.gz") as tar:
+        archived = {m.name: tar.extractfile(m).read() for m in tar.getmembers()}
+    assert set(archived) == {rec["path"] for rec in manifest["contents"].values()} | {
+        ".photos-ingest/photos-26-archive-manifest.json"}
+    for rec in manifest["contents"].values():                      # the hashes describe what was archived
+        assert hashlib.sha256(archived[rec["path"]]).hexdigest() == rec["sha256"], rec["path"]
+
+
 @pytest.mark.spec("geotag-finalize-no-merge-1")
 def test_finalize_bundles_archive_but_performs_no_merge(tmp_path, monkeypatch):
     """§31 (anti): finalize assembles the archival package (photos-26 complete-log + DB + manifest)

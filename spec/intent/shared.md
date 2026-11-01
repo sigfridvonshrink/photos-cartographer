@@ -1405,11 +1405,11 @@ everything done to it and why. Each phase keeps its own, carrying the previous p
 
 :::{def} The archival package
 :id: DEF-archival_package
-:status: seed
+:status: ruled
 :uses: DEF-control_records, DEF-transformation_log
 
-The **archival package** is one portable bundle holding the complete record of a dump's journey through the pipeline —
-what was done to its photos and why. It is what the user keeps when the workspace goes away.
+The **archival package** is one archive, kept with the control records, holding the complete record of a dump's journey
+through the pipeline — what was done to its photos and why. It is what the user keeps when the workspace goes away.
 :::
 
 :::{rul} The record is whole at the end of every phase
@@ -1466,15 +1466,16 @@ already stands at the end of geotag and write the package from it.
 
 :::{rul} What the package holds
 :id: RUL-package_contents
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
-:aliases: archive-package-contents-1
-:uses: DEF-archival_package, DEF-transformation_log
+:aliases: archive-package-contents-1, archive-whole-control-dir-1
+:uses: DEF-archival_package, DEF-transformation_log, DEF-control_records
 
-The archival package SHALL hold the configuration that governed the workspace; every current decision and plan record,
-exactly as the pipeline validated it; the database, with its snapshot from the end of each phase; and every phase's
-transformation log.
+The archival package SHALL hold every control record but the transient ones, archived together with its own list of
+them: the configuration that governed the workspace; every current decision and plan record, exactly as the pipeline
+validated it; the database, with its snapshot from the end of each phase; every phase's transformation log; and every
+run's journal.
 :::
 
 :::{rul} The package describes itself

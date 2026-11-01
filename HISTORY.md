@@ -14,6 +14,18 @@ it, and a JPEG's whole EXIF block must fit in 64 KB; values to 1,000 characters 
 JPEG and an ARW, and exiv2 read `fused+carto-time` back from both. Of the suffixes offered: *"+carto-time is ok"*. The
 bare position markers stay as they were; the suffix is appended once to whatever the field holds.
 
+## 2026-11-01 — the package is the control folder, archived; the log's key named for what it holds
+
+Proposed §13.1–§13.3a as intent §12 continued. The contract called the package "a single, portable bundle"; finalize
+wrote only a manifest listing files left in place. Vasile: *"finalize should archive the entire control folder and its
+manifest and add it to the control folder."* Finalize now lists every control-directory file but the transient ones —
+locks, temporary files, SQLite's rollback journals, the plan memo, which the contract keeps out as scratch, and earlier
+archives — and archives them with the manifest into `photos-26-archive.tar.gz`; merge's re-seal, re-making the same
+package, does the same into `photos-35-archive.tar.gz`. The drift record, missing from the manifest: *"yes"*; the
+journals, needed to rebuild the history but not in the package: *"yes"* — both are now among the archived files. The
+log's key field `content_sha256`, which holds the decoded-content fingerprint and not a SHA-256: *"fix please"* — prep
+now writes `content_fingerprint`, as geotag already did; logs written before keep the old name.
+
 ## 2026-11-01 — finalize copies prep's log; what it reads is not specified
 
 Answered: the intent states the result, not the sources, except that an earlier record is copied forward rather than

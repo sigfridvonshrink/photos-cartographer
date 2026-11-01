@@ -468,14 +468,15 @@ The package is produced by an **explicit finalize/archive command**, not automat
 
 ### 13.2 Contents
 
-The archival package contains:
+The archival package is **one archive file in the control directory** — `photos-26-archive.tar.gz`, made by finalize, and after merge `photos-35-archive.tar.gz`, made by its re-seal — holding the **whole control directory** as it stands, but for its transient files (locks, temporary files, SQLite's rollback journals), the plan memo (Section 13.4) and earlier archives, together with the manifest. It therefore contains:
 
 1. **The workspace configuration** — `photos-00-config.json`, the pinned config that governed all processing in this workspace (Section 4).
 2. **All current decision/plan JSON artifacts** — the prep handoff (`photos-11-handoff.json`); the numbered geotag artifacts `photos-21-time-decisions.json`, `photos-22-gps-drift-validation.json`, `photos-23-gps-decisions.json`, `photos-24-executable-plan.json`, `photos-25-execution-summary.json`; and, if merge has run, the merge summary (`photos-31-merge-summary.json`) — exactly as written (same bytes the pipeline validated against, Section 12 part 2).
 3. **The SQLite database and its per-phase backup snapshots** — the live `photos-00-ingest.db` (Section 13.4) plus every per-phase backup snapshot present (`photos-15-prep-ingest.db`, `photos-26-geotag-ingest.db`, and, if merge has run, `photos-35-merge-ingest.db`, Section 13.4a): the DB is part of the durable record, not throwaway scratch, and is archived with the artifacts, together with a full point-in-time image as of each phase boundary.
 4. **The per-phase transformation logs** — every phase log present (`photos-15-prep-log.json`, `photos-26-complete-log.json`, and, if merge has run, `photos-35-merge-log.json`, Section 13.3), each a complete record through its phase and each a superset of the one before. The latest-phase log is the authoritative full record; the earlier ones are each phase's own standalone record (Section 13.0a). All present are bundled.
+5. **Every run's journal** (`journal-<run>.json`), the history the logs are built from (Section 13.3a).
 
-The package is self-describing: it should record the workspace identity, the plan/execution ids it corresponds to, and a manifest of its own contents with their SHA-256s, so its integrity is verifiable later. (When merge re-seals the package, Section 13.6, it re-bundles to include the merge artifacts — `photos-31-merge-summary.json`, `photos-35-merge-log.json`, `photos-35-merge-ingest.db` — and refreshes the manifest.)
+The package is self-describing: its manifest records the workspace identity, the plan/execution ids it corresponds to, and every file it holds with its SHA-256, so its integrity is verifiable later. (When merge re-seals the package, Section 13.6, it re-bundles to include the merge artifacts — `photos-31-merge-summary.json`, `photos-35-merge-log.json`, `photos-35-merge-ingest.db` — and refreshes the manifest.)
 
 ### 13.3 The transformation log (`photos-26-complete-log.json`)
 
@@ -516,7 +517,7 @@ Illustrative per-photo shape (not normative):
 
 ```json
 {
-  "content_sha256": "…",
+  "content_fingerprint": "…",
   "final_path": "6-photos-by-dest/Belgium/Brussels/2024-07-03--14-12-21.arw",
   "camera_group": "sony_a6400_serial_123456",
   "journey": [
@@ -593,7 +594,7 @@ Merge (`photos-3-merge`, spec `photos-3-merge-workflow.md`) is the explicit, sep
 
 Merge requires that geotag was finalized (Section 13.5; merge spec Section 3) — it operates on the finalized record. But merge then *adds to* that record: it writes its own log `photos-35-merge-log.json` (copied forward from `photos-26` and extended with library destinations), captures the end-of-merge DB snapshot `photos-35-merge-ingest.db`, and writes `photos-31-merge-summary.json`. So the package finalize sealed no longer reflects the full state. Two consequences:
 
-1. **Merge re-seals the archival package automatically.** On successful completion (every by-dest photo moved into or confirmed already in the library, with no un-merged photo left — Section 13.7 / merge spec Section 9.4), merge re-assembles the archival package (Section 13.2) so it includes the merge log `photos-35-merge-log.json`, the merge summary, and the end-of-merge DB snapshot, and re-writes the self-describing manifest with the updated SHA-256s. This is **automatic**, not a separate command: the whole point of merge is to land the batch in the library, so the operator should get the complete, library-aware archive as a matter of course. (Contrast geotag's finalize, Section 13.1, which stays a deliberate, separately-invoked step precisely because geotag is freely re-run and re-finalizing after every pass would be wasteful; merge, by contrast, is the terminal action for the workspace — Section 13.7 — so re-sealing once at its end is the right standard behavior.) Merge re-seals by bundling the now-current artifacts (a read of each, never editing another phase's file, Section 13.0a); it does not re-run geotag's finalize logic or re-derive geotag's portion of the record.
+1. **Merge re-seals the archival package automatically.** On successful completion (every by-dest photo moved into or confirmed already in the library, with no un-merged photo left — Section 13.7 / merge spec Section 9.4), merge re-assembles the archival package (Section 13.2) so it includes the merge log `photos-35-merge-log.json`, the merge summary, and the end-of-merge DB snapshot: its own manifest `photos-35-archive-manifest.json` and archive `photos-35-archive.tar.gz` supersede finalize's. This is **automatic**, not a separate command: the whole point of merge is to land the batch in the library, so the operator should get the complete, library-aware archive as a matter of course. (Contrast geotag's finalize, Section 13.1, which stays a deliberate, separately-invoked step precisely because geotag is freely re-run and re-finalizing after every pass would be wasteful; merge, by contrast, is the terminal action for the workspace — Section 13.7 — so re-sealing once at its end is the right standard behavior.) Merge re-seals by bundling the now-current artifacts (a read of each, never editing another phase's file, Section 13.0a); it does not re-run geotag's finalize logic or re-derive geotag's portion of the record.
 
 2. **The workspace becomes terminal.** A successfully merged workspace has done its job: its batch is in the permanent library and its complete archive is sealed. The workspace must not be silently reused for a fresh dump, because it is no longer a clean slate — see Section 13.7.
 

@@ -81,7 +81,7 @@ def test_media_journey_keyed_by_fingerprint(tmp_path, monkeypatch):
     photos = _log(ws)["photos"]
     assert len(photos) == 1
     fp, entry = next(iter(photos.items()))
-    assert entry["content_sha256"] == fp                   # keyed by content fingerprint
+    assert entry["content_fingerprint"] == fp              # keyed by content fingerprint
     actions = [(s["action"], s.get("to") or s.get("from")) for s in entry["journey"]]
     assert ("extension_normalized", "IMG.JPG") in [(s["action"], s.get("from")) for s in entry["journey"]]
     assert any(a == "organized" for a, _ in actions)
