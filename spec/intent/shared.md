@@ -1553,7 +1553,7 @@ person reads them — times, timezones and offsets.
 
 :::{rul} History is kept across runs, as much as the log needs
 :id: RUL-history_retained
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required

@@ -419,7 +419,7 @@ def _finalize(monkeypatch, ws):
     return json.loads((ws / ".photos-ingest" / "photos-26-complete-log.json").read_text())["photos"]
 
 
-@pytest.mark.spec("RUL-log_entry_grows", "RUL-partial_history_shown", "log-every-geotag-pass-1", test="TST-geotag_rerun_markers-the_log_keeps_every_geotag_pass")
+@pytest.mark.spec("RUL-log_entry_grows", "RUL-partial_history_shown", "RUL-history_retained", "log-every-geotag-pass-1", "log-decision-version-kept-1", test="TST-geotag_rerun_markers-the_log_keeps_every_geotag_pass")
 def test_the_log_keeps_every_geotag_pass(tmp_path, monkeypatch):
     """Finalize logs what every executed pass did, in order and matched by fingerprint — not only the
     latest plan's operations: a photo corrected, then corrected again, then left alone shows all three."""
@@ -439,4 +439,10 @@ def test_the_log_keeps_every_geotag_pass(tmp_path, monkeypatch):
     assert [s["offset_seconds"] for s in offsets] == [SLOW, SLOW - 300, SLOW - 300]
     # the offset applied is the drift check's validated one, so each step names that confirmation
     assert all(s["because"] == f"photos-22 destinations.{T}.drift_decisions.{CAM}" for s in offsets)
+    # and names the exact version of the record it followed, which execution kept, though the record
+    # was edited in place between passes
+    for s in offsets:
+        assert cal.sha256_file(str(ws / s["because_record"])) == s["because_record_sha256"]
+    current = cal.sha256_file(str(ws / ".photos-ingest" / "photos-22-gps-drift-validation.json"))
+    assert offsets[0]["because_record_sha256"] != current and offsets[-1]["because_record_sha256"] == current
     assert sum(s["action"] == "gps_written" for s in steps) == 2

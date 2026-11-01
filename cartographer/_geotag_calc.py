@@ -46,6 +46,7 @@ from .photos_utils import (
 from .reporting import get_reporter
 
 __all__ = [
+    'DECISION_RECORD_DEPS',
     'describe_offset',
     'offset_decision_pointer',
     'manual_gps_pointer',
@@ -1001,6 +1002,24 @@ def manual_gps_pointer(category, dest, rel, fallback_cell):
     return p
 
 
+_DECISION_RECORD_DEP = {"photos-21": "time_decisions", "photos-22": "drift_validation", "photos-23": "gps_decisions"}
+DECISION_RECORD_DEPS = tuple(_DECISION_RECORD_DEP.values())
+
+
+def _with_record_hashes(steps, plan):
+    """Each step naming a decision also names the exact version of the decision record its pass
+    followed: the copy execution kept of it (`executed/<plan id>/`) and its hash, the one the pass's
+    plan depended on — so the why stays findable after the live record is edited (§13.3a)."""
+    deps = plan.get("depends_on") or {}
+    for s in steps:
+        dep = deps.get(_DECISION_RECORD_DEP.get((s.get("because") or "")[:9]) or "") or {}
+        if dep.get("sha256"):
+            s["because_record_sha256"] = dep["sha256"]
+            if dep.get("artifact_name") and plan.get("plan_id"):
+                s["because_record"] = f"{CONTROL_DIR}/executed/{plan['plan_id']}/{dep['artifact_name']}"
+    return steps
+
+
 def _earlier_pass_steps(plan, confirmed, pre_by_fp):
     """{fingerprint: [steps]} for one earlier executed pass: what its confirmed operations did to each
     photo, matched by the fingerprint the operation was planned against, each step naming the run."""
@@ -1024,10 +1043,11 @@ def _earlier_pass_steps(plan, confirmed, pre_by_fp):
             if prov.get("resolved_utc"):
                 steps.append({"phase": "geotag", "action": "resolved_utc", "value": prov["resolved_utc"]})
             if prov.get("destination_timezone"):
-                steps.append({"phase": "geotag", "action": "timezone_resolved", "value": prov["destination_timezone"]})
+                steps.append({"phase": "geotag", "action": "timezone_resolved", "value": prov["destination_timezone"],
+                              **({"because": prov["timezone_because"]} if prov.get("timezone_because") else {})})
             steps.append({"phase": "geotag", "action": "time_written", "writes": time_op.get("writes")})
         steps += _gps_and_rename_steps(fp, ops, pre_by_fp, native=False)
-        out[fp] = [dict(s, run=run) for s in steps]
+        out[fp] = _with_record_hashes([dict(s, run=run) for s in steps], plan)
     return out
 
 
@@ -1109,6 +1129,7 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, l
         steps.extend(_gps_and_rename_steps(fp, ops, pre_by_fp, native=f.get("has_native_gps")))
         if run:
             steps[start:] = [dict(s, run=run) for s in steps[start:]]
+        _with_record_hashes(steps[start:], plan)
     return photos
 
 

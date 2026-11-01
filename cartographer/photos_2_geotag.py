@@ -36,6 +36,7 @@ import hashlib
 import json
 import math
 import os
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -66,6 +67,7 @@ COMPLETE_LOG_ARTIFACT = "photos-26-complete-log.json"
 GEOTAG_DB_SNAPSHOT = "photos-26-geotag-ingest.db"
 ARCHIVE_MANIFEST_ARTIFACT = "photos-26-archive-manifest.json"
 ARCHIVE_ARTIFACT = "photos-26-archive.tar.gz"
+EXECUTED_DIR = "executed"            # executed/<plan id>/: the decision records each executed plan ran against
 GPX_WARNINGS_SHOWN = 10     # geotag plan prints at most this many GPX load warnings, then a count
 
 
@@ -1155,6 +1157,7 @@ class GeotagWorkflow:
                         o["provenance"] = {
                             "resolved_utc": row.get("resolved_utc"), "time_rule_used": row.get("time_rule_used"),
                             "utc_offset_used": row.get("utc_offset_used"), "destination_timezone": tz,
+                            "timezone_because": f"photos-21 destinations.{dest}.destination_timezone",
                             "because": offset_decision_pointer(
                                 dict(row, camera_group=row.get("camera_group") or f.get("camera_group_key")), dest, cells)}
                     elif o["type"] == "metadata_gps_write" and o.get("gps_origin") == "apply_manual":
@@ -1381,6 +1384,7 @@ class GeotagWorkflow:
         stale = self.revalidate_plan(plan, gpx)
         if stale:
             return {"status": "rejected", "plan_id": plan.get("plan_id"), "stale": stale}
+        self._keep_executed_decisions(plan)
 
         # Optional pre-mutation ZFS snapshot (§29 step 6), labelled "geotag" so it never collides
         # with prep's "prep-" snapshot. A REQUIRED snapshot that cannot be taken aborts before any
@@ -1599,6 +1603,25 @@ class GeotagWorkflow:
         write_json_artifact(archive_manifest_path(ws), self._archive_manifest(plan, summary, now_iso, members))
         write_control_archive(ws, archive_path(ws), members + [os.path.relpath(archive_manifest_path(ws), ws)])
         return []
+
+    def _keep_executed_decisions(self, plan):
+        """Keep, once per plan, the exact decision records the plan was made from and is now executed
+        against (§13.3a) — `executed/<plan id>/` in the control directory — so a later finalize's log
+        can name the precise version a pass followed after the live records have been edited in place.
+        Revalidation has just proven the live records are the ones the plan depends on."""
+        ws = self.workspace_root
+        keep = os.path.join(ws, CONTROL_DIR, EXECUTED_DIR, plan["plan_id"])
+        for key in DECISION_RECORD_DEPS:
+            dep = (plan.get("depends_on") or {}).get(key) or {}
+            src = os.path.join(ws, dep["artifact_path"]) if dep.get("artifact_path") else None
+            if not src or not os.path.exists(src) or sha256_file(src) != dep.get("sha256"):
+                continue
+            dst = os.path.join(keep, os.path.basename(src))
+            if not os.path.exists(dst):
+                os.makedirs(keep, exist_ok=True)
+                tmp = os.path.join(keep, ".tmp-" + os.path.basename(src))
+                shutil.copyfile(src, tmp)
+                os.replace(tmp, dst)
 
     def _earlier_passes(self, current_plan_id):
         """[(plan, confirmed operation ids)] of every geotag pass executed before the current plan,

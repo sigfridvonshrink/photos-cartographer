@@ -538,6 +538,7 @@ ahead of UTC"), `resolved_utc`, `timezone_resolved`, `time_written`, `gps_writte
 for a manual position, the pinned pre-state), `gps_reverted`, `gps_preserved` and `final_rename`, each naming its `run`;
 finalize SHALL take them from every executed pass — each superseded `photos-24` whose journal shows it ran, oldest
 first, matched by fingerprint — before the current plan's, from the provenance each time write carries (geotag §31). Each run's journal SHALL be kept as
-its own `journal-<run>.json`; prep marks its log partial and warns when its history cannot rebuild a journey (prep
+its own `journal-<run>.json`, and each geotag execution SHALL keep the decision records its plan depended on, verified
+by hash, in `executed/<plan id>/`, which a step's `because_record` and `because_record_sha256` name; prep marks its log partial and warns when its history cannot rebuild a journey (prep
 §16.1).
 :::
