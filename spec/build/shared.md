@@ -529,8 +529,10 @@ re-seal does the same into `photos-35-archive-manifest.json` and `photos-35-arch
 Each log SHALL be pretty-printed JSON with sorted keys, its `photos` keyed by the content fingerprint (`content_fingerprint`),
 each entry carrying `final_path` and a `journey` of steps, each step naming its `phase` and `action` and, where a decision
 caused it, a `because` pointing into the decision record (`photos-21 destinations.<dest>...`). Geotag's steps SHALL be
-`clock_offset_applied`, `resolved_utc`, `timezone_resolved`, `gps_written` (with its origin, method and, for a manual
-position, the pinned pre-state), `gps_reverted`, `gps_preserved` and `final_rename`. Each run's journal SHALL be kept as
+`clock_offset_applied`, `resolved_utc`, `timezone_resolved`, `time_written`, `gps_written` (with its origin, method and,
+for a manual position, the pinned pre-state), `gps_reverted`, `gps_preserved` and `final_rename`, each naming its `run`;
+finalize SHALL take them from every executed pass — each superseded `photos-24` whose journal shows it ran, oldest
+first, matched by fingerprint — before the current plan's, from the provenance each time write carries (geotag §31). Each run's journal SHALL be kept as
 its own `journal-<run>.json`; prep marks its log partial and warns when its history cannot rebuild a journey (prep
 §16.1).
 :::

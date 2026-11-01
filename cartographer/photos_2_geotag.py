@@ -31,6 +31,7 @@ The script sits beside `photos_utils.py` and imports the shared infrastructure f
 """
 import argparse
 import concurrent.futures
+import glob
 import hashlib
 import json
 import math
@@ -1145,6 +1146,15 @@ class GeotagWorkflow:
                                           eff_fb, reviews.get(rel))
                 cat_by_rel[rel] = (cat, dest, f)
                 fops = plan_file_ops(f, ru, tz, cat, coord, renames.get(rel))
+                row = utc_by_path.get(rel) or {}
+                for o in fops:
+                    if o["type"] == "metadata_time_write":
+                        # what this pass established, kept with the write so a later finalize can log it
+                        # once a later pass has replaced the resolved-UTC cache (§13.3)
+                        o["provenance"] = {
+                            "resolved_utc": row.get("resolved_utc"), "time_rule_used": row.get("time_rule_used"),
+                            "utc_offset_used": row.get("utc_offset_used"), "destination_timezone": tz,
+                            "because": f"photos-21 destinations.{dest}.camera_group_time_decisions.{f.get('camera_group_key')}"}
                 if fops:
                     ops.extend(fops)
                 else:
@@ -1568,7 +1578,8 @@ class GeotagWorkflow:
                 prep_photos = (json.load(open(prep_log_path(ws))) or {}).get("photos", {}) or {}
             except Exception:
                 prep_photos = {}
-        photos = build_complete_log(prep_photos, files, rows, time_artifact, plan, ledger)
+        photos = build_complete_log(prep_photos, files, rows, time_artifact, plan, ledger,
+                                    earlier_passes=self._earlier_passes(plan.get("plan_id")))
         write_json_artifact(complete_log_path(ws),
                             {"schema_version": 1, "tool": "photos-2-geotag", "photos": photos})
 
@@ -1584,6 +1595,32 @@ class GeotagWorkflow:
         write_json_artifact(archive_manifest_path(ws), self._archive_manifest(plan, summary, now_iso, members))
         write_control_archive(ws, archive_path(ws), members + [os.path.relpath(archive_manifest_path(ws), ws)])
         return []
+
+    def _earlier_passes(self, current_plan_id):
+        """[(plan, confirmed operation ids)] of every geotag pass executed before the current plan,
+        oldest first: each superseded plan (kept as photos-24-...-NNN.json, numbered in the order they
+        were set aside) whose journal shows it ran (§13.3a)."""
+        ws = self.workspace_root
+        stem = os.path.splitext(EXECUTABLE_PLAN_ARTIFACT)[0]
+        backups = sorted(glob.glob(os.path.join(ws, CONTROL_DIR, f"{stem}-[0-9][0-9][0-9]*.json")),
+                         key=lambda p: int(os.path.basename(p)[len(stem) + 1:-len(".json")] or 0))
+        out, seen = [], {current_plan_id}
+        for p in backups:
+            try:
+                plan = json.load(open(p))
+            except (OSError, ValueError):
+                continue
+            pid = plan.get("plan_id")
+            jp = journal_path(ws, pid) if pid else None
+            if pid in seen or not jp or not os.path.exists(jp):
+                continue
+            seen.add(pid)
+            try:
+                ops = (json.load(open(jp)) or {}).get("operations") or {}
+            except (OSError, ValueError):
+                continue
+            out.append((plan, {oid for oid, st in ops.items() if st == "confirmed"}))
+        return out
 
     def _archive_manifest(self, plan, summary, now_iso, members):
         ws = self.workspace_root

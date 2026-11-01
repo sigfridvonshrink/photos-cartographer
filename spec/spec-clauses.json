@@ -7857,6 +7857,20 @@
       "test": "tests/test_prep_log.py::test_recognized_move_appends_moved_to_by_dest"
     },
     {
+      "id": "log-every-geotag-pass-1",
+      "area": "shared",
+      "criticality": "med",
+      "anti": true,
+      "title": "Finalize logs every executed geotag pass, oldest first and matched by fingerprint, not only the current plan's operations",
+      "spec": {
+        "file": "photos-shared-contract.md",
+        "section": "13.3"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_rerun_markers.py::test_the_log_keeps_every_geotag_pass"
+    },
+    {
       "id": "log-fail-if-insufficient-1",
       "area": "shared",
       "criticality": "med",
