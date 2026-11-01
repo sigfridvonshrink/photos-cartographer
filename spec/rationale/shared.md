@@ -488,3 +488,23 @@ tampered with by what came after. That is why the log is three files, one per ph
 phase that copies its predecessor's record, rather than deriving that history again from other sources, keeps one
 account of each phase: a second, rebuilt account could disagree with the first.
 :::
+
+:::{rat} A name cannot key the log
+:id: RAT-names_cannot_key_the_log
+:status: seed
+:justifies: RUL-log_keyed_by_fingerprint
+
+A photo is renamed up to twice in the workspace — a provisional name, then its final one — and may be renamed again on
+its way into the library, so no name identifies it across its journey. Its fingerprint does: it survives every rename,
+move and metadata write the pipeline makes.
+:::
+
+:::{rat} Retention serves the log, nothing more
+:id: RAT-retention_serves_the_log
+:status: seed
+:justifies: RUL-history_retained, RUL-partial_history_shown
+
+A journey spans many runs — prep, re-prep after moves, repeated geotag passes, merge — so a log rebuilt from the last
+run alone would silently lose the rest. What is kept exists to serve the log, and resuming and auditing; it is not an
+open-ended store of events.
+:::

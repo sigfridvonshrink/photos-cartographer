@@ -505,3 +505,30 @@ merge `photos-3X`. The configuration and the database are phase-neutral, each wi
 the configuration, which `init-library` may later extend by `library_root` alone (§4), and prep writes the database's
 cache and identity rows while geotag and merge write only their own regions of it (§13.4). Bundling copies of every phase's records into the archival package reads them, and is no write.
 :::
+
+:::{bld} The package's manifest
+:id: BLD-archive_manifest
+:status: seed
+:realises: RUL-finalize_non_destructive, RUL-package_contents, RUL-package_self_describing
+
+`geotag finalize` SHALL write `photos-26-complete-log.json`, the database snapshot `photos-26-geotag-ingest.db` and the
+manifest `photos-26-archive-manifest.json` into the control directory, and write nothing else. The manifest SHALL list,
+with each one's SHA-256 and path, the configuration, `photos-11-handoff.json`, `photos-15-prep-log.json`,
+`photos-15-prep-ingest.db`, `photos-21`, `photos-23`, `photos-24`, `photos-25`, `photos-26-complete-log.json`,
+`photos-26-geotag-ingest.db` and the live `photos-00-ingest.db`, and record the workspace folder's name and the plan
+and execution ids. It requires a ready plan whose execution succeeded (geotag §31). Merge re-seals it (§13.6).
+:::
+
+:::{bld} The log's format, and the history it is made from
+:id: BLD-log_format
+:status: seed
+:realises: RUL-log_entry_grows, RUL-log_keyed_by_fingerprint, RUL-log_cites_decisions, RUL-log_records_gps_reverts, RUL-log_human_readable, RUL-history_retained, RUL-partial_history_shown
+
+Each log SHALL be pretty-printed JSON with sorted keys, its `photos` keyed by the content fingerprint (`content_sha256`),
+each entry carrying `final_path` and a `journey` of steps, each step naming its `phase` and `action` and, where a decision
+caused it, a `because` pointing into the decision record (`photos-21 destinations.<dest>...`). Geotag's steps SHALL be
+`clock_offset_applied`, `resolved_utc`, `timezone_resolved`, `gps_written` (with its origin, method and, for a manual
+position, the pinned pre-state), `gps_reverted`, `gps_preserved` and `final_rename`. Each run's journal SHALL be kept as
+its own `journal-<run>.json`; prep marks its log partial and warns when its history cannot rebuild a journey (prep
+§16.1).
+:::

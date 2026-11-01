@@ -1183,7 +1183,7 @@ resumes from prep.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: loop-finalize-before-merge-1
+:aliases: loop-finalize-before-merge-1, archive-finalize-explicit-1
 :uses: DEF-finalize, DEF-merge
 
 Finalize SHALL be a command of its own, never a side effect of geotag's execution. Merge SHALL refuse a workspace that
@@ -1449,4 +1449,130 @@ rewrite or extend its own records across its runs; it SHALL read every other pha
 
 To carry an earlier phase's record forward, a phase SHALL copy it to a record of its own and extend the copy, leaving
 the earlier one untouched; it SHALL NOT derive an earlier phase's history again.
+:::
+
+:::{rul} Finalize only reads and records
+:id: RUL-finalize_non_destructive
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: archive-finalize-nondestructive-1
+:uses: DEF-finalize, DEF-archival_package
+
+Finalize SHALL change nothing in the workspace's media, its other records or the library: it SHALL read the record that
+already stands at the end of geotag and write the package from it.
+:::
+
+:::{rul} What the package holds
+:id: RUL-package_contents
+:status: seed
+:criticality: med
+:verify: required
+:aliases: archive-package-contents-1
+:uses: DEF-archival_package, DEF-transformation_log
+
+The archival package SHALL hold the configuration that governed the workspace; every current decision and plan record,
+exactly as the pipeline validated it; the database, with its snapshot from the end of each phase; and every phase's
+transformation log.
+:::
+
+:::{rul} The package describes itself
+:id: RUL-package_self_describing
+:status: seed
+:criticality: low
+:verify: required
+:aliases: archive-self-describing-manifest-1
+:uses: DEF-archival_package
+
+The package SHALL say which workspace it came from and which plan and execution it records, and list its contents with
+each item's hash, so its integrity can be checked later.
+:::
+
+:::{rul} A photo's entry grows one phase at a time
+:id: RUL-log_entry_grows
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: log-entry-append-only-1
+:uses: DEF-transformation_log
+
+A photo's entry in the log SHALL gather the steps of every phase it passes through and be whole through the latest of
+them; each phase SHALL only append its own steps, never rewrite an earlier one. The latest phase's log SHALL be the full
+record; each earlier log stays its own phase's.
+:::
+
+:::{rul} The log is keyed by fingerprint
+:id: RUL-log_keyed_by_fingerprint
+:status: seed
+:criticality: med
+:verify: required
+:aliases: log-keyed-by-fingerprint-1
+:uses: DEF-transformation_log, DEF-fingerprint
+
+The log SHALL key each photo's entry by its fingerprint and carry the chain of names and places it passed through. A
+file of no media class SHALL have no entry.
+:::
+
+:::{rul} A step names the decision behind it
+:id: RUL-log_cites_decisions
+:status: seed
+:criticality: low
+:verify: required
+:aliases: log-decision-provenance-1
+:uses: DEF-transformation_log, DEF-decision
+
+A step that followed from a decision SHALL name that decision, so the why stands beside the what.
+:::
+
+:::{rul} A manual position's reversal is logged like its application
+:id: RUL-log_records_gps_reverts
+:status: seed
+:criticality: med
+:verify: required
+:aliases: log-records-gps-revert-1
+:uses: DEF-transformation_log
+
+A manual position applied, changed or withdrawn SHALL appear in the log with the position it replaced or restored, or
+that there was none.
+:::
+
+:::{rul} The log reads as it stands
+:id: RUL-log_human_readable
+:status: seed
+:criticality: low
+:verify: required
+:aliases: log-human-readable-json-1
+:uses: DEF-transformation_log
+
+The log SHALL be readable as it stands, with no separate report: stably ordered, with descriptive names, and values as a
+person reads them — times, timezones and offsets.
+:::
+
+:::{rul} History is kept across runs, as much as the log needs
+:id: RUL-history_retained
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: log-retention-across-runs-1
+:uses: DEF-transformation_log
+
+The records the log is made from SHALL be kept across runs in enough detail to rebuild every photo's history through
+each phase — each step, the decision and inputs behind it, and the run that made it — never only the last run's.
+Anything beyond that MAY be pruned.
+:::
+
+:::{rul} A history too thin to rebuild is never shown as whole
+:id: RUL-partial_history_shown
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: log-fail-if-insufficient-1
+:refines: RUL-history_retained
+
+A phase whose kept history cannot rebuild a photo's journey through it SHALL fail, or mark its record plainly partial;
+it SHALL NOT write a log that looks whole but reflects only the last run.
 :::
