@@ -132,7 +132,7 @@ _FORWARD_PLUS_GPS_REVERT = {"metadata_time_write", "metadata_gps_write", "gps_ma
                             "rename_no_clobber", "revert_manual_gps"}
 
 
-@pytest.mark.spec("authored-withdraw-undoes-1", "geotag-recompute-inplace-1", "time-name-never-reverted-1")
+@pytest.mark.spec("authored-withdraw-undoes-1", "geotag-recompute-inplace-1", "time-name-never-reverted-1", test="TST-geotag_gps_ledger-withdraw_reverts_gps_only_never_time_name_or_destination")
 def test_withdraw_reverts_gps_only_never_time_name_or_destination(tmp_path):
     """Withdrawing a decision reverts GPS ONLY — geotag has no time/filename revert op at all (time
     writes + renames are forward-idempotent), and it NEVER relocates a photo across destinations. After
@@ -299,7 +299,7 @@ def test_manual_gps_prestate_pinned_before_the_gps_write(tmp_path, monkeypatch):
     assert events[labels.index("gps_write")][1] == f"{BYDEST}/T/2024-07-03--14-30-00.arw"
 
 
-@pytest.mark.spec("geotag-manual-gps-reversible-1", "geotag-prestate-absent-1", "geotag-rerunnable-after-execute-1")
+@pytest.mark.spec("geotag-manual-gps-reversible-1", "geotag-prestate-absent-1", "geotag-rerunnable-after-execute-1", "RUL-decision_revisable", test="TST-geotag_gps_ledger-full_pin_then_withdraw_reverts_and_consumes")
 def test_full_pin_then_withdraw_reverts_and_consumes(tmp_path, monkeypatch):
     ws, ctl = _exec_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)

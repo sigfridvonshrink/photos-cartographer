@@ -1305,3 +1305,89 @@ A phase run over a workspace whose relevant state has not changed SHALL change n
 — the same operations, fingerprints and names. It SHALL report the work it reused and the files already right, and SHALL
 NOT treat earlier work as an error.
 :::
+
+## 11. Nothing changes that the user did not write down
+
+:::{def} A decision
+:id: DEF-decision
+:status: seed
+:uses: DEF-geotag
+
+A **decision** is a value the user records in one of geotag's records for the tool to act on — a destination's
+timezone, an accepted time anchor, a clock offset, a confirmed drift check, a manual position, a folder fallback. The
+tool *proposes*; the user *decides*.
+:::
+
+:::{inv} Every change follows from the record
+:id: INV-every_change_from_the_record
+:status: seed
+:criticality: high
+:anti: yes
+:verify: incidental
+:aliases: authored-no-autonomous-mutation-1
+:uses: DEF-decision
+
+Every change a phase makes SHALL follow from a decision the user recorded, or from a fixed rule applied to recorded
+inputs — never from a choice the tool makes on its own. An execution SHALL act only on a plan made from those.
+:::
+
+:::{rul} The user writes the decisions; the tool lays out their fields
+:id: RUL-user_writes_decisions
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: authored-fields-not-overwritten-1
+:uses: DEF-decision, RUL-decision_kept
+
+A decision field SHALL be written by the user alone, and no phase SHALL overwrite what the user wrote. A phase SHALL
+create every field a decision needs, so the user fills in values, never structure.
+:::
+
+:::{rul} Prep takes no decision
+:id: RUL-prep_takes_no_decision
+:status: seed
+:criticality: med
+:verify: incidental
+:uses: DEF-prep
+
+Prep SHALL ask the user for no decision: it SHALL organize from the state of the workspace and its configuration alone.
+:::
+
+:::{rul} The cause of every change can be found
+:id: RUL-cause_locatable
+:status: seed
+:criticality: med
+:verify: incidental
+:aliases: authored-locatable-cause-1
+:uses: DEF-decision, DEF-dependency_cascade
+
+Every change a phase executes SHALL be traceable in the records, from the decision and the inputs it was made from,
+through the plan, to the record of what ran — so a wrong result points at a recorded choice.
+:::
+
+:::{rul} A wrong decision is fixed in the record
+:id: RUL-decision_revisable
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-decision, DEF-dependency_cascade
+
+A decision SHALL be revised by changing it in the record and running again: the change SHALL reach everything that
+depends on it, and no change the tool makes SHALL be irreversible at the level of the decisions. A wrong choice SHALL
+never need the mutated files repaired by hand.
+:::
+
+:::{rul} Withdrawing a decision undoes it
+:id: RUL-withdrawal_undoes
+:status: seed
+:criticality: med
+:verify: required
+:aliases: authored-withdraw-undoes-1
+:refines: RUL-decision_revisable
+
+Withdrawing a decision SHALL undo its effect, not merely stop asserting it. A manual position withdrawn SHALL give the
+file back the position it held before, or none if it held none; a position derived by the tool SHALL be derived again; a
+time and a name SHALL be recomputed where the file stands, never moving it out of its destination.
+:::

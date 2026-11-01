@@ -462,3 +462,18 @@ records a photo already in the library as already present (merge §7). A run's s
 the files already right. Each phase's own consequences are in its spec: prep §13 and §21, geotag §29.1 and §30, merge
 §8.
 :::
+
+## 11. Nothing changes that the user did not write down
+
+:::{bld} Where the decisions live, and how a change is traced
+:id: BLD-decision_records
+:status: seed
+:realises: RUL-user_writes_decisions, RUL-cause_locatable, RUL-decision_revisable, RUL-withdrawal_undoes
+
+The decisions SHALL live in the `user_decision` fields of geotag's `photos-21`, `photos-22` and `photos-23`, each field
+created by geotag and preserved across regeneration (geotag §9, §20); the decision editor SHALL write only those
+fields. A change SHALL be traced from its decision record through the `depends_on` fingerprints (§9) to the executable
+plan and the run's journal (prep §14.3; geotag §4–§6, §29). Merge takes no decision; its placement is a fixed rule over
+recorded inputs, recorded the same way (merge §8–§9). A withdrawn manual position SHALL be restored from the pinned
+pre-state ledger (geotag §24.1); an automatic position is recomputed, never rolled back.
+:::
