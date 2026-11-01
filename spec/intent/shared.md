@@ -1529,7 +1529,7 @@ A step that followed from a decision SHALL name that decision, so the why stands
 
 :::{rul} A manual position's reversal is logged like its application
 :id: RUL-log_records_gps_reverts
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: log-records-gps-revert-1

@@ -7955,6 +7955,20 @@
       "test": "tests/test_geotag_finalize.py::test_complete_log_gps_written_and_reverted"
     },
     {
+      "id": "log-revert-and-new-position-1",
+      "area": "shared",
+      "criticality": "med",
+      "anti": true,
+      "title": "A pin withdrawn and the photo placed anew in the same pass are both logged, the revert first",
+      "spec": {
+        "file": "photos-shared-contract.md",
+        "section": "13.3"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_finalize.py::test_a_revert_and_a_new_position_in_one_pass_are_both_logged"
+    },
+    {
       "id": "log-retention-across-runs-1",
       "area": "shared",
       "criticality": "med",
