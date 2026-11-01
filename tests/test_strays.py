@@ -137,37 +137,37 @@ def test_strays_scan_skipped_on_next_run(tmp_path, monkeypatch):
     assert os.path.exists(landed)                                # the stray is left untouched
 
 
-@pytest.mark.spec("gpx-prep-unaware-1", test="TST-strays-gpx_in_sources_is_an_ordinary_stray_never_parsed")
-def test_gpx_in_sources_is_an_ordinary_stray_never_parsed(tmp_path, monkeypatch):
-    """Shared contract §8: GPX is geotag's alone — prep is GPX-unaware. With gpx_root at its default
-    (outside the managed tree), a `.gpx` dropped into 0-sources is just an `other`-class file: prep
-    moves it inert into 1-strays (structure preserved), never parses/fingerprints/organizes it as GPX.
-    Probe the fingerprint seam to prove the .gpx is never fingerprinted, and assert it is not cached."""
+@pytest.mark.spec("gpx-prep-unaware-1", "RUL-tracks_geotag_only", "RUL-track_files_block_prep", test="TST-strays-track_file_blocks_prep_and_stays_put")
+def test_track_file_blocks_prep_and_stays_put(tmp_path, monkeypatch):
+    """Shared contract §8: a track is never media. A `.gpx` anywhere prep inventories — the 0-sources
+    dump or a managed folder — blocks the plan and is left where it is: no operation moves it (above
+    all not into 1-strays, where clearing the strays would delete it), it is never fingerprinted, and
+    the blocked plan cannot be executed."""
     _install(monkeypatch)
-    # gpx_root is left at its default (outside 0-6), so the .gpx is encountered only as an inbox dump.
     seen = {"n": 0}
     orig = prep.ContentHasher.fingerprint_image
 
     def spy(p):
-        if p.endswith(".gpx"):
+        if p.lower().endswith(".gpx"):
             seen["n"] += 1
         return orig(p)
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", spy)
 
     ws = _ws(tmp_path)
     (ws / "0-sources" / "track1.gpx").write_text("<gpx><trkpt lat='1' lon='2'/></gpx>")
+    (ws / "5-photos-by-date" / "2023-01-02").mkdir()
+    (ws / "5-photos-by-date" / "2023-01-02" / "TRACK2.GPX").write_text("<gpx/>")
     (ws / "0-sources" / "photo.jpg").write_bytes(b"img")
     plan = _plan(ws)
-    # The .gpx routes as a non-media stray (same disposition as notes.txt), not as parsed GPX.
-    stray_dest = {op.source: op.destination for op in plan.operations
-                  if op.reason and "stray" in op.reason}
-    assert "0-sources/track1.gpx" in stray_dest
-    assert stray_dest["0-sources/track1.gpx"].endswith("/track1.gpx")
-    _run(ws)
-    assert seen["n"] == 0                                          # never fingerprinted / parsed as GPX
-    assert glob.glob(str(ws / "1-strays" / "*" / "track1.gpx"))    # moved inert into 1-strays
-    assert not any(".gpx" in p for p in _cached_paths(ws))         # untracked in the cache
-    assert any("5-photos-by-date" in p for p in _cached_paths(ws)) # the real photo organized normally
+    assert any("0-sources/track1.gpx" in b for b in plan.blockers), plan.blockers
+    assert any("5-photos-by-date/2023-01-02/TRACK2.GPX" in b for b in plan.blockers), plan.blockers
+    assert not [op for op in plan.operations
+                if ".gpx" in ((op.source or "") + (op.destination or "")).lower()]
+    assert seen["n"] == 0                                           # never fingerprinted
+    with pytest.raises(ValueError, match="blockers"):
+        prep.PlanExecutor(str(ws)).execute(plan)
+    assert (ws / "0-sources" / "track1.gpx").exists()               # left where it was
+    assert not glob.glob(str(ws / "1-strays" / "**" / "*.gpx"), recursive=True)
 
 
 def test_mixed_media_and_stray(tmp_path, monkeypatch):

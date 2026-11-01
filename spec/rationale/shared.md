@@ -266,13 +266,13 @@ folders, prep's normal scan never encounters them, so they can never be taken fo
 into the inbox and organized.
 :::
 
-:::{rat} A wrong location must not make the tracks media
-:id: RAT-tracks_skip_is_defensive
+:::{rat} A track among the strays could be deleted with them
+:id: RAT-tracks_never_strays
 :status: seed
-:justifies: RUL-tracks_skipped_if_inside
+:justifies: RUL-track_files_block_prep
 
-Prep's one obligation toward the tracks is defensive: a misconfigured location must not turn them into media to
-organize. Skipping it as prep skips the quarantine keeps them untouched even under a bad configuration.
+Parked among the strays, a track could be deleted when the strays are cleared in bulk, and a lost track is evidence no
+re-run can recover. Refusing to run leaves it where the user put it until they move it to the tracks' location.
 :::
 
 ## 8. Nothing used once what it came from has changed

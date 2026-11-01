@@ -4724,14 +4724,14 @@
       "area": "prep",
       "criticality": "med",
       "anti": true,
-      "title": "If gpx_root resolves inside the managed tree, prep skips that subtree so GPX files are never organized",
+      "title": "A gpx_root resolving inside the managed tree is an invalid configuration, so GPX files are never organized",
       "spec": {
         "file": "photos-1-prep-workflow.md",
         "section": "3.2"
       },
       "coverage": "covered",
       "must_cover": true,
-      "test": "tests/test_workspace_prep.py::test_gpx_root_inside_managed_tree_is_skipped"
+      "test": "tests/test_workspace_prep.py::test_gpx_root_inside_managed_tree_is_refused"
     },
     {
       "id": "prep-gpx-unaware-1",
@@ -4745,7 +4745,7 @@
       },
       "coverage": "incidental",
       "must_cover": false,
-      "omit_reason": "gpx-skip test shows tracks not organized but no assertion that prep never reads/parses GPX content"
+      "omit_reason": "the track-file test shows a track is never fingerprinted or moved, but no assertion that prep never reads or parses GPX content"
     },
     {
       "id": "prep-group-by-fingerprint-class-1",
@@ -7412,28 +7412,28 @@
       "area": "shared",
       "criticality": "med",
       "anti": false,
-      "title": "If gpx_root resolves inside the managed tree, prep must skip that subtree during scanning so GPX is never organized",
+      "title": "A gpx_root resolving inside the managed tree is refused, so GPX is never organized",
       "spec": {
         "file": "photos-shared-contract.md",
         "section": "8.2"
       },
       "coverage": "covered",
       "must_cover": true,
-      "test": "tests/test_workspace_prep.py::test_gpx_root_inside_managed_tree_is_skipped"
+      "test": "tests/test_workspace_prep.py::test_gpx_root_inside_managed_tree_is_refused"
     },
     {
       "id": "gpx-prep-unaware-1",
       "area": "shared",
       "criticality": "med",
       "anti": true,
-      "title": "GPX is consumed only by geotag; prep never reads/parses/fingerprints/organizes/moves GPX files",
+      "title": "GPX is consumed only by geotag; prep never reads/parses/fingerprints/organizes/moves GPX files, and a track file anywhere prep inventories blocks the plan",
       "spec": {
         "file": "photos-shared-contract.md",
         "section": "8"
       },
       "coverage": "covered",
       "must_cover": true,
-      "test": "tests/test_strays.py::test_gpx_in_sources_is_an_ordinary_stray_never_parsed"
+      "test": "tests/test_strays.py::test_track_file_blocks_prep_and_stays_put"
     },
     {
       "id": "gpx-root-outside-tree-1",
@@ -7445,9 +7445,9 @@
         "file": "photos-shared-contract.md",
         "section": "8.1"
       },
-      "coverage": "none",
-      "must_cover": false,
-      "omit_reason": "no test asserts gpx_root is validated/required to be outside the 0-6 tree"
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_config_validation.py::test_gpx_root_overlapping_the_managed_folders_is_refused"
     },
     {
       "id": "handoff-runonly-refresh-no-restale-1",

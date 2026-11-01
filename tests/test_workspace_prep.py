@@ -482,29 +482,20 @@ def test_plan_is_non_mutating(tmp_path, monkeypatch):
     assert not (cd / "photos-11-handoff.json").exists()         # no handoff (execute-only)
 
 
-@pytest.mark.spec("gpx-prep-defensive-skip-1", "prep-gpx-inside-tree-skip-1", test="TST-workspace_prep-gpx_root_inside_managed_tree_is_skipped")
-def test_gpx_root_inside_managed_tree_is_skipped(tmp_path, monkeypatch, seed_from_live_config):
-    """Defensive GPX skip (shared contract §8.2): a gpx_root misconfigured to resolve inside a managed
-    folder must be skipped during scanning so the GPX tracks are never organized / swept to strays —
-    while ordinary media in the same managed folder is still organized."""
-    import photos_utils as utils
-    monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
-    monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image",
-                        lambda p: {"status": "valid", "value": "sig-" + os.path.basename(p),
-                                   "strategy": "image-content-hash-v1", "engine_version": "t"})
-    photos_ingest.CONFIG["jobs"] = 1
+@pytest.mark.spec("gpx-prep-defensive-skip-1", "prep-gpx-inside-tree-skip-1", "gpx-root-outside-tree-1", "RUL-tracks_outside_managed_folders", test="TST-workspace_prep-gpx_root_inside_managed_tree_is_refused")
+def test_gpx_root_inside_managed_tree_is_refused(tmp_path, monkeypatch):
+    """Shared contract §8: a gpx_root configured inside the managed tree is an invalid configuration —
+    prep refuses to plan, naming the field, and nothing in the workspace moves."""
     ws = _empty_initialized_ws(tmp_path)
     gpx_dir = ws / "0-sources" / "gpx_tracks"; gpx_dir.mkdir()
     (gpx_dir / "track1.gpx").write_text("<gpx/>")
-    (ws / "0-sources" / "photo.jpg").write_bytes(b"P")            # normal media — still organized
-    monkeypatch.setitem(photos_ingest.CONFIG, "gpx_root", str(gpx_dir))   # misconfigured inside 0-6
-
+    cfg = json.loads(json.dumps(photos_ingest.CONFIG)); cfg["gpx_root"] = "0-sources/gpx_tracks"
+    (ws / ".photos-ingest" / "photos-00-config.json").write_text(json.dumps(cfg))
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=True)
-    plan = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
+    with pytest.raises(ValueError, match="gpx_root"):
+        photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
     cache.close()
-    assert not any(op.source and "track1.gpx" in (op.source or "") for op in plan.operations), \
-        "the misconfigured-in-tree gpx_root subtree must be skipped, not organized"
-    assert any(op.source and op.source.endswith("photo.jpg") for op in plan.operations)
+    assert (gpx_dir / "track1.gpx").exists()
 
 
 def test_deterministic_temp_names_with_existing(tmp_path, monkeypatch):

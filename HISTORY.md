@@ -2,6 +2,21 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-01 — the shared contract §8–§9, the tracks and the dependency cascade: four points ruled
+
+Proposed as intent §7 and §8, their rationale and build. The tracks' fingerprint recorded as a dependency always and in
+all four geotag records, where the contract said "when GPX is used" and named three: *"agree"*. "No record is used once
+what it came from has changed" stated for every phase, where the contract said "both phases": *"agree"*. A `gpx_root`
+configured inside the managed folders, which prep skipped and nothing refused: *"should refuse"* — configuration
+validation now refuses it in every phase, and the skip is gone. A track file found in the dump, which prep moved to the
+strays like any non-media file: *"tracks in the dump: this is a serious problem because it opens the possibility that
+tracks are bulk deleted by the user. tracks in the dump should always cause the script to refuse to run."* — a track
+file anywhere prep inventories now blocks the plan and is left where it is. With it, on new files in the dump: *"Also, I
+don't remember if this is the case but new files in the dump showing up should stale it and they should be incorporated
+by a new prep (avoiding metadata re-read for matching files)"*. On the stale comment in prep's skip, which gave the
+default track location as `.photos-ingest/gpx/`: *"fix it"* — it went with the skip; the same claim in `AGENTS.md` is
+corrected.
+
 ## 2026-11-01 — the shared contract §6–§7, camera groups and the filename format: three points ruled
 
 Proposed as intent §5 and §6, their rationale and build. The old key name `geotag_filename_timestamp_format`, which no
