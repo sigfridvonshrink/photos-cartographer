@@ -484,5 +484,7 @@ must be whole at each.
 
 With each phase writing only its own records and carrying earlier ones forward by copy, every phase's output stays a
 stable record attributable to it, which no later phase can silently change: complete at its boundary, and evident if
-tampered with by what came after. That is why the log is three files, one per phase, not one changed in place.
+tampered with by what came after. That is why the log is three files, one per phase, not one changed in place. And a
+phase that copies its predecessor's record, rather than deriving that history again from other sources, keeps one
+account of each phase: a second, rebuilt account could disagree with the first.
 :::
