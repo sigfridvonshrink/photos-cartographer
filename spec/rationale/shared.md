@@ -418,12 +418,11 @@ to the library. A development folder's presence alone is the signal; nothing gue
 
 :::{rat} Redoing settled work buys no safety
 :id: RAT-no_redo_to_be_safe
-:status: seed
+:status: ruled
 :justifies: INV-change_only_what_needs
 
 Settled work done again "to be safe" makes nothing safer: a file written with what it already holds gains nothing and
-risks a failed write, and reading a library's content again costs hours. What is still valid is the record of what was
-done; repeating it only adds chances to go wrong.
+risks a failed write, and reading a library's content again can cost hours.
 :::
 
 :::{rat} One principle, stated once

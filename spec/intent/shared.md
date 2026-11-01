@@ -1233,7 +1233,7 @@ even an empty one — SHALL stop geotag's planning, execution and finalize, and 
 
 :::{inv} A run changes only what its inputs require
 :id: INV-change_only_what_needs
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: incidental
@@ -1284,7 +1284,7 @@ already in its place, with its name and its metadata, SHALL produce no operation
 
 :::{rul} A run over unchanged inputs changes nothing
 :id: RUL-no_op_run
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: idem-no-op-run-1

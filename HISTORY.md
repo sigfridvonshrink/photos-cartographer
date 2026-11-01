@@ -14,6 +14,15 @@ it, and a JPEG's whole EXIF block must fit in 64 KB; values to 1,000 characters 
 JPEG and an ARW, and exiv2 read `fused+carto-time` back from both. Of the suffixes offered: *"+carto-time is ok"*. The
 bare position markers stay as they were; the suffix is appended once to whatever the field holds.
 
+## 2026-11-01 — the shared contract §11, idempotency: three points ruled
+
+Proposed as intent §10, its rationale and build. A no-op run giving "the same plan", where each new plan carries a fresh
+id: written as the same operations, fingerprints and names — *"yes"*. Why settled work is not redone "to be safe":
+*"can't remember where "to be safe" comes from but I agree with gains nothing and risks a failed write, and might cost
+hours."* The invariant verified only through its four rules: *"ok"*. Whether the reuse rule should repeat that a
+decision is kept while its target is unchanged, which the re-run rule of intent §9 also says, waits on reading that
+rule whole.
+
 ## 2026-11-01 — geotag always writes the corrected time and name; the phone check to the backlog
 
 Three switches in the default configuration — `write_corrected_metadata_times`, `write_corrected_offset_tags` and
