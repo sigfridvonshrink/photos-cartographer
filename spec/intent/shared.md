@@ -1541,7 +1541,7 @@ that there was none.
 
 :::{rul} The log reads as it stands
 :id: RUL-log_human_readable
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :aliases: log-human-readable-json-1

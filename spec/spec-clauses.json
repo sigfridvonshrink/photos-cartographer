@@ -7913,6 +7913,20 @@
       "test": "tests/test_prep_log.py::test_log_is_deterministic_and_in_control_dir"
     },
     {
+      "id": "log-offset-in-words-1",
+      "area": "shared",
+      "criticality": "low",
+      "anti": false,
+      "title": "A logged clock offset carries a description in words beside its seconds: how far the camera's clock ran ahead of or behind UTC",
+      "spec": {
+        "file": "photos-shared-contract.md",
+        "section": "13.3"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_finalize.py::test_an_offset_is_described_in_words"
+    },
+    {
       "id": "log-keyed-by-fingerprint-1",
       "area": "shared",
       "criticality": "med",

@@ -150,6 +150,17 @@ def test_a_revert_and_a_new_position_in_one_pass_are_both_logged():
     assert journey[0]["pre_state"] == {"present": False} and journey[1]["lat"] == 50.5
 
 
+@pytest.mark.spec("RUL-log_human_readable", "log-human-readable-json-1", "log-offset-in-words-1", test="TST-geotag_finalize-an_offset_is_described_in_words")
+def test_an_offset_is_described_in_words():
+    assert cal.describe_offset(-6900) == "camera clock 1 h 55 min ahead of UTC"
+    assert cal.describe_offset(3612) == "camera clock 1 h 12 s behind UTC"
+    assert cal.describe_offset(0) == "camera clock on UTC"
+    files = [_file(f"{BYDEST}/T/a.arw", "fpA")]
+    rows = [{"relative_path": f"{BYDEST}/T/a.arw", "utc_offset_used": -7200, "time_rule_used": "camera_group_offset"}]
+    step = cal.build_complete_log({}, files, rows, {}, {"destinations": {}}, [])["fpA"]["journey"][0]
+    assert step["offset_seconds"] == -7200 and step["offset_description"] == "camera clock 2 h ahead of UTC"
+
+
 # --- finalize: readiness + end-to-end ---------------------------------------
 
 def _ready_ws(tmp_path, monkeypatch):
