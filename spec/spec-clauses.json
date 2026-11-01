@@ -6736,6 +6736,20 @@
       "test": "tests/test_geotag_finalize.py::test_finalize_assembles_package_and_is_nondestructive"
     },
     {
+      "id": "archive-whole-control-dir-1",
+      "area": "shared",
+      "criticality": "med",
+      "anti": false,
+      "title": "The package is the whole control directory but its transient files, listed with SHA-256s in the manifest and archived with it into one file in the control directory; merge's re-seal makes it again",
+      "spec": {
+        "file": "photos-shared-contract.md",
+        "section": "13.2"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_finalize.py::test_finalize_archives_the_whole_control_directory"
+    },
+    {
       "id": "archive-self-describing-manifest-1",
       "area": "shared",
       "criticality": "low",

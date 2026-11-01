@@ -51,6 +51,7 @@ from .photos_utils import (
     json_dependency, verify_json_dependency, handoff_content_fingerprint, write_json_artifact, write_versioned_json, db_path, ensure_control_dir,
     journal_path, ContentHasher, _move_no_clobber,
     prep_log_path, prep_db_snapshot_path, write_db_snapshot, take_zfs_snapshot,
+    control_archive_members, write_control_archive,
     WorkspaceLock, ProgressCoordinator,
 )
 from .reporting import get_reporter, emit_next_step
@@ -63,6 +64,7 @@ EXECUTION_SUMMARY_ARTIFACT = "photos-25-execution-summary.json"
 COMPLETE_LOG_ARTIFACT = "photos-26-complete-log.json"
 GEOTAG_DB_SNAPSHOT = "photos-26-geotag-ingest.db"
 ARCHIVE_MANIFEST_ARTIFACT = "photos-26-archive-manifest.json"
+ARCHIVE_ARTIFACT = "photos-26-archive.tar.gz"
 GPX_WARNINGS_SHOWN = 10     # geotag plan prints at most this many GPX load warnings, then a count
 
 
@@ -95,6 +97,10 @@ def complete_log_path(ws):
 
 def geotag_db_snapshot_path(ws):
     return os.path.join(ws, CONTROL_DIR, GEOTAG_DB_SNAPSHOT)
+
+
+def archive_path(ws):
+    return os.path.join(ws, CONTROL_DIR, ARCHIVE_ARTIFACT)
 
 
 def archive_manifest_path(ws):
@@ -1526,11 +1532,6 @@ class GeotagWorkflow:
 
     # --- Stage 11: finalize + archive (§31 / shared §13) ---------------------
 
-    _ARCHIVE_ITEMS = ["photos-00-config.json", "photos-11-handoff.json", "photos-15-prep-log.json",
-                      "photos-15-prep-ingest.db", TIME_DECISIONS_ARTIFACT, GPS_DECISIONS_ARTIFACT,
-                      EXECUTABLE_PLAN_ARTIFACT, EXECUTION_SUMMARY_ARTIFACT, COMPLETE_LOG_ARTIFACT,
-                      GEOTAG_DB_SNAPSHOT, "photos-00-ingest.db"]
-
     def finalize_package(self, now_iso):
         """Stage 11 (§31): assemble the durable archival package — the photos-26 transformation log,
         an end-of-geotag DB snapshot, and a manifest. Non-destructive (only NEW files; never
@@ -1577,16 +1578,17 @@ class GeotagWorkflow:
         finally:
             conn.close()
 
-        write_json_artifact(archive_manifest_path(ws), self._archive_manifest(plan, summary, now_iso))
+        # The package (§13.2): the whole control directory but its transient files, listed with their
+        # hashes in the manifest, then archived together with it into the control directory itself.
+        members = control_archive_members(ws, exclude=(ARCHIVE_MANIFEST_ARTIFACT,))
+        write_json_artifact(archive_manifest_path(ws), self._archive_manifest(plan, summary, now_iso, members))
+        write_control_archive(ws, archive_path(ws), members + [os.path.relpath(archive_manifest_path(ws), ws)])
         return []
 
-    def _archive_manifest(self, plan, summary, now_iso):
+    def _archive_manifest(self, plan, summary, now_iso, members):
         ws = self.workspace_root
-        contents = {}
-        for name in self._ARCHIVE_ITEMS:
-            p = os.path.join(ws, CONTROL_DIR, name)
-            if os.path.exists(p):
-                contents[name] = {"path": os.path.relpath(p, ws), "sha256": sha256_file(p)}
+        contents = {os.path.relpath(rel, CONTROL_DIR): {"path": rel, "sha256": sha256_file(os.path.join(ws, rel))}
+                    for rel in members}
         return {
             "artifact_type": "archive_manifest", "artifact_name": ARCHIVE_MANIFEST_ARTIFACT,
             "schema_version": 1,

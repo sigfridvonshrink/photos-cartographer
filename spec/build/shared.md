@@ -506,17 +506,18 @@ the configuration, which `init-library` may later extend by `library_root` alone
 cache and identity rows while geotag and merge write only their own regions of it (§13.4). Bundling copies of every phase's records into the archival package reads them, and is no write.
 :::
 
-:::{bld} The package's manifest
+:::{bld} The package: the control directory, archived with its manifest
 :id: BLD-archive_manifest
-:status: seed
+:status: ruled
 :realises: RUL-finalize_non_destructive, RUL-package_contents, RUL-package_self_describing
 
-`geotag finalize` SHALL write `photos-26-complete-log.json`, the database snapshot `photos-26-geotag-ingest.db` and the
-manifest `photos-26-archive-manifest.json` into the control directory, and write nothing else. The manifest SHALL list,
-with each one's SHA-256 and path, the configuration, `photos-11-handoff.json`, `photos-15-prep-log.json`,
-`photos-15-prep-ingest.db`, `photos-21`, `photos-23`, `photos-24`, `photos-25`, `photos-26-complete-log.json`,
-`photos-26-geotag-ingest.db` and the live `photos-00-ingest.db`, and record the workspace folder's name and the plan
-and execution ids. It requires a ready plan whose execution succeeded (geotag §31). Merge re-seals it (§13.6).
+`geotag finalize` SHALL write `photos-26-complete-log.json` and the database snapshot `photos-26-geotag-ingest.db`, then
+list every file of the control directory but the transient ones — locks, `.tmp-` files, SQLite's `-journal` files, the
+plan memo `photos-00-plan-memo.db` and any `*-archive.tar.gz` — with its SHA-256 and path in
+`photos-26-archive-manifest.json`, recording the workspace folder's name and the plan and execution ids, and archive
+those files and the manifest into `photos-26-archive.tar.gz` in the control directory, by a temporary name and an
+atomic rename. It SHALL write nothing else, and requires a ready plan whose execution succeeded (geotag §31). Merge's
+re-seal does the same into `photos-35-archive-manifest.json` and `photos-35-archive.tar.gz` (§13.6).
 :::
 
 :::{bld} The log's format, and the history it is made from
@@ -524,7 +525,7 @@ and execution ids. It requires a ready plan whose execution succeeded (geotag §
 :status: seed
 :realises: RUL-log_entry_grows, RUL-log_keyed_by_fingerprint, RUL-log_cites_decisions, RUL-log_records_gps_reverts, RUL-log_human_readable, RUL-history_retained, RUL-partial_history_shown
 
-Each log SHALL be pretty-printed JSON with sorted keys, its `photos` keyed by the content fingerprint (`content_sha256`),
+Each log SHALL be pretty-printed JSON with sorted keys, its `photos` keyed by the content fingerprint (`content_fingerprint`),
 each entry carrying `final_path` and a `journey` of steps, each step naming its `phase` and `action` and, where a decision
 caused it, a `because` pointing into the decision record (`photos-21 destinations.<dest>...`). Geotag's steps SHALL be
 `clock_offset_applied`, `resolved_utc`, `timezone_resolved`, `gps_written` (with its origin, method and, for a manual

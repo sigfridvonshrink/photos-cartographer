@@ -229,7 +229,7 @@ def build_prep_log(prior_photos, operations, cache_files, quarantine_evidence, i
             # means lost history (warn + partial, §13.3a); by-dest/user-curated media is skipped.
             top = current.split('/', 1)[0] if current else ""
             if top in _bands:
-                photos[fp] = {"content_sha256": fp, "final_path": current, "journey": [],
+                photos[fp] = {"content_fingerprint": fp, "final_path": current, "journey": [],
                               "partial": True, "note": "prep history incomplete (no retained journey)"}
                 warnings.append(f"prep-log: incomplete history for {current}")
             continue
@@ -240,7 +240,7 @@ def build_prep_log(prior_photos, operations, cache_files, quarantine_evidence, i
                 journey.append({"phase": "user", "action": "moved_to_by_dest", "to": current, "run": run_id})
             entry = {**prior, "final_path": current or prior.get("final_path"), "journey": journey}
         else:
-            entry = {"content_sha256": fp, "final_path": current, "journey": run_steps}
+            entry = {"content_fingerprint": fp, "final_path": current, "journey": run_steps}
         if quar:
             entry["deduplicated"] = {"retained": entry.get("final_path"), "quarantined": quar}
         photos[fp] = entry

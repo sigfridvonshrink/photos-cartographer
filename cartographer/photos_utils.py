@@ -382,6 +382,43 @@ def prep_db_snapshot_path(ws: str) -> str:
     """End-of-prep DB backup snapshot (shared §13.4a)."""
     return os.path.join(ws, CONTROL_DIR, "photos-15-prep-ingest.db")
 
+def _not_archived(name: str) -> bool:
+    """A control-directory file the archival package does not carry: transient (a lock, a temp file,
+    SQLite's rollback journal), the plan memo (scratch, shared contract §13.4), or an archive itself."""
+    return (name.endswith(".lock") or name.startswith(".tmp-") or name.endswith("-journal")
+            or name == os.path.basename(plan_memo_db_path("")) or name.endswith("-archive.tar.gz"))
+
+
+def control_archive_members(ws: str, exclude=()) -> list:
+    """The control directory's files the archival package carries (§13.2), as workspace-relative
+    paths in sorted order: every file but the transient ones and those in `exclude`."""
+    root = os.path.join(ws, CONTROL_DIR)
+    out = []
+    for dp, dns, fns in os.walk(root):
+        dns.sort()
+        for fn in fns:
+            if _not_archived(fn) or fn in exclude:
+                continue
+            out.append(os.path.relpath(os.path.join(dp, fn), ws))
+    return sorted(out)
+
+
+def write_control_archive(ws: str, archive_path: str, members) -> None:
+    """Write the archival package (§13.2): a gzipped tar of `members` (workspace-relative paths), in
+    the given order, to a temp name in the control directory, then an atomic rename."""
+    import tarfile
+    import uuid
+    tmp = os.path.join(os.path.dirname(archive_path), f".tmp-archive-{uuid.uuid4().hex[:8]}.tar.gz")
+    try:
+        with tarfile.open(tmp, "w:gz") as tar:
+            for rel in members:
+                tar.add(os.path.join(ws, rel), arcname=rel, recursive=False)
+        os.replace(tmp, archive_path)
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+
+
 def write_db_snapshot(conn, dest_path: str) -> None:
     """Capture a transactionally-consistent point-in-time image of `conn`'s database to `dest_path`
     (shared contract §13.4a): VACUUM INTO a temp name, VERIFY it, then atomic rename — so an
@@ -676,33 +713,21 @@ def max_suffix(root: str, names) -> int:
 # rewrites another phase's file (shared contract §13.0a). Consumed by photos-3-merge.
 MERGE_ARCHIVE_MANIFEST = "photos-35-archive-manifest.json"
 GEOTAG_ARCHIVE_MANIFEST = "photos-26-archive-manifest.json"
-_MERGE_ARCHIVE_ITEMS = [
-    "photos-00-config.json", "photos-11-handoff.json",
-    "photos-15-prep-log.json", "photos-15-prep-ingest.db",
-    "photos-21-time-decisions.json", "photos-23-gps-decisions.json",
-    "photos-24-executable-plan.json", "photos-25-execution-summary.json",
-    "photos-26-complete-log.json", "photos-26-geotag-ingest.db",
-    GEOTAG_ARCHIVE_MANIFEST,
-    "photos-31-merge-summary.json", "photos-35-merge-log.json", "photos-35-merge-ingest.db",
-    "photos-00-ingest.db",
-]
+MERGE_ARCHIVE = "photos-35-archive.tar.gz"
 
 def merge_archive_manifest_path(ws: str) -> str:
     return os.path.join(ws, CONTROL_DIR, MERGE_ARCHIVE_MANIFEST)
 
 def reseal_archival_package(ws: str, *, workspace_name: str, plan_id: str, execution_id: str,
                             merge_run_id: str, generated_at: str) -> str:
-    """Re-seal the archival package after a successful merge: recompute the SHA-256 of every package
-    artifact present in the control dir (including merge's photos-31/35 artifacts and the live DB) and
-    write merge's own photos-35-archive-manifest.json (supersedes geotag's photos-26 manifest,
-    shared contract §13.6). Reads each artifact; never mutates another phase's file (§13.0a). Returns
-    the manifest's SHA-256."""
-    cd = control_dir(ws)
-    contents = {}
-    for name in _MERGE_ARCHIVE_ITEMS:
-        ap = os.path.join(cd, name)
-        if os.path.isfile(ap):
-            contents[name] = {"path": os.path.relpath(ap, ws), "sha256": sha256_file(ap)}
+    """Re-seal the archival package after a successful merge: list every file of the control directory
+    the package carries (merge's photos-31/35 records and the live DB among them) with its SHA-256 in
+    merge's own photos-35-archive-manifest.json, which supersedes geotag's photos-26 manifest, and
+    archive them with it into photos-35-archive.tar.gz (shared contract §13.6). Reads each file; never
+    mutates another phase's (§13.0a). Returns the manifest's SHA-256."""
+    members = control_archive_members(ws, exclude=(MERGE_ARCHIVE_MANIFEST,))
+    contents = {os.path.relpath(rel, CONTROL_DIR): {"path": rel, "sha256": sha256_file(os.path.join(ws, rel))}
+                for rel in members}
     manifest = {
         "artifact_type": "archive_manifest",
         "artifact_name": MERGE_ARCHIVE_MANIFEST,
@@ -715,7 +740,10 @@ def reseal_archival_package(ws: str, *, workspace_name: str, plan_id: str, execu
         "contents": contents,
         "run_metadata": {"generated_at": generated_at},
     }
-    return write_json_artifact(merge_archive_manifest_path(ws), manifest)
+    digest = write_json_artifact(merge_archive_manifest_path(ws), manifest)
+    write_control_archive(ws, os.path.join(control_dir(ws), MERGE_ARCHIVE),
+                          members + [os.path.relpath(merge_archive_manifest_path(ws), ws)])
+    return digest
 
 def quarantine_dir(ws: str) -> str:
     return os.path.join(ws, QUARANTINE_DIR)

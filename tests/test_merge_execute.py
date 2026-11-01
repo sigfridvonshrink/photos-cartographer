@@ -793,3 +793,19 @@ def test_library_takes_a_second_workspace_after_the_first_is_sealed(tmp_path):
     assert merge._run_locked_workflow("execute", str(ws2)) == 0
     assert utils.is_sealed(str(ws2))
     assert sorted(os.listdir(os.path.join(str(lib), "Trip"))) == ["a.jpg", "b.jpg"]
+
+
+@pytest.mark.spec("archive-whole-control-dir-1", test="TST-merge_execute-reseal_archives_the_control_directory_with_merges_records")
+def test_reseal_archives_the_control_directory_with_merges_records(tmp_path):
+    """Merge's re-seal makes the package again: the whole control directory, merge's own records among
+    it, listed in photos-35's manifest and archived with it."""
+    import tarfile
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    ctl = ws / ".photos-ingest"
+    manifest = json.loads((ctl / "photos-35-archive-manifest.json").read_text())
+    assert {"photos-31-merge-summary.json", "photos-35-merge-log.json", "photos-26-complete-log.json"} <= set(manifest["contents"])
+    with tarfile.open(ctl / "photos-35-archive.tar.gz") as tar:
+        names = set(tar.getnames())
+    assert names == {rec["path"] for rec in manifest["contents"].values()} | {".photos-ingest/photos-35-archive-manifest.json"}
