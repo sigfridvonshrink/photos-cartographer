@@ -8332,6 +8332,20 @@
       "test": "tests/test_merge_execute.py::test_sealed_workspace_rerun_hardstops"
     },
     {
+      "id": "edit-sealed-refuses-1",
+      "area": "shared",
+      "criticality": "high",
+      "anti": true,
+      "title": "The decision editor refuses a sealed workspace: it does not open it, and a save from the console writes nothing",
+      "spec": {
+        "file": "photos-shared-contract.md",
+        "section": "13.7"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "cartographer/editor/tests/test_serve.py::test_serve_refuses_a_sealed_workspace"
+    },
+    {
       "id": "seal-success-then-sealed-1",
       "area": "shared",
       "criticality": "med",

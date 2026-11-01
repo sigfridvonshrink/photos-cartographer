@@ -520,3 +520,32 @@ def test_edit_has_no_workspace_arg_and_demo_is_the_only_no_workspace_mode():
     a = p.parse_args([])
     assert a.demo is False and not hasattr(a, "workspace")   # no workspace-naming argument
     assert p.parse_args(["--demo"]).demo is True
+
+
+def _seal(ws):
+    (open(os.path.join(ws, serve.CONTROL, "photos-00-sealed.json"), "w")
+     .write('{"sealed": true, "merged_run_id": "r1"}'))
+
+
+@pytest.mark.spec("edit-sealed-refuses-1", test="TST-serve-serve_refuses_a_sealed_workspace")
+def test_serve_refuses_a_sealed_workspace(tmp_path):
+    # A merged workspace is final: the editor will not open it, so its decisions cannot change.
+    ws = _workspace_with_fixtures(tmp_path)
+    open(os.path.join(ws, serve.CONTROL, serve.GUARD_NAME), "w").close()
+    _seal(ws)
+    with pytest.raises(SystemExit) as e:
+        serve.serve(ws, port=0)
+    assert e.value.code == 2
+    assert not os.path.exists(os.path.join(ws, serve.CONTROL, serve.EDITOR_LOCK))
+
+
+@pytest.mark.spec("edit-sealed-refuses-1", test="TST-serve-save_refuses_a_sealed_workspace")
+def test_save_refuses_a_sealed_workspace(tmp_path):
+    # The console calls _save directly, without serve()'s startup check: the save refuses on its own.
+    ws = _workspace_with_fixtures(tmp_path)
+    _seal(ws)
+    before = open(os.path.join(ws, serve.CONTROL, serve.TIME_NAME), "rb").read()
+    res = serve._save(ws, {"time": [{"dest": "6-photos-by-dest/Japan", "kind": "timezone",
+                                     "user_decision": {"manual_iana_timezone": "Asia/Tokyo"}}]})
+    assert res["ok"] is False and "sealed" in res["error"]
+    assert open(os.path.join(ws, serve.CONTROL, serve.TIME_NAME), "rb").read() == before

@@ -304,6 +304,8 @@ def _apply_edits(art, edits):
 
 def _save(workspace, payload):
     """Write the posted user_decision edits back into the workspace's decision artifacts."""
+    if photos_utils.is_sealed(workspace):       # the console reaches here without serve()'s check
+        return {"ok": False, "error": "workspace is sealed (already merged): decisions can no longer change"}
     cd = os.path.join(workspace, CONTROL)
     written = []
     for key, name in (("time", TIME_NAME), ("drift", DRIFT_NAME), ("gps", GPS_NAME)):
@@ -447,6 +449,11 @@ def serve(workspace, port=8765, host="0.0.0.0"):
         print(f"{os.path.abspath(workspace)} is not an initialized workspace "
               f"(no {CONTROL}/{GUARD_NAME}). Run `photos-cartographer prep plan` here first, "
               f"or use `photos-cartographer edit --demo` for a read-only fixtures tour.", file=sys.stderr)
+        sys.exit(2)
+    # A sealed (merged) workspace is final (shared contract §13.7): its decisions may no longer change.
+    if workspace and photos_utils.is_sealed(workspace):
+        print(f"{os.path.abspath(workspace)} is SEALED (already merged): the decision editor will not "
+              f"open it. A sealed workspace is final — move new media into a fresh workspace.", file=sys.stderr)
         sys.exit(2)
     Handler.workspace = workspace
 
