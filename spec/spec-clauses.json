@@ -7843,6 +7843,20 @@
       "test": "tests/test_geotag_finalize.py::test_complete_log_superset_and_geotag_steps"
     },
     {
+      "id": "log-names-exact-decision-1",
+      "area": "shared",
+      "criticality": "low",
+      "anti": false,
+      "title": "A logged step names its decision exactly: the per-day offset cell, the drift confirmation that replaced it, or a manual position's pin or folder fallback",
+      "spec": {
+        "file": "photos-shared-contract.md",
+        "section": "13.3"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_finalize.py::test_each_step_names_its_exact_decision"
+    },
+    {
       "id": "log-entry-append-only-1",
       "area": "shared",
       "criticality": "med",
