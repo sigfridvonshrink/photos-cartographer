@@ -964,19 +964,80 @@ def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename):
 # consolidation of artifacts already written — no new authority.
 # ============================================================================
 
-def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, ledger):
+def _earlier_pass_steps(plan, confirmed, pre_by_fp):
+    """{fingerprint: [steps]} for one earlier executed pass: what its confirmed operations did to each
+    photo, matched by the fingerprint the operation was planned against, each step naming the run."""
+    run = plan.get("plan_id")
+    ops_by_fp = {}
+    for dd in (plan.get("destinations") or {}).values():
+        for op in dd.get("operations") or []:
+            fp = (op.get("preconditions") or {}).get("content_fingerprint") or op.get("content_fingerprint")
+            if fp and (confirmed is None or op.get("operation_id") in confirmed):
+                ops_by_fp.setdefault(fp, []).append(op)
+    out = {}
+    for fp, ops in ops_by_fp.items():
+        steps = []
+        time_op = next((o for o in ops if o["type"] == "metadata_time_write"), None)
+        if time_op is not None:
+            prov = time_op.get("provenance") or {}
+            if prov.get("time_rule_used") == "camera_group_offset" and prov.get("utc_offset_used") is not None:
+                steps.append({"phase": "geotag", "action": "clock_offset_applied", "offset_seconds": prov["utc_offset_used"],
+                              "because": prov.get("because")})
+            if prov.get("resolved_utc"):
+                steps.append({"phase": "geotag", "action": "resolved_utc", "value": prov["resolved_utc"]})
+            if prov.get("destination_timezone"):
+                steps.append({"phase": "geotag", "action": "timezone_resolved", "value": prov["destination_timezone"]})
+            steps.append({"phase": "geotag", "action": "time_written", "writes": time_op.get("writes")})
+        steps += _gps_and_rename_steps(fp, ops, pre_by_fp, native=False)
+        out[fp] = [dict(s, run=run) for s in steps]
+    return out
+
+
+def _gps_and_rename_steps(fp, ops, pre_by_fp, native):
+    """The GPS and rename steps of one photo's operations in one pass."""
+    steps = []
+    revert_op = next((o for o in ops if o["type"] == "revert_manual_gps"), None)
+    gps_op = next((o for o in ops if o["type"] == "metadata_gps_write"), None)
+    marker = next((o for o in ops if o["type"] == "gps_marker_write"), None)
+    if revert_op is not None:
+        steps.append({"phase": "geotag", "action": "gps_reverted",
+                      "pre_state": revert_op.get("pre_state") or pre_by_fp.get(fp)})
+    elif gps_op is not None:
+        w = gps_op.get("writes") or {}
+        step = {"phase": "geotag", "action": "gps_written", "lat": w.get("GPSLatitude"),
+                "lon": w.get("GPSLongitude"), "origin": gps_op.get("gps_origin"),
+                "gps_processing_method": (marker.get("writes") or {}).get("GPSProcessingMethod") if marker else None}
+        if gps_op.get("gps_origin") == "apply_manual" and fp in pre_by_fp:
+            step["pre_state"] = pre_by_fp[fp]
+        steps.append(step)
+    elif native:
+        steps.append({"phase": "geotag", "action": "gps_preserved"})
+    rename_op = next((o for o in ops if o["type"] == "rename_no_clobber"), None)
+    if rename_op is not None:
+        steps.append({"phase": "geotag", "action": "final_rename", "to": rename_op["to"]})
+    return steps
+
+
+def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, ledger, earlier_passes=()):
     """photos-26-complete-log.json's `photos` (§13.3): a deep copy of prep's per-photo, content-
     fingerprint-keyed journeys with each calibrated photo's `phase:"geotag"` steps APPENDED — a
     strict superset of the prep log, derived from photos-21 / the resolved-UTC cache / photos-24 /
-    the ledger. Deterministic, fingerprint-keyed. The prep file itself is never edited."""
+    the ledger. `earlier_passes` — [(plan, confirmed operation ids)], oldest first — are the geotag
+    passes executed before the current plan's: their steps come first, so a photo written in an
+    earlier pass keeps the record of it however later passes went. Deterministic, fingerprint-keyed.
+    The prep file itself is never edited."""
     photos = json.loads(json.dumps(prep_photos or {}))            # deep copy; never touch the prep file
     row_by_rel = {r["relative_path"]: r for r in resolved_rows}
     t_dests = (time_artifact or {}).get("destinations") or {}
     pre_by_fp = {e["content_fingerprint"]: e["pre_state"] for e in (ledger or [])}
-    ops_by_rel = {}
+    ops_by_fp = {}
+    fp_by_rel = {f["relative_path"]: f.get("content_fingerprint") for f in files}
     for dd in (plan.get("destinations") or {}).values():
         for op in dd.get("operations") or []:
-            ops_by_rel.setdefault(op["relative_path"], []).append(op)
+            fp = (op.get("preconditions") or {}).get("content_fingerprint") or fp_by_rel.get(op["relative_path"])
+            ops_by_fp.setdefault(fp, []).append(op)
+    earlier = [_earlier_pass_steps(p, confirmed, pre_by_fp) for p, confirmed in earlier_passes]
+    run = plan.get("plan_id")
 
     for f in sorted(files, key=lambda x: x["relative_path"]):
         fp = f.get("content_fingerprint")
@@ -985,8 +1046,11 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, l
         rel, dest, group = f["relative_path"], f["destination"], f["camera_group_key"]
         entry = photos.setdefault(fp, {"content_fingerprint": fp, "journey": []})
         steps = entry.setdefault("journey", [])
+        for past in earlier:
+            steps.extend(past.get(fp) or [])
         row = row_by_rel.get(rel) or {}
-        ops = ops_by_rel.get(rel) or []
+        ops = ops_by_fp.get(fp) or []
+        start = len(steps)
 
         if row.get("time_rule_used") == "camera_group_offset" and row.get("utc_offset_used") is not None:
             steps.append({"phase": "geotag", "action": "clock_offset_applied",
@@ -999,26 +1063,9 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, l
             steps.append({"phase": "geotag", "action": "timezone_resolved", "value": tz,
                           "because": f"photos-21 destinations.{dest}.destination_timezone"})
 
-        revert_op = next((o for o in ops if o["type"] == "revert_manual_gps"), None)
-        gps_op = next((o for o in ops if o["type"] == "metadata_gps_write"), None)
-        marker = next((o for o in ops if o["type"] == "gps_marker_write"), None)
-        if revert_op is not None:
-            steps.append({"phase": "geotag", "action": "gps_reverted",
-                          "pre_state": revert_op.get("pre_state") or pre_by_fp.get(fp)})
-        elif gps_op is not None:
-            w = gps_op.get("writes") or {}
-            step = {"phase": "geotag", "action": "gps_written", "lat": w.get("GPSLatitude"),
-                    "lon": w.get("GPSLongitude"), "origin": gps_op.get("gps_origin"),
-                    "gps_processing_method": (marker.get("writes") or {}).get("GPSProcessingMethod") if marker else None}
-            if gps_op.get("gps_origin") == "apply_manual" and fp in pre_by_fp:
-                step["pre_state"] = pre_by_fp[fp]
-            steps.append(step)
-        elif f.get("has_native_gps"):
-            steps.append({"phase": "geotag", "action": "gps_preserved"})
-
-        rename_op = next((o for o in ops if o["type"] == "rename_no_clobber"), None)
-        if rename_op is not None:
-            steps.append({"phase": "geotag", "action": "final_rename", "to": rename_op["to"]})
+        steps.extend(_gps_and_rename_steps(fp, ops, pre_by_fp, native=f.get("has_native_gps")))
+        if run:
+            steps[start:] = [dict(s, run=run) for s in steps[start:]]
     return photos
 
 

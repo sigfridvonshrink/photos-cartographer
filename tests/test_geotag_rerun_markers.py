@@ -407,3 +407,33 @@ def test_the_record_follows_the_decision(tmp_path, monkeypatch):
     _plan(monkeypatch, ws)
     assert _cell(ws)["effective_time_anchor"]["offset_seconds"] == SLOW - 60
     assert not _cell(ws)["requires_user_input"]
+
+
+def _finalize(monkeypatch, ws):
+    monkeypatch.chdir(str(ws))
+    monkeypatch.setattr(sys, "argv", ["photos-2-geotag", "finalize"])
+    try:
+        cal.main()
+    except SystemExit as e:
+        assert e.code in (0, None), e.code
+    return json.loads((ws / ".photos-ingest" / "photos-26-complete-log.json").read_text())["photos"]
+
+
+@pytest.mark.spec("RUL-log_entry_grows", "RUL-partial_history_shown", "log-every-geotag-pass-1", test="TST-geotag_rerun_markers-the_log_keeps_every_geotag_pass")
+def test_the_log_keeps_every_geotag_pass(tmp_path, monkeypatch):
+    """Finalize logs what every executed pass did, in order and matched by fingerprint — not only the
+    latest plan's operations: a photo corrected, then corrected again, then left alone shows all three."""
+    ws = _executed_round(tmp_path, monkeypatch)                          # pass 1: placed and renamed
+    _confirm_drift(ws, SLOW - 300)
+    _plan(monkeypatch, ws)
+    _execute(monkeypatch, ws)                                            # pass 2: corrected again
+    _plan(monkeypatch, ws)
+    _execute(monkeypatch, ws)                                            # pass 3: nothing left to write
+    steps = _finalize(monkeypatch, ws)["fp-a.arw"]["journey"]
+    runs = list(dict.fromkeys(s["run"] for s in steps))
+    assert len(runs) == 3
+    renames = [s["to"] for s in steps if s["action"] == "final_rename"]
+    assert renames == ["2024-07-03--14-30-00.arw", "2024-07-03--14-25-00.arw"]
+    offsets = [s["offset_seconds"] for s in steps if s["action"] == "clock_offset_applied"]
+    assert offsets == [SLOW, SLOW - 300, SLOW - 300]
+    assert sum(s["action"] == "gps_written" for s in steps) == 2

@@ -1492,7 +1492,7 @@ each item's hash, so its integrity can be checked later.
 
 :::{rul} A photo's entry grows one phase at a time
 :id: RUL-log_entry_grows
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
