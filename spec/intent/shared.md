@@ -1506,7 +1506,7 @@ record; each earlier log stays its own phase's.
 
 :::{rul} The log is keyed by fingerprint
 :id: RUL-log_keyed_by_fingerprint
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: log-keyed-by-fingerprint-1

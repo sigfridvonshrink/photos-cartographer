@@ -268,3 +268,24 @@ def test_missing_history_warns_and_marks_partial(tmp_path, monkeypatch):
     entry = next(iter(_log(ws)["photos"].values()))
     assert entry.get("partial") is True
     assert "incomplete" in entry.get("note", "")
+
+
+@pytest.mark.spec("RUL-log_keyed_by_fingerprint", "log-chain-of-names-1", test="TST-prep_log-every_move_names_where_it_came_from")
+def test_every_move_names_where_it_came_from(tmp_path, monkeypatch):
+    """The journey keeps the chain of names and places: each move and rename records where the photo
+    came from as well as where it went, so the first step holds its original path in the dump."""
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "card").mkdir()
+    (ws / "0-sources" / "card" / "DSC01234.jpg").write_bytes(b"AAAA")
+    _run(ws)
+    organized = glob.glob(str(ws / "5-photos-by-date" / "**" / "*.jpg"), recursive=True)[0]
+    (ws / "6-photos-by-dest" / "Trip").mkdir(parents=True)
+    os.rename(organized, ws / "6-photos-by-dest" / "Trip" / os.path.basename(organized))
+    _run(ws)
+    journey = next(iter(_log(ws)["photos"].values()))["journey"]
+    by = {s["action"]: s for s in journey}
+    assert by["organized"]["from"] == "0-sources/card/DSC01234.jpg"
+    assert by["provisional_rename"]["from"] == "DSC01234.jpg"
+    assert by["moved_to_by_dest"]["from"].startswith("5-photos-by-date/")
+    assert by["moved_to_by_dest"]["to"].startswith("6-photos-by-dest/Trip/")

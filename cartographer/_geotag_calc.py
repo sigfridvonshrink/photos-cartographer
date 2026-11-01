@@ -1014,7 +1014,7 @@ def _gps_and_rename_steps(fp, ops, pre_by_fp, native):
         steps.append({"phase": "geotag", "action": "gps_preserved"})
     rename_op = next((o for o in ops if o["type"] == "rename_no_clobber"), None)
     if rename_op is not None:
-        steps.append({"phase": "geotag", "action": "final_rename", "to": rename_op["to"]})
+        steps.append({"phase": "geotag", "action": "final_rename", "from": rename_op.get("from"), "to": rename_op["to"]})
     return steps
 
 

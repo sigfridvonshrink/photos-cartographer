@@ -7913,6 +7913,20 @@
       "test": "tests/test_prep_log.py::test_media_journey_keyed_by_fingerprint"
     },
     {
+      "id": "log-chain-of-names-1",
+      "area": "shared",
+      "criticality": "med",
+      "anti": false,
+      "title": "Every logged move and rename records where the photo came from as well as where it went; the first step holds its original path in the dump",
+      "spec": {
+        "file": "photos-shared-contract.md",
+        "section": "13.3"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_prep_log.py::test_every_move_names_where_it_came_from"
+    },
+    {
       "id": "log-records-gps-revert-1",
       "area": "shared",
       "criticality": "med",

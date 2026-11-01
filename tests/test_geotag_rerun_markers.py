@@ -434,6 +434,7 @@ def test_the_log_keeps_every_geotag_pass(tmp_path, monkeypatch):
     assert len(runs) == 3
     renames = [s["to"] for s in steps if s["action"] == "final_rename"]
     assert renames == ["2024-07-03--14-30-00.arw", "2024-07-03--14-25-00.arw"]
+    assert [s["from"] for s in steps if s["action"] == "final_rename"] == ["a.arw", "2024-07-03--14-30-00.arw"]
     offsets = [s["offset_seconds"] for s in steps if s["action"] == "clock_offset_applied"]
     assert offsets == [SLOW, SLOW - 300, SLOW - 300]
     assert sum(s["action"] == "gps_written" for s in steps) == 2
