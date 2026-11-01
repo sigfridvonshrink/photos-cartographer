@@ -1696,7 +1696,7 @@ Geotag records what it did to a file in the file's `GPSProcessingMethod`:
 1. `interpolated` (a position from the tracks, interpolated or extrapolated), `manual_locked` (a per-file manual position) or `manual_fallback` (the destination's folder fallback) — the **position markers**, written bare with every GPS write. Setting a position means geotag fixed the time too, so a position marker needs nothing more;
 2. the **time mark** `+carto-time` — appended to whatever the field holds when geotag fixes a file's time and writes no position: the device's own value is kept in front of it (`fused` becomes `fused+carto-time`), and an empty field becomes `+carto-time`. The mark is never appended twice. It means the time is fixed and the GPS is the device's own, or not set yet.
 
-Only these are geotag's. Any other value — a phone writes its own, such as `GPS`, `NETWORK` or `fused` — is the device's, and the GPS beside it is native. The field's length sets no practical limit: EXIF bounds the value only by the segment holding it, and a JPEG's whole EXIF block must fit in 64 KB.
+Only these are geotag's. Any other value — a phone writes its own, such as `GPS`, `NETWORK` or `fused` — is the device's, and the GPS beside it is native.
 
 Read back on a later run:
 

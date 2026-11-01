@@ -807,7 +807,7 @@ _GPS_OP_MARKER = {"gpx_interpolation": "interpolated", "gpx_extrapolation": "int
 # appended to whatever the field held (the device's own value, or nothing), means geotag fixed the
 # time and kept the device's GPS or has set none. Anything else is the device's own: GPS native.
 POSITION_MARKERS = ("interpolated", "manual_locked", "manual_fallback")
-TIME_FIXED_SUFFIX = "+carto-time"
+TIME_FIXED_SUFFIX = "+carto-time"   # EXIF sets no length on the field; a JPEG's whole EXIF block is 64 KB
 
 
 def geotag_marker(processing_method):
