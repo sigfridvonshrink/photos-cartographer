@@ -253,3 +253,65 @@ needless rename; the two phases use the identical rule so they never disagree on
 Merge appends at `max+1` rather than reusing a freed-up lower number because the library is append-only and a re-run
 must reproduce the same name.
 :::
+
+## 7. The tracks, kept outside the managed folders
+
+:::{rat} Where the tracks live is what keeps them geotag's
+:id: RAT-tracks_kept_outside
+:status: seed
+:justifies: RUL-tracks_outside_managed_folders, RUL-tracks_geotag_only
+
+The shared rule that makes it safe for geotag alone to own the tracks is where they live. Kept outside the managed
+folders, prep's normal scan never encounters them, so they can never be taken for files of no media class, or swept
+into the inbox and organized.
+:::
+
+:::{rat} A wrong location must not make the tracks media
+:id: RAT-tracks_skip_is_defensive
+:status: seed
+:justifies: RUL-tracks_skipped_if_inside
+
+Prep's one obligation toward the tracks is defensive: a misconfigured location must not turn them into media to
+organize. Skipping it as prep skips the quarantine keeps them untouched even under a bad configuration.
+:::
+
+## 8. Nothing used once what it came from has changed
+
+:::{rat} One source for each shared fact
+:id: RAT-one_source_per_fact
+:status: seed
+:justifies: INV-no_stale_use
+
+The facts the dependencies are built from — the configuration, the control records, the camera-group derivation's
+version, the filename format, the tracks, the snapshot mechanism — are each defined once, for every phase, so that a
+single change has one authoritative source and a predictable staleness footprint everywhere.
+:::
+
+:::{rat} Opposite jobs, so different names
+:id: RAT-fingerprint_and_hash_opposite_jobs
+:status: seed
+:justifies: DEF-fingerprint, DEF-hash
+
+The two words name a value by the role it plays, not by the algorithm underneath, and the two roles are opposite: one
+must be invariant under mutation, the other sensitive to it. They keep different names even though a fingerprint is
+itself computed with a hash function.
+:::
+
+:::{rat} A file's identity outlives its edits
+:id: RAT-identity_survives_edits
+:status: seed
+:justifies: RUL-fingerprint_survives_mutation
+
+A fingerprint is chosen precisely so it stays the same when the pipeline rewrites a photo's metadata or position or
+renames the file: a media file's identity must survive those mutations, which is what makes it the identity spine the
+transformation log and de-duplication rely on.
+:::
+
+:::{rat} Detecting change is a hash's whole purpose
+:id: RAT-hash_is_for_change
+:status: seed
+:justifies: RUL-hash_detects_any_change
+
+A hash is chosen precisely so it changes on any byte change: detecting change is its whole purpose, which is what makes
+it the right dependency check for records.
+:::

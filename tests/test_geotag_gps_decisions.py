@@ -91,7 +91,7 @@ def test_valid_coord(lat, lon, ok):
 
 # --- the summary artifact ----------------------------------------------------
 
-@pytest.mark.spec("geotag-23-paths-only-review-1", "gpx-geotag-fingerprint-cascade-1")
+@pytest.mark.spec("geotag-23-paths-only-review-1", "gpx-geotag-fingerprint-cascade-1", test="TST-geotag_gps_decisions-summary_counts_and_review_items")
 def test_summary_counts_and_review_items(tmp_path):
     wf = _wf(tmp_path)
     d = f"{BYDEST}/Trip"
