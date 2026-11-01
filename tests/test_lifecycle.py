@@ -19,6 +19,7 @@ written last), no-flatten, and the initialized-workspace root-file block. Mocked
 metadata, fast. photos_1_prep / photos_utils come from conftest.py.
 """
 import glob
+import json
 import os
 import types
 
@@ -412,3 +413,23 @@ def test_prep_takes_no_decision(tmp_path, monkeypatch):
     assert records                                                        # the plan, the handoff, the log
     for rec in records:
         assert "user_decision" not in open(rec).read(), rec
+
+
+@pytest.mark.spec("RUL-record_whole_each_phase", "archive-complete-each-phase-1", test="TST-lifecycle-a_prep_only_workspace_has_a_whole_record")
+def test_a_prep_only_workspace_has_a_whole_record(tmp_path, monkeypatch):
+    """Prepped and never geotagged, the workspace still holds a whole record of prep: every photo's
+    journey keyed by its fingerprint, ending where the photo now is, with prep's database snapshot beside
+    it — and nothing of geotag's or merge's is needed for it."""
+    _install(monkeypatch)
+    ws = _initialized(tmp_path)
+    for name in ("a.jpg", "b.jpg"):
+        (ws / "0-sources" / name).write_bytes(b"img-" + name.encode())
+    prep.PlanExecutor(str(ws)).execute(_plan(ws))
+    ctl = ws / ".photos-ingest"
+    log = json.load(open(ctl / "photos-15-prep-log.json"))["photos"]
+    assert len(log) == 2
+    for fp, entry in log.items():
+        assert entry["journey"] and all(step["phase"] == "prep" for step in entry["journey"])
+        assert (ws / entry["final_path"]).is_file()
+    assert (ctl / "photos-15-prep-ingest.db").is_file()
+    assert not glob.glob(str(ctl / "photos-2*")) and not glob.glob(str(ctl / "photos-3*"))

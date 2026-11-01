@@ -496,7 +496,7 @@ decision, plan and execution-summary records, merge's summary — SHALL stay on 
 
 :::{bld} Which phase writes which record
 :id: BLD-record_ownership
-:status: seed
+:status: ruled
 :realises: RUL-phase_writes_own_records
 :uses: BLD-artifact_numbering, BLD-init_library_writes_library_root
 
