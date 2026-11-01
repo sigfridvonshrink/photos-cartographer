@@ -433,3 +433,32 @@ risks a failed write, and reading a library's content again can cost hours.
 The three phases share one sense of idempotency, stated once for all of them; each phase states only what it means in
 its own terms, so the principle cannot drift between them.
 :::
+
+## 11. Nothing changes that the user did not write down
+
+:::{rat} A user who distrusts opaque mutation can always ask why
+:id: RAT-why_did_this_change
+:status: seed
+:justifies: INV-every_change_from_the_record, RUL-cause_locatable, RUL-decision_revisable
+
+For irreplaceable photos, a user who distrusts opaque, automatic change must always be able to answer *why did this
+change happen?* — and to change the answer. So the tool proposes and the user decides, the decision stays in a durable
+record that the change can be traced back to, and revising the record revises the result.
+:::
+
+:::{rat} A time and a name are recomputed, not reverted
+:id: RAT-time_name_recomputed
+:status: seed
+:justifies: RUL-withdrawal_undoes
+
+A file's time and name are not rolled back when a decision is withdrawn but recomputed in place: reverting them would
+un-position a file the user has already organized.
+:::
+
+:::{rat} One principle, stated once
+:id: RAT-one_authorship_principle
+:status: seed
+:justifies: INV-every_change_from_the_record
+
+The three phases share one stance on authorship, stated once; each phase states only how it meets it.
+:::
