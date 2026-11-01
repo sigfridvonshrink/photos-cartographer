@@ -134,6 +134,22 @@ def test_each_step_names_its_exact_decision():
     assert step["because"] == f"photos-23 destinations.{BYDEST}/T.folder_fallback"
 
 
+@pytest.mark.spec("RUL-log_records_gps_reverts", "log-records-gps-revert-1", "log-revert-and-new-position-1", test="TST-geotag_finalize-a_revert_and_a_new_position_in_one_pass_are_both_logged")
+def test_a_revert_and_a_new_position_in_one_pass_are_both_logged():
+    """A withdrawn pin restored and the photo placed anew in the same pass: both are in the log, in the
+    order they are applied."""
+    files = [_file(f"{BYDEST}/T/r.jpg", "fpR")]
+    plan = {"destinations": {f"{BYDEST}/T": {"operations": [
+        {"type": "revert_manual_gps", "relative_path": f"{BYDEST}/T/r.jpg", "writes": {"GPSLatitude": ""},
+         "pre_state": {"present": False}},
+        {"type": "metadata_gps_write", "relative_path": f"{BYDEST}/T/r.jpg", "gps_origin": "recompute_automated",
+         "writes": {"GPSLatitude": 50.5, "GPSLongitude": 4.5}},
+        {"type": "gps_marker_write", "relative_path": f"{BYDEST}/T/r.jpg", "writes": {"GPSProcessingMethod": "interpolated"}}]}}}
+    journey = cal.build_complete_log({}, files, [], {}, plan, [])["fpR"]["journey"]
+    assert [s["action"] for s in journey] == ["gps_reverted", "gps_written"]
+    assert journey[0]["pre_state"] == {"present": False} and journey[1]["lat"] == 50.5
+
+
 # --- finalize: readiness + end-to-end ---------------------------------------
 
 def _ready_ws(tmp_path, monkeypatch):

@@ -1025,10 +1025,10 @@ def _gps_and_rename_steps(fp, ops, pre_by_fp, native):
     revert_op = next((o for o in ops if o["type"] == "revert_manual_gps"), None)
     gps_op = next((o for o in ops if o["type"] == "metadata_gps_write"), None)
     marker = next((o for o in ops if o["type"] == "gps_marker_write"), None)
-    if revert_op is not None:
+    if revert_op is not None:              # applied first, so a new position in the same pass follows it
         steps.append({"phase": "geotag", "action": "gps_reverted",
                       "pre_state": revert_op.get("pre_state") or pre_by_fp.get(fp)})
-    elif gps_op is not None:
+    if gps_op is not None:
         w = gps_op.get("writes") or {}
         step = {"phase": "geotag", "action": "gps_written", "lat": w.get("GPSLatitude"),
                 "lon": w.get("GPSLongitude"), "origin": gps_op.get("gps_origin"),
@@ -1038,7 +1038,7 @@ def _gps_and_rename_steps(fp, ops, pre_by_fp, native):
         if (gps_op.get("provenance") or {}).get("because"):
             step["because"] = gps_op["provenance"]["because"]
         steps.append(step)
-    elif native:
+    elif native and revert_op is None:
         steps.append({"phase": "geotag", "action": "gps_preserved"})
     rename_op = next((o for o in ops if o["type"] == "rename_no_clobber"), None)
     if rename_op is not None:
