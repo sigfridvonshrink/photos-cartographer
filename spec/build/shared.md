@@ -361,7 +361,7 @@ when it is a managed folder, lies inside one, or contains one — the workspace 
 :status: seed
 :realises: RUL-track_files_block_prep, DEF-tracks
 
-A track file SHALL be a file named `*.gpx`, `*.kml`, `*.fit`, `*.tcx` or `*.nmea`, in any case. Of these geotag reads
+A track file SHALL be a file named `*.gpx`, `*.kml`, `*.kmz`, `*.fit`, `*.tcx`, `*.nmea` or `*.igc`, in any case. Of these geotag reads
 only the `*.gpx` files beneath `gpx_root`. Prep SHALL raise one blocker for each it inventories, naming it, and leave it
 out of the plan (prep §3, §6.1); and execute SHALL raise the same blocker for one that appeared after planning (prep
 §14.3).

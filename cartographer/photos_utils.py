@@ -181,7 +181,7 @@ def selected_gpx_root() -> str:
     return os.path.realpath(os.path.abspath(root)) if root else ""
 
 # Track formats (shared contract §8): a file in one of these is a track, never media. Geotag reads only GPX.
-TRACK_EXTENSIONS = (".gpx", ".kml", ".fit", ".tcx", ".nmea")
+TRACK_EXTENSIONS = (".gpx", ".kml", ".kmz", ".fit", ".tcx", ".nmea", ".igc")
 
 def is_track_file(name: str) -> bool:
     """A track file in any format, by name (shared contract §8): anywhere prep inventories, one is a

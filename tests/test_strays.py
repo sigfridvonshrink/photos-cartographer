@@ -171,7 +171,7 @@ def test_track_file_blocks_prep_and_stays_put(tmp_path, monkeypatch):
 
 
 @pytest.mark.spec("RUL-track_files_block_prep", test="TST-strays-every_track_format_blocks_prep")
-@pytest.mark.parametrize("name", ["route.kml", "ride.FIT", "run.tcx", "log.nmea"])
+@pytest.mark.parametrize("name", ["route.kml", "route.KMZ", "ride.FIT", "run.tcx", "log.nmea", "flight.igc"])
 def test_every_track_format_blocks_prep(tmp_path, monkeypatch, name):
     """Shared contract §8: a track in any format, not only the GPX geotag reads, is never media — it
     blocks the plan and stays in the dump, never parked in 1-strays."""
