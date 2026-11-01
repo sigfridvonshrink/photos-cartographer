@@ -126,6 +126,9 @@ class GeotagCache:
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS manual_gps_ledger ("
             "content_fingerprint TEXT PRIMARY KEY, relative_path TEXT, pre_state TEXT, captured_at TEXT)")
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS original_values ("
+            "content_fingerprint TEXT PRIMARY KEY, relative_path TEXT, original TEXT, captured_at TEXT)")
         self.conn.commit()
 
     def replace_all(self, rows):
@@ -162,6 +165,18 @@ class GeotagCache:
     def ledger_consume(self, fp):
         with self.conn:
             self.conn.execute("DELETE FROM manual_gps_ledger WHERE content_fingerprint=?", (fp,))
+
+    # --- original-values ledger (§24.2): a file's own values, pinned before geotag's first write ---
+    def originals_pin(self, fp, rel, original, captured_at):
+        """Pin a file's own values ONCE — never overwritten, so every later run decides from them."""
+        with self.conn:
+            self.conn.execute(
+                "INSERT OR IGNORE INTO original_values (content_fingerprint, relative_path, original, captured_at) "
+                "VALUES (?,?,?,?)", (fp, rel, json.dumps(original, sort_keys=True), captured_at))
+
+    def originals_all(self):
+        cur = self.conn.execute("SELECT content_fingerprint, original FROM original_values")
+        return {r[0]: json.loads(r[1]) for r in cur.fetchall()}
 
     def ledger_all(self):
         cur = self.conn.execute(
@@ -416,6 +431,11 @@ class GeotagWorkflow:
         handoff was already blocked (§13.1)."""
         by_dest = folder_name('photos_by_dest')
         files = []
+        cache = GeotagCache(self.workspace_root)
+        try:
+            originals = cache.originals_all()
+        finally:
+            cache.close()
         for rec in (self.handoff.get("files") or []):
             if rec.get("folder_class") != by_dest or rec.get("media_class") not in ("image", "raw"):
                 continue
@@ -457,10 +477,14 @@ class GeotagWorkflow:
                                   and geotag_marker(parsed.get("GPSProcessingMethod")) not in POSITION_MARKERS,
                 "geotag_marker": geotag_marker(parsed.get("GPSProcessingMethod")),
                 "processing_method": parsed.get("GPSProcessingMethod"),   # the value a time mark extends
+                "own_values": own_values(dict(parsed, has_native_gps=bool(md.get("has_native_gps")
+                                                                           or parsed.get("has_native_gps")))),
                 "metadata_field_set_version": md.get("field_set_version", FIELD_SET_VERSION),
                 "folder_class": rec.get("folder_class"),
                 "planned_filename": None,                    # set during the rename lookahead (Phase 6)
             })
+            if fp in originals:                              # decide from the file's own values (§24.2)
+                files[-1] = from_originals(files[-1], originals[fp])
         files.sort(key=lambda f: f["relative_path"])
         return files
 
@@ -561,10 +585,16 @@ class GeotagWorkflow:
                     bucket = group if date is None else f"{group}@{date}"
                     prior_cell = prior_cells.get(bucket) or {}
                     if not sel:
-                        # every time in this bucket is corrected already: nothing to ask, but a resolved
-                        # answer is kept for photos of the same camera and day that arrive later
-                        if prior_cell.get("effective_time_anchor"):
-                            cells[bucket] = prior_cell
+                        # Every time here is corrected already and none has its own values pinned (a photo
+                        # geotag marked elsewhere), so nothing asks. A resolved answer is kept for photos of
+                        # the same camera and day arriving later — derived again from the decision, never
+                        # copied, so the record always says what the decision now says.
+                        if prior_cell:
+                            cell = self._offset_cell(dest, group, g, prior_cell, [], gpx, blockers,
+                                                     tz=tz, rep_naive=None, date=date)
+                            if cell["effective_time_anchor"]:
+                                cell["requires_user_input"] = False
+                                cells[bucket] = cell
                         continue
                     anchor_frames = [f for f in sel if f.get("has_native_gps")]
                     rep_naive = min((f.get("source_naive_time") for f in sel
@@ -803,9 +833,13 @@ class GeotagWorkflow:
                 frames = [f for f in by_dest_group.get((dest, group), [])
                           if date is None or _naive_date(f.get("source_naive_time")) == date]
                 if not frames:
-                    # every photo here is corrected already: keep the confirmation for later arrivals
-                    if (prior_cells.get(bucket) or {}).get("effective_drift_offset"):
-                        cells[bucket] = prior_cells[bucket]
+                    # every photo here is corrected already: keep the confirmation for later arrivals,
+                    # derived again from the decision and the current offset, never copied
+                    if prior_cells.get(bucket):
+                        kept = self._drift_cell(dest, bucket, cell, [], [], prior_cells[bucket], blockers, date=date)
+                        if kept["effective_drift_offset"]:
+                            kept["requires_user_input"] = False
+                            cells[bucket] = kept
                     continue
                 if any(f.get("has_native_gps") and match_frame_to_gpx(f, gpx, cfg) for f in frames):
                     continue                                  # has a native-GPS anchor -> reliably placeable
@@ -1365,8 +1399,16 @@ class GeotagWorkflow:
             # Capture-before-write (§24.1 / §29.1a.3): pin each manual GPS override's pre-state —
             # prep's original GPS, NOT a re-read — once, BEFORE any write, keyed by content fingerprint.
             captured = 0
+            model = self.build_file_model()
             pre_by_fp = {f.get("content_fingerprint"): (f["relative_path"], _handoff_pre_state(f.get("native_gps")))
-                         for f in self.build_file_model()}
+                         for f in model}
+            # Pin each file's own values before geotag's first write to it (§24.2). A file already carrying
+            # geotag's mark holds no original values any more, so it is not pinned.
+            for f in model:
+                fp = f.get("content_fingerprint")
+                if (fp and f["relative_path"] in by_file and not f.get("from_originals")
+                        and geotag_marker(held_values(f).get("method")) is None):
+                    cache.originals_pin(fp, f["relative_path"], f["own_values"], now_iso)
             for ops in by_file.values():
                 for op in ops:
                     if op.get("gps_origin") == "apply_manual":

@@ -46,6 +46,11 @@ from .photos_utils import (
 from .reporting import get_reporter
 
 __all__ = [
+    'ORIGINAL_KEYS',
+    'own_values',
+    'from_originals',
+    'device_method',
+    'held_values',
     'POSITION_MARKERS',
     'TIME_FIXED_SUFFIX',
     'geotag_marker',
@@ -825,6 +830,55 @@ def with_time_fixed(processing_method):
     return v if v.endswith(TIME_FIXED_SUFFIX) else v + TIME_FIXED_SUFFIX
 
 
+def device_method(processing_method):
+    """The device's own GPSProcessingMethod within a value: geotag's suffix and position markers removed."""
+    v = processing_method.strip() if isinstance(processing_method, str) else ""
+    if v in POSITION_MARKERS:
+        return ""
+    return v[:-len(TIME_FIXED_SUFFIX)] if v.endswith(TIME_FIXED_SUFFIX) else v
+
+
+# What the original-values ledger pins of a file before geotag first writes to it (geotag §24.2).
+ORIGINAL_KEYS = ("selected_source_naive_timestamp", "selected_source_timestamp_tag", "DateTimeOriginal",
+                 "OffsetTimeOriginal", "GPSLatitude", "GPSLongitude", "GPSProcessingMethod", "has_native_gps")
+
+
+def own_values(parsed):
+    """A file's own time, offset tag, position and GPSProcessingMethod, from prep's parsed metadata, in
+    the shape the original-values ledger pins."""
+    return {k: parsed.get(k) for k in ORIGINAL_KEYS}
+
+
+def from_originals(file, original):
+    """`file` decided from its pinned `original` values — as the device left it, before geotag's first
+    write — while `held` keeps what it holds now, for the comparison. Pure; returns a new dict."""
+    f = dict(file, held=held_values(file), from_originals=True)
+    rt = {k: v for k, v in (file.get("raw_times") or {}).items() if k not in ("DateTimeOriginal", "OffsetTimeOriginal")}
+    for k in ("DateTimeOriginal", "OffsetTimeOriginal"):
+        if original.get(k) is not None:
+            rt[k] = original[k]
+    method = original.get("GPSProcessingMethod")
+    has_gps = bool(original.get("has_native_gps")) and geotag_marker(method) not in POSITION_MARKERS
+    f.update(raw_times=rt, source_naive_time=original.get("selected_source_naive_timestamp"),
+             source_time_tag=original.get("selected_source_timestamp_tag"),
+             has_timestamp=original.get("selected_source_naive_timestamp") is not None,
+             native_gps=({"lat": original.get("GPSLatitude"), "lon": original.get("GPSLongitude"),
+                          "processing_method": method} if original.get("has_native_gps") else None),
+             has_native_gps=has_gps, geotag_marker=geotag_marker(method), processing_method=method)
+    return f
+
+
+def held_values(file):
+    """What `file` holds now, as the comparison side of planning: its time, offset tag, position and
+    GPSProcessingMethod. Differs from the file's decision basis only where the original-values ledger
+    gave the basis the file's own values from before geotag's first write."""
+    if file.get("held") is not None:
+        return file["held"]
+    rt, ng = file.get("raw_times") or {}, file.get("native_gps") or {}
+    return {"DateTimeOriginal": rt.get("DateTimeOriginal"), "OffsetTimeOriginal": rt.get("OffsetTimeOriginal"),
+            "lat": ng.get("lat"), "lon": ng.get("lon"), "method": file.get("processing_method")}
+
+
 def _local_time_and_offset(resolved_utc, tz):
     """(DateTimeOriginal 'YYYY:MM:DD HH:MM:SS', OffsetTimeOriginal '+HH:MM') for a resolved UTC in the
     destination timezone, or (None, None) if unpositionable. The corrected time is destination-local
@@ -846,16 +900,15 @@ def _make_op(typ, rel, reason, semantic, preconditions):
     return op
 
 
-def time_fixed_marker_op(file, clear_position=False):
-    """The marker write recording that geotag fixed `file`'s time and wrote no position: the suffix
-    appended to the device's own GPSProcessingMethod. With `clear_position`, the position an earlier
-    geotag run wrote is cleared, and with it its marker, leaving the suffix alone."""
+def time_fixed_marker_op(file, method, clear_position=False):
+    """The marker write recording that geotag fixed `file`'s time and wrote no position: `method`, the
+    device's own GPSProcessingMethod with the suffix appended. With `clear_position`, the position an
+    earlier geotag run wrote is cleared too."""
     pre = {"content_fingerprint": file.get("content_fingerprint"),
            "size": file.get("size"), "mtime_ns": file.get("mtime_ns")}
+    writes = {"GPSProcessingMethod": method}
     if clear_position:
-        writes = {**_revert_tags({"present": False}), "GPSProcessingMethod": TIME_FIXED_SUFFIX}
-    else:
-        writes = {"GPSProcessingMethod": with_time_fixed(file.get("processing_method"))}
+        writes = {**_revert_tags({"present": False}), **writes}
     return _make_op("gps_marker_write", file["relative_path"], "time provenance", {"writes": writes}, pre)
 
 
@@ -868,8 +921,8 @@ def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename):
            "size": file.get("size"), "mtime_ns": file.get("mtime_ns")}
     ops = []
 
-    held = file.get("raw_times") or {}
-    marker = file.get("geotag_marker")
+    held = held_values(file)                      # what the file holds now: the comparison side
+    marker = file.get("geotag_marker")            # the decision side: geotag's mark on the basis values
     time_corrected = bool(marker)                 # geotag wrote this file's time on an earlier run
     dto, off = _local_time_and_offset(resolved_utc, tz)
     if dto is not None:
@@ -882,21 +935,22 @@ def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename):
 
     if gps_category in _GPS_OP_ORIGIN and gps_coord is not None:
         new_marker = _GPS_OP_MARKER[gps_category]
-        ng = file.get("native_gps") or {}
-        same_fix = (marker == new_marker and isinstance(ng.get("lat"), (int, float))
-                    and isinstance(ng.get("lon"), (int, float))
-                    and round(ng["lat"], 6) == round(gps_coord["lat"], 6)
-                    and round(ng["lon"], 6) == round(gps_coord["lon"], 6))
+        same_fix = ((held.get("method") or "").strip() == new_marker
+                    and isinstance(held.get("lat"), (int, float)) and isinstance(held.get("lon"), (int, float))
+                    and round(held["lat"], 6) == round(gps_coord["lat"], 6)
+                    and round(held["lon"], 6) == round(gps_coord["lon"], 6))
         if not same_fix:                          # a re-placed file already holding this fix: no write
             ops.append(_make_op("metadata_gps_write", rel, f"gps:{gps_category}",
                                 {"writes": _coordinate_tags(gps_coord["lat"], gps_coord["lon"]),
                                  "gps_origin": _GPS_OP_ORIGIN[gps_category]}, pre))
             ops.append(_make_op("gps_marker_write", rel, "gps provenance",
                                 {"writes": {"GPSProcessingMethod": new_marker}}, pre))
-    elif marker in POSITION_MARKERS:
-        ops.append(time_fixed_marker_op(file, clear_position=True))  # geotag's old fix: not kept
-    elif time_corrected and marker != TIME_FIXED_SUFFIX:
-        ops.append(time_fixed_marker_op(file))
+    elif time_corrected:
+        target = with_time_fixed(device_method(file.get("processing_method")))
+        if geotag_marker(held.get("method")) in POSITION_MARKERS:
+            ops.append(time_fixed_marker_op(file, target, clear_position=True))   # geotag's old fix: not kept
+        elif (held.get("method") or "").strip() != target:
+            ops.append(time_fixed_marker_op(file, target))
 
     if rename and rename.get("rename"):
         ops.append(_make_op("rename_no_clobber", rel, "destination-local timestamp name",

@@ -435,7 +435,10 @@ workspace's shape, and validate against the plan's own dependencies instead of t
 Geotag SHALL record what it wrote in the file's `GPSProcessingMethod`: the bare value `interpolated`, `manual_locked`
 or `manual_fallback` beside each position it writes, and, when it fixes the time and writes no position, the suffix
 `+carto-time` appended once to whatever the field held, keeping the device's own value. Any other value is the
-device's own, and the GPS beside it native. On a re-run, a file carrying a position marker or the suffix SHALL be
+device's own, and the GPS beside it native. Before geotag's first write to a file, execution SHALL pin its own time, offset tag, position and
+`GPSProcessingMethod` in an original-values ledger keyed by fingerprint, once, unless it already carries geotag's mark;
+a later plan SHALL decide about a pinned file from those values and plan only the writes that differ from what it
+holds (geotag §24.2). On a re-run, a file with no pinned values carrying a position marker or the suffix SHALL be
 resolved from its own time and offset tag with no clock offset, SHALL be no clock anchor and in no drift check, and a
 camera group's offset cells SHALL be built from its unmarked files alone. A file with a position marker SHALL count as
 having no native GPS and be placed again; one now placed nowhere has geotag's position and marker cleared and carries
