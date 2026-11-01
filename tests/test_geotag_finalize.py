@@ -109,6 +109,31 @@ def test_complete_log_gps_written_and_reverted():
     assert next(s for s in photos2["fpN"]["journey"] if s["action"] == "gps_written")["gps_processing_method"] is None
 
 
+@pytest.mark.spec("RUL-log_cites_decisions", "log-decision-provenance-1", "log-names-exact-decision-1", test="TST-geotag_finalize-each_step_names_its_exact_decision")
+def test_each_step_names_its_exact_decision():
+    """The offset names its exact cell — with its day when the camera's photos there span days — or
+    the drift confirmation that replaced it; a manual position names the pin or the folder fallback."""
+    row = {"camera_group": CAM, "source_naive_time": "2024:07:03 14:00:00"}
+    cells = {f"{CAM}@2024-07-02": {}, f"{CAM}@2024-07-03": {}}
+    assert cal.offset_decision_pointer(row, f"{BYDEST}/T", cells) == \
+        f"photos-21 destinations.{BYDEST}/T.camera_group_time_decisions.{CAM}@2024-07-03"
+    assert cal.offset_decision_pointer(dict(row, resolved_utc_provenance="gps_drift_validated"), f"{BYDEST}/T", {CAM: {}}) == \
+        f"photos-22 destinations.{BYDEST}/T.drift_decisions.{CAM}"
+    assert cal.manual_gps_pointer("manual_locked", f"{BYDEST}/T", f"{BYDEST}/T/m.jpg", None) == \
+        f"photos-23 destinations.{BYDEST}/T.gps_decisions.review_items[m.jpg]"
+    inherited = {"proposal": {"proposal_source": "inherited", "inherited_from": BYDEST},
+                 "user_decision": {"accept_proposal": True}}
+    assert cal.manual_gps_pointer("manual_fallback", f"{BYDEST}/T", f"{BYDEST}/T/m.jpg", inherited) == \
+        f"photos-23 destinations.{BYDEST}/T.folder_fallback (accepted from {BYDEST})"
+    files = [_file(f"{BYDEST}/T/m.jpg", "fpM")]
+    plan = {"destinations": {f"{BYDEST}/T": {"operations": [
+        {"type": "metadata_gps_write", "relative_path": f"{BYDEST}/T/m.jpg", "gps_origin": "apply_manual",
+         "writes": {"GPSLatitude": 48.85, "GPSLongitude": 2.35},
+         "provenance": {"because": f"photos-23 destinations.{BYDEST}/T.folder_fallback"}}]}}}
+    step = next(s for s in cal.build_complete_log({}, files, [], {}, plan, [])["fpM"]["journey"] if s["action"] == "gps_written")
+    assert step["because"] == f"photos-23 destinations.{BYDEST}/T.folder_fallback"
+
+
 # --- finalize: readiness + end-to-end ---------------------------------------
 
 def _ready_ws(tmp_path, monkeypatch):

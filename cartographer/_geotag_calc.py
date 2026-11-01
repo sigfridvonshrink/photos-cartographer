@@ -46,6 +46,8 @@ from .photos_utils import (
 from .reporting import get_reporter
 
 __all__ = [
+    'offset_decision_pointer',
+    'manual_gps_pointer',
     'ORIGINAL_KEYS',
     'own_values',
     'from_originals',
@@ -964,6 +966,30 @@ def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename):
 # consolidation of artifacts already written — no new authority.
 # ============================================================================
 
+def offset_decision_pointer(row, dest, cells):
+    """Where the clock offset applied to a photo was decided: its exact (camera group, destination[,
+    day]) cell in photos-21, or — when the drift check's validated offset replaced it — the matching
+    confirmation in photos-22 (§13.3 item 3)."""
+    group = row.get("camera_group")
+    date = _naive_date(row.get("source_naive_time"))
+    bucket = f"{group}@{date}" if f"{group}@{date}" in (cells or {}) else group
+    if row.get("resolved_utc_provenance") == "gps_drift_validated":
+        return f"photos-22 destinations.{dest}.drift_decisions.{bucket}"
+    return f"photos-21 destinations.{dest}.camera_group_time_decisions.{bucket}"
+
+
+def manual_gps_pointer(category, dest, rel, fallback_cell):
+    """Where a manual position was decided: the photo's own pin among photos-23's review items, or the
+    destination's folder fallback (with the destination it was inherited from, when accepted from one)."""
+    if category == "manual_locked":
+        return f"photos-23 destinations.{dest}.gps_decisions.review_items[{os.path.basename(rel)}]"
+    p = f"photos-23 destinations.{dest}.folder_fallback"
+    prop = (fallback_cell or {}).get("proposal") or {}
+    if prop.get("proposal_source") == "inherited" and ((fallback_cell or {}).get("user_decision") or {}).get("accept_proposal"):
+        p += f" (accepted from {prop.get('inherited_from')})"
+    return p
+
+
 def _earlier_pass_steps(plan, confirmed, pre_by_fp):
     """{fingerprint: [steps]} for one earlier executed pass: what its confirmed operations did to each
     photo, matched by the fingerprint the operation was planned against, each step naming the run."""
@@ -1009,6 +1035,8 @@ def _gps_and_rename_steps(fp, ops, pre_by_fp, native):
                 "gps_processing_method": (marker.get("writes") or {}).get("GPSProcessingMethod") if marker else None}
         if gps_op.get("gps_origin") == "apply_manual" and fp in pre_by_fp:
             step["pre_state"] = pre_by_fp[fp]
+        if (gps_op.get("provenance") or {}).get("because"):
+            step["because"] = gps_op["provenance"]["because"]
         steps.append(step)
     elif native:
         steps.append({"phase": "geotag", "action": "gps_preserved"})
@@ -1053,9 +1081,11 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, l
         start = len(steps)
 
         if row.get("time_rule_used") == "camera_group_offset" and row.get("utc_offset_used") is not None:
+            cells = (t_dests.get(dest) or {}).get("camera_group_time_decisions") or {}
             steps.append({"phase": "geotag", "action": "clock_offset_applied",
                           "offset_seconds": row["utc_offset_used"],
-                          "because": f"photos-21 destinations.{dest}.camera_group_time_decisions.{group}"})
+                          "because": offset_decision_pointer(dict(row, camera_group=row.get("camera_group") or group),
+                                                             dest, cells)})
         if row.get("resolved_utc"):
             steps.append({"phase": "geotag", "action": "resolved_utc", "value": row["resolved_utc"]})
         tz = ((t_dests.get(dest, {}).get("destination_timezone")) or {}).get("effective_iana_timezone")

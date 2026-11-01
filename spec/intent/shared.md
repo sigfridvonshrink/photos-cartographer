@@ -1518,7 +1518,7 @@ file of no media class SHALL have no entry.
 
 :::{rul} A step names the decision behind it
 :id: RUL-log_cites_decisions
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :aliases: log-decision-provenance-1

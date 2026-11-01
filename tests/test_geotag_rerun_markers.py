@@ -435,6 +435,8 @@ def test_the_log_keeps_every_geotag_pass(tmp_path, monkeypatch):
     renames = [s["to"] for s in steps if s["action"] == "final_rename"]
     assert renames == ["2024-07-03--14-30-00.arw", "2024-07-03--14-25-00.arw"]
     assert [s["from"] for s in steps if s["action"] == "final_rename"] == ["a.arw", "2024-07-03--14-30-00.arw"]
-    offsets = [s["offset_seconds"] for s in steps if s["action"] == "clock_offset_applied"]
-    assert offsets == [SLOW, SLOW - 300, SLOW - 300]
+    offsets = [s for s in steps if s["action"] == "clock_offset_applied"]
+    assert [s["offset_seconds"] for s in offsets] == [SLOW, SLOW - 300, SLOW - 300]
+    # the offset applied is the drift check's validated one, so each step names that confirmation
+    assert all(s["because"] == f"photos-22 destinations.{T}.drift_decisions.{CAM}" for s in offsets)
     assert sum(s["action"] == "gps_written" for s in steps) == 2

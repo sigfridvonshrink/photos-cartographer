@@ -1147,14 +1147,18 @@ class GeotagWorkflow:
                 cat_by_rel[rel] = (cat, dest, f)
                 fops = plan_file_ops(f, ru, tz, cat, coord, renames.get(rel))
                 row = utc_by_path.get(rel) or {}
+                cells = (t_dests.get(dest) or {}).get("camera_group_time_decisions") or {}
                 for o in fops:
+                    # what this pass established and which decision it followed, kept with the write so a
+                    # later finalize can log it once a later pass has replaced the resolved-UTC cache (§13.3)
                     if o["type"] == "metadata_time_write":
-                        # what this pass established, kept with the write so a later finalize can log it
-                        # once a later pass has replaced the resolved-UTC cache (§13.3)
                         o["provenance"] = {
                             "resolved_utc": row.get("resolved_utc"), "time_rule_used": row.get("time_rule_used"),
                             "utc_offset_used": row.get("utc_offset_used"), "destination_timezone": tz,
-                            "because": f"photos-21 destinations.{dest}.camera_group_time_decisions.{f.get('camera_group_key')}"}
+                            "because": offset_decision_pointer(
+                                dict(row, camera_group=row.get("camera_group") or f.get("camera_group_key")), dest, cells)}
+                    elif o["type"] == "metadata_gps_write" and o.get("gps_origin") == "apply_manual":
+                        o["provenance"] = {"because": manual_gps_pointer(cat, dest, rel, g_d.get("folder_fallback"))}
                 if fops:
                     ops.extend(fops)
                 else:
