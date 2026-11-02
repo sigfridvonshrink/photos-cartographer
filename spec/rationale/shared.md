@@ -544,7 +544,7 @@ capture interrupted leaves a usable image either way.
 
 :::{rat} The library is the user's, and already in order
 :id: RAT-library_is_ground_truth
-:status: seed
+:status: ruled
 :justifies: RUL-library_never_altered, RUL-library_not_scanned, RUL-collision_by_content
 
 The library is the user's curated collection: its organisation and names are the ground truth, and other tools and

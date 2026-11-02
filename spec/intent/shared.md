@@ -1674,7 +1674,7 @@ A workspace is **sealed** once merge has succeeded in it: marked as finished, by
 
 :::{rul} Merge never alters the library
 :id: RUL-library_never_altered
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
