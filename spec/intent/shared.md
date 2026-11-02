@@ -1590,7 +1590,7 @@ it, and the fingerprints of library files merge has read.
 
 :::{def} A phase's database image
 :id: DEF-database_image
-:status: seed
+:status: ruled
 :uses: DEF-workspace_database
 
 A phase's **database image** is a copy of the workspace database as it stood at the end of that phase's latest
@@ -1638,7 +1638,7 @@ SHALL only read it.
 
 :::{rul} Each phase keeps an image of the database at its end
 :id: RUL-database_image_each_phase
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: db-snapshot-per-phase-1, db-snapshot-skip-on-failure-1
@@ -1651,7 +1651,7 @@ and every image present SHALL be archived in the package.
 
 :::{rul} An image is whole
 :id: RUL-database_image_whole
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
