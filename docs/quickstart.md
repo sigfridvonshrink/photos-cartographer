@@ -58,9 +58,9 @@ photos-cartographer prep dry-run # inspect the exact plan that execute will run
 photos-cartographer prep execute # apply it
 ```
 
-Every phase follows the same **plan → dry-run → execute** rhythm: planning never mutates, dry-run shows
-the *real* serialized plan, and execute applies only a validated plan. Nothing is deleted (duplicates
-go to a recoverable quarantine) and nothing is overwritten.
+Every phase follows the same **plan → dry-run → execute** rhythm: planning changes nothing but the
+fingerprints it keeps, dry-run shows the *real* serialized plan, and execute applies only a validated
+plan. Nothing is deleted (duplicates go to a recoverable quarantine) and nothing is overwritten.
 
 After this, `prep` has sorted your media: photos into `5-photos-by-date/`, videos into
 `4-videos-by-date/`, untimestamped media into `2-missing-metadata/`, redundant JPEGs (RAW siblings)

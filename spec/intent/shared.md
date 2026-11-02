@@ -88,7 +88,8 @@ SHALL hold it while it does.
 :upholds: INV-one_run_at_a_time
 
 A run SHALL hold the lock before it reads any of the workspace's content — before it plans, scans, fingerprints,
-reads metadata, dry-runs or executes. Planning changes nothing, and is inside the lock all the same.
+reads metadata, dry-runs or executes. Planning changes nothing but the fingerprints it keeps for later runs, and is
+inside the lock all the same.
 :::
 
 :::{rul} The lock lasts the whole run, and no longer

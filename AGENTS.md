@@ -198,7 +198,7 @@ The whole design exists to safely mutate **irreplaceable originals**. These rule
 
 - **No mutation outside a plan.** Every move/rename/quarantine/metadata-write/DB-mutation is a planned
   operation with a plan ID, op ID, explicit preconditions, expected result, and journal entry. Planning
-  never mutates.
+  mutates nothing but the fingerprints it keeps for later runs (prep's plan memo, merge's library cache).
 - **Dry-run is not simulation.** Dry-run validates the *real* serialized plan that execution would
   consume (the persisted canonical plan artifact) and reports a **summary** of it — never a separate
   virtual-filesystem code path. It does not dump every operation: the full exact plan is the saved

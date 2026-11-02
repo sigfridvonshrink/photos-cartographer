@@ -21,7 +21,7 @@
 2	The merge phase additionally takes a separate library-side lock for the duration of its run (Section 15.2), so two merges into the same library — even from different workspaces — cannot overlap; that library lock is independent of, and held in addition to, the workspace lock.	defer:shared-15.2	the library lock: its items come with §15.2
 2	The lock guards the entire run, not just mutation:	RUL-lock_through_the_run	
 2	1. The lock is acquired at process startup, immediately after the workspace root is resolved and the root sentinel (`photos-00-workspace-guard`) is verified, and **before any planning, scanning, fingerprinting, metadata extraction, dry-run, or execution begins**.	RUL-lock_before_reading BLD-lock_after_guard	
-2	Planning is non-mutating, but it must still not run concurrently: a plan computed against a workspace another process is reading or mutating is untrustworthy, so planning is inside the lock too.	RAT-planning_inside_lock	
+2	Planning changes nothing but the fingerprints it keeps for later runs (prep's plan-time decode memo, prep Section 10.3; merge's library-file fingerprint cache, Section 13.4), but it must still not run concurrently: a plan computed against a workspace another process is reading or mutating is untrustworthy, so planning is inside the lock too.	RAT-planning_inside_lock	
 2	2. The lock is held for the duration of a run — across plan, dry-run, execute, cache update, and handoff/artifact writes — and released when the script finishes (success or failure).	RUL-lock_through_the_run	
 2	It is per-run, not a persistent lock on the workspace between runs: when no script is running, the workspace is unlocked.	RUL-lock_through_the_run	
 2	3. Acquisition is **fail-fast, not blocking**.	RUL-lock_fail_fast	
