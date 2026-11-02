@@ -1624,7 +1624,7 @@ workspace as a cache would be.
 
 :::{rul} Each phase writes only its own part of the database
 :id: RUL-database_regions_disjoint
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
