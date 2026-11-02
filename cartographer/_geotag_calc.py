@@ -1127,15 +1127,18 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, l
                           "because": f"photos-21 destinations.{dest}.destination_timezone"})
 
         steps.extend(_gps_and_rename_steps(fp, ops, pre_by_fp, native=f.get("has_native_gps")))
+        if not f.get("from_originals") and geotag_marker(held_values(f).get("method")):
+            # geotag's mark is on the photo, but this workspace never held its own values: its time was
+            # fixed elsewhere, or that history is lost — say so rather than look whole (§13.3a). The
+            # note is a step of geotag's own: prep's fields, a note among them, are carried unchanged.
+            entry["partial"] = True
+            steps.append({"phase": "geotag", "action": "history_incomplete",
+                          "note": "geotag's mark is on this photo but no pass in this workspace's record "
+                                  "first corrected it: its correction was made elsewhere, or that history "
+                                  "is lost"})
         if run:
             steps[start:] = [dict(s, run=run) for s in steps[start:]]
         _with_record_hashes(steps[start:], plan)
-        if not f.get("from_originals") and geotag_marker(held_values(f).get("method")):
-            # geotag's mark is on the photo, but this workspace never held its own values: its time was
-            # fixed elsewhere, or that history is lost — say so rather than look whole (§13.3a)
-            entry["partial"] = True
-            entry["note"] = ("geotag's mark is on this photo but no pass in this workspace's record first "
-                             "corrected it: its correction was made elsewhere, or that history is lost")
     return photos
 
 

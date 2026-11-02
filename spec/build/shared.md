@@ -490,8 +490,13 @@ pre-state ledger (geotag §24.1); an automatic position is recomputed, never rol
 
 Prep SHALL write `photos-15-prep-log.json` at the end of every prep run (prep §16.1). Geotag's finalize SHALL copy it
 to `photos-26-complete-log.json` and append each photo's geotag steps (§13.3); merge SHALL copy that to
-`photos-35-merge-log.json` and append its own (§13.5). Each phase's job records — prep's handoff and summary, geotag's
-decision, plan and execution-summary records, merge's summary — SHALL stay on disk.
+`photos-35-merge-log.json` and append its own (§13.5). Each copy SHALL carry the earlier log unchanged — every entry,
+every field and every step as it was, a phase only adding — and finalize and merge SHALL check it: a copy that would
+change the earlier record is not written, and merge SHALL refuse while `photos-26-complete-log.json` no longer carries
+`photos-15-prep-log.json` so, or cannot be read. A prep log missing or unreadable at finalize SHALL be named in the
+complete log's `warnings`, the log then `partial`. Each phase's job records — prep's handoff and summary, geotag's
+decision, plan and execution-summary records, merge's summary — SHALL stay on disk, as SHALL every pass's plan and
+journal and the decision records each execution kept (`BLD-log_format`).
 :::
 
 :::{bld} Which phase writes which record
@@ -540,7 +545,7 @@ finalize SHALL take them from every executed pass — each superseded `photos-24
 first, matched by fingerprint — before the current plan's, from the provenance each time write carries (geotag §31). Each run's journal SHALL be kept as
 its own `journal-<run>.json`, and each geotag execution SHALL keep the decision records its plan depended on, verified
 by hash, in `executed/<plan id>/`, which a step's `because_record` and `because_record_sha256` name; prep marks its log partial and warns when its history cannot rebuild a journey (prep
-§16.1); geotag's finalize marks `partial`, with a note, the entry of a photo carrying geotag's mark whose own values
-the workspace never pinned, and names in the log's `warnings`, the log then `partial`, any pass whose journal is kept
+§16.1); geotag's finalize marks `partial` the entry of a photo carrying geotag's mark whose own values the workspace
+never pinned, with a `history_incomplete` step of its own saying why, and names in the log's `warnings`, the log then `partial`, any pass whose journal is kept
 but whose plan is missing (geotag §31).
 :::

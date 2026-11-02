@@ -7913,6 +7913,20 @@
       "test": "tests/test_geotag_rerun_markers.py::test_a_history_too_thin_is_marked_partial"
     },
     {
+      "id": "log-carried-unchanged-1",
+      "area": "shared",
+      "criticality": "med",
+      "anti": true,
+      "title": "Each phase's log carries the earlier one unchanged, only adding; finalize and merge check it, and merge refuses a photos-26 that no longer carries photos-15",
+      "spec": {
+        "file": "photos-shared-contract.md",
+        "section": "13.0a"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_merge_plan.py::test_a_log_edited_after_finalize_blocks_merge"
+    },
+    {
       "id": "log-human-readable-json-1",
       "area": "shared",
       "criticality": "low",

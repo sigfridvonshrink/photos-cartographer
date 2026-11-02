@@ -370,3 +370,42 @@ def test_any_config_edit_restales_the_merge_plan(tmp_path, monkeypatch):
     cfg["gpx_direct_match_max_seconds"] = cfg.get("gpx_direct_match_max_seconds", 60.0) + 1
     open(cfg_path, "w").write(json.dumps(cfg))
     assert "config changed" in wf.revalidate_plan_deps(str(ws), plan)
+
+
+@pytest.mark.spec("BLD-phase_logs", "log-carried-unchanged-1", test="TST-merge_plan-a_log_edited_after_finalize_blocks_merge")
+def test_a_log_edited_after_finalize_blocks_merge(tmp_path, monkeypatch, capsys):
+    """Each log carries the one before it unchanged and only adds: an entry of prep's that photos-26 no
+    longer carries whole — either edited after finalize — blocks merge; one carried whole does not."""
+    ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    _patch_fp(monkeypatch, fp)
+    ctl = ws / ".photos-ingest"
+    step = {"phase": "prep", "action": "moved_to_by_date", "from": "a", "to": "b"}
+    (ctl / "photos-15-prep-log.json").write_text(json.dumps(
+        {"photos": {"A": {"content_fingerprint": "A", "final_path": "b", "journey": [step]}}}))
+    carried = {"A": {"content_fingerprint": "A", "final_path": "b", "partial": True,
+                     "journey": [step, {"phase": "geotag", "action": "final_rename", "from": "b", "to": "c"}]}}
+    (ctl / "photos-26-complete-log.json").write_text(json.dumps({"photos": carried}))
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert not _plan_of(ws)["blockers"]
+
+    carried["A"]["journey"][0] = dict(step, to="elsewhere")
+    (ctl / "photos-26-complete-log.json").write_text(json.dumps({"photos": carried}))
+    capsys.readouterr()
+    assert merge._run_locked_workflow("plan", str(ws)) != 0
+    assert "no longer carries prep's record" in "".join(capsys.readouterr())
+
+    (ctl / "photos-26-complete-log.json").write_text("{not json")
+    assert merge._run_locked_workflow("plan", str(ws)) != 0
+    assert "photos-26-complete-log.json cannot be read" in "".join(capsys.readouterr())
+
+
+def test_entries_not_carried():
+    """Only additions pass: a field changed or dropped, a step changed or dropped, or an entry gone, fails."""
+    e = {"content_fingerprint": "A", "final_path": "b", "journey": [{"action": "x"}]}
+    nc = utils.entries_not_carried
+    assert nc({"A": e}, {"A": dict(e, partial=True, journey=e["journey"] + [{"action": "y"}])}) == []
+    assert nc({"A": e}, {"A": dict(e, final_path="c")}) == ["A"]
+    assert nc({"A": e}, {"A": {k: v for k, v in e.items() if k != "final_path"}}) == ["A"]
+    assert nc({"A": e}, {"A": dict(e, journey=[])}) == ["A"]
+    assert nc({"A": e}, {"A": dict(e, journey=[{"action": "z"}, {"action": "x"}])}) == ["A"]
+    assert nc({"A": e}, {}) == ["A"]

@@ -46,7 +46,7 @@ from .photos_utils import (
     verify_json_dependency, json_dependency, write_json_artifact, write_versioned_json, is_library, write_library_marker,
     library_marker_path, allocate_suffix, suffix_root, max_suffix, ContentHasher, WorkspaceCache,
     journal_path, take_zfs_snapshot, _move_no_clobber, write_db_snapshot, reseal_archival_package,
-    write_sealed_marker, WorkspaceLock, LibraryLock, XDEV_TMP_PREFIX, XDEV_TMP_SUFFIX,
+    write_sealed_marker, entries_not_carried, prep_log_path, WorkspaceLock, LibraryLock, XDEV_TMP_PREFIX, XDEV_TMP_SUFFIX,
 )
 from .reporting import get_reporter, emit_next_step
 
@@ -241,6 +241,8 @@ class MergeWorkflow:
             blockers.append("The workspace has not been finalized (photos-26-complete-log.json is "
                             "missing). Run the finalize command (`photos-cartographer geotag finalize`) first, "
                             "then merge.")
+        else:
+            self._check_logs_carried(ws, blockers)
         if not os.path.exists(archive_manifest_path(ws)):
             blockers.append("The archival package is incomplete (photos-26-archive-manifest.json is "
                             "missing) — run `photos-cartographer geotag finalize` before merging.")
@@ -820,17 +822,32 @@ class MergeWorkflow:
         return {"status": status, "plan_id": plan.get("plan_id"), "summary": summary, "finalized": finalized,
                 "blocked": [r for r in results if r["final_kind"] == "blocked"]}
 
+    def _check_logs_carried(self, ws, blockers):
+        """photos-26 still carries prep's record unchanged (§13.0a): each phase's log is a superset of the
+        one before, so an earlier record edited, or a copy edited, after finalize is evident here."""
+        try:
+            complete = (json.load(open(complete_log_path(ws))) or {}).get("photos") or {}
+        except Exception:
+            blockers.append("photos-26-complete-log.json cannot be read — re-run finalize "
+                            "(`photos-cartographer geotag finalize`), then merge.")
+            return
+        try:
+            prep = (json.load(open(prep_log_path(ws))) or {}).get("photos") or {}
+        except Exception:
+            return                     # finalize already said so, in the log's warnings
+        not_carried = entries_not_carried(prep, complete)
+        if not_carried:
+            blockers.append(f"photos-26-complete-log.json no longer carries prep's record "
+                            f"(photos-15-prep-log.json) unchanged for {len(not_carried)} photo(s): one of the two "
+                            "was edited after finalize. Re-run finalize (`photos-cartographer geotag finalize`), "
+                            "then merge.")
+
     def _build_merge_log(self, ws, results):
         """photos-35-merge-log.json (§9.2): photos-26-complete-log.json copied FORWARD with a per-file
         `merge` step appended to each merged photo's journey (final library path + renamed flag). Built
         fresh from photos-26 every run (never from a prior photos-35), so it is deterministic and
         idempotent under resume; photos-26 itself is never edited (§13.0a)."""
-        base = {}
-        if os.path.exists(complete_log_path(ws)):
-            try:
-                base = json.load(open(complete_log_path(ws)))
-            except Exception:
-                base = {}
+        base = json.load(open(complete_log_path(ws)))          # preconditions proved it readable
         photos = json.loads(json.dumps(base.get("photos") or {}))      # deep copy; never touch photos-26
         for r in sorted(results, key=lambda x: x["by_dest_source"]):
             if r["final_kind"] == "blocked" or not r.get("content_fingerprint"):
@@ -843,6 +860,10 @@ class MergeWorkflow:
                 "from": r["by_dest_source"],
                 "library_path": r["library_path"],
                 "renamed_for_library": r["final_kind"] == "renamed_for_library"})
+        not_carried = entries_not_carried(base.get("photos"), photos)
+        if not_carried:      # a defect, not a state of the workspace: the copy would misstate photos-26
+            raise RuntimeError(f"{MERGE_LOG_ARTIFACT} would not carry photos-26-complete-log.json unchanged "
+                               f"for {len(not_carried)} photo(s)")
         return {"schema_version": 1, "tool": "photos-3-merge", "artifact_name": MERGE_LOG_ARTIFACT,
                 "photos": photos}
 
