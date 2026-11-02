@@ -542,7 +542,9 @@ offset replaced it; a timezone its destination's cell; a manual position the pho
 items or the destination's folder fallback, with the destination it was accepted from. Geotag's steps SHALL be
 `clock_offset_applied` (its `offset_seconds` with an `offset_description` in words, such as "camera clock 1 h 55 min
 ahead of UTC"), `resolved_utc`, `timezone_resolved`, `time_written`, `gps_written` (with its origin, method and,
-for a manual position, the pinned pre-state), `gps_reverted`, `gps_preserved` and `final_rename`, each naming its `run`;
+for a manual position, the position it replaced, from the plan), `gps_reverted`, `gps_cleared` (a position geotag wrote
+and no longer places, with that position, from the plan, and the method left), `gps_preserved` and `final_rename`,
+each naming its `run`;
 finalize SHALL take them from every executed pass — each superseded `photos-24` whose journal shows it ran, oldest
 first, matched by fingerprint — before the current plan's, from the provenance each time write carries (geotag §31). Each run's journal SHALL be kept as
 its own `journal-<run>.json`, and each geotag execution SHALL keep the decision records its plan depended on, verified

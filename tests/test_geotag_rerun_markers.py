@@ -334,6 +334,10 @@ def test_unlocated_geotag_position_is_cleared(tmp_path, monkeypatch):
     _plan(monkeypatch, ws)
     e = _ops(ws)[f"{T}/2024-07-03--18-00-00.arw"]
     assert e["writes"]["GPSLatitude"] == "" and e["writes"]["GPSProcessingMethod"] == "+carto-time"
+    plan = json.loads((ws / ".photos-ingest" / "photos-24-executable-plan.json").read_text())
+    clear = next(o for d in plan["destinations"].values() for o in d["operations"] if o["type"] == "gps_marker_write")
+    assert clear["pre_state"] == {"present": True, "GPSLatitude": 40.0, "GPSLongitude": 3.0,
+                                  "GPSProcessingMethod": "interpolated"}   # what it clears, for the log
 
 
 @pytest.mark.spec("RUL-decision_revisable", "geotag-originals-pinned-1", test="TST-geotag_rerun_markers-changed_offset_after_execute_reaches_the_photo")
