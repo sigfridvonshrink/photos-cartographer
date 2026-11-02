@@ -115,7 +115,7 @@ def _ops(ws):
     assert plan["status"] == "ready", plan.get("blockers")
     out = {}
     for d in plan["destinations"].values():
-        for op in sorted(d["operations"], key=lambda o: o["type"] != "revert_manual_gps"):
+        for op in d["operations"]:
             e = out.setdefault(op["relative_path"], {"writes": {}, "types": [], "to": None})
             e["types"].append(op["type"])
             e["writes"].update(op.get("writes") or {})

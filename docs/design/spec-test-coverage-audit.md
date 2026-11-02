@@ -76,7 +76,7 @@ These all assert the refusal/detection but **not** the safety consequence. Group
 **Missing "ordering / single-threaded-before-concurrency" assertion:**
 - `exec-concurrency-no-semantic-change-1` — run the *same geotag plan* under `-j1` vs `-jN`, assert identical photos-25 + file tree.
 - `merge-moveset-fixed-before-concurrency-1` — assert snapshot + revalidation precede the parallel move pass (sequencing probe).
-- `exec-single-writer-journal-1` — assert journal/SQLite/ledger writes never originate from worker threads; pre-state pass completes before the write pass.
+- `exec-single-writer-journal-1` — assert journal/SQLite/ledger writes never originate from worker threads; the pinning pass completes before the write pass.
 - `prep-cache-single-writer-1` / `prep-db-disjoint-writers-1` / `prep-execute-no-patch-stale-1` — assert no two phases write the same rows / no worker-thread DB write.
 
 **Missing "library/by-dest untouched / never-follows / never-fixes" assertion:**

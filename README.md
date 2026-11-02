@@ -161,8 +161,8 @@ Photos are irreplaceable, so the whole design is **plan → validate → execute
   files are recognized and skipped.
 - **Stable identity.** Each photo's identity is a decoded-pixel fingerprint, invariant under in-place metadata
   writes and renames — so its full history stays attached across every transformation.
-- **Reversible & traceable.** A pre-state ledger remembers what each file held before a manual override, so a
-  decision can be withdrawn; and finalize writes a per-photo **journey log** — every clock offset, resolved
+- **Reversible & traceable.** An original-values ledger keeps what each photo held before geotag first changed it,
+  and every plan decides from it, so any decision can be withdrawn; and finalize writes a per-photo **journey log** — every clock offset, resolved
   UTC, timezone, GPS method (native / GPX direct-match / interpolation / extrapolation / manual) and rename,
   each linked to the decision that caused it, carried forward by merge with the final library path.
 

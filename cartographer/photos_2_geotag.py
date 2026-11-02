@@ -117,7 +117,7 @@ def archive_manifest_path(ws):
 
 class GeotagCache:
     """Geotag's own region of the shared photos-00-ingest.db (shared contract §13.4) — the
-    resolved-UTC cache here, the manual-GPS pre-state ledger later. Disjoint from prep's tables."""
+    resolved-UTC cache and the original-values ledger. Disjoint from prep's tables."""
 
     COLUMNS = ["relative_path", "destination_path", "destination_timezone", "camera_group",
                "time_decision_scope", "source_naive_time", "source_time_provenance", "time_rule_used",
@@ -132,9 +132,6 @@ class GeotagCache:
             "camera_group TEXT, time_decision_scope TEXT, source_naive_time TEXT, "
             "source_time_provenance TEXT, time_rule_used TEXT, utc_offset_used INTEGER, "
             "resolved_utc TEXT, resolved_utc_status TEXT, resolved_utc_provenance TEXT)")
-        self.conn.execute(
-            "CREATE TABLE IF NOT EXISTS manual_gps_ledger ("
-            "content_fingerprint TEXT PRIMARY KEY, relative_path TEXT, pre_state TEXT, captured_at TEXT)")
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS original_values ("
             "content_fingerprint TEXT PRIMARY KEY, relative_path TEXT, original TEXT, captured_at TEXT)")
@@ -153,28 +150,6 @@ class GeotagCache:
             f"SELECT {','.join(self.COLUMNS)} FROM resolved_utc_cache ORDER BY relative_path")
         return [dict(zip(self.COLUMNS, row)) for row in cur.fetchall()]
 
-    # --- manual-GPS pre-state ledger (§24.1): reversibility for manual GPS only ----------
-    def ledger_get(self, fp):
-        cur = self.conn.execute(
-            "SELECT content_fingerprint, relative_path, pre_state, captured_at "
-            "FROM manual_gps_ledger WHERE content_fingerprint=?", (fp,))
-        row = cur.fetchone()
-        return None if row is None else {"content_fingerprint": row[0], "relative_path": row[1],
-                                         "pre_state": json.loads(row[2]), "captured_at": row[3]}
-
-    def ledger_pin(self, fp, rel, pre_state, captured_at):
-        """Pin a file's pre-override GPS ONCE — never overwritten (§24.1.1/3), so a later changed
-        manual value still reverts to the true original."""
-        with self.conn:
-            self.conn.execute(
-                "INSERT OR IGNORE INTO manual_gps_ledger "
-                "(content_fingerprint, relative_path, pre_state, captured_at) VALUES (?,?,?,?)",
-                (fp, rel, json.dumps(pre_state, sort_keys=True), captured_at))
-
-    def ledger_consume(self, fp):
-        with self.conn:
-            self.conn.execute("DELETE FROM manual_gps_ledger WHERE content_fingerprint=?", (fp,))
-
     # --- original-values ledger (§24.2): a file's own values, pinned before geotag's first write ---
     def originals_pin(self, fp, rel, original, captured_at):
         """Pin a file's own values ONCE — never overwritten, so every later run decides from them."""
@@ -186,13 +161,6 @@ class GeotagCache:
     def originals_all(self):
         cur = self.conn.execute("SELECT content_fingerprint, original FROM original_values")
         return {r[0]: json.loads(r[1]) for r in cur.fetchall()}
-
-    def ledger_all(self):
-        cur = self.conn.execute(
-            "SELECT content_fingerprint, relative_path, pre_state, captured_at "
-            "FROM manual_gps_ledger ORDER BY content_fingerprint")
-        return [{"content_fingerprint": r[0], "relative_path": r[1],
-                 "pre_state": json.loads(r[2]), "captured_at": r[3]} for r in cur.fetchall()]
 
     def close(self):
         self.conn.close()
@@ -1092,9 +1060,9 @@ class GeotagWorkflow:
     # --- Stage 9: executable plan (photos-24, §28) ---------------------------
 
     def build_executable_plan(self, files, resolved_rows, time_artifact, gps_artifact, gpx,
-                              resolved_fp, ledger_entries=None):
+                              resolved_fp):
         """Assemble photos-24 (§28): per-destination operations (corrected-time / GPS / marker /
-        rename, plus revert-manual-GPS for withdrawn overrides §24.1) for execution to apply, the
+        rename) for execution to apply, the
         readiness gate, and the flattened dependency cascade. Automatic GPS is re-derived from
         inputs, never read from the photos-23 summary. Deterministic. Returns (plan, blockers)."""
         cfg = CONFIG
@@ -1128,7 +1096,6 @@ class GeotagWorkflow:
             by_dest.setdefault(f["destination"], []).append(f)
 
         destinations, all_ops, media_pre = {}, [], []
-        cat_by_rel = {}                                   # rel -> (category, destination, file) for revert detection
         for dest in sorted(by_dest):
             g_d = g_dests.get(dest, {})
             eff_fb = (g_d.get("folder_fallback") or {}).get("effective_fallback")
@@ -1146,7 +1113,6 @@ class GeotagWorkflow:
                 ru = (utc_by_path.get(rel) or {}).get("resolved_utc")
                 cat, coord = classify_gps(f, _parse_utc(ru) if ru else None, gpx, cfg,
                                           eff_fb, reviews.get(rel))
-                cat_by_rel[rel] = (cat, dest, f)
                 fops = plan_file_ops(f, ru, tz, cat, coord, renames.get(rel))
                 row = utc_by_path.get(rel) or {}
                 cells = (t_dests.get(dest) or {}).get("camera_group_time_decisions") or {}
@@ -1173,22 +1139,6 @@ class GeotagWorkflow:
                                   "size": f.get("size"), "mtime_ns": f.get("mtime_ns")})
             destinations[dest] = {"destination_path": dest, "operations": ops, "no_ops": no_ops}
 
-        # Revert-manual-GPS (§24.1): a ledger'd file whose current decision is no longer manual had
-        # its override withdrawn -> restore the pinned pre-state. A vanished file's entry is kept,
-        # never reverted; a still-manual file re-asserts via its apply_manual write (no revert).
-        for entry in (ledger_entries or []):
-            rel = entry["relative_path"]
-            cur = cat_by_rel.get(rel)
-            if cur is None or cur[0] in _MANUAL_GPS_CATEGORIES:
-                continue
-            _cat, dest, f = cur
-            op = _make_op("revert_manual_gps", rel, "revert withdrawn manual GPS",
-                          {"writes": _revert_tags(entry["pre_state"]), "pre_state": entry["pre_state"],
-                           "content_fingerprint": entry["content_fingerprint"]},
-                          {"content_fingerprint": f.get("content_fingerprint"),
-                           "size": f.get("size"), "mtime_ns": f.get("mtime_ns")})
-            destinations[dest]["operations"].append(op)
-
         for dest, dd in destinations.items():
             ops = dd["operations"]
             all_ops.extend(ops)
@@ -1198,7 +1148,6 @@ class GeotagWorkflow:
                 "metadata_gps_writes": sum(1 for o in ops if o["type"] == "metadata_gps_write"),
                 "gps_marker_writes": sum(1 for o in ops if o["type"] == "gps_marker_write"),
                 "renames": sum(1 for o in ops if o["type"] == "rename_no_clobber"),
-                "manual_gps_reverts": sum(1 for o in ops if o["type"] == "revert_manual_gps"),
             }
 
         planned_op_fp = sha256_text(json.dumps(all_ops, sort_keys=True))
@@ -1241,8 +1190,7 @@ class GeotagWorkflow:
 
     _META_OP_TYPES = ("metadata_time_write", "metadata_gps_write", "gps_marker_write")
     _OP_TOTAL_KEY = {"metadata_time_write": "metadata_time_writes", "metadata_gps_write": "metadata_gps_writes",
-                     "gps_marker_write": "gps_marker_writes", "rename_no_clobber": "renames",
-                     "revert_manual_gps": "manual_gps_reverts"}
+                     "gps_marker_write": "gps_marker_writes", "rename_no_clobber": "renames"}
 
     def _exiftool_write(self, abs_path, tags):
         """Apply a file's batched tag writes atomically (exiftool -overwrite_original = temp + atomic
@@ -1313,7 +1261,7 @@ class GeotagWorkflow:
         is skipped or re-applied idempotently rather than tripping the size/mtime precondition."""
         abs_path = os.path.join(self.workspace_root, rel)
         res = {"relative_path": rel, "applied": [], "skipped": [], "failed": [], "blocker": None,
-               "mismatch": None, "reverted_fps": []}
+               "mismatch": None}
         if all(journal.get(o["operation_id"]) == "confirmed" for o in ops):
             res["skipped"] = [o["operation_id"] for o in ops]
             return res
@@ -1341,10 +1289,8 @@ class GeotagWorkflow:
                 res["blocker"] = f"{rel}: size/mtime changed and content fingerprint differs since planning"
                 return res
 
-        # metadata + revert-manual-GPS ops both produce a single batched, idempotent exiftool tag write
-        # A revert goes first, so this run's own writes for the file land on top of the restored state.
-        write_ops = sorted((o for o in ops if o["type"] in self._META_OP_TYPES or o["type"] == "revert_manual_gps"),
-                           key=lambda o: o["type"] != "revert_manual_gps")
+        # the metadata ops produce a single batched, idempotent exiftool tag write
+        write_ops = [o for o in ops if o["type"] in self._META_OP_TYPES]
         if write_ops:
             tags = {}
             for o in write_ops:
@@ -1355,8 +1301,6 @@ class GeotagWorkflow:
             new_fp = (ContentHasher.fingerprint_image(abs_path) or {}).get("value")
             if new_fp == pre.get("content_fingerprint") or rel in accepted_mismatches:
                 res["applied"].extend(o["operation_id"] for o in write_ops)
-                res["reverted_fps"] = [o["content_fingerprint"] for o in write_ops
-                                       if o["type"] == "revert_manual_gps"]   # consume on restore
             else:
                 res["mismatch"] = {"relative_path": rel, "expected_fingerprint": pre.get("content_fingerprint"),
                                    "actual_fingerprint": new_fp}
@@ -1423,27 +1367,15 @@ class GeotagWorkflow:
 
         cache = GeotagCache(ws)
         try:
-            # Capture-before-write (§24.1 / §29.1a.3): pin each manual GPS override's pre-state —
-            # prep's original GPS, NOT a re-read — once, BEFORE any write, keyed by content fingerprint.
-            captured = 0
-            model = self.build_file_model()
-            pre_by_fp = {f.get("content_fingerprint"): (f["relative_path"], _handoff_pre_state(f.get("native_gps")))
-                         for f in model}
-            # Pin each file's own values before geotag's first write to it (§24.2). A file already carrying
+            # Capture-before-write (§29.1a.3): pin each file's own values — prep's record, NOT a re-read —
+            # before geotag's first write to it (§24.2), keyed by content fingerprint. A file already carrying
             # geotag's mark holds no original values any more, so it is not pinned.
+            model = self.build_file_model()
             for f in model:
                 fp = f.get("content_fingerprint")
                 if (fp and f["relative_path"] in by_file and not f.get("from_originals")
                         and geotag_marker(held_values(f).get("method")) is None):
                     cache.originals_pin(fp, f["relative_path"], f["own_values"], now_iso)
-            for ops in by_file.values():
-                for op in ops:
-                    if op.get("gps_origin") == "apply_manual":
-                        fp = (op.get("preconditions") or {}).get("content_fingerprint")
-                        if fp and cache.ledger_get(fp) is None and fp in pre_by_fp:
-                            rel_fp, pre = pre_by_fp[fp]
-                            cache.ledger_pin(fp, rel_fp, pre, now_iso)
-                            captured += 1
 
             results = []
             self.coordinator.start_phase("applying calibration", len(by_file))
@@ -1471,12 +1403,6 @@ class GeotagWorkflow:
                     raise
             self.coordinator.finish_phase()
 
-            # Consume-on-restore (§24.1.4): a successfully-reverted present file's pin is removed.
-            reverted = 0
-            for r in results:
-                for fp in r.get("reverted_fps") or []:
-                    cache.ledger_consume(fp)
-                    reverted += 1
         finally:
             cache.close()
             from .photos_utils import PersistentMagickWorker
@@ -1484,7 +1410,6 @@ class GeotagWorkflow:
 
         # The journal was persisted incrementally as each file completed (above); nothing more to flush.
         summary = self._build_summary(plan, results, now_iso, execution_id, jobs)
-        summary["totals"]["manual_gps_pre_states_captured"] = captured   # reverts counted by _build_summary
         summary["snapshot"] = snapshot                                   # the pre-mutation ZFS record (or None)
         write_json_artifact(execution_summary_path(ws), summary)
         return summary
@@ -1579,7 +1504,7 @@ class GeotagWorkflow:
         files = self.build_file_model()
         cache = GeotagCache(ws)
         try:
-            rows, ledger = cache.get_rows(), cache.ledger_all()
+            rows = cache.get_rows()
         finally:
             cache.close()
         time_artifact = json.load(open(time_decisions_path(ws)))
@@ -1590,7 +1515,7 @@ class GeotagWorkflow:
             prep_unread = "is missing"
         except Exception:
             prep_unread = "cannot be read"
-        photos = build_complete_log(prep_photos, files, rows, time_artifact, plan, ledger,
+        photos = build_complete_log(prep_photos, files, rows, time_artifact, plan,
                                     earlier_passes=self._earlier_passes(plan.get("plan_id")))
         not_carried = entries_not_carried(prep_photos, photos)
         if not_carried:
@@ -1955,7 +1880,6 @@ def run(args):
                     cache = GeotagCache(workspace_root)
                     try:
                         cache.replace_all(rows)
-                        ledger_entries = cache.ledger_all()    # to plan revert ops for withdrawn overrides
                     finally:
                         cache.close()
                     fp = resolved_utc_fingerprint(rows, input_fps)
@@ -1994,8 +1918,7 @@ def run(args):
                     # Stage 9: assemble photos-24 only when ALL decision artifacts are complete (§28).
                     if (artifact["status"] == "complete" and drift_artifact["status"] == "complete"
                             and gps_artifact["status"] == "complete"):
-                        plan, _ = wf.build_executable_plan(files, rows, artifact, gps_artifact, gpx, fp,
-                                                           ledger_entries)
+                        plan, _ = wf.build_executable_plan(files, rows, artifact, gps_artifact, gpx, fp)
                         epp = executable_plan_path(workspace_root)
                         _, _ep_bak = write_versioned_json(epp, plan)
                         n_ops = sum(d["summary"]["operations_total"] for d in plan["destinations"].values())

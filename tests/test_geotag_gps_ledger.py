@@ -12,15 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Phase 6c-2 (geotag) — the reversible manual-GPS pre-state ledger + revert ops (§24.1).
-
-The revert target is prep's recorded original GPS (the handoff's native_gps), pinned once; a withdrawn
-manual override plans + applies a revert that restores it (or clears added GPS), then consumes the
-pin. Manual-GPS only. exiftool-write + fingerprint are mocked. From conftest.py.
+"""Geotag (§24.1) — reversible manual GPS overrides. Every plan decides about a pinned photo from its own
+values (the original-values ledger, §24.2), so a withdrawn pin is planned like any changed decision:
+the photo is placed again from the tracks, or geotag's position is cleared. There is no revert operation
+and no store of its own. exiftool-write + fingerprint are mocked. From conftest.py.
 """
 import json
 import os
 import sys
+from datetime import datetime, timezone
 
 import pytest
 
@@ -33,49 +33,7 @@ MANAGED = ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
            "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"]
 
 
-# --- pure helpers -----------------------------------------------------------
-
-def test_handoff_pre_state():
-    assert cal._handoff_pre_state({"lat": 50.0, "lon": 4.0, "processing_method": "gps"}) == {
-        "present": True, "GPSLatitude": 50.0, "GPSLongitude": 4.0, "GPSProcessingMethod": "gps"}
-    assert cal._handoff_pre_state(None) == {"present": False}
-    assert cal._handoff_pre_state({"lat": None, "lon": None}) == {"present": False}
-
-
-def test_revert_tags():
-    assert cal._revert_tags({"present": True, "GPSLatitude": 1, "GPSLongitude": 2, "GPSProcessingMethod": "m"}) == {
-        "GPSLatitude": 1, "GPSLatitudeRef": "N", "GPSLongitude": 2, "GPSLongitudeRef": "E",
-        "GPSProcessingMethod": "m"}
-    assert cal._revert_tags({"present": False}) == {                          # clears the added GPS
-        "GPSLatitude": "", "GPSLatitudeRef": "", "GPSLongitude": "", "GPSLongitudeRef": "",
-        "GPSProcessingMethod": ""}
-
-
-@pytest.mark.spec("geotag-gps-write-complete-fix-1")
-def test_revert_tags_carry_hemisphere_refs():
-    """§28.1: a restored coordinate carries the refs its sign implies, and a clear drops them too —
-    a ref left behind without its coordinate is a torn fix."""
-    south_west = cal._revert_tags({"present": True, "GPSLatitude": -33.9, "GPSLongitude": -70.6})
-    assert (south_west["GPSLatitudeRef"], south_west["GPSLongitudeRef"]) == ("S", "W")
-    assert set(cal._revert_tags({"present": False})) == {
-        "GPSLatitude", "GPSLatitudeRef", "GPSLongitude", "GPSLongitudeRef", "GPSProcessingMethod"}
-
-
-@pytest.mark.spec("geotag-change-overwrite-original-pinned-1", "geotag-prestate-capture-1", "geotag-prestate-immutable-1")
-def test_ledger_cache_pin_once_get_consume(tmp_path):
-    (tmp_path / ".photos-ingest").mkdir()
-    c = cal.GeotagCache(str(tmp_path))
-    c.ledger_pin("fp1", "a.jpg", {"present": False}, "t0")
-    c.ledger_pin("fp1", "a.jpg", {"present": True, "GPSLatitude": 9}, "t1")     # pin-once -> ignored
-    assert c.ledger_get("fp1")["pre_state"] == {"present": False}              # the original stands
-    assert c.ledger_get("fp1")["captured_at"] == "t0"
-    assert len(c.ledger_all()) == 1
-    c.ledger_consume("fp1")
-    assert c.ledger_get("fp1") is None
-    c.close()
-
-
-# --- build_executable_plan: revert-op planning ------------------------------
+# --- build_executable_plan: withdrawal planning -----------------------------
 
 def _model(rel, dest, *, native=False):
     return {"relative_path": rel, "destination": dest, "has_native_gps": native,
@@ -87,7 +45,7 @@ def _row(rel):
     return {"relative_path": rel, "resolved_utc": "2024-07-03T12:00:00Z", "resolved_utc_status": "valid"}
 
 
-def _plan_wf(tmp_path, files, *, manual=None):
+def _plan_wf(tmp_path, files, *, manual=None, unlocated=()):
     ws = tmp_path / "ws"; (ws / ".photos-ingest").mkdir(parents=True); ctl = ws / ".photos-ingest"
     (ctl / "photos-00-config.json").write_text(json.dumps({k: v for k, v in utils.CONFIG.items() if k != "jobs"}))
     (ctl / "photos-11-handoff.json").write_text(json.dumps({"cache_fingerprint": "pcf"}))
@@ -96,6 +54,9 @@ def _plan_wf(tmp_path, files, *, manual=None):
     for rel, (lat, lon) in (manual or {}).items():
         d = next(f["destination"] for f in files if f["relative_path"] == rel)
         reviews[d].append({"relative_path": rel, "user_decision": {"manual_lat": lat, "manual_lon": lon}})
+    for rel in unlocated:
+        d = next(f["destination"] for f in files if f["relative_path"] == rel)
+        reviews[d].append({"relative_path": rel, "user_decision": {"accept_unlocated": True}})
     time_art = {"status": "complete", "destinations": {
         d: {"destination_timezone": {"effective_iana_timezone": "Europe/Brussels"}} for d in dests}}
     gps_art = {"status": "complete", "destinations": {
@@ -110,71 +71,114 @@ def _plan_wf(tmp_path, files, *, manual=None):
     return wf, time_art, gps_art, gpx
 
 
-def _reverts(plan):
+
+
+def _pinned(rel, dest, held_gps=None, held_method=None):
+    """A photo with no GPS of its own, decided from its pinned values, now holding `held_gps` — the
+    position an earlier run wrote — under `held_method`."""
+    f = dict(_model(rel, dest), from_originals=True, processing_method=None, geotag_marker=None)
+    f["held"] = {"DateTimeOriginal": "2024:07:03 14:00:00", "OffsetTimeOriginal": "+02:00",
+                 "lat": (held_gps or (None, None))[0], "lon": (held_gps or (None, None))[1], "method": held_method}
+    return f
+
+
+def _ops(plan, rel=None):
     return [o for dd in plan["destinations"].values() for o in dd["operations"]
-            if o["type"] == "revert_manual_gps"]
+            if rel is None or o["relative_path"] == rel]
 
 
-@pytest.mark.spec("geotag-withdraw-revert-1")
-def test_withdrawn_override_plans_revert(tmp_path):
-    f = _model(f"{BYDEST}/T/a.jpg", f"{BYDEST}/T", native=True)        # now preserve_native (non-manual)
-    wf, t, g, gpx = _plan_wf(tmp_path, [f])
-    ledger = [{"content_fingerprint": "fp-" + f["relative_path"], "relative_path": f["relative_path"],
-               "pre_state": {"present": False}, "captured_at": "t0"}]
-    plan, _ = wf.build_executable_plan([f], [_row(f["relative_path"])], t, g, gpx, "rfp", ledger)
-    rv = _reverts(plan)
-    assert len(rv) == 1 and rv[0]["content_fingerprint"] == "fp-" + f["relative_path"]
-    assert rv[0]["writes"] == {"GPSLatitude": "", "GPSLatitudeRef": "", "GPSLongitude": "",       # clear
-                               "GPSLongitudeRef": "", "GPSProcessingMethod": ""}
+_FORWARD = {"metadata_time_write", "metadata_gps_write", "gps_marker_write", "rename_no_clobber"}
 
 
-_FORWARD_PLUS_GPS_REVERT = {"metadata_time_write", "metadata_gps_write", "gps_marker_write",
-                            "rename_no_clobber", "revert_manual_gps"}
+@pytest.mark.spec("geotag-gps-write-complete-fix-1")
+def test_a_cleared_position_takes_its_hemisphere_refs_with_it():
+    """§28.1: a clear drops the refs with the coordinates — a ref left behind without its coordinate is a
+    torn fix."""
+    op = cal.time_fixed_marker_op(_model(f"{BYDEST}/T/a.jpg", f"{BYDEST}/T"), "+carto-time", clear_position=True)
+    assert op["writes"] == {"GPSLatitude": "", "GPSLatitudeRef": "", "GPSLongitude": "", "GPSLongitudeRef": "",
+                            "GPSProcessingMethod": "+carto-time"}
 
 
-@pytest.mark.spec("authored-withdraw-undoes-1", "geotag-recompute-inplace-1", "time-name-never-reverted-1", test="TST-geotag_gps_ledger-withdraw_reverts_gps_only_never_time_name_or_destination")
-def test_withdraw_reverts_gps_only_never_time_name_or_destination(tmp_path):
-    """Withdrawing a decision reverts GPS ONLY — geotag has no time/filename revert op at all (time
-    writes + renames are forward-idempotent), and it NEVER relocates a photo across destinations. After
-    a withdraw: a revert_manual_gps is planned, every op stays in the file's own destination, and any
-    rename only changes the basename (an in-dest rename, never a cross-dest move)."""
+@pytest.mark.spec("geotag-withdraw-revert-1", "geotag-manual-gps-reversible-1", "authored-withdraw-undoes-1", test="TST-geotag_gps_ledger-a_withdrawn_pin_is_cleared")
+def test_a_withdrawn_pin_is_cleared(tmp_path):
+    """A pin withdrawn from a photo that had no GPS, the photo accepted as unlocated: the plan, deciding
+    from its own values, clears geotag's position, and records the position it clears."""
     rel = f"{BYDEST}/T/a.jpg"
-    f = _model(rel, f"{BYDEST}/T", native=True)                       # now non-manual -> withdraw
+    f = _pinned(rel, f"{BYDEST}/T", (48.85, 2.35), "manual_locked")
+    wf, t, g, gpx = _plan_wf(tmp_path, [f], unlocated=[rel])
+    plan, blockers = wf.build_executable_plan([f], [_row(rel)], t, g, gpx, "rfp")
+    assert blockers == []
+    clear = next(o for o in _ops(plan, rel) if o["type"] == "gps_marker_write")
+    assert clear["writes"]["GPSLatitude"] == "" and clear["writes"]["GPSLongitude"] == ""
+    assert clear["writes"]["GPSProcessingMethod"] == "+carto-time"
+    assert clear["pre_state"] == {"present": True, "GPSLatitude": 48.85, "GPSLongitude": 2.35,
+                                  "GPSProcessingMethod": "manual_locked"}
+    assert not any(o["type"] == "metadata_gps_write" for o in _ops(plan, rel))
+
+
+@pytest.mark.spec("geotag-automated-gps-no-revert-1", test="TST-geotag_gps_ledger-a_withdrawn_pin_is_placed_again_from_the_tracks")
+def test_a_withdrawn_pin_is_placed_again_from_the_tracks(tmp_path):
+    """Withdrawn, the pin gives way to the position the tracks give the photo's own time: recomputed, not
+    rolled back to anything stored."""
+    rel = f"{BYDEST}/T/a.jpg"
+    f = _pinned(rel, f"{BYDEST}/T", (48.85, 2.35), "manual_locked")
     wf, t, g, gpx = _plan_wf(tmp_path, [f])
-    ledger = [{"content_fingerprint": "fp-" + rel, "relative_path": rel,
-               "pre_state": {"present": False}, "captured_at": "t0"}]
-    plan, _ = wf.build_executable_plan([f], [_row(rel)], t, g, gpx, "rfp", ledger)
-    ops = [o for dd in plan["destinations"].values() for o in dd["operations"]]
-    types = {o["type"] for o in ops}
-    assert "revert_manual_gps" in types                              # GPS is reverted
-    assert types <= _FORWARD_PLUS_GPS_REVERT                         # no time/name REVERT op exists
+    gpx.points = [cal.GPXPoint(50.0, 4.0, datetime(2024, 7, 3, 11, 59, tzinfo=timezone.utc), "t.gpx", 0),
+                  cal.GPXPoint(50.0, 4.0, datetime(2024, 7, 3, 12, 1, tzinfo=timezone.utc), "t.gpx", 1)]
+    plan, blockers = wf.build_executable_plan([f], [_row(rel)], t, g, gpx, "rfp")
+    assert blockers == []
+    w = next(o for o in _ops(plan, rel) if o["type"] == "metadata_gps_write")
+    assert (w["writes"]["GPSLatitude"], w["writes"]["GPSLongitude"]) == (50.0, 4.0)
+    assert w["gps_origin"] == "recompute_automated"
+    assert {o["type"] for o in _ops(plan)} <= _FORWARD
+
+
+@pytest.mark.spec("geotag-recompute-inplace-1", "time-name-never-reverted-1", test="TST-geotag_gps_ledger-a_withdrawal_never_reverts_time_name_or_destination")
+def test_a_withdrawal_never_reverts_time_name_or_destination(tmp_path):
+    """Withdrawing a decision changes GPS only as any plan would: geotag has no revert operation at all
+    (time writes and renames are forward-idempotent), and it never moves a photo across destinations."""
+    rel = f"{BYDEST}/T/a.jpg"
+    f = _pinned(rel, f"{BYDEST}/T", (48.85, 2.35), "manual_locked")
+    wf, t, g, gpx = _plan_wf(tmp_path, [f], unlocated=[rel])
+    plan, _ = wf.build_executable_plan([f], [_row(rel)], t, g, gpx, "rfp")
+    ops = _ops(plan)
+    assert ops and {o["type"] for o in ops} <= _FORWARD
     for o in ops:
-        assert os.path.dirname(o["relative_path"]) == f"{BYDEST}/T"  # stays in its destination
+        assert os.path.dirname(o["relative_path"]) == f"{BYDEST}/T"       # stays in its destination
         if o["type"] == "rename_no_clobber":
-            assert "/" not in o["to"]                                # basename-only -> in-dest rename
+            assert "/" not in o["to"]                                    # basename-only -> in-dest rename
 
 
-def test_still_manual_no_revert(tmp_path):
+def test_a_pin_still_in_force_writes_nothing_again(tmp_path):
     rel = f"{BYDEST}/T/a.jpg"
-    f = _model(rel, f"{BYDEST}/T")                                     # no native GPS
-    wf, t, g, gpx = _plan_wf(tmp_path, [f], manual={rel: (10.0, 20.0)})  # still a manual lock
-    ledger = [{"content_fingerprint": "fp-" + rel, "relative_path": rel,
-               "pre_state": {"present": False}, "captured_at": "t0"}]
-    plan, _ = wf.build_executable_plan([f], [_row(rel)], t, g, gpx, "rfp", ledger)
-    assert _reverts(plan) == []                                        # re-asserted, not reverted
+    f = _pinned(rel, f"{BYDEST}/T", (10.0, 20.0), "manual_locked")
+    wf, t, g, gpx = _plan_wf(tmp_path, [f], manual={rel: (10.0, 20.0)})
+    plan, _ = wf.build_executable_plan([f], [_row(rel)], t, g, gpx, "rfp")
+    assert not any(o["type"] in ("metadata_gps_write", "gps_marker_write") for o in _ops(plan, rel))
 
 
-@pytest.mark.spec("geotag-disappeared-entry-kept-1")
-def test_vanished_file_kept_no_revert(tmp_path):
-    f = _model(f"{BYDEST}/T/a.jpg", f"{BYDEST}/T", native=True)
-    wf, t, g, gpx = _plan_wf(tmp_path, [f])
-    ledger = [{"content_fingerprint": "fp-gone", "relative_path": f"{BYDEST}/T/gone.jpg",
-               "pre_state": {"present": True, "GPSLatitude": 5, "GPSLongitude": 6}, "captured_at": "t0"}]
-    plan, _ = wf.build_executable_plan([f], [_row(f["relative_path"])], t, g, gpx, "rfp", ledger)
-    assert _reverts(plan) == []                                        # missing file -> no op (entry kept elsewhere)
+def test_a_changed_pin_is_written_over_the_old_one(tmp_path):
+    rel = f"{BYDEST}/T/a.jpg"
+    f = _pinned(rel, f"{BYDEST}/T", (10.0, 20.0), "manual_locked")
+    wf, t, g, gpx = _plan_wf(tmp_path, [f], manual={rel: (11.0, 21.0)})
+    plan, _ = wf.build_executable_plan([f], [_row(rel)], t, g, gpx, "rfp")
+    w = next(o for o in _ops(plan, rel) if o["type"] == "metadata_gps_write")
+    assert (w["writes"]["GPSLatitude"], w["gps_origin"]) == (11.0, "apply_manual")
+    assert w["pre_state"] == {"present": True, "GPSLatitude": 10.0, "GPSLongitude": 20.0,
+                              "GPSProcessingMethod": "manual_locked"}      # the position it replaces
 
 
-# --- execute: capture pins from prep, revert applies + consumes -------------
+@pytest.mark.spec("geotag-prestate-absent-1")
+def test_a_pin_never_overrides_native_gps(tmp_path):
+    """Preserve-native wins: a photo carrying its own GPS keeps it, whatever pin it is given."""
+    rel = f"{BYDEST}/T/a.jpg"
+    f = _model(rel, f"{BYDEST}/T", native=True)
+    wf, t, g, gpx = _plan_wf(tmp_path, [f], manual={rel: (11.0, 21.0)})
+    plan, _ = wf.build_executable_plan([f], [_row(rel)], t, g, gpx, "rfp")
+    assert not any(o["type"] == "metadata_gps_write" for o in _ops(plan, rel))
+
+
+# --- execute: own values pinned before the first write ---------------------
 
 def _exec_ws(tmp_path, monkeypatch):
     """A workspace whose blocked no-GPS photo is resolved via an accepted folder fallback (-> a manual
@@ -250,81 +254,42 @@ def _drive_ready(monkeypatch, ws, ctl):
     assert (ctl / "photos-24-executable-plan.json").exists()
 
 
-@pytest.mark.spec("geotag-automated-gps-no-revert-1")
-def test_automated_gps_stores_no_prestate_and_emits_no_revert(tmp_path, monkeypatch):
-    """§24.1 (anti): automated GPS (here the two native-GPS frames -> preserve_native) is never made
-    reversible — it pins NO pre-state to the ledger and the plan emits NO revert op for it. Only the
-    MANUAL frame (c, folder-fallback) is reversible. (a/b are automated; c is the single manual lock.)"""
-    ws, ctl = _exec_ws(tmp_path, monkeypatch)
-    _mock_tools(monkeypatch, ws)
-    _drive_ready(monkeypatch, ws, ctl)
-    plan = json.load(open(ctl / "photos-24-executable-plan.json"))
-    # As built (no withdrawal), the plan carries no revert op at all — automated GPS is never rolled back.
-    assert not any(o["type"] == "revert_manual_gps"
-                   for dd in plan["destinations"].values() for o in dd["operations"])
-    assert _run(monkeypatch, ws, "execute") == 0
-    # Only the manual frame pinned a pre-state; the automated native frames a/b pinned nothing.
-    db = cal.GeotagCache(str(ws)); pinned = {e["relative_path"] for e in db.ledger_all()}; db.close()
-    assert pinned == {f"{BYDEST}/T/2024-07-03--14-30-00.arw"}
-    assert f"{BYDEST}/T/2024-07-03--14-00-00.arw" not in pinned and f"{BYDEST}/T/2024-07-03--15-00-00.arw" not in pinned
-
-
-@pytest.mark.spec("geotag-prestate-before-write-1")
-def test_manual_gps_prestate_pinned_before_the_gps_write(tmp_path, monkeypatch):
-    """§29.1a: a manual GPS override's pre-state is committed to the ledger BEFORE the GPS write that
-    overwrites it. Order-probe both seams during execute and assert the pin precedes the GPS write."""
+@pytest.mark.spec("geotag-prestate-before-write-1", test="TST-geotag_gps_ledger-own_values_pinned_before_the_first_write")
+def test_own_values_pinned_before_the_first_write(tmp_path, monkeypatch):
+    """§29.1a: a photo's own values are committed to the ledger BEFORE geotag's first write to it.
+    Order-probe both seams during execute and assert the pin precedes the write."""
     ws, ctl = _exec_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)                                # sets _exiftool_write to a passthrough mock
     _drive_ready(monkeypatch, ws, ctl)
     events = []
-    orig_pin = cal.GeotagCache.ledger_pin
+    orig_pin = cal.GeotagCache.originals_pin
     orig_write = cal.GeotagWorkflow._exiftool_write             # the mock installed by _mock_tools
 
-    def pin_spy(self, fp, rel, pre, at):
+    def pin_spy(self, fp, rel, original, at):
         events.append(("pin", rel))
-        return orig_pin(self, fp, rel, pre, at)
+        return orig_pin(self, fp, rel, original, at)
 
     def write_spy(self, abs_path, tags):
-        if "GPSLatitude" in tags:                              # the GPS write (vs a pure time write)
-            events.append(("gps_write", os.path.relpath(abs_path, str(ws))))
+        events.append(("write", os.path.relpath(abs_path, str(ws))))
         return orig_write(self, abs_path, tags)
 
-    monkeypatch.setattr(cal.GeotagCache, "ledger_pin", pin_spy)
+    monkeypatch.setattr(cal.GeotagCache, "originals_pin", pin_spy)
     monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", write_spy)
     assert _run(monkeypatch, ws, "execute") == 0
-    labels = [e[0] for e in events]
-    assert "pin" in labels and "gps_write" in labels, events
-    assert labels.index("pin") < labels.index("gps_write"), events     # captured before overwritten
-    assert events[labels.index("pin")][1] == f"{BYDEST}/T/2024-07-03--14-30-00.arw"       # the manual frame
-    assert events[labels.index("gps_write")][1] == f"{BYDEST}/T/2024-07-03--14-30-00.arw"
+    manual = f"{BYDEST}/T/2024-07-03--14-30-00.arw"
+    assert ("pin", manual) in events and ("write", manual) in events, events
+    assert events.index(("pin", manual)) < events.index(("write", manual)), events
 
 
-@pytest.mark.spec("geotag-manual-gps-reversible-1", "geotag-prestate-absent-1", "geotag-rerunnable-after-execute-1", "RUL-decision_revisable", test="TST-geotag_gps_ledger-full_pin_then_withdraw_reverts_and_consumes")
-def test_full_pin_then_withdraw_reverts_and_consumes(tmp_path, monkeypatch):
+@pytest.mark.spec("geotag-rerunnable-after-execute-1", test="TST-geotag_gps_ledger-a_pin_executed_then_withdrawn_plans_and_executes_again")
+def test_a_pin_executed_then_withdrawn_plans_and_executes_again(tmp_path, monkeypatch):
     ws, ctl = _exec_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)
-    _run(monkeypatch, ws, "plan")                                       # photos-21: timezone needs input
-    _edit(ctl, "photos-21-time-decisions.json", lambda a: a["destinations"][f"{BYDEST}/T"]
-          ["destination_timezone"]["user_decision"].update({"accept_proposed_timezone": True}))
-    _run(monkeypatch, ws, "plan")                                       # now photos-22 exists (c blocked)
-    _edit(ctl, "photos-23-gps-decisions.json", lambda b: b["destinations"][f"{BYDEST}/T"]
-          ["folder_fallback"]["user_decision"].update({"fallback_lat": 48.85, "fallback_lon": 2.35}))
-    _run(monkeypatch, ws, "plan")                                       # c.arw now manual_fallback -> photos-23
-    assert (ctl / "photos-24-executable-plan.json").exists()
+    _drive_ready(monkeypatch, ws, ctl)
     assert _run(monkeypatch, ws, "execute") == 0
-    # pre-state pinned (c had no native GPS -> absent), manual GPS written
-    db = cal.GeotagCache(str(ws)); pinned = {e["relative_path"]: e["pre_state"] for e in db.ledger_all()}; db.close()
-    assert pinned == {f"{BYDEST}/T/2024-07-03--14-30-00.arw": {"present": False}}
     t1 = json.load(open(ctl / "photos-25-execution-summary.json"))["totals"]
-    assert t1["metadata_gps_writes"] == 1 and t1["manual_gps_pre_states_captured"] == 1
-
-    # idempotent re-execute (c still manual): pin-once -> not re-captured, ledger unchanged
-    assert _run(monkeypatch, ws, "execute") == 0
-    t2 = json.load(open(ctl / "photos-25-execution-summary.json"))["totals"]
-    assert t2["manual_gps_pre_states_captured"] == 0                   # already pinned, skipped
-    db = cal.GeotagCache(str(ws)); assert len(db.ledger_all()) == 1; db.close()
-
-    # WITHDRAW: drop the fallback, accept c as unlocated -> non-manual -> revert planned
+    assert t1["metadata_gps_writes"] == 1
+    assert _run(monkeypatch, ws, "execute") == 0                        # idempotent re-execute
     q = ctl / "photos-23-gps-decisions.json"; b = json.load(open(q))
     b["destinations"][f"{BYDEST}/T"]["folder_fallback"]["user_decision"].update({"fallback_lat": "", "fallback_lon": ""})
     b["destinations"][f"{BYDEST}/T"]["gps_decisions"]["review_items"] = [
@@ -332,8 +297,6 @@ def test_full_pin_then_withdraw_reverts_and_consumes(tmp_path, monkeypatch):
     q.write_text(json.dumps(b))
     _run(monkeypatch, ws, "plan")
     plan = json.load(open(ctl / "photos-24-executable-plan.json"))
-    assert any(o["type"] == "revert_manual_gps" for dd in plan["destinations"].values() for o in dd["operations"])
+    assert plan["status"] == "ready"
+    assert {o["type"] for dd in plan["destinations"].values() for o in dd["operations"]} <= _FORWARD
     assert _run(monkeypatch, ws, "execute") == 0
-    s = json.load(open(ctl / "photos-25-execution-summary.json"))
-    assert s["totals"]["manual_gps_reverts"] == 1
-    db = cal.GeotagCache(str(ws)); assert db.ledger_all() == []; db.close()   # consumed on restore

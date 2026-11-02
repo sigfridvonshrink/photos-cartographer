@@ -114,7 +114,7 @@ a downstream expression of the "local, owned" ethos (P1, P2), not a structural d
 :forced: yes
 :follows_from: CHC-photos_matter
 
-plan / validate / execute; atomic no-clobber; quarantine, not delete; pre-state ledger.
+plan / validate / execute; atomic no-clobber; quarantine, not delete; original-values ledger.
 :::
 
 :::{rat} No mutation outside a validated plan
@@ -150,8 +150,8 @@ Duplicates are **quarantined**, never removed; pruning is an explicit, separate 
 :forced: yes
 :follows_from: RAT-non_destructive_core
 
-A **pre-state ledger** records what a file held before a manual override, so deleting the decision *restores* the
-prior state.
+An **original-values ledger** keeps what each photo held before the tool first changed it, and every plan decides from
+it, so deleting a decision *restores* the prior state.
 :::
 
 ### From F2 + P3 — drift makes the decisions intricate; P3 keeps them cheap
