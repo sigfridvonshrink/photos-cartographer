@@ -10,8 +10,8 @@ items it `justifies`, under the same section numbers. Where the two differ, the 
 :status: seed
 :justifies: RUL-lock_before_reading
 
-Planning is non-mutating, but it must still not run concurrently: a plan computed against a workspace another process
-is reading or mutating is untrustworthy, so planning is inside the lock too.
+Planning changes nothing but the fingerprints it keeps for later runs, but it must still not run concurrently: a plan
+computed against a workspace another process is reading or changing is untrustworthy, so planning is inside the lock too.
 :::
 
 :::{rat} The lock and revalidation guard different things
