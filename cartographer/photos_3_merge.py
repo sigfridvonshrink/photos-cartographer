@@ -45,7 +45,7 @@ from .photos_utils import (
     folders_fingerprint, media_extensions_fingerprint,
     verify_json_dependency, json_dependency, write_json_artifact, write_versioned_json, is_library, write_library_marker,
     library_marker_path, allocate_suffix, suffix_root, max_suffix, ContentHasher, WorkspaceCache,
-    journal_path, take_zfs_snapshot, _move_no_clobber, write_db_snapshot, reseal_archival_package,
+    journal_path, take_zfs_snapshot, _move_no_clobber, get_imagemagick_version, write_db_snapshot, reseal_archival_package,
     write_sealed_marker, entries_not_carried, prep_log_path, WorkspaceLock, LibraryLock, XDEV_TMP_PREFIX, XDEV_TMP_SUFFIX,
 )
 from .reporting import get_reporter, emit_next_step
@@ -512,13 +512,14 @@ class MergeWorkflow:
 
     def _library_fingerprint(self, abs_path, cache):
         """Content fingerprint of a resident library file, cached by path+size/mtime so it is read at
-        most once per run / across re-runs while unchanged (§7). Returns (value, None) on success or
+        most once per run / across re-runs while unchanged and the image engine unchanged (§7). Returns (value, None) on success or
         (None, reason) if it cannot be fingerprinted."""
         try:
             st = os.stat(abs_path)
         except OSError as e:
             return None, str(e)
-        hit = cache.get_cached_library_fingerprint(abs_path, st.st_size, st.st_mtime_ns) if cache else None
+        hit = (cache.get_cached_library_fingerprint(abs_path, st.st_size, st.st_mtime_ns, get_imagemagick_version())
+               if cache else None)
         if hit and hit.get("value"):
             return hit["value"], None
         fp = self._fingerprint_library_file(abs_path)

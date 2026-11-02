@@ -129,6 +129,9 @@ def test_library_fingerprint_cache_roundtrip_and_staleness(tmp_path):
         # Re-cache (file changed) overwrites in place.
         cache.cache_library_fingerprint(p, 101, 111, _fp("feedface"))
         assert cache.get_cached_library_fingerprint(p, 101, 111)["value"] == "feedface"
+        # Taken by another ImageMagick version -> miss: it could differ from prep's for the same pixels.
+        assert cache.get_cached_library_fingerprint(p, 101, 111, "im-7.1")["value"] == "feedface"
+        assert cache.get_cached_library_fingerprint(p, 101, 111, "im-7.2") is None
     finally:
         cache.close()
 

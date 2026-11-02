@@ -2465,16 +2465,22 @@ class WorkspaceCache:
                   "value": fp.get("value"), "strategy": fp.get("strategy"),
                   "engine_version": fp.get("engine_version")})
 
-    def get_cached_library_fingerprint(self, library_path: str, size: int, mtime_ns: int):
+    def get_cached_library_fingerprint(self, library_path: str, size: int, mtime_ns: int,
+                                       engine_version: Optional[str] = None):
         """Return the cached fingerprint dict for a library file iff the cached size + mtime_ns still
-        match the current ones (else None — the file changed, so re-fingerprint). Shape mirrors a
-        ContentHasher result: {status: 'valid', value, strategy, engine_version}."""
+        match the current ones (else None — the file changed, so re-fingerprint) and it was taken by the
+        current image engine `engine_version`: a fingerprint from another ImageMagick version could
+        differ from prep's for the same pixels. As in prep, a row with no recorded engine version is
+        judged by size + mtime alone. Shape mirrors a ContentHasher result: {status: 'valid', value,
+        strategy, engine_version}."""
         with self._lock:
             cur = self.conn.cursor()
             cur.execute("SELECT size, mtime_ns, fingerprint_value, fingerprint_strategy, engine_version "
                         "FROM library_fingerprint_cache WHERE library_path = ?", (library_path,))
             row = cur.fetchone()
         if row is None or row["size"] != size or row["mtime_ns"] != mtime_ns:
+            return None
+        if engine_version is not None and row["engine_version"] is not None and row["engine_version"] != engine_version:
             return None
         return {"status": "valid", "value": row["fingerprint_value"],
                 "strategy": row["fingerprint_strategy"], "engine_version": row["engine_version"]}
