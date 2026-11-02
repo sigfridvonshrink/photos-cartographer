@@ -64,7 +64,7 @@ def test_complete_log_superset_and_geotag_steps():
     ta = {"destinations": {f"{BYDEST}/T": {"destination_timezone": {"effective_iana_timezone": "Europe/Brussels"}}}}
     plan = {"destinations": {f"{BYDEST}/T": {"operations": [
         {"type": "rename_no_clobber", "relative_path": f"{BYDEST}/T/a.arw", "to": "2024-07-03--14-00-00.arw"}]}}}
-    photos = cal.build_complete_log(prep, files, rows, ta, plan, [])
+    photos = cal.build_complete_log(prep, files, rows, ta, plan)
     actions = [s["action"] for s in photos["fpA"]["journey"]]
     assert actions[0] == "organized"                                     # prep step preserved (superset)
     assert photos["fpA"]["geotag_path"] == f"{BYDEST}/T/2024-07-03--14-00-00.arw"   # the name geotag gave
@@ -79,34 +79,29 @@ def test_complete_log_skips_unfingerprinted_and_offsetless():
              _file(f"{BYDEST}/T/b.arw", "fpB")]
     rows = [{"relative_path": f"{BYDEST}/T/b.arw", "resolved_utc": "2024-07-03T12:00:00Z",
              "time_rule_used": "camera_group_offset", "utc_offset_used": None}]   # offset None -> no step
-    photos = cal.build_complete_log({}, files, rows, {}, {"destinations": {}}, [])
+    photos = cal.build_complete_log({}, files, rows, {}, {"destinations": {}})
     assert None not in photos and "fpB" in photos
     assert [s["action"] for s in photos["fpB"]["journey"]] == ["resolved_utc"]   # offset skipped
 
 
-@pytest.mark.spec("geotag-three-gps-origins-1", "log-records-gps-revert-1", test="TST-geotag_finalize-complete_log_gps_written_and_reverted")
-def test_complete_log_gps_written_and_reverted():
-    files = [_file(f"{BYDEST}/T/m.jpg", "fpM"), _file(f"{BYDEST}/T/r.jpg", "fpR")]
-    rows = [{"relative_path": f"{BYDEST}/T/m.jpg", "resolved_utc": "2024-07-03T12:00:00Z"},
-            {"relative_path": f"{BYDEST}/T/r.jpg", "resolved_utc": "2024-07-03T12:00:00Z"}]
+@pytest.mark.spec("geotag-three-gps-origins-1", "log-records-gps-revert-1", test="TST-geotag_finalize-complete_log_gps_written")
+def test_complete_log_gps_written():
+    files = [_file(f"{BYDEST}/T/m.jpg", "fpM")]
+    rows = [{"relative_path": f"{BYDEST}/T/m.jpg", "resolved_utc": "2024-07-03T12:00:00Z"}]
     plan = {"destinations": {f"{BYDEST}/T": {"operations": [
         {"type": "metadata_gps_write", "relative_path": f"{BYDEST}/T/m.jpg", "gps_origin": "apply_manual",
-         "writes": {"GPSLatitude": 48.85, "GPSLongitude": 2.35}},
-        {"type": "gps_marker_write", "relative_path": f"{BYDEST}/T/m.jpg", "writes": {"GPSProcessingMethod": "manual_fallback"}},
-        {"type": "revert_manual_gps", "relative_path": f"{BYDEST}/T/r.jpg", "writes": {"GPSLatitude": ""},
-         "pre_state": {"present": False}}]}}}
-    photos = cal.build_complete_log({}, files, rows, {}, plan, [{"content_fingerprint": "fpM", "pre_state": {"present": False}}])
+         "writes": {"GPSLatitude": 48.85, "GPSLongitude": 2.35}, "pre_state": {"present": False}},
+        {"type": "gps_marker_write", "relative_path": f"{BYDEST}/T/m.jpg", "writes": {"GPSProcessingMethod": "manual_fallback"}}]}}}
+    photos = cal.build_complete_log({}, files, rows, {}, plan)
     m = next(s for s in photos["fpM"]["journey"] if s["action"] == "gps_written")
     assert m["lat"] == 48.85 and m["origin"] == "apply_manual" and m["gps_processing_method"] == "manual_fallback"
-    assert m["pre_state"] == {"present": False}                          # manual apply records pre-state
-    r = next(s for s in photos["fpR"]["journey"] if s["action"] == "gps_reverted")
-    assert r["pre_state"] == {"present": False}                          # revert records the pinned pre-state
+    assert m["pre_state"] == {"present": False}                          # manual apply records what it replaced
     # a GPS write with no marker op -> gps_processing_method is None (not an error)
     files2 = [_file(f"{BYDEST}/T/n.jpg", "fpN")]
     plan2 = {"destinations": {f"{BYDEST}/T": {"operations": [
         {"type": "metadata_gps_write", "relative_path": f"{BYDEST}/T/n.jpg", "gps_origin": "recompute_automated",
          "writes": {"GPSLatitude": 1, "GPSLongitude": 2}}]}}}
-    photos2 = cal.build_complete_log({}, files2, [], {}, plan2, [])
+    photos2 = cal.build_complete_log({}, files2, [], {}, plan2)
     assert next(s for s in photos2["fpN"]["journey"] if s["action"] == "gps_written")["gps_processing_method"] is None
 
 
@@ -122,7 +117,7 @@ def test_a_cleared_position_is_logged_with_what_it_held():
                     "GPSProcessingMethod": "+carto-time"}},
         {"type": "metadata_gps_write", "relative_path": f"{BYDEST}/T/m.jpg", "gps_origin": "apply_manual",
          "writes": {"GPSLatitude": 48.85, "GPSLongitude": 2.35}, "pre_state": {"present": False}}]}}}
-    photos = cal.build_complete_log({}, files, [], {}, plan, [])
+    photos = cal.build_complete_log({}, files, [], {}, plan)
     c = [s for s in photos["fpC"]["journey"] if s["phase"] == "geotag"]
     assert c == [{"phase": "geotag", "action": "gps_cleared", "pre_state": held,
                   "gps_processing_method": "+carto-time"}]
@@ -155,24 +150,8 @@ def test_each_step_names_its_exact_decision():
         {"type": "metadata_gps_write", "relative_path": f"{BYDEST}/T/m.jpg", "gps_origin": "apply_manual",
          "writes": {"GPSLatitude": 48.85, "GPSLongitude": 2.35},
          "provenance": {"because": f"photos-23 destinations.{BYDEST}/T.folder_fallback"}}]}}}
-    step = next(s for s in cal.build_complete_log({}, files, [], {}, plan, [])["fpM"]["journey"] if s["action"] == "gps_written")
+    step = next(s for s in cal.build_complete_log({}, files, [], {}, plan)["fpM"]["journey"] if s["action"] == "gps_written")
     assert step["because"] == f"photos-23 destinations.{BYDEST}/T.folder_fallback"
-
-
-@pytest.mark.spec("RUL-log_records_gps_reverts", "log-records-gps-revert-1", "log-revert-and-new-position-1", test="TST-geotag_finalize-a_revert_and_a_new_position_in_one_pass_are_both_logged")
-def test_a_revert_and_a_new_position_in_one_pass_are_both_logged():
-    """A withdrawn pin restored and the photo placed anew in the same pass: both are in the log, in the
-    order they are applied."""
-    files = [_file(f"{BYDEST}/T/r.jpg", "fpR")]
-    plan = {"destinations": {f"{BYDEST}/T": {"operations": [
-        {"type": "revert_manual_gps", "relative_path": f"{BYDEST}/T/r.jpg", "writes": {"GPSLatitude": ""},
-         "pre_state": {"present": False}},
-        {"type": "metadata_gps_write", "relative_path": f"{BYDEST}/T/r.jpg", "gps_origin": "recompute_automated",
-         "writes": {"GPSLatitude": 50.5, "GPSLongitude": 4.5}},
-        {"type": "gps_marker_write", "relative_path": f"{BYDEST}/T/r.jpg", "writes": {"GPSProcessingMethod": "interpolated"}}]}}}
-    journey = cal.build_complete_log({}, files, [], {}, plan, [])["fpR"]["journey"]
-    assert [s["action"] for s in journey] == ["gps_reverted", "gps_written"]
-    assert journey[0]["pre_state"] == {"present": False} and journey[1]["lat"] == 50.5
 
 
 @pytest.mark.spec("RUL-log_human_readable", "log-human-readable-json-1", "log-offset-in-words-1", test="TST-geotag_finalize-an_offset_is_described_in_words")
@@ -182,7 +161,7 @@ def test_an_offset_is_described_in_words():
     assert cal.describe_offset(0) == "camera clock on UTC"
     files = [_file(f"{BYDEST}/T/a.arw", "fpA")]
     rows = [{"relative_path": f"{BYDEST}/T/a.arw", "utc_offset_used": -7200, "time_rule_used": "camera_group_offset"}]
-    step = cal.build_complete_log({}, files, rows, {}, {"destinations": {}}, [])["fpA"]["journey"][0]
+    step = cal.build_complete_log({}, files, rows, {}, {"destinations": {}})["fpA"]["journey"][0]
     assert step["offset_seconds"] == -7200 and step["offset_description"] == "camera clock 2 h ahead of UTC"
 
 

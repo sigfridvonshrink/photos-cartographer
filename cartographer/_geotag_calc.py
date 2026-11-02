@@ -86,11 +86,9 @@ __all__ = [
     '_valid_coord',
     '_GPS_PLACE_CATEGORY',
     'classify_gps',
-    '_MANUAL_GPS_CATEGORIES',
-    '_handoff_pre_state',
     'held_pre_state',
     '_coordinate_tags',
-    '_revert_tags',
+    '_CLEARED_POSITION',
     '_walk_ancestors',
     '_nearest_ancestor',
     '_expand_destinations',
@@ -664,24 +662,14 @@ def classify_gps(file, resolved_utc, gpx, cfg, effective_fallback, file_decision
     return "blocked", None
 
 
-_MANUAL_GPS_CATEGORIES = ("manual_locked", "manual_fallback")
-
-
-def _handoff_pre_state(native_gps):
-    """A manual GPS override's pre-state from prep's scan (§24.1) — the file's original GPS as the
-    handoff recorded it, NOT a re-read at execute time. `native_gps` is {lat, lon, processing_method}
-    or None. Returns the pinned ledger value: the prior coordinates, or the 'absent' sentinel."""
-    if native_gps and native_gps.get("lat") is not None and native_gps.get("lon") is not None:
-        return {"present": True, "GPSLatitude": native_gps["lat"], "GPSLongitude": native_gps["lon"],
-                "GPSProcessingMethod": native_gps.get("processing_method") or ""}
-    return {"present": False}
-
-
 def held_pre_state(file):
     """The position `file` holds now, in the pre-state shape the log records beside a write that replaces
     or clears it (shared contract §13.3): the coordinates with their GPSProcessingMethod, or 'absent'."""
     h = held_values(file)
-    return _handoff_pre_state({"lat": h.get("lat"), "lon": h.get("lon"), "processing_method": h.get("method")})
+    if h.get("lat") is not None and h.get("lon") is not None:
+        return {"present": True, "GPSLatitude": h["lat"], "GPSLongitude": h["lon"],
+                "GPSProcessingMethod": h.get("method") or ""}
+    return {"present": False}
 
 
 def _coordinate_tags(lat, lon):
@@ -697,15 +685,9 @@ def _coordinate_tags(lat, lon):
             "GPSLongitude": lon, "GPSLongitudeRef": "E" if lon >= 0 else "W"}
 
 
-def _revert_tags(pre_state):
-    """The exiftool tag writes that restore a pinned pre-state: the prior coordinates, or empty
-    values that CLEAR the GPS the override added when prep saw no native GPS (§24.1.2). Clearing
-    drops the hemisphere refs too — a ref left behind without its coordinate is a torn fix."""
-    if pre_state.get("present"):
-        return {**_coordinate_tags(pre_state["GPSLatitude"], pre_state["GPSLongitude"]),
-                "GPSProcessingMethod": pre_state.get("GPSProcessingMethod") or ""}
-    return {"GPSLatitude": "", "GPSLatitudeRef": "", "GPSLongitude": "", "GPSLongitudeRef": "",
-            "GPSProcessingMethod": ""}
+# The tag writes that clear a position geotag wrote. The hemisphere refs go too — a ref left behind
+# without its coordinate is a torn fix.
+_CLEARED_POSITION = {"GPSLatitude": "", "GPSLatitudeRef": "", "GPSLongitude": "", "GPSLongitudeRef": ""}
 
 
 def _walk_ancestors(dest):
@@ -920,7 +902,7 @@ def time_fixed_marker_op(file, method, clear_position=False):
            "size": file.get("size"), "mtime_ns": file.get("mtime_ns")}
     writes = {"GPSProcessingMethod": method}
     if clear_position:
-        writes = {**_revert_tags({"present": False}), **writes}
+        writes = {**_CLEARED_POSITION, **writes}
     return _make_op("gps_marker_write", file["relative_path"], "time provenance", {"writes": writes}, pre)
 
 
@@ -1028,7 +1010,7 @@ def _with_record_hashes(steps, plan):
     return steps
 
 
-def _earlier_pass_steps(plan, confirmed, pre_by_fp):
+def _earlier_pass_steps(plan, confirmed):
     """{fingerprint: [steps]} for one earlier executed pass: what its confirmed operations did to each
     photo, matched by the fingerprint the operation was planned against, each step naming the run."""
     run = plan.get("plan_id")
@@ -1054,29 +1036,23 @@ def _earlier_pass_steps(plan, confirmed, pre_by_fp):
                 steps.append({"phase": "geotag", "action": "timezone_resolved", "value": prov["destination_timezone"],
                               **({"because": prov["timezone_because"]} if prov.get("timezone_because") else {})})
             steps.append({"phase": "geotag", "action": "time_written", "writes": time_op.get("writes")})
-        steps += _gps_and_rename_steps(fp, ops, pre_by_fp, native=False)
+        steps += _gps_and_rename_steps(ops, native=False)
         out[fp] = _with_record_hashes([dict(s, run=run) for s in steps], plan)
     return out
 
 
-def _gps_and_rename_steps(fp, ops, pre_by_fp, native):
+def _gps_and_rename_steps(ops, native):
     """The GPS and rename steps of one photo's operations in one pass."""
     steps = []
-    revert_op = next((o for o in ops if o["type"] == "revert_manual_gps"), None)
     gps_op = next((o for o in ops if o["type"] == "metadata_gps_write"), None)
     marker = next((o for o in ops if o["type"] == "gps_marker_write"), None)
-    if revert_op is not None:              # applied first, so a new position in the same pass follows it
-        steps.append({"phase": "geotag", "action": "gps_reverted",
-                      "pre_state": revert_op.get("pre_state") or pre_by_fp.get(fp)})
     if gps_op is not None:
         w = gps_op.get("writes") or {}
         step = {"phase": "geotag", "action": "gps_written", "lat": w.get("GPSLatitude"),
                 "lon": w.get("GPSLongitude"), "origin": gps_op.get("gps_origin"),
                 "gps_processing_method": (marker.get("writes") or {}).get("GPSProcessingMethod") if marker else None}
-        if gps_op.get("gps_origin") == "apply_manual":
-            pre = gps_op.get("pre_state") or pre_by_fp.get(fp)
-            if pre is not None:
-                step["pre_state"] = pre
+        if gps_op.get("gps_origin") == "apply_manual" and gps_op.get("pre_state") is not None:
+            step["pre_state"] = gps_op["pre_state"]
         if (gps_op.get("provenance") or {}).get("because"):
             step["because"] = gps_op["provenance"]["because"]
         steps.append(step)
@@ -1084,7 +1060,7 @@ def _gps_and_rename_steps(fp, ops, pre_by_fp, native):
         # geotag's old position cleared: the decision now places none
         steps.append({"phase": "geotag", "action": "gps_cleared", "pre_state": marker.get("pre_state"),
                       "gps_processing_method": marker["writes"].get("GPSProcessingMethod")})
-    elif native and revert_op is None:
+    elif native:
         steps.append({"phase": "geotag", "action": "gps_preserved"})
     rename_op = next((o for o in ops if o["type"] == "rename_no_clobber"), None)
     if rename_op is not None:
@@ -1092,25 +1068,24 @@ def _gps_and_rename_steps(fp, ops, pre_by_fp, native):
     return steps
 
 
-def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, ledger, earlier_passes=()):
+def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, earlier_passes=()):
     """photos-26-complete-log.json's `photos` (§13.3): a deep copy of prep's per-photo, content-
     fingerprint-keyed journeys with each calibrated photo's `phase:"geotag"` steps APPENDED — a
-    strict superset of the prep log, derived from photos-21 / the resolved-UTC cache / photos-24 /
-    the ledger. `earlier_passes` — [(plan, confirmed operation ids)], oldest first — are the geotag
+    strict superset of the prep log, derived from photos-21 / the resolved-UTC cache / photos-24.
+    `earlier_passes` — [(plan, confirmed operation ids)], oldest first — are the geotag
     passes executed before the current plan's: their steps come first, so a photo written in an
     earlier pass keeps the record of it however later passes went. Deterministic, fingerprint-keyed.
     The prep file itself is never edited."""
     photos = json.loads(json.dumps(prep_photos or {}))            # deep copy; never touch the prep file
     row_by_rel = {r["relative_path"]: r for r in resolved_rows}
     t_dests = (time_artifact or {}).get("destinations") or {}
-    pre_by_fp = {e["content_fingerprint"]: e["pre_state"] for e in (ledger or [])}
     ops_by_fp = {}
     fp_by_rel = {f["relative_path"]: f.get("content_fingerprint") for f in files}
     for dd in (plan.get("destinations") or {}).values():
         for op in dd.get("operations") or []:
             fp = (op.get("preconditions") or {}).get("content_fingerprint") or fp_by_rel.get(op["relative_path"])
             ops_by_fp.setdefault(fp, []).append(op)
-    earlier = [_earlier_pass_steps(p, confirmed, pre_by_fp) for p, confirmed in earlier_passes]
+    earlier = [_earlier_pass_steps(p, confirmed) for p, confirmed in earlier_passes]
     run = plan.get("plan_id")
 
     for f in sorted(files, key=lambda x: x["relative_path"]):
@@ -1140,7 +1115,7 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, l
             steps.append({"phase": "geotag", "action": "timezone_resolved", "value": tz,
                           "because": f"photos-21 destinations.{dest}.destination_timezone"})
 
-        steps.extend(_gps_and_rename_steps(fp, ops, pre_by_fp, native=f.get("has_native_gps")))
+        steps.extend(_gps_and_rename_steps(ops, native=f.get("has_native_gps")))
         if not f.get("from_originals") and geotag_marker(held_values(f).get("method")):
             # geotag's mark is on the photo, but this workspace never held its own values: its time was
             # fixed elsewhere, or that history is lost — say so rather than look whole (§13.3a). The

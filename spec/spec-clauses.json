@@ -132,14 +132,14 @@
       "area": "geotag",
       "criticality": "high",
       "anti": true,
-      "title": "Automated GPS is never rolled back: no pre-state stored, no revert op emitted; it is recomputed from current inputs",
+      "title": "No GPS is rolled back to a stored value and there is no revert operation: a position is recomputed from current inputs",
       "spec": {
         "file": "photos-2-geotag-workflow.md",
         "section": "24.1"
       },
       "coverage": "covered",
       "must_cover": true,
-      "test": "tests/test_geotag_gps_ledger.py::test_automated_gps_stores_no_prestate_and_emits_no_revert"
+      "test": "tests/test_geotag_gps_ledger.py::test_a_withdrawn_pin_is_placed_again_from_the_tracks"
     },
     {
       "id": "geotag-autoresolve-config-gated-1",
@@ -266,20 +266,6 @@
       "coverage": "covered",
       "must_cover": true,
       "test": "tests/test_geotag_rename_planning.py::test_case_insensitive_collision_suffixes"
-    },
-    {
-      "id": "geotag-change-overwrite-original-pinned-1",
-      "area": "geotag",
-      "criticality": "med",
-      "anti": false,
-      "title": "Changing a manual GPS value overwrites to the new value while the pinned original stays unchanged for later full withdrawal",
-      "spec": {
-        "file": "photos-2-geotag-workflow.md",
-        "section": "24.1"
-      },
-      "coverage": "covered",
-      "must_cover": true,
-      "test": "tests/test_geotag_gps_ledger.py::test_ledger_cache_pin_once_get_consume"
     },
     {
       "id": "geotag-clock-error-window-1",
@@ -490,20 +476,6 @@
       "coverage": "covered",
       "must_cover": true,
       "test": "tests/test_geotag_preflight.py::test_dev_subfolder_blocks"
-    },
-    {
-      "id": "geotag-disappeared-entry-kept-1",
-      "area": "geotag",
-      "criticality": "med",
-      "anti": true,
-      "title": "A ledger entry for a file that no longer exists is kept (not pruned), triggers no operation, and is carried into the archived DB",
-      "spec": {
-        "file": "photos-2-geotag-workflow.md",
-        "section": "24.1"
-      },
-      "coverage": "covered",
-      "must_cover": true,
-      "test": "tests/test_geotag_gps_ledger.py::test_vanished_file_kept_no_revert"
     },
     {
       "id": "geotag-drift-confirmation-preserved-1",
@@ -1196,14 +1168,14 @@
       "area": "geotag",
       "criticality": "high",
       "anti": false,
-      "title": "A manual GPS override is reversible via the pinned pre-state; withdrawing undoes its effect and changing re-applies cleanly",
+      "title": "A manual GPS override is reversible: every plan decides from the photo's own values, so withdrawing undoes its effect and changing re-applies cleanly",
       "spec": {
         "file": "photos-2-geotag-workflow.md",
         "section": "24.1"
       },
       "coverage": "covered",
       "must_cover": true,
-      "test": "tests/test_geotag_gps_ledger.py::test_full_pin_then_withdraw_reverts_and_consumes"
+      "test": "tests/test_geotag_gps_ledger.py::test_a_withdrawn_pin_is_cleared"
     },
     {
       "id": "geotag-misplaced-root-hardstop-1",
@@ -1588,14 +1560,14 @@
       "area": "geotag",
       "criticality": "med",
       "anti": false,
-      "title": "apply_manual only targets files with no native GPS (preserve-native wins), so the captured pre-state is the absent sentinel or an earlier geotag position, never a native one",
+      "title": "apply_manual only targets files with no native GPS (preserve-native wins), so a pin never overrides a device's own position",
       "spec": {
         "file": "photos-2-geotag-workflow.md",
         "section": "24.1"
       },
       "coverage": "covered",
       "must_cover": true,
-      "test": "tests/test_geotag_gps_ledger.py::test_full_pin_then_withdraw_reverts_and_consumes"
+      "test": "tests/test_geotag_gps_ledger.py::test_a_pin_never_overrides_native_gps"
     },
     {
       "id": "geotag-marker-time-corrected-1",
@@ -1700,42 +1672,14 @@
       "area": "geotag",
       "criticality": "high",
       "anti": false,
-      "title": "For a manual GPS override the pinned pre-state is committed to the ledger before the GPS write that overwrites it",
+      "title": "A photo's own values are committed to the original-values ledger before geotag's first write to it",
       "spec": {
         "file": "photos-2-geotag-workflow.md",
         "section": "29.1a"
       },
       "coverage": "covered",
       "must_cover": true,
-      "test": "tests/test_geotag_gps_ledger.py::test_manual_gps_prestate_pinned_before_the_gps_write"
-    },
-    {
-      "id": "geotag-prestate-capture-1",
-      "area": "geotag",
-      "criticality": "high",
-      "anti": false,
-      "title": "On first application a manual GPS write captures and pins the file's prior GPS (or an absent sentinel) in the ledger, keyed by content fingerprint",
-      "spec": {
-        "file": "photos-2-geotag-workflow.md",
-        "section": "24.1"
-      },
-      "coverage": "covered",
-      "must_cover": true,
-      "test": "tests/test_geotag_gps_ledger.py::test_ledger_cache_pin_once_get_consume"
-    },
-    {
-      "id": "geotag-prestate-immutable-1",
-      "area": "geotag",
-      "criticality": "high",
-      "anti": true,
-      "title": "The pinned pre-state is the true original, written once and never overwritten by subsequent runs of the same or changed decision",
-      "spec": {
-        "file": "photos-2-geotag-workflow.md",
-        "section": "24.1"
-      },
-      "coverage": "covered",
-      "must_cover": true,
-      "test": "tests/test_geotag_gps_ledger.py::test_ledger_cache_pin_once_get_consume"
+      "test": "tests/test_geotag_gps_ledger.py::test_own_values_pinned_before_the_first_write"
     },
     {
       "id": "geotag-recalc-only-affected-1",
@@ -1777,7 +1721,7 @@
       },
       "coverage": "covered",
       "must_cover": true,
-      "test": "tests/test_geotag_gps_ledger.py::test_withdraw_reverts_gps_only_never_time_name_or_destination"
+      "test": "tests/test_geotag_gps_ledger.py::test_a_withdrawal_never_reverts_time_name_or_destination"
     },
     {
       "id": "geotag-rehash-before-use-1",
@@ -1833,7 +1777,7 @@
       },
       "coverage": "covered",
       "must_cover": true,
-      "test": "tests/test_geotag_gps_ledger.py::test_full_pin_then_withdraw_reverts_and_consumes"
+      "test": "tests/test_geotag_gps_ledger.py::test_a_pin_executed_then_withdrawn_plans_and_executes_again"
     },
     {
       "id": "geotag-residuals-ok-1",
@@ -2120,14 +2064,14 @@
       "area": "geotag",
       "criticality": "med",
       "anti": false,
-      "title": "The plan distinguishes three GPS operation origins (apply manual, revert manual, recompute automated) and the transformation log records which applied",
+      "title": "The plan distinguishes the GPS write origins (apply manual, recompute automated) beside the clear, and the transformation log records which applied",
       "spec": {
         "file": "photos-2-geotag-workflow.md",
         "section": "24.1"
       },
       "coverage": "covered",
       "must_cover": true,
-      "test": "tests/test_geotag_finalize.py::test_complete_log_gps_written_and_reverted"
+      "test": "tests/test_geotag_finalize.py::test_complete_log_gps_written"
     },
     {
       "id": "geotag-timezone-autoresolve-1",
@@ -2400,14 +2344,14 @@
       "area": "geotag",
       "criticality": "high",
       "anti": false,
-      "title": "Withdrawing a manual GPS decision emits an explicit revert operation driving the field to the pinned pre-state (restore coords or clear)",
+      "title": "Withdrawing a manual GPS decision plans the photo again from its own values: the tracks' position, or geotag's position cleared",
       "spec": {
         "file": "photos-2-geotag-workflow.md",
         "section": "24.1"
       },
       "coverage": "covered",
       "must_cover": true,
-      "test": "tests/test_geotag_gps_ledger.py::test_withdrawn_override_plans_revert"
+      "test": "tests/test_geotag_gps_ledger.py::test_a_withdrawn_pin_is_cleared"
     },
     {
       "id": "geotag-write-summary-1",
@@ -2456,14 +2400,14 @@
       "area": "geotag",
       "criticality": "med",
       "anti": true,
-      "title": "withdraw reverts GPS only; no time/name revert, never relocates across dests",
+      "title": "withdrawal changes GPS only; no time/name revert, never relocates across dests",
       "spec": {
         "file": "photos-2-geotag-workflow.md",
         "section": "24.1"
       },
       "coverage": "covered",
       "must_cover": true,
-      "test": "tests/test_geotag_gps_ledger.py::test_withdraw_reverts_gps_only_never_time_name_or_destination"
+      "test": "tests/test_geotag_gps_ledger.py::test_a_withdrawal_never_reverts_time_name_or_destination"
     },
     {
       "id": "exec-concurrency-no-semantic-change-1",
@@ -6867,14 +6811,14 @@
       "area": "shared",
       "criticality": "med",
       "anti": false,
-      "title": "Withdrawing a manual GPS override undoes its effect via a pinned pre-state ledger; time/filename recomputed in place, never relocating the file",
+      "title": "Withdrawing a manual GPS override undoes its effect, the photo decided again from its own values; time/filename recomputed in place, never relocating the file",
       "spec": {
         "file": "photos-shared-contract.md",
         "section": "12"
       },
       "coverage": "covered",
       "must_cover": true,
-      "test": "tests/test_geotag_gps_ledger.py::test_withdraw_reverts_gps_only_never_time_name_or_destination"
+      "test": "tests/test_geotag_gps_ledger.py::test_a_withdrawn_pin_is_cleared"
     },
     {
       "id": "camera-geotag-reuses-1",
@@ -7987,28 +7931,14 @@
       "area": "shared",
       "criticality": "med",
       "anti": false,
-      "title": "The log records manual-GPS apply/change/withdraw and the pinned pre-state captured or restored",
+      "title": "The log records manual-GPS apply/change/withdraw with the position replaced or cleared",
       "spec": {
         "file": "photos-shared-contract.md",
         "section": "13.3"
       },
       "coverage": "covered",
       "must_cover": true,
-      "test": "tests/test_geotag_finalize.py::test_complete_log_gps_written_and_reverted"
-    },
-    {
-      "id": "log-revert-and-new-position-1",
-      "area": "shared",
-      "criticality": "med",
-      "anti": true,
-      "title": "A pin withdrawn and the photo placed anew in the same pass are both logged, the revert first",
-      "spec": {
-        "file": "photos-shared-contract.md",
-        "section": "13.3"
-      },
-      "coverage": "covered",
-      "must_cover": true,
-      "test": "tests/test_geotag_finalize.py::test_a_revert_and_a_new_position_in_one_pass_are_both_logged"
+      "test": "tests/test_geotag_finalize.py::test_complete_log_gps_written"
     },
     {
       "id": "log-retention-across-runs-1",

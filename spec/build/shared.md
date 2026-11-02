@@ -477,8 +477,9 @@ The decisions SHALL live in the `user_decision` fields of geotag's `photos-21`, 
 created by geotag and preserved across regeneration (geotag §9, §20); the decision editor SHALL write only those
 fields. A change SHALL be traced from its decision record through the `depends_on` fingerprints (§9) to the executable
 plan and the run's journal (prep §14.3; geotag §4–§6, §29). Merge takes no decision; its placement is a fixed rule over
-recorded inputs, recorded the same way (merge §8–§9). A withdrawn manual position SHALL be restored from the pinned
-pre-state ledger (geotag §24.1); an automatic position is recomputed, never rolled back.
+recorded inputs, recorded the same way (merge §8–§9). Every plan SHALL decide about a photo from its own values, pinned
+before geotag first wrote to it (geotag §24.2), so a withdrawn manual position is undone like any decision: the photo is
+placed again, or geotag's position cleared; an automatic position is recomputed, never rolled back.
 :::
 
 ## 12. The record of what was done, kept beyond the workspace
@@ -542,7 +543,7 @@ offset replaced it; a timezone its destination's cell; a manual position the pho
 items or the destination's folder fallback, with the destination it was accepted from. Geotag's steps SHALL be
 `clock_offset_applied` (its `offset_seconds` with an `offset_description` in words, such as "camera clock 1 h 55 min
 ahead of UTC"), `resolved_utc`, `timezone_resolved`, `time_written`, `gps_written` (with its origin, method and,
-for a manual position, the position it replaced, from the plan), `gps_reverted`, `gps_cleared` (a position geotag wrote
+for a manual position, the position it replaced, from the plan), `gps_cleared` (a position geotag wrote
 and no longer places, with that position, from the plan, and the method left), `gps_preserved` and `final_rename`,
 each naming its `run`;
 finalize SHALL take them from every executed pass — each superseded `photos-24` whose journal shows it ran, oldest
@@ -563,8 +564,7 @@ but whose plan is missing (geotag §31).
 The workspace database SHALL be SQLite, `photos-00-ingest.db` in `.photos-ingest/`. Its writers SHALL be: prep, of the
 file and metadata caches (`file_cache`, `metadata_cache`) and their version row (`meta`), through its single-writer
 path (prep §14.3); geotag, of the resolved-UTC cache (`resolved_utc_cache`), the values each photo held before geotag
-first wrote to it (`original_values`, geotag §24.2) and the manual-position pre-states (`manual_gps_ledger`, geotag
-§24.1); merge, of the library-file fingerprint cache (`library_fingerprint_cache`, keyed by the library file's absolute
+first wrote to it (`original_values`, geotag §24.2); merge, of the library-file fingerprint cache (`library_fingerprint_cache`, keyed by the library file's absolute
 path with its size and modification time). Where each photo landed is in merge's JSON records, not the database. Prep's
 plan-time decode memo, `photos-00-plan-memo.db`, is the one other database: scratch, re-derivable, deletable at any
 time (prep §10.3).
