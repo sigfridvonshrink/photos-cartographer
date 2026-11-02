@@ -1580,7 +1580,7 @@ it SHALL NOT write a log that looks whole but reflects only the last run.
 
 :::{def} The workspace database
 :id: DEF-workspace_database
-:status: seed
+:status: ruled
 :uses: DEF-workspace, DEF-control_records
 
 The **workspace database** is the one database of record: what cartographer knows about the workspace's media — each
@@ -1599,7 +1599,7 @@ successful run.
 
 :::{rul} One database, in the workspace
 :id: RUL-one_database
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
