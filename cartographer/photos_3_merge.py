@@ -1101,7 +1101,8 @@ def do_init_library(path_arg, ws):
     (merge spec §4). Behavior depends on workspace context and whether a path was given:
 
       in workspace + path  -> bless the resolved path AND record library_root in config (the one
-                              narrow exception to "prep is the config seeder", shared contract §4.1)
+                              narrow exception to "prep is the config seeder", shared contract §4.1);
+                              a sealed workspace refuses it whole (§13.7)
       in workspace, no path -> bless the directory config already names (no config write)
       no workspace + path  -> bless only; advise running from a workspace to record it in config
       no workspace, no path -> error (nothing to bless, no config to read)
@@ -1171,6 +1172,18 @@ def do_init_library(path_arg, ws):
         reporter.log(f"Workspace is locked by an in-progress run{detail}; try again when it finishes.")
         return 1
     try:
+        # Sealed means sealed (shared contract §13.7): recording the library is a config write, so a
+        # sealed workspace refuses it whole — nothing blessed, nothing written.
+        if is_sealed(ws):
+            reporter.error("Workspace is SEALED (a prior merge fully succeeded): init-library will not record "
+                           "a library in its config. Nothing was blessed or written — to bless the directory "
+                           "alone, run `photos-cartographer merge init-library <path>` from outside any workspace.")
+            wf = MergeWorkflow(ws)
+            if wf._root_files() or wf._entries(folder_name('sources')):
+                reporter.warn("A likely new dump is present (files at the workspace root or in "
+                              f"{folder_name('sources')}/). A sealed workspace is final; move it into a fresh "
+                              "workspace by hand — init-library left it exactly where it is.")
+            return 2
         cfg_p = config_path(ws)
         try:
             with open(cfg_p) as f:

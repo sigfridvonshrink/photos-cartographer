@@ -303,6 +303,25 @@ def test_init_library_in_workspace_with_path_blesses_and_writes_config(tmp_path)
     assert written["merge"]["library_root"] == str(lib)   # the one narrow config write
 
 
+@pytest.mark.spec("RUL-sealed_refuses", test="TST-merge_preflight-init_library_refuses_to_record_a_library_in_a_sealed_workspace")
+def test_init_library_refuses_to_record_a_library_in_a_sealed_workspace(tmp_path):
+    ws, lib = _fresh_ws_and_lib(tmp_path)
+    cfg_p = ws / ".photos-ingest" / "photos-00-config.json"
+    utils.write_sealed_marker(str(ws), "run-1", str(lib))
+    before = cfg_p.read_bytes()
+    other = tmp_path / "other"
+    other.mkdir()
+
+    rc = merge.do_init_library(str(other), str(ws))
+    assert rc == 2
+    assert not utils.is_library(str(other))              # nothing blessed
+    assert cfg_p.read_bytes() == before                  # nothing written
+
+    # Blessing the library the config already names writes nothing in the workspace, so it stays allowed.
+    assert merge.do_init_library(None, str(ws)) == 0
+    assert cfg_p.read_bytes() == before
+
+
 @pytest.mark.spec("merge-init-library-inside-no-path-reads-config-1")
 def test_init_library_in_workspace_no_path_uses_config(tmp_path):
     ws, lib = _fresh_ws_and_lib(tmp_path)
