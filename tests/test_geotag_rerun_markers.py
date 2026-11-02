@@ -463,7 +463,8 @@ def test_a_history_too_thin_is_marked_partial(tmp_path, monkeypatch):
     _plan(monkeypatch, ws)
     _execute(monkeypatch, ws)
     entry = _finalize(monkeypatch, ws)["fp-2024-07-03--14-30-00.arw"]
-    assert entry["partial"] and "made elsewhere" in entry["note"]
+    assert entry["partial"]
+    assert any(s["action"] == "history_incomplete" and "made elsewhere" in s["note"] for s in entry["journey"])
 
     (tmp_path / "two").mkdir()
     ws2 = _executed_round(tmp_path / "two", monkeypatch)                 # a pass, then a second one
@@ -477,3 +478,60 @@ def test_a_history_too_thin_is_marked_partial(tmp_path, monkeypatch):
     log = json.loads((ws2 / ".photos-ingest" / "photos-26-complete-log.json").read_text())
     assert log["partial"] and any(first in w for w in log["warnings"])
     assert "partial" not in log["photos"]["fp-a.arw"]                    # its own values were pinned here
+
+
+@pytest.mark.spec("BLD-phase_logs", "RUL-partial_history_shown", "log-carried-unchanged-1", test="TST-geotag_rerun_markers-finalize_carries_prep_s_record_unchanged")
+def test_finalize_carries_prep_s_record_unchanged(tmp_path, monkeypatch):
+    """Finalize's log carries prep's every field and step unchanged, a note of prep's among them, and adds
+    only its own: geotag's note goes in a step of its own. A prep log gone is said, never passed over."""
+    ws = _ws(tmp_path, [lambda ws: _rec(ws, f"{T}/2024-07-03--14-30-00.arw", "2024:07:03 14:30:00",
+                                        gps=(40.0, 3.0), method="interpolated")])
+    p = ws / ".photos-ingest" / "photos-11-handoff.json"
+    ho = json.loads(p.read_text())
+    parsed = json.loads(ho["files"][0]["metadata_status"]["parsed_json"])
+    parsed["OffsetTimeOriginal"] = "+02:00"
+    ho["files"][0]["metadata_status"]["parsed_json"] = json.dumps(parsed)
+    _write_handoff(ws, ho["files"])
+    fp = "fp-2024-07-03--14-30-00.arw"
+    prep = {fp: {"content_fingerprint": fp, "final_path": "x", "partial": True,
+                 "note": "prep history incomplete (no retained journey)",
+                 "journey": [{"phase": "prep", "action": "moved_to_by_date", "from": "a", "to": "b"}]}}
+    (ws / ".photos-ingest" / "photos-15-prep-log.json").write_text(json.dumps({"photos": prep}))
+    _plan(monkeypatch, ws)
+    _execute(monkeypatch, ws)
+    entry = _finalize(monkeypatch, ws)[fp]
+    assert {k: entry[k] for k in prep[fp] if k != "journey"} == {k: v for k, v in prep[fp].items() if k != "journey"}
+    assert entry["journey"][:1] == prep[fp]["journey"]
+    assert any(s["action"] == "history_incomplete" for s in entry["journey"][1:])
+    log = json.loads((ws / ".photos-ingest" / "photos-26-complete-log.json").read_text())
+    assert not any("prep's log" in w for w in log["warnings"])
+
+    (ws / ".photos-ingest" / "photos-15-prep-log.json").unlink()
+    _finalize(monkeypatch, ws)
+    log = json.loads((ws / ".photos-ingest" / "photos-26-complete-log.json").read_text())
+    assert log["partial"] and any("prep's log" in w and "missing" in w for w in log["warnings"])
+
+
+@pytest.mark.spec("BLD-phase_logs", test="TST-geotag_rerun_markers-a_copy_that_would_alter_prep_s_record_is_refused")
+def test_a_copy_that_would_alter_prep_s_record_is_refused(tmp_path, monkeypatch, capsys):
+    """Were finalize's copy to change prep's record, finalize writes nothing and says so."""
+    ws = _executed_round(tmp_path, monkeypatch)
+    fp = "fp-prep-only"
+    (ws / ".photos-ingest" / "photos-15-prep-log.json").write_text(json.dumps(
+        {"photos": {fp: {"content_fingerprint": fp, "final_path": "x", "journey": []}}}))
+    real = cal.build_complete_log
+
+    def altering(*a, **k):
+        photos = real(*a, **k)
+        photos[fp]["final_path"] = "elsewhere"
+        return photos
+    monkeypatch.setattr(cal, "build_complete_log", altering)
+    before = sorted(os.listdir(ws / ".photos-ingest"))
+    monkeypatch.chdir(str(ws))
+    monkeypatch.setattr(sys, "argv", ["photos-2-geotag", "finalize"])
+    capsys.readouterr()
+    with pytest.raises(SystemExit) as e:
+        cal.main()
+    assert e.value.code not in (0, None)
+    assert "would not carry prep's record unchanged for 1 photo" in "".join(capsys.readouterr())
+    assert sorted(os.listdir(ws / ".photos-ingest")) == before

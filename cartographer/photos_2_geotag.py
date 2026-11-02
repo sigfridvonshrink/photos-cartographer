@@ -52,7 +52,7 @@ from .photos_utils import (
     missing_managed_folders, by_dest_reprep_pending,
     json_dependency, verify_json_dependency, handoff_content_fingerprint, write_json_artifact, write_versioned_json, db_path, ensure_control_dir,
     journal_path, ContentHasher, _move_no_clobber,
-    prep_log_path, prep_db_snapshot_path, write_db_snapshot, take_zfs_snapshot,
+    prep_log_path, prep_db_snapshot_path, entries_not_carried, write_db_snapshot, take_zfs_snapshot,
     control_archive_members, write_control_archive, workspace_id,
     WorkspaceLock, ProgressCoordinator,
 )
@@ -1580,18 +1580,26 @@ class GeotagWorkflow:
         finally:
             cache.close()
         time_artifact = json.load(open(time_decisions_path(ws)))
-        prep_photos = {}
-        if os.path.exists(prep_log_path(ws)):
-            try:
-                prep_photos = (json.load(open(prep_log_path(ws))) or {}).get("photos", {}) or {}
-            except Exception:
-                prep_photos = {}
+        prep_photos, prep_unread = {}, None
+        try:
+            prep_photos = (json.load(open(prep_log_path(ws))) or {}).get("photos", {}) or {}
+        except FileNotFoundError:
+            prep_unread = "is missing"
+        except Exception:
+            prep_unread = "cannot be read"
         photos = build_complete_log(prep_photos, files, rows, time_artifact, plan, ledger,
                                     earlier_passes=self._earlier_passes(plan.get("plan_id")))
-        self.finalize_warnings = [f"geotag pass {pid} ran (its journal is kept) but its plan is missing: "
-                                  "its steps are not in the log" for pid in self._passes_without_a_plan(plan.get("plan_id"))]
-        self.finalize_warnings += [f"{e.get('final_path') or fp}: {e['note']}" for fp, e in sorted(photos.items())
-                                   if e.get("partial") and e.get("note", "").startswith("geotag's mark")]
+        not_carried = entries_not_carried(prep_photos, photos)
+        if not_carried:
+            # a defect, not a state of the workspace: the copy would misstate prep's record (§13.0a)
+            return [f"{COMPLETE_LOG_ARTIFACT} would not carry prep's record unchanged for {len(not_carried)} "
+                    "photo(s); nothing was written."]
+        self.finalize_warnings = ([f"prep's log ({os.path.basename(prep_log_path(ws))}) {prep_unread}: the "
+                                   "prep part of every journey is absent"] if prep_unread else [])
+        self.finalize_warnings += [f"geotag pass {pid} ran (its journal is kept) but its plan is missing: "
+                                   "its steps are not in the log" for pid in self._passes_without_a_plan(plan.get("plan_id"))]
+        self.finalize_warnings += [f"{e.get('final_path') or fp}: {s['note']}" for fp, e in sorted(photos.items())
+                                   for s in e.get("journey") or [] if s.get("action") == "history_incomplete"]
         log = {"schema_version": 1, "tool": "photos-2-geotag", "photos": photos}
         if self.finalize_warnings:
             log["partial"] = True

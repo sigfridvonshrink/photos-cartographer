@@ -378,6 +378,19 @@ def prep_log_path(ws: str) -> str:
     """End-of-prep transformation log (prep §16.1 / shared §13.3)."""
     return os.path.join(ws, CONTROL_DIR, "photos-15-prep-log.json")
 
+def entries_not_carried(earlier: dict, later: dict) -> list:
+    """Fingerprints whose entry in an earlier phase's log is not carried whole into a later phase's
+    copy (§13.0a): a later phase only adds, so the later entry keeps every field the earlier one has,
+    unchanged, and its journey begins with the earlier journey, step for step."""
+    out = []
+    for fp, entry in sorted((earlier or {}).items()):
+        copy = (later or {}).get(fp)
+        journey = entry.get("journey") or []
+        if not isinstance(copy, dict) or (copy.get("journey") or [])[:len(journey)] != journey \
+                or any(copy.get(k) != v for k, v in entry.items() if k != "journey"):
+            out.append(fp)
+    return out
+
 def prep_db_snapshot_path(ws: str) -> str:
     """End-of-prep DB backup snapshot (shared §13.4a)."""
     return os.path.join(ws, CONTROL_DIR, "photos-15-prep-ingest.db")

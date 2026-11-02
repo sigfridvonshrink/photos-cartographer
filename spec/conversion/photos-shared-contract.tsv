@@ -341,6 +341,7 @@
 13.0a	(It writes only its own disjoint live-DB regions, Section 13.4.)	defer:shared-13.4	
 13.0a	Re-running a phase may legitimately refresh **its own** artifacts (a re-prep updates `photos-15-*`; geotag reruns update `photos-2X-*`); it still never touches another phase's.	RUL-phase_writes_own_records	
 13.0a	The benefit is that each phase's outputs are a stable, attributable record that a later phase cannot silently alter — combined with the per-phase completeness guarantee above, every phase's artifacts are both complete and tamper-evident with respect to later phases.	RAT-records_attributable	
+13.0a	Finalize and merge check it: each phase's copy of the log carries the earlier one unchanged — every entry, field and step, the phase only adding — and merge refuses while `photos-26-complete-log.json` no longer carries `photos-15-prep-log.json` so.	BLD-phase_logs	
 13.0a	(The archival package bundles copies of all phases' artifacts, Section 13.2; bundling is a read, not a write, so it does not violate ownership.)	BLD-record_ownership	
 13.1	### 13.1 When the archival package is produced	dropped	a heading; the corpus's documents carry their own
 13.1	The package is produced by an **explicit finalize/archive command**, not automatically at the end of each geotag.	RUL-finalize_explicit	
