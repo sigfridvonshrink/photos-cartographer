@@ -52,7 +52,7 @@ from .photos_utils import (
     missing_managed_folders, by_dest_reprep_pending,
     json_dependency, verify_json_dependency, handoff_content_fingerprint, write_json_artifact, write_versioned_json, db_path, ensure_control_dir,
     journal_path, ContentHasher, _move_no_clobber,
-    prep_log_path, prep_db_snapshot_path, entries_not_carried, write_db_snapshot, take_zfs_snapshot,
+    prep_log_path, entries_not_carried, write_db_snapshot, take_zfs_snapshot,
     control_archive_members, write_control_archive, workspace_id,
     WorkspaceLock, ProgressCoordinator,
 )
