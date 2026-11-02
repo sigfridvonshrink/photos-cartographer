@@ -523,7 +523,7 @@ re-seal does the same into `photos-35-archive-manifest.json` and `photos-35-arch
 
 :::{bld} The log's format, and the history it is made from
 :id: BLD-log_format
-:status: seed
+:status: ruled
 :realises: RUL-log_entry_grows, RUL-log_keyed_by_fingerprint, RUL-log_cites_decisions, RUL-log_records_gps_reverts, RUL-log_human_readable, RUL-history_retained, RUL-partial_history_shown
 
 Each log SHALL be pretty-printed JSON with sorted keys, its `photos` keyed by the content fingerprint (`content_fingerprint`),
