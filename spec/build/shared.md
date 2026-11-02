@@ -551,3 +551,79 @@ by hash, in `executed/<plan id>/`, which a step's `because_record` and `because_
 never pinned, with a `history_incomplete` step of its own saying why, and names in the log's `warnings`, the log then `partial`, any pass whose journal is kept
 but whose plan is missing (geotag §31).
 :::
+
+:::{bld} The database: its file, its writers, its images
+:id: BLD-workspace_database
+:status: seed
+:realises: RUL-one_database, RUL-database_is_record, RUL-database_regions_disjoint, RUL-database_image_each_phase, RUL-database_image_whole
+:uses: BLD-record_ownership
+
+The workspace database SHALL be SQLite, `photos-00-ingest.db` in `.photos-ingest/`. Its writers SHALL be: prep, of the
+file and metadata caches (`file_cache`, `metadata_cache`) and their version row (`meta`), through its single-writer
+path (prep §14.3); geotag, of the resolved-UTC cache (`resolved_utc_cache`), the values each photo held before geotag
+first wrote to it (`original_values`, geotag §24.2) and the manual-position pre-states (`manual_gps_ledger`, geotag
+§24.1); merge, of the library-file fingerprint cache (`library_fingerprint_cache`, keyed by the library file's absolute
+path with its size and modification time). Where each photo landed is in merge's JSON records, not the database. Prep's
+plan-time decode memo, `photos-00-plan-memo.db`, is the one other database: scratch, re-derivable, deletable at any
+time (prep §10.3).
+
+The images SHALL be `photos-15-prep-ingest.db`, written when prep writes its handoff and log; `photos-26-geotag-ingest.db`,
+written by finalize with the complete log; and `photos-35-merge-ingest.db`, written when merge succeeds, before it
+re-seals. Each SHALL be captured under the workspace lock by `VACUUM INTO` a `.tmp-` name in the control directory,
+checked with `PRAGMA quick_check`, then renamed over the phase's earlier image.
+:::
+
+## 13. Merge: the library kept, the workspace sealed
+
+:::{bld} Merge's collision check and its library cache
+:id: BLD-merge_collision
+:status: seed
+:realises: RUL-library_not_scanned, RUL-collision_by_content, RUL-library_file_read_once
+:uses: BLD-workspace_database
+
+Merge SHALL map each photo by destination to its place under `library_root`, and list only the folders its photos go
+to — for the names taken there — and the library's top folder, for temporary copies a crash of its own left (§15). Where a file is
+there, merge SHALL fingerprint it — from `library_fingerprint_cache` when its path, size and modification time match a
+row, otherwise by decoding it and adding the row — and compare it with the incoming photo's fingerprint from prep. An
+incoming photo whose name is taken by different content SHALL take the shared suffix convention's next free suffix
+(§7.2), the library's own name keeping its bare form.
+:::
+
+:::{bld} Merge's move: copy, verify, rename, then remove
+:id: BLD-merge_move
+:status: seed
+:realises: RUL-library_never_altered, RUL-merge_moves, RUL-merge_resumable
+
+Each photo SHALL be copied to a temporary name on the library's volume, its copy fingerprinted against the planned
+content, renamed into its place only if that place is still free, and only then removed from photos by destination; the
+journal SHALL record each confirmed photo. A re-run SHALL take a place already holding the planned content as done,
+removing the workspace copy if it remains. A photo already present SHALL be removed from photos by destination after
+the library's copy is checked to hold its content.
+:::
+
+:::{bld} The merge records and the re-seal
+:id: BLD-merge_records
+:status: seed
+:realises: RUL-merge_records_landing, RUL-merge_reseals, RUL-seal_on_success_only
+:uses: BLD-archive_manifest, BLD-workspace_database
+
+Merge SHALL write `photos-31-merge-summary.json` on every outcome but a stale plan or a failed precondition: per photo
+and in total, where it landed, whether it was renamed for the library, already present or blocked. Only on success —
+every photo placed or already present, none left — SHALL it then, in order, write `photos-35-merge-log.json`,
+`photos-35-merge-ingest.db`, the package's `photos-35-archive-manifest.json` and `photos-35-archive.tar.gz`, and last
+the seal.
+:::
+
+:::{bld} The seal and its checks
+:id: BLD-seal_marker
+:status: seed
+:realises: RUL-seal_is_authority, RUL-sealed_refuses, RUL-sealed_prune_allowed, RUL-sealed_new_dump_warned
+
+The seal SHALL be `photos-00-sealed.json` in the control directory, its own file beside the workspace guard — which
+only prep writes — recording `sealed`, the merge run id (`merged_run_id`) and `library_root`; its presence alone seals.
+Prep's `plan`, `dry-run` and `execute`, every geotag command, and merge's `plan`, `dry-run` and `execute` SHALL check it under the workspace
+lock before reading anything else, and stop with exit status 2 if it is there, adding the likely-new-dump warning when
+the workspace's top level holds a file or the inbox holds anything. `edit` SHALL refuse to serve a sealed workspace,
+and its save SHALL write nothing there. `prune-quarantine` SHALL not check the seal; nor does `merge init-library`,
+which given a path from inside a workspace records it as `library_root` in the configuration.
+:::

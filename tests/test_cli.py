@@ -155,7 +155,7 @@ def test_sealed_workspace_warns_on_new_dump(tmp_path, monkeypatch, capsys):
     assert "new dump" in capsys.readouterr().err.lower()
 
 
-@pytest.mark.spec("prep-sealed-new-dump-warning-1", "seal-new-dump-warn-1")
+@pytest.mark.spec("prep-sealed-new-dump-warning-1", "seal-new-dump-warn-1", test="TST-cli-sealed_new_dump_is_left_exactly_in_place")
 def test_sealed_new_dump_is_left_exactly_in_place(tmp_path, monkeypatch, capsys):
     """The sealed-workspace new-dump path only WARNS — it never relocates the dumped file. After the
     refusal the file is byte-identical at its original 0-sources path (the operator must move it to a
@@ -169,7 +169,7 @@ def test_sealed_new_dump_is_left_exactly_in_place(tmp_path, monkeypatch, capsys)
     assert os.listdir(ws / "0-sources") == ["newdump.jpg"]     # nothing relocated
 
 
-@pytest.mark.spec("prep-prune-quarantine-exempt-seal-1", "seal-prune-exception-1")
+@pytest.mark.spec("prep-prune-quarantine-exempt-seal-1", "seal-prune-exception-1", test="TST-cli-prune_quarantine_is_the_sole_op_allowed_on_a_sealed_workspace")
 def test_prune_quarantine_is_the_sole_op_allowed_on_a_sealed_workspace(tmp_path, monkeypatch, capsys):
     """The seal blocks ONLY plan/dry-run/execute; prune-quarantine is the sole maintenance op that
     still runs on a sealed (terminal) workspace — quarantine cleanup must survive the seal. Assert it

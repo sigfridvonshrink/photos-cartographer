@@ -537,3 +537,31 @@ def test_a_copy_that_would_alter_prep_s_record_is_refused(tmp_path, monkeypatch,
     assert e.value.code not in (0, None)
     assert "would not carry prep's record unchanged for 1 photo" in "".join(capsys.readouterr())
     assert sorted(os.listdir(ws / ".photos-ingest")) == before
+
+
+@pytest.mark.spec("RUL-database_regions_disjoint", test="TST-geotag_rerun_markers-geotag_writes_only_its_own_part_of_the_database")
+def test_geotag_writes_only_its_own_part_of_the_database(tmp_path, monkeypatch):
+    """Geotag's plan, execution and finalize leave prep's part of the database exactly as it was, and
+    merge's untouched."""
+    import sqlite3
+    ws = _ws(tmp_path, [lambda ws: _rec(ws, f"{T}/a.arw", "2024:07:03 14:20:00")])
+    utils.WorkspaceCache(str(ws)).close()
+    db = str(ws / ".photos-ingest" / "photos-00-ingest.db")
+    conn = sqlite3.connect(db)
+    conn.execute("INSERT INTO meta VALUES ('a-prep-row', 'v')")
+    conn.execute("INSERT INTO library_fingerprint_cache VALUES ('/lib/x.jpg', 1, 2, 'fp', 's', 'e')")
+    conn.commit()
+    others = ("meta", "file_cache", "metadata_cache", "library_fingerprint_cache")
+
+    def rows():
+        return {t: sorted(map(repr, conn.execute(f"SELECT * FROM {t}"))) for t in others}
+    before = rows()
+    _plan(monkeypatch, ws)
+    _set_offset(ws, SLOW)
+    _plan(monkeypatch, ws)
+    _confirm_drift(ws, SLOW)
+    _plan(monkeypatch, ws)
+    _execute(monkeypatch, ws)
+    _finalize(monkeypatch, ws)
+    assert rows() == before
+    conn.close()

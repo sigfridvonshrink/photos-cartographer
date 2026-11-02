@@ -1577,3 +1577,266 @@ Anything beyond that MAY be pruned.
 A phase whose kept history cannot rebuild a photo's journey through it SHALL fail, or mark its record plainly partial;
 it SHALL NOT write a log that looks whole but reflects only the last run.
 :::
+
+:::{def} The workspace database
+:id: DEF-workspace_database
+:status: seed
+:uses: DEF-workspace, DEF-control_records
+
+The **workspace database** is the one database of record: what cartographer knows about the workspace's media — each
+file's identity and metadata, what each phase derived from them, the values a photo held before geotag first changed
+it, and the fingerprints of library files merge has read.
+:::
+
+:::{def} A phase's database image
+:id: DEF-database_image
+:status: seed
+:uses: DEF-workspace_database
+
+A phase's **database image** is a copy of the workspace database as it stood at the end of that phase's latest
+successful run.
+:::
+
+:::{rul} One database, in the workspace
+:id: RUL-one_database
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: db-single-workspace-1
+:uses: DEF-workspace_database, DEF-library
+
+A workspace SHALL hold exactly one database of record, and the library none. Any other database a phase keeps SHALL be
+scratch: holding no decision and no history, safe to delete at any time, and neither journalled nor archived.
+:::
+
+:::{rul} The database is part of the record
+:id: RUL-database_is_record
+:status: seed
+:criticality: low
+:verify: required
+:aliases: db-durable-artifact-1
+:uses: DEF-workspace_database, DEF-archival_package
+
+The workspace database SHALL be kept with the control records and archived in the package, never discarded with the
+workspace as a cache would be.
+:::
+
+:::{rul} Each phase writes only its own part of the database
+:id: RUL-database_regions_disjoint
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: db-disjoint-writers-1
+:uses: DEF-workspace_database
+:refines: RUL-phase_writes_own_records
+
+Each phase SHALL write only its own part of the workspace database; no two phases SHALL write the same rows. Finalize
+SHALL only read it.
+:::
+
+:::{rul} Each phase keeps an image of the database at its end
+:id: RUL-database_image_each_phase
+:status: seed
+:criticality: med
+:verify: required
+:aliases: db-snapshot-per-phase-1, db-snapshot-skip-on-failure-1
+:uses: DEF-database_image, DEF-archival_package
+
+Each phase SHALL keep its database image, refreshed by each of its successful runs and left untouched by every other
+phase; a run that does not succeed SHALL leave the image as it was. An image SHALL never be read back as working data,
+and every image present SHALL be archived in the package.
+:::
+
+:::{rul} An image is whole
+:id: RUL-database_image_whole
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: db-snapshot-consistent-1, db-snapshot-atomic-replace-1
+:uses: DEF-database_image
+
+A database image SHALL be a consistent state of the database, never a copy torn mid-transaction; an interrupted
+capture SHALL leave the earlier image or the new one, whole.
+:::
+
+## 13. Merge: the library kept, the workspace sealed
+
+:::{def} A sealed workspace
+:id: DEF-sealed_workspace
+:status: seed
+:uses: DEF-workspace, DEF-merge
+
+A workspace is **sealed** once merge has succeeded in it: marked as finished, by a mark only merge writes.
+:::
+
+:::{rul} Merge never alters the library
+:id: RUL-library_never_altered
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: merge-library-protected-1
+:uses: DEF-merge, DEF-library
+
+Merge SHALL never rename, overwrite, move, delete or change a file already in the library; where an incoming photo's
+place is taken, the incoming photo SHALL give way.
+:::
+
+:::{rul} Merge reads the library only where it places a photo
+:id: RUL-library_not_scanned
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:uses: DEF-merge, DEF-library
+
+Merge SHALL touch the library only at the places its photos go, and read a library file only when one is already
+there. It SHALL NOT scan, index or de-duplicate the library.
+:::
+
+:::{rul} A taken place is settled by content
+:id: RUL-collision_by_content
+:status: seed
+:criticality: high
+:verify: required
+:aliases: merge-collision-same-content-1, merge-collision-diff-content-1
+:uses: DEF-merge, DEF-library, DEF-fingerprint
+:refines: RUL-library_never_altered
+
+Where an incoming photo's place in the library is taken, merge SHALL compare the two by fingerprint. The same content
+SHALL mean the photo is already in the library: nothing is written there, and the workspace's copy is removed. Different
+content SHALL mean two photos share a name: the incoming one is placed under a differentiating name.
+:::
+
+:::{rul} A library file is read at most once while unchanged
+:id: RUL-library_file_read_once
+:status: seed
+:criticality: low
+:verify: required
+:aliases: merge-fingerprint-cached-onfly-1
+:uses: DEF-library, DEF-fingerprint, DEF-workspace_database
+
+A library file's fingerprint SHALL be computed only when a collision needs it, and kept, so that a library file
+unchanged since is never fingerprinted again in the workspace, in that run or a later one.
+:::
+
+:::{rul} Merge moves, and a photo leaves the workspace only once safe in the library
+:id: RUL-merge_moves
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: merge-move-leaves-bydest-empty-1, merge-move-atomic-source-last-1, merge-blocker-left-in-bydest-1
+:uses: DEF-merge, DEF-library, DEF-managed_folders
+
+Merge SHALL move each photo it places: the workspace's copy SHALL be removed only once the library's is verified in
+place, and a photo already in the library SHALL be removed likewise. A photo merge cannot place SHALL stay where it is,
+the run then partial.
+:::
+
+:::{rul} Merge resumes, and a merged batch is a no-op
+:id: RUL-merge_resumable
+:status: seed
+:criticality: med
+:verify: required
+:aliases: merge-idempotent-resumable-1
+:uses: DEF-merge
+:refines: RUL-no_op_run
+
+A merge interrupted SHALL be finished by running it again, which SHALL apply only what is outstanding; merging a batch
+already merged SHALL change nothing.
+:::
+
+:::{rul} Merge records where every photo landed
+:id: RUL-merge_records_landing
+:status: seed
+:criticality: low
+:verify: required
+:aliases: merge-records-summary-1
+:uses: DEF-merge, DEF-transformation_log
+:refines: RUL-phase_writes_own_records
+
+Merge SHALL record, in its own records, where each photo landed in the library, whether it was renamed there, which
+were already present, and what blocked the rest. Nothing SHALL be built from merge's records.
+:::
+
+:::{rul} Merge remakes the package as part of its run
+:id: RUL-merge_reseals
+:status: seed
+:criticality: med
+:verify: required
+:aliases: merge-reseals-automatically-1, merge-reseal-no-rederive-1
+:uses: DEF-merge, DEF-archival_package
+
+A merge that succeeds SHALL remake the archival package to hold its own records too, as part of the same run and with
+no command of its own, from the records as they stand: it SHALL re-derive nothing of an earlier phase.
+:::
+
+:::{rul} Only a whole merge seals
+:id: RUL-seal_on_success_only
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: seal-success-then-sealed-1, seal-partial-writes-no-marker-1
+:uses: DEF-sealed_workspace, DEF-merge
+
+Merge SHALL seal the workspace only when it succeeds whole: every photo by destination placed in the library or found
+already there, none left. A partial, failed or interrupted merge SHALL leave the workspace unsealed.
+:::
+
+:::{rul} The seal alone says a workspace is finished
+:id: RUL-seal_is_authority
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: seal-marker-is-authority-1, seal-marker-separate-file-1
+:uses: DEF-sealed_workspace, DEF-managed_folders
+
+Whether a workspace is finished SHALL be read from its seal alone, never from the state of its folders.
+:::
+
+:::{rul} A sealed workspace is never processed again
+:id: RUL-sealed_refuses
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: seal-scripts-hardstop-1, edit-sealed-refuses-1
+:uses: DEF-sealed_workspace, DEF-decision
+:refines: RUL-merge_is_terminal
+
+In a sealed workspace prep, geotag and merge SHALL stop as they start, changing and touching nothing, and the decision
+editor SHALL neither open it nor save into it. Its records MAY still be read.
+:::
+
+:::{rul} Pruning the quarantine is still allowed
+:id: RUL-sealed_prune_allowed
+:status: seed
+:criticality: high
+:verify: required
+:aliases: seal-prune-exception-1
+:uses: DEF-sealed_workspace
+:refines: RUL-sealed_refuses
+
+Pruning the quarantine SHALL remain allowed in a sealed workspace, and SHALL be the only change allowed there.
+:::
+
+:::{rul} A new dump in a sealed workspace is pointed out and left
+:id: RUL-sealed_new_dump_warned
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: seal-new-dump-warn-1
+:uses: DEF-sealed_workspace
+:refines: RUL-sealed_refuses
+
+A command refusing a sealed workspace that finds files where a dump would land — the workspace's top level or the
+inbox — SHALL say that a new dump is likely there and must go to a fresh workspace, and SHALL leave it exactly where it
+is.
+:::
