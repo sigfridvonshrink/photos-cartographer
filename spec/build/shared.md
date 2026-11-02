@@ -624,6 +624,8 @@ only prep writes — recording `sealed`, the merge run id (`merged_run_id`) and 
 Prep's `plan`, `dry-run` and `execute`, every geotag command, and merge's `plan`, `dry-run` and `execute` SHALL check it under the workspace
 lock before reading anything else, and stop with exit status 2 if it is there, adding the likely-new-dump warning when
 the workspace's top level holds a file or the inbox holds anything. `edit` SHALL refuse to serve a sealed workspace,
-and its save SHALL write nothing there. `prune-quarantine` SHALL not check the seal; nor does `merge init-library`,
-which given a path from inside a workspace records it as `library_root` in the configuration.
+and its save SHALL write nothing there. `merge init-library` given a path from inside a workspace, which would record it
+as `library_root` in the configuration, SHALL check the seal under the lock the same way, and stop with exit status 2
+having blessed nothing; without a path, or from outside any workspace, it writes nothing in the workspace and does not
+check. `prune-quarantine` SHALL not check the seal.
 :::
