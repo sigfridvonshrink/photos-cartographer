@@ -522,7 +522,7 @@ database because it is the user's own collection, organised as they choose, and 
 
 :::{rat} A database shows only now
 :id: RAT-database_shows_only_now
-:status: seed
+:status: ruled
 :justifies: RUL-database_image_each_phase
 
 The live database is one file that every phase changes, so at any moment it shows only the latest state: what prep
@@ -532,7 +532,7 @@ boundary, to be opened later and compared.
 
 :::{rat} An image is regenerable; a photo is not
 :id: RAT-image_replaced_not_kept
-:status: seed
+:status: ruled
 :justifies: RUL-database_image_each_phase, RUL-database_image_whole
 
 Never overwriting guards photos, which cannot be made again. An image can: it is a copy of the live database, and only
