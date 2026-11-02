@@ -2,6 +2,42 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-02 — §13's seed items, one by one: the log made to keep what it claims
+
+Vasile: *"let's discuss the seed items in turn"*. Each item was checked against the code before it was put; where the
+code fell short, the fix was proposed with it.
+
+- **Finalize only reads and records** — it writes only its own four files: *"yes"*.
+- **The package describes itself** — the manifest named the workspace by its folder alone, and the old workspace's
+  folder was called `workspace`; proposed the id of the prep run that created it, from the guard, the name kept
+  beside it: *"ok"*.
+- **A photo's entry grows one phase at a time** — finalize built geotag's steps from the latest plan only, matched by
+  path: a photo positioned and renamed in an earlier pass lost those steps. Proposed rebuilding them from every
+  executed pass, matched by fingerprint: *"yes"*.
+- **The log is keyed by fingerprint and carries the chain of names** — only the extension fix recorded where a photo
+  came from; proposed a `from` on every move and rename, so the first step holds the path in the dump: *"yes"*.
+- **A step names its decision** — the offset pointer missed per-day cells and drift confirmations, and a manual
+  position named none; proposed all three: *"yes"*.
+- **A manual position's reversal is logged** — a withdrawal and a new position in the same pass logged only the
+  revert; proposed both, the revert first: *"yes."*
+- **The log reads as it stands** — offsets were bare seconds; of `-01:55:00` and *camera clock 1 h 55 min ahead of
+  UTC*: *"second"*.
+- **History is kept across runs** — an earlier pass's pointer led to a record since edited; proposed the record's hash:
+  *"ok"*. Testing it showed the hash alone cannot find a version edited in place, as a decision saved from the editor
+  is; proposed that each execution keep the records it ran against, in `executed/<plan id>/`: *"do it"*.
+- **A history too thin is never shown as whole** — prep marked it, finalize never checked; proposed marking partial a
+  photo carrying geotag's mark that no pass here first corrected, and naming any pass whose plan is gone, neither
+  stopping finalize: *"do it"*.
+- **The log's keying and retention rationale, and its format**: *"yes"*.
+- **The transformation log, the whole record at every phase, why each phase keeps its own** — the rationale claimed
+  each record *"evident if tampered with by what came after"*, with nothing checking it. Offered keeping the claim,
+  weakening it, or checking that each copy carries the earlier log unchanged: *"1 build"*. That `BLD-phase_logs` omit
+  the kept plans, journals and executed records: *"2 ok"*. Building the check found finalize and merge each starting
+  from an empty record when the earlier log could not be read, and geotag's note able to overwrite one of prep's; both
+  fixed. The check then forbade a later phase changing `final_path`, which only prep wrote and later phases left stale:
+  *"so then prep_path makes sense? and then geotag_final_path and maybe library_path?"* — proposed `geotag_path`
+  beside the other two. *"then I rule all 5 (including the library_path/geotag_path/prep_path). And you van build"*.
+
 ## 2026-11-01 — a fixed time is a suffix on the device's own value
 
 `time_only` replaced the field's whole value, so a phone's own `GPSProcessingMethod` — `fused`, `GPS` — was lost when
