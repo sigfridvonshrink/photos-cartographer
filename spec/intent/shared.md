@@ -1612,7 +1612,7 @@ scratch: holding no decision and no history, safe to delete at any time, and nei
 
 :::{rul} The database is part of the record
 :id: RUL-database_is_record
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :aliases: db-durable-artifact-1

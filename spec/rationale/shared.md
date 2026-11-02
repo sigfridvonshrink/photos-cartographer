@@ -511,7 +511,7 @@ open-ended store of events.
 
 :::{rat} The database holds what the record cannot rebuild
 :id: RAT-database_is_record
-:status: seed
+:status: ruled
 :justifies: RUL-database_is_record, RUL-one_database
 
 The database is not only a cache that makes re-runs cheap: it holds what nothing else does — the values a photo held
