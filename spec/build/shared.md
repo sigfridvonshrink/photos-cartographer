@@ -554,7 +554,7 @@ but whose plan is missing (geotag §31).
 
 :::{bld} The database: its file, its writers, its images
 :id: BLD-workspace_database
-:status: seed
+:status: ruled
 :realises: RUL-one_database, RUL-database_is_record, RUL-database_regions_disjoint, RUL-database_image_each_phase, RUL-database_image_whole
 :uses: BLD-record_ownership
 
