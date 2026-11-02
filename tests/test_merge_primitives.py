@@ -93,7 +93,7 @@ def test_write_library_marker_is_idempotent_no_clobber(tmp_path):
 
 # --- Workspace seal marker writer (merge §9.4 / shared §13.7) -------------------
 
-@pytest.mark.spec("merge-seal-separate-file-not-guard-field-1", "seal-marker-separate-file-1")
+@pytest.mark.spec("merge-seal-separate-file-not-guard-field-1", "seal-marker-separate-file-1", test="TST-merge_primitives-write_sealed_marker")
 def test_write_sealed_marker(tmp_path):
     ws = tmp_path / "ws"
     ws.mkdir()
@@ -112,7 +112,7 @@ def _fp(value="abc123"):
             "engine_version": "im-7.1"}
 
 
-@pytest.mark.spec("merge-cache-library-fingerprint-in-workspace-db-1", "merge-fingerprint-cached-onfly-1")
+@pytest.mark.spec("merge-cache-library-fingerprint-in-workspace-db-1", "merge-fingerprint-cached-onfly-1", test="TST-merge_primitives-library_fingerprint_cache_roundtrip_and_staleness")
 def test_library_fingerprint_cache_roundtrip_and_staleness(tmp_path):
     cache = utils.WorkspaceCache(str(tmp_path), in_memory=True)
     try:

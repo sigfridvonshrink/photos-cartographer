@@ -34,7 +34,7 @@ MANAGED = ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
 
 # --- shared write_db_snapshot helper ----------------------------------------
 
-@pytest.mark.spec("db-snapshot-consistent-1", "geotag-finalize-db-snapshot-1")
+@pytest.mark.spec("db-snapshot-consistent-1", "geotag-finalize-db-snapshot-1", test="TST-geotag_finalize-write_db_snapshot_is_a_valid_copy")
 def test_write_db_snapshot_is_a_valid_copy(tmp_path):
     src = tmp_path / "live.db"
     conn = sqlite3.connect(str(src))

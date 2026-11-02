@@ -508,3 +508,108 @@ A journey spans many runs — prep, re-prep after moves, repeated geotag passes,
 run alone would silently lose the rest. What is kept exists to serve the log, and resuming and auditing; it is not an
 open-ended store of events.
 :::
+
+:::{rat} The database holds what the record cannot rebuild
+:id: RAT-database_is_record
+:status: seed
+:justifies: RUL-database_is_record, RUL-one_database
+
+The database is not only a cache that makes re-runs cheap: it holds what nothing else does — the values a photo held
+before geotag first changed it, which let any change be undone, and each photo's identity across its moves. Discarded
+with the workspace, that knowledge would be lost; kept in two places, the two could disagree. The library keeps no
+database because it is the user's own collection, organised as they choose, and merge only adds to it.
+:::
+
+:::{rat} A database shows only now
+:id: RAT-database_shows_only_now
+:status: seed
+:justifies: RUL-database_image_each_phase
+
+The live database is one file that every phase changes, so at any moment it shows only the latest state: what prep
+knew is overwritten by what geotag learned. An image taken at each phase's end keeps the database's state at every
+boundary, to be opened later and compared.
+:::
+
+:::{rat} An image is regenerable; a photo is not
+:id: RAT-image_replaced_not_kept
+:status: seed
+:justifies: RUL-database_image_each_phase, RUL-database_image_whole
+
+Never overwriting guards photos, which cannot be made again. An image can: it is a copy of the live database, and only
+the latest end of each phase is worth keeping, so a phase's next successful run replaces its image — whole, so that a
+capture interrupted leaves a usable image either way.
+:::
+
+## 13. Merge: the library kept, the workspace sealed
+
+:::{rat} The library is the user's, and already in order
+:id: RAT-library_is_ground_truth
+:status: seed
+:justifies: RUL-library_never_altered, RUL-library_not_scanned, RUL-collision_by_content
+
+The library is the user's curated collection: its organisation and names are the ground truth, and other tools and
+people rely on them. So merge adds to it and changes nothing in it, and assumes it is in order rather than scanning it:
+scanning a whole library to place one batch would cost far more than it saves. Where a name is taken, only the content
+tells a copy already present from a different photo sharing a name.
+:::
+
+:::{rat} A library file costs a full read
+:id: RAT-library_reads_cost
+:status: seed
+:justifies: RUL-library_file_read_once
+
+Fingerprinting a library file means reading and decoding it whole, and the library may sit across a network. Kept in the workspace, a
+fingerprint already taken spares that read on the next run, and stays right while the file is unchanged.
+:::
+
+:::{rat} The workspace keeps only what still needs attention
+:id: RAT-move_not_copy
+:status: seed
+:justifies: RUL-merge_moves, RUL-merge_resumable
+
+A copy left in the workspace of a photo already in the library is a duplicate that invites confusion and wastes space,
+so merge moves rather than copies, and removes a copy whose content the library already holds. What stays behind is
+exactly what still needs attention. Removing the workspace's copy last, once the library's is verified, means an
+interruption never loses a photo: running merge again finishes the work.
+:::
+
+:::{rat} Merge is the end, so the package is remade at once
+:id: RAT-reseal_automatic
+:status: seed
+:justifies: RUL-merge_reseals
+
+Merge adds to the record finalize packaged, so that package no longer describes the whole journey. Since merge is the
+workspace's last act, remaking the package once at its end is what the user always wants. Finalize stays its own
+command because geotag is freely re-run, and re-packaging after every pass would be wasted.
+:::
+
+:::{rat} An empty folder means two things; a mark means one
+:id: RAT-seal_not_folder_state
+:status: seed
+:justifies: RUL-seal_is_authority, RUL-seal_on_success_only
+
+Photos by destination is empty both in a workspace just sorted and in one merged and finished, so its state cannot say
+which a workspace is. A mark written only when merge succeeds whole can — and a merge that left a photo behind writes
+none, so it can be finished by running it again.
+:::
+
+:::{rat} A finished workspace is read, not reprocessed
+:id: RAT-sealed_is_final
+:status: seed
+:justifies: RUL-sealed_refuses, RUL-sealed_new_dump_warned
+
+A second batch processed in a merged workspace would interleave with the first's database, logs and package, and its
+record would no longer describe one dump. So nothing that could change it runs; the records stay readable; and a dump
+dropped there is left untouched and pointed out, for the user to move to a fresh workspace by hand — safer than any
+automated move inside a finished workspace.
+:::
+
+:::{rat} Pruning the quarantine changes nothing controlled
+:id: RAT-prune_harms_nothing
+:status: seed
+:justifies: RUL-sealed_prune_allowed
+
+The quarantine holds only spare copies of duplicates, which a sealed workspace still keeps. Deleting them touches no
+photo, library file, record or row of the database, and neither reprocesses the workspace nor adds a batch to it, so
+the seal's reasons do not reach it, and the space can be reclaimed.
+:::

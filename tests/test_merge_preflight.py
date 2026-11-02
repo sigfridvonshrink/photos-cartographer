@@ -105,7 +105,7 @@ def test_clean_workspace_passes(tmp_path):
 
 # --- lifecycle / structural guards (return early) ----------------------------
 
-@pytest.mark.spec("seal-marker-is-authority-1")
+@pytest.mark.spec("seal-marker-is-authority-1", test="TST-merge_preflight-sealed_blocks_and_warns_on_dump")
 def test_sealed_blocks_and_warns_on_dump(tmp_path):
     ws, _ = _make(tmp_path, sources_files=("newdump.jpg",))
     (_ctl(ws) / "photos-00-sealed.json").write_text('{"sealed": true, "merged_run_id": "r1"}')

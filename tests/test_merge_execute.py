@@ -133,7 +133,7 @@ def _tree(root):
 
 # --- the four dispositions ---------------------------------------------------
 
-@pytest.mark.spec("merge-create-library-dest-subdir-1", "merge-move-leaves-bydest-empty-1", "merge-move-placed-out-of-by-dest-1", "merge-summary-counts-partition-1")
+@pytest.mark.spec("merge-create-library-dest-subdir-1", "merge-move-leaves-bydest-empty-1", "merge-move-placed-out-of-by-dest-1", "merge-summary-counts-partition-1", test="TST-merge_execute-execute_placed_new_moves_into_library")
 def test_execute_placed_new_moves_into_library(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     assert merge._run_locked_workflow("plan", str(ws)) == 0
@@ -148,7 +148,7 @@ def test_execute_placed_new_moves_into_library(tmp_path):
     assert s["resume"] == {"newly_moved": 1, "already_done_skipped": 0}
 
 
-@pytest.mark.spec("merge-collision-same-content-1", "merge-no-duplicate-of-library-file-1")
+@pytest.mark.spec("merge-collision-same-content-1", "merge-no-duplicate-of-library-file-1", test="TST-merge_execute-execute_already_present_removes_source_no_write")
 def test_execute_already_present_removes_source_no_write(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
                   library_files=[{"fp": "A", "dest": "Trip", "name": "a.jpg"}])
@@ -159,7 +159,7 @@ def test_execute_already_present_removes_source_no_write(tmp_path):
     assert _summary(ws)["totals"]["already_present"] == 1
 
 
-@pytest.mark.spec("merge-collision-diff-content-1", "merge-different-content-rename-incoming-1", "merge-library-file-never-deleted-written-renamed-1")
+@pytest.mark.spec("merge-collision-diff-content-1", "merge-different-content-rename-incoming-1", "merge-library-file-never-deleted-written-renamed-1", test="TST-merge_execute-execute_renamed_incoming_places_under_safe_name")
 def test_execute_renamed_incoming_places_under_safe_name(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "NEW", "dest": "Trip", "final_name": "ts.jpg"}],
                   library_files=[{"fp": "OLD", "dest": "Trip", "name": "ts.jpg"}])
@@ -182,7 +182,7 @@ def test_execute_unfingerprintable_library_blocks_and_keeps_source(tmp_path):
     assert s["totals"]["blocked"] == 1 and s["failures"]
 
 
-@pytest.mark.spec("exec-noclobber-recheck-1", "merge-execute-no-clobber-at-execute-time-1", "merge-execute-occupied-different-blocker-1", "merge-execute-safe-alt-only-if-planned-1", "merge-library-protected-1")
+@pytest.mark.spec("exec-noclobber-recheck-1", "merge-execute-no-clobber-at-execute-time-1", "merge-execute-occupied-different-blocker-1", "merge-execute-safe-alt-only-if-planned-1", "merge-library-protected-1", test="TST-merge_execute-execute_occupied_by_different_content_at_execute_blocks_no_clobber")
 def test_execute_occupied_by_different_content_at_execute_blocks_no_clobber(tmp_path):
     """TOCTOU clobber guard: target FREE at plan (placed_new), then a *different-content* file appears
     at the planned target before execute. The execute-time recheck must refuse — rc 3, source left in
@@ -322,7 +322,7 @@ def test_config_is_byte_identical_across_plan_dryrun_execute(tmp_path):
 
 # --- resume (state-derivation, §8.3) -----------------------------------------
 
-@pytest.mark.spec("merge-interrupted-not-sealed-resumes-1", "merge-move-atomic-source-last-1", "merge-resume-state-derivation-1")
+@pytest.mark.spec("merge-interrupted-not-sealed-resumes-1", "merge-move-atomic-source-last-1", "merge-resume-state-derivation-1", test="TST-merge_execute-execute_resume_after_crash_before_seal")
 def test_execute_resume_after_crash_before_seal(tmp_path, monkeypatch):
     # Full success seals the workspace, so the genuine resume case is a crash AFTER the moves/journal
     # but BEFORE the seal: the re-run must recognize the already-moved files (state-derivation) and
@@ -349,7 +349,7 @@ def test_execute_resume_after_crash_before_seal(tmp_path, monkeypatch):
     assert open(os.path.join(str(lib), "Trip", "a.jpg"), "rb").read() == _fp_bytes("A")
 
 
-@pytest.mark.spec("merge-execute-occupied-identical-treat-present-1", "merge-idempotent-resumable-1", "merge-resume-completes-crash-window-1")
+@pytest.mark.spec("merge-execute-occupied-identical-treat-present-1", "merge-idempotent-resumable-1", "merge-resume-completes-crash-window-1", test="TST-merge_execute-execute_resume_finishes_crash_window")
 def test_execute_resume_finishes_crash_window(tmp_path):
     # Simulate a crash AFTER the library copy is in place but BEFORE the source was removed: both
     # present + fingerprints match -> resume finishes the source removal (no duplicate kept).
@@ -654,7 +654,7 @@ def _ctl(ws, name):
     return os.path.join(str(ws), ".photos-ingest", name)
 
 
-@pytest.mark.spec("merge-execute-db-snapshot-on-success-1", "merge-records-summary-1", "merge-reseal-archive-automatic-1", "merge-reseals-automatically-1", "seal-success-then-sealed-1")
+@pytest.mark.spec("merge-execute-db-snapshot-on-success-1", "merge-records-summary-1", "merge-reseal-archive-automatic-1", "merge-reseals-automatically-1", "seal-success-then-sealed-1", test="TST-merge_execute-full_success_writes_terminal_artifacts_and_seals")
 def test_full_success_writes_terminal_artifacts_and_seals(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     assert merge._run_locked_workflow("plan", str(ws)) == 0
@@ -700,7 +700,7 @@ def test_merge_log_copies_photos25_forward_and_appends(tmp_path):
     assert p25["photos"]["A"]["journey"] == [{"phase": "geotag", "action": "renamed"}]
 
 
-@pytest.mark.spec("merge-blocker-left-in-by-dest-partial-1", "merge-blocker-left-in-bydest-1", "merge-seal-only-on-full-success-1", "seal-partial-writes-no-marker-1")
+@pytest.mark.spec("merge-blocker-left-in-by-dest-partial-1", "merge-blocker-left-in-bydest-1", "merge-seal-only-on-full-success-1", "seal-partial-writes-no-marker-1", test="TST-merge_execute-partial_run_does_not_seal_or_finalize")
 def test_partial_run_does_not_seal_or_finalize(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
                   library_files=[{"fp": "FAIL", "dest": "Trip", "name": "a.jpg"}])
@@ -764,7 +764,7 @@ def test_re_plan_after_crash_before_seal_is_refused(tmp_path, monkeypatch):
     assert merge._run_locked_workflow("plan", str(ws)) == 2          # re-plan still refused
 
 
-@pytest.mark.spec("merge-sealed-hardstop-touch-nothing-1", "seal-scripts-hardstop-1")
+@pytest.mark.spec("merge-sealed-hardstop-touch-nothing-1", "seal-scripts-hardstop-1", test="TST-merge_execute-sealed_workspace_rerun_hardstops")
 def test_sealed_workspace_rerun_hardstops(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     assert merge._run_locked_workflow("plan", str(ws)) == 0
@@ -810,3 +810,106 @@ def test_reseal_archives_the_control_directory_with_merges_records(tmp_path):
     with tarfile.open(ctl / "photos-35-archive.tar.gz") as tar:
         names = set(tar.getnames())
     assert names == {rec["path"] for rec in manifest["contents"].values()} | {".photos-ingest/photos-35-archive-manifest.json"}
+
+
+def _rows(db, skip=()):
+    """{table: sorted rows} of every table in the SQLite file `db` but those in `skip`."""
+    import sqlite3
+    conn = sqlite3.connect(db)
+    try:
+        tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")]
+        return {t: sorted(map(repr, conn.execute(f"SELECT * FROM {t}"))) for t in tables if t not in skip}
+    finally:
+        conn.close()
+
+
+@pytest.mark.spec("RUL-database_regions_disjoint", test="TST-merge_execute-merge_writes_only_its_own_part_of_the_database")
+def test_merge_writes_only_its_own_part_of_the_database(tmp_path):
+    """Merge writes the library-file fingerprint cache and nothing else of the database: prep's and
+    geotag's rows stand exactly as they were."""
+    import sqlite3
+    import photos_2_geotag as geotag
+    ws, lib = _ws(tmp_path, [{"fp": "NEW", "dest": "Trip", "final_name": "ts.jpg"}],
+                  library_files=[{"fp": "OLD", "dest": "Trip", "name": "ts.jpg"}])
+    utils.WorkspaceCache(str(ws)).close()
+    geotag.GeotagCache(str(ws)).close()
+    db = os.path.join(str(ws), ".photos-ingest", "photos-00-ingest.db")
+    conn = sqlite3.connect(db)
+    conn.execute("INSERT INTO original_values VALUES ('NEW', '6-photos-by-dest/Trip/ts.jpg', '{}', 't')")
+    conn.execute("INSERT INTO meta VALUES ('a-prep-row', 'v')")
+    conn.commit()
+    conn.close()
+    before = _rows(db, skip=("library_fingerprint_cache",))
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    assert _rows(db, skip=("library_fingerprint_cache",)) == before
+    assert _rows(db)["library_fingerprint_cache"]                      # its own part: written
+
+
+@pytest.mark.spec("RUL-one_database", test="TST-merge_execute-one_database_in_the_workspace_none_in_the_library")
+def test_one_database_in_the_workspace_none_in_the_library(tmp_path):
+    """After a whole merge the workspace holds one database of record, besides the phase images and
+    prep's scratch memo, and the library holds no database at all."""
+    ws, lib = _ws(tmp_path, [{"fp": "NEW", "dest": "Trip", "final_name": "ts.jpg"}],
+                  library_files=[{"fp": "OLD", "dest": "Trip", "name": "ts.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+
+    def sqlite_files(root):
+        out = []
+        for dp, _dn, fns in os.walk(root):
+            for fn in fns:
+                with open(os.path.join(dp, fn), "rb") as f:
+                    if f.read(16) == b"SQLite format 3\x00":
+                        out.append(os.path.relpath(os.path.join(dp, fn), root))
+        return sorted(out)
+    images = {"photos-15-prep-ingest.db", "photos-26-geotag-ingest.db", "photos-35-merge-ingest.db",
+              "photos-00-plan-memo.db"}
+    found = sqlite_files(str(ws))
+    assert os.path.join(".photos-ingest", "photos-00-ingest.db") in found
+    assert {os.path.basename(f) for f in found} - images == {"photos-00-ingest.db"}
+    assert sqlite_files(str(lib)) == []
+
+
+@pytest.mark.spec("RUL-library_not_scanned", test="TST-merge_execute-merge_reads_the_library_only_where_it_places_a_photo")
+def test_merge_reads_the_library_only_where_it_places_a_photo(tmp_path, monkeypatch):
+    """Merge lists only the folders its photos go to — and the library's top folder, for temporary copies
+    a crash of its own left — never walks the library, and fingerprints a library file only where an
+    incoming photo's place is taken."""
+    ws, lib = _ws(tmp_path, [{"fp": "NEW", "dest": "Trip", "final_name": "ts.jpg"}],
+                  library_files=[{"fp": "OLD", "dest": "Trip", "name": "ts.jpg"},
+                                 {"fp": "SIB", "dest": "Trip", "name": "sibling.jpg"},
+                                 {"fp": "FAR", "dest": "Elsewhere", "name": "far.jpg"}])
+    root = str(lib)
+    listed, walked, read = [], [], []
+    real_listdir, real_walk, real_scandir = os.listdir, os.walk, os.scandir
+    real_fp = merge.MergeWorkflow._fingerprint_library_file
+
+    def listdir(p="."):
+        if str(p).startswith(root):
+            listed.append(os.path.relpath(str(p), root))
+        return real_listdir(p)
+
+    def walk(p, *a, **k):
+        if str(p).startswith(root):
+            walked.append(str(p))
+        return real_walk(p, *a, **k)
+
+    def scandir(p="."):
+        if str(p).startswith(root):
+            walked.append(str(p))
+        return real_scandir(p)
+
+    def fp(self, abs_path):
+        if abs_path.startswith(root):
+            read.append(os.path.relpath(abs_path, root))
+        return real_fp(self, abs_path)
+    monkeypatch.setattr(os, "listdir", listdir)
+    monkeypatch.setattr(os, "walk", walk)
+    monkeypatch.setattr(os, "scandir", scandir)
+    monkeypatch.setattr(merge.MergeWorkflow, "_fingerprint_library_file", fp)
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    assert set(listed) <= {"Trip", "."} and not walked     # the top folder: only for merge's own temporaries
+    assert "Trip/sibling.jpg" not in read and not any(r.startswith("Elsewhere") for r in read)
+    assert "Trip/ts.jpg" in read
