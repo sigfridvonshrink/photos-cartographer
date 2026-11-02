@@ -402,4 +402,4 @@
 13.3a	Each phase fails (or warns and produces a clearly-partial record) if the retained history is insufficient to reconstruct the journey through its phase — it must not silently emit a log that looks complete but only reflects the last run.	RUL-partial_history_shown BLD-log_format	
 13.3a	(Prep applies this to its own end-of-phase log, Section 16.1; finalize applies it through geotag; merge through merge.)	RUL-partial_history_shown	
 13.3a	Illustrative per-photo shape (not normative):	dropped	an introduction to an example
-13.3a	```json [sha1:540fbd4c, 21 lines]	dropped	an illustration the contract itself marks not normative; the format is BLD-log_format
+13.3a	```json [sha1:f9279829, 22 lines]	dropped	an illustration the contract itself marks not normative; the format is BLD-log_format

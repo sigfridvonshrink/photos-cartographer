@@ -485,7 +485,7 @@ pre-state ledger (geotag §24.1); an automatic position is recomputed, never rol
 
 :::{bld} The per-phase logs and records
 :id: BLD-phase_logs
-:status: seed
+:status: ruled
 :realises: RUL-record_whole_each_phase, RUL-carry_forward_by_copy
 
 Prep SHALL write `photos-15-prep-log.json` at the end of every prep run (prep §16.1). Geotag's finalize SHALL copy it
@@ -532,7 +532,9 @@ re-seal does the same into `photos-35-archive-manifest.json` and `photos-35-arch
 :realises: RUL-log_entry_grows, RUL-log_keyed_by_fingerprint, RUL-log_cites_decisions, RUL-log_records_gps_reverts, RUL-log_human_readable, RUL-history_retained, RUL-partial_history_shown
 
 Each log SHALL be pretty-printed JSON with sorted keys, its `photos` keyed by the content fingerprint (`content_fingerprint`),
-each entry carrying `final_path` and a `journey` of steps, each step naming its `phase` and `action`, a move or rename
+each entry carrying where each phase left the photo — `prep_path`, written by prep and updated by every prep run;
+`geotag_path`, by finalize, its by-dest folder under the name its last final rename gave it; `library_path`, by merge —
+and a `journey` of steps, each step naming its `phase` and `action`, a move or rename
 its `from` and `to` — the first step's `from` being the photo's path in the dump — and, where a decision caused it, a
 `because` naming the decision exactly: a clock offset its `photos-21` cell, with its day where the camera's photos
 there span days (`camera_group_time_decisions.<group>@<date>`), or the `photos-22` drift confirmation whose validated

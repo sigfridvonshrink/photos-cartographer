@@ -1598,7 +1598,7 @@ class GeotagWorkflow:
                                    "prep part of every journey is absent"] if prep_unread else [])
         self.finalize_warnings += [f"geotag pass {pid} ran (its journal is kept) but its plan is missing: "
                                    "its steps are not in the log" for pid in self._passes_without_a_plan(plan.get("plan_id"))]
-        self.finalize_warnings += [f"{e.get('final_path') or fp}: {s['note']}" for fp, e in sorted(photos.items())
+        self.finalize_warnings += [f"{e.get('geotag_path') or e.get('prep_path') or fp}: {s['note']}" for fp, e in sorted(photos.items())
                                    for s in e.get("journey") or [] if s.get("action") == "history_incomplete"]
         log = {"schema_version": 1, "tool": "photos-2-geotag", "photos": photos}
         if self.finalize_warnings:

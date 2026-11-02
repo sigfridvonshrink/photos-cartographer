@@ -430,6 +430,6 @@ def test_a_prep_only_workspace_has_a_whole_record(tmp_path, monkeypatch):
     assert len(log) == 2
     for fp, entry in log.items():
         assert entry["journey"] and all(step["phase"] == "prep" for step in entry["journey"])
-        assert (ws / entry["final_path"]).is_file()
+        assert (ws / entry["prep_path"]).is_file()
     assert (ctl / "photos-15-prep-ingest.db").is_file()
     assert not glob.glob(str(ctl / "photos-2*")) and not glob.glob(str(ctl / "photos-3*"))

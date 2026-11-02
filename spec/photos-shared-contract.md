@@ -518,7 +518,8 @@ Illustrative per-photo shape (not normative):
 ```json
 {
   "content_fingerprint": "…",
-  "final_path": "6-photos-by-dest/Belgium/Brussels/2024-07-03--14-12-21.arw",
+  "prep_path": "6-photos-by-dest/Belgium/Brussels/2024-07-03--14-12-08.arw",
+  "geotag_path": "6-photos-by-dest/Belgium/Brussels/2024-07-03--14-12-21.arw",
   "camera_group": "sony_a6400_serial_123456",
   "journey": [
     { "phase": "prep", "action": "extension_normalized", "from": "DSC01234.ARW", "to": "dsc01234.arw" },
