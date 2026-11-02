@@ -67,6 +67,7 @@ def test_complete_log_superset_and_geotag_steps():
     photos = cal.build_complete_log(prep, files, rows, ta, plan, [])
     actions = [s["action"] for s in photos["fpA"]["journey"]]
     assert actions[0] == "organized"                                     # prep step preserved (superset)
+    assert photos["fpA"]["geotag_path"] == f"{BYDEST}/T/2024-07-03--14-00-00.arw"   # the name geotag gave
     assert actions[1:] == ["clock_offset_applied", "resolved_utc", "timezone_resolved",
                            "gps_preserved", "final_rename"]
     off = photos["fpA"]["journey"][1]

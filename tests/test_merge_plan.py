@@ -381,8 +381,8 @@ def test_a_log_edited_after_finalize_blocks_merge(tmp_path, monkeypatch, capsys)
     ctl = ws / ".photos-ingest"
     step = {"phase": "prep", "action": "moved_to_by_date", "from": "a", "to": "b"}
     (ctl / "photos-15-prep-log.json").write_text(json.dumps(
-        {"photos": {"A": {"content_fingerprint": "A", "final_path": "b", "journey": [step]}}}))
-    carried = {"A": {"content_fingerprint": "A", "final_path": "b", "partial": True,
+        {"photos": {"A": {"content_fingerprint": "A", "prep_path": "b", "journey": [step]}}}))
+    carried = {"A": {"content_fingerprint": "A", "prep_path": "b", "partial": True,
                      "journey": [step, {"phase": "geotag", "action": "final_rename", "from": "b", "to": "c"}]}}
     (ctl / "photos-26-complete-log.json").write_text(json.dumps({"photos": carried}))
     assert merge._run_locked_workflow("plan", str(ws)) == 0
@@ -401,11 +401,11 @@ def test_a_log_edited_after_finalize_blocks_merge(tmp_path, monkeypatch, capsys)
 
 def test_entries_not_carried():
     """Only additions pass: a field changed or dropped, a step changed or dropped, or an entry gone, fails."""
-    e = {"content_fingerprint": "A", "final_path": "b", "journey": [{"action": "x"}]}
+    e = {"content_fingerprint": "A", "prep_path": "b", "journey": [{"action": "x"}]}
     nc = utils.entries_not_carried
     assert nc({"A": e}, {"A": dict(e, partial=True, journey=e["journey"] + [{"action": "y"}])}) == []
-    assert nc({"A": e}, {"A": dict(e, final_path="c")}) == ["A"]
-    assert nc({"A": e}, {"A": {k: v for k, v in e.items() if k != "final_path"}}) == ["A"]
+    assert nc({"A": e}, {"A": dict(e, prep_path="c")}) == ["A"]
+    assert nc({"A": e}, {"A": {k: v for k, v in e.items() if k != "prep_path"}}) == ["A"]
     assert nc({"A": e}, {"A": dict(e, journey=[])}) == ["A"]
     assert nc({"A": e}, {"A": dict(e, journey=[{"action": "z"}, {"action": "x"}])}) == ["A"]
     assert nc({"A": e}, {}) == ["A"]

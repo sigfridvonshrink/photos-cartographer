@@ -224,27 +224,27 @@ def build_prep_log(prior_photos, operations, cache_files, quarantine_evidence, i
         prior = prior_photos.get(fp)
         run_steps = run_steps_by_fp.get(fp, [])
         quar = quarantined_by_fp.get(fp)
-        current = fp_to_current.get(fp) or (prior.get("final_path") if prior else None)
+        current = fp_to_current.get(fp) or (prior.get("prep_path") if prior else None)
         if not (prior or run_steps or quar):
             # No prep transformation recorded for this content. In a prep-organized band that
             # means lost history (warn + partial, §13.3a); by-dest/user-curated media is skipped.
             top = current.split('/', 1)[0] if current else ""
             if top in _bands:
-                photos[fp] = {"content_fingerprint": fp, "final_path": current, "journey": [],
+                photos[fp] = {"content_fingerprint": fp, "prep_path": current, "journey": [],
                               "partial": True, "note": "prep history incomplete (no retained journey)"}
                 warnings.append(f"prep-log: incomplete history for {current}")
             continue
         if prior:
             journey = list(prior.get("journey", [])) + run_steps
-            if not run_steps and current and current != prior.get("final_path"):
+            if not run_steps and current and current != prior.get("prep_path"):
                 # Recognized by-date -> by-dest move (carried-forward identity, no plan op).
-                journey.append({"phase": "user", "action": "moved_to_by_dest", "from": prior.get("final_path"),
+                journey.append({"phase": "user", "action": "moved_to_by_dest", "from": prior.get("prep_path"),
                                 "to": current, "run": run_id})
-            entry = {**prior, "final_path": current or prior.get("final_path"), "journey": journey}
+            entry = {**prior, "prep_path": current or prior.get("prep_path"), "journey": journey}
         else:
-            entry = {"content_fingerprint": fp, "final_path": current, "journey": run_steps}
+            entry = {"content_fingerprint": fp, "prep_path": current, "journey": run_steps}
         if quar:
-            entry["deduplicated"] = {"retained": entry.get("final_path"), "quarantined": quar}
+            entry["deduplicated"] = {"retained": entry.get("prep_path"), "quarantined": quar}
         photos[fp] = entry
     return photos, warnings
 

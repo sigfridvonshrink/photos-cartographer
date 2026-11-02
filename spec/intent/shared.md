@@ -1396,7 +1396,7 @@ time and a name SHALL be recomputed where the file stands, never moving it out o
 
 :::{def} The transformation log
 :id: DEF-transformation_log
-:status: seed
+:status: ruled
 :uses: DEF-fingerprint
 
 The **transformation log** is the human-readable account, photo by photo and keyed by each photo's fingerprint, of
@@ -1414,7 +1414,7 @@ through the pipeline — what was done to its photos and why. It is what the use
 
 :::{rul} The record is whole at the end of every phase
 :id: RUL-record_whole_each_phase
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: archive-complete-each-phase-1

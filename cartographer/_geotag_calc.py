@@ -1139,6 +1139,10 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, l
         if run:
             steps[start:] = [dict(s, run=run) for s in steps[start:]]
         _with_record_hashes(steps[start:], plan)
+        # where geotag left the photo: its by-dest folder, under the name its last final rename gave it
+        renamed = [s["to"] for s in steps if s.get("phase") == "geotag" and s.get("action") == "final_rename"
+                   and s.get("to")]
+        entry["geotag_path"] = os.path.join(os.path.dirname(rel), renamed[-1]) if renamed else rel
     return photos
 
 

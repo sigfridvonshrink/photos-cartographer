@@ -854,6 +854,7 @@ class MergeWorkflow:
                 continue
             fp = r["content_fingerprint"]
             entry = photos.setdefault(fp, {"content_fingerprint": fp, "journey": []})
+            entry["library_path"] = r["library_path"]           # where the photo now is
             entry.setdefault("journey", []).append({
                 "phase": "merge",
                 "action": "already_present" if r["final_kind"] == "already_present" else "placed",

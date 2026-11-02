@@ -467,7 +467,7 @@ The three phases share one stance on authorship, stated once; each phase states 
 
 :::{rat} The workspace is transient; the record must not be
 :id: RAT-record_outlives_workspace
-:status: seed
+:status: ruled
 :justifies: RUL-record_whole_each_phase
 
 The decisions drive a run, but their lasting value is as the record of what was done to the archive and why — and the
@@ -479,7 +479,7 @@ must be whole at each.
 
 :::{rat} A record no later phase can silently alter
 :id: RAT-records_attributable
-:status: seed
+:status: ruled
 :justifies: RUL-phase_writes_own_records, RUL-carry_forward_by_copy
 
 With each phase writing only its own records and carrying earlier ones forward by copy, every phase's output stays a

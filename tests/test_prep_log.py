@@ -86,7 +86,7 @@ def test_media_journey_keyed_by_fingerprint(tmp_path, monkeypatch):
     assert ("extension_normalized", "IMG.JPG") in [(s["action"], s.get("from")) for s in entry["journey"]]
     assert any(a == "organized" for a, _ in actions)
     assert any(a == "provisional_rename" for a, _ in actions)
-    assert entry["final_path"].startswith("5-photos-by-date/")
+    assert entry["prep_path"].startswith("5-photos-by-date/")
     assert all(s.get("run") for s in entry["journey"])     # each step attributed to its run
 
 
@@ -100,7 +100,7 @@ def test_quarantined_duplicate_recorded(tmp_path, monkeypatch):
     photos = _log(ws)["photos"]
     assert len(photos) == 1                                # one content, one entry
     entry = next(iter(photos.values()))
-    assert entry["deduplicated"]["retained"] == entry["final_path"]   # final location of the kept file
+    assert entry["deduplicated"]["retained"] == entry["prep_path"]   # final location of the kept file
     dq = entry["deduplicated"]["quarantined"]
     assert len(dq) == 1
     assert dq[0]["origin"].startswith("0-sources/")
@@ -127,7 +127,7 @@ def test_prep_organizes_by_raw_naive_timestamp_no_tz_or_utc_shift(tmp_path, monk
     _run(ws)
     entry = next(iter(_log(ws)["photos"].values()))
     # raw 2023:03:26 23:45:00 -> exact same date folder + civil time, no shift to 21:45 / 03-27 / etc.
-    assert entry["final_path"] == "5-photos-by-date/2023-03-26/2023-03-26--23-45-00.jpg"
+    assert entry["prep_path"] == "5-photos-by-date/2023-03-26/2023-03-26--23-45-00.jpg"
 
 
 @pytest.mark.spec("prep-log-self-sufficient-1")
@@ -150,7 +150,7 @@ def test_prep_log_is_complete_and_standalone_without_geotag_or_merge(tmp_path, m
     assert len(photos) == 1
     entry = next(iter(photos.values()))
     assert not entry.get("partial")                                   # complete, nothing missing
-    assert entry["final_path"].startswith("5-photos-by-date/")        # full journey to its destination
+    assert entry["prep_path"].startswith("5-photos-by-date/")        # full journey to its destination
     actions = [s["action"] for s in entry["journey"]]
     assert "organized" in actions and "provisional_rename" in actions
     assert all(s.get("run") for s in entry["journey"])                # every step attributed to its run
@@ -168,8 +168,8 @@ def test_nonconforming_name_is_ignored_timestamp_comes_from_metadata(tmp_path, m
     _run(ws)
     entry = next(iter(_log(ws)["photos"].values()))
     # Date + provisional name come from EXIF metadata, not the filename.
-    assert entry["final_path"] == "5-photos-by-date/2023-01-02/2023-01-02--03-04-05.jpg"
-    assert "2099" not in entry["final_path"]                        # the misleading name was not parsed
+    assert entry["prep_path"] == "5-photos-by-date/2023-01-02/2023-01-02--03-04-05.jpg"
+    assert "2099" not in entry["prep_path"]                        # the misleading name was not parsed
 
 
 @pytest.mark.spec("prep-log-derived-no-new-authority-1")
@@ -191,7 +191,7 @@ def test_prep_log_entries_are_derived_from_the_validated_plan(tmp_path, monkeypa
     planned_names = {os.path.basename(p) for p in op_dests | op_srcs}
     entry = next(iter(_log(ws)["photos"].values()))
     # The log's terminal location is one the plan actually planned — not a fact the log invented.
-    assert entry["final_path"] in op_dests, (entry["final_path"], sorted(op_dests))
+    assert entry["prep_path"] in op_dests, (entry["prep_path"], sorted(op_dests))
     # The extension-normalization step's 'from' name is the plan's rename source — derived, not new.
     norm = [s for s in entry["journey"] if s["action"] == "extension_normalized"]
     assert norm and norm[0]["from"] == "IMG.JPG"
@@ -237,7 +237,7 @@ def test_recognized_move_appends_moved_to_by_dest(tmp_path, monkeypatch):
     os.rename(organized, dest_dir / os.path.basename(organized))
     _run(ws)                                                 # prep recognizes the move
     entry = _log(ws)["photos"][fp_before]                    # same fingerprint key
-    assert entry["final_path"].startswith("6-photos-by-dest/Trip/")
+    assert entry["prep_path"].startswith("6-photos-by-dest/Trip/")
     moves = [s for s in entry["journey"] if s["action"] == "moved_to_by_dest"]
     assert len(moves) == 1 and moves[0]["to"].startswith("6-photos-by-dest/Trip/")
     # the unmoved prep steps were carried forward, not re-derived (still exactly one organize)

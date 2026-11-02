@@ -677,7 +677,7 @@ def test_full_success_writes_terminal_artifacts_and_seals(tmp_path):
     assert "photos-35-merge-log.json" in manifest["contents"]
 
 
-@pytest.mark.spec("log-copy-forward-extend-1", "merge-log-copy-26-forward-append-1", "merge-writes-only-own-3x-copies-26-forward-1")
+@pytest.mark.spec("BLD-log_format", "log-copy-forward-extend-1", "merge-log-copy-26-forward-append-1", "merge-writes-only-own-3x-copies-26-forward-1")
 def test_merge_log_copies_photos25_forward_and_appends(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     # Seed photos-25 with a prior geotag journey for fingerprint A.
@@ -691,6 +691,7 @@ def test_merge_log_copies_photos25_forward_and_appends(tmp_path):
     assert log["tool"] == "photos-3-merge"
     journey = log["photos"]["A"]["journey"]
     assert journey[0]["phase"] == "geotag"                      # carried forward
+    assert log["photos"]["A"]["library_path"] == os.path.join(str(lib), "Trip", "a.jpg")   # where it now is
     assert journey[-1] == {"phase": "merge", "action": "placed", "from": "6-photos-by-dest/Trip/a.jpg",
                            "library_path": os.path.join(str(lib), "Trip", "a.jpg"),
                            "renamed_for_library": False}

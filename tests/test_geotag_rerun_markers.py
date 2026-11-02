@@ -419,7 +419,7 @@ def _finalize(monkeypatch, ws):
     return json.loads((ws / ".photos-ingest" / "photos-26-complete-log.json").read_text())["photos"]
 
 
-@pytest.mark.spec("RUL-log_entry_grows", "RUL-partial_history_shown", "RUL-history_retained", "log-every-geotag-pass-1", "log-decision-version-kept-1", test="TST-geotag_rerun_markers-the_log_keeps_every_geotag_pass")
+@pytest.mark.spec("RUL-log_entry_grows", "RUL-partial_history_shown", "RUL-history_retained", "BLD-log_format", "log-every-geotag-pass-1", "log-decision-version-kept-1", test="TST-geotag_rerun_markers-the_log_keeps_every_geotag_pass")
 def test_the_log_keeps_every_geotag_pass(tmp_path, monkeypatch):
     """Finalize logs what every executed pass did, in order and matched by fingerprint — not only the
     latest plan's operations: a photo corrected, then corrected again, then left alone shows all three."""
@@ -429,7 +429,9 @@ def test_the_log_keeps_every_geotag_pass(tmp_path, monkeypatch):
     _execute(monkeypatch, ws)                                            # pass 2: corrected again
     _plan(monkeypatch, ws)
     _execute(monkeypatch, ws)                                            # pass 3: nothing left to write
-    steps = _finalize(monkeypatch, ws)["fp-a.arw"]["journey"]
+    entry = _finalize(monkeypatch, ws)["fp-a.arw"]
+    steps = entry["journey"]
+    assert entry["geotag_path"] == f"{T}/2024-07-03--14-25-00.arw"       # where the last pass left it
     runs = list(dict.fromkeys(s["run"] for s in steps))
     assert len(runs) == 3
     renames = [s["to"] for s in steps if s["action"] == "final_rename"]
@@ -493,7 +495,7 @@ def test_finalize_carries_prep_s_record_unchanged(tmp_path, monkeypatch):
     ho["files"][0]["metadata_status"]["parsed_json"] = json.dumps(parsed)
     _write_handoff(ws, ho["files"])
     fp = "fp-2024-07-03--14-30-00.arw"
-    prep = {fp: {"content_fingerprint": fp, "final_path": "x", "partial": True,
+    prep = {fp: {"content_fingerprint": fp, "prep_path": "x", "partial": True,
                  "note": "prep history incomplete (no retained journey)",
                  "journey": [{"phase": "prep", "action": "moved_to_by_date", "from": "a", "to": "b"}]}}
     (ws / ".photos-ingest" / "photos-15-prep-log.json").write_text(json.dumps({"photos": prep}))
@@ -518,12 +520,12 @@ def test_a_copy_that_would_alter_prep_s_record_is_refused(tmp_path, monkeypatch,
     ws = _executed_round(tmp_path, monkeypatch)
     fp = "fp-prep-only"
     (ws / ".photos-ingest" / "photos-15-prep-log.json").write_text(json.dumps(
-        {"photos": {fp: {"content_fingerprint": fp, "final_path": "x", "journey": []}}}))
+        {"photos": {fp: {"content_fingerprint": fp, "prep_path": "x", "journey": []}}}))
     real = cal.build_complete_log
 
     def altering(*a, **k):
         photos = real(*a, **k)
-        photos[fp]["final_path"] = "elsewhere"
+        photos[fp]["prep_path"] = "elsewhere"
         return photos
     monkeypatch.setattr(cal, "build_complete_log", altering)
     before = sorted(os.listdir(ws / ".photos-ingest"))
