@@ -1162,6 +1162,9 @@ class GeotagWorkflow:
                                 dict(row, camera_group=row.get("camera_group") or f.get("camera_group_key")), dest, cells)}
                     elif o["type"] == "metadata_gps_write" and o.get("gps_origin") == "apply_manual":
                         o["provenance"] = {"because": manual_gps_pointer(cat, dest, rel, g_d.get("folder_fallback"))}
+                        o["pre_state"] = held_pre_state(f)        # the position it replaces, for the log
+                    elif o["type"] == "gps_marker_write" and (o.get("writes") or {}).get("GPSLatitude") == "":
+                        o["pre_state"] = held_pre_state(f)        # the position it clears, for the log
                 if fops:
                     ops.extend(fops)
                 else:

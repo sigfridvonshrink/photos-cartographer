@@ -88,6 +88,7 @@ __all__ = [
     'classify_gps',
     '_MANUAL_GPS_CATEGORIES',
     '_handoff_pre_state',
+    'held_pre_state',
     '_coordinate_tags',
     '_revert_tags',
     '_walk_ancestors',
@@ -676,6 +677,13 @@ def _handoff_pre_state(native_gps):
     return {"present": False}
 
 
+def held_pre_state(file):
+    """The position `file` holds now, in the pre-state shape the log records beside a write that replaces
+    or clears it (shared contract §13.3): the coordinates with their GPSProcessingMethod, or 'absent'."""
+    h = held_values(file)
+    return _handoff_pre_state({"lat": h.get("lat"), "lon": h.get("lon"), "processing_method": h.get("method")})
+
+
 def _coordinate_tags(lat, lon):
     """The complete EXIF coordinate tag set for a signed decimal position (§28.1).
 
@@ -1065,11 +1073,17 @@ def _gps_and_rename_steps(fp, ops, pre_by_fp, native):
         step = {"phase": "geotag", "action": "gps_written", "lat": w.get("GPSLatitude"),
                 "lon": w.get("GPSLongitude"), "origin": gps_op.get("gps_origin"),
                 "gps_processing_method": (marker.get("writes") or {}).get("GPSProcessingMethod") if marker else None}
-        if gps_op.get("gps_origin") == "apply_manual" and fp in pre_by_fp:
-            step["pre_state"] = pre_by_fp[fp]
+        if gps_op.get("gps_origin") == "apply_manual":
+            pre = gps_op.get("pre_state") or pre_by_fp.get(fp)
+            if pre is not None:
+                step["pre_state"] = pre
         if (gps_op.get("provenance") or {}).get("because"):
             step["because"] = gps_op["provenance"]["because"]
         steps.append(step)
+    elif marker is not None and (marker.get("writes") or {}).get("GPSLatitude") == "":
+        # geotag's old position cleared: the decision now places none
+        steps.append({"phase": "geotag", "action": "gps_cleared", "pre_state": marker.get("pre_state"),
+                      "gps_processing_method": marker["writes"].get("GPSProcessingMethod")})
     elif native and revert_op is None:
         steps.append({"phase": "geotag", "action": "gps_preserved"})
     rename_op = next((o for o in ops if o["type"] == "rename_no_clobber"), None)

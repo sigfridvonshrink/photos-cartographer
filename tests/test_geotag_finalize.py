@@ -110,6 +110,30 @@ def test_complete_log_gps_written_and_reverted():
     assert next(s for s in photos2["fpN"]["journey"] if s["action"] == "gps_written")["gps_processing_method"] is None
 
 
+@pytest.mark.spec("RUL-log_records_gps_reverts", "RUL-record_whole_each_phase", test="TST-geotag_finalize-a_cleared_position_is_logged_with_what_it_held")
+def test_a_cleared_position_is_logged_with_what_it_held():
+    """A position geotag wrote and no longer places is cleared, and the log says so with the position
+    the photo held; a manual position records the one it replaced."""
+    files = [_file(f"{BYDEST}/T/c.jpg", "fpC"), _file(f"{BYDEST}/T/m.jpg", "fpM")]
+    held = {"present": True, "GPSLatitude": 40.0, "GPSLongitude": 3.0, "GPSProcessingMethod": "manual_locked"}
+    plan = {"destinations": {f"{BYDEST}/T": {"operations": [
+        {"type": "gps_marker_write", "relative_path": f"{BYDEST}/T/c.jpg", "pre_state": held,
+         "writes": {"GPSLatitude": "", "GPSLatitudeRef": "", "GPSLongitude": "", "GPSLongitudeRef": "",
+                    "GPSProcessingMethod": "+carto-time"}},
+        {"type": "metadata_gps_write", "relative_path": f"{BYDEST}/T/m.jpg", "gps_origin": "apply_manual",
+         "writes": {"GPSLatitude": 48.85, "GPSLongitude": 2.35}, "pre_state": {"present": False}}]}}}
+    photos = cal.build_complete_log({}, files, [], {}, plan, [])
+    c = [s for s in photos["fpC"]["journey"] if s["phase"] == "geotag"]
+    assert c == [{"phase": "geotag", "action": "gps_cleared", "pre_state": held,
+                  "gps_processing_method": "+carto-time"}]
+    m = next(s for s in photos["fpM"]["journey"] if s["action"] == "gps_written")
+    assert m["pre_state"] == {"present": False}
+    held_file = dict(_file(f"{BYDEST}/T/x.jpg", "fpX"), native_gps={"lat": 40.0, "lon": 3.0},
+                     processing_method="manual_locked")
+    assert cal.held_pre_state(held_file) == held
+    assert cal.held_pre_state(_file(f"{BYDEST}/T/y.jpg", "fpY")) == {"present": False}
+
+
 @pytest.mark.spec("RUL-log_cites_decisions", "log-decision-provenance-1", "log-names-exact-decision-1", test="TST-geotag_finalize-each_step_names_its_exact_decision")
 def test_each_step_names_its_exact_decision():
     """The offset names its exact cell — with its day when the camera's photos there span days — or
