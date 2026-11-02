@@ -2065,7 +2065,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "Merge SHALL map each photo by destination to its place under `library_root`, and list only the folders its photos go\nto — for the names taken there — and the library's top folder, for temporary copies a crash of its own left (§15). Where a file is\nthere, merge SHALL fingerprint it — from `library_fingerprint_cache` when its path, size and modification time match a\nrow, otherwise by decoding it and adding the row — and compare it with the incoming photo's fingerprint from prep. An\nincoming photo whose name is taken by different content SHALL take the shared suffix convention's next free suffix\n(§7.2), the library's own name keeping its bare form.",
+     "content": "Merge SHALL map each photo by destination to its place under `library_root`, and list only the folders its photos go\nto — for the names taken there — and the library's top folder, for temporary copies a crash of its own left (§15). Where a file is\nthere, merge SHALL fingerprint it — from `library_fingerprint_cache` when its path, size and modification time match a\nrow taken by the current ImageMagick version (or recording none), otherwise by decoding it and storing the row — and compare it with the incoming photo's fingerprint from prep. An\nincoming photo whose name is taken by different content SHALL take the shared suffix convention's next free suffix\n(§7.2), the library's own name keeping its bare form.",
      "criticality": null,
      "docname": "build/shared",
      "doctype": ".md",
@@ -17659,7 +17659,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "A library file's fingerprint SHALL be computed only when a collision needs it, and kept, so that a library file\nunchanged since is never fingerprinted again in the workspace, in that run or a later one.",
+     "content": "A library file's fingerprint SHALL be computed only when a collision needs it, and kept, so that a library file\nunchanged since is never fingerprinted again in the workspace, in that run or a later one, while the way photos are\ndecoded is unchanged too.",
      "criticality": "low",
      "docname": "intent/shared",
      "doctype": ".md",
@@ -18843,7 +18843,7 @@
       "RAT-move_not_copy"
      ],
      "layout": null,
-     "lineno": 1727,
+     "lineno": 1728,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -18928,7 +18928,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1754,
+     "lineno": 1755,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -19014,7 +19014,7 @@
       "RAT-reseal_automatic"
      ],
      "layout": null,
-     "lineno": 1767,
+     "lineno": 1768,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -19099,7 +19099,7 @@
       "RAT-move_not_copy"
      ],
      "layout": null,
-     "lineno": 1741,
+     "lineno": 1742,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -21811,7 +21811,7 @@
       "RAT-seal_not_folder_state"
      ],
      "layout": null,
-     "lineno": 1792,
+     "lineno": 1793,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -21896,7 +21896,7 @@
       "RAT-seal_not_folder_state"
      ],
      "layout": null,
-     "lineno": 1779,
+     "lineno": 1780,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -21981,7 +21981,7 @@
       "RAT-sealed_is_final"
      ],
      "layout": null,
-     "lineno": 1831,
+     "lineno": 1832,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -22066,7 +22066,7 @@
       "RAT-prune_harms_nothing"
      ],
      "layout": null,
-     "lineno": 1819,
+     "lineno": 1820,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -22151,7 +22151,7 @@
       "RAT-sealed_is_final"
      ],
      "layout": null,
-     "lineno": 1804,
+     "lineno": 1805,
      "links": [],
      "links_back": [],
      "modifications": 0,

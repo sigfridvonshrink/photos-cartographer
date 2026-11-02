@@ -586,7 +586,7 @@ checked with `PRAGMA quick_check`, then renamed over the phase's earlier image.
 Merge SHALL map each photo by destination to its place under `library_root`, and list only the folders its photos go
 to — for the names taken there — and the library's top folder, for temporary copies a crash of its own left (§15). Where a file is
 there, merge SHALL fingerprint it — from `library_fingerprint_cache` when its path, size and modification time match a
-row, otherwise by decoding it and adding the row — and compare it with the incoming photo's fingerprint from prep. An
+row taken by the current ImageMagick version (or recording none), otherwise by decoding it and storing the row — and compare it with the incoming photo's fingerprint from prep. An
 incoming photo whose name is taken by different content SHALL take the shared suffix convention's next free suffix
 (§7.2), the library's own name keeping its bare form.
 :::
