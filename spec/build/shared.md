@@ -579,7 +579,7 @@ checked with `PRAGMA quick_check`, then renamed over the phase's earlier image.
 
 :::{bld} Merge's collision check and its library cache
 :id: BLD-merge_collision
-:status: seed
+:status: ruled
 :realises: RUL-library_not_scanned, RUL-collision_by_content, RUL-library_file_read_once
 :uses: BLD-workspace_database
 
