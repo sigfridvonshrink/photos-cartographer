@@ -730,12 +730,10 @@ def test_partial_run_does_not_seal_or_finalize(tmp_path):
     assert os.path.exists(_ctl(ws, "photos-31-merge-summary.json"))     # summary still written
 
 
-@pytest.mark.spec("merge-resume-via-execute-not-plan-1")
-def test_re_plan_after_partial_is_refused(tmp_path):
-    # Re-planning over a partially-applied merge is refused (resume via execute), so an already-moved
-    # file can never be dropped from the merge log a later execute writes. The saved plan is untouched.
-    # Genuine mixed partial: a.jpg places (target free, source removed), b.jpg blocks (unfingerprintable
-    # collision) — so a real moved file exists to protect.
+@pytest.mark.spec("merge-resume-via-execute-not-plan-1", "RUL-merge_resumable", test="TST-merge_execute-a_re_plan_after_a_partial_merge_carries_what_was_moved")
+def test_a_re_plan_after_a_partial_merge_carries_what_was_moved(tmp_path):
+    """A partial merge — a.jpg moved, b.jpg blocked — is re-planned once the blocker is cleared. The new
+    plan carries a.jpg forward from the plan that moved it, and the merge that finishes logs both."""
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
                              {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
                   library_files=[{"fp": "FAIL", "dest": "Trip", "name": "b.jpg"}])
@@ -743,9 +741,40 @@ def test_re_plan_after_partial_is_refused(tmp_path):
     assert merge._run_locked_workflow("execute", str(ws)) == 3          # 1 placed, 1 blocked -> partial
     assert _summary(ws)["status"] == "partial"
     assert not os.path.exists(_src(ws, "Trip", "a.jpg"))               # a.jpg was moved (source gone)
-    plan_before = open(merge.merge_plan_path(str(ws))).read()
-    assert merge._run_locked_workflow("plan", str(ws)) == 2             # re-plan refused
-    assert open(merge.merge_plan_path(str(ws))).read() == plan_before   # plan untouched
+    with open(os.path.join(str(lib), "Trip", "b.jpg"), "wb") as f:
+        f.write(_fp_bytes("OLD"))                                        # the blocker cleared
+    assert merge._run_locked_workflow("plan", str(ws)) == 0             # re-plan allowed
+    plan = json.load(open(merge.merge_plan_path(str(ws))))
+    recs = {r["by_dest_source"]: r for d in plan["destinations"].values() for r in d["files"]}
+    assert recs["6-photos-by-dest/Trip/a.jpg"].get("carried_from_plan")
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    assert utils.is_sealed(str(ws))
+    log = json.loads(open(_ctl(ws, "photos-35-merge-log.json")).read())
+    assert log["photos"]["A"]["library_path"] == os.path.join(str(lib), "Trip", "a.jpg")
+    assert log["photos"]["B"]["library_path"] == os.path.join(str(lib), "Trip", "b-001.jpg")
+
+
+def test_a_photo_moved_earlier_but_gone_from_its_place_blocks_the_re_plan(tmp_path):
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
+                             {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
+                  library_files=[{"fp": "FAIL", "dest": "Trip", "name": "b.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 3
+    with open(os.path.join(str(lib), "Trip", "a.jpg"), "wb") as f:
+        f.write(_fp_bytes("X"))                                          # a.jpg's place no longer holds it
+    merge._run_locked_workflow("plan", str(ws))
+    plan = json.load(open(merge.merge_plan_path(str(ws))))
+    a = next(r for d in plan["destinations"].values() for r in d["files"] if r["by_dest_source"].endswith("a.jpg"))
+    assert a["disposition"] == "blocked" and "no longer holds it" in a["blocked_reason"]
+
+
+def test_a_photo_gone_from_the_workspace_that_no_merge_moved_blocks_the_plan(tmp_path):
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    os.remove(_src(ws, "Trip", "a.jpg"))                                # gone by other means
+    merge._run_locked_workflow("plan", str(ws))
+    plan = json.load(open(merge.merge_plan_path(str(ws))))
+    a = next(r for d in plan["destinations"].values() for r in d["files"])
+    assert a["disposition"] == "blocked" and "no earlier merge" in a["blocked_reason"]
 
 
 @pytest.mark.spec("merge-replan-allowed-after-failed-or-rejected-1")
@@ -763,22 +792,28 @@ def test_re_plan_after_failed_is_allowed(tmp_path):
 
 
 def test_re_plan_allowed_when_no_partial(tmp_path):
-    # The guard only fires on an in-flight (unsealed) merge: a plan with no prior summary re-plans fine.
+    # A plan with no prior summary re-plans fine.
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     assert merge._run_locked_workflow("plan", str(ws)) == 0
     assert merge._run_locked_workflow("plan", str(ws)) == 0
 
 
-def test_re_plan_after_crash_before_seal_is_refused(tmp_path, monkeypatch):
+def test_a_re_plan_after_a_crash_before_the_seal_finishes_and_seals(tmp_path, monkeypatch):
     # A crash between the summary write (status=success) and the seal leaves the workspace unsealed
-    # with status=success. Re-planning must STILL be refused (resume via execute) so the complete
-    # log/summary is not overwritten by an empty re-plan that then seals an incomplete record.
+    # with every photo already moved. A re-plan carries them all forward, so the merge that follows
+    # writes a log naming every photo, then seals.
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    real = merge.MergeWorkflow._finalize_terminal
     monkeypatch.setattr(merge.MergeWorkflow, "_finalize_terminal", lambda *a, **k: None)  # skip the seal
     assert merge._run_locked_workflow("plan", str(ws)) == 0
     assert merge._run_locked_workflow("execute", str(ws)) == 0       # success, but crashed before seal
     assert _summary(ws)["status"] == "success" and not utils.is_sealed(str(ws))
-    assert merge._run_locked_workflow("plan", str(ws)) == 2          # re-plan still refused
+    monkeypatch.setattr(merge.MergeWorkflow, "_finalize_terminal", real)
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    assert utils.is_sealed(str(ws))
+    log = json.loads(open(_ctl(ws, "photos-35-merge-log.json")).read())
+    assert log["photos"]["A"]["library_path"] == os.path.join(str(lib), "Trip", "a.jpg")
 
 
 @pytest.mark.spec("merge-sealed-hardstop-touch-nothing-1", "seal-scripts-hardstop-1", test="TST-merge_execute-sealed_workspace_rerun_hardstops")

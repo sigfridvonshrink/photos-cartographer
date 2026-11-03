@@ -3324,7 +3324,7 @@
       "area": "merge",
       "criticality": "med",
       "anti": false,
-      "title": "After a failed (all-blocked) or rejected (pre-mutation) summary, re-planning is allowed (nothing moved)",
+      "title": "Re-planning is allowed at any time on an unsealed workspace, whatever the prior summary says",
       "spec": {
         "file": "photos-3-merge-workflow.md",
         "section": "8"
@@ -3506,14 +3506,14 @@
       "area": "merge",
       "criticality": "med",
       "anti": true,
-      "title": "Resume is via execute; plan refuses while a prior merge is in flight but unsealed (partial/success summary + saved plan)",
+      "title": "Resume is via execute, or a fresh plan, which carries forward every photo an earlier merge plan moved (journal-confirmed, its library place fingerprinted again), so the merge log names every photo",
       "spec": {
         "file": "photos-3-merge-workflow.md",
         "section": "8"
       },
       "coverage": "covered",
       "must_cover": true,
-      "test": "tests/test_merge_execute.py::test_re_plan_after_partial_is_refused"
+      "test": "tests/test_merge_execute.py::test_a_re_plan_after_a_partial_merge_carries_what_was_moved"
     },
     {
       "id": "merge-same-content-already-present-remove-source-1",
