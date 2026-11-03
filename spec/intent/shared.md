@@ -1820,7 +1820,7 @@ Its records MAY still be read.
 
 :::{rul} Pruning the quarantine is still allowed
 :id: RUL-sealed_prune_allowed
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :aliases: seal-prune-exception-1
