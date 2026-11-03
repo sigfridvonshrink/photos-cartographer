@@ -1700,7 +1700,7 @@ there. It SHALL NOT scan, index or de-duplicate the library.
 
 :::{rul} A taken place is settled by content
 :id: RUL-collision_by_content
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :aliases: merge-collision-same-content-1, merge-collision-diff-content-1
