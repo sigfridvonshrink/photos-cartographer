@@ -619,7 +619,7 @@ the seal.
 
 :::{bld} The seal and its checks
 :id: BLD-seal_marker
-:status: seed
+:status: ruled
 :realises: RUL-seal_is_authority, RUL-sealed_refuses, RUL-sealed_prune_allowed, RUL-sealed_new_dump_warned
 
 The seal SHALL be `photos-00-sealed.json` in the control directory, its own file beside the workspace guard — which
