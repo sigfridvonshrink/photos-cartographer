@@ -1722,7 +1722,8 @@ content SHALL mean two photos share a name: the incoming one is placed under a d
 
 A library file's fingerprint SHALL be computed only when a collision needs it, and kept, so that a library file
 unchanged since is never fingerprinted again in the workspace, in that run or a later one, while the way photos are
-decoded is unchanged too.
+decoded is unchanged too. One read is exempt: before a photo is removed from the workspace because the library already
+holds it, the library file SHALL be fingerprinted again, whatever is kept.
 :::
 
 :::{rul} Merge moves, and a photo leaves the workspace only once safe in the library

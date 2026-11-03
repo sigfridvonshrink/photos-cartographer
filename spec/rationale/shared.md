@@ -559,7 +559,9 @@ tells a copy already present from a different photo sharing a name.
 :justifies: RUL-library_file_read_once
 
 Fingerprinting a library file means reading and decoding it whole, and the library may sit across a network. Kept in the workspace, a
-fingerprint already taken spares that read on the next run, and stays right while the file is unchanged.
+fingerprint already taken spares that read on the next run, and stays right while the file is unchanged. A kept
+fingerprint is trusted by size and modification time, though, and removing a photo because the library already holds
+it cannot be undone: that one decision reads the file again rather than trust what was kept.
 :::
 
 :::{rat} The workspace keeps only what still needs attention
