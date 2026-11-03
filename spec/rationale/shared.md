@@ -566,7 +566,7 @@ it cannot be undone: that one decision reads the file again rather than trust wh
 
 :::{rat} The workspace keeps only what still needs attention
 :id: RAT-move_not_copy
-:status: seed
+:status: ruled
 :justifies: RUL-merge_moves, RUL-merge_resumable
 
 A copy left in the workspace of a photo already in the library is a duplicate that invites confusion and wastes space,
