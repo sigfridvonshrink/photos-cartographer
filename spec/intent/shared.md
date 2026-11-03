@@ -1813,7 +1813,7 @@ Whether a workspace is finished SHALL be read from its seal alone, never from th
 :uses: DEF-sealed_workspace, DEF-decision
 :refines: RUL-merge_is_terminal
 
-In a sealed workspace prep, geotag and merge SHALL stop as they start, changing and touching nothing, and the decision
+In a sealed workspace prep, geotag and merge SHALL stop as they start, changing nothing but the owner record of the workspace lock, and the decision
 editor SHALL neither open it nor save into it; nor SHALL merge's library setup record a library in its configuration.
 Its records MAY still be read.
 :::
