@@ -299,6 +299,7 @@ def test_missing_plan_errors(tmp_path, monkeypatch):
 
 # --- no-clobber recheck + determinism (unit) --------------------------------
 
+@pytest.mark.spec("RUL-target_free_at_execute", test="TST-geotag_execution-target_occupied_recheck")
 def test_target_occupied_recheck(tmp_path):
     wf = cal.GeotagWorkflow(str(tmp_path))
     (tmp_path / "A.JPG").write_text("x")
@@ -309,6 +310,7 @@ def test_target_occupied_recheck(tmp_path):
 
 # --- unit: _exiftool_write seam --------------------------------------------
 
+@pytest.mark.spec("BLD-metadata_safe_write", test="TST-geotag_execution-exiftool_write_invocation")
 def test_exiftool_write_invocation(tmp_path, monkeypatch):
     wf = cal.GeotagWorkflow(str(tmp_path))
     calls = {}

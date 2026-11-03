@@ -564,6 +564,25 @@ fingerprint is trusted by size and modification time, though, and removing a pho
 it cannot be undone: that one decision reads the file again rather than trust what was kept.
 :::
 
+:::{rat} One library, many workspaces
+:id: RAT-library_shared
+:status: seed
+:justifies: RUL-library_lock, RUL-library_lock_fail_fast
+
+Many workspaces merge into one library, each under its own lock. Only a lock on the library itself keeps two of their
+merges from writing it at once.
+:::
+
+:::{rat} A library has nothing of the tool's to inspect
+:id: RAT-library_mark
+:status: seed
+:justifies: RUL-library_known_by_mark, RUL-library_confirmed_before_lock, RUL-library_place_checked
+
+The library is the user's: it has no structure of the tool's to inspect, so one mark, made once and on purpose, is
+all that tells it from any other folder. Checking the mark before anything is written there — the lock included —
+keeps the tool from writing into a folder that was never made a library.
+:::
+
 :::{rat} The workspace keeps only what still needs attention
 :id: RAT-move_not_copy
 :status: ruled
@@ -615,4 +634,77 @@ The quarantine holds only spare copies of duplicates, which a sealed workspace s
 manifests that list them, touches no photo, library file, control record or row of the database; what each manifest
 said is kept in the transformation log and the package. It neither reprocesses the workspace nor adds a batch to it,
 so the seal's reasons do not reach it, and the space can be reclaimed.
+:::
+
+## 14. Every value the user writes is checked
+
+:::{rat} A current value can still be wrong
+:id: RAT-valid_is_not_unchanged
+:status: seed
+:justifies: INV-authored_values_checked, RUL-checked_every_run
+
+A fingerprint tells whether a value changed, not whether it makes sense. A value can match its fingerprint and still be
+meaningless or dangerous, or be freshly typed and wrong; and a value valid in one run can be edited before the next. So
+both checks are needed, every time.
+:::
+
+:::{rat} What is typed by hand can be mistyped
+:id: RAT-hand_written_fallible
+:status: seed
+:justifies: INV-authored_values_checked, RUL-checked_paths, RUL-checked_timezones, RUL-checked_positions_and_times, RUL-checked_filename_format, RUL-checked_numbers, RUL-checked_shapes, RUL-invalid_value_stops, RUL-invalid_value_located
+
+The user writes the configuration and the decisions by hand, so the tool cannot assume they are well formed. A
+mistyped timezone or an unsafe path, reported early as a specific problem in a named place, is fixed at its source;
+coerced, half applied or let through, it spoils a later operation, and the change it causes can no longer be
+explained. Checking keeps every change explainable and the user its author.
+:::
+
+:::{rat} A snapshot fails before anything changes, not midway
+:id: RAT-snapshot_name_early
+:status: seed
+:justifies: RUL-checked_snapshot_names
+
+A snapshot's name the snapshot tool would refuse is found when the configuration is read, not when the snapshot is
+taken, so a bad name never surprises an execution midway.
+:::
+
+:::{rat} The user keeps what they wrote
+:id: RAT-invalid_decision_shown
+:status: seed
+:justifies: RUL-invalid_decision_kept
+
+Erasing an invalid decision would take away the very thing the user must see to correct it. Kept and marked, it shows
+what was written and what is wrong with it.
+:::
+
+## 15. Nothing overwritten, nothing left half-done
+
+:::{rat} A plan describes the workspace as it was
+:id: RAT-plan_can_be_overtaken
+:status: seed
+:justifies: RUL-target_free_at_execute
+
+A plan is made from the filesystem at one moment, and the workspace or the library can change before it runs. The
+plan's own collision check is the first defence; checking each name as it is written is a second, independent one,
+which no plan, however careful, can stand in for.
+:::
+
+:::{rat} Safety and resuming rest on the moment of each change
+:id: RAT-safe_at_each_change
+:status: seed
+:justifies: RUL-operations_atomic, RUL-rewrite_in_place_atomic, RUL-cross_fs_all_or_nothing, RUL-failed_operation_clean
+
+That nothing is overwritten, and that an interrupted run is finished by running it again, hold only if each change is
+safe when it happens. A half-done move, a half-written file, or a failure recorded as done would break both where no
+plan can see it.
+:::
+
+:::{rat} A temporary copy left behind is debris
+:id: RAT-temps_are_debris
+:status: seed
+:justifies: RUL-crash_temps_cleared
+
+Merge holds the library's lock, so a temporary copy found in a folder it places into was left by an interrupted earlier
+merge, never one being written now. It bears no photo's name, so it does no harm either way: clearing it keeps the
+library free of litter — hygiene, not safety.
 :::

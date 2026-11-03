@@ -90,7 +90,7 @@ def test_validate_config_rejects_illegal(bad):
         utils.validate_config(bad)
 
 
-@pytest.mark.spec("validate-zfs-prefix-1")
+@pytest.mark.spec("validate-zfs-prefix-1", test="TST-zfs-load_or_seed_config_rejects_illegal_zfs")
 def test_load_or_seed_config_rejects_illegal_zfs(tmp_path):
     ws = _ws(tmp_path)
     cfg = utils.config_path(str(ws))

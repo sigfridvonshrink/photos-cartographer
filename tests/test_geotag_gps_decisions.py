@@ -84,7 +84,7 @@ def test_classify_all_branches():
 
 @pytest.mark.parametrize("lat, lon, ok", [(50, 4, True), (-90, 180, True), (91, 0, False),
                                           (0, 181, False), ("x", 0, False), (0, True, False)])
-@pytest.mark.spec("validate-coords-offsets-1")
+@pytest.mark.spec("validate-coords-offsets-1", test="TST-geotag_gps_decisions-valid_coord")
 def test_valid_coord(lat, lon, ok):
     assert cal._valid_coord(lat, lon) is ok
 
