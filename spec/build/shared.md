@@ -591,16 +591,17 @@ incoming photo whose name is taken by different content SHALL take the shared su
 (§7.2), the library's own name keeping its bare form.
 :::
 
-:::{bld} Merge's move: copy, verify, rename, then remove
+:::{bld} Merge's move: one rename, or copy, verify, rename and remove
 :id: BLD-merge_move
-:status: seed
+:status: ruled
 :realises: RUL-library_never_altered, RUL-merge_moves, RUL-merge_resumable
 
-Each photo SHALL be copied to a temporary name on the library's volume, its copy fingerprinted against the planned
-content, renamed into its place only if that place is still free, and only then removed from photos by destination; the
-journal SHALL record each confirmed photo. A re-run SHALL take a place already holding the planned content as done,
-removing the workspace copy if it remains. A photo already present SHALL be removed from photos by destination after
-the library's copy is checked to hold its content.
+Each photo SHALL move into its place without overwriting it: on the library's own filesystem by a single rename that
+refuses an existing name; across filesystems by a copy to a temporary name beside its place, fingerprinted against the
+planned content, renamed into the place only if it is still free, and only then removed from photos by destination. The
+journal SHALL record each confirmed photo. A re-run SHALL take a place already holding the planned content, fingerprinted
+again, as done, removing the workspace copy if it remains. A photo already present SHALL be removed from photos by
+destination after the library's copy is fingerprinted again and found to hold its content.
 :::
 
 :::{bld} The merge records and the re-seal

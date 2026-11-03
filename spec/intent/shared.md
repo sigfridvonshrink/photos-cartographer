@@ -1728,7 +1728,7 @@ holds it, the library file SHALL be fingerprinted again, whatever is kept.
 
 :::{rul} Merge moves, and a photo leaves the workspace only once safe in the library
 :id: RUL-merge_moves
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -1742,7 +1742,7 @@ the run then partial.
 
 :::{rul} Merge resumes, and a merged batch is a no-op
 :id: RUL-merge_resumable
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: merge-idempotent-resumable-1
