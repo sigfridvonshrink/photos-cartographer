@@ -587,7 +587,7 @@ command because geotag is freely re-run, and re-packaging after every pass would
 
 :::{rat} An empty folder means two things; a mark means one
 :id: RAT-seal_not_folder_state
-:status: seed
+:status: ruled
 :justifies: RUL-seal_is_authority, RUL-seal_on_success_only
 
 Photos by destination is empty both in a workspace just sorted and in one merged and finished, so its state cannot say

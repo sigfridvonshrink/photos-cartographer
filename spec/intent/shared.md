@@ -1667,7 +1667,7 @@ capture SHALL leave the earlier image or the new one, whole.
 
 :::{def} A sealed workspace
 :id: DEF-sealed_workspace
-:status: seed
+:status: ruled
 :uses: DEF-workspace, DEF-merge
 
 A workspace is **sealed** once merge has succeeded in it: marked as finished, by a mark only merge writes.
@@ -1780,7 +1780,7 @@ no command of its own, from the records as they stand: it SHALL re-derive nothin
 
 :::{rul} Only a whole merge seals
 :id: RUL-seal_on_success_only
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -1793,7 +1793,7 @@ already there, none left. A partial, failed or interrupted merge SHALL leave the
 
 :::{rul} The seal alone says a workspace is finished
 :id: RUL-seal_is_authority
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
