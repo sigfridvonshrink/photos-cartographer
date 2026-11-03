@@ -1805,7 +1805,7 @@ Whether a workspace is finished SHALL be read from its seal alone, never from th
 
 :::{rul} A sealed workspace is never processed again
 :id: RUL-sealed_refuses
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
