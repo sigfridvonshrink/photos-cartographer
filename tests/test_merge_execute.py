@@ -159,6 +159,23 @@ def test_execute_already_present_removes_source_no_write(tmp_path):
     assert _summary(ws)["totals"]["already_present"] == 1
 
 
+@pytest.mark.spec("RUL-library_file_read_once", "RUL-collision_by_content", test="TST-merge_execute-the_library_file_is_read_again_before_a_photo_already_there_is_removed")
+def test_the_library_file_is_read_again_before_a_photo_already_there_is_removed(tmp_path):
+    """The cache trusts size and modification time; removing the workspace's copy cannot be undone. A
+    library file changed since the plan without either moving is still caught: the photo stays."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
+                  library_files=[{"fp": "A", "dest": "Trip", "name": "a.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0             # fingerprint cached at plan
+    target = os.path.join(str(lib), "Trip", "a.jpg")
+    st = os.stat(target)
+    with open(target, "wb") as f:
+        f.write(_fp_bytes("B"))                                         # same size, other content
+    os.utime(target, ns=(st.st_atime_ns, st.st_mtime_ns))               # same modification time
+    assert merge._run_locked_workflow("execute", str(ws)) != 0
+    assert os.path.exists(_src(ws, "Trip", "a.jpg"))                    # the photo stays in the workspace
+    assert open(target, "rb").read() == _fp_bytes("B")                  # the library file untouched
+
+
 @pytest.mark.spec("merge-collision-diff-content-1", "merge-different-content-rename-incoming-1", "merge-library-file-never-deleted-written-renamed-1", test="TST-merge_execute-execute_renamed_incoming_places_under_safe_name")
 def test_execute_renamed_incoming_places_under_safe_name(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "NEW", "dest": "Trip", "final_name": "ts.jpg"}],
