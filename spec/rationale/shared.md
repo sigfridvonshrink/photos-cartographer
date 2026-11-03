@@ -580,8 +580,8 @@ interruption never loses a photo: running merge again finishes the work.
 :status: seed
 :justifies: RUL-merge_reseals
 
-Merge adds to the record finalize packaged, so that package no longer describes the whole journey. Since merge is the
-workspace's last act, remaking the package once at its end is what the user always wants. Finalize stays its own
+Merge adds to the record finalize packaged, so the existing package no longer describes the whole journey. Since merge
+is the workspace's last act, remaking the package once at its end is what the user always wants. Finalize stays its own
 command because geotag is freely re-run, and re-packaging after every pass would be wasted.
 :::
 

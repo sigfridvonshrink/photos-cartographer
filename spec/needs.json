@@ -12693,7 +12693,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "Merge adds to the record finalize packaged, so that package no longer describes the whole journey. Since merge is the\nworkspace's last act, remaking the package once at its end is what the user always wants. Finalize stays its own\ncommand because geotag is freely re-run, and re-packaging after every pass would be wasted.",
+     "content": "Merge adds to the record finalize packaged, so the existing package no longer describes the whole journey. Since merge\nis the workspace's last act, remaking the package once at its end is what the user always wants. Finalize stays its own\ncommand because geotag is freely re-run, and re-packaging after every pass would be wasted.",
      "criticality": null,
      "docname": "rationale/shared",
      "doctype": ".md",
