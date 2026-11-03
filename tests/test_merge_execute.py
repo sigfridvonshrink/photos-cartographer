@@ -264,7 +264,7 @@ def test_merge_never_mutates_by_dest_name_or_content_only_library_renames(tmp_pa
     assert journal == {"6-photos-by-dest/Trip/ts.jpg": "confirmed"}
 
 
-@pytest.mark.spec("lib-never-rescanned-1")
+@pytest.mark.spec("lib-never-rescanned-1", test="TST-merge_execute-merge_only_inspects_specific_collision_target_never_rescans_library")
 def test_merge_only_inspects_specific_collision_target_never_rescans_library(tmp_path, monkeypatch):
     """§15.1 (anti): merge never rescans the library wholesale — it fingerprints only each incoming
     file's specific collision target, never a library-wide index. Seed the library with the collision
@@ -394,7 +394,7 @@ def _force_cross_fs(monkeypatch):
     monkeypatch.setattr(utils, "_rename_no_clobber_same_fs", patched)
 
 
-@pytest.mark.spec("atomic-crossfs-equivalent-1", "merge-move-place-then-remove-no-loss-1")
+@pytest.mark.spec("atomic-crossfs-equivalent-1", "merge-move-place-then-remove-no-loss-1", test="TST-merge_execute-execute_cross_fs_move_verifies_and_completes")
 def test_execute_cross_fs_move_verifies_and_completes(tmp_path, monkeypatch):
     _force_cross_fs(monkeypatch)
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
@@ -404,7 +404,7 @@ def test_execute_cross_fs_move_verifies_and_completes(tmp_path, monkeypatch):
     assert not os.path.exists(_src(ws, "Trip", "a.jpg"))
 
 
-@pytest.mark.spec("exec-failed-op-clean-1", "merge-source-removed-only-after-verified-copy-1", "merge-verify-copy-detect-torn-1")
+@pytest.mark.spec("exec-failed-op-clean-1", "merge-source-removed-only-after-verified-copy-1", "merge-verify-copy-detect-torn-1", test="TST-merge_execute-execute_torn_copy_blocks_and_keeps_source")
 def test_execute_torn_copy_blocks_and_keeps_source(tmp_path, monkeypatch):
     _force_cross_fs(monkeypatch)
     monkeypatch.setattr(utils.shutil, "copyfile",
@@ -442,7 +442,7 @@ def test_execute_jobs_determinism(tmp_path):
     assert _comparable(_summary(ws1)) == _comparable(_summary(ws2))
 
 
-@pytest.mark.spec("atomic-crossfs-temp-sweep-1", "merge-sweep-stale-temps-1")
+@pytest.mark.spec("atomic-crossfs-temp-sweep-1", "merge-sweep-stale-temps-1", test="TST-merge_execute-execute_sweeps_crash_orphaned_cross_fs_temps")
 def test_execute_sweeps_crash_orphaned_cross_fs_temps(tmp_path):
     """A prior interrupted run can leave a cross-fs copy temp (.tmp-xdev-*.part) in a library dir.
     Because merge holds the library lock (no concurrent merge), execute safely sweeps such orphans

@@ -156,8 +156,7 @@ left alone.
 :::
 
 Merge also takes a lock on the library it writes into, so that two merges into one library — even from two workspaces
-— never overlap; that lock is held besides the workspace's, not instead of it. *(Its items come with §15.2 of the
-shared contract, when that is converted.)*
+— never overlap; that lock is held besides the workspace's, not instead of it. Its items are with merge's.
 
 ## 2. A snapshot before changing, optionally
 
@@ -468,9 +467,10 @@ configurable; an extension not listed SHALL be `other`; and an extension SHALL b
 :criticality: med
 :verify: required
 :aliases: config-values-validated-1
+:refines: INV-authored_values_checked
 
-Every value of the configuration that comes from the user SHALL be validated before it is used (§14 of the shared
-contract), as part of reading the configuration — never as a separate, optional pass.
+Every value of the configuration that comes from the user SHALL be validated before it is used, as part of reading the
+configuration — never as a separate, optional pass.
 :::
 
 ## 4. The control records, apart from the media
@@ -1726,6 +1726,76 @@ decoded is unchanged too. One read is exempt: before a photo is removed from the
 holds it, the library file SHALL be fingerprinted again, whatever is kept.
 :::
 
+:::{rul} The library's place is checked
+:id: RUL-library_place_checked
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: lib-root-validated-outside-1
+:uses: DEF-library, DEF-workspace
+:refines: RUL-checked_paths
+
+Merge SHALL check the library's configured place like every path the user writes, and SHALL refuse it unless it is an
+existing folder outside the workspace.
+:::
+
+:::{rul} A library is known by its mark alone
+:id: RUL-library_known_by_mark
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: lib-marker-only-identity-1
+:uses: DEF-library, DEF-merge
+
+A folder SHALL be taken for a library by one mark in it and by nothing else: merge SHALL inspect no structure of the
+library, which has none of a workspace's folders, guard or lifecycle. Merge's library setup alone SHALL make the mark,
+once — making it again SHALL change nothing; merge's plan, dry run and execution SHALL only read it, and stop at once if
+it is absent. Beyond the mark, the folders merge creates under the library SHALL be only those its photos go into.
+:::
+
+:::{rul} One merge at a time in a library
+:id: RUL-library_lock
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: merge-library-lock-1
+:uses: DEF-library, DEF-merge
+
+Merge SHALL hold a lock on the library for its whole run, besides the workspace's lock and not instead of it, so that
+no two merges write one library at once, even from different workspaces. The lock SHALL hold nothing about the library
+but who holds it.
+:::
+
+:::{rul} A locked library is refused at once
+:id: RUL-library_lock_fail_fast
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: merge-library-lock-failfast-1
+:refines: RUL-library_lock
+
+A merge that finds the library locked SHALL stop at once, having changed nothing in the library. A library lock left by
+a merge that died SHALL be recognisable as stale, and recoverable, as the workspace's lock is.
+:::
+
+:::{rul} The library is confirmed before it is locked
+:id: RUL-library_confirmed_before_lock
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: merge-lock-after-marker-1
+:refines: RUL-library_lock
+
+Merge SHALL take the workspace's lock first, then check the library's place and its mark, and only then take the
+library's lock, so that no lock is ever left in a folder that is not a library. A merge stopped at any of these steps
+SHALL have changed nothing in the library.
+:::
+
 :::{rul} Merge moves, and a photo leaves the workspace only once safe in the library
 :id: RUL-merge_moves
 :status: ruled
@@ -1843,4 +1913,253 @@ Pruning the quarantine SHALL remain allowed in a sealed workspace, and SHALL be 
 A command refusing a sealed workspace that finds anything where a dump would land — an entry at the workspace's top
 level other than its managed folders and hidden entries, or anything in the inbox — SHALL say that a new dump is likely
 there and must go to a fresh workspace, and SHALL leave it exactly where it is.
+:::
+
+## 14. Every value the user writes is checked
+
+:::{def} An authored value
+:id: DEF-authored_value
+:status: seed
+:uses: DEF-configuration, DEF-decision
+
+An **authored value** is one the user writes by hand: a setting of the configuration, or a decision.
+:::
+
+:::{inv} No value the user writes is used unchecked
+:id: INV-authored_values_checked
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: validate-everything-authored-1
+:uses: DEF-authored_value, DEF-dependency_cascade
+
+Every authored value SHALL be checked to be valid before it is used — besides, not instead of, the dependency cascade's
+check that it has not changed.
+:::
+
+:::{rul} A configured path is checked
+:id: RUL-checked_paths
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: validate-paths-1
+:uses: DEF-configuration, DEF-managed_folders, DEF-tracks
+:refines: INV-authored_values_checked
+
+A path the configuration names SHALL be neither empty nor blank, SHALL hold no character the platform forbids, and SHALL
+stay where it must: the tracks' place outside the managed folders, the library's an existing folder outside the
+workspace.
+:::
+
+:::{rul} A snapshot's name is checked before any snapshot
+:id: RUL-checked_snapshot_names
+:status: seed
+:criticality: med
+:verify: required
+:aliases: validate-zfs-prefix-1
+:uses: RUL-snapshot_optional
+:refines: INV-authored_values_checked
+
+The settings a snapshot's name is made from SHALL be checked to make a valid snapshot name before any snapshot is
+attempted.
+:::
+
+:::{rul} A timezone is a real zone
+:id: RUL-checked_timezones
+:status: seed
+:criticality: med
+:verify: required
+:aliases: validate-timezone-1
+:refines: INV-authored_values_checked
+
+A timezone the user writes SHALL be a real zone that resolves, never an arbitrary string.
+:::
+
+:::{rul} A position, an offset and a true time are in range
+:id: RUL-checked_positions_and_times
+:status: seed
+:criticality: high
+:verify: required
+:aliases: validate-coords-offsets-1
+:uses: DEF-decision
+:refines: INV-authored_values_checked
+
+A position the user writes SHALL be two well-formed numbers in range — latitude −90 to 90, longitude −180 to 180. A
+clock offset or a true time the user writes SHALL parse, and fall within sane bounds.
+:::
+
+:::{rul} The filename format makes a safe name
+:id: RUL-checked_filename_format
+:status: seed
+:criticality: med
+:verify: required
+:aliases: validate-filename-format-1
+:uses: RUL-one_filename_format
+:refines: INV-authored_values_checked
+
+The filename format SHALL make a part of a name that is never empty and is safe on the filesystem: no path separator
+and no character a filename may not hold.
+:::
+
+:::{rul} A number is of the right kind and in range
+:id: RUL-checked_numbers
+:status: seed
+:criticality: med
+:verify: required
+:aliases: validate-numeric-thresholds-1
+:uses: DEF-configuration
+:refines: INV-authored_values_checked
+
+A number the configuration sets — a threshold, a distance, a duration, a count — SHALL be of the right kind and within
+a sane range: a duration or a distance is never negative.
+:::
+
+:::{rul} A choice is one of its choices, and a decision has its shape
+:id: RUL-checked_shapes
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: validate-enum-structure-1
+:uses: DEF-decision, RUL-user_writes_decisions
+:refines: INV-authored_values_checked
+
+A yes-or-no SHALL be a yes or a no, and a value from a fixed set — a device group's class among them — one of that set.
+A decision whose structure is broken SHALL be an error, never ignored.
+:::
+
+:::{rul} An invalid value stops the phase before it changes anything
+:id: RUL-invalid_value_stops
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: validate-fail-closed-1
+:uses: INV-no_stale_use
+:refines: INV-authored_values_checked
+
+A value found invalid SHALL stop the phase as a stale dependency does: nothing SHALL be made from it, and nothing
+changed.
+:::
+
+:::{rul} An invalid value is named where it was written, and never repaired
+:id: RUL-invalid_value_located
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: validate-locate-no-repair-1
+:uses: DEF-authored_value, RUL-cause_locatable
+:refines: INV-authored_values_checked
+
+The report of an invalid value SHALL name the record and the field it was written in — for a decision, also the
+destination, the camera group or the file it is about. A value SHALL be used as written or not at all: never repaired.
+:::
+
+:::{rul} A value is checked each time it is used
+:id: RUL-checked_every_run
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:refines: INV-authored_values_checked
+
+A value SHALL be checked every time a run uses it, never taken as valid because an earlier run found it so.
+:::
+
+:::{rul} An invalid decision is kept, and marked
+:id: RUL-invalid_decision_kept
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: validate-preserve-invalid-1
+:uses: DEF-decision, RUL-decision_kept
+:refines: RUL-invalid_value_stops
+
+A decision found invalid SHALL be kept as the user wrote it, and marked as needing correction — never erased.
+:::
+
+## 15. Nothing overwritten, nothing left half-done
+
+:::{rul} Every name is checked free as it is written
+:id: RUL-target_free_at_execute
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: exec-noclobber-recheck-1, exec-noclobber-all-content-ops-1
+:uses: RUL-suffix_no_clobber, DEF-library
+
+Immediately before each change that gives a file a name — prep's moves, renames and setting duplicates aside, geotag's
+renames, merge's placing in the library — execution SHALL check that the name is free, ignoring case where the
+filesystem does, and SHALL never write onto a taken name on the strength of the plan. A name found taken SHALL block
+that operation; where the plan recorded a safe other name for it, that name SHALL be checked the same way.
+:::
+
+:::{rul} An interrupted move leaves the before or the after
+:id: RUL-operations_atomic
+:status: seed
+:criticality: high
+:anti: yes
+:verify: incidental
+:aliases: atomic-operations-1
+
+A move, a rename or a placement SHALL be one indivisible operation where the filesystem allows, so that an interruption
+leaves the state before it or the state after, never part of either.
+:::
+
+:::{rul} A file rewritten in place is the old one or the new one
+:id: RUL-rewrite_in_place_atomic
+:status: seed
+:criticality: high
+:anti: yes
+:verify: none
+:omit_reason: crash-injection testing is out of scope; the guarantee rests on how the file is written
+:aliases: atomic-inplace-metadata-1
+:refines: RUL-operations_atomic
+
+A write that rewrites a file in place SHALL leave, if interrupted, the intact original or the fully written file —
+never a damaged one between them.
+:::
+
+:::{rul} Across filesystems, a placement is still all or nothing
+:id: RUL-cross_fs_all_or_nothing
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: atomic-crossfs-equivalent-1
+:refines: RUL-operations_atomic
+
+Where a placement crosses filesystems and cannot be one operation, it SHALL be made equivalent: the file copied under a
+temporary name beside its place, verified, and only then given its name, if that is still free. An interruption SHALL
+leave no file under that name, or the complete one — never part of one.
+:::
+
+:::{rul} A temporary copy a crash left is cleared
+:id: RUL-crash_temps_cleared
+:status: seed
+:criticality: low
+:verify: required
+:aliases: atomic-crossfs-temp-sweep-1
+:uses: DEF-merge, DEF-library
+:refines: RUL-cross_fs_all_or_nothing
+
+A temporary copy SHALL bear a name of its own, which no photo bears. Merge SHALL clear, as its execution starts, the
+temporary copies an interrupted merge left in the folders it places into, and record how many.
+:::
+
+:::{rul} A failed operation leaves its file as it was
+:id: RUL-failed_operation_clean
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: exec-failed-op-clean-1
+
+An operation that cannot complete SHALL leave its file as it was before it, record the failure, and never be recorded
+as done, so that a re-run does it again.
 :::

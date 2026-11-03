@@ -68,7 +68,7 @@ def test_workspace_lock_still_works_after_refactor(tmp_path):
 
 # --- Library identity marker + init-library writer -----------------------------
 
-@pytest.mark.spec("lib-marker-only-identity-1")
+@pytest.mark.spec("lib-marker-only-identity-1", test="TST-merge_primitives-library_marker_path_and_identity")
 def test_library_marker_path_and_identity(tmp_path):
     lib = tmp_path / "library"
     lib.mkdir()
@@ -170,7 +170,7 @@ def test_validate_merge_config_rejects_bad_inputs(tmp_path):
         utils.validate_merge_config(_cfg(lib, collision="overwrite"), str(ws))
 
 
-@pytest.mark.spec("lib-root-validated-outside-1")
+@pytest.mark.spec("lib-root-validated-outside-1", test="TST-merge_primitives-validate_merge_config_rejects_library_inside_workspace")
 def test_validate_merge_config_rejects_library_inside_workspace(tmp_path):
     import pytest
     ws = tmp_path / "ws"; ws.mkdir()

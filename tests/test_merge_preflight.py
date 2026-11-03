@@ -395,7 +395,7 @@ def test_init_library_resolves_relative_path(tmp_path):
 
 # --- locking flow (merge spec §12) -------------------------------------------
 
-@pytest.mark.spec("merge-hold-two-locks-1", "merge-library-lock-1")
+@pytest.mark.spec("merge-hold-two-locks-1", "merge-library-lock-1", test="TST-merge_preflight-locked_workflow_acquires_both_and_releases")
 def test_locked_workflow_acquires_both_and_releases(tmp_path):
     ws, lib = _make(tmp_path)
     rc = merge._run_locked_workflow("plan", str(ws))
@@ -419,7 +419,7 @@ def test_locked_workflow_exits_1_if_workspace_locked(tmp_path):
         held.release()
 
 
-@pytest.mark.spec("merge-fail-lock-or-marker-mutates-nothing-1", "merge-library-lock-failfast-1")
+@pytest.mark.spec("merge-fail-lock-or-marker-mutates-nothing-1", "merge-library-lock-failfast-1", test="TST-merge_preflight-locked_workflow_exits_1_if_library_locked")
 def test_locked_workflow_exits_1_if_library_locked(tmp_path):
     ws, lib = _make(tmp_path)
     held = utils.LibraryLock(str(lib))                # another workspace's merge holds the library
@@ -442,7 +442,7 @@ def test_locked_workflow_exits_2_on_blocker(tmp_path):
 
 # --- Tier 3: no-mutation / never-follows consequences ------------------------
 
-@pytest.mark.spec("merge-lock-after-marker-1", "merge-marker-check-before-liblock-1")
+@pytest.mark.spec("merge-lock-after-marker-1", "merge-marker-check-before-liblock-1", test="TST-merge_preflight-marker_check_precedes_library_lock_no_lockfile_dropped")
 def test_marker_check_precedes_library_lock_no_lockfile_dropped(tmp_path):
     """§12 lock order: the .photos-library marker is validated BEFORE the library-side lock is taken.
     Against a marker-less library_root, the run blocks (rc 2) and must NEVER have created the
@@ -468,7 +468,7 @@ def test_bydest_symlink_blocks_run_and_is_never_followed(tmp_path):
     assert list(lib.iterdir()) == [lib / ".photos-library"]    # library untouched (marker only)
 
 
-@pytest.mark.spec("merge-config-validated-1", "validate-fail-closed-1")
+@pytest.mark.spec("merge-config-validated-1", "validate-fail-closed-1", test="TST-merge_preflight-invalid_merge_policy_blocks_with_no_summary_no_placement")
 def test_invalid_merge_policy_blocks_with_no_summary_no_placement(tmp_path):
     """A bad merge.placement_policy/collision_policy is caught in the merge data path (validate_merge
     _config) and surfaces as a preflight blocker: rc 2, no plan, no photos-31 summary, no placement."""

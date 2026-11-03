@@ -188,7 +188,7 @@ def test_determinism_unchanged_rerun_is_byte_identical(tmp_path, monkeypatch):
 
 # --- validation (§9.2) -------------------------------------------------------
 
-@pytest.mark.spec("geotag-invalid-preserved-1", "geotag-validation-hard-blocker-1", "validate-everything-authored-1", "validate-preserve-invalid-1", "validate-timezone-1")
+@pytest.mark.spec("geotag-invalid-preserved-1", "geotag-validation-hard-blocker-1", "validate-everything-authored-1", "validate-preserve-invalid-1", "validate-timezone-1", test="TST-geotag_time_decisions-bad_timezone_blocks_and_leaves_artifact")
 def test_bad_timezone_blocks_and_leaves_artifact(tmp_path, monkeypatch, capsys):
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []})
@@ -201,7 +201,7 @@ def test_bad_timezone_blocks_and_leaves_artifact(tmp_path, monkeypatch, capsys):
     assert (ws / ".photos-ingest" / cal.TIME_DECISIONS_ARTIFACT).read_bytes() == before   # untouched
 
 
-@pytest.mark.spec("geotag-sanity-validate-1", "validate-locate-no-repair-1")
+@pytest.mark.spec("geotag-sanity-validate-1", "validate-locate-no-repair-1", test="TST-geotag_time_decisions-bad_offset_blocks")
 def test_bad_offset_blocks(tmp_path, monkeypatch, capsys):
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []})

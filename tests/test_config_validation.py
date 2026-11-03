@@ -83,6 +83,19 @@ def test_load_or_seed_config_rejects_non_object_file(tmp_path):
         utils.load_or_seed_config(str(tmp_path))
 
 
+@pytest.mark.spec("RUL-checked_every_run", test="TST-config_validation-config_rechecked_on_every_read")
+def test_config_rechecked_on_every_read(tmp_path):
+    (tmp_path / ".photos-ingest").mkdir()
+    utils.load_or_seed_config(str(tmp_path))                 # seeded, read and found valid
+    path = utils.config_path(str(tmp_path))
+    with open(path) as f:
+        cfg = json.load(f)
+    cfg["gpx_direct_match_max_seconds"] = -1                 # edited between runs
+    with open(path, "w") as f:
+        json.dump(cfg, f)
+    with pytest.raises(ValueError, match="gpx_direct_match_max_seconds"):
+        utils.load_or_seed_config(str(tmp_path))             # the next read checks it again
+
 def test_valid_edits_pass():
     utils.validate_config(_pol(default_folder_timezone="Europe/Brussels"))
     utils.validate_config(_cfg(gpx_interpolation_max_distance_meters=500.0,

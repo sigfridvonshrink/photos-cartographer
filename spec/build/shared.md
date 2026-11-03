@@ -153,7 +153,7 @@ lowercase, no leading dot (prep §6.1). `CAMERA_GROUP_KEY_VERSION` SHALL be a co
 :::{bld} What validating the configuration checks
 :id: BLD-config_values_checked
 :status: seed
-:realises: RUL-config_validated_before_use
+:realises: RUL-config_validated_before_use, RUL-checked_paths, RUL-checked_snapshot_names, RUL-checked_filename_format, RUL-checked_numbers
 
 Validating the configuration SHALL check, among others, that a path resolves sanely, that a ZFS snapshot prefix is a
 syntactically valid snapshot component, and that an IANA timezone is a real zone.
@@ -591,6 +591,30 @@ incoming photo whose name is taken by different content SHALL take the shared su
 (§7.2), the library's own name keeping its bare form.
 :::
 
+:::{bld} The library's mark and its checks
+:id: BLD-library_marker
+:status: seed
+:realises: RUL-library_known_by_mark, RUL-library_place_checked
+
+A library SHALL be marked by an empty `.photos-library` file in `library_root`, which `is_library` tests with
+`os.path.isfile`; `merge init-library` alone SHALL create it, with `O_CREAT|O_EXCL`, leaving one already there as it is
+(merge §4). `validate_merge_config` SHALL require `merge.library_root` to be non-empty and to resolve to an existing
+directory that is neither the workspace nor inside it. Merge SHALL create a missing destination directory under
+`library_root` with `os.makedirs` as it places a photo there.
+:::
+
+:::{bld} The library lock
+:id: BLD-library_lock
+:status: seed
+:realises: RUL-library_lock, RUL-library_lock_fail_fast, RUL-library_confirmed_before_lock
+
+The library lock SHALL be `LibraryLock`: an exclusive, non-blocking `flock` on `.photos-merge.lock` in `library_root`,
+recording its holder's `pid`, `started_at` and `host` and nothing else, released by the kernel when its process dies;
+the file is never deleted. Merge's `plan`, `dry-run` and `execute` SHALL take it after the workspace lock and after the
+preflight's `validate_merge_config` and `is_library` checks, and hold it to their end; one that cannot take it SHALL
+stop with exit status 1.
+:::
+
 :::{bld} Merge's move: one rename, or copy, verify, rename and remove
 :id: BLD-merge_move
 :status: ruled
@@ -632,4 +656,64 @@ nothing there. `merge init-library` given a path from inside a workspace, which 
 as `library_root` in the configuration, SHALL check the seal under the lock the same way, and stop with exit status 2
 having blessed nothing; without a path, or from outside any workspace, it writes nothing in the workspace and does not
 check. `prune-quarantine` SHALL not check the seal.
+:::
+
+## 14. Every value the user writes is checked
+
+:::{bld} Where each phase checks what the user wrote
+:id: BLD-authored_checks_by_phase
+:status: seed
+:realises: INV-authored_values_checked, RUL-checked_shapes, RUL-checked_positions_and_times, RUL-checked_timezones, RUL-invalid_value_stops, RUL-invalid_value_located, RUL-checked_every_run, RUL-invalid_decision_kept
+:uses: BLD-config_values_checked
+
+`validate_config` SHALL check the configuration each time it is read: by prep as it seeds and reads it, by geotag and
+merge as they load it. Merge SHALL check besides, with `validate_merge_config`, `merge.library_root` and the merge
+policy's values. Geotag SHALL check the decisions in `photos-21`, `photos-22` and `photos-23` as it reads them (geotag
+§9.2, §20): each blocker SHALL name the artifact, the destination, the cell or the file, and the field, and an artifact
+holding one SHALL be left as it is, its plan not written.
+:::
+
+## 15. Nothing overwritten, nothing left half-done
+
+:::{bld} One rename that refuses a taken name
+:id: BLD-no_clobber_rename
+:status: seed
+:realises: RUL-target_free_at_execute, RUL-operations_atomic
+
+Every move and rename that carries content SHALL go through `_move_no_clobber`: on one filesystem `renameat2` with
+`RENAME_NOREPLACE`, one call that refuses an existing name, or where that is unavailable `os.link` then `os.unlink`;
+across filesystems `_move_cross_fs_no_clobber`. A refused name SHALL be a blocker. Merge SHALL also test its target
+before moving, and geotag compares names ignoring case (geotag §27). The rename that completes an operation is thus
+itself the check that its name is free (prep §14.3–§14.4, geotag §29.1a, merge §11).
+:::
+
+:::{bld} Geotag's metadata writes
+:id: BLD-metadata_safe_write
+:status: seed
+:realises: RUL-rewrite_in_place_atomic
+
+Geotag SHALL write metadata with `exiftool -overwrite_original`, which writes a temporary file and renames it over the
+original, having first removed a `<file>_exiftool_tmp` an interrupted write left (geotag §29.1a).
+:::
+
+:::{bld} The cross-filesystem copy and its sweep
+:id: BLD-cross_fs_temp
+:status: seed
+:realises: RUL-cross_fs_all_or_nothing, RUL-crash_temps_cleared
+
+`_move_cross_fs_no_clobber` SHALL copy to a `.tmp-xdev-<random>.part` file in the destination directory, fingerprint
+it against the planned content, sync it, rename it into its place without overwriting, and then remove the source.
+Merge's `execute` SHALL, after revalidating its plan and taking its snapshot and before its first move, remove every
+`.tmp-xdev-*.part` file directly in `library_root` and in each planned target's directory, and record how many in
+`photos-31-merge-summary.json` as `run_metadata.orphan_temps_swept`.
+:::
+
+:::{bld} What each phase does with a failed operation
+:id: BLD-failed_operation
+:status: seed
+:realises: RUL-failed_operation_clean
+
+Prep SHALL journal an operation that raised as `failed`, and stop. Geotag SHALL confirm no write whose tool failed or
+whose result does not fingerprint as planned. Merge SHALL record a placement that raised as blocked, its photo left in
+photos by destination.
 :::
