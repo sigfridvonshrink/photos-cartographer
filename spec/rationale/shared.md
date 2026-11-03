@@ -608,7 +608,7 @@ automated move inside a finished workspace.
 
 :::{rat} Pruning the quarantine changes nothing controlled
 :id: RAT-prune_harms_nothing
-:status: seed
+:status: ruled
 :justifies: RUL-sealed_prune_allowed
 
 The quarantine holds only spare copies of duplicates, which a sealed workspace still keeps. Deleting them, with the
