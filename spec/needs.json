@@ -12066,7 +12066,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "The quarantine holds only spare copies of duplicates, which a sealed workspace still keeps. Deleting them touches no\nphoto, library file, record or row of the database, and neither reprocesses the workspace nor adds a batch to it, so\nthe seal's reasons do not reach it, and the space can be reclaimed.",
+     "content": "The quarantine holds only spare copies of duplicates, which a sealed workspace still keeps. Deleting them, with the\nmanifests that list them, touches no photo, library file, control record or row of the database; what each manifest\nsaid is kept in the transformation log and the package. It neither reprocesses the workspace nor adds a batch to it,\nso the seal's reasons do not reach it, and the space can be reclaimed.",
      "criticality": null,
      "docname": "rationale/shared",
      "doctype": ".md",
