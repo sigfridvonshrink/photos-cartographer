@@ -2,6 +2,50 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-03 — §13.4–§13.7's seed items: the database, merge and the seal
+
+The 36 items proposed for the database, merge and the seal were put in 14 topics, one per message, each checked
+against the code first. Of the proposal's five findings: `init-library` writing the config in a sealed workspace,
+*"1 yes"*; the manual-position ledger, *"2 look into whether it can go"*; the dropped promise to update a package
+already copied away, *"3 keep it dropped"*; the database's table list and merge listing the library's top folder,
+*"4 ok"*, *"5 ok"* — *"and let's go one by one through the 24"* (they were 36).
+
+- **The manual-position ledger went.** Every plan decides from the original values, so a withdrawn pin is undone by
+  the ordinary path; the ledger's revert was always overwritten in the same run. A fix for a pinned photo with no
+  resolved time was written and dropped: a plan with such a photo never executes. The log now records a cleared
+  position, and what each position write replaced, from the plan. Asked which item 2 was meant: *"what do you mean if
+  item 2 goes ahead - which item 2?"* — then *"1 ok, and 2 (topic 1) looks good"*.
+- **One database, in the workspace**: ruled with that. **The database is part of the record**: *"yes"*. **Each phase
+  writes only its own part**: *"ruled"*. **Each phase's image of the database**: *"ruled"*. **Merge never alters the
+  library**: *"ruled"*.
+- **Merge reads the library only where it places a photo, and each file once** — merge's planning wrote its library
+  cache while "planning changes nothing": *"well, maybe Planning changes nothing should be rephrased - planning changes
+  nothing except fingerprint caches?"*; a cached fingerprint ignored the ImageMagick version: *"And cache miss - yes,
+  fix it"*. Asked again about the four items: *"sorry, I also meant the four are ruled. I only said what i wanted
+  different"*. Told that items not objected to would count as ruled: *"From now on, items you don't object to count as
+  ruled - no. I still want to rule explicitly"*.
+- **A taken place is settled by content** — merge decodes the library file again before deleting the workspace's copy
+  of a photo already there, against the read-once rule: *"Keep the second read, this is too sensitive (irreversible) to
+  rely on cache"*; *"and topic 7 is ruled"*.
+- **Merge moves, and resumes**, with the build item rewritten for the same-filesystem rename: *"yes"*.
+- **Merge records where every photo landed** — merge refused to re-plan after a partial run, and its advice was to
+  delete its summary, losing the moved photos from the log: *"The question is what happens if for any reason I need to
+  replan"*. A re-plan now carries forward what earlier runs moved, each place fingerprinted again: *"Go, and the two
+  are ruled, too"*.
+- **Merge remakes the package** — *"so that package no longer covers the whole journey" ?*; then: *"\"so that package\"
+  can be also read as \"so the package\". \"that\" is unclear and confuses the reader. needs to be clarified, maybe
+  \"so the existing package\", or \"so the previous package\""*. "The existing package" it is. The merge spec still
+  promised to add merge's records to a package already copied to storage: *"both ruled; that line to be dropped;"*.
+- **The seal**: *"yes"*.
+- **A sealed workspace is never processed again** — every refusing command still writes its owner record into the
+  workspace lock, which it holds while checking the seal; worded as the one thing it changes: *"ruled including your
+  recommendation"*.
+- **Pruning the quarantine is still allowed** — prune deletes each quarantine folder's manifest too, and the rationale
+  said it touched no record; of keeping the code and saying that the manifest's content lives on in the transformation
+  log (A), or keeping the manifests (B): *"both ruled and A"*.
+- **A new dump in a sealed workspace is pointed out and left** — a dump copied in as a folder went unnoticed, the
+  editor never looked, and prep disagreed with geotag and merge on hidden files; one check for all: *"go and rule"*.
+
 ## 2026-11-02 — §13's seed items, one by one: the log made to keep what it claims
 
 Vasile: *"let's discuss the seed items in turn"*. Each item was checked against the code before it was put; where the
