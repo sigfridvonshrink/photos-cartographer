@@ -2834,15 +2834,11 @@ def run(args):
         # Sealed/terminal-workspace guard (prep Section 6.2 item 1 / shared 13.7): a successful
         # merge seals the workspace. Prep then hard-stops and mutates nothing. Applies to the prep
         # operations (plan/dry-run/execute); prune-quarantine is a separate maintenance command.
-        from .photos_utils import is_sealed, folder_name as _folder_name
+        from .photos_utils import is_sealed, likely_new_dump, folder_name as _folder_name
         if args.command in ("plan", "dry-run", "execute") and is_sealed(workspace_root):
             reporter.error("Workspace is SEALED (already merged): prep will not run. Nothing was touched.")
-            _src = os.path.join(workspace_root, _folder_name('sources'))
-            _root_files = [f for f in os.listdir(workspace_root)
-                           if os.path.isfile(os.path.join(workspace_root, f)) and not f.startswith('.')]
-            _src_entries = os.listdir(_src) if os.path.isdir(_src) else []
-            if _root_files or _src_entries:
-                reporter.log(f"  A likely new dump is present (files at the root or in {_folder_name('sources')}). "
+            if likely_new_dump(workspace_root):
+                reporter.log(f"  A likely new dump is present (at the workspace root or in {_folder_name('sources')}). "
                              "A sealed workspace is final — move new media into a fresh workspace.")
             sys.exit(2)
 

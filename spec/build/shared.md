@@ -626,8 +626,9 @@ The seal SHALL be `photos-00-sealed.json` in the control directory, its own file
 only prep writes — recording `sealed`, the merge run id (`merged_run_id`) and `library_root`; its presence alone seals.
 Prep's `plan`, `dry-run` and `execute`, every geotag command, and merge's `plan`, `dry-run` and `execute` SHALL check it under the workspace
 lock before reading anything else, and stop with exit status 2 if it is there, adding the likely-new-dump warning when
-the workspace's top level holds a file or the inbox holds anything. `edit` SHALL refuse to serve a sealed workspace,
-and its save SHALL write nothing there. `merge init-library` given a path from inside a workspace, which would record it
+`likely_new_dump` finds an entry at the workspace's top level other than its managed folders and hidden entries, or
+anything in the inbox. `edit` SHALL refuse to serve a sealed workspace, with the same warning, and its save SHALL write
+nothing there. `merge init-library` given a path from inside a workspace, which would record it
 as `library_root` in the configuration, SHALL check the seal under the lock the same way, and stop with exit status 2
 having blessed nothing; without a path, or from outside any workspace, it writes nothing in the workspace and does not
 check. `prune-quarantine` SHALL not check the seal.

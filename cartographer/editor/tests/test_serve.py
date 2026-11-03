@@ -539,6 +539,22 @@ def test_serve_refuses_a_sealed_workspace(tmp_path):
     assert not os.path.exists(os.path.join(ws, serve.CONTROL, serve.EDITOR_LOCK))
 
 
+@pytest.mark.spec("RUL-sealed_new_dump_warned", test="TST-serve-serve_points_out_a_dump_in_a_sealed_workspace")
+def test_serve_points_out_a_dump_in_a_sealed_workspace(tmp_path, capsys):
+    # Refusing a sealed workspace, the editor says a dump dropped in its inbox is likely new, and leaves it.
+    ws = _workspace_with_fixtures(tmp_path)
+    open(os.path.join(ws, serve.CONTROL, serve.GUARD_NAME), "w").close()
+    _seal(ws)
+    inbox = os.path.join(ws, "0-sources")
+    os.makedirs(inbox, exist_ok=True)
+    open(os.path.join(inbox, "new.jpg"), "wb").write(b"img")
+    with pytest.raises(SystemExit) as e:
+        serve.serve(ws, port=0)
+    assert e.value.code == 2
+    assert "new dump" in capsys.readouterr().err.lower()
+    assert os.listdir(inbox) == ["new.jpg"]
+
+
 @pytest.mark.spec("edit-sealed-refuses-1", test="TST-serve-save_refuses_a_sealed_workspace")
 def test_save_refuses_a_sealed_workspace(tmp_path):
     # The console calls _save directly, without serve()'s startup check: the save refuses on its own.

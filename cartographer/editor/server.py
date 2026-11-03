@@ -453,7 +453,11 @@ def serve(workspace, port=8765, host="0.0.0.0"):
     # A sealed (merged) workspace is final (shared contract §13.7): its decisions may no longer change.
     if workspace and photos_utils.is_sealed(workspace):
         print(f"{os.path.abspath(workspace)} is SEALED (already merged): the decision editor will not "
-              f"open it. A sealed workspace is final — move new media into a fresh workspace.", file=sys.stderr)
+              f"open it. A sealed workspace is final.", file=sys.stderr)
+        if photos_utils.likely_new_dump(workspace):
+            print(f"A likely new dump is present (at the workspace root or in "
+                  f"{photos_utils.folder_name('sources')}/). Move it into a fresh workspace by hand — "
+                  f"the editor left it exactly where it is.", file=sys.stderr)
         sys.exit(2)
     Handler.workspace = workspace
 

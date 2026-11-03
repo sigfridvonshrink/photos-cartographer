@@ -47,7 +47,7 @@ from .photos_utils import (
     verify_json_dependency, json_dependency, write_json_artifact, write_versioned_json, is_library, write_library_marker,
     library_marker_path, allocate_suffix, suffix_root, max_suffix, ContentHasher, WorkspaceCache,
     journal_path, take_zfs_snapshot, _move_no_clobber, get_imagemagick_version, write_db_snapshot, reseal_archival_package,
-    write_sealed_marker, entries_not_carried, prep_log_path, WorkspaceLock, LibraryLock, XDEV_TMP_PREFIX, XDEV_TMP_SUFFIX,
+    write_sealed_marker, likely_new_dump, entries_not_carried, prep_log_path, WorkspaceLock, LibraryLock, XDEV_TMP_PREFIX, XDEV_TMP_SUFFIX,
 )
 from .reporting import get_reporter, emit_next_step
 
@@ -139,8 +139,8 @@ class MergeWorkflow:
         if is_sealed(ws):
             blockers.append("Workspace is SEALED (a prior merge fully succeeded): merge will not run. "
                             "Nothing was touched — move any new media into a fresh workspace.")
-            if self._root_files() or self._entries(folder_name('sources')):
-                warnings.append("A likely new dump is present (files at the workspace root or in "
+            if likely_new_dump(ws):
+                warnings.append("A likely new dump is present (at the workspace root or in "
                                 f"{folder_name('sources')}/). A sealed workspace is final; move it into "
                                 "a fresh workspace by hand — merge left it exactly where it is.")
             return blockers, warnings, info
@@ -1211,9 +1211,8 @@ def do_init_library(path_arg, ws):
             reporter.error("Workspace is SEALED (a prior merge fully succeeded): init-library will not record "
                            "a library in its config. Nothing was blessed or written — to bless the directory "
                            "alone, run `photos-cartographer merge init-library <path>` from outside any workspace.")
-            wf = MergeWorkflow(ws)
-            if wf._root_files() or wf._entries(folder_name('sources')):
-                reporter.warn("A likely new dump is present (files at the workspace root or in "
+            if likely_new_dump(ws):
+                reporter.warn("A likely new dump is present (at the workspace root or in "
                               f"{folder_name('sources')}/). A sealed workspace is final; move it into a fresh "
                               "workspace by hand — init-library left it exactly where it is.")
             return 2
