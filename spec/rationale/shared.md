@@ -597,7 +597,7 @@ none, so it can be finished by running it again.
 
 :::{rat} A finished workspace is read, not reprocessed
 :id: RAT-sealed_is_final
-:status: seed
+:status: ruled
 :justifies: RUL-sealed_refuses, RUL-sealed_new_dump_warned
 
 A second batch processed in a merged workspace would interleave with the first's database, logs and package, and its
