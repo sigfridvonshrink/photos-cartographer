@@ -22128,7 +22128,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "In a sealed workspace prep, geotag and merge SHALL stop as they start, changing and touching nothing, and the decision\neditor SHALL neither open it nor save into it; nor SHALL merge's library setup record a library in its configuration.\nIts records MAY still be read.",
+     "content": "In a sealed workspace prep, geotag and merge SHALL stop as they start, changing nothing but the owner record of the workspace lock, and the decision\neditor SHALL neither open it nor save into it; nor SHALL merge's library setup record a library in its configuration.\nIts records MAY still be read.",
      "criticality": "high",
      "docname": "intent/shared",
      "doctype": ".md",
