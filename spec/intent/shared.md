@@ -1688,7 +1688,7 @@ place is taken, the incoming photo SHALL give way.
 
 :::{rul} Merge reads the library only where it places a photo
 :id: RUL-library_not_scanned
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -1714,7 +1714,7 @@ content SHALL mean two photos share a name: the incoming one is placed under a d
 
 :::{rul} A library file is read at most once while unchanged
 :id: RUL-library_file_read_once
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :aliases: merge-fingerprint-cached-onfly-1

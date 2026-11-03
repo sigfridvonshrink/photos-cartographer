@@ -555,7 +555,7 @@ tells a copy already present from a different photo sharing a name.
 
 :::{rat} A library file costs a full read
 :id: RAT-library_reads_cost
-:status: seed
+:status: ruled
 :justifies: RUL-library_file_read_once
 
 Fingerprinting a library file means reading and decoding it whole, and the library may sit across a network. Kept in the workspace, a
