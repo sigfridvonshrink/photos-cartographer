@@ -606,7 +606,7 @@ destination after the library's copy is fingerprinted again and found to hold it
 
 :::{bld} The merge records and the re-seal
 :id: BLD-merge_records
-:status: seed
+:status: ruled
 :realises: RUL-merge_records_landing, RUL-merge_reseals, RUL-seal_on_success_only
 :uses: BLD-archive_manifest, BLD-workspace_database
 

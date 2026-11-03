@@ -1755,7 +1755,7 @@ already merged SHALL change nothing.
 
 :::{rul} Merge records where every photo landed
 :id: RUL-merge_records_landing
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :aliases: merge-records-summary-1
