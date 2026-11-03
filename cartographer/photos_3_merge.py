@@ -33,6 +33,7 @@ The script sits beside `photos_utils.py` and imports the shared infrastructure f
 import argparse
 import concurrent.futures
 import errno
+import glob
 import json
 import os
 import sys
@@ -395,6 +396,7 @@ class MergeWorkflow:
         fingerprint (append-at-max+1). Non-mutating except populating the library-file fingerprint
         cache. Returns the serialized plan dict (the photos-30-merge-plan.json body)."""
         entries = self.enumerate_finalized(calib_plan, library_root)
+        earlier = self._earlier_moves(ws)
         # Per-library-dir occupancy: existing library names + this run's whole incoming batch (+ any
         # name allocated so far). max_suffix over it gives max(library, incoming) for append-at-max+1.
         batch_by_dir = {}
@@ -447,7 +449,13 @@ class MergeWorkflow:
         for e in entries:
             src_abs = os.path.join(ws, e["by_dest_relpath"])
             if not os.path.exists(src_abs):
-                continue                       # finalized entry already moved/absent: resume case
+                # Moved by an earlier run: carried forward from the plan that moved it, so the merge log
+                # still says where it landed (§8.3). Never left out quietly.
+                rec = self._carried_forward(e, earlier.get(e["content_fingerprint"]), blockers)
+                totals[rec["disposition"] if rec["disposition"] != "renamed_incoming"
+                       else "renamed_for_library"] += 1
+                dests.setdefault(e["lib_dest"], {"files": []})["files"].append(rec)
+                continue
             st = os.stat(src_abs)
             rec = {"by_dest_source": e["by_dest_relpath"], "content_fingerprint": e["content_fingerprint"],
                    "preconditions": {"size": st.st_size, "mtime_ns": st.st_mtime_ns,
@@ -510,6 +518,50 @@ class MergeWorkflow:
             sort_keys=True))[:16]
         return plan
 
+    def _earlier_moves(self, ws):
+        """{content fingerprint: (plan id, record)} for every photo an earlier merge plan of this
+        workspace moved or found already in the library, as its journal confirmed — the saved plan and
+        every plan a re-plan set aside, the latest winning."""
+        cur = merge_plan_path(ws)
+        stem, ext = os.path.splitext(cur)
+        found = {}
+        for p in sorted(glob.glob(glob.escape(stem) + "-[0-9]*" + ext)) + [cur]:
+            try:
+                with open(p) as f:
+                    plan = json.load(f)
+                pid = plan["plan_id"]
+            except (OSError, ValueError, KeyError, TypeError):
+                continue
+            try:
+                with open(journal_path(ws, pid)) as f:
+                    confirmed = (json.load(f) or {}).get("operations") or {}
+            except (OSError, ValueError):
+                continue
+            for d in (plan.get("destinations") or {}).values():
+                for rec in d.get("files") or []:
+                    if rec.get("disposition") != "blocked" and confirmed.get(rec.get("by_dest_source")) == "confirmed":
+                        found[rec.get("content_fingerprint")] = (pid, rec)
+        return found
+
+    def _carried_forward(self, e, earlier, blockers):
+        """The plan record of a finalized photo no longer in by-dest: the earlier plan's record for it,
+        once its library place is fingerprinted again — never from the cache — and found to hold it;
+        otherwise a blocker naming why."""
+        if earlier is None:
+            reason = (f"{e['by_dest_relpath']} is no longer in the workspace and no earlier merge of it "
+                      "moved it into the library")
+        else:
+            pid, rec = earlier
+            target = rec.get("library_target")
+            if target and self._verify_fp(target, e["content_fingerprint"]):
+                return dict(rec, carried_from_plan=pid)
+            reason = (f"{e['by_dest_relpath']} was moved by an earlier merge to {target}, which no longer "
+                      "holds it")
+        blockers.append(reason + ".")
+        return {"by_dest_source": e["by_dest_relpath"], "content_fingerprint": e["content_fingerprint"],
+                "disposition": "blocked", "library_target": e["library_target"],
+                "resolved_name": e["final_name"], "renamed_for_library": False, "blocked_reason": reason}
+
     def _library_fingerprint(self, abs_path, cache):
         """Content fingerprint of a resident library file, cached by path+size/mtime so it is read at
         most once per run / across re-runs while unchanged and the image engine unchanged (§7). Returns (value, None) on success or
@@ -562,26 +614,6 @@ class MergeWorkflow:
 
     def do_plan(self, ws, library_root):
         reporter = get_reporter()
-        # Refuse re-plan only over a merge that actually MOVED files but is not sealed — i.e. status
-        # `partial` (some placed, a blocker left in by-dest) or `success` (all placed, crashed before
-        # the seal). Such a run already moved finalized photos into the library (their by-dest sources
-        # are gone), and re-planning would `continue` past them (build_merge_plan) and omit them from
-        # the merge log a later execute writes — an already-placed *renamed* file can't be reliably
-        # re-located on a fresh plan. The correct resume is `execute`, which reuses the saved photos-30
-        # and finishes/seals. A `failed` (all blocked → nothing placed) or `rejected` (pre-mutation
-        # abort) summary moved NOTHING — every source is still in by-dest — so re-planning after it is
-        # safe and allowed (and if upstream inputs changed, execute's staleness check forces a re-plan
-        # anyway). do_plan is only reached on an UNSEALED workspace (precondition 0 blocks a sealed one).
-        if os.path.exists(merge_plan_path(ws)) and \
-                _json_get(merge_summary_path(ws), "status") in ("partial", "success"):
-            reporter.log(f"A prior merge is in flight but not sealed ({MERGE_SUMMARY_ARTIFACT} present on an "
-                  "unsealed workspace): some photos are already in the library. Run `execute` to resume "
-                  f"the saved {MERGE_PLAN_ARTIFACT} — it finishes any remaining moves, writes a log "
-                  "covering every file, and seals. Re-planning now would drop the already-moved files "
-                  f"from the merge log. (To re-plan from scratch instead, remove {MERGE_SUMMARY_ARTIFACT} "
-                  "first.)")
-            emit_next_step(reporter, "`merge execute` to resume the in-flight merge and seal.")
-            return 2
         cache = WorkspaceCache(ws)
         try:
             plan = self.build_merge_plan(ws, self.calib_plan, library_root, cache)
