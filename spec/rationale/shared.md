@@ -577,7 +577,7 @@ interruption never loses a photo: running merge again finishes the work.
 
 :::{rat} Merge is the end, so the package is remade at once
 :id: RAT-reseal_automatic
-:status: seed
+:status: ruled
 :justifies: RUL-merge_reseals
 
 Merge adds to the record finalize packaged, so the existing package no longer describes the whole journey. Since merge

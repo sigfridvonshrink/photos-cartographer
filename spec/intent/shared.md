@@ -1768,7 +1768,7 @@ were already present, and what blocked the rest. Nothing SHALL be built from mer
 
 :::{rul} Merge remakes the package as part of its run
 :id: RUL-merge_reseals
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: merge-reseals-automatically-1, merge-reseal-no-rederive-1
