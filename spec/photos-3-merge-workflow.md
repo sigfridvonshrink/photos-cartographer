@@ -50,7 +50,7 @@ Merge reads `6-photos-by-dest` as its source and **moves** each successfully-pla
 
 The workspace lock is acquired at process startup, and the library-side lock is acquired before any library access (Section 12; shared contract Sections 2 and 15.2). With the locks held, merge validates the following and **hard-stops before any placement** if any fails:
 
-0. **Terminal-seal check — sealed means sealed.** If the workspace carries the terminal/sealed marker from a prior successful merge (shared contract Section 13.7), merge **hard-stops immediately, touching nothing but the owner record of the workspace lock** — there is no confirming re-merge and no recovery utility. If files are present at the **workspace root** or in **`0-sources`**, merge additionally warns that a likely new dump was detected and that, because this workspace is done, the dump must be moved into a **fresh workspace** by hand; merge leaves it exactly where it is. (A merge that was merely *interrupted* is not sealed — the seal is written only on full success, step 10 of Section 10.3 — so resuming an interrupted merge proceeds normally and may still have files to move; that is an unsealed workspace, not a sealed-workspace re-run.)
+0. **Terminal-seal check — sealed means sealed.** If the workspace carries the terminal/sealed marker from a prior successful merge (shared contract Section 13.7), merge **hard-stops immediately, touching nothing but the owner record of the workspace lock** — there is no confirming re-merge and no recovery utility. If an entry sits at the **workspace root** other than its managed folders and hidden entries — a file or a whole folder — or anything sits in **`0-sources`**, merge additionally warns that a likely new dump was detected and that, because this workspace is done, the dump must be moved into a **fresh workspace** by hand; merge leaves it exactly where it is. (A merge that was merely *interrupted* is not sealed — the seal is written only on full success, step 10 of Section 10.3 — so resuming an interrupted merge proceeds normally and may still have files to move; that is an unsealed workspace, not a sealed-workspace re-run.)
 0a. **Initialized, and no misplaced entry at the workspace root.** The workspace must be initialized — root sentinel `photos-00-workspace-guard` present (shared contract Section 5; prep Section 3.1). If it is not, merge hard-stops, reporting that the workspace is not initialized and that prep must run first (only prep's init path may consume an as-arrived dump). And, exactly as in prep and geotag, **any misplaced entry at the workspace root blocks** — a **loose file** (strict: any file, dotfiles included), a **non-managed folder** (a stray dump folder belongs *inside* `0-sources`, not loose at the base), or a **symlink** (barred outright rather than followed, since following it would escape the workspace). The base of an initialized workspace holds only the managed folders and control/dot directories, and dumps belong in `0-sources`. This is the shared structural-integrity guard every script applies at startup (shared contract Section 5.3; prep Section 6.2 items 2–3; geotag Section 13).
 0b. **`0-sources` is empty.** Prep leaves `0-sources` empty at the end of every run (prep Sections 7.6, 18). Merge requires it empty, confirming no un-processed dump is sitting in the inbox. (By-date *photos* empty is required separately by precondition 3. By-date *videos* (`4-videos-by-date`), `2-missing-metadata`, `3-redundant-jpgs`, and `1-strays` may hold residuals — they are not library-bound and do not block merge.)
 0c. **The managed `0`–`6` structure is intact.** Every managed folder (`0-sources`…`6-photos-by-dest`) must exist. A *missing* managed folder on an initialized workspace means the structure was disturbed out-of-band (the operator deleted or moved one — possibly with media inside); merge **hard-stops** and directs the operator to restore the folder(s) and re-run, rather than proceeding against a damaged workspace. Like geotag, merge never creates or repairs the workspace structure — folder creation is prep's init-only job (shared contract Section 5.3 item 3; prep Section 6.2 item 7). (This concerns the *workspace* `0`–`6` tree, not the library: merge does create any missing destination subdirectory *under `library_root`* when it places a file, which is ordinary additive library placement, Section 6.)
@@ -318,7 +318,8 @@ Both must be held before any library *content* access. Acquisition order is: wor
 ```text
 Second run, workspace already sealed (prior merge fully succeeded)
   -> HARD-STOP: sealed means sealed; nothing is read for placement, nothing touched
-  -> if files sit at the root or in 0-sources, also warn "likely new dump; start
+  -> if anything but the managed folders and hidden entries is at the root, or
+     anything is in 0-sources, also warn "likely new dump; start
      a fresh workspace; left untouched" (Section 3 precond 0)
 
 Misplaced entry at the workspace root (loose file, non-managed folder, or symlink)
@@ -374,7 +375,8 @@ Merge with a blocker (e.g. un-fingerprintable library file at a collision)
 
 Operator drops a NEW dump into a sealed workspace and runs any script
   -> every script refuses: workspace sealed (shared contract 13.7) -> use a fresh workspace
-  -> it warns a likely new dump was detected (files at root or in 0-sources) and
+  -> it warns a likely new dump was detected (anything at the root but the managed
+     folders and hidden entries, or anything in 0-sources) and
      leaves the dump UNTOUCHED; the operator moves it by hand into a fresh workspace
      (manual recovery only — there is no collection utility)
 ```
@@ -407,7 +409,8 @@ The merge workflow is:
 ```text
 1. Acquire the workspace lock and the library-side lock.
 2. If the workspace is already sealed (prior merge), HARD-STOP — sealed means sealed;
-   touch nothing, and warn of a likely new dump if files sit at root or in 0-sources.
+   touch nothing, and warn of a likely new dump if anything but the managed folders and
+   hidden entries sits at the root, or anything in 0-sources.
    Require an initialized workspace (else "run prep first"); block on any misplaced root
    entry (loose file, non-managed folder, or symlink — strict); require 0-sources empty;
    require the managed 0-6 structure intact (a missing folder blocks; merge never

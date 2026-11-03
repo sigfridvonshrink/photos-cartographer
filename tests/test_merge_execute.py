@@ -965,3 +965,50 @@ def test_merge_reads_the_library_only_where_it_places_a_photo(tmp_path, monkeypa
     assert set(listed) <= {"Trip", "."} and not walked     # the top folder: only for merge's own temporaries
     assert "Trip/sibling.jpg" not in read and not any(r.startswith("Elsewhere") for r in read)
     assert "Trip/ts.jpg" in read
+
+
+def _refusals(ws, lib, capsys, monkeypatch):
+    """Run every command that refuses a sealed workspace; return {command: (exit, output)}."""
+    from cartographer import cli
+    monkeypatch.chdir(ws)
+    out = {}
+    for argv in (["prep", "plan"], ["prep", "dry-run"], ["prep", "execute"],
+                 ["geotag", "plan"], ["geotag", "execute"], ["geotag", "finalize"],
+                 ["merge", "plan"], ["merge", "dry-run"], ["merge", "execute"],
+                 ["merge", "init-library", str(lib)]):
+        try:
+            rc = cli.main(argv)
+        except SystemExit as e:
+            rc = e.code
+        cap = capsys.readouterr()
+        out[" ".join(argv[:2])] = (rc, cap.out + cap.err)
+    return out
+
+
+@pytest.mark.spec("RUL-sealed_new_dump_warned", test="TST-merge_execute-a_folder_dropped_into_a_sealed_workspace_is_pointed_out_and_left")
+def test_a_folder_dropped_into_a_sealed_workspace_is_pointed_out_and_left(tmp_path, capsys, monkeypatch):
+    """A dump copied in as a whole folder lands at the top level: every command refusing the sealed
+    workspace says a new dump is likely there, and leaves the folder exactly as it was."""
+    ws, _lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    dump = ws / "DCIM"
+    dump.mkdir()
+    (dump / "IMG_0001.JPG").write_bytes(b"card")
+    for cmd, (rc, text) in _refusals(ws, _lib, capsys, monkeypatch).items():
+        assert rc == 2, cmd
+        assert "new dump" in text.lower(), cmd
+    assert os.listdir(dump) == ["IMG_0001.JPG"] and (dump / "IMG_0001.JPG").read_bytes() == b"card"
+
+
+@pytest.mark.spec("RUL-sealed_new_dump_warned", test="TST-merge_execute-a_hidden_file_alone_is_not_a_new_dump")
+def test_a_hidden_file_alone_is_not_a_new_dump(tmp_path, capsys, monkeypatch):
+    """A hidden file at the top level, such as one a file browser leaves, is not a dump: no command
+    refusing the sealed workspace warns of one."""
+    ws, _lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    (ws / ".DS_Store").write_bytes(b"x")
+    for cmd, (rc, text) in _refusals(ws, _lib, capsys, monkeypatch).items():
+        assert rc == 2, cmd
+        assert "new dump" not in text.lower(), cmd

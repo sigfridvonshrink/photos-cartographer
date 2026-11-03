@@ -45,7 +45,7 @@ import zoneinfo
 from datetime import datetime, timedelta, timezone
 
 from .photos_utils import (
-    CONFIG, CONTROL_DIR, config_path, handoff_path, guard_path, is_sealed,
+    CONFIG, CONTROL_DIR, config_path, handoff_path, guard_path, is_sealed, likely_new_dump,
     validate_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
     folders_fingerprint, media_extensions_fingerprint,
     selected_gpx_root, CAMERA_IDENTITY_FIELDS, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
@@ -203,8 +203,8 @@ class GeotagWorkflow:
         if is_sealed(ws):
             blockers.append("Workspace is SEALED (already merged): geotag will not run. "
                             "Nothing was touched — move new media into a fresh workspace.")
-            if self._root_files() or self._entries(folder_name('sources')):
-                warnings.append("A likely new dump is present (files at the root or in "
+            if likely_new_dump(ws):
+                warnings.append("A likely new dump is present (at the workspace root or in "
                                 f"{folder_name('sources')}/). A sealed workspace is final; move it "
                                 "into a fresh workspace by hand.")
             return blockers, warnings, info

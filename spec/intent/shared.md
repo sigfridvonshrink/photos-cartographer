@@ -1840,7 +1840,7 @@ Pruning the quarantine SHALL remain allowed in a sealed workspace, and SHALL be 
 :uses: DEF-sealed_workspace
 :refines: RUL-sealed_refuses
 
-A command refusing a sealed workspace that finds files where a dump would land — the workspace's top level or the
-inbox — SHALL say that a new dump is likely there and must go to a fresh workspace, and SHALL leave it exactly where it
-is.
+A command refusing a sealed workspace that finds anything where a dump would land — an entry at the workspace's top
+level other than its managed folders and hidden entries, or anything in the inbox — SHALL say that a new dump is likely
+there and must go to a fresh workspace, and SHALL leave it exactly where it is.
 :::

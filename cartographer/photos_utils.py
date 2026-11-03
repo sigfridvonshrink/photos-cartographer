@@ -319,6 +319,17 @@ def sealed_marker_path(ws: str) -> str:
 def is_sealed(ws: str) -> bool:
     return os.path.exists(sealed_marker_path(ws))
 
+def likely_new_dump(ws: str) -> bool:
+    """Whether anything sits where a dump would land (shared contract §13.7 item 3): an entry at the
+    workspace's top level, file or folder, other than its managed folders and hidden entries, or
+    anything at all in the inbox. Every command refusing a sealed workspace asks this, so each points
+    out a dump dropped there the same way, and none moves it."""
+    managed = {folder_name(r) for r in FOLDER_ROLES}
+    if any(not n.startswith('.') and n not in managed for n in os.listdir(ws)):
+        return True
+    inbox = os.path.join(ws, folder_name('sources'))
+    return os.path.isdir(inbox) and bool(os.listdir(inbox))
+
 def config_path(ws: str) -> str:
     # Path only; load_or_seed_config (below) seeds it on first prep run, then reads it as authoritative.
     return os.path.join(ws, CONTROL_DIR, "photos-00-config.json")
