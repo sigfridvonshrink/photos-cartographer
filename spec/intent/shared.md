@@ -1832,7 +1832,7 @@ Pruning the quarantine SHALL remain allowed in a sealed workspace, and SHALL be 
 
 :::{rul} A new dump in a sealed workspace is pointed out and left
 :id: RUL-sealed_new_dump_warned
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
