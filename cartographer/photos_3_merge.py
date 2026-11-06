@@ -1129,6 +1129,45 @@ def _in_workspace(ws):
     return os.path.exists(guard_path(ws))
 
 
+def _acquire_workspace_lock(ws, reporter):
+    """Take the workspace lock for init-library, or say who holds it and return None."""
+    lock = WorkspaceLock(ws)
+    if not lock.acquire():
+        owner = lock.read_owner() or {}
+        detail = f" (pid {owner.get('pid')}, since {owner.get('started_at')})" if owner else ""
+        reporter.log(f"Workspace is locked by an in-progress run{detail}; try again when it finishes.")
+        return None
+    return lock
+
+
+def _init_library_from_config(ws, reporter):
+    """init-library with no path, in a workspace: bless the library its config already names. The
+    caller holds the workspace lock."""
+    cfg_p = config_path(ws)
+    try:
+        with open(cfg_p) as f:
+            cfg = json.load(f)
+    except Exception as e:
+        reporter.log(f"Workspace config could not be read: {e}")
+        return 2
+    library_root = ((cfg.get("merge") or {}).get("library_root") or "")
+    if not library_root:
+        reporter.log("No merge.library_root is set in photos-00-config.json — pass a path "
+              "(`photos-cartographer merge init-library <path>`) or set it in config first.")
+        return 2
+    try:
+        validate_merge_config(cfg, ws)          # validates library_root (existing, outside ws)
+    except ValueError as e:
+        reporter.log(str(e))
+        return 2
+    pre = is_library(library_root)
+    marker = write_library_marker(library_root)
+    reporter.log(f"Library {'already blessed' if pre else 'blessed'}: {library_root} "
+          f"({os.path.basename(marker)}). Already named in config; no config change.", stream="stdout")
+    emit_next_step(reporter, "`merge plan` to map the by-dest photos to library targets.")
+    return 0
+
+
 def do_init_library(path_arg, ws):
     """The one-time `init-library` setup command — the sole creator of the `.photos-library` marker
     (merge spec §4). Behavior depends on workspace context and whether a path was given:
@@ -1140,7 +1179,8 @@ def do_init_library(path_arg, ws):
       no workspace + path  -> bless only; advise running from a workspace to record it in config
       no workspace, no path -> error (nothing to bless, no config to read)
 
-    Returns a process exit code."""
+    Both in-workspace forms read the workspace, so both hold its lock; a locked workspace is refused
+    with exit 1, nothing blessed. Returns a process exit code."""
     reporter = get_reporter()
     in_ws = _in_workspace(ws)
 
@@ -1150,29 +1190,14 @@ def do_init_library(path_arg, ws):
                   "(there is no workspace config to read). Pass the library directory, e.g. "
                   "`photos-cartographer merge init-library /srv/library`.")
             return 2
-        cfg_p = config_path(ws)
+        # Reading the workspace's config is reading the workspace: under its lock, like every command.
+        lock = _acquire_workspace_lock(ws, reporter)
+        if lock is None:
+            return 1
         try:
-            with open(cfg_p) as f:
-                cfg = json.load(f)
-        except Exception as e:
-            reporter.log(f"Workspace config could not be read: {e}")
-            return 2
-        library_root = ((cfg.get("merge") or {}).get("library_root") or "")
-        if not library_root:
-            reporter.log("No merge.library_root is set in photos-00-config.json — pass a path "
-                  "(`photos-cartographer merge init-library <path>`) or set it in config first.")
-            return 2
-        try:
-            validate_merge_config(cfg, ws)          # validates library_root (existing, outside ws)
-        except ValueError as e:
-            reporter.log(str(e))
-            return 2
-        pre = is_library(library_root)
-        marker = write_library_marker(library_root)
-        reporter.log(f"Library {'already blessed' if pre else 'blessed'}: {library_root} "
-              f"({os.path.basename(marker)}). Already named in config; no config change.", stream="stdout")
-        emit_next_step(reporter, "`merge plan` to map the by-dest photos to library targets.")
-        return 0
+            return _init_library_from_config(ws, reporter)
+        finally:
+            lock.release()
 
     # A path was given: resolve to an absolute path and validate it.
     resolved = os.path.abspath(os.path.expanduser(path_arg))
@@ -1198,11 +1223,8 @@ def do_init_library(path_arg, ws):
         reporter.log(f"init-library: {resolved} must resolve outside the workspace (it must not be the "
               "workspace or any path inside it).")
         return 2
-    lock = WorkspaceLock(ws)
-    if not lock.acquire():
-        owner = lock.read_owner() or {}
-        detail = f" (pid {owner.get('pid')}, since {owner.get('started_at')})" if owner else ""
-        reporter.log(f"Workspace is locked by an in-progress run{detail}; try again when it finishes.")
+    lock = _acquire_workspace_lock(ws, reporter)
+    if lock is None:
         return 1
     try:
         # Sealed means sealed (shared contract §13.7): recording the library is a config write, so a
