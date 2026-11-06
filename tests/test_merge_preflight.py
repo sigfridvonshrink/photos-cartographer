@@ -330,6 +330,23 @@ def test_init_library_in_workspace_no_path_uses_config(tmp_path):
     assert utils.is_library(str(lib))
 
 
+@pytest.mark.spec("RUL-every_command_locks", test="TST-merge_preflight-init_library_without_path_refuses_a_locked_workspace")
+def test_init_library_without_path_refuses_a_locked_workspace(tmp_path):
+    # Reading the config is reading the workspace: a run holding its lock keeps init-library out.
+    ws, lib = _fresh_ws_and_lib(tmp_path)
+    held = utils.WorkspaceLock(str(ws))
+    assert held.acquire() is True
+    try:
+        assert merge.do_init_library(None, str(ws)) == 1
+        assert not utils.is_library(str(lib))            # nothing blessed
+    finally:
+        held.release()
+    assert merge.do_init_library(None, str(ws)) == 0     # and the lock is released after a run
+    held = utils.WorkspaceLock(str(ws))
+    assert held.acquire() is True
+    held.release()
+
+
 @pytest.mark.spec("merge-init-library-outside-with-path-bless-only-1")
 def test_init_library_outside_workspace_with_path_blesses_only(tmp_path):
     lib = tmp_path / "lib"

@@ -1752,7 +1752,8 @@ existing folder outside the workspace.
 A folder SHALL be taken for a library by one mark in it and by nothing else: merge SHALL inspect no structure of the
 library, which has none of a workspace's folders, guard or lifecycle. Merge's library setup alone SHALL make the mark,
 once — making it again SHALL change nothing; merge's plan, dry run and execution SHALL only read it, and stop at once if
-it is absent. Beyond the mark, the folders merge creates under the library SHALL be only those its photos go into.
+it is absent. Beyond its mark and its lock, merge SHALL create in the library only the photos it places, the folders
+they go into, and, while a photo crosses filesystems, its temporary copy.
 :::
 
 :::{rul} One merge at a time in a library
