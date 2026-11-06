@@ -2080,7 +2080,8 @@ A value SHALL be checked every time a run uses it, never taken as valid because 
 :uses: DEF-decision, RUL-decision_kept
 :refines: RUL-invalid_value_stops
 
-A decision found invalid SHALL be kept as the user wrote it, and marked as needing correction — never erased.
+A decision found invalid SHALL be kept exactly as the user wrote it, and reported as needing correction — never erased
+or rewritten.
 :::
 
 ## 15. Nothing overwritten, nothing left half-done

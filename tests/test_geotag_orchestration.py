@@ -236,20 +236,28 @@ def test_plan_reports_gpx_load_warnings_capped(tmp_path, monkeypatch, capsys):
     assert "... and 3 more." in err
 
 
-def test_complete_run_tolerates_corrupt_prior_gps_artifact(tmp_path, monkeypatch):
+@pytest.mark.spec("RUL-invalid_decision_kept", "RUL-invalid_value_located",
+                  test="TST-geotag_orchestration-unparseable_decision_artifact_blocks_and_is_kept")
+@pytest.mark.parametrize("artifact", ["photos-21-time-decisions.json", "photos-22-gps-drift-validation.json",
+                                      "photos-23-gps-decisions.json"], ids=["21", "22", "23"])
+@pytest.mark.parametrize("content, problem", [("{\n  \"a\": 1,\n}", "is not valid JSON (line "),
+                                              ("[]", "must be a JSON object, not list")],
+                         ids=["not_json", "not_an_object"])
+def test_unparseable_decision_artifact_blocks_and_is_kept(tmp_path, monkeypatch, capsys, artifact, content, problem):
+    # A decision file the user broke by hand is never regenerated over: geotag names it and where it
+    # fails to parse, stops before anything is made from it, and leaves it byte-for-byte as written.
     ws, ctl = _completable_ws(tmp_path)
-    _run(monkeypatch, ws); _accept_tz(ctl); _run(monkeypatch, ws)             # produce both artifacts
-    (ctl / "photos-23-gps-decisions.json").write_text("{corrupt")            # corrupt only photos-22
-    assert _run(monkeypatch, ws) == 0                                         # prior ignored, regenerated
-    assert json.load(open(ctl / "photos-23-gps-decisions.json"))["artifact_type"] == "gps_decisions"
-
-
-def test_corrupt_prior_time_decisions_tolerated(tmp_path, monkeypatch):
-    ws, ctl = _completable_ws(tmp_path)
-    _run(monkeypatch, ws)                                                     # writes photos-21
-    (ctl / "photos-21-time-decisions.json").write_text("{corrupt")           # corrupt prior
-    assert _run(monkeypatch, ws) == 0                                         # prior-load guard -> regenerated
-    assert json.load(open(ctl / "photos-21-time-decisions.json"))["artifact_type"] == "time_decisions"
+    assert _run(monkeypatch, ws) == 0                                         # writes photos-21, -22, -23
+    p = ctl / artifact
+    assert p.exists()
+    p.write_text(content)
+    before = sorted(x.name for x in ctl.iterdir())
+    capsys.readouterr()
+    assert _run(monkeypatch, ws) == 2
+    err = capsys.readouterr().err
+    assert f"{artifact} {problem}" in err
+    assert p.read_text() == content                                           # kept as written
+    assert sorted(x.name for x in ctl.iterdir()) == before                    # no backup, no new version
 
 
 def test_recognize_camera_groups_records_timestamps(tmp_path):
