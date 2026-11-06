@@ -566,7 +566,7 @@ it cannot be undone: that one decision reads the file again rather than trust wh
 
 :::{rat} One library, many workspaces
 :id: RAT-library_shared
-:status: seed
+:status: ruled
 :justifies: RUL-library_lock, RUL-library_lock_fail_fast
 
 Many workspaces merge into one library, each under its own lock. Only a lock on the library itself keeps two of their
