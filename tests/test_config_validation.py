@@ -62,6 +62,12 @@ def _pol(**overrides):
     (_cfg(camera_time_and_timezone_policy="nope"), "must be an object"),        # policy not a dict
     (_pol(device_groups="nope"), "device_groups must be an object"),           # device_groups not a dict
     (_cfg(zfs={"datasets": "nope"}), "zfs.datasets must be an object"),         # zfs.datasets not a dict
+    (_cfg(gpx_interpolation_max_gap_seconds=json.loads("NaN")), "must be a number"),       # JSON NaN
+    (_cfg(gpx_interpolation_max_distance_meters=json.loads("Infinity")), "must be a number"),  # JSON Infinity
+    (_pol(dst_conflict_tolerance_seconds=float("-inf")), "must be a number"),   # not finite
+    (_cfg(gpx_root="   "), "must not be blank"),                                # blank path
+    (_cfg(merge={"library_root": " \t"}), "must not be blank"),                # blank library path
+    (_pol(device_groups={"phone": ["Pixel"]}), "device_groups.phone is not a device class"),  # misspelt class
 ])
 @pytest.mark.spec("config-values-validated-1", "prep-config-validate-gpx-malformed-1", "prep-config-validate-timestamp-format-1", "validate-enum-structure-1", "validate-filename-format-1", "validate-numeric-thresholds-1", "validate-paths-1", test="TST-config_validation-validate_config_rejects")
 def test_validate_config_rejects(cfg, needle):
