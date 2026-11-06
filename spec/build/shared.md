@@ -670,7 +670,8 @@ check. `prune-quarantine` SHALL not check the seal.
 merge as they load it. Merge SHALL check besides, with `validate_merge_config`, `merge.library_root` and the merge
 policy's values. Geotag SHALL check the decisions in `photos-21`, `photos-22` and `photos-23` as it reads them (geotag
 §9.2, §20): each blocker SHALL name the artifact, the destination, the cell or the file, and the field, and an artifact
-holding one SHALL be left as it is, its plan not written.
+holding one SHALL be left as it is, its plan not written. A decision artifact that cannot be read, does not parse as
+JSON or is not a JSON object SHALL be such a blocker, located to where parsing failed — never taken as absent.
 :::
 
 ## 15. Nothing overwritten, nothing left half-done

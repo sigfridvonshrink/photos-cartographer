@@ -1643,6 +1643,34 @@ GEOTAG_BLURB = (
 )
 
 
+def _load_prior_decisions(path):
+    """The user's prior decision artifact at `path`, as (artifact, problem). (None, None) when there is
+    none yet. A file that cannot be read or parsed, or that is not a JSON object, is never ignored or
+    regenerated over (shared contract §14; geotag §9.2 item 5): it comes back as (None, problem), the
+    problem located to where parsing failed, for the caller to stop on with the file left as it is."""
+    if not os.path.exists(path):
+        return None, None
+    name = os.path.basename(path)
+    try:
+        with open(path) as f:
+            prior = json.load(f)
+    except json.JSONDecodeError as e:
+        return None, f"{name} is not valid JSON (line {e.lineno}, column {e.colno}: {e.msg})."
+    except (OSError, UnicodeDecodeError) as e:
+        return None, f"{name} could not be read: {e}"
+    if not isinstance(prior, dict):
+        return None, f"{name} must be a JSON object, not {type(prior).__name__}."
+    return prior, None
+
+
+def _stop_on_unreadable_decisions(reporter, problem):
+    """A decision artifact that does not parse stops geotag before anything is made from it."""
+    reporter.error("\nGeotag cannot proceed: a decision artifact cannot be read:")
+    reporter.log(f"  - {problem}")
+    reporter.log("\nFix the file (or restore it from a -NNN backup) and re-run; it was left unchanged.")
+    sys.exit(2)
+
+
 def add_arguments(parser):
     """Register geotag's `-j` + subcommands (plan / execute / finalize) on `parser`. Shared by the
     standalone `python -m cartographer.photos_2_geotag` and the combined `photos-cartographer geotag`."""
@@ -1798,13 +1826,9 @@ def run(args):
             # preserving authored decisions (§9); a sanity-validation failure on a preserved value
             # is a hard blocker that leaves the user's artifact untouched to be fixed (§9.2).
             tdp = time_decisions_path(workspace_root)
-            prior = None
-            if os.path.exists(tdp):
-                try:
-                    with open(tdp) as f:
-                        prior = json.load(f)
-                except Exception:
-                    prior = None
+            prior, problem = _load_prior_decisions(tdp)
+            if problem:
+                _stop_on_unreadable_decisions(reporter, problem)
             artifact, td_blockers = wf.build_time_decisions(files, groups, prior, gpx)
             if td_blockers:
                 reporter.error("\nGeotag cannot proceed: invalid value(s) in photos-21-time-decisions.json:")
@@ -1838,13 +1862,9 @@ def run(args):
                 # resolved UTC, so a wrong offset silently mis-places the whole batch; 22 makes the
                 # operator confirm each such bucket (a zero-scrub must be explicit) before GPS is built.
                 dvp = drift_validation_path(workspace_root)
-                prior_drift = None
-                if os.path.exists(dvp):
-                    try:
-                        with open(dvp) as f:
-                            prior_drift = json.load(f)
-                    except Exception:
-                        prior_drift = None
+                prior_drift, problem = _load_prior_decisions(dvp)
+                if problem:
+                    _stop_on_unreadable_decisions(reporter, problem)
                 drift_artifact, drift_blockers = wf.build_drift_validation(files, artifact, rows0, gpx, prior_drift)
                 if drift_blockers:
                     reporter.error(f"\nGeotag cannot proceed: invalid value(s) in {DRIFT_VALIDATION_ARTIFACT}:")
@@ -1890,13 +1910,9 @@ def run(args):
                     # Stage 8: GPS decisions (photos-23). Regenerate from the resolved rows + GPX,
                     # preserving authored GPS decisions; a bad authored coord leaves the artifact as-is.
                     gdp = gps_decisions_path(workspace_root)
-                    prior_gps = None
-                    if os.path.exists(gdp):
-                        try:
-                            with open(gdp) as f:
-                                prior_gps = json.load(f)
-                        except Exception:
-                            prior_gps = None
+                    prior_gps, problem = _load_prior_decisions(gdp)
+                    if problem:
+                        _stop_on_unreadable_decisions(reporter, problem)
                     gps_artifact, gps_blockers = wf.build_gps_decisions(files, rows, gpx, prior_gps, fp)
                     if gps_blockers:
                         reporter.error("\nGeotag cannot proceed: invalid value(s) in "
