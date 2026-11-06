@@ -593,7 +593,7 @@ incoming photo whose name is taken by different content SHALL take the shared su
 
 :::{bld} The library's mark and its checks
 :id: BLD-library_marker
-:status: seed
+:status: ruled
 :realises: RUL-library_known_by_mark, RUL-library_place_checked
 
 A library SHALL be marked by an empty `.photos-library` file in `library_root`, which `is_library` tests with

@@ -575,7 +575,7 @@ merges from writing it at once.
 
 :::{rat} A library has nothing of the tool's to inspect
 :id: RAT-library_mark
-:status: seed
+:status: ruled
 :justifies: RUL-library_known_by_mark, RUL-library_confirmed_before_lock, RUL-library_place_checked
 
 The library is the user's: it has no structure of the tool's to inspect, so one mark, made once and on purpose, is
