@@ -1920,7 +1920,7 @@ there and must go to a fresh workspace, and SHALL leave it exactly where it is.
 
 :::{def} An authored value
 :id: DEF-authored_value
-:status: seed
+:status: ruled
 :uses: DEF-configuration, DEF-decision
 
 An **authored value** is one the user writes by hand: a setting of the configuration, or a decision.
@@ -1928,7 +1928,7 @@ An **authored value** is one the user writes by hand: a setting of the configura
 
 :::{inv} No value the user writes is used unchecked
 :id: INV-authored_values_checked
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -2033,7 +2033,7 @@ A decision whose structure is broken SHALL be an error, never ignored.
 
 :::{rul} An invalid value stops the phase before it changes anything
 :id: RUL-invalid_value_stops
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -2047,7 +2047,7 @@ changed.
 
 :::{rul} An invalid value is named where it was written, and never repaired
 :id: RUL-invalid_value_located
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -2061,7 +2061,7 @@ destination, the camera group or the file it is about. A value SHALL be used as 
 
 :::{rul} A value is checked each time it is used
 :id: RUL-checked_every_run
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -2072,7 +2072,7 @@ A value SHALL be checked every time a run uses it, never taken as valid because 
 
 :::{rul} An invalid decision is kept, and marked
 :id: RUL-invalid_decision_kept
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required

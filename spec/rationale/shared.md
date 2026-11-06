@@ -640,7 +640,7 @@ so the seal's reasons do not reach it, and the space can be reclaimed.
 
 :::{rat} A current value can still be wrong
 :id: RAT-valid_is_not_unchanged
-:status: seed
+:status: ruled
 :justifies: INV-authored_values_checked, RUL-checked_every_run
 
 A fingerprint tells whether a value changed, not whether it makes sense. A value can match its fingerprint and still be
@@ -650,7 +650,7 @@ both checks are needed, every time.
 
 :::{rat} What is typed by hand can be mistyped
 :id: RAT-hand_written_fallible
-:status: seed
+:status: ruled
 :justifies: INV-authored_values_checked, RUL-checked_paths, RUL-checked_timezones, RUL-checked_positions_and_times, RUL-checked_filename_format, RUL-checked_numbers, RUL-checked_shapes, RUL-invalid_value_stops, RUL-invalid_value_located
 
 The user writes the configuration and the decisions by hand, so the tool cannot assume they are well formed. A
@@ -670,7 +670,7 @@ taken, so a bad name never surprises an execution midway.
 
 :::{rat} The user keeps what they wrote
 :id: RAT-invalid_decision_shown
-:status: seed
+:status: ruled
 :justifies: RUL-invalid_decision_kept
 
 Erasing an invalid decision would take away the very thing the user must see to correct it. Kept and marked, it shows
