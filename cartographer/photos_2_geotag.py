@@ -172,6 +172,75 @@ class GeotagCache:
 # _interp/_extrapolate, classify_gps) now live in _geotag_calc.py (geotag §23/§25).
 # ============================================================================
 
+def _decision_shape_blockers(prior, kind):
+    """Where a prior decision artifact's structure is broken, as located blockers (shared contract §14;
+    geotag §9.2 item 6). The user fills values, never structure: every container the builders walk to
+    reach a user_decision — the destinations, each destination, its decision blocks and cells, and each
+    user_decision — must be an object (review_items a list of objects), or the run stops on it, never
+    passing over it. `kind` is "time" (photos-21), "drift" (photos-22) or "gps" (photos-23)."""
+    out = []
+    dests = (prior or {}).get("destinations")
+    if dests is None:
+        return out
+    if not isinstance(dests, dict):
+        return ["destinations must be an object."]
+
+    def obj(container, key, where):
+        v = container.get(key)
+        if v is None or isinstance(v, dict):
+            return v or {}
+        out.append(f"{where} must be an object.")
+        return {}
+
+    def cells(d, key, dest):
+        for bucket, cell in obj(d, key, f"{dest}: {key}").items():
+            if not isinstance(cell, dict):
+                out.append(f"{dest}: {key}[{bucket}] must be an object.")
+            else:
+                obj(cell, "user_decision", f"{dest}: {key}[{bucket}].user_decision")
+
+    for dest, d in dests.items():
+        if not isinstance(d, dict):
+            out.append(f"{dest}: the destination's entry must be an object.")
+            continue
+        if kind == "time":
+            obj(obj(d, "destination_timezone", f"{dest}: destination_timezone"), "user_decision",
+                f"{dest}: destination_timezone.user_decision")
+            cells(d, "camera_group_time_decisions", dest)
+        elif kind == "drift":
+            cells(d, "drift_decisions", dest)
+        else:
+            obj(obj(d, "folder_fallback", f"{dest}: folder_fallback"), "user_decision",
+                f"{dest}: folder_fallback.user_decision")
+            items = obj(d, "gps_decisions", f"{dest}: gps_decisions").get("review_items")
+            if items is None:
+                continue
+            if not isinstance(items, list):
+                out.append(f"{dest}: gps_decisions.review_items must be a list.")
+                continue
+            for i, ri in enumerate(items):
+                if not isinstance(ri, dict) or not isinstance(ri.get("relative_path"), str):
+                    out.append(f"{dest}: gps_decisions.review_items[{i}] must be an object with its relative_path.")
+                else:
+                    obj(ri, "user_decision", f"{dest}/{os.path.basename(ri['relative_path'])}: user_decision")
+    return out
+
+
+def _decision_flag(ud, field, where, blockers):
+    """A yes-or-no the user writes: absent (or null) means no; true or false as written; anything else
+    — "false", 1, "yes" — is a located blocker, never coerced (shared contract §14)."""
+    v = ud.get(field)
+    if v is None or isinstance(v, bool):
+        return bool(v)
+    blockers.append(f"{where}.{field} must be true or false, not {v!r}.")
+    return False
+
+
+def _half_position(lat, lon):
+    """True iff exactly one of a position's two numbers is filled in."""
+    return (lat in (None, "")) != (lon in (None, ""))
+
+
 class GeotagWorkflow:
     """Stages 1–11: validate the workspace, build the model, produce photos-21/22/23 decision artifacts,
     compute resolved UTC, assemble photos-24-executable-plan.json (when decisions are complete),
@@ -519,7 +588,9 @@ class GeotagWorkflow:
         GPX self-anchor when one can be inferred (else manual-required). Returns (artifact,
         blockers); blockers come from sanity-validating preserved authored values (§9.2) and mean
         "do not overwrite — fix first"."""
-        blockers = []
+        blockers = _decision_shape_blockers(prior, "time")
+        if blockers:
+            return None, blockers
         prior_dests = ((prior or {}).get("destinations")) or {}
         by_dest = {}
         for f in files:
@@ -623,7 +694,7 @@ class GeotagWorkflow:
             proposed, source, confidence, inherited_from = None, "none", "none", None
         ud = prior_tz.get("user_decision") or {}
         manual = ud.get("manual_iana_timezone", "") or ""
-        accept = bool(ud.get("accept_proposed_timezone", False))
+        accept = _decision_flag(ud, "accept_proposed_timezone", f"{dest}: destination_timezone.user_decision", blockers)
         effective, stale = "", False
         if manual:
             if _valid_iana(manual):
@@ -678,7 +749,7 @@ class GeotagWorkflow:
         policy = CONFIG.get("camera_time_and_timezone_policy") or {}
 
         ud = prior_cell.get("user_decision") or {}
-        accept = bool(ud.get("accept_proposal", False))
+        accept = _decision_flag(ud, "accept_proposal", f"{dest}: camera_group_time_decisions[{loc}].user_decision", blockers)
         manual_off = ud.get("manual_offset_seconds", "")
         manual_utc = ud.get("manual_real_utc", "") or ""
         effective, stale, decision_mode = "", False, None
@@ -788,7 +859,9 @@ class GeotagWorkflow:
         native-GPS anchor, and GPX coverage over its plausible time window). Authored confirmations
         are preserved across reruns; a confirmation whose bucket no longer triggers is stale-flagged.
         Returns (artifact, blockers); a bad authored value is a blocker (leave the artifact as-is)."""
-        blockers = []
+        blockers = _decision_shape_blockers(prior, "drift")
+        if blockers:
+            return None, blockers
         cfg = CONFIG
         window = cfg.get("gpx_anchor_max_clock_error_seconds")
         by_dest_group = {}
@@ -858,7 +931,7 @@ class GeotagWorkflow:
         current = eff.get("offset_seconds")
         loc = bucket
         prior_ud = prior_cell.get("user_decision") or {}
-        confirmed = bool(prior_ud.get("confirmed", False))
+        confirmed = _decision_flag(prior_ud, "confirmed", f"{dest}: drift_decisions[{loc}].user_decision", blockers)
         corrected = prior_ud.get("corrected_offset_seconds", "")
         effective = ""
         if confirmed:
@@ -915,7 +988,9 @@ class GeotagWorkflow:
         destination as automatic-category SUMMARIES with file paths only for review/blocker items.
         Destinations are processed parent-first so a folder_fallback inherits its nearest resolved
         ancestor's effective fallback (§25, mirroring §10.2). Returns (artifact, blockers)."""
-        blockers = []
+        blockers = _decision_shape_blockers(prior, "gps")
+        if blockers:
+            return None, blockers
         prior_dests = ((prior or {}).get("destinations")) or {}
         utc_by_path = {r["relative_path"]: r["resolved_utc"] for r in resolved_rows}
         by_dest = {}
@@ -1003,7 +1078,9 @@ class GeotagWorkflow:
     def _folder_fallback_cell(self, dest, prior_fb, inherited, blockers):
         ud = prior_fb.get("user_decision") or {}
         flat, flon = ud.get("fallback_lat", ""), ud.get("fallback_lon", "")
-        accept = bool(ud.get("accept_proposal", False))
+        accept = _decision_flag(ud, "accept_proposal", f"{dest}: folder_fallback.user_decision", blockers)
+        if _half_position(flat, flon):
+            blockers.append(f"{dest}: folder_fallback.user_decision fallback_lat/lon must both be set, or neither.")
         if inherited is not None:
             anc_path, anc_coord = inherited
             proposal = {"proposal_source": "inherited", "proposed_fallback": anc_coord,
@@ -1031,8 +1108,12 @@ class GeotagWorkflow:
 
     def _validate_review_decision(self, dest, rel, ud, blockers):
         mlat, mlon = ud.get("manual_lat", ""), ud.get("manual_lon", "")
-        if mlat not in (None, "") and mlon not in (None, "") and not _valid_coord(mlat, mlon):
-            blockers.append(f"{dest}/{os.path.basename(rel)}: review manual_lat/lon out of range.")
+        where = f"{dest}/{os.path.basename(rel)}"
+        if _half_position(mlat, mlon):
+            blockers.append(f"{where}: review manual_lat/lon must both be set, or neither.")
+        elif mlat not in (None, "") and not _valid_coord(mlat, mlon):
+            blockers.append(f"{where}: review manual_lat/lon out of range.")
+        _decision_flag(ud, "accept_unlocated", f"{where}: user_decision", blockers)
 
     def _review_item(self, rel, reason, ud, requires):
         return {
@@ -1646,7 +1727,7 @@ GEOTAG_BLURB = (
 def _load_prior_decisions(path):
     """The user's prior decision artifact at `path`, as (artifact, problem). (None, None) when there is
     none yet. A file that cannot be read or parsed, or that is not a JSON object, is never ignored or
-    regenerated over (shared contract §14; geotag §9.2 item 5): it comes back as (None, problem), the
+    regenerated over (shared contract §14; geotag §9.2 item 6): it comes back as (None, problem), the
     problem located to where parsing failed, for the caller to stop on with the file left as it is."""
     if not os.path.exists(path):
         return None, None

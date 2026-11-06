@@ -1987,8 +1987,9 @@ A timezone the user writes SHALL be a real zone that resolves, never an arbitrar
 :uses: DEF-decision
 :refines: INV-authored_values_checked
 
-A position the user writes SHALL be two well-formed numbers in range — latitude −90 to 90, longitude −180 to 180. A
-clock offset or a true time the user writes SHALL parse, and fall within sane bounds.
+A position the user writes SHALL be two well-formed numbers in range — latitude −90 to 90, longitude −180 to 180, both
+or neither. A clock offset the user writes SHALL be a number within a day either way; a true time SHALL parse as a date
+and time.
 :::
 
 :::{rul} The filename format makes a safe name
