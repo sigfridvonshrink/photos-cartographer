@@ -1758,7 +1758,7 @@ they go into, and, while a photo crosses filesystems, its temporary copy.
 
 :::{rul} One merge at a time in a library
 :id: RUL-library_lock
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -1772,7 +1772,7 @@ but who holds it.
 
 :::{rul} A locked library is refused at once
 :id: RUL-library_lock_fail_fast
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -1785,7 +1785,7 @@ a merge that died SHALL be recognisable as stale, and recoverable, as the worksp
 
 :::{rul} The library is confirmed before it is locked
 :id: RUL-library_confirmed_before_lock
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required

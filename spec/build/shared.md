@@ -605,7 +605,7 @@ directory that is neither the workspace nor inside it. Merge SHALL create a miss
 
 :::{bld} The library lock
 :id: BLD-library_lock
-:status: seed
+:status: ruled
 :realises: RUL-library_lock, RUL-library_lock_fail_fast, RUL-library_confirmed_before_lock
 
 The library lock SHALL be `LibraryLock`: an exclusive, non-blocking `flock` on `.photos-merge.lock` in `library_root`,
