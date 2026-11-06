@@ -1728,7 +1728,7 @@ holds it, the library file SHALL be fingerprinted again, whatever is kept.
 
 :::{rul} The library's place is checked
 :id: RUL-library_place_checked
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -1742,7 +1742,7 @@ existing folder outside the workspace.
 
 :::{rul} A library is known by its mark alone
 :id: RUL-library_known_by_mark
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
