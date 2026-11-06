@@ -441,8 +441,15 @@ def test_locked_workflow_exits_1_if_library_locked(tmp_path):
     ws, lib = _make(tmp_path)
     held = utils.LibraryLock(str(lib))                # another workspace's merge holds the library
     assert held.acquire() is True
+
+    def library_state():
+        return sorted((str(p.relative_to(lib)), p.read_bytes() if p.is_file() else None, p.stat().st_mtime_ns)
+                      for p in lib.rglob("*"))
+
+    before = library_state()                          # the holder's owner record included
     try:
         assert merge._run_locked_workflow("plan", str(ws)) == 1
+        assert library_state() == before              # refused at once: the library unchanged
     finally:
         held.release()
 
