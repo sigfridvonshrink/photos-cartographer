@@ -1941,7 +1941,7 @@ check that it has not changed.
 
 :::{rul} A configured path is checked
 :id: RUL-checked_paths
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -1956,7 +1956,7 @@ workspace.
 
 :::{rul} A snapshot's name is checked before any snapshot
 :id: RUL-checked_snapshot_names
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: validate-zfs-prefix-1
@@ -1969,7 +1969,7 @@ attempted.
 
 :::{rul} A timezone is a real zone
 :id: RUL-checked_timezones
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: validate-timezone-1
@@ -1980,7 +1980,7 @@ A timezone the user writes SHALL be a real zone that resolves, never an arbitrar
 
 :::{rul} A position, an offset and a true time are in range
 :id: RUL-checked_positions_and_times
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :aliases: validate-coords-offsets-1
@@ -1994,7 +1994,7 @@ and time.
 
 :::{rul} The filename format makes a safe name
 :id: RUL-checked_filename_format
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: validate-filename-format-1
@@ -2007,7 +2007,7 @@ and no character a filename may not hold.
 
 :::{rul} A number is of the right kind and in range
 :id: RUL-checked_numbers
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: validate-numeric-thresholds-1
@@ -2020,7 +2020,7 @@ a sane range: a duration or a distance is never negative.
 
 :::{rul} A choice is one of its choices, and a decision has its shape
 :id: RUL-checked_shapes
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
