@@ -661,7 +661,7 @@ explained. Checking keeps every change explainable and the user its author.
 
 :::{rat} A snapshot fails before anything changes, not midway
 :id: RAT-snapshot_name_early
-:status: seed
+:status: ruled
 :justifies: RUL-checked_snapshot_names
 
 A snapshot's name the snapshot tool would refuse is found when the configuration is read, not when the snapshot is
