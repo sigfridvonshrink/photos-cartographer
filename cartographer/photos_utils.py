@@ -17,6 +17,7 @@ import sys
 import copy
 import json
 import hashlib
+import math
 import re
 import shutil
 import tempfile
@@ -884,13 +885,15 @@ def _check_path(path, v):
     _check_string(path, v)
     if "\x00" in v:
         raise ValueError(f"config: {path} must not contain a NUL byte.")
+    if v and not v.strip():
+        raise ValueError(f"config: {path} must not be blank (leave it empty, or name a path).")
 
 def _check_number(path, v, minimum=None, integer=False):
     if integer:
         if not isinstance(v, int) or isinstance(v, bool):
             raise ValueError(f"config: {path} must be an integer.")
-    elif not isinstance(v, (int, float)) or isinstance(v, bool):
-        raise ValueError(f"config: {path} must be a number.")
+    elif not isinstance(v, (int, float)) or isinstance(v, bool) or not math.isfinite(v):
+        raise ValueError(f"config: {path} must be a number.")   # JSON's NaN/Infinity load as floats
     if minimum is not None and v < minimum:
         raise ValueError(f"config: {path} must be >= {minimum}.")
 
@@ -1060,6 +1063,10 @@ def validate_config(cfg: dict, workspace_root: str = None):
         if dg is not None:
             if not isinstance(dg, dict):
                 raise ValueError("config: camera_time_and_timezone_policy.device_groups must be an object.")
+            unknown = sorted(set(dg) - {"phones", "fixed_clock_cameras"})
+            if unknown:   # a misspelt class would silently leave its cameras in the default class
+                raise ValueError(f"config: camera_time_and_timezone_policy.device_groups.{unknown[0]} is not a "
+                                 f"device class (allowed: fixed_clock_cameras, phones).")
             for gk in ("phones", "fixed_clock_cameras"):
                 if gk in dg:
                     lst = dg[gk]
