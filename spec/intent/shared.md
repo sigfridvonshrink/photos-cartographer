@@ -2099,7 +2099,7 @@ or rewritten.
 Immediately before each change that gives a file a name — prep's moves, renames and setting duplicates aside, geotag's
 renames, merge's placing in the library — execution SHALL check that the name is free, ignoring case where the
 filesystem does, and SHALL never write onto a taken name on the strength of the plan. A name found taken SHALL block
-that operation; where the plan recorded a safe other name for it, that name SHALL be checked the same way.
+that operation.
 :::
 
 :::{rul} An interrupted move leaves the before or the after
