@@ -683,8 +683,8 @@ JSON or is not a JSON object SHALL be such a blocker, located to where parsing f
 
 Every move and rename that carries content SHALL go through `_move_no_clobber`: on one filesystem `renameat2` with
 `RENAME_NOREPLACE`, one call that refuses an existing name, or where that is unavailable `os.link` then `os.unlink`;
-across filesystems `_move_cross_fs_no_clobber`. A refused name SHALL be a blocker. Merge SHALL also test its target
-before moving, and geotag compares names ignoring case (geotag §27). The rename that completes an operation is thus
+across filesystems `_move_cross_fs_no_clobber`. A refused name SHALL stop that operation: prep records it failed and
+stops; geotag and merge record a blocker and leave the photo where it is. Merge SHALL also test its target before moving, and geotag compares names ignoring case (geotag §27). The rename that completes an operation is thus
 itself the check that its name is free (prep §14.3–§14.4, geotag §29.1a, merge §11).
 :::
 
