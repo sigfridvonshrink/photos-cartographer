@@ -681,7 +681,7 @@ what was written and what is wrong with it.
 
 :::{rat} A plan describes the workspace as it was
 :id: RAT-plan_can_be_overtaken
-:status: seed
+:status: ruled
 :justifies: RUL-target_free_at_execute
 
 A plan is made from the filesystem at one moment, and the workspace or the library can change before it runs. The

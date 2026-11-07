@@ -2089,7 +2089,7 @@ or rewritten.
 
 :::{rul} Every name is checked free as it is written
 :id: RUL-target_free_at_execute
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required

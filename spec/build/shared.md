@@ -678,7 +678,7 @@ JSON or is not a JSON object SHALL be such a blocker, located to where parsing f
 
 :::{bld} One rename that refuses a taken name
 :id: BLD-no_clobber_rename
-:status: seed
+:status: ruled
 :realises: RUL-target_free_at_execute, RUL-operations_atomic
 
 Every move and rename that carries content SHALL go through `_move_no_clobber`: on one filesystem `renameat2` with
