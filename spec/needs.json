@@ -1794,7 +1794,7 @@
      "pre_content": null,
      "pre_template": null,
      "realises": [
-      "RUL-not_inventoried"
+      "RUL-dump_hidden_files_quarantined"
      ],
      "realises_back": [],
      "refines": [],
@@ -22190,7 +22190,9 @@
      "pre_content": null,
      "pre_template": null,
      "realises": [],
-     "realises_back": [],
+     "realises_back": [
+      "BLD-dump_dotfiles_quarantined"
+     ],
      "refines": [],
      "refines_back": [],
      "section_name": "4. The control records, apart from the media",
@@ -28785,7 +28787,6 @@
      "pre_template": null,
      "realises": [],
      "realises_back": [
-      "BLD-dump_dotfiles_quarantined",
       "BLD-prep_skip_set"
      ],
      "refines": [

@@ -539,7 +539,7 @@ def test_serve_refuses_a_sealed_workspace(tmp_path):
     assert not os.path.exists(os.path.join(ws, serve.CONTROL, serve.EDITOR_LOCK))
 
 
-@pytest.mark.spec("RUL-sealed_new_dump_warned", test="TST-serve-serve_points_out_a_dump_in_a_sealed_workspace")
+@pytest.mark.spec("RUL-sealed_new_dump_warned", "RUL-sealed_new_dump_left", test="TST-serve-serve_points_out_a_dump_in_a_sealed_workspace")
 def test_serve_points_out_a_dump_in_a_sealed_workspace(tmp_path, capsys):
     # Refusing a sealed workspace, the editor says a dump dropped in its inbox is likely new, and leaves it.
     ws = _workspace_with_fixtures(tmp_path)
