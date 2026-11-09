@@ -827,7 +827,7 @@ def test_sealed_workspace_rerun_hardstops(tmp_path):
     assert open(os.path.join(str(lib), "Trip", "a.jpg"), "rb").read() == before   # untouched
 
 
-@pytest.mark.spec("RUL-merge_is_terminal", test="TST-merge_execute-library_takes_a_second_workspace_after_the_first_is_sealed")
+@pytest.mark.spec("RUL-merge_is_terminal", "RUL-library_takes_many_workspaces", test="TST-merge_execute-library_takes_a_second_workspace_after_the_first_is_sealed")
 def test_library_takes_a_second_workspace_after_the_first_is_sealed(tmp_path):
     """Merge ends its workspace — sealed, it refuses to merge again — and more media reaches the same
     library through a fresh workspace."""

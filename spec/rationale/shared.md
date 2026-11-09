@@ -310,7 +310,7 @@ transformation log and de-duplication rely on.
 :::{rat} Detecting change is a hash's whole purpose
 :id: RAT-hash_is_for_change
 :status: seed
-:justifies: RUL-hash_detects_any_change
+:justifies: RUL-hash_detects_any_change, RUL-hash_is_the_dependency_check
 
 A hash is chosen precisely so it changes on any byte change: detecting change is its whole purpose, which is what makes
 it the right dependency check for records.
@@ -362,7 +362,7 @@ recognised as corrected whichever workspace it is in.
 :::{rat} New photos never reach geotag behind prep's back
 :id: RAT-never_behind_prep
 :status: seed
-:justifies: RUL-prep_records_sort
+:justifies: RUL-prep_records_sort, RUL-sort_recorded_by_stat
 
 Geotag depends on prep's handoff, and a photo prep has not recorded is not in it. Re-prepping after every sort, even
 after geotag has run, keeps the handoff the whole truth about photos by destination.
@@ -389,7 +389,7 @@ moment the user declares the dump done.
 :::{rat} Never a half-geotagged set in the library
 :id: RAT-merge_never_half_done
 :status: seed
-:justifies: RUL-merge_takes_finalized_current
+:justifies: RUL-merge_takes_finalized_current, RUL-merge_refuses_changed_since_finalize
 
 Finalize is a point in time, and photos by destination can change after it. Merge checks the finalized set against the
 present one rather than trusting finalize was last, so a half-geotagged set cannot reach the library.
@@ -398,7 +398,7 @@ present one rather than trusting finalize was last, so a half-geotagged set cann
 :::{rat} A merged workspace is not a clean slate
 :id: RAT-workspace_not_recycled
 :status: seed
-:justifies: RUL-merge_is_terminal
+:justifies: RUL-merge_is_terminal, RUL-library_takes_many_workspaces
 
 Even with photos by destination empty, a merged workspace keeps its database, ledgers, caches, snapshots and sealed
 record. Starting afresh keeps each workspace's record about one batch.

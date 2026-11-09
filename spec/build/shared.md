@@ -394,7 +394,7 @@ hashes, and the field-scoped configuration fingerprints (shared §4.2) that keep
 :::{bld} How a fingerprint and a hash are computed
 :id: BLD-fingerprint_and_hash
 :status: seed
-:realises: DEF-fingerprint, DEF-hash, RUL-fingerprint_survives_mutation, RUL-hash_detects_any_change
+:realises: DEF-fingerprint, DEF-hash, RUL-fingerprint_survives_mutation, RUL-hash_detects_any_change, RUL-hash_is_the_dependency_check
 
 A photo's fingerprint SHALL be ImageMagick `identify`'s signature — a SHA-256 of the normalized pixel stream; a video's,
 the `ffmpeg` stream MD5 (prep §9). A hash SHALL be a SHA-256 over the exact bytes of a numbered JSON record or the
@@ -406,7 +406,7 @@ configuration.
 :::{bld} The loop's commands
 :id: BLD-loop_commands
 :status: ruled
-:realises: DEF-operator_loop, DEF-finalize, RUL-prep_records_sort
+:realises: DEF-operator_loop, DEF-finalize, RUL-prep_records_sort, RUL-sort_recorded_by_stat
 
 The loop SHALL run as: `prep plan`, `dry-run`, `execute`; the sort, by hand; the prep commands again; `geotag plan`, the
 decision editor (`edit`) for what it asks, and `geotag plan` again until `photos-24-executable-plan.json` is ready;
@@ -451,7 +451,7 @@ recomputed from the destination's local time, a file already so named getting no
 :::{bld} What each phase reuses and skips
 :id: BLD-idempotency
 :status: seed
-:realises: RUL-reuse_valid_work, RUL-remake_only_what_depends, RUL-mutate_on_difference, RUL-no_op_run
+:realises: RUL-reuse_valid_work, RUL-remake_only_what_depends, RUL-mutate_on_difference, RUL-no_op_run, RUL-no_op_run_reports_reuse
 
 Prep SHALL reuse the cached fingerprint and metadata of a file whose size and modification time are unchanged, and
 carry a moved file's identity forward without reading it (prep §10, §13); a plan never executed SHALL leave its
