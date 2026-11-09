@@ -2640,7 +2640,11 @@ class WorkspaceLock(_FlockLock):
     """The whole-run workspace lock (shared contract §2), keyed to the control dir's
     photos-00-workspace.lock. Inherits the non-blocking flock + owner-identity discipline from
     _FlockLock; only the keyed path (and ensuring the control dir exists) differs."""
-    def __init__(self, workspace_root: str):
+    def __init__(self, workspace_root: str, create: bool = True):
+        # Only prep creates the control directory (shared contract §1, §5.3). Every other taker passes
+        # create=False, having checked the directory exists — so a run in a folder that is not a
+        # workspace leaves nothing behind, not even its lock file.
         from .photos_utils import lock_path, ensure_control_dir
-        ensure_control_dir(workspace_root)
+        if create:
+            ensure_control_dir(workspace_root)
         super().__init__(lock_path(workspace_root))

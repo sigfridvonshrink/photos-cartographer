@@ -66,7 +66,7 @@ At most one cartographer run SHALL act on a workspace at any time — whatever t
 of two phases, a merge, a finalize, or a quarantine prune.
 :::
 
-:::{rul} Every command takes the lock
+:::{rul} Every run, and every change, takes the lock
 :id: RUL-every_command_locks
 :status: seed
 :criticality: med
@@ -74,7 +74,7 @@ of two phases, a merge, a finalize, or a quarantine prune.
 :aliases: lock-every-command-takes-1
 :upholds: INV-one_run_at_a_time
 
-Every command that reads or changes the workspace SHALL hold its lock while it does.
+Every run, and every change to the workspace, SHALL hold the workspace's lock.
 :::
 
 :::{rul} A workspace has one lock

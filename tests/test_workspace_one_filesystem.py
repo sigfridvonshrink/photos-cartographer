@@ -40,6 +40,7 @@ def _ws(tmp_path):
     ws = tmp_path / "ws"
     (ws / "0-sources" / "trip").mkdir(parents=True)
     (ws / "5-photos-by-date").mkdir()
+    (ws / ".photos-ingest").mkdir()
     return ws
 
 
@@ -47,7 +48,6 @@ def _ws(tmp_path):
                   test="TST-workspace_one_filesystem-breaks_found_anywhere")
 def test_breaks_found_anywhere_without_descending(tmp_path, monkeypatch):
     ws = _ws(tmp_path)
-    (ws / ".photos-ingest").mkdir()
     (ws / "0-sources" / "trip" / "deep").mkdir()
     assert utils.workspace_volume_breaks(str(ws)) == []
     assert utils.workspace_volume_error(str(ws)) is None
@@ -87,7 +87,7 @@ def test_geotag_refuses_a_workspace_on_two_volumes(tmp_path, monkeypatch, capsys
         geotag.run(types.SimpleNamespace(command=command, jobs=1))
     assert ei.value.code == 2 and "more than one filesystem" in capsys.readouterr().err
     assert not any(n.startswith("photos-2") for n in os.listdir(ws / ".photos-ingest"))   # no artifact
-    assert [n for n in sorted(os.listdir(ws)) if n != ".photos-ingest"] == before
+    assert sorted(os.listdir(ws)) == before
 
 
 @pytest.mark.spec("RUL-one_filesystem_checked_every_run", "RUL-spanning_workspace_stops",
@@ -107,7 +107,6 @@ def test_merge_refuses_a_workspace_on_two_volumes(tmp_path, monkeypatch, capsys,
 @pytest.mark.parametrize("with_path", [False, True])
 def test_init_library_in_a_workspace_on_two_volumes_refuses(tmp_path, monkeypatch, capsys, with_path):
     ws = _ws(tmp_path)
-    (ws / ".photos-ingest").mkdir()
     open(utils.guard_path(str(ws)), "w").close()               # an initialized workspace
     lib = tmp_path / "lib"; lib.mkdir()
     _other_volume(monkeypatch, ws / "5-photos-by-date")
