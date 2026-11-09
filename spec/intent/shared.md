@@ -247,14 +247,24 @@ When snapshots are not required, or not configured, a run SHALL proceed without 
 always does, on the journal, the recoverable quarantine, never overwriting, and the filesystem as the truth.
 :::
 
-:::{rul} Merge snapshots the library
+:::{rul} Merge snapshots the workspace, and the library beside it
 :id: RUL-merge_snapshots_library
 :status: seed
-:criticality: med
-:verify: none
-:omit_reason: carried by merge's own snapshot items, when merge is converted
+:criticality: high
+:verify: required
 
-Merge's snapshot SHALL cover the library, where its changes land — not the workspace, which prep's and geotag's cover.
+Merge's snapshot SHALL cover the workspace, and the library too where the library can be snapshotted.
+:::
+
+:::{rul} Merge takes no snapshot of the library alone
+:id: RUL-no_library_only_snapshot
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-merge_snapshots_library
+
+Merge SHALL take no snapshot of the library alone.
 :::
 
 ## 3. One configuration, kept in the workspace

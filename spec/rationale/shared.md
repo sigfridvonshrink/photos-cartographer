@@ -45,6 +45,19 @@ The mechanism is named for ZFS because that is the reference implementation, but
 of the pipeline that touches a specific filesystem feature, and it is optional; everything else is filesystem-agnostic.
 :::
 
+:::{rat} A snapshot of the library alone would lose what merge moved
+:id: RAT-library_snapshot_alone_loses
+:status: seed
+:justifies: RUL-merge_snapshots_library, RUL-no_library_only_snapshot
+
+Merge's changes land in two places: it adds each photo to the library and removes it from the workspace. Rolled back
+alone, a snapshot of the library takes the merged photos out of the library while the workspace no longer holds them —
+the rollback loses them, a rollback point that destroys what it should protect. A snapshot of the workspace alone is
+safe: rolled back, it gives the photos back to the workspace while the library keeps them, a duplicate the next merge
+finds already present. So merge snapshots the workspace always, the library beside it where it can, and never the
+library alone; with no snapshot of the workspace it takes none at all, and says this merge has no rollback point.
+:::
+
 :::{rat} One mechanism, so the phases cannot diverge
 :id: RAT-one_snapshot_mechanism
 :status: seed

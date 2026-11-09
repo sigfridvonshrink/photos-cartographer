@@ -82,6 +82,16 @@ The snapshot SHALL be a ZFS snapshot, configured by the `zfs` block of the works
 block not configured, it proceeds without one.
 :::
 
+:::{bld} Merge's two snapshots
+:id: BLD-merge_snapshots
+:status: seed
+:realises: RUL-merge_snapshots_library, RUL-no_library_only_snapshot
+
+Merge's `_take_snapshots` SHALL snapshot the workspace's dataset and then, where the library's differs, the library's —
+each pinned by `zfs.datasets.workspace` and `zfs.datasets.library` or detected from its path — taking the library's
+only after the workspace's has succeeded, and recording both in `photos-31-merge-summary.json` under `snapshot`.
+:::
+
 :::{bld} One snapshot mechanism for every phase
 :id: BLD-one_snapshot_mechanism
 :status: seed
