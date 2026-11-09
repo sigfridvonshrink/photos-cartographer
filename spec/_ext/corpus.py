@@ -27,6 +27,8 @@
   - a fact or a choice nothing follows from;
   - a rationale marked `forced: yes` whose `follows_from` chain reaches no fact or choice;
   - an item stating more than one SHALL: an item carries one obligation, so a second is an item of its own;
+  - a rule or invariant no rationale justifies, directly or through the item it refines or upholds — but for the
+    ones listed in `unjustified.txt`, a list that only shrinks;
   - an option continued onto a second line, which sphinx-needs would silently drop.
 """
 import json
@@ -232,9 +234,41 @@ def _items_well_formed(app, env):
         LOG.warning(line, type="corpus", subtype="form")
 
 
+def _rules_justified(app, env):
+    """Every rule and invariant has a reason: a rationale justifies it, or the item it refines or upholds."""
+    from sphinx_needs.data import SphinxNeedsData
+    view = SphinxNeedsData(env).get_needs_view()
+    justified = {t for need in view.values() if need["type"] == "rat" for t in need.get("justifies") or []}
+
+    def reasoned(need_id, seen):
+        if need_id in justified:
+            return True
+        need = view.get(need_id)
+        if need is None or need_id in seen:
+            return False
+        return any(reasoned(p, seen | {need_id}) for p in (need.get("refines") or []) + (need.get("upholds") or []))
+
+    listed = set()
+    path = os.path.join(app.srcdir, "unjustified.txt")
+    if os.path.exists(path):
+        listed = {l.strip() for l in open(path, encoding="utf-8") if l.strip() and not l.startswith("#")}
+    bad = []
+    for need in view.values():
+        if need["type"] in ("rul", "inv") and not reasoned(need["id"], frozenset()) and need["id"] not in listed:
+            bad.append(f"{need['id']}: no rationale justifies it, directly or through the item it refines or upholds")
+    for item in sorted(listed):
+        if item not in view:
+            bad.append(f"unjustified.txt lists {item}, which is not an item: take it off")
+        elif reasoned(item, frozenset()):
+            bad.append(f"unjustified.txt lists {item}, which now has a rationale: take it off")
+    for line in sorted(bad):
+        LOG.warning(line, type="corpus", subtype="rationale")
+
+
 def setup(app):
     app.connect("builder-inited", _write_tests_page)
     app.connect("env-check-consistency", _required_are_verified)
     app.connect("env-check-consistency", _links_hold)
     app.connect("env-check-consistency", _items_well_formed)
+    app.connect("env-check-consistency", _rules_justified)
     return {"parallel_read_safe": False, "parallel_write_safe": True}

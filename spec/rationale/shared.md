@@ -45,6 +45,34 @@ The mechanism is named for ZFS because that is the reference implementation, but
 of the pipeline that touches a specific filesystem feature, and it is optional; everything else is filesystem-agnostic.
 :::
 
+:::{rat} A rollback point is the state just before the change
+:id: RAT-snapshot_just_before
+:status: seed
+:justifies: RUL-snapshot_timing
+
+A snapshot restores the state just before a plan's changes. Taken before the plan is validated, it may precede a plan
+that is then refused; taken outside the lock, another run may change the workspace between it and the first change;
+taken after a change, it no longer restores the state before it.
+:::
+
+:::{rat} Required means a condition of changing anything
+:id: RAT-required_means_condition
+:status: seed
+:justifies: RUL-required_snapshot_or_nothing
+
+An operator who requires snapshots has made a rollback point a condition of any change. Going on without one would break
+that condition silently, so the run stops before its first change, when stopping costs nothing.
+:::
+
+:::{rat} A rollback is chosen by hand, later
+:id: RAT-rollback_chosen_by_hand
+:status: seed
+:justifies: RUL-snapshot_per_plan
+
+A rollback is done by hand, often long after the run. The snapshot must say which plan's changes it precedes, so the
+operator can find the right one and tell the phases' snapshots apart.
+:::
+
 :::{rat} A snapshot of the library alone would lose what merge moved
 :id: RAT-library_snapshot_alone_loses
 :status: seed
