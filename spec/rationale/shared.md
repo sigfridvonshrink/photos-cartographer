@@ -692,7 +692,7 @@ which no plan, however careful, can stand in for.
 :::{rat} Safety and resuming rest on the moment of each change
 :id: RAT-safe_at_each_change
 :status: seed
-:justifies: RUL-operations_atomic, RUL-rewrite_in_place_atomic, RUL-cross_fs_all_or_nothing, RUL-failed_operation_clean
+:justifies: RUL-operations_atomic, RUL-split_move_never_lost, RUL-rewrite_in_place_atomic, RUL-cross_fs_all_or_nothing, RUL-failed_operation_clean
 
 That nothing is overwritten, and that an interrupted run is finished by running it again, hold only if each change is
 safe when it happens. A half-done move, a half-written file, or a failure recorded as done would break both where no
@@ -702,7 +702,7 @@ plan can see it.
 :::{rat} Within a workspace, every move is one rename
 :id: RAT-workspace_one_filesystem
 :status: seed
-:justifies: RUL-workspace_one_filesystem
+:justifies: RUL-workspace_one_filesystem, RUL-one_filesystem_checked_every_run, RUL-workspace_moves_one_filesystem
 
 On one filesystem every move a workspace sees is a single rename: nothing to copy, nothing to verify, no temporary copy
 to leave behind. A workspace is one place made for one ingest, so nothing needs it spread over volumes; one that is

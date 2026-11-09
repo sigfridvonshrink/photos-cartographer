@@ -679,7 +679,7 @@ JSON or is not a JSON object SHALL be such a blocker, located to where parsing f
 :::{bld} One rename that refuses a taken name
 :id: BLD-no_clobber_rename
 :status: ruled
-:realises: RUL-target_free_at_execute, RUL-operations_atomic
+:realises: RUL-target_free_at_execute, RUL-operations_atomic, RUL-split_move_never_lost
 
 Every move and rename that carries content SHALL go through `_move_no_clobber`: on one filesystem `renameat2` with
 `RENAME_NOREPLACE`, one call that refuses an existing name, or where that is unavailable `os.link` then `os.unlink`;
@@ -691,7 +691,7 @@ itself the check that its name is free (prep §14.3–§14.4, geotag §29.1a, me
 :::{bld} Each run checks the workspace's devices
 :id: BLD-workspace_one_filesystem
 :status: seed
-:realises: RUL-workspace_one_filesystem
+:realises: RUL-workspace_one_filesystem, RUL-one_filesystem_checked_every_run, RUL-spanning_workspace_stops, RUL-spanning_workspace_located, RUL-workspace_moves_one_filesystem
 
 `workspace_volume_breaks` SHALL walk every folder of the workspace without following links, compare each one's device
 with the workspace root's, and not descend into a folder found on another. Prep's and geotag's `run`, and merge's plan,

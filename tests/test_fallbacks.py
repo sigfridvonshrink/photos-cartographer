@@ -108,7 +108,7 @@ def test_move_no_clobber_falls_back_to_cross_fs_on_exdev(tmp_path, monkeypatch):
     assert dest.read_bytes() == b"XDEV" and not src.exists() and seen["n"] == 2
 
 
-@pytest.mark.spec("RUL-workspace_one_filesystem", test="TST-fallbacks-move_no_clobber_refuses_exdev_unless_cross_fs")
+@pytest.mark.spec("RUL-workspace_moves_one_filesystem", test="TST-fallbacks-move_no_clobber_refuses_exdev_unless_cross_fs")
 def test_move_no_clobber_refuses_exdev_unless_cross_fs(tmp_path, monkeypatch):
     """Only merge crosses filesystems: for prep and geotag (no cross_fs) a move that would cross one is
     raised as a failure, never turned into a copy — the source stays and no temp is left."""
