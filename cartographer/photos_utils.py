@@ -120,8 +120,7 @@ CONFIG = {
         "phone_gpx_agreement_tolerance_seconds": 60,
         "phone_gpx_conflict_threshold_seconds": 300,
         "dst_conflict_tolerance_seconds": 120,
-        "phone_gpx_max_distance_meters": 250,
-        "manual_segment_template_count": 2
+        "phone_gpx_max_distance_meters": 250
     },
     "filename_timestamp_format": "%Y-%m-%d--%H-%M-%S",
     # Format-distribution subfolder names that mark the later development/processing phase
@@ -944,11 +943,8 @@ def _check_path(path, v):
     if v and not v.strip():
         raise ValueError(f"config: {path} must not be blank (leave it empty, or name a path).")
 
-def _check_number(path, v, minimum=None, integer=False):
-    if integer:
-        if not isinstance(v, int) or isinstance(v, bool):
-            raise ValueError(f"config: {path} must be an integer.")
-    elif not isinstance(v, (int, float)) or isinstance(v, bool) or not math.isfinite(v):
+def _check_number(path, v, minimum=None):
+    if not isinstance(v, (int, float)) or isinstance(v, bool) or not math.isfinite(v):
         raise ValueError(f"config: {path} must be a number.")   # JSON's NaN/Infinity load as floats
     if minimum is not None and v < minimum:
         raise ValueError(f"config: {path} must be >= {minimum}.")
@@ -1102,9 +1098,6 @@ def validate_config(cfg: dict, workspace_root: str = None):
                    "dst_conflict_tolerance_seconds", "phone_gpx_max_distance_meters"):
             if nk in pol:
                 _check_number(f"camera_time_and_timezone_policy.{nk}", pol[nk], minimum=0)
-        if "manual_segment_template_count" in pol:
-            _check_number("camera_time_and_timezone_policy.manual_segment_template_count",
-                          pol["manual_segment_template_count"], minimum=0, integer=True)
         if "default_folder_timezone" in pol:
             tz = pol["default_folder_timezone"]
             _check_string("camera_time_and_timezone_policy.default_folder_timezone", tz)
