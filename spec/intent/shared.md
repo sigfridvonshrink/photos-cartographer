@@ -2104,7 +2104,7 @@ that operation.
 
 :::{rul} An interrupted move leaves the before or the after
 :id: RUL-operations_atomic
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: incidental
@@ -2116,7 +2116,7 @@ leaves the state before it or the state after, never part of either.
 
 :::{rul} A move that cannot be one operation is never lost
 :id: RUL-split_move_never_lost
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: incidental
@@ -2128,7 +2128,7 @@ both — never under neither, never part of one.
 
 :::{rul} A workspace lies on one filesystem
 :id: RUL-workspace_one_filesystem
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -2141,7 +2141,7 @@ among them — on the same one.
 
 :::{rul} The workspace's filesystem is checked each run
 :id: RUL-one_filesystem_checked_every_run
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -2153,7 +2153,7 @@ one filesystem — never taking it as whole because an earlier run found it so.
 
 :::{rul} A workspace spanning filesystems stops the run
 :id: RUL-spanning_workspace_stops
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -2164,7 +2164,7 @@ A workspace found to span filesystems SHALL stop the run with nothing changed.
 
 :::{rul} The stop names a folder that lies elsewhere
 :id: RUL-spanning_workspace_located
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :uses: RUL-cause_locatable
@@ -2175,7 +2175,7 @@ The report of a workspace spanning filesystems SHALL name a folder in it that li
 
 :::{rul} Prep and geotag never move across filesystems
 :id: RUL-workspace_moves_one_filesystem
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -2187,7 +2187,7 @@ A move by prep or geotag that would cross filesystems SHALL fail, never be made 
 
 :::{rul} A file rewritten in place is the old one or the new one
 :id: RUL-rewrite_in_place_atomic
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: none
@@ -2201,7 +2201,7 @@ never a damaged one between them.
 
 :::{rul} Across filesystems, a placement is still all or nothing
 :id: RUL-cross_fs_all_or_nothing
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -2215,7 +2215,7 @@ leave no file under that name, or the complete one — never part of one.
 
 :::{rul} A temporary copy a crash left is cleared
 :id: RUL-crash_temps_cleared
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :aliases: atomic-crossfs-temp-sweep-1
@@ -2228,7 +2228,7 @@ into, and record how many.
 
 :::{rul} A temporary copy bears a name no photo bears
 :id: RUL-temp_name_own
-:status: seed
+:status: ruled
 :criticality: low
 :verify: incidental
 :refines: RUL-cross_fs_all_or_nothing
