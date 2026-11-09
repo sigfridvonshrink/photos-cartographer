@@ -8,7 +8,7 @@ it*, in [the build](../build/shared.md).
 
 :::{def} The workspace
 :id: DEF-workspace
-:status: seed
+:status: ruled
 
 A **workspace** is the transient place one ingest happens in: a dump of media enters it, the phases work on it in
 turn, and merge moves its finished photos into the library. A run's workspace is the folder it is started in.
@@ -16,7 +16,7 @@ turn, and merge moves its finished photos into the library. A run's workspace is
 
 :::{def} The library
 :id: DEF-library
-:status: seed
+:status: ruled
 :uses: DEF-workspace
 
 The **library** is the permanent, curated collection the media ends in — outside every workspace, and written only by
@@ -25,7 +25,7 @@ merge.
 
 :::{def} Prep
 :id: DEF-prep
-:status: seed
+:status: ruled
 :uses: DEF-workspace
 
 **Prep**, the first phase, takes an unorganized dump and makes it a clean working set: it consolidates the dump,
@@ -35,7 +35,7 @@ geotag what it found.
 
 :::{def} Geotag
 :id: DEF-geotag
-:status: seed
+:status: ruled
 :uses: DEF-prep
 
 **Geotag**, the second phase, resolves each photo to its true time, inferring and correcting each camera's clock
@@ -45,7 +45,7 @@ time.
 
 :::{def} Merge
 :id: DEF-merge
-:status: seed
+:status: ruled
 :uses: DEF-geotag, DEF-library
 
 **Merge**, the third phase, runs after a workspace has been geotagged and finalized, and moves its finished photos,
