@@ -113,7 +113,7 @@ def test_handwritten_config_is_authoritative(tmp_path, monkeypatch):
     assert any("5-photos-by-date/2023-01-02/20230102__030405" in d for d in dests), dests
 
 
-@pytest.mark.spec("config-hashed-cascade-1", test="TST-config-config_fingerprint_is_file_sha_and_in_handoff")
+@pytest.mark.spec("config-hashed-cascade-1", "RUL-config_digest_recorded", test="TST-config-config_fingerprint_is_file_sha_and_in_handoff")
 def test_config_fingerprint_is_file_sha_and_in_handoff(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)

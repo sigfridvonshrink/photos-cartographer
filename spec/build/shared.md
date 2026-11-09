@@ -97,7 +97,7 @@ The setup command `init-library` (merge §4), run inside a workspace with an exp
 :::{bld} Field-scoped fingerprints, and one whole-file SHA-256
 :id: BLD-config_fingerprints
 :status: seed
-:realises: RUL-staleness_by_area, RUL-config_in_dependencies, RUL-organization_settings_restale
+:realises: RUL-staleness_by_area, RUL-config_in_dependencies, RUL-organization_settings_restale, RUL-config_digest_recorded
 
 Two things SHALL be derived from the configuration: field-scoped fingerprints — the filename format, the camera-time and
 timezone policy, the GPX thresholds, the camera-group-key version, the snapshot policy, the folder-name set, the
@@ -109,7 +109,7 @@ dependencies of geotag's executable plan and of merge's plan.
 :::{bld} The whole-file hash is in the executable plan's dependencies
 :id: BLD-whole_hash_in_the_plan
 :status: seed
-:realises: RUL-any_config_change_replans, RUL-costly_results_survive_unrelated_edits
+:realises: RUL-any_config_change_replans, RUL-costly_results_survive_unrelated_edits, RUL-times_survive_unrelated_config_edits
 
 The whole-file fingerprint SHALL be carried in the `depends_on` of geotag's executable plan (geotag §28, in the
 flattened dependency set of geotag §5) and of merge's plan, `config_fingerprint`, and each SHALL be refused when it no
@@ -138,7 +138,7 @@ name it.
 :::{bld} The configuration's keys
 :id: BLD-config_keys
 :status: seed
-:realises: DEF-config_areas, RUL-folder_names_not_roles, RUL-camera_classes_not_derivation, RUL-extension_one_class
+:realises: DEF-config_areas, RUL-folder_names_not_roles, RUL-camera_classes_not_derivation, RUL-extension_one_class, RUL-folder_found_by_role, RUL-config_lists_extensions, RUL-unlisted_extension_other
 
 The areas SHALL be, at least: the `zfs` block and `snapshots_required` (§2 above);
 `camera_time_and_timezone_policy.device_groups`, with `phones` and `fixed_clock_cameras` (shared §6); `filename_timestamp_format`

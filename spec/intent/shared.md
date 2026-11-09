@@ -67,7 +67,7 @@ At most one cartographer run SHALL act on a workspace at any time — whatever t
 of two phases, a merge, a finalize, or a quarantine prune.
 :::
 
-:::{rul} One lock, taken by every command
+:::{rul} Every command takes the lock
 :id: RUL-every_command_locks
 :status: seed
 :criticality: med
@@ -75,8 +75,17 @@ of two phases, a merge, a finalize, or a quarantine prune.
 :aliases: lock-every-command-takes-1
 :upholds: INV-one_run_at_a_time
 
-A workspace SHALL have exactly one lock, shared by every command. Every command that reads or changes the workspace
-SHALL hold it while it does.
+Every command that reads or changes the workspace SHALL hold its lock while it does.
+:::
+
+:::{rul} A workspace has one lock
+:id: RUL-one_workspace_lock
+:status: seed
+:criticality: med
+:verify: incidental
+:refines: RUL-every_command_locks
+
+A workspace SHALL have exactly one lock, shared by every command.
 :::
 
 :::{rul} The lock comes before anything is read
@@ -101,8 +110,8 @@ inside the lock all the same.
 :aliases: lock-covers-whole-run-1
 :upholds: INV-one_run_at_a_time
 
-A run SHALL hold the lock until it ends — through planning, dry run, execution, and every record and artifact it
-writes — and SHALL release it then. The lock SHALL NOT outlive its run: between runs, the workspace is unlocked.
+A run SHALL hold the lock until it ends — through planning, dry run, execution, and every record and artifact it writes
+— and release it then, never letting it outlive the run: between runs, the workspace is unlocked.
 :::
 
 :::{rul} A locked workspace is refused at once
@@ -114,8 +123,8 @@ writes — and SHALL release it then. The lock SHALL NOT outlive its run: betwee
 :aliases: lock-failfast-1
 :upholds: INV-one_run_at_a_time
 
-A run that finds the workspace locked SHALL NOT wait for it. It SHALL stop at once, saying the workspace is locked by a
-run in progress, having scanned, planned and changed nothing — and having produced no plan, no dry-run report and no
+A run that finds the workspace locked SHALL stop at once, never waiting for it, saying the workspace is locked by a run
+in progress, having scanned, planned and changed nothing — and having produced no plan, no dry-run report and no
 artifact.
 :::
 
@@ -151,8 +160,8 @@ workspace locked for good.
 :aliases: lock-stale-takeover-conservative-1
 :refines: RUL-stale_lock_recovered
 
-A stale lock SHALL be taken over only when its owner is provably gone. A lock whose owner may still be running SHALL be
-left alone.
+A stale lock SHALL be taken over only when its owner is provably gone; a lock whose owner may still be running is left
+alone.
 :::
 
 Merge also takes a lock on the library it writes into, so that two merges into one library — even from two workspaces
@@ -168,7 +177,7 @@ Merge also takes a lock on the library it writes into, so that two merges into o
 :aliases: snapshot-optional-1
 
 A phase that changes files MAY first take a snapshot of what it is about to change, from which the whole change can be
-rolled back. Cartographer SHALL be complete and safe without one: no guarantee SHALL depend on a snapshot having been
+rolled back. Cartographer SHALL be complete and safe without one, no guarantee depending on a snapshot having been
 taken.
 :::
 
@@ -190,7 +199,7 @@ Snapshots SHALL be off unless the workspace's configuration turns them on.
 :verify: none
 :omit_reason: a design constraint over the whole code; the gap audit (backlog item 2) checks it
 
-Nothing in cartographer but the snapshot SHALL depend on a particular filesystem's features; and cartographer SHALL run
+Nothing in cartographer but the snapshot SHALL depend on a particular filesystem's features, so that cartographer runs
 fully on a filesystem that has none.
 :::
 
@@ -246,7 +255,7 @@ always does, on the journal, the recoverable quarantine, never overwriting, and 
 :verify: none
 :omit_reason: carried by merge's own snapshot items, when merge is converted
 
-Prep's and geotag's snapshot SHALL cover the workspace; merge's SHALL cover the library, where its changes land.
+Merge's snapshot SHALL cover the library, where its changes land — not the workspace, which prep's and geotag's cover.
 :::
 
 ## 3. One configuration, kept in the workspace
@@ -267,8 +276,8 @@ what is processed under it, and it is an input the user authors.
 :verify: incidental
 :aliases: config-single-shared-1
 
-All three phases SHALL read their settings from the workspace's one configuration, each the settings it needs. No phase
-SHALL keep settings of its own, and no setting that governs a run SHALL come from outside the workspace.
+All three phases SHALL read their settings from the workspace's one configuration alone, each the settings it needs — no
+phase keeping settings of its own, and no setting that governs a run coming from outside the workspace.
 :::
 
 :::{rul} Prep seeds the configuration once
@@ -278,8 +287,8 @@ SHALL keep settings of its own, and no setting that governs a run SHALL come fro
 :verify: required
 :aliases: config-seeded-by-prep-1
 
-A prep run that finds no configuration SHALL create one from the seed defaults. A prep run that finds one SHALL use it as
-it is.
+A prep run SHALL create the configuration from the seed defaults when it finds none, and only then: a configuration it
+finds, it uses as it is.
 :::
 
 :::{rul} The workspace's configuration governs it, not the defaults
@@ -290,8 +299,8 @@ it is.
 :aliases: config-file-authoritative-1
 :refines: RUL-config_seeded_once
 
-The seed defaults SHALL serve only to seed a new workspace. Once a workspace's configuration exists, it SHALL govern
-every run in that workspace, whatever the defaults later become.
+Once a workspace's configuration exists, it SHALL govern every run in that workspace, whatever the seed defaults later
+become — the defaults serving only to seed a new workspace.
 :::
 
 :::{rul} Who writes the configuration
@@ -303,7 +312,7 @@ every run in that workspace, whatever the defaults later become.
 :aliases: config-prep-sole-writer-1, config-merge-readonly-1
 
 The configuration SHALL be written only when prep seeds it, when the user edits it by hand, and by the library setup
-below. Geotag SHALL never write it. Merge's planning, dry run and execution SHALL leave it unchanged.
+below — never by geotag, and never by merge's planning, dry run or execution.
 :::
 
 :::{rul} The library setup records one setting
@@ -327,7 +336,17 @@ library this workspace merges into — that setting, and no other.
 :aliases: config-hashed-cascade-1
 
 The configuration SHALL be a dependency of what is derived under it, like every other artifact, so that a change to it
-never changes a run without being detected. A digest of its whole content SHALL be recorded for integrity.
+never changes a run without being detected.
+:::
+
+:::{rul} A digest of the whole configuration is recorded
+:id: RUL-config_digest_recorded
+:status: seed
+:criticality: med
+:verify: required
+:refines: RUL-config_in_dependencies
+
+A digest of the configuration's whole content SHALL be recorded for integrity.
 :::
 
 :::{rul} The configuration is part of the permanent record
@@ -349,8 +368,8 @@ The configuration SHALL be part of the archival record the workspace leaves behi
 :aliases: config-in-control-dir-skipped-1
 :refines: RUL-control_records_never_media
 
-No phase SHALL treat the configuration as media: none SHALL inventory or organize it, and none SHALL fold it into what
-identifies the media.
+No phase SHALL treat the configuration as media — inventorying or organizing it, or folding it into what identifies the
+media.
 :::
 
 :::{rul} A change to one area restales only what depends on it
@@ -372,11 +391,21 @@ not placement.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: config-edit-outside-timepolicy-1
 :refines: RUL-staleness_by_area
 
-A result that is costly to rebuild SHALL be made stale only by the areas it depends on. A configuration change outside
-the camera-time policy SHALL NOT make stale the true times already resolved.
+A result that is costly to rebuild SHALL be made stale only by the areas it depends on.
+:::
+
+:::{rul} Resolved true times survive configuration edits outside the time policy
+:id: RUL-times_survive_unrelated_config_edits
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: config-edit-outside-timepolicy-1
+:refines: RUL-costly_results_survive_unrelated_edits
+
+A configuration change outside the camera-time policy SHALL NOT make stale the true times already resolved.
 :::
 
 :::{rul} Any configuration change restales the plan
@@ -387,7 +416,7 @@ the camera-time policy SHALL NOT make stale the true times already resolved.
 :aliases: config-wholehash-coarse-replan-1
 
 Any change to the configuration, in whatever area, SHALL make stale every plan made before it — prep's plan, geotag's
-executable plan and merge's plan — and none of them SHALL be executed.
+executable plan and merge's plan — so that none of them is executed.
 :::
 
 :::{rul} A change to the folder names or the media classes restales the plans
@@ -411,7 +440,7 @@ executable plan and merge's plan.
 :omit_reason: no test asserts it yet
 
 Where a workspace keeps its control records — its configuration among them — SHALL be fixed, the same in every
-workspace. No setting SHALL move it.
+workspace, no setting moving it.
 :::
 
 :::{def} What the configuration sets
@@ -433,8 +462,17 @@ media. Each area's detail is in the items of its own section.
 :verify: required
 :aliases: config-folder-roles-not-config-1
 
-The configuration SHALL set the managed folders' names. Their roles, and the structure they form, SHALL NOT be
-configurable, and every phase SHALL find a managed folder by its role, never by its name.
+The configuration SHALL set the managed folders' names, never their roles or the structure they form.
+:::
+
+:::{rul} A managed folder is found by its role
+:id: RUL-folder_found_by_role
+:status: seed
+:criticality: med
+:verify: required
+:refines: RUL-folder_names_not_roles
+
+Every phase SHALL find a managed folder by its role, never by its name.
 :::
 
 :::{rul} The user classifies camera groups; how they are derived is fixed
@@ -446,8 +484,8 @@ configurable, and every phase SHALL find a managed folder by its role, never by 
 :omit_reason: no test asserts it (backlog item 3)
 :aliases: config-camerakey-version-not-config-1
 
-The configuration SHALL say which camera groups are phones and which have fixed clocks — the only part of camera
-grouping it sets. How a camera group is derived, and the version of that derivation, SHALL NOT be configurable.
+Of camera grouping, the configuration SHALL set only which camera groups are phones and which have fixed clocks — never
+how a group is derived, nor the version of that derivation.
 :::
 
 :::{rul} Each extension is one class of media
@@ -457,8 +495,27 @@ grouping it sets. How a camera group is derived, and the version of that derivat
 :verify: required
 :aliases: config-ext-one-class-1
 
-The configuration SHALL list which extensions are images, raw files and videos. The classes themselves SHALL NOT be
-configurable; an extension not listed SHALL be `other`; and an extension SHALL be in exactly one class.
+An extension SHALL be in exactly one class of media.
+:::
+
+:::{rul} The configuration lists the extensions, not the classes
+:id: RUL-config_lists_extensions
+:status: seed
+:criticality: med
+:verify: required
+:refines: RUL-extension_one_class
+
+The configuration SHALL list which extensions are images, raw files and videos, never the classes themselves.
+:::
+
+:::{rul} An extension not listed is other
+:id: RUL-unlisted_extension_other
+:status: seed
+:criticality: med
+:verify: required
+:refines: RUL-extension_one_class
+
+An extension the configuration does not list SHALL be `other`.
 :::
 
 :::{rul} Every value the user supplies is checked before use

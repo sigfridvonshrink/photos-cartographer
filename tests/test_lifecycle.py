@@ -433,3 +433,27 @@ def test_a_prep_only_workspace_has_a_whole_record(tmp_path, monkeypatch):
         assert (ws / entry["prep_path"]).is_file()
     assert (ctl / "photos-15-prep-ingest.db").is_file()
     assert not glob.glob(str(ctl / "photos-2*")) and not glob.glob(str(ctl / "photos-3*"))
+
+
+@pytest.mark.spec("RUL-folder_found_by_role", test="TST-lifecycle-renamed_folders_found_by_role")
+def test_renamed_folders_are_built_and_used_by_role(tmp_path, monkeypatch):
+    """The user names the managed folders; prep finds each by its role. With the inbox and the photos
+    band renamed in the seed defaults, init builds the renamed folders and organizes into them — no
+    default name is created or written into."""
+    import copy
+    seed = copy.deepcopy(utils.DEFAULT_CONFIG)
+    seed["folders"]["sources"] = "0-inbox"
+    seed["folders"]["photos_by_date"] = "5-by-date"
+    seed.pop("jobs", None)
+    defaults = tmp_path / "defaults.json"
+    defaults.write_text(json.dumps(seed))
+    monkeypatch.setenv("PHOTOS_CARTOGRAPHER_CONFIG", str(defaults))
+    _install(monkeypatch)
+    ws = _bare(tmp_path)
+    (ws / "photo.jpg").write_bytes(b"img")
+    plan = _plan(ws)
+    assert not plan.blockers, plan.blockers
+    prep.PlanExecutor(str(ws)).execute(plan)
+    assert (ws / "0-inbox").is_dir() and list((ws / "0-inbox").iterdir()) == []
+    assert len(glob.glob(str(ws / "5-by-date" / "**" / "*.jpg"), recursive=True)) == 1
+    assert not (ws / "0-sources").exists() and not (ws / "5-photos-by-date").exists()

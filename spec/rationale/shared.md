@@ -58,7 +58,7 @@ Each phase that mutates uses the same mechanism so the phases behave identically
 :::{rat} A configuration in a file is bound to what it governed
 :id: RAT-config_is_a_file
 :status: seed
-:justifies: DEF-configuration, RUL-config_in_dependencies, RUL-config_archived
+:justifies: DEF-configuration, RUL-config_in_dependencies, RUL-config_archived, RUL-config_digest_recorded
 
 Making the config a file binds it intrinsically to the workspace and to everything processed in it. Hashed and folded
 into the dependency cascade, it closes the gap where an ambient config could change a run without leaving a trace; and
@@ -77,7 +77,7 @@ explicitly not done.
 :::{rat} A coarse trigger for the cheap plan, a precise one for the costly caches
 :id: RAT-coarse_trigger_for_the_cheap_plan
 :status: seed
-:justifies: RUL-any_config_change_replans, RUL-costly_results_survive_unrelated_edits
+:justifies: RUL-any_config_change_replans, RUL-costly_results_survive_unrelated_edits, RUL-times_survive_unrelated_config_edits
 
 The whole-file fingerprint restaling the plan is a catch-all guaranteeing no config-driven change is ever silently
 missed, even one in an area without its own field-scoped fingerprint. It is intentional belt-and-braces *alongside* the
@@ -100,7 +100,7 @@ run and guards execution with the whole-file hash, so it needs no separate folde
 :::{rat} A folder's role is pipeline logic
 :id: RAT-folder_roles_are_logic
 :status: seed
-:justifies: RUL-folder_names_not_roles
+:justifies: RUL-folder_names_not_roles, RUL-folder_found_by_role
 
 The roles — the inbox, the read-only destination tree, the order in which duplicates are retained, which folders are
 the photo and video bands — are pipeline logic, so the user sets the names and never the roles.
