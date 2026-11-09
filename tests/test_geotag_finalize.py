@@ -282,7 +282,7 @@ def test_finalize_assembles_package_and_is_nondestructive(tmp_path, monkeypatch)
     assert "photos-26-complete-log.json" in manifest["contents"] and "photos-00-ingest.db" in manifest["contents"]
 
 
-@pytest.mark.spec("RUL-package_contents", "RUL-package_self_describing", "archive-whole-control-dir-1", "archive-self-describing-manifest-1", test="TST-geotag_finalize-finalize_archives_the_whole_control_directory")
+@pytest.mark.spec("RUL-package_contents", "RUL-package_self_describing", "archive-whole-control-dir-1", "archive-self-describing-manifest-1", "RUL-other_databases_scratch", "RUL-images_archived", test="TST-geotag_finalize-finalize_archives_the_whole_control_directory")
 def test_finalize_archives_the_whole_control_directory(tmp_path, monkeypatch):
     """The package is the whole control directory but its transient files — the drift record and every
     journal among it — listed with their hashes in the manifest and archived, manifest included, into
@@ -293,12 +293,14 @@ def test_finalize_archives_the_whole_control_directory(tmp_path, monkeypatch):
     _to_executed(monkeypatch, ws, ctl)
     (ctl / "photos-22-gps-drift-validation.json").write_text('{"status": "complete"}')
     (ctl / "photos-00-plan-memo.db").write_bytes(b"scratch")
+    (ctl / "photos-15-prep-ingest.db").write_bytes(b"prep's database image")
     (ctl / "photos-00-workspace-guard").write_text('{"initialized": true, "initialized_by_run": "prep-init-1"}')
     assert _run(monkeypatch, ws, "finalize") == 0
     manifest = json.load(open(ctl / "photos-26-archive-manifest.json"))
     assert manifest["workspace_id"] == "prep-init-1"              # the identity a renamed folder keeps
     listed = set(manifest["contents"])
     assert {"photos-22-gps-drift-validation.json", "photos-00-config.json", "photos-00-ingest.db"} <= listed
+    assert {"photos-15-prep-ingest.db", "photos-26-geotag-ingest.db"} <= listed      # every database image
     assert any(n.startswith("journal-") for n in listed)
     assert not any(n.endswith(".lock") or n.startswith(".tmp-") for n in listed)
     assert "photos-00-plan-memo.db" not in listed and "photos-26-archive-manifest.json" not in listed

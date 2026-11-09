@@ -898,7 +898,7 @@ def test_merge_writes_only_its_own_part_of_the_database(tmp_path):
     assert _rows(db)["library_fingerprint_cache"]                      # its own part: written
 
 
-@pytest.mark.spec("RUL-one_database", test="TST-merge_execute-one_database_in_the_workspace_none_in_the_library")
+@pytest.mark.spec("RUL-one_database", "RUL-other_databases_scratch", test="TST-merge_execute-one_database_in_the_workspace_none_in_the_library")
 def test_one_database_in_the_workspace_none_in_the_library(tmp_path):
     """After a whole merge the workspace holds one database of record, besides the phase images and
     prep's scratch memo, and the library holds no database at all."""

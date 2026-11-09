@@ -492,7 +492,7 @@ account of each phase: a second, rebuilt account could disagree with the first.
 :::{rat} A name cannot key the log
 :id: RAT-names_cannot_key_the_log
 :status: ruled
-:justifies: RUL-log_keyed_by_fingerprint
+:justifies: RUL-log_keyed_by_fingerprint, RUL-no_log_entry_for_other
 
 A photo is renamed up to twice in the workspace — a provisional name, then its final one — and may be renamed again on
 its way into the library, so no name identifies it across its journey. Its fingerprint does: it survives every rename,
@@ -512,7 +512,7 @@ open-ended store of events.
 :::{rat} The database holds what the record cannot rebuild
 :id: RAT-database_is_record
 :status: ruled
-:justifies: RUL-database_is_record, RUL-one_database
+:justifies: RUL-database_is_record, RUL-one_database, RUL-other_databases_scratch
 
 The database is not only a cache that makes re-runs cheap: it holds what nothing else does — the values a photo held
 before geotag first changed it, which let any change be undone, and each photo's identity across its moves. Discarded
@@ -523,7 +523,7 @@ database because it is the user's own collection, organised as they choose, and 
 :::{rat} A database shows only now
 :id: RAT-database_shows_only_now
 :status: ruled
-:justifies: RUL-database_image_each_phase
+:justifies: RUL-database_image_each_phase, RUL-image_never_working_data, RUL-images_archived
 
 The live database is one file that every phase changes, so at any moment it shows only the latest state: what prep
 knew is overwritten by what geotag learned. An image taken at each phase's end keeps the database's state at every
@@ -533,7 +533,7 @@ boundary, to be opened later and compared.
 :::{rat} An image is regenerable; a photo is not
 :id: RAT-image_replaced_not_kept
 :status: ruled
-:justifies: RUL-database_image_each_phase, RUL-database_image_whole
+:justifies: RUL-database_image_each_phase, RUL-database_image_whole, RUL-image_never_working_data, RUL-images_archived, RUL-image_capture_atomic
 
 Never overwriting guards photos, which cannot be made again. An image can: it is a copy of the live database, and only
 the latest end of each phase is worth keeping, so a phase's next successful run replaces its image — whole, so that a

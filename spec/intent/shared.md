@@ -1524,10 +1524,10 @@ tool *proposes*; the user *decides*.
 :uses: DEF-decision
 
 Every change a phase makes SHALL follow from a decision the user recorded, or from a fixed rule applied to recorded
-inputs — never from a choice the tool makes on its own. An execution SHALL act only on a plan made from those.
+inputs — never from a choice the tool makes on its own; an execution acts only on a plan made from those.
 :::
 
-:::{rul} The user writes the decisions; the tool lays out their fields
+:::{rul} The user writes the decisions
 :id: RUL-user_writes_decisions
 :status: ruled
 :criticality: high
@@ -1536,8 +1536,17 @@ inputs — never from a choice the tool makes on its own. An execution SHALL act
 :aliases: authored-fields-not-overwritten-1
 :uses: DEF-decision, RUL-decision_kept
 
-A decision field SHALL be written by the user alone, and no phase SHALL overwrite what the user wrote. A phase SHALL
-create every field a decision needs, so the user fills in values, never structure.
+A decision field SHALL be written by the user alone, no phase ever overwriting what the user wrote.
+:::
+
+:::{rul} The tool lays out every decision's fields
+:id: RUL-decision_fields_laid_out
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-user_writes_decisions
+
+A phase SHALL create every field a decision needs, so the user fills in values, never structure.
 :::
 
 :::{rul} Prep takes no decision
@@ -1547,7 +1556,7 @@ create every field a decision needs, so the user fills in values, never structur
 :verify: required
 :uses: DEF-prep
 
-Prep SHALL ask the user for no decision: it SHALL organize from the state of the workspace and its configuration alone.
+Prep SHALL ask the user for no decision, organizing from the state of the workspace and its configuration alone.
 :::
 
 :::{rul} The cause of every change can be found
@@ -1570,9 +1579,9 @@ through the plan, to the record of what ran — so a wrong result points at a re
 :verify: required
 :uses: DEF-decision, DEF-dependency_cascade
 
-A decision SHALL be revised by changing it in the record and running again: the change SHALL reach everything that
-depends on it, and no change the tool makes SHALL be irreversible at the level of the decisions. A wrong choice SHALL
-never need the mutated files repaired by hand.
+A decision SHALL be revised by changing it in the record and running again, the change reaching everything that depends
+on it: no change the tool makes is irreversible at the level of the decisions, and a wrong choice never needs the
+mutated files repaired by hand.
 :::
 
 :::{rul} Withdrawing a decision undoes it
@@ -1583,9 +1592,9 @@ never need the mutated files repaired by hand.
 :aliases: authored-withdraw-undoes-1
 :refines: RUL-decision_revisable
 
-Withdrawing a decision SHALL undo its effect, not merely stop asserting it. A manual position withdrawn SHALL give the
-file back the position it held before, or none if it held none; a position derived by the tool SHALL be derived again; a
-time and a name SHALL be recomputed where the file stands, never moving it out of its destination.
+Withdrawing a decision SHALL undo its effect, not merely stop asserting it: a manual position withdrawn gives the file
+back the position it held before, or none if it held none; a position derived by the tool is derived again; a time and a
+name are recomputed where the file stands, never moving it out of its destination.
 :::
 
 ## 12. The record of what was done, kept beyond the workspace
@@ -1617,8 +1626,8 @@ through the pipeline — what was done to its photos and why. It is what the use
 :uses: DEF-transformation_log, DEF-control_records
 
 At the end of every phase the workspace SHALL hold a complete, self-sufficient, human-readable record of everything done
-to its files so far: whole whether or not any later phase ever runs, and extended by each phase through its own work. A
-phase not yet run SHALL read as the workspace not having advanced, never as a record incomplete.
+to its files so far: whole whether or not any later phase ever runs, extended by each phase through its own work, a
+phase not yet run reading as the workspace not having advanced, never as a record incomplete.
 :::
 
 :::{rul} Each phase writes only its own records
@@ -1630,8 +1639,8 @@ phase not yet run SHALL read as the workspace not having advanced, never as a re
 :aliases: archive-artifact-ownership-1
 :uses: DEF-control_records
 
-Each numbered record SHALL be written by the phase whose number it carries, and by no other. A phase MAY create,
-rewrite or extend its own records across its runs; it SHALL read every other phase's records read-only.
+Each numbered record SHALL be written by the phase whose number it carries, and by no other: a phase MAY create, rewrite
+or extend its own records across its runs, and reads every other phase's records read-only.
 :::
 
 :::{rul} An earlier record is carried forward by copying it
@@ -1643,8 +1652,8 @@ rewrite or extend its own records across its runs; it SHALL read every other pha
 :aliases: archive-no-cross-phase-write-1
 :refines: RUL-phase_writes_own_records
 
-To carry an earlier phase's record forward, a phase SHALL copy it to a record of its own and extend the copy, leaving
-the earlier one untouched; it SHALL NOT derive an earlier phase's history again.
+To carry an earlier phase's record forward, a phase SHALL copy it to a record of its own and extend the copy — leaving
+the earlier one untouched, and never deriving an earlier phase's history again.
 :::
 
 :::{rul} Finalize only reads and records
@@ -1656,8 +1665,8 @@ the earlier one untouched; it SHALL NOT derive an earlier phase's history again.
 :aliases: archive-finalize-nondestructive-1
 :uses: DEF-finalize, DEF-archival_package
 
-Finalize SHALL change nothing in the workspace's media, its other records or the library: it SHALL read the record that
-already stands at the end of geotag and write the package from it.
+Finalize SHALL change nothing in the workspace's media, its other records or the library, only reading the record that
+already stands at the end of geotag and writing the package from it.
 :::
 
 :::{rul} What the package holds
@@ -1696,8 +1705,8 @@ each item's hash, so its integrity can be checked later.
 :uses: DEF-transformation_log
 
 A photo's entry in the log SHALL gather the steps of every phase it passes through and be whole through the latest of
-them; each phase SHALL only append its own steps, never rewrite an earlier one. The latest phase's log SHALL be the full
-record; each earlier log stays its own phase's.
+them, each phase only appending its own steps, never rewriting an earlier one — so the latest phase's log is the full
+record, and each earlier log stays its own phase's.
 :::
 
 :::{rul} The log is keyed by fingerprint
@@ -1708,8 +1717,17 @@ record; each earlier log stays its own phase's.
 :aliases: log-keyed-by-fingerprint-1
 :uses: DEF-transformation_log, DEF-fingerprint
 
-The log SHALL key each photo's entry by its fingerprint and carry the chain of names and places it passed through. A
-file of no media class SHALL have no entry.
+The log SHALL key each photo's entry by its fingerprint and carry the chain of names and places it passed through.
+:::
+
+:::{rul} A file of no media class has no log entry
+:id: RUL-no_log_entry_for_other
+:status: ruled
+:criticality: low
+:verify: required
+:refines: RUL-log_keyed_by_fingerprint
+
+A file of no media class SHALL have no entry in the log.
 :::
 
 :::{rul} A step names the decision behind it
@@ -1770,8 +1788,8 @@ Anything beyond that MAY be pruned.
 :aliases: log-fail-if-insufficient-1
 :refines: RUL-history_retained
 
-A phase whose kept history cannot rebuild a photo's journey through it SHALL fail, or mark its record plainly partial;
-it SHALL NOT write a log that looks whole but reflects only the last run.
+A phase whose kept history cannot rebuild a photo's journey through it SHALL fail, or mark its record plainly partial —
+never writing a log that looks whole but reflects only the last run.
 :::
 
 :::{def} The workspace database
@@ -1802,8 +1820,18 @@ successful run.
 :aliases: db-single-workspace-1
 :uses: DEF-workspace_database, DEF-library
 
-A workspace SHALL hold exactly one database of record, and the library none. Any other database a phase keeps SHALL be
-scratch: holding no decision and no history, safe to delete at any time, and neither journalled nor archived.
+A workspace SHALL hold exactly one database of record, and the library none.
+:::
+
+:::{rul} Any other database is scratch
+:id: RUL-other_databases_scratch
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-one_database
+
+Any database a phase keeps besides the database of record SHALL be scratch: holding no decision and no history, safe to
+delete at any time, and neither journalled nor archived.
 :::
 
 :::{rul} The database is part of the record
@@ -1828,8 +1856,18 @@ workspace as a cache would be.
 :uses: DEF-workspace_database
 :refines: RUL-phase_writes_own_records
 
-Each phase SHALL write only its own part of the workspace database; no two phases SHALL write the same rows. Finalize
-SHALL only read it.
+Each phase SHALL write only its own part of the workspace database, no two phases writing the same rows.
+:::
+
+:::{rul} Finalize only reads the database
+:id: RUL-finalize_reads_database
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: incidental
+:refines: RUL-database_regions_disjoint
+
+Finalize SHALL only read the workspace database.
 :::
 
 :::{rul} Each phase keeps an image of the database at its end
@@ -1840,9 +1878,30 @@ SHALL only read it.
 :aliases: db-snapshot-per-phase-1, db-snapshot-skip-on-failure-1
 :uses: DEF-database_image, DEF-archival_package
 
-Each phase SHALL keep its database image, refreshed by each of its successful runs and left untouched by every other
-phase; a run that does not succeed SHALL leave the image as it was. An image SHALL never be read back as working data,
-and every image present SHALL be archived in the package.
+Each phase SHALL keep its database image, refreshed by each of its successful runs alone, and left untouched by every
+other phase and by a run that does not succeed.
+:::
+
+:::{rul} A database image is never read back as working data
+:id: RUL-image_never_working_data
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: none
+:omit_reason: no test asserts it (backlog item 3)
+:refines: RUL-database_image_each_phase
+
+A database image SHALL never be read back as working data.
+:::
+
+:::{rul} Every database image is archived
+:id: RUL-images_archived
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-database_image_each_phase
+
+Every database image present SHALL be archived in the package.
 :::
 
 :::{rul} An image is whole
@@ -1851,11 +1910,22 @@ and every image present SHALL be archived in the package.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: db-snapshot-consistent-1, db-snapshot-atomic-replace-1
+:aliases: db-snapshot-consistent-1
 :uses: DEF-database_image
 
-A database image SHALL be a consistent state of the database, never a copy torn mid-transaction; an interrupted
-capture SHALL leave the earlier image or the new one, whole.
+A database image SHALL be a consistent state of the database, never a copy torn mid-transaction.
+:::
+
+:::{rul} An interrupted capture leaves an image whole
+:id: RUL-image_capture_atomic
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: db-snapshot-atomic-replace-1
+:refines: RUL-database_image_whole
+
+An interrupted capture of a database image SHALL leave the earlier image or the new one, whole.
 :::
 
 ## 13. Merge: the library kept, the workspace sealed
