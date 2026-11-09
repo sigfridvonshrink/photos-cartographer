@@ -2219,11 +2219,21 @@ leave no file under that name, or the complete one — never part of one.
 :criticality: low
 :verify: required
 :aliases: atomic-crossfs-temp-sweep-1
-:uses: DEF-merge, DEF-library
+:uses: DEF-merge, DEF-library, RUL-temp_name_own
 :refines: RUL-cross_fs_all_or_nothing
 
-A temporary copy SHALL bear a name of its own, which no photo bears. Merge SHALL clear, as its execution starts, the
-temporary copies an interrupted merge left in the folders it places into, and record how many.
+Merge SHALL clear, as its execution starts, the temporary copies an interrupted merge left in the folders it places
+into, and record how many.
+:::
+
+:::{rul} A temporary copy bears a name no photo bears
+:id: RUL-temp_name_own
+:status: seed
+:criticality: low
+:verify: incidental
+:refines: RUL-cross_fs_all_or_nothing
+
+A temporary copy SHALL bear a name of its own, which no photo bears.
 :::
 
 :::{rul} A failed operation leaves its file as it was

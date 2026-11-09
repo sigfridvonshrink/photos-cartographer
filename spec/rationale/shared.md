@@ -713,7 +713,7 @@ crosses into it. Checking every run, not once, catches a volume mounted into the
 :::{rat} A temporary copy left behind is debris
 :id: RAT-temps_are_debris
 :status: seed
-:justifies: RUL-crash_temps_cleared
+:justifies: RUL-crash_temps_cleared, RUL-temp_name_own
 
 Merge holds the library's lock, so a temporary copy found in a folder it places into was left by an interrupted earlier
 merge, never one being written now. It bears no photo's name, so it does no harm either way: clearing it keeps the
