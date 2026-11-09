@@ -201,6 +201,7 @@ def test_prep_log_entries_are_derived_from_the_validated_plan(tmp_path, monkeypa
     assert prov and os.path.basename(prov[0]["to"]) in planned_names, (prov, sorted(planned_names))
 
 
+@pytest.mark.spec("RUL-no_log_entry_for_other", test="TST-prep_log-strays_and_other_not_logged")
 def test_strays_and_other_not_logged(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)

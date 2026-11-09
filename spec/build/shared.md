@@ -471,7 +471,7 @@ the files already right. Each phase's own consequences are in its spec: prep §1
 :::{bld} Where the decisions live, and how a change is traced
 :id: BLD-decision_records
 :status: ruled
-:realises: RUL-user_writes_decisions, RUL-cause_locatable, RUL-decision_revisable, RUL-withdrawal_undoes
+:realises: RUL-user_writes_decisions, RUL-cause_locatable, RUL-decision_revisable, RUL-withdrawal_undoes, RUL-decision_fields_laid_out
 
 The decisions SHALL live in the `user_decision` fields of geotag's `photos-21`, `photos-22` and `photos-23`, each field
 created by geotag and preserved across regeneration (geotag §9, §20); the decision editor SHALL write only those
@@ -530,7 +530,7 @@ re-seal does the same into `photos-35-archive-manifest.json` and `photos-35-arch
 :::{bld} The log's format, and the history it is made from
 :id: BLD-log_format
 :status: ruled
-:realises: RUL-log_entry_grows, RUL-log_keyed_by_fingerprint, RUL-log_cites_decisions, RUL-log_records_gps_reverts, RUL-log_human_readable, RUL-history_retained, RUL-partial_history_shown
+:realises: RUL-log_entry_grows, RUL-log_keyed_by_fingerprint, RUL-log_cites_decisions, RUL-log_records_gps_reverts, RUL-log_human_readable, RUL-history_retained, RUL-partial_history_shown, RUL-no_log_entry_for_other
 
 Each log SHALL be pretty-printed JSON with sorted keys, its `photos` keyed by the content fingerprint (`content_fingerprint`),
 each entry carrying where each phase left the photo — `prep_path`, written by prep and updated by every prep run;
@@ -558,7 +558,7 @@ but whose plan is missing (geotag §31).
 :::{bld} The database: its file, its writers, its images
 :id: BLD-workspace_database
 :status: ruled
-:realises: RUL-one_database, RUL-database_is_record, RUL-database_regions_disjoint, RUL-database_image_each_phase, RUL-database_image_whole
+:realises: RUL-one_database, RUL-database_is_record, RUL-database_regions_disjoint, RUL-database_image_each_phase, RUL-database_image_whole, RUL-other_databases_scratch, RUL-finalize_reads_database, RUL-image_never_working_data, RUL-images_archived, RUL-image_capture_atomic
 :uses: BLD-record_ownership
 
 The workspace database SHALL be SQLite, `photos-00-ingest.db` in `.photos-ingest/`. Its writers SHALL be: prep, of the
