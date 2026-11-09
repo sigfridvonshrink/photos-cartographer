@@ -39,8 +39,8 @@ gone can be told from one whose owner is running.
 :status: seed
 :realises: RUL-lock_through_the_run
 
-Each phase's `plan`, `dry-run` and `execute` SHALL run with the lock taken at start already held; none SHALL take it
-again or scope it on its own (prep §14, geotag §29).
+Each phase's `plan`, `dry-run` and `execute` SHALL run with the lock taken at start already held, none taking it again
+or scoping it on its own (prep §14, geotag §29).
 :::
 
 ## 2. A snapshot before changing, optionally
@@ -51,7 +51,7 @@ again or scope it on its own (prep §14, geotag §29).
 :realises: RUL-snapshot_optional, RUL-snapshot_off_by_default, RUL-required_snapshot_or_nothing, RUL-snapshot_per_plan
 
 The snapshot SHALL be a ZFS snapshot, configured by the `zfs` block of the workspace configuration,
-`photos-00-config.json`; with no `zfs` block, or one not enabled, none is taken. Its name SHALL carry the plan id.
+`photos-00-config.json`; with no `zfs` block, or one not enabled, none is taken. Its name carries the plan id.
 `snapshots_required` decides what a failed snapshot means: true, the run aborts before its first change; false, or the
 block not configured, it proceeds without one.
 :::
@@ -101,19 +101,27 @@ The setup command `init-library` (merge §4), run inside a workspace with an exp
 
 Two things SHALL be derived from the configuration: field-scoped fingerprints — the filename format, the camera-time and
 timezone policy, the GPX thresholds, the camera-group-key version, the snapshot policy, the folder-name set, the
-media-extension lists, and others — which drive staleness; and one SHA-256 of the whole file, for integrity and
-provenance, recorded in the archival manifest. The folder-set and media-extension fingerprints SHALL be among the
-dependencies of geotag's executable plan and of merge's plan.
+media-extension lists, and others — which drive staleness, the folder-set and media-extension fingerprints among the
+dependencies of geotag's executable plan and of merge's plan; and one SHA-256 of the whole file, for integrity and
+provenance, recorded in the archival manifest.
 :::
 
 :::{bld} The whole-file hash is in the executable plan's dependencies
 :id: BLD-whole_hash_in_the_plan
 :status: seed
-:realises: RUL-any_config_change_replans, RUL-costly_results_survive_unrelated_edits, RUL-times_survive_unrelated_config_edits
+:realises: RUL-any_config_change_replans
 
 The whole-file fingerprint SHALL be carried in the `depends_on` of geotag's executable plan (geotag §28, in the
-flattened dependency set of geotag §5) and of merge's plan, `config_fingerprint`, and each SHALL be refused when it no
-longer matches the file. The costly caches SHALL be keyed on their own areas instead: resolved UTC on the
+flattened dependency set of geotag §5) and of merge's plan, `config_fingerprint`, each plan refused when it no longer
+matches the file.
+:::
+
+:::{bld} The costly caches are keyed on their own areas
+:id: BLD-costly_caches_keyed_by_area
+:status: seed
+:realises: RUL-costly_results_survive_unrelated_edits, RUL-times_survive_unrelated_config_edits
+
+The costly caches SHALL be keyed on their own areas instead of the whole-file fingerprint: resolved UTC on the
 time-policy subset (geotag §22.1), the renames on the filename-format fingerprint.
 :::
 
@@ -122,8 +130,8 @@ time-policy subset (geotag §22.1), the renames on the filename-format fingerpri
 :status: seed
 :realises: RUL-any_config_change_replans
 
-Prep SHALL re-plan from the filesystem each run and guard execution with the whole-file hash; it SHALL keep no folder
-or extension fingerprint of its own.
+Prep SHALL re-plan from the filesystem each run and guard execution with the whole-file hash, keeping no folder or
+extension fingerprint of its own.
 :::
 
 :::{bld} The control directory is always `.photos-ingest/`
@@ -131,8 +139,8 @@ or extension fingerprint of its own.
 :status: seed
 :realises: RUL-control_directory_fixed
 
-The control directory SHALL be `.photos-ingest/` at the workspace root, in every workspace. No configuration key SHALL
-name it.
+The control directory SHALL be `.photos-ingest/` at the workspace root, in every workspace, no configuration key naming
+it.
 :::
 
 :::{bld} The configuration's keys
@@ -141,13 +149,14 @@ name it.
 :realises: DEF-config_areas, RUL-folder_names_not_roles, RUL-camera_classes_not_derivation, RUL-extension_one_class, RUL-folder_found_by_role, RUL-config_lists_extensions, RUL-unlisted_extension_other
 
 The areas SHALL be, at least: the `zfs` block and `snapshots_required` (§2 above);
-`camera_time_and_timezone_policy.device_groups`, with `phones` and `fixed_clock_cameras` (shared §6); `filename_timestamp_format`
-(shared §7); `gpx_root` and the GPX thresholds, such as `gpx_direct_match_max_seconds`, `gpx_interpolation_max_gap_seconds` and
-`gpx_interpolation_max_distance_meters` (shared §8); the camera-time policy flags, such as `single_anchor_auto_apply` and
-`multi_anchor_auto_apply` (geotag); `library_root` and merge's collision and placement policy (merge; shared §13.5); `folders`,
-a role→name map of the numbered managed folders `0-sources`…`6-photos-by-dest` (shared §5, prep §3), whose code finds each
-folder by its role; and `media_extensions`, mapping `image`, `raw` and `video` to lists of canonical extensions —
-lowercase, no leading dot (prep §6.1). `CAMERA_GROUP_KEY_VERSION` SHALL be a code constant, never a configuration field.
+`camera_time_and_timezone_policy.device_groups`, with `phones` and `fixed_clock_cameras` (shared §6);
+`filename_timestamp_format` (shared §7); `gpx_root` and the GPX thresholds, such as `gpx_direct_match_max_seconds`,
+`gpx_interpolation_max_gap_seconds` and `gpx_interpolation_max_distance_meters` (shared §8); the camera-time policy
+flags, such as `single_anchor_auto_apply` and `multi_anchor_auto_apply` (geotag); `library_root` and merge's collision
+and placement policy (merge; shared §13.5); `folders`, a role→name map of the numbered managed folders
+`0-sources`…`6-photos-by-dest` (shared §5, prep §3), whose code finds each folder by its role; and `media_extensions`,
+mapping `image`, `raw` and `video` to lists of canonical extensions — lowercase, no leading dot (prep §6.1).
+`CAMERA_GROUP_KEY_VERSION` is a code constant, never a configuration field.
 :::
 
 :::{bld} What validating the configuration checks
@@ -229,8 +238,16 @@ bands are unrelated to the numbered media folders `0-sources`…`6-photos-by-des
 :realises: RUL-not_inventoried, RUL-control_records_never_media, RUL-config_never_media, DEF-strays_folder, RUL-strays_never_processed
 
 Prep SHALL skip `.photos-ingest/`, `.photos-ingest-quarantine/` and `.git` as whole subtrees, every dot-prefixed file,
-and the strays folder `1-strays/` with all its `<plan-id>` subfolders (prep §3, §3.2). The strays of a run SHALL go to
-`1-strays/<plan-id>/`. Hidden dotfiles in a dump area SHALL be swept to the quarantine (prep §3, §15).
+and the strays folder `1-strays/` with all its `<plan-id>` subfolders (prep §3, §3.2), the strays of a run going to
+`1-strays/<plan-id>/`.
+:::
+
+:::{bld} Hidden files in a dump go to the quarantine
+:id: BLD-dump_dotfiles_quarantined
+:status: seed
+:realises: RUL-not_inventoried
+
+Hidden dotfiles in a dump area SHALL be swept to the quarantine (prep §3, §15).
 :::
 
 :::{bld} The plans' fixed paths
@@ -239,20 +256,27 @@ and the strays folder `1-strays/` with all its `<plan-id>` subfolders (prep §3,
 :realises: RUL-plan_at_fixed_place, RUL-no_plan_location_option, RUL-no_plan_no_run
 
 The plan and decision artifacts SHALL be prep's `photos-10-prep-plan.json`, geotag's `photos-21`, `photos-23` and
-`photos-24`, and merge's `photos-30-merge-plan.json`, in `.photos-ingest/`. Every phase's `plan` SHALL write its file
-there; `dry-run` and `execute` SHALL read it there; no command SHALL take a path flag for it.
+`photos-24`, and merge's `photos-30-merge-plan.json`, in `.photos-ingest/`: every phase's `plan` writes its file there,
+`dry-run` and `execute` read it there, and no command takes a path flag for it.
 :::
 
 :::{bld} A superseded plan goes aside under `-NNN`
 :id: BLD-plan_backups
 :status: seed
-:realises: RUL-replanning_keeps_the_prior, RUL-unchanged_replan_writes_nothing
+:realises: RUL-replanning_keeps_the_prior
 
 A differing re-plan SHALL first rename the existing artifact under the shared incremental `-NNN` suffix (shared §7.2) —
-`photos-10-prep-plan-001.json`, say — and announce where; byte-identical content SHALL write nothing and back up
-nothing. A plan carrying a fresh plan id differs every run, so re-planning it always preserves the prior plan. The
-per-run journals SHALL keep their `journal-<run_id>.json` naming; this convention governs the plan and decision
-artifacts.
+`photos-10-prep-plan-001.json`, say — and announce where. A plan carrying a fresh plan id differs every run, so
+re-planning it always preserves the prior plan. The per-run journals keep their `journal-<run_id>.json` naming; this
+convention governs the plan and decision artifacts.
+:::
+
+:::{bld} A byte-identical re-plan writes nothing
+:id: BLD-identical_replan_writes_nothing
+:status: seed
+:realises: RUL-unchanged_replan_writes_nothing
+
+A re-plan whose content is byte-identical to the saved artifact SHALL write nothing and back up nothing.
 :::
 
 :::{bld} The handoff's two hashes
@@ -260,10 +284,10 @@ artifacts.
 :status: seed
 :realises: RUL-handoff_verified_by_content, RUL-run_only_refresh_restales_nothing
 
-The handoff SHALL be `photos-11-handoff.json` in `.photos-ingest/`. Geotag SHALL recompute its `content_fingerprint` —
-the content-scoped staleness key prep stamps on it (prep §16.2) — and compare it with the value in geotag's dependency
-block (geotag §4). Its whole-file SHA-256 SHALL be kept as an integrity and archival hash (shared §13), never the
-dependency check.
+The handoff SHALL be `photos-11-handoff.json` in `.photos-ingest/`, which geotag checks by its `content_fingerprint` —
+the content-scoped staleness key prep stamps on it (prep §16.2) — recomputing it and comparing it with the value in
+geotag's dependency block (geotag §4). Its whole-file SHA-256 is kept as an integrity and archival hash (shared §13),
+never the dependency check.
 :::
 
 :::{bld} The workspace's top level
@@ -272,7 +296,7 @@ dependency check.
 :realises: RUL-top_level_only_managed, RUL-first_dump_at_top_level, RUL-structure_built_once, RUL-only_prep_builds_structure
 
 The top level of an initialized workspace SHALL hold exactly the managed folders `0-sources`…`6-photos-by-dest` and
-`.photos-ingest/`, `.photos-ingest-quarantine/`, `.git` and other dotfiles and dot-directories; the inbox SHALL be
+`.photos-ingest/`, `.photos-ingest-quarantine/`, `.git` and other dotfiles and dot-directories, the inbox being
 `0-sources/`. Prep applies the guard (prep §3.1), geotag at startup (geotag §13), merge as its precondition 0a (merge
 §3).
 :::
@@ -292,13 +316,28 @@ item 7, geotag §13, merge precondition 0c.
 :::{bld} `camera_group_key` and its version
 :id: BLD-camera_group_key
 :status: seed
-:realises: DEF-camera_group, RUL-prep_derives_camera_group, RUL-geotag_reuses_camera_group, RUL-camera_group_derivation_versioned, RUL-known_when_classified
+:realises: DEF-camera_group, RUL-prep_derives_camera_group, RUL-geotag_reuses_camera_group
 
 The key SHALL be `camera_group_key`, computed by prep from the serial, make, model and owner fields and emitted in both
-the handoff manifest and SQLite (prep §12); geotag consumes and classifies it (geotag §16). Its derivation SHALL be
-versioned by `CAMERA_GROUP_KEY_VERSION`, part of the metadata-freshness and dependency fingerprints. A group SHALL be
-known when its key is listed under `camera_time_and_timezone_policy.device_groups` — `phones` (mobile) or
-`fixed_clock_cameras` (fixed-clock).
+the handoff manifest and SQLite (prep §12); geotag consumes and classifies it (geotag §16).
+:::
+
+:::{bld} `CAMERA_GROUP_KEY_VERSION`
+:id: BLD-camera_group_key_version
+:status: seed
+:realises: RUL-camera_group_derivation_versioned
+
+The derivation of `camera_group_key` SHALL be versioned by `CAMERA_GROUP_KEY_VERSION`, part of the metadata-freshness
+and dependency fingerprints.
+:::
+
+:::{bld} A camera group is known when it is listed
+:id: BLD-known_camera_group
+:status: seed
+:realises: RUL-known_when_classified
+
+A group SHALL be known when its key is listed under `camera_time_and_timezone_policy.device_groups` — `phones` (mobile)
+or `fixed_clock_cameras` (fixed-clock).
 :::
 
 ## 6. One filename format
@@ -309,9 +348,9 @@ known when its key is listed under `camera_time_and_timezone_policy.device_group
 :realises: RUL-one_filename_format, DEF-timestamp_name
 
 The format SHALL be the configuration key `filename_timestamp_format`, default `"%Y-%m-%d--%H-%M-%S"`, which gives a
-timestamp of the form `YYYY-MM-DD--HH-MM-SS`. Both phases SHALL read it; it takes part in the dependency cascade (shared
-§9) through the filename-format fingerprint, and a change to it restales prep's by-date organization and geotag's
-executable rename plan.
+timestamp of the form `YYYY-MM-DD--HH-MM-SS`. Both phases read it; it takes part in the dependency cascade (shared §9)
+through the filename-format fingerprint, and a change to it restales prep's by-date organization and geotag's executable
+rename plan.
 :::
 
 :::{bld} The `-NNN` suffix
@@ -359,12 +398,19 @@ when it is a managed folder, lies inside one, or contains one — the workspace 
 :::{bld} A track file
 :id: BLD-track_file
 :status: seed
-:realises: RUL-track_files_block_prep, DEF-tracks, RUL-track_file_left_in_place
+:realises: DEF-tracks
 
-A track file SHALL be a file named `*.gpx`, `*.kml`, `*.kmz`, `*.fit`, `*.tcx`, `*.nmea` or `*.igc`, in any case. Of these geotag reads
-only the `*.gpx` files beneath `gpx_root`. Prep SHALL raise one blocker for each it inventories, naming it, and leave it
-out of the plan (prep §3, §6.1); and execute SHALL raise the same blocker for one that appeared after planning (prep
-§14.3).
+A track file SHALL be a file named `*.gpx`, `*.kml`, `*.kmz`, `*.fit`, `*.tcx`, `*.nmea` or `*.igc`, in any case. Of
+these geotag reads only the `*.gpx` files beneath `gpx_root`.
+:::
+
+:::{bld} Prep's blocker for a track file
+:id: BLD-track_file_blocker
+:status: seed
+:realises: RUL-track_files_block_prep, RUL-track_file_left_in_place
+
+Prep SHALL raise one blocker for each track file it inventories, naming it, and leave it out of the plan (prep §3,
+§6.1); execute raises the same blocker for one that appeared after planning (prep §14.3).
 :::
 
 :::{bld} The GPX fingerprint
@@ -374,9 +420,9 @@ out of the plan (prep §3, §6.1); and execute SHALL raise the same blocker for 
 
 The GPX fingerprint SHALL be a SHA-256 over the resolved `gpx_root`, a version tag, and, in sorted order, each `*.gpx`
 file's path relative to the root and the SHA-256 of its bytes. An empty `gpx_root`, and a `gpx_root` that is not a
-directory, SHALL each give a fixed value of their own, the second with a warning. It SHALL be recorded as
-`gpx_fingerprint` in the `depends_on` of `photos-21-time-decisions.json`, `photos-22-gps-drift-validation.json`,
-`photos-23-gps-decisions.json` and `photos-24-executable-plan.json`, and checked before each is used.
+directory, each give a fixed value of their own, the second with a warning. It is recorded as `gpx_fingerprint` in the
+`depends_on` of `photos-21-time-decisions.json`, `photos-22-gps-drift-validation.json`, `photos-23-gps-decisions.json`
+and `photos-24-executable-plan.json`, and checked before each is used.
 :::
 
 ## 8. Nothing used once what it came from has changed
@@ -391,14 +437,21 @@ states in full: prep §5; geotag §3–§6; merge §10.3. The cascade consumes m
 hashes, and the field-scoped configuration fingerprints (shared §4.2) that keep staleness surgical.
 :::
 
-:::{bld} How a fingerprint and a hash are computed
+:::{bld} How a fingerprint is computed
 :id: BLD-fingerprint_and_hash
 :status: seed
-:realises: DEF-fingerprint, DEF-hash, RUL-fingerprint_survives_mutation, RUL-hash_detects_any_change, RUL-hash_is_the_dependency_check
+:realises: DEF-fingerprint, RUL-fingerprint_survives_mutation
 
 A photo's fingerprint SHALL be ImageMagick `identify`'s signature — a SHA-256 of the normalized pixel stream; a video's,
-the `ffmpeg` stream MD5 (prep §9). A hash SHALL be a SHA-256 over the exact bytes of a numbered JSON record or the
-configuration.
+the `ffmpeg` stream MD5 (prep §9).
+:::
+
+:::{bld} How a hash is computed
+:id: BLD-hash
+:status: seed
+:realises: DEF-hash, RUL-hash_detects_any_change, RUL-hash_is_the_dependency_check
+
+A hash SHALL be a SHA-256 over the exact bytes of a numbered JSON record or the configuration.
 :::
 
 ## 9. One loop across the phases
