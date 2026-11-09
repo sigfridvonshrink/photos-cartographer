@@ -713,7 +713,7 @@ original, having first removed a `<file>_exiftool_tmp` an interrupted write left
 :::{bld} The cross-filesystem copy and its sweep
 :id: BLD-cross_fs_temp
 :status: seed
-:realises: RUL-cross_fs_all_or_nothing, RUL-crash_temps_cleared
+:realises: RUL-cross_fs_all_or_nothing, RUL-crash_temps_cleared, RUL-temp_name_own
 
 `_move_cross_fs_no_clobber` SHALL copy to a `.tmp-xdev-<random>.part` file in the destination directory, fingerprint
 it against the planned content, sync it, rename it into its place without overwriting, and then remove the source.

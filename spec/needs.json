@@ -1016,7 +1016,8 @@
      "pre_template": null,
      "realises": [
       "RUL-crash_temps_cleared",
-      "RUL-cross_fs_all_or_nothing"
+      "RUL-cross_fs_all_or_nothing",
+      "RUL-temp_name_own"
      ],
      "realises_back": [],
      "refines": [],
@@ -14892,7 +14893,8 @@
      "is_modified": false,
      "jinja_content": false,
      "justifies": [
-      "RUL-crash_temps_cleared"
+      "RUL-crash_temps_cleared",
+      "RUL-temp_name_own"
      ],
      "justifies_back": [],
      "layout": null,
@@ -17816,7 +17818,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "A temporary copy SHALL bear a name of its own, which no photo bears. Merge SHALL clear, as its execution starts, the\ntemporary copies an interrupted merge left in the folders it places into, and record how many.",
+     "content": "Merge SHALL clear, as its execution starts, the temporary copies an interrupted merge left in the folders it places\ninto, and record how many.",
      "criticality": "low",
      "docname": "intent/shared",
      "doctype": ".md",
@@ -17881,7 +17883,8 @@
      "upholds_back": [],
      "uses": [
       "DEF-library",
-      "DEF-merge"
+      "DEF-merge",
+      "RUL-temp_name_own"
      ],
      "uses_back": [],
      "verifies": [],
@@ -17950,7 +17953,8 @@
       "RUL-operations_atomic"
      ],
      "refines_back": [
-      "RUL-crash_temps_cleared"
+      "RUL-crash_temps_cleared",
+      "RUL-temp_name_own"
      ],
      "section_name": "15. Nothing overwritten, nothing left half-done",
      "sections": [
@@ -18923,7 +18927,7 @@
       "RAT-safe_at_each_change"
      ],
      "layout": null,
-     "lineno": 2229,
+     "lineno": 2239,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -27045,6 +27049,89 @@
       "TST-no_clobber-execute_time_no_clobber_preserves_existing"
      ],
      "verify": "required"
+    },
+    "RUL-temp_name_own": {
+     "aliases": null,
+     "anti": null,
+     "arch": {},
+     "assumes": [],
+     "assumes_back": [],
+     "choice_kind": null,
+     "completion": null,
+     "constraints": [],
+     "constraints_error": null,
+     "constraints_passed": true,
+     "constraints_results": {},
+     "content": "A temporary copy SHALL bear a name of its own, which no photo bears.",
+     "criticality": "low",
+     "docname": "intent/shared",
+     "doctype": ".md",
+     "duration": null,
+     "excepts": [],
+     "excepts_back": [],
+     "external_css": "external_link",
+     "external_url": null,
+     "follows_from": [],
+     "follows_from_back": [],
+     "forced": null,
+     "has_dead_links": false,
+     "has_forbidden_dead_links": false,
+     "id": "RUL-temp_name_own",
+     "illustrates": [],
+     "illustrates_back": [],
+     "is_external": false,
+     "is_import": false,
+     "is_modified": false,
+     "jinja_content": false,
+     "justifies": [],
+     "justifies_back": [
+      "RAT-temps_are_debris"
+     ],
+     "layout": null,
+     "lineno": 2229,
+     "links": [],
+     "links_back": [],
+     "modifications": 0,
+     "nodeid": null,
+     "omit_reason": null,
+     "parent_need": null,
+     "parent_needs": [],
+     "parent_needs_back": [],
+     "parts": {},
+     "post_content": null,
+     "post_template": null,
+     "pre_content": null,
+     "pre_template": null,
+     "realises": [],
+     "realises_back": [
+      "BLD-cross_fs_temp"
+     ],
+     "refines": [
+      "RUL-cross_fs_all_or_nothing"
+     ],
+     "refines_back": [],
+     "section_name": "15. Nothing overwritten, nothing left half-done",
+     "sections": [
+      "15. Nothing overwritten, nothing left half-done",
+      "Shared — what every phase guarantees"
+     ],
+     "signature": null,
+     "status": "seed",
+     "style": null,
+     "tags": [],
+     "template": null,
+     "title": "A temporary copy bears a name no photo bears",
+     "type": "rul",
+     "type_name": "Rule",
+     "upholds": [],
+     "upholds_back": [],
+     "uses": [],
+     "uses_back": [
+      "RUL-crash_temps_cleared"
+     ],
+     "verifies": [],
+     "verifies_back": [],
+     "verify": "incidental"
     },
     "RUL-top_level_only_managed": {
      "aliases": "struct-base-folders-only-1",
@@ -42146,7 +42233,7 @@
      "verify": null
     }
    },
-   "needs_amount": 530,
+   "needs_amount": 531,
    "needs_schema": {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "properties": {
