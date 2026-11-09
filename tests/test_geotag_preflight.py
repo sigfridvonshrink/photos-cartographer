@@ -450,3 +450,26 @@ def test_a_missing_setting_stops_every_phase(tmp_path, monkeypatch):
     assert json.loads(cfg_p.read_text()) == cfg                     # never filled in
     for blockers in (_pf(ws)[0], merge.MergeWorkflow(str(ws)).preflight()[0]):
         assert any("missing setting" in b and "gpx_extrapolation_max_seconds" in b for b in blockers), blockers
+
+
+@pytest.mark.spec("RUL-config_no_unknown_settings", test="TST-geotag_preflight-an_unknown_setting_stops_every_phase")
+@pytest.mark.parametrize("edit, named", [
+    (lambda c: c["media_extensions"].__setitem__("audio", ["mp3"]), "media_extensions.audio"),   # a class of one's own
+    (lambda c: c["folders"].__setitem__("extra", "9-extra"), "folders.extra"),                     # a role of one's own
+    (lambda c: c["zfs"].__setitem__("snapshot_required", True), "zfs.snapshot_required"),          # a misspelling
+    (lambda c: c.__setitem__("gpx_rot", "/tmp"), "gpx_rot"),                                       # at the top level
+])
+def test_an_unknown_setting_stops_every_phase(tmp_path, monkeypatch, edit, named):
+    """A setting cartographer does not know is never ignored: prep's load, geotag and merge each stop,
+    naming it — the user would otherwise believe it took effect."""
+    import photos_3_merge as merge
+    ws = _ws(tmp_path)
+    cfg_p = ws / ".photos-ingest" / "photos-00-config.json"
+    cfg = json.loads(cfg_p.read_text())
+    edit(cfg)
+    cfg_p.write_text(json.dumps(cfg))
+    with pytest.raises(ValueError) as ei:
+        utils.load_or_seed_config(str(ws))                          # prep's path
+    assert named in str(ei.value) and "does not know" in str(ei.value)
+    for blockers in (_pf(ws)[0], merge.MergeWorkflow(str(ws)).preflight()[0]):
+        assert any("does not know" in b and named in b for b in blockers), blockers

@@ -115,10 +115,10 @@ which prep skips wholesale (§5 of the shared contract) — never an in-code glo
 :::{bld} Every phase reads the configuration through one loader
 :id: BLD-config_loader
 :status: ruled
-:realises: RUL-one_configuration, RUL-config_complete
+:realises: RUL-one_configuration, RUL-config_complete, RUL-config_no_unknown_settings
 
 Every phase SHALL read the configuration through `load_config`, which refuses a file lacking any setting of the built-in
-template, naming each with its default, and otherwise replaces the in-code `CONFIG` with the file wholesale, the
+template, naming each with its default, or holding one the template lacks, and otherwise replaces the in-code `CONFIG` with the file wholesale, the
 extension-to-class map rebuilt from it. Seed defaults supplied by a deployment are refused the same way.
 :::
 

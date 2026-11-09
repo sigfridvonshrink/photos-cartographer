@@ -300,6 +300,17 @@ phase keeping settings of its own, and no setting that governs a run coming from
 A configuration that lacks a setting SHALL stop the run, naming the setting — never filled from the program's defaults.
 :::
 
+:::{rul} A configuration holding an unknown setting stops the run
+:id: RUL-config_no_unknown_settings
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-one_configuration
+
+A configuration holding a setting cartographer does not know SHALL stop the run, naming the setting.
+:::
+
 :::{rul} Prep seeds the configuration once
 :id: RUL-config_seeded_once
 :status: ruled
@@ -469,8 +480,8 @@ workspace, no setting moving it.
 
 The configuration sets, at least: the snapshot policy; which camera groups are phones and which have fixed clocks; the
 filename timestamp format; where the tracks are and the thresholds for matching photos to them; the camera-time policy;
-the library and how merge places files in it; the managed folders' names; and which extensions are which class of
-media. Each area's detail is in the items of its own section.
+the library and how merge places files in it; the managed folders' names; the names of the development subfolders;
+and which extensions are which class of media. Each area's detail is in the items of its own section.
 :::
 
 :::{rul} The user names the folders; their roles are fixed
