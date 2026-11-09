@@ -1139,6 +1139,15 @@ def detect_zfs_dataset(path: str):
     except Exception:
         return None
 
+def zfs_dataset(ws: str, *, target_path=None, dataset_key: str = "workspace"):
+    """The ZFS dataset a snapshot of `target_path` (default: the workspace) would be taken of — pinned by
+    `zfs.datasets.<dataset_key>`, or detected from the path when that is "auto" — or None if there is
+    none. Takes nothing."""
+    zfs = CONFIG.get("zfs") or {}
+    ds_cfg = (zfs.get("datasets") or {}).get(dataset_key, "auto")
+    return detect_zfs_dataset(target_path or ws) if ds_cfg == "auto" else ds_cfg
+
+
 def take_zfs_snapshot(ws: str, snapshot_id: str, label: str, *, target_path=None,
                       dataset_key: str = "workspace"):
     """Take an optional pre-mutation ZFS snapshot — shared by prep (§14.3, workspace), geotag
@@ -1161,8 +1170,7 @@ def take_zfs_snapshot(ws: str, snapshot_id: str, label: str, *, target_path=None
         return None
     required = bool(zfs.get("snapshots_required", False))
     detect_path = target_path or ws
-    ds_cfg = (zfs.get("datasets") or {}).get(dataset_key, "auto")
-    dataset = detect_zfs_dataset(detect_path) if ds_cfg == "auto" else ds_cfg
+    dataset = zfs_dataset(ws, target_path=target_path, dataset_key=dataset_key)
     if not dataset:
         return {"required": required, "snapshot_name": None, "command": None, "exit_code": None,
                 "stdout": "", "stderr": f"ZFS enabled but no dataset found for {detect_path}", "ok": False}

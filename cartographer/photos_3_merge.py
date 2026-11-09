@@ -46,7 +46,7 @@ from .photos_utils import (
     folders_fingerprint, media_extensions_fingerprint,
     verify_json_dependency, json_dependency, write_json_artifact, write_versioned_json, is_library, write_library_marker,
     library_marker_path, allocate_suffix, suffix_root, max_suffix, ContentHasher, WorkspaceCache,
-    journal_path, take_zfs_snapshot, _move_no_clobber, get_imagemagick_version, write_db_snapshot, reseal_archival_package,
+    journal_path, take_zfs_snapshot, zfs_dataset, _move_no_clobber, get_imagemagick_version, write_db_snapshot, reseal_archival_package,
     write_sealed_marker, likely_new_dump, entries_not_carried, prep_log_path, WorkspaceLock, LibraryLock, XDEV_TMP_PREFIX, XDEV_TMP_SUFFIX,
     workspace_volume_error,
 )
@@ -778,7 +778,7 @@ class MergeWorkflow:
         return out
 
     def execute_plan(self, ws, library_root, jobs, now_iso, execution_id):
-        """Apply photos-30 after revalidating its dependencies, taking the optional library snapshot,
+        """Apply photos-30 after revalidating its dependencies, taking the optional snapshots,
         moving each file (concurrent), journaling confirmed completions (single-writer, main thread),
         and writing photos-31-merge-summary.json. Returns the result dict (status no_plan / rejected /
         success / partial)."""
@@ -791,17 +791,20 @@ class MergeWorkflow:
         if stale:
             return {"status": "rejected", "plan_id": plan.get("plan_id"), "stale": stale}
 
-        # Pre-mutation snapshot of the LIBRARY volume (§10.3 step 3), labelled "merge". A required
-        # snapshot that cannot be taken aborts before any placement; the record goes into the summary.
-        snapshot = take_zfs_snapshot(ws, plan["plan_id"], "merge",
-                                     target_path=library_root, dataset_key="library")
-        if snapshot is not None and snapshot["required"] and not snapshot["ok"]:
-            reason = f"required ZFS pre-mutation snapshot of the library failed: {snapshot['stderr']}"
-            summary = self._build_summary(ws, plan, library_root, [], snapshot, "rejected",
-                                          now_iso, execution_id, jobs, extra_failures=[reason])
-            write_json_artifact(merge_summary_path(ws), summary)
-            return {"status": "rejected", "plan_id": plan.get("plan_id"), "stale": [reason],
-                    "snapshot": snapshot}
+        # Pre-mutation snapshots (§10.3 step 3; shared contract §2), labelled "merge": the workspace, and
+        # the library beside it — merge removes what it places from the workspace, so a snapshot of the
+        # library alone, rolled back, would lose those photos. A required snapshot that cannot be taken
+        # aborts before any placement; an unrequired one is warned and skipped. Recorded in the summary.
+        snapshot, problem = self._take_snapshots(ws, plan["plan_id"], library_root)
+        if problem:
+            if snapshot["required"]:
+                reason = f"required ZFS pre-mutation snapshot failed: {problem}"
+                summary = self._build_summary(ws, plan, library_root, [], snapshot, "rejected",
+                                              now_iso, execution_id, jobs, extra_failures=[reason])
+                write_json_artifact(merge_summary_path(ws), summary)
+                return {"status": "rejected", "plan_id": plan.get("plan_id"), "stale": [reason],
+                        "snapshot": snapshot}
+            get_reporter().warn(f"Warning: {problem}")
 
         # Sweep crash-orphaned cross-fs copy temps (<XDEV_TMP_PREFIX>*<XDEV_TMP_SUFFIX>) left by a
         # prior INTERRUPTED run from the dirs this plan targets. Safe: the library lock makes concurrent
@@ -968,6 +971,40 @@ class MergeWorkflow:
                              "finished_at": finished_at or now_iso, "jobs": jobs,
                              "orphan_temps_swept": orphans_swept},
         }
+
+    def _take_snapshots(self, ws, plan_id, library_root):
+        """Merge's pre-mutation snapshots: the workspace, and the library too where it can be snapshotted
+        — never the library alone (shared contract §2, RUL-merge_snapshots_library and
+        RUL-no_library_only_snapshot). Returns (record, problem): record is None when ZFS is off, else
+        {required, workspace, library} with each side's take_zfs_snapshot record (the library's the
+        workspace's own when both are one dataset; None when not taken); problem is None, or why a
+        snapshot the run wanted is missing — fatal when required, a warning otherwise."""
+        zfs = CONFIG.get("zfs") or {}
+        if not zfs.get("enabled", False):
+            return None, None
+        rec = {"required": bool(zfs.get("snapshots_required", False)), "workspace": None, "library": None}
+        ws_ds = zfs_dataset(ws)
+        lib_ds = zfs_dataset(ws, target_path=library_root, dataset_key="library")
+        if not ws_ds:
+            return rec, (f"no ZFS dataset found for the workspace {ws}; merge takes no snapshot of the "
+                         "library alone, so this merge has no rollback point")
+        if not lib_ds and rec["required"]:
+            return rec, f"no ZFS dataset found for the library {library_root}"
+        rec["workspace"] = take_zfs_snapshot(ws, plan_id, "merge")
+        if not rec["workspace"]["ok"]:
+            return rec, (f"the workspace snapshot failed ({rec['workspace']['stderr']}); merge takes no "
+                         "snapshot of the library alone, so this merge has no rollback point")
+        if not lib_ds:
+            return rec, (f"no ZFS dataset found for the library {library_root}; the snapshot covers the "
+                         "workspace only")
+        if lib_ds == ws_ds:
+            rec["library"] = rec["workspace"]                     # one dataset: one snapshot covers both
+            return rec, None
+        rec["library"] = take_zfs_snapshot(ws, plan_id, "merge", target_path=library_root,
+                                           dataset_key="library")
+        if not rec["library"]["ok"]:
+            return rec, f"the library snapshot failed ({rec['library']['stderr']})"
+        return rec, None
 
     def _sweep_orphan_temps(self, plan, library_root):
         """Remove crash-orphaned cross-fs copy temps (<XDEV_TMP_PREFIX>*<XDEV_TMP_SUFFIX>) from the

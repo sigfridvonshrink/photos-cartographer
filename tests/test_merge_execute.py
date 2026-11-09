@@ -291,16 +291,41 @@ def test_merge_only_inspects_specific_collision_target_never_rescans_library(tmp
     assert not any(os.path.join("Spain", "q.jpg") in p for p in seen)  # other-dir file untouched
 
 
+def _zfs(monkeypatch, ws, *, required=False, datasets=("ws", "lib"), fail=()):
+    """Turn snapshots on in the workspace's configuration — before `plan`, which the configuration is a
+    dependency of — with the workspace on dataset `datasets[0]` and the library on `datasets[1]` (None:
+    not snapshottable), and fake `zfs snapshot`, failing for the datasets named in `fail`. Returns the
+    list of datasets snapshotted, in order."""
+    taken = []
+    cfg_path = utils.config_path(str(ws))
+    cfg = json.load(open(cfg_path))
+    cfg["zfs"] = dict(cfg.get("zfs") or {}, enabled=True, snapshots_required=required)
+    json.dump(cfg, open(cfg_path, "w"))
+
+    def dataset(ws, *, target_path=None, dataset_key="workspace"):
+        return datasets[0] if dataset_key == "workspace" else datasets[1]
+
+    def take(ws, plan_id, label, *, target_path=None, dataset_key="workspace"):
+        ds = dataset(ws, target_path=target_path, dataset_key=dataset_key)
+        ok = ds not in fail
+        if ok:
+            taken.append(ds)
+        return {"required": required, "ok": ok, "snapshot_name": f"{ds}@{label}-{plan_id}",
+                "command": "zfs snapshot", "exit_code": 0 if ok else 1, "stdout": "",
+                "stderr": "" if ok else "pool busy"}
+    monkeypatch.setattr(merge, "zfs_dataset", dataset)
+    monkeypatch.setattr(merge, "take_zfs_snapshot", take)
+    return taken
+
+
 @pytest.mark.spec("merge-snapshot-required-aborts-1", "merge-summary-final-status-values-1")
 def test_execute_required_snapshot_failure_aborts_before_any_placement(tmp_path, monkeypatch):
     """snapshots_required + the library pre-mutation snapshot fails -> abort BEFORE any move:
     status rejected (rc 2), nothing placed, source untouched in by-dest, library empty, workspace
     NOT sealed. The required-snapshot guard is the merge spec §10.3-step-3 promise."""
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    _zfs(monkeypatch, ws, required=True, fail={"lib"})
     assert merge._run_locked_workflow("plan", str(ws)) == 0
-    monkeypatch.setattr(merge, "take_zfs_snapshot", lambda *a, **k: {
-        "required": True, "ok": False, "snapshot_name": "lib@merge-x", "command": "zfs snapshot",
-        "exit_code": 1, "stdout": "", "stderr": "pool busy"})
     assert merge._run_locked_workflow("execute", str(ws)) == 2          # rejected -> rc 2
     assert open(_src(ws, "Trip", "a.jpg"), "rb").read() == _fp_bytes("A")  # source untouched
     assert not os.path.exists(os.path.join(str(lib), "Trip", "a.jpg"))  # nothing placed
@@ -484,6 +509,7 @@ def test_snapshot_and_revalidation_precede_the_parallel_move_pass(tmp_path, monk
                   [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
                    {"fp": "B", "dest": "Trip", "final_name": "b.jpg"},
                    {"fp": "C", "dest": "Spain", "final_name": "c.jpg"}])
+    _zfs(monkeypatch, ws)                                         # snapshots on, both sides snapshottable
     assert merge._run_locked_workflow("plan", str(ws)) == 0
 
     events = []
@@ -500,6 +526,7 @@ def test_snapshot_and_revalidation_precede_the_parallel_move_pass(tmp_path, monk
     def move(self, *a, **k):
         events.append("move"); return orig_move(self, *a, **k)
 
+    orig_snap = merge.take_zfs_snapshot
     monkeypatch.setattr(merge.MergeWorkflow, "revalidate_plan_deps", reval)
     monkeypatch.setattr(merge, "take_zfs_snapshot", snap)
     monkeypatch.setattr(merge.MergeWorkflow, "_move_file", move)
@@ -1046,3 +1073,35 @@ def test_failed_placement_is_done_by_the_next_run(tmp_path, monkeypatch):
     assert open(os.path.join(str(lib), "Trip", "a.jpg"), "rb").read() == _fp_bytes("A")
     assert not os.path.exists(_src(ws, "Trip", "a.jpg"))
     assert _summary(ws)["totals"]["blocked"] == 0
+
+
+@pytest.mark.spec("RUL-merge_snapshots_library", test="TST-merge_execute-merge_snapshots_the_workspace_and_the_library")
+@pytest.mark.parametrize("datasets, expected", [(("ws", "lib"), ["ws", "lib"]),     # both, each its own
+                                                (("pool", "pool"), ["pool"]),        # one dataset: one snapshot
+                                                (("ws", None), ["ws"])])             # library not snapshottable
+def test_merge_snapshots_the_workspace_and_the_library(tmp_path, monkeypatch, datasets, expected):
+    """Merge snapshots the workspace — it removes what it places from there — and the library beside
+    it where the library can be snapshotted; a library that cannot be only narrows the snapshot, with a
+    warning, and the merge proceeds."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    taken = _zfs(monkeypatch, ws, datasets=datasets)
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    assert taken == expected
+    assert os.path.exists(os.path.join(str(lib), "Trip", "a.jpg"))
+
+
+@pytest.mark.spec("RUL-no_library_only_snapshot", test="TST-merge_execute-merge_takes_no_snapshot_of_the_library_alone")
+@pytest.mark.parametrize("datasets, fail", [((None, "lib"), ()),          # workspace not snapshottable
+                                            (("ws", "lib"), {"ws"})])    # workspace snapshot fails
+def test_merge_takes_no_snapshot_of_the_library_alone(tmp_path, monkeypatch, capsys, datasets, fail):
+    """Without the workspace's snapshot, merge takes none of the library either — rolled back alone it
+    would lose the photos merge removed from the workspace. Not required, the merge warns that it has no
+    rollback point, and proceeds."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    taken = _zfs(monkeypatch, ws, datasets=datasets, fail=fail)
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    assert "lib" not in taken
+    assert "no rollback point" in capsys.readouterr().err
+    assert os.path.exists(os.path.join(str(lib), "Trip", "a.jpg"))
