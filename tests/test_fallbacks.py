@@ -104,8 +104,22 @@ def test_move_no_clobber_falls_back_to_cross_fs_on_exdev(tmp_path, monkeypatch):
     seen = _exdev_seam(monkeypatch)
     src = tmp_path / "s"; src.write_bytes(b"XDEV")
     dest = tmp_path / "d.jpg"
-    utils._move_no_clobber(str(src), str(dest))
+    utils._move_no_clobber(str(src), str(dest), cross_fs=True)
     assert dest.read_bytes() == b"XDEV" and not src.exists() and seen["n"] == 2
+
+
+@pytest.mark.spec("RUL-workspace_one_filesystem", test="TST-fallbacks-move_no_clobber_refuses_exdev_unless_cross_fs")
+def test_move_no_clobber_refuses_exdev_unless_cross_fs(tmp_path, monkeypatch):
+    """Only merge crosses filesystems: for prep and geotag (no cross_fs) a move that would cross one is
+    raised as a failure, never turned into a copy — the source stays and no temp is left."""
+    seen = _exdev_seam(monkeypatch)
+    src = tmp_path / "s"; src.write_bytes(b"XDEV")
+    dest = tmp_path / "d.jpg"
+    with pytest.raises(OSError) as ei:
+        utils._move_no_clobber(str(src), str(dest))
+    assert ei.value.errno == errno.EXDEV and seen["n"] == 1
+    assert src.read_bytes() == b"XDEV" and not dest.exists()
+    assert not list(tmp_path.glob(".tmp-xdev-*"))
 
 
 def test_move_no_clobber_cross_fs_preserves_on_existing_dest(tmp_path, monkeypatch):
@@ -113,7 +127,7 @@ def test_move_no_clobber_cross_fs_preserves_on_existing_dest(tmp_path, monkeypat
     src = tmp_path / "s"; src.write_bytes(b"NEW")
     dest = tmp_path / "d.jpg"; dest.write_bytes(b"KEEP")
     with pytest.raises(FileExistsError):
-        utils._move_no_clobber(str(src), str(dest))
+        utils._move_no_clobber(str(src), str(dest), cross_fs=True)
     assert dest.read_bytes() == b"KEEP" and src.read_bytes() == b"NEW"
     assert not list(tmp_path.glob(".tmp-xdev-*"))               # temp cleaned on the no-clobber abort
 

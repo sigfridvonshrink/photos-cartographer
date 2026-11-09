@@ -699,6 +699,17 @@ safe when it happens. A half-done move, a half-written file, or a failure record
 plan can see it.
 :::
 
+:::{rat} Within a workspace, every move is one rename
+:id: RAT-workspace_one_filesystem
+:status: seed
+:justifies: RUL-workspace_one_filesystem
+
+On one filesystem every move a workspace sees is a single rename: nothing to copy, nothing to verify, no temporary copy
+to leave behind. A workspace is one place made for one ingest, so nothing needs it spread over volumes; one that is
+would turn prep's ordinary moves into copies, slower and less safe. Only the library is a place apart, and only merge
+crosses into it. Checking every run, not once, catches a volume mounted into the workspace since the last.
+:::
+
 :::{rat} A temporary copy left behind is debris
 :id: RAT-temps_are_debris
 :status: seed

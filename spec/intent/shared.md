@@ -2111,7 +2111,23 @@ that operation.
 :aliases: atomic-operations-1
 
 A move, a rename or a placement SHALL be one indivisible operation where the filesystem allows, so that an interruption
-leaves the state before it or the state after, never part of either.
+leaves the state before it or the state after, never part of either. Where it cannot be one operation, an interruption
+SHALL leave the file whole under its old name, its new name or both — never under neither, never part of one.
+:::
+
+:::{rul} A workspace lies on one filesystem
+:id: RUL-workspace_one_filesystem
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-workspace
+:refines: RUL-operations_atomic
+
+A workspace SHALL lie on one filesystem: no folder in it — the control records' and the set-aside duplicates' among
+them — SHALL lie on another. Every run of every phase on a workspace SHALL check this before it reads or changes
+anything, and a workspace that spans filesystems SHALL stop the run, nothing changed, naming a folder that lies
+elsewhere. Prep and geotag SHALL therefore never move a file across filesystems: a move that would SHALL fail.
 :::
 
 :::{rul} A file rewritten in place is the old one or the new one
@@ -2137,7 +2153,7 @@ never a damaged one between them.
 :aliases: atomic-crossfs-equivalent-1
 :refines: RUL-operations_atomic
 
-Where a placement crosses filesystems and cannot be one operation, it SHALL be made equivalent: the file copied under a
+Where merge's placement into the library crosses filesystems and cannot be one operation, it SHALL be made equivalent: the file copied under a
 temporary name beside its place, verified, and only then given its name, if that is still free. An interruption SHALL
 leave no file under that name, or the complete one — never part of one.
 :::

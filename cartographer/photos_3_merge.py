@@ -48,6 +48,7 @@ from .photos_utils import (
     library_marker_path, allocate_suffix, suffix_root, max_suffix, ContentHasher, WorkspaceCache,
     journal_path, take_zfs_snapshot, _move_no_clobber, get_imagemagick_version, write_db_snapshot, reseal_archival_package,
     write_sealed_marker, likely_new_dump, entries_not_carried, prep_log_path, WorkspaceLock, LibraryLock, XDEV_TMP_PREFIX, XDEV_TMP_SUFFIX,
+    workspace_volume_error,
 )
 from .reporting import get_reporter, emit_next_step
 
@@ -762,7 +763,7 @@ class MergeWorkflow:
 
         try:
             os.makedirs(os.path.dirname(target) or ".", exist_ok=True)   # additive placement (§6)
-            _move_no_clobber(src_abs, target, verify=lambda s, t: self._verify_copy(t, fp))
+            _move_no_clobber(src_abs, target, verify=lambda s, t: self._verify_copy(t, fp), cross_fs=True)
             out.update({"final_kind": self._plan_kind(disp), "removed": True, "newly": True})
         except FileExistsError:                             # target appeared since planning
             if os.path.exists(target) and self._verify_fp(target, fp):
@@ -1195,6 +1196,10 @@ def do_init_library(path_arg, ws):
         if lock is None:
             return 1
         try:
+            vol_err = workspace_volume_error(ws)     # shared §15: a workspace lies on one filesystem
+            if vol_err:
+                reporter.error(vol_err)
+                return 2
             return _init_library_from_config(ws, reporter)
         finally:
             lock.release()
@@ -1227,6 +1232,10 @@ def do_init_library(path_arg, ws):
     if lock is None:
         return 1
     try:
+        vol_err = workspace_volume_error(ws)         # shared §15: a workspace lies on one filesystem
+        if vol_err:
+            reporter.error(vol_err)
+            return 2
         # Sealed means sealed (shared contract §13.7): recording the library is a config write, so a
         # sealed workspace refuses it whole — nothing blessed, nothing written.
         if is_sealed(ws):
@@ -1278,6 +1287,10 @@ def _run_locked_workflow(command, ws, jobs=None):
         return 1
     reporter.log(f"Lock acquired: {run_lock.lock_path}")
     try:
+        vol_err = workspace_volume_error(ws)         # shared §15: a workspace lies on one filesystem
+        if vol_err:
+            reporter.error(vol_err)
+            return 2
         wf = MergeWorkflow(ws)
         blockers, warnings, info = wf.preflight()
         for w in warnings:

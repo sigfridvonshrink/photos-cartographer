@@ -47,7 +47,8 @@ search use OpenStreetMap at runtime and degrade gracefully offline.
 
 ## 2. Initialize a workspace and run prep
 
-Pick an empty working folder (separate from your permanent library), drop your raw dump into it, and run
+Pick an empty working folder (separate from your permanent library) on a single filesystem — every
+phase refuses a workspace with a folder mounted from another volume — drop your raw dump into it, and run
 `prep`. The first run **initializes** the workspace: it creates the `0`–`6` folders and the
 `.photos-ingest/` control dir, moves your dump into `0-sources/`, and seeds the config.
 
