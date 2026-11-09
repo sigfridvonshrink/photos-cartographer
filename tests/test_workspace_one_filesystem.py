@@ -43,7 +43,8 @@ def _ws(tmp_path):
     return ws
 
 
-@pytest.mark.spec("RUL-workspace_one_filesystem", test="TST-workspace_one_filesystem-breaks_found_anywhere")
+@pytest.mark.spec("RUL-workspace_one_filesystem", "RUL-spanning_workspace_located",
+                  test="TST-workspace_one_filesystem-breaks_found_anywhere")
 def test_breaks_found_anywhere_without_descending(tmp_path, monkeypatch):
     ws = _ws(tmp_path)
     (ws / ".photos-ingest").mkdir()
@@ -57,7 +58,8 @@ def test_breaks_found_anywhere_without_descending(tmp_path, monkeypatch):
     assert "more than one filesystem" in err and os.path.join("0-sources", "trip") + "/" in err
 
 
-@pytest.mark.spec("RUL-workspace_one_filesystem", test="TST-workspace_one_filesystem-prep_refuses")
+@pytest.mark.spec("RUL-one_filesystem_checked_every_run", "RUL-spanning_workspace_stops",
+                  test="TST-workspace_one_filesystem-prep_refuses")
 @pytest.mark.parametrize("command", ["plan", "dry-run", "execute", "prune-quarantine"])
 def test_prep_refuses_a_workspace_on_two_volumes(tmp_path, monkeypatch, capsys, command):
     ws = tmp_path / "ws"; ws.mkdir()
@@ -73,7 +75,8 @@ def test_prep_refuses_a_workspace_on_two_volumes(tmp_path, monkeypatch, capsys, 
     assert not os.path.exists(utils.prep_plan_path(str(ws)))   # no plan written
 
 
-@pytest.mark.spec("RUL-workspace_one_filesystem", test="TST-workspace_one_filesystem-geotag_refuses")
+@pytest.mark.spec("RUL-one_filesystem_checked_every_run", "RUL-spanning_workspace_stops",
+                  test="TST-workspace_one_filesystem-geotag_refuses")
 @pytest.mark.parametrize("command", ["plan", "execute", "finalize"])
 def test_geotag_refuses_a_workspace_on_two_volumes(tmp_path, monkeypatch, capsys, command):
     ws = _ws(tmp_path)
@@ -87,7 +90,8 @@ def test_geotag_refuses_a_workspace_on_two_volumes(tmp_path, monkeypatch, capsys
     assert [n for n in sorted(os.listdir(ws)) if n != ".photos-ingest"] == before
 
 
-@pytest.mark.spec("RUL-workspace_one_filesystem", test="TST-workspace_one_filesystem-merge_refuses")
+@pytest.mark.spec("RUL-one_filesystem_checked_every_run", "RUL-spanning_workspace_stops",
+                  test="TST-workspace_one_filesystem-merge_refuses")
 @pytest.mark.parametrize("command", ["plan", "dry-run", "execute"])
 def test_merge_refuses_a_workspace_on_two_volumes(tmp_path, monkeypatch, capsys, command):
     ws = _ws(tmp_path)
@@ -98,7 +102,8 @@ def test_merge_refuses_a_workspace_on_two_volumes(tmp_path, monkeypatch, capsys,
     assert not os.path.exists(merge.merge_summary_path(str(ws)))
 
 
-@pytest.mark.spec("RUL-workspace_one_filesystem", test="TST-workspace_one_filesystem-init_library_refuses")
+@pytest.mark.spec("RUL-one_filesystem_checked_every_run", "RUL-spanning_workspace_stops",
+                  test="TST-workspace_one_filesystem-init_library_refuses")
 @pytest.mark.parametrize("with_path", [False, True])
 def test_init_library_in_a_workspace_on_two_volumes_refuses(tmp_path, monkeypatch, capsys, with_path):
     ws = _ws(tmp_path)

@@ -2111,8 +2111,19 @@ that operation.
 :aliases: atomic-operations-1
 
 A move, a rename or a placement SHALL be one indivisible operation where the filesystem allows, so that an interruption
-leaves the state before it or the state after, never part of either. Where it cannot be one operation, an interruption
-SHALL leave the file whole under its old name, its new name or both — never under neither, never part of one.
+leaves the state before it or the state after, never part of either.
+:::
+
+:::{rul} A move that cannot be one operation is never lost
+:id: RUL-split_move_never_lost
+:status: seed
+:criticality: high
+:anti: yes
+:verify: incidental
+:refines: RUL-operations_atomic
+
+Where a move cannot be one operation, an interruption SHALL leave the file whole under its old name, its new name or
+both — never under neither, never part of one.
 :::
 
 :::{rul} A workspace lies on one filesystem
@@ -2124,10 +2135,54 @@ SHALL leave the file whole under its old name, its new name or both — never un
 :uses: DEF-workspace
 :refines: RUL-operations_atomic
 
-A workspace SHALL lie on one filesystem: no folder in it — the control records' and the set-aside duplicates' among
-them — SHALL lie on another. Every run of every phase on a workspace SHALL check this before it reads or changes
-anything, and a workspace that spans filesystems SHALL stop the run, nothing changed, naming a folder that lies
-elsewhere. Prep and geotag SHALL therefore never move a file across filesystems: a move that would SHALL fail.
+A workspace SHALL lie on one filesystem, every folder in it — the control records' and the set-aside duplicates'
+among them — on the same one.
+:::
+
+:::{rul} The workspace's filesystem is checked each run
+:id: RUL-one_filesystem_checked_every_run
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-workspace_one_filesystem
+
+Every run of every phase on a workspace SHALL check, before it reads or changes anything, that the workspace lies on
+one filesystem — never taking it as whole because an earlier run found it so.
+:::
+
+:::{rul} A workspace spanning filesystems stops the run
+:id: RUL-spanning_workspace_stops
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-workspace_one_filesystem
+
+A workspace found to span filesystems SHALL stop the run with nothing changed.
+:::
+
+:::{rul} The stop names a folder that lies elsewhere
+:id: RUL-spanning_workspace_located
+:status: seed
+:criticality: med
+:verify: required
+:uses: RUL-cause_locatable
+:refines: RUL-spanning_workspace_stops
+
+The report of a workspace spanning filesystems SHALL name a folder in it that lies on another filesystem.
+:::
+
+:::{rul} Prep and geotag never move across filesystems
+:id: RUL-workspace_moves_one_filesystem
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-prep, DEF-geotag
+:refines: RUL-workspace_one_filesystem
+
+A move by prep or geotag that would cross filesystems SHALL fail, never be made a copy.
 :::
 
 :::{rul} A file rewritten in place is the old one or the new one

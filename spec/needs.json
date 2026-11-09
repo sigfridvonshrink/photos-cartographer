@@ -2908,6 +2908,7 @@
      "pre_template": null,
      "realises": [
       "RUL-operations_atomic",
+      "RUL-split_move_never_lost",
       "RUL-target_free_at_execute"
      ],
      "realises_back": [],
@@ -4338,6 +4339,10 @@
      "pre_content": null,
      "pre_template": null,
      "realises": [
+      "RUL-one_filesystem_checked_every_run",
+      "RUL-spanning_workspace_located",
+      "RUL-spanning_workspace_stops",
+      "RUL-workspace_moves_one_filesystem",
       "RUL-workspace_one_filesystem"
      ],
      "realises_back": [],
@@ -5768,7 +5773,8 @@
       "INV-change_only_what_needs",
       "RUL-geotag_gates",
       "RUL-geotag_rerunnable",
-      "RUL-prep_records_sort"
+      "RUL-prep_records_sort",
+      "RUL-workspace_moves_one_filesystem"
      ],
      "verifies": [],
      "verifies_back": [],
@@ -6302,7 +6308,8 @@
       "DEF-timestamp_name",
       "INV-change_only_what_needs",
       "RUL-prep_records_sort",
-      "RUL-prep_takes_no_decision"
+      "RUL-prep_takes_no_decision",
+      "RUL-workspace_moves_one_filesystem"
      ],
      "verifies": [],
      "verifies_back": [],
@@ -14107,7 +14114,8 @@
       "RUL-cross_fs_all_or_nothing",
       "RUL-failed_operation_clean",
       "RUL-operations_atomic",
-      "RUL-rewrite_in_place_atomic"
+      "RUL-rewrite_in_place_atomic",
+      "RUL-split_move_never_lost"
      ],
      "justifies_back": [],
      "layout": null,
@@ -15667,6 +15675,8 @@
      "is_modified": false,
      "jinja_content": false,
      "justifies": [
+      "RUL-one_filesystem_checked_every_run",
+      "RUL-workspace_moves_one_filesystem",
       "RUL-workspace_one_filesystem"
      ],
      "justifies_back": [],
@@ -16116,7 +16126,8 @@
       "DEF-dependency_cascade"
      ],
      "uses_back": [
-      "RUL-invalid_value_located"
+      "RUL-invalid_value_located",
+      "RUL-spanning_workspace_located"
      ],
      "verifies": [],
      "verifies_back": [
@@ -17831,7 +17842,7 @@
       "RAT-temps_are_debris"
      ],
      "layout": null,
-     "lineno": 2161,
+     "lineno": 2216,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -17917,7 +17928,7 @@
       "RAT-safe_at_each_change"
      ],
      "layout": null,
-     "lineno": 2147,
+     "lineno": 2202,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -18912,7 +18923,7 @@
       "RAT-safe_at_each_change"
      ],
      "layout": null,
-     "lineno": 2174,
+     "lineno": 2229,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -23535,6 +23546,92 @@
      "verifies_back": [],
      "verify": "incidental"
     },
+    "RUL-one_filesystem_checked_every_run": {
+     "aliases": null,
+     "anti": "yes",
+     "arch": {},
+     "assumes": [],
+     "assumes_back": [],
+     "choice_kind": null,
+     "completion": null,
+     "constraints": [],
+     "constraints_error": null,
+     "constraints_passed": true,
+     "constraints_results": {},
+     "content": "Every run of every phase on a workspace SHALL check, before it reads or changes anything, that the workspace lies on\none filesystem — never taking it as whole because an earlier run found it so.",
+     "criticality": "high",
+     "docname": "intent/shared",
+     "doctype": ".md",
+     "duration": null,
+     "excepts": [],
+     "excepts_back": [],
+     "external_css": "external_link",
+     "external_url": null,
+     "follows_from": [],
+     "follows_from_back": [],
+     "forced": null,
+     "has_dead_links": false,
+     "has_forbidden_dead_links": false,
+     "id": "RUL-one_filesystem_checked_every_run",
+     "illustrates": [],
+     "illustrates_back": [],
+     "is_external": false,
+     "is_import": false,
+     "is_modified": false,
+     "jinja_content": false,
+     "justifies": [],
+     "justifies_back": [
+      "RAT-workspace_one_filesystem"
+     ],
+     "layout": null,
+     "lineno": 2142,
+     "links": [],
+     "links_back": [],
+     "modifications": 0,
+     "nodeid": null,
+     "omit_reason": null,
+     "parent_need": null,
+     "parent_needs": [],
+     "parent_needs_back": [],
+     "parts": {},
+     "post_content": null,
+     "post_template": null,
+     "pre_content": null,
+     "pre_template": null,
+     "realises": [],
+     "realises_back": [
+      "BLD-workspace_one_filesystem"
+     ],
+     "refines": [
+      "RUL-workspace_one_filesystem"
+     ],
+     "refines_back": [],
+     "section_name": "15. Nothing overwritten, nothing left half-done",
+     "sections": [
+      "15. Nothing overwritten, nothing left half-done",
+      "Shared — what every phase guarantees"
+     ],
+     "signature": null,
+     "status": "seed",
+     "style": null,
+     "tags": [],
+     "template": null,
+     "title": "The workspace's filesystem is checked each run",
+     "type": "rul",
+     "type_name": "Rule",
+     "upholds": [],
+     "upholds_back": [],
+     "uses": [],
+     "uses_back": [],
+     "verifies": [],
+     "verifies_back": [
+      "TST-workspace_one_filesystem-geotag_refuses",
+      "TST-workspace_one_filesystem-init_library_refuses",
+      "TST-workspace_one_filesystem-merge_refuses",
+      "TST-workspace_one_filesystem-prep_refuses"
+     ],
+     "verify": "required"
+    },
     "RUL-operations_atomic": {
      "aliases": "atomic-operations-1",
      "anti": "yes",
@@ -23547,7 +23644,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "A move, a rename or a placement SHALL be one indivisible operation where the filesystem allows, so that an interruption\nleaves the state before it or the state after, never part of either. Where it cannot be one operation, an interruption\nSHALL leave the file whole under its old name, its new name or both — never under neither, never part of one.",
+     "content": "A move, a rename or a placement SHALL be one indivisible operation where the filesystem allows, so that an interruption\nleaves the state before it or the state after, never part of either.",
      "criticality": "high",
      "docname": "intent/shared",
      "doctype": ".md",
@@ -23595,6 +23692,7 @@
      "refines_back": [
       "RUL-cross_fs_all_or_nothing",
       "RUL-rewrite_in_place_atomic",
+      "RUL-split_move_never_lost",
       "RUL-workspace_one_filesystem"
      ],
      "section_name": "15. Nothing overwritten, nothing left half-done",
@@ -25067,7 +25165,7 @@
       "RAT-safe_at_each_change"
      ],
      "layout": null,
-     "lineno": 2133,
+     "lineno": 2188,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -26115,6 +26213,256 @@
       "TST-geotag_preflight-video_in_by_dest_blocks"
      ],
      "verify": "required"
+    },
+    "RUL-spanning_workspace_located": {
+     "aliases": null,
+     "anti": null,
+     "arch": {},
+     "assumes": [],
+     "assumes_back": [],
+     "choice_kind": null,
+     "completion": null,
+     "constraints": [],
+     "constraints_error": null,
+     "constraints_passed": true,
+     "constraints_results": {},
+     "content": "The report of a workspace spanning filesystems SHALL name a folder in it that lies on another filesystem.",
+     "criticality": "med",
+     "docname": "intent/shared",
+     "doctype": ".md",
+     "duration": null,
+     "excepts": [],
+     "excepts_back": [],
+     "external_css": "external_link",
+     "external_url": null,
+     "follows_from": [],
+     "follows_from_back": [],
+     "forced": null,
+     "has_dead_links": false,
+     "has_forbidden_dead_links": false,
+     "id": "RUL-spanning_workspace_located",
+     "illustrates": [],
+     "illustrates_back": [],
+     "is_external": false,
+     "is_import": false,
+     "is_modified": false,
+     "jinja_content": false,
+     "justifies": [],
+     "justifies_back": [],
+     "layout": null,
+     "lineno": 2165,
+     "links": [],
+     "links_back": [],
+     "modifications": 0,
+     "nodeid": null,
+     "omit_reason": null,
+     "parent_need": null,
+     "parent_needs": [],
+     "parent_needs_back": [],
+     "parts": {},
+     "post_content": null,
+     "post_template": null,
+     "pre_content": null,
+     "pre_template": null,
+     "realises": [],
+     "realises_back": [
+      "BLD-workspace_one_filesystem"
+     ],
+     "refines": [
+      "RUL-spanning_workspace_stops"
+     ],
+     "refines_back": [],
+     "section_name": "15. Nothing overwritten, nothing left half-done",
+     "sections": [
+      "15. Nothing overwritten, nothing left half-done",
+      "Shared — what every phase guarantees"
+     ],
+     "signature": null,
+     "status": "seed",
+     "style": null,
+     "tags": [],
+     "template": null,
+     "title": "The stop names a folder that lies elsewhere",
+     "type": "rul",
+     "type_name": "Rule",
+     "upholds": [],
+     "upholds_back": [],
+     "uses": [
+      "RUL-cause_locatable"
+     ],
+     "uses_back": [],
+     "verifies": [],
+     "verifies_back": [
+      "TST-workspace_one_filesystem-breaks_found_anywhere"
+     ],
+     "verify": "required"
+    },
+    "RUL-spanning_workspace_stops": {
+     "aliases": null,
+     "anti": "yes",
+     "arch": {},
+     "assumes": [],
+     "assumes_back": [],
+     "choice_kind": null,
+     "completion": null,
+     "constraints": [],
+     "constraints_error": null,
+     "constraints_passed": true,
+     "constraints_results": {},
+     "content": "A workspace found to span filesystems SHALL stop the run with nothing changed.",
+     "criticality": "high",
+     "docname": "intent/shared",
+     "doctype": ".md",
+     "duration": null,
+     "excepts": [],
+     "excepts_back": [],
+     "external_css": "external_link",
+     "external_url": null,
+     "follows_from": [],
+     "follows_from_back": [],
+     "forced": null,
+     "has_dead_links": false,
+     "has_forbidden_dead_links": false,
+     "id": "RUL-spanning_workspace_stops",
+     "illustrates": [],
+     "illustrates_back": [],
+     "is_external": false,
+     "is_import": false,
+     "is_modified": false,
+     "jinja_content": false,
+     "justifies": [],
+     "justifies_back": [],
+     "layout": null,
+     "lineno": 2154,
+     "links": [],
+     "links_back": [],
+     "modifications": 0,
+     "nodeid": null,
+     "omit_reason": null,
+     "parent_need": null,
+     "parent_needs": [],
+     "parent_needs_back": [],
+     "parts": {},
+     "post_content": null,
+     "post_template": null,
+     "pre_content": null,
+     "pre_template": null,
+     "realises": [],
+     "realises_back": [
+      "BLD-workspace_one_filesystem"
+     ],
+     "refines": [
+      "RUL-workspace_one_filesystem"
+     ],
+     "refines_back": [
+      "RUL-spanning_workspace_located"
+     ],
+     "section_name": "15. Nothing overwritten, nothing left half-done",
+     "sections": [
+      "15. Nothing overwritten, nothing left half-done",
+      "Shared — what every phase guarantees"
+     ],
+     "signature": null,
+     "status": "seed",
+     "style": null,
+     "tags": [],
+     "template": null,
+     "title": "A workspace spanning filesystems stops the run",
+     "type": "rul",
+     "type_name": "Rule",
+     "upholds": [],
+     "upholds_back": [],
+     "uses": [],
+     "uses_back": [],
+     "verifies": [],
+     "verifies_back": [
+      "TST-workspace_one_filesystem-geotag_refuses",
+      "TST-workspace_one_filesystem-init_library_refuses",
+      "TST-workspace_one_filesystem-merge_refuses",
+      "TST-workspace_one_filesystem-prep_refuses"
+     ],
+     "verify": "required"
+    },
+    "RUL-split_move_never_lost": {
+     "aliases": null,
+     "anti": "yes",
+     "arch": {},
+     "assumes": [],
+     "assumes_back": [],
+     "choice_kind": null,
+     "completion": null,
+     "constraints": [],
+     "constraints_error": null,
+     "constraints_passed": true,
+     "constraints_results": {},
+     "content": "Where a move cannot be one operation, an interruption SHALL leave the file whole under its old name, its new name or\nboth — never under neither, never part of one.",
+     "criticality": "high",
+     "docname": "intent/shared",
+     "doctype": ".md",
+     "duration": null,
+     "excepts": [],
+     "excepts_back": [],
+     "external_css": "external_link",
+     "external_url": null,
+     "follows_from": [],
+     "follows_from_back": [],
+     "forced": null,
+     "has_dead_links": false,
+     "has_forbidden_dead_links": false,
+     "id": "RUL-split_move_never_lost",
+     "illustrates": [],
+     "illustrates_back": [],
+     "is_external": false,
+     "is_import": false,
+     "is_modified": false,
+     "jinja_content": false,
+     "justifies": [],
+     "justifies_back": [
+      "RAT-safe_at_each_change"
+     ],
+     "layout": null,
+     "lineno": 2117,
+     "links": [],
+     "links_back": [],
+     "modifications": 0,
+     "nodeid": null,
+     "omit_reason": null,
+     "parent_need": null,
+     "parent_needs": [],
+     "parent_needs_back": [],
+     "parts": {},
+     "post_content": null,
+     "post_template": null,
+     "pre_content": null,
+     "pre_template": null,
+     "realises": [],
+     "realises_back": [
+      "BLD-no_clobber_rename"
+     ],
+     "refines": [
+      "RUL-operations_atomic"
+     ],
+     "refines_back": [],
+     "section_name": "15. Nothing overwritten, nothing left half-done",
+     "sections": [
+      "15. Nothing overwritten, nothing left half-done",
+      "Shared — what every phase guarantees"
+     ],
+     "signature": null,
+     "status": "seed",
+     "style": null,
+     "tags": [],
+     "template": null,
+     "title": "A move that cannot be one operation is never lost",
+     "type": "rul",
+     "type_name": "Rule",
+     "upholds": [],
+     "upholds_back": [],
+     "uses": [],
+     "uses_back": [],
+     "verifies": [],
+     "verifies_back": [],
+     "verify": "incidental"
     },
     "RUL-stale_lock_recovered": {
      "aliases": "lock-stale-detectable-1",
@@ -27616,6 +27964,92 @@
      ],
      "verify": "required"
     },
+    "RUL-workspace_moves_one_filesystem": {
+     "aliases": null,
+     "anti": "yes",
+     "arch": {},
+     "assumes": [],
+     "assumes_back": [],
+     "choice_kind": null,
+     "completion": null,
+     "constraints": [],
+     "constraints_error": null,
+     "constraints_passed": true,
+     "constraints_results": {},
+     "content": "A move by prep or geotag that would cross filesystems SHALL fail, never be made a copy.",
+     "criticality": "high",
+     "docname": "intent/shared",
+     "doctype": ".md",
+     "duration": null,
+     "excepts": [],
+     "excepts_back": [],
+     "external_css": "external_link",
+     "external_url": null,
+     "follows_from": [],
+     "follows_from_back": [],
+     "forced": null,
+     "has_dead_links": false,
+     "has_forbidden_dead_links": false,
+     "id": "RUL-workspace_moves_one_filesystem",
+     "illustrates": [],
+     "illustrates_back": [],
+     "is_external": false,
+     "is_import": false,
+     "is_modified": false,
+     "jinja_content": false,
+     "justifies": [],
+     "justifies_back": [
+      "RAT-workspace_one_filesystem"
+     ],
+     "layout": null,
+     "lineno": 2176,
+     "links": [],
+     "links_back": [],
+     "modifications": 0,
+     "nodeid": null,
+     "omit_reason": null,
+     "parent_need": null,
+     "parent_needs": [],
+     "parent_needs_back": [],
+     "parts": {},
+     "post_content": null,
+     "post_template": null,
+     "pre_content": null,
+     "pre_template": null,
+     "realises": [],
+     "realises_back": [
+      "BLD-workspace_one_filesystem"
+     ],
+     "refines": [
+      "RUL-workspace_one_filesystem"
+     ],
+     "refines_back": [],
+     "section_name": "15. Nothing overwritten, nothing left half-done",
+     "sections": [
+      "15. Nothing overwritten, nothing left half-done",
+      "Shared — what every phase guarantees"
+     ],
+     "signature": null,
+     "status": "seed",
+     "style": null,
+     "tags": [],
+     "template": null,
+     "title": "Prep and geotag never move across filesystems",
+     "type": "rul",
+     "type_name": "Rule",
+     "upholds": [],
+     "upholds_back": [],
+     "uses": [
+      "DEF-geotag",
+      "DEF-prep"
+     ],
+     "uses_back": [],
+     "verifies": [],
+     "verifies_back": [
+      "TST-fallbacks-move_no_clobber_refuses_exdev_unless_cross_fs"
+     ],
+     "verify": "required"
+    },
     "RUL-workspace_one_filesystem": {
      "aliases": null,
      "anti": "yes",
@@ -27628,7 +28062,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "A workspace SHALL lie on one filesystem: no folder in it — the control records' and the set-aside duplicates' among\nthem — SHALL lie on another. Every run of every phase on a workspace SHALL check this before it reads or changes\nanything, and a workspace that spans filesystems SHALL stop the run, nothing changed, naming a folder that lies\nelsewhere. Prep and geotag SHALL therefore never move a file across filesystems: a move that would SHALL fail.",
+     "content": "A workspace SHALL lie on one filesystem, every folder in it — the control records' and the set-aside duplicates'\namong them — on the same one.",
      "criticality": "high",
      "docname": "intent/shared",
      "doctype": ".md",
@@ -27654,7 +28088,7 @@
       "RAT-workspace_one_filesystem"
      ],
      "layout": null,
-     "lineno": 2118,
+     "lineno": 2129,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -27675,7 +28109,11 @@
      "refines": [
       "RUL-operations_atomic"
      ],
-     "refines_back": [],
+     "refines_back": [
+      "RUL-one_filesystem_checked_every_run",
+      "RUL-spanning_workspace_stops",
+      "RUL-workspace_moves_one_filesystem"
+     ],
      "section_name": "15. Nothing overwritten, nothing left half-done",
      "sections": [
       "15. Nothing overwritten, nothing left half-done",
@@ -27697,12 +28135,7 @@
      "uses_back": [],
      "verifies": [],
      "verifies_back": [
-      "TST-fallbacks-move_no_clobber_refuses_exdev_unless_cross_fs",
-      "TST-workspace_one_filesystem-breaks_found_anywhere",
-      "TST-workspace_one_filesystem-geotag_refuses",
-      "TST-workspace_one_filesystem-init_library_refuses",
-      "TST-workspace_one_filesystem-merge_refuses",
-      "TST-workspace_one_filesystem-prep_refuses"
+      "TST-workspace_one_filesystem-breaks_found_anywhere"
      ],
      "verify": "required"
     },
@@ -29152,7 +29585,7 @@
      "uses": [],
      "uses_back": [],
      "verifies": [
-      "RUL-workspace_one_filesystem"
+      "RUL-workspace_moves_one_filesystem"
      ],
      "verifies_back": [],
      "verify": null
@@ -40638,6 +41071,7 @@
      "uses": [],
      "uses_back": [],
      "verifies": [
+      "RUL-spanning_workspace_located",
       "RUL-workspace_one_filesystem"
      ],
      "verifies_back": [],
@@ -40655,7 +41089,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "`tests/test_workspace_one_filesystem.py:76`",
+     "content": "`tests/test_workspace_one_filesystem.py:78`",
      "criticality": null,
      "docname": "_generated/tests",
      "doctype": ".md",
@@ -40714,7 +41148,8 @@
      "uses": [],
      "uses_back": [],
      "verifies": [
-      "RUL-workspace_one_filesystem"
+      "RUL-one_filesystem_checked_every_run",
+      "RUL-spanning_workspace_stops"
      ],
      "verifies_back": [],
      "verify": null
@@ -40731,7 +41166,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "`tests/test_workspace_one_filesystem.py:101`",
+     "content": "`tests/test_workspace_one_filesystem.py:105`",
      "criticality": null,
      "docname": "_generated/tests",
      "doctype": ".md",
@@ -40790,7 +41225,8 @@
      "uses": [],
      "uses_back": [],
      "verifies": [
-      "RUL-workspace_one_filesystem"
+      "RUL-one_filesystem_checked_every_run",
+      "RUL-spanning_workspace_stops"
      ],
      "verifies_back": [],
      "verify": null
@@ -40807,7 +41243,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "`tests/test_workspace_one_filesystem.py:90`",
+     "content": "`tests/test_workspace_one_filesystem.py:93`",
      "criticality": null,
      "docname": "_generated/tests",
      "doctype": ".md",
@@ -40866,7 +41302,8 @@
      "uses": [],
      "uses_back": [],
      "verifies": [
-      "RUL-workspace_one_filesystem"
+      "RUL-one_filesystem_checked_every_run",
+      "RUL-spanning_workspace_stops"
      ],
      "verifies_back": [],
      "verify": null
@@ -40883,7 +41320,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "`tests/test_workspace_one_filesystem.py:60`",
+     "content": "`tests/test_workspace_one_filesystem.py:61`",
      "criticality": null,
      "docname": "_generated/tests",
      "doctype": ".md",
@@ -40942,7 +41379,8 @@
      "uses": [],
      "uses_back": [],
      "verifies": [
-      "RUL-workspace_one_filesystem"
+      "RUL-one_filesystem_checked_every_run",
+      "RUL-spanning_workspace_stops"
      ],
      "verifies_back": [],
      "verify": null
@@ -41708,7 +42146,7 @@
      "verify": null
     }
    },
-   "needs_amount": 525,
+   "needs_amount": 530,
    "needs_schema": {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "properties": {
