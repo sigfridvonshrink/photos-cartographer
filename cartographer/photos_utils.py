@@ -169,6 +169,10 @@ def default_config() -> dict:
         if src and os.path.isfile(src):
             with open(src) as f:
                 data = json.load(f)
+            missing = missing_config_settings(data)
+            if missing:      # it would seed a configuration every phase then refuses
+                raise ValueError(f"Seed defaults {src} are missing setting(s): "
+                                 + ", ".join(k for k, _ in missing))
             validate_config(data)
             return data
     return copy.deepcopy(DEFAULT_CONFIG)
@@ -831,22 +835,31 @@ def _atomic_write_text(path: str, text: str) -> None:
             pass
         raise
 
-def load_or_seed_config(workspace_root: str) -> str:
-    """Seed `photos-00-config.json` from `default_config()` on first run (an external
-    `photos-config-defaults.json` beside the executable if present, else the built-in
-    DEFAULT_CONFIG), then read it as the authoritative config for this workspace.
+def missing_config_settings(cfg: dict, template: dict = None, prefix: str = "") -> list:
+    """The settings of the built-in template that `cfg` lacks, as dotted paths, each with the template's
+    value: [(path, value)]. A workspace's configuration names every setting itself (shared contract §3):
+    a missing one is never filled from the program's defaults, which may change between releases."""
+    template = DEFAULT_CONFIG if template is None else template
+    out = []
+    for key, value in template.items():
+        if key == "jobs":
+            continue
+        path = f"{prefix}{key}"
+        if key not in cfg:
+            out.append((path, value))
+        elif isinstance(value, dict) and isinstance(cfg[key], dict):
+            out.extend(missing_config_settings(cfg[key], value, path + "."))
+    return out
 
-    Per the shared contract (Section 4), the on-disk file — not the in-code dict —
-    governs all processing once it exists; prep is its sole writer (seeds once). The
-    user changes configuration by hand-editing the JSON. Returns the whole-file
-    SHA-256 (the config fingerprint). `jobs` is a runtime override and is never
-    persisted to the file.
-    """
-    ensure_control_dir(workspace_root)
+
+def load_config(workspace_root: str) -> str:
+    """Read the workspace's `photos-00-config.json` as the one configuration of this run — every phase
+    reads it through here (shared contract §3). It must exist (only prep seeds it, `load_or_seed_config`),
+    parse, be complete — every setting of the built-in template present — and validate; anything else
+    raises ValueError naming the file and what is wrong. The file then REPLACES the active CONFIG
+    wholesale, the runtime `jobs` override aside, and the extension-to-class map is rebuilt from it.
+    Returns the whole-file SHA-256 (the config fingerprint)."""
     path = config_path(workspace_root)
-    if not os.path.exists(path):
-        seed = {k: v for k, v in default_config().items() if k != "jobs"}
-        _atomic_write_text(path, json.dumps(seed, indent=2, sort_keys=True))
     with open(path, "rb") as f:
         raw = f.read()
     sha = hashlib.sha256(raw).hexdigest()
@@ -856,8 +869,12 @@ def load_or_seed_config(workspace_root: str) -> str:
         raise ValueError(f"Workspace config {path} is not valid JSON: {e}")
     if not isinstance(loaded, dict):
         raise ValueError(f"Workspace config {path} must be a JSON object.")
+    missing = missing_config_settings(loaded)
+    if missing:
+        listed = "; ".join(f"{k} (the default is {json.dumps(v)})" for k, v in missing)
+        raise ValueError(f"Workspace config {path} is missing setting(s): {listed}. Add each to the file — "
+                         "a workspace's configuration names every setting itself.")
     validate_config(loaded, workspace_root)  # human-authored input is validated before it is accepted
-    # Make the file authoritative; preserve the runtime jobs override.
     jobs = CONFIG.get("jobs")
     CONFIG.clear()
     CONFIG.update(loaded)
@@ -865,6 +882,20 @@ def load_or_seed_config(workspace_root: str) -> str:
         CONFIG["jobs"] = jobs
     _refresh_media_class_map()   # the workspace config's extension lists are now authoritative
     return sha
+
+
+def load_or_seed_config(workspace_root: str) -> str:
+    """Seed `photos-00-config.json` from `default_config()` on first run (an external
+    `photos-config-defaults.json` beside the executable if present, else the built-in
+    DEFAULT_CONFIG), then read it through `load_config` as the authoritative config for this
+    workspace. Prep alone calls this: it is the configuration's only seeder (shared contract §3).
+    `jobs` is a runtime override and is never persisted to the file."""
+    ensure_control_dir(workspace_root)
+    path = config_path(workspace_root)
+    if not os.path.exists(path):
+        seed = {k: v for k, v in default_config().items() if k != "jobs"}
+        _atomic_write_text(path, json.dumps(seed, indent=2, sort_keys=True))
+    return load_config(workspace_root)
 
 
 # ZFS naming charsets. A snapshot is <dataset>@<snapshot_prefix><plan_id>; the suffix
@@ -930,8 +961,8 @@ _GPX_NUMERIC_KEYS = (
 def validate_config(cfg: dict, workspace_root: str = None):
     """Validate human-authored config before it is accepted — input a human writes is
     sanity-validated (types, ranges, paths, formats), not merely parsed as JSON. Raises
-    ValueError with a clear 'config: <path> ...' message on any violation; missing keys
-    default and unknown keys are ignored. The same validate-on-load discipline applies
+    ValueError with a clear 'config: <path> ...' message on any violation; unknown keys are ignored,
+    and a missing one is `load_config`'s refusal (`missing_config_settings`), not this check's. The same validate-on-load discipline applies
     to the geotag decision JSON ([[validate-human-input]]). Given the workspace, it also
     refuses a gpx_root that overlaps the managed folders (shared contract §8)."""
     if not isinstance(cfg, dict):

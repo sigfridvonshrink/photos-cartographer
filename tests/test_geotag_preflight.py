@@ -415,3 +415,38 @@ def test_geotag_and_merge_create_nothing_outside_a_workspace(tmp_path, monkeypat
     assert ei.value.code == 2 and "Not an initialized workspace" in capsys.readouterr().err
     assert merge._run_locked_workflow("plan", str(d)) == 2
     assert list(d.iterdir()) == []
+
+
+@pytest.mark.spec("RUL-one_configuration", test="TST-geotag_preflight-geotag_classifies_by_the_workspaces_extension_lists")
+def test_geotag_classifies_by_the_workspaces_extension_lists(tmp_path, monkeypatch):
+    """Geotag reads the workspace's own configuration, extension lists included: a `.webp` the user
+    listed as an image is a photo in photos by destination, not a file of no media class — whatever
+    the built-in lists say."""
+    ws = _ws(tmp_path, bydest=("6-photos-by-dest/Trip/a.webp",))
+    cfg_p = ws / ".photos-ingest" / "photos-00-config.json"
+    cfg = json.loads(cfg_p.read_text())
+    cfg["media_extensions"]["image"].append("webp")
+    cfg_p.write_text(json.dumps(cfg))
+    assert utils.media_class_for_ext(".webp") == "other"            # the built-in lists say other
+    blockers, _, _ = _pf(ws)
+    assert not any("a.webp" in b for b in blockers), blockers
+    assert utils.media_class_for_ext(".webp") == "image"
+
+
+@pytest.mark.spec("RUL-config_complete", test="TST-geotag_preflight-a_missing_setting_stops_every_phase")
+def test_a_missing_setting_stops_every_phase(tmp_path, monkeypatch):
+    """A setting missing from the workspace's configuration is never filled from the program's defaults:
+    prep's load, geotag and merge each stop, naming the setting and the value to add."""
+    import photos_3_merge as merge
+    ws = _ws(tmp_path)
+    cfg_p = ws / ".photos-ingest" / "photos-00-config.json"
+    cfg = json.loads(cfg_p.read_text())
+    del cfg["gpx_extrapolation_max_seconds"]
+    del cfg["zfs"]["snapshot_prefix"]
+    cfg_p.write_text(json.dumps(cfg))
+    with pytest.raises(ValueError) as ei:
+        utils.load_or_seed_config(str(ws))                          # prep's path
+    assert "gpx_extrapolation_max_seconds" in str(ei.value) and "zfs.snapshot_prefix" in str(ei.value)
+    assert json.loads(cfg_p.read_text()) == cfg                     # never filled in
+    for blockers in (_pf(ws)[0], merge.MergeWorkflow(str(ws)).preflight()[0]):
+        assert any("missing setting" in b and "gpx_extrapolation_max_seconds" in b for b in blockers), blockers

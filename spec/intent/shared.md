@@ -289,6 +289,17 @@ All three phases SHALL read their settings from the workspace's one configuratio
 phase keeping settings of its own, and no setting that governs a run coming from outside the workspace.
 :::
 
+:::{rul} A configuration missing a setting stops the run
+:id: RUL-config_complete
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-one_configuration
+
+A configuration that lacks a setting SHALL stop the run, naming the setting — never filled from the program's defaults.
+:::
+
 :::{rul} Prep seeds the configuration once
 :id: RUL-config_seeded_once
 :status: seed
@@ -362,8 +373,7 @@ A digest of the configuration's whole content SHALL be recorded for integrity.
 :id: RUL-config_archived
 :status: seed
 :criticality: med
-:verify: none
-:omit_reason: carried by the archival package's items, when §13 of the shared contract is converted
+:verify: required
 
 The configuration SHALL be part of the archival record the workspace leaves behind.
 :::

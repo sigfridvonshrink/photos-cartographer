@@ -41,7 +41,7 @@ from datetime import datetime, timezone
 
 from .photos_utils import (
     CONFIG, CONTROL_DIR, config_path, handoff_path, guard_path, is_sealed,
-    validate_config, validate_merge_config, sha256_file, sha256_text, media_class_for_ext,
+    validate_config, load_config, validate_merge_config, sha256_file, sha256_text, media_class_for_ext,
     folder_name, FOLDER_ROLES, missing_managed_folders, handoff_content_fingerprint,
     folders_fingerprint, media_extensions_fingerprint,
     verify_json_dependency, json_dependency, write_json_artifact, write_versioned_json, is_library, write_library_marker,
@@ -181,16 +181,14 @@ class MergeWorkflow:
             blockers.append("Workspace config photos-00-config.json is missing — run prep first: `photos-cartographer prep plan` then `photos-cartographer prep execute`.")
             return blockers, warnings, info
         try:
-            with open(cfg_p) as f:
-                cfg = json.load(f)
-            validate_config(cfg, ws)
+            load_config(ws)                 # the workspace's file, whole and checked, replaces CONFIG
         except ValueError as e:
             blockers.append(f"Invalid workspace config: {e}")
             return blockers, warnings, info
         except Exception as e:
             blockers.append(f"Workspace config could not be read: {e}")
             return blockers, warnings, info
-        CONFIG.update(cfg)              # adopt the seeded config as authoritative for this run
+        cfg = CONFIG
 
         # 5. Config valid + library_root is a blessed library (§3 precond 5; merge spec §4). The
         # deep merge-config validation and the marker check run before the library lock (§12).

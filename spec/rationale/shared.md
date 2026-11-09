@@ -96,6 +96,38 @@ Each phase that mutates uses the same mechanism so the phases behave identically
 
 ## 3. One configuration, kept in the workspace
 
+:::{rat} One place for every setting
+:id: RAT-one_place_for_settings
+:status: seed
+:justifies: RUL-one_configuration
+
+Settings read from more than one place — a phase's own file, an environment variable, the program's defaults — can
+disagree, and a run's result would then depend on where it ran, not on the workspace. With one configuration in the
+workspace, everything that governed a run is in one file, hashed, checked and archived with what it governed.
+:::
+
+:::{rat} A workspace keeps the settings it started with
+:id: RAT-workspace_keeps_its_settings
+:status: seed
+:justifies: RUL-config_seeded_once, RUL-config_authoritative
+
+A workspace's runs, spread over days or weeks, must all read the settings it was set up with, or a later run could
+process the same files differently from an earlier one. The seed defaults belong to the installed program, which may be
+upgraded or redeployed meanwhile; so they are copied once into the workspace, where they can be read, edited and
+archived, and from then on the copy governs, not the program.
+:::
+
+:::{rat} Every change to the configuration is one someone chose
+:id: RAT-config_changes_chosen
+:status: seed
+:justifies: RUL-config_writers, RUL-library_setup_writes_one_setting
+
+Prep's seeding happens once, before anything is made under the configuration; the user's own edits are the intended way
+to change it; the library setup records only the one answer it was asked for. A phase that rewrote the configuration on
+its own would change what governs the workspace with nobody having decided it, and restale every plan with no cause the
+user can find.
+:::
+
 :::{rat} A configuration in a file is bound to what it governed
 :id: RAT-config_is_a_file
 :status: seed

@@ -508,7 +508,7 @@ def _mock_zfs(monkeypatch, *, fail=False):
 @pytest.mark.spec("geotag-snapshot-phase-label-1")
 def test_execute_records_zfs_snapshot(tmp_path, monkeypatch):
     zfs = {"enabled": True, "snapshots_required": True, "snapshot_prefix": "px-",
-           "datasets": {"workspace": "auto"}}
+           "datasets": {"workspace": "auto", "library": "auto"}}
     ws, ctl = _ready_ws(tmp_path, monkeypatch, zfs=zfs)
     _mock_tools(monkeypatch, ws); _mock_zfs(monkeypatch)
     assert _execute(monkeypatch, ws) == 0
@@ -519,7 +519,7 @@ def test_execute_records_zfs_snapshot(tmp_path, monkeypatch):
 @pytest.mark.spec("geotag-snapshot-required-abort-1")
 def test_execute_aborts_when_required_snapshot_fails(tmp_path, monkeypatch):
     zfs = {"enabled": True, "snapshots_required": True, "snapshot_prefix": "px-",
-           "datasets": {"workspace": "auto"}}
+           "datasets": {"workspace": "auto", "library": "auto"}}
     ws, ctl = _ready_ws(tmp_path, monkeypatch, zfs=zfs)
     _mock_tools(monkeypatch, ws); _mock_zfs(monkeypatch, fail=True)
     before = sorted(os.listdir(ws / "6-photos-by-dest" / "T"))

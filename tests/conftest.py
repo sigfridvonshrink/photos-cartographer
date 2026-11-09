@@ -48,6 +48,7 @@ def _restore_config():
     finally:
         photos_utils.CONFIG.clear()
         photos_utils.CONFIG.update(saved)
+        photos_utils._refresh_media_class_map()   # a test that loaded a workspace's lists leaves none behind
 
 
 @pytest.fixture
