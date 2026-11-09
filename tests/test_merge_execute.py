@@ -404,7 +404,7 @@ def test_execute_cross_fs_move_verifies_and_completes(tmp_path, monkeypatch):
     assert not os.path.exists(_src(ws, "Trip", "a.jpg"))
 
 
-@pytest.mark.spec("exec-failed-op-clean-1", "merge-source-removed-only-after-verified-copy-1", "merge-verify-copy-detect-torn-1", test="TST-merge_execute-execute_torn_copy_blocks_and_keeps_source")
+@pytest.mark.spec("exec-failed-op-clean-1", "merge-source-removed-only-after-verified-copy-1", "merge-verify-copy-detect-torn-1", "RUL-failure_recorded", test="TST-merge_execute-execute_torn_copy_blocks_and_keeps_source")
 def test_execute_torn_copy_blocks_and_keeps_source(tmp_path, monkeypatch):
     _force_cross_fs(monkeypatch)
     monkeypatch.setattr(utils.shutil, "copyfile",
@@ -1029,3 +1029,20 @@ def test_merge_creates_in_the_library_only_what_it_places(tmp_path):
     found -= {".photos-library", ".photos-merge.lock"}
     assert found == {"Trip", os.path.join("Trip", "a.jpg"), "Spain", os.path.join("Spain", "Madrid"),
                      os.path.join("Spain", "Madrid", "b.jpg")}
+
+
+@pytest.mark.spec("RUL-failure_never_done", test="TST-merge_execute-failed_placement_is_done_by_the_next_run")
+def test_failed_placement_is_done_by_the_next_run(tmp_path, monkeypatch):
+    """A placement that failed is never recorded as done: once its cause is gone, running execute again
+    places the photo and the run succeeds."""
+    _force_cross_fs(monkeypatch)
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    with monkeypatch.context() as m:
+        m.setattr(utils.shutil, "copyfile", lambda src, dst: open(dst, "wb").write(b"FP=TORN"))
+        assert merge._run_locked_workflow("execute", str(ws)) == 3      # torn copy -> blocked
+    assert _summary(ws)["totals"]["blocked"] == 1
+    assert merge._run_locked_workflow("execute", str(ws)) == 0          # the next run does it
+    assert open(os.path.join(str(lib), "Trip", "a.jpg"), "rb").read() == _fp_bytes("A")
+    assert not os.path.exists(_src(ws, "Trip", "a.jpg"))
+    assert _summary(ws)["totals"]["blocked"] == 0

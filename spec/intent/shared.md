@@ -2542,9 +2542,10 @@ leaves the state before it or the state after, never part of either.
 :anti: yes
 :verify: incidental
 :refines: RUL-operations_atomic
+:excepts: RUL-failed_operation_clean
 
-Where a move cannot be one operation, an interruption SHALL leave the file whole under its old name, its new name or
-both — never under neither, never part of one.
+Where a move cannot be one operation, an interruption, or a failure partway, SHALL leave the file whole under its old
+name, its new name or both — never under neither, never part of one.
 :::
 
 :::{rul} A workspace lies on one filesystem
@@ -2665,6 +2666,26 @@ A temporary copy SHALL bear a name of its own, which no photo bears.
 :verify: required
 :aliases: exec-failed-op-clean-1
 
-An operation that cannot complete SHALL leave its file as it was before it, record the failure, and never be recorded
-as done, so that a re-run does it again.
+An operation that cannot complete SHALL leave its file as it was before it.
+:::
+
+:::{rul} A failed operation's failure is recorded
+:id: RUL-failure_recorded
+:status: seed
+:criticality: high
+:verify: required
+:refines: RUL-failed_operation_clean
+
+The failure of an operation that cannot complete SHALL be recorded.
+:::
+
+:::{rul} A failed operation is never recorded as done
+:id: RUL-failure_never_done
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-failed_operation_clean
+
+An operation that cannot complete SHALL never be recorded as done, so that a re-run does it again.
 :::
