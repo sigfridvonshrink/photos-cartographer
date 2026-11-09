@@ -683,9 +683,22 @@ JSON or is not a JSON object SHALL be such a blocker, located to where parsing f
 
 Every move and rename that carries content SHALL go through `_move_no_clobber`: on one filesystem `renameat2` with
 `RENAME_NOREPLACE`, one call that refuses an existing name, or where that is unavailable `os.link` then `os.unlink`;
-across filesystems `_move_cross_fs_no_clobber`. A refused name SHALL stop that operation: prep records it failed and
+across filesystems, for merge alone, `_move_cross_fs_no_clobber`. A refused name SHALL stop that operation: prep records it failed and
 stops; geotag and merge record a blocker and leave the photo where it is. Merge SHALL also test its target before moving, and geotag compares names ignoring case (geotag §27). The rename that completes an operation is thus
 itself the check that its name is free (prep §14.3–§14.4, geotag §29.1a, merge §11).
+:::
+
+:::{bld} Each run checks the workspace's devices
+:id: BLD-workspace_one_filesystem
+:status: seed
+:realises: RUL-workspace_one_filesystem
+
+`workspace_volume_breaks` SHALL walk every folder of the workspace without following links, compare each one's device
+with the workspace root's, and not descend into a folder found on another. Prep's and geotag's `run`, and merge's plan,
+dry run, execution and in-workspace `init-library`, SHALL call it through `workspace_volume_error` as soon as they hold
+the workspace lock and, on a folder found elsewhere, report it and exit 2. `_move_no_clobber` SHALL fall back to a
+cross-filesystem copy only when its caller passes `cross_fs=True`, which merge alone does; for prep and geotag the
+`EXDEV` of a move across filesystems SHALL be raised as a failure.
 :::
 
 :::{bld} Geotag's metadata writes

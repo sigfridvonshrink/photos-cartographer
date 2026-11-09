@@ -2831,6 +2831,14 @@ def run(args):
     reporter.log(f"Lock acquired: {run_lock.lock_path}")
 
     try:
+        # A workspace lies on one filesystem (shared contract §15), so every move in it is one rename.
+        # Checked on every invocation, prune-quarantine included, before anything is read or changed.
+        from .photos_utils import workspace_volume_error
+        vol_err = workspace_volume_error(workspace_root)
+        if vol_err:
+            reporter.error(vol_err)
+            sys.exit(2)
+
         # Sealed/terminal-workspace guard (prep Section 6.2 item 1 / shared 13.7): a successful
         # merge seals the workspace. Prep then hard-stops and mutates nothing. Applies to the prep
         # operations (plan/dry-run/execute); prune-quarantine is a separate maintenance command.

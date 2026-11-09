@@ -2092,11 +2092,13 @@ def _move_cross_fs_no_clobber(src: str, dest: str, verify=None):
                 pass
     os.unlink(src)                                      # remove the source LAST (crash-safe)
 
-def _move_no_clobber(src: str, dest: str, verify=None):
+def _move_no_clobber(src: str, dest: str, verify=None, cross_fs=False):
     """Move src -> dest, failing (FileExistsError) instead of overwriting an existing destination.
-    Primary path is an atomic same-filesystem MOVE (_rename_no_clobber_same_fs). Only when that move
-    cannot cross filesystems (EXDEV) does it fall back to the cross-fs copy-then-remove workaround
-    (§15.3) — a same-fs move never touches the fallback.
+    Primary path is an atomic same-filesystem MOVE (_rename_no_clobber_same_fs). Only a caller that
+    passes `cross_fs=True` — merge, whose library may be on another volume — falls back to the cross-fs
+    copy-then-remove workaround (§15.3) when the move cannot cross filesystems (EXDEV). A workspace lies
+    on one filesystem (checked every run, `workspace_volume_breaks`), so prep and geotag never cross one:
+    for them EXDEV is raised like any other failure, never turned into a copy.
 
     `verify(src, tmp)` applies only to the cross-fs fallback (a same-fs rename is lossless, so there is
     nothing to verify); it runs against the temp copy before it is exposed under the final name and must
@@ -2104,10 +2106,49 @@ def _move_no_clobber(src: str, dest: str, verify=None):
     try:
         _rename_no_clobber_same_fs(src, dest)
     except OSError as e:
-        if e.errno == errno.EXDEV:                      # crossing filesystems — use the workaround
+        if cross_fs and e.errno == errno.EXDEV:         # merge crossing into the library's volume
             _move_cross_fs_no_clobber(src, dest, verify=verify)
         else:
             raise                                       # incl. FileExistsError (EEXIST): no-clobber
+
+
+def _dev_of(path: str) -> int:
+    """The filesystem (device) a path itself lies on, links not followed."""
+    return os.lstat(path).st_dev
+
+
+def workspace_volume_breaks(workspace_root: str) -> list:
+    """Workspace-relative folders that lie on another filesystem than the workspace root (shared
+    contract §15): a workspace must lie on one filesystem, so every move within it is one rename. Walks
+    every folder — the control directory and the quarantine included — without following links, and
+    does not descend into a folder found elsewhere. Sorted; empty when the workspace is whole."""
+    root_dev = _dev_of(workspace_root)
+    breaks = []
+    for dirpath, dirnames, _files in os.walk(workspace_root):
+        keep = []
+        for d in sorted(dirnames):
+            p = os.path.join(dirpath, d)
+            try:
+                dev = _dev_of(p)
+            except OSError:
+                continue                                # vanished mid-walk: nothing lies there
+            if dev != root_dev:
+                breaks.append(os.path.relpath(p, workspace_root))
+            else:
+                keep.append(d)
+        dirnames[:] = keep
+    return sorted(breaks)
+
+
+def workspace_volume_error(workspace_root: str):
+    """The message stopping a run on a workspace that spans filesystems, or None when it lies on one."""
+    breaks = workspace_volume_breaks(workspace_root)
+    if not breaks:
+        return None
+    shown = ", ".join(f"{b}/" for b in breaks[:5]) + (f" and {len(breaks) - 5} more" if len(breaks) > 5 else "")
+    return (f"The workspace spans more than one filesystem: {shown} lies on another volume than the "
+            f"workspace root. A workspace must lie on one filesystem; move it onto one and re-run. "
+            f"Nothing was touched.")
 
 class PlanFingerprintMemo:
     """Plan-time decode memo (prep §10.3): the fingerprint + metadata prep observed for a file at a

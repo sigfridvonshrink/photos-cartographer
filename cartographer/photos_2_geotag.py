@@ -45,7 +45,7 @@ import zoneinfo
 from datetime import datetime, timedelta, timezone
 
 from .photos_utils import (
-    CONFIG, CONTROL_DIR, config_path, handoff_path, guard_path, is_sealed, likely_new_dump,
+    CONFIG, CONTROL_DIR, workspace_volume_error, config_path, handoff_path, guard_path, is_sealed, likely_new_dump,
     validate_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
     folders_fingerprint, media_extensions_fingerprint,
     selected_gpx_root, CAMERA_IDENTITY_FIELDS, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
@@ -1832,6 +1832,10 @@ def run(args):
         sys.exit(1)
     reporter.log(f"Lock acquired: {run_lock.lock_path}")
     try:
+        vol_err = workspace_volume_error(workspace_root)   # shared §15: a workspace lies on one filesystem
+        if vol_err:
+            reporter.error(vol_err)
+            sys.exit(2)
         if args.command == "plan":
             _plan_ready = False    # set once the executable plan (photos-24) is assembled
             wf = GeotagWorkflow(workspace_root)
