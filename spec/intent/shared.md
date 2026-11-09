@@ -11,7 +11,7 @@ it*, in [the build](../build/shared.md).
 :status: seed
 
 A **workspace** is the transient place one ingest happens in: a dump of media enters it, the phases work on it in
-turn, and merge empties it into the library. Every run acts on exactly one workspace.
+turn, and merge moves its finished photos into the library. A run's workspace is the folder it is started in.
 :::
 
 :::{def} The library
@@ -48,9 +48,8 @@ time.
 :status: seed
 :uses: DEF-geotag, DEF-library
 
-**Merge**, the third phase, runs after a workspace has been geotagged and finalized: it moves the finalized media,
-sorted by destination, into the library — never renaming or overwriting anything already there — and then seals the
-workspace.
+**Merge**, the third phase, runs after a workspace has been geotagged and finalized, and moves its finished photos,
+sorted by destination, into the library.
 :::
 
 ## 1. One run at a time
