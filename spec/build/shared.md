@@ -30,8 +30,16 @@ anything else in it is read.
 :status: seed
 :realises: RUL-only_prep_builds_structure
 
-`WorkspaceLock` SHALL create the control directory only when prep takes it; every other taker passes `create=False`,
-geotag and merge first checking that the directory exists and stopping, with exit status 2, where it does not.
+`WorkspaceLock` SHALL create the control directory only when prep takes it; every other taker passes `create=False`.
+:::
+
+:::{bld} Geotag and merge stop where there is no control directory
+:id: BLD-no_control_dir_stops
+:status: seed
+:realises: RUL-only_prep_builds_structure
+
+Geotag and merge SHALL check that the control directory exists before they take the lock, and where it does not, stop
+with exit status 2, having created nothing.
 :::
 
 :::{bld} The editor's save takes the lock
