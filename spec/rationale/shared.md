@@ -691,7 +691,7 @@ which no plan, however careful, can stand in for.
 
 :::{rat} Safety and resuming rest on the moment of each change
 :id: RAT-safe_at_each_change
-:status: seed
+:status: ruled
 :justifies: RUL-operations_atomic, RUL-split_move_never_lost, RUL-rewrite_in_place_atomic, RUL-cross_fs_all_or_nothing, RUL-failed_operation_clean
 
 That nothing is overwritten, and that an interrupted run is finished by running it again, hold only if each change is
@@ -701,7 +701,7 @@ plan can see it.
 
 :::{rat} Within a workspace, every move is one rename
 :id: RAT-workspace_one_filesystem
-:status: seed
+:status: ruled
 :justifies: RUL-workspace_one_filesystem, RUL-one_filesystem_checked_every_run, RUL-workspace_moves_one_filesystem
 
 On one filesystem every move a workspace sees is a single rename: nothing to copy, nothing to verify, no temporary copy
@@ -712,7 +712,7 @@ crosses into it. Checking every run, not once, catches a volume mounted into the
 
 :::{rat} A temporary copy left behind is debris
 :id: RAT-temps_are_debris
-:status: seed
+:status: ruled
 :justifies: RUL-crash_temps_cleared, RUL-temp_name_own
 
 Merge holds the library's lock, so a temporary copy found in a folder it places into was left by an interrupted earlier

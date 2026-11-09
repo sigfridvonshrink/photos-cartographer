@@ -690,7 +690,7 @@ itself the check that its name is free (prep §14.3–§14.4, geotag §29.1a, me
 
 :::{bld} Each run checks the workspace's devices
 :id: BLD-workspace_one_filesystem
-:status: seed
+:status: ruled
 :realises: RUL-workspace_one_filesystem, RUL-one_filesystem_checked_every_run, RUL-spanning_workspace_stops, RUL-spanning_workspace_located, RUL-workspace_moves_one_filesystem
 
 `workspace_volume_breaks` SHALL walk every folder of the workspace without following links, compare each one's device
@@ -703,7 +703,7 @@ cross-filesystem copy only when its caller passes `cross_fs=True`, which merge a
 
 :::{bld} Geotag's metadata writes
 :id: BLD-metadata_safe_write
-:status: seed
+:status: ruled
 :realises: RUL-rewrite_in_place_atomic
 
 Geotag SHALL write metadata with `exiftool -overwrite_original`, which writes a temporary file and renames it over the
@@ -712,7 +712,7 @@ original, having first removed a `<file>_exiftool_tmp` an interrupted write left
 
 :::{bld} The cross-filesystem copy and its sweep
 :id: BLD-cross_fs_temp
-:status: seed
+:status: ruled
 :realises: RUL-cross_fs_all_or_nothing, RUL-crash_temps_cleared, RUL-temp_name_own
 
 `_move_cross_fs_no_clobber` SHALL copy to a `.tmp-xdev-<random>.part` file in the destination directory, fingerprint
