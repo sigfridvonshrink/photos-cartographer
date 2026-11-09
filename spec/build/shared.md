@@ -245,7 +245,7 @@ and the strays folder `1-strays/` with all its `<plan-id>` subfolders (prep §3,
 :::{bld} Hidden files in a dump go to the quarantine
 :id: BLD-dump_dotfiles_quarantined
 :status: seed
-:realises: RUL-not_inventoried
+:realises: RUL-dump_hidden_files_quarantined
 
 Hidden dotfiles in a dump area SHALL be swept to the quarantine (prep §3, §15).
 :::
