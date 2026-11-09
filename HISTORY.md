@@ -2,6 +2,44 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-09 — §13–§15's remaining seed items ruled; one obligation per item
+
+The library's place and mark, its lock, the checked values and the moment of each change, put in seven topics, each
+checked against the code first, then — at Vasile's word — the whole corpus restructured so that every item states one
+obligation.
+
+- **The library's place and its mark**: *"ok"*. **The library's lock** — a merge refused by a locked library is now
+  checked to leave the library unchanged: *"agree"*.
+- **Every value the user writes is checked** — a decision artifact that did not parse was taken as absent, geotag
+  regenerating fresh proposals over it, the user's decisions surviving only in a `-NNN` backup; it now stops geotag,
+  kept as written: *"ruled"*.
+- **The specific checks** — a yes-or-no decision read with `bool()` took the string `"false"` as yes; a broken decision
+  crashed geotag; half a position was ignored; the configuration took NaN, Infinity, a blank path and a misspelt
+  device class. Each is now a located blocker: *"ok all"*.
+- **Every name checked free as it is written** — the old spec allowed an alternative name a plan had recorded; no plan
+  records one, so a taken name only blocks: *"ruled"*.
+- **Atomic operations, and the workspace on one filesystem** — what an interruption leaves when a move is a link then
+  an unlink: *"1 - ok"*. The build item claimed a cross-filesystem copy was always fingerprinted, which only merge does;
+  prep crossed filesystems only into a volume mounted inside the workspace: *"2 - a workspace must never span multiple
+  volumes and this should be checked at each script invocation - this is much better and closer to my intentions"*.
+  Every phase now stops on a workspace with a folder on another device, and only merge may copy across filesystems.
+- **One obligation per item.** The new rule was drafted with four SHALLs: *"RUL-workspace_one_filesystem - this includes
+  subsidiary SHALL - I thought our convention is that no such subsidiary stuff would exist, so things are easy to check
+  and reference?"* Split, it was ruled: *"yes, ruled; also take the opportunity to ensure that no multiple subsidiary
+  SHALLs exist elsewhere in the corpus"*. 134 items stated more than one SHALL; each was split where the second was an
+  obligation of its own — about 45 intent and 40 build items — or reworded into one sentence where it restated the first.
+  `tools/spec-build` now refuses an item with more than one SHALL, and an option continued onto a second line, which
+  sphinx-needs had been dropping silently. Whether the pieces of a ruled item needed ruling again: *"q1 - no, if the
+  breakups are mechanical, I'm fine with my previous rulings."* The ledger still named the original items:
+  *"shouldn't thins be fixed?"* — 87 sentences now name the item their content went to.
+- **A failed operation** — the build item counted geotag's fingerprint hold-back, which changes the file, as a failure,
+  and named no failed rename: *"1 ok"*. The rule's proposed wording carried three obligations under one SHALL: *"2 the
+  proposed looks like multiple hidden SHALLs - take a look?"* Split into the file left as it was, the failure recorded,
+  and never recorded as done, the two-step move its exception: *"1 ok"*. The same can hide in the items reworded into
+  one SHALL; reading them all for it waits for the end of the conversion (BACKLOG item 7): *"maybe we can do this at
+  the very end after the full conversion to sphinx-needs? I am worried that we are piling too much work in one strand
+  and doing it now might break other links, too."*
+
 ## 2026-11-03 — §13.4–§13.7's seed items: the database, merge and the seal
 
 The 36 items proposed for the database, merge and the seal were put in 14 topics, one per message, each checked
