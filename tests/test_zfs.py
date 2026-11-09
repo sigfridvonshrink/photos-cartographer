@@ -19,6 +19,7 @@ via `zfs list -H -o name <abspath>`, and the execute() snapshot path (success + 
 failure). subprocess is mocked so no real `zfs` runs. Helpers come from conftest.py.
 """
 import glob
+import copy
 import json
 import os
 import subprocess
@@ -95,7 +96,9 @@ def test_load_or_seed_config_rejects_illegal_zfs(tmp_path):
     ws = _ws(tmp_path)
     cfg = utils.config_path(str(ws))
     with open(cfg, "w") as f:
-        json.dump({"zfs": {"snapshot_prefix": "bad prefix!"}}, f)
+        full = {k: v for k, v in copy.deepcopy(utils.DEFAULT_CONFIG).items() if k != "jobs"}
+        full["zfs"]["snapshot_prefix"] = "bad prefix!"
+        json.dump(full, f)
     with pytest.raises(ValueError, match="snapshot_prefix"):
         utils.load_or_seed_config(str(ws))
 
@@ -137,7 +140,7 @@ def test_snapshot_taken_with_detected_dataset_and_prefix(tmp_path, monkeypatch, 
     monkeypatch.setattr(utils, "detect_zfs_dataset", lambda p: "pool/ws")
     _intercept_zfs_snapshot(monkeypatch, fail=False)
     prep.CONFIG["zfs"] = {"enabled": True, "snapshots_required": True,
-                          "snapshot_prefix": "photos-cartographer-", "datasets": {"workspace": "auto"}}
+                          "snapshot_prefix": "photos-cartographer-", "datasets": {"workspace": "auto", "library": "auto"}}
     ws = _ws(tmp_path)
     (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
     plan = _plan(ws)
@@ -154,7 +157,7 @@ def test_required_snapshot_with_no_dataset_aborts(tmp_path, monkeypatch, seed_fr
     _mock_media(monkeypatch)
     monkeypatch.setattr(utils, "detect_zfs_dataset", lambda p: None)   # workspace not on zfs
     prep.CONFIG["zfs"] = {"enabled": True, "snapshots_required": True,
-                          "snapshot_prefix": "photos-cartographer-", "datasets": {"workspace": "auto"}}
+                          "snapshot_prefix": "photos-cartographer-", "datasets": {"workspace": "auto", "library": "auto"}}
     ws = _ws(tmp_path)
     (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
     plan = _plan(ws)
@@ -174,7 +177,7 @@ def test_take_zfs_snapshot_disabled(monkeypatch):
 @pytest.mark.spec("snapshot-not-required-proceeds-1", test="TST-zfs-take_zfs_snapshot_no_dataset")
 def test_take_zfs_snapshot_no_dataset(monkeypatch):
     monkeypatch.setitem(utils.CONFIG, "zfs", {"enabled": True, "snapshots_required": False,
-                                              "datasets": {"workspace": "auto"}})
+                                              "datasets": {"workspace": "auto", "library": "auto"}})
     monkeypatch.setattr(utils, "detect_zfs_dataset", lambda p: None)
     r = utils.take_zfs_snapshot("/ws", "pid", "prep")
     assert r["snapshot_name"] is None and r["ok"] is False and r["required"] is False
@@ -182,7 +185,7 @@ def test_take_zfs_snapshot_no_dataset(monkeypatch):
 
 def test_take_zfs_snapshot_phase_labels_are_distinct(monkeypatch):
     monkeypatch.setitem(utils.CONFIG, "zfs", {"enabled": True, "snapshots_required": True,
-                                              "snapshot_prefix": "px-", "datasets": {"workspace": "auto"}})
+                                              "snapshot_prefix": "px-", "datasets": {"workspace": "auto", "library": "auto"}})
     monkeypatch.setattr(utils, "detect_zfs_dataset", lambda p: "pool/ws")
     monkeypatch.setattr(subprocess, "run",
                         lambda *a, **k: types.SimpleNamespace(returncode=0, stdout="", stderr=""))
@@ -197,7 +200,7 @@ def test_take_zfs_snapshot_logs_name_on_success(monkeypatch):
     # A successful snapshot emits a log line naming it — one place so every phase reports it.
     from cartographer.reporting import Reporter, CaptureSink, use_reporter
     monkeypatch.setitem(utils.CONFIG, "zfs", {"enabled": True, "snapshots_required": False,
-                                              "snapshot_prefix": "px-", "datasets": {"workspace": "auto"}})
+                                              "snapshot_prefix": "px-", "datasets": {"workspace": "auto", "library": "auto"}})
     monkeypatch.setattr(utils, "detect_zfs_dataset", lambda p: "pool/ws")
     monkeypatch.setattr(subprocess, "run",
                         lambda *a, **k: types.SimpleNamespace(returncode=0, stdout="", stderr=""))
@@ -212,7 +215,7 @@ def test_take_zfs_snapshot_no_log_when_disabled_or_failed(monkeypatch):
     # No snapshot taken -> no "taken" log line (disabled = None; failure is the caller's to surface).
     from cartographer.reporting import Reporter, CaptureSink, use_reporter
     monkeypatch.setitem(utils.CONFIG, "zfs", {"enabled": True, "snapshots_required": False,
-                                              "datasets": {"workspace": "auto"}})
+                                              "datasets": {"workspace": "auto", "library": "auto"}})
     monkeypatch.setattr(utils, "detect_zfs_dataset", lambda p: "pool/ws")
     def boom(*a, **k):
         raise subprocess.CalledProcessError(1, "zfs", stderr="pool busy")
@@ -225,7 +228,7 @@ def test_take_zfs_snapshot_no_log_when_disabled_or_failed(monkeypatch):
 
 def test_take_zfs_snapshot_failure_is_recorded_not_raised(monkeypatch):
     monkeypatch.setitem(utils.CONFIG, "zfs", {"enabled": True, "snapshots_required": True,
-                                              "datasets": {"workspace": "auto"}})
+                                              "datasets": {"workspace": "auto", "library": "auto"}})
     monkeypatch.setattr(utils, "detect_zfs_dataset", lambda p: "pool/ws")
     def boom(*a, **k):
         raise subprocess.CalledProcessError(1, "zfs", stderr="pool busy")

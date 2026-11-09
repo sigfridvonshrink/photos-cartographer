@@ -41,7 +41,7 @@ def _ws(tmp_path, *, config=None):
     (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
     cfg = config if config is not None else {k: v for k, v in utils.CONFIG.items() if k != "jobs"}
     if config is None:
-        cfg = dict(cfg); cfg["zfs"] = {"enabled": False}   # never shell out to `zfs snapshot`
+        cfg = dict(cfg); cfg["zfs"] = dict(cfg["zfs"], enabled=False)   # never shell out to `zfs snapshot`
     (ws / ".photos-ingest" / "photos-00-config.json").write_text(json.dumps(cfg))
     return ws
 
@@ -317,7 +317,7 @@ def test_execute_without_saved_plan_exits_nonzero(tmp_path, monkeypatch, capsys)
 @pytest.mark.spec("prep-config-sanity-validated-1")
 def test_invalid_config_rejected_at_load(tmp_path, monkeypatch, capsys):
     bad = {k: v for k, v in utils.CONFIG.items() if k != "jobs"}
-    bad = dict(bad); bad["zfs"] = {"enabled": False}
+    bad = dict(bad); bad["zfs"] = dict(bad["zfs"], enabled=False)
     bad["gpx_interpolation_max_distance_meters"] = -1
     code = _main(monkeypatch, _ws(tmp_path, config=bad), "plan")
     assert code != 0 and "config:" in capsys.readouterr().err

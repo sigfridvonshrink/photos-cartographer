@@ -148,7 +148,7 @@ for those listed in `spec/unjustified.txt`, a list that only shrinks. Of the 34 
 unruled ones get their rationale as their section of the shared contract is ruled.
 
 **What to do:** the ones already ruled — the stale lock's two, the decisions' three in §11, the log's and the package's
-seven in §12, `RUL-one_configuration`, `RUL-control_directory_fixed` and `RUL-tracks_in_dependencies` — get a rationale
+seven in §12, `RUL-control_directory_fixed` and `RUL-tracks_in_dependencies` — get a rationale
 each, drafted and ruled in one pass, and come off the list.
 
 **When:** right after §0–§10 of the shared contract are ruled. It only adds rationale items and moves no link, so it

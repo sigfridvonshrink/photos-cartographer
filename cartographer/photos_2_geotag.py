@@ -46,7 +46,7 @@ from datetime import datetime, timedelta, timezone
 
 from .photos_utils import (
     CONFIG, CONTROL_DIR, control_dir, workspace_volume_error, config_path, handoff_path, guard_path, is_sealed, likely_new_dump,
-    validate_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
+    validate_config, load_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
     folders_fingerprint, media_extensions_fingerprint,
     selected_gpx_root, CAMERA_IDENTITY_FIELDS, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
     missing_managed_folders, by_dest_reprep_pending,
@@ -319,16 +319,14 @@ class GeotagWorkflow:
             blockers.append("Workspace config photos-00-config.json is missing — run prep first: `photos-cartographer prep plan` then `photos-cartographer prep execute`.")
             return blockers, warnings, info
         try:
-            with open(cfg_p) as f:
-                cfg = json.load(f)
-            validate_config(cfg, ws)        # sanity-validate human-authored config (§9.2)
+            load_config(ws)                 # the workspace's file, whole and checked, replaces CONFIG
         except ValueError as e:
             blockers.append(f"Invalid workspace config: {e}")
             return blockers, warnings, info
         except Exception as e:
             blockers.append(f"Workspace config could not be read: {e}")
             return blockers, warnings, info
-        CONFIG.update(cfg)                  # adopt the seeded config as authoritative for this run
+        cfg = CONFIG
 
         ho_p = handoff_path(ws)
         if not os.path.exists(ho_p):
