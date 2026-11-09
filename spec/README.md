@@ -28,7 +28,7 @@ The specs are being restructured into **one Sphinx corpus** of [sphinx-needs](ht
 items, in three levels with the same four documents each (and the rationale's `philosophy`, the roots): [`intent/`](intent/) — what cartographer guarantees, naming
 no tool, file or database; [`rationale/`](rationale/) — why, the justifications, tagged and never normative;
 [`build/`](build/) — how this build meets the intent. Each item has an id, a status (`seed` until ruled) and typed
-links; the tests are items too, from their `@pytest.mark.spec(..., test="TST-...")` marks. `tools/spec-build` renders
+links, and states one obligation, in one SHALL — a second obligation is an item of its own, refining the first; the tests are items too, from their `@pytest.mark.spec(..., test="TST-...")` marks. `tools/spec-build` renders
 it and fails on any warning; `spec/needs.json` is its committed export. Each old document's sentences are recorded,
 verbatim, with where each went, in [`conversion/`](conversion/) — `tools/spec-ledger check` proves none was lost.
 Converted so far: the shared contract, §1–§15 (under review), and the user guide's roots and what they force,

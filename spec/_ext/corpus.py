@@ -25,7 +25,9 @@
   - a link against the levels' direction: an intent item naming a build item; a rationale named by any link but
     `follows_from` (a rationale is never binding); a `follows_from` from anything but a rationale;
   - a fact or a choice nothing follows from;
-  - a rationale marked `forced: yes` whose `follows_from` chain reaches no fact or choice.
+  - a rationale marked `forced: yes` whose `follows_from` chain reaches no fact or choice;
+  - an item stating more than one SHALL: an item carries one obligation, so a second is an item of its own;
+  - an option continued onto a second line, which sphinx-needs would silently drop.
 """
 import json
 import os
@@ -201,8 +203,38 @@ def _links_hold(app, env):
         LOG.warning(line, type="corpus", subtype="links")
 
 
+def _items_well_formed(app, env):
+    """Read from the sources, since what sphinx-needs drops never reaches its data: one SHALL per item, and every
+    option on one line."""
+    import glob
+    import re
+    bad = []
+    for path in sorted(glob.glob(os.path.join(app.srcdir, "*", "*.md"))):
+        if os.sep + GENERATED + os.sep in path:
+            continue
+        rel = os.path.relpath(path, app.srcdir)
+        text = open(path, encoding="utf-8").read()
+        for m in re.finditer(r"^:::\{\w+\}[^\n]*\n(.*?)^:::$", text, re.S | re.M):
+            lines = m.group(1).split("\n")
+            item = next((re.match(r":id:\s*(\S+)", l).group(1) for l in lines if l.startswith(":id:")), "?")
+            head = True
+            for line in lines:
+                if head and not line.strip():
+                    head = False
+                elif head and not line.startswith(":"):
+                    bad.append(f"{rel}: {item}: an option continues onto a second line, which sphinx-needs drops: "
+                               f"{line.strip()[:60]}")
+            body = "\n".join(l for l in lines if not l.startswith(":"))
+            shalls = len(re.findall(r"\bSHALL\b", body))
+            if shalls > 1:
+                bad.append(f"{rel}: {item} states {shalls} SHALLs: an item carries one obligation")
+    for line in bad:
+        LOG.warning(line, type="corpus", subtype="form")
+
+
 def setup(app):
     app.connect("builder-inited", _write_tests_page)
     app.connect("env-check-consistency", _required_are_verified)
     app.connect("env-check-consistency", _links_hold)
+    app.connect("env-check-consistency", _items_well_formed)
     return {"parallel_read_safe": False, "parallel_write_safe": True}
