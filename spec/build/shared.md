@@ -997,7 +997,7 @@ Merge's `execute` SHALL, after revalidating its plan and taking its snapshot and
 
 :::{bld} Prep's failed operation
 :id: BLD-failed_operation
-:status: seed
+:status: ruled
 :realises: RUL-failed_operation_clean, RUL-failure_recorded, RUL-failure_never_done
 
 Prep SHALL journal an operation that raised as `failed`, and stop.
@@ -1005,7 +1005,7 @@ Prep SHALL journal an operation that raised as `failed`, and stop.
 
 :::{bld} Geotag's failed write
 :id: BLD-geotag_failed_write
-:status: seed
+:status: ruled
 :realises: RUL-failed_operation_clean, RUL-failure_recorded, RUL-failure_never_done
 
 Geotag SHALL record a metadata write whose tool failed, or a rename that raised, as failed, confirming neither: a
@@ -1014,7 +1014,7 @@ failed write leaves the file as exiftool found it, a failed rename leaves it und
 
 :::{bld} Merge's failed placement
 :id: BLD-merge_failed_placement
-:status: seed
+:status: ruled
 :realises: RUL-failed_operation_clean, RUL-failure_recorded, RUL-failure_never_done
 
 Merge SHALL record a placement that raised as blocked, its photo left in photos by destination.

@@ -2660,7 +2660,7 @@ A temporary copy SHALL bear a name of its own, which no photo bears.
 
 :::{rul} A failed operation leaves its file as it was
 :id: RUL-failed_operation_clean
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -2671,7 +2671,7 @@ An operation that cannot complete SHALL leave its file as it was before it.
 
 :::{rul} A failed operation's failure is recorded
 :id: RUL-failure_recorded
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-failed_operation_clean
@@ -2681,7 +2681,7 @@ The failure of an operation that cannot complete SHALL be recorded.
 
 :::{rul} A failed operation is never recorded as done
 :id: RUL-failure_never_done
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
