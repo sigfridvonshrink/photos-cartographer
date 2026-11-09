@@ -139,7 +139,7 @@ def test_content_changed_write_flags_mismatch(tmp_path, monkeypatch):
     assert os.path.exists(ws / "6-photos-by-dest" / "T" / "a.arw")
 
 
-@pytest.mark.spec("geotag-no-partial-persistence-1", "geotag-summary-status-1", "geotag-tool-failure-not-silent-1")
+@pytest.mark.spec("geotag-no-partial-persistence-1", "geotag-summary-status-1", "geotag-tool-failure-not-silent-1", "RUL-failure_recorded", test="TST-geotag_execution-exiftool_failure_records_failure")
 def test_exiftool_failure_records_failure(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws, write_ok=False)
