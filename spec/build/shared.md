@@ -105,7 +105,7 @@ and none redefines it.
 
 :::{bld} The configuration is `photos-00-config.json`, in the control directory
 :id: BLD-config_file
-:status: seed
+:status: ruled
 :realises: DEF-configuration, RUL-one_configuration, RUL-config_never_media
 
 The configuration SHALL be the JSON file `photos-00-config.json` in the workspace's control directory, `.photos-ingest/`,
@@ -114,7 +114,7 @@ which prep skips wholesale (§5 of the shared contract) — never an in-code glo
 
 :::{bld} Every phase reads the configuration through one loader
 :id: BLD-config_loader
-:status: seed
+:status: ruled
 :realises: RUL-one_configuration, RUL-config_complete
 
 Every phase SHALL read the configuration through `load_config`, which refuses a file lacking any setting of the built-in
@@ -124,7 +124,7 @@ extension-to-class map rebuilt from it. Seed defaults supplied by a deployment a
 
 :::{bld} Prep seeds from a template a deployment may replace
 :id: BLD-config_seed_template
-:status: seed
+:status: ruled
 :realises: RUL-config_seeded_once, RUL-config_authoritative
 
 Prep SHALL seed the configuration from a default template. A deployment MAY supply its own seed defaults; how it does
@@ -133,7 +133,7 @@ so is the deployment's concern, not the specification's.
 
 :::{bld} `init-library` may write `library_root`
 :id: BLD-init_library_writes_library_root
-:status: seed
+:status: ruled
 :realises: RUL-library_setup_writes_one_setting
 
 The setup command `init-library` (merge §4), run inside a workspace with an explicit library path, MAY write the
@@ -142,7 +142,7 @@ The setup command `init-library` (merge §4), run inside a workspace with an exp
 
 :::{bld} Field-scoped fingerprints, and one whole-file SHA-256
 :id: BLD-config_fingerprints
-:status: seed
+:status: ruled
 :realises: RUL-staleness_by_area, RUL-config_in_dependencies, RUL-organization_settings_restale, RUL-config_digest_recorded
 
 Two things SHALL be derived from the configuration: field-scoped fingerprints — the filename format, the camera-time and
@@ -154,7 +154,7 @@ provenance, recorded in the archival manifest.
 
 :::{bld} The whole-file hash is in the executable plan's dependencies
 :id: BLD-whole_hash_in_the_plan
-:status: seed
+:status: ruled
 :realises: RUL-any_config_change_replans
 
 The whole-file fingerprint SHALL be carried in the `depends_on` of geotag's executable plan (geotag §28, in the
@@ -164,7 +164,7 @@ matches the file.
 
 :::{bld} The costly caches are keyed on their own areas
 :id: BLD-costly_caches_keyed_by_area
-:status: seed
+:status: ruled
 :realises: RUL-costly_results_survive_unrelated_edits, RUL-times_survive_unrelated_config_edits
 
 The costly caches SHALL be keyed on their own areas instead of the whole-file fingerprint: resolved UTC on the
@@ -173,7 +173,7 @@ time-policy subset (geotag §22.1), the renames on the filename-format fingerpri
 
 :::{bld} Prep guards execution with the whole-file hash
 :id: BLD-prep_guards_with_the_whole_hash
-:status: seed
+:status: ruled
 :realises: RUL-any_config_change_replans
 
 Prep SHALL re-plan from the filesystem each run and guard execution with the whole-file hash, keeping no folder or
@@ -207,7 +207,7 @@ mapping `image`, `raw` and `video` to lists of canonical extensions — lowercas
 
 :::{bld} What validating the configuration checks
 :id: BLD-config_values_checked
-:status: seed
+:status: ruled
 :realises: RUL-config_validated_before_use, RUL-checked_paths, RUL-checked_snapshot_names, RUL-checked_filename_format, RUL-checked_numbers
 
 Validating the configuration SHALL check, among others, that a path resolves sanely, that a ZFS snapshot prefix is a

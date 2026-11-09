@@ -271,7 +271,7 @@ Merge SHALL take no snapshot of the library alone.
 
 :::{def} The configuration
 :id: DEF-configuration
-:status: seed
+:status: ruled
 :uses: DEF-workspace
 
 A workspace's **configuration** is the one record of the settings its runs read. It is kept in the workspace, beside
@@ -291,7 +291,7 @@ phase keeping settings of its own, and no setting that governs a run coming from
 
 :::{rul} A configuration missing a setting stops the run
 :id: RUL-config_complete
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -302,7 +302,7 @@ A configuration that lacks a setting SHALL stop the run, naming the setting — 
 
 :::{rul} Prep seeds the configuration once
 :id: RUL-config_seeded_once
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: config-seeded-by-prep-1
@@ -313,7 +313,7 @@ finds, it uses as it is.
 
 :::{rul} The workspace's configuration governs it, not the defaults
 :id: RUL-config_authoritative
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: config-file-authoritative-1
@@ -325,7 +325,7 @@ become — the defaults serving only to seed a new workspace.
 
 :::{rul} Who writes the configuration
 :id: RUL-config_writers
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -337,7 +337,7 @@ below — never by geotag, and never by merge's planning, dry run or execution.
 
 :::{rul} The library setup records one setting
 :id: RUL-library_setup_writes_one_setting
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -350,7 +350,7 @@ library this workspace merges into — that setting, and no other.
 
 :::{rul} The configuration is a dependency of what is made under it
 :id: RUL-config_in_dependencies
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: config-hashed-cascade-1
@@ -361,7 +361,7 @@ never changes a run without being detected.
 
 :::{rul} A digest of the whole configuration is recorded
 :id: RUL-config_digest_recorded
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-config_in_dependencies
@@ -371,7 +371,7 @@ A digest of the configuration's whole content SHALL be recorded for integrity.
 
 :::{rul} The configuration is part of the permanent record
 :id: RUL-config_archived
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 
@@ -380,7 +380,7 @@ The configuration SHALL be part of the archival record the workspace leaves behi
 
 :::{rul} The configuration is never media
 :id: RUL-config_never_media
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -393,7 +393,7 @@ media.
 
 :::{rul} A change to one area restales only what depends on it
 :id: RUL-staleness_by_area
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -406,7 +406,7 @@ not placement.
 
 :::{rul} Costly results survive edits they do not depend on
 :id: RUL-costly_results_survive_unrelated_edits
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -417,7 +417,7 @@ A result that is costly to rebuild SHALL be made stale only by the areas it depe
 
 :::{rul} Resolved true times survive configuration edits outside the time policy
 :id: RUL-times_survive_unrelated_config_edits
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -440,7 +440,7 @@ executable plan and merge's plan — so that none of them is executed.
 
 :::{rul} A change to the folder names or the media classes restales the plans
 :id: RUL-organization_settings_restale
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: config-folderset-ext-restale-1
@@ -539,7 +539,7 @@ An extension the configuration does not list SHALL be `other`.
 
 :::{rul} Every value the user supplies is checked before use
 :id: RUL-config_validated_before_use
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: config-values-validated-1
