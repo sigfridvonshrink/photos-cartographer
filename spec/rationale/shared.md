@@ -27,7 +27,7 @@ against *stale* inputs across separate runs, while the lock guarantees runs neve
 
 :::{rat} A snapshot is an extra layer, not the safety model
 :id: RAT-snapshot_is_extra
-:status: seed
+:status: ruled
 :justifies: RUL-snapshot_optional, RUL-unrequired_snapshot_proceeds
 
 **Snapshots are an optional extra safety layer, not a requirement.** The pipeline operates fully and safely without
@@ -38,7 +38,7 @@ filesystem supports it; they are not the basis of the safety model.
 
 :::{rat} Why the snapshot alone may touch the filesystem
 :id: RAT-one_filesystem_specific_part
-:status: seed
+:status: ruled
 :justifies: RUL-filesystem_agnostic, BLD-snapshot_is_zfs
 
 The mechanism is named for ZFS because that is the reference implementation, but it is deliberately the *only* part
@@ -47,7 +47,7 @@ of the pipeline that touches a specific filesystem feature, and it is optional; 
 
 :::{rat} A rollback point is the state just before the change
 :id: RAT-snapshot_just_before
-:status: seed
+:status: ruled
 :justifies: RUL-snapshot_timing
 
 A snapshot restores the state just before a plan's changes. Taken before the plan is validated, it may precede a plan
@@ -57,7 +57,7 @@ taken after a change, it no longer restores the state before it.
 
 :::{rat} Required means a condition of changing anything
 :id: RAT-required_means_condition
-:status: seed
+:status: ruled
 :justifies: RUL-required_snapshot_or_nothing
 
 An operator who requires snapshots has made a rollback point a condition of any change. Going on without one would break
@@ -66,7 +66,7 @@ that condition silently, so the run stops before its first change, when stopping
 
 :::{rat} A rollback is chosen by hand, later
 :id: RAT-rollback_chosen_by_hand
-:status: seed
+:status: ruled
 :justifies: RUL-snapshot_per_plan
 
 A rollback is done by hand, often long after the run. The snapshot must say which plan's changes it precedes, so the
@@ -75,7 +75,7 @@ operator can find the right one and tell the phases' snapshots apart.
 
 :::{rat} A snapshot of the library alone would lose what merge moved
 :id: RAT-library_snapshot_alone_loses
-:status: seed
+:status: ruled
 :justifies: RUL-merge_snapshots_library, RUL-no_library_only_snapshot
 
 Merge's changes land in two places: it adds each photo to the library and removes it from the workspace. Rolled back
@@ -88,7 +88,7 @@ library alone; with no snapshot of the workspace it takes none at all, and says 
 
 :::{rat} One mechanism, so the phases cannot diverge
 :id: RAT-one_snapshot_mechanism
-:status: seed
+:status: ruled
 :justifies: BLD-one_snapshot_mechanism
 
 Each phase that mutates uses the same mechanism so the phases behave identically and cannot diverge.
