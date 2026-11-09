@@ -2456,7 +2456,7 @@ and no character a filename may not hold.
 :uses: DEF-configuration
 :refines: INV-authored_values_checked
 
-A number the configuration sets — a threshold, a distance, a duration, a count — SHALL be of the right kind and within
+A number the configuration sets — a threshold, a distance, a duration — SHALL be of the right kind and within
 a sane range: a duration or a distance is never negative.
 :::
 

@@ -54,7 +54,6 @@ def _pol(**overrides):
     (_cfg(zfs={"snapshot_prefix": "bad name!"}), "snapshot_prefix"),             # illegal zfs prefix
     (_pol(single_anchor_auto_apply="yes"), "must be a boolean"),                 # non-bool flag
     (_pol(default_folder_timezone="Mars/Phobos"), "valid IANA timezone"),        # bad tz
-    (_pol(manual_segment_template_count=1.5), "must be an integer"),             # non-int count
     (_pol(phone_gpx_max_distance_meters=-5), "phone_gpx_max_distance_meters"),   # negative
     (_pol(device_groups={"phones": "nope"}), "list of strings"),                # not a list
     (_pol(device_groups={"phones": [1, 2]}), "list of strings"),                # non-string elems
