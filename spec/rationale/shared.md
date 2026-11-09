@@ -98,7 +98,7 @@ Each phase that mutates uses the same mechanism so the phases behave identically
 
 :::{rat} One place for every setting
 :id: RAT-one_place_for_settings
-:status: seed
+:status: ruled
 :justifies: RUL-one_configuration
 
 Settings read from more than one place — a phase's own file, an environment variable, the program's defaults — can
@@ -108,7 +108,7 @@ workspace, everything that governed a run is in one file, hashed, checked and ar
 
 :::{rat} A workspace keeps the settings it started with
 :id: RAT-workspace_keeps_its_settings
-:status: seed
+:status: ruled
 :justifies: RUL-config_seeded_once, RUL-config_authoritative
 
 A workspace's runs, spread over days or weeks, must all read the settings it was set up with, or a later run could
@@ -119,7 +119,7 @@ archived, and from then on the copy governs, not the program.
 
 :::{rat} Every change to the configuration is one someone chose
 :id: RAT-config_changes_chosen
-:status: seed
+:status: ruled
 :justifies: RUL-config_writers, RUL-library_setup_writes_one_setting
 
 Prep's seeding happens once, before anything is made under the configuration; the user's own edits are the intended way
@@ -130,7 +130,7 @@ user can find.
 
 :::{rat} A configuration in a file is bound to what it governed
 :id: RAT-config_is_a_file
-:status: seed
+:status: ruled
 :justifies: DEF-configuration, RUL-config_in_dependencies, RUL-config_archived, RUL-config_digest_recorded
 
 Making the config a file binds it intrinsically to the workspace and to everything processed in it. Hashed and folded
@@ -140,7 +140,7 @@ archived, it lets a future reader know not only what was decided but **under wha
 
 :::{rat} Surgical staleness: one hash for everything would restale everything
 :id: RAT-surgical_staleness
-:status: seed
+:status: ruled
 :justifies: RUL-staleness_by_area
 
 Collapsing all staleness to a single whole-file hash would needlessly restale unrelated artifacts on any edit, and is
@@ -149,7 +149,7 @@ explicitly not done.
 
 :::{rat} A coarse trigger for the cheap plan, a precise one for the costly caches
 :id: RAT-coarse_trigger_for_the_cheap_plan
-:status: seed
+:status: ruled
 :justifies: RUL-any_config_change_replans, RUL-costly_results_survive_unrelated_edits, RUL-times_survive_unrelated_config_edits
 
 The whole-file fingerprint restaling the plan is a catch-all guaranteeing no config-driven change is ever silently
@@ -162,7 +162,7 @@ coarse trigger for a cheap artifact is consistent with — indeed protective of 
 
 :::{rat} Folder names and media classes decide which files exist where
 :id: RAT-organization_decides_where_files_are
-:status: seed
+:status: ruled
 :justifies: RUL-organization_settings_restale, BLD-prep_guards_with_the_whole_hash
 
 Geotag's and merge's plans locate the destination tree by name and classify the tree, and renaming a managed folder or
