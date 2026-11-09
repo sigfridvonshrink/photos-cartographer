@@ -28,7 +28,7 @@ import pytest
 
 # --- LibraryLock (shared contract §15.2 / merge §12) ---------------------------
 
-@pytest.mark.spec("merge-library-lock-is-dotfile-cross-workspace-1")
+@pytest.mark.spec("merge-library-lock-is-dotfile-cross-workspace-1", "RUL-library_lock_holds_only_holder", test="TST-merge_primitives-library_lock_keyed_to_root_records_owner")
 def test_library_lock_keyed_to_root_records_owner(tmp_path):
     lib = tmp_path / "library"
     lib.mkdir()

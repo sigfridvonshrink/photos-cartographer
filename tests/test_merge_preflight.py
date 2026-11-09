@@ -166,7 +166,7 @@ def test_empty_library_root_blocks(tmp_path):
     assert any("library_root must be a non-empty" in b for b in blockers), blockers
 
 
-@pytest.mark.spec("merge-require-blessed-library-marker-1")
+@pytest.mark.spec("merge-require-blessed-library-marker-1", "RUL-library_mark_required", test="TST-merge_preflight-unblessed_library_blocks")
 def test_unblessed_library_blocks(tmp_path):
     ws, _ = _make(tmp_path, bless_lib=False)
     blockers, _, _ = _pf(ws)
@@ -303,7 +303,7 @@ def test_init_library_in_workspace_with_path_blesses_and_writes_config(tmp_path)
     assert written["merge"]["library_root"] == str(lib)   # the one narrow config write
 
 
-@pytest.mark.spec("RUL-sealed_refuses", test="TST-merge_preflight-init_library_refuses_to_record_a_library_in_a_sealed_workspace")
+@pytest.mark.spec("RUL-sealed_refuses", "RUL-sealed_no_library_recorded", test="TST-merge_preflight-init_library_refuses_to_record_a_library_in_a_sealed_workspace")
 def test_init_library_refuses_to_record_a_library_in_a_sealed_workspace(tmp_path):
     ws, lib = _fresh_ws_and_lib(tmp_path)
     cfg_p = ws / ".photos-ingest" / "photos-00-config.json"
@@ -366,7 +366,7 @@ def test_init_library_outside_workspace_no_path_errors(tmp_path):
     assert rc == 2
 
 
-@pytest.mark.spec("merge-init-library-creates-marker-1")
+@pytest.mark.spec("merge-init-library-creates-marker-1", "RUL-library_mark_made_by_setup", test="TST-merge_preflight-init_library_idempotent")
 def test_init_library_idempotent(tmp_path):
     lib = tmp_path / "lib"
     lib.mkdir()
@@ -466,7 +466,7 @@ def test_locked_workflow_exits_2_on_blocker(tmp_path):
 
 # --- Tier 3: no-mutation / never-follows consequences ------------------------
 
-@pytest.mark.spec("merge-lock-after-marker-1", "merge-marker-check-before-liblock-1", test="TST-merge_preflight-marker_check_precedes_library_lock_no_lockfile_dropped")
+@pytest.mark.spec("merge-lock-after-marker-1", "merge-marker-check-before-liblock-1", "RUL-library_mark_required", test="TST-merge_preflight-marker_check_precedes_library_lock_no_lockfile_dropped")
 def test_marker_check_precedes_library_lock_no_lockfile_dropped(tmp_path):
     """§12 lock order: the .photos-library marker is validated BEFORE the library-side lock is taken.
     Against a marker-less library_root, the run blocks (rc 2) and must NEVER have created the
@@ -506,7 +506,7 @@ def test_invalid_merge_policy_blocks_with_no_summary_no_placement(tmp_path):
     assert list(lib.iterdir()) == [lib / ".photos-library"]    # nothing placed
 
 
-@pytest.mark.spec("merge-sealed-newdump-warn-1")
+@pytest.mark.spec("merge-sealed-newdump-warn-1", "RUL-sealed_new_dump_left", test="TST-merge_preflight-sealed_new_dump_left_in_place_and_library_untouched")
 def test_sealed_new_dump_left_in_place_and_library_untouched(tmp_path):
     """The merge sealed-workspace path warns about a new dump but relocates nothing: the dumped file
     stays byte-identical in 0-sources and the library is untouched (only its marker)."""

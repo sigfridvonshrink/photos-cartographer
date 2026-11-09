@@ -545,7 +545,7 @@ capture interrupted leaves a usable image either way.
 :::{rat} The library is the user's, and already in order
 :id: RAT-library_is_ground_truth
 :status: ruled
-:justifies: RUL-library_never_altered, RUL-library_not_scanned, RUL-collision_by_content
+:justifies: RUL-library_never_altered, RUL-library_not_scanned, RUL-collision_by_content, RUL-collision_same_content, RUL-collision_different_content
 
 The library is the user's curated collection: its organisation and names are the ground truth, and other tools and
 people rely on them. So merge adds to it and changes nothing in it, and assumes it is in order rather than scanning it:
@@ -556,7 +556,7 @@ tells a copy already present from a different photo sharing a name.
 :::{rat} A library file costs a full read
 :id: RAT-library_reads_cost
 :status: ruled
-:justifies: RUL-library_file_read_once
+:justifies: RUL-library_file_read_once, RUL-library_file_rechecked_before_removal
 
 Fingerprinting a library file means reading and decoding it whole, and the library may sit across a network. Kept in the workspace, a
 fingerprint already taken spares that read on the next run, and stays right while the file is unchanged. A kept
@@ -567,7 +567,7 @@ it cannot be undone: that one decision reads the file again rather than trust wh
 :::{rat} One library, many workspaces
 :id: RAT-library_shared
 :status: ruled
-:justifies: RUL-library_lock, RUL-library_lock_fail_fast
+:justifies: RUL-library_lock, RUL-library_lock_fail_fast, RUL-library_lock_holds_only_holder, RUL-library_lock_stale_recovered
 
 Many workspaces merge into one library, each under its own lock. Only a lock on the library itself keeps two of their
 merges from writing it at once.
@@ -576,7 +576,7 @@ merges from writing it at once.
 :::{rat} A library has nothing of the tool's to inspect
 :id: RAT-library_mark
 :status: ruled
-:justifies: RUL-library_known_by_mark, RUL-library_confirmed_before_lock, RUL-library_place_checked
+:justifies: RUL-library_known_by_mark, RUL-library_confirmed_before_lock, RUL-library_place_checked, RUL-library_mark_made_by_setup, RUL-library_mark_required, RUL-library_creates_only_placements
 
 The library is the user's: it has no structure of the tool's to inspect, so one mark, made once and on purpose, is
 all that tells it from any other folder. Checking the mark before anything is written there — the lock included —
@@ -586,7 +586,7 @@ keeps the tool from writing into a folder that was never made a library.
 :::{rat} The workspace keeps only what still needs attention
 :id: RAT-move_not_copy
 :status: ruled
-:justifies: RUL-merge_moves, RUL-merge_resumable
+:justifies: RUL-merge_moves, RUL-merge_resumable, RUL-unplaced_photo_stays
 
 A copy left in the workspace of a photo already in the library is a duplicate that invites confusion and wastes space,
 so merge moves rather than copies, and removes a copy whose content the library already holds. What stays behind is
@@ -597,7 +597,7 @@ interruption never loses a photo: running merge again finishes the work.
 :::{rat} Merge is the end, so the package is remade at once
 :id: RAT-reseal_automatic
 :status: ruled
-:justifies: RUL-merge_reseals
+:justifies: RUL-merge_reseals, RUL-reseal_rederives_nothing
 
 Merge adds to the record finalize packaged, so the existing package no longer describes the whole journey. Since merge
 is the workspace's last act, remaking the package once at its end is what the user always wants. Finalize stays its own
@@ -617,7 +617,7 @@ none, so it can be finished by running it again.
 :::{rat} A finished workspace is read, not reprocessed
 :id: RAT-sealed_is_final
 :status: ruled
-:justifies: RUL-sealed_refuses, RUL-sealed_new_dump_warned
+:justifies: RUL-sealed_refuses, RUL-sealed_new_dump_warned, RUL-editor_refuses_sealed, RUL-sealed_no_library_recorded, RUL-sealed_new_dump_left
 
 A second batch processed in a merged workspace would interleave with the first's database, logs and package, and its
 record would no longer describe one dump. So nothing that could change it runs; the records stay readable; and a dump

@@ -580,7 +580,7 @@ checked with `PRAGMA quick_check`, then renamed over the phase's earlier image.
 :::{bld} Merge's collision check and its library cache
 :id: BLD-merge_collision
 :status: ruled
-:realises: RUL-library_not_scanned, RUL-collision_by_content, RUL-library_file_read_once
+:realises: RUL-library_not_scanned, RUL-collision_by_content, RUL-library_file_read_once, RUL-collision_same_content, RUL-collision_different_content, RUL-library_file_rechecked_before_removal
 :uses: BLD-workspace_database
 
 Merge SHALL map each photo by destination to its place under `library_root`, and list only the folders its photos go
@@ -594,7 +594,7 @@ incoming photo whose name is taken by different content SHALL take the shared su
 :::{bld} The library's mark and its checks
 :id: BLD-library_marker
 :status: ruled
-:realises: RUL-library_known_by_mark, RUL-library_place_checked
+:realises: RUL-library_known_by_mark, RUL-library_place_checked, RUL-library_mark_made_by_setup, RUL-library_mark_required, RUL-library_creates_only_placements
 
 A library SHALL be marked by an empty `.photos-library` file in `library_root`, which `is_library` tests with
 `os.path.isfile`; `merge init-library` alone SHALL create it, with `O_CREAT|O_EXCL`, leaving one already there as it is
@@ -606,7 +606,7 @@ directory that is neither the workspace nor inside it. Merge SHALL create a miss
 :::{bld} The library lock
 :id: BLD-library_lock
 :status: ruled
-:realises: RUL-library_lock, RUL-library_lock_fail_fast, RUL-library_confirmed_before_lock
+:realises: RUL-library_lock, RUL-library_lock_fail_fast, RUL-library_confirmed_before_lock, RUL-library_lock_holds_only_holder, RUL-library_lock_stale_recovered
 
 The library lock SHALL be `LibraryLock`: an exclusive, non-blocking `flock` on `.photos-merge.lock` in `library_root`,
 recording its holder's `pid`, `started_at` and `host` and nothing else, released by the kernel when its process dies;
@@ -618,7 +618,7 @@ stop with exit status 1.
 :::{bld} Merge's move: one rename, or copy, verify, rename and remove
 :id: BLD-merge_move
 :status: ruled
-:realises: RUL-library_never_altered, RUL-merge_moves, RUL-merge_resumable
+:realises: RUL-library_never_altered, RUL-merge_moves, RUL-merge_resumable, RUL-unplaced_photo_stays
 
 Each photo SHALL move into its place without overwriting it: on the library's own filesystem by a single rename that
 refuses an existing name; across filesystems by a copy to a temporary name beside its place, fingerprinted against the
@@ -631,7 +631,7 @@ destination after the library's copy is fingerprinted again and found to hold it
 :::{bld} The merge records and the re-seal
 :id: BLD-merge_records
 :status: ruled
-:realises: RUL-merge_records_landing, RUL-merge_reseals, RUL-seal_on_success_only
+:realises: RUL-merge_records_landing, RUL-merge_reseals, RUL-seal_on_success_only, RUL-nothing_built_from_merge_records, RUL-reseal_rederives_nothing
 :uses: BLD-archive_manifest, BLD-workspace_database
 
 Merge SHALL write `photos-31-merge-summary.json` on every outcome but a stale plan or a failed precondition: per photo
@@ -644,7 +644,7 @@ the seal.
 :::{bld} The seal and its checks
 :id: BLD-seal_marker
 :status: ruled
-:realises: RUL-seal_is_authority, RUL-sealed_refuses, RUL-sealed_prune_allowed, RUL-sealed_new_dump_warned
+:realises: RUL-seal_is_authority, RUL-sealed_refuses, RUL-sealed_prune_allowed, RUL-sealed_new_dump_warned, RUL-editor_refuses_sealed, RUL-sealed_no_library_recorded, RUL-sealed_new_dump_left
 
 The seal SHALL be `photos-00-sealed.json` in the control directory, its own file beside the workspace guard — which
 only prep writes — recording `sealed`, the merge run id (`merged_run_id`) and `library_root`; its presence alone seals.

@@ -276,7 +276,7 @@ def test_recognize_camera_groups_records_timestamps(tmp_path):
     assert groups[CAM]["missing_timestamp"] == 1
 
 
-@pytest.mark.spec("geotag-sealed-newdump-warn-1")
+@pytest.mark.spec("geotag-sealed-newdump-warn-1", "RUL-sealed_new_dump_left", test="TST-geotag_orchestration-sealed_workspace_with_dump_warns_and_blocks")
 def test_sealed_workspace_with_dump_warns_and_blocks(tmp_path, monkeypatch, capsys):
     ws, ctl = _init_ws(tmp_path)
     (ctl / "photos-00-config.json").write_text(json.dumps({k: v for k, v in utils.CONFIG.items() if k != "jobs"}))

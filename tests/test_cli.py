@@ -155,7 +155,7 @@ def test_sealed_workspace_warns_on_new_dump(tmp_path, monkeypatch, capsys):
     assert "new dump" in capsys.readouterr().err.lower()
 
 
-@pytest.mark.spec("prep-sealed-new-dump-warning-1", "seal-new-dump-warn-1", test="TST-cli-sealed_new_dump_is_left_exactly_in_place")
+@pytest.mark.spec("prep-sealed-new-dump-warning-1", "seal-new-dump-warn-1", "RUL-sealed_new_dump_left", test="TST-cli-sealed_new_dump_is_left_exactly_in_place")
 def test_sealed_new_dump_is_left_exactly_in_place(tmp_path, monkeypatch, capsys):
     """The sealed-workspace new-dump path only WARNS — it never relocates the dumped file. After the
     refusal the file is byte-identical at its original 0-sources path (the operator must move it to a

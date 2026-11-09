@@ -1947,8 +1947,8 @@ A workspace is **sealed** once merge has succeeded in it: marked as finished, by
 :aliases: merge-library-protected-1
 :uses: DEF-merge, DEF-library
 
-Merge SHALL never rename, overwrite, move, delete or change a file already in the library; where an incoming photo's
-place is taken, the incoming photo SHALL give way.
+Merge SHALL never rename, overwrite, move, delete or change a file already in the library, an incoming photo whose place
+is taken giving way instead.
 :::
 
 :::{rul} Merge reads the library only where it places a photo
@@ -1959,8 +1959,8 @@ place is taken, the incoming photo SHALL give way.
 :verify: required
 :uses: DEF-merge, DEF-library
 
-Merge SHALL touch the library only at the places its photos go, and read a library file only when one is already
-there. It SHALL NOT scan, index or de-duplicate the library.
+Merge SHALL touch the library only at the places its photos go, and read a library file only when one is already there —
+never scanning, indexing or de-duplicating the library.
 :::
 
 :::{rul} A taken place is settled by content
@@ -1968,13 +1968,35 @@ there. It SHALL NOT scan, index or de-duplicate the library.
 :status: ruled
 :criticality: high
 :verify: required
-:aliases: merge-collision-same-content-1, merge-collision-diff-content-1
 :uses: DEF-merge, DEF-library, DEF-fingerprint
 :refines: RUL-library_never_altered
 
-Where an incoming photo's place in the library is taken, merge SHALL compare the two by fingerprint. The same content
-SHALL mean the photo is already in the library: nothing is written there, and the workspace's copy is removed. Different
-content SHALL mean two photos share a name: the incoming one is placed under a differentiating name.
+Where an incoming photo's place in the library is taken, merge SHALL compare the two by fingerprint.
+:::
+
+:::{rul} The same content is already in the library
+:id: RUL-collision_same_content
+:status: ruled
+:criticality: high
+:verify: required
+:aliases: merge-collision-same-content-1
+:refines: RUL-collision_by_content
+
+A taken place holding the same content SHALL mean the photo is already in the library: nothing is written there, and the
+workspace's copy is removed.
+:::
+
+:::{rul} Different content is placed under a differentiating name
+:id: RUL-collision_different_content
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: merge-collision-diff-content-1
+:refines: RUL-collision_by_content
+
+A taken place holding different content SHALL mean two photos share a name: the incoming one is placed under a
+differentiating name.
 :::
 
 :::{rul} A library file is read at most once while unchanged
@@ -1987,8 +2009,19 @@ content SHALL mean two photos share a name: the incoming one is placed under a d
 
 A library file's fingerprint SHALL be computed only when a collision needs it, and kept, so that a library file
 unchanged since is never fingerprinted again in the workspace, in that run or a later one, while the way photos are
-decoded is unchanged too. One read is exempt: before a photo is removed from the workspace because the library already
-holds it, the library file SHALL be fingerprinted again, whatever is kept.
+decoded is unchanged too — save for the one check before a photo is removed from the workspace.
+:::
+
+:::{rul} A library file is fingerprinted again before a photo it holds is removed
+:id: RUL-library_file_rechecked_before_removal
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-library_file_read_once
+
+Before a photo is removed from the workspace because the library already holds it, the library file SHALL be
+fingerprinted again, whatever is kept.
 :::
 
 :::{rul} The library's place is checked
@@ -2001,8 +2034,8 @@ holds it, the library file SHALL be fingerprinted again, whatever is kept.
 :uses: DEF-library, DEF-workspace
 :refines: RUL-checked_paths
 
-Merge SHALL check the library's configured place like every path the user writes, and SHALL refuse it unless it is an
-existing folder outside the workspace.
+Merge SHALL check the library's configured place like every path the user writes, refusing it unless it is an existing
+folder outside the workspace.
 :::
 
 :::{rul} A library is known by its mark alone
@@ -2014,11 +2047,41 @@ existing folder outside the workspace.
 :aliases: lib-marker-only-identity-1
 :uses: DEF-library, DEF-merge
 
-A folder SHALL be taken for a library by one mark in it and by nothing else: merge SHALL inspect no structure of the
-library, which has none of a workspace's folders, guard or lifecycle. Merge's library setup alone SHALL make the mark,
-once — making it again SHALL change nothing; merge's plan, dry run and execution SHALL only read it, and stop at once if
-it is absent. Beyond its mark and its lock, merge SHALL create in the library only the photos it places, the folders
-they go into, and, while a photo crosses filesystems, its temporary copy.
+A folder SHALL be taken for a library by one mark in it and by nothing else, merge inspecting no structure of the
+library, which has none of a workspace's folders, guard or lifecycle.
+:::
+
+:::{rul} Only the library setup makes the mark, once
+:id: RUL-library_mark_made_by_setup
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-library_known_by_mark
+
+Merge's library setup alone SHALL make the library's mark — once, making it again changing nothing.
+:::
+
+:::{rul} Merge's plan, dry run and execution stop without the mark
+:id: RUL-library_mark_required
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-library_known_by_mark
+
+Merge's plan, dry run and execution SHALL only read the library's mark, and stop at once if it is absent.
+:::
+
+:::{rul} Merge creates in the library only what it places
+:id: RUL-library_creates_only_placements
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-library_known_by_mark
+
+Beyond its mark and its lock, merge SHALL create in the library only the photos it places, the folders they go into,
+and, while a photo crosses filesystems, its temporary copy.
 :::
 
 :::{rul} One merge at a time in a library
@@ -2030,9 +2093,18 @@ they go into, and, while a photo crosses filesystems, its temporary copy.
 :aliases: merge-library-lock-1
 :uses: DEF-library, DEF-merge
 
-Merge SHALL hold a lock on the library for its whole run, besides the workspace's lock and not instead of it, so that
-no two merges write one library at once, even from different workspaces. The lock SHALL hold nothing about the library
-but who holds it.
+Merge SHALL hold a lock on the library for its whole run, besides the workspace's lock and not instead of it, so that no
+two merges write one library at once, even from different workspaces.
+:::
+
+:::{rul} The library's lock holds only who holds it
+:id: RUL-library_lock_holds_only_holder
+:status: ruled
+:criticality: low
+:verify: required
+:refines: RUL-library_lock
+
+The library's lock SHALL hold nothing about the library but who holds it.
 :::
 
 :::{rul} A locked library is refused at once
@@ -2044,8 +2116,17 @@ but who holds it.
 :aliases: merge-library-lock-failfast-1
 :refines: RUL-library_lock
 
-A merge that finds the library locked SHALL stop at once, having changed nothing in the library. A library lock left by
-a merge that died SHALL be recognisable as stale, and recoverable, as the workspace's lock is.
+A merge that finds the library locked SHALL stop at once, having changed nothing in the library.
+:::
+
+:::{rul} A dead merge's library lock is recoverable
+:id: RUL-library_lock_stale_recovered
+:status: ruled
+:criticality: med
+:verify: incidental
+:refines: RUL-library_lock_fail_fast
+
+A library lock left by a merge that died SHALL be recognisable as stale, and recoverable, as the workspace's lock is.
 :::
 
 :::{rul} The library is confirmed before it is locked
@@ -2058,8 +2139,8 @@ a merge that died SHALL be recognisable as stale, and recoverable, as the worksp
 :refines: RUL-library_lock
 
 Merge SHALL take the workspace's lock first, then check the library's place and its mark, and only then take the
-library's lock, so that no lock is ever left in a folder that is not a library. A merge stopped at any of these steps
-SHALL have changed nothing in the library.
+library's lock, so that no lock is ever left in a folder that is not a library — a merge stopped at any of these steps
+having changed nothing in the library.
 :::
 
 :::{rul} Merge moves, and a photo leaves the workspace only once safe in the library
@@ -2068,12 +2149,23 @@ SHALL have changed nothing in the library.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: merge-move-leaves-bydest-empty-1, merge-move-atomic-source-last-1, merge-blocker-left-in-bydest-1
+:aliases: merge-move-leaves-bydest-empty-1, merge-move-atomic-source-last-1
 :uses: DEF-merge, DEF-library, DEF-managed_folders
 
-Merge SHALL move each photo it places: the workspace's copy SHALL be removed only once the library's is verified in
-place, and a photo already in the library SHALL be removed likewise. A photo merge cannot place SHALL stay where it is,
-the run then partial.
+Merge SHALL move each photo it places, removing the workspace's copy only once the library's is verified in place — and
+a photo already in the library likewise.
+:::
+
+:::{rul} A photo merge cannot place stays where it is
+:id: RUL-unplaced_photo_stays
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: merge-blocker-left-in-bydest-1
+:refines: RUL-merge_moves
+
+A photo merge cannot place SHALL stay where it is, the run then partial.
 :::
 
 :::{rul} Merge resumes, and a merged batch is a no-op
@@ -2085,8 +2177,8 @@ the run then partial.
 :uses: DEF-merge
 :refines: RUL-no_op_run
 
-A merge interrupted SHALL be finished by running it again, which SHALL apply only what is outstanding; merging a batch
-already merged SHALL change nothing.
+A merge interrupted SHALL be finished by running it again, which applies only what is outstanding — merging a batch
+already merged changing nothing.
 :::
 
 :::{rul} Merge records where every photo landed
@@ -2098,8 +2190,19 @@ already merged SHALL change nothing.
 :uses: DEF-merge, DEF-transformation_log
 :refines: RUL-phase_writes_own_records
 
-Merge SHALL record, in its own records, where each photo landed in the library, whether it was renamed there, which
-were already present, and what blocked the rest. Nothing SHALL be built from merge's records.
+Merge SHALL record, in its own records, where each photo landed in the library, whether it was renamed there, which were
+already present, and what blocked the rest.
+:::
+
+:::{rul} Nothing is built from merge's records
+:id: RUL-nothing_built_from_merge_records
+:status: ruled
+:criticality: low
+:verify: none
+:omit_reason: no test asserts it (backlog item 3)
+:refines: RUL-merge_records_landing
+
+Nothing SHALL be built from merge's records.
 :::
 
 :::{rul} Merge remakes the package as part of its run
@@ -2107,11 +2210,23 @@ were already present, and what blocked the rest. Nothing SHALL be built from mer
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: merge-reseals-automatically-1, merge-reseal-no-rederive-1
+:aliases: merge-reseals-automatically-1
 :uses: DEF-merge, DEF-archival_package
 
-A merge that succeeds SHALL remake the archival package to hold its own records too, as part of the same run and with
-no command of its own, from the records as they stand: it SHALL re-derive nothing of an earlier phase.
+A merge that succeeds SHALL remake the archival package to hold its own records too, as part of the same run and with no
+command of its own.
+:::
+
+:::{rul} Remaking the package re-derives nothing
+:id: RUL-reseal_rederives_nothing
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: merge-reseal-no-rederive-1
+:refines: RUL-merge_reseals
+
+Merge SHALL remake the package from the records as they stand, re-deriving nothing of an earlier phase.
 :::
 
 :::{rul} Only a whole merge seals
@@ -2123,8 +2238,8 @@ no command of its own, from the records as they stand: it SHALL re-derive nothin
 :aliases: seal-success-then-sealed-1, seal-partial-writes-no-marker-1
 :uses: DEF-sealed_workspace, DEF-merge
 
-Merge SHALL seal the workspace only when it succeeds whole: every photo by destination placed in the library or found
-already there, none left. A partial, failed or interrupted merge SHALL leave the workspace unsealed.
+Merge SHALL seal the workspace only when it succeeds whole — every photo by destination placed in the library or found
+already there, none left — a partial, failed or interrupted merge leaving it unsealed.
 :::
 
 :::{rul} The seal alone says a workspace is finished
@@ -2145,13 +2260,35 @@ Whether a workspace is finished SHALL be read from its seal alone, never from th
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: seal-scripts-hardstop-1, edit-sealed-refuses-1
+:aliases: seal-scripts-hardstop-1
 :uses: DEF-sealed_workspace, DEF-decision
 :refines: RUL-merge_is_terminal
 
-In a sealed workspace prep, geotag and merge SHALL stop as they start, changing nothing but the owner record of the workspace lock, and the decision
-editor SHALL neither open it nor save into it; nor SHALL merge's library setup record a library in its configuration.
-Its records MAY still be read.
+In a sealed workspace prep, geotag and merge SHALL stop as they start, changing nothing but the owner record of the
+workspace lock. Its records MAY still be read.
+:::
+
+:::{rul} The decision editor refuses a sealed workspace
+:id: RUL-editor_refuses_sealed
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: edit-sealed-refuses-1
+:refines: RUL-sealed_refuses
+
+The decision editor SHALL neither open a sealed workspace nor save into it.
+:::
+
+:::{rul} A sealed workspace's configuration records no library
+:id: RUL-sealed_no_library_recorded
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-sealed_refuses
+
+Merge's library setup SHALL NOT record a library in a sealed workspace's configuration.
 :::
 
 :::{rul} Pruning the quarantine is still allowed
@@ -2163,22 +2300,33 @@ Its records MAY still be read.
 :uses: DEF-sealed_workspace
 :refines: RUL-sealed_refuses
 
-Pruning the quarantine SHALL remain allowed in a sealed workspace, and SHALL be the only change allowed there.
+Pruning the quarantine SHALL remain allowed in a sealed workspace — the only change allowed there.
 :::
 
-:::{rul} A new dump in a sealed workspace is pointed out and left
+:::{rul} A new dump in a sealed workspace is pointed out
 :id: RUL-sealed_new_dump_warned
 :status: ruled
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: seal-new-dump-warn-1
 :uses: DEF-sealed_workspace
 :refines: RUL-sealed_refuses
 
 A command refusing a sealed workspace that finds anything where a dump would land — an entry at the workspace's top
 level other than its managed folders and hidden entries, or anything in the inbox — SHALL say that a new dump is likely
-there and must go to a fresh workspace, and SHALL leave it exactly where it is.
+there and must go to a fresh workspace.
+:::
+
+:::{rul} A new dump in a sealed workspace is left where it is
+:id: RUL-sealed_new_dump_left
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: seal-new-dump-warn-1
+:refines: RUL-sealed_new_dump_warned
+
+A command refusing a sealed workspace SHALL leave a new dump it finds there exactly where it is.
 :::
 
 ## 14. Every value the user writes is checked
