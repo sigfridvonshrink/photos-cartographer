@@ -284,7 +284,7 @@ def test_hash_failure_preservation(tmp_path, monkeypatch):
         op_types = [op.type for op in plan.operations]
         assert "quarantine_move" not in op_types
 
-@pytest.mark.spec("struct-symlinks-barred-1", test="TST-workspace_prep-symlink_blocking")
+@pytest.mark.spec("struct-symlinks-barred-1", "RUL-link_named", test="TST-workspace_prep-symlink_blocking")
 def test_symlink_blocking(tmp_path, monkeypatch):
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
@@ -590,7 +590,7 @@ def _mock_for_plan(monkeypatch):
     photos_ingest.CONFIG["jobs"] = 1
 
 
-@pytest.mark.spec("prep-missing-folder-blocks-1", "struct-no-silent-rebuild-1", test="TST-workspace_prep-missing_managed_folder_on_activated_workspace_hard_stops")
+@pytest.mark.spec("prep-missing-folder-blocks-1", "struct-no-silent-rebuild-1", "RUL-missing_folder_named", test="TST-workspace_prep-missing_managed_folder_on_activated_workspace_hard_stops")
 def test_missing_managed_folder_on_activated_workspace_hard_stops(tmp_path, monkeypatch):
     """An activated workspace (guard present) missing managed 0-6 folder(s) is non-conforming — prep
     hard-stops with a blocker rather than silently recreating them (which could mask lost media)."""
@@ -606,7 +606,7 @@ def test_missing_managed_folder_on_activated_workspace_hard_stops(tmp_path, monk
                for b in plan.blockers), plan.blockers
 
 
-@pytest.mark.spec("prep-empty-sources-not-missing-1")
+@pytest.mark.spec("prep-empty-sources-not-missing-1", "RUL-empty_inbox_normal", test="TST-workspace_prep-empty_sources_is_steady_end_state_not_a_missing_folder_block")
 def test_empty_sources_is_steady_end_state_not_a_missing_folder_block(tmp_path, monkeypatch):
     """§6.2 (item 7, final clause): an EMPTY 0-sources is the normal steady end-state (Section 18),
     NOT a missing-folder condition. On an initialized workspace whose 0-sources is present but empty

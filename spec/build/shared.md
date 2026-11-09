@@ -226,7 +226,7 @@ bands are unrelated to the numbered media folders `0-sources`…`6-photos-by-des
 :::{bld} What prep skips
 :id: BLD-prep_skip_set
 :status: seed
-:realises: RUL-not_inventoried, RUL-control_records_never_media, RUL-config_never_media, DEF-strays_folder
+:realises: RUL-not_inventoried, RUL-control_records_never_media, RUL-config_never_media, DEF-strays_folder, RUL-strays_never_processed
 
 Prep SHALL skip `.photos-ingest/`, `.photos-ingest-quarantine/` and `.git` as whole subtrees, every dot-prefixed file,
 and the strays folder `1-strays/` with all its `<plan-id>` subfolders (prep §3, §3.2). The strays of a run SHALL go to
@@ -269,7 +269,7 @@ dependency check.
 :::{bld} The workspace's top level
 :id: BLD-top_level_entries
 :status: seed
-:realises: RUL-top_level_only_managed, RUL-first_dump_at_top_level, RUL-structure_built_once
+:realises: RUL-top_level_only_managed, RUL-first_dump_at_top_level, RUL-structure_built_once, RUL-only_prep_builds_structure
 
 The top level of an initialized workspace SHALL hold exactly the managed folders `0-sources`…`6-photos-by-dest` and
 `.photos-ingest/`, `.photos-ingest-quarantine/`, `.git` and other dotfiles and dot-directories; the inbox SHALL be
@@ -280,7 +280,7 @@ The top level of an initialized workspace SHALL hold exactly the managed folders
 :::{bld} Where each phase applies the shape guards
 :id: BLD-shape_guards_by_phase
 :status: seed
-:realises: RUL-no_links, RUL-who_checks_for_links, RUL-missing_folder_blocks, RUL-shape_checked_first
+:realises: RUL-no_links, RUL-who_checks_for_links, RUL-missing_folder_blocks, RUL-shape_checked_first, RUL-link_named, RUL-geotag_merge_check_top_level_links, RUL-missing_folder_named, RUL-empty_inbox_normal
 
 Links: prep across the tree it walks (prep §6.2 item 3); geotag and merge at the workspace root at startup (geotag §13;
 merge precondition 0a), and through the handoff (geotag §7.2; merge precondition 3). Missing managed folders: prep §6.2
@@ -317,7 +317,7 @@ executable rename plan.
 :::{bld} The `-NNN` suffix
 :id: BLD-name_suffix
 :status: seed
-:realises: RUL-suffix_no_clobber, RUL-suffix_choice_by_phase
+:realises: RUL-suffix_no_clobber, RUL-suffix_choice_by_phase, RUL-merge_suffix_above_highest
 
 The names SHALL be `<timestamp>.ext` for the first file with a free base name, `<timestamp>-001.ext` for the first
 collision, `<timestamp>-002.ext` for the second, and so on. Each phase specifies its allocation where it plans its
@@ -359,7 +359,7 @@ when it is a managed folder, lies inside one, or contains one — the workspace 
 :::{bld} A track file
 :id: BLD-track_file
 :status: seed
-:realises: RUL-track_files_block_prep, DEF-tracks
+:realises: RUL-track_files_block_prep, DEF-tracks, RUL-track_file_left_in_place
 
 A track file SHALL be a file named `*.gpx`, `*.kml`, `*.kmz`, `*.fit`, `*.tcx`, `*.nmea` or `*.igc`, in any case. Of these geotag reads
 only the `*.gpx` files beneath `gpx_root`. Prep SHALL raise one blocker for each it inventories, naming it, and leave it

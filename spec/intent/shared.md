@@ -549,8 +549,8 @@ plans and the decisions, the journals, the end-of-phase records and the database
 :aliases: ctrl-all-in-photos-ingest-1
 :uses: DEF-control_records
 
-Every control record SHALL be kept in the workspace's one place for them. None SHALL sit among the media or at the
-workspace's top level.
+Every control record SHALL be kept in the workspace's one place for them, none among the media or at the workspace's top
+level.
 :::
 
 :::{rul} The control records' place is never searched for media
@@ -562,8 +562,8 @@ workspace's top level.
 :aliases: ctrl-prep-skips-wholesale-1
 :refines: RUL-control_records_together
 
-No phase SHALL take a control record for media. The place they are kept SHALL be left out of every inventory of media as
-a whole — not file by file.
+The control records' place SHALL be left out of every inventory of media as a whole — not file by file — so that no
+phase takes a control record for media.
 :::
 
 :::{def} The strays folder
@@ -586,8 +586,17 @@ phase's output.
 :uses: DEF-strays_folder
 
 Prep SHALL leave out of its inventory of media, each as a whole: the control records' place, the quarantine, a
-version-control directory, and the strays folder with everything in it; and every hidden file. Prep SHALL write into the
-strays folder but never scan it, and nothing SHALL process its contents again.
+version-control directory, and the strays folder with everything in it; and every hidden file.
+:::
+
+:::{rul} The strays folder's contents are never processed again
+:id: RUL-strays_never_processed
+:status: seed
+:criticality: med
+:verify: incidental
+:refines: RUL-not_inventoried
+
+Nothing SHALL process the strays folder's contents again: prep writes into it, but never scans it.
 :::
 
 :::{rul} Hidden files in a dump are quarantined
@@ -608,8 +617,8 @@ be moved to the recoverable quarantine, not merely left out.
 :verify: required
 :aliases: plan-canonical-path-1
 
-Each phase's plan, and each of its decision records, SHALL have one fixed place among the control records. The phase's
-planning SHALL write it there, and its dry run and its execution SHALL read it from there.
+Each phase's plan, and each of its decision records, SHALL have one fixed place among the control records, where the
+phase's planning writes it and its dry run and its execution read it.
 :::
 
 :::{rul} No command is told where a plan is
@@ -656,8 +665,8 @@ simulation.
 :verify: required
 :aliases: plan-replan-no-clobber-1
 
-Re-planning SHALL never overwrite a plan or a decision record. When what it makes differs from what is saved, the saved
-one SHALL first be set aside, recoverably, and the user told where.
+Re-planning SHALL never overwrite a plan or a decision record: when what it makes differs from what is saved, the saved
+one is first set aside, recoverably, and the user told where.
 :::
 
 :::{rul} An unchanged re-plan writes nothing
@@ -709,7 +718,7 @@ No phase SHALL process an initialized workspace whose shape was disturbed from o
 top level that does not belong there, a symbolic link among its files, a managed folder missing — without stopping.
 :::
 
-:::{rul} Only prep builds the structure, once
+:::{rul} Prep builds the structure once, and never removes a folder
 :id: RUL-structure_built_once
 :status: seed
 :criticality: med
@@ -717,9 +726,20 @@ top level that does not belong there, a symbolic link among its files, a managed
 :verify: required
 :upholds: INV-undisturbed_shape
 
-Prep SHALL create the full structure of managed folders exactly once, when it initializes the workspace, and SHALL never
-remove one. No other phase SHALL create or repair the workspace's structure; the folders merge creates in the library
-are placement, not structure.
+Prep SHALL create the full structure of managed folders exactly once, when it initializes the workspace, and never
+remove one.
+:::
+
+:::{rul} No other phase creates or repairs the structure
+:id: RUL-only_prep_builds_structure
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-structure_built_once
+
+No phase but prep SHALL create or repair the workspace's structure; the folders merge creates in the library are
+placement, not structure.
 :::
 
 :::{rul} The top level holds only what belongs there
@@ -732,8 +752,8 @@ are placement, not structure.
 :upholds: INV-undisturbed_shape
 
 The top level of an initialized workspace SHALL hold only the managed folders, the control records' place, the
-quarantine and hidden entries. Any other entry — a file, a folder, a link — SHALL be a misplaced dump, and block every
-phase alike. The inbox SHALL be the only place a dump belongs.
+quarantine and hidden entries: any other entry — a file, a folder, a link — is a misplaced dump, whose only place is the
+inbox, and blocks every phase alike.
 :::
 
 :::{rul} A new workspace's first dump is at its top level
@@ -744,8 +764,8 @@ phase alike. The inbox SHALL be the only place a dump belongs.
 :aliases: struct-uninit-exception-1
 :refines: RUL-top_level_only_managed
 
-On a workspace not yet initialized, files and folders at the top level SHALL be the first dump, and SHALL start
-initialization. A symbolic link there SHALL still block.
+On a workspace not yet initialized, the files and folders at the top level SHALL be the first dump, and start
+initialization — a symbolic link there still blocking, as everywhere.
 :::
 
 :::{rul} No symbolic link is followed, and any link blocks
@@ -757,13 +777,22 @@ initialization. A symbolic link there SHALL still block.
 :aliases: struct-symlinks-barred-1
 :upholds: INV-undisturbed_shape
 
-No phase SHALL follow or organize a symbolic link. A link anywhere among the managed files SHALL block — a link to a
+A symbolic link anywhere among the managed files SHALL block, never followed, organized or skipped silently: a link to a
 file anywhere; a link to a folder inside a dump or a managed folder, whose mere presence blocks though it is never
-entered; a managed folder that is itself a link, before it is walked; a link at the top level — never be skipped
-silently. The phase SHALL name the link and produce no executable plan and no artifact after it.
+entered; a managed folder that is itself a link, before it is walked; a link at the top level.
 :::
 
-:::{rul} Prep checks the whole tree; the others check the top level
+:::{rul} A blocking link is named, and nothing is made after it
+:id: RUL-link_named
+:status: seed
+:criticality: med
+:verify: required
+:refines: RUL-no_links
+
+A phase a link blocks SHALL name the link, and produce no executable plan and no artifact after it.
+:::
+
+:::{rul} Prep checks the whole tree for links
 :id: RUL-who_checks_for_links
 :status: seed
 :criticality: med
@@ -771,7 +800,17 @@ silently. The phase SHALL name the link and produce no executable plan and no ar
 :refines: RUL-no_links
 
 Prep SHALL check for links across the whole tree it walks, the destination tree included though prep never changes it.
-Geotag and merge SHALL check the top level themselves, and SHALL consume only a handoff prep built with no link present.
+:::
+
+:::{rul} Geotag and merge check the top level for links
+:id: RUL-geotag_merge_check_top_level_links
+:status: seed
+:criticality: med
+:verify: required
+:refines: RUL-who_checks_for_links
+
+Geotag and merge SHALL check the top level for links themselves, and consume only a handoff prep built with no link
+present.
 :::
 
 :::{rul} A missing managed folder blocks, and is never rebuilt
@@ -783,9 +822,29 @@ Geotag and merge SHALL check the top level themselves, and SHALL consume only a 
 :aliases: struct-no-silent-rebuild-1
 :upholds: INV-undisturbed_shape
 
-On an initialized workspace, a missing managed folder SHALL block every phase. It SHALL NOT be recreated outside
-initialization, and no phase SHALL organize media into a structure it had to rebuild. The block SHALL name the missing
-folders, say that something is wrong, and tell the user to restore them and run again; an empty folder restores one.
+On an initialized workspace, a missing managed folder SHALL block every phase, never recreated outside initialization:
+no phase organizes media into a structure it had to rebuild.
+:::
+
+:::{rul} The block names the missing folders
+:id: RUL-missing_folder_named
+:status: seed
+:criticality: med
+:verify: required
+:refines: RUL-missing_folder_blocks
+
+The block of a missing managed folder SHALL name the missing folders, say that something is wrong, and tell the user to
+restore them and run again; an empty folder restores one.
+:::
+
+:::{rul} An empty inbox is normal
+:id: RUL-empty_inbox_normal
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-missing_folder_blocks
+
 An empty inbox SHALL be normal — the steady state, not a missing folder.
 :::
 
@@ -832,7 +891,7 @@ geotag and in its own records.
 :aliases: camera-geotag-reuses-1
 :refines: RUL-prep_derives_camera_group
 
-Geotag SHALL use the camera group prep derived, and SHALL NOT derive a file's identity again.
+Geotag SHALL use the camera group prep derived, never deriving a file's identity again.
 :::
 
 :::{rul} The derivation carries a version
@@ -844,8 +903,8 @@ Geotag SHALL use the camera group prep derived, and SHALL NOT derive a file's id
 :aliases: camera-version-detectable-1
 :refines: RUL-prep_derives_camera_group
 
-How camera groups are derived SHALL carry a version, which SHALL take part in the checks of freshness and of
-dependencies, so that a change to the derivation is detected and old and new groups are never silently mixed.
+How camera groups are derived SHALL carry a version taking part in the checks of freshness and of dependencies, so that
+a change to the derivation is detected and old and new groups are never silently mixed.
 :::
 
 :::{rul} A camera group is known once it is classified
@@ -880,7 +939,7 @@ sets, followed by a differentiating suffix when that name is taken.
 :uses: DEF-timestamp_name
 
 Prep and geotag SHALL name files from a timestamp in one format for the whole pipeline, not one for each phase, set by
-the configuration; neither SHALL hard-code it.
+the configuration and hard-coded by neither.
 :::
 
 :::{rul} A taken name gets a suffix, never clobbering
@@ -896,7 +955,7 @@ and without clobbering: against every name on disk and every name planned in the
 so that two files never collide.
 :::
 
-:::{rul} Which free name each phase takes
+:::{rul} Prep and geotag take the first free name
 :id: RUL-suffix_choice_by_phase
 :status: ruled
 :criticality: med
@@ -905,8 +964,17 @@ so that two files never collide.
 :refines: RUL-suffix_no_clobber
 
 Prep and geotag SHALL take the first free name — the name with no suffix when it is free, otherwise the lowest free
-suffix — by one identical rule. Merge SHALL take the suffix above the highest already used for that name, never a lower
-one that has come free.
+suffix — by one identical rule.
+:::
+
+:::{rul} Merge takes the suffix above the highest used
+:id: RUL-merge_suffix_above_highest
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-suffix_choice_by_phase
+
+Merge SHALL take the suffix above the highest already used for a name, never a lower one that has come free.
 :::
 
 :::{rul} Prep's name is provisional
@@ -916,8 +984,8 @@ one that has come free.
 :verify: incidental
 :aliases: fname-prep-provisional-1
 
-Prep SHALL derive a file's name from its raw timestamp, as the camera recorded it, for organizing and ordering only.
-The name SHALL be provisional: prep SHALL NOT correct it, resolve its timezone or convert it to UTC.
+Prep SHALL derive a file's name from its raw timestamp, as the camera recorded it, for organizing and ordering only — a
+provisional name, which prep never corrects, resolves to a timezone or converts to UTC.
 :::
 
 :::{rul} Geotag's name is final
@@ -939,8 +1007,8 @@ destination's civil timezone — and rename it to that final name.
 :aliases: fname-uncorrected-no-rename-1
 :uses: RUL-prep_name_provisional, RUL-geotag_name_final
 
-A file's name SHALL change between prep and geotag only when its timestamp is corrected. Geotag SHALL plan no rename for
-a file whose time is not corrected.
+A file's name SHALL change between prep and geotag only when its timestamp is corrected: geotag plans no rename for a
+file whose time is not corrected.
 :::
 
 :::{rul} A name off the format is an ordinary dump
@@ -952,9 +1020,20 @@ a file whose time is not corrected.
 :omit_reason: no test asserts it (backlog item 3)
 :aliases: fname-nonconforming-redumped-1
 
-A file in the workspace whose name does not follow the format SHALL be treated as any other dump — taken in and named
-by the pipeline — never specially migrated or matched against patterns. No phase SHALL read meaning from a file's name:
-its timestamp SHALL come from its metadata.
+A file in the workspace whose name does not follow the format SHALL be treated as any other dump — taken in and named by
+the pipeline — never specially migrated or matched against patterns.
+:::
+
+:::{rul} No meaning is read from a file's name
+:id: RUL-no_meaning_from_names
+:status: seed
+:criticality: med
+:anti: yes
+:verify: none
+:omit_reason: no test asserts it (backlog item 3)
+:refines: RUL-nonconforming_name_is_a_dump
+
+No phase SHALL read meaning from a file's name: its timestamp comes from its metadata.
 :::
 
 ## 7. The tracks, kept outside the managed folders
@@ -977,8 +1056,8 @@ photos along them by interpolation or extrapolation. The configuration says wher
 :aliases: gpx-prep-unaware-1
 :uses: DEF-tracks
 
-Geotag SHALL be the only phase that reads the tracks: it scans their location, parses them, fingerprints them and uses
-them as evidence. Prep SHALL NOT read, parse, fingerprint or move them, nor otherwise act on them.
+Geotag SHALL be the only phase that reads the tracks — scanning their location, parsing them, fingerprinting them and
+using them as evidence; prep never reads, parses, fingerprints or moves them, nor otherwise acts on them.
 :::
 
 :::{rul} The tracks lie outside the managed folders
@@ -991,12 +1070,12 @@ them as evidence. Prep SHALL NOT read, parse, fingerprint or move them, nor othe
 :uses: DEF-tracks
 :refines: RUL-config_validated_before_use
 
-The tracks' location SHALL lie outside the managed folders — neither inside one nor containing one. Where outside them
-is the configuration's choice, not part of this contract. A configuration that places it otherwise SHALL be refused
-before any phase uses it.
+The tracks' location SHALL lie outside the managed folders — neither inside one nor containing one — a configuration
+that places it otherwise being refused before any phase uses it. Where outside them is the configuration's choice, not
+part of this contract.
 :::
 
-:::{rul} A track file stops prep, and stays where it is
+:::{rul} A track file stops prep
 :id: RUL-track_files_block_prep
 :status: ruled
 :criticality: high
@@ -1005,8 +1084,19 @@ before any phase uses it.
 :uses: DEF-tracks, DEF-strays_folder
 
 A track file — a recorded position log in any of the usual formats, whether or not geotag reads that format — found
-anywhere prep inventories, in the dump or in a managed folder, SHALL block prep's plan. Prep SHALL leave it where it is:
-never moving it, to the strays folder or anywhere else, and never treating it as a file of no media class.
+anywhere prep inventories, in the dump or in a managed folder, SHALL block prep's plan.
+:::
+
+:::{rul} A track file stays where it is
+:id: RUL-track_file_left_in_place
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-track_files_block_prep
+
+Prep SHALL leave a track file where it is: never moving it, to the strays folder or anywhere else, and never treating it
+as a file of no media class.
 :::
 
 :::{rul} The tracks are a dependency of what geotag derives from them
