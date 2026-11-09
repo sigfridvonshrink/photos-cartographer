@@ -221,7 +221,7 @@ def test_media_extensions_rejects_bad(cfg, needle):
     assert needle in str(ei.value), str(ei.value)
 
 
-@pytest.mark.spec("config-ext-one-class-1", "prep-classify-by-extension-1", "prep-reads-config-authoritative-1", test="TST-config_validation-classification_follows_config_after_load")
+@pytest.mark.spec("config-ext-one-class-1", "prep-classify-by-extension-1", "prep-reads-config-authoritative-1", "RUL-config_lists_extensions", "RUL-unlisted_extension_other", test="TST-config_validation-classification_follows_config_after_load")
 def test_classification_follows_config_after_load(tmp_path, monkeypatch):
     # A user adds .webp to the image list; after load_or_seed_config it classifies as image, not stray.
     ws = tmp_path / "ws"
