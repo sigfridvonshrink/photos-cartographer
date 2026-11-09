@@ -1150,9 +1150,8 @@ fingerprints of the configuration areas it reads — and each use checks them fi
 :aliases: dep-cascade-reject-stale-1
 :uses: DEF-dependency_cascade
 
-No phase SHALL use a record once anything it was derived from has changed. Each phase SHALL validate what it derives
-from, then create the record, record those dependencies in it, and refuse its use downstream when any of them has
-changed.
+No phase SHALL use a record once anything it was derived from has changed: each phase validates what it derives from,
+then creates the record, records those dependencies in it, and refuses its use downstream when any of them has changed.
 :::
 
 :::{rul} A fingerprint survives what the pipeline does to a file
@@ -1174,8 +1173,18 @@ A media file's fingerprint SHALL stay the same when the pipeline rewrites its me
 :aliases: dep-hash-sensitive-1
 :uses: DEF-hash
 
-A record's hash SHALL change on any change to its bytes, and SHALL be what checks a record or the configuration as a
-dependency. Prep's handoff is the one exception: it is checked by its content.
+A record's hash SHALL change on any change to its bytes.
+:::
+
+:::{rul} A record is checked as a dependency by its hash
+:id: RUL-hash_is_the_dependency_check
+:status: seed
+:criticality: high
+:verify: required
+:refines: RUL-hash_detects_any_change
+
+A record's hash SHALL be what checks it, or the configuration, as a dependency — prep's handoff excepted, which is
+checked by its content.
 :::
 
 ## 9. One loop across the phases
@@ -1240,22 +1249,32 @@ time to missing metadata, and every file of no media class to the strays folder.
 :aliases: loop-sort-photo-only-1
 :uses: DEF-operator_loop, DEF-managed_folders
 
-Photos by destination SHALL hold only photos: videos stay in videos by date, and no file of no media class belongs there.
-Geotag SHALL refuse to run while it holds anything else.
+Photos by destination SHALL hold only photos — videos stay in videos by date, and no file of no media class belongs
+there — geotag refusing to run while it holds anything else.
 :::
 
-:::{rul} Prep records every sort before geotag plans
+:::{rul} Geotag does not plan over an unrecorded sort
 :id: RUL-prep_records_sort
 :status: seed
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: loop-reprep-mandatory-1, loop-no-behind-preps-back-1
+:aliases: loop-no-behind-preps-back-1
 :uses: DEF-operator_loop, DEF-prep, DEF-geotag
 
-Geotag SHALL NOT plan while photos by destination holds a photo prep has not recorded where it now is. A prep run after
-the latest sort SHALL record the moves from the files' sizes and modification times alone, carrying each moved file's
-identity forward without reading it again.
+Geotag SHALL NOT plan while photos by destination holds a photo prep has not recorded where it now is.
+:::
+
+:::{rul} Prep records a sort from sizes and times alone
+:id: RUL-sort_recorded_by_stat
+:status: seed
+:criticality: med
+:verify: required
+:aliases: loop-reprep-mandatory-1
+:refines: RUL-prep_records_sort
+
+A prep run after the latest sort SHALL record the moves from the files' sizes and modification times alone, carrying
+each moved file's identity forward without reading it again.
 :::
 
 :::{rul} Geotag may be re-run until merge
@@ -1280,9 +1299,9 @@ not been merged.
 :refines: RUL-geotag_rerunnable
 :uses: RUL-decision_kept, RUL-mutate_on_difference
 
-A geotag re-run SHALL recognise in each file what an earlier run wrote there: a time geotag corrected SHALL NOT be
-corrected again, and a position geotag wrote SHALL be derived again and replaced, never kept as the file's own. The
-user's decisions, and files already right, it keeps as every run does.
+A geotag re-run SHALL recognise in each file what an earlier run wrote there — never correcting again a time geotag
+corrected, and deriving again and replacing a position geotag wrote, never keeping it as the file's own. The user's
+decisions, and files already right, it keeps as every run does.
 :::
 
 :::{rul} Geotag's gates are the present state, not its history
@@ -1294,10 +1313,10 @@ user's decisions, and files already right, it keeps as every run does.
 :aliases: loop-geotag-gating-preconditions-1
 :uses: DEF-geotag, DEF-managed_folders
 
-Geotag SHALL proceed when, and only when, the workspace now satisfies its gates: photos by date holds no photo; photos by
-destination holds only photos and no development subfolder; prep has recorded every photo in it; and the inbox is
-empty. Whether, or how often, prep, the sort or geotag ran before SHALL NOT bear on it, so the user may run any number
-of prep and sort cycles before geotagging.
+Geotag SHALL proceed when, and only when, the workspace now satisfies its gates: photos by date holds no photo; photos
+by destination holds only photos and no development subfolder; prep has recorded every photo in it; and the inbox is
+empty — whether, or how often, prep, the sort or geotag ran before not bearing on it, so the user may run any number of
+prep and sort cycles before geotagging.
 :::
 
 :::{rul} A re-run does as much as what changed requires
@@ -1325,31 +1344,42 @@ A new dump SHALL be accepted into the inbox at any point before merge, after a s
 resumes from prep.
 :::
 
-:::{rul} Finalize is its own command, and merge requires it
+:::{rul} Finalize is its own command
 :id: RUL-finalize_explicit
 :status: seed
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: loop-finalize-before-merge-1, archive-finalize-explicit-1
+:aliases: archive-finalize-explicit-1
 :uses: DEF-finalize, DEF-merge
 
-Finalize SHALL be a command of its own, never a side effect of geotag's execution. Merge SHALL refuse a workspace that
-has not been finalized.
+Finalize SHALL be a command of its own, never a side effect of geotag's execution.
 :::
 
-:::{rul} Merge takes only the finalized, current set
+:::{rul} Merge requires a finalized workspace
 :id: RUL-merge_takes_finalized_current
 :status: seed
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: merge-preconditions-finalized-1, merge-revalidates-current-1
+:aliases: merge-preconditions-finalized-1, loop-finalize-before-merge-1
 :uses: DEF-finalize, DEF-merge, DEF-managed_folders
 
-Merge SHALL require that geotag's execution succeeded and the workspace was finalized, and SHALL refuse when photos by
-destination has changed since finalize — so what reaches the library is always the corrected, named, fully recorded
-set. A refresh that changes only what describes a prep run SHALL NOT count as a change.
+Merge SHALL require that geotag's execution succeeded and the workspace was finalized, and refuse a workspace that was
+not.
+:::
+
+:::{rul} Merge refuses photos by destination changed since finalize
+:id: RUL-merge_refuses_changed_since_finalize
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: merge-revalidates-current-1
+:refines: RUL-merge_takes_finalized_current
+
+Merge SHALL refuse when photos by destination has changed since finalize — a refresh that changes only what describes a
+prep run not counting as a change — so that what reaches the library is always the corrected, named, fully recorded set.
 :::
 
 :::{rul} Merge ends the workspace
@@ -1360,8 +1390,17 @@ set. A refresh that changes only what describes a prep run SHALL NOT count as a 
 :verify: required
 :uses: DEF-merge, DEF-workspace
 
-Merge SHALL be the last phase run in a workspace: once it succeeds, more media SHALL go to a fresh workspace, and the
-library SHALL accept merges from many workspaces.
+Merge SHALL be the last phase run in a workspace: once it succeeds, more media goes to a fresh workspace.
+:::
+
+:::{rul} The library accepts merges from many workspaces
+:id: RUL-library_takes_many_workspaces
+:status: seed
+:criticality: med
+:verify: required
+:refines: RUL-merge_is_terminal
+
+The library SHALL accept merges from many workspaces.
 :::
 
 :::{rul} Development happens in the library, after merge
@@ -1373,8 +1412,8 @@ library SHALL accept merges from many workspaces.
 :aliases: loop-dev-before-geotag-blocks-1
 :uses: DEF-development, DEF-managed_folders
 
-Development SHALL happen in the library, after merge. A development subfolder anywhere in photos by destination —
-even an empty one — SHALL stop geotag's planning, execution and finalize, and merge.
+Development SHALL happen in the library, after merge: a development subfolder anywhere in photos by destination — even
+an empty one — stops geotag's planning, execution and finalize, and merge.
 :::
 
 ## 10. Change only what needs changing
@@ -1387,8 +1426,8 @@ even an empty one — SHALL stop geotag's planning, execution and finalize, and 
 :verify: incidental
 :uses: DEF-prep, DEF-geotag, DEF-merge
 
-Every phase SHALL change only what its inputs actually require, as far as the work allows: no phase SHALL redo settled
-work to be safe, and none SHALL leave a file in a state other than its inputs require.
+Every phase SHALL change only what its inputs actually require, as far as the work allows — redoing no settled work to
+be safe, and leaving no file in a state other than its inputs require.
 :::
 
 :::{rul} Valid work is reused
@@ -1399,8 +1438,8 @@ work to be safe, and none SHALL leave a file in a state other than its inputs re
 :aliases: idem-reuse-not-recompute-1
 :refines: INV-change_only_what_needs
 
-Work already done and still valid SHALL be reused, not repeated: a file's content and metadata SHALL be read, and the
-tracks parsed, only for inputs that are new or have changed.
+Work already done and still valid SHALL be reused, not repeated — a file's content and metadata read, and the tracks
+parsed, only for inputs that are new or have changed.
 :::
 
 :::{rul} A decision is kept while its target is unchanged
@@ -1424,8 +1463,7 @@ unchanged.
 :uses: DEF-dependency_cascade
 :refines: INV-change_only_what_needs
 
-When an input changes, only the records that depend on it SHALL be made again; every other record SHALL be left as it
-is.
+When an input changes, only the records that depend on it SHALL be made again, every other record left as it is.
 :::
 
 :::{rul} A file is changed only where it differs
@@ -1438,7 +1476,7 @@ is.
 :refines: INV-change_only_what_needs
 
 In every phase and every run, a file SHALL be moved, renamed or written only where its current state differs from what
-the run requires of it. A file already in its place, with its name and its metadata, SHALL produce no operation.
+the run requires of it: a file already in its place, with its name and its metadata, produces no operation.
 :::
 
 :::{rul} A run over unchanged inputs changes nothing
@@ -1449,9 +1487,19 @@ the run requires of it. A file already in its place, with its name and its metad
 :aliases: idem-no-op-run-1
 :refines: INV-change_only_what_needs
 
-A phase run over a workspace whose relevant state has not changed SHALL change nothing, and SHALL produce the same result
-— the same operations, fingerprints and names. It SHALL report the work it reused and the files already right, and SHALL
-NOT treat earlier work as an error.
+A phase run over a workspace whose relevant state has not changed SHALL change nothing, and produce the same result —
+the same operations, fingerprints and names.
+:::
+
+:::{rul} A run over unchanged inputs reports what it reused, never an error
+:id: RUL-no_op_run_reports_reuse
+:status: ruled
+:criticality: low
+:verify: required
+:refines: RUL-no_op_run
+
+A run over unchanged inputs SHALL report the work it reused and the files already right, never treating earlier work as
+an error.
 :::
 
 ## 11. Nothing changes that the user did not write down
