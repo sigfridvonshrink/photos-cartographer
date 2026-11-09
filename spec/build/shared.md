@@ -182,7 +182,7 @@ extension fingerprint of its own.
 
 :::{bld} The control directory is always `.photos-ingest/`
 :id: BLD-control_directory_fixed
-:status: seed
+:status: ruled
 :realises: RUL-control_directory_fixed
 
 The control directory SHALL be `.photos-ingest/` at the workspace root, in every workspace, no configuration key naming
@@ -191,7 +191,7 @@ it.
 
 :::{bld} The configuration's keys
 :id: BLD-config_keys
-:status: seed
+:status: ruled
 :realises: DEF-config_areas, RUL-folder_names_not_roles, RUL-camera_classes_not_derivation, RUL-extension_one_class, RUL-folder_found_by_role, RUL-config_lists_extensions, RUL-unlisted_extension_other
 
 The areas SHALL be, at least: the `zfs` block and `snapshots_required` (§2 above);

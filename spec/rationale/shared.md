@@ -172,7 +172,7 @@ run and guards execution with the whole-file hash, so it needs no separate folde
 
 :::{rat} A file's class decides how it is handled
 :id: RAT-class_decides_handling
-:status: seed
+:status: ruled
 :justifies: RUL-extension_one_class, RUL-config_lists_extensions, RUL-unlisted_extension_other
 
 A file's class decides everything the pipeline does with it: a photo is organized by date and geotagged, a video goes to
@@ -183,7 +183,7 @@ extension nobody listed is safest set aside, recoverably, rather than guessed at
 
 :::{rat} The control records are found before anything is read
 :id: RAT-control_records_found_first
-:status: seed
+:status: ruled
 :justifies: RUL-control_directory_fixed
 
 Every phase, the editor and the console must find the control records before reading any of them — and the
@@ -193,7 +193,7 @@ it out wholesale, and lets anyone opening an old workspace find its record.
 
 :::{rat} A folder's role is pipeline logic
 :id: RAT-folder_roles_are_logic
-:status: seed
+:status: ruled
 :justifies: RUL-folder_names_not_roles, RUL-folder_found_by_role
 
 The roles — the inbox, the read-only destination tree, the order in which duplicates are retained, which folders are
@@ -202,7 +202,7 @@ the photo and video bands — are pipeline logic, so the user sets the names and
 
 :::{rat} The derivation's version must stay the code's
 :id: RAT-derivation_version_is_code
-:status: seed
+:status: ruled
 :justifies: RUL-camera_classes_not_derivation
 
 The version of the camera-group derivation takes part in the dependency fingerprints, so a change to the derivation is
