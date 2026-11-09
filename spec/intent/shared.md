@@ -56,7 +56,7 @@ sorted by destination, into the library.
 
 :::{inv} One run at a time
 :id: INV-one_run_at_a_time
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -68,7 +68,7 @@ of two phases, a merge, a finalize, or a quarantine prune.
 
 :::{rul} Every run, and every change, takes the lock
 :id: RUL-every_command_locks
-:status: seed
+:status: ruled
 :criticality: med
 :verify: incidental
 :aliases: lock-every-command-takes-1
@@ -79,7 +79,7 @@ Every run, and every change to the workspace, SHALL hold the workspace's lock.
 
 :::{rul} A workspace has one lock
 :id: RUL-one_workspace_lock
-:status: seed
+:status: ruled
 :criticality: med
 :verify: incidental
 :refines: RUL-every_command_locks
@@ -89,7 +89,7 @@ A workspace SHALL have exactly one lock, shared by every command.
 
 :::{rul} The lock comes before anything is read
 :id: RUL-lock_before_reading
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :aliases: lock-covers-planning-1
@@ -102,7 +102,7 @@ inside the lock all the same.
 
 :::{rul} The lock lasts the whole run, and no longer
 :id: RUL-lock_through_the_run
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -115,7 +115,7 @@ A run SHALL hold the lock until it ends — through planning, dry run, execution
 
 :::{rul} A locked workspace is refused at once
 :id: RUL-lock_fail_fast
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -129,7 +129,7 @@ artifact.
 
 :::{rul} The lock is released however the run ends
 :id: RUL-lock_released_on_any_end
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: lock-release-on-exit-error-1
@@ -140,7 +140,7 @@ A run SHALL release the lock when it ends, whether it succeeds or fails.
 
 :::{rul} A stale lock is recognised and recovered
 :id: RUL-stale_lock_recovered
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: lock-stale-detectable-1
@@ -151,7 +151,7 @@ workspace locked for good.
 
 :::{rul} Only a dead owner's lock is taken over
 :id: RUL-stale_takeover_conservative
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: none

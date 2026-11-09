@@ -18,7 +18,7 @@ records, `photos-1-prep`, `photos-2-geotag` and `photos-3-merge`.
 
 :::{bld} The lock is taken first
 :id: BLD-lock_after_guard
-:status: seed
+:status: ruled
 :realises: RUL-lock_before_reading
 
 The lock SHALL be taken as soon as the run's workspace is known, before the guard, `photos-00-workspace-guard`, or
@@ -27,7 +27,7 @@ anything else in it is read.
 
 :::{bld} Only prep creates the control directory
 :id: BLD-control_dir_by_prep_only
-:status: seed
+:status: ruled
 :realises: RUL-only_prep_builds_structure
 
 `WorkspaceLock` SHALL create the control directory only when prep takes it; every other taker passes `create=False`.
@@ -35,7 +35,7 @@ anything else in it is read.
 
 :::{bld} Geotag and merge stop where there is no control directory
 :id: BLD-no_control_dir_stops
-:status: seed
+:status: ruled
 :realises: RUL-only_prep_builds_structure
 
 Geotag and merge SHALL check that the control directory exists before they take the lock, and where it does not, stop
@@ -44,7 +44,7 @@ with exit status 2, having created nothing.
 
 :::{bld} The editor's save takes the lock
 :id: BLD-editor_save_locks
-:status: seed
+:status: ruled
 :realises: RUL-every_command_locks
 
 The decision editor's save SHALL take the workspace lock for the time it writes, refusing at once while a run holds it;
@@ -53,7 +53,7 @@ the editor's display reads take none, each record being replaced whole.
 
 :::{bld} The lock records its owner
 :id: BLD-lock_owner_record
-:status: seed
+:status: ruled
 :realises: RUL-stale_lock_recovered
 
 The lock SHALL record the identity of the process that owns it and the time it started, so that a lock whose owner is
@@ -62,7 +62,7 @@ gone can be told from one whose owner is running.
 
 :::{bld} The phases run inside the run's lock
 :id: BLD-phases_inside_lock
-:status: seed
+:status: ruled
 :realises: RUL-lock_through_the_run
 
 Each phase's `plan`, `dry-run` and `execute` SHALL run with the lock taken at start already held, none taking it again

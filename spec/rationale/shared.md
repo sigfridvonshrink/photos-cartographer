@@ -7,7 +7,7 @@ items it `justifies`, under the same section numbers. Where the two differ, the 
 
 :::{rat} A plan made beside another run cannot be trusted
 :id: RAT-planning_inside_lock
-:status: seed
+:status: ruled
 :justifies: RUL-lock_before_reading
 
 Planning changes nothing but the fingerprints it keeps for later runs, but it must still not run concurrently: a plan
@@ -16,7 +16,7 @@ computed against a workspace another process is reading or changing is untrustwo
 
 :::{rat} The lock and revalidation guard different things
 :id: RAT-lock_and_revalidation
-:status: seed
+:status: ruled
 :justifies: INV-one_run_at_a_time
 
 This whole-run lock is independent of, and stricter than, the dependency-revalidation discipline: revalidation guards
