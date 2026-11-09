@@ -565,3 +565,26 @@ def test_save_refuses_a_sealed_workspace(tmp_path):
                                      "user_decision": {"manual_iana_timezone": "Asia/Tokyo"}}]})
     assert res["ok"] is False and "sealed" in res["error"]
     assert open(os.path.join(ws, serve.CONTROL, serve.TIME_NAME), "rb").read() == before
+
+
+@pytest.mark.spec("RUL-every_command_locks", test="TST-serve-save_refuses_while_a_run_holds_the_lock")
+def test_save_refuses_while_a_run_holds_the_lock(tmp_path):
+    """A save changes the workspace, so it takes the workspace's lock: while a run holds it, the save
+    refuses and writes nothing — it cannot land between a geotag plan's read and its rewrite. Once the
+    run ends, the same save goes through, and leaves the lock free."""
+    ws = _workspace_with_fixtures(tmp_path)
+    edit = {"time": [{"dest": "6-photos-by-dest/Japan", "kind": "timezone",
+                      "user_decision": {"manual_iana_timezone": "Asia/Tokyo"}}]}
+    path = os.path.join(ws, serve.CONTROL, serve.TIME_NAME)
+    before = open(path, "rb").read()
+    run = serve.photos_utils.WorkspaceLock(ws, create=False)
+    assert run.acquire()
+    try:
+        res = serve._save(ws, edit)
+        assert res["ok"] is False and "run is in progress" in res["error"]
+        assert open(path, "rb").read() == before
+    finally:
+        run.release()
+    assert serve._save(ws, edit)["ok"] is True
+    assert open(path, "rb").read() != before
+    assert serve.photos_utils.WorkspaceLock(ws, create=False).held_owner() is None

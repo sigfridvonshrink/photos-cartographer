@@ -2805,8 +2805,6 @@ def _emit_first_run_config_notice(workspace_root, plan, reporter):
 
 
 def run(args):
-    CONFIG["jobs"] = getattr(args, "jobs", 4)
-
     workspace_root = os.getcwd()
 
     # Scrolling status goes through the reporting seam (cartographer/reporting.py). The active
@@ -2831,195 +2829,7 @@ def run(args):
     reporter.log(f"Lock acquired: {run_lock.lock_path}")
 
     try:
-        # A workspace lies on one filesystem (shared contract §15), so every move in it is one rename.
-        # Checked on every invocation, prune-quarantine included, before anything is read or changed.
-        from .photos_utils import workspace_volume_error
-        vol_err = workspace_volume_error(workspace_root)
-        if vol_err:
-            reporter.error(vol_err)
-            sys.exit(2)
-
-        # Sealed/terminal-workspace guard (prep Section 6.2 item 1 / shared 13.7): a successful
-        # merge seals the workspace. Prep then hard-stops and mutates nothing. Applies to the prep
-        # operations (plan/dry-run/execute); prune-quarantine is a separate maintenance command.
-        from .photos_utils import is_sealed, likely_new_dump, folder_name as _folder_name
-        if args.command in ("plan", "dry-run", "execute") and is_sealed(workspace_root):
-            reporter.error("Workspace is SEALED (already merged): prep will not run. Nothing was touched.")
-            if likely_new_dump(workspace_root):
-                reporter.log(f"  A likely new dump is present (at the workspace root or in {_folder_name('sources')}). "
-                             "A sealed workspace is final — move new media into a fresh workspace.")
-            sys.exit(2)
-
-        if args.command == "plan":
-            # External-tool preflight (shared contract: decline cleanly, don't crash mid-scan).
-            # exiftool is hard-required — planning extracts metadata from every file through it and
-            # there is no graceful fallback. magick/ffmpeg are SOFT: their absence degrades content
-            # fingerprinting (image/video files are reported fingerprint-failed) but does not abort,
-            # so they are a warning, not a blocker.
-            from .photos_utils import missing_tools
-            miss = missing_tools(["exiftool"])
-            if miss:
-                reporter.error(f"Required external tool not found on PATH: {', '.join(miss)}. "
-                               "Install exiftool and re-run `photos-cartographer prep plan`.")
-                sys.exit(3)
-            soft = missing_tools(["magick", "ffmpeg"])
-            if soft:
-                reporter.warn(f"Warning: {', '.join(soft)} not found on PATH — content fingerprinting will be "
-                              "degraded (affected files reported as fingerprint-failed): "
-                              "magick→images, ffmpeg→videos.")
-
-            # Whether the workspace config already existed BEFORE this plan — `plan()` seeds it from
-            # defaults on first run, so a previously-absent config means this is the first plan and the
-            # operator should review the (default) config before trusting the plan (notice below).
-            from .photos_utils import config_path as _config_path
-            _config_was_seeded = not os.path.exists(_config_path(workspace_root))
-
-            cache = WorkspaceCache(workspace_root, read_only=True)
-            workflow = WorkspacePrepWorkflow(workspace_root, cache)
-            plan = workflow.plan()
-            cache.close()
-
-            _qf = plan.summary.get("quarantine_footprint", {}) or {}
-            reporter.log(f"Quarantine footprint: {_qf.get('total_files', 0)} files, "
-                         f"{_qf.get('total_bytes', 0)} bytes across {_qf.get('plan_id_dirs', 0)} plan(s).")
-
-            # Auto-save to the canonical control-dir path; a prior plan is backed up under an
-            # incremental -NNN suffix (never clobbered), and we tell the operator both locations so
-            # the plan can be reviewed without hunting for it.
-            from .photos_utils import prep_plan_path, write_versioned_json
-            pp = prep_plan_path(workspace_root)
-            _sha, _bak = write_versioned_json(pp, asdict(plan))
-            reporter.log(f"Plan saved to {pp}", stream="stdout")
-            if _bak:
-                reporter.log(f"  Previous plan backed up to {_bak}", stream="stdout")
-
-            # First plan on this workspace: the config was just seeded with defaults — prompt the
-            # operator to review/tune it (esp. media_extensions) before trusting the plan. Advisory.
-            if _config_was_seeded:
-                _emit_first_run_config_notice(workspace_root, plan, reporter)
-
-            # Surface blockers immediately: the plan is still saved (for inspection), but it cannot be
-            # executed as-is, so don't let "Plan saved" read as all-clear — print each blocker and exit
-            # non-zero. (A common one: a stray folder at the workspace root — "dumps belong in
-            # 0-sources/" — which prep never auto-removes; the operator must move it into 0-sources or
-            # delete it.) dry-run/execute would otherwise be where the operator first learns of it.
-            if plan.blockers:
-                reporter.error(f"\nThis plan CANNOT be executed — {len(plan.blockers)} blocker(s) must be "
-                               "resolved first:")
-                for b in plan.blockers:
-                    reporter.error(f"  - {b}")
-                emit_next_step(reporter, "fix the blocker(s) above, then re-run `prep plan`.")
-                sys.exit(2)
-
-            emit_next_step(reporter, "`prep dry-run` to review the plan, or `prep execute` to apply.")
-
-        elif args.command == "dry-run":
-            from .photos_utils import prep_plan_path, PREP_PLAN_ARTIFACT
-            pp = prep_plan_path(workspace_root)
-            if not os.path.exists(pp):
-                reporter.error(f"No {PREP_PLAN_ARTIFACT} found — run `plan` first.")
-                sys.exit(2)
-            # Same fast, friendly stop as execute: an already-prepped workspace with an empty 0-sources
-            # has nothing to validate — the saved plan is stale (its moves are already applied).
-            if _prep_nothing_to_do(workspace_root, reporter):
-                sys.exit(0)
-            with open(pp, "r") as f:
-                plan_data = json.load(f)
-            plan = Plan.from_dict(plan_data)
-
-            # Use an in-memory database for dry-run
-            cache = WorkspaceCache(workspace_root, in_memory=True)
-            executor = PlanExecutor(workspace_root)
-
-            try:
-                PlanValidator.validate_plan_preflight(plan, workspace_root)
-            except ValueError as e:
-                reporter.error(f"Preflight validation failed: {e}")
-                emit_next_step(reporter, "re-run `prep plan` to rebuild the plan against the current state.")
-                sys.exit(1)
-
-            # Dry-run is not a simulation: it validates the REAL saved plan (no virtual-filesystem
-            # walk) and reports a SUMMARY of it. The full exact plan is the saved artifact at `pp`,
-            # so there is no need to flood the terminal with every operation.
-            op_counts = {}
-            for op in plan.operations:
-                op_counts[op.type] = op_counts.get(op.type, 0) + 1
-            reporter.log(f"Dry-run: validated plan {plan.plan_id} — {len(plan.operations)} operation(s).",
-                         stream="stdout")
-            for t in sorted(op_counts):
-                reporter.log(f"  {t}: {op_counts[t]}", stream="stdout")
-            reporter.log(f"  no-op / already-correct files: {plan.summary.get('no_op_files', 0)}",
-                         stream="stdout")
-            if plan.warnings:
-                reporter.log(f"  warnings: {len(plan.warnings)}", stream="stdout")
-                for w in plan.warnings[:20]:
-                    reporter.log(f"    - {w}", stream="stdout")
-                if len(plan.warnings) > 20:
-                    reporter.log(f"    … and {len(plan.warnings) - 20} more", stream="stdout")
-            if plan.blockers:
-                reporter.log(f"  BLOCKERS: {len(plan.blockers)} — execute will refuse:", stream="stdout")
-                for b in plan.blockers[:20]:
-                    reporter.log(f"    - {b}", stream="stdout")
-                if len(plan.blockers) > 20:
-                    reporter.log(f"    … and {len(plan.blockers) - 20} more", stream="stdout")
-            reporter.log(f"  Full plan: {pp}", stream="stdout")
-            if plan.blockers:
-                emit_next_step(reporter, "fix the blocker(s) shown above, then re-run `prep plan`.")
-            else:
-                emit_next_step(reporter, "`prep execute` to apply the plan.")
-
-        elif args.command == "execute":
-            from .photos_utils import prep_plan_path, PREP_PLAN_ARTIFACT
-            pp = prep_plan_path(workspace_root)
-            if not os.path.exists(pp):
-                reporter.error(f"No {PREP_PLAN_ARTIFACT} found — run `plan` first.")
-                sys.exit(2)
-            # Fast, friendly stop on an already-prepped workspace (empty 0-sources) — shared with
-            # dry-run, gated on a plan existing so a missing plan still takes the "run plan first" path.
-            if _prep_nothing_to_do(workspace_root, reporter):
-                sys.exit(0)
-            with open(pp, "r") as f:
-                plan_data = json.load(f)
-            plan = Plan.from_dict(plan_data)
-
-            executor = PlanExecutor(workspace_root)
-
-            try:
-                executor.execute(plan)
-            except Exception as e:
-                reporter.error(f"Execution failed: {e}")
-                emit_next_step(reporter, "resolve the error above and re-run `prep execute` "
-                                         "(execute is idempotent — safe to re-run).")
-                sys.exit(1)
-
-            # Next step depends on whether sorting is still pending: an empty by-dest means this was a
-            # first ingest (sort, re-prep, then geotag); a populated by-dest means the move is recorded
-            # and geotag can run.
-            from .photos_utils import media_class_for_ext as _mc
-            _bd = folder_name('photos_by_dest')
-            _bd_has_media = any(_mc(os.path.splitext(fn)[1]) in ("image", "raw")
-                                for _root, _dirs, _fs in os.walk(os.path.join(workspace_root, _bd))
-                                for fn in _fs)
-            if _bd_has_media:
-                emit_next_step(reporter, f"`geotag plan` (or sort more photos into {_bd} first).")
-            else:
-                emit_next_step(reporter, f"sort photos from {folder_name('photos_by_date')} into {_bd}, then "
-                                         f"re-run `prep plan` + `prep execute`, then `geotag plan`.")
-
-        elif args.command == "prune-quarantine":
-            prune_quarantine(
-                workspace_root,
-                plan_ids=getattr(args, "plan_ids", None),
-                older_than_days=getattr(args, "older_than_days", None),
-                do_delete=getattr(args, "yes", False),
-                prune_all=getattr(args, "prune_all", False),
-            )
-            if getattr(args, "yes", False):
-                emit_next_step(reporter, "quarantine pruned — continue with the pipeline "
-                                         "(`geotag plan` if prep is complete).")
-            else:
-                emit_next_step(reporter, "re-run with `--yes` to actually delete the listed quarantine.")
-
+        _run_locked(args, workspace_root, reporter)
     except KeyboardInterrupt:
         # Clean Ctrl-C: planning never mutates and execute is journalled/idempotent, so an
         # interrupted run leaves nothing partially applied. Exit quietly with the conventional
@@ -3032,6 +2842,201 @@ def run(args):
     finally:
         run_lock.release()
         reporter.log("Lock released.")
+
+
+def _run_locked(args, workspace_root, reporter):
+    """Prep's command, its workspace lock already held: by `run` above, or by geotag's run when it
+    records a sort itself (geotag §13.1.1) — one lock for the whole run, taken before anything is read
+    (shared contract §1)."""
+    CONFIG["jobs"] = getattr(args, "jobs", 4)
+    # A workspace lies on one filesystem (shared contract §15), so every move in it is one rename.
+    # Checked on every invocation, prune-quarantine included, before anything is read or changed.
+    from .photos_utils import workspace_volume_error
+    vol_err = workspace_volume_error(workspace_root)
+    if vol_err:
+        reporter.error(vol_err)
+        sys.exit(2)
+
+    # Sealed/terminal-workspace guard (prep Section 6.2 item 1 / shared 13.7): a successful
+    # merge seals the workspace. Prep then hard-stops and mutates nothing. Applies to the prep
+    # operations (plan/dry-run/execute); prune-quarantine is a separate maintenance command.
+    from .photos_utils import is_sealed, likely_new_dump, folder_name as _folder_name
+    if args.command in ("plan", "dry-run", "execute") and is_sealed(workspace_root):
+        reporter.error("Workspace is SEALED (already merged): prep will not run. Nothing was touched.")
+        if likely_new_dump(workspace_root):
+            reporter.log(f"  A likely new dump is present (at the workspace root or in {_folder_name('sources')}). "
+                         "A sealed workspace is final — move new media into a fresh workspace.")
+        sys.exit(2)
+
+    if args.command == "plan":
+        # External-tool preflight (shared contract: decline cleanly, don't crash mid-scan).
+        # exiftool is hard-required — planning extracts metadata from every file through it and
+        # there is no graceful fallback. magick/ffmpeg are SOFT: their absence degrades content
+        # fingerprinting (image/video files are reported fingerprint-failed) but does not abort,
+        # so they are a warning, not a blocker.
+        from .photos_utils import missing_tools
+        miss = missing_tools(["exiftool"])
+        if miss:
+            reporter.error(f"Required external tool not found on PATH: {', '.join(miss)}. "
+                           "Install exiftool and re-run `photos-cartographer prep plan`.")
+            sys.exit(3)
+        soft = missing_tools(["magick", "ffmpeg"])
+        if soft:
+            reporter.warn(f"Warning: {', '.join(soft)} not found on PATH — content fingerprinting will be "
+                          "degraded (affected files reported as fingerprint-failed): "
+                          "magick→images, ffmpeg→videos.")
+
+        # Whether the workspace config already existed BEFORE this plan — `plan()` seeds it from
+        # defaults on first run, so a previously-absent config means this is the first plan and the
+        # operator should review the (default) config before trusting the plan (notice below).
+        from .photos_utils import config_path as _config_path
+        _config_was_seeded = not os.path.exists(_config_path(workspace_root))
+
+        cache = WorkspaceCache(workspace_root, read_only=True)
+        workflow = WorkspacePrepWorkflow(workspace_root, cache)
+        plan = workflow.plan()
+        cache.close()
+
+        _qf = plan.summary.get("quarantine_footprint", {}) or {}
+        reporter.log(f"Quarantine footprint: {_qf.get('total_files', 0)} files, "
+                     f"{_qf.get('total_bytes', 0)} bytes across {_qf.get('plan_id_dirs', 0)} plan(s).")
+
+        # Auto-save to the canonical control-dir path; a prior plan is backed up under an
+        # incremental -NNN suffix (never clobbered), and we tell the operator both locations so
+        # the plan can be reviewed without hunting for it.
+        from .photos_utils import prep_plan_path, write_versioned_json
+        pp = prep_plan_path(workspace_root)
+        _sha, _bak = write_versioned_json(pp, asdict(plan))
+        reporter.log(f"Plan saved to {pp}", stream="stdout")
+        if _bak:
+            reporter.log(f"  Previous plan backed up to {_bak}", stream="stdout")
+
+        # First plan on this workspace: the config was just seeded with defaults — prompt the
+        # operator to review/tune it (esp. media_extensions) before trusting the plan. Advisory.
+        if _config_was_seeded:
+            _emit_first_run_config_notice(workspace_root, plan, reporter)
+
+        # Surface blockers immediately: the plan is still saved (for inspection), but it cannot be
+        # executed as-is, so don't let "Plan saved" read as all-clear — print each blocker and exit
+        # non-zero. (A common one: a stray folder at the workspace root — "dumps belong in
+        # 0-sources/" — which prep never auto-removes; the operator must move it into 0-sources or
+        # delete it.) dry-run/execute would otherwise be where the operator first learns of it.
+        if plan.blockers:
+            reporter.error(f"\nThis plan CANNOT be executed — {len(plan.blockers)} blocker(s) must be "
+                           "resolved first:")
+            for b in plan.blockers:
+                reporter.error(f"  - {b}")
+            emit_next_step(reporter, "fix the blocker(s) above, then re-run `prep plan`.")
+            sys.exit(2)
+
+        emit_next_step(reporter, "`prep dry-run` to review the plan, or `prep execute` to apply.")
+
+    elif args.command == "dry-run":
+        from .photos_utils import prep_plan_path, PREP_PLAN_ARTIFACT
+        pp = prep_plan_path(workspace_root)
+        if not os.path.exists(pp):
+            reporter.error(f"No {PREP_PLAN_ARTIFACT} found — run `plan` first.")
+            sys.exit(2)
+        # Same fast, friendly stop as execute: an already-prepped workspace with an empty 0-sources
+        # has nothing to validate — the saved plan is stale (its moves are already applied).
+        if _prep_nothing_to_do(workspace_root, reporter):
+            sys.exit(0)
+        with open(pp, "r") as f:
+            plan_data = json.load(f)
+        plan = Plan.from_dict(plan_data)
+
+        # Use an in-memory database for dry-run
+        cache = WorkspaceCache(workspace_root, in_memory=True)
+        executor = PlanExecutor(workspace_root)
+
+        try:
+            PlanValidator.validate_plan_preflight(plan, workspace_root)
+        except ValueError as e:
+            reporter.error(f"Preflight validation failed: {e}")
+            emit_next_step(reporter, "re-run `prep plan` to rebuild the plan against the current state.")
+            sys.exit(1)
+
+        # Dry-run is not a simulation: it validates the REAL saved plan (no virtual-filesystem
+        # walk) and reports a SUMMARY of it. The full exact plan is the saved artifact at `pp`,
+        # so there is no need to flood the terminal with every operation.
+        op_counts = {}
+        for op in plan.operations:
+            op_counts[op.type] = op_counts.get(op.type, 0) + 1
+        reporter.log(f"Dry-run: validated plan {plan.plan_id} — {len(plan.operations)} operation(s).",
+                     stream="stdout")
+        for t in sorted(op_counts):
+            reporter.log(f"  {t}: {op_counts[t]}", stream="stdout")
+        reporter.log(f"  no-op / already-correct files: {plan.summary.get('no_op_files', 0)}",
+                     stream="stdout")
+        if plan.warnings:
+            reporter.log(f"  warnings: {len(plan.warnings)}", stream="stdout")
+            for w in plan.warnings[:20]:
+                reporter.log(f"    - {w}", stream="stdout")
+            if len(plan.warnings) > 20:
+                reporter.log(f"    … and {len(plan.warnings) - 20} more", stream="stdout")
+        if plan.blockers:
+            reporter.log(f"  BLOCKERS: {len(plan.blockers)} — execute will refuse:", stream="stdout")
+            for b in plan.blockers[:20]:
+                reporter.log(f"    - {b}", stream="stdout")
+            if len(plan.blockers) > 20:
+                reporter.log(f"    … and {len(plan.blockers) - 20} more", stream="stdout")
+        reporter.log(f"  Full plan: {pp}", stream="stdout")
+        if plan.blockers:
+            emit_next_step(reporter, "fix the blocker(s) shown above, then re-run `prep plan`.")
+        else:
+            emit_next_step(reporter, "`prep execute` to apply the plan.")
+
+    elif args.command == "execute":
+        from .photos_utils import prep_plan_path, PREP_PLAN_ARTIFACT
+        pp = prep_plan_path(workspace_root)
+        if not os.path.exists(pp):
+            reporter.error(f"No {PREP_PLAN_ARTIFACT} found — run `plan` first.")
+            sys.exit(2)
+        # Fast, friendly stop on an already-prepped workspace (empty 0-sources) — shared with
+        # dry-run, gated on a plan existing so a missing plan still takes the "run plan first" path.
+        if _prep_nothing_to_do(workspace_root, reporter):
+            sys.exit(0)
+        with open(pp, "r") as f:
+            plan_data = json.load(f)
+        plan = Plan.from_dict(plan_data)
+
+        executor = PlanExecutor(workspace_root)
+
+        try:
+            executor.execute(plan)
+        except Exception as e:
+            reporter.error(f"Execution failed: {e}")
+            emit_next_step(reporter, "resolve the error above and re-run `prep execute` "
+                                     "(execute is idempotent — safe to re-run).")
+            sys.exit(1)
+
+        # Next step depends on whether sorting is still pending: an empty by-dest means this was a
+        # first ingest (sort, re-prep, then geotag); a populated by-dest means the move is recorded
+        # and geotag can run.
+        from .photos_utils import media_class_for_ext as _mc
+        _bd = folder_name('photos_by_dest')
+        _bd_has_media = any(_mc(os.path.splitext(fn)[1]) in ("image", "raw")
+                            for _root, _dirs, _fs in os.walk(os.path.join(workspace_root, _bd))
+                            for fn in _fs)
+        if _bd_has_media:
+            emit_next_step(reporter, f"`geotag plan` (or sort more photos into {_bd} first).")
+        else:
+            emit_next_step(reporter, f"sort photos from {folder_name('photos_by_date')} into {_bd}, then "
+                                     f"re-run `prep plan` + `prep execute`, then `geotag plan`.")
+
+    elif args.command == "prune-quarantine":
+        prune_quarantine(
+            workspace_root,
+            plan_ids=getattr(args, "plan_ids", None),
+            older_than_days=getattr(args, "older_than_days", None),
+            do_delete=getattr(args, "yes", False),
+            prune_all=getattr(args, "prune_all", False),
+        )
+        if getattr(args, "yes", False):
+            emit_next_step(reporter, "quarantine pruned — continue with the pipeline "
+                                     "(`geotag plan` if prep is complete).")
+        else:
+            emit_next_step(reporter, "re-run with `--yes` to actually delete the listed quarantine.")
 
 
 def main(argv=None):

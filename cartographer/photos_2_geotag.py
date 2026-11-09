@@ -45,7 +45,7 @@ import zoneinfo
 from datetime import datetime, timedelta, timezone
 
 from .photos_utils import (
-    CONFIG, CONTROL_DIR, workspace_volume_error, config_path, handoff_path, guard_path, is_sealed, likely_new_dump,
+    CONFIG, CONTROL_DIR, control_dir, workspace_volume_error, config_path, handoff_path, guard_path, is_sealed, likely_new_dump,
     validate_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
     folders_fingerprint, media_extensions_fingerprint,
     selected_gpx_root, CAMERA_IDENTITY_FIELDS, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
@@ -1765,7 +1765,7 @@ def add_arguments(parser):
 
 
 def _auto_reprep_for_clean_move(args, workspace_root, reporter):
-    """Geotag §13.1.1 — auto re-prep for a clean by-dest move, run BEFORE geotag takes the whole-run lock.
+    """Geotag §13.1.1 — auto re-prep for a clean by-dest move, run inside geotag's whole-run lock.
 
     The common operator flow is: move photos from by-date into the by-dest tree, then go straight to
     geotag. That move leaves the handoff stale (geotag derives each file's calibration `destination`
@@ -1775,9 +1775,10 @@ def _auto_reprep_for_clean_move(args, workspace_root, reporter):
     the handoff hasn't recorded — run the real prep phases (`plan` then `execute`) for the operator,
     announcing what and why. Everything else is left untouched for the in-lock gates to report:
     sealed/uninitialized, a non-empty `0-sources` dump (the cheapest hard gate — a bigger op the
-    operator should launch knowingly), or nothing pending. prep takes and releases its own whole-run
-    lock, so this MUST run pre-lock to avoid self-deadlock; geotag's own `_check_reprep_gate` then
-    re-validates under the lock as the fallback (a race or a non-clean move still hard-stops)."""
+    operator should launch knowingly), or nothing pending. Prep's commands run through
+    `photos_1_prep._run_locked`, under the lock geotag already holds, so nothing is read before the lock
+    and no other run can slip in between prep and geotag; `_check_reprep_gate` then re-validates (a
+    non-clean move still hard-stops)."""
     if args.command != "plan":
         return
     if is_sealed(workspace_root) or not os.path.exists(guard_path(workspace_root)):
@@ -1806,12 +1807,15 @@ def _auto_reprep_for_clean_move(args, workspace_root, reporter):
     for cmd in ("plan", "execute"):
         prep_args = types.SimpleNamespace(command=cmd, jobs=getattr(args, "jobs", 4))
         try:
-            photos_1_prep.run(prep_args)
+            photos_1_prep._run_locked(prep_args, workspace_root, reporter)   # under geotag's lock
         except SystemExit as e:
             if e.code not in (0, None):
                 reporter.error(f"Auto prep {cmd} did not succeed (exit {e.code}). Resolve it and re-run "
                                "geotag — nothing was geotagged.")
                 sys.exit(2)
+        except Exception as e:
+            reporter.error(f"Auto prep {cmd} failed: {e}. Resolve it and re-run geotag — nothing was geotagged.")
+            sys.exit(2)
     reporter.log("Re-prep complete; continuing with geotag.")
 
 
@@ -1819,12 +1823,16 @@ def run(args):
     workspace_root = os.getcwd()
     reporter = get_reporter()
 
-    # §13.1.1: auto re-prep a clean by-dest move so the operator can go straight to geotag. Runs BEFORE
-    # the lock (prep takes its own); the in-lock _check_reprep_gate stays as the re-validation fallback.
-    _auto_reprep_for_clean_move(args, workspace_root, reporter)
+    # Only prep creates the control directory (shared contract §1, §5.3): a folder without one is not a
+    # workspace, and geotag stops there having created nothing — not even its lock file.
+    if not os.path.isdir(control_dir(workspace_root)):
+        reporter.error(f"Not an initialized workspace (no {CONTROL_DIR}/) — run prep first: "
+                       "`photos-cartographer prep plan` then `photos-cartographer prep execute`. Nothing was created.")
+        sys.exit(2)
 
-    # Whole-run workspace lock (shared contract §2): one lock across every phase; fail-fast.
-    run_lock = WorkspaceLock(workspace_root)
+    # Whole-run workspace lock (shared contract §1): one lock across every phase, taken before anything in
+    # the workspace is read; fail-fast.
+    run_lock = WorkspaceLock(workspace_root, create=False)
     if not run_lock.acquire():
         owner = run_lock.read_owner() or {}
         detail = f" (pid {owner.get('pid')}, since {owner.get('started_at')})" if owner else ""
@@ -1836,6 +1844,9 @@ def run(args):
         if vol_err:
             reporter.error(vol_err)
             sys.exit(2)
+        # §13.1.1: auto re-prep a clean by-dest move so the operator can go straight to geotag — prep's
+        # plan and execute run inside this run's lock; the _check_reprep_gate below re-validates after.
+        _auto_reprep_for_clean_move(args, workspace_root, reporter)
         if args.command == "plan":
             _plan_ready = False    # set once the executable plan (photos-24) is assembled
             wf = GeotagWorkflow(workspace_root)

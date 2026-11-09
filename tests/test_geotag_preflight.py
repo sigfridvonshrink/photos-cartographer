@@ -237,14 +237,14 @@ class _CollectRep:
 
 
 def _autoreprep(ws, monkeypatch, *, command="plan", jobs=4, fail=None):
-    """Drive the pre-lock auto-reprep helper with prep.run stubbed; return (prep commands it ran, reporter)."""
+    """Drive the auto-reprep helper with prep's locked body stubbed; return (prep commands it ran, reporter)."""
     import photos_1_prep as prep
     calls = []
-    def fake_prep_run(a):
+    def fake_prep_run_locked(a, workspace_root, reporter):
         calls.append(a.command)
         if fail is not None and a.command == fail:
             raise SystemExit(2)
-    monkeypatch.setattr(prep, "run", fake_prep_run)
+    monkeypatch.setattr(prep, "_run_locked", fake_prep_run_locked)
     rep = _CollectRep()
     cal._auto_reprep_for_clean_move(_types.SimpleNamespace(command=command, jobs=jobs), str(ws), rep)
     return calls, rep
@@ -253,8 +253,8 @@ def _autoreprep(ws, monkeypatch, *, command="plan", jobs=4, fail=None):
 @pytest.mark.spec("geotag-auto-reprep-clean-move-1")
 def test_auto_reprep_runs_prep_plan_then_execute_for_clean_move(tmp_path, monkeypatch):
     """A clean by-dest move (0-sources empty + an unrecorded by-dest photo) makes geotag plan auto-run the
-    REAL prep phases — plan then execute, in order — before locking, so the operator goes straight to
-    geotag. prep does the mutation; geotag only orchestrates."""
+    REAL prep phases — plan then execute, in order — so the operator goes straight to geotag. prep does
+    the mutation; geotag only orchestrates."""
     ws = _ws(tmp_path, bydest=("6-photos-by-dest/Trip/a.jpg",), handoff_files=[])   # a.jpg unrecorded
     calls, rep = _autoreprep(ws, monkeypatch)
     assert calls == ["plan", "execute"], calls
@@ -380,3 +380,38 @@ def test_geotag_never_repairs_a_missing_folder(tmp_path):
     blockers, _, _ = _pf(ws)
     assert blockers
     assert not (ws / "4-videos-by-date").exists()             # blocked, never recreated
+
+
+@pytest.mark.spec("RUL-lock_before_reading", test="TST-geotag_preflight-auto_reprep_runs_inside_geotags_lock")
+def test_auto_reprep_runs_inside_geotags_lock(tmp_path, monkeypatch):
+    """Geotag takes the workspace lock before it reads anything, and runs prep's plan and execute for a
+    clean sort inside that same lock — no read before it, no other run slipping in between."""
+    import types as _t
+    import photos_1_prep as prep
+    ws = _ws(tmp_path, bydest=("6-photos-by-dest/Trip/a.jpg",), handoff_files=[])
+    held = []
+    def fake_prep_run_locked(a, workspace_root, reporter):
+        held.append((a.command, utils.WorkspaceLock(workspace_root, create=False).held_owner() is not None))
+    monkeypatch.setattr(prep, "_run_locked", fake_prep_run_locked)
+    def stop(self):
+        raise SystemExit(9)                                          # geotag's own planning is not under test
+    monkeypatch.setattr(cal.GeotagWorkflow, "preflight", stop)
+    monkeypatch.chdir(ws)
+    with pytest.raises(SystemExit):
+        cal.run(_t.SimpleNamespace(command="plan", jobs=1))
+    assert held == [("plan", True), ("execute", True)], held
+
+
+@pytest.mark.spec("RUL-only_prep_builds_structure", test="TST-geotag_preflight-geotag_and_merge_create_nothing_outside_a_workspace")
+def test_geotag_and_merge_create_nothing_outside_a_workspace(tmp_path, monkeypatch, capsys):
+    """Run in a folder that is not a workspace, geotag and merge stop without creating the control
+    directory — not even for their lock file. Only prep creates it."""
+    import types as _t
+    import photos_3_merge as merge
+    d = tmp_path / "not-a-workspace"; d.mkdir()
+    monkeypatch.chdir(d)
+    with pytest.raises(SystemExit) as ei:
+        cal.run(_t.SimpleNamespace(command="plan", jobs=1))
+    assert ei.value.code == 2 and "Not an initialized workspace" in capsys.readouterr().err
+    assert merge._run_locked_workflow("plan", str(d)) == 2
+    assert list(d.iterdir()) == []

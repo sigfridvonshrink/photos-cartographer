@@ -16,13 +16,31 @@ records, `photos-1-prep`, `photos-2-geotag` and `photos-3-merge`.
 
 ## 1. One run at a time
 
-:::{bld} The lock follows the workspace guard
+:::{bld} The lock is taken first
 :id: BLD-lock_after_guard
 :status: seed
 :realises: RUL-lock_before_reading
 
-The lock SHALL be taken at process start, immediately after the workspace root is resolved and its sentinel,
-`photos-00-workspace-guard`, is verified.
+The lock SHALL be taken as soon as the run's workspace is known, before the guard, `photos-00-workspace-guard`, or
+anything else in it is read.
+:::
+
+:::{bld} Only prep creates the control directory
+:id: BLD-control_dir_by_prep_only
+:status: seed
+:realises: RUL-only_prep_builds_structure
+
+`WorkspaceLock` SHALL create the control directory only when prep takes it; every other taker passes `create=False`,
+geotag and merge first checking that the directory exists and stopping, with exit status 2, where it does not.
+:::
+
+:::{bld} The editor's save takes the lock
+:id: BLD-editor_save_locks
+:status: seed
+:realises: RUL-every_command_locks
+
+The decision editor's save SHALL take the workspace lock for the time it writes, refusing at once while a run holds it;
+the editor's display reads take none, each record being replaced whole.
 :::
 
 :::{bld} The lock records its owner
@@ -473,7 +491,7 @@ decision editor (`edit`) for what it asks, and `geotag plan` again until `photos
 :realises: RUL-prep_records_sort, RUL-sort_recorded_by_stat
 
 When the only change prep has not recorded is a sort and the inbox is empty, `geotag plan` SHALL run prep's `plan` and
-`execute` itself, saying so, before it plans.
+`execute` itself, inside its own lock, saying so, before it plans.
 :::
 
 :::{bld} Where the loop's gates are checked

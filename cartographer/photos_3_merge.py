@@ -1131,8 +1131,9 @@ def _in_workspace(ws):
 
 
 def _acquire_workspace_lock(ws, reporter):
-    """Take the workspace lock for init-library, or say who holds it and return None."""
-    lock = WorkspaceLock(ws)
+    """Take the workspace lock for init-library, or say who holds it and return None. Called only in a
+    workspace (its guard present), so the control directory exists and is never created here."""
+    lock = WorkspaceLock(ws, create=False)
     if not lock.acquire():
         owner = lock.read_owner() or {}
         detail = f" (pid {owner.get('pid')}, since {owner.get('started_at')})" if owner else ""
@@ -1279,7 +1280,13 @@ def _run_locked_workflow(command, ws, jobs=None):
     """plan / dry-run / execute: acquire the workspace lock, validate config + the library marker via
     preflight, then acquire the library lock, then dispatch."""
     reporter = get_reporter()
-    run_lock = WorkspaceLock(ws)
+    # Only prep creates the control directory (shared contract §1, §5.3): a folder without one is not a
+    # workspace, and merge stops there having created nothing — not even its lock file.
+    if not os.path.isdir(os.path.join(ws, CONTROL_DIR)):
+        reporter.error(f"Not an initialized workspace (no {CONTROL_DIR}/) — run prep first: "
+                       "`photos-cartographer prep plan` then `photos-cartographer prep execute`. Nothing was created.")
+        return 2
+    run_lock = WorkspaceLock(ws, create=False)
     if not run_lock.acquire():
         owner = run_lock.read_owner() or {}
         detail = f" (pid {owner.get('pid')}, since {owner.get('started_at')})" if owner else ""
