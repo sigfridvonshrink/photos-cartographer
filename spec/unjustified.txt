@@ -2,10 +2,7 @@
 # tools/spec-build fails on any other such item, and on an id here that has gained a rationale or is gone:
 # this list only shrinks. The seed ones get their rationale as their section is ruled; the ruled ones in one
 # pass after §0-§10 of the shared contract (BACKLOG item 8).
-RUL-config_lists_extensions
-RUL-control_directory_fixed
 RUL-decision_fields_laid_out
-RUL-extension_one_class
 RUL-finalize_non_destructive
 RUL-known_when_classified
 RUL-log_cites_decisions
@@ -26,5 +23,4 @@ RUL-stale_lock_recovered
 RUL-stale_takeover_conservative
 RUL-suffix_no_clobber
 RUL-tracks_in_dependencies
-RUL-unlisted_extension_other
 RUL-user_writes_decisions

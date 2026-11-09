@@ -173,6 +173,10 @@ def default_config() -> dict:
             if missing:      # it would seed a configuration every phase then refuses
                 raise ValueError(f"Seed defaults {src} are missing setting(s): "
                                  + ", ".join(k for k, _ in missing))
+            unknown = [k for k in unknown_config_settings(data) if k != "jobs"]   # jobs is stripped on seeding
+            if unknown:
+                raise ValueError(f"Seed defaults {src} hold setting(s) cartographer does not know: "
+                                 + ", ".join(unknown))
             validate_config(data)
             return data
     return copy.deepcopy(DEFAULT_CONFIG)
@@ -852,6 +856,23 @@ def missing_config_settings(cfg: dict, template: dict = None, prefix: str = "") 
     return out
 
 
+def unknown_config_settings(cfg: dict, template: dict = None, prefix: str = "") -> list:
+    """The settings in `cfg` the built-in template does not know, as dotted paths. A workspace's
+    configuration holds exactly the template's settings (shared contract §3): an unknown one — a
+    misspelling, a class or folder role of the user's own, a setting a release removed — would
+    otherwise be ignored while the user believes it took effect. `jobs` is a runtime override, never
+    a setting."""
+    template = DEFAULT_CONFIG if template is None else template
+    out = []
+    for key, value in cfg.items():
+        path = f"{prefix}{key}"
+        if key == "jobs" or key not in template:
+            out.append(path)
+        elif isinstance(template[key], dict) and isinstance(value, dict):
+            out.extend(unknown_config_settings(value, template[key], path + "."))
+    return out
+
+
 def load_config(workspace_root: str) -> str:
     """Read the workspace's `photos-00-config.json` as the one configuration of this run — every phase
     reads it through here (shared contract §3). It must exist (only prep seeds it, `load_or_seed_config`),
@@ -874,6 +895,10 @@ def load_config(workspace_root: str) -> str:
         listed = "; ".join(f"{k} (the default is {json.dumps(v)})" for k, v in missing)
         raise ValueError(f"Workspace config {path} is missing setting(s): {listed}. Add each to the file — "
                          "a workspace's configuration names every setting itself.")
+    unknown = unknown_config_settings(loaded)
+    if unknown:
+        raise ValueError(f"Workspace config {path} holds setting(s) cartographer does not know: "
+                         f"{', '.join(unknown)}. Correct or remove each — an unknown setting would be ignored.")
     validate_config(loaded, workspace_root)  # human-authored input is validated before it is accepted
     jobs = CONFIG.get("jobs")
     CONFIG.clear()
@@ -961,8 +986,8 @@ _GPX_NUMERIC_KEYS = (
 def validate_config(cfg: dict, workspace_root: str = None):
     """Validate human-authored config before it is accepted — input a human writes is
     sanity-validated (types, ranges, paths, formats), not merely parsed as JSON. Raises
-    ValueError with a clear 'config: <path> ...' message on any violation; unknown keys are ignored,
-    and a missing one is `load_config`'s refusal (`missing_config_settings`), not this check's. The same validate-on-load discipline applies
+    ValueError with a clear 'config: <path> ...' message on any violation. A missing or unknown setting
+    is `load_config`'s refusal (`missing_config_settings`, `unknown_config_settings`), not this check's. The same validate-on-load discipline applies
     to the geotag decision JSON ([[validate-human-input]]). Given the workspace, it also
     refuses a gpx_root that overlaps the managed folders (shared contract §8)."""
     if not isinstance(cfg, dict):
