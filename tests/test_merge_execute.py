@@ -159,7 +159,7 @@ def test_execute_already_present_removes_source_no_write(tmp_path):
     assert _summary(ws)["totals"]["already_present"] == 1
 
 
-@pytest.mark.spec("RUL-library_file_read_once", "RUL-collision_by_content", test="TST-merge_execute-the_library_file_is_read_again_before_a_photo_already_there_is_removed")
+@pytest.mark.spec("RUL-library_file_read_once", "RUL-collision_by_content", "RUL-library_file_rechecked_before_removal", test="TST-merge_execute-the_library_file_is_read_again_before_a_photo_already_there_is_removed")
 def test_the_library_file_is_read_again_before_a_photo_already_there_is_removed(tmp_path):
     """The cache trusts size and modification time; removing the workspace's copy cannot be undone. A
     library file changed since the plan without either moving is still caught: the photo stays."""
@@ -985,7 +985,7 @@ def _refusals(ws, lib, capsys, monkeypatch):
     return out
 
 
-@pytest.mark.spec("RUL-sealed_new_dump_warned", test="TST-merge_execute-a_folder_dropped_into_a_sealed_workspace_is_pointed_out_and_left")
+@pytest.mark.spec("RUL-sealed_new_dump_warned", "RUL-sealed_new_dump_left", test="TST-merge_execute-a_folder_dropped_into_a_sealed_workspace_is_pointed_out_and_left")
 def test_a_folder_dropped_into_a_sealed_workspace_is_pointed_out_and_left(tmp_path, capsys, monkeypatch):
     """A dump copied in as a whole folder lands at the top level: every command refusing the sealed
     workspace says a new dump is likely there, and leaves the folder exactly as it was."""
@@ -1012,3 +1012,20 @@ def test_a_hidden_file_alone_is_not_a_new_dump(tmp_path, capsys, monkeypatch):
     for cmd, (rc, text) in _refusals(ws, _lib, capsys, monkeypatch).items():
         assert rc == 2, cmd
         assert "new dump" not in text.lower(), cmd
+
+
+@pytest.mark.spec("RUL-library_creates_only_placements", test="TST-merge_execute-merge_creates_in_the_library_only_what_it_places")
+def test_merge_creates_in_the_library_only_what_it_places(tmp_path):
+    """Beyond its mark and its lock, a merge leaves in the library only the photos it placed and the
+    folders they went into — no record, cache, temporary copy or database of its own."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
+                             {"fp": "B", "dest": "Spain/Madrid", "final_name": "b.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    found = set()
+    for dp, dns, fns in os.walk(str(lib)):
+        for n in dns + fns:
+            found.add(os.path.relpath(os.path.join(dp, n), str(lib)))
+    found -= {".photos-library", ".photos-merge.lock"}
+    assert found == {"Trip", os.path.join("Trip", "a.jpg"), "Spain", os.path.join("Spain", "Madrid"),
+                     os.path.join("Spain", "Madrid", "b.jpg")}
