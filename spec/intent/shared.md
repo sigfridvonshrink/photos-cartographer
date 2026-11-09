@@ -302,7 +302,7 @@ A configuration that lacks a setting SHALL stop the run, naming the setting — 
 
 :::{rul} A configuration holding an unknown setting stops the run
 :id: RUL-config_no_unknown_settings
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -475,7 +475,7 @@ workspace, no setting moving it.
 
 :::{def} What the configuration sets
 :id: DEF-config_areas
-:status: seed
+:status: ruled
 :uses: DEF-configuration
 
 The configuration sets, at least: the snapshot policy; which camera groups are phones and which have fixed clocks; the
@@ -486,7 +486,7 @@ and which extensions are which class of media. Each area's detail is in the item
 
 :::{rul} The user names the folders; their roles are fixed
 :id: RUL-folder_names_not_roles
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -497,7 +497,7 @@ The configuration SHALL set the managed folders' names, never their roles or the
 
 :::{rul} A managed folder is found by its role
 :id: RUL-folder_found_by_role
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-folder_names_not_roles
@@ -507,7 +507,7 @@ Every phase SHALL find a managed folder by its role, never by its name.
 
 :::{rul} The user classifies camera groups; how they are derived is fixed
 :id: RUL-camera_classes_not_derivation
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: none
@@ -520,7 +520,7 @@ how a group is derived, nor the version of that derivation.
 
 :::{rul} Each extension is one class of media
 :id: RUL-extension_one_class
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: config-ext-one-class-1
@@ -530,7 +530,7 @@ An extension SHALL be in exactly one class of media.
 
 :::{rul} The configuration lists the extensions, not the classes
 :id: RUL-config_lists_extensions
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-extension_one_class
@@ -540,7 +540,7 @@ The configuration SHALL list which extensions are images, raw files and videos, 
 
 :::{rul} An extension not listed is other
 :id: RUL-unlisted_extension_other
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-extension_one_class
