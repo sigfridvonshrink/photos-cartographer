@@ -170,7 +170,7 @@ Merge also takes a lock on the library it writes into, so that two merges into o
 
 :::{rul} A snapshot is optional, and nothing rests on it
 :id: RUL-snapshot_optional
-:status: seed
+:status: ruled
 :criticality: med
 :verify: incidental
 :aliases: snapshot-optional-1
@@ -182,7 +182,7 @@ taken.
 
 :::{rul} No snapshot unless configured
 :id: RUL-snapshot_off_by_default
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: snapshot-disabled-default-1
@@ -204,7 +204,7 @@ fully on a filesystem that has none.
 
 :::{rul} A snapshot names its plan
 :id: RUL-snapshot_per_plan
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :aliases: snapshot-keyed-by-plan-1
@@ -214,7 +214,7 @@ Each snapshot SHALL be identifiable by the plan whose changes it precedes.
 
 :::{rul} When a snapshot is taken
 :id: RUL-snapshot_timing
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: snapshot-timing-1
@@ -225,7 +225,7 @@ the plan's first change.
 
 :::{rul} A required snapshot that fails stops the run
 :id: RUL-required_snapshot_or_nothing
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -237,7 +237,7 @@ When the configuration requires snapshots, a run that cannot take one SHALL stop
 
 :::{rul} Without a required snapshot, the run goes on
 :id: RUL-unrequired_snapshot_proceeds
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: snapshot-not-required-proceeds-1
@@ -249,7 +249,7 @@ always does, on the journal, the recoverable quarantine, never overwriting, and 
 
 :::{rul} Merge snapshots the workspace, and the library beside it
 :id: RUL-merge_snapshots_library
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 
@@ -258,7 +258,7 @@ Merge's snapshot SHALL cover the workspace, and the library too where the librar
 
 :::{rul} Merge takes no snapshot of the library alone
 :id: RUL-no_library_only_snapshot
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required

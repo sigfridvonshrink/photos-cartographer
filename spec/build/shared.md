@@ -73,7 +73,7 @@ or scoping it on its own (prep §14, geotag §29).
 
 :::{bld} The snapshot is a ZFS snapshot, configured by the `zfs` block
 :id: BLD-snapshot_is_zfs
-:status: seed
+:status: ruled
 :realises: RUL-snapshot_optional, RUL-snapshot_off_by_default, RUL-required_snapshot_or_nothing, RUL-snapshot_per_plan
 
 The snapshot SHALL be a ZFS snapshot, configured by the `zfs` block of the workspace configuration,
@@ -84,7 +84,7 @@ block not configured, it proceeds without one.
 
 :::{bld} Merge's two snapshots
 :id: BLD-merge_snapshots
-:status: seed
+:status: ruled
 :realises: RUL-merge_snapshots_library, RUL-no_library_only_snapshot
 
 Merge's `_take_snapshots` SHALL snapshot the workspace's dataset and then, where the library's differs, the library's —
@@ -94,7 +94,7 @@ only after the workspace's has succeeded, and recording both in `photos-31-merge
 
 :::{bld} One snapshot mechanism for every phase
 :id: BLD-one_snapshot_mechanism
-:status: seed
+:status: ruled
 :realises: RUL-snapshot_optional
 
 The three phases SHALL take their snapshots through one mechanism — prep §14.3, geotag §29 and merge §10.3 invoke it,
