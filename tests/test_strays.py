@@ -137,7 +137,7 @@ def test_strays_scan_skipped_on_next_run(tmp_path, monkeypatch):
     assert os.path.exists(landed)                                # the stray is left untouched
 
 
-@pytest.mark.spec("gpx-prep-unaware-1", "RUL-tracks_geotag_only", "RUL-track_files_block_prep", test="TST-strays-track_file_blocks_prep_and_stays_put")
+@pytest.mark.spec("gpx-prep-unaware-1", "RUL-tracks_geotag_only", "RUL-track_files_block_prep", "RUL-track_file_left_in_place", test="TST-strays-track_file_blocks_prep_and_stays_put")
 def test_track_file_blocks_prep_and_stays_put(tmp_path, monkeypatch):
     """Shared contract §8: a track is never media. A `.gpx` anywhere prep inventories — the 0-sources
     dump or a managed folder — blocks the plan and is left where it is: no operation moves it (above

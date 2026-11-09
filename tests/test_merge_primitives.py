@@ -220,7 +220,7 @@ def test_max_suffix():
     assert utils.max_suffix("FOO", ["foo-005.arw"]) == 5
 
 
-@pytest.mark.spec("fname-allocation-per-phase-1", test="TST-merge_primitives-append_at_max_plus_one_integration")
+@pytest.mark.spec("fname-allocation-per-phase-1", "RUL-merge_suffix_above_highest", test="TST-merge_primitives-append_at_max_plus_one_integration")
 def test_append_at_max_plus_one_integration():
     # The merge collision-rename composition: root + max(library, incoming) + 1.
     lib_names = ["ts.arw", "ts-002.arw"]

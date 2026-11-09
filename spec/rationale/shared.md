@@ -176,7 +176,7 @@ itself*.
 :::{rat} A followed link escapes the managed tree
 :id: RAT-a_link_escapes_the_tree
 :status: seed
-:justifies: RUL-no_links
+:justifies: RUL-no_links, RUL-link_named
 
 Following a symbolic link would let a planned read or write reach a target **outside** the managed tree — a pipeline
 escape that breaks the no-clobber and "originals never lost" guarantees and the closed-world assumption the content
@@ -186,7 +186,7 @@ fingerprint and de-duplication rest on.
 :::{rat} Prep is the gatekeeper for links under the destination tree
 :id: RAT-prep_gatekeeps_links
 :status: seed
-:justifies: RUL-who_checks_for_links
+:justifies: RUL-who_checks_for_links, RUL-geotag_merge_check_top_level_links
 
 The destination tree is read-only for prep yet still scanned by it, so prep is also the gatekeeper for links that
 appear there; and the mandatory re-prep after any change to it means geotag and merge only ever consume a handoff prep
@@ -196,7 +196,7 @@ built with no forbidden link present.
 :::{rat} A rebuilt structure could mask a loss
 :id: RAT-rebuild_masks_loss
 :status: seed
-:justifies: RUL-missing_folder_blocks, RUL-structure_built_once
+:justifies: RUL-missing_folder_blocks, RUL-structure_built_once, RUL-only_prep_builds_structure, RUL-missing_folder_named, RUL-empty_inbox_normal
 
 Since prep creates the structure once and never removes a folder, a missing one is evidence the structure was deleted
 or moved out-of-band — not a state any phase produces. Silently rebuilding it could mask a real loss: a deleted folder
@@ -239,7 +239,7 @@ file's provisional and final names coincide, so geotag plans no needless rename 
 :::{rat} The first free name makes the two names coincide
 :id: RAT-bare_first
 :status: seed
-:justifies: RUL-suffix_choice_by_phase, RUL-uncorrected_keeps_its_name
+:justifies: RUL-suffix_choice_by_phase, RUL-uncorrected_keeps_its_name, RUL-merge_suffix_above_highest
 
 Bare-first is what makes an uncorrected file's provisional (prep) and final (geotag) names coincide, so geotag plans no
 needless rename; the two phases use the identical rule so they never disagree on a name.
@@ -248,7 +248,7 @@ needless rename; the two phases use the identical rule so they never disagree on
 :::{rat} The library is append-only
 :id: RAT-merge_appends
 :status: seed
-:justifies: RUL-suffix_choice_by_phase
+:justifies: RUL-suffix_choice_by_phase, RUL-merge_suffix_above_highest
 
 Merge appends at `max+1` rather than reusing a freed-up lower number because the library is append-only and a re-run
 must reproduce the same name.
@@ -269,7 +269,7 @@ into the inbox and organized.
 :::{rat} A track among the strays could be deleted with them
 :id: RAT-tracks_never_strays
 :status: seed
-:justifies: RUL-track_files_block_prep
+:justifies: RUL-track_files_block_prep, RUL-track_file_left_in_place
 
 Parked among the strays, a track could be deleted when the strays are cleared in bulk, and a lost track is evidence no
 re-run can recover. Refusing to run leaves it where the user put it until they move it to the tracks' location.
