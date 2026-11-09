@@ -7,7 +7,7 @@ the intent it implements. *Why* a choice was made is in [the rationale](../ratio
 
 :::{bld} The phases are three commands
 :id: BLD-phase_commands
-:status: seed
+:status: ruled
 :realises: DEF-prep, DEF-geotag, DEF-merge
 
 The phases SHALL be the commands `photos-cartographer prep`, `geotag` and `merge` — named in the specs, and in their
