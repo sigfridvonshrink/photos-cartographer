@@ -663,7 +663,7 @@ check. `prune-quarantine` SHALL not check the seal.
 :::{bld} Where each phase checks what the user wrote
 :id: BLD-authored_checks_by_phase
 :status: ruled
-:realises: INV-authored_values_checked, RUL-checked_shapes, RUL-checked_positions_and_times, RUL-checked_timezones, RUL-invalid_value_stops, RUL-invalid_value_located, RUL-checked_every_run, RUL-invalid_decision_kept
+:realises: INV-authored_values_checked, RUL-checked_shapes, RUL-checked_positions_and_times, RUL-checked_timezones, RUL-invalid_value_stops, RUL-invalid_value_located, RUL-checked_every_run, RUL-invalid_decision_kept, RUL-invalid_value_never_repaired
 :uses: BLD-config_values_checked
 
 `validate_config` SHALL check the configuration each time it is read: by prep as it seeds and reads it, by geotag and

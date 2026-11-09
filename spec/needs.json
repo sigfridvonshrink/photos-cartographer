@@ -222,6 +222,7 @@
       "RUL-checked_timezones",
       "RUL-invalid_decision_kept",
       "RUL-invalid_value_located",
+      "RUL-invalid_value_never_repaired",
       "RUL-invalid_value_stops"
      ],
      "realises_back": [],
@@ -10023,6 +10024,7 @@
       "RUL-checked_shapes",
       "RUL-checked_timezones",
       "RUL-invalid_value_located",
+      "RUL-invalid_value_never_repaired",
       "RUL-invalid_value_stops"
      ],
      "justifies_back": [],
@@ -16247,7 +16249,7 @@
       "RAT-valid_is_not_unchanged"
      ],
      "layout": null,
-     "lineno": 2476,
+     "lineno": 2485,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -16330,7 +16332,7 @@
       "RAT-hand_written_fallible"
      ],
      "layout": null,
-     "lineno": 2408,
+     "lineno": 2407,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -16415,7 +16417,7 @@
       "RAT-hand_written_fallible"
      ],
      "layout": null,
-     "lineno": 2421,
+     "lineno": 2420,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -16474,7 +16476,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "A path the configuration names SHALL be neither empty nor blank, SHALL hold no character the platform forbids, and SHALL\nstay where it must: the tracks' place outside the managed folders, the library's an existing folder outside the\nworkspace.",
+     "content": "A path the configuration names SHALL be neither empty nor blank, hold no character the platform forbids, and stay where\nit must: the tracks' place outside the managed folders, the library's an existing folder outside the workspace.",
      "criticality": "med",
      "docname": "intent/shared",
      "doctype": ".md",
@@ -16563,7 +16565,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "A position the user writes SHALL be two well-formed numbers in range — latitude −90 to 90, longitude −180 to 180, both\nor neither. A clock offset the user writes SHALL be a number within a day either way; a true time SHALL parse as a date\nand time.",
+     "content": "A position, a clock offset or a true time the user writes SHALL be in range: a position two well-formed numbers —\nlatitude −90 to 90, longitude −180 to 180, both or neither; a clock offset a number within a day either way; a true time\na date and time that parses.",
      "criticality": "high",
      "docname": "intent/shared",
      "doctype": ".md",
@@ -16589,7 +16591,7 @@
       "RAT-hand_written_fallible"
      ],
      "layout": null,
-     "lineno": 2394,
+     "lineno": 2393,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -16649,7 +16651,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "A yes-or-no SHALL be a yes or a no, and a value from a fixed set — a device group's class among them — one of that set.\nA decision whose structure is broken SHALL be an error, never ignored.",
+     "content": "A yes-or-no SHALL be a yes or a no, a value from a fixed set — a device group's class among them — one of that set, and\na decision's structure whole: a decision whose structure is broken is an error, never ignored.",
      "criticality": "high",
      "docname": "intent/shared",
      "doctype": ".md",
@@ -16675,7 +16677,7 @@
       "RAT-hand_written_fallible"
      ],
      "layout": null,
-     "lineno": 2434,
+     "lineno": 2433,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -16763,7 +16765,7 @@
       "RAT-snapshot_name_early"
      ],
      "layout": null,
-     "lineno": 2370,
+     "lineno": 2369,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -16848,7 +16850,7 @@
       "RAT-hand_written_fallible"
      ],
      "layout": null,
-     "lineno": 2383,
+     "lineno": 2382,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -18251,7 +18253,7 @@
       "RAT-temps_are_debris"
      ],
      "layout": null,
-     "lineno": 2629,
+     "lineno": 2637,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -18312,7 +18314,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "Where merge's placement into the library crosses filesystems and cannot be one operation, it SHALL be made equivalent: the file copied under a\ntemporary name beside its place, verified, and only then given its name, if that is still free. An interruption SHALL\nleave no file under that name, or the complete one — never part of one.",
+     "content": "Where merge's placement into the library crosses filesystems and cannot be one operation, it SHALL be made equivalent:\nthe file copied under a temporary name beside its place, verified, and only then given its name, if that is still free —\nso that an interruption leaves no file under that name, or the complete one, never part of one.",
      "criticality": "high",
      "docname": "intent/shared",
      "doctype": ".md",
@@ -18338,7 +18340,7 @@
       "RAT-safe_at_each_change"
      ],
      "layout": null,
-     "lineno": 2615,
+     "lineno": 2623,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -19593,7 +19595,7 @@
       "RAT-safe_at_each_change"
      ],
      "layout": null,
-     "lineno": 2652,
+     "lineno": 2660,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -21432,7 +21434,7 @@
       "RAT-invalid_decision_shown"
      ],
      "layout": null,
-     "lineno": 2487,
+     "lineno": 2496,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -21493,7 +21495,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "The report of an invalid value SHALL name the record and the field it was written in — for a decision, also the\ndestination, the camera group or the file it is about. A value SHALL be used as written or not at all: never repaired.",
+     "content": "The report of an invalid value SHALL name the record and the field it was written in — for a decision, also the\ndestination, the camera group or the file it is about.",
      "criticality": "med",
      "docname": "intent/shared",
      "doctype": ".md",
@@ -21519,7 +21521,7 @@
       "RAT-hand_written_fallible"
      ],
      "layout": null,
-     "lineno": 2462,
+     "lineno": 2460,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -21540,7 +21542,9 @@
      "refines": [
       "INV-authored_values_checked"
      ],
-     "refines_back": [],
+     "refines_back": [
+      "RUL-invalid_value_never_repaired"
+     ],
      "section_name": "14. Every value the user writes is checked",
      "sections": [
       "14. Every value the user writes is checked",
@@ -21551,7 +21555,7 @@
      "style": null,
      "tags": [],
      "template": null,
-     "title": "An invalid value is named where it was written, and never repaired",
+     "title": "An invalid value is named where it was written",
      "type": "rul",
      "type_name": "Rule",
      "upholds": [],
@@ -21569,6 +21573,89 @@
      ],
      "verify": "required"
     },
+    "RUL-invalid_value_never_repaired": {
+     "aliases": null,
+     "anti": "yes",
+     "arch": {},
+     "assumes": [],
+     "assumes_back": [],
+     "choice_kind": null,
+     "completion": null,
+     "constraints": [],
+     "constraints_error": null,
+     "constraints_passed": true,
+     "constraints_results": {},
+     "content": "A value SHALL be used as written or not at all: never repaired.",
+     "criticality": "high",
+     "docname": "intent/shared",
+     "doctype": ".md",
+     "duration": null,
+     "excepts": [],
+     "excepts_back": [],
+     "external_css": "external_link",
+     "external_url": null,
+     "follows_from": [],
+     "follows_from_back": [],
+     "forced": null,
+     "has_dead_links": false,
+     "has_forbidden_dead_links": false,
+     "id": "RUL-invalid_value_never_repaired",
+     "illustrates": [],
+     "illustrates_back": [],
+     "is_external": false,
+     "is_import": false,
+     "is_modified": false,
+     "jinja_content": false,
+     "justifies": [],
+     "justifies_back": [
+      "RAT-hand_written_fallible"
+     ],
+     "layout": null,
+     "lineno": 2474,
+     "links": [],
+     "links_back": [],
+     "modifications": 0,
+     "nodeid": null,
+     "omit_reason": null,
+     "parent_need": null,
+     "parent_needs": [],
+     "parent_needs_back": [],
+     "parts": {},
+     "post_content": null,
+     "post_template": null,
+     "pre_content": null,
+     "pre_template": null,
+     "realises": [],
+     "realises_back": [
+      "BLD-authored_checks_by_phase"
+     ],
+     "refines": [
+      "RUL-invalid_value_located"
+     ],
+     "refines_back": [],
+     "section_name": "14. Every value the user writes is checked",
+     "sections": [
+      "14. Every value the user writes is checked",
+      "Shared — what every phase guarantees"
+     ],
+     "signature": null,
+     "status": "ruled",
+     "style": null,
+     "tags": [],
+     "template": null,
+     "title": "An invalid value is never repaired",
+     "type": "rul",
+     "type_name": "Rule",
+     "upholds": [],
+     "upholds_back": [],
+     "uses": [],
+     "uses_back": [],
+     "verifies": [],
+     "verifies_back": [
+      "TST-geotag_time_decisions-bad_timezone_blocks_and_leaves_artifact"
+     ],
+     "verify": "required"
+    },
     "RUL-invalid_value_stops": {
      "aliases": "validate-fail-closed-1",
      "anti": "yes",
@@ -21581,7 +21668,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "A value found invalid SHALL stop the phase as a stale dependency does: nothing SHALL be made from it, and nothing\nchanged.",
+     "content": "A value found invalid SHALL stop the phase as a stale dependency does, nothing made from it and nothing changed.",
      "criticality": "high",
      "docname": "intent/shared",
      "doctype": ".md",
@@ -21607,7 +21694,7 @@
       "RAT-hand_written_fallible"
      ],
      "layout": null,
-     "lineno": 2448,
+     "lineno": 2447,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -26092,7 +26179,7 @@
       "RAT-workspace_one_filesystem"
      ],
      "layout": null,
-     "lineno": 2555,
+     "lineno": 2563,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -26339,7 +26426,7 @@
       "RAT-safe_at_each_change"
      ],
      "layout": null,
-     "lineno": 2518,
+     "lineno": 2526,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -28002,7 +28089,7 @@
       "RAT-safe_at_each_change"
      ],
      "layout": null,
-     "lineno": 2601,
+     "lineno": 2609,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -29341,7 +29428,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 2578,
+     "lineno": 2586,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -29424,7 +29511,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 2567,
+     "lineno": 2575,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -29512,7 +29599,7 @@
       "RAT-safe_at_each_change"
      ],
      "layout": null,
-     "lineno": 2530,
+     "lineno": 2538,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -30144,7 +30231,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "Immediately before each change that gives a file a name — prep's moves, renames and setting duplicates aside, geotag's\nrenames, merge's placing in the library — execution SHALL check that the name is free, ignoring case where the\nfilesystem does, and SHALL never write onto a taken name on the strength of the plan. A name found taken SHALL block\nthat operation.",
+     "content": "Immediately before each change that gives a file a name — prep's moves, renames and setting duplicates aside, geotag's\nrenames, merge's placing in the library — execution SHALL check that the name is free, ignoring case where the\nfilesystem does, never writing onto a taken name on the strength of the plan: a name found taken blocks that operation.",
      "criticality": "high",
      "docname": "intent/shared",
      "doctype": ".md",
@@ -30170,7 +30257,7 @@
       "RAT-plan_can_be_overtaken"
      ],
      "layout": null,
-     "lineno": 2503,
+     "lineno": 2512,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -30256,7 +30343,7 @@
       "RAT-temps_are_debris"
      ],
      "layout": null,
-     "lineno": 2642,
+     "lineno": 2650,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -31591,7 +31678,7 @@
       "RAT-workspace_one_filesystem"
      ],
      "layout": null,
-     "lineno": 2589,
+     "lineno": 2597,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -31677,7 +31764,7 @@
       "RAT-workspace_one_filesystem"
      ],
      "layout": null,
-     "lineno": 2542,
+     "lineno": 2550,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -38047,7 +38134,8 @@
      "verifies": [
       "INV-authored_values_checked",
       "RUL-checked_timezones",
-      "RUL-invalid_decision_kept"
+      "RUL-invalid_decision_kept",
+      "RUL-invalid_value_never_repaired"
      ],
      "verifies_back": [],
      "verify": null
@@ -46439,7 +46527,7 @@
      "verify": null
     }
    },
-   "needs_amount": 581,
+   "needs_amount": 582,
    "needs_schema": {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "properties": {

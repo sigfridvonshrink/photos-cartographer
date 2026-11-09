@@ -651,7 +651,7 @@ both checks are needed, every time.
 :::{rat} What is typed by hand can be mistyped
 :id: RAT-hand_written_fallible
 :status: ruled
-:justifies: INV-authored_values_checked, RUL-checked_paths, RUL-checked_timezones, RUL-checked_positions_and_times, RUL-checked_filename_format, RUL-checked_numbers, RUL-checked_shapes, RUL-invalid_value_stops, RUL-invalid_value_located
+:justifies: INV-authored_values_checked, RUL-checked_paths, RUL-checked_timezones, RUL-checked_positions_and_times, RUL-checked_filename_format, RUL-checked_numbers, RUL-checked_shapes, RUL-invalid_value_stops, RUL-invalid_value_located, RUL-invalid_value_never_repaired
 
 The user writes the configuration and the decisions by hand, so the tool cannot assume they are well formed. A
 mistyped timezone or an unsafe path, reported early as a specific problem in a named place, is fixed at its source;

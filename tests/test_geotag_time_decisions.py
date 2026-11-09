@@ -188,7 +188,7 @@ def test_determinism_unchanged_rerun_is_byte_identical(tmp_path, monkeypatch):
 
 # --- validation (§9.2) -------------------------------------------------------
 
-@pytest.mark.spec("geotag-invalid-preserved-1", "geotag-validation-hard-blocker-1", "validate-everything-authored-1", "validate-preserve-invalid-1", "validate-timezone-1", test="TST-geotag_time_decisions-bad_timezone_blocks_and_leaves_artifact")
+@pytest.mark.spec("geotag-invalid-preserved-1", "geotag-validation-hard-blocker-1", "validate-everything-authored-1", "validate-preserve-invalid-1", "validate-timezone-1", "RUL-invalid_value_never_repaired", test="TST-geotag_time_decisions-bad_timezone_blocks_and_leaves_artifact")
 def test_bad_timezone_blocks_and_leaves_artifact(tmp_path, monkeypatch, capsys):
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []})

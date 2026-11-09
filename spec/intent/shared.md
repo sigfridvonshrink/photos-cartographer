@@ -2362,9 +2362,8 @@ check that it has not changed.
 :uses: DEF-configuration, DEF-managed_folders, DEF-tracks
 :refines: INV-authored_values_checked
 
-A path the configuration names SHALL be neither empty nor blank, SHALL hold no character the platform forbids, and SHALL
-stay where it must: the tracks' place outside the managed folders, the library's an existing folder outside the
-workspace.
+A path the configuration names SHALL be neither empty nor blank, hold no character the platform forbids, and stay where
+it must: the tracks' place outside the managed folders, the library's an existing folder outside the workspace.
 :::
 
 :::{rul} A snapshot's name is checked before any snapshot
@@ -2400,9 +2399,9 @@ A timezone the user writes SHALL be a real zone that resolves, never an arbitrar
 :uses: DEF-decision
 :refines: INV-authored_values_checked
 
-A position the user writes SHALL be two well-formed numbers in range — latitude −90 to 90, longitude −180 to 180, both
-or neither. A clock offset the user writes SHALL be a number within a day either way; a true time SHALL parse as a date
-and time.
+A position, a clock offset or a true time the user writes SHALL be in range: a position two well-formed numbers —
+latitude −90 to 90, longitude −180 to 180, both or neither; a clock offset a number within a day either way; a true time
+a date and time that parses.
 :::
 
 :::{rul} The filename format makes a safe name
@@ -2441,8 +2440,8 @@ a sane range: a duration or a distance is never negative.
 :uses: DEF-decision, RUL-user_writes_decisions
 :refines: INV-authored_values_checked
 
-A yes-or-no SHALL be a yes or a no, and a value from a fixed set — a device group's class among them — one of that set.
-A decision whose structure is broken SHALL be an error, never ignored.
+A yes-or-no SHALL be a yes or a no, a value from a fixed set — a device group's class among them — one of that set, and
+a decision's structure whole: a decision whose structure is broken is an error, never ignored.
 :::
 
 :::{rul} An invalid value stops the phase before it changes anything
@@ -2455,11 +2454,10 @@ A decision whose structure is broken SHALL be an error, never ignored.
 :uses: INV-no_stale_use
 :refines: INV-authored_values_checked
 
-A value found invalid SHALL stop the phase as a stale dependency does: nothing SHALL be made from it, and nothing
-changed.
+A value found invalid SHALL stop the phase as a stale dependency does, nothing made from it and nothing changed.
 :::
 
-:::{rul} An invalid value is named where it was written, and never repaired
+:::{rul} An invalid value is named where it was written
 :id: RUL-invalid_value_located
 :status: ruled
 :criticality: med
@@ -2470,7 +2468,18 @@ changed.
 :refines: INV-authored_values_checked
 
 The report of an invalid value SHALL name the record and the field it was written in — for a decision, also the
-destination, the camera group or the file it is about. A value SHALL be used as written or not at all: never repaired.
+destination, the camera group or the file it is about.
+:::
+
+:::{rul} An invalid value is never repaired
+:id: RUL-invalid_value_never_repaired
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-invalid_value_located
+
+A value SHALL be used as written or not at all: never repaired.
 :::
 
 :::{rul} A value is checked each time it is used
@@ -2511,8 +2520,7 @@ or rewritten.
 
 Immediately before each change that gives a file a name — prep's moves, renames and setting duplicates aside, geotag's
 renames, merge's placing in the library — execution SHALL check that the name is free, ignoring case where the
-filesystem does, and SHALL never write onto a taken name on the strength of the plan. A name found taken SHALL block
-that operation.
+filesystem does, never writing onto a taken name on the strength of the plan: a name found taken blocks that operation.
 :::
 
 :::{rul} An interrupted move leaves the before or the after
@@ -2621,9 +2629,9 @@ never a damaged one between them.
 :aliases: atomic-crossfs-equivalent-1
 :refines: RUL-operations_atomic
 
-Where merge's placement into the library crosses filesystems and cannot be one operation, it SHALL be made equivalent: the file copied under a
-temporary name beside its place, verified, and only then given its name, if that is still free. An interruption SHALL
-leave no file under that name, or the complete one — never part of one.
+Where merge's placement into the library crosses filesystems and cannot be one operation, it SHALL be made equivalent:
+the file copied under a temporary name beside its place, verified, and only then given its name, if that is still free —
+so that an interruption leaves no file under that name, or the complete one, never part of one.
 :::
 
 :::{rul} A temporary copy a crash left is cleared
