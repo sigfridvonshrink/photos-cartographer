@@ -170,6 +170,43 @@ def test_track_file_blocks_prep_and_stays_put(tmp_path, monkeypatch):
     assert not glob.glob(str(ws / "1-strays" / "**" / "*.gpx"), recursive=True)
 
 
+@pytest.mark.spec("RUL-tracks_geotag_only", test="TST-strays-prep_never_reads_the_tracks")
+def test_prep_never_reads_the_tracks(tmp_path, monkeypatch):
+    """Prep resolves gpx_root to check where it lies, and does nothing more with it: it never lists,
+    walks or opens anything beneath it, and never builds geotag's GPX index."""
+    import builtins
+    import json as _json
+    import photos_2_geotag as geo
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    tracks = tmp_path / "tracks"
+    (tracks / "2023").mkdir(parents=True)
+    (tracks / "2023" / "day.gpx").write_text("<gpx><trkpt lat='1' lon='2'/></gpx>")
+    _plan(ws)                                                        # seeds the workspace config
+    cfg_p = ws / ".photos-ingest" / "photos-00-config.json"
+    cfg_p.write_text(_json.dumps(dict(_json.loads(cfg_p.read_text()), gpx_root=str(tracks))))
+
+    root = os.path.realpath(str(tracks))
+    touched = []
+
+    def watch(fn):
+        def wrapper(path=".", *a, **k):
+            if isinstance(path, (str, os.PathLike)) and os.path.realpath(os.fspath(path)).startswith(root):
+                touched.append((fn.__name__, os.fspath(path)))
+            return fn(path, *a, **k)
+        return wrapper
+    for name in ("walk", "listdir", "scandir"):
+        monkeypatch.setattr(os, name, watch(getattr(os, name)))
+    monkeypatch.setattr(builtins, "open", watch(builtins.open))
+    monkeypatch.setattr(geo.GPXIndex, "__init__", lambda *a, **k: pytest.fail("prep built the GPX index"))
+
+    (ws / "0-sources" / "photo.jpg").write_bytes(b"img")
+    plan = _run(ws)
+    assert plan.blockers == [] and not any("gpx" in w.lower() for w in plan.warnings), (plan.blockers, plan.warnings)
+    assert prep.CONFIG["gpx_root"] == str(tracks)                    # the run had the tracks configured
+    assert touched == []
+
+
 @pytest.mark.spec("RUL-track_files_block_prep", test="TST-strays-every_track_format_blocks_prep")
 @pytest.mark.parametrize("name", ["route.kml", "route.KMZ", "ride.FIT", "run.tcx", "log.nmea", "flight.igc"])
 def test_every_track_format_blocks_prep(tmp_path, monkeypatch, name):
