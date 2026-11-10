@@ -133,7 +133,9 @@ SHALL — `RUL-lock_fail_fast`, for one, stops at once, says the workspace is lo
 `RUL-replanning_keeps_the_prior` sets the saved plan aside and tells the user where; `RUL-no_plan_no_run` stops and
 tells the user to plan first. From §4's structure: `RUL-structure_built_once`, `RUL-top_level_only_managed`,
 `RUL-first_dump_at_top_level`, `RUL-link_named`, `RUL-geotag_merge_check_top_level_links`, `RUL-missing_folder_blocks`,
-`RUL-missing_folder_named`, and `RUL-no_links` with its four cases. Vasile caught
+`RUL-missing_folder_named`, and `RUL-no_links` with its four cases. From §5's camera groups:
+`RUL-prep_derives_camera_group` (derive the group, record it in two places) and `RUL-camera_group_derivation_versioned`
+(carry a version, have it checked). Vasile caught
 the pattern in a proposed `RUL-failed_operation_clean` and wants the rest found.
 
 **What to do:** read every item against a stricter test — one property per item, which a single test could find broken
@@ -171,3 +173,15 @@ into a managed folder is one too. Such a file then stays among the media, unrepo
 with a blocker naming it, or leave it and report it — state that in the prep spec, and make the code and a test follow.
 
 **When:** with the conversion of the prep spec (item 1), where the strays are specified.
+
+### 10. Files without a camera identity share one camera group
+
+**Why:** a file whose metadata names no serial number, make, model or owner gets the camera-group key `unknown`, and
+every such file shares it: screenshots, scans, photos a messaging app stripped. They are not one camera, as a camera
+group is defined to be. Classed under `fixed_clock_cameras`, they would all get one clock offset per destination.
+Found while ruling §5 of the shared contract.
+
+**What to do:** decide how geotag treats files with no identity — a group of their own that can never be classed, each
+file on its own, or as now — state it in the geotag spec, and make the code and a test follow.
+
+**When:** with the conversion of the geotag spec (item 1), where camera groups are classified.

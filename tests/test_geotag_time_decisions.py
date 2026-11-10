@@ -39,8 +39,9 @@ def _hfile(rel, *, key=CAM, dto="2024:07:03 14:12:08"):
     return {"relative_path": rel, "media_class": "image", "folder_class": "6-photos-by-dest",
             "size": 100, "mtime_ns": 1,
             "content_hash": json.dumps({"value": "fp-" + rel, "status": "valid"}),
-            "metadata_status": {"camera_group_key": key, "has_timestamp": True,
-                                "has_native_gps": False, "field_set_version": 1,
+            "metadata_status": {"camera_group_key_version": utils.CAMERA_GROUP_KEY_VERSION,
+                                "camera_group_key": key, "has_timestamp": True,
+                                "has_native_gps": False, "field_set_version": utils.FIELD_SET_VERSION,
                                 "parsed_json": json.dumps(parsed)}}
 
 

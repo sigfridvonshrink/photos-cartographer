@@ -338,8 +338,20 @@ operator's task.
 :status: seed
 :justifies: RUL-prep_derives_camera_group, RUL-geotag_reuses_camera_group
 
-One derived key identifies a camera or device so that grouping is computed once, by prep, and reused by geotag — never
-reinvented.
+Two derivations of a camera's identity could disagree: a file grouped one way by prep and another way by geotag would
+get another camera's clock offset. And the user classes groups by the key they see, so it must be the same key
+everywhere it appears. One derivation, by prep, recorded with the file and reused by geotag, rules out both.
+:::
+
+:::{rat} Only the user knows a group's class
+:id: RAT-class_from_the_user
+:status: seed
+:justifies: RUL-known_when_classified
+
+Geotag treats the two classes differently: a phone keeps network time and is solved file by file, while a camera's clock
+drifts and needs an offset for each group and destination. Guessing the class from a make or a model would be wrong for
+some devices, and wrong without anyone noticing. Only the user knows, so a group the configuration does not class stays
+unknown and geotag asks.
 :::
 
 ## 6. One filename format

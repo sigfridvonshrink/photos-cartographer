@@ -65,8 +65,9 @@ def _ready_ws(tmp_path, monkeypatch, *, zfs=None):
         return {"relative_path": rel, "media_class": "image", "folder_class": "6-photos-by-dest",
                 "size": st.st_size, "mtime_ns": st.st_mtime_ns,
                 "content_hash": json.dumps({"value": "fp-" + rel, "status": "valid"}),
-                "metadata_status": {"camera_group_key": CAM, "has_timestamp": True, "has_native_gps": True,
-                                    "field_set_version": 1, "parsed_json": json.dumps(parsed)}}
+                "metadata_status": {"camera_group_key_version": utils.CAMERA_GROUP_KEY_VERSION,
+                                    "camera_group_key": CAM, "has_timestamp": True, "has_native_gps": True,
+                                    "field_set_version": utils.FIELD_SET_VERSION, "parsed_json": json.dumps(parsed)}}
     files = [rec("6-photos-by-dest/T/a.arw", "2024:07:03 14:00:00", 50.0, 4.0),
              rec("6-photos-by-dest/T/b.arw", "2024:07:03 15:00:00", 51.0, 5.0)]
     ho = {"run_metadata": {"plan_id": "prep-1", "execution_id": "exec-1"},
@@ -405,7 +406,7 @@ def test_apply_file_rename_skip_and_failure(tmp_path, monkeypatch):
     assert r["failed"] == ["oR"] and "rename failed" in r["blocker"]
 
 
-@pytest.mark.spec("geotag-filename-change-invalidates-plan-1", "geotag-no-stale-execution-1", "RUL-tracks_in_dependencies", "INV-no_stale_use", test="TST-geotag_execution-revalidate_detects_each_stale_input")
+@pytest.mark.spec("geotag-filename-change-invalidates-plan-1", "geotag-no-stale-execution-1", "RUL-tracks_in_dependencies", "INV-no_stale_use", "RUL-camera_group_derivation_versioned", test="TST-geotag_execution-revalidate_detects_each_stale_input")
 def test_revalidate_detects_each_stale_input(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     wf = cal.GeotagWorkflow(str(ws)); wf.preflight(for_execute=True)
@@ -414,7 +415,8 @@ def test_revalidate_detects_each_stale_input(tmp_path, monkeypatch):
     assert wf.revalidate_plan(plan, gpx) == []                        # fresh -> nothing stale
     assert any("not 'ready'" in s for s in wf.revalidate_plan({**plan, "status": "blocked"}, gpx))
     for k in ("config_fingerprint", "filename_format_fingerprint", "camera_group_fingerprint",
-              "folders_fingerprint", "media_extensions_fingerprint", "gpx_fingerprint"):
+              "folders_fingerprint", "media_extensions_fingerprint", "gpx_fingerprint",
+              "camera_group_key_version", "metadata_field_set_version"):
         pk = {**plan, "depends_on": {**plan["depends_on"], k: "WRONG"}}
         assert any(k in s for s in wf.revalidate_plan(pk, gpx)), k
     pk = {**plan, "depends_on": {**plan["depends_on"], "planned_operation_fingerprint": "WRONG"}}

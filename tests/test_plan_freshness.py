@@ -185,6 +185,8 @@ def _geotag_setup(tmp_path):
     deps["folders_fingerprint"] = U.folders_fingerprint()
     deps["media_extensions_fingerprint"] = U.media_extensions_fingerprint()
     deps["camera_group_fingerprint"] = U.sha256_text(cam)
+    deps["camera_group_key_version"] = U.CAMERA_GROUP_KEY_VERSION
+    deps["metadata_field_set_version"] = U.FIELD_SET_VERSION
     deps["gpx_fingerprint"] = "GPXFP"
     deps["planned_operation_fingerprint"] = U.sha256_text(json.dumps([], sort_keys=True))
     plan = {"status": "ready", "destinations": {}, "depends_on": deps}

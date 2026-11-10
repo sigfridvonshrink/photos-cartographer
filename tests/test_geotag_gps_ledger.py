@@ -212,8 +212,9 @@ def _exec_ws(tmp_path, monkeypatch):
         return {"relative_path": rel, "media_class": "image", "folder_class": "6-photos-by-dest",
                 "size": st.st_size, "mtime_ns": st.st_mtime_ns,
                 "content_hash": json.dumps({"value": "fp-" + rel, "status": "valid"}),
-                "metadata_status": {"camera_group_key": CAM, "has_timestamp": True, "has_native_gps": bool(gps),
-                                    "field_set_version": 1, "parsed_json": json.dumps(parsed)}}
+                "metadata_status": {"camera_group_key_version": utils.CAMERA_GROUP_KEY_VERSION,
+                                    "camera_group_key": CAM, "has_timestamp": True, "has_native_gps": bool(gps),
+                                    "field_set_version": utils.FIELD_SET_VERSION, "parsed_json": json.dumps(parsed)}}
     files = [rec(f"{BYDEST}/T/2024-07-03--14-00-00.arw", "2024:07:03 14:00:00", (50.0, 4.0)),
              rec(f"{BYDEST}/T/2024-07-03--15-00-00.arw", "2024:07:03 15:00:00", (51.0, 5.0)),
              rec(f"{BYDEST}/T/2024-07-03--14-30-00.arw", "2024:07:03 14:30:00")]            # no GPS -> blocked -> fallback
