@@ -353,6 +353,15 @@ The top level of an initialized workspace SHALL hold exactly the managed folders
 §3).
 :::
 
+:::{bld} One check of the top level for all three phases
+:id: BLD-one_top_level_check
+:status: seed
+:realises: RUL-top_level_only_managed
+
+Prep, geotag and merge SHALL find a workspace's misplaced top-level entries with the one function they share,
+`photos_utils.misplaced_top_level_entries`, so the three cannot disagree on what belongs there.
+:::
+
 :::{bld} Where each phase applies the shape guards
 :id: BLD-shape_guards_by_phase
 :status: seed

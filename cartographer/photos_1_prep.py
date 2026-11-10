@@ -39,7 +39,7 @@ import errno
 # ==============================================================================
 # CONFIGURATION BLOCK
 # ==============================================================================
-from .photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, is_track_file, missing_managed_folders, FOLDER_ROLES
+from .photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, is_track_file, missing_managed_folders, misplaced_top_level_entries, FOLDER_ROLES
 from .reporting import get_reporter, emit_next_step
 from .photos_utils import (_move_no_clobber, _move_link_unlink, _get_renameat2,
                           WorkspaceCache, WorkspaceLock, ContentHasher, PlanFingerprintMemo,
@@ -1528,10 +1528,10 @@ class WorkspacePrepWorkflow:
                 continue
             # Everything else at the base is a dump entry.
             if not self._initializing:
-                # Initialized workspace (prep Section 6.2 item 2): the base holds only the managed
-                # folders + control dirs. Any other root entry — file, dotfile, or non-managed
-                # folder — is a misplaced dump and a hard block; dumps belong in 0-sources/.
-                blockers.append(f"Misplaced entry at workspace root (dumps belong in {_sources}/): {f}")
+                # Initialized workspace (shared contract §4): the base holds only the managed folders
+                # and hidden entries. Every other root entry — a file, a non-managed folder, a named
+                # pipe — is a misplaced dump and a hard block, found by the check every phase shares
+                # (below); a hidden file is left where it is, never inventoried.
                 continue
             # Init run: inventory this base entry so Stage 1 moves it into 0-sources (no flatten).
             if f.startswith('.'):
@@ -1551,6 +1551,9 @@ class WorkspacePrepWorkflow:
                             files.append(rel_path)
             else:
                 files.append(f)
+        if not self._initializing:
+            blockers.extend(f"Misplaced entry at workspace root (dumps belong in {_sources}/): {f}"
+                            for f in misplaced_top_level_entries(self.workspace_root))
         for d in self.managed_folders:
             folder_path = os.path.join(self.workspace_root, d)
             # A managed folder that is itself a symlink would let os.walk traverse its external

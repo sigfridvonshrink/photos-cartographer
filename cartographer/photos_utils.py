@@ -293,6 +293,21 @@ def missing_managed_folders(ws: str, cfg=None) -> list:
     return [folder_name(r, cfg) for r in FOLDER_ROLES
             if not os.path.isdir(os.path.join(ws, folder_name(r, cfg)))]
 
+def top_level_links(ws: str) -> list:
+    """Every symbolic link at the workspace's top level, hidden or not, dangling or not (shared
+    contract §4): each blocks, and none is followed. Sorted names."""
+    return sorted(n for n in os.listdir(ws) if os.path.islink(os.path.join(ws, n)))
+
+def misplaced_top_level_entries(ws: str, cfg=None) -> list:
+    """The entries at an initialized workspace's top level that do not belong there (shared contract
+    §4): anything but a managed folder or a hidden entry — a file, a folder, a named pipe or any other
+    kind. Links are reported by `top_level_links`, and a managed folder's name held by something that
+    is not a folder by `missing_managed_folders`, so neither is listed here. Every phase blocks on
+    the same list. Sorted names."""
+    managed = {folder_name(r, cfg) for r in FOLDER_ROLES}
+    return sorted(n for n in os.listdir(ws)
+                  if not n.startswith('.') and n not in managed and not os.path.islink(os.path.join(ws, n)))
+
 def dedup_priority(path, cfg=None) -> int:
     """Dedup retention priority of `path` by its top folder component (lower = retained)."""
     role = folder_role(path.split('/', 1)[0], cfg)

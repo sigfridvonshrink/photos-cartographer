@@ -613,7 +613,7 @@ The workspace lock is acquired at process startup, before preflight (shared cont
 
 - **Sealed workspace → hard-stop, sealed means sealed.** If a **terminal/sealed marker** from a prior successful merge is present (shared contract Section 13.7), geotag **hard-stops immediately, mutating nothing and touching nothing but the owner record of the workspace lock**, and directs the user to a fresh workspace — a merged workspace is done. There is no recovery utility. If an entry sits at the **workspace root** other than its managed folders and hidden entries — a file or a whole folder — or anything sits in **`0-sources`**, geotag additionally warns that a likely new dump was detected and that, because this workspace is sealed, the dump must be moved into a **fresh workspace** by hand; it leaves the dump exactly where it is.
 - **Uninitialized → run prep first.** If the workspace has no root sentinel `photos-00-workspace-guard` (it was never initialized, shared contract Section 5; prep Section 3.1), geotag hard-stops, reporting that the workspace is not initialized and that prep must run first (only prep's init path consumes an as-arrived dump).
-- **Misplaced entry at the workspace root → hard-stop (strict).** On an initialized workspace the base must hold only the managed folders and control/dot directories; any misplaced root entry blocks — a **loose file** (dotfiles included), a **non-managed folder** (a stray dump folder belongs *inside* `0-sources`, not loose at the base), or a **symlink** (barred outright rather than followed, since following it would escape the workspace). Dumps belong in `0-sources` (shared contract Section 5.3; prep Section 6.2 items 2–3). Geotag matches prep here so a misplaced dump is caught no matter which phase the operator runs next.
+- **Misplaced entry at the workspace root → hard-stop (strict).** On an initialized workspace the base must hold only the managed folders and control/dot directories; any misplaced root entry blocks — a **loose file** (a hidden one excepted, like every hidden entry), a **non-managed folder** (a stray dump folder belongs *inside* `0-sources`, not loose at the base), or a **symlink** (barred outright rather than followed, since following it would escape the workspace). Dumps belong in `0-sources` (shared contract Section 5.3; prep Section 6.2 items 2–3). Geotag matches prep here so a misplaced dump is caught no matter which phase the operator runs next.
 - **Incomplete managed folder structure → hard-stop.** If any of the managed `0`–`6` folders is missing on an initialized workspace, the structure was disturbed out-of-band; geotag hard-stops and directs the operator to restore it and re-run prep, rather than proceeding against a damaged workspace (shared contract Section 5.3; prep Section 6.2 item 7). Folder creation is prep's init-only job; geotag never creates or repairs the structure.
 
 Otherwise, the first workflow action is always preflight validation.
@@ -1855,7 +1855,7 @@ Workspace not initialized (no root sentinel)
   -> geotag hard-stops because the workspace is not initialized (Section 13)
 
 Loose file at the workspace root (initialized workspace)
-  -> geotag hard-stops (strict: any root file, dotfiles included; Section 13)
+  -> geotag hard-stops (any root file but a hidden one; Section 13)
 
 Non-managed folder or symlink at the workspace root (initialized)
   -> geotag hard-stops, same as a loose root file (Section 13):

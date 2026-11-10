@@ -218,7 +218,7 @@ Planning must block, producing no executable plan, if it finds:
    - **a non-managed folder** — a directory at the root whose name is **not** one of the reserved managed names (`0-sources`…`6-photos-by-dest`) and is not a control/dot directory. Prep does **not** treat a stray root folder as an additional inbox to sweep; a dump that arrives as a folder belongs **inside** `0-sources/` (its tree is preserved there, Section 7.2), not loose at the base. (This is the symmetric counterpart to the loose-file rule: after init, the base holds *only* the managed folders, whether the intruder is a file or a folder.);
    - **a symlink** — any non-dot symlink at the root (whether it points at a file or a directory) is blocked rather than followed. Following a root symlink would let the scan traverse an external target and plan moves for files outside the workspace — a pipeline escape (item 3; shared contract Section 5.3). A symlink is therefore checked **before** the file/folder distinction and blocked outright.
 
-   Prep hard-stops with a message that dumps belong in `0-sources/` (move the entry there or remove it, then re-run). The check is **strict**: any such root entry blocks, dotfiles included — nothing but the numbered folders and the control/dot directories belongs at the base. (This guard does **not** apply on an *uninitialized* workspace, where root files and folders are the expected first dump and trigger initialization instead, Section 3.1; even there, a **symlink** at the base is still barred as an escape rather than consumed into `0-sources/`.);
+   Prep hard-stops with a message that dumps belong in `0-sources/` (move the entry there or remove it, then re-run). Any such root entry blocks — a named pipe or any other kind of entry included. A **hidden** entry is not misplaced, a dotfile no more than a dot-directory: it is never inventoried (Section 3.2), and on an initialized workspace the root is not a dump area, so a root dotfile is left where it is. (This guard does **not** apply on an *uninitialized* workspace, where root files and folders are the expected first dump and trigger initialization instead, Section 3.1; even there, a **symlink** at the base is still barred as an escape rather than consumed into `0-sources/`.);
 3. a **symlink among managed files (forbidden), including nested directory symlinks** — the pipeline never follows or organizes a symlink, because doing so would let a planned move read from or write to a target outside the managed tree (an escape, shared contract `photos-shared-contract.md` Section 5.3). The bar is comprehensive and covers every place a symlink can appear:
    - a **file symlink** anywhere in a dump or a managed folder;
    - a **nested directory symlink** — a directory symlink encountered *inside* a dump tree (under `0-sources/`, or under an as-arrived base dump on an init run) **or inside any managed folder** (including `6-photos-by-dest`). The traversal does not descend into it (it is not followed), but its mere presence is a hard blocker — it is never silently skipped;
@@ -751,7 +751,7 @@ New dump added to 0-sources (initialized workspace)
 
 Loose file appears at the workspace root (initialized workspace)
   -> hard block (Section 6.2 item 2): dumps belong in 0-sources
-  -> strict: any root file blocks, dotfiles included
+  -> any root file blocks; a hidden root file is left where it is
 
 Non-managed folder or symlink appears at the workspace root (initialized)
   -> same hard block as a loose root file (Section 6.2 item 2):

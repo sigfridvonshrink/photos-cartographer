@@ -780,7 +780,8 @@ placement, not structure.
 :upholds: INV-undisturbed_shape
 
 The top level of an initialized workspace SHALL hold only the managed folders, the control records' place, the
-quarantine and hidden entries: any other entry — a file, a folder, a link — is a misplaced dump, whose only place is the
+quarantine and hidden entries, hidden files as much as hidden folders: any other entry — a file, a folder, a link, an
+entry of any other kind — is a misplaced dump, whose only place is the
 inbox, and blocks every phase alike.
 :::
 

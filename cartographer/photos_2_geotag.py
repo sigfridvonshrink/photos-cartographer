@@ -49,7 +49,7 @@ from .photos_utils import (
     validate_config, load_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
     folders_fingerprint, media_extensions_fingerprint,
     selected_gpx_root, CAMERA_IDENTITY_FIELDS, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
-    missing_managed_folders, by_dest_reprep_pending,
+    missing_managed_folders, top_level_links, misplaced_top_level_entries, by_dest_reprep_pending,
     json_dependency, verify_json_dependency, handoff_content_fingerprint, write_json_artifact, write_versioned_json, db_path, ensure_control_dir,
     journal_path, ContentHasher, _move_no_clobber,
     prep_log_path, entries_not_carried, write_db_snapshot, take_zfs_snapshot,
@@ -284,9 +284,9 @@ class GeotagWorkflow:
         # A symlink at the workspace root is barred outright (§13) and never followed — including a
         # dangling link (neither file nor dir) or one named like a managed folder (which os.path.isdir
         # would otherwise resolve through). Checked before the structural/loose-entry guards below.
-        root_syms = self._root_symlinks()
+        root_syms = top_level_links(ws)
         if root_syms:
-            blockers.append(f"Forbidden symlink at the workspace root: {root_syms[0]}. Symlinks are "
+            blockers.append(f"Forbidden symlink at the workspace root: {', '.join(root_syms)}. Symlinks are "
                             "never followed; remove it before geotagging.")
             return blockers, warnings, info
         # The activated workspace must have its full 0-6 structure. A managed folder that is missing or
@@ -298,19 +298,11 @@ class GeotagWorkflow:
                             f"{', '.join(struct_missing)}. Restore the 0-6 structure (or move the "
                             "media into a fresh workspace and re-run prep there — `photos-cartographer prep plan` then `photos-cartographer prep execute`) before geotagging.")
             return blockers, warnings, info
-        loose = self._root_files()
-        if loose:
-            blockers.append(f"Loose file at the workspace root (dumps belong in "
-                            f"{folder_name('sources')}/): {loose[0]}. The base must hold only folders.")
-            return blockers, warnings, info
-        # A misplaced dump drops folders at the root too, not just files. The base must hold ONLY the
-        # managed 0-6 folders (+ dot/control dirs); any other root folder — including a directory
-        # symlink — is a misplaced dump, blocked exactly like a loose file.
-        loose_dirs = self._root_nonmanaged_dirs()
-        if loose_dirs:
-            blockers.append(f"Misplaced folder at the workspace root (dumps belong in "
-                            f"{folder_name('sources')}/): {loose_dirs[0]}. The base must hold only "
-                            "the managed folders.")
+        misplaced = misplaced_top_level_entries(ws)
+        if misplaced:
+            blockers.append(f"Misplaced entry at workspace root (dumps belong in "
+                            f"{folder_name('sources')}/): {', '.join(misplaced)}. The top level holds only "
+                            "the managed folders and hidden entries.")
             return blockers, warnings, info
 
         # 2. Config (read-only) + handoff — both must exist; geotag never seeds/writes config.
@@ -399,30 +391,9 @@ class GeotagWorkflow:
 
     # --- filesystem helpers --------------------------------------------------
 
-    def _root_files(self):
-        ws = self.workspace_root
-        return sorted(f for f in os.listdir(ws) if os.path.isfile(os.path.join(ws, f)))
-
-    def _root_nonmanaged_dirs(self):
-        """Root entries that are directories (a directory symlink counts) but are neither one of the
-        managed 0-6 folders nor a dot/control dir — i.e. misplaced dump folders."""
-        ws = self.workspace_root
-        managed = {folder_name(r) for r in FOLDER_ROLES}
-        return sorted(f for f in os.listdir(ws)
-                      if not f.startswith('.') and f not in managed
-                      and os.path.isdir(os.path.join(ws, f)))
-
     def _entries(self, rel_folder):
         d = os.path.join(self.workspace_root, rel_folder)
         return sorted(os.listdir(d)) if os.path.isdir(d) else []
-
-    def _root_symlinks(self):
-        """Any entry at the workspace root that is a symlink (file, directory, or dangling) — barred
-        outright, never followed (§13). Dot-named ones included: the only legitimate dot entries
-        (.photos-ingest*) are real directories, never symlinks, so a dot-named symlink is forbidden too."""
-        ws = self.workspace_root
-        return sorted(f for f in os.listdir(ws)
-                      if os.path.islink(os.path.join(ws, f)))
 
     def _scan_media(self, rel_folder):
         """Yield (workspace-relative path, media_class) for non-dot files under rel_folder."""
