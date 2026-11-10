@@ -58,7 +58,7 @@ def _ws(tmp_path, *, files, device_groups, default_tz=""):
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
     for rec in files:
         p = ws / rec["relative_path"]; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"img")
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"files": files}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files}))
     return ws
 
 

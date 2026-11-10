@@ -413,6 +413,36 @@ be off or still on home time, and UTC is nobody's time of day; the corrected tim
 matches the memory.
 :::
 
+:::{rat} Outside the inbox, every name is the pipeline's
+:id: RAT-misnamed_not_ignored
+:status: seed
+:justifies: RUL-misnamed_file_stops_prep
+
+Outside the inbox every name is one the pipeline gave. A name that is not means a file was renamed or put there by
+hand, and nothing says which time or which photo it holds; passed over in silence, it would reach the library under a
+name that looks trusted. Only the inbox takes files as they come.
+:::
+
+:::{rat} The JPG named like its RAW
+:id: RAT-redundant_named_like_its_raw
+:status: seed
+:justifies: RUL-redundant_jpg_timestamp_named
+
+A redundant JPG is the same shot as the RAW kept in the dated folders: named from the same time, the two names show it,
+and the JPG's name is checked like any other outside the inbox.
+:::
+
+:::{rat} One format for a workspace's life
+:id: RAT-format_fixed_per_workspace
+:status: seed
+:justifies: RUL-format_fixed_once_named
+
+Merge never renames a file in the library, so after a change the library holds both formats whatever the workspace
+does. Renaming every named file in the workspace would buy consistency for the few weeks a workspace lives, at the cost
+of renaming originals in bulk; keeping the format the workspace began with and taking the new one to the next workspace
+costs nothing.
+:::
+
 ## 7. The tracks, kept outside the managed folders
 
 :::{rat} Where the tracks live is what keeps them geotag's

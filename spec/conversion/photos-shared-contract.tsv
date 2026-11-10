@@ -194,7 +194,7 @@
 7.4	### 7.4 Both phases use the same format; non-conforming names are dumps	dropped	a heading; its items are in intent §6, One filename format
 7.4	Both prep and geotag read the same `filename_timestamp_format` and emit the same name shape, so a file's provisional (prep) and final (geotag) names differ only when the timestamp is actually corrected (Section 7.3).	RUL-one_filename_format RUL-uncorrected_keeps_its_name	
 7.4	There is no format divergence to reconcile.	RAT-one_format_no_drift	
-7.4	A file already in the workspace whose name does **not** match the convention is not specially migrated or pattern-matched — it is simply treated as an ordinary dump: re-ingested and named by the pipeline like any other incoming file.	RUL-nonconforming_name_is_a_dump	
+7.4	A file already in the workspace whose name does **not** match the convention is not specially migrated or pattern-matched — it is simply treated as an ordinary dump: re-ingested and named by the pipeline like any other incoming file.	RUL-misnamed_file_stops_prep	reversed by ruling (§6, 2026-11-10): a misnamed file outside the inbox stops prep; only the inbox takes names as they come
 7.4	The pipeline never tries to parse meaning out of a non-conforming existing filename; the timestamp comes from metadata, not from the name.	RUL-no_meaning_from_names	
 8	## 8. GPX root	dropped	a heading; its items are in intent §7, The tracks, kept outside the managed folders
 8	GPX track files are consumed only by geotag (`photos-2-geotag-workflow.md` Section 15), for time-anchor proposals and for GPS interpolation/extrapolation.	DEF-tracks RUL-tracks_geotag_only	

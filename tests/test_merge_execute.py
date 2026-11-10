@@ -92,7 +92,7 @@ def _ws(tmp_path, photos, library_files=(), name="ws"):
         ldir.mkdir(parents=True, exist_ok=True)
         (ldir / lf["name"]).write_bytes(_fp_bytes(lf["fp"]))
 
-    handoff = {"files": ho_files, "content_fingerprint": "whole", "run_metadata": {"started_at": "t"}}
+    handoff = {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": ho_files, "content_fingerprint": "whole", "run_metadata": {"started_at": "t"}}
     (ctl / "photos-11-handoff.json").write_text(json.dumps(handoff))
     cfg = {k: v for k, v in utils.CONFIG.items() if k != "jobs"}
     cfg["merge"] = dict(cfg.get("merge") or {})

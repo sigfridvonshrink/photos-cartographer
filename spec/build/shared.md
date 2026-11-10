@@ -410,9 +410,8 @@ or `fixed_clock_cameras` (fixed-clock).
 :realises: RUL-one_filename_format, DEF-timestamp_name
 
 The format SHALL be the configuration key `filename_timestamp_format`, default `"%Y-%m-%d--%H-%M-%S"`, which gives a
-timestamp of the form `YYYY-MM-DD--HH-MM-SS`. Both phases read it; it takes part in the dependency cascade (shared §9)
-through the filename-format fingerprint, and a change to it restales prep's by-date organization and geotag's executable
-rename plan.
+timestamp of the form `YYYY-MM-DD--HH-MM-SS`. Both phases read it; geotag's plans also depend on it through the
+filename-format fingerprint (shared §9).
 :::
 
 :::{bld} The `-NNN` suffix
@@ -432,6 +431,35 @@ renames: prep §8 and §7.3, geotag §27, merge §7.
 
 Geotag SHALL compute the final name as resolved UTC → the destination's civil timezone → a local naive datetime → the
 format.
+:::
+
+:::{bld} The `UNKN_` mark
+:id: BLD-untimed_mark
+:status: seed
+:realises: DEF-untimed_name
+
+The untimed name SHALL be `UNKN_<name it came with>`, with the `-NNN` suffix when that is taken.
+:::
+
+:::{bld} What prep checks a name against
+:id: BLD-name_check
+:status: seed
+:realises: RUL-misnamed_file_stops_prep, RUL-misnamed_file_named
+
+At plan, prep SHALL check the name of every media file in the dated, missing-metadata, redundant-JPG and by-destination
+folders: without its extension and `-NNN` suffix, it is the file's recorded time (`DateTimeOriginal`, else
+`CreateDate`, else `ModifyDate`) formatted by `filename_timestamp_format`, or starts with `UNKN_` for a file with no
+recorded time and for every file in the missing-metadata folder. A dated file with no recorded time is moved to the
+missing-metadata folder instead, and the strays folder is not checked.
+:::
+
+:::{bld} The format recorded in the handoff
+:id: BLD-format_recorded
+:status: seed
+:realises: RUL-format_fixed_once_named
+
+The handoff SHALL record the format prep named the files in as `filename_timestamp_format`; prep compares it with the
+configured format at plan once a file outside the inbox carries a timestamp name, and geotag and merge at their start.
 :::
 
 ## 7. The tracks, kept outside the managed folders

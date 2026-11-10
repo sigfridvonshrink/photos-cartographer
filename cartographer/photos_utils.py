@@ -717,6 +717,36 @@ def write_sealed_marker(ws: str, run_id: str, library_root: str) -> str:
 # truth so the phases can never drift in how a differentiating suffix is formed.
 _DEDUP_SUFFIX_RE = re.compile(r"-(\d{3,})$")
 
+UNTIMED_PREFIX = "UNKN_"   # what a media file with no recorded time is named by: its dump name behind this
+
+
+def filename_format_changed(recorded, current) -> str:
+    """The blocker for a filename format changed after prep named a workspace's files in another (shared
+    §6): the format is fixed for the workspace, so the way on is to set it back."""
+    return (f"The filename format has changed since prep named this workspace's files ({recorded!r}, now "
+            f"{current!r}). Set filename_timestamp_format back to {recorded!r}; the new format can be used "
+            "in the next workspace.")
+
+
+def handoff_filename_format_blocker(handoff: dict):
+    """Geotag's and merge's check that the configured filename format is the one prep named the files
+    in, as its handoff records; None when it is."""
+    recorded, current = handoff.get("filename_timestamp_format"), CONFIG["filename_timestamp_format"]
+    if recorded is None:
+        return ("The prep handoff records no filename format — re-run prep: `photos-cartographer prep plan` "
+                "then `photos-cartographer prep execute`.")
+    return None if recorded == current else filename_format_changed(recorded, current)
+
+
+def carries_stem(name: str, stem: str) -> bool:
+    """Whether `name`, without its extension, is `stem` or `stem-NNN` (compared without regard to case):
+    the file is named for that timestamp, its differentiating suffix aside."""
+    own = os.path.splitext(name)[0].lower()
+    stem = stem.lower()
+    rest = own[len(stem) + 1:]
+    return own == stem or (own.startswith(stem + "-") and len(rest) >= 3 and rest.isdigit())
+
+
 def allocate_suffix(base: str, ext: str, index: set, start_idx: int = 1, bare_first: bool = False) -> str:
     """Allocate the next free name not already in `index` (compared case-insensitively), adding the
     chosen lower-cased name to `index` so sequential allocations in the same batch never collide.

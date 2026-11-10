@@ -442,7 +442,7 @@ def test_stale_dependency_under_concurrency_blocks_execution(mock_read_metadata_
 
     # We should have one file triggering a metadata fetch
     os.makedirs(os.path.join(workspace, "2-missing-metadata"), exist_ok=True)
-    file_path = os.path.join(workspace, "2-missing-metadata", "dummy.jpg")
+    file_path = os.path.join(workspace, "2-missing-metadata", "UNKN_dummy.jpg")
     with open(file_path, "w") as f:
         f.write("dummy")
 

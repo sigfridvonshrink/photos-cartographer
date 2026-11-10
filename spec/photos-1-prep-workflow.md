@@ -279,7 +279,7 @@ A file whose extension is not lowercase (e.g. `.JPG`, `.ARW`) is renamed to the 
 
 ### 7.4 Stage 3 — Separate redundant JPEGs
 
-Files are grouped by `(folder, basename-without-extension)`. If a group contains both a RAW and a `.jpg`, the JPEG is considered redundant (the RAW is the master). A redundant JPEG that is in `0-sources` is moved to `3-redundant-jpgs/`. Paired JPEGs are excluded from the content-dedup stage so a RAW+JPEG pair is never treated as a duplicate of itself.
+Files are grouped by `(folder, basename-without-extension)`. If a group contains both a RAW and a `.jpg`, the JPEG is considered redundant (the RAW is the master). A redundant JPEG that is in `0-sources` is moved to `3-redundant-jpgs/`, named from its timestamp like a dated file (Section 8). Paired JPEGs are excluded from the content-dedup stage so a RAW+JPEG pair is never treated as a duplicate of itself.
 
 ### 7.5 Stage 4 — Content deduplication and quarantine
 
@@ -335,6 +335,8 @@ Date-organized names follow the project standard and are derived from the source
 ```text
 4-videos-by-date / 5-photos-by-date :  YYYY-MM-DD/YYYY-MM-DD--HH-MM-SS[-NNN].ext
 2-missing-metadata                  :  UNKN_<original-base>[-NNN].ext            (flat — no day folder)
+3-redundant-jpgs                    :  YYYY-MM-DD--HH-MM-SS[-NNN].ext, or UNKN_<original-base>[-NNN].ext
+                                       with no timestamp                         (flat)
 ```
 
 By-date media is grouped into a `YYYY-MM-DD/` day subfolder (the date portion of the same source-naive timestamp); the filename keeps the full timestamp. Because the filename already encodes the full date, two files can share a name only if they share the whole timestamp — i.e. the same day, hence the same day folder — so a single occupied-name set across the band is sufficient to allocate suffixes (two files in different day folders can never collide on name).
@@ -343,7 +345,7 @@ The **first** file at a given name takes the **bare** name (no suffix); a `-NNN`
 
 The timestamp component (`YYYY-MM-DD--HH-MM-SS`) is the raw camera-naive value, used here only for organization and ordering. It shares the same textual format as the final filename geotag assigns later (`photos-2-geotag-workflow.md` Section 26 / shared contract Section 7.3), but the value is **provisional**: geotag recomputes it from corrected, destination-local civil time and rewrites the name. Prep does not correct, timezone-resolve, or UTC-convert the timestamp.
 
-> Both prep and geotag use the same `filename_timestamp_format` (shared contract `photos-shared-contract.md` Section 7). A pre-existing file whose name does not match the convention is treated as an ordinary dump and re-ingested — prep never parses meaning from a non-conforming filename; the timestamp comes from metadata.
+> Both prep and geotag use the same `filename_timestamp_format` (shared contract `photos-shared-contract.md` Section 7). Outside `0-sources`, a media file whose name is not the one this section gives it — its recorded timestamp in the format, `-NNN` aside, or with no timestamp its `UNKN_` name — blocks the plan, each such file named with the name it should carry; only the inbox takes names as they come. Prep never parses meaning from a filename; the timestamp comes from metadata. The format is fixed once prep has named files in it: the handoff records it, and a changed format blocks the plan (shared contract §6).
 
 ---
 

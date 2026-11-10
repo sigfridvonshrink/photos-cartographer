@@ -50,7 +50,7 @@ from .photos_utils import (
     folders_fingerprint, media_extensions_fingerprint,
     selected_gpx_root, CAMERA_IDENTITY_FIELDS, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
     missing_managed_folders, top_level_links, misplaced_top_level_entries, by_dest_reprep_pending,
-    json_dependency, verify_json_dependency, handoff_content_fingerprint, write_json_artifact, write_versioned_json, db_path, ensure_control_dir,
+    json_dependency, verify_json_dependency, handoff_content_fingerprint, handoff_filename_format_blocker, write_json_artifact, write_versioned_json, db_path, ensure_control_dir,
     journal_path, ContentHasher, _move_no_clobber,
     prep_log_path, entries_not_carried, write_db_snapshot, take_zfs_snapshot,
     control_archive_members, write_control_archive, workspace_id,
@@ -332,6 +332,12 @@ class GeotagWorkflow:
             return blockers, warnings, info
         info["handoff_sha256"] = sha256_file(ho_p)
         self.handoff = handoff          # stashed for the model/group stages (Phase 2)
+
+        # The filename format is fixed once prep has named the files in it (shared §6).
+        fmt_blocker = handoff_filename_format_blocker(handoff)
+        if fmt_blocker:
+            blockers.append(fmt_blocker)
+            return blockers, warnings, info
 
         # External-tool preflight: geotag reads existing EXIF GPS/time through exiftool and WRITES the
         # corrected tags through it at execute/finalize. There is no graceful fallback for the write, so

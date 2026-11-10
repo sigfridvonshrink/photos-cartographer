@@ -35,7 +35,7 @@ MANAGED = ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
 
 def _wf(handoff_files, rename_ops):
     wf = merge.MergeWorkflow("/ws")
-    wf.handoff = {"files": handoff_files}
+    wf.handoff = {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": handoff_files}
     return wf, {"destinations": {"only": {"operations": rename_ops}}}
 
 
@@ -127,7 +127,7 @@ def _build_ws(tmp_path, photos, library_files=()):
         fpath.write_bytes(b"library")
         fp_by_path[str(fpath)] = lf["fp"]
 
-    handoff = {"files": ho_files, "content_fingerprint": "whole", "run_metadata": {"started_at": "t"}}
+    handoff = {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": ho_files, "content_fingerprint": "whole", "run_metadata": {"started_at": "t"}}
     (ctl / "photos-11-handoff.json").write_text(json.dumps(handoff))
     cfg = {k: v for k, v in utils.CONFIG.items() if k != "jobs"}
     cfg["merge"] = dict(cfg.get("merge") or {})

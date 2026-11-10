@@ -56,7 +56,7 @@ def _run(monkeypatch, ws):
 def test_lock_contention_exits_1(tmp_path, monkeypatch, capsys):
     ws, ctl = _init_ws(tmp_path)
     (ctl / "photos-00-config.json").write_text(json.dumps({k: v for k, v in utils.CONFIG.items() if k != "jobs"}))
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"files": []}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": []}))
     held = utils.WorkspaceLock(str(ws))
     assert held.acquire()
     try:
@@ -71,7 +71,7 @@ def test_invalid_config_blocks(tmp_path, monkeypatch, capsys):
     bad = {k: v for k, v in utils.CONFIG.items() if k != "jobs"}
     bad["gpx_interpolation_max_distance_meters"] = -5            # fails validate_config
     (ctl / "photos-00-config.json").write_text(json.dumps(bad))
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"files": []}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": []}))
     assert _run(monkeypatch, ws) == 2
     assert "Invalid workspace config" in capsys.readouterr().err
 
@@ -79,7 +79,7 @@ def test_invalid_config_blocks(tmp_path, monkeypatch, capsys):
 def test_corrupt_json_config_blocks(tmp_path, monkeypatch, capsys):
     ws, ctl = _init_ws(tmp_path)
     (ctl / "photos-00-config.json").write_text("{not valid json")      # JSONDecodeError is a ValueError
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"files": []}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": []}))
     assert _run(monkeypatch, ws) == 2
     assert "Invalid workspace config" in capsys.readouterr().err
 
@@ -87,7 +87,7 @@ def test_corrupt_json_config_blocks(tmp_path, monkeypatch, capsys):
 def test_unreadable_config_blocks(tmp_path, monkeypatch, capsys):
     ws, ctl = _init_ws(tmp_path)
     (ctl / "photos-00-config.json").mkdir()                            # a dir -> open() raises (not ValueError)
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"files": []}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": []}))
     assert _run(monkeypatch, ws) == 2
     assert "could not be read" in capsys.readouterr().err
 
@@ -125,7 +125,7 @@ def test_build_file_model_tolerates_malformed_records(tmp_path):
     ws, ctl = _init_ws(tmp_path)
     (ctl / "photos-11-handoff.json").write_text("{}")
     wf = cal.GeotagWorkflow(str(ws))
-    wf.handoff = {"files": [
+    wf.handoff = {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [
         {"relative_path": "6-photos-by-dest/T/a.jpg", "media_class": "image",
          "folder_class": "6-photos-by-dest", "content_hash": "{not json",      # bad content_hash
          "metadata_status": {"camera_group_key_version": utils.CAMERA_GROUP_KEY_VERSION, "field_set_version": utils.FIELD_SET_VERSION,
@@ -191,7 +191,7 @@ def _completable_ws(tmp_path):
     files = [rec("6-photos-by-dest/T/a.arw", "2024:07:03 14:00:00", gps=(50.0, 4.0)),
              rec("6-photos-by-dest/T/b.arw", "2024:07:03 15:00:00", gps=(51.0, 5.0)),
              rec("6-photos-by-dest/T/c.arw", "2024:07:03 14:30:00")]          # no GPS -> blocked
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"files": files, "cache_fingerprint": "pcf"}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files, "cache_fingerprint": "pcf"}))
     return ws, ctl
 
 
@@ -282,7 +282,7 @@ def test_recognize_camera_groups_records_timestamps(tmp_path):
 def test_sealed_workspace_with_dump_warns_and_blocks(tmp_path, monkeypatch, capsys):
     ws, ctl = _init_ws(tmp_path)
     (ctl / "photos-00-config.json").write_text(json.dumps({k: v for k, v in utils.CONFIG.items() if k != "jobs"}))
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"files": []}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": []}))
     open(utils.sealed_marker_path(str(ws)), "w").close()           # seal it
     (ws / "loose.jpg").write_bytes(b"x")                           # a new dump at the root
     assert _run(monkeypatch, ws) == 2                              # sealed -> hard stop

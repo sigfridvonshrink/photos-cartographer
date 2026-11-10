@@ -50,7 +50,7 @@ def setup_workspace(tmp_path: Path):
     # Exact duplicate already organized in 5-photos-by-date
     photos_dir = ws / "5-photos-by-date"
     photos_dir.mkdir()
-    (photos_dir / "20230101_120000-001.jpg").write_text("duplicate_data")
+    (photos_dir / "2023-01-01--12-00-00-001.jpg").write_text("duplicate_data")
 
     # RAW and JPG with SAME content but shouldn't quarantine (in 0-sources)
     (source_dir / "RAW_SAME.CR2").write_text("same_hash_content")
@@ -80,7 +80,7 @@ def mock_read_metadata_concurrently(folders, max_workers=4, progress_coordinator
     for folder in folders:
         for f in os.listdir(folder):
             abs_path = os.path.join(folder, f)
-            if "duplicate" in abs_path or "20230101_120000" in abs_path:
+            if "duplicate" in abs_path or "2023-01-01--12-00-00" in abs_path:
                 res[abs_path] = {"DateTimeOriginal": "2023:01:01 12:00:00"}
             elif "555" in abs_path:
                 res[abs_path] = {"DateTimeOriginal": "2023:02:02 14:00:00"}
@@ -136,13 +136,13 @@ def test_prep_workflow_plan_and_execute(mock_meta, mock_hash_img, tmp_path, monk
     # PR ACCEPTANCE TEST: RAW/JPG not treated as disposable duplicates
     # PHOTO_555.CR2 and PHOTO_555.jpg have the same fake hash, but shouldn't quarantine.
     # The JPG should be in 3-redundant-jpgs. The RAW should be in 5-photos-by-date.
-    assert (ws / "3-redundant-jpgs" / "PHOTO_555.jpg").exists()
+    # A redundant JPG is named from its timestamp like the RAW it came with (shared §6).
+    assert (ws / "3-redundant-jpgs" / "2023-02-02--14-00-00.jpg").exists()
     assert (ws / "5-photos-by-date" / "2023-02-02" / "2023-02-02--14-00-00.cr2").exists()   # lone file -> bare (§7.2)
 
     # PR ACCEPTANCE TEST: RAW/JPG pair (same content) is NOT quarantined — the jpg is the
     # redundant sibling (-> 3-redundant-jpgs), the raw is the master (-> 2-missing-metadata).
-    assert any("raw_same" in f.name.lower() and f.name.lower().endswith(".jpg")
-               for f in (ws / "3-redundant-jpgs").iterdir())
+    assert any(f.name == "UNKN_RAW_SAME.jpg" for f in (ws / "3-redundant-jpgs").iterdir())   # no time: untimed mark
     names_in_mm = [f.name.lower() for f in (ws / "2-missing-metadata").iterdir()]
     assert any("raw_same" in name and name.endswith(".cr2") for name in names_in_mm)
 
@@ -260,7 +260,7 @@ def test_hash_failure_preservation(tmp_path, monkeypatch):
 # PR ACCEPTANCE TEST: hash failure preserving files and blocking
     # We mock it to fail for certain files
     def mock_hash_fail(filepath):
-        if "dup_image" in str(filepath) or "20230101_120000" in str(filepath):
+        if "dup_image" in str(filepath) or "2023-01-01--12-00-00" in str(filepath):
             return {"status": "failed", "strategy": "image-content-hash-v1", "value": None, "error": "Mocked failure"}
         import hashlib
         try:

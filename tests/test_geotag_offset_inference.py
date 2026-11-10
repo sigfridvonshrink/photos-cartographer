@@ -365,7 +365,7 @@ def test_run_auto_resolves_offset_from_gpx(tmp_path, monkeypatch):
              rec("6-photos-by-dest/B/b.arw", 50.8480, 4.3540, "2024:07:03 14:13:08")]
     for f in files:
         p = ws / f["relative_path"]; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"x")
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"files": files}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files}))
 
     CAM_CFG = CAM
     monkeypatch.chdir(str(ws))

@@ -70,7 +70,7 @@ def _ready_ws(tmp_path, monkeypatch, *, zfs=None):
                                     "field_set_version": utils.FIELD_SET_VERSION, "parsed_json": json.dumps(parsed)}}
     files = [rec("6-photos-by-dest/T/a.arw", "2024:07:03 14:00:00", 50.0, 4.0),
              rec("6-photos-by-dest/T/b.arw", "2024:07:03 15:00:00", 51.0, 5.0)]
-    ho = {"run_metadata": {"plan_id": "prep-1", "execution_id": "exec-1"},
+    ho = {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "run_metadata": {"plan_id": "prep-1", "execution_id": "exec-1"},
           "files": files, "cache_fingerprint": "pcf"}
     ho["content_fingerprint"] = utils.handoff_content_fingerprint(ho)
     (ctl / "photos-11-handoff.json").write_text(json.dumps(ho))

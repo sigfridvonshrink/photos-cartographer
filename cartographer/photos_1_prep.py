@@ -39,7 +39,7 @@ import errno
 # ==============================================================================
 # CONFIGURATION BLOCK
 # ==============================================================================
-from .photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, is_track_file, missing_managed_folders, misplaced_top_level_entries, FOLDER_ROLES
+from .photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, is_track_file, missing_managed_folders, misplaced_top_level_entries, FOLDER_ROLES, UNTIMED_PREFIX, carries_stem, filename_format_changed
 from .reporting import get_reporter, emit_next_step
 from .photos_utils import (_move_no_clobber, _move_link_unlink, _get_renameat2,
                           WorkspaceCache, WorkspaceLock, ContentHasher, PlanFingerprintMemo,
@@ -968,6 +968,8 @@ class PlanExecutor:
                             for n in managed_folder_names(CONFIG)
                         ],
                         "files": final_files,
+                        # The format prep named the files in: fixed for the workspace from here (shared §6).
+                        "filename_timestamp_format": CONFIG["filename_timestamp_format"],
                         "camera_groups": camera_groups,
                         "destination_folders": destination_folders,
                         "diagnostics": {
@@ -1969,7 +1971,11 @@ class WorkspacePrepWorkflow:
             base_groups.setdefault((folder, name), []).append(f)
 
         paired_jpgs = set()
-        # print("BASE GROUPS:", list(base_groups.keys()))
+        # A redundant JPG is named from its timestamp like a dated file (shared §6), against every name
+        # already outside the inbox, so it can never collide with one wherever either is moved later.
+        _src = folder_name('sources') + "/"
+        taken = {os.path.basename(st.current_paths[f['relative_path']]).lower() for f in db_files
+                 if not st.current_paths[f['relative_path']].startswith(_src)}
         for (folder, name), group in base_groups.items():
             has_raw = any(f['media_class'] == 'raw' for f in group)
             has_jpg = any(f['media_class'] == 'image' and f['relative_path'].lower().endswith('.jpg') for f in group)
@@ -1978,8 +1984,13 @@ class WorkspacePrepWorkflow:
                     if f['media_class'] == 'image':
                         rel_path = st.current_paths[f['relative_path']]
                         paired_jpgs.add(f['relative_path'])
-                        if rel_path.startswith(folder_name('sources') + "/"):
-                            dest = os.path.join(folder_name('redundant_jpgs'), os.path.basename(rel_path))
+                        if rel_path.startswith(_src):
+                            base, ext = os.path.splitext(os.path.basename(rel_path))
+                            dt = self._file_datetime(f)
+                            stem = (dt.strftime(CONFIG["filename_timestamp_format"]) if dt is not None
+                                    else UNTIMED_PREFIX + base)
+                            dest = os.path.join(folder_name('redundant_jpgs'),
+                                                self._allocate_suffix(stem, ext.lstrip('.'), taken, bare_first=True))
                             st.media_mutated_originals.add(f["relative_path"])
 
                             st.operations.append(Operation(
@@ -2125,7 +2136,38 @@ class WorkspacePrepWorkflow:
                     quarantined.add(dup['relative_path'])
                     st.current_paths[dup['relative_path']] = quarantine_dest
 
-    def _plan_organize(self, st, db_files, quarantined, plan_id_for_quarantine):
+    def _recorded_filename_format(self):
+        """The filename format the last prep execute named this workspace's files in, from the handoff
+        it wrote; None when there is none yet."""
+        from .photos_utils import handoff_path
+        try:
+            with open(handoff_path(self.workspace_root)) as f:
+                return json.load(f).get("filename_timestamp_format")
+        except (OSError, ValueError, AttributeError):
+            return None
+
+    def _expected_name(self, rel_path, top, dt):
+        """The name a media file outside the inbox should carry when its own does not (shared §6): its
+        recorded time in the format, suffix aside, or — with no recorded time, or in the
+        missing-metadata folder — its dump name behind the untimed mark. None when the name fits, and
+        for a dated file with no time, which prep moves to the missing-metadata folder and names."""
+        name = os.path.basename(rel_path)
+        base, ext = os.path.splitext(name)
+        if top == folder_name('missing_metadata') or dt is None:
+            if dt is None and top in (folder_name('photos_by_date'), folder_name('videos_by_date')):
+                return None
+            return None if name.startswith(UNTIMED_PREFIX) else UNTIMED_PREFIX + name
+        stem = dt.strftime(CONFIG["filename_timestamp_format"])
+        return None if carries_stem(name, stem) else stem + ext
+
+    @staticmethod
+    def _misnamed_blocker(rel_path, expected):
+        sources = folder_name('sources')
+        return (f"Misnamed file outside {sources}/: {rel_path} — its name is not its recorded time in the "
+                f"filename format (expected {expected}). Rename it so, or move it into {sources}/ for prep "
+                "to name it.")
+
+    def _plan_organize(self, st, db_files, quarantined, plan_id_for_quarantine, blockers, by_dest_files=()):
         """Organize pass (prep §7.6/§8): classify each non-quarantined file as already-conforming
         (no-op) vs to-organize vs non-media stray; move strays into 1-strays/<plan-id>/ and place
         each to-organize file into its date band (`band/YYYY-MM-DD/`, or missing-metadata for the
@@ -2138,6 +2180,20 @@ class WorkspacePrepWorkflow:
         _sources = folder_name('sources')
         _sources_prefix = _sources + '/'
         _by_date_bands = {folder_name('photos_by_date'), folder_name('videos_by_date')}
+        # The format is fixed once files are named in it (shared §6): a change stops the plan as a whole
+        # rather than calling every name it would invalidate misnamed.
+        _fmt = CONFIG["filename_timestamp_format"]
+        recorded_fmt = self._recorded_filename_format()
+        fmt_changed = recorded_fmt is not None and recorded_fmt != _fmt
+        named_in_format = 0
+
+        # By-dest is never organized by prep, but its names are checked like the rest.
+        for f in by_dest_files:
+            dt_named = self._file_datetime(f)
+            named_in_format += dt_named is not None
+            expected = None if fmt_changed else self._expected_name(f['relative_path'], folder_name('photos_by_dest'), dt_named)
+            if expected is not None:
+                blockers.append(self._misnamed_blocker(f['relative_path'], expected))
 
         for f in db_files:
             if f['relative_path'] in quarantined: continue
@@ -2152,6 +2208,13 @@ class WorkspacePrepWorkflow:
                 continue
             top = rel_path.split('/', 1)[0]
             if top != _sources and top in _managed:    # already in a managed band
+                # Outside the inbox every name is one the pipeline gave: one that is not stops the plan.
+                dt_named = self._file_datetime(f)
+                if dt_named is not None and top != folder_name('missing_metadata'):
+                    named_in_format += 1
+                expected = None if fmt_changed else self._expected_name(rel_path, top, dt_named)
+                if expected is not None:
+                    blockers.append(self._misnamed_blocker(rel_path, expected))
                 if top in _by_date_bands:
                     # By-date files must live under a `band/YYYY-MM-DD/` day folder. One already there
                     # (matching its own timestamp) is conforming -> no-op; a flat or wrong-day file is
@@ -2182,6 +2245,9 @@ class WorkspacePrepWorkflow:
                 database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}]))
             st.current_paths[f['relative_path']] = dest
 
+        if fmt_changed and named_in_format:
+            blockers.append(filename_format_changed(recorded_fmt, _fmt))
+
         # Pass 2: place each file still in 0-sources (or being re-located from a non-conforming by-date
         # spot) into its destination directory and allocate its name against that directory's index.
         for f, rel_path in to_organize:
@@ -2198,7 +2264,7 @@ class WorkspacePrepWorkflow:
                 target_dir = os.path.join(target_folder, dt.strftime("%Y-%m-%d"))
             else:
                 target_dir = folder_name('missing_metadata')   # untimestamped -> flat, no day folder
-                prefix = f"UNKN_{base}"
+                prefix = UNTIMED_PREFIX + base
 
             # §7.2: the first file at a given timestamp gets the bare name; the -NNN suffix appears only
             # on a genuine collision (matches geotag's final naming, so an uncorrected file's
@@ -2532,7 +2598,7 @@ class WorkspacePrepWorkflow:
         # if they share the full timestamp — i.e. the same day, hence the same `YYYY-MM-DD/` folder.
         # Two files in different day folders can never collide on name, so a global basename set is
         # exactly equivalent to per-folder scoping.
-        self._plan_organize(st, db_files, quarantined, plan_id_for_quarantine)
+        self._plan_organize(st, db_files, quarantined, plan_id_for_quarantine, blockers, by_dest_files)
 
         self._plan_cache_effects(st, all_db_files, carried_forward, existing_cache, existing_metadata, current_metadata_context, ghost_prunes)
 

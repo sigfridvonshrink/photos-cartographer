@@ -8,8 +8,6 @@ RUL-log_cites_decisions
 RUL-log_entry_grows
 RUL-log_human_readable
 RUL-log_records_gps_reverts
-RUL-no_meaning_from_names
-RUL-nonconforming_name_is_a_dump
 RUL-package_contents
 RUL-package_self_describing
 RUL-prep_empties_inbox
