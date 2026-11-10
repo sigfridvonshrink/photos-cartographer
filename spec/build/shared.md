@@ -195,12 +195,12 @@ it.
 :realises: DEF-config_areas, RUL-folder_names_not_roles, RUL-camera_classes_not_derivation, RUL-extension_one_class, RUL-folder_found_by_role, RUL-config_lists_extensions, RUL-unlisted_extension_other
 
 The areas SHALL be, at least: the `zfs` block and `snapshots_required` (§2 above);
-`camera_time_and_timezone_policy.device_groups`, with `phones` and `fixed_clock_cameras` (shared §6);
-`filename_timestamp_format` (shared §7); `gpx_root` and the GPX thresholds, such as `gpx_direct_match_max_seconds`,
-`gpx_interpolation_max_gap_seconds` and `gpx_interpolation_max_distance_meters` (shared §8); the camera-time policy
+`camera_time_and_timezone_policy.device_groups`, with `phones` and `fixed_clock_cameras` ({need}`DEF-camera_group`);
+`filename_timestamp_format` ({need}`BLD-filename_timestamp_format`); `gpx_root` and the GPX thresholds, such as `gpx_direct_match_max_seconds`,
+`gpx_interpolation_max_gap_seconds` and `gpx_interpolation_max_distance_meters` ({need}`DEF-tracks`); the camera-time policy
 flags, such as `single_anchor_auto_apply` and `multi_anchor_auto_apply` (geotag); `library_root` and merge's collision
-and placement policy (merge; shared §13.5); `folders`, a role→name map of the numbered managed folders
-`0-sources`…`6-photos-by-dest` (shared §5, prep §3), whose code finds each folder by its role; and `media_extensions`,
+and placement policy (merge; {need}`RUL-collision_by_content`); `folders`, a role→name map of the numbered managed folders
+`0-sources`…`6-photos-by-dest` ({need}`DEF-managed_folders`, prep §3), whose code finds each folder by its role; and `media_extensions`,
 mapping `image`, `raw` and `video` to lists of canonical extensions — lowercase, no leading dot (prep §6.1).
 `CAMERA_GROUP_KEY_VERSION` is a code constant, never a configuration field.
 :::
@@ -221,7 +221,7 @@ syntactically valid snapshot component, and that an IANA timezone is a real zone
 :status: ruled
 :realises: DEF-control_records, RUL-control_records_together
 
-The control records SHALL be these files in `.photos-ingest/` (shared §13 for the archival and database ones):
+The control records SHALL be these files in `.photos-ingest/` ({need}`DEF-archival_package` and {need}`DEF-workspace_database` for the archival and database ones):
 
 ```text
 .photos-ingest/
@@ -317,7 +317,7 @@ The plan and decision artifacts SHALL be prep's `photos-10-prep-plan.json`, geot
 :status: ruled
 :realises: RUL-replanning_keeps_the_prior
 
-A differing re-plan SHALL first rename the existing artifact under the shared incremental `-NNN` suffix (shared §7.2) —
+A differing re-plan SHALL first rename the existing artifact under the shared incremental `-NNN` suffix ({need}`BLD-name_suffix`) —
 `photos-10-prep-plan-001.json`, say — and announce where. A plan carrying a fresh plan id differs every run, so
 re-planning it always preserves the prior plan. The per-run journals keep their `journal-<run_id>.json` naming; this
 convention governs the plan and decision artifacts.
@@ -338,7 +338,7 @@ A re-plan whose content is byte-identical to the saved artifact SHALL write noth
 
 The handoff SHALL be `photos-11-handoff.json` in `.photos-ingest/`, which geotag checks by its `content_fingerprint` —
 the content-scoped staleness key prep stamps on it (prep §16.2) — recomputing it and comparing it with the value in
-geotag's dependency block (geotag §4). Its whole-file SHA-256 is kept as an integrity and archival hash (shared §13),
+geotag's dependency block (geotag §4). Its whole-file SHA-256 is kept as an integrity and archival hash ({need}`DEF-archival_package`),
 never the dependency check.
 :::
 
@@ -411,7 +411,7 @@ or `fixed_clock_cameras` (fixed-clock).
 
 The format SHALL be the configuration key `filename_timestamp_format`, default `"%Y-%m-%d--%H-%M-%S"`, which gives a
 timestamp of the form `YYYY-MM-DD--HH-MM-SS`. Both phases read it; geotag's plans also depend on it through the
-filename-format fingerprint (shared §9).
+filename-format fingerprint ({need}`DEF-dependency_cascade`).
 :::
 
 :::{bld} The `-NNN` suffix
@@ -524,11 +524,11 @@ and `photos-24-executable-plan.json`, and checked before each is used.
 
 Each phase SHALL record a record's dependencies in its `depends_on` block and check them before use, as its own spec
 states in full: prep §5; geotag §3–§6; merge §10.3. The cascade consumes media by content fingerprints, records by byte
-hashes, and the field-scoped configuration fingerprints (shared §4.2) that keep staleness surgical.
+hashes, and the field-scoped configuration fingerprints ({need}`DEF-config_areas`) that keep staleness surgical.
 :::
 
 :::{bld} How a fingerprint is computed
-:id: BLD-fingerprint_and_hash
+:id: BLD-fingerprint
 :status: seed
 :realises: DEF-fingerprint, RUL-fingerprint_survives_mutation
 

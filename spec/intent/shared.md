@@ -1202,8 +1202,8 @@ means this.
 :uses: DEF-fingerprint, DEF-hash, DEF-config_areas
 
 The **dependency cascade** is how the phases keep a record from being used once what it was made from has changed: each
-record carries what it depends on — media by their fingerprints, other records by their hashes, and settings by the
-fingerprints of the configuration areas it reads — and each use checks them first. Its full name, the
+record carries what it depends on — media by their fingerprints, other records by their hashes, and settings by a hash
+of the configuration or of the areas the record reads — and each use checks them first. Its full name, the
 *dependency-fingerprint/hash cascade*, says that it tracks both kinds of identity.
 :::
 
@@ -1249,8 +1249,7 @@ A record's hash SHALL change on any change to its bytes.
 :verify: required
 :refines: RUL-hash_detects_any_change
 
-A record's hash SHALL be what checks it, or the configuration, as a dependency — prep's handoff excepted, which is
-checked by its content.
+A record SHALL be checked as a dependency by its hash — prep's handoff excepted, which is checked by its content.
 :::
 
 ## 9. One loop across the phases

@@ -123,6 +123,31 @@ def test_pixel_signature_is_exif_invariant(tmp_path):
     assert original["value"] == edited["value"], "pixel signature changed after an EXIF-only edit"
 
 
+@pytest.mark.slow
+@requires_magick
+@requires_exiftool
+@pytest.mark.spec("RUL-fingerprint_survives_mutation", test="TST-content_hash-raw_signature_survives_geotag_s_writes")
+def test_raw_signature_survives_geotag_s_writes(tmp_path):
+    # Geotag writes the corrected time, its offset, a position and its marker into RAW files too: the
+    # RAW's fingerprint must not move. Slow (30 MB RAW decode, twice); CI runs it, pre-push skips it.
+    original = prep.ContentHasher.fingerprint_image(CAM_RAW)
+    if original.get("status") != "valid":
+        pytest.skip(f"ImageMagick lacks RAW decode support here: {original.get('error')}")
+    variant = tmp_path / "variant.ARW"
+    shutil.copy(CAM_RAW, variant)
+    subprocess.run(
+        ["exiftool", "-overwrite_original",
+         "-DateTimeOriginal=2099:12:31 23:59:59", "-OffsetTimeOriginal=+02:00",
+         "-GPSLatitude=12.3456", "-GPSLatitudeRef=N", "-GPSLongitude=65.4321", "-GPSLongitudeRef=E",
+         "-GPSProcessingMethod=geotag:test", str(variant)],
+        check=True, capture_output=True,
+    )
+    assert variant.read_bytes() != open(CAM_RAW, "rb").read()          # the file did change
+    edited = prep.ContentHasher.fingerprint_image(str(variant))
+    assert edited["status"] == "valid"
+    assert edited["value"] == original["value"], "RAW pixel signature changed after geotag's writes"
+
+
 def test_hash_image_failure_is_recorded_when_magick_absent(monkeypatch):
     # Simulate ImageMagick missing: fingerprint_image must return a clean failure record
     # (which the §6.2/§11.3 blocker path keys on), still version-stamped.
