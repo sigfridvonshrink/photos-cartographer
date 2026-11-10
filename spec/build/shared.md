@@ -519,7 +519,7 @@ and `photos-24-executable-plan.json`, and checked before each is used.
 
 :::{bld} Each phase's dependencies, in full
 :id: BLD-phase_dependencies
-:status: seed
+:status: ruled
 :realises: INV-no_stale_use
 
 Each phase SHALL record a record's dependencies in its `depends_on` block and check them before use, as its own spec
@@ -529,7 +529,7 @@ hashes, and the field-scoped configuration fingerprints ({need}`DEF-config_areas
 
 :::{bld} How a fingerprint is computed
 :id: BLD-fingerprint
-:status: seed
+:status: ruled
 :realises: DEF-fingerprint, RUL-fingerprint_survives_mutation
 
 A photo's fingerprint SHALL be ImageMagick `identify`'s signature — a SHA-256 of the normalized pixel stream; a video's,
@@ -538,7 +538,7 @@ the `ffmpeg` stream MD5 (prep §9).
 
 :::{bld} How a hash is computed
 :id: BLD-hash
-:status: seed
+:status: ruled
 :realises: DEF-hash, RUL-hash_detects_any_change, RUL-hash_is_the_dependency_check
 
 A hash SHALL be a SHA-256 over the exact bytes of a numbered JSON record or the configuration.
