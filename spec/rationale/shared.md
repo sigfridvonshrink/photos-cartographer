@@ -447,7 +447,7 @@ costs nothing.
 
 :::{rat} Where the tracks live is what keeps them geotag's
 :id: RAT-tracks_kept_outside
-:status: seed
+:status: ruled
 :justifies: RUL-tracks_outside_managed_folders, RUL-tracks_geotag_only
 
 The shared rule that makes it safe for geotag alone to own the tracks is where they live. Kept outside the managed
@@ -457,7 +457,7 @@ into the inbox and organized.
 
 :::{rat} The tracks are geotag's evidence
 :id: RAT-tracks_are_geotags_evidence
-:status: seed
+:status: ruled
 :justifies: RUL-tracks_geotag_only
 
 The tracks are evidence for a photo's time and place, and only geotag decides those: prep never plans a time or a
@@ -467,7 +467,7 @@ to its own records.
 
 :::{rat} A track among the strays could be deleted with them
 :id: RAT-tracks_never_strays
-:status: seed
+:status: ruled
 :justifies: RUL-track_files_block_prep, RUL-track_file_left_in_place
 
 Parked among the strays, a track could be deleted when the strays are cleared in bulk, and a lost track is evidence no
