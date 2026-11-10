@@ -1496,7 +1496,7 @@ be safe, and leaving no file in a state other than its inputs require.
 
 :::{rul} Valid work is reused
 :id: RUL-reuse_valid_work
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: idem-reuse-not-recompute-1
@@ -1520,7 +1520,7 @@ unchanged.
 
 :::{rul} Only what depends on a change is made again
 :id: RUL-remake_only_what_depends
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: idem-recompute-staleness-only-1

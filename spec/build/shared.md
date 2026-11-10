@@ -634,7 +634,7 @@ record is missing.
 
 :::{bld} What each phase reuses
 :id: BLD-idempotency
-:status: seed
+:status: ruled
 :realises: RUL-reuse_valid_work
 
 Each phase SHALL reuse what is still valid: prep, the cached fingerprint and metadata of a file whose size and
@@ -651,7 +651,7 @@ prep §13 and §21, geotag §29.1 and §30, merge §8.
 
 :::{bld} Staleness follows the field-scoped fingerprints
 :id: BLD-staleness_by_field_fingerprints
-:status: seed
+:status: ruled
 :realises: RUL-remake_only_what_depends
 
 Staleness SHALL follow the dependencies each record carries ({need}`DEF-dependency_cascade`): a plan depends on the
@@ -660,7 +660,7 @@ whole configuration's hash, a costly result on the hash of the areas it reads.
 
 :::{bld} An operation only where the file differs
 :id: BLD-operation_only_where_different
-:status: seed
+:status: ruled
 :realises: RUL-mutate_on_difference, RUL-no_op_run
 
 A file's operation SHALL be planned only where the file does not already hold the target: prep does not move or rename a
@@ -670,7 +670,7 @@ file already in place, geotag plans no write a file already holds and recomputes
 
 :::{bld} A run's summary counts what it reused
 :id: BLD-summary_counts_reuse
-:status: seed
+:status: ruled
 :realises: RUL-no_op_run_reports_reuse
 
 Each phase's report SHALL count the files already right, and the work it took from a cache: prep's summary its cache
