@@ -79,7 +79,7 @@ def _guard(ws):
 
 # --- initialization ----------------------------------------------------------
 
-@pytest.mark.spec("prep-init-creates-structure-1", "prep-init-moves-base-into-sources-1", "prep-post-init-base-folders-only-1")
+@pytest.mark.spec("prep-init-creates-structure-1", "prep-init-moves-base-into-sources-1", "prep-post-init-base-folders-only-1", test="TST-lifecycle-init_creates_structure_and_moves_dump_structure_preserved")
 def test_init_creates_structure_and_moves_dump_structure_preserved(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _bare(tmp_path)
@@ -108,7 +108,7 @@ def test_init_creates_structure_and_moves_dump_structure_preserved(tmp_path, mon
     assert not _plan(ws).blockers
 
 
-@pytest.mark.spec("prep-crash-init-reenters-harmlessly-1", "prep-crash-safe-rerun-1", "prep-sentinel-written-last-1")
+@pytest.mark.spec("prep-crash-init-reenters-harmlessly-1", "prep-crash-safe-rerun-1", "prep-sentinel-written-last-1", test="TST-lifecycle-guard_written_last_then_reentry_is_clean")
 def test_guard_written_last_then_reentry_is_clean(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _bare(tmp_path)

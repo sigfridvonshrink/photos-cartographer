@@ -100,7 +100,7 @@ def test_stray_moved_structure_preserved(tmp_path, monkeypatch):
     assert list((ws / "0-sources").iterdir()) == []               # inbox left empty
 
 
-@pytest.mark.spec("prep-other-not-fingerprinted-1", "prep-strays-inert-1")
+@pytest.mark.spec("prep-other-not-fingerprinted-1", "prep-strays-inert-1", test="TST-strays-stray_not_fingerprinted_and_not_cached")
 def test_stray_not_fingerprinted_and_not_cached(tmp_path, monkeypatch):
     # If fingerprint_image were called on the stray it would raise (so we'd notice).
     _install(monkeypatch)
@@ -121,6 +121,8 @@ def test_stray_not_fingerprinted_and_not_cached(tmp_path, monkeypatch):
     cached = _cached_paths(ws)
     assert not any("notes.txt" in p for p in cached)             # not tracked in the cache
     assert any("5-photos-by-date" in p for p in cached)          # the real photo is
+    log = open(utils.prep_log_path(str(ws))).read()
+    assert "notes.txt" not in log                                # in no log
 
 
 @pytest.mark.spec("prep-scan-skips-control-subtrees-1", "prep-strays-excluded-from-scan-1")

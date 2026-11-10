@@ -34,3 +34,44 @@ The pipeline's aim is photos placed in time and on the map. Videos arrive in the
 so they are neither lost nor scattered, not because the pipeline means to correct them — so they keep a folder of their
 own, out of the sort.
 :::
+
+## 3. The workspace's first run, and the strays
+
+:::{rat} The first gesture bootstraps the workspace
+:id: RAT-bootstrap_once
+:status: seed
+:justifies: RUL-init_moves_dump_to_inbox
+
+Dropping a dump into a bare folder is the most natural first gesture, so the first run takes it as it comes: it builds
+the structure around the dump and moves it into the inbox whole, its folders kept, for a dump's folders often carry
+meaning — a trip, a day, a card. Afterwards the workspace has an inbox, and the top level is no place for a dump.
+:::
+
+:::{rat} The structure's names are reserved
+:id: RAT-structure_names_reserved
+:status: seed
+:justifies: RUL-dump_folder_named_as_managed
+
+A managed folder's name is reserved for the structure. Moving a folder of that name into the inbox would nest a managed
+folder inside another, where nothing would look for it, and leave its place to be made again empty beside it.
+:::
+
+:::{rat} The mark means the workspace is whole
+:id: RAT-mark_means_whole
+:status: seed
+:justifies: RUL-initialized_marked_last
+
+The mark says the workspace is whole. Written before the folders, a run that died halfway would leave a workspace marked
+whole but missing a folder, and every later run would refuse it as disturbed; written last, a dead run leaves no mark,
+and the next simply initializes again.
+:::
+
+:::{rat} A stray is not the pipeline's to answer for
+:id: RAT-strays_not_the_pipelines
+:status: seed
+:justifies: RUL-strays_leave_no_trace
+
+A stray is a file cartographer does not understand — a document, a sidecar it has no use for. Recorded beside the media,
+it would make cartographer answer for what it cannot reason about; parked whole, it waits for the user to keep or clear
+it, and clearing it costs the record nothing.
+:::
