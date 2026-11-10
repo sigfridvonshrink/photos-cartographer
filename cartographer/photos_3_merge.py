@@ -121,6 +121,9 @@ class MergeWorkflow:
         self.workspace_root = workspace_root
         self.handoff = None
         self.calib_plan = None      # photos-24 parsed once in preflight; reused by the plan builder
+        # Library fingerprints this run took from the cache / read from the file. Reported, never put in
+        # the plan, which an unchanged re-plan must leave byte-identical (shared §4).
+        self.library_fp_counts = {"cached": 0, "read": 0}
 
     # --- preflight (merge spec §3) -------------------------------------------
 
@@ -596,7 +599,9 @@ class MergeWorkflow:
         hit = (cache.get_cached_library_fingerprint(abs_path, st.st_size, st.st_mtime_ns, get_imagemagick_version())
                if cache else None)
         if hit and hit.get("value"):
+            self.library_fp_counts["cached"] += 1
             return hit["value"], None
+        self.library_fp_counts["read"] += 1
         fp = self._fingerprint_library_file(abs_path)
         if fp.get("status") == "valid" and fp.get("value"):
             if cache:
@@ -648,6 +653,10 @@ class MergeWorkflow:
         reporter.log(f"Wrote {MERGE_PLAN_ARTIFACT}: plan {plan['plan_id']} — {t['placed_new']} new, "
               f"{t['already_present']} already-present, {t['renamed_for_library']} renamed, "
               f"{t['blocked']} blocked.", stream="stdout")
+        c = self.library_fp_counts
+        if c["cached"] or c["read"]:
+            reporter.log(f"  Library files fingerprinted: {c['read']} read, {c['cached']} reused from the cache.",
+                         stream="stdout")
         reporter.log(f"  Plan saved to {mpp}", stream="stdout")
         if _mp_bak:
             reporter.log(f"  Previous plan backed up to {_mp_bak}", stream="stdout")

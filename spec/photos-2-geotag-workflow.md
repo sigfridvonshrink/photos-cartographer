@@ -721,6 +721,8 @@ The workflow must record:
 
 A track point's `<time>` is an `xsd:dateTime` and must be read as one: fractional seconds are optional (`2024-07-03T12:00:04Z` and `2024-07-03T12:00:04.000Z` are both valid — some recorders, e.g. Garmin, always write the fraction), and the zone may be `Z` or a numeric offset, normalized to UTC. A point without a timezone, with an unparseable time, or with missing/out-of-range coordinates is skipped with a warning naming the file and point, and those warnings are reported to the operator — a file whose every point was rejected must never read as merely an empty track.
 
+Every track file is read whole on every run, since its bytes are what the fingerprint checks; but a file whose bytes were parsed on an earlier run is not parsed again — its points come from the track memo `photos-00-track-memo.db`, keyed by the SHA-256 of those bytes, which yields exactly what parsing would. The memo is scratch (shared contract §10): deleting it, or finding it unreadable, only means parsing again.
+
 If GPX is unavailable or disabled, later artifacts should record that no GPX evidence was used.
 
 If GPX is used for time-anchor proposals, the GPX fingerprint becomes an upstream dependency of `photos-21-time-decisions.json`.

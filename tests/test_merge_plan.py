@@ -222,6 +222,24 @@ def test_plan_already_present(tmp_path, monkeypatch):
     assert f["renamed_for_library"] is False
 
 
+@pytest.mark.spec("RUL-no_op_run_reports_reuse", "RUL-unchanged_replan_writes_nothing", test="TST-merge_plan-replan_reports_library_fingerprints_reused")
+def test_replan_reports_library_fingerprints_reused(tmp_path, monkeypatch, capsys):
+    """A re-plan says how many library fingerprints it took from the cache — and the plan it writes is
+    the same file, the count kept out of it."""
+    ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
+                            library_files=[{"fp": "A", "dest": "Trip", "name": "a.jpg"}])
+    _patch_fp(monkeypatch, fp)
+    monkeypatch.setattr(merge, "get_imagemagick_version", lambda: "test")   # the fake's engine
+    capsys.readouterr()
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert "Library files fingerprinted: 1 read, 0 reused from the cache." in capsys.readouterr().out
+    first = open(merge.merge_plan_path(str(ws)), "rb").read()
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert "Library files fingerprinted: 0 read, 1 reused from the cache." in capsys.readouterr().out
+    assert open(merge.merge_plan_path(str(ws)), "rb").read() == first
+    assert not [n for n in os.listdir(ws / ".photos-ingest") if n.startswith("photos-30-merge-plan-")]
+
+
 @pytest.mark.spec("merge-suffix-append-at-max-plus-1-1")
 def test_plan_renamed_incoming_append_at_max_plus_one(tmp_path, monkeypatch):
     # Different content at the target; library also has root-002 -> incoming becomes root-003.

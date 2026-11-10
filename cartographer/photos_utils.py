@@ -370,6 +370,12 @@ def plan_memo_db_path(ws: str) -> str:
     it was saving."""
     return os.path.join(ws, CONTROL_DIR, "photos-00-plan-memo.db")
 
+def track_memo_db_path(ws: str) -> str:
+    """Geotag's parse memo for the tracks (shared §10): each track file's parsed points, keyed by the
+    SHA-256 of its bytes, so a track unchanged since the last run is not parsed again. Scratch: no
+    decision, no history, safe to delete at any time, neither journalled nor archived."""
+    return os.path.join(ws, CONTROL_DIR, "photos-00-track-memo.db")
+
 PREP_PLAN_ARTIFACT = "photos-10-prep-plan.json"
 
 def prep_plan_path(ws: str) -> str:
@@ -441,9 +447,10 @@ def workspace_id(ws: str):
 
 def _not_archived(name: str) -> bool:
     """A control-directory file the archival package does not carry: transient (a lock, a temp file,
-    SQLite's rollback journal), the plan memo (scratch, shared contract §13.4), or an archive itself."""
+    SQLite's rollback journal), the plan and track memos (scratch), or an archive itself."""
     return (name.endswith(".lock") or name.startswith(".tmp-") or name.endswith("-journal")
-            or name == os.path.basename(plan_memo_db_path("")) or name.endswith("-archive.tar.gz"))
+            or name in (os.path.basename(plan_memo_db_path("")), os.path.basename(track_memo_db_path("")))
+            or name.endswith("-archive.tar.gz"))
 
 
 def control_archive_members(ws: str, exclude=()) -> list:
