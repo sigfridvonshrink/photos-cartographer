@@ -283,6 +283,22 @@ def test_finalize_assembles_package_and_is_nondestructive(tmp_path, monkeypatch)
     assert "photos-26-complete-log.json" in manifest["contents"] and "photos-00-ingest.db" in manifest["contents"]
 
 
+@pytest.mark.spec("RUL-merge_refuses_changed_since_finalize", test="TST-geotag_finalize-finalize_records_each_photo_as_left")
+def test_finalize_records_each_photo_as_left(tmp_path, monkeypatch):
+    """Finalize records every by-dest photo as geotag left it — under its final, renamed path — by size
+    and modification time, so merge can refuse one changed after."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    assert _run(monkeypatch, ws, "finalize") == 0
+    media = json.load(open(ctl / "photos-26-finalized-media.json"))["media"]
+    on_disk = sorted(os.path.relpath(os.path.join(r, n), str(ws))
+                     for r, _d, fs in os.walk(ws / BYDEST) for n in fs)
+    assert sorted(media) == on_disk and not any(p.endswith(("/a.arw", "/b.arw")) for p in media)  # final names
+    for rel, rec in media.items():
+        st = os.stat(ws / rel)
+        assert rec == {"size": st.st_size, "mtime_ns": st.st_mtime_ns}, rel
+
+
 @pytest.mark.spec("RUL-package_contents", "RUL-package_self_describing", "archive-whole-control-dir-1", "archive-self-describing-manifest-1", "RUL-other_databases_scratch", "RUL-images_archived", "RUL-config_archived", test="TST-geotag_finalize-finalize_archives_the_whole_control_directory")
 def test_finalize_archives_the_whole_control_directory(tmp_path, monkeypatch):
     """The package is the whole control directory but its transient files — the drift record and every

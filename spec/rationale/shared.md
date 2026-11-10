@@ -568,6 +568,26 @@ workspace, reaches the library, and is read back wherever the photo turns up aga
 recognised as corrected whichever workspace it is in.
 :::
 
+:::{rat} An empty inbox means nothing is waiting
+:id: RAT-empty_inbox_means_nothing_waits
+:status: seed
+:justifies: RUL-prep_empties_inbox
+
+An empty inbox is the one sign that nothing is waiting to be organized: geotag and merge refuse to run while it holds
+something, and the next dump arrives into a clean place, where nothing left from the last one can be taken for part of
+it.
+:::
+
+:::{rat} Only what geotag treats goes to the library
+:id: RAT-only_what_geotag_treats
+:status: seed
+:justifies: RUL-sort_photos_only
+
+Geotag corrects only photos: it reads and writes photo metadata and places photos on the map. A video or any other file
+in photos by destination would reach the library beside photos geotag treated, itself untreated; refusing keeps the
+destination's set one geotag has wholly treated.
+:::
+
 :::{rat} New photos never reach geotag behind prep's back
 :id: RAT-never_behind_prep
 :status: seed

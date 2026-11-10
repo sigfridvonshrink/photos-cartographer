@@ -1301,8 +1301,7 @@ subfolders of a destination.
 :verify: required
 :uses: DEF-managed_folders
 
-A prep execution SHALL leave the inbox empty: photos to photos by date, videos to videos by date, media with no capture
-time to missing metadata, and every file of no media class to the strays folder.
+A prep execution SHALL leave the inbox empty.
 :::
 
 :::{rul} Only photos are sorted into photos by destination

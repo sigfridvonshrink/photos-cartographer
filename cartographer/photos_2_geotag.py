@@ -45,7 +45,7 @@ import zoneinfo
 from datetime import datetime, timedelta, timezone
 
 from .photos_utils import (
-    CONFIG, CONTROL_DIR, control_dir, workspace_volume_error, config_path, handoff_path, guard_path, is_sealed, likely_new_dump,
+    CONFIG, CONTROL_DIR, control_dir, FINALIZED_MEDIA_ARTIFACT, finalized_media_path, workspace_volume_error, config_path, handoff_path, guard_path, is_sealed, likely_new_dump,
     validate_config, load_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
     folders_fingerprint, media_extensions_fingerprint,
     selected_gpx_root, CAMERA_IDENTITY_FIELDS, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
@@ -1602,6 +1602,7 @@ class GeotagWorkflow:
             log["partial"] = True
             log["warnings"] = self.finalize_warnings
         write_json_artifact(complete_log_path(ws), log)
+        write_json_artifact(finalized_media_path(ws), self._finalized_media(files, plan))
 
         conn = sqlite3.connect(db_path(ws))
         try:
@@ -1683,6 +1684,23 @@ class GeotagWorkflow:
             if isinstance(ops, dict) and any(st == "confirmed" for st in ops.values()) and j.get("plan_id") not in known:
                 missing.append(j.get("plan_id"))
         return missing
+
+    def _finalized_media(self, files, plan):
+        """Each by-dest photo as geotag left it — its final path, size and modification time — for merge
+        to refuse one changed since (shared §9). The final path is the plan's rename target, if any."""
+        renamed = {op["relative_path"]: op["to"] for d in (plan.get("destinations") or {}).values()
+                   for op in d.get("operations") or [] if op.get("type") == "rename_no_clobber"}
+        media = {}
+        for f in files:
+            rel = f["relative_path"]
+            final = os.path.join(os.path.dirname(rel), renamed[rel]) if rel in renamed else rel
+            try:
+                st = os.stat(os.path.join(self.workspace_root, final))
+            except OSError:
+                continue
+            media[final] = {"size": st.st_size, "mtime_ns": st.st_mtime_ns}
+        return {"artifact_type": "finalized_media", "artifact_name": FINALIZED_MEDIA_ARTIFACT,
+                "schema_version": 1, "plan_id": plan.get("plan_id"), "media": dict(sorted(media.items()))}
 
     def _archive_manifest(self, plan, summary, now_iso, members):
         ws = self.workspace_root

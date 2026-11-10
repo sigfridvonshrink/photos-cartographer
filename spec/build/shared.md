@@ -244,6 +244,7 @@ The control records SHALL be these files in `.photos-ingest/` ({need}`DEF-archiv
   photos-25-execution-summary.json geotag-phase artifact
   photos-26-complete-log.json      geotag-phase artifact: full transformation log (prep+geotag, at finalize, Section 13.3)
   photos-26-geotag-ingest.db       geotag-phase artifact: DB backup snapshot, end of geotag (Section 13.4a)
+  photos-26-finalized-media.json   geotag-phase artifact: each by-dest photo's size and mtime as finalize found it
   photos-26-archive-manifest.json  geotag-phase artifact: the archival package's manifest, at finalize (Section 13.2)
   photos-26-archive.tar.gz         geotag-phase artifact: the archival package, at finalize (Section 13.2)
   photos-30-merge-plan.json        merge-phase artifact: merge plan (written by `plan`, consumed by `dry-run`/`execute`)
@@ -616,6 +617,16 @@ placed nowhere has geotag's position and marker cleared and carries the suffix a
 
 A write SHALL be planned only where the file does not already hold its value, names being recomputed from the
 destination's local time, a file already so named getting no rename (geotag §27, §28.2).
+:::
+
+:::{bld} Each photo as finalize found it
+:id: BLD-finalized_media
+:status: seed
+:realises: RUL-merge_refuses_changed_since_finalize
+
+`geotag finalize` SHALL write `photos-26-finalized-media.json`, giving each photo in photos by destination, under its
+final path, its size and modification time; merge's preflight refuses when a photo still there differs from it, or the
+record is missing.
 :::
 
 ## 10. Change only what needs changing
