@@ -748,7 +748,7 @@ top level that does not belong there, a symbolic link among its files, a managed
 
 :::{rul} Prep builds the structure once, and never removes a folder
 :id: RUL-structure_built_once
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -760,7 +760,7 @@ remove one.
 
 :::{rul} No other phase creates or repairs the structure
 :id: RUL-only_prep_builds_structure
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -772,7 +772,7 @@ placement, not structure.
 
 :::{rul} The top level holds only what belongs there
 :id: RUL-top_level_only_managed
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -787,7 +787,7 @@ inbox, and blocks every phase alike.
 
 :::{rul} A new workspace's first dump is at its top level
 :id: RUL-first_dump_at_top_level
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: struct-uninit-exception-1
@@ -799,7 +799,7 @@ initialization — a symbolic link there still blocking, as everywhere.
 
 :::{rul} No symbolic link is followed, and any link blocks
 :id: RUL-no_links
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -813,7 +813,7 @@ entered; a managed folder that is itself a link, before it is walked; a link at 
 
 :::{rul} A blocking link is named, and nothing is made after it
 :id: RUL-link_named
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-no_links
@@ -823,7 +823,7 @@ A phase a link blocks SHALL name the link, and produce no executable plan and no
 
 :::{rul} Prep checks the whole tree for links
 :id: RUL-who_checks_for_links
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-no_links
@@ -833,7 +833,7 @@ Prep SHALL check for links across the whole tree it walks, the destination tree 
 
 :::{rul} Geotag and merge check the top level for links
 :id: RUL-geotag_merge_check_top_level_links
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-who_checks_for_links
@@ -844,7 +844,7 @@ present.
 
 :::{rul} A missing managed folder blocks, and is never rebuilt
 :id: RUL-missing_folder_blocks
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -857,7 +857,7 @@ no phase organizes media into a structure it had to rebuild.
 
 :::{rul} The block names the missing folders
 :id: RUL-missing_folder_named
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-missing_folder_blocks
@@ -868,7 +868,7 @@ restore them and run again; an empty folder restores one.
 
 :::{rul} An empty inbox is normal
 :id: RUL-empty_inbox_normal
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -879,7 +879,7 @@ An empty inbox SHALL be normal — the steady state, not a missing folder.
 
 :::{rul} The shape is checked first
 :id: RUL-shape_checked_first
-:status: seed
+:status: ruled
 :criticality: med
 :verify: incidental
 :aliases: struct-guards-at-startup-1

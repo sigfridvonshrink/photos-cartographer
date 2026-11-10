@@ -291,7 +291,7 @@ it does not restale downstream.
 
 :::{rat} Every phase relies on the shape when it scans
 :id: RAT-phases_rely_on_the_shape
-:status: seed
+:status: ruled
 :justifies: INV-undisturbed_shape, RUL-shape_checked_first
 
 The structural facts are shared by every phase because each relies on them when it scans, and a violation of any one
@@ -302,7 +302,7 @@ itself*.
 
 :::{rat} A followed link escapes the managed tree
 :id: RAT-a_link_escapes_the_tree
-:status: seed
+:status: ruled
 :justifies: RUL-no_links, RUL-link_named
 
 Following a symbolic link would let a planned read or write reach a target **outside** the managed tree — a pipeline
@@ -312,7 +312,7 @@ fingerprint and de-duplication rest on.
 
 :::{rat} Prep is the gatekeeper for links under the destination tree
 :id: RAT-prep_gatekeeps_links
-:status: seed
+:status: ruled
 :justifies: RUL-who_checks_for_links, RUL-geotag_merge_check_top_level_links
 
 The destination tree is read-only for prep yet still scanned by it, so prep is also the gatekeeper for links that
@@ -322,7 +322,7 @@ built with no forbidden link present.
 
 :::{rat} A rebuilt structure could mask a loss
 :id: RAT-rebuild_masks_loss
-:status: seed
+:status: ruled
 :justifies: RUL-missing_folder_blocks, RUL-structure_built_once, RUL-only_prep_builds_structure, RUL-missing_folder_named, RUL-empty_inbox_normal
 
 Since prep creates the structure once and never removes a folder, a missing one is evidence the structure was deleted
