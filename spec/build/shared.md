@@ -226,6 +226,8 @@ The control records SHALL be these files in `.photos-ingest/` (shared §13 for t
 ```text
 .photos-ingest/
   photos-00-config.json            workspace configuration (seeded by prep, Section 4)
+  photos-00-workspace.lock         the workspace lock: held by every run while it plans or executes (Section 2)
+  photos-00-decision-editor.lock   the decision editor's lock: one editor at a time on a workspace
   photos-00-workspace-guard        workspace root sentinel: marks the workspace as INITIALIZED (written last by prep on init, prep photos-1-prep-workflow.md Section 3.1)
   photos-00-sealed.json            terminal/sealed marker, written by a successful merge ALONGSIDE the guard (a separate file, not a field inside the guard) — its presence seals the workspace (Section 13.7)
   photos-00-ingest.db              SQLite identity/metadata cache + derived caches (live working DB, Section 13.4)
@@ -243,11 +245,15 @@ The control records SHALL be these files in `.photos-ingest/` (shared §13 for t
   photos-26-complete-log.json      geotag-phase artifact: full transformation log (prep+geotag, at finalize, Section 13.3)
   photos-26-geotag-ingest.db       geotag-phase artifact: DB backup snapshot, end of geotag (Section 13.4a)
   photos-26-archive-manifest.json  geotag-phase artifact: the archival package's manifest, at finalize (Section 13.2)
+  photos-26-archive.tar.gz         geotag-phase artifact: the archival package, at finalize (Section 13.2)
   photos-30-merge-plan.json        merge-phase artifact: merge plan (written by `plan`, consumed by `dry-run`/`execute`)
   photos-31-merge-summary.json     merge-phase artifact: library-merge summary (Section 13.5)
   photos-35-merge-log.json         merge-phase artifact: full transformation log (prep+geotag+merge, Section 13.3)
   photos-35-merge-ingest.db        merge-phase artifact: DB backup snapshot, end of merge (Section 13.4a)
   photos-35-archive-manifest.json  merge-phase artifact: the re-sealed package's manifest, superseding photos-26's (Section 13.6)
+  photos-35-archive.tar.gz         merge-phase artifact: the re-sealed archival package (Section 13.6)
+  executed/<plan id>/              geotag: the decision records each executed plan ran against (Section 13.3a)
+  <artifact>-NNN.<ext>             a superseded plan or decision record, kept when it was replaced (Section 5)
   gpx/                             gpx_root, when configured to live here (Section 8)
 ```
 

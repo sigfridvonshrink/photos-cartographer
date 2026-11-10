@@ -568,7 +568,8 @@ configuration — never as a separate, optional pass.
 :uses: DEF-workspace
 
 A workspace's **control records** are everything cartographer keeps in it besides the media: the configuration, the
-plans and the decisions, the journals, the end-of-phase records and the databases.
+plans and the decisions, the journals, the end-of-phase records and the databases. The quarantine's manifests are not
+control records: each belongs to the quarantine folder whose duplicates it describes.
 :::
 
 :::{rul} The control records are kept together, apart from the media
