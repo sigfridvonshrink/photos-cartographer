@@ -529,7 +529,7 @@ after it stale.
 
 :::{rat} A steady state to return to
 :id: RAT-loop_is_steady_state
-:status: seed
+:status: ruled
 :justifies: RUL-geotag_gates, RUL-more_dumps_until_merge
 
 The loop is a steady state to return to, not a one-way pipeline: a batch can be imported, sorted, and followed by
@@ -539,7 +539,7 @@ the present state need not.
 
 :::{rat} Bounded by what is true now, not by a flag
 :id: RAT-gates_not_history
-:status: seed
+:status: ruled
 :justifies: RUL-geotag_gates, RUL-geotag_rerunnable
 
 What bounds geotag's freedom is a small, fixed set of conditions on the workspace, not a "has geotag run before?" flag.
@@ -548,7 +548,7 @@ Each gate names a state geotag cannot work correctly from; none says anything ab
 
 :::{rat} Re-running is safe because nothing settled is redone
 :id: RAT-rerun_is_safe
-:status: seed
+:status: ruled
 :justifies: RUL-geotag_rerunnable
 :follows_from: RUL-geotag_rerun_keeps_settled
 
@@ -570,7 +570,7 @@ recognised as corrected whichever workspace it is in.
 
 :::{rat} An empty inbox means nothing is waiting
 :id: RAT-empty_inbox_means_nothing_waits
-:status: seed
+:status: ruled
 :justifies: RUL-prep_empties_inbox
 
 An empty inbox is the one sign that nothing is waiting to be organized: geotag and merge refuse to run while it holds
@@ -580,7 +580,7 @@ it.
 
 :::{rat} Only what geotag treats goes to the library
 :id: RAT-only_what_geotag_treats
-:status: seed
+:status: ruled
 :justifies: RUL-sort_photos_only
 
 Geotag corrects only photos: it reads and writes photo metadata and places photos on the map. A video or any other file
@@ -590,7 +590,7 @@ destination's set one geotag has wholly treated.
 
 :::{rat} New photos never reach geotag behind prep's back
 :id: RAT-never_behind_prep
-:status: seed
+:status: ruled
 :justifies: RUL-prep_records_sort, RUL-sort_recorded_by_stat
 
 Geotag depends on prep's handoff, and a photo prep has not recorded is not in it. Re-prepping after every sort, even
@@ -599,7 +599,7 @@ after geotag has run, keeps the handoff the whole truth about photos by destinat
 
 :::{rat} Safe is not frictionless
 :id: RAT-rerun_not_frictionless
-:status: seed
+:status: ruled
 :justifies: RUL-rerun_does_what_changed
 
 "Freely re-runnable" does not mean "always a no-op". Any change upstream — not only new media — restales exactly what
@@ -608,7 +608,7 @@ depends on it, and may raise new questions about the items it touches; a re-run 
 
 :::{rat} Finalize stays apart because geotag is re-run
 :id: RAT-finalize_apart
-:status: seed
+:status: ruled
 :justifies: RUL-finalize_explicit
 
 Geotag is re-run freely, and assembling the permanent record on each pass would be wasted work. Finalize marks the one
@@ -617,7 +617,7 @@ moment the user declares the dump done.
 
 :::{rat} Never a half-geotagged set in the library
 :id: RAT-merge_never_half_done
-:status: seed
+:status: ruled
 :justifies: RUL-merge_takes_finalized_current, RUL-merge_refuses_changed_since_finalize
 
 Finalize is a point in time, and photos by destination can change after it. Merge checks the finalized set against the
@@ -626,7 +626,7 @@ present one rather than trusting finalize was last, so a half-geotagged set cann
 
 :::{rat} A merged workspace is not a clean slate
 :id: RAT-workspace_not_recycled
-:status: seed
+:status: ruled
 :justifies: RUL-merge_is_terminal, RUL-library_takes_many_workspaces
 
 Even with photos by destination empty, a merged workspace keeps its database, ledgers, caches, snapshots and sealed
@@ -635,7 +635,7 @@ record. Starting afresh keeps each workspace's record about one batch.
 
 :::{rat} Corrections would invalidate development
 :id: RAT-development_after_corrections
-:status: seed
+:status: ruled
 :justifies: RUL-development_after_merge
 
 Distribution copies made before geotag's time and position corrections would be made from uncorrected photos, and the

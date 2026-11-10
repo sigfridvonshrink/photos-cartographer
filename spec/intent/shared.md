@@ -1256,7 +1256,7 @@ A record SHALL be checked as a dependency by its hash — prep's handoff excepte
 
 :::{def} The managed folders
 :id: DEF-managed_folders
-:status: seed
+:status: ruled
 :uses: DEF-workspace, DEF-strays_folder
 
 The **managed folders** are the workspace's media folders, each with a fixed role: the **inbox**, where a dump arrives;
@@ -1267,7 +1267,7 @@ library.
 
 :::{def} The operator loop
 :id: DEF-operator_loop
-:status: seed
+:status: ruled
 :uses: DEF-prep, DEF-geotag, DEF-merge, DEF-managed_folders
 
 The **operator loop** is how the user drives the three phases through one workspace's life: prep organizes a dump; the
@@ -1278,7 +1278,7 @@ record; merge moves it into the library. Each phase's own loop is in its own spe
 
 :::{def} Finalize
 :id: DEF-finalize
-:status: seed
+:status: ruled
 :uses: DEF-geotag
 
 **Finalize** is geotag's closing command, given once the user judges the workspace's media done: it assembles the
@@ -1287,7 +1287,7 @@ workspace's permanent record and its complete transformation log.
 
 :::{def} Development
 :id: DEF-development
-:status: seed
+:status: ruled
 :uses: DEF-library
 
 **Development** is the later processing of photos into distribution copies — the JPEG and TIFF breakout — kept in
@@ -1296,7 +1296,7 @@ subfolders of a destination.
 
 :::{rul} Prep leaves the inbox empty
 :id: RUL-prep_empties_inbox
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :uses: DEF-managed_folders
@@ -1306,7 +1306,7 @@ A prep execution SHALL leave the inbox empty.
 
 :::{rul} Only photos are sorted into photos by destination
 :id: RUL-sort_photos_only
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -1319,7 +1319,7 @@ there — geotag refusing to run while it holds anything else.
 
 :::{rul} Geotag does not plan over an unrecorded sort
 :id: RUL-prep_records_sort
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -1331,7 +1331,7 @@ Geotag SHALL NOT plan while photos by destination holds a photo prep has not rec
 
 :::{rul} Prep records a sort from sizes and times alone
 :id: RUL-sort_recorded_by_stat
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: loop-reprep-mandatory-1
@@ -1343,7 +1343,7 @@ each moved file's identity forward without reading it again.
 
 :::{rul} Geotag may be re-run until merge
 :id: RUL-geotag_rerunnable
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: loop-geotag-rerunnable-1
@@ -1385,7 +1385,7 @@ prep and sort cycles before geotagging.
 
 :::{rul} A re-run does as much as what changed requires
 :id: RUL-rerun_does_what_changed
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :aliases: loop-rerun-may-need-decisions-1
@@ -1399,7 +1399,7 @@ the change affects.
 
 :::{rul} More dumps may follow until merge
 :id: RUL-more_dumps_until_merge
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :uses: DEF-operator_loop, DEF-merge
@@ -1410,7 +1410,7 @@ resumes from prep.
 
 :::{rul} Finalize is its own command
 :id: RUL-finalize_explicit
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -1422,7 +1422,7 @@ Finalize SHALL be a command of its own, never a side effect of geotag's executio
 
 :::{rul} Merge requires a finalized workspace
 :id: RUL-merge_takes_finalized_current
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -1435,7 +1435,7 @@ not.
 
 :::{rul} Merge refuses photos by destination changed since finalize
 :id: RUL-merge_refuses_changed_since_finalize
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -1448,7 +1448,7 @@ prep run not counting as a change — so that what reaches the library is always
 
 :::{rul} Merge ends the workspace
 :id: RUL-merge_is_terminal
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -1459,7 +1459,7 @@ Merge SHALL be the last phase run in a workspace: once it succeeds, more media g
 
 :::{rul} The library accepts merges from many workspaces
 :id: RUL-library_takes_many_workspaces
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-merge_is_terminal

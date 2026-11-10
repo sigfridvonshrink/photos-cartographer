@@ -569,7 +569,7 @@ When the only change prep has not recorded is a sort and the inbox is empty, `ge
 
 :::{bld} Where the loop's gates are checked
 :id: BLD-loop_gates
-:status: seed
+:status: ruled
 :realises: RUL-geotag_gates, RUL-sort_photos_only, RUL-development_after_merge
 
 The gates SHALL be checked as follows: `geotag plan` checks every gate; `geotag execute` and `finalize` check the
@@ -621,7 +621,7 @@ destination's local time, a file already so named getting no rename (geotag §27
 
 :::{bld} Each photo as finalize found it
 :id: BLD-finalized_media
-:status: seed
+:status: ruled
 :realises: RUL-merge_refuses_changed_since_finalize
 
 `geotag finalize` SHALL write `photos-26-finalized-media.json`, giving each photo in photos by destination, under its
