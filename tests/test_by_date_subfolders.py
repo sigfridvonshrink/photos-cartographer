@@ -76,7 +76,7 @@ def test_photo_lands_in_day_subfolder(tmp_path, monkeypatch):
     assert list((ws / "0-sources").iterdir()) == []
 
 
-@pytest.mark.spec("prep-route-by-class-timestamp-1", "prep-videos-date-organized-1")
+@pytest.mark.spec("prep-route-by-class-timestamp-1", "prep-videos-date-organized-1", test="TST-by_date_subfolders-video_lands_in_day_subfolder")
 def test_video_lands_in_day_subfolder(tmp_path, monkeypatch):
     _mock(monkeypatch, lambda f: "2023:07:04 14:30:05")
     ws = _ws(tmp_path)

@@ -9,6 +9,7 @@ the links between items are typed and checked at every build.
 :caption: What it guarantees
 
 intent/shared
+intent/prep
 ```
 
 ```{toctree}
@@ -17,6 +18,7 @@ intent/shared
 
 rationale/philosophy
 rationale/shared
+rationale/prep
 ```
 
 ```{toctree}
@@ -24,6 +26,7 @@ rationale/shared
 :caption: How this build does it
 
 build/shared
+build/prep
 ```
 
 ```{toctree}
