@@ -893,7 +893,7 @@ plans or changes anything.
 
 :::{def} A camera group
 :id: DEF-camera_group
-:status: seed
+:status: ruled
 
 A **camera group** is the photos one camera or device took, identified by a key derived from the device-identity
 metadata the files carry.
@@ -901,7 +901,7 @@ metadata the files carry.
 
 :::{rul} Prep derives the camera group
 :id: RUL-prep_derives_camera_group
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: camera-prep-computes-key-1
@@ -913,7 +913,7 @@ geotag and in its own records.
 
 :::{rul} Geotag reuses prep's camera group
 :id: RUL-geotag_reuses_camera_group
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -925,7 +925,7 @@ Geotag SHALL use the camera group prep derived, never deriving a file's identity
 
 :::{rul} The derivation carries a version
 :id: RUL-camera_group_derivation_versioned
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -938,7 +938,7 @@ a change to the derivation is detected and old and new groups are never silently
 
 :::{rul} A camera group is known once it is classified
 :id: RUL-known_when_classified
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :aliases: camera-known-when-classified-1
