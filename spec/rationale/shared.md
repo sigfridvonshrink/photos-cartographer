@@ -509,10 +509,20 @@ transformation log and de-duplication rely on.
 :::{rat} Detecting change is a hash's whole purpose
 :id: RAT-hash_is_for_change
 :status: seed
-:justifies: RUL-hash_detects_any_change, RUL-hash_is_the_dependency_check
+:justifies: RUL-hash_detects_any_change
 
-A hash is chosen precisely so it changes on any byte change: detecting change is its whole purpose, which is what makes
-it the right dependency check for records.
+A hash is chosen precisely so it changes on any byte change: detecting change is its whole purpose.
+:::
+
+:::{rat} A record's every byte can matter
+:id: RAT-bytes_are_the_safe_check
+:status: seed
+:justifies: RUL-hash_is_the_dependency_check
+
+A record is small and every byte of it can matter — a decision, an offset, a timezone — so the safe check is its exact
+bytes: comparing chosen fields would let through a change to a field nobody chose. The handoff is the exception because
+prep rewrites its run identifiers on every run; checked by its bytes, a run that changed nothing would make everything
+after it stale.
 :::
 
 ## 9. One loop across the phases
