@@ -23,6 +23,26 @@ This whole-run lock is independent of, and stricter than, the dependency-revalid
 against *stale* inputs across separate runs, while the lock guarantees runs never overlap in the first place.
 :::
 
+:::{rat} A crash never locks a workspace for good
+:id: RAT-crash_never_locks_for_good
+:status: ruled
+:justifies: RUL-stale_lock_recovered
+
+Runs can die — a power cut, a killed terminal, the system running out of memory — and a dead run cannot release its
+lock. Held for good, it would leave the user to find and delete a control file by hand, the one edit the tool otherwise
+never asks of them; recognised as stale, it lets the next run go on.
+:::
+
+:::{rat} A live lock is never taken
+:id: RAT-live_lock_never_taken
+:status: ruled
+:justifies: RUL-stale_takeover_conservative
+
+Taking over a lock whose owner is still running would let two runs change the same originals at once — the very thing
+the lock exists to stop. Leaving a stale lock alone costs a retry; taking a live one could cost photos. So a doubtful
+owner counts as alive.
+:::
+
 ## 2. A snapshot before changing, optionally
 
 :::{rat} A snapshot is an extra layer, not the safety model
@@ -443,6 +463,17 @@ of renaming originals in bulk; keeping the format the workspace began with and t
 costs nothing.
 :::
 
+:::{rat} Two files never share a name
+:id: RAT-names_never_collide
+:status: ruled
+:justifies: RUL-suffix_no_clobber
+
+Photos taken in the same second — a burst, two cameras — get the same timestamp name, and a name given twice would
+overwrite an original. The suffix keeps every one; counting the names already planned as taken stops two files of one
+run from claiming the same name, and comparing without case keeps them apart on a filesystem that ignores case.
+Allocated deterministically, a re-run gives each file the name it gave before.
+:::
+
 ## 7. The tracks, kept outside the managed folders
 
 :::{rat} Where the tracks live is what keeps them geotag's
@@ -472,6 +503,16 @@ to its own records.
 
 Parked among the strays, a track could be deleted when the strays are cleared in bulk, and a lost track is evidence no
 re-run can recover. Refusing to run leaves it where the user put it until they move it to the tracks' location.
+:::
+
+:::{rat} Changed tracks can change the answers
+:id: RAT-tracks_change_the_answers
+:status: ruled
+:justifies: RUL-tracks_in_dependencies
+
+The tracks are evidence for the clock offsets and positions geotag proposes, and a track added, corrected or removed can
+change them. A decision made against the old tracks, or a plan built from them, could then be wrong while still looking
+settled; the tracks' fingerprint in each record turns the change into staleness instead of letting it pass unseen.
 :::
 
 ## 8. Nothing used once what it came from has changed
@@ -675,12 +716,34 @@ A file's time and name are not rolled back when a decision is withdrawn but reco
 un-position a file the user has already organized.
 :::
 
-:::{rat} One principle, stated once
-:id: RAT-one_authorship_principle
+:::{rat} A decision is what only the user knows
+:id: RAT-decisions_are_the_users
 :status: ruled
-:justifies: INV-every_change_from_the_record
+:justifies: RUL-user_writes_decisions
 
-The three phases share one stance on authorship, stated once; each phase states only how it meets it.
+A decision is a fact only the user knows — which timezone a trip was in, which offset a camera had, where a photo with
+no position was taken. A phase that overwrote one, even with a better-looking guess, would silently put the tool's guess
+in place of the user's knowledge; so the tool proposes in fields of its own and never touches the user's.
+:::
+
+:::{rat} The tool lays out, the user fills in
+:id: RAT-structure_from_the_tool
+:status: ruled
+:justifies: RUL-decision_fields_laid_out
+
+The user edits these records a few times a year, by hand or in the editor. A field they had to add would need its exact
+name and place remembered, and one mistyped would be a decision lost or misread; laid out by the tool, every decision is
+one value to fill in, its place already right.
+:::
+
+:::{rat} Prep has nothing to ask
+:id: RAT-prep_needs_no_answers
+:status: ruled
+:justifies: RUL-prep_takes_no_decision
+
+Prep's work — sorting by type and date, setting duplicates aside, recording what is where — follows from the files and
+the configuration with nothing left to judge. The questions only the user can answer are about time and place, which are
+geotag's; a prep that asked would hold up the inbox on questions it does not need answered.
 :::
 
 ## 12. The record of what was done, kept beyond the workspace
@@ -758,6 +821,76 @@ boundary, to be opened later and compared.
 Never overwriting guards photos, which cannot be made again. An image can: it is a copy of the live database, and only
 the latest end of each phase is worth keeping, so a phase's next successful run replaces its image — whole, so that a
 capture interrupted leaves a usable image either way.
+:::
+
+:::{rat} Finalize records what geotag left
+:id: RAT-finalize_only_records
+:status: ruled
+:justifies: RUL-finalize_non_destructive
+
+Finalize is the moment the user declares the workspace done, and the package must record what geotag actually left. Were
+finalize to change anything, the package would record a state that existed only inside finalize, and finalizing again
+could record another; reading only, it can be run again at any time and records the same.
+:::
+
+:::{rat} The why beside the what
+:id: RAT-why_beside_what
+:status: ruled
+:justifies: RUL-log_cites_decisions
+
+A step alone says what happened to a photo — its time moved by three hours — not why. Years later, the decision behind
+it is what tells a right correction from a mistake; named beside the step, it is found without searching records that
+may be long gone with the workspace.
+:::
+
+:::{rat} Each phase writes only its own steps
+:id: RAT-each_phase_owns_its_steps
+:status: ruled
+:justifies: RUL-log_entry_grows
+
+Each phase knows only its own work, so each appends only its own steps; rewriting an earlier phase's would put words in
+its mouth. Kept whole through the latest phase, one log tells a photo's full story, and each earlier log stays the true
+record of what its phase saw.
+:::
+
+:::{rat} The log is read by people, years on
+:id: RAT-log_read_by_people
+:status: ruled
+:justifies: RUL-log_human_readable
+
+The log outlives the tool that wrote it: it is read by a person, years on, perhaps without cartographer at hand. A
+stable order lets two logs be compared line by line; names and values as people say them — a time with its timezone, an
+offset in hours and minutes — need no program to decode.
+:::
+
+:::{rat} Undoing a position is a step too
+:id: RAT-reverts_are_steps_too
+:status: ruled
+:justifies: RUL-log_records_gps_reverts
+
+Withdrawing a manual position changes the photo as much as applying one: its position goes back to what it held, or to
+none. Logged with what it replaced or restored, every position the photo ever carried can be traced; left out, the log
+would show a position the photo no longer has.
+:::
+
+:::{rat} The package answers what the workspace could
+:id: RAT-package_answers_later
+:status: ruled
+:justifies: RUL-package_contents
+
+The workspace is transient; the package is what remains of it beside the library. It must answer later what the
+workspace could: under which settings, by which decisions, from which plans each photo was changed, and what each phase
+saw. Anything left out — a journal, a snapshot — is a question no one can answer once the workspace is gone.
+:::
+
+:::{rat} The package can be checked without the tool
+:id: RAT-package_checks_itself
+:status: ruled
+:justifies: RUL-package_self_describing
+
+A package moved to long-term storage is parted from the workspace that made it and may sit untouched for years. Naming
+its workspace, plan and execution ties it to what it records; listing every item with its hash lets anyone confirm,
+without the tool, that nothing in it has decayed or been altered.
 :::
 
 ## 13. Merge: the library kept, the workspace sealed

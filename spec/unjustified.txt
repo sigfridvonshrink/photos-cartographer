@@ -1,18 +1,4 @@
 # Rules and invariants that no rationale justifies yet, directly or through the item they refine or uphold.
 # tools/spec-build fails on any other such item, and on an id here that has gained a rationale or is gone:
-# this list only shrinks. The seed ones get their rationale as their section is ruled; the ruled ones in one
-# pass after §0-§10 of the shared contract (BACKLOG item 8).
-RUL-decision_fields_laid_out
-RUL-finalize_non_destructive
-RUL-log_cites_decisions
-RUL-log_entry_grows
-RUL-log_human_readable
-RUL-log_records_gps_reverts
-RUL-package_contents
-RUL-package_self_describing
-RUL-prep_takes_no_decision
-RUL-stale_lock_recovered
-RUL-stale_takeover_conservative
-RUL-suffix_no_clobber
-RUL-tracks_in_dependencies
-RUL-user_writes_decisions
+# this list only shrinks. Emptied 2026-11-10: every rule and invariant of the shared contract has a
+# rationale.
