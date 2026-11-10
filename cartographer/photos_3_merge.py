@@ -297,11 +297,7 @@ class MergeWorkflow:
             blockers.append("The geotag plan records no handoff dependency — re-run geotag and "
                             "re-finalize before merging.")
             return plan
-        if dep.get("dependency_type") == "handoff_content":
-            ok = handoff_content_fingerprint(handoff) == dep.get("content_fingerprint")
-        else:
-            ok = verify_json_dependency(dep, ws)   # legacy byte-hash handoff dependency
-        if not ok:
+        if handoff_content_fingerprint(handoff) != dep.get("content_fingerprint"):
             blockers.append("By-dest has changed since geotag was finalized (the current handoff's "
                             "content fingerprint no longer matches the one photos-24-executable-plan.json "
                             "recorded). Re-run geotag and re-finalize before merging — a present but "

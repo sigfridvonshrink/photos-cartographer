@@ -240,12 +240,34 @@ transformation log, so pruning loses nothing of the record.
 Hidden dotfiles are swept to the recoverable quarantine, not merely skipped, so a dump leaves no hidden litter.
 :::
 
+:::{rat} A plan in one known place is the plan that runs
+:id: RAT-one_place_per_plan
+:status: seed
+:justifies: RUL-plan_at_fixed_place, RUL-no_plan_location_option
+
+A plan kept in one known place is the plan that runs: the dry run and the execution read exactly what the last planning
+wrote, and the user always knows where to review it. An option naming another place would let a run carry out a plan
+other than the last one made — an old copy, or another workspace's — and would ask the user to remember where they put
+it, in a tool used a few times a year.
+:::
+
+:::{rat} Nothing runs that the user could not review
+:id: RAT-plan_before_run
+:status: seed
+:justifies: RUL-no_plan_no_run
+
+Execution carries out only a plan the user could review first. With none saved, there is nothing reviewed to carry out,
+and planning on the spot would skip the review the plan exists for.
+:::
+
 :::{rat} The dry run reads the persisted plan
 :id: RAT-dry_run_reads_the_saved_plan
 :status: seed
 :justifies: RUL-dry_run_summarises_the_real_plan
 
-Because the full plan is a persisted artifact, the dry run reports on the on-disk plan — still not a simulation.
+A simulation is a second path that can disagree with execution: it can pass where execution would fail, or the
+reverse. Checking the very plan execution will carry out means what the dry run passed is what runs. A summary is
+enough because the whole plan is on disk to read.
 :::
 
 :::{rat} A superseded plan stays recoverable; an unchanged one adds nothing

@@ -108,7 +108,7 @@ def test_summary_counts_and_review_items(tmp_path):
     assert art["status"] == "requires_user_input" and art["requires_user_input"]
     dep = art["depends_on"]
     assert dep["resolved_utc_cache_fingerprint"] == "rfp" and dep["gpx_fingerprint"] == "gfp"
-    assert dep["gps_policy_fingerprint"] and dep["handoff"]["sha256"]
+    assert dep["gps_policy_fingerprint"] and dep["handoff"]["content_fingerprint"]
 
 
 def test_extrapolation_counts_in_summary(tmp_path):

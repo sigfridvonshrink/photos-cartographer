@@ -657,8 +657,7 @@ phase's planning writes it and its dry run and its execution read it.
 :status: seed
 :criticality: med
 :anti: yes
-:verify: none
-:omit_reason: no test asserts it (backlog item 3)
+:verify: required
 :aliases: plan-no-path-flag-1
 :refines: RUL-plan_at_fixed_place
 
@@ -704,8 +703,7 @@ one is first set aside, recoverably, and the user told where.
 :id: RUL-unchanged_replan_writes_nothing
 :status: seed
 :criticality: med
-:verify: none
-:omit_reason: no test asserts it (backlog item 3)
+:verify: required
 :aliases: plan-unchanged-no-backup-1
 :refines: RUL-replanning_keeps_the_prior
 
@@ -720,9 +718,8 @@ A re-plan whose result is identical to what is saved SHALL write nothing and set
 :aliases: handoff-verified-by-content-1
 :refines: RUL-hash_detects_any_change
 
-Geotag SHALL verify prep's handoff before using it, though it lives among the control records: by recomputing the
-fingerprint of its content and comparing it with the one its dependencies recorded — by its content, not its exact
-bytes.
+Geotag SHALL verify prep's handoff before using it by the fingerprint of its content — recomputed, and compared with
+the one its dependencies recorded — never by the file's exact bytes.
 :::
 
 :::{rul} Refreshing what describes the run restales nothing

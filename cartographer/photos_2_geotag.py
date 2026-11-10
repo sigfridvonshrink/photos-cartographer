@@ -809,22 +809,17 @@ class GeotagWorkflow:
         return cell
 
     def _handoff_dependency(self, ws):
-        """The handoff dependency is its deterministic CONTENT fingerprint (prep §16.2), not the
-        volatile file bytes — so a no-op prep re-run (which only refreshes run_metadata) does not
-        restale this plan. Falls back to a plain byte-hash dependency for a legacy handoff with no
-        content_fingerprint."""
+        """The handoff dependency is its deterministic CONTENT fingerprint (prep §16.2), recomputed from
+        the handoff, never the volatile file bytes — so a no-op prep re-run (which only refreshes
+        run_metadata) does not restale this plan."""
         with open(handoff_path(ws)) as f:
             ho = json.load(f)
-        if "content_fingerprint" in ho:
-            return {"dependency_type": "handoff_content", "artifact_name": "photos-11-handoff.json",
-                    "artifact_path": os.path.relpath(handoff_path(ws), ws),
-                    "content_fingerprint": handoff_content_fingerprint(ho)}
-        return json_dependency("photos-11-handoff.json", ws, handoff_path(ws))   # legacy
+        return {"dependency_type": "handoff_content", "artifact_name": "photos-11-handoff.json",
+                "artifact_path": os.path.relpath(handoff_path(ws), ws),
+                "content_fingerprint": handoff_content_fingerprint(ho)}
 
     @staticmethod
     def _verify_handoff_dependency(dep, ws):
-        if dep.get("dependency_type") != "handoff_content":
-            return verify_json_dependency(dep, ws)                                # legacy byte-hash
         p = os.path.join(ws, dep.get("artifact_path", ""))
         try:
             with open(p) as f:

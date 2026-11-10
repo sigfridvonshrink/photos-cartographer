@@ -96,7 +96,7 @@ def test_first_run_writes_artifact_requiring_input(tmp_path, monkeypatch):
     assert list(d["camera_group_time_decisions"]) == [CAM]
     assert d["camera_group_time_decisions"][CAM]["proposal"]["proposal_source"] == "manual_required"
     dep = art["depends_on"]
-    assert dep["handoff"]["sha256"] and dep["camera_time_policy_fingerprint"] and dep["gpx_fingerprint"]
+    assert dep["handoff"]["content_fingerprint"] and dep["camera_time_policy_fingerprint"] and dep["gpx_fingerprint"]
 
 
 def test_smartphone_group_gets_no_offset_cell(tmp_path, monkeypatch):
@@ -220,9 +220,9 @@ def test_depends_on_reverifies(tmp_path, monkeypatch):
              device_groups={"fixed_clock_cameras": [CAM], "phones": []})
     _run(monkeypatch, ws)
     dep = _artifact(ws)["depends_on"]["handoff"]
-    assert utils.verify_json_dependency(dep, str(ws))                 # matches as written
+    assert cal.GeotagWorkflow._verify_handoff_dependency(dep, str(ws))   # matches as written
     (ws / ".photos-ingest" / "photos-11-handoff.json").write_text('{"files": []}')
-    assert not utils.verify_json_dependency(dep, str(ws))             # change detected
+    assert not cal.GeotagWorkflow._verify_handoff_dependency(dep, str(ws))   # change detected
 
 
 @pytest.mark.spec("geotag-timezone-autoresolve-1", "geotag-timezone-inherit-priority-1", "geotag-timezone-unresolved-requires-input-1")
