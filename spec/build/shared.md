@@ -232,6 +232,7 @@ The control records SHALL be these files in `.photos-ingest/` ({need}`DEF-archiv
   photos-00-sealed.json            terminal/sealed marker, written by a successful merge ALONGSIDE the guard (a separate file, not a field inside the guard) — its presence seals the workspace (Section 13.7)
   photos-00-ingest.db              SQLite identity/metadata cache + derived caches (live working DB, Section 13.4)
   photos-00-plan-memo.db           prep-phase scratch: plan-time decode memo (disposable, NOT part of the record, prep photos-1-prep-workflow.md Section 10.3)
+  photos-00-track-memo.db          geotag-phase scratch: each track file's parsed points, by the SHA-256 of its bytes (disposable, NOT part of the record)
   photos-15-prep-ingest.db         prep-phase artifact: DB backup snapshot, end of prep (Section 13.4a)
   journal-*.json                   execution journals
   photos-10-prep-plan.json         prep-phase artifact: prep plan (written by `plan`, consumed by `dry-run`/`execute`; see "Canonical plan persistence" below)
@@ -638,10 +639,14 @@ record is missing.
 
 Each phase SHALL reuse what is still valid: prep, the cached fingerprint and metadata of a file whose size and
 modification time are unchanged, carrying a moved file's identity forward without reading it (prep §10, §13), a plan
-never executed leaving its fingerprints and metadata for the next plan to reuse (prep §10.3); geotag, its resolved-UTC
-cache while its inputs are unchanged, keeping each decision whose target is unchanged (geotag §9, §22.1). Fingerprinting
-(ImageMagick `identify`, `ffmpeg`), metadata extraction (`exiftool`) and GPX parsing thus run only for new or changed
-inputs. Each phase's own consequences are in its spec: prep §13 and §21, geotag §29.1 and §30, merge §8.
+never executed leaving its fingerprints and metadata for the next plan to reuse (prep §10.3); geotag reads no photo,
+taking every photo's metadata from prep, works out its results again on each run — a result that comes out the same
+leaving everything that depends on it as it is — keeps each decision whose target is unchanged (geotag §9, §22.1), and
+reads every track file whole for its fingerprint but parses only one whose bytes it has not parsed before, taking the
+rest from its track memo, `photos-00-track-memo.db`; merge, a library file's fingerprint while its size and
+modification time are unchanged (merge §7). Fingerprinting (ImageMagick `identify`, `ffmpeg`), metadata extraction
+(`exiftool`) and GPX parsing thus run only for new or changed inputs. Each phase's own consequences are in its spec:
+prep §13 and §21, geotag §29.1 and §30, merge §8.
 :::
 
 :::{bld} Staleness follows the field-scoped fingerprints
@@ -649,7 +654,8 @@ inputs. Each phase's own consequences are in its spec: prep §13 and §21, geota
 :status: seed
 :realises: RUL-remake_only_what_depends
 
-Staleness SHALL follow the field-scoped fingerprints of the dependency cascade (§9).
+Staleness SHALL follow the dependencies each record carries ({need}`DEF-dependency_cascade`): a plan depends on the
+whole configuration's hash, a costly result on the hash of the areas it reads.
 :::
 
 :::{bld} An operation only where the file differs
@@ -667,7 +673,9 @@ file already in place, geotag plans no write a file already holds and recomputes
 :status: seed
 :realises: RUL-no_op_run_reports_reuse
 
-A run's summary SHALL count the cache hits and the files already right.
+Each phase's report SHALL count the files already right, and the work it took from a cache: prep's summary its cache
+hits, merge's plan the library fingerprints it reused — in what it prints, never in the plan, which an unchanged
+re-plan leaves byte-identical. Geotag keeps no cache of results, so has none to count.
 :::
 
 ## 11. Nothing changes that the user did not write down
@@ -760,7 +768,7 @@ cache and identity rows while geotag and merge write only their own regions of i
 
 `geotag finalize` SHALL write `photos-26-complete-log.json` and the database snapshot `photos-26-geotag-ingest.db`, then
 list every file of the control directory but the transient ones — locks, `.tmp-` files, SQLite's `-journal` files, the
-plan memo `photos-00-plan-memo.db` and any `*-archive.tar.gz` — with its SHA-256 and path in
+plan and track memos `photos-00-plan-memo.db` and `photos-00-track-memo.db`, and any `*-archive.tar.gz` — with its SHA-256 and path in
 `photos-26-archive-manifest.json`, recording the workspace's identity — the init run id prep wrote in the guard — with
 the folder's name beside it, and the plan and execution ids, and archive those files and the manifest into
 `photos-26-archive.tar.gz` in the control directory, by a temporary name and an atomic rename — writing nothing else,
@@ -830,8 +838,8 @@ metadata caches (`file_cache`, `metadata_cache`) and their version row (`meta`),
 §14.3); geotag, of the resolved-UTC cache (`resolved_utc_cache`), the values each photo held before geotag first wrote
 to it (`original_values`, geotag §24.2); merge, of the library-file fingerprint cache (`library_fingerprint_cache`,
 keyed by the library file's absolute path with its size and modification time). Where each photo landed is in merge's
-JSON records, not the database. Prep's plan-time decode memo, `photos-00-plan-memo.db`, is the one other database:
-scratch, re-derivable, deletable at any time (prep §10.3).
+JSON records, not the database. The other databases are scratch, re-derivable and deletable at any time: prep's
+plan-time decode memo, `photos-00-plan-memo.db` (prep §10.3), and geotag's track memo, `photos-00-track-memo.db`.
 :::
 
 :::{bld} The database images and how each is captured

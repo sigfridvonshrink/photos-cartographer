@@ -114,7 +114,7 @@ def test_gpx_malformed_warns_not_crashes(tmp_path):
 
 
 def test_gpx_parser_skips_bad_trkpts(tmp_path):
-    # exercise every reject branch in GPXIndex._parse_file (GPS code -> full coverage):
+    # exercise every reject branch in GPXIndex._parse_bytes (GPS code -> full coverage):
     # missing lon, missing time, out-of-range coord, non-numeric coord, and a naive-time point;
     # the one fully-valid trkpt survives.
     root = tmp_path / "gpx"; root.mkdir()

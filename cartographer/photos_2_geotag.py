@@ -45,7 +45,7 @@ import zoneinfo
 from datetime import datetime, timedelta, timezone
 
 from .photos_utils import (
-    CONFIG, CONTROL_DIR, control_dir, FINALIZED_MEDIA_ARTIFACT, finalized_media_path, workspace_volume_error, config_path, handoff_path, guard_path, is_sealed, likely_new_dump,
+    CONFIG, CONTROL_DIR, control_dir, FINALIZED_MEDIA_ARTIFACT, track_memo_db_path, finalized_media_path, workspace_volume_error, config_path, handoff_path, guard_path, is_sealed, likely_new_dump,
     validate_config, load_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
     folders_fingerprint, media_extensions_fingerprint,
     selected_gpx_root, CAMERA_IDENTITY_FIELDS, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
@@ -528,7 +528,7 @@ class GeotagWorkflow:
     # --- Stage 3: GPX index (geotag spec §15) ---------------------------
 
     def load_gpx(self):
-        idx = GPXIndex(selected_gpx_root()).build(self.coordinator)
+        idx = GPXIndex(selected_gpx_root(), track_memo_db_path(self.workspace_root)).build(self.coordinator)
         self._gpx_fingerprint = idx.fingerprint
         return idx
 
@@ -1396,7 +1396,7 @@ class GeotagWorkflow:
         ws = self.workspace_root
         with open(executable_plan_path(ws)) as f:
             plan = json.load(f)
-        gpx = GPXIndex(selected_gpx_root()).build(self.coordinator)
+        gpx = GPXIndex(selected_gpx_root(), track_memo_db_path(ws)).build(self.coordinator)
         stale = self.revalidate_plan(plan, gpx)
         if stale:
             return {"status": "rejected", "plan_id": plan.get("plan_id"), "stale": stale}

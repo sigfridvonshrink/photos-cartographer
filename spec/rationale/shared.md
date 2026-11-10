@@ -654,15 +654,6 @@ Settled work done again "to be safe" makes nothing safer: a file written with wh
 risks a failed write, and reading a library's content again can cost hours.
 :::
 
-:::{rat} One principle, stated once
-:id: RAT-one_idempotency_principle
-:status: seed
-:justifies: INV-change_only_what_needs
-
-The three phases share one sense of idempotency, stated once for all of them; each phase states only what it means in
-its own terms, so the principle cannot drift between them.
-:::
-
 ## 11. Nothing changes that the user did not write down
 
 :::{rat} A user who distrusts opaque mutation can always ask why

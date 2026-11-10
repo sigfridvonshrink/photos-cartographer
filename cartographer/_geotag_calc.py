@@ -39,7 +39,7 @@ from .photos_utils import (
     selected_gpx_root, is_gpx_file, CAMERA_IDENTITY_FIELDS, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
     missing_managed_folders, by_dest_reprep_pending,
     json_dependency, verify_json_dependency, handoff_content_fingerprint, write_json_artifact, write_versioned_json, db_path, ensure_control_dir,
-    journal_path, ContentHasher, _move_no_clobber, allocate_suffix, carries_stem,
+    journal_path, ContentHasher, _move_no_clobber, allocate_suffix, carries_stem, track_memo_db_path,
     prep_log_path, write_db_snapshot, take_zfs_snapshot,
     WorkspaceLock, ProgressCoordinator,
 )
@@ -125,19 +125,29 @@ class GPXPoint:
         self.point_index = point_index
 
 
+_REL = "\x00rel\x00"            # stands for the file's path in a memoized warning: the memo is keyed by bytes
+GPX_PARSE_VERSION = "gpx-parse-v1"   # bump when the parse below changes what it yields
+
+
 class GPXIndex:
     """Deterministically ordered, fingerprinted index of all GPX track points under gpx_root.
 
     Availability is recorded in `status` (disabled / missing / empty / usable). The `fingerprint`
     is a SHA-256 over the root, each file's bytes, and each parsed point — it becomes an upstream
-    dependency of the time/GPS artifacts in later phases (§4–§6)."""
+    dependency of the time/GPS artifacts in later phases (§4–§6).
 
-    def __init__(self, gpx_root):
+    Every file is read whole on every build — its bytes are what the fingerprint checks — but with a
+    `memo_path` a file whose bytes were parsed before is not parsed again: its points come from the
+    track memo (shared §10), which yields exactly what parsing would."""
+
+    def __init__(self, gpx_root, memo_path=None):
         self.gpx_root = gpx_root
+        self.memo_path = memo_path
         self.points = []
         self.fingerprint = None
         self.status = "disabled"
         self.warnings = []
+        self.parsed = self.reused = 0      # files parsed this build / taken from the memo
 
     def build(self, coordinator=None):
         if not self.gpx_root:
@@ -155,6 +165,8 @@ class GPXIndex:
             for r, _d, files in os.walk(self.gpx_root) for f in files
             if is_gpx_file(f))
 
+        memo = self._open_memo()
+        seen = set()
         if coordinator:                       # per-file progress (count + %), named by GPX file
             coordinator.start_phase("loading GPX tracks", len(gpx_files))
         h = hashlib.sha256()
@@ -164,19 +176,32 @@ class GPXIndex:
             if coordinator:
                 coordinator.set_detail(rel)
             h.update(rel.encode("utf-8"))
-            read_ok = True
             try:
                 with open(abs_path, "rb") as f:
-                    h.update(hashlib.sha256(f.read()).digest())
+                    data = f.read()
             except OSError as e:
                 self.warnings.append(f"Could not read GPX file {rel}: {e}")
-                read_ok = False
-            if read_ok:
-                self._parse_file(rel, abs_path)
+                data = None
+            if data is not None:
+                digest = hashlib.sha256(data).digest()
+                h.update(digest)
+                seen.add(digest.hex())
+                parsed = self._memo_get(memo, digest.hex())
+                if parsed is None:
+                    parsed = self._parse_bytes(data)
+                    self._memo_put(memo, digest.hex(), parsed)
+                    self.parsed += 1
+                else:
+                    self.reused += 1
+                points, warnings = parsed
+                self.points.extend(GPXPoint(lat, lon, datetime.fromisoformat(t), rel, idx)
+                                   for lat, lon, t, idx in points)
+                self.warnings.extend(w.replace(_REL, rel) for w in warnings)
             if coordinator:
                 coordinator.increment_completed(1)
         if coordinator:
             coordinator.finish_phase()
+        self._close_memo(memo, seen)
 
         self.points.sort(key=lambda p: (p.time_utc, p.source_file, p.point_index))
         for p in self.points:
@@ -186,12 +211,75 @@ class GPXIndex:
         self.status = "usable" if self.points else "empty"
         return self
 
-    def _parse_file(self, rel, abs_path):
+    # --- the track memo: scratch, so any failure only means parsing again -----------------
+
+    def _open_memo(self):
+        if not self.memo_path:
+            return None
+        for attempt in (1, 2):                 # a memo that is not a database is replaced: it is scratch
+            conn = None
+            try:
+                conn = sqlite3.connect(self.memo_path)
+                conn.execute("CREATE TABLE IF NOT EXISTS track_memo (sha256 TEXT PRIMARY KEY, "
+                             "parse_version TEXT, parsed_json TEXT)")
+                return conn
+            except sqlite3.Error:
+                if conn is not None:
+                    conn.close()
+                if attempt == 2:
+                    return None
+                try:
+                    os.remove(self.memo_path)
+                except OSError:
+                    return None
+        return None
+
+    @staticmethod
+    def _memo_get(conn, sha):
+        if conn is None:
+            return None
         try:
-            root = ET.parse(abs_path).getroot()
-        except ET.ParseError as e:
-            self.warnings.append(f"Malformed GPX XML in {rel}: {e}")
+            row = conn.execute("SELECT parsed_json FROM track_memo WHERE sha256 = ? AND parse_version = ?",
+                               (sha, GPX_PARSE_VERSION)).fetchone()
+            return tuple(json.loads(row[0])) if row else None
+        except (sqlite3.Error, ValueError):
+            return None
+
+    @staticmethod
+    def _memo_put(conn, sha, parsed):
+        if conn is None:
             return
+        try:
+            with conn:
+                conn.execute("INSERT OR REPLACE INTO track_memo VALUES (?, ?, ?)",
+                             (sha, GPX_PARSE_VERSION, json.dumps(parsed)))
+        except sqlite3.Error:
+            pass
+
+    @staticmethod
+    def _close_memo(conn, seen):
+        """Drop the entries of tracks no longer under gpx_root, so the memo follows the tracks."""
+        if conn is None:
+            return
+        try:
+            with conn:
+                for (sha,) in conn.execute("SELECT sha256 FROM track_memo").fetchall():
+                    if sha not in seen:
+                        conn.execute("DELETE FROM track_memo WHERE sha256 = ?", (sha,))
+        except sqlite3.Error:
+            pass
+        finally:
+            conn.close()
+
+    @staticmethod
+    def _parse_bytes(data):
+        """A track file's points as [lat, lon, UTC time (ISO), index] and its warnings, the file's path
+        written as _REL — what the memo keeps for the file's bytes, wherever the file lies."""
+        points, warnings = [], []
+        try:
+            root = ET.fromstring(data)
+        except ET.ParseError as e:
+            return points, [f"Malformed GPX XML in {_REL}: {e}"]
         idx = 0
         for elem in root.iter():
             if not elem.tag.endswith("trkpt"):
@@ -204,7 +292,7 @@ class GPXIndex:
             try:
                 lat, lon = float(lat_s), float(lon_s)
                 if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
-                    self.warnings.append(f"Out-of-range coordinate in {rel} at trkpt {idx}")
+                    warnings.append(f"Out-of-range coordinate in {_REL} at trkpt {idx}")
                     idx += 1
                     continue
                 ts = time_elem.text.strip()
@@ -214,14 +302,14 @@ class GPXIndex:
                     ts = ts[:-1] + "+00:00"
                 dt = datetime.fromisoformat(ts)
                 if dt.tzinfo is None:
-                    self.warnings.append(f"GPX time without timezone in {rel} at trkpt {idx}")
+                    warnings.append(f"GPX time without timezone in {_REL} at trkpt {idx}")
                     idx += 1
                     continue
-                dt = dt.astimezone(timezone.utc)
-                self.points.append(GPXPoint(lat, lon, dt, rel, idx))
+                points.append([lat, lon, dt.astimezone(timezone.utc).isoformat(), idx])
             except ValueError as e:
-                self.warnings.append(f"Bad trkpt in {rel} at index {idx}: {e}")
+                warnings.append(f"Bad trkpt in {_REL} at index {idx}: {e}")
             idx += 1
+        return points, warnings
 
 
 def _valid_iana(tz):
