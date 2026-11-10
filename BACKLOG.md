@@ -4,7 +4,7 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **8** — 1, 2, 3, 4, 5, 6, 7 and 8.* 🛑 Numbers are never reused; the next is **9**.
+*Open items: **9** — 1, 2, 3, 4, 5, 6, 7, 9 and 10.* 🛑 Numbers are never reused; the next is **11**.
 
 ---
 
@@ -152,20 +152,6 @@ following, as `RUL-failed_operation_clean` was split into it, `RUL-failure_recor
 **Blocked by:** item 1. Vasile: *"maybe we can do this at the very end after the full conversion to sphinx-needs? I am
 worried that we are piling too much work in one strand and doing it now might break other links, too."* So it waits
 until every spec is converted, and is done once, over the whole corpus.
-
-### 8. A rationale for every ruled rule that has none
-
-**Why:** Vasile: *"Ideally every rule should have a rationale"*. Every rule and invariant is now to be justified by a
-rationale, directly or through the item it refines or upholds, and `tools/spec-build` fails on one that is not — but
-for those listed in `spec/unjustified.txt`, a list that only shrinks. Of the 34 found when the gate went in, the
-unruled ones get their rationale as their section of the shared contract is ruled.
-
-**What to do:** the ones already ruled — the stale lock's two, the decisions' three in §11, the log's and the package's
-seven in §12, and `RUL-tracks_in_dependencies` — get a rationale
-each, drafted and ruled in one pass, and come off the list.
-
-**When:** right after §0–§10 of the shared contract are ruled. It only adds rationale items and moves no link, so it
-does not wait for the end of the conversion (unlike item 7).
 
 ### 9. A file of no media class found outside the inbox
 
