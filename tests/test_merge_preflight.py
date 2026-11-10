@@ -60,7 +60,7 @@ def _make(tmp_path, *, guard=True, config=True, library_in_config=True, bless_li
     for name in sources_files:
         (ws / "0-sources" / name).write_bytes(b"x")
 
-    ho = {"files": [{"relative_path": rel, "folder_class": "6-photos-by-dest", "media_class": "image",
+    ho = {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [{"relative_path": rel, "folder_class": "6-photos-by-dest", "media_class": "image",
                      "content_fingerprint": f"fp-{i}"} for i, rel in enumerate(bydest)],
           "content_fingerprint": "whole-file-hash", "run_metadata": {"started_at": "t0"}}
     fp = utils.handoff_content_fingerprint(ho)
@@ -90,6 +90,15 @@ def _make(tmp_path, *, guard=True, config=True, library_in_config=True, bless_li
 
 def _pf(ws):
     return merge.MergeWorkflow(str(ws)).preflight()
+
+
+@pytest.mark.spec("RUL-format_fixed_once_named", test="TST-merge_preflight-filename_format_other_than_prep_s_blocks")
+def test_filename_format_other_than_prep_s_blocks(tmp_path):
+    ws, _ = _make(tmp_path)
+    ho_p = _ctl(ws) / "photos-11-handoff.json"
+    ho_p.write_text(json.dumps(dict(json.loads(ho_p.read_text()), filename_timestamp_format="%Y%m%d_%H%M%S")))
+    blockers, _, _ = _pf(ws)
+    assert blockers == [utils.filename_format_changed("%Y%m%d_%H%M%S", utils.CONFIG["filename_timestamp_format"])]
 
 
 # --- happy path --------------------------------------------------------------

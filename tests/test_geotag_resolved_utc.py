@@ -187,7 +187,7 @@ def test_resolved_utc_cache_created_only_after_photos21_complete(tmp_path, monke
              rec("6-photos-by-dest/B/b.arw", 50.8480, 4.3540, "2024:07:03 14:13:08")]
     for f in files:
         p = ws / f["relative_path"]; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"x")
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"files": files, "cache_fingerprint": "pcf"}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files, "cache_fingerprint": "pcf"}))
 
     def run():
         monkeypatch.chdir(str(ws))
@@ -262,7 +262,7 @@ def test_run_populates_cache_when_complete(tmp_path, monkeypatch, capsys):
     for f in files:
         p = ws / f["relative_path"]; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"x")
     # the timezone must be accepted for status=complete
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"files": files, "cache_fingerprint": "pcf"}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files, "cache_fingerprint": "pcf"}))
 
     def run():
         monkeypatch.chdir(str(ws))
@@ -339,7 +339,7 @@ def test_unrelated_config_edit_replans_but_does_not_restale_resolved_utc(tmp_pat
              rec("6-photos-by-dest/B/b.arw", 50.8480, 4.3540, "2024:07:03 14:13:08")]
     for f in files:
         p = ws / f["relative_path"]; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"x")
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"files": files, "cache_fingerprint": "pcf"}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files, "cache_fingerprint": "pcf"}))
 
     def run_fingerprint():
         monkeypatch.chdir(str(ws))

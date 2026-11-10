@@ -81,7 +81,7 @@ def create_mock_metadata_reader(monkeypatch):
                     "raw_payload": "{}"
                 }
             if "vacation" in folder:
-                res[os.path.join(folder, "photo2.jpg")] = {
+                res[os.path.join(folder, "2023-01-02--12-00-00.jpg")] = {
                     "DateTimeOriginal": "2023:01:02 12:00:00",
                     "Make": "Canon",
                     "Model": "EOS R5",
@@ -162,7 +162,7 @@ def test_handoff_manifest_enrichment(workspace, monkeypatch):
     source_file = workspace / "0-sources" / "photo.jpg"
     source_file.write_text("dummy")
 
-    dest_file = workspace / "6-photos-by-dest" / "vacation" / "photo2.jpg"
+    dest_file = workspace / "6-photos-by-dest" / "vacation" / "2023-01-02--12-00-00.jpg"
     dest_file.write_text("dummy2")
 
     cache = prep.WorkspaceCache(str(workspace), in_memory=False)

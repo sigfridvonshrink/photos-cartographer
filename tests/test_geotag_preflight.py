@@ -52,7 +52,7 @@ def _ws(tmp_path, *, guard=True, sealed=False, config=True, handoff=True,
     if handoff:
         files = handoff_files if handoff_files is not None else \
             [{"relative_path": rel, "media_class": "image"} for rel in bydest]
-        (ctl / "photos-11-handoff.json").write_text(json.dumps({"files": files}))
+        (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files}))
     return ws
 
 
@@ -162,6 +162,20 @@ def test_handoff_of_another_derivation_version_blocks(tmp_path, field):
         {"relative_path": rel, "media_class": "image", "metadata_status": dict(md, **{field: 0})}]))
     assert any("another version of cartographer" in b and rel in b and "prep plan" in b
                for b in blockers), blockers
+
+
+@pytest.mark.spec("RUL-format_fixed_once_named", test="TST-geotag_preflight-filename_format_other_than_prep_s_blocks")
+def test_filename_format_other_than_prep_s_blocks(tmp_path):
+    ws = _ws(tmp_path)
+    ho_p = ws / ".photos-ingest" / "photos-11-handoff.json"
+    ho = json.loads(ho_p.read_text())
+    ho_p.write_text(json.dumps(dict(ho, filename_timestamp_format="%Y%m%d_%H%M%S")))
+    blockers, _, _ = _pf(ws)
+    assert blockers == [utils.filename_format_changed("%Y%m%d_%H%M%S", utils.CONFIG["filename_timestamp_format"])]
+    ho.pop("filename_timestamp_format")
+    ho_p.write_text(json.dumps(ho))
+    blockers, _, _ = _pf(ws)
+    assert len(blockers) == 1 and "records no filename format" in blockers[0], blockers
 
 
 # --- by-dest scope gates -----------------------------------------------------

@@ -239,17 +239,18 @@ def test_quarantine_writes_evidence_before_moving(tmp_path, monkeypatch):
 
 def test_by_dest_hash_failure_skipped_mutable_blocks(tmp_path, monkeypatch):
     def hash_for(p):
-        if "fail" in os.path.basename(p):
+        if "fail" in os.path.basename(p) or "/6-photos-by-dest/" in p:
             return {"status": "failed", "strategy": "image-content-hash-v1", "error": "boom"}
         return None
     _install(monkeypatch, hash_for=hash_for)
     ws = _ws(tmp_path)
+    bd = "2023-01-02--03-04-05.jpg"
     (ws / "6-photos-by-dest" / "Trip").mkdir(parents=True)
-    (ws / "6-photos-by-dest" / "Trip" / "failbd.jpg").write_bytes(b"x")   # by-dest fail -> skip
+    (ws / "6-photos-by-dest" / "Trip" / bd).write_bytes(b"x")             # by-dest fail -> skip
     (ws / "0-sources" / "failmut.jpg").write_bytes(b"y")                   # mutable fail -> block
     blockers = _plan(ws).blockers
     assert any("failmut.jpg" in b for b in blockers), blockers
-    assert not any("failbd.jpg" in b for b in blockers), blockers
+    assert not any(bd in b for b in blockers), blockers
 
 
 def test_redundant_jpeg_only_separated_from_source(tmp_path, monkeypatch):
@@ -285,7 +286,7 @@ def test_by_dest_change_rejects_plan_at_execute(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
     (ws / "6-photos-by-dest" / "Trip").mkdir(parents=True)
-    bd = ws / "6-photos-by-dest" / "Trip" / "keep.jpg"
+    bd = ws / "6-photos-by-dest" / "Trip" / "2023-01-02--03-04-05.jpg"
     bd.write_bytes(b"original")
     (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
     plan = _plan(ws)

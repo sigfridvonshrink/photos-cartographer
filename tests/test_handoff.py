@@ -108,7 +108,7 @@ def test_conflict_attributed_to_by_dest_folder(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
     (ws / "6-photos-by-dest" / "Trip").mkdir(parents=True)
-    (ws / "6-photos-by-dest" / "Trip" / "keep.jpg").write_bytes(b"SAME")  # retained
+    (ws / "6-photos-by-dest" / "Trip" / "2023-01-02--03-04-05.jpg").write_bytes(b"SAME")  # retained
     (ws / "0-sources" / "dup.jpg").write_bytes(b"SAME")                   # mutable duplicate
     _run(ws)
     h = _handoff(ws)

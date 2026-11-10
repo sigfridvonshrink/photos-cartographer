@@ -313,7 +313,7 @@ def _e2e_ws(tmp_path):
                                     "field_set_version": utils.FIELD_SET_VERSION, "parsed_json": json.dumps(parsed)}}
     files = [rec(f"{BYDEST}/T/a.arw", "2024:07:03 14:00:00"),
              rec(f"{BYDEST}/T/b.arw", "2024:07:03 14:30:00")]
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"files": files, "cache_fingerprint": "pcf"}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files, "cache_fingerprint": "pcf"}))
     return ws, ctl
 
 

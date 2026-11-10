@@ -400,7 +400,7 @@ def test_new_dump_after_successful_geotag_is_organized(tmp_path, monkeypatch):
     (ctl / "photos-26-complete-log.json").write_text('{"photos": {}}')
     (ctl / "photos-26-archive-manifest.json").write_text('{"artifact_name": "m"}')
     (ws / "6-photos-by-dest" / "Trip").mkdir()
-    (ws / "6-photos-by-dest" / "Trip" / "a.jpg").write_bytes(b"geotagged")
+    (ws / "6-photos-by-dest" / "Trip" / "2023-01-02--03-04-05.jpg").write_bytes(b"geotagged")
     (ws / "0-sources" / "b.jpg").write_bytes(b"later")
     plan = _plan(ws)
     assert not plan.blockers, plan.blockers

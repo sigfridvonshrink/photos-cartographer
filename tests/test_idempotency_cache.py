@@ -37,8 +37,8 @@ def setup_workspace(tmp_path: Path):
     (ws / "6-photos-by-dest").mkdir()
 
     # Existing files in their correct final locations
-    (ws / "6-photos-by-dest" / "vacation" / "img1.jpg").parent.mkdir(parents=True)
-    (ws / "6-photos-by-dest" / "vacation" / "img1.jpg").write_text("already_dest")
+    (ws / "6-photos-by-dest" / "vacation" / "2023-01-01--12-00-00.jpg").parent.mkdir(parents=True)
+    (ws / "6-photos-by-dest" / "vacation" / "2023-01-01--12-00-00.jpg").write_text("already_dest")
 
     (ws / "5-photos-by-date" / "2023-01-01").mkdir()
     (ws / "5-photos-by-date" / "2023-01-01" / "2023-01-01--12-00-00.jpg").write_text("already_date")
@@ -108,7 +108,7 @@ def test_prep_idempotency_and_by_dest_accounting(mock_meta, tmp_path):
     ops_types = [op.type for op in plan1.operations]
     assert "move_no_clobber" in ops_types # for new_img
     assert "quarantine_move" in ops_types # for dup_img
-    assert "db_upsert" in ops_types # for by-dest img1.jpg
+    assert "db_upsert" in ops_types # for by-dest 2023-01-01--12-00-00.jpg
 
     # We should only have those 3 operations
     assert len(plan1.operations) == 3, f"Expected 3 operations, got {len(plan1.operations)}"
@@ -133,8 +133,8 @@ def test_prep_idempotency_and_by_dest_accounting(mock_meta, tmp_path):
     assert any(f.startswith("5-photos-by-date/2023-01-01/2023-01-01--12-00-00-001") for f in all_files.keys())
 
     # Verify that by-dest files were NEVER mutated (still in original place)
-    assert (ws / "6-photos-by-dest" / "vacation" / "img1.jpg").exists()
-    assert (ws / "6-photos-by-dest" / "vacation" / "img1.jpg").read_text() == "already_dest"
+    assert (ws / "6-photos-by-dest" / "vacation" / "2023-01-01--12-00-00.jpg").exists()
+    assert (ws / "6-photos-by-dest" / "vacation" / "2023-01-01--12-00-00.jpg").read_text() == "already_dest"
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
@@ -320,7 +320,7 @@ def test_prep_replans_from_filesystem_when_journal_corrupt_or_deleted(mock_meta,
     assert len(plan3.operations) == 0, "deleted journal must not resurrect already-applied operations"
 
     # State is intact regardless of the journal: the moved/by-dest files are still in place.
-    assert (ws / "6-photos-by-dest" / "vacation" / "img1.jpg").read_text() == "already_dest"
+    assert (ws / "6-photos-by-dest" / "vacation" / "2023-01-01--12-00-00.jpg").read_text() == "already_dest"
     assert any(f.startswith("5-photos-by-date/2023-01-01/2023-01-01--12-00-00-001")
                for f in cache3.get_all_files().keys())
 
@@ -567,7 +567,7 @@ def test_stale_cache_upsert_fails(mock_meta, tmp_path):
     plan1 = workflow.plan()
 
     # Modify the by-dest file AFTER the plan is generated but BEFORE execution
-    (ws / "6-photos-by-dest" / "vacation" / "img1.jpg").write_text("modified_after_plan")
+    (ws / "6-photos-by-dest" / "vacation" / "2023-01-01--12-00-00.jpg").write_text("modified_after_plan")
 
     executor = photos_ingest.PlanExecutor(str(ws))
     journal_path = str(ws / ".photos-ingest/journal.json")
@@ -586,7 +586,7 @@ def test_stale_cache_upsert_fails(mock_meta, tmp_path):
     # Assert cache row was not updated
     cache_verify = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
     all_files = cache_verify.get_all_files()
-    assert "6-photos-by-dest/vacation/img1.jpg" not in all_files
+    assert "6-photos-by-dest/vacation/2023-01-01--12-00-00.jpg" not in all_files
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
@@ -624,7 +624,7 @@ def test_cache_fingerprint_changes(mock_meta, tmp_path):
     assert fp1 == fp2
 
     # Change a file
-    (ws / "6-photos-by-dest" / "vacation" / "img1.jpg").write_text("modified_data_with_different_size")
+    (ws / "6-photos-by-dest" / "vacation" / "2023-01-01--12-00-00.jpg").write_text("modified_data_with_different_size")
 
     cache3 = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
     workflow3 = photos_ingest.WorkspacePrepWorkflow(str(ws), cache3)
@@ -703,7 +703,7 @@ def test_stale_already_cached_file_aborts(mock_meta, tmp_path):
     assert not has_upsert, "Should not generate db_upsert if cache is fresh"
 
     # Modify the by-dest file BEFORE execute
-    (ws / "6-photos-by-dest" / "vacation" / "img1.jpg").write_text("modified_data_staleness_test")
+    (ws / "6-photos-by-dest" / "vacation" / "2023-01-01--12-00-00.jpg").write_text("modified_data_staleness_test")
 
     executor2 = photos_ingest.PlanExecutor(str(ws))
     import pytest

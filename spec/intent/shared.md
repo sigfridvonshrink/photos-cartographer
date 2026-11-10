@@ -1040,17 +1040,35 @@ A file's name SHALL change between prep and geotag only when its timestamp is co
 file whose time is not corrected.
 :::
 
-:::{rul} A name off the format is an ordinary dump
-:id: RUL-nonconforming_name_is_a_dump
+:::{def} An untimed name
+:id: DEF-untimed_name
+:status: seed
+:uses: DEF-prep
+
+A file's **untimed name** is the name prep gives a media file with no recorded time: the name it came with, behind a
+mark that says so.
+:::
+
+:::{rul} A misnamed file outside the inbox stops prep
+:id: RUL-misnamed_file_stops_prep
+:status: seed
+:criticality: high
+:verify: required
+:aliases: fname-nonconforming-redumped-1
+:uses: DEF-timestamp_name, DEF-untimed_name
+
+A media file outside the inbox whose name is neither its timestamp name nor, lacking a recorded time, its untimed name
+SHALL stop prep.
+:::
+
+:::{rul} Every misnamed file is named
+:id: RUL-misnamed_file_named
 :status: seed
 :criticality: med
-:anti: yes
-:verify: none
-:omit_reason: no test asserts it (backlog item 3)
-:aliases: fname-nonconforming-redumped-1
+:verify: required
+:refines: RUL-misnamed_file_stops_prep
 
-A file in the workspace whose name does not follow the format SHALL be treated as any other dump — taken in and named by
-the pipeline — never specially migrated or matched against patterns.
+Prep SHALL name every misnamed file it finds, with the name the file should carry.
 :::
 
 :::{rul} No meaning is read from a file's name
@@ -1058,11 +1076,30 @@ the pipeline — never specially migrated or matched against patterns.
 :status: seed
 :criticality: med
 :anti: yes
-:verify: none
-:omit_reason: no test asserts it (backlog item 3)
-:refines: RUL-nonconforming_name_is_a_dump
+:verify: required
+:refines: RUL-misnamed_file_stops_prep
 
 No phase SHALL read meaning from a file's name: its timestamp comes from its metadata.
+:::
+
+:::{rul} A redundant JPG gets its timestamp name
+:id: RUL-redundant_jpg_timestamp_named
+:status: seed
+:criticality: low
+:verify: required
+:uses: DEF-timestamp_name
+
+A JPG prep sets aside as redundant to its RAW SHALL get its timestamp name, as a dated file does.
+:::
+
+:::{rul} The format is fixed once files are named in it
+:id: RUL-format_fixed_once_named
+:status: seed
+:criticality: med
+:verify: required
+:uses: RUL-one_filename_format
+
+Once prep has named a workspace's files in a format, a change to the format SHALL stop every phase.
 :::
 
 ## 7. The tracks, kept outside the managed folders

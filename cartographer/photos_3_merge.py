@@ -42,7 +42,7 @@ from datetime import datetime, timezone
 from .photos_utils import (
     CONFIG, CONTROL_DIR, config_path, handoff_path, guard_path, is_sealed,
     validate_config, load_config, validate_merge_config, sha256_file, sha256_text, media_class_for_ext,
-    folder_name, FOLDER_ROLES, missing_managed_folders, top_level_links, misplaced_top_level_entries, handoff_content_fingerprint,
+    folder_name, FOLDER_ROLES, missing_managed_folders, top_level_links, misplaced_top_level_entries, handoff_content_fingerprint, handoff_filename_format_blocker,
     folders_fingerprint, media_extensions_fingerprint,
     verify_json_dependency, json_dependency, write_json_artifact, write_versioned_json, is_library, write_library_marker,
     library_marker_path, allocate_suffix, suffix_root, max_suffix, ContentHasher, WorkspaceCache,
@@ -212,6 +212,12 @@ class MergeWorkflow:
             return blockers, warnings, info
         info["handoff_sha256"] = sha256_file(ho_p)
         self.handoff = handoff
+
+        # The filename format is fixed once prep has named the files in it (shared §6).
+        fmt_blocker = handoff_filename_format_blocker(handoff)
+        if fmt_blocker:
+            blockers.append(fmt_blocker)
+            return blockers, warnings, info
 
         # ---- Gathered preconditions (report every problem at once) ----------
         # External-tool preflight: merge fingerprints library targets with ImageMagick (magick) for
