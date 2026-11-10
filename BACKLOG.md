@@ -139,7 +139,10 @@ tells the user to plan first. From §4's structure: `RUL-structure_built_once`, 
 configuration, hard-coded by neither phase), `RUL-suffix_no_clobber` (zero-padded, deterministic, compared without
 regard to case, checked against the names on disk and those planned), `RUL-prep_name_provisional` (the raw timestamp,
 for ordering only, never corrected) and `RUL-geotag_name_final` (work out the final name, rename to it). From §7's tracks: `RUL-tracks_geotag_only` (what
-geotag alone does with the tracks, and what prep never does). Vasile caught
+geotag alone does with the tracks, and what prep never does). From §9's loop: `RUL-sort_photos_only` (only photos, and
+geotag refuses otherwise), `RUL-rerun_does_what_changed` (exactly what changed requires, and asks only about what is
+affected), `RUL-merge_is_terminal` (merge comes last, new media goes to a fresh workspace) and
+`RUL-more_dumps_until_merge` (a dump is accepted, the loop resumes from prep). Vasile caught
 the pattern in a proposed `RUL-failed_operation_clean` and wants the rest found.
 
 **What to do:** read every item against a stricter test — one property per item, which a single test could find broken

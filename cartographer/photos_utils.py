@@ -617,6 +617,15 @@ def plan_dependencies_fresh(ws: str, depends_on: dict, current_fingerprints: dic
     return stale
 
 
+FINALIZED_MEDIA_ARTIFACT = "photos-26-finalized-media.json"
+
+
+def finalized_media_path(ws: str) -> str:
+    """Where finalize records each by-dest photo as geotag left it (size, mtime): merge refuses a photo
+    that has changed since (shared §9)."""
+    return os.path.join(ws, CONTROL_DIR, FINALIZED_MEDIA_ARTIFACT)
+
+
 def write_json_artifact(path: str, obj: dict) -> str:
     """Atomically write a numbered artifact as deterministic, pretty-printed, sorted JSON
     (temp → atomic rename). Returns its SHA-256. Artifacts must be byte-deterministic for a given

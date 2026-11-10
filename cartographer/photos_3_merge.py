@@ -40,7 +40,7 @@ import sys
 from datetime import datetime, timezone
 
 from .photos_utils import (
-    CONFIG, CONTROL_DIR, config_path, handoff_path, guard_path, is_sealed,
+    CONFIG, CONTROL_DIR, FINALIZED_MEDIA_ARTIFACT, finalized_media_path, config_path, handoff_path, guard_path, is_sealed,
     validate_config, load_config, validate_merge_config, sha256_file, sha256_text, media_class_for_ext,
     folder_name, FOLDER_ROLES, missing_managed_folders, top_level_links, misplaced_top_level_entries, handoff_content_fingerprint, handoff_filename_format_blocker,
     folders_fingerprint, media_extensions_fingerprint,
@@ -255,8 +255,35 @@ class MergeWorkflow:
         # the handoff⨝photos-24 enumeration because geotag renamed by-dest without re-keying it.
         if calib_plan is not None:
             self._check_prep_consistency(handoff, calib_plan, info["library_root"], blockers)
+            self._check_unchanged_since_finalize(ws, calib_plan, info["library_root"], blockers)
 
         return blockers, warnings, info
+
+    def _check_unchanged_since_finalize(self, ws, calib_plan, library_root, blockers):
+        """Every by-dest photo still there is as finalize recorded it, by size and modification time: an
+        edit after finalize — a metadata write that leaves the pixels, and so the fingerprint, alone —
+        would otherwise reach the library unseen (shared §9). A photo gone is merge's resume case."""
+        try:
+            with open(finalized_media_path(ws)) as f:
+                media = (json.load(f) or {}).get("media") or {}
+        except (OSError, ValueError, AttributeError):
+            blockers.append(f"The finalized record {FINALIZED_MEDIA_ARTIFACT} is missing or unreadable — run "
+                            "`photos-cartographer geotag finalize` before merging.")
+            return
+        changed = []
+        for e in self.enumerate_finalized(calib_plan, library_root):
+            rel = e["by_dest_relpath"]
+            try:
+                st = os.stat(os.path.join(ws, rel))
+            except OSError:
+                continue
+            rec = media.get(rel) or {}
+            if (rec.get("size"), rec.get("mtime_ns")) != (st.st_size, st.st_mtime_ns):
+                changed.append(rel)
+        if changed:
+            blockers.append(f"{len(changed)} photo(s) changed since the workspace was finalized (e.g. {changed[0]}) "
+                            "— what reaches the library must be what geotag treated. Run prep, then geotag "
+                            "plan, execute and finalize again before merging.")
 
     def _check_geotag_finalized(self, ws, handoff, blockers):
         """Preconditions 1 and 1a. Geotag must have produced an executed plan (photos-24) with a

@@ -141,6 +141,11 @@ def _build_ws(tmp_path, photos, library_files=()):
     (ctl / "photos-25-execution-summary.json").write_text(json.dumps({"status": "success"}))
     (ctl / "photos-26-complete-log.json").write_text(json.dumps({"photos": {}}))
     (ctl / "photos-26-archive-manifest.json").write_text(json.dumps({"artifact_name": "m"}))
+    _bd = ws / "6-photos-by-dest"          # finalize's record of each by-dest photo as geotag left it
+    (ctl / "photos-26-finalized-media.json").write_text(json.dumps({"media": {
+        os.path.relpath(os.path.join(r, n), ws): {"size": os.stat(os.path.join(r, n)).st_size,
+                                                  "mtime_ns": os.stat(os.path.join(r, n)).st_mtime_ns}
+        for r, _d, fs in os.walk(_bd) for n in fs}}))
     return ws, lib, fp_by_path
 
 

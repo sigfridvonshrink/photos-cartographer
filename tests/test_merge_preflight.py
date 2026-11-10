@@ -37,7 +37,7 @@ def _ctl(ws):
 
 def _make(tmp_path, *, guard=True, config=True, library_in_config=True, bless_lib=True,
           handoff=True, handoff_current=True, cal_plan=True, cal_summary=True,
-          summary_status="success", complete_log=True, archive_manifest=True,
+          summary_status="success", complete_log=True, archive_manifest=True, finalized_media=True,
           bydest=("6-photos-by-dest/Trip/a.jpg",), sources_files=()):
     """Build a workspace that PASSES preflight by default, plus a sibling blessed library. Each
     keyword turns off / corrupts one precondition's input so a single check can be isolated."""
@@ -85,11 +85,33 @@ def _make(tmp_path, *, guard=True, config=True, library_in_config=True, bless_li
     if archive_manifest:
         (ctl / "photos-26-archive-manifest.json").write_text(
             json.dumps({"artifact_name": "photos-26-archive-manifest.json"}))
+    if finalized_media:
+        (ctl / "photos-26-finalized-media.json").write_text(json.dumps({"media": {
+            rel: {"size": os.stat(ws / rel).st_size, "mtime_ns": os.stat(ws / rel).st_mtime_ns}
+            for rel in bydest}}))
     return ws, lib
 
 
 def _pf(ws):
     return merge.MergeWorkflow(str(ws)).preflight()
+
+
+@pytest.mark.spec("RUL-merge_refuses_changed_since_finalize", test="TST-merge_preflight-photo_changed_since_finalize_blocks")
+def test_photo_changed_since_finalize_blocks(tmp_path):
+    ws, _ = _make(tmp_path)
+    p = ws / "6-photos-by-dest/Trip/a.jpg"
+    st = os.stat(p)
+    os.utime(p, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000_000))  # a metadata write: same pixels, new mtime
+    blockers, _, _ = _pf(ws)
+    assert len(blockers) == 1 and "changed since the workspace was finalized" in blockers[0] \
+        and "6-photos-by-dest/Trip/a.jpg" in blockers[0], blockers
+
+
+@pytest.mark.spec("RUL-merge_refuses_changed_since_finalize", test="TST-merge_preflight-no_finalized_media_record_blocks")
+def test_no_finalized_media_record_blocks(tmp_path):
+    ws, _ = _make(tmp_path, finalized_media=False)
+    blockers, _, _ = _pf(ws)
+    assert len(blockers) == 1 and "photos-26-finalized-media.json" in blockers[0], blockers
 
 
 @pytest.mark.spec("RUL-format_fixed_once_named", test="TST-merge_preflight-filename_format_other_than_prep_s_blocks")

@@ -10,9 +10,7 @@ RUL-log_human_readable
 RUL-log_records_gps_reverts
 RUL-package_contents
 RUL-package_self_describing
-RUL-prep_empties_inbox
 RUL-prep_takes_no_decision
-RUL-sort_photos_only
 RUL-stale_lock_recovered
 RUL-stale_takeover_conservative
 RUL-suffix_no_clobber
