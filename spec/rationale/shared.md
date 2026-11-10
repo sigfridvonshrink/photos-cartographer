@@ -221,6 +221,17 @@ no per-file "ignore list" to maintain — consolidating everything in one skippe
 registry that earlier designs needed.
 :::
 
+:::{rat} A duplicate and its explanation are not separated
+:id: RAT-quarantine_manifest_beside_duplicates
+:status: seed
+:justifies: RUL-control_records_together
+
+A quarantine manifest says why each file beside it was set aside. Kept in the quarantine folder it describes, it cannot
+be parted from those files: whoever looks at a duplicate finds its reason next to it, and pruning a folder removes the
+files and their manifest together, leaving no record of files that are gone. What each manifest said is kept in the
+transformation log, so pruning loses nothing of the record.
+:::
+
 :::{rat} A dump leaves no hidden litter
 :id: RAT-no_hidden_litter
 :status: seed
