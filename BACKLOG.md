@@ -129,7 +129,9 @@ before it is specified.
 **Why:** every corpus item states one obligation, and `tools/spec-build` refuses an item with more than one SHALL. But
 the count cannot see a second obligation folded into one sentence: in the pass that made every item one SHALL, about 90
 items had a restating second SHALL reworded into the first, and some of them still carry two obligations under one
-SHALL — `RUL-lock_fail_fast`, for one, stops at once, says the workspace is locked and produces nothing. Vasile caught
+SHALL — `RUL-lock_fail_fast`, for one, stops at once, says the workspace is locked and produces nothing;
+`RUL-replanning_keeps_the_prior` sets the saved plan aside and tells the user where; `RUL-no_plan_no_run` stops and
+tells the user to plan first. Vasile caught
 the pattern in a proposed `RUL-failed_operation_clean` and wants the rest found.
 
 **What to do:** read every item against a stricter test — one property per item, which a single test could find broken

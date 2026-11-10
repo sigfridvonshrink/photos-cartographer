@@ -10,12 +10,9 @@ RUL-log_entry_grows
 RUL-log_human_readable
 RUL-log_records_gps_reverts
 RUL-no_meaning_from_names
-RUL-no_plan_location_option
-RUL-no_plan_no_run
 RUL-nonconforming_name_is_a_dump
 RUL-package_contents
 RUL-package_self_describing
-RUL-plan_at_fixed_place
 RUL-prep_empties_inbox
 RUL-prep_takes_no_decision
 RUL-sort_photos_only

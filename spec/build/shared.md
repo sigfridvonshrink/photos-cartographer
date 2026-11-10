@@ -307,8 +307,8 @@ Hidden dotfiles in a dump area SHALL be swept to the quarantine (prep §3, §15)
 :status: seed
 :realises: RUL-plan_at_fixed_place, RUL-no_plan_location_option, RUL-no_plan_no_run
 
-The plan and decision artifacts SHALL be prep's `photos-10-prep-plan.json`, geotag's `photos-21`, `photos-23` and
-`photos-24`, and merge's `photos-30-merge-plan.json`, in `.photos-ingest/`: every phase's `plan` writes its file there,
+The plan and decision artifacts SHALL be prep's `photos-10-prep-plan.json`, geotag's `photos-21`, `photos-22`,
+`photos-23` and `photos-24`, and merge's `photos-30-merge-plan.json`, in `.photos-ingest/`: every phase's `plan` writes its file there,
 `dry-run` and `execute` read it there, and no command takes a path flag for it.
 :::
 
