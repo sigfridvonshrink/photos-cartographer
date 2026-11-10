@@ -455,6 +455,16 @@ folders, prep's normal scan never encounters them, so they can never be taken fo
 into the inbox and organized.
 :::
 
+:::{rat} The tracks are geotag's evidence
+:id: RAT-tracks_are_geotags_evidence
+:status: seed
+:justifies: RUL-tracks_geotag_only
+
+The tracks are evidence for a photo's time and place, and only geotag decides those: prep never plans a time or a
+position, so it has no use for them. A phase that read them would also have to treat every change to them as a change
+to its own records.
+:::
+
 :::{rat} A track among the strays could be deleted with them
 :id: RAT-tracks_never_strays
 :status: seed

@@ -138,7 +138,8 @@ tells the user to plan first. From §4's structure: `RUL-structure_built_once`, 
 (carry a version, have it checked). From §6's filename format: `RUL-one_filename_format` (one format, set by the
 configuration, hard-coded by neither phase), `RUL-suffix_no_clobber` (zero-padded, deterministic, compared without
 regard to case, checked against the names on disk and those planned), `RUL-prep_name_provisional` (the raw timestamp,
-for ordering only, never corrected) and `RUL-geotag_name_final` (work out the final name, rename to it). Vasile caught
+for ordering only, never corrected) and `RUL-geotag_name_final` (work out the final name, rename to it). From §7's tracks: `RUL-tracks_geotag_only` (what
+geotag alone does with the tracks, and what prep never does). Vasile caught
 the pattern in a proposed `RUL-failed_operation_clean` and wants the rest found.
 
 **What to do:** read every item against a stricter test — one property per item, which a single test could find broken
