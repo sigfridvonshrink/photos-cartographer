@@ -358,7 +358,7 @@ unknown and geotag asks.
 
 :::{rat} One key, so the names cannot drift apart
 :id: RAT-one_format_no_drift
-:status: seed
+:status: ruled
 :justifies: RUL-one_filename_format
 
 With one format key for the whole pipeline, the provisional names prep assigns and the final names geotag assigns are
@@ -367,7 +367,7 @@ guaranteed to share the same textual shape and can never drift apart; there is n
 
 :::{rat} The same shape, a different value, on purpose
 :id: RAT-same_shape_different_value
-:status: seed
+:status: ruled
 :justifies: RUL-prep_name_provisional, RUL-geotag_name_final, RUL-uncorrected_keeps_its_name
 
 Both phases use the same format, but the **value** differs by phase and that difference is intentional. Because the
@@ -377,7 +377,7 @@ file's provisional and final names coincide, so geotag plans no needless rename 
 
 :::{rat} The first free name makes the two names coincide
 :id: RAT-bare_first
-:status: seed
+:status: ruled
 :justifies: RUL-suffix_choice_by_phase, RUL-uncorrected_keeps_its_name
 
 Bare-first is what makes an uncorrected file's provisional (prep) and final (geotag) names coincide, so geotag plans no
@@ -386,7 +386,7 @@ needless rename; the two phases use the identical rule so they never disagree on
 
 :::{rat} The library is append-only
 :id: RAT-merge_appends
-:status: seed
+:status: ruled
 :justifies: RUL-merge_suffix_above_highest
 
 In the library a gap in the numbers is a photo the user deleted; giving its number to a new photo would hand it a name
@@ -395,7 +395,7 @@ a backup or an export may still use for the deleted one.
 
 :::{rat} Prep cannot know a photo's true time
 :id: RAT-prep_cannot_know_the_time
-:status: seed
+:status: ruled
 :justifies: RUL-prep_name_provisional
 
 Prep runs before anyone knows a photo's true time: the camera's clock offset comes from geotag, by matching against the
@@ -405,7 +405,7 @@ the camera recorded — enough to put a day's photos in order, not enough for a 
 
 :::{rat} A name in the time of day where the photo was taken
 :id: RAT-name_in_local_time
-:status: seed
+:status: ruled
 :justifies: RUL-geotag_name_final
 
 A name is read by a person looking for a photo, who remembers the time of day where it was taken. A camera's clock may
@@ -415,7 +415,7 @@ matches the memory.
 
 :::{rat} Outside the inbox, every name is the pipeline's
 :id: RAT-misnamed_not_ignored
-:status: seed
+:status: ruled
 :justifies: RUL-misnamed_file_stops_prep
 
 Outside the inbox every name is one the pipeline gave. A name that is not means a file was renamed or put there by
@@ -425,7 +425,7 @@ name that looks trusted. Only the inbox takes files as they come.
 
 :::{rat} The JPG named like its RAW
 :id: RAT-redundant_named_like_its_raw
-:status: seed
+:status: ruled
 :justifies: RUL-redundant_jpg_timestamp_named
 
 A redundant JPG is the same shot as the RAW kept in the dated folders: named from the same time, the two names show it,
@@ -434,7 +434,7 @@ and the JPG's name is checked like any other outside the inbox.
 
 :::{rat} One format for a workspace's life
 :id: RAT-format_fixed_per_workspace
-:status: seed
+:status: ruled
 :justifies: RUL-format_fixed_once_named
 
 Merge never renames a file in the library, so after a change the library holds both formats whatever the workspace

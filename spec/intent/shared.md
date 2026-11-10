@@ -952,7 +952,7 @@ unknown otherwise.
 
 :::{def} A timestamp name
 :id: DEF-timestamp_name
-:status: seed
+:status: ruled
 :uses: DEF-prep, DEF-geotag
 
 A file's **timestamp name** is the name prep and geotag give it from its timestamp, in the one format the configuration
@@ -961,7 +961,7 @@ sets, followed by a differentiating suffix when that name is taken.
 
 :::{rul} One format, set by the configuration
 :id: RUL-one_filename_format
-:status: seed
+:status: ruled
 :criticality: med
 :verify: incidental
 :aliases: fname-single-shared-key-1
@@ -973,7 +973,7 @@ the configuration and hard-coded by neither.
 
 :::{rul} A taken name gets a suffix, never clobbering
 :id: RUL-suffix_no_clobber
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -1008,7 +1008,7 @@ Merge SHALL take the suffix above the highest already used for a name, never a l
 
 :::{rul} Prep's name is provisional
 :id: RUL-prep_name_provisional
-:status: seed
+:status: ruled
 :criticality: med
 :verify: incidental
 :aliases: fname-prep-provisional-1
@@ -1019,7 +1019,7 @@ provisional name, which prep never corrects, resolves to a timezone or converts 
 
 :::{rul} Geotag's name is final
 :id: RUL-geotag_name_final
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: fname-geotag-final-1
@@ -1030,7 +1030,7 @@ destination's civil timezone — and rename it to that final name.
 
 :::{rul} An uncorrected file keeps its name
 :id: RUL-uncorrected_keeps_its_name
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: fname-uncorrected-no-rename-1
@@ -1042,7 +1042,7 @@ file whose time is not corrected.
 
 :::{def} An untimed name
 :id: DEF-untimed_name
-:status: seed
+:status: ruled
 :uses: DEF-prep
 
 A file's **untimed name** is the name prep gives a media file with no recorded time: the name it came with, behind a
@@ -1051,7 +1051,7 @@ mark that says so.
 
 :::{rul} A misnamed file outside the inbox stops prep
 :id: RUL-misnamed_file_stops_prep
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :aliases: fname-nonconforming-redumped-1
@@ -1063,7 +1063,7 @@ SHALL stop prep.
 
 :::{rul} Every misnamed file is named
 :id: RUL-misnamed_file_named
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-misnamed_file_stops_prep
@@ -1073,7 +1073,7 @@ Prep SHALL name every misnamed file it finds, with the name the file should carr
 
 :::{rul} No meaning is read from a file's name
 :id: RUL-no_meaning_from_names
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -1084,7 +1084,7 @@ No phase SHALL read meaning from a file's name: its timestamp comes from its met
 
 :::{rul} A redundant JPG gets its timestamp name
 :id: RUL-redundant_jpg_timestamp_named
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :uses: DEF-timestamp_name
@@ -1094,7 +1094,7 @@ A JPG prep sets aside as redundant to its RAW SHALL get its timestamp name, as a
 
 :::{rul} The format is fixed once files are named in it
 :id: RUL-format_fixed_once_named
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :uses: RUL-one_filename_format
