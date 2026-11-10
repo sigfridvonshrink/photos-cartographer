@@ -378,7 +378,7 @@ file's provisional and final names coincide, so geotag plans no needless rename 
 :::{rat} The first free name makes the two names coincide
 :id: RAT-bare_first
 :status: seed
-:justifies: RUL-suffix_choice_by_phase, RUL-uncorrected_keeps_its_name, RUL-merge_suffix_above_highest
+:justifies: RUL-suffix_choice_by_phase, RUL-uncorrected_keeps_its_name
 
 Bare-first is what makes an uncorrected file's provisional (prep) and final (geotag) names coincide, so geotag plans no
 needless rename; the two phases use the identical rule so they never disagree on a name.
@@ -387,10 +387,30 @@ needless rename; the two phases use the identical rule so they never disagree on
 :::{rat} The library is append-only
 :id: RAT-merge_appends
 :status: seed
-:justifies: RUL-suffix_choice_by_phase, RUL-merge_suffix_above_highest
+:justifies: RUL-merge_suffix_above_highest
 
-Merge appends at `max+1` rather than reusing a freed-up lower number because the library is append-only and a re-run
-must reproduce the same name.
+In the library a gap in the numbers is a photo the user deleted; giving its number to a new photo would hand it a name
+a backup or an export may still use for the deleted one.
+:::
+
+:::{rat} Prep cannot know a photo's true time
+:id: RAT-prep_cannot_know_the_time
+:status: seed
+:justifies: RUL-prep_name_provisional
+
+Prep runs before anyone knows a photo's true time: the camera's clock offset comes from geotag, by matching against the
+tracks or from the user, and the timezone from the destination the user sorts the photo into. All prep has is the time
+the camera recorded — enough to put a day's photos in order, not enough for a name to keep.
+:::
+
+:::{rat} A name in the time of day where the photo was taken
+:id: RAT-name_in_local_time
+:status: seed
+:justifies: RUL-geotag_name_final
+
+A name is read by a person looking for a photo, who remembers the time of day where it was taken. A camera's clock may
+be off or still on home time, and UTC is nobody's time of day; the corrected time at the destination is the one that
+matches the memory.
 :::
 
 ## 7. The tracks, kept outside the managed folders

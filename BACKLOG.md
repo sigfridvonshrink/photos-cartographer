@@ -135,7 +135,10 @@ tells the user to plan first. From §4's structure: `RUL-structure_built_once`, 
 `RUL-first_dump_at_top_level`, `RUL-link_named`, `RUL-geotag_merge_check_top_level_links`, `RUL-missing_folder_blocks`,
 `RUL-missing_folder_named`, and `RUL-no_links` with its four cases. From §5's camera groups:
 `RUL-prep_derives_camera_group` (derive the group, record it in two places) and `RUL-camera_group_derivation_versioned`
-(carry a version, have it checked). Vasile caught
+(carry a version, have it checked). From §6's filename format: `RUL-one_filename_format` (one format, set by the
+configuration, hard-coded by neither phase), `RUL-suffix_no_clobber` (zero-padded, deterministic, compared without
+regard to case, checked against the names on disk and those planned), `RUL-prep_name_provisional` (the raw timestamp,
+for ordering only, never corrected) and `RUL-geotag_name_final` (work out the final name, rename to it). Vasile caught
 the pattern in a proposed `RUL-failed_operation_clean` and wants the rest found.
 
 **What to do:** read every item against a stricter test — one property per item, which a single test could find broken

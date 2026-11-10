@@ -39,7 +39,7 @@ from .photos_utils import (
     selected_gpx_root, is_gpx_file, CAMERA_IDENTITY_FIELDS, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
     missing_managed_folders, by_dest_reprep_pending,
     json_dependency, verify_json_dependency, handoff_content_fingerprint, write_json_artifact, write_versioned_json, db_path, ensure_control_dir,
-    journal_path, ContentHasher, _move_no_clobber,
+    journal_path, ContentHasher, _move_no_clobber, allocate_suffix,
     prep_log_path, write_db_snapshot, take_zfs_snapshot,
     WorkspaceLock, ProgressCoordinator,
 )
@@ -94,7 +94,6 @@ __all__ = [
     '_expand_destinations',
     '_dest_label',
     'destination_local_basename',
-    '_allocate_name',
     'plan_renames',
     '_GPS_OP_ORIGIN',
     '_GPS_OP_MARKER',
@@ -756,16 +755,14 @@ def destination_local_basename(resolved_utc, tz, fmt, ext):
     return _parse_utc(resolved_utc).astimezone(zoneinfo.ZoneInfo(tz)).strftime(fmt) + (ext or "")
 
 
-def _allocate_name(stem, ext, occupied):
-    """First free '<stem><ext>' / '<stem>-NNN<ext>' not in `occupied` (compared case-insensitively),
-    added to `occupied` and returned — the deterministic no-clobber suffix allocation (§27)."""
-    cand = stem + ext
-    idx = 0
-    while cand.lower() in occupied:
-        idx += 1
-        cand = f"{stem}-{idx:03d}{ext}"
-    occupied.add(cand.lower())
-    return cand
+def _named_for(name, stem):
+    """Whether `name` (without its extension) is `stem` or `stem-NNN`: the file already carries the
+    timestamp it would be renamed to, its suffix aside. Such a file keeps its name — renaming it to
+    another suffix of the same timestamp would change nothing, and on the next run back again."""
+    own = os.path.splitext(name)[0].lower()
+    stem = stem.lower()
+    rest = own[len(stem) + 1:]
+    return own == stem or (own.startswith(stem + "-") and len(rest) >= 3 and rest.isdigit())
 
 
 def plan_renames(files, fmt):
@@ -782,10 +779,11 @@ def plan_renames(files, fmt):
         name = os.path.basename(rel)
         ext = os.path.splitext(name)[1]
         base = destination_local_basename(f.get("resolved_utc"), f.get("destination_timezone"), fmt, ext)
-        if base is None or name.lower() == base.lower():
+        if base is None or _named_for(name, os.path.splitext(base)[0]):
             out.append({"relative_path": rel, "current_name": name, "planned_name": name, "rename": False})
             continue
-        planned = _allocate_name(os.path.splitext(base)[0], ext, occupied)
+        # The first free name, by the one rule prep also uses (shared §6).
+        planned = allocate_suffix(os.path.splitext(base)[0], ext.lstrip("."), occupied, bare_first=True)
         out.append({"relative_path": rel, "current_name": name, "planned_name": planned, "rename": True})
     return out
 
