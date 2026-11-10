@@ -407,7 +407,7 @@ def test_nested_directory_symlink_in_managed_folder_blocked(tmp_path, monkeypatc
     assert any("Forbidden symlink detected" in b and "nested" in b for b in plan.blockers), plan.blockers
 
 
-@pytest.mark.spec("prep-reserved-names-not-moved-1")
+@pytest.mark.spec("prep-reserved-names-not-moved-1", test="TST-workspace_prep-init_does_not_move_a_dump_folder_named_like_a_managed_folder")
 def test_init_does_not_move_a_dump_folder_named_like_a_managed_folder(tmp_path, monkeypatch):
     """Reserved-name guard (prep §6.2): on an INIT run a base entry whose name collides with a managed
     folder (e.g. an as-arrived dump dir named `5-photos-by-date`) is treated AS that managed folder —
@@ -648,7 +648,7 @@ def test_a_blocker_is_reported_textually_and_never_silently_skipped(tmp_path, mo
     assert not any(p.suffix == ".jpg" for p in (ws / "5-photos-by-date").rglob("*"))
 
 
-@pytest.mark.spec("prep-init-excludes-managed-from-move-1")
+@pytest.mark.spec("prep-init-excludes-managed-from-move-1", test="TST-workspace_prep-init_move_excludes_managed_folders_and_control_dirs")
 def test_init_move_excludes_managed_folders_and_control_dirs(tmp_path, monkeypatch):
     """§3.1: init's base-dump consolidation moves genuine root dumps into 0-sources but EXCLUDES the
     managed 0-6 folders and the control/dot directories (.photos-ingest, .git). A real root dump file

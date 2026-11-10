@@ -316,7 +316,7 @@ A configuration holding a setting cartographer does not know SHALL stop the run,
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: config-seeded-by-prep-1
+:aliases: config-seeded-by-prep-1, prep-seeds-config-if-absent-1, prep-reads-config-authoritative-1
 
 A prep run SHALL create the configuration from the seed defaults when it finds none, and only then: a configuration it
 finds, it uses as it is.
@@ -340,7 +340,7 @@ become — the defaults serving only to seed a new workspace.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: config-prep-sole-writer-1, config-merge-readonly-1
+:aliases: config-prep-sole-writer-1, config-merge-readonly-1, prep-sole-config-writer-1
 
 The configuration SHALL be written only when prep seeds it, when the user edits it by hand, and by the library setup
 below — never by geotag, and never by merge's planning, dry run or execution.
@@ -612,7 +612,7 @@ phase's output.
 :status: ruled
 :criticality: med
 :verify: incidental
-:aliases: ctrl-skip-set-1
+:aliases: ctrl-skip-set-1, prep-scan-skips-control-subtrees-1
 :refines: RUL-control_records_never_media
 :uses: DEF-strays_folder
 
@@ -625,6 +625,7 @@ version-control directory, and the strays folder with everything in it; and ever
 :status: ruled
 :criticality: med
 :verify: incidental
+:aliases: prep-strays-excluded-from-scan-1
 :refines: RUL-not_inventoried
 
 Nothing SHALL process the strays folder's contents again: prep writes into it, but never scans it.
@@ -635,7 +636,7 @@ Nothing SHALL process the strays folder's contents again: prep writes into it, b
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: ctrl-dotfiles-swept-quarantine-1
+:aliases: ctrl-dotfiles-swept-quarantine-1, prep-hidden-dump-sweep-1, prep-init-sweeps-hidden-to-quarantine-1, prep-no-sweep-non-dump-dotfiles-1
 
 Hidden files that arrive in a dump area — the workspace's top level on the run that initializes it, or the inbox — SHALL
 be moved to the recoverable quarantine, not merely left out.
@@ -752,6 +753,7 @@ top level that does not belong there, a symbolic link among its files, a managed
 :criticality: med
 :anti: yes
 :verify: required
+:aliases: prep-init-creates-structure-1
 :upholds: INV-undisturbed_shape
 
 Prep SHALL create the full structure of managed folders exactly once, when it initializes the workspace, and never
@@ -776,7 +778,7 @@ placement, not structure.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: struct-base-folders-only-1
+:aliases: struct-base-folders-only-1, prep-post-init-base-folders-only-1
 :upholds: INV-undisturbed_shape
 
 The top level of an initialized workspace SHALL hold only the managed folders, the control records' place, the
@@ -1119,7 +1121,7 @@ photos along them by interpolation or extrapolation. The configuration says wher
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: gpx-prep-unaware-1
+:aliases: gpx-prep-unaware-1, prep-gpx-unaware-1
 :uses: DEF-tracks
 
 Geotag SHALL be the only phase that reads the tracks — scanning their location, parsing them, fingerprinting them and
@@ -1132,7 +1134,7 @@ using them as evidence; prep never reads, parses, fingerprints or moves them, no
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: gpx-root-outside-tree-1, gpx-prep-defensive-skip-1
+:aliases: gpx-root-outside-tree-1, gpx-prep-defensive-skip-1, prep-gpx-inside-tree-skip-1
 :uses: DEF-tracks
 :refines: RUL-config_validated_before_use
 
@@ -1916,7 +1918,7 @@ workspace as a cache would be.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: db-disjoint-writers-1
+:aliases: db-disjoint-writers-1, prep-sole-cache-writer-1
 :uses: DEF-workspace_database
 :refines: RUL-phase_writes_own_records
 
