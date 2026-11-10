@@ -58,7 +58,7 @@ def test_by_dest_read_only():
     assert 'class WorkspacePrepWorkflow:' in dir(photos_1_prep) or hasattr(photos_1_prep, 'WorkspacePrepWorkflow')
 
 
-@pytest.mark.spec("prep-allowed-op-types-1")
+@pytest.mark.spec("prep-allowed-op-types-1", "RUL-prep_no_time_or_gps", "BLD-prep_operation_kinds", test="TST-prep_split-execute_rejects_forbidden_operation_types")
 def test_execute_rejects_forbidden_operation_types(tmp_path):
     # If we pass an invalid op.type, execution should raise ValueError
     executor = photos_1_prep.PlanExecutor(str(tmp_path))
@@ -227,3 +227,22 @@ def test_dry_run_rejects_metadata_write(tmp_path):
     )
     with pytest.raises(ValueError, match="Operation type 'metadata_write' is not allowed in photos-1-prep"):
         photos_1_prep.PlanValidator.validate_plan_preflight(plan, str(tmp_path))
+
+
+@pytest.mark.spec("RUL-prep_leaves_by_dest_as_found", "BLD-by_dest_ops_refused", test="TST-prep_split-execute_rejects_any_operation_in_by_dest")
+@pytest.mark.parametrize("source,destination", [
+    ("0-sources/a.jpg", "6-photos-by-dest/Trip/a.jpg"),                 # into it
+    ("6-photos-by-dest/Trip/a.jpg", "5-photos-by-date/a.jpg"),          # out of it
+    ("6-photos-by-dest/Trip/a.jpg", "6-photos-by-dest/Rome/a.jpg"),     # within it
+])
+def test_execute_rejects_any_operation_in_by_dest(tmp_path, source, destination):
+    executor = photos_1_prep.PlanExecutor(str(tmp_path))
+    plan = photos_1_prep.Plan(
+        plan_version=photos_1_prep.PLAN_SCHEMA_VERSION, plan_id="test", command="prep", created_at="now",
+        workspace_root=str(tmp_path), digikam_root=None,
+        config_fingerprint=photos_1_prep.Fingerprint("sha256", "val"), instruction_fingerprints={},
+        locks_required=[], summary={}, blockers=[], warnings=[],
+        operations=[photos_1_prep.Operation(operation_id="op-1", type="move_no_clobber", reason="test",
+                                            source=source, destination=destination)])
+    with pytest.raises(ValueError, match="forbidden on (source|destination) in 6-photos-by-dest"):
+        executor.execute(plan, str(tmp_path / "j.json"))

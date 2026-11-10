@@ -1,0 +1,47 @@
+# section	sentence (verbatim)	to	note -- the ledger of the prep spec's conversion (tools/spec-ledger)
+1	## 1. Purpose	dropped	a heading; the corpus's documents carry their own
+1	This document defines the complete, self-contained workflow for the preparation phase implemented by `photos-1-prep`.	dropped	document structure: the corpus index and each document's introduction replace it
+1	The prep phase exists to take an unorganized workspace and leave it in a clean, deduplicated, date-organized state so the user can then move photos into the correct destination folders under `6-photos-by-dest`, after which the geotag phase (`photos-2-geotag`, see `photos-2-geotag-workflow.md`) takes over.	DEF-prep DEF-operator_loop	
+1	The prep phase:	dropped	the lead-in of a summary list; each entry names the items it restates
+1	1. **initializes** the workspace on first run — creating the `0`–`6` folder structure and control directory, moving any as-arrived base dump into `0-sources/`, and writing the root sentinel last (Sections 3.1, 7.1);	defer:3.1	
+1	2. seeds the workspace configuration (`photos-00-config.json`) on first run if absent, then reads it as authoritative;	RUL-config_seeded_once RUL-config_authoritative	
+1	3. inventories the workspace safely and blocks on unsafe inputs (a sealed workspace; a misplaced root entry — loose file, non-managed folder, or symlink — on an initialized workspace; a missing managed folder; or a symlink anywhere among managed files, including nested directory symlinks, Section 6.2);	defer:6.2	
+1	4. takes each dump from `0-sources/` (the one inbox) without flattening it, resolving destination-name collisions in memory at planning (Section 7.2);	defer:7.2	
+1	5. normalizes file extensions;	defer:7.3	
+1	6. separates redundant JPEGs that have a RAW sibling;	defer:7.4	
+1	7. detects content duplicates and quarantines them recoverably;	defer:7.5	
+1	8. organizes timestamped media into by-date folders, untimestamped media into a missing-metadata folder, and **non-media into the strays folder `1-strays/`** — leaving `0-sources/` empty (Sections 7.6, 18, 3.2);	defer:7.6	
+1	9. maintains a SQLite fingerprint/metadata cache so repeated runs are cheap and idempotent;	defer:9	
+1	10. passively caches the EXIF/QuickTime/XMP facts the geotag phase will need, without making any time/GPS decision;	defer:12	
+1	11. writes a dependency-fingerprinted handoff manifest for the geotag phase;	defer:16	
+1	12. writes a complete, human-readable end-of-prep audit log (`photos-15-prep-log.json`) recording every transformation each photo underwent in prep — a self-sufficient record even if no later phase ever runs.	defer:16.1	
+1	The prep phase ends when timestamped photos are in `5-photos-by-date` and videos in `4-videos-by-date`.	DEF-operator_loop	
+1	Only the photos are then moved by the user into `6-photos-by-dest`; videos stay in `4-videos-by-date` and never enter by-dest (Section 2.4).	RUL-sort_photos_only	
+1	This is a workflow specification, not a script implementation specification.	dropped	document structure: the corpus keeps intent and build apart
+1	It describes *what* the prep phase does and the invariants it must uphold, not the staged build or class layout that implements it; those details live in the prep implementation/build notes and are out of scope here.	dropped	document structure: the corpus keeps intent and build apart
+1	Cross-phase facts shared with geotag — the workspace lock, the pre-mutation snapshot (`zfs`) mechanism, the shared configuration object, the workspace control directory, the camera-group identity key, the filename timestamp format, the GPX root, and the end-to-end operator loop — are defined in `photos-shared-contract.md` and are authoritative there.	dropped	document structure: the corpus links prep's items to the shared ones
+1	This document references that contract rather than restating it.	dropped	document structure: the corpus links prep's items to the shared ones
+2	## 2. Scope and boundary	dropped	a heading; the corpus's documents carry their own
+2.1	### 2.1 Prep is prep-only	dropped	a heading; the corpus's documents carry their own
+2.1	`photos-1-prep` owns filesystem organization, deduplication, cache/fingerprint maintenance, passive metadata acceleration, and handoff generation.	DEF-prep	
+2.1	It must not plan, infer, write, or apply any time or GPS correction.	RUL-prep_no_time_or_gps BLD-prep_operation_kinds	
+2.1	The full prohibition list is in Section 20.	dropped	a cross-reference: §20's items are linked where they belong
+2.2	### 2.2 `6-photos-by-dest` is read-only for media	dropped	a heading; the corpus's documents carry their own
+2.2	`photos-1-prep` scans and accounts for `6-photos-by-dest` but must never move, rename, quarantine, delete, touch, or metadata-write any file inside it (Section 11).	RUL-prep_leaves_by_dest_as_found BLD-by_dest_ops_refused	
+2.3	### 2.3 The end of prep is the start of geotag	dropped	a heading; the corpus's documents carry their own
+2.3	Prep leaves organized media in `4-videos-by-date` and `5-photos-by-date`.	DEF-operator_loop	
+2.3	The user then moves the **photos** from `5-photos-by-date` into destination folders under `6-photos-by-dest`; videos remain in `4-videos-by-date` and are never moved into by-dest (Section 2.4).	DEF-operator_loop RUL-sort_photos_only	
+2.3	Geotag (`photos-2-geotag-workflow.md`) requires that `5-photos-by-date` contain no photos, that `6-photos-by-dest` be photo-only (no non-media files and no videos), and that no `jpg`/`tif` development subfolders exist under `6-photos-by-dest` before it will run.	RUL-geotag_gates	
+2.3	Prep itself does not perform that move and does not enforce the geotag preconditions; it only produces the by-date working set and the handoff.	RUL-prep_leaves_by_dest_as_found	'does not enforce the geotag preconditions' dropped: prep blocks a video in photos by date or by destination (§6.2)
+2.3	Crucially, when the user does move files into by-dest, the next prep run must recognize the move rather than rescan (Section 10.1); this re-prep is mandatory before geotagging the moved files, and applies every time new media enters by-dest — including after a prior successful geotag.	RUL-prep_records_sort RUL-sort_recorded_by_stat RUL-more_dumps_until_merge	
+2.3	The full cross-phase cycle is in the shared contract (`photos-shared-contract.md` Section 10).	dropped	a cross-reference: the corpus links to the shared loop
+2.4	### 2.4 Videos are semi-foreign	dropped	a heading; the corpus's documents carry their own
+2.4	The pipeline's main target is **photos**.	RAT-videos_kept_not_corrected	
+2.4	Videos are handled as **semi-foreign**: prep inventories, deduplicates, and date-organizes them into `4-videos-by-date`, and names them by date with the same convention as photos — but that is the extent of their special treatment.	RUL-videos_by_date	
+2.4	Videos are renamed naively (by their own timestamp) and otherwise left alone; in particular they are **not** time/GPS-geotagged downstream (geotag `photos-2-geotag-workflow.md` Section 7.3).	RUL-videos_by_date RUL-sort_photos_only	
+2.4	They are organized so they aren't lost or scattered, not because the pipeline aims to correct them.	RAT-videos_kept_not_corrected	
+2.4	Videos live **only** in `4-videos-by-date`.	defer:6.2	
+2.4	They must **never** appear in `5-photos-by-date` or `6-photos-by-dest`, and the user does not sort them into destinations.	defer:6.2	
+2.4	This is a hard invariant: a `video`-class file found in **either** `5-photos-by-date` **or** `6-photos-by-dest` is a **prep-side hard block** (Section 6.1, Section 6.2 item 6) — prep reports the offending path and produces no plan.	defer:6.2	
+2.4	Geotag independently re-guards the same condition for by-dest as a second line of defence (geotag Section 7.3), but the primary stop is prep's band-misplacement guard, which fires for a video in by-dest exactly as for one in by-date.	RUL-sort_photos_only RUL-geotag_gates	
+2.4	By-date and by-dest are photo-only (`image`/`raw`); the video band is separate and stays separate.	defer:6.2	
