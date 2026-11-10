@@ -376,7 +376,7 @@ item 7, geotag §13, merge precondition 0c.
 
 :::{bld} `camera_group_key` and its version
 :id: BLD-camera_group_key
-:status: seed
+:status: ruled
 :realises: DEF-camera_group, RUL-prep_derives_camera_group, RUL-geotag_reuses_camera_group
 
 The key SHALL be `camera_group_key`, computed by prep from the serial, make, model and owner fields and emitted in both
@@ -385,7 +385,7 @@ the handoff manifest and SQLite (prep §12); geotag consumes and classifies it (
 
 :::{bld} `CAMERA_GROUP_KEY_VERSION`
 :id: BLD-camera_group_key_version
-:status: seed
+:status: ruled
 :realises: RUL-camera_group_derivation_versioned
 
 The derivation of `camera_group_key` SHALL be versioned by `CAMERA_GROUP_KEY_VERSION`, recorded with each file's
@@ -395,7 +395,7 @@ plan against every file of the handoff, and by geotag's execute against its plan
 
 :::{bld} A camera group is known when it is listed
 :id: BLD-known_camera_group
-:status: seed
+:status: ruled
 :realises: RUL-known_when_classified
 
 A group SHALL be known when its key is listed under `camera_time_and_timezone_policy.device_groups` — `phones` (mobile)

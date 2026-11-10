@@ -335,7 +335,7 @@ operator's task.
 
 :::{rat} Grouping computed once is never reinvented
 :id: RAT-grouping_computed_once
-:status: seed
+:status: ruled
 :justifies: RUL-prep_derives_camera_group, RUL-geotag_reuses_camera_group
 
 Two derivations of a camera's identity could disagree: a file grouped one way by prep and another way by geotag would
@@ -345,7 +345,7 @@ everywhere it appears. One derivation, by prep, recorded with the file and reuse
 
 :::{rat} Only the user knows a group's class
 :id: RAT-class_from_the_user
-:status: seed
+:status: ruled
 :justifies: RUL-known_when_classified
 
 Geotag treats the two classes differently: a phone keeps network time and is solved file by file, while a camera's clock
