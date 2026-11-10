@@ -304,7 +304,7 @@ Hidden dotfiles in a dump area SHALL be swept to the quarantine (prep §3, §15)
 
 :::{bld} The plans' fixed paths
 :id: BLD-canonical_plan_paths
-:status: seed
+:status: ruled
 :realises: RUL-plan_at_fixed_place, RUL-no_plan_location_option, RUL-no_plan_no_run
 
 The plan and decision artifacts SHALL be prep's `photos-10-prep-plan.json`, geotag's `photos-21`, `photos-22`,
@@ -314,7 +314,7 @@ The plan and decision artifacts SHALL be prep's `photos-10-prep-plan.json`, geot
 
 :::{bld} A superseded plan goes aside under `-NNN`
 :id: BLD-plan_backups
-:status: seed
+:status: ruled
 :realises: RUL-replanning_keeps_the_prior
 
 A differing re-plan SHALL first rename the existing artifact under the shared incremental `-NNN` suffix (shared §7.2) —
@@ -325,7 +325,7 @@ convention governs the plan and decision artifacts.
 
 :::{bld} A byte-identical re-plan writes nothing
 :id: BLD-identical_replan_writes_nothing
-:status: seed
+:status: ruled
 :realises: RUL-unchanged_replan_writes_nothing
 
 A re-plan whose content is byte-identical to the saved artifact SHALL write nothing and back up nothing.
@@ -333,7 +333,7 @@ A re-plan whose content is byte-identical to the saved artifact SHALL write noth
 
 :::{bld} The handoff's two hashes
 :id: BLD-handoff_hashes
-:status: seed
+:status: ruled
 :realises: RUL-handoff_verified_by_content, RUL-run_only_refresh_restales_nothing
 
 The handoff SHALL be `photos-11-handoff.json` in `.photos-ingest/`, which geotag checks by its `content_fingerprint` —

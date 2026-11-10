@@ -643,7 +643,7 @@ be moved to the recoverable quarantine, not merely left out.
 
 :::{rul} Each plan has one fixed place
 :id: RUL-plan_at_fixed_place
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: plan-canonical-path-1
@@ -654,7 +654,7 @@ phase's planning writes it and its dry run and its execution read it.
 
 :::{rul} No command is told where a plan is
 :id: RUL-no_plan_location_option
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -666,7 +666,7 @@ No command SHALL take an option saying where to put a plan or where to find one;
 
 :::{rul} No plan, no dry run and no execution
 :id: RUL-no_plan_no_run
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -677,7 +677,7 @@ A dry run or an execution that finds no plan in its place SHALL stop, and tell t
 
 :::{rul} A dry run summarises the real plan
 :id: RUL-dry_run_summarises_the_real_plan
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -689,7 +689,7 @@ simulation.
 
 :::{rul} Re-planning sets the prior plan aside
 :id: RUL-replanning_keeps_the_prior
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -701,7 +701,7 @@ one is first set aside, recoverably, and the user told where.
 
 :::{rul} An unchanged re-plan writes nothing
 :id: RUL-unchanged_replan_writes_nothing
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: plan-unchanged-no-backup-1
@@ -712,7 +712,7 @@ A re-plan whose result is identical to what is saved SHALL write nothing and set
 
 :::{rul} Geotag verifies the handoff by its content
 :id: RUL-handoff_verified_by_content
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: handoff-verified-by-content-1
@@ -724,7 +724,7 @@ the one its dependencies recorded — never by the file's exact bytes.
 
 :::{rul} Refreshing what describes the run restales nothing
 :id: RUL-run_only_refresh_restales_nothing
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
