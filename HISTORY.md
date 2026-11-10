@@ -2,6 +2,62 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-10 — §0–§10 of the shared contract ruled; every rule justified
+
+Asked whether to convert every spec first and rule at the end, or rule now: *"What do you think is best: convert
+everything and then rule? or rule now and then convert the rest?"* — rule the shared contract's §0–§10 now, then each
+phase spec right after converting it, `philosophy.md` last and BACKLOG item 7 at the very end: *"ok"*. Each topic was
+checked against the code first; most turned up a defect.
+
+- **§0, the pipeline** — `DEF-workspace` said merge empties the workspace, `DEF-merge` that merge always seals. The
+  rewording carried rules into definitions: *"yes but isn't 2 again compound ("and then")?"* Both definitions now only
+  define, the rules living in their own items: *"yes"*.
+- **§1, the lock** — the decision editor saved without the workspace lock, so a geotag run could overwrite a save; its
+  save now takes the lock, its display stays unlocked: *"1 b"*. Geotag and merge left a `.photos-ingest/` behind in any
+  folder they were run in; only prep now creates it, and geotag locks before it reads: *"2 ok but is it compound? / 3
+  ok"*, then *"ok and split off “geotag and merge stop where there is no control directory” as its own build item"*.
+- **§2, the snapshot** — merge snapshotted only the library, so rolling a merge back lost the photos it had moved out of
+  the workspace: *"the fix: in principle OK but what happens if the library is not snapshottable and the workspace
+  is?"* Merge now snapshots the workspace, the library beside it where it can, and never the library alone: *"agree"*.
+- **Every rule a rationale.** *"this reminds me - Ideally every rule should have a rationale"*. `tools/spec-build` now
+  fails on a rule or invariant justified by no rationale, directly or through the item it refines or upholds, the gaps
+  of the day on a list that only shrinks: *"yes"*, *"ok"*.
+- **§3, the configuration** — geotag and merge classed extensions by the built-in lists, not the workspace's; one
+  loader now serves every phase. A setting missing from the file silently took the program's default; now it stops the
+  run, named: *"2 a; 1, 3, 4 ok;"*, *"yes"*. An unknown setting — a class of the user's own, a misspelt key — was
+  ignored; it now stops the run too: *"1 fix workspace/.photos-ingest/photos-00-config.json please / rest is ok"*. *"is
+  the config block in the code also up to date?"* — the dead `manual_segment_template_count` went: *"yes. then do 4a"*.
+- **§4, the control records** — the quarantine's manifests stay beside the duplicates they explain; the control
+  directory's list gained the locks, archives, kept decisions and backups: *"1 a; 2 ok; 3 backlog now."* (a file of no
+  media class outside the inbox, BACKLOG item 9). The handoff's old byte-hash check went: *"2 - ignore how the tool
+  behaved before, this is about now, and there are no workspaces dating from that period. / 6 - yes they will need
+  tests / 7 - one rule = one obligation, add to item 7 / rest ok"*. A hidden file at the top level — a `.directory`, a
+  `.DS_Store` — stopped every phase; it is now left alone, and one shared check names every misplaced top-level entry:
+  *"1 a; 2 agree; 3 ok"*.
+- **§5, camera groups** — geotag recorded the camera-group key version and the metadata field-set version but never
+  compared them; a handoff or plan of another version now stops it: *"yes. 1 with FIELD_SET_VERSION."* Files with no
+  camera identity sharing one group went to the backlog (item 10).
+- **§6, the filename format** — geotag renamed a burst's `-001` to `-002` and back on every run; a name already carrying
+  its timestamp now keeps its suffix. Names outside the format had been taken as ordinary dumps: *"2 disagree; files
+  named outside the format and which sit outside the dump must abort processing, they should not be silently ignored.
+  the only place where non-conforming filenames are allowed is in the dump folder"*. A misnamed file outside the inbox
+  now stops prep, named; a redundant JPG gets its timestamp name. On a changed format: *"3 actually IMO it should
+  trigger renaming all existing sorted files to new pattern. We should discuss this, maybe there are other options"* —
+  merge never renames the library, so renaming would buy consistency only for a workspace's short life; the format is
+  fixed once files are named in it: *"2 d - the migration is OK, name format does not change / 3 B / 2 a and b are
+  OK"*, then *"all"*.
+- **§7, the tracks** — a test now shows prep never reads them: *"yes"*. **§8, the dependency cascade** — a RAW's
+  fingerprint is now tested against geotag's writes, and the build items cite items by link, not by the old contract's
+  section numbers: *"yes"*.
+- **§9, the loop** — a photo's metadata edited after finalize reached the library unseen; finalize now records each
+  photo's size and modification time, and merge refuses one that differs: *"3a, rest ok"*.
+- **§10, change only what needs changing** — geotag parsed every track on every run; it now parses only bytes it has
+  not parsed before, keeping the rest in a scratch memo: *"1 a. Literally no difference if tracks not changed and much
+  faster / rest ok"*. Merge's plan now says how many library fingerprints it reused.
+- **The rationales still missing** for rules ruled before this round — the stale lock, the suffix, the tracks, the
+  decisions, the log and the package — were drafted in one pass: *"ok all"*. No rule or invariant of the shared contract
+  is without one; for the phase specs, every converted rule gets its rationale in the same pass: *"go with the first"*.
+
 ## 2026-11-09 — §13–§15's remaining seed items ruled; one obligation per item
 
 The library's place and mark, its lock, the checked values and the moment of each change, put in seven topics, each
