@@ -242,7 +242,7 @@ Hidden dotfiles are swept to the recoverable quarantine, not merely skipped, so 
 
 :::{rat} A plan in one known place is the plan that runs
 :id: RAT-one_place_per_plan
-:status: seed
+:status: ruled
 :justifies: RUL-plan_at_fixed_place, RUL-no_plan_location_option
 
 A plan kept in one known place is the plan that runs: the dry run and the execution read exactly what the last planning
@@ -253,7 +253,7 @@ it, in a tool used a few times a year.
 
 :::{rat} Nothing runs that the user could not review
 :id: RAT-plan_before_run
-:status: seed
+:status: ruled
 :justifies: RUL-no_plan_no_run
 
 Execution carries out only a plan the user could review first. With none saved, there is nothing reviewed to carry out,
@@ -262,7 +262,7 @@ and planning on the spot would skip the review the plan exists for.
 
 :::{rat} The dry run reads the persisted plan
 :id: RAT-dry_run_reads_the_saved_plan
-:status: seed
+:status: ruled
 :justifies: RUL-dry_run_summarises_the_real_plan
 
 A simulation is a second path that can disagree with execution: it can pass where execution would fail, or the
@@ -272,7 +272,7 @@ enough because the whole plan is on disk to read.
 
 :::{rat} A superseded plan stays recoverable; an unchanged one adds nothing
 :id: RAT-superseded_plans_recoverable
-:status: seed
+:status: ruled
 :justifies: RUL-replanning_keeps_the_prior, RUL-unchanged_replan_writes_nothing
 
 Setting the prior artifact aside keeps a superseded plan and any authored decisions recoverable; writing nothing on an
@@ -281,7 +281,7 @@ unchanged re-run means the iterative decision-editing loop does not accumulate r
 
 :::{rat} The handoff is invisible to the scan, yet verified
 :id: RAT-handoff_by_content
-:status: seed
+:status: ruled
 :justifies: RUL-handoff_verified_by_content, RUL-run_only_refresh_restales_nothing
 
 Living in the skipped directory is independent of the handoff's role as a dependency: it is invisible to prep's media
