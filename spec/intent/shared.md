@@ -1182,7 +1182,7 @@ stale.
 
 :::{def} A fingerprint
 :id: DEF-fingerprint
-:status: seed
+:status: ruled
 
 A media file's **fingerprint** is the identity of its decoded content — a photo's pixels, a video's streams. Unqualified,
 *fingerprint* means this.
@@ -1190,7 +1190,7 @@ A media file's **fingerprint** is the identity of its decoded content — a phot
 
 :::{def} A hash
 :id: DEF-hash
-:status: seed
+:status: ruled
 
 A record's **hash** is a digest of its exact bytes — of a numbered record, or of the configuration. Unqualified, *hash*
 means this.
@@ -1198,7 +1198,7 @@ means this.
 
 :::{def} The dependency cascade
 :id: DEF-dependency_cascade
-:status: seed
+:status: ruled
 :uses: DEF-fingerprint, DEF-hash, DEF-config_areas
 
 The **dependency cascade** is how the phases keep a record from being used once what it was made from has changed: each
@@ -1222,7 +1222,7 @@ then creates the record, records those dependencies in it, and refuses its use d
 
 :::{rul} A fingerprint survives what the pipeline does to a file
 :id: RUL-fingerprint_survives_mutation
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: dep-fingerprint-invariant-1
@@ -1233,7 +1233,7 @@ A media file's fingerprint SHALL stay the same when the pipeline rewrites its me
 
 :::{rul} A hash changes with any byte
 :id: RUL-hash_detects_any_change
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: dep-hash-sensitive-1
@@ -1244,7 +1244,7 @@ A record's hash SHALL change on any change to its bytes.
 
 :::{rul} A record is checked as a dependency by its hash
 :id: RUL-hash_is_the_dependency_check
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-hash_detects_any_change
