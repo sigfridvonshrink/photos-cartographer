@@ -406,7 +406,7 @@ or `fixed_clock_cameras` (fixed-clock).
 
 :::{bld} `filename_timestamp_format`
 :id: BLD-filename_timestamp_format
-:status: seed
+:status: ruled
 :realises: RUL-one_filename_format, DEF-timestamp_name
 
 The format SHALL be the configuration key `filename_timestamp_format`, default `"%Y-%m-%d--%H-%M-%S"`, which gives a
@@ -416,7 +416,7 @@ filename-format fingerprint (shared §9).
 
 :::{bld} The `-NNN` suffix
 :id: BLD-name_suffix
-:status: seed
+:status: ruled
 :realises: RUL-suffix_no_clobber, RUL-suffix_choice_by_phase, RUL-merge_suffix_above_highest
 
 The names SHALL be `<timestamp>.ext` for the first file with a free base name, `<timestamp>-001.ext` for the first
@@ -426,7 +426,7 @@ renames: prep §8 and §7.3, geotag §27, merge §7.
 
 :::{bld} Geotag's final name, step by step
 :id: BLD-geotag_final_name
-:status: seed
+:status: ruled
 :realises: RUL-geotag_name_final
 
 Geotag SHALL compute the final name as resolved UTC → the destination's civil timezone → a local naive datetime → the
@@ -435,7 +435,7 @@ format.
 
 :::{bld} The `UNKN_` mark
 :id: BLD-untimed_mark
-:status: seed
+:status: ruled
 :realises: DEF-untimed_name
 
 The untimed name SHALL be `UNKN_<name it came with>`, with the `-NNN` suffix when that is taken.
@@ -443,7 +443,7 @@ The untimed name SHALL be `UNKN_<name it came with>`, with the `-NNN` suffix whe
 
 :::{bld} What prep checks a name against
 :id: BLD-name_check
-:status: seed
+:status: ruled
 :realises: RUL-misnamed_file_stops_prep, RUL-misnamed_file_named
 
 At plan, prep SHALL check the name of every media file in the dated, missing-metadata, redundant-JPG and by-destination
@@ -455,7 +455,7 @@ missing-metadata folder instead, and the strays folder is not checked.
 
 :::{bld} The format recorded in the handoff
 :id: BLD-format_recorded
-:status: seed
+:status: ruled
 :realises: RUL-format_fixed_once_named
 
 The handoff SHALL record the format prep named the files in as `filename_timestamp_format`; prep compares it with the
