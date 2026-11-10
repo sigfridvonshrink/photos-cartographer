@@ -1182,7 +1182,7 @@
       "area": "geotag",
       "criticality": "high",
       "anti": true,
-      "title": "A misplaced root entry (loose file incl. dotfiles, non-managed folder, or symlink) hard-stops geotag strictly",
+      "title": "A misplaced root entry (non-hidden loose file, non-managed folder, or symlink) hard-stops geotag",
       "spec": {
         "file": "photos-2-geotag-workflow.md",
         "section": "13"
@@ -6036,18 +6036,18 @@
       "test": "tests/test_idempotency_cache.py::test_prep_idempotency_and_by_dest_accounting"
     },
     {
-      "id": "prep-root-block-strict-dotfiles-1",
+      "id": "prep-root-dotfile-left-1",
       "area": "prep",
       "criticality": "med",
       "anti": true,
-      "title": "plain root dotfile on an initialized workspace hard-blocks",
+      "title": "a hidden root file on an initialized workspace is left where it is, never a block",
       "spec": {
         "file": "photos-1-prep-workflow.md",
         "section": "6.2"
       },
       "coverage": "covered",
       "must_cover": true,
-      "test": "tests/test_workspace_prep.py::test_initialized_root_dotfile_is_a_misplaced_entry_hard_block"
+      "test": "tests/test_workspace_prep.py::test_initialized_root_dotfile_is_left_alone"
     },
     {
       "id": "prep-root-entry-blocks-1",

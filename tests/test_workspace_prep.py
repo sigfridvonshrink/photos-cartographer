@@ -434,11 +434,11 @@ def test_init_does_not_move_a_dump_folder_named_like_a_managed_folder(tmp_path, 
     assert not any("not a managed" in b or "Misplaced" in b for b in plan.blockers), plan.blockers
 
 
-@pytest.mark.spec("prep-root-block-strict-dotfiles-1")
-def test_initialized_root_dotfile_is_a_misplaced_entry_hard_block(tmp_path, monkeypatch):
-    """Root strictness (prep §6.2 item 2): on an INITIALIZED workspace the root holds only the managed
-    folders + control dirs. A plain root dotfile (e.g. `.DS_Store`) is a misplaced dump and a hard
-    block — the dot-prefix earns no exemption for files (only dot DIRS are control/skip dirs)."""
+@pytest.mark.spec("prep-root-dotfile-left-1", "RUL-top_level_only_managed", test="TST-workspace_prep-initialized_root_dotfile_is_left_alone")
+def test_initialized_root_dotfile_is_left_alone(tmp_path, monkeypatch):
+    """The top level of an INITIALIZED workspace holds the managed folders and hidden entries (shared
+    contract §4): a root dotfile (a file manager's `.directory` or `.DS_Store`) is not a misplaced
+    dump — no block — and, the root being no dump area once initialized, no operation touches it."""
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
     monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image",
@@ -451,8 +451,8 @@ def test_initialized_root_dotfile_is_a_misplaced_entry_hard_block(tmp_path, monk
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=True)
     plan = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
     cache.close()
-    assert any("Misplaced entry at workspace root" in b and ".DS_Store" in b
-               for b in plan.blockers), plan.blockers
+    assert not plan.blockers, plan.blockers
+    assert not any(".DS_Store" in (op.source or "") for op in plan.operations)
 
 
 @pytest.mark.spec("prep-plan-nonmutating-1")

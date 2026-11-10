@@ -142,14 +142,37 @@ def test_loose_root_file_blocks(tmp_path):
     ws, _ = _make(tmp_path)
     (ws / "stray.txt").write_text("loose")
     blockers, _, _ = _pf(ws)
-    assert any("Loose file at the workspace root" in b for b in blockers), blockers
+    assert any("Misplaced entry at workspace root" in b for b in blockers), blockers
 
 
 def test_nonmanaged_root_folder_blocks(tmp_path):
     ws, _ = _make(tmp_path)
     (ws / "randomdump").mkdir()
     blockers, _, _ = _pf(ws)
-    assert any("Misplaced folder at the workspace root" in b for b in blockers), blockers
+    assert any("Misplaced entry at workspace root" in b for b in blockers), blockers
+
+
+@pytest.mark.spec("RUL-top_level_only_managed", test="TST-merge_preflight-root_hidden_file_allowed")
+def test_root_hidden_file_allowed(tmp_path):
+    """A hidden file at the top level (a file manager's `.directory`) is a hidden entry, not a
+    misplaced dump: it blocks nothing (shared contract §4)."""
+    ws, _ = _make(tmp_path)
+    (ws / ".directory").write_text("[Dolphin]")
+    blockers, _, _ = _pf(ws)
+    assert not any("Misplaced entry" in b for b in blockers), blockers
+
+
+@pytest.mark.spec("RUL-top_level_only_managed", test="TST-merge_preflight-every_misplaced_root_entry_named")
+def test_every_misplaced_root_entry_named(tmp_path):
+    """Any other top-level entry blocks, whatever its kind — a named pipe too — and the block names
+    every one, not only the first."""
+    ws, _ = _make(tmp_path)
+    (ws / "stray.txt").write_text("loose")
+    (ws / "randomdump").mkdir()
+    os.mkfifo(str(ws / "pipe"))
+    blockers, _, _ = _pf(ws)
+    hit = [b for b in blockers if "Misplaced entry at workspace root" in b]
+    assert hit and all(n in hit[0] for n in ("pipe", "randomdump", "stray.txt")), blockers
 
 
 # --- config + library identity ----------------------------------------------

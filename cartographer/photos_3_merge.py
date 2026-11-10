@@ -42,7 +42,7 @@ from datetime import datetime, timezone
 from .photos_utils import (
     CONFIG, CONTROL_DIR, config_path, handoff_path, guard_path, is_sealed,
     validate_config, load_config, validate_merge_config, sha256_file, sha256_text, media_class_for_ext,
-    folder_name, FOLDER_ROLES, missing_managed_folders, handoff_content_fingerprint,
+    folder_name, FOLDER_ROLES, missing_managed_folders, top_level_links, misplaced_top_level_entries, handoff_content_fingerprint,
     folders_fingerprint, media_extensions_fingerprint,
     verify_json_dependency, json_dependency, write_json_artifact, write_versioned_json, is_library, write_library_marker,
     library_marker_path, allocate_suffix, suffix_root, max_suffix, ContentHasher, WorkspaceCache,
@@ -151,9 +151,9 @@ class MergeWorkflow:
             blockers.append("Not an initialized workspace (no photos-00-workspace-guard) — "
                             "run prep first: `photos-cartographer prep plan` then `photos-cartographer prep execute`.")
             return blockers, warnings, info
-        root_syms = self._root_symlinks()
+        root_syms = top_level_links(ws)
         if root_syms:
-            blockers.append(f"Forbidden symlink at the workspace root: {root_syms[0]}. Symlinks are "
+            blockers.append(f"Forbidden symlink at the workspace root: {', '.join(root_syms)}. Symlinks are "
                             "never followed; remove it before merging.")
             return blockers, warnings, info
         # 0c. The managed 0-6 structure must be intact (§3 precond 0c) — merge never creates/repairs it.
@@ -163,16 +163,11 @@ class MergeWorkflow:
                             f"{', '.join(struct_missing)}. Restore the 0-6 structure (merge never "
                             "creates or repairs it) before merging.")
             return blockers, warnings, info
-        loose = self._root_files()
-        if loose:
-            blockers.append(f"Loose file at the workspace root (dumps belong in "
-                            f"{folder_name('sources')}/): {loose[0]}. The base must hold only folders.")
-            return blockers, warnings, info
-        loose_dirs = self._root_nonmanaged_dirs()
-        if loose_dirs:
-            blockers.append(f"Misplaced folder at the workspace root (dumps belong in "
-                            f"{folder_name('sources')}/): {loose_dirs[0]}. The base must hold only "
-                            "the managed folders.")
+        misplaced = misplaced_top_level_entries(ws)
+        if misplaced:
+            blockers.append(f"Misplaced entry at workspace root (dumps belong in "
+                            f"{folder_name('sources')}/): {', '.join(misplaced)}. The top level holds only "
+                            "the managed folders and hidden entries.")
             return blockers, warnings, info
 
         # Config (read-only) — must exist and be valid; merge's data path never writes it.
@@ -1064,21 +1059,6 @@ class MergeWorkflow:
         return 0
 
     # --- filesystem helpers (mirrors of geotag's; merge is read-only here) ---
-
-    def _root_files(self):
-        ws = self.workspace_root
-        return sorted(f for f in os.listdir(ws) if os.path.isfile(os.path.join(ws, f)))
-
-    def _root_nonmanaged_dirs(self):
-        ws = self.workspace_root
-        managed = {folder_name(r) for r in FOLDER_ROLES}
-        return sorted(f for f in os.listdir(ws)
-                      if not f.startswith('.') and f not in managed
-                      and os.path.isdir(os.path.join(ws, f)))
-
-    def _root_symlinks(self):
-        ws = self.workspace_root
-        return sorted(f for f in os.listdir(ws) if os.path.islink(os.path.join(ws, f)))
 
     def _entries(self, rel_folder):
         d = os.path.join(self.workspace_root, rel_folder)
