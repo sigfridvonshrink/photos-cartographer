@@ -344,7 +344,7 @@ never the dependency check.
 
 :::{bld} The workspace's top level
 :id: BLD-top_level_entries
-:status: seed
+:status: ruled
 :realises: RUL-top_level_only_managed, RUL-first_dump_at_top_level, RUL-structure_built_once, RUL-only_prep_builds_structure
 
 The top level of an initialized workspace SHALL hold exactly the managed folders `0-sources`…`6-photos-by-dest` and
@@ -355,7 +355,7 @@ The top level of an initialized workspace SHALL hold exactly the managed folders
 
 :::{bld} One check of the top level for all three phases
 :id: BLD-one_top_level_check
-:status: seed
+:status: ruled
 :realises: RUL-top_level_only_managed
 
 Prep, geotag and merge SHALL find a workspace's misplaced top-level entries with the one function they share,
@@ -364,7 +364,7 @@ Prep, geotag and merge SHALL find a workspace's misplaced top-level entries with
 
 :::{bld} Where each phase applies the shape guards
 :id: BLD-shape_guards_by_phase
-:status: seed
+:status: ruled
 :realises: RUL-no_links, RUL-who_checks_for_links, RUL-missing_folder_blocks, RUL-shape_checked_first, RUL-link_named, RUL-geotag_merge_check_top_level_links, RUL-missing_folder_named, RUL-empty_inbox_normal
 
 Links: prep across the tree it walks (prep §6.2 item 3); geotag and merge at the workspace root at startup (geotag §13;
