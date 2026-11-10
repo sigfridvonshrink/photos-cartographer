@@ -8,7 +8,7 @@ to. *Why* each holds is in [the rationale](../rationale/prep.md); *how this buil
 
 :::{rul} Prep corrects no time and no position
 :id: RUL-prep_no_time_or_gps
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -20,7 +20,7 @@ Prep SHALL make no correction to a file's time or position: it plans, infers, wr
 
 :::{rul} Prep leaves photos by destination as it finds it
 :id: RUL-prep_leaves_by_dest_as_found
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -33,7 +33,7 @@ renaming, quarantining, deleting or writing one there.
 
 :::{rul} Prep puts videos by date
 :id: RUL-videos_by_date
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: prep-videos-date-organized-1

@@ -7,7 +7,7 @@ items it `justifies`, under the same section numbers. Where the two differ, the 
 
 :::{rat} Prep has no evidence for a time or a place
 :id: RAT-prep_has_no_evidence
-:status: seed
+:status: ruled
 :justifies: RUL-prep_no_time_or_gps
 
 A photo's true time and place need what prep does not have: the camera's clock offset, found by geotag against the
@@ -17,7 +17,7 @@ before them would be a guess written into an original; prep leaves time and plac
 
 :::{rat} Photos by destination is the user's sorting
 :id: RAT-by_dest_is_the_users
-:status: seed
+:status: ruled
 :justifies: RUL-prep_leaves_by_dest_as_found
 
 Photos by destination is the user's own sorting: where each photo sits is a decision made by hand, which only the user
@@ -27,7 +27,7 @@ never undone by a run that cannot know why it was made.
 
 :::{rat} Videos are kept, not corrected
 :id: RAT-videos_kept_not_corrected
-:status: seed
+:status: ruled
 :justifies: RUL-videos_by_date
 
 The pipeline's aim is photos placed in time and on the map. Videos arrive in the same dumps; prep organizes them by date
