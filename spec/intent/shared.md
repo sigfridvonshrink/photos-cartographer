@@ -1106,7 +1106,7 @@ Once prep has named a workspace's files in a format, a change to the format SHAL
 
 :::{def} The tracks
 :id: DEF-tracks
-:status: seed
+:status: ruled
 :uses: DEF-geotag, DEF-configuration
 
 A workspace's **tracks** are the recorded position logs geotag reads as evidence: to propose time anchors, and to place
@@ -1115,7 +1115,7 @@ photos along them by interpolation or extrapolation. The configuration says wher
 
 :::{rul} Only geotag reads the tracks
 :id: RUL-tracks_geotag_only
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required

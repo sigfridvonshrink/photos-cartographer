@@ -466,7 +466,7 @@ configured format at plan once a file outside the inbox carries a timestamp name
 
 :::{bld} `gpx_root`
 :id: BLD-gpx_root
-:status: seed
+:status: ruled
 :realises: DEF-tracks, RUL-tracks_outside_managed_folders
 
 The tracks' location SHALL be the configuration key `gpx_root`: a path, absolute or relative to the workspace, resolved
@@ -478,7 +478,7 @@ their detail is geotag §15 and §19.
 
 :::{bld} `gpx_root` checked against the managed folders
 :id: BLD-gpx_root_checked
-:status: seed
+:status: ruled
 :realises: RUL-tracks_outside_managed_folders
 
 Configuration validation, in every phase, SHALL resolve `gpx_root` against the workspace, through links, and refuse it
@@ -487,7 +487,7 @@ when it is a managed folder, lies inside one, or contains one — the workspace 
 
 :::{bld} A track file
 :id: BLD-track_file
-:status: seed
+:status: ruled
 :realises: DEF-tracks
 
 A track file SHALL be a file named `*.gpx`, `*.kml`, `*.kmz`, `*.fit`, `*.tcx`, `*.nmea` or `*.igc`, in any case. Of
@@ -496,7 +496,7 @@ these geotag reads only the `*.gpx` files beneath `gpx_root`.
 
 :::{bld} Prep's blocker for a track file
 :id: BLD-track_file_blocker
-:status: seed
+:status: ruled
 :realises: RUL-track_files_block_prep, RUL-track_file_left_in_place
 
 Prep SHALL raise one blocker for each track file it inventories, naming it, and leave it out of the plan (prep §3,
@@ -505,7 +505,7 @@ Prep SHALL raise one blocker for each track file it inventories, naming it, and 
 
 :::{bld} The GPX fingerprint
 :id: BLD-gpx_fingerprint
-:status: seed
+:status: ruled
 :realises: RUL-tracks_in_dependencies
 
 The GPX fingerprint SHALL be a SHA-256 over the resolved `gpx_root`, a version tag, and, in sorted order, each `*.gpx`
