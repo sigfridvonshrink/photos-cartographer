@@ -218,7 +218,7 @@ syntactically valid snapshot component, and that an IANA timezone is a real zone
 
 :::{bld} The control directory's contents
 :id: BLD-control_directory_contents
-:status: seed
+:status: ruled
 :realises: DEF-control_records, RUL-control_records_together
 
 The control records SHALL be these files in `.photos-ingest/` (shared §13 for the archival and database ones):
@@ -262,7 +262,7 @@ The section numbers in it are the shared contract's.
 
 :::{bld} An artifact's first digit names the phase that made it
 :id: BLD-artifact_numbering
-:status: seed
+:status: ruled
 :realises: DEF-control_records
 
 The numbered artifacts SHALL follow this scheme:
@@ -286,7 +286,7 @@ bands are unrelated to the numbered media folders `0-sources`…`6-photos-by-des
 
 :::{bld} What prep skips
 :id: BLD-prep_skip_set
-:status: seed
+:status: ruled
 :realises: RUL-not_inventoried, RUL-control_records_never_media, RUL-config_never_media, DEF-strays_folder, RUL-strays_never_processed
 
 Prep SHALL skip `.photos-ingest/`, `.photos-ingest-quarantine/` and `.git` as whole subtrees, every dot-prefixed file,
@@ -296,7 +296,7 @@ and the strays folder `1-strays/` with all its `<plan-id>` subfolders (prep §3,
 
 :::{bld} Hidden files in a dump go to the quarantine
 :id: BLD-dump_dotfiles_quarantined
-:status: seed
+:status: ruled
 :realises: RUL-dump_hidden_files_quarantined
 
 Hidden dotfiles in a dump area SHALL be swept to the quarantine (prep §3, §15).

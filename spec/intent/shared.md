@@ -564,7 +564,7 @@ configuration — never as a separate, optional pass.
 
 :::{def} The control records
 :id: DEF-control_records
-:status: seed
+:status: ruled
 :uses: DEF-workspace
 
 A workspace's **control records** are everything cartographer keeps in it besides the media: the configuration, the
@@ -574,7 +574,7 @@ control records: each belongs to the quarantine folder whose duplicates it descr
 
 :::{rul} The control records are kept together, apart from the media
 :id: RUL-control_records_together
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: ctrl-all-in-photos-ingest-1
@@ -586,7 +586,7 @@ level.
 
 :::{rul} The control records' place is never searched for media
 :id: RUL-control_records_never_media
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -599,7 +599,7 @@ phase takes a control record for media.
 
 :::{def} The strays folder
 :id: DEF-strays_folder
-:status: seed
+:status: ruled
 :uses: DEF-prep
 
 The **strays folder** is a media-tree folder at the workspace's top level. It holds the files that are not media which
@@ -609,7 +609,7 @@ phase's output.
 
 :::{rul} What prep never inventories
 :id: RUL-not_inventoried
-:status: seed
+:status: ruled
 :criticality: med
 :verify: incidental
 :aliases: ctrl-skip-set-1
@@ -622,7 +622,7 @@ version-control directory, and the strays folder with everything in it; and ever
 
 :::{rul} The strays folder's contents are never processed again
 :id: RUL-strays_never_processed
-:status: seed
+:status: ruled
 :criticality: med
 :verify: incidental
 :refines: RUL-not_inventoried
@@ -632,7 +632,7 @@ Nothing SHALL process the strays folder's contents again: prep writes into it, b
 
 :::{rul} Hidden files in a dump are quarantined
 :id: RUL-dump_hidden_files_quarantined
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: ctrl-dotfiles-swept-quarantine-1

@@ -213,7 +213,7 @@ detectable; it versions the code that computes the key, so only the code can set
 
 :::{rat} One skipped place instead of a list of names
 :id: RAT-one_skipped_place
-:status: seed
+:status: ruled
 :justifies: RUL-control_records_together, RUL-control_records_never_media
 
 Skipping the control directory wholesale means a control or artifact file can never be mistaken for a photo. There is
@@ -223,7 +223,7 @@ registry that earlier designs needed.
 
 :::{rat} A duplicate and its explanation are not separated
 :id: RAT-quarantine_manifest_beside_duplicates
-:status: seed
+:status: ruled
 :justifies: RUL-control_records_together
 
 A quarantine manifest says why each file beside it was set aside. Kept in the quarantine folder it describes, it cannot
@@ -234,7 +234,7 @@ transformation log, so pruning loses nothing of the record.
 
 :::{rat} A dump leaves no hidden litter
 :id: RAT-no_hidden_litter
-:status: seed
+:status: ruled
 :justifies: RUL-dump_hidden_files_quarantined
 
 Hidden dotfiles are swept to the recoverable quarantine, not merely skipped, so a dump leaves no hidden litter.
