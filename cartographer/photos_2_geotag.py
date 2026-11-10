@@ -386,6 +386,10 @@ class GeotagWorkflow:
         # 4. Re-prep-after-move gate (§13.1): a prep run must follow the latest by-date→by-dest move.
         self._check_reprep_gate(handoff, by_dest, by_date, blockers)
 
+        # 5. The handoff's camera-group keys and extracted fields must come from this version of
+        # cartographer: a key derived the old way would be matched against a config written for the new.
+        self._check_derivation_versions(handoff, blockers)
+
         info["by_dest_photos"] = sum(1 for _, mc in self._scan_media(by_dest) if mc in ("image", "raw"))
         return blockers, warnings, info
 
@@ -437,6 +441,18 @@ class GeotagWorkflow:
                 "and refresh the handoff: run `photos-cartographer prep plan` then "
                 "`photos-cartographer prep execute` (the move is recognized stat-only — no re-fingerprint, "
                 "no re-read). Then geotag can proceed.")
+
+    @staticmethod
+    def _check_derivation_versions(handoff, blockers):
+        for field, current, what in (("camera_group_key_version", CAMERA_GROUP_KEY_VERSION, "camera-group keys"),
+                                     ("field_set_version", FIELD_SET_VERSION, "metadata fields")):
+            other = sorted(rec.get("relative_path") or "" for rec in (handoff.get("files") or [])
+                           if rec.get("metadata_status") and rec["metadata_status"].get(field) != current)
+            if other:
+                blockers.append(
+                    f"The handoff's {what} were derived by another version of cartographer "
+                    f"({len(other)} file(s), e.g. {other[0]}; this version is {current}). Re-run prep "
+                    "to derive them again: `photos-cartographer prep plan` then `photos-cartographer prep execute`.")
 
     # --- Stage 2: in-memory by-dest file model (geotag spec §14) --------
 
@@ -1277,6 +1293,8 @@ class GeotagWorkflow:
                        ("folders_fingerprint", folders_fingerprint()),
                        ("media_extensions_fingerprint", media_extensions_fingerprint()),
                        ("camera_group_fingerprint", sha256_text(policy)),
+                       ("camera_group_key_version", CAMERA_GROUP_KEY_VERSION),
+                       ("metadata_field_set_version", FIELD_SET_VERSION),
                        ("gpx_fingerprint", gpx.fingerprint)):
             if dep.get(k) != cur:
                 stale.append(f"{k} changed")

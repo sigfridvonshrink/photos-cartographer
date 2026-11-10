@@ -128,7 +128,8 @@ def test_build_file_model_tolerates_malformed_records(tmp_path):
     wf.handoff = {"files": [
         {"relative_path": "6-photos-by-dest/T/a.jpg", "media_class": "image",
          "folder_class": "6-photos-by-dest", "content_hash": "{not json",      # bad content_hash
-         "metadata_status": {"parsed_json": "{not json"}},                      # bad parsed_json
+         "metadata_status": {"camera_group_key_version": utils.CAMERA_GROUP_KEY_VERSION, "field_set_version": utils.FIELD_SET_VERSION,
+                             "parsed_json": "{not json"}},                      # bad parsed_json
         {"relative_path": "6-photos-by-dest/T/b.jpg", "media_class": "image",
          "folder_class": "6-photos-by-dest"},                                   # no metadata_status at all
     ]}
@@ -183,8 +184,9 @@ def _completable_ws(tmp_path):
         p = ws / rel; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"x")
         return {"relative_path": rel, "media_class": "image", "folder_class": "6-photos-by-dest",
                 "size": 1, "mtime_ns": 1, "content_hash": json.dumps({"value": "fp" + rel, "status": "valid"}),
-                "metadata_status": {"camera_group_key": CAM, "has_timestamp": True,
-                                    "has_native_gps": bool(gps), "field_set_version": 1,
+                "metadata_status": {"camera_group_key_version": utils.CAMERA_GROUP_KEY_VERSION,
+                                    "camera_group_key": CAM, "has_timestamp": True,
+                                    "has_native_gps": bool(gps), "field_set_version": utils.FIELD_SET_VERSION,
                                     "parsed_json": json.dumps(parsed)}}
     files = [rec("6-photos-by-dest/T/a.arw", "2024:07:03 14:00:00", gps=(50.0, 4.0)),
              rec("6-photos-by-dest/T/b.arw", "2024:07:03 15:00:00", gps=(51.0, 5.0)),

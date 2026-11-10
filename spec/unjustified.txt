@@ -4,7 +4,6 @@
 # pass after §0-§10 of the shared contract (BACKLOG item 8).
 RUL-decision_fields_laid_out
 RUL-finalize_non_destructive
-RUL-known_when_classified
 RUL-log_cites_decisions
 RUL-log_entry_grows
 RUL-log_human_readable

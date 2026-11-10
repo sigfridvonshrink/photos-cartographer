@@ -50,8 +50,9 @@ def _rec(ws, rel, dto, *, key=CAM, gps=None, method=None):
     return {"relative_path": rel, "media_class": "image", "folder_class": "6-photos-by-dest",
             "size": st.st_size, "mtime_ns": st.st_mtime_ns,
             "content_hash": json.dumps({"value": "fp-" + os.path.basename(rel), "status": "valid"}),
-            "metadata_status": {"camera_group_key": key, "has_timestamp": True, "has_native_gps": bool(gps),
-                                "field_set_version": 1, "parsed_json": json.dumps(parsed)}}
+            "metadata_status": {"camera_group_key_version": utils.CAMERA_GROUP_KEY_VERSION,
+                                "camera_group_key": key, "has_timestamp": True, "has_native_gps": bool(gps),
+                                "field_set_version": utils.FIELD_SET_VERSION, "parsed_json": json.dumps(parsed)}}
 
 
 def _ws(tmp_path, recs):

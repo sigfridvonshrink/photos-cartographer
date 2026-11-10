@@ -149,6 +149,21 @@ def test_missing_handoff_blocks(tmp_path):
     assert any("handoff" in b and "photos-cartographer prep" in b for b in blockers), blockers
 
 
+@pytest.mark.spec("RUL-camera_group_derivation_versioned", test="TST-geotag_preflight-handoff_of_another_derivation_version_blocks")
+@pytest.mark.parametrize("field", ["camera_group_key_version", "field_set_version"])
+def test_handoff_of_another_derivation_version_blocks(tmp_path, field):
+    rel = "6-photos-by-dest/Trip/a.jpg"
+    (tmp_path / "now").mkdir(); (tmp_path / "old").mkdir()
+    md = {"camera_group_key_version": utils.CAMERA_GROUP_KEY_VERSION, "field_set_version": utils.FIELD_SET_VERSION}
+    blockers, _, _ = _pf(_ws(tmp_path / "now", handoff_files=[
+        {"relative_path": rel, "media_class": "image", "metadata_status": md}]))
+    assert blockers == [], blockers                                  # the running version's handoff passes
+    blockers, _, _ = _pf(_ws(tmp_path / "old", handoff_files=[
+        {"relative_path": rel, "media_class": "image", "metadata_status": dict(md, **{field: 0})}]))
+    assert any("another version of cartographer" in b and rel in b and "prep plan" in b
+               for b in blockers), blockers
+
+
 # --- by-dest scope gates -----------------------------------------------------
 
 @pytest.mark.spec("reprep-geotag-no-fix-1")

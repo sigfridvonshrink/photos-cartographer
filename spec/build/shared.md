@@ -388,8 +388,9 @@ the handoff manifest and SQLite (prep §12); geotag consumes and classifies it (
 :status: seed
 :realises: RUL-camera_group_derivation_versioned
 
-The derivation of `camera_group_key` SHALL be versioned by `CAMERA_GROUP_KEY_VERSION`, part of the metadata-freshness
-and dependency fingerprints.
+The derivation of `camera_group_key` SHALL be versioned by `CAMERA_GROUP_KEY_VERSION`, recorded with each file's
+metadata and in each plan's dependencies, and compared with the running code's: by prep's metadata freshness, by geotag's
+plan against every file of the handoff, and by geotag's execute against its plan.
 :::
 
 :::{bld} A camera group is known when it is listed

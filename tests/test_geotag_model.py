@@ -46,8 +46,9 @@ def _hfile(rel, *, key="SONY|ILCE-6400|123", dto="2024:07:03 14:12:08", gps=None
     return {"relative_path": rel, "media_class": media_class, "folder_class": folder_class,
             "size": 100, "mtime_ns": 1,
             "content_hash": json.dumps({"value": "fp-" + rel, "status": "valid"}),
-            "metadata_status": {"camera_group_key": key, "has_timestamp": bool(dto),
-                                "has_native_gps": bool(gps), "field_set_version": 1,
+            "metadata_status": {"camera_group_key_version": utils.CAMERA_GROUP_KEY_VERSION,
+                                "camera_group_key": key, "has_timestamp": bool(dto),
+                                "has_native_gps": bool(gps), "field_set_version": utils.FIELD_SET_VERSION,
                                 "parsed_json": json.dumps(parsed)}}
 
 
@@ -198,8 +199,9 @@ def test_geotag_reuses_handoff_camera_group_key_never_recomputes(tmp_path):
     rec = {"relative_path": "6-photos-by-dest/Trip/a.arw", "media_class": "image",
            "folder_class": "6-photos-by-dest", "size": 1, "mtime_ns": 1,
            "content_hash": json.dumps({"value": "fp", "status": "valid"}),
-           "metadata_status": {"camera_group_key": sentinel, "has_timestamp": True,
-                               "has_native_gps": False, "field_set_version": 1,
+           "metadata_status": {"camera_group_key_version": utils.CAMERA_GROUP_KEY_VERSION,
+                               "camera_group_key": sentinel, "has_timestamp": True,
+                               "has_native_gps": False, "field_set_version": utils.FIELD_SET_VERSION,
                                "parsed_json": json.dumps(parsed)}}
     wf = _wf(tmp_path, [rec])
     files = wf.build_file_model()
