@@ -103,7 +103,7 @@ def test_real_duplicate_evidence_against_mutable(tmp_path, monkeypatch):
     assert diag["blockers"] == []
 
 
-@pytest.mark.spec("prep-dup-against-bydest-quarantine-mutable-1")
+@pytest.mark.spec("prep-dup-against-bydest-quarantine-mutable-1", "BLD-duplicate_evidence", test="TST-handoff-conflict_attributed_to_by_dest_folder")
 def test_conflict_attributed_to_by_dest_folder(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)

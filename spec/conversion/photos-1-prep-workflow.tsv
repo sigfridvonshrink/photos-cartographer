@@ -182,7 +182,7 @@
 6.2	In every case prep reports the offending path and produces no executable plan.	RUL-link_named	
 6.2	The decoded-content fingerprint and organization machinery only ever operate on real files inside the workspace;	RUL-no_links	
 6.2	4. a forbidden sidecar (`.xmp`, `.dop`, `.pp3`) — editing sidecars are not part of this pipeline;	RUL-sidecar_blocks BLD-sidecar_extensions RAT-sidecar_orphaned	
-6.2	5. a content fingerprint failure for any non-by-dest **media** file whose content equality a decision depends on (Section 11.3);	defer:11.3	
+6.2	5. a content fingerprint failure for any non-by-dest **media** file whose content equality a decision depends on (Section 11.3);	RUL-failed_fingerprint_blocks	
 6.2	6. a band misplacement — a `video`-class file under `5-photos-by-date` or `6-photos-by-dest`, or an `image`/`raw` file under `4-videos-by-date` (Section 6.1).	RUL-band_misplacement_blocks	
 6.2	Prep never creates such a placement itself; this guard catches one introduced by hand.	RAT-bands_never_mix	
 6.2	7. an **incomplete managed folder structure on an initialized workspace** — on an *initialized* workspace (sentinel present, Section 3.1) the full `0`–`6` structure is an invariant: prep created every folder during init and never removes one.	RUL-missing_folder_blocks	
@@ -255,7 +255,7 @@
 7.5	2. every other copy on the mutable side is moved to `.photos-ingest-quarantine/<plan_id>/<original-path>` via `quarantine_move`;	RUL-duplicates_quarantined RUL-duplicate_set_aside_as_found	
 7.5	3. a by-dest copy is **never** quarantined (it can only ever be the retained file);	RUL-prep_leaves_by_dest_as_found	
 7.5	4. quarantine is recoverable: each quarantined file gets a manifest entry recording its original path, quarantine path, the retained counterpart, and the duplicate evidence (Section 15);	defer:15	
-7.5	5. files with unknown/invalid fingerprints are not grouped as duplicates (Section 11.3).	defer:11.3	
+7.5	5. files with unknown/invalid fingerprints are not grouped as duplicates (Section 11.3).	RUL-failed_fingerprint_no_duplicate BLD-failed_fingerprint	
 7.6	### 7.6 Stage 5 — Chronological organization	dropped	a heading; the corpus's documents carry their own
 7.6	Every mutable-side file still in `0-sources` after Stages 2–4 (not quarantined, not set aside as a redundant JPEG) is handled by its class and timestamp.	RUL-photos_by_date RUL-videos_by_date RUL-untimed_to_missing_metadata RUL-inbox_non_media_to_strays	
 7.6	The timestamp is read passively from cached metadata: the first of these fields, in priority order, that holds a valid time — a field present but holding none (such as `0000:00:00 00:00:00`) is passed over:	RUL-recorded_time_order	
@@ -310,7 +310,7 @@
 9	Each fingerprint records the method that took it — its strategy, and for a photo the ImageMagick version; a video's records no `ffmpeg` version, since copying the streams out decodes nothing — so a change of method is detectable rather than silently shifting identities.	BLD-fingerprint_method RUL-fingerprint_method_matches	
 9	**`other`-class files are not fingerprinted at all.** Non-media (`other`-class) files get **no content fingerprint** — there is nothing meaningful to decode and they are never content-deduplicated or organized.	RUL-strays_leave_no_trace	
 9	They are moved out of `0-sources` into `1-strays/<plan-id>/` and ignored thereafter (Sections 3.2, 6.1, 7.6).	RUL-inbox_non_media_to_strays RUL-strays_leave_no_trace	
-9	This is by design, not a fingerprint failure: the absence of a fingerprint on an `other` file is normal and never a blocker, unlike a *media* fingerprint **failure** (Section 11.3).	defer:11.3	
+9	This is by design, not a fingerprint failure: the absence of a fingerprint on an `other` file is normal and never a blocker, unlike a *media* fingerprint **failure** (Section 11.3).	RUL-strays_leave_no_trace	
 9	**Byte-level (whole-file) SHA-256 is reserved for artifacts.** The only place a hash is taken over raw file bytes is the pipeline's **artifacts** — the numbered JSON files and `photos-00-config.json` (geotag Section 4 / shared contract Section 4.1) — where detecting a byte change *is* the point.	BLD-hash	
 9	Media is never identified by a byte hash.	DEF-fingerprint BLD-hash	
 9	Reuse rules (apply to the fingerprinted media classes — photos and videos;	dropped	the reuse rules' lead-in; each rule is placed below
@@ -320,8 +320,8 @@
 9	2. if a fingerprinted media file is absent from the cache, compute its content fingerprint (ImageMagick `identify` / `ffmpeg` stream MD5) and store the result;	RUL-fingerprint_taken_afresh	
 9	3. if size or mtime changed, treat the cached fingerprint as stale and recompute — a metadata-only edit (including the pipeline's own EXIF writes) changes size/mtime and forces a recompute, but a photo's `identify` fingerprint (or a video's `ffmpeg` stream MD5) recomputes to the **same** value, so identity is preserved while the cache freshness is refreshed;	RUL-fingerprint_taken_afresh RUL-fingerprint_survives_mutation	
 9	4. if prep moves or case-normalizes a file without changing content, carry the known fingerprint forward to the new workspace-relative path (Section 10);	BLD-move_row_effects	
-9	5. a fingerprint failure on a media file never implies equality;	defer:11.3	
-9	6. an unknown or failed fingerprint on a *media* file blocks any decision that depends on content equality (Section 11.3); an `other` file's absence of a fingerprint is not such a case (it is intentionally unfingerprinted and never enters a content-equality decision);	defer:11.3	
+9	5. a fingerprint failure on a media file never implies equality;	RUL-failed_fingerprint_no_duplicate	
+9	6. an unknown or failed fingerprint on a *media* file blocks any decision that depends on content equality (Section 11.3); an `other` file's absence of a fingerprint is not such a case (it is intentionally unfingerprinted and never enters a content-equality decision);	RUL-failed_fingerprint_blocks RUL-failed_fingerprint_no_duplicate	
 9	7. the fingerprint algorithm — including the tool identity/version (ImageMagick `identify` for photos, `ffmpeg` stream MD5 for videos) — is recorded in the cache and handoff.	BLD-prep_dependencies BLD-fingerprint_method	
 9	The workspace database records its schema version and the fingerprint-algorithm version; each execute writes the current ones.	BLD-cache_versions BLD-prep_dependencies	
 9	A database recording a schema version other than the one prep uses stops the plan: prep never migrates a database, and the remedy is a fresh workspace.	RUL-cache_schema_not_migrated BLD-cache_versions	
@@ -371,3 +371,17 @@
 10.3	7. the memo tracks the current workspace rather than accumulating indefinitely: entries for paths a planning run no longer observes are dropped.	RUL-memo_tracks_workspace	
 10.3	Only entries that could actually be reused are worth storing — an entry lacking either a content fingerprint or a metadata record can never satisfy the all-or-nothing freshness gate.	BLD-plan_memo	
 10.3	The memo changes cost, never outcome: the plan a run produces is the same whether its fingerprints were computed, reused from the cache, or reused from the memo.	RUL-memo_never_changes_plan	
+11	## 11. Uniqueness and duplicate rules involving by-dest	dropped	a heading; the corpus's documents carry their own
+11.1	### 11.1 Content duplicate against by-dest	dropped	a heading; the corpus's documents carry their own
+11.1	If a mutable-side file has the same content fingerprint as a *different* by-dest file (i.e. not the same file recognized as moved per Section 10.1), it is classified as a duplicate against existing by-dest content.	RUL-duplicates_quarantined RUL-move_recognized	
+11.1	The by-dest file is the retained copy; only the mutable-side file is acted on (quarantined).	RUL-copy_kept_by_folder RUL-prep_leaves_by_dest_as_found	
+11.1	The relationship is recorded in the summary, the quarantine manifest, and the handoff.	RUL-duplicate_recorded_with_kept BLD-duplicate_evidence	
+11.2	### 11.2 Path conflict against by-dest	dropped	a heading; the corpus's documents carry their own
+11.2	Prep plans no destination inside `6-photos-by-dest` (Section 2.2), so no planned path can collide with a by-dest path; every destination it plans is allocated free of the names on disk and in the plan, ignoring case.	BLD-by_dest_ops_refused RUL-suffix_no_clobber	
+11.3	### 11.3 Unknown fingerprints	dropped	a heading; the corpus's documents carry their own
+11.3	This rule concerns **media** files (photos and videos), which are fingerprinted;	dropped	scope; each item says it concerns media files
+11.3	`other`-class files are intentionally unfingerprinted (Section 9) and never enter a content-equality decision, so they are out of scope here.	RUL-strays_leave_no_trace	
+11.3	If either side of a potential duplicate is a **media** file with an unknown fingerprint (a fingerprint *failure* — the decode/fingerprint could not be computed), prep must not classify it as a content duplicate and must not remove or quarantine based on equality.	RUL-failed_fingerprint_no_duplicate BLD-failed_fingerprint	
+11.3	For a mutable-side media file this is a blocker; for a by-dest file it is skipped (by-dest is read-only and never quarantined regardless).	RUL-failed_fingerprint_blocks RUL-prep_leaves_by_dest_as_found	
+11.3	A failed fingerprint is never reused from the cache or the memo: the failure may have been the machine's — a tool missing, a decoder crashing — so every run takes it again.	RUL-failed_fingerprint_retried RAT-failure_may_be_the_machines	
+11.3	By-dest inventory facts that influenced any decision are recorded in the plan dependencies, so execution rejects the plan if by-dest state changed in a way that affects uniqueness decisions.	BLD-prep_dependencies	

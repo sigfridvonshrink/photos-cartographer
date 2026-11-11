@@ -5564,7 +5564,7 @@
       "area": "prep",
       "criticality": "high",
       "anti": true,
-      "title": "A planned destination colliding with an existing by-dest path must not clobber; allocate or block, by-dest untouched",
+      "title": "No planned destination lies in by-dest; every planned name is allocated free, ignoring case, never clobbering",
       "spec": {
         "file": "photos-1-prep-workflow.md",
         "section": "11.2"

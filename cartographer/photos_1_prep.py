@@ -1647,9 +1647,12 @@ class WorkspacePrepWorkflow:
 
         # A cached fingerprint is fresh only when taken by this build's method for its class: the
         # strategy, and for a photo the ImageMagick version (prep §9).
-        from .photos_utils import fingerprint_reusable
-        content_hash_fresh = (not (cached and cached.get('content_hash'))
-                              or fingerprint_reusable(cached['content_hash'], media_class, current_magick_version))
+        from .photos_utils import fingerprint_reusable, fingerprint_valid
+        # A media file's cached fingerprint must be one this build would reuse; a file of no media class
+        # has none to judge.
+        content_hash_fresh = (media_class not in ('image', 'raw', 'video')
+                              or fingerprint_reusable((cached or {}).get('content_hash'), media_class,
+                                                      current_magick_version))
 
         result = {
             "relative_path": rel_path,
@@ -1680,7 +1683,8 @@ class WorkspacePrepWorkflow:
         # decoded. Classify WHY so an unexpected re-hash is visible — `new` (first ingest, expected),
         # else a previously-cached file restaled by `moved-unmatched` (a by-dest move that missed the
         # bijective match), `size-changed`, `mtime-changed`, `metadata-stale` (an exiftool/field-set/
-        # camera-group-key stamp moved), or `engine-changed` (ImageMagick/ffmpeg version bump).
+        # camera-group-key stamp moved), `failed-before` (a failed fingerprint, taken again on every
+        # run), or `engine-changed` (ImageMagick/ffmpeg version bump).
         if media_class in ('image', 'raw', 'video'):
             if cached is None:
                 result["rehash_reason"] = "moved-unmatched" if rel_path in moved_unmatched else "new"
@@ -1690,6 +1694,8 @@ class WorkspacePrepWorkflow:
                 result["rehash_reason"] = "mtime-changed"
             elif not md_fresh:
                 result["rehash_reason"] = "metadata-stale"
+            elif not fingerprint_valid(cached.get('content_hash')):
+                result["rehash_reason"] = "failed-before"
             else:
                 result["rehash_reason"] = "engine-changed"
 

@@ -2175,16 +2175,22 @@ def cache_schema_mismatch(cache) -> Optional[str]:
             f"{CACHE_SCHEMA_VERSION}. Prep does not migrate a database: plan in a fresh workspace.")
 
 
-def fingerprint_reusable(content_hash_json, media_class, current_magick_version) -> bool:
-    """Whether a cached fingerprint was taken by the method this build uses for its class: the same
-    strategy, and for a photo the same ImageMagick version. A fingerprint that records no ImageMagick
-    version is not reusable. Only a valid fingerprint is judged; a failed one is kept as it is."""
+def fingerprint_valid(content_hash_json) -> bool:
+    """Whether a recorded fingerprint is a valid one — not a failure, and readable."""
     try:
-        ch = json.loads(content_hash_json)
-    except (TypeError, ValueError):
+        return json.loads(content_hash_json).get("status") == "valid"
+    except (TypeError, ValueError, AttributeError):
         return False
-    if ch.get("status") != "valid":
-        return True
+
+
+def fingerprint_reusable(content_hash_json, media_class, current_magick_version) -> bool:
+    """Whether a cached fingerprint can be reused: a valid one, taken by the method this build uses for
+    its class — the same strategy, and for a photo the same ImageMagick version. A fingerprint that
+    records no ImageMagick version is not reusable, and a failed one never is: the failure may have
+    been the machine's (a tool missing, a decode crashing), so every run takes it again (prep §11.3)."""
+    if not fingerprint_valid(content_hash_json):
+        return False
+    ch = json.loads(content_hash_json)
     if media_class in ("image", "raw"):
         return (ch.get("strategy") == IMAGE_FINGERPRINT_STRATEGY
                 and ch.get("engine_version") is not None and ch.get("engine_version") == current_magick_version)
@@ -2411,8 +2417,8 @@ class PlanFingerprintMemo:
         actually be reused."""
         rows = []
         for rec in records:
-            if not rec or not rec.get("relative_path") or not rec.get("content_hash"):
-                continue
+            if not rec or not rec.get("relative_path") or not fingerprint_valid(rec.get("content_hash")):
+                continue                     # a failed fingerprint is never reused, so never kept
             if not rec.get("metadata"):
                 continue
             stored = {k: v for k, v in rec.items() if k != "absolute_path"}   # path is machine-specific

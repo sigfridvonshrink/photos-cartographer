@@ -1010,7 +1010,7 @@ the configuration and hard-coded by neither.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: fname-suffix-noclobber-1, prep-organized-output-unique-path-1
+:aliases: fname-suffix-noclobber-1, prep-organized-output-unique-path-1, prep-path-conflict-bydest-no-clobber-1
 
 A file whose timestamp name is already taken SHALL get a zero-padded differentiating suffix, allocated deterministically
 and without clobbering: against every name on disk and every name planned in the run, compared without regard to case,

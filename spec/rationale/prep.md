@@ -365,3 +365,36 @@ wins where both speak, an entry is held to the database's tests, and an entry pr
 says nothing of where any file went. The memo saves reading and nothing else, so with it, without it, or with it
 broken, prep plans the same.
 :::
+
+
+## 11. Duplicates and failures beside photos by destination
+
+:::{rat} A failure says nothing of the content
+:id: RAT-failure_says_nothing
+:status: seed
+:justifies: RUL-failed_fingerprint_no_duplicate, RUL-failed_fingerprint_blocks
+
+A fingerprint that could not be taken tells nothing of what the file holds: two failures are not two copies, and a
+failure is no copy of anything. Outside photos by destination, every file's place depends on knowing whether it is a
+copy, so prep stops and names it rather than file it blind. A file in photos by destination is the user's, never set
+aside; its failure decides nothing there.
+:::
+
+:::{rat} A failure may be the machine's
+:id: RAT-failure_may_be_the_machines
+:status: seed
+:justifies: RUL-failed_fingerprint_retried
+
+A fingerprint fails as often for the machine as for the file: a tool not installed, a decoder missing, a crash. The user
+fixes the machine, not the file, so its size and time do not change; a failure kept would block on after its cause was
+gone. Taking it again costs one attempt per run for a file that still fails.
+:::
+
+:::{rat} A duplicate's record points at its twin
+:id: RAT-duplicate_points_at_twin
+:status: seed
+:justifies: RUL-duplicate_recorded_with_kept
+
+A file set aside as a copy is recoverable only if one can tell which file it copies. Recorded with the copy kept, the
+user can check the pair, and a photo already sorted into a destination is seen to have had its copy set aside.
+:::

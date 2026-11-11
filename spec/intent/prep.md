@@ -488,3 +488,50 @@ read.
 
 The plan memo SHALL hold entries only for paths the latest plan read.
 :::
+
+
+## 11. Duplicates and failures beside photos by destination
+
+:::{rul} A failed fingerprint matches nothing
+:id: RUL-failed_fingerprint_no_duplicate
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: prep-unknown-fingerprint-no-dup-1
+:uses: DEF-fingerprint
+
+A media file whose fingerprint failed SHALL be found the duplicate of no file, and no file its duplicate.
+:::
+
+:::{rul} A failed fingerprint outside photos by destination blocks
+:id: RUL-failed_fingerprint_blocks
+:status: seed
+:criticality: high
+:verify: required
+:aliases: prep-fingerprint-failure-blocks-1
+:uses: DEF-fingerprint
+
+A media file outside photos by destination whose fingerprint failed SHALL block prep's plan.
+:::
+
+:::{rul} A failed fingerprint is taken again
+:id: RUL-failed_fingerprint_retried
+:status: seed
+:criticality: high
+:verify: required
+:uses: DEF-fingerprint
+
+Prep SHALL take a media file's fingerprint again at every run while it has failed.
+:::
+
+:::{rul} A duplicate is recorded with the copy kept
+:id: RUL-duplicate_recorded_with_kept
+:status: seed
+:criticality: med
+:verify: required
+:aliases: prep-dup-against-bydest-quarantine-mutable-1
+:refines: RUL-duplicates_quarantined
+
+Prep SHALL record each duplicate it quarantines with the copy it kept, in the quarantine manifest and the handoff.
+:::
