@@ -172,3 +172,59 @@ def test_a_stray_keeps_its_place_and_name(tmp_path):
     plan = _run(ws)
     assert (ws / "1-strays" / plan.plan_id / "card" / "NOTES.TXT").exists()
     assert not any(t == "rename_no_clobber" for t, _, _ in _media_ops(plan))
+
+
+def _untimed(monkeypatch):
+    """Metadata holding no recorded time, for every file."""
+    def meta(folders, max_workers=4, progress_coordinator=None):
+        return {os.path.join(fo, fn): {"extraction_status": "extracted_empty", "raw_payload": "{}"}
+                for fo in folders for fn in os.listdir(fo)}, set()
+    monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", meta)
+
+
+@pytest.mark.spec("RUL-untimed_mark_once", "DEF-untimed_name", "BLD-untimed_mark",
+                  test="TST-prep_pipeline-a_file_back_from_missing_metadata_keeps_one_mark")
+def test_a_file_back_from_missing_metadata_keeps_one_mark(tmp_path, monkeypatch):
+    """A file sent back to the inbox with still no time returns to missing metadata under the name it
+    had there: the untimed mark is not taken twice."""
+    _untimed(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "foo.JPG").write_bytes(b"AAAA")
+    _run(ws)
+    assert os.listdir(ws / "2-missing-metadata") == ["UNKN_foo.jpg"]
+    os.rename(ws / "2-missing-metadata" / "UNKN_foo.jpg", ws / "0-sources" / "UNKN_foo.jpg")
+    _run(ws)
+    assert os.listdir(ws / "2-missing-metadata") == ["UNKN_foo.jpg"]
+
+
+@pytest.mark.spec("RUL-redundant_jpg_timestamp_named", "RUL-untimed_mark_once",
+                  test="TST-prep_pipeline-an_untimed_redundant_jpeg_takes_its_untimed_name")
+def test_an_untimed_redundant_jpeg_takes_its_untimed_name(tmp_path, monkeypatch):
+    """A JPEG set aside beside its RAW with no recorded time takes its untimed name, flat — the mark once,
+    however it came."""
+    _untimed(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "shot.arw").write_bytes(b"raw1")
+    (ws / "0-sources" / "shot.JPG").write_bytes(b"jpg1")
+    (ws / "0-sources" / "UNKN_old.arw").write_bytes(b"raw2")
+    (ws / "0-sources" / "UNKN_old.jpg").write_bytes(b"jpg2")
+    _run(ws)
+    assert sorted(os.listdir(ws / "3-redundant-jpgs")) == ["UNKN_old.jpg", "UNKN_shot.jpg"]
+
+
+@pytest.mark.spec("RUL-database_matches_files", "BLD-database_ops",
+                  test="TST-prep_pipeline-a_file_sent_back_is_refiled_where_it_was")
+def test_a_file_sent_back_is_refiled_where_it_was(tmp_path):
+    """A filed file the user moves back into the inbox is filed again under the name it had; the row of
+    that path is the move's, not a ghost to prune."""
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "IMG.JPG").write_bytes(b"AAAA")
+    _run(ws)
+    filed = ws / "5-photos-by-date" / "2023-01-02" / f"{NAME}.jpg"
+    os.rename(filed, ws / "0-sources" / f"{NAME}.jpg")
+    plan = _run(ws)
+    assert filed.exists()
+    assert not any(op.type == "db_remove" for op in plan.operations)
+    cache = prep.WorkspaceCache(str(ws))
+    assert set(cache.get_all_files()) == {f"5-photos-by-date/2023-01-02/{NAME}.jpg"}
+    cache.close()

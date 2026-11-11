@@ -278,5 +278,23 @@
 7.7	### 7.7 Stage 6 — Cache reconciliation	dropped	a heading; the corpus's documents carry their own
 7.7	For files that were not mutated and whose cache record is stale (changed size/mtime or stale metadata), a `db_upsert` records the refreshed state.	RUL-database_matches_files BLD-database_ops	
 7.7	Before treating a cached file whose path has disappeared as a ghost, prep applies the move-recognition rule of Section 10.1: a disappearance explained by a matching new by-dest entry is a move (cache carried forward), not a ghost.	defer:10.1	
-7.7	Genuinely missing cache rows are pruned with `db_remove` (ghost prune).	BLD-database_ops	
+7.7	Genuinely missing cache rows are pruned with `db_remove` (ghost prune) — but not the row of a path a planned move fills again (a file the user sent back to the inbox, refiled under the name it had): that move replaces the row.	BLD-database_ops	
 7.7	Unchanged, already-fresh files produce no operation and are reported as `no_op` / `already_correct`.	RUL-no_op_run RUL-no_op_run_reports_reuse	
+8	## 8. Naming conventions	dropped	a heading; the corpus's documents carry their own
+8	Date-organized names follow the project standard and are derived from the source-naive timestamp:	DEF-timestamp_name RUL-prep_name_provisional	
+8	```text [sha1:f44f45db, 4 lines]	RUL-photos_by_date RUL-videos_by_date RUL-untimed_to_missing_metadata RUL-redundant_jpg_timestamp_named BLD-day_folder_name BLD-untimed_mark BLD-name_suffix	
+8	By-date media is grouped into a `YYYY-MM-DD/` day subfolder (the date portion of the same source-naive timestamp); the filename keeps the full timestamp.	RUL-by_date_in_day_folder BLD-day_folder_name	
+8	Because the filename already encodes the full date, two files can share a name only if they share the whole timestamp — i.e. the same day, hence the same day folder — so a single occupied-name set across the band is sufficient to allocate suffixes (two files in different day folders can never collide on name).	RUL-suffix_no_clobber BLD-planned_paths_tracked	
+8	A file that comes in under a name already carrying the `UNKN_` mark — one the user sent back from `2-missing-metadata` still without a time — keeps that name as its untimed name: the mark is not added again.	RUL-untimed_mark_once	
+8	A redundant JPEG with no timestamp takes its untimed name the same way.	RUL-redundant_jpg_timestamp_named	
+8	The **first** file at a given name takes the **bare** name (no suffix); a `-NNN` zero-padded differentiating suffix (`-001`, `-002`, …) is added only on a collision, allocated deterministically and no-clobber against a per-run, case-insensitive occupied-name set, taking the **lowest free** index, so two files never collide.	RUL-suffix_choice_by_phase RUL-suffix_no_clobber BLD-name_suffix	
+8	This bare-first, first-free rule is shared with geotag so an uncorrected file's provisional (prep) and final (geotag) names coincide (Section 7.3; shared contract `photos-shared-contract.md` Section 7.2) — it is **not** monotonic/append-only; only merge appends at `max+1` (for its append-only library).	RUL-suffix_choice_by_phase RUL-uncorrected_keeps_its_name RUL-merge_suffix_above_highest	
+8	Extensions are normalized to lowercase (Section 7.3).	RUL-media_extension_lowercase	
+8	The timestamp shape and the differentiating-suffix convention are defined once in the shared contract (Section 7); prep reads the same shared `filename_timestamp_format` key as geotag.	RUL-one_filename_format BLD-filename_timestamp_format	
+8	The timestamp component (`YYYY-MM-DD--HH-MM-SS`) is the raw camera-naive value, used here only for organization and ordering.	RUL-prep_name_provisional	
+8	It shares the same textual format as the final filename geotag assigns later (`photos-2-geotag-workflow.md` Section 26 / shared contract Section 7.3), but the value is **provisional**: geotag recomputes it from corrected, destination-local civil time and rewrites the name.	RUL-prep_name_provisional RUL-geotag_name_final RUL-one_filename_format	
+8	Prep does not correct, timezone-resolve, or UTC-convert the timestamp.	RUL-prep_name_provisional RUL-prep_no_time_or_gps	
+8	> Both prep and geotag use the same `filename_timestamp_format` (shared contract `photos-shared-contract.md` Section 7).	RUL-one_filename_format	
+8	Outside `0-sources`, a media file whose name is not the one this section gives it — its recorded timestamp in the format, `-NNN` aside, or with no timestamp its `UNKN_` name — blocks the plan, each such file named with the name it should carry; only the inbox takes names as they come.	RUL-misnamed_file_stops_prep RUL-misnamed_file_named RUL-inbox_kept_as_dumped	
+8	Prep never parses meaning from a filename; the timestamp comes from metadata.	RUL-no_meaning_from_names	
+8	The format is fixed once prep has named files in it: the handoff records it, and a changed format blocks the plan (shared contract §6).	RUL-format_fixed_once_named	

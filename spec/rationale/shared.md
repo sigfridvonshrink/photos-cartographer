@@ -470,7 +470,18 @@ name that looks trusted. Only the inbox takes files as they come.
 :justifies: RUL-redundant_jpg_timestamp_named
 
 A redundant JPG is the same shot as the RAW kept in the dated folders: named from the same time, the two names show it,
-and the JPG's name is checked like any other outside the inbox.
+and the JPG's name is checked like any other outside the inbox. With no time to name it from, it is named as any untimed
+file is.
+:::
+
+:::{rat} A file sent back keeps the name it had
+:id: RAT-mark_once
+:status: seed
+:justifies: RUL-untimed_mark_once
+
+A file comes in already marked when the user sends it back from missing metadata: they gave it a time, or meant to. If
+it still has none it returns to missing metadata, and the name it had there is the one the user knows it by; marking it
+again would grow its name on every round and say nothing new.
 :::
 
 :::{rat} One format for a workspace's life

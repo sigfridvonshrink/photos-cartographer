@@ -754,6 +754,12 @@ _DEDUP_SUFFIX_RE = re.compile(r"-(\d{3,})$")
 UNTIMED_PREFIX = "UNKN_"   # what a media file with no recorded time is named by: its dump name behind this
 
 
+def untimed_stem(base: str) -> str:
+    """The untimed name's stem for a file that came in as `base` (no extension): `base` behind the
+    untimed mark, which a name already carrying it does not take twice."""
+    return base if base.startswith(UNTIMED_PREFIX) else UNTIMED_PREFIX + base
+
+
 def filename_format_changed(recorded, current) -> str:
     """The blocker for a filename format changed after prep named a workspace's files in another (shared
     §6): the format is fixed for the workspace, so the way on is to set it back."""

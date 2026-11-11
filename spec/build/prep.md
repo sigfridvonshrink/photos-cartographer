@@ -202,5 +202,17 @@ A JPEG SHALL be a file of the `image` class ending `.jpg` or `.jpeg`, matched ig
 :realises: RUL-database_matches_files
 
 Prep's plan SHALL refresh a stale database row with a `db_upsert`, and remove with a `db_remove` the row of a file gone
-that no move explains.
+that no move explains and whose path no planned move fills again — that row is the move's to replace.
+:::
+
+
+## 8. Naming conventions
+
+:::{bld} A day's folder is named `YYYY-MM-DD`
+:id: BLD-day_folder_name
+:status: seed
+:realises: RUL-by_date_in_day_folder
+:aliases: prep-date-name-format-1
+
+A day's folder SHALL be named `YYYY-MM-DD` from its recorded time's date, whatever `filename_timestamp_format` is.
 :::
