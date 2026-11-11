@@ -109,7 +109,7 @@ in the workspace database, no entry in any log, no place in the archival package
 
 :::{rul} A file in the other kind's folder blocks prep
 :id: RUL-band_misplacement_blocks
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -120,7 +120,7 @@ A video in photos by date or photos by destination, or a photo in videos by date
 
 :::{rul} An editing sidecar blocks prep
 :id: RUL-sidecar_blocks
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -132,7 +132,7 @@ prep's plan.
 
 :::{rul} A file of no media class outside the inbox blocks prep
 :id: RUL-other_outside_inbox_blocks
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -142,7 +142,7 @@ A file of no media class found in a managed folder other than the inbox SHALL bl
 
 :::{rul} Every blocker is reported
 :id: RUL-blockers_all_reported
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -153,7 +153,7 @@ Prep SHALL report every blocker it finds, each naming what blocks, never skippin
 
 :::{rul} Media set aside as strays is pointed out
 :id: RUL-stray_media_hinted
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :aliases: prep-stray-media-warning-1, prep-stray-media-warning-advisory-1

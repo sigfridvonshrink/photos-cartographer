@@ -550,7 +550,7 @@ An extension the configuration does not list SHALL be `other`.
 
 :::{rul} An extension is matched ignoring case
 :id: RUL-extension_matched_ignoring_case
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-config_lists_extensions
@@ -2468,7 +2468,7 @@ attempted.
 
 :::{rul} The managed folders' names are checked
 :id: RUL-checked_folder_names
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :uses: RUL-folder_names_not_roles
@@ -2480,7 +2480,7 @@ records' place or of the quarantine.
 
 :::{rul} The extension lists are checked
 :id: RUL-checked_extension_lists
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :uses: RUL-config_lists_extensions

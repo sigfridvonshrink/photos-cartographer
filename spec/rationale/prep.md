@@ -80,7 +80,7 @@ it, and clearing it costs the record nothing.
 
 :::{rat} Photos and videos go separate ways
 :id: RAT-bands_never_mix
-:status: seed
+:status: ruled
 :justifies: RUL-band_misplacement_blocks
 
 Photos are sorted into destinations and geotagged; videos are kept by date and not corrected. A file in the other kind's
@@ -90,7 +90,7 @@ corrected. Prep never puts one there, so one found there was moved by hand, and 
 
 :::{rat} A sidecar would be orphaned
 :id: RAT-sidecar_orphaned
-:status: seed
+:status: ruled
 :justifies: RUL-sidecar_blocks
 
 A sidecar is tied to its photo by name. Prep renames and moves photos, so the sidecar would be left behind under the old
@@ -101,7 +101,7 @@ goes on.
 
 :::{rat} A non-media file outside the inbox got there another way
 :id: RAT-other_outside_inbox_is_the_users
-:status: seed
+:status: ruled
 :justifies: RUL-other_outside_inbox_blocks
 
 Prep sets files of no media class aside only from the inbox, where a dump arrives mixed. Outside it, such a file got
@@ -112,7 +112,7 @@ file nothing accounts for. Stopping names it, and the user decides — as for a 
 
 :::{rat} All the problems at once
 :id: RAT-every_blocker_at_once
-:status: seed
+:status: ruled
 :justifies: RUL-blockers_all_reported
 
 A blocker skipped would let a file be left out with nobody knowing. Reporting every one, not the first found, spares the
@@ -121,7 +121,7 @@ user a run for each problem: a dump with three is fixed in one pass.
 
 :::{rat} A format the lists missed is noticed
 :id: RAT-unlisted_media_noticed
-:status: seed
+:status: ruled
 :justifies: RUL-stray_media_hinted
 
 The media lists are the user's configuration, and a camera may write a format they never listed. Its photos would be set
