@@ -196,7 +196,7 @@ def test_unreadable_image_blocks_with_hash_failure(tmp_path):
 
 @requires_magick
 @requires_exiftool
-@pytest.mark.spec("prep-quarantine-extra-copies-1")
+@pytest.mark.spec("prep-quarantine-extra-copies-1", "RUL-duplicates_quarantined", test="TST-content_hash-byte_identical_images_dedup_with_real_hasher")
 def test_byte_identical_images_dedup_with_real_hasher(tmp_path):
     ws = _make_ws(tmp_path)
     shutil.copy(CAM_SMALL, ws / "0-sources" / "a.jpg")
@@ -212,7 +212,7 @@ def test_byte_identical_images_dedup_with_real_hasher(tmp_path):
 @pytest.mark.slow
 @requires_magick
 @requires_exiftool
-@pytest.mark.spec("prep-separate-redundant-jpeg-1")
+@pytest.mark.spec("prep-separate-redundant-jpeg-1", "RUL-redundant_jpeg_set_aside", test="TST-content_hash-raw_jpeg_pair_separates_redundant_jpeg")
 def test_raw_jpeg_pair_separates_redundant_jpeg(tmp_path):
     # Uses the real RAW (slow). The JPEG sibling only needs the same basename.
     if prep.ContentHasher.fingerprint_image(CAM_RAW)["status"] != "valid":

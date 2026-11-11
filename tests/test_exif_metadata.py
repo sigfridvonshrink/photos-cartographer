@@ -99,7 +99,7 @@ def create_mock_metadata_reader(monkeypatch):
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read)
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", lambda *a, **k: {"status": "valid", "strategy": "image-content-hash-v1", "value": "dummycontenthash"})
 
-@pytest.mark.spec("prep-cache-metadata-fields-1", "prep-cache-upsert-stale-1", "prep-passive-metadata-cache-1")
+@pytest.mark.spec("prep-cache-metadata-fields-1", "prep-cache-upsert-stale-1", "prep-passive-metadata-cache-1", "RUL-database_matches_files", "BLD-database_ops", test="TST-exif_metadata-metadata_cache_creation_and_staleness")
 def test_metadata_cache_creation_and_staleness(workspace, monkeypatch):
     create_mock_metadata_reader(monkeypatch)
 
@@ -367,7 +367,7 @@ def test_schema_migration(workspace):
     cache.upsert_file(data)
 
 
-@pytest.mark.spec("prep-timestamp-priority-1")
+@pytest.mark.spec("prep-timestamp-priority-1", "RUL-recorded_time_order", test="TST-exif_metadata-parse_exiftool_item_timestamp_source_fallback")
 def test_parse_exiftool_item_timestamp_source_fallback():
     """selected_source_naive_timestamp prefers DateTimeOriginal, then CreateDate, then ModifyDate,
     else None (photos_utils Section 8)."""

@@ -1877,13 +1877,18 @@ class WorkspacePrepWorkflow:
                     ))
                     st.current_paths[f['relative_path']] = dest
 
-    def _plan_extension_case(self, st, db_files):
-        """Extension-case normalization (prep §6): a file whose extension is not lowercase is
-        renamed to lowercase via a two-step temp rename (no-clobber, case-insensitive-collision
-        safe). Mutates the op-building cluster on `st`. Verbatim from plan() with `<cluster> ->
-        st.<cluster>`."""
+    def _plan_extension_case(self, st, db_files, quarantined):
+        """Extension-case normalization (prep §7.3): a media file outside the inbox whose extension is
+        not lowercase is renamed to lowercase via a two-step temp rename (no-clobber,
+        case-insensitive-collision safe). An inbox file takes its lowercase extension in the move that
+        files it; a duplicate and a stray keep their names. Mutates the op-building cluster on `st`."""
+        _sources_prefix = folder_name('sources') + '/'
         for f in db_files:
+            if f['relative_path'] in quarantined or f['media_class'] == 'other':
+                continue
             rel_path = st.current_paths[f['relative_path']]
+            if rel_path.startswith(_sources_prefix):
+                continue
             basename = os.path.basename(rel_path)
             name, ext = os.path.splitext(basename)
             if ext and ext != ext.lower():
@@ -1957,35 +1962,39 @@ class WorkspacePrepWorkflow:
                     ))
                     st.current_paths[f['relative_path']] = final_rel
 
-    def _plan_redundant_jpgs(self, st, db_files):
-        """RAW+JPG pairing (prep §6): when a RAW and its same-stem JPG share a folder, move the
-        JPG to 3-redundant-jpgs (the RAW is the keeper). Returns paired_jpgs (the set of paired
-        JPG rel-paths, consumed by the dedup step). Mutates the op-building cluster on `st`.
-        Verbatim from plan() with `<cluster> -> st.<cluster>` + a trailing return."""
+    def _plan_redundant_jpgs(self, st, db_files, quarantined):
+        """RAW+JPEG pairing (prep §7.4): when a RAW and a same-stem JPEG (`.jpg` or `.jpeg`) share an
+        inbox folder, move the JPEG — and only the JPEG — to 3-redundant-jpgs (the RAW is the keeper).
+        Mutates the op-building cluster on `st`."""
         base_groups = {}
         for f in db_files:
+            if f['relative_path'] in quarantined:
+                continue
             rel_path = st.current_paths[f['relative_path']]
             basename = os.path.basename(rel_path)
             name, _ = os.path.splitext(basename)
             folder = os.path.dirname(rel_path)
             base_groups.setdefault((folder, name), []).append(f)
 
-        paired_jpgs = set()
         # A redundant JPG is named from its timestamp like a dated file (shared §6), against every name
         # already outside the inbox, so it can never collide with one wherever either is moved later.
         _src = folder_name('sources') + "/"
         taken = {os.path.basename(st.current_paths[f['relative_path']]).lower() for f in db_files
-                 if not st.current_paths[f['relative_path']].startswith(_src)}
+                 if f['relative_path'] not in quarantined
+                 and not st.current_paths[f['relative_path']].startswith(_src)}
+
+        def is_jpeg(f):
+            return (f['media_class'] == 'image'
+                    and os.path.splitext(st.current_paths[f['relative_path']])[1].lower() in ('.jpg', '.jpeg'))
+
         for (folder, name), group in base_groups.items():
-            has_raw = any(f['media_class'] == 'raw' for f in group)
-            has_jpg = any(f['media_class'] == 'image' and f['relative_path'].lower().endswith('.jpg') for f in group)
-            if has_raw and has_jpg:
+            if any(f['media_class'] == 'raw' for f in group):
                 for f in group:
-                    if f['media_class'] == 'image':
+                    if is_jpeg(f):
                         rel_path = st.current_paths[f['relative_path']]
-                        paired_jpgs.add(f['relative_path'])
                         if rel_path.startswith(_src):
                             base, ext = os.path.splitext(os.path.basename(rel_path))
+                            ext = ext.lower()
                             dt = self._file_datetime(f)
                             stem = (dt.strftime(CONFIG["filename_timestamp_format"]) if dt is not None
                                     else UNTIMED_PREFIX + base)
@@ -2007,17 +2016,14 @@ class WorkspacePrepWorkflow:
                                 database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(f, relative_path=dest, absolute_path=os.path.join(self.workspace_root, dest))}]
                             ))
                             st.current_paths[f['relative_path']] = dest
-        return paired_jpgs
 
-    def _plan_content_groups(self, db_files, by_dest_files, paired_jpgs, blockers):
-        """Content-fingerprint grouping (prep §6/§9): group media by (content_hash, media_class)
-        for dedup, skipping paired JPGs and non-media; a missing/invalid fingerprint on a mutable
-        file is a blocker (by-dest is exempt). Appends to `blockers`; returns content_groups.
-        Verbatim lift from plan() (no op-building cluster touched)."""
+    def _plan_content_groups(self, db_files, by_dest_files, blockers):
+        """Content-fingerprint grouping (prep §7.5/§9): group media by (content_hash, media_class)
+        for dedup, skipping non-media; a missing/invalid fingerprint on a mutable file is a blocker
+        (by-dest is exempt). A RAW and its JPEG never share a group: their classes differ. Appends to
+        `blockers`; returns content_groups."""
         content_groups = {}
         for f in db_files + by_dest_files:
-            if f['relative_path'] in paired_jpgs:
-                continue
             # Non-media (other-class) is never fingerprinted and never content-deduplicated; it is
             # routed to 1-strays below. The absence of a fingerprint on `other` is never a blocker
             # (prep Section 9 / 3.2).
@@ -2091,16 +2097,16 @@ class WorkspacePrepWorkflow:
                 database_effects_after_verification=[]))
 
     def _plan_dedup(self, st, content_groups, quarantined, plan_id_for_quarantine):
-        """Content dedup (prep §6/§12): within each (content_hash, media_class) group keep the
-        highest-priority file and quarantine the rest (evidence-before-quarantine quarantine_move,
-        recoverable; by-dest never mutated). Records each quarantined rel-path in `quarantined`
-        (read later by the organize step). Mutates the op-building cluster on `st`. Verbatim from
-        plan() with `<cluster> -> st.<cluster>`."""
+        """Content dedup (prep §7.5): within each (content_hash, media_class) group keep the file in the
+        highest-priority folder — where it lies before this plan moves anything, ties by path — and
+        quarantine the rest (evidence-before-quarantine quarantine_move, recoverable; by-dest never
+        mutated). Records each quarantined rel-path in `quarantined` (every later stage skips it).
+        Mutates the op-building cluster on `st`."""
         for (ch_str, mc), group in content_groups.items():
             if len(group) > 1:
                 def priority(item):
                     p = st.current_paths.get(item['relative_path'], item['relative_path'])
-                    return dedup_priority(p)
+                    return (dedup_priority(p), p)
 
                 group.sort(key=priority)
                 retained = group[0]
@@ -2265,7 +2271,7 @@ class WorkspacePrepWorkflow:
         for f, rel_path in to_organize:
             dt = self._file_datetime(f)
             base, ext = os.path.splitext(os.path.basename(rel_path))
-            ext = ext.lstrip('.')
+            ext = ext.lstrip('.').lower()     # the move that files it lowercases its extension (§7.3)
 
             if dt is not None:
                 target_folder = (folder_name('videos_by_date') if f['media_class'] == 'video'
@@ -2586,12 +2592,9 @@ class WorkspacePrepWorkflow:
             media_mutated_originals)
         self._plan_init_moves(st, db_files)
 
-        self._plan_extension_case(st, db_files)
-
-        paired_jpgs = self._plan_redundant_jpgs(st, db_files)
-
-
-        content_groups = self._plan_content_groups(db_files, by_dest_files, paired_jpgs, blockers)
+        # Duplicates are set aside first, from where they lie (prep §7): no later stage moves or renames
+        # a file this plan quarantines, so its record keeps its dump path and name.
+        content_groups = self._plan_content_groups(db_files, by_dest_files, blockers)
 
         quarantined = set()
         plan_id_for_quarantine = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:6]}"
@@ -2599,6 +2602,10 @@ class WorkspacePrepWorkflow:
         self._plan_quarantine_artifacts(st, exiftool_leftovers, dump_dotfiles, plan_id_for_quarantine)
 
         self._plan_dedup(st, content_groups, quarantined, plan_id_for_quarantine)
+
+        self._plan_extension_case(st, db_files, quarantined)
+
+        self._plan_redundant_jpgs(st, db_files, quarantined)
 
         # Pass 1: seed the per-run suffix index with EVERY already-conforming name first, so a
         # newly-organized (or re-located) file never collides with an existing one regardless of

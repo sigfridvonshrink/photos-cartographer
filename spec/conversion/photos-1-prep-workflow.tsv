@@ -6,11 +6,11 @@
 1	1. **initializes** the workspace on first run — creating the `0`–`6` folder structure and control directory, moving any as-arrived base dump into `0-sources/`, and writing the root sentinel last (Sections 3.1, 7.1);	defer:3.1	
 1	2. seeds the workspace configuration (`photos-00-config.json`) on first run if absent, then reads it as authoritative;	RUL-config_seeded_once RUL-config_authoritative	
 1	3. inventories the workspace safely and blocks on unsafe inputs (a sealed workspace; a misplaced root entry — loose file, non-managed folder, or symlink — on an initialized workspace; a missing managed folder; or a symlink anywhere among managed files, including nested directory symlinks, Section 6.2);	defer:6.2	
-1	4. takes each dump from `0-sources/` (the one inbox) without flattening it, resolving destination-name collisions in memory at planning (Section 7.2);	defer:7.2	
-1	5. normalizes file extensions;	defer:7.3	
-1	6. separates redundant JPEGs that have a RAW sibling;	defer:7.4	
-1	7. detects content duplicates and quarantines them recoverably;	defer:7.5	
-1	8. organizes timestamped media into by-date folders, untimestamped media into a missing-metadata folder, and **non-media into the strays folder `1-strays/`** — leaving `0-sources/` empty (Sections 7.6, 18, 3.2);	defer:7.6	
+1	4. takes each dump from `0-sources/` (the one inbox) without flattening it, resolving destination-name collisions in memory at planning (Section 7.2);	RUL-inbox_kept_as_dumped RUL-suffix_no_clobber	
+1	5. normalizes file extensions;	RUL-media_extension_lowercase	
+1	6. separates redundant JPEGs that have a RAW sibling;	RUL-redundant_jpeg_set_aside	
+1	7. detects content duplicates and quarantines them recoverably;	RUL-duplicates_quarantined	
+1	8. organizes timestamped media into by-date folders, untimestamped media into a missing-metadata folder, and **non-media into the strays folder `1-strays/`** — leaving `0-sources/` empty (Sections 7.6, 18, 3.2);	RUL-photos_by_date RUL-videos_by_date RUL-untimed_to_missing_metadata RUL-inbox_non_media_to_strays RUL-prep_empties_inbox	
 1	9. maintains a SQLite fingerprint/metadata cache so repeated runs are cheap and idempotent;	defer:9	
 1	10. passively caches the EXIF/QuickTime/XMP facts the geotag phase will need, without making any time/GPS decision;	defer:12	
 1	11. writes a dependency-fingerprinted handoff manifest for the geotag phase;	defer:16	
@@ -208,3 +208,75 @@
 6.3	`folders` (every role present, each name a unique single path component, no control-dir collision) and `media_extensions` (each class a non-empty list of canonical lowercase, dot-less extensions, with no extension mapped to more than one class).	RUL-checked_folder_names RUL-checked_extension_lists	
 6.3	A validation failure is a hard blocker: prep reports it textually, naming the offending config field so the user can fix the JSON and re-run, and produces no executable plan and no mutation — exactly as for a hard input guard above.	RUL-invalid_value_stops RUL-invalid_value_located	
 6.3	Validation never silently coerces or "repairs" a value.	RUL-invalid_value_never_repaired	
+7	## 7. The prep pipeline	dropped	a heading; the corpus's documents carry their own
+7	Planning derives operations in a fixed, deterministic order: initialization and inventory, then content deduplication (Stage 2, Section 7.5) — before any stage moves or renames a file — then extension case, redundant JPEGs and chronological organization.	BLD-prep_stage_order	the order's determinism waits for §17
+7	Each stage updates an in-memory "current path" for every file so later stages reason about where a file will be, not only where it is.	BLD-planned_paths_tracked	
+7	Allowed operation types are:	BLD-prep_operation_kinds	
+7	```text [sha1:66f61749, 1 lines]	BLD-prep_operation_kinds	
+7.1	### 7.1 Stage 0 — Initialize if needed; inventory; guards	dropped	a heading; the corpus's documents carry their own
+7.1	First, determine whether the workspace is **initialized** — root sentinel `photos-00-workspace-guard` present (Section 3.1):	BLD-workspace_guard	
+7.1	- **Uninitialized** (no sentinel): prep plans **initialization** — create any missing part of the `0`–`6` structure and the control directory `.photos-ingest/`, and move every base entry that is **not** part of the managed structure (loose files *and* whole folder trees, **structure preserved — no flattening**) into `0-sources/`.	RUL-structure_built_once RUL-init_moves_dump_to_inbox	
+7.1	The move **excludes** the numbered folders themselves and the control directories (`.photos-ingest/`, `.photos-ingest-quarantine/`, `.git`), so a re-entry after a crashed init never moves an already-created `0`–`6` folder beneath `0-sources/`.	RUL-init_moves_dump_to_inbox RUL-dump_folder_named_as_managed	
+7.1	Hidden (dot-prefixed) dump entries are instead swept to the recoverable quarantine (Section 15), not left at the root.	RUL-dump_hidden_files_quarantined	
+7.1	The sentinel is **not** written now; it is written **last**, only on successful completion of the run (Section 14.3), so a crash before then leaves the workspace uninitialized and the next run re-enters this path harmlessly — the dump already in `0-sources/` and the already-created structure are recognized and left in place (Section 3.1).	RUL-initialized_marked_last RUL-init_taken_up_again	
+7.1	- **Initialized** (sentinel present): the structure already exists and the dump lives in `0-sources/`.	BLD-workspace_guard	
+7.1	The root-entry guard (Section 6.2 item 2) blocks any misplaced base entry — a loose file, a non-managed folder, or a symlink; the structure guard (Section 6.2 item 7) blocks a workspace missing any of its `0`–`6` folders; the symlink guard (Section 6.2 item 3) blocks symlinks anywhere among managed files, including nested directory symlinks and a managed folder that is itself a symlink; and the seal guard (Section 6.2 item 1) blocks a sealed workspace.	RUL-top_level_only_managed RUL-missing_folder_blocks RUL-no_links RUL-who_checks_for_links RUL-sealed_refuses	
+7.1	Then scan `0-sources/` and every managed folder, apply the guards of Section 6.2, and split the inventory into **mutable-side files** (everything outside `6-photos-by-dest`) and **read-only by-dest files**.	RUL-prep_leaves_by_dest_as_found RUL-blockers_all_reported	
+7.2	### 7.2 Stage 1 — The dump in `0-sources` (no flattening)	dropped	a heading; the corpus's documents carry their own
+7.2	**`0-sources/` is the one and only inbox.** On an initialized workspace you place a dump — arbitrary files and whole folder trees, in any structure — into `0-sources/`; on an uninitialized workspace prep moves the as-arrived base dump into `0-sources/` during initialization (Stage 0).	RUL-top_level_only_managed RUL-init_moves_dump_to_inbox	
+7.2	Either way the dump then sits in `0-sources/` and prep processes it from there.	RUL-inbox_kept_as_dumped	
+7.2	You are not expected to pre-organize, rename, or sort anything.	RUL-inbox_kept_as_dumped	
+7.2	A single workspace may receive one or many dumps over time (shared contract `photos-shared-contract.md` Section 10).	RUL-more_dumps_until_merge	
+7.2	**Prep does not flatten `0-sources`.** Dumped folder trees are left as they are on disk; prep does not lift files up into the top level of `0-sources/`.	RUL-inbox_kept_as_dumped	
+7.2	The job flattening used to do — guaranteeing no destination-name collisions — is instead handled **in memory during planning**: prep computes each file's by-date destination name and resolves any collision with the deterministic `-NNN` suffix allocator (Section 8), treating every on-disk and planned name as occupied.	BLD-planned_paths_tracked RUL-suffix_no_clobber	
+7.2	So the *organized outputs* — by-date photos and videos — always land at a unique destination path (logically "flattened") without ever physically flattening `0-sources`; uniqueness is per day folder (within a `YYYY-MM-DD/` band subfolder, Section 8).	RUL-suffix_no_clobber RUL-by_date_in_day_folder	
+7.2	Files already inside a managed folder are left where they are at this stage, **except** a by-date file not in its conforming day folder, which is re-located into it (Section 7.6); non-media files are routed to `1-strays/` at Stage 5 (Section 7.6).	RUL-filed_file_stays RUL-by_date_in_day_folder RUL-inbox_non_media_to_strays	
+7.2	> **Caution — protect your originals *during* the dump; a clobber at copy time is invisible to the pipeline.** Every operation the pipeline performs is no-clobber and atomic (Section 14.3; shared contract `photos-shared-contract.md` Section 15), and prep preserves every distinct file it finds — photos and videos are organized under uniquely-allocated by-date names (Section 8), non-media is moved into `1-strays/` (Section 3.2), and nothing is overwritten.	dropped	guidance to the user, not behaviour: docs/quickstart.md carries it
+7.2	**That protection begins only at the first prep invocation.** It cannot cover a file overwritten *while you are dumping*, before prep has run: if your own copy/move command overwrites a same-named file in the same destination folder as you stage files — e.g. `cp a/IMG_1234.jpg 0-sources/` then `cp b/IMG_1234.jpg 0-sources/`, where the second silently replaces the first — that file is gone at the filesystem level and the pipeline has **no record it ever existed**: nothing to detect, nothing to recover.	dropped	guidance to the user, not behaviour: docs/quickstart.md carries it
+7.2	The pipeline cannot see a collision that happened before it was invoked.	dropped	guidance to the user, not behaviour: docs/quickstart.md carries it
+7.2	To stay safe, dump each source into its **own subfolder** under `0-sources/` (prep keeps the subfolder structure on disk and gives same-named files from different subtrees distinct by-date names — it won't conflate them), or use a non-overwriting copy (`cp -n`, `rsync --ignore-existing`, or a tool that refuses to overwrite) and verify file counts before running prep.	dropped	guidance to the user, not behaviour: docs/quickstart.md carries it
+7.2	The dump is the one step where avoiding a clobber is in your hands, not the pipeline's.	dropped	guidance to the user, not behaviour: docs/quickstart.md carries it
+7.3	### 7.3 Stage 3 — Normalize extension case	dropped	a heading; the corpus's documents carry their own
+7.3	A media file outside `0-sources` whose extension is not lowercase (e.g. `.JPG`, `.ARW`) is renamed in place to the lowercase form.	RUL-media_extension_lowercase	
+7.3	To stay safe on case-insensitive filesystems this is done as two no-clobber renames (to a unique temporary name, then to the final lowercase name).	BLD-two_step_case_rename	
+7.3	Collisions are resolved by suffix allocation (Section 8).	RUL-suffix_no_clobber	
+7.3	A media file in `0-sources` takes its lowercase extension in the one move that files it (Sections 7.4, 7.6).	BLD-two_step_case_rename	
+7.3	A file quarantined as a duplicate and a non-media file keep their names as they came.	RUL-duplicate_set_aside_as_found RUL-inbox_non_media_to_strays	
+7.4	### 7.4 Stage 4 — Separate redundant JPEGs	dropped	a heading; the corpus's documents carry their own
+7.4	Files are grouped by `(folder, basename-without-extension)`.	RUL-redundant_jpeg_set_aside	
+7.4	If a group contains both a RAW and a JPEG (`.jpg` or `.jpeg`), the JPEG is considered redundant (the RAW is the master); no other file of the group is.	RUL-redundant_jpeg_set_aside BLD-jpeg_extensions	
+7.4	A redundant JPEG that is in `0-sources` is moved to `3-redundant-jpgs/`, named from its timestamp like a dated file (Section 8).	RUL-redundant_jpeg_set_aside RUL-redundant_jpg_timestamp_named	
+7.4	A RAW and a JPEG in different folders are not paired: each is organized on its own (Section 7.6).	RUL-redundant_jpeg_set_aside	
+7.5	### 7.5 Stage 2 — Content deduplication and quarantine	dropped	a heading; the corpus's documents carry their own
+7.5	Files (mutable-side **and** by-dest, **excluding `other`-class files, which are not fingerprinted, Section 9**) are grouped by `(content_fingerprint, media_class)`, so a RAW and a JPEG are never duplicates of each other.	RUL-duplicates_quarantined BLD-prep_stage_order	that a file of no media class has no fingerprint waits for §9
+7.5	Within a group of more than one file:	dropped	the list's lead-in; each item is placed below
+7.5	1. one file is **retained**, chosen by the folder it lies in when planning — by-dest wins, then the more-organized folder; within one folder, the first by path:	RUL-copy_kept_by_folder	
+7.5	```text [sha1:53866c0b, 2 lines]	RUL-copy_kept_by_folder	
+7.5	2. every other copy on the mutable side is moved to `.photos-ingest-quarantine/<plan_id>/<original-path>` via `quarantine_move`;	RUL-duplicates_quarantined RUL-duplicate_set_aside_as_found	
+7.5	3. a by-dest copy is **never** quarantined (it can only ever be the retained file);	RUL-prep_leaves_by_dest_as_found	
+7.5	4. quarantine is recoverable: each quarantined file gets a manifest entry recording its original path, quarantine path, the retained counterpart, and the duplicate evidence (Section 15);	defer:15	
+7.5	5. files with unknown/invalid fingerprints are not grouped as duplicates (Section 11.3).	defer:11.3	
+7.6	### 7.6 Stage 5 — Chronological organization	dropped	a heading; the corpus's documents carry their own
+7.6	Every mutable-side file still in `0-sources` after Stages 2–4 (not quarantined, not set aside as a redundant JPEG) is handled by its class and timestamp.	RUL-photos_by_date RUL-videos_by_date RUL-untimed_to_missing_metadata RUL-inbox_non_media_to_strays	
+7.6	The timestamp is read passively from cached metadata in priority order:	RUL-recorded_time_order	
+7.6	```text [sha1:ae68f2e2, 1 lines]	RUL-recorded_time_order	
+7.6	Routing:	dropped	the routing table's lead-in; its rows are placed below
+7.6	```text [sha1:5d014076, 4 lines]	RUL-photos_by_date RUL-videos_by_date RUL-untimed_to_missing_metadata RUL-inbox_non_media_to_strays	
+7.6	Timestamped media is grouped into a **`YYYY-MM-DD/` day subfolder** under its band (the day is the date portion of the source-naive timestamp, Section 8); the filename still carries the full timestamp.	RUL-by_date_in_day_folder	
+7.6	An already-organized by-date file that is **not** in its conforming day folder — a flat file from an older layout, or one whose timestamp changed — is **re-located into the correct day folder** on the next run (idempotent: a file already in its day folder is a no-op).	RUL-by_date_in_day_folder	
+7.6	`2-missing-metadata` stays flat (it has no date to group by).	RUL-untimed_to_missing_metadata	
+7.6	Empty day folders left behind (e.g. after the user moves a day's photos into by-dest) are pruned (Section 14.3).	defer:14.3	
+7.6	After Stage 5, **`0-sources/` is empty** — every file it held has been organized into a by-date band, set aside in `2-missing-metadata`, quarantined as a duplicate, or moved to `1-strays/`.	RUL-prep_empties_inbox	
+7.6	Leaving `0-sources/` empty at the end of every run is a deliberate end-state (Section 18): it is the clean inbox the next dump arrives into, and it is what geotag's "`0-sources` empty" gate checks (geotag `photos-2-geotag-workflow.md` Section 13).	RUL-prep_empties_inbox	the reason is the empty inbox's rationale; geotag's gate converts with geotag §13
+7.6	The timestamp used here is the raw camera-naive value, used only for organization and ordering.	DEF-recorded_time RUL-prep_no_time_or_gps	
+7.6	Prep does **not** correct it, resolve a timezone, or convert to UTC — that is geotag's job.	RUL-prep_no_time_or_gps	
+7.6	**How files leave `2-missing-metadata`.** Prep cannot invent a timestamp, so a media file with no usable one lands in `2-missing-metadata` and stays there until **the user supplies the missing metadata** (e.g. sets `DateTimeOriginal` in the file).	RUL-untimed_to_missing_metadata RUL-missing_metadata_stays	
+7.6	Resolving these is the user's responsibility, not the pipeline's.	RAT-fix_through_inbox	
+7.6	Once the user has fixed a file, they move it back into `0-sources` — at which point it is simply an **additional dump** (Section 7.2): the next prep run re-inventories it, and because its size/mtime changed (the metadata edit) it is re-extracted, now has a valid timestamp, and is routed normally to `5-photos-by-date` (or `4-videos-by-date`).	RUL-missing_metadata_stays	
+7.6	(It must go into `0-sources`, not the workspace root — a root file is blocked on an initialized workspace, Section 6.2 item 2.) Prep provides no special "re-import from missing-metadata" path; the file just flows through the ordinary pipeline as any dumped file does.	RUL-missing_metadata_stays RUL-top_level_only_managed	
+7.6	A file left in `2-missing-metadata` is residual and never blocks geotag (geotag `photos-2-geotag-workflow.md` Section 7).	dropped	geotag's behaviour: geotag §7 states it, and converts with geotag
+7.7	### 7.7 Stage 6 — Cache reconciliation	dropped	a heading; the corpus's documents carry their own
+7.7	For files that were not mutated and whose cache record is stale (changed size/mtime or stale metadata), a `db_upsert` records the refreshed state.	RUL-database_matches_files BLD-database_ops	
+7.7	Before treating a cached file whose path has disappeared as a ghost, prep applies the move-recognition rule of Section 10.1: a disappearance explained by a matching new by-dest entry is a move (cache carried forward), not a ghost.	defer:10.1	
+7.7	Genuinely missing cache rows are pruned with `db_remove` (ghost prune).	BLD-database_ops	
+7.7	Unchanged, already-fresh files produce no operation and are reported as `no_op` / `already_correct`.	RUL-no_op_run RUL-no_op_run_reports_reuse	

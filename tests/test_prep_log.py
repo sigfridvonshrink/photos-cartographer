@@ -76,16 +76,17 @@ def _log(ws):
 def test_media_journey_keyed_by_fingerprint(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
-    (ws / "0-sources" / "IMG.JPG").write_bytes(b"AAAA")     # uppercase ext -> normalized
+    (ws / "0-sources" / "IMG.JPG").write_bytes(b"AAAA")     # uppercase ext -> lowercased as it is filed
     _run(ws)
     photos = _log(ws)["photos"]
     assert len(photos) == 1
     fp, entry = next(iter(photos.items()))
     assert entry["content_fingerprint"] == fp              # keyed by content fingerprint
     actions = [(s["action"], s.get("to") or s.get("from")) for s in entry["journey"]]
-    assert ("extension_normalized", "IMG.JPG") in [(s["action"], s.get("from")) for s in entry["journey"]]
     assert any(a == "organized" for a, _ in actions)
-    assert any(a == "provisional_rename" for a, _ in actions)
+    renames = [(s["from"], s["to"]) for s in entry["journey"] if s["action"] == "provisional_rename"]
+    assert renames == [("IMG.JPG", "2023-01-02--03-04-05.jpg")]
+    assert not any(a == "extension_normalized" for a, _ in actions)   # one move, not a rename pair
     assert entry["prep_path"].startswith("5-photos-by-date/")
     assert all(s.get("run") for s in entry["journey"])     # each step attributed to its run
 
@@ -180,7 +181,8 @@ def test_prep_log_entries_are_derived_from_the_validated_plan(tmp_path, monkeypa
     the plan's rename source — the log records nothing the plan/journal did not establish."""
     _install(monkeypatch)
     ws = _ws(tmp_path)
-    (ws / "0-sources" / "IMG.JPG").write_bytes(b"AAAA")             # uppercase ext -> a rename op
+    day = ws / "5-photos-by-date" / "2023-01-02"; day.mkdir()
+    (day / "2023-01-02--03-04-05.JPG").write_bytes(b"AAAA")         # filed, uppercase ext -> a rename op
     cache = prep.WorkspaceCache(str(ws))
     plan = prep.WorkspacePrepWorkflow(str(ws), cache).plan()
     cache.close()
@@ -194,11 +196,9 @@ def test_prep_log_entries_are_derived_from_the_validated_plan(tmp_path, monkeypa
     assert entry["prep_path"] in op_dests, (entry["prep_path"], sorted(op_dests))
     # The extension-normalization step's 'from' name is the plan's rename source — derived, not new.
     norm = [s for s in entry["journey"] if s["action"] == "extension_normalized"]
-    assert norm and norm[0]["from"] == "IMG.JPG"
-    assert "IMG.JPG" in planned_names, sorted(planned_names)
-    # The provisional rename's target filename is the basename of a path the plan planned.
-    prov = [s for s in entry["journey"] if s["action"] == "provisional_rename"]
-    assert prov and os.path.basename(prov[0]["to"]) in planned_names, (prov, sorted(planned_names))
+    assert norm and norm[0]["from"] == "2023-01-02--03-04-05.JPG"
+    assert "2023-01-02--03-04-05.JPG" in planned_names, sorted(planned_names)
+    assert os.path.basename(norm[0]["to"]) in planned_names, (norm, sorted(planned_names))
 
 
 @pytest.mark.spec("RUL-no_log_entry_for_other", test="TST-prep_log-strays_and_other_not_logged")

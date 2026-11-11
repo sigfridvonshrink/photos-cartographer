@@ -385,6 +385,17 @@ unknown and geotag asks.
 
 ## 6. One filename format
 
+:::{rat} The shutter's time first
+:id: RAT-shutter_time_first
+:status: seed
+:justifies: RUL-recorded_time_order
+
+`DateTimeOriginal` is the moment the shutter fired. `CreateDate` is when the file was written, the same moment for a
+camera's own file but not for a scan or an export; `ModifyDate` is the last edit, a guess at the making when nothing
+else is there. Taking them in that order dates a file as near its making as its metadata allows, and every phase reads
+the same one.
+:::
+
 :::{rat} One key, so the names cannot drift apart
 :id: RAT-one_format_no_drift
 :status: ruled

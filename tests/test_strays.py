@@ -81,7 +81,7 @@ def _cached_paths(ws):
         conn.close()
 
 
-@pytest.mark.spec("prep-sources-empty-after-stage5-1", "prep-strays-per-run-subfolder-1")
+@pytest.mark.spec("prep-sources-empty-after-stage5-1", "prep-strays-per-run-subfolder-1", "RUL-inbox_non_media_to_strays", test="TST-strays-stray_moved_structure_preserved")
 def test_stray_moved_structure_preserved(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)

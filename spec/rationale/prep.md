@@ -129,3 +129,138 @@ aside as strays, recoverably but without a word. Asking the files' content what 
 choice — to list the extension and plan again — with the user; the warning blocks nothing and changes no list.
 :::
 
+
+## 7. The prep pipeline
+
+:::{rat} A dump's folders say where it came from
+:id: RAT-dump_folders_kept
+:status: seed
+:justifies: RUL-inbox_kept_as_dumped
+
+A dump's folders are the only trace of where each file came from — a card, a phone, a friend's share — and two files of
+one name from different sources sit apart only by them. Lifting the files up into one folder would throw that away and
+make the names collide; each file instead leaves the inbox once, straight for where it is filed, under a name made free
+in the plan.
+:::
+
+:::{rat} What is filed is settled
+:id: RAT-filed_is_settled
+:status: seed
+:justifies: RUL-filed_file_stays
+
+A file outside the inbox was filed by an earlier run or moved there by the user. Moving it again on a later run would
+undo either for nothing and churn the names the user and later phases know it by. Only two things move it: a copy of it
+found to be better filed, and its own recorded time no longer matching its day.
+:::
+
+:::{rat} A day of photos is one folder
+:id: RAT-day_folder
+:status: seed
+:justifies: RUL-by_date_in_day_folder
+
+The user sorts photos by date into destinations, and a day is the unit they think in: a day's folder holds what was
+shot that day and nothing else. A file's day comes from its recorded time, so a file whose time changed — corrected by
+the user — belongs to another day, and one whose time is gone belongs to no day at all.
+:::
+
+:::{rat} Photos wait by date for the user's sort
+:id: RAT-photos_wait_by_date
+:status: seed
+:justifies: RUL-photos_by_date
+
+The user sorts photos into destinations from photos by date; ordered by their recorded time, the photos of one trip and
+one day sit together, ready to be moved as a block. The timestamp name keeps that order however a folder is listed.
+:::
+
+:::{rat} A file with no time cannot be dated
+:id: RAT-untimed_set_apart
+:status: seed
+:justifies: RUL-untimed_to_missing_metadata
+
+Prep cannot invent a time, and a file with none has no day to be filed under: it waits apart, flat, until the user
+gives it one. Its untimed name keeps the name it came with, the user's only way to tell which file it was.
+:::
+
+:::{rat} A stray is the user's, untouched
+:id: RAT-stray_as_it_came
+:status: seed
+:justifies: RUL-inbox_non_media_to_strays
+
+A file of no media class is not the pipeline's to process ({need}`RAT-strays_not_the_pipelines`); it leaves the inbox
+so that the inbox ends empty, and goes where the user can find it as it was — at the place it had in the dump, under the
+name it came with, in the run's own folder so no two runs' strays meet.
+:::
+
+:::{rat} The user's fix goes through the inbox
+:id: RAT-fix_through_inbox
+:status: seed
+:justifies: RUL-missing_metadata_stays
+
+The user gives a file in missing metadata its time with their own tools, whenever they choose. Moving it back into the
+inbox says that they are done; it then goes through prep like any file of a new dump, and no second way into the
+pipeline needs keeping in step with the first.
+:::
+
+:::{rat} One spelling of each extension
+:id: RAT-one_extension_spelling
+:status: seed
+:justifies: RUL-media_extension_lowercase
+
+Cameras write `.JPG` and `.ARW`; tools and the library match names exactly on many filesystems. One spelling across the
+workspace means a name is the same name in every folder and every phase, and two files differing only in an
+extension's case are seen as the one name they are.
+:::
+
+:::{rat} A duplicate's record names where it was
+:id: RAT-duplicate_found_as_it_was
+:status: seed
+:justifies: RUL-duplicate_set_aside_as_found
+
+Quarantine keeps a duplicate to be recovered. Its record must give the path and the name it had when found, or a
+restore puts back a file the user never had; and moving or renaming it before setting it aside would be work for
+nothing, with a crash between leaving it where no run expects it. Setting duplicates aside before any other stage also
+lets the copy kept be chosen from where the copies really are.
+:::
+
+:::{rat} The RAW is the master
+:id: RAT-raw_is_master
+:status: seed
+:justifies: RUL-redundant_jpeg_set_aside
+
+A camera shooting RAW and JPEG together writes one name with two extensions in one folder. The RAW holds everything the
+JPEG does and more, so the JPEG is redundant — kept, not deleted, but set apart from what the user sorts. Only that
+evidence is trusted: a name shared within a folder, as the camera wrote it. Another image under the same name is not
+the camera's JPEG, and a JPEG and a RAW in different folders, or matched only by time, may be two shots.
+:::
+
+:::{rat} Identical media is kept once
+:id: RAT-identical_kept_once
+:status: seed
+:justifies: RUL-duplicates_quarantined
+
+Dumps overlap: the same card copied twice, a phone's backup next to its export. Two copies of one photo would be sorted,
+geotagged and merged twice. The fingerprint is over the decoded content, so copies are found whatever their name or
+metadata; the media class keeps a RAW and the JPEG from it apart, though they show one picture. The copies beyond the
+first go to quarantine, recoverable, and photos by destination is never touched.
+:::
+
+:::{rat} The copy kept is the one further along
+:id: RAT-keep_further_along
+:status: seed
+:justifies: RUL-copy_kept_by_folder
+
+A copy in photos by destination carries the user's sort, and one already filed has been named and placed; keeping the
+copy furthest along saves redoing that and never moves what the user arranged. The folders are taken as they are before
+the plan moves anything, so a new dump never displaces a file already filed, and the order by path makes the choice the
+same on every run.
+:::
+
+:::{rat} The database is what the next run trusts
+:id: RAT-database_trusted_next
+:status: seed
+:justifies: RUL-database_matches_files
+
+The next run reuses the database's fingerprints and metadata for every file whose size and time are unchanged. A row
+left stale or pointing at a file that is gone would be reused for what it no longer describes; refreshing and pruning at
+each execution keeps reuse safe.
+:::

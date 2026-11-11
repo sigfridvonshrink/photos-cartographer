@@ -12,7 +12,7 @@ to. *Why* each holds is in [the rationale](../rationale/prep.md); *how this buil
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: prep-no-time-gps-correction-1
+:aliases: prep-no-time-gps-correction-1, prep-no-timestamp-correction-1
 :uses: DEF-prep
 
 Prep SHALL make no correction to a file's time or position: it plans, infers, writes and applies none.
@@ -24,7 +24,7 @@ Prep SHALL make no correction to a file's time or position: it plans, infers, wr
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: prep-by-dest-readonly-1, prep-no-perform-bydest-move-1
+:aliases: prep-by-dest-readonly-1, prep-no-perform-bydest-move-1, prep-bydest-never-quarantined-1, prep-scan-split-inventory-1
 :uses: DEF-prep, DEF-managed_folders
 
 Prep SHALL leave photos by destination as it finds it: never moving a file into it, out of it or within it, nor
@@ -162,3 +162,163 @@ When files prep is about to set aside as strays are images or videos by their co
 extension.
 :::
 
+
+## 7. The prep pipeline
+
+:::{rul} A dump keeps its folders in the inbox
+:id: RUL-inbox_kept_as_dumped
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: prep-no-flatten-sources-1
+:uses: DEF-managed_folders
+
+Prep SHALL move no file from one place in the inbox to another: a dump's folders stay as they arrived until each file
+leaves the inbox.
+:::
+
+:::{rul} A filed media file stays in its folder
+:id: RUL-filed_file_stays
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: prep-files-in-managed-left-1
+:uses: DEF-managed_folders
+
+A media file outside the inbox SHALL stay in the folder it is in, unless prep sets it aside as a duplicate or it is a
+dated file outside its day folder.
+:::
+
+:::{rul} A dated file lies in its day folder
+:id: RUL-by_date_in_day_folder
+:status: seed
+:criticality: med
+:verify: required
+:aliases: prep-day-subfolder-grouping-1, prep-relocate-misfiled-bydate-1
+:uses: DEF-managed_folders, DEF-recorded_time
+
+Each file in photos by date or videos by date SHALL lie in the folder of its recorded time's day, directly under its
+band; prep moves one that does not into it — or, with no recorded time, into missing metadata.
+:::
+
+:::{rul} Prep puts photos by date
+:id: RUL-photos_by_date
+:status: seed
+:criticality: med
+:verify: required
+:aliases: prep-route-by-class-timestamp-1
+:uses: DEF-prep, DEF-managed_folders, DEF-timestamp_name, DEF-recorded_time
+
+Prep SHALL put each photo it takes in that has a recorded time into photos by date, under its timestamp name.
+:::
+
+:::{rul} Media with no recorded time goes to missing metadata
+:id: RUL-untimed_to_missing_metadata
+:status: seed
+:criticality: med
+:verify: required
+:aliases: prep-missing-metadata-flat-1
+:uses: DEF-managed_folders, DEF-untimed_name, DEF-recorded_time
+
+Prep SHALL put each media file it takes in with no recorded time directly into missing metadata, no day folder between,
+under its untimed name.
+:::
+
+:::{rul} Non-media leaves the inbox for the strays folder, as it came
+:id: RUL-inbox_non_media_to_strays
+:status: seed
+:criticality: med
+:verify: required
+:uses: DEF-strays_folder, DEF-managed_folders
+
+Prep SHALL move each file of no media class in the inbox into the strays folder's subfolder for the run, at its place
+under the inbox and with its name unchanged.
+:::
+
+:::{rul} A file in missing metadata stays there
+:id: RUL-missing_metadata_stays
+:status: seed
+:criticality: low
+:anti: yes
+:verify: required
+:aliases: prep-missing-metadata-no-special-path-1
+:uses: DEF-managed_folders, DEF-recorded_time
+
+Prep SHALL leave a file in missing metadata where it is, though it has since gained a recorded time: only the user
+moving it back into the inbox takes it through prep again.
+:::
+
+:::{rul} A media file's extension is lowercase
+:id: RUL-media_extension_lowercase
+:status: seed
+:criticality: low
+:verify: required
+:aliases: prep-normalize-extension-case-1
+:uses: DEF-managed_folders
+
+Each media file prep files, or finds outside the inbox, SHALL end with its extension in lowercase.
+:::
+
+:::{rul} A duplicate is set aside as it was found
+:id: RUL-duplicate_set_aside_as_found
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:uses: DEF-fingerprint
+
+Prep SHALL quarantine a duplicate from the place and under the name it had when planned, no other stage of the plan
+moving or renaming it first.
+:::
+
+:::{rul} A JPEG beside its RAW is set aside
+:id: RUL-redundant_jpeg_set_aside
+:status: seed
+:criticality: med
+:verify: required
+:aliases: prep-separate-redundant-jpeg-1
+:uses: DEF-managed_folders
+
+Prep SHALL move into redundant JPEGs each JPEG in the inbox that shares its folder and its name, extension aside, with a
+raw file — and no other file with it.
+:::
+
+:::{rul} Of identical media, one copy is kept
+:id: RUL-duplicates_quarantined
+:status: seed
+:criticality: high
+:verify: required
+:aliases: prep-quarantine-extra-copies-1, prep-group-by-fingerprint-class-1
+:uses: DEF-fingerprint, DEF-managed_folders
+
+Of the media files prep inventories that share one fingerprint and one media class, prep SHALL keep one and quarantine
+every other copy outside photos by destination.
+:::
+
+:::{rul} The copy kept is the best filed
+:id: RUL-copy_kept_by_folder
+:status: seed
+:criticality: med
+:verify: required
+:aliases: prep-retain-by-folder-priority-1
+:refines: RUL-duplicates_quarantined
+:uses: DEF-managed_folders
+
+The copy prep keeps SHALL be the one first in this order of the folders the copies lie in when planned — photos by
+destination, photos by date, videos by date, redundant JPEGs, missing metadata, the inbox — and, among copies in one
+folder, the first by path.
+:::
+
+:::{rul} The workspace database matches the files
+:id: RUL-database_matches_files
+:status: seed
+:criticality: med
+:verify: required
+:aliases: prep-cache-upsert-stale-1, prep-ghost-prune-1
+:uses: DEF-workspace_database
+
+A prep execution SHALL leave the workspace database current: a row for each media file prep inventoried, describing the
+file as it now is and where it now is, and no row for a file that is gone.
+:::

@@ -66,7 +66,7 @@ def _plan(ws):
     return prep.WorkspacePrepWorkflow(str(ws), prep.WorkspaceCache(str(ws), in_memory=True)).plan()
 
 
-@pytest.mark.spec("prep-date-name-format-1", "prep-day-subfolder-grouping-1")
+@pytest.mark.spec("prep-date-name-format-1", "prep-day-subfolder-grouping-1", "RUL-by_date_in_day_folder", "RUL-photos_by_date", test="TST-by_date_subfolders-photo_lands_in_day_subfolder")
 def test_photo_lands_in_day_subfolder(tmp_path, monkeypatch):
     _mock(monkeypatch, lambda f: "2023:07:04 14:30:05")
     ws = _ws(tmp_path)
@@ -85,7 +85,7 @@ def test_video_lands_in_day_subfolder(tmp_path, monkeypatch):
     assert (ws / "4-videos-by-date" / "2023-07-04" / "2023-07-04--14-30-05.mp4").exists()
 
 
-@pytest.mark.spec("prep-missing-metadata-flat-1")
+@pytest.mark.spec("prep-missing-metadata-flat-1", "RUL-untimed_to_missing_metadata", test="TST-by_date_subfolders-untimestamped_stays_flat_in_missing_metadata")
 def test_untimestamped_stays_flat_in_missing_metadata(tmp_path, monkeypatch):
     _mock(monkeypatch, lambda f: None)
     ws = _ws(tmp_path)
@@ -113,7 +113,7 @@ def test_same_day_collides_other_day_does_not(tmp_path, monkeypatch):
     }, dests
 
 
-@pytest.mark.spec("prep-relocate-misfiled-bydate-1")
+@pytest.mark.spec("prep-relocate-misfiled-bydate-1", "RUL-by_date_in_day_folder", test="TST-by_date_subfolders-existing_flat_file_is_migrated_into_day_folder")
 def test_existing_flat_file_is_migrated_into_day_folder(tmp_path, monkeypatch):
     _mock(monkeypatch, lambda f: "2023:07:04 14:30:05")
     ws = _ws(tmp_path)
@@ -128,7 +128,7 @@ def test_existing_flat_file_is_migrated_into_day_folder(tmp_path, monkeypatch):
     assert (ws / "5-photos-by-date" / "2023-07-04" / "2023-07-04--14-30-05.jpg").exists()
 
 
-@pytest.mark.spec("prep-files-in-managed-left-1", "prep-recognize-correct-location-1")
+@pytest.mark.spec("prep-files-in-managed-left-1", "prep-recognize-correct-location-1", "RUL-filed_file_stays", test="TST-by_date_subfolders-conforming_file_is_a_noop")
 def test_conforming_file_is_a_noop(tmp_path, monkeypatch):
     _mock(monkeypatch, lambda f: "2023:07:04 14:30:05")
     ws = _ws(tmp_path)

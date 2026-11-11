@@ -418,7 +418,7 @@ def test_restored_quarantine_file_reflows_as_a_normal_dump(mock_meta, tmp_path):
                for op in plan2.operations), [(o.type, o.source) for o in plan2.operations]
 
 
-@pytest.mark.spec("prep-missing-metadata-no-special-path-1")
+@pytest.mark.spec("prep-missing-metadata-no-special-path-1", "RUL-missing_metadata_stays", test="TST-idempotency_cache-no_special_reimport_path_from_missing_metadata")
 def test_no_special_reimport_path_from_missing_metadata(tmp_path):
     """2-missing-metadata is a holding bay, not a re-entry point: prep never reprocesses a file sitting
     there in place. A file still missing a date stays put (no op); the way to re-import is to move it to
@@ -717,7 +717,7 @@ def test_stale_already_cached_file_aborts(mock_meta, tmp_path):
     assert (ws / "5-photos-by-date" / "2023-01-01" / "2023-01-01--12-00-00-001.jpg").exists()
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("prep-ghost-prune-1")
+@pytest.mark.spec("prep-ghost-prune-1", "RUL-database_matches_files", "BLD-database_ops", test="TST-idempotency_cache-stale_ghost_prune_reappeared_file_aborts_before_cache_remove")
 def test_stale_ghost_prune_reappeared_file_aborts_before_cache_remove(mock_meta, tmp_path):
     ws = tmp_path / "workspace"
     ws.mkdir()
