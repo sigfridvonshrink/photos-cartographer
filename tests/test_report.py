@@ -41,6 +41,7 @@ def _mock(monkeypatch):
             return {"status": "valid", "strategy": "image-content-hash-v1",
                     "value": "sig-" + f.read().hex()[:16], "engine_version": "t"}
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", spy)
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "t")   # the version the spy stamps
 
     def meta(folders, max_workers=4, progress_coordinator=None):
         res = {}

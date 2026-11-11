@@ -83,7 +83,7 @@ def _seed(ws, n=2):
     prep.CONFIG["jobs"] = 1
 
 
-@pytest.mark.spec("prep-plan-memo-reuse-1")
+@pytest.mark.spec("prep-plan-memo-reuse-1", test="TST-plan_memo-replan_without_execute_reuses_fingerprints")
 def test_replan_without_execute_reuses_fingerprints(tmp_path, monkeypatch):
     """The point of the memo: plan, do NOT execute, plan again — the second plan decodes nothing.
     Before the memo this re-hashed the whole workspace, because cache rows are written by execute."""
@@ -111,7 +111,7 @@ def test_replan_without_execute_reuses_fingerprints(tmp_path, monkeypatch):
     assert _hashes(plan2) == _hashes(plan1)
 
 
-@pytest.mark.spec("prep-plan-memo-not-the-cache-1")
+@pytest.mark.spec("prep-plan-memo-not-the-cache-1", test="TST-plan_memo-plan_does_not_write_the_workspace_cache")
 def test_plan_does_not_write_the_workspace_cache(tmp_path, monkeypatch):
     """The memo must not become a back door into the cache: planning still leaves file_cache empty,
     and the memo lives in its own database file."""
@@ -128,7 +128,7 @@ def test_plan_does_not_write_the_workspace_cache(tmp_path, monkeypatch):
     assert utils.plan_memo_db_path(str(ws)) != utils.db_path(str(ws))
 
 
-@pytest.mark.spec("prep-plan-memo-subordinate-1")
+@pytest.mark.spec("prep-plan-memo-subordinate-1", test="TST-plan_memo-executed_cache_wins_over_the_memo")
 def test_executed_cache_wins_over_the_memo(tmp_path, monkeypatch):
     """A cache row is the executed state and always outranks a memo row for the same path: after
     execute, reuse is attributed to the cache (memo_reused 0), not to the memo."""
@@ -146,7 +146,7 @@ def test_executed_cache_wins_over_the_memo(tmp_path, monkeypatch):
     assert (reused, total) == (0, 0)                 # ... and the source was the cache
 
 
-@pytest.mark.spec("prep-plan-memo-freshness-1")
+@pytest.mark.spec("prep-plan-memo-freshness-1", test="TST-plan_memo-changed_file_is_not_reused_from_the_memo")
 def test_changed_file_is_not_reused_from_the_memo(tmp_path, monkeypatch):
     """A memo row faces the same freshness gate as a cache row: bump the mtime and it is rejected,
     the file is re-decoded, and the re-hash diagnostic names a reason rather than staying silent."""
@@ -165,7 +165,7 @@ def test_changed_file_is_not_reused_from_the_memo(tmp_path, monkeypatch):
     assert plan2.summary["performance_and_cache"]["rehash_summary"]["by_reason"] == {"mtime-changed": 1}
 
 
-@pytest.mark.spec("prep-plan-memo-freshness-1")
+@pytest.mark.spec("prep-plan-memo-freshness-1", test="TST-plan_memo-engine_change_invalidates_memo_rows")
 def test_engine_change_invalidates_memo_rows(tmp_path, monkeypatch):
     """The memo stores the engine version bound to each pixel signature, so an ImageMagick bump
     restales memo rows exactly as it restales cache rows."""
@@ -182,7 +182,7 @@ def test_engine_change_invalidates_memo_rows(tmp_path, monkeypatch):
     assert plan2.summary["performance_and_cache"]["rehash_summary"]["by_reason"] == {"engine-changed": 1}
 
 
-@pytest.mark.spec("prep-plan-memo-pruned-1")
+@pytest.mark.spec("prep-plan-memo-pruned-1", test="TST-plan_memo-memo_drops_paths_it_no_longer_sees")
 def test_memo_drops_paths_it_no_longer_sees(tmp_path, monkeypatch):
     """The memo tracks the workspace instead of growing forever: a file that disappears loses its row."""
     hash_calls = []
@@ -199,7 +199,7 @@ def test_memo_drops_paths_it_no_longer_sees(tmp_path, monkeypatch):
     assert sorted(rows) == ["0-sources/a0.jpg"]
 
 
-@pytest.mark.spec("prep-plan-memo-disposable-1")
+@pytest.mark.spec("prep-plan-memo-disposable-1", test="TST-plan_memo-a_broken_memo_degrades_instead_of_failing_the_plan")
 def test_a_broken_memo_degrades_instead_of_failing_the_plan(tmp_path, monkeypatch):
     """The memo is an accelerator, never a dependency: a corrupt memo database costs the decode it
     was saving and nothing else — the plan still completes."""
@@ -218,6 +218,7 @@ def test_a_broken_memo_degrades_instead_of_failing_the_plan(tmp_path, monkeypatc
     assert _memo_stats(plan2)[0] == 0
 
 
+@pytest.mark.spec("BLD-plan_memo", test="TST-plan_memo-memo_skips_records_it_could_never_reuse")
 def test_memo_skips_records_it_could_never_reuse(tmp_path, monkeypatch):
     """Only complete observations are stored. A record without a metadata row could not satisfy the
     all-or-nothing freshness gate, so storing it would buy nothing and relabel its re-hash reason."""
@@ -254,3 +255,42 @@ def test_memo_row_is_rejected_when_it_disagrees_with_its_own_key(tmp_path, monke
     memo = utils.PlanFingerprintMemo(str(tmp_path))
     assert memo.load() == {}
     memo.close()
+
+
+def _ops(plan):
+    """The plan's operations, with the plan's own id (in quarantine paths) taken out."""
+    return [(op.type, op.source, (op.destination or "").replace(plan.plan_id, "<plan>"))
+            for op in plan.operations]
+
+
+@pytest.mark.spec("RUL-memo_never_changes_plan", test="TST-plan_memo-the_memo_never_changes_the_plan")
+def test_the_memo_never_changes_the_plan(tmp_path, monkeypatch):
+    """The same workspace plans to the same operations with the memo empty, reused, or gone."""
+    hash_calls = []
+    _install_mocks(monkeypatch, hash_calls)
+    ws = _ws(tmp_path)
+    _seed(ws, 3)
+    fresh = _ops(_plan(ws))
+    hash_calls.clear()
+    reused = _ops(_plan(ws))
+    assert hash_calls == []                          # every fingerprint came from the memo
+    os.remove(utils.plan_memo_db_path(str(ws)))
+    assert fresh == reused == _ops(_plan(ws))
+
+
+@pytest.mark.spec("RUL-memo_proves_no_move", "BLD-move_match", test="TST-plan_memo-the_memo_proves_no_move")
+def test_the_memo_proves_no_move(tmp_path, monkeypatch):
+    """A file read by a plan never executed and then moved into photos by destination is not recognized
+    as moved: the memo's entry for its old path is no record of it, and it is read as new."""
+    hash_calls = []
+    _install_mocks(monkeypatch, hash_calls)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"CONTENT")
+    prep.CONFIG["jobs"] = 1
+    _plan(ws)                                        # read into the memo, never executed
+    (ws / "6-photos-by-dest" / "T").mkdir()
+    os.rename(ws / "0-sources" / "a.jpg", ws / "6-photos-by-dest" / "T" / "a.jpg")
+    hash_calls.clear()
+    plan = _plan(ws)
+    assert plan.summary["recognized_moves"] == 0
+    assert [os.path.relpath(p, ws) for p in hash_calls] == ["6-photos-by-dest/T/a.jpg"]

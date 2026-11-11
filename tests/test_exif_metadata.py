@@ -190,17 +190,15 @@ def test_handoff_manifest_enrichment(workspace, monkeypatch):
     assert len(handoff["camera_groups"]) == 1
     cg = handoff["camera_groups"][0]
 
-    # 0-sources gets moved to 2-missing-metadata normally, but here it's got no gps so maybe just 2-missing-metadata
-    # Actually wait, why did it go to quarantine? Because it's an exact duplicate of the content_hash returned by the mock.
-    # We should look at whatever files are actually in cg["files"], but they are sorted correctly.
-    assert len(cg["files"]) == 2
-    assert cg["files"] == sorted(cg["files"])
-    assert cg["cache_freshness"]["total_files"] == 2
-    assert cg["cache_freshness"]["metadata_extracted_ok"] == 2
+    # The mock fingerprints both files alike, so the inbox photo is quarantined as a duplicate of the
+    # by-dest one; a quarantined file leaves the database and the handoff.
+    assert cg["files"] == ["6-photos-by-dest/vacation/2023-01-02--12-00-00.jpg"]
+    assert cg["cache_freshness"]["total_files"] == 1
+    assert cg["cache_freshness"]["metadata_extracted_ok"] == 1
     assert cg["cache_freshness"]["metadata_reused_from_cache"] == 0
     assert cg["group_key"] == "12345|Canon|EOS R5"
-    assert cg["file_count"] == 2
-    assert cg["has_native_gps"] == 2
+    assert cg["file_count"] == 1
+    assert cg["has_native_gps"] == 1
 
     assert len(handoff["destination_folders"]) == 1
     df = handoff["destination_folders"][0]

@@ -1269,28 +1269,42 @@ class WorkspacePrepWorkflow:
         out.sort()
         return out
 
-    def _recognize_carried_moves(self, files, existing_cache, existing_metadata):
+    def _recognize_carried_moves(self, files, existing_cache, existing_metadata,
+                                 current_metadata_context, current_magick_version):
         """Move-aware cache identity (prep §10.1 / 10.2). Recognize a file the user moved from by-date
         into 6-photos-by-dest (or re-sorted between destinations inside by-dest) by a cache-only
         bijective (size, mtime_ns, basename) stat match, and carry its cached hash + metadata forward
         to the new path instead of re-hashing / re-extracting it. By-dest is read-only, so there is no
         filesystem operation: the old (now-missing) row is dropped by ghost-prune and the carried row is
-        upserted at the new path. Returns (carried_forward, moved_unmatched). Pure helper — computes the
-        two maps; mutates no plan state. (Extracted verbatim from plan().)"""
+        upserted at the new path. A row is carried only if it would be reused where it was — its
+        fingerprint taken by this build's method and its metadata fresh (prep §9); otherwise the file is
+        read whole at its new path. Returns (carried_forward, moved_unmatched). Pure helper — computes
+        the two maps; mutates no plan state."""
         import collections as _collections
+        from .photos_utils import is_metadata_cache_fresh, fingerprint_reusable, media_class_for_ext
+
+        def _row_reusable(path, row, md):
+            record = {'relative_path': path, 'size': row['size'], 'mtime_ns': row['mtime_ns']}
+            if row.get('content_hash'):
+                record['content_hash'] = row['content_hash']
+                media_class = media_class_for_ext(os.path.splitext(path)[1].lower().lstrip('.'))
+                if not fingerprint_reusable(row['content_hash'], media_class, current_magick_version):
+                    return False
+            return is_metadata_cache_fresh(record, md, current_metadata_context)
+
         _present = set(files)
         _missing_rows = {p: r for p, r in existing_cache.items() if p not in _present}
         _new_by_dest = [f for f in files
                         if f.startswith(folder_name('photos_by_dest') + '/') and f not in existing_cache]
         _src_idx = _collections.defaultdict(list)
         for _p, _r in _missing_rows.items():
-            _src_idx[(_r['size'], _r['mtime_ns'], os.path.basename(_p).lower())].append(_p)
+            _src_idx[(_r['size'], _r['mtime_ns'], os.path.basename(_p))].append(_p)
         _tgt_idx = _collections.defaultdict(list)
         _tgt_stat = {}
         for _f in _new_by_dest:
             _st = os.stat(os.path.join(self.workspace_root, _f))
             _tgt_stat[_f] = _st
-            _tgt_idx[(_st.st_size, _st.st_mtime_ns, os.path.basename(_f).lower())].append(_f)
+            _tgt_idx[(_st.st_size, _st.st_mtime_ns, os.path.basename(_f))].append(_f)
         carried_forward = {}  # new_by_dest_path -> {"source": old_path, "db_file": carried_db}
         for _key, _tgts in _tgt_idx.items():
             _srcs = _src_idx.get(_key, [])
@@ -1298,6 +1312,8 @@ class WorkspacePrepWorkflow:
                 _old_path, _new_path = _srcs[0], _tgts[0]
                 _old_row = existing_cache[_old_path]
                 _old_md = existing_metadata.get(_old_path)
+                if not _row_reusable(_old_path, _old_row, _old_md):
+                    continue
                 _st = _tgt_stat[_new_path]
                 _carried = dict(_old_row,
                                 relative_path=_new_path,
@@ -2123,7 +2139,7 @@ class WorkspacePrepWorkflow:
                         destination=quarantine_dest,
                         preconditions={"size": dup["size"], "mtime_ns": dup["mtime_ns"]},
                         verification=manifest_payload,
-                        database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}, {"action": "upsert", "data": dict(dup, relative_path=quarantine_dest, absolute_path=os.path.join(self.workspace_root, quarantine_dest))}]
+                        database_effects_after_verification=[{"action": "remove", "relative_path": rel_path}]
                     ))
                     quarantined.add(dup['relative_path'])
                     st.current_paths[dup['relative_path']] = quarantine_dest
@@ -2465,15 +2481,6 @@ class WorkspacePrepWorkflow:
         from .photos_utils import prep_plan_path
         unpersisted_prior_plan = (not existing_cache) and os.path.exists(prep_plan_path(self.workspace_root))
 
-        carried_forward, moved_unmatched = self._recognize_carried_moves(
-            files, existing_cache, existing_metadata)
-
-        # Plan-time decode memo (prep §10.3). Move recognition above deliberately runs against the
-        # EXECUTED state only — a memo row proves nothing about where prep has put a file — so the
-        # overlay happens after it, and cache rows always win over memo rows.
-        existing_cache, existing_metadata, memo_paths = self._overlay_plan_memo(
-            existing_cache, existing_metadata)
-
         from .photos_utils import MetadataReader, ProgressCoordinator, get_exiftool_version, get_imagemagick_version, FIELD_SET_VERSION, EXTRACTION_OPTIONS_FINGERPRINT, METADATA_SCHEMA_VERSION, CAMERA_GROUP_KEY_VERSION
         current_exiftool_version = get_exiftool_version()
         current_magick_version = get_imagemagick_version()
@@ -2488,6 +2495,15 @@ class WorkspacePrepWorkflow:
             "metadata_schema_version": METADATA_SCHEMA_VERSION,
             "camera_group_key_version": CAMERA_GROUP_KEY_VERSION,
         }
+
+        carried_forward, moved_unmatched = self._recognize_carried_moves(
+            files, existing_cache, existing_metadata, current_metadata_context, current_magick_version)
+
+        # Plan-time decode memo (prep §10.3). Move recognition above deliberately runs against the
+        # EXECUTED state only — a memo row proves nothing about where prep has put a file — so the
+        # overlay happens after it, and cache rows always win over memo rows.
+        existing_cache, existing_metadata, memo_paths = self._overlay_plan_memo(
+            existing_cache, existing_metadata)
 
         folders_to_scan = set()
         for f in files:

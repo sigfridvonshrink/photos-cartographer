@@ -228,3 +228,24 @@ def test_a_file_sent_back_is_refiled_where_it_was(tmp_path):
     cache = prep.WorkspaceCache(str(ws))
     assert set(cache.get_all_files()) == {f"5-photos-by-date/2023-01-02/{NAME}.jpg"}
     cache.close()
+
+
+@pytest.mark.spec("RUL-quarantined_leaves_database", "BLD-move_row_effects",
+                  test="TST-prep_pipeline-a_quarantined_file_leaves_the_database")
+def test_a_quarantined_file_leaves_the_database(tmp_path):
+    """A duplicate set aside has no row in the database and no entry in the handoff; reclaiming the
+    quarantine leaves the next plan nothing to do."""
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.JPG").write_bytes(b"same")
+    (ws / "0-sources" / "b.JPG").write_bytes(b"same")
+    plan = _run(ws)
+    assert any(op.type == "quarantine_move" for op in plan.operations)
+    filed = f"5-photos-by-date/2023-01-02/{NAME}.jpg"
+    cache = prep.WorkspaceCache(str(ws))
+    assert set(cache.get_all_files()) == {filed}
+    cache.close()
+    with open(utils.handoff_path(str(ws))) as f:
+        assert [r["relative_path"] for r in json.load(f)["files"]] == [filed]
+    import shutil
+    shutil.rmtree(ws / ".photos-ingest-quarantine")
+    assert [op.type for op in _plan(ws).operations if op.type.startswith("db_")] == []

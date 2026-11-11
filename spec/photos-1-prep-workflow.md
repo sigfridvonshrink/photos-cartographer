@@ -382,7 +382,7 @@ The workspace database records its schema version and the fingerprint-algorithm 
 
 ## 10. Move-aware cache identity
 
-The cache must distinguish: same content at a new path because of a move; same path with changed content; different path and different content; duplicate content already in by-dest; duplicate content already quarantined.
+The cache must distinguish: same content at a new path because of a move; same path with changed content; different path and different content; duplicate content already in by-dest. A file prep quarantines leaves the cache — its row is removed and none is written for its quarantine path — so it is in neither the cache nor the handoff; the quarantine manifest is its record.
 
 Each planned move/rename carries enough to update the cache row without re-fingerprinting after the move: source path, destination path, source size, source mtime, source fingerprint if known, the post-move expected path, the post-move cache action, and the dependency facts proving the carried-forward fingerprint is still valid. Cache updates are derived from the validated plan and applied during execution, never speculatively during planning. What planning must not write is **anticipated** state — a row describing where a file will be once an operation succeeds. A record of bytes already read at the path they were read from is not anticipated state, and Section 10.3 permits exactly that, in a separate store.
 
@@ -392,16 +392,17 @@ After prep organizes media into `4-videos-by-date`/`5-photos-by-date`, the user 
 
 Detection is cache-only — no file re-read beyond `stat`:
 
-1. a previously cached mutable-side file (typically under `5-photos-by-date`/`4-videos-by-date`) is now missing from its cached path; and
-2. a by-dest file that was not previously cached now exists whose `stat` (size and `mtime_ns`) and basename match that missing file.
+1. a previously cached file is now missing from its cached path; and
+2. a by-dest file that was not previously cached now exists whose `stat` (size and `mtime_ns`) and basename, exactly, match that missing file.
 
-On a unique match, prep treats it as a move: it carries the cached content fingerprint and metadata record forward to the new by-dest path (move-aware identity), drops the stale old cache row, and records the new by-dest row from the carried-forward facts. Because `6-photos-by-dest` is read-only, prep performs **no** filesystem operation — it only fixes its cache and the handoff manifest to reflect the new location.
+On a unique match whose cached row would have been reused at its old path (Section 9), prep treats it as a move: it carries the cached content fingerprint and metadata record forward to the new by-dest path (move-aware identity), drops the stale old cache row, and records the new by-dest row from the carried-forward facts. Because `6-photos-by-dest` is read-only, prep performs **no** filesystem operation — it only fixes its cache and the handoff manifest to reflect the new location.
 
 Safety:
 
 1. if more than one missing file could match (ambiguous size/mtime/basename), or the move did not preserve mtime, prep does not guess: it treats the by-dest file as a normal newly-seen by-dest file and scans it (Section 9), and the old row is ghost-pruned;
 2. carried-forward identity never overrides a content change — if the by-dest file's size/mtime differ from the cached source, it is rescanned;
-3. move recognition only updates prep's own cache/handoff; it never mutates by-dest media.
+3. move recognition only updates prep's own cache/handoff; it never mutates by-dest media;
+4. a cached row that would not have been reused at its old path — its fingerprint taken by another method, or its metadata stale — is not carried: the by-dest file is read whole as a newly-seen file, and the old row is ghost-pruned.
 
 This makes the round trip cheap: after the user sorts the by-date working set into by-dest, re-running prep does not re-fingerprint or re-read the moved files — it simply fixes the handoff.
 

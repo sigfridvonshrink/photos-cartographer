@@ -4010,7 +4010,7 @@
       "area": "prep",
       "criticality": "med",
       "anti": false,
-      "title": "The cache distinguishes move/content-change/different-file/dup-in-by-dest/dup-quarantined",
+      "title": "The cache distinguishes move/content-change/different-file/dup-in-by-dest; a quarantined file leaves it",
       "spec": {
         "file": "photos-1-prep-workflow.md",
         "section": "10"

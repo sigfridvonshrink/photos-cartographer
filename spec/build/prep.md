@@ -21,7 +21,7 @@ plan that holds any other operation — a metadata write among them.
 :realises: RUL-prep_leaves_by_dest_as_found
 
 Prep's plan SHALL hold no operation whose source or destination lies in `6-photos-by-dest`, its execute refusing a plan
-that holds one; prep reads the files there for their fingerprint and metadata only (prep §10, §11).
+that holds one; prep reads the files there for their fingerprint and metadata only ({need}`RUL-move_recognized`; prep §11).
 :::
 
 ## 3. The workspace's first run, and the strays
@@ -238,4 +238,50 @@ build's.
 Each fingerprint SHALL record its strategy — `image-content-hash-v1` for a photo, `video-md5-v1` for a video — and a
 photo's the ImageMagick version that took it; a cached photo fingerprint is reused when both match the build's, a video's
 when its strategy does.
+:::
+
+
+## 10. Files the user moves, and the plan memo
+
+:::{bld} The move is matched on size, time and name
+:id: BLD-move_match
+:status: seed
+:realises: RUL-move_recognized, RUL-memo_proves_no_move
+
+Prep's plan SHALL match, before laying the plan memo under the database, the rows of the workspace database whose path
+is not in the inventory against the inventoried files under `6-photos-by-dest` that have no row, by size, `mtime_ns`
+and exact basename; a triple held by more than one row or more than one file matches nothing.
+:::
+
+:::{bld} A recognized move is a database write
+:id: BLD-carried_row
+:status: seed
+:realises: RUL-moved_file_carried
+:aliases: prep-move-recognition-before-ghost-1
+
+Prep's plan SHALL carry a matched row whose fingerprint passes {need}`BLD-fingerprint_method` and whose metadata is
+fresh as a `db_upsert` of it at the new path with the file's size, `mtime_ns` and inode, its old path left to the
+ghost prunes; an unmatched or stale row is a ghost, and its file is read as new.
+:::
+
+:::{bld} A planned move carries its row
+:id: BLD-move_row_effects
+:status: seed
+:realises: RUL-reuse_valid_work, RUL-database_matches_files, RUL-quarantined_leaves_database
+:aliases: prep-fingerprint-carry-forward-move-1, prep-move-row-carries-facts-1, prep-cache-update-from-validated-plan-1
+
+Each move or rename in prep's plan SHALL carry its database effects — the row of its source removed and, but for a
+quarantine move, the file's row with its fingerprint and metadata written at its destination — applied by execute once
+the operation succeeds.
+:::
+
+:::{bld} The plan memo is `photos-00-plan-memo.db`
+:id: BLD-plan_memo
+:status: seed
+:realises: RUL-plan_memo_kept, RUL-database_over_memo, RUL-memo_entry_same_tests, RUL-memo_never_changes_plan, RUL-memo_tracks_workspace
+
+The plan memo SHALL be the SQLite file `photos-00-plan-memo.db` in `.photos-ingest/`, one row per path with its size,
+`mtime_ns` and the file's row as read, replaced whole by each plan with its media files holding both a fingerprint and a
+metadata record; read, its entries lie under the database's rows and pass the same reuse tests, and failing to open,
+read or write it warns and goes on.
 :::

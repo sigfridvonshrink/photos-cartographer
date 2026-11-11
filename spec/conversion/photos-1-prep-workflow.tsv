@@ -277,7 +277,7 @@
 7.6	A file left in `2-missing-metadata` is residual and never blocks geotag (geotag `photos-2-geotag-workflow.md` Section 7).	dropped	geotag's behaviour: geotag §7 states it, and converts with geotag
 7.7	### 7.7 Stage 6 — Cache reconciliation	dropped	a heading; the corpus's documents carry their own
 7.7	For files that were not mutated and whose cache record is stale (changed size/mtime or stale metadata), a `db_upsert` records the refreshed state.	RUL-database_matches_files BLD-database_ops	
-7.7	Before treating a cached file whose path has disappeared as a ghost, prep applies the move-recognition rule of Section 10.1: a disappearance explained by a matching new by-dest entry is a move (cache carried forward), not a ghost.	defer:10.1	
+7.7	Before treating a cached file whose path has disappeared as a ghost, prep applies the move-recognition rule of Section 10.1: a disappearance explained by a matching new by-dest entry is a move (cache carried forward), not a ghost.	BLD-carried_row RUL-move_recognized	
 7.7	Genuinely missing cache rows are pruned with `db_remove` (ghost prune) — but not the row of a path a planned move fills again (a file the user sent back to the inbox, refiled under the name it had): that move replaces the row.	BLD-database_ops	
 7.7	Unchanged, already-fresh files produce no operation and are reported as `no_op` / `already_correct`.	RUL-no_op_run RUL-no_op_run_reports_reuse	
 8	## 8. Naming conventions	dropped	a heading; the corpus's documents carry their own
@@ -319,9 +319,55 @@
 9	A file whose metadata must be read again is fingerprinted again with it;	RUL-reread_whole	
 9	2. if a fingerprinted media file is absent from the cache, compute its content fingerprint (ImageMagick `identify` / `ffmpeg` stream MD5) and store the result;	RUL-fingerprint_taken_afresh	
 9	3. if size or mtime changed, treat the cached fingerprint as stale and recompute — a metadata-only edit (including the pipeline's own EXIF writes) changes size/mtime and forces a recompute, but a photo's `identify` fingerprint (or a video's `ffmpeg` stream MD5) recomputes to the **same** value, so identity is preserved while the cache freshness is refreshed;	RUL-fingerprint_taken_afresh RUL-fingerprint_survives_mutation	
-9	4. if prep moves or case-normalizes a file without changing content, carry the known fingerprint forward to the new workspace-relative path (Section 10);	defer:10	
+9	4. if prep moves or case-normalizes a file without changing content, carry the known fingerprint forward to the new workspace-relative path (Section 10);	BLD-move_row_effects	
 9	5. a fingerprint failure on a media file never implies equality;	defer:11.3	
 9	6. an unknown or failed fingerprint on a *media* file blocks any decision that depends on content equality (Section 11.3); an `other` file's absence of a fingerprint is not such a case (it is intentionally unfingerprinted and never enters a content-equality decision);	defer:11.3	
 9	7. the fingerprint algorithm — including the tool identity/version (ImageMagick `identify` for photos, `ffmpeg` stream MD5 for videos) — is recorded in the cache and handoff.	BLD-prep_dependencies BLD-fingerprint_method	
 9	The workspace database records its schema version and the fingerprint-algorithm version; each execute writes the current ones.	BLD-cache_versions BLD-prep_dependencies	
 9	A database recording a schema version other than the one prep uses stops the plan: prep never migrates a database, and the remedy is a fresh workspace.	RUL-cache_schema_not_migrated BLD-cache_versions	
+10	## 10. Move-aware cache identity	dropped	a heading; the corpus's documents carry their own
+10	The cache must distinguish: same content at a new path because of a move; same path with changed content; different path and different content; duplicate content already in by-dest.	RUL-move_recognized RUL-fingerprint_taken_afresh RUL-duplicates_quarantined	
+10	A file prep quarantines leaves the cache — its row is removed and none is written for its quarantine path — so it is in neither the cache nor the handoff; the quarantine manifest is its record.	RUL-quarantined_leaves_database BLD-move_row_effects	
+10	Each planned move/rename carries enough to update the cache row without re-fingerprinting after the move: source path, destination path, source size, source mtime, source fingerprint if known, the post-move expected path, the post-move cache action, and the dependency facts proving the carried-forward fingerprint is still valid.	BLD-move_row_effects	
+10	Cache updates are derived from the validated plan and applied during execution, never speculatively during planning.	BLD-move_row_effects RUL-planning_changes_no_media	
+10	What planning must not write is **anticipated** state — a row describing where a file will be once an operation succeeds.	RUL-planning_changes_no_media	
+10	A record of bytes already read at the path they were read from is not anticipated state, and Section 10.3 permits exactly that, in a separate store.	RUL-plan_memo_kept DEF-plan_memo	
+10.1	### 10.1 Recognizing manual moves from by-date into by-dest	dropped	a heading; the corpus's documents carry their own
+10.1	After prep organizes media into `4-videos-by-date`/`5-photos-by-date`, the user moves **photos** from `5-photos-by-date` into destination folders under `6-photos-by-dest` (videos are not moved;	RUL-move_recognized RUL-videos_by_date	
+10.1	Section 2.4).	RUL-move_recognized RUL-videos_by_date	
+10.1	On the next prep run those photos appear at a new by-dest path and are absent from their old by-date path.	RUL-move_recognized	
+10.1	Prep must recognize this as a move and must **not** re-fingerprint or re-extract metadata for the moved file.	RUL-move_recognized RUL-moved_file_carried	
+10.1	Detection is cache-only — no file re-read beyond `stat`:	RUL-moved_file_carried	
+10.1	1. a previously cached file is now missing from its cached path; and	RUL-move_recognized BLD-move_match	
+10.1	2. a by-dest file that was not previously cached now exists whose `stat` (size and `mtime_ns`) and basename, exactly, match that missing file.	RUL-move_recognized BLD-move_match	
+10.1	On a unique match whose cached row would have been reused at its old path (Section 9), prep treats it as a move: it carries the cached content fingerprint and metadata record forward to the new by-dest path (move-aware identity), drops the stale old cache row, and records the new by-dest row from the carried-forward facts.	RUL-moved_file_carried BLD-carried_row RUL-database_matches_files	
+10.1	Because `6-photos-by-dest` is read-only, prep performs **no** filesystem operation — it only fixes its cache and the handoff manifest to reflect the new location.	RUL-prep_leaves_by_dest_as_found	
+10.1	Safety:	dropped	the lead-in of a list; each entry names the items it restates
+10.1	1. if more than one missing file could match (ambiguous size/mtime/basename), or the move did not preserve mtime, prep does not guess: it treats the by-dest file as a normal newly-seen by-dest file and scans it (Section 9), and the old row is ghost-pruned;	RUL-move_recognized BLD-move_match BLD-carried_row	
+10.1	2. carried-forward identity never overrides a content change — if the by-dest file's size/mtime differ from the cached source, it is rescanned;	RUL-move_recognized	
+10.1	3. move recognition only updates prep's own cache/handoff; it never mutates by-dest media;	RUL-prep_leaves_by_dest_as_found	
+10.1	4. a cached row that would not have been reused at its old path — its fingerprint taken by another method, or its metadata stale — is not carried: the by-dest file is read whole as a newly-seen file, and the old row is ghost-pruned.	RUL-moved_file_carried BLD-carried_row	
+10.1	This makes the round trip cheap: after the user sorts the by-date working set into by-dest, re-running prep does not re-fingerprint or re-read the moved files — it simply fixes the handoff.	RAT-sort_costs_no_reading	
+10.2	### 10.2 Recognizing moves between destinations (re-sort within by-dest)	dropped	a heading; the corpus's documents carry their own
+10.2	The user may also move an already-placed file from one destination to another inside `6-photos-by-dest` (e.g. correcting a mis-sort:	RUL-move_recognized	
+10.2	`Belgium/Brussels` → `Belgium/Bruges`).	RUL-move_recognized	
+10.2	Prep must recognize this the same cache-only way: a previously cached by-dest file is now missing from its cached by-dest path, and an uncached by-dest file with matching `stat` and basename now exists at a different by-dest path.	RUL-move_recognized BLD-move_match	
+10.2	On a unique match, prep carries the cached identity forward to the new by-dest path, drops the old row, and updates the handoff to record the new destination — performing **no** filesystem operation (by-dest is read-only).	RUL-moved_file_carried RUL-prep_leaves_by_dest_as_found	
+10.2	This matters because a file's **destination is a geotag input**: the destination civil timezone is destination-scoped (geotag `photos-2-geotag-workflow.md` Section 18).	defer:geotag-18	
+10.2	When prep moves a file's recorded destination, the handoff changes, which (via the dependency cascade) restales the affected destination decisions so geotag **re-evaluates** the moved file under its new destination rather than silently keeping the old destination's timezone (geotag Section 18.1).	defer:geotag-18.1	
+10.2	As with all by-dest moves, the mandatory re-prep after the move applies (shared contract `photos-shared-contract.md` Section 10), and the same ambiguity safety as Section 10.1 holds (ambiguous matches are treated as new files and rescanned).	RUL-move_recognized RUL-sort_recorded_by_stat	
+10.3	### 10.3 Plan-time decode memo	dropped	a heading; the corpus's documents carry their own
+10.3	Re-fingerprinting is the dominant cost of a plan (Section 17.4), and cache rows are written by execute only (Section 10, Section 14.3).	RAT-plan_keeps_its_reading	
+10.3	A plan that is never executed therefore discards every fingerprint it computed, so the next plan re-decodes the whole workspace — a cost measured in hours on a real library, paid whenever the operator re-plans before executing (a config edit, a corrected folder, an interrupted run).	RAT-plan_keeps_its_reading	
+10.3	Prep must retain the fingerprints and metadata a planning run computed, in a **decode memo** that is distinct from the workspace cache:	RUL-plan_memo_kept DEF-plan_memo	
+10.3	1. the memo is a **separate store** from the workspace cache, so the cache remains writable by execute alone and keeps its single meaning — the state of the executed workspace;	DEF-plan_memo RUL-other_databases_scratch RAT-plan_keeps_its_reading	
+10.3	2. a memo entry is an **observation, not a claim about prep's actions**: it records that a file at a given workspace-relative path, with a given size and mtime, fingerprinted to a given value under a given engine/field-set context.	DEF-plan_memo RAT-memo_is_observation	
+10.3	It asserts nothing about where prep has put anything, so it is not the anticipated state Section 10 forbids;	RAT-memo_is_observation	
+10.3	3. the memo is **subordinate to the cache**: it is consulted only for paths the cache has no row for, and a cache row always wins;	RUL-database_over_memo	
+10.3	4. a memo entry is accepted only if it passes the **same freshness tests as a cache row** (Section 9 reuse rules, Section 12.1 metadata freshness).	RUL-memo_entry_same_tests	
+10.3	A stale entry is rejected and the file re-fingerprinted, exactly as for a stale cache row;	RUL-memo_entry_same_tests	
+10.3	5. move recognition (Sections 10.1, 10.2) runs against the **executed state only** — a memo entry never establishes that a file moved;	RUL-memo_proves_no_move BLD-move_match	
+10.3	6. the memo is **disposable**: losing, deleting, or failing to read it costs only the decode work it was saving and must never fail a plan, block, or change its operations;	RUL-memo_never_changes_plan BLD-plan_memo	
+10.3	7. the memo tracks the current workspace rather than accumulating indefinitely: entries for paths a planning run no longer observes are dropped.	RUL-memo_tracks_workspace	
+10.3	Only entries that could actually be reused are worth storing — an entry lacking either a content fingerprint or a metadata record can never satisfy the all-or-nothing freshness gate.	BLD-plan_memo	
+10.3	The memo changes cost, never outcome: the plan a run produces is the same whether its fingerprints were computed, reused from the cache, or reused from the memo.	RUL-memo_never_changes_plan	
