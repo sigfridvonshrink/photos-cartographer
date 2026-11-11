@@ -572,7 +572,7 @@ def test_source_changed_after_plan_abort_no_db(tmp_path, monkeypatch):
 
     # Hand build a plan and verify executor fails it without making a DB
     plan = photos_ingest.Plan(
-        plan_version=photos_ingest.PLAN_SCHEMA_VERSION,
+        plan_version=photos_ingest.PLAN_SCHEMA_VERSION, code_fingerprint=photos_ingest.code_fingerprint(),
         plan_id="dummy",
         command="prep",
         created_at="now",

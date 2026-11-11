@@ -69,10 +69,10 @@ recorded there, running no step of planning.
 :::{bld} Prep journals each operation as it ends
 :id: BLD-prep_journal
 :status: ruled
-:realises: RUL-every_change_journaled
+:realises: RUL-every_change_journaled, RUL-journal_never_torn
 
 Prep's execute SHALL append each operation's outcome to `journal-<plan-id>.json` as the operation ends, saving the
-journal after each.
+journal after each by replacing it whole — written to a temporary file in its folder, then renamed over it.
 :::
 
 ## 5. What each of prep's records depends on
@@ -268,7 +268,7 @@ ghost prunes; an unmatched or stale row is a ghost, and its file is read as new.
 :id: BLD-move_row_effects
 :status: ruled
 :realises: RUL-reuse_valid_work, RUL-database_matches_files, RUL-quarantined_leaves_database
-:aliases: prep-fingerprint-carry-forward-move-1, prep-move-row-carries-facts-1, prep-cache-update-from-validated-plan-1
+:aliases: prep-fingerprint-carry-forward-move-1, prep-move-row-carries-facts-1, prep-cache-update-from-validated-plan-1, prep-cache-write-after-fs-verified-1
 
 Each move or rename in prep's plan SHALL carry its database effects — the row of its source removed and, but for a
 quarantine move, the file's row with its fingerprint and metadata written at its destination — applied by execute once
@@ -333,4 +333,40 @@ The handoff SHALL carry `camera_groups` — each group's key, files and count, i
 recorded time, native-GPS, missing-GPS and missing-time counts, cache freshness and the device class the configuration
 gives it — and `destination_folders` — each folder's path, files scanned, camera groups, time range, native-GPS,
 missing-GPS and `GPSProcessingMethod` counts, cache freshness, and the duplicates whose kept copy it holds.
+:::
+
+
+## 14. Plan, dry run, execution
+
+:::{bld} What prep's plan records
+:id: BLD-prep_plan_contents
+:status: seed
+:realises: RUL-plan_carried_out_by_its_code, RUL-new_file_restales_plan
+:aliases: prep-plan-serialized-contents-1
+
+`photos-10-prep-plan.json` SHALL record its id, its schema version, its command, the configuration's hash, the
+fingerprint of the code that made it ({need}`BLD-code_fingerprint`), its operations in order, its blockers and warnings,
+the size and modification time of each file it leaves as it is, its metadata dependencies, every path its scan found,
+and a summary.
+:::
+
+:::{bld} The code's fingerprint
+:id: BLD-code_fingerprint
+:status: seed
+:realises: RUL-plan_carried_out_by_its_code
+
+The code's fingerprint SHALL be the SHA-256 over the files of the `cartographer` package the zipapp ships, as loaded —
+from the zipapp or a checkout, which agree — each one's path and bytes in path order; execute and dry run compare
+the plan's with the running code's, after its schema version and command and before its operations.
+:::
+
+:::{bld} Folder removals are `rmdir` operations
+:id: BLD-folder_removals
+:status: seed
+:realises: RUL-emptied_folders_removed
+
+Prep's plan SHALL end with an `rmdir` for each folder it leaves holding no file — under `0-sources`,
+`4-videos-by-date` and `5-photos-by-date`, and on the first run the dump's own top-level folders — found by replaying
+its moves over the files on disk, hidden ones included, deepest folder first; execute removes one only if it is then
+empty, journals a folder found not empty or not removable as skipped, and warns of it.
 :::

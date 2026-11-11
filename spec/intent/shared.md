@@ -106,7 +106,7 @@ inside the lock all the same.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: lock-covers-whole-run-1
+:aliases: lock-covers-whole-run-1, prep-run-under-single-lock-1
 :upholds: INV-one_run_at_a_time
 
 A run SHALL hold the lock until it ends — through planning, dry run, execution, and every record and artifact it writes
@@ -217,7 +217,7 @@ Each snapshot SHALL be identifiable by the plan whose changes it precedes.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: snapshot-timing-1
+:aliases: snapshot-timing-1, prep-execute-snapshot-1
 
 A snapshot SHALL be taken after the plan has been validated against its dependencies and the lock is held, and before
 the plan's first change.
@@ -657,7 +657,7 @@ be moved to the recoverable quarantine, not merely left out.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: plan-canonical-path-1
+:aliases: plan-canonical-path-1, prep-plan-canonical-path-1
 
 Each phase's plan, and each of its decision records, SHALL have one fixed place among the control records, where the
 phase's planning writes it and its dry run and its execution read it.
@@ -681,7 +681,7 @@ No command SHALL take an option saying where to put a plan or where to find one;
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: plan-missing-stops-1
+:aliases: plan-missing-stops-1, prep-dryrun-no-plan-stops-1, prep-execute-no-plan-stops-1
 
 A dry run or an execution that finds no plan in its place SHALL stop, and tell the user to plan first.
 :::
@@ -704,7 +704,7 @@ simulation.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: plan-replan-no-clobber-1
+:aliases: plan-replan-no-clobber-1, prep-replan-never-clobbers-1
 
 Re-planning SHALL never overwrite a plan or a decision record: when what it makes differs from what is saved, the saved
 one is first set aside, recoverably, and the user told where.
@@ -1998,7 +1998,7 @@ Finalize SHALL only read the workspace database.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: db-snapshot-per-phase-1, db-snapshot-skip-on-failure-1
+:aliases: db-snapshot-per-phase-1, db-snapshot-skip-on-failure-1, prep-db-backup-on-success-1
 :uses: DEF-database_image, DEF-archival_package
 
 Each phase SHALL keep its database image, refreshed by each of its successful runs alone, and left untouched by every
@@ -2662,7 +2662,7 @@ or rewritten.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: exec-noclobber-recheck-1, exec-noclobber-all-content-ops-1, prep-no-clobber-1
+:aliases: exec-noclobber-recheck-1, exec-noclobber-all-content-ops-1, prep-no-clobber-1, prep-execute-time-no-clobber-recheck-1
 :uses: RUL-suffix_no_clobber, DEF-library
 
 Immediately before each change that gives a file a name — prep's moves, renames and setting duplicates aside, geotag's

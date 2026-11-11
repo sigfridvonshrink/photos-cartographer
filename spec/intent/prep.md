@@ -316,7 +316,7 @@ folder, the first by path.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: prep-cache-upsert-stale-1, prep-ghost-prune-1
+:aliases: prep-cache-upsert-stale-1, prep-ghost-prune-1, prep-filesystem-source-of-truth-1
 :uses: DEF-workspace_database
 
 A prep execution SHALL leave the workspace database current: a row for each media file prep inventoried, describing the
@@ -584,4 +584,87 @@ were when it was read.
 
 Prep's handoff SHALL report, for each camera group and each folder of photos by destination, facts of the files in it —
 their count, their time range, how many carry a GPS position — inferring nothing from them.
+:::
+
+
+## 14. Plan, dry run, execution
+
+:::{rul} A plan is carried out only by the code that made it
+:id: RUL-plan_carried_out_by_its_code
+:status: seed
+:criticality: high
+:verify: required
+:aliases: prep-execute-revalidates-rejects-stale-1
+:refines: INV-no_stale_use
+
+Prep SHALL carry out or summarise a saved plan only with the code that made it, refusing before any change a plan made
+by other code or recording none.
+:::
+
+:::{rul} A file that appeared since planning restales the plan
+:id: RUL-new_file_restales_plan
+:status: seed
+:criticality: high
+:verify: required
+:aliases: prep-execute-rejects-new-file-1
+:refines: INV-no_stale_use
+
+A file found, at execution, anywhere prep scans that its plan did not record SHALL make the plan stale, refused before
+any change.
+:::
+
+:::{rul} A dry run changes nothing
+:id: RUL-prep_dry_run_changes_nothing
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: prep-dryrun-mutates-nothing-1, prep-dryrun-not-simulation-1, prep-dryrun-summary-not-dump-1
+:refines: RUL-dry_run_summarises_the_real_plan
+
+Prep's dry run SHALL change nothing in the workspace.
+:::
+
+:::{rul} A prepped workspace has nothing to do
+:id: RUL-prepped_nothing_to_do
+:status: seed
+:criticality: med
+:verify: required
+:aliases: prep-dryrun-empty-sources-nothing-to-do-1, prep-execute-empty-sources-nothing-to-do-1
+
+On an initialized workspace whose inbox holds no file, prep's dry run and execution SHALL stop, changing nothing, and
+not carry out the saved plan.
+:::
+
+:::{rul} The journal is never left torn
+:id: RUL-journal_never_torn
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-every_change_journaled
+
+An interruption SHALL leave prep's journal as its last save left it, never part-written.
+:::
+
+:::{rul} A folder left empty is removed as planned
+:id: RUL-emptied_folders_removed
+:status: seed
+:criticality: med
+:verify: required
+:refines: RUL-execution_only_the_plan
+
+Prep SHALL remove a folder its plan leaves empty — in the inbox or a by-date folder, or a dump's folder on the first run
+— only as a planned operation, and only while the folder is empty.
+:::
+
+:::{rul} An interrupted execution is planned again, not resumed
+:id: RUL-prep_replans
+:status: seed
+:criticality: high
+:verify: required
+:aliases: prep-replan-not-resume-1, prep-crash-safe-rerun-1, prep-no-journal-replay-1
+
+After an interrupted execution, prep SHALL plan again from the workspace as it stands, never resuming or replaying the
+interrupted plan.
 :::

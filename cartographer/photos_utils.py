@@ -909,6 +909,36 @@ def quarantine_footprint(ws: str) -> dict:
         "newest_plan_id": plan_ids[-1] if plan_ids else None,
     }
 
+def code_fingerprint() -> str:
+    """SHA-256 of the cartographer package as loaded — from a zipapp or a checkout: every file the zipapp
+    ships, its path and bytes, in path order. A plan records it, and execute refuses a
+    plan made by other code (prep §14.3), so a saved plan is never carried out by a build that would
+    not have made it."""
+    global _CODE_FINGERPRINT
+    if _CODE_FINGERPRINT is None:
+        import importlib.resources
+        h = hashlib.sha256()
+
+        def walk(node, prefix):
+            for child in sorted(node.iterdir(), key=lambda c: c.name):
+                # the files the zipapp ships (tools/build-pyz `_included`): no caches, tests, design
+                # notes or the dev-only example generator — so a checkout and its build agree
+                if (child.name in ("__pycache__", "tests", "generate_examples.py")
+                        or child.name.endswith((".pyc", ".md"))):
+                    continue
+                rel = prefix + child.name
+                if child.is_dir():
+                    walk(child, rel + "/")
+                else:
+                    h.update(rel.encode("utf-8") + b"\0" + child.read_bytes() + b"\0")
+        walk(importlib.resources.files(__package__), "")
+        _CODE_FINGERPRINT = h.hexdigest()
+    return _CODE_FINGERPRINT
+
+
+_CODE_FINGERPRINT = None
+
+
 def _atomic_write_text(path: str, text: str) -> None:
     import tempfile
     fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".tmp-", suffix=".json")

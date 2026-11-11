@@ -443,3 +443,74 @@ Geotag decides a clock offset per camera and a timezone per destination; before 
 what each camera group and destination holds — how many files, over what span, how many already placed. Prep reports it
 and infers nothing: inference is geotag's, made with evidence prep lacks.
 :::
+
+
+## 14. Plan, dry run, execution
+
+:::{rat} A plan is its code's decisions
+:id: RAT-plan_is_its_codes
+:status: seed
+:justifies: RUL-plan_carried_out_by_its_code
+
+A saved plan is the decisions of the code that made it: names, copies, places. Carried out by another build, it would
+apply decisions the running code would not make — a fault the upgrade fixed among them. A version number cannot tell
+builds apart while every local build carries the same one; the code's own fingerprint can. Planning again is cheap, the
+plan memo keeping what was read.
+:::
+
+:::{rat} The plan is of the workspace it saw
+:id: RAT-plan_saw_the_workspace
+:status: seed
+:justifies: RUL-new_file_restales_plan
+
+A file that arrived after planning is one the plan never considered: a copy of something it files, or a name it gives
+another. Carrying out the plan would leave the file unfiled, or file around it; planning again takes it in, reusing all
+that is already known.
+:::
+
+:::{rat} A dry run is for looking
+:id: RAT-dry_run_for_looking
+:status: seed
+:justifies: RUL-prep_dry_run_changes_nothing
+
+A dry run lets the user see what execution would do before it does it. Changing anything would make it a partial
+execution, and the user could no longer look without acting.
+:::
+
+:::{rat} An empty inbox is the end state
+:id: RAT-empty_inbox_end_state
+:status: seed
+:justifies: RUL-prepped_nothing_to_do
+
+An initialized workspace whose inbox is empty is where every prep run ends. A saved plan there is already carried out:
+replaying it would collide with the files it made. Stopping says there is nothing to do.
+:::
+
+:::{rat} The journal is the evidence of an interrupted run
+:id: RAT-journal_is_evidence
+:status: seed
+:justifies: RUL-journal_never_torn
+
+After an interruption, the journal is the only record of what the run did. Rewritten in place, a crash mid-save would
+leave it truncated — the evidence lost at the one moment it is needed, and the handoff unable to vouch for it.
+:::
+
+:::{rat} A folder is changed like a file
+:id: RAT-folder_changed_like_a_file
+:status: seed
+:justifies: RUL-emptied_folders_removed
+
+Moving files out leaves their folders empty, and the inbox must end empty for the next dump; a day emptied by the sort
+should not linger. Removing a folder is a change to the workspace like any other, so it is planned and journaled; and
+only an empty one goes, so nothing a folder holds — even what arrived unplanned — is ever lost with it.
+:::
+
+:::{rat} The files say what is done
+:id: RAT-files_say_what_is_done
+:status: seed
+:justifies: RUL-prep_replans
+
+Prep's plan holds no decision of the user's — it follows from the files, the configuration and the database. After an
+interruption the files say what was done; planning again from them finds only what is left, while resuming would trust a
+plan made for a workspace that no longer stands. The journal records what happened; it is evidence, not a script.
+:::

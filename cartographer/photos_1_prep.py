@@ -39,7 +39,7 @@ import errno
 # ==============================================================================
 # CONFIGURATION BLOCK
 # ==============================================================================
-from .photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, is_track_file, missing_managed_folders, misplaced_top_level_entries, FOLDER_ROLES, UNTIMED_PREFIX, untimed_stem, carries_stem, filename_format_changed
+from .photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, is_track_file, missing_managed_folders, misplaced_top_level_entries, FOLDER_ROLES, UNTIMED_PREFIX, untimed_stem, carries_stem, filename_format_changed, code_fingerprint
 from .reporting import get_reporter, emit_next_step
 from .photos_utils import (_move_no_clobber, _move_link_unlink, _get_renameat2,
                           WorkspaceCache, WorkspaceLock, ContentHasher, PlanFingerprintMemo,
@@ -300,9 +300,16 @@ class PlanValidator:
             raise ValueError(f"Stale plan: plan_version {plan.plan_version} is not the supported schema {PLAN_SCHEMA_VERSION}; regenerate the plan.")
         if plan.command != 'prep':
             raise ValueError(f"Plan command '{plan.command}' is not supported by photos-1-prep. Only 'prep' plans are allowed.")
+        # A plan is carried out only by the code that made it: another build may plan otherwise, and a plan
+        # recording no code is unverifiable, hence stale.
+        from .photos_utils import code_fingerprint
+        if plan.code_fingerprint != code_fingerprint():
+            raise ValueError("Stale plan: it was made by another build of cartographer; regenerate the plan.")
         for op in plan.operations:
             if op.type not in PREP_ALLOWED_OPERATION_TYPES:
                 raise ValueError(f"Operation type '{op.type}' is not allowed in photos-1-prep.")
+            if op.type == "rmdir" and not _removable_folder(op.source, current_workspace):
+                raise ValueError(f"Operation rmdir forbidden on {op.source}: not a folder prep may remove.")
             if op.type in ['move_no_clobber', 'rename_no_clobber', 'quarantine_move']:
                 if op.source and op.source.startswith(folder_name('photos_by_dest') + '/'):
                     raise ValueError(f"Operation {op.type} forbidden on source in {folder_name('photos_by_dest')}: {op.source}")
@@ -471,71 +478,6 @@ class PlanExecutor:
         from .photos_utils import ProgressCoordinator
         self.coordinator = ProgressCoordinator()
 
-    def _prune_empty_dirs(self):
-        """Remove directory skeletons left empty by structure-preserving moves and dump-dotfile
-        quarantine: emptied subtrees under the 0-sources inbox, and any non-managed base entry an
-        init move/quarantine emptied — including a hidden dump dir like `.thumbnails/` once its files
-        are quarantined. The managed folders (`0`–`6`), the strays tree, and the control directories
-        (`.photos-ingest`, `.photos-ingest-quarantine`, `.git`) are **never removed, even when
-        empty** — they are explicitly protected by absolute path. Empty-dir removal is pure
-        housekeeping; no media is affected.
-
-        Returns a list of (relpath, reason) for non-managed base **dump** dirs that could NOT be
-        pruned — still non-empty, or an `rmdir` failure (e.g. no write permission on the workspace
-        root) — so the caller can warn the operator rather than leave the folder behind silently."""
-        from .photos_utils import managed_folder_names, folder_name, CONTROL_DIR, QUARANTINE_DIR
-        ws = self.workspace_root
-        sources_path = os.path.join(ws, folder_name('sources'))
-        control_top = {CONTROL_DIR, QUARANTINE_DIR, ".git"}
-        managed_top = set(managed_folder_names()) | {folder_name('strays')}
-        # Explicit guard: a managed/strays/control directory is never pruned even if empty. (0-sources
-        # is a managed folder, so this also keeps the inbox itself while its internals are pruned.)
-        protected = {os.path.abspath(os.path.join(ws, n)) for n in (managed_top | control_top)}
-        # Non-managed base entries are the dump dirs an init move/quarantine should have emptied.
-        base_dumps = []
-        for f in os.listdir(ws):
-            if f in managed_top or f in control_top:
-                continue                               # never a prune target (managed/strays/control)
-            p = os.path.join(ws, f)
-            if os.path.isdir(p) and not os.path.islink(p):
-                base_dumps.append(p)
-        # Also sweep the by-date bands so a `YYYY-MM-DD/` day folder emptied by a by-dest move (or by
-        # re-bucketing) does not linger; the band roots themselves stay protected above.
-        targets = [sources_path,
-                   os.path.join(ws, folder_name('photos_by_date')),
-                   os.path.join(ws, folder_name('videos_by_date'))] + base_dumps
-        for base in targets:
-            if not os.path.isdir(base):
-                continue
-            for dirpath, _dirs, _files in os.walk(base, topdown=False):
-                if os.path.abspath(dirpath) in protected:
-                    continue                           # explicit: never remove a managed/strays/control dir
-                try:
-                    if not os.listdir(dirpath):
-                        os.rmdir(dirpath)
-                except OSError:
-                    pass                               # surfaced below if the dir is a base dump dir
-
-        # Diagnose any base dump dir that survived, so a leftover is never silent (it answers the
-        # "why wasn't this folder deleted?" question directly).
-        leftovers = []
-        for p in base_dumps:
-            if not os.path.isdir(p):
-                continue                               # pruned successfully
-            rel = os.path.relpath(p, ws)
-            try:
-                entries = [e for e in os.listdir(p)]
-            except OSError as e:
-                leftovers.append((rel, f"cannot list it ({e})"))
-                continue
-            if entries:
-                sample = ", ".join(sorted(entries)[:3]) + ("…" if len(entries) > 3 else "")
-                leftovers.append((rel, f"still contains: {sample}"))
-            else:
-                leftovers.append((rel, "it is empty but could not be removed — check write permission "
-                                       "on the workspace root (e.g. a group-owned dir without group write)"))
-        return leftovers
-
     def execute(self, plan: Plan, journal_path: str = None):
         # A distinct id for this execution run (vs plan.plan_id which identifies the plan);
         # surfaced in the handoff (prep Section 16).
@@ -631,6 +573,21 @@ class PlanExecutor:
                         if op.destination:
                             abs_dest = RootGuard.resolve_and_check_path(self.workspace_root, op.destination)
                             os.makedirs(abs_dest, exist_ok=True)
+                    elif op.type == "rmdir":
+                        # A folder the plan leaves empty is removed only if it is empty now; one that is
+                        # not (or cannot be removed) is left, skipped and reported — never emptied.
+                        abs_dir = RootGuard.resolve_and_check_path(self.workspace_root, op.source)
+                        if not os.path.isdir(abs_dir):
+                            status, details["reason"] = "skipped", "already gone"
+                        else:
+                            try:
+                                os.rmdir(abs_dir)
+                            except OSError as e:
+                                left = sorted(os.listdir(abs_dir)) if os.path.isdir(abs_dir) else []
+                                status = "skipped"
+                                details["reason"] = (f"still contains: {', '.join(left[:3])}{'…' if len(left) > 3 else ''}"
+                                                     if left else f"could not be removed ({e.strerror}) — check write "
+                                                     "permission on its parent folder")
                     elif op.type in ["move_no_clobber", "rename_no_clobber", "quarantine_move"]:
                         if op.source and op.destination:
                             abs_src = RootGuard.resolve_and_check_path(self.workspace_root, op.source)
@@ -754,13 +711,14 @@ class PlanExecutor:
             else:
                 journal.finish_journal("success")
 
-                # Housekeeping: structure-preserving moves + organization empty out the dump's
-                # directory skeleton. Prune the empty dirs left under 0-sources and any base dump
-                # dir an init move emptied, so 0-sources is left empty and the base holds only the
-                # managed folders (prep Section 3.1 / 7). Empty-dir removal loses no media. Any dump
-                # dir that could NOT be removed is reported (never left silently).
-                for _rel, _why in self._prune_empty_dirs():
-                    get_reporter().warn(f"Warning: left the dump folder {_rel}/ in place — {_why}")
+                # A folder the plan meant to remove but found not empty, or could not remove, is
+                # reported — never left silently.
+                _by_id = {o.operation_id: o for o in plan.operations}
+                for r in journal.journal.operations:
+                    _o = _by_id.get(r.operation_id)
+                    if _o is not None and _o.type == "rmdir" and r.status == "skipped" \
+                            and r.details.get("reason") != "already gone":
+                        get_reporter().warn(f"Warning: left the folder {_o.source}/ in place — {r.details['reason']}")
 
                 # Update summary with db effects
                 if plan.summary and "performance_and_cache" in plan.summary:
@@ -1155,9 +1113,11 @@ class JournalWriter:
             self.save()
 
     def save(self):
+        """Replace the journal whole (temporary file, then rename): a crash mid-save leaves the journal as
+        it was after the previous operation, never truncated."""
         if self.journal:
-            with open(self.journal_path, 'w') as f:
-                f.write(self.journal.to_json())
+            from .photos_utils import _atomic_write_text
+            _atomic_write_text(self.journal_path, self.journal.to_json())
 
 
 class _PlanState:
@@ -2319,6 +2279,47 @@ class WorkspacePrepWorkflow:
             ))
             st.current_paths[f['relative_path']] = dest
 
+    def _plan_folder_removals(self, st):
+        """Plan the removal of every folder the plan leaves empty (prep §14.3): under the inbox and the two
+        by-date folders, and — on the first run — the dump's own folders at the top level. The plan's
+        moves are replayed over the files on disk (hidden ones included); a folder holding none of the
+        files left — on disk now, or made by a move on its way — is removed, deepest first. Execute removes
+        each only if it is then empty."""
+        ws = self.workspace_root
+        roots = [folder_name('sources'), folder_name('photos_by_date'), folder_name('videos_by_date')]
+        if self._initializing:
+            roots += sorted(e for e in os.listdir(ws) if _removable_folder(e, ws))
+        present, folders = set(), []
+        for root in roots:
+            base = os.path.join(ws, root)
+            if not os.path.isdir(base) or os.path.islink(base):
+                continue
+            for dirpath, dirnames, filenames in os.walk(base):
+                rel = os.path.relpath(dirpath, ws).replace(os.sep, '/')
+                if _removable_folder(rel, ws):
+                    folders.append(rel)
+                present.update(f"{rel}/{n}" for n in filenames)
+                present.update(f"{rel}/{d}" for d in dirnames if os.path.islink(os.path.join(dirpath, d)))
+        folders = set(folders)
+        for op in st.operations:
+            if op.type in ("move_no_clobber", "rename_no_clobber", "quarantine_move"):
+                present.discard(op.source)
+                present.add(op.destination)
+                # a folder a move creates on its way is the plan's too, to remove if left empty
+                parts = op.destination.split('/')
+                folders.update(f for f in ('/'.join(parts[:i]) for i in range(1, len(parts)))
+                               if f.split('/')[0] in roots and _removable_folder(f, ws))
+        held = set()
+        for p in present:
+            parts = p.split('/')
+            held.update('/'.join(parts[:i]) for i in range(1, len(parts)))
+        for rel in sorted((f for f in folders if f not in held), key=lambda f: (-f.count('/'), f)):
+            st.operations.append(Operation(
+                operation_id=f"op-{uuid.uuid4().hex[:8]}",
+                type="rmdir", reason="Remove a folder the plan leaves empty",
+                source=rel, destination=None,
+                preconditions={}, verification={}, database_effects_after_verification=[]))
+
     def _plan_cache_effects(self, st, all_db_files, carried_forward, existing_cache, existing_metadata, current_metadata_context, ghost_prunes):
         """Cache effects (prep §5/§16): a db_upsert op reconciling unchanged-state cache rows
         (skipping mutated/carried/relocated files and rows already fresh) plus the recognized-move
@@ -2633,6 +2634,8 @@ class WorkspacePrepWorkflow:
 
         self._plan_cache_effects(st, all_db_files, carried_forward, existing_cache, existing_metadata, current_metadata_context, ghost_prunes)
 
+        self._plan_folder_removals(st)
+
         no_op_count = len(files) - len(st.media_mutated_originals)
         from .photos_utils import quarantine_footprint
         qf = quarantine_footprint(self.workspace_root)
@@ -2700,8 +2703,27 @@ class WorkspacePrepWorkflow:
             operations=operations,
             workspace_file_preconditions=workspace_file_preconditions,
             inventory=inventory,
-            metadata_dependencies=current_metadata_dependencies()
+            metadata_dependencies=current_metadata_dependencies(),
+            code_fingerprint=code_fingerprint()
         )
+
+def _removable_folder(rel, ws):
+    """Whether prep may remove the folder `rel` (workspace-relative) once empty: one under the inbox or a
+    by-date folder, or a dump's folder at the top level — never a managed folder itself, the strays
+    folder, photos by destination, or a control directory."""
+    from .photos_utils import managed_folder_names, CONTROL_DIR, QUARANTINE_DIR
+    if not rel or rel.startswith('/') or '..' in rel.split('/'):
+        return False
+    top = rel.split('/')[0]
+    if top in (CONTROL_DIR, QUARANTINE_DIR, ".git", folder_name('strays'), folder_name('photos_by_dest')):
+        return False
+    if top in (folder_name('sources'), folder_name('photos_by_date'), folder_name('videos_by_date')):
+        return '/' in rel
+    if top in managed_folder_names():
+        return False
+    p = os.path.join(ws, rel)
+    return os.path.isdir(p) and not os.path.islink(p)
+
 
 def _parse_plan_id_time(plan_id: str):
     """The quarantine <plan_id> dir name starts with the run's UTC timestamp."""

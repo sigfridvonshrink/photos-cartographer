@@ -230,7 +230,7 @@ def test_a_log_the_handoff_does_not_vouch_for_is_rewritten(tmp_path, monkeypatch
     assert not prep._prep_nothing_to_do(str(ws), rep)                   # gone: cannot be checked
 
 
-@pytest.mark.spec("prep-dryrun-empty-sources-nothing-to-do-1")
+@pytest.mark.spec("prep-dryrun-empty-sources-nothing-to-do-1", test="TST-lifecycle-dry_run_on_prepped_workspace_with_empty_sources_is_nothing_to_do")
 def test_dry_run_on_prepped_workspace_with_empty_sources_is_nothing_to_do(tmp_path, monkeypatch):
     # dry-run shares execute's fast-stop: an already-prepped, empty-0-sources workspace has nothing to
     # validate, so it stops with "nothing to do" rather than summarizing the stale plan.
@@ -252,7 +252,7 @@ def test_dry_run_on_prepped_workspace_with_empty_sources_is_nothing_to_do(tmp_pa
     assert any("Nothing to do" in e.msg and f"{src} is empty" in e.msg for e in cap.logs())
 
 
-@pytest.mark.spec("prep-execute-empty-sources-nothing-to-do-1")
+@pytest.mark.spec("prep-execute-empty-sources-nothing-to-do-1", test="TST-lifecycle-execute_on_prepped_workspace_with_empty_sources_is_nothing_to_do")
 def test_execute_on_prepped_workspace_with_empty_sources_is_nothing_to_do(tmp_path, monkeypatch):
     # After a successful prep, 0-sources is the empty steady end-state (shared contract §6). With a
     # (now-stale) saved plan present, re-running execute must stop fast with "nothing to do" rather
