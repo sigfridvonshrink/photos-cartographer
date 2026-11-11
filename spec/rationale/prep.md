@@ -371,7 +371,7 @@ broken, prep plans the same.
 
 :::{rat} A failure says nothing of the content
 :id: RAT-failure_says_nothing
-:status: seed
+:status: ruled
 :justifies: RUL-failed_fingerprint_no_duplicate, RUL-failed_fingerprint_blocks
 
 A fingerprint that could not be taken tells nothing of what the file holds: two failures are not two copies, and a
@@ -382,7 +382,7 @@ aside; its failure decides nothing there.
 
 :::{rat} A failure may be the machine's
 :id: RAT-failure_may_be_the_machines
-:status: seed
+:status: ruled
 :justifies: RUL-failed_fingerprint_retried
 
 A fingerprint fails as often for the machine as for the file: a tool not installed, a decoder missing, a crash. The user
@@ -392,7 +392,7 @@ gone. Taking it again costs one attempt per run for a file that still fails.
 
 :::{rat} A duplicate's record points at its twin
 :id: RAT-duplicate_points_at_twin
-:status: seed
+:status: ruled
 :justifies: RUL-duplicate_recorded_with_kept
 
 A file set aside as a copy is recoverable only if one can tell which file it copies. Recorded with the copy kept, the
