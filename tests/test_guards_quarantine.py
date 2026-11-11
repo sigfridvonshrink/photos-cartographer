@@ -76,7 +76,7 @@ def _seed_quarantine(ws):
 
 # --- band-misplacement guard -------------------------------------------------
 
-@pytest.mark.spec("prep-band-misplacement-blocks-1", "prep-video-only-in-videos-band-1")
+@pytest.mark.spec("prep-band-misplacement-blocks-1", "prep-video-only-in-videos-band-1", "RUL-band_misplacement_blocks", test="TST-guards_quarantine-band_guard_blocks_video_under_photo_band")
 def test_band_guard_blocks_video_under_photo_band(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -85,6 +85,7 @@ def test_band_guard_blocks_video_under_photo_band(tmp_path, monkeypatch):
     assert any("Band misplacement" in b and "x.mp4" in b for b in plan.blockers), plan.blockers
 
 
+@pytest.mark.spec("RUL-band_misplacement_blocks", test="TST-guards_quarantine-band_guard_blocks_raw_under_video_band")
 def test_band_guard_blocks_raw_under_video_band(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)

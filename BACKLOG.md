@@ -4,7 +4,7 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **9** — 1, 2, 3, 4, 5, 6, 7, 9 and 10.* 🛑 Numbers are never reused; the next is **11**.
+*Open items: **8** — 1, 2, 3, 4, 5, 6, 7 and 10.* 🛑 Numbers are never reused; the next is **11**.
 
 ---
 
@@ -152,20 +152,6 @@ following, as `RUL-failed_operation_clean` was split into it, `RUL-failure_recor
 **Blocked by:** item 1. Vasile: *"maybe we can do this at the very end after the full conversion to sphinx-needs? I am
 worried that we are piling too much work in one strand and doing it now might break other links, too."* So it waits
 until every spec is converted, and is done once, over the whole corpus.
-
-### 9. A file of no media class found outside the inbox
-
-**Why:** prep moves a file of no media class — one whose extension no list names — to the strays folder only when it
-is in the inbox; anywhere else in the workspace it leaves it where it is and says nothing (`_plan_organize` in
-`cartographer/photos_1_prep.py`, commented "it should not occur"). It can occur: taking an extension off the media
-lists turns files already organized into the dated or by-destination folders into such files, and a file put by hand
-into a managed folder is one too. Such a file then stays among the media, unreported, on every run. Found while ruling
-§4 of the shared contract; Vasile: *"backlog now"*.
-
-**What to do:** decide what prep does with such a file — move it to the strays folder as from the inbox, stop the plan
-with a blocker naming it, or leave it and report it — state that in the prep spec, and make the code and a test follow.
-
-**When:** with the conversion of the prep spec (item 1), where the strays are specified.
 
 ### 10. Files without a camera identity share one camera group
 

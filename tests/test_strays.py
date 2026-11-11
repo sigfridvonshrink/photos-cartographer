@@ -239,24 +239,32 @@ def test_mixed_media_and_stray(tmp_path, monkeypatch):
     assert list((ws / "0-sources").iterdir()) == []
 
 
-@pytest.mark.spec("prep-stray-media-warning-1")
+@pytest.mark.spec("prep-stray-media-warning-1", "RUL-stray_media_hinted", "BLD-stray_media_probe", test="TST-strays-stray_media_detection_warns_only_for_media_mime")
 def test_stray_media_detection_warns_only_for_media_mime(tmp_path, monkeypatch):
     # An unlisted RAW (.raf) and a real non-media (.txt) both land in strays. exiftool sees the .raf as
-    # image/*, the .txt as text/plain -> only the .raf gets the "add to media_extensions" hint.
+    # image/*, the .txt as text/plain -> only the .raf gets the "add to media_extensions" hint, once,
+    # from one probe of the extension however many files carry it.
     _install(monkeypatch)
     ws = _ws(tmp_path)
     (ws / "0-sources" / "DSCF1.raf").write_bytes(b"raw")        # not in default media_extensions -> stray
+    (ws / "0-sources" / "DSCF2.RAF").write_bytes(b"raw2")       # same extension, other case
     (ws / "0-sources" / "notes.txt").write_bytes(b"hello")      # genuine non-media stray
     mimes = {".raf": "image/x-fujifilm-raf", ".txt": "text/plain"}
-    monkeypatch.setattr(utils, "exiftool_mime_type",
-                        lambda p: mimes.get(os.path.splitext(p)[1].lower()))
+    probed = []
+
+    def probe(p):
+        probed.append(os.path.splitext(p)[1].lower())
+        return mimes.get(probed[-1])
+    monkeypatch.setattr(utils, "exiftool_mime_type", probe)
     plan = _plan(ws)
     raf_warn = [w for w in plan.warnings if ".raf" in w]
-    assert raf_warn and "media_extensions" in raf_warn[0], plan.warnings
+    assert len(raf_warn) == 1 and "media_extensions" in raf_warn[0], plan.warnings
     assert not any(".txt" in w for w in plan.warnings)
+    assert sorted(probed) == [".raf", ".txt"]                    # one probe per distinct extension
+    assert not plan.blockers                                     # a hint, never a block
 
 
-@pytest.mark.spec("prep-stray-media-warning-advisory-1")
+@pytest.mark.spec("prep-stray-media-warning-advisory-1", "RUL-stray_media_hinted", test="TST-strays-stray_media_detection_silent_when_exiftool_absent")
 def test_stray_media_detection_silent_when_exiftool_absent(tmp_path, monkeypatch):
     # exiftool unavailable (probe returns None) -> no stray-media warning, never blocks.
     _install(monkeypatch)
@@ -265,3 +273,22 @@ def test_stray_media_detection_silent_when_exiftool_absent(tmp_path, monkeypatch
     monkeypatch.setattr(utils, "exiftool_mime_type", lambda p: None)
     plan = _plan(ws)
     assert not any(".raf" in w for w in plan.warnings)
+
+
+@pytest.mark.spec("RUL-other_outside_inbox_blocks", test="TST-strays-a_file_of_no_media_class_outside_the_inbox_blocks")
+@pytest.mark.parametrize("where", ["5-photos-by-date/2023-01-02", "2-missing-metadata", "4-videos-by-date/2023-01-02",
+                                   "6-photos-by-dest/Trip"])
+def test_a_file_of_no_media_class_outside_the_inbox_blocks(tmp_path, monkeypatch, where):
+    """Prep moves a file of no media class to the strays folder only from the inbox. Anywhere else — an
+    extension taken off the lists, a file put there by hand — it stops the plan, naming the file, and
+    the file stays where it is."""
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    folder = ws / where
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "notes.txt").write_bytes(b"hello")
+    plan = _plan(ws)
+    rel = f"{where}/notes.txt"
+    assert [b for b in plan.blockers if rel in b and "no media class" in b], plan.blockers
+    assert not any(rel in (op.source or "") for op in plan.operations)
+

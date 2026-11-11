@@ -2161,6 +2161,13 @@ class WorkspacePrepWorkflow:
         return None if carries_stem(name, stem) else stem + ext
 
     @staticmethod
+    def _not_media_blocker(rel_path):
+        """The blocker for a file of no media class outside the inbox (prep §6.1)."""
+        ext = os.path.splitext(rel_path)[1].lower().lstrip('.')
+        return (f"File of no media class outside {folder_name('sources')}/: {rel_path}. Move it out of the "
+                f"workspace, or add '{ext}' to the right media_extensions class if it is media.")
+
+    @staticmethod
     def _misnamed_blocker(rel_path, expected):
         sources = folder_name('sources')
         return (f"Misnamed file outside {sources}/: {rel_path} — its name is not its recorded time in the "
@@ -2189,6 +2196,9 @@ class WorkspacePrepWorkflow:
 
         # By-dest is never organized by prep, but its names are checked like the rest.
         for f in by_dest_files:
+            if f['media_class'] == 'other':
+                blockers.append(self._not_media_blocker(f['relative_path']))
+                continue
             dt_named = self._file_datetime(f)
             named_in_format += dt_named is not None
             expected = None if fmt_changed else self._expected_name(f['relative_path'], folder_name('photos_by_dest'), dt_named)
@@ -2200,11 +2210,13 @@ class WorkspacePrepWorkflow:
             rel_path = st.current_paths[f['relative_path']]
             # Non-media (other-class): never date-organized. Move it out of the 0-sources inbox
             # into 1-strays/<plan-id>/<rel> (structure preserved), inert and untracked (prep
-            # Section 3.2 / 7.6), so 0-sources is left empty. Other-class outside the inbox (it
-            # should not occur) is left untouched.
+            # Section 3.2 / 7.6), so 0-sources is left empty. Outside the inbox one stops the plan: an
+            # extension taken off the media lists, or a file put there by hand — only the user knows which.
             if f['media_class'] == 'other':
                 if rel_path.startswith(_sources_prefix):
                     strays_to_move.append((f, rel_path))
+                else:
+                    blockers.append(self._not_media_blocker(rel_path))
                 continue
             top = rel_path.split('/', 1)[0]
             if top != _sources and top in _managed:    # already in a managed band

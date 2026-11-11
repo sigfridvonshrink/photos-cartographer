@@ -201,6 +201,15 @@ the configuration invented would have no handling, since the phases are written 
 extension nobody listed is safest set aside, recoverably, rather than guessed at.
 :::
 
+:::{rat} Case says nothing about a format
+:id: RAT-case_says_nothing
+:status: seed
+:justifies: RUL-extension_matched_ignoring_case
+
+One camera writes `JPG`, another `jpg`, and a file copied through another system may come back either way; the format
+is the same. Matching by case would make the same photo a stray in one dump and a photo in the next.
+:::
+
 :::{rat} The control records are found before anything is read
 :id: RAT-control_records_found_first
 :status: ruled
@@ -1020,6 +1029,26 @@ The user writes the configuration and the decisions by hand, so the tool cannot 
 mistyped timezone or an unsafe path, reported early as a specific problem in a named place, is fixed at its source;
 coerced, half applied or let through, it spoils a later operation, and the change it causes can no longer be
 explained. Checking keeps every change explainable and the user its author.
+:::
+
+:::{rat} A folder's name is a place on disk
+:id: RAT-folder_names_are_places
+:status: seed
+:justifies: RUL-checked_folder_names
+
+Each managed folder's name becomes a folder at the workspace's top level. A name holding a separator would put it inside
+another; a hidden one would be passed over as a hidden entry; two roles under one name would pour two folders into one;
+and the control records' or the quarantine's name would mix media with the records about them.
+:::
+
+:::{rat} A list entry that cannot match sets photos aside unseen
+:id: RAT-extension_entries_must_match
+:status: seed
+:justifies: RUL-checked_extension_lists
+
+A file's extension is matched lowercase and without its dot, so an entry written otherwise matches nothing, and every
+file it was meant for is set aside as a stray without a word. An empty class would do the same to the whole class.
+Checking the lists turns that silent loss into a named mistake.
 :::
 
 :::{rat} A snapshot fails before anything changes, not midway

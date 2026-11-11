@@ -213,14 +213,14 @@ def test_media_extensions_default_seeded_and_valid():
     (_mx(image=["j pg"], raw=["arw"], video=["mp4"]), "canonical bare extension"), # whitespace
     (_mx(image=[5], raw=["arw"], video=["mp4"]), "must be a non-empty string"),    # wrong type
 ])
-@pytest.mark.spec("prep-config-validate-numeric-lists-1")
+@pytest.mark.spec("prep-config-validate-numeric-lists-1", "RUL-checked_extension_lists", test="TST-config_validation-media_extensions_rejects_bad")
 def test_media_extensions_rejects_bad(cfg, needle):
     with pytest.raises(ValueError) as ei:
         utils.validate_config(cfg)
     assert needle in str(ei.value), str(ei.value)
 
 
-@pytest.mark.spec("config-ext-one-class-1", "prep-classify-by-extension-1", "prep-reads-config-authoritative-1", "RUL-config_lists_extensions", "RUL-unlisted_extension_other", test="TST-config_validation-classification_follows_config_after_load")
+@pytest.mark.spec("config-ext-one-class-1", "prep-classify-by-extension-1", "prep-reads-config-authoritative-1", "RUL-config_lists_extensions", "RUL-unlisted_extension_other", "RUL-extension_matched_ignoring_case", test="TST-config_validation-classification_follows_config_after_load")
 def test_classification_follows_config_after_load(tmp_path, monkeypatch):
     # A user adds .webp to the image list; after load_or_seed_config it classifies as image, not stray.
     ws = tmp_path / "ws"

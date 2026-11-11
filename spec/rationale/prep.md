@@ -75,3 +75,57 @@ A stray is a file cartographer does not understand — a document, a sidecar it 
 it would make cartographer answer for what it cannot reason about; parked whole, it waits for the user to keep or clear
 it, and clearing it costs the record nothing.
 :::
+
+## 6. What prep refuses to work on
+
+:::{rat} Photos and videos go separate ways
+:id: RAT-bands_never_mix
+:status: seed
+:justifies: RUL-band_misplacement_blocks
+
+Photos are sorted into destinations and geotagged; videos are kept by date and not corrected. A file in the other kind's
+folder would be handled as what it is not — a video sorted where geotag cannot place it, a photo kept where it is never
+corrected. Prep never puts one there, so one found there was moved by hand, and only the user knows where it belongs.
+:::
+
+:::{rat} A sidecar would be orphaned
+:id: RAT-sidecar_orphaned
+:status: seed
+:justifies: RUL-sidecar_blocks
+
+A sidecar is tied to its photo by name. Prep renames and moves photos, so the sidecar would be left behind under the old
+name, its development lost without a word. Development belongs in the library, after merge
+({need}`RUL-development_after_merge`); a sidecar arriving with the dump is the user's to keep or discard before prep
+goes on.
+:::
+
+:::{rat} A non-media file outside the inbox got there another way
+:id: RAT-other_outside_inbox_is_the_users
+:status: seed
+:justifies: RUL-other_outside_inbox_blocks
+
+Prep sets files of no media class aside only from the inbox, where a dump arrives mixed. Outside it, such a file got
+there another way: an extension the user has since taken off the lists, which turns organized photos into files of no
+class, or a file the user put there by hand. Moving it would guess which; leaving it unsaid would keep among the media a
+file nothing accounts for. Stopping names it, and the user decides — as for a misnamed file.
+:::
+
+:::{rat} All the problems at once
+:id: RAT-every_blocker_at_once
+:status: seed
+:justifies: RUL-blockers_all_reported
+
+A blocker skipped would let a file be left out with nobody knowing. Reporting every one, not the first found, spares the
+user a run for each problem: a dump with three is fixed in one pass.
+:::
+
+:::{rat} A format the lists missed is noticed
+:id: RAT-unlisted_media_noticed
+:status: seed
+:justifies: RUL-stray_media_hinted
+
+The media lists are the user's configuration, and a camera may write a format they never listed. Its photos would be set
+aside as strays, recoverably but without a word. Asking the files' content what they are catches that, and leaves the
+choice — to list the extension and plan again — with the user; the warning blocks nothing and changes no list.
+:::
+
