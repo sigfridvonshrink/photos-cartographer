@@ -27,7 +27,7 @@ that holds one; prep reads the files there for their fingerprint and metadata on
 
 :::{bld} The mark is `photos-00-workspace-guard`, written last
 :id: BLD-workspace_guard
-:status: seed
+:status: ruled
 :realises: RUL-initialized_marked_last
 
 The mark SHALL be the file `photos-00-workspace-guard` in `.photos-ingest/`, which the initializing run's execute writes
@@ -36,7 +36,7 @@ after every other operation has succeeded; the managed folders it creates are `0
 
 :::{bld} A run's strays go to `1-strays/<plan-id>/`
 :id: BLD-strays_per_run
-:status: seed
+:status: ruled
 :realises: DEF-strays_folder
 :aliases: prep-strays-per-run-subfolder-1, prep-strays-no-collision-across-runs-1
 
@@ -46,7 +46,7 @@ share a folder there.
 
 :::{bld} The configuration is seeded before it is fingerprinted
 :id: BLD-seed_before_fingerprints
-:status: seed
+:status: ruled
 :realises: RUL-config_seeded_once
 :aliases: prep-seed-before-fingerprint-1
 
