@@ -2868,7 +2868,7 @@ Execution SHALL carry out only the operations its plan records, re-deriving no d
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: prep-journal-all-mutations-1
+:aliases: prep-journal-all-mutations-1, prep-progress-not-only-record-1
 
 Every change an execution makes to a media file SHALL be recorded in that run's journal.
 :::

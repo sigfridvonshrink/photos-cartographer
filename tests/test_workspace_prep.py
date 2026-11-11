@@ -179,7 +179,7 @@ def test_prep_workflow_plan_and_execute(mock_meta, mock_hash_img, tmp_path, monk
     assert not any("__photos_ingest_tmp_extnorm__" in p for p in db_paths)
     cache_conn.close()
 
-@pytest.mark.spec("prep-deterministic-order-1", "prep-same-names-same-input-1")
+@pytest.mark.spec("prep-deterministic-order-1", "prep-same-names-same-input-1", test="TST-workspace_prep-deterministic_temp_names")
 def test_deterministic_temp_names(tmp_path, monkeypatch):
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
