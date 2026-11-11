@@ -622,7 +622,7 @@ phase's output.
 :status: ruled
 :criticality: med
 :verify: incidental
-:aliases: ctrl-skip-set-1, prep-scan-skips-control-subtrees-1
+:aliases: ctrl-skip-set-1, prep-scan-skips-control-subtrees-1, prep-no-requarantine-1
 :refines: RUL-control_records_never_media
 :uses: DEF-strays_folder
 
@@ -1557,7 +1557,7 @@ be safe, and leaving no file in a state other than its inputs require.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: idem-reuse-not-recompute-1, prep-fingerprint-reuse-unchanged-1
+:aliases: idem-reuse-not-recompute-1, prep-fingerprint-reuse-unchanged-1, prep-reuse-cache-unchanged-1, prep-new-files-act-only-on-changed-1
 :refines: INV-change_only_what_needs
 
 Work already done and still valid SHALL be reused, not repeated — a file's content and metadata read, and the tracks
@@ -1606,7 +1606,7 @@ the run requires of it: a file already in its place, with its name and its metad
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: idem-no-op-run-1, prep-unchanged-no-op-1
+:aliases: idem-no-op-run-1, prep-unchanged-no-op-1, prep-second-run-zero-mutations-1, prep-same-names-same-input-1
 :refines: INV-change_only_what_needs
 
 A phase run over a workspace whose relevant state has not changed SHALL change nothing, and produce the same result —
@@ -1618,6 +1618,7 @@ the same operations, fingerprints and names.
 :status: ruled
 :criticality: low
 :verify: required
+:aliases: prep-report-no-op-facts-1
 :refines: RUL-no_op_run
 
 A run over unchanged inputs SHALL report the work it reused and the files already right, never treating earlier work as

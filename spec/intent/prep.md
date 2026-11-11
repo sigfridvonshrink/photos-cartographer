@@ -184,7 +184,7 @@ leaves the inbox.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: prep-files-in-managed-left-1
+:aliases: prep-files-in-managed-left-1, prep-recognize-correct-location-1, prep-tolerate-populated-folders-1
 :uses: DEF-managed_folders
 
 A media file outside the inbox SHALL stay in the folder it is in, unless prep sets it aside as a duplicate or it is a
@@ -255,7 +255,7 @@ moving it back into the inbox takes it through prep again.
 :status: ruled
 :criticality: low
 :verify: required
-:aliases: prep-normalize-extension-case-1
+:aliases: prep-normalize-extension-case-1, prep-no-renormalize-extensions-1
 :uses: DEF-managed_folders
 
 Each media file prep files, or finds outside the inbox, SHALL end with its extension in lowercase.

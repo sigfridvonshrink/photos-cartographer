@@ -713,7 +713,7 @@ def test_init_move_excludes_managed_folders_and_control_dirs(tmp_path, monkeypat
                    and op.reason and "Initialize" in op.reason for op in plan.operations)
 
 
-@pytest.mark.spec("prep-no-renormalize-extensions-1")
+@pytest.mark.spec("prep-no-renormalize-extensions-1", test="TST-workspace_prep-already_lowercase_extension_gets_no_rename_op")
 def test_already_lowercase_extension_gets_no_rename_op(tmp_path, monkeypatch):
     """§13 item 3: prep does not re-normalize an already-normalized extension. A file already named
     with a lowercase `.jpg` must produce NO extension-normalization rename op (no two-step temp
