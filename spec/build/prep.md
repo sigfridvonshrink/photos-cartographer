@@ -291,7 +291,7 @@ read or write it warns and goes on.
 
 :::{bld} A failed fingerprint is recorded as failed
 :id: BLD-failed_fingerprint
-:status: seed
+:status: ruled
 :realises: RUL-failed_fingerprint_no_duplicate, RUL-failed_fingerprint_blocks, RUL-failed_fingerprint_retried
 
 A fingerprint that could not be taken SHALL be recorded with the status `failed` and no value; prep's duplicate grouping
@@ -301,7 +301,7 @@ database nor the plan memo offers it for reuse.
 
 :::{bld} The handoff names each duplicate's kept copy
 :id: BLD-duplicate_evidence
-:status: seed
+:status: ruled
 :realises: RUL-duplicate_recorded_with_kept
 
 Each duplicate's quarantine move SHALL carry its evidence — its path, the copy kept and the shared fingerprint — which

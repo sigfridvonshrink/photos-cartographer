@@ -494,7 +494,7 @@ The plan memo SHALL hold entries only for paths the latest plan read.
 
 :::{rul} A failed fingerprint matches nothing
 :id: RUL-failed_fingerprint_no_duplicate
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -506,7 +506,7 @@ A media file whose fingerprint failed SHALL be found the duplicate of no file, a
 
 :::{rul} A failed fingerprint outside photos by destination blocks
 :id: RUL-failed_fingerprint_blocks
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :aliases: prep-fingerprint-failure-blocks-1
@@ -517,7 +517,7 @@ A media file outside photos by destination whose fingerprint failed SHALL block 
 
 :::{rul} A failed fingerprint is taken again
 :id: RUL-failed_fingerprint_retried
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :uses: DEF-fingerprint
@@ -527,7 +527,7 @@ Prep SHALL take a media file's fingerprint again at every run while it has faile
 
 :::{rul} A duplicate is recorded with the copy kept
 :id: RUL-duplicate_recorded_with_kept
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: prep-dup-against-bydest-quarantine-mutable-1
