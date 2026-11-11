@@ -225,7 +225,7 @@ def test_seal_refuses_all_three_phases_except_prune_quarantine(tmp_path, monkeyp
     assert "SEALED" not in capsys.readouterr().err   # prune itself never hit the seal guard
 
 
-@pytest.mark.spec("prep-quarantine-no-auto-delete-1")
+@pytest.mark.spec("prep-quarantine-no-auto-delete-1", test="TST-cli-prep_plan_never_auto_deletes_quarantine")
 def test_prep_plan_never_auto_deletes_quarantine(tmp_path, monkeypatch, capsys):
     """Quarantine is recoverable and is NEVER auto-purged: an ordinary prep `plan` leaves a populated
     quarantine completely intact (only the explicit `prune-quarantine` command may remove it)."""
@@ -237,7 +237,7 @@ def test_prep_plan_never_auto_deletes_quarantine(tmp_path, monkeypatch, capsys):
     assert qd.exists() and (qd / "dup.jpg").read_bytes() == b"recoverable"   # untouched by plan
 
 
-@pytest.mark.spec("prep-prune-no-managed-1")
+@pytest.mark.spec("prep-prune-no-managed-1", test="TST-cli-prune_quarantine_preserves_managed_folders")
 def test_prune_quarantine_preserves_managed_folders(tmp_path, monkeypatch, capsys):
     """prune-quarantine removes only quarantine contents — the managed 0-6 tree (incl. 6-photos-by-dest)
     is never touched by a prune run."""
