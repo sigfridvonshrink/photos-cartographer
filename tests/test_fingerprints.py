@@ -323,3 +323,33 @@ def test_execute_run_lands_all_cache_rows(tmp_path, monkeypatch):
     _run(ws)
     rows = prep.WorkspaceCache(str(ws)).get_all_files()
     assert any(k.startswith("5-photos-by-date/") for k in rows), rows  # organized + cached
+
+
+def _failing(monkeypatch):
+    monkeypatch.setattr(prep.ContentHasher, "fingerprint_image",
+                        lambda p: {"status": "failed", "strategy": utils.IMAGE_FINGERPRINT_STRATEGY, "value": None,
+                                   "error": "ImageMagick not found", "engine_version": None})
+
+
+@pytest.mark.spec("RUL-failed_fingerprint_retried", "BLD-failed_fingerprint",
+                  test="TST-fingerprints-a_failed_fingerprint_is_taken_again")
+def test_a_failed_fingerprint_is_taken_again(tmp_path, monkeypatch):
+    """A failed fingerprint is offered for reuse neither by the plan memo nor by the database: once the
+    machine is fixed, the next plan takes it, the file's size and time unchanged."""
+    _mock(monkeypatch)
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "t")
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"A")
+    _failing(monkeypatch)
+    cache = prep.WorkspaceCache(str(ws))
+    blocked = prep.WorkspacePrepWorkflow(str(ws), cache).plan()
+    cache.close()
+    assert any("a.jpg" in b for b in blocked.blockers)              # held only in the memo
+    assert _plan_counting(ws, monkeypatch) == 1
+
+    (ws / "0-sources" / "a.jpg").unlink()
+    (ws / "6-photos-by-dest" / "T").mkdir()
+    (ws / "6-photos-by-dest" / "T" / "2023-01-02--03-04-05.jpg").write_bytes(b"B")
+    _failing(monkeypatch)
+    _run(ws)                                                         # by-dest: no blocker, row kept
+    assert _plan_counting(ws, monkeypatch) == 1

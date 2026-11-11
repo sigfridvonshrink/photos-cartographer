@@ -256,7 +256,7 @@ def test_sidecar_blocking(tmp_path, monkeypatch):
         executor.execute(plan, journal_path)
 
 
-@pytest.mark.spec("prep-unknown-fingerprint-no-dup-1")
+@pytest.mark.spec("prep-unknown-fingerprint-no-dup-1", "RUL-failed_fingerprint_blocks", test="TST-workspace_prep-hash_failure_preservation")
 def test_hash_failure_preservation(tmp_path, monkeypatch):
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)

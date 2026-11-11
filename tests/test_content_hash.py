@@ -181,7 +181,7 @@ def test_real_jpeg_organizes_with_spec_filename_and_no_blocker(tmp_path):
 
 @requires_magick
 @requires_exiftool
-@pytest.mark.spec("prep-fingerprint-failure-blocks-1")
+@pytest.mark.spec("prep-fingerprint-failure-blocks-1", test="TST-content_hash-unreadable_image_blocks_with_hash_failure")
 def test_unreadable_image_blocks_with_hash_failure(tmp_path):
     # Negative path: a file that magick cannot decode must surface a §6.2/§11.3
     # hash-failure blocker, not silently pass.

@@ -436,15 +436,15 @@ The memo changes cost, never outcome: the plan a run produces is the same whethe
 
 ### 11.1 Content duplicate against by-dest
 
-If a mutable-side file has the same content fingerprint as a *different* by-dest file (i.e. not the same file recognized as moved per Section 10.1), it is classified as a duplicate against existing by-dest content. The by-dest file is the retained copy; only the mutable-side file is acted on (quarantined). The relationship is recorded in the summary, journal, and handoff.
+If a mutable-side file has the same content fingerprint as a *different* by-dest file (i.e. not the same file recognized as moved per Section 10.1), it is classified as a duplicate against existing by-dest content. The by-dest file is the retained copy; only the mutable-side file is acted on (quarantined). The relationship is recorded in the summary, the quarantine manifest, and the handoff.
 
 ### 11.2 Path conflict against by-dest
 
-If a planned destination path would collide with an existing by-dest path (including case-insensitively), prep must not clobber it: it allocates a safe alternative name where the operation class allows, otherwise it blocks. The by-dest file is never touched.
+Prep plans no destination inside `6-photos-by-dest` (Section 2.2), so no planned path can collide with a by-dest path; every destination it plans is allocated free of the names on disk and in the plan, ignoring case.
 
 ### 11.3 Unknown fingerprints
 
-This rule concerns **media** files (photos and videos), which are fingerprinted; `other`-class files are intentionally unfingerprinted (Section 9) and never enter a content-equality decision, so they are out of scope here. If either side of a potential duplicate is a **media** file with an unknown fingerprint (a fingerprint *failure* — the decode/fingerprint could not be computed), prep must not classify it as a content duplicate and must not remove or quarantine based on equality. For a mutable-side media file this is a blocker; for a by-dest file it is skipped (by-dest is read-only and never quarantined regardless).
+This rule concerns **media** files (photos and videos), which are fingerprinted; `other`-class files are intentionally unfingerprinted (Section 9) and never enter a content-equality decision, so they are out of scope here. If either side of a potential duplicate is a **media** file with an unknown fingerprint (a fingerprint *failure* — the decode/fingerprint could not be computed), prep must not classify it as a content duplicate and must not remove or quarantine based on equality. For a mutable-side media file this is a blocker; for a by-dest file it is skipped (by-dest is read-only and never quarantined regardless). A failed fingerprint is never reused from the cache or the memo: the failure may have been the machine's — a tool missing, a decoder crashing — so every run takes it again.
 
 By-dest inventory facts that influenced any decision are recorded in the plan dependencies, so execution rejects the plan if by-dest state changed in a way that affects uniqueness decisions.
 

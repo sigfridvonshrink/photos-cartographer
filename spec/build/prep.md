@@ -21,7 +21,7 @@ plan that holds any other operation — a metadata write among them.
 :realises: RUL-prep_leaves_by_dest_as_found
 
 Prep's plan SHALL hold no operation whose source or destination lies in `6-photos-by-dest`, its execute refusing a plan
-that holds one; prep reads the files there for their fingerprint and metadata only ({need}`RUL-move_recognized`; prep §11).
+that holds one; prep reads the files there for their fingerprint and metadata only ({need}`RUL-move_recognized`, {need}`RUL-copy_kept_by_folder`).
 :::
 
 ## 3. The workspace's first run, and the strays
@@ -81,7 +81,7 @@ journal after each.
 :id: BLD-prep_dependencies
 :status: ruled
 :realises: INV-no_stale_use, RUL-unchecked_counts_as_changed
-:aliases: prep-artifacts-carry-depends-on-1, prep-record-min-fingerprints-1, prep-fingerprint-algo-recorded-1
+:aliases: prep-artifacts-carry-depends-on-1, prep-record-min-fingerprints-1, prep-fingerprint-algo-recorded-1, prep-bydest-precondition-recorded-1
 
 Prep's records SHALL carry their dependencies so:
 
@@ -284,4 +284,27 @@ The plan memo SHALL be the SQLite file `photos-00-plan-memo.db` in `.photos-inge
 `mtime_ns` and the file's row as read, replaced whole by each plan with its media files holding both a fingerprint and a
 metadata record; read, its entries lie under the database's rows and pass the same reuse tests, and failing to open,
 read or write it warns and goes on.
+:::
+
+
+## 11. Duplicates and failures beside photos by destination
+
+:::{bld} A failed fingerprint is recorded as failed
+:id: BLD-failed_fingerprint
+:status: seed
+:realises: RUL-failed_fingerprint_no_duplicate, RUL-failed_fingerprint_blocks, RUL-failed_fingerprint_retried
+
+A fingerprint that could not be taken SHALL be recorded with the status `failed` and no value; prep's duplicate grouping
+passes it over, its plan records a blocker for each such file outside `6-photos-by-dest`, and neither the workspace
+database nor the plan memo offers it for reuse.
+:::
+
+:::{bld} The handoff names each duplicate's kept copy
+:id: BLD-duplicate_evidence
+:status: seed
+:realises: RUL-duplicate_recorded_with_kept
+
+Each duplicate's quarantine move SHALL carry its evidence — its path, the copy kept and the shared fingerprint — which
+the quarantine manifest and the handoff record, the handoff also under the destination folder of a kept copy in
+`6-photos-by-dest`.
 :::
