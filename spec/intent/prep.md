@@ -674,7 +674,7 @@ interrupted plan.
 
 :::{rul} A duplicate's evidence is recorded before it is moved
 :id: RUL-evidence_before_quarantine
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :aliases: prep-evidence-before-quarantine-1
@@ -686,7 +686,7 @@ file into the quarantine.
 
 :::{rul} No run deletes from the quarantine
 :id: RUL-quarantine_never_auto_deleted
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -697,7 +697,7 @@ No prep run SHALL remove anything from the quarantine, however often it runs and
 
 :::{rul} Only the user's prune deletes, and only when told to
 :id: RUL-prune_explicit
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -709,7 +709,7 @@ and touches nothing outside the quarantine.
 
 :::{rul} A file restored from the quarantine is a new file
 :id: RUL-restored_file_is_new
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: prep-quarantine-restore-normal-1, prep-restored-requarantine-if-dup-1, prep-no-reconcile-old-quarantine-1
@@ -720,7 +720,7 @@ quarantine record left as it is.
 
 :::{rul} The quarantine's size is reported
 :id: RUL-quarantine_footprint_reported
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :aliases: prep-quarantine-footprint-reported-1
