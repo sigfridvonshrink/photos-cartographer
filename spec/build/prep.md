@@ -308,3 +308,29 @@ Each duplicate's quarantine move SHALL carry its evidence — its path, the copy
 the quarantine manifest and the handoff record, the handoff also under the destination folder of a kept copy in
 `6-photos-by-dest`.
 :::
+
+
+## 12. The metadata prep keeps for geotag
+
+:::{bld} Metadata is read by exiftool, by group
+:id: BLD-metadata_extraction
+:status: seed
+:realises: RUL-metadata_kept_for_geotag, RUL-metadata_group_order, RUL-metadata_freshness
+
+Prep SHALL read metadata with `exiftool -json -n -a -G0`, taking each field from the first group holding it in the
+order `EXIF`, `XMP`, `MakerNotes`, `IPTC`, `QuickTime`, `File` — `Composite` first for the GPS position — and a time
+field from the first group holding a valid time in it; it keeps the fields in `metadata_cache.parsed_json` with the
+recorded time's field and group, stamped with `exiftool`, its version, the field-set version, the SHA-256 of the
+options, the metadata-schema version and the camera-group-key version.
+:::
+
+:::{bld} The handoff's camera groups and destination folders
+:id: BLD-handoff_grouping_facts
+:status: seed
+:realises: RUL-grouping_facts_reported
+
+The handoff SHALL carry `camera_groups` — each group's key, files and count, identity fields, earliest and latest
+recorded time, native-GPS, missing-GPS and missing-time counts, cache freshness and the device class the configuration
+gives it — and `destination_folders` — each folder's path, files scanned, camera groups, time range, native-GPS,
+missing-GPS and `GPSProcessingMethod` counts, cache freshness, and the duplicates whose kept copy it holds.
+:::

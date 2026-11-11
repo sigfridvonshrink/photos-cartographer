@@ -454,13 +454,14 @@ By-dest inventory facts that influenced any decision are recorded in the plan de
 
 Because prep already opens every file for fingerprinting and organization, it caches the EXIF/QuickTime/XMP facts the geotag phase will need, so geotag can avoid re-reading unchanged files. This is strictly passive: prep stores facts, makes no time/GPS decision, and corrects nothing.
 
-Cached per file (raw values plus clearly-labelled parsed helpers):
+Cached per file, each field as exiftool reports it:
 
 1. **camera/device identity**: `Make`, `Model`, `UniqueCameraModel`, `BodySerialNumber`, `CameraSerialNumber`, `InternalSerialNumber`, `SerialNumber`, `OwnerName`, lens model/serial, and a derived `camera_group_key`;
-2. **timestamps (uncorrected)**: `DateTimeOriginal`, `CreateDate`, `ModifyDate`, sub-second and offset/timezone fields, XMP/IPTC `CreateDate`/`ModifyDate`/`DateCreated`, and the QuickTime `*CreateDate`/`*ModifyDate`/`Track*`/`Media*` family, plus the selected source-naive timestamp and its provenance;
+2. **timestamps (uncorrected)**: `DateTimeOriginal`, `CreateDate`, `ModifyDate`, sub-second and offset/timezone fields, `DateCreated`, and the QuickTime `TrackCreateDate`/`TrackModifyDate`/`MediaCreateDate`/`MediaModifyDate`, plus the selected source-naive timestamp and its provenance — the field and the group it was taken from;
 3. **native GPS (uncorrected)**: presence flag, `GPSLatitude(Ref)`, `GPSLongitude(Ref)`, parsed signed decimals where safe, `GPSAltitude(Ref)`, `GPSDateStamp`, `GPSTimeStamp`, `GPSDateTime`, `GPSProcessingMethod`;
-4. **normalized media facts**: folder class, extension, normalized extension, media kind, dimensions, orientation, rotation, video duration;
-5. a raw metadata payload (or at least the raw values for the requested field set) so future fields can be added without re-reading unchanged files.
+4. **normalized media facts**: folder class, extension, normalized extension, media kind, dimensions, orientation, rotation, video duration.
+
+Each field is taken from the first metadata group holding it, in a fixed order: EXIF, XMP, maker notes, IPTC, QuickTime, the file itself — the camera's own record first, then where other tools keep or mirror it. The GPS position is taken first from exiftool's composite value, signed by its hemisphere. A time field is taken from the first group holding a valid time in it, so a shutter time missing or a placeholder in EXIF is taken from XMP's before `CreateDate` is tried. Prep keeps no copy of a file's whole metadata: a change to what is read is a re-read (Section 9).
 
 ### 12.1 Metadata freshness
 
@@ -468,7 +469,7 @@ A cached metadata record is reusable only when all freshness inputs still match:
 
 ### 12.2 Passive grouping facts
 
-The handoff/summary reports passive grouping facts for later use, with no inference: per camera group (key, file count, contributing identity fields, earliest/latest source-naive timestamp, native-GPS counts, missing/ambiguous-timestamp count, and phone/camera class only if already known from config) and per by-dest folder (path, files scanned, camera groups present, timestamp range, native-GPS/missing-GPS/GPSProcessingMethod counts, cache-freshness summary, and conflicts/duplicates involving files outside by-dest).
+The handoff/summary reports passive grouping facts for later use, with no inference: per camera group (key, file count, contributing identity fields, earliest/latest source-naive timestamp, native-GPS counts, missing-timestamp count, and phone/camera class only if already known from config) and per by-dest folder (path, files scanned, camera groups present, timestamp range, native-GPS/missing-GPS/GPSProcessingMethod counts, cache-freshness summary, and conflicts/duplicates involving files outside by-dest).
 
 ---
 
@@ -708,7 +709,7 @@ Prep produces a textual summary that lets a reviewer confirm safety and progress
 6. duplicates against mutable folders vs. against read-only by-dest;
 7. cache records reused, fingerprints recomputed, fingerprints carried forward after moves, cache records updated;
 8. metadata records reused/extracted/failed, field-set and extractor versions;
-9. camera groups found; native-GPS and missing/ambiguous-timestamp counts;
+9. camera groups found; native-GPS and missing-timestamp counts;
 10. blockers (sealed workspace, loose root file, symlinks, forbidden sidecars, fingerprint failures, stale dependencies) and warnings (including, on a sealed workspace, a detected likely-new-dump);
 11. confirmation that durable artifacts were written only after dependency validation;
 12. the current quarantine footprint — total quarantined files, total size, number of distinct `<plan_id>` directories, and oldest/newest plan id present — since quarantine is never auto-deleted and grows across runs (Section 15.3);

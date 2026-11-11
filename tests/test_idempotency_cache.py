@@ -58,7 +58,7 @@ def mock_read_metadata_concurrently(folders, max_workers=4, progress_coordinator
     for folder in folders:
         for f in os.listdir(folder):
             abs_path = os.path.join(folder, f)
-            res[abs_path] = {"DateTimeOriginal": "2023:01:01 12:00:00", "extraction_status": "extracted_ok", "raw_payload": "{}"}
+            res[abs_path] = {"DateTimeOriginal": "2023:01:01 12:00:00", "extraction_status": "extracted_ok"}
     return res, set()
 
 

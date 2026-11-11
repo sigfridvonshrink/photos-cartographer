@@ -52,7 +52,7 @@ def _mock(monkeypatch):
                     "camera_group_key": "test-cam",
                     "has_native_gps": False,
                     "has_timestamp": True,
-                    "extraction_status": "extracted_ok", "raw_payload": "{}",
+                    "extraction_status": "extracted_ok",
                 }
         return res, set()
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", meta)

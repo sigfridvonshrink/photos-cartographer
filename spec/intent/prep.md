@@ -535,3 +535,53 @@ Prep SHALL take a media file's fingerprint again at every run while it has faile
 
 Prep SHALL record each duplicate it quarantines with the copy it kept, in the quarantine manifest and the handoff.
 :::
+
+
+## 12. The metadata prep keeps for geotag
+
+:::{rul} Prep keeps the metadata geotag needs
+:id: RUL-metadata_kept_for_geotag
+:status: seed
+:criticality: high
+:verify: required
+:aliases: prep-cache-metadata-fields-1, prep-passive-metadata-cache-1
+:uses: DEF-workspace_database
+
+Prep SHALL keep in the workspace database, for each media file it reads, the metadata geotag works from — the camera's
+identity, the times and the native GPS position as recorded, and the file's dimensions, orientation and duration.
+:::
+
+:::{rul} A field is taken from the camera's own record first
+:id: RUL-metadata_group_order
+:status: seed
+:criticality: high
+:verify: required
+
+Prep SHALL take each metadata field from the file's EXIF where EXIF holds it, else from its XMP, before any other place
+the file records it — a time field from the first of them holding a valid time in it.
+:::
+
+:::{rul} Cached metadata is reused only while read the same way
+:id: RUL-metadata_freshness
+:status: seed
+:criticality: high
+:verify: required
+:aliases: prep-metadata-freshness-inputs-1
+:refines: RUL-reuse_valid_work
+:uses: DEF-workspace_database
+
+Prep SHALL reuse a file's cached metadata only while the file's path, size, modification time and fingerprint, and the
+way the metadata was read — the extractor and its version, the fields, the options and the record's form — are as they
+were when it was read.
+:::
+
+:::{rul} The handoff reports what the groups hold
+:id: RUL-grouping_facts_reported
+:status: seed
+:criticality: med
+:verify: required
+:aliases: prep-passive-grouping-facts-1
+
+Prep's handoff SHALL report, for each camera group and each folder of photos by destination, facts of the files in it —
+their count, their time range, how many carry a GPS position — inferring nothing from them.
+:::

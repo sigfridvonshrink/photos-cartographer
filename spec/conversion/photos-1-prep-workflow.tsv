@@ -12,7 +12,7 @@
 1	7. detects content duplicates and quarantines them recoverably;	RUL-duplicates_quarantined	
 1	8. organizes timestamped media into by-date folders, untimestamped media into a missing-metadata folder, and **non-media into the strays folder `1-strays/`** — leaving `0-sources/` empty (Sections 7.6, 18, 3.2);	RUL-photos_by_date RUL-videos_by_date RUL-untimed_to_missing_metadata RUL-inbox_non_media_to_strays RUL-prep_empties_inbox	
 1	9. maintains a SQLite fingerprint/metadata cache so repeated runs are cheap and idempotent;	RUL-reuse_valid_work RUL-fingerprint_taken_afresh DEF-workspace_database	
-1	10. passively caches the EXIF/QuickTime/XMP facts the geotag phase will need, without making any time/GPS decision;	defer:12	
+1	10. passively caches the EXIF/QuickTime/XMP facts the geotag phase will need, without making any time/GPS decision;	RUL-metadata_kept_for_geotag RUL-prep_no_time_or_gps	
 1	11. writes a dependency-fingerprinted handoff manifest for the geotag phase;	defer:16	
 1	12. writes a complete, human-readable end-of-prep audit log (`photos-15-prep-log.json`) recording every transformation each photo underwent in prep — a self-sufficient record even if no later phase ever runs.	defer:16.1	
 1	The prep phase ends when timestamped photos are in `5-photos-by-date` and videos in `4-videos-by-date`.	DEF-operator_loop	
@@ -385,3 +385,23 @@
 11.3	For a mutable-side media file this is a blocker; for a by-dest file it is skipped (by-dest is read-only and never quarantined regardless).	RUL-failed_fingerprint_blocks RUL-prep_leaves_by_dest_as_found	
 11.3	A failed fingerprint is never reused from the cache or the memo: the failure may have been the machine's — a tool missing, a decoder crashing — so every run takes it again.	RUL-failed_fingerprint_retried RAT-failure_may_be_the_machines	
 11.3	By-dest inventory facts that influenced any decision are recorded in the plan dependencies, so execution rejects the plan if by-dest state changed in a way that affects uniqueness decisions.	BLD-prep_dependencies	
+12	## 12. Passive metadata acceleration	dropped	a heading; the corpus's documents carry their own
+12	Because prep already opens every file for fingerprinting and organization, it caches the EXIF/QuickTime/XMP facts the geotag phase will need, so geotag can avoid re-reading unchanged files.	RUL-metadata_kept_for_geotag RAT-one_read_serves_both	
+12	This is strictly passive: prep stores facts, makes no time/GPS decision, and corrects nothing.	RUL-prep_no_time_or_gps RAT-one_read_serves_both	
+12	Cached per file, each field as exiftool reports it:	RUL-metadata_kept_for_geotag BLD-metadata_extraction	
+12	1. **camera/device identity**:	RUL-metadata_kept_for_geotag BLD-metadata_extraction	
+12	`Make`, `Model`, `UniqueCameraModel`, `BodySerialNumber`, `CameraSerialNumber`, `InternalSerialNumber`, `SerialNumber`, `OwnerName`, lens model/serial, and a derived `camera_group_key`;	RUL-metadata_kept_for_geotag BLD-metadata_extraction	
+12	2. **timestamps (uncorrected)**:	RUL-metadata_kept_for_geotag BLD-metadata_extraction	
+12	`DateTimeOriginal`, `CreateDate`, `ModifyDate`, sub-second and offset/timezone fields, `DateCreated`, and the QuickTime `TrackCreateDate`/`TrackModifyDate`/`MediaCreateDate`/`MediaModifyDate`, plus the selected source-naive timestamp and its provenance — the field and the group it was taken from;	RUL-metadata_kept_for_geotag BLD-metadata_extraction RUL-recorded_time_order	
+12	3. **native GPS (uncorrected)**: presence flag, `GPSLatitude(Ref)`, `GPSLongitude(Ref)`, parsed signed decimals where safe, `GPSAltitude(Ref)`, `GPSDateStamp`, `GPSTimeStamp`, `GPSDateTime`, `GPSProcessingMethod`;	RUL-metadata_kept_for_geotag BLD-metadata_extraction	
+12	4. **normalized media facts**: folder class, extension, normalized extension, media kind, dimensions, orientation, rotation, video duration.	RUL-metadata_kept_for_geotag RUL-database_matches_files	
+12	Each field is taken from the first metadata group holding it, in a fixed order:	RUL-metadata_group_order BLD-metadata_extraction	
+12	EXIF, XMP, maker notes, IPTC, QuickTime, the file itself — the camera's own record first, then where other tools keep or mirror it.	RUL-metadata_group_order RAT-camera_record_first	
+12	The GPS position is taken first from exiftool's composite value, signed by its hemisphere.	BLD-metadata_extraction	
+12	A time field is taken from the first group holding a valid time in it, so a shutter time missing or a placeholder in EXIF is taken from XMP's before `CreateDate` is tried.	RUL-metadata_group_order RAT-camera_record_first	
+12	Prep keeps no copy of a file's whole metadata: a change to what is read is a re-read (Section 9).	RUL-reread_whole RAT-reread_on_purpose	
+12.1	### 12.1 Metadata freshness	dropped	a heading; the corpus's documents carry their own
+12.1	A cached metadata record is reusable only when all freshness inputs still match: path (or move-aware identity, Section 10.1), size, mtime, content fingerprint if available, extractor name, extractor version, field-set version, extraction-options fingerprint, metadata-schema version, and camera-group-key version.	RUL-metadata_freshness BLD-metadata_extraction RUL-moved_file_carried	
+12.1	Changing the field set or extractor in a future release makes existing records detectably stale without being confused with content changes.	RAT-reading_change_detectable	
+12.2	### 12.2 Passive grouping facts	dropped	a heading; the corpus's documents carry their own
+12.2	The handoff/summary reports passive grouping facts for later use, with no inference: per camera group (key, file count, contributing identity fields, earliest/latest source-naive timestamp, native-GPS counts, missing-timestamp count, and phone/camera class only if already known from config) and per by-dest folder (path, files scanned, camera groups present, timestamp range, native-GPS/missing-GPS/GPSProcessingMethod counts, cache-freshness summary, and conflicts/duplicates involving files outside by-dest).	RUL-grouping_facts_reported BLD-handoff_grouping_facts	

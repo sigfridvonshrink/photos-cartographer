@@ -398,3 +398,48 @@ gone. Taking it again costs one attempt per run for a file that still fails.
 A file set aside as a copy is recoverable only if one can tell which file it copies. Recorded with the copy kept, the
 user can check the pair, and a photo already sorted into a destination is seen to have had its copy set aside.
 :::
+
+
+## 12. The metadata prep keeps for geotag
+
+:::{rat} One read serves both phases
+:id: RAT-one_read_serves_both
+:status: seed
+:justifies: RUL-metadata_kept_for_geotag
+
+Prep opens every file anyway, to fingerprint and file it; geotag needs the same files' times, cameras and positions.
+Kept by prep, they are read once, and geotag reads no photo. Prep keeps them as recorded and decides nothing from them
+({need}`RAT-prep_has_no_evidence`).
+:::
+
+:::{rat} The camera's record first, by the pipeline's choice
+:id: RAT-camera_record_first
+:status: seed
+:justifies: RUL-metadata_group_order
+
+A file can hold one field in several places: EXIF, written by the camera; XMP, where other tools mirror it, or keep it
+for a file with no EXIF; maker notes, QuickTime and the rest. Which one counts must be the pipeline's stated choice, not
+the extractor's internal preference, which no one documents and a new version may change. The camera's own record comes
+first. A shutter time is still a shutter time when XMP holds it, so a time missing or a placeholder in EXIF is sought in
+the same field elsewhere before another field is tried.
+:::
+
+:::{rat} A change in reading is told apart from a change in the file
+:id: RAT-reading_change_detectable
+:status: seed
+:justifies: RUL-metadata_freshness
+
+Metadata kept is reused for every unchanged file, so what it depends on must be recorded with it: the file as it was,
+and the way it was read. A new extractor, another field set or other options make each record detectably stale, without
+being taken for a change in the file — and the record is read again whole ({need}`RAT-reread_on_purpose`).
+:::
+
+:::{rat} Facts before decisions
+:id: RAT-facts_before_decisions
+:status: seed
+:justifies: RUL-grouping_facts_reported
+
+Geotag decides a clock offset per camera and a timezone per destination; before it does, the user and geotag can see
+what each camera group and destination holds — how many files, over what span, how many already placed. Prep reports it
+and infers nothing: inference is geotag's, made with evidence prep lacks.
+:::

@@ -4024,7 +4024,7 @@
       "area": "prep",
       "criticality": "med",
       "anti": false,
-      "title": "Prep caches the enumerated per-file fields (camera identity, timestamps, native GPS, media facts, raw payload)",
+      "title": "Prep caches the enumerated per-file fields (camera identity, timestamps, native GPS, media facts), each from an explicit group order",
       "spec": {
         "file": "photos-1-prep-workflow.md",
         "section": "12"

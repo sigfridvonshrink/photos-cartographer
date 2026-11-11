@@ -57,7 +57,7 @@ def _mocks(monkeypatch):
         for fo in folders:
             for fn in os.listdir(fo):
                 res[os.path.join(fo, fn)] = {"DateTimeOriginal": TIME,
-                                             "extraction_status": "extracted_ok", "raw_payload": "{}"}
+                                             "extraction_status": "extracted_ok"}
         return res, set()
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", meta)
 
@@ -177,7 +177,7 @@ def test_a_stray_keeps_its_place_and_name(tmp_path):
 def _untimed(monkeypatch):
     """Metadata holding no recorded time, for every file."""
     def meta(folders, max_workers=4, progress_coordinator=None):
-        return {os.path.join(fo, fn): {"extraction_status": "extracted_empty", "raw_payload": "{}"}
+        return {os.path.join(fo, fn): {"extraction_status": "extracted_empty"}
                 for fo in folders for fn in os.listdir(fo)}, set()
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", meta)
 
