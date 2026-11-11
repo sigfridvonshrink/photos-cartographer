@@ -589,7 +589,7 @@ After a successful run, prep writes a machine-readable, non-editable handoff man
 .photos-ingest/photos-11-handoff.json
 ```
 
-It is written only after the validated plan executed, the journal is complete, the final filesystem matches expected postconditions, and the SQLite/cache state matches the filesystem. It must include at least:
+It is written only after every operation of the validated plan succeeded — each verified as it ran — and the journal is complete. It must include at least:
 
 1. schema version and tool name (`photos-1-prep`);
 2. the per-run identifiers (plan id, execution id) under a dedicated **`run_metadata`** block — segregated from the deterministic content, not at the top level (Section 16.2);
@@ -619,9 +619,10 @@ It must:
 2. record, for each file, the ordered prep `journey` — at least: extension normalization (from/to), the initial consolidation into `0-sources` (only on the workspace's first/initializing run, Section 7.1), redundant-JPEG separation, content de-duplication / quarantine (with the retained counterpart and duplicate evidence), chronological organization into `4-videos-by-date`/`5-photos-by-date`/`2-missing-metadata`, and the provisional date-rename — each step attributable to the run that caused it;
 3. record duplicates that were quarantined (origin path, quarantine path, retained counterpart, content fingerprint) so the recoverable-set-aside is auditable, not just the retained file;
 4. be **derived from the validated plan and journal** of the run (and prior retained journals, shared contract Section 13.3a), introducing no new authority — it consolidates records prep already produced;
-5. be written **only after a successful run** (the same gate as the handoff, Section 14.3 step 8), be **deterministic** for a given workspace state, and live in `.photos-ingest/` (skipped wholesale, never inventoried as media);
+5. be written **only after a successful run** (the same gate as the handoff, Section 14.3 steps 8–9), be **deterministic** for a given workspace state, and live in `.photos-ingest/` (skipped wholesale, never inventoried as media);
 6. be **maintained incrementally across prep runs** like the handoff: re-prep that only recognizes a by-date→by-dest move (Sections 10.1, 10.2) updates the affected entries' locations from carried-forward identity without re-deriving unmoved files; a no-op prep run leaves it unchanged;
-7. give each entry a `prep_path` — where the file is when the prep run ends, updated by every prep run — which is also how the next run recognizes a move the user made: a file now elsewhere, with no prep step of its own to explain it, gains a `user` step `moved_to_by_dest` from its old `prep_path`. The field is prep's: later phases carry it unchanged and record where they left the file in fields of their own (`geotag_path`, `library_path`).
+7. give each entry a `prep_path` — where the file is when the prep run ends, updated by every prep run — which is also how the next run recognizes a move the user made: a file now elsewhere, with no prep step of its own to explain it, gains a `user` step `moved_to_by_dest` from its old `prep_path`. The field is prep's: later phases carry it unchanged and record where they left the file in fields of their own (`geotag_path`, `library_path`);
+8. follow a photo whose fingerprint is taken again with a new value — the method that takes it having changed (Section 9): an entry whose old value is no longer anywhere in the workspace, and whose `prep_path` now holds a file of a new value, moves to the new value with a `fingerprint_retaken` step, rather than being left behind while the photo starts again with no history.
 
 `photos-15-prep-log.json` is **carried forward, not discarded**: geotag's finalize consumes it (with the prep journals) as the prep portion of each photo's journey when it produces `photos-26-complete-log.json` (shared contract Section 13.3 item 6), appending geotag's steps rather than re-deriving prep's. Where both files exist, `photos-26-complete-log.json` is the authoritative full record and `photos-15-prep-log.json` remains as prep's standalone phase record. Prep fails (or warns and writes a clearly-partial log) if retained history is insufficient to reconstruct the prep journey (shared contract Section 13.3a) — it must not emit a log that looks complete but reflects only the last run.
 

@@ -392,7 +392,7 @@ other new file in photos by destination.
 :status: ruled
 :criticality: high
 :verify: required
-:aliases: prep-recognize-bydate-to-bydest-move-1, prep-move-carry-forward-drop-old-1
+:aliases: prep-recognize-bydate-to-bydest-move-1, prep-move-carry-forward-drop-old-1, prep-handoff-updated-on-move-only-1
 :refines: RUL-reuse_valid_work
 :uses: DEF-fingerprint, DEF-workspace_database
 
@@ -727,4 +727,76 @@ quarantine record left as it is.
 
 Each prep plan SHALL report the quarantine's size — its files, their bytes, and the runs that filled it, oldest and
 newest.
+:::
+
+
+## 16. The handoff and prep's log
+
+:::{rul} Prep's records are written only by an execution that succeeded
+:id: RUL-prep_records_on_success
+:status: seed
+:criticality: high
+:verify: required
+:aliases: prep-handoff-non-editable-1, prep-handoff-only-on-success-1, prep-prep-log-on-success-1
+
+Prep SHALL write its log and its handoff only at the end of an execution all of whose operations succeeded, each
+written whole, never edited in place.
+:::
+
+:::{rul} The handoff describes the workspace geotag works on
+:id: RUL-handoff_describes_workspace
+:status: seed
+:criticality: high
+:verify: required
+:aliases: prep-handoff-min-contents-1, prep-handoff-strays-excluded-1
+
+Prep's handoff SHALL describe the workspace as prep leaves it: every media file with its place, its fingerprint's state
+and its metadata; the camera groups and the destination folders; the folders prep organizes and which of them it may
+change; and what the handoff was made from.
+:::
+
+:::{rul} One workspace state, one handoff content
+:id: RUL-handoff_deterministic
+:status: seed
+:criticality: high
+:verify: required
+:aliases: prep-handoff-deterministic-1, prep-handoff-run-metadata-segregated-1, prep-noop-rerun-stable-fingerprint-1
+:refines: RUL-run_only_refresh_restales_nothing
+
+Prep's handoff SHALL hold the same content for the same workspace state, whatever run wrote it — what describes the run
+kept apart from it.
+:::
+
+:::{rul} Prep's log is made from prep's own records
+:id: RUL-prep_log_derived
+:status: seed
+:criticality: med
+:verify: required
+:aliases: prep-log-derived-no-new-authority-1
+
+Prep's log SHALL be made from prep's plans, journals, quarantine evidence and database alone, holding nothing they do
+not.
+:::
+
+:::{rul} Prep's log names what it set aside
+:id: RUL-prep_log_records_set_aside
+:status: seed
+:criticality: med
+:verify: required
+:aliases: prep-log-records-quarantine-dups-1
+:refines: RUL-duplicate_recorded_with_kept
+
+Prep's log SHALL record each duplicate prep quarantined — where it was, where it went, and the copy kept — with the kept
+copy's entry.
+:::
+
+:::{rul} A photo keeps its history when its fingerprint is taken again
+:id: RUL-log_follows_retaken_fingerprint
+:status: seed
+:criticality: high
+:verify: required
+:refines: RUL-log_keyed_by_fingerprint
+
+A photo whose fingerprint is taken again with a new value SHALL keep its history in the log, under the new value, with a
+step recording the change.
 :::

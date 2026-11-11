@@ -396,3 +396,44 @@ or `--older-than-days` — a run's age taken from the time in its plan id, the t
 listing them with their files and bytes and deleting only with `--yes`, and with no selector only with `--all` too; the
 plan's summary carries the quarantine's footprint.
 :::
+
+
+## 16. The handoff and prep's log
+
+:::{bld} What the handoff holds
+:id: BLD-handoff_content
+:status: seed
+:realises: RUL-handoff_describes_workspace, RUL-prep_records_on_success
+
+Prep's execute SHALL write `photos-11-handoff.json` last but for the database image and the mark, through a temporary
+file renamed over it, holding: `schema_version`, `tool`, `run_metadata` (plan and execution ids), `cache_fingerprint`,
+`folders_scanned` (the managed folders but `1-strays`, each with whether prep may change it), `files` (sorted, each with
+its path, size, `mtime_ns`, media class, fingerprint and its status, folder and metadata),
+`filename_timestamp_format`, `camera_groups`, `destination_folders` ({need}`BLD-handoff_grouping_facts`),
+`diagnostics` (duplicates, blockers, warnings, quarantine footprint), `depends_on` (configuration, prep log, journal,
+final inventory, metadata extractor, plan and database versions, image engine) and `content_fingerprint`.
+:::
+
+:::{bld} The handoff's content fingerprint
+:id: BLD-handoff_content_fingerprint
+:status: seed
+:realises: RUL-handoff_deterministic
+:aliases: prep-handoff-content-fingerprint-pins-1
+
+`content_fingerprint` SHALL be the SHA-256 of the handoff serialized with sorted keys, without the keys `run_metadata`,
+`diagnostics`, `execution_journal`, `prep_log`, `content_fingerprint`, `cache_freshness` and `conflicts_or_duplicates`
+wherever they appear — the last two being each camera group's and destination folder's run-scoped counts and
+duplicates.
+:::
+
+:::{bld} How prep's log is built
+:id: BLD-prep_log_build
+:status: seed
+:realises: RUL-prep_log_derived, RUL-prep_log_records_set_aside, RUL-log_follows_retaken_fingerprint, RUL-partial_history_shown
+
+Prep's execute SHALL build `photos-15-prep-log.json` from the plan's moves and renames replayed per file, the
+quarantine evidence and the final database rows, merged onto the prior log by fingerprint: an entry whose old value is
+nowhere in the workspace and whose `prep_path` holds a file of a new value moves to it with a `fingerprint_retaken`
+step; an entry whose file is elsewhere with no step of this run gains a `user` step `moved_to_by_dest`; and a file in
+a prep-organized folder with no recorded history gets an entry marked `partial`, with a warning.
+:::

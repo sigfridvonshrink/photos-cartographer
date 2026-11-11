@@ -1745,7 +1745,7 @@ through the pipeline — what was done to its photos and why. It is what the use
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: archive-complete-each-phase-1
+:aliases: archive-complete-each-phase-1, prep-log-self-sufficient-1
 :uses: DEF-transformation_log, DEF-control_records
 
 At the end of every phase the workspace SHALL hold a complete, self-sufficient, human-readable record of everything done
@@ -1824,7 +1824,7 @@ each item's hash, so its integrity can be checked later.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: log-entry-append-only-1
+:aliases: log-entry-append-only-1, prep-log-incremental-1, prep-log-carried-forward-1
 :uses: DEF-transformation_log
 
 A photo's entry in the log SHALL gather the steps of every phase it passes through and be whole through the latest of
@@ -1837,7 +1837,7 @@ record, and each earlier log stays its own phase's.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: log-keyed-by-fingerprint-1
+:aliases: log-keyed-by-fingerprint-1, prep-log-per-photo-fingerprint-keyed-1, prep-log-records-journey-1
 :uses: DEF-transformation_log, DEF-fingerprint
 
 The log SHALL key each photo's entry by its fingerprint and carry the chain of names and places it passed through.
@@ -1908,7 +1908,7 @@ Anything beyond that MAY be pruned.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: log-fail-if-insufficient-1
+:aliases: log-fail-if-insufficient-1, prep-log-fail-if-history-insufficient-1
 :refines: RUL-history_retained
 
 A phase whose kept history cannot rebuild a photo's journey through it SHALL fail, or mark its record plainly partial —

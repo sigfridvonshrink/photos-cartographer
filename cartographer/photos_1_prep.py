@@ -217,7 +217,20 @@ def build_prep_log(prior_photos, operations, cache_files, quarantine_evidence, i
             "retained_counterpart": ev.get("retained_counterpart"),
         })
 
-    # 5. Merge onto the prior log carried forward.
+    # 5. A photo whose fingerprint was taken again by another method has a new value: its entry, found by
+    #    the path it was left at, moves to the new value — provided the old value is no longer anywhere in
+    #    the workspace and no step of this run already speaks for the new one.
+    prior_photos = dict(prior_photos)
+    _old_by_path = {e.get("prep_path"): old for old, e in prior_photos.items()
+                    if old not in fp_to_current and e.get("prep_path")}
+    for new_fp, path in fp_to_current.items():
+        old = _old_by_path.get(path)
+        if new_fp not in prior_photos and old in prior_photos:
+            entry = prior_photos.pop(old)
+            prior_photos[new_fp] = dict(entry, content_fingerprint=new_fp, journey=list(entry.get("journey", [])) + [
+                _step("fingerprint_retaken", **{"from": old, "to": new_fp})])
+
+    # 6. Merge onto the prior log carried forward.
     _bands = {folder_name(r) for r in ("missing_metadata", "redundant_jpgs", "videos_by_date", "photos_by_date")}
     photos = {}
     for fp in set(prior_photos) | set(run_steps_by_fp) | set(fp_to_current) | set(quarantined_by_fp):
@@ -1686,6 +1699,11 @@ class WorkspacePrepWorkflow:
                 result["metadata_plan_status"] = meta["extraction_status"]
             else:
                 result["metadata_plan_status"] = "extracted_ok"
+        elif media_class != "other" and md_fresh:
+            # Fingerprinted again (another method) but its metadata was fresh, so it was not read again:
+            # the cached record is reused as it is (prep §9).
+            meta = None
+            result["metadata_plan_status"] = "reused_from_cache"
         else:
             meta = {}
             if media_class == "other":
@@ -1698,7 +1716,9 @@ class WorkspacePrepWorkflow:
                 result["warnings"].append(f"Metadata extraction failed or returned empty for {rel_path}")
 
         md_record = None
-        if meta.get("extraction_status") == "extraction_failed":
+        if meta is None:
+            md_record = cached_md
+        elif meta.get("extraction_status") == "extraction_failed":
             if cached_md and is_metadata_cache_fresh(file_record, cached_md, current_metadata_context):
                 md_record = cached_md
             else:

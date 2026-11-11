@@ -353,3 +353,20 @@ def test_a_failed_fingerprint_is_taken_again(tmp_path, monkeypatch):
     _failing(monkeypatch)
     _run(ws)                                                         # by-dest: no blocker, row kept
     assert _plan_counting(ws, monkeypatch) == 1
+
+
+@pytest.mark.spec("RUL-fingerprint_method_matches", test="TST-fingerprints-a_retaken_fingerprint_reuses_fresh_metadata")
+def test_a_retaken_fingerprint_reuses_fresh_metadata(tmp_path, monkeypatch):
+    """A file fingerprinted again only because the method changed keeps its fresh metadata, reported as
+    reused — not as a failed extraction."""
+    _mock(monkeypatch)
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "t")
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"A")
+    _run(ws)
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "u")
+    cache = prep.WorkspaceCache(str(ws), read_only=True)
+    plan = prep.WorkspacePrepWorkflow(str(ws), cache).plan()
+    cache.close()
+    assert set(plan.summary["metadata_plan_status"].values()) == {"reused_from_cache"}
+    assert plan.warnings == [] and plan.blockers == []

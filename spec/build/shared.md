@@ -339,7 +339,7 @@ A re-plan whose content is byte-identical to the saved artifact SHALL write noth
 :realises: RUL-handoff_verified_by_content, RUL-run_only_refresh_restales_nothing
 
 The handoff SHALL be `photos-11-handoff.json` in `.photos-ingest/`, which geotag checks by its `content_fingerprint` —
-the content-scoped staleness key prep stamps on it (prep §16.2) — recomputing it and comparing it with the value in
+the content-scoped staleness key prep stamps on it ({need}`BLD-handoff_content_fingerprint`) — recomputing it and comparing it with the value in
 geotag's dependency block (geotag §4). Its whole-file SHA-256 is kept as an integrity and archival hash ({need}`DEF-archival_package`),
 never the dependency check.
 :::
@@ -717,7 +717,7 @@ automatic position is recomputed, never rolled back.
 :status: ruled
 :realises: RUL-record_whole_each_phase, RUL-carry_forward_by_copy
 
-Each phase SHALL write its log: prep `photos-15-prep-log.json` at the end of every prep run (prep §16.1); geotag's
+Each phase SHALL write its log: prep `photos-15-prep-log.json` at the end of every prep run ({need}`BLD-prep_log_build`); geotag's
 finalize copies it to `photos-26-complete-log.json` and appends each photo's geotag steps (§13.3); merge copies that to
 `photos-35-merge-log.json` and appends its own (§13.5).
 :::
@@ -823,7 +823,7 @@ plan depended on, verified by hash, in `executed/<plan id>/`, which a step's `be
 :realises: RUL-partial_history_shown
 
 A log whose kept history cannot rebuild a journey SHALL be marked partial: prep marks its log partial and warns when its
-history cannot rebuild a journey (prep §16.1); geotag's finalize marks `partial` the entry of a photo carrying geotag's
+history cannot rebuild a journey ({need}`BLD-prep_log_build`); geotag's finalize marks `partial` the entry of a photo carrying geotag's
 mark whose own values the workspace never pinned, with a `history_incomplete` step of its own saying why, and names in
 the log's `warnings`, the log then `partial`, any pass whose journal is kept but whose plan is missing (geotag §31).
 :::
