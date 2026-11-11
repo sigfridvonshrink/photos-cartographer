@@ -207,8 +207,27 @@ def test_second_plan_does_not_repeat_config_notice(tmp_path, monkeypatch):
 # --- re-execute on an already-prepped workspace ------------------------------
 
 def _stale_plan(ws):
-    (ws / ".photos-ingest" / "photos-10-prep-plan.json").write_text(
-        '{"plan_id": "stale", "command": "prep", "operations": []}')
+    """A plan lingering after a successful prep — whose handoff vouches for its log, as prep writes them."""
+    ctl = ws / ".photos-ingest"
+    (ctl / "photos-10-prep-plan.json").write_text('{"plan_id": "stale", "command": "prep", "operations": []}')
+    (ctl / "photos-15-prep-log.json").write_text('{"photos": {}}')
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(
+        {"files": [], "depends_on": {"prep_log": {"sha256": utils.sha256_file(str(ctl / "photos-15-prep-log.json"))}}}))
+
+
+@pytest.mark.spec("RUL-unchecked_counts_as_changed", "BLD-prep_fast_stop_checks_log", test="TST-lifecycle-a_log_the_handoff_does_not_vouch_for_is_rewritten")
+def test_a_log_the_handoff_does_not_vouch_for_is_rewritten(tmp_path, monkeypatch):
+    """A prepped workspace whose log is not the one its handoff records — a crash between the two writes —
+    is not "nothing to do": prep runs its execution again, which rewrites both."""
+    from cartographer.reporting import Reporter, CaptureSink
+    ws = _initialized(tmp_path)
+    _stale_plan(ws)
+    rep = Reporter([CaptureSink()])
+    assert prep._prep_nothing_to_do(str(ws), rep)                       # vouched for: nothing to do
+    (ws / ".photos-ingest" / "photos-15-prep-log.json").write_text('{"photos": {"x": {}}}')
+    assert not prep._prep_nothing_to_do(str(ws), rep)                   # changed: prep runs again
+    (ws / ".photos-ingest" / "photos-15-prep-log.json").unlink()
+    assert not prep._prep_nothing_to_do(str(ws), rep)                   # gone: cannot be checked
 
 
 @pytest.mark.spec("prep-dryrun-empty-sources-nothing-to-do-1")

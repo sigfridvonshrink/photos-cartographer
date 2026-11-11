@@ -418,6 +418,24 @@ def prep_log_path(ws: str) -> str:
     """End-of-prep transformation log (prep §16.1 / shared §13.3)."""
     return os.path.join(ws, CONTROL_DIR, "photos-15-prep-log.json")
 
+def prep_log_blocker(ws: str, handoff: dict):
+    """None when prep's log is the one the handoff vouches for — its bytes hash to the sha256 the handoff's
+    `depends_on.prep_log` records — else why not. A log missing, unreadable or changed, or a handoff
+    recording no hash, cannot be checked, and so counts as changed: a crash between prep writing its log
+    and its handoff leaves exactly that, and prep's next run rewrites both."""
+    name = os.path.basename(prep_log_path(ws))
+    recorded = ((handoff or {}).get("depends_on") or {}).get("prep_log") or {}
+    if not recorded.get("sha256"):
+        return f"the handoff records no hash of prep's log ({name}) — run `prep plan` and `prep execute` again"
+    try:
+        current = sha256_file(prep_log_path(ws))
+    except OSError:
+        return f"prep's log ({name}) is missing or unreadable — run `prep plan` and `prep execute` again"
+    if current != recorded["sha256"]:
+        return (f"prep's log ({name}) is not the one the handoff records — run `prep plan` and "
+                "`prep execute` again")
+    return None
+
 def entries_not_carried(earlier: dict, later: dict) -> list:
     """Fingerprints whose entry in an earlier phase's log is not carried whole into a later phase's
     copy (§13.0a): a later phase only adds, so the later entry keeps every field the earlier one has,
@@ -549,11 +567,11 @@ def json_dependency(name: str, ws: str, abs_path: str) -> dict:
 
 # Per-run audit keys that describe THIS run, not the organized workspace state, and so must NOT enter
 # the handoff content fingerprint — they change run to run even when the result does not (§16.2):
-# the top-level run_metadata/diagnostics/content_fingerprint + the execution-journal pointer, and —
+# the top-level run_metadata/diagnostics/content_fingerprint + the execution-journal and prep-log pointers, and —
 # nested inside camera_groups / destination_folders — the cache-freshness counts (extracted-vs-reused
 # flips on a no-op re-run) and the conflicts/duplicates (only populated on the run that quarantined).
 _HANDOFF_VOLATILE_KEYS = frozenset({
-    "run_metadata", "content_fingerprint", "diagnostics", "execution_journal",
+    "run_metadata", "content_fingerprint", "diagnostics", "execution_journal", "prep_log",
     "cache_freshness", "conflicts_or_duplicates",
 })
 

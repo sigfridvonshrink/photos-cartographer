@@ -204,7 +204,8 @@ def _ready_ws(tmp_path, monkeypatch):
                                     "field_set_version": utils.FIELD_SET_VERSION, "parsed_json": json.dumps(parsed)}}
     files = [rec(f"{BYDEST}/T/a.arw", "2024:07:03 14:00:00", (50.0, 4.0)),
              rec(f"{BYDEST}/T/b.arw", "2024:07:03 15:00:00", (51.0, 5.0))]
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files, "cache_fingerprint": "pcf"}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files, "cache_fingerprint": "pcf",
+        "depends_on": {"prep_log": {"sha256": utils.sha256_file(str(ctl / "photos-15-prep-log.json"))}}}))
 
     monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", lambda self, p, t: True)
     monkeypatch.setattr(cal.ContentHasher, "fingerprint_image",
@@ -391,12 +392,22 @@ def test_finalize_sealed_workspace_blocks(tmp_path, monkeypatch):
     assert _run(monkeypatch, ws, "finalize") == 2                        # sealed -> preflight blocks
 
 
-def test_finalize_tolerates_corrupt_prep_log(tmp_path, monkeypatch):
+@pytest.mark.spec("RUL-unchecked_counts_as_changed", "BLD-finalize_checks_prep_log", test="TST-geotag_finalize-finalize_refuses_a_prep_log_the_handoff_does_not_vouch_for")
+@pytest.mark.parametrize("damage", ["changed", "missing"])
+def test_finalize_refuses_a_prep_log_the_handoff_does_not_vouch_for(tmp_path, monkeypatch, capsys, damage):
+    """Finalize copies prep's log only as the handoff records it, by hash: a log changed since — or gone,
+    which cannot be checked — stops finalize, nothing written, and sends the user back to prep."""
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _to_executed(monkeypatch, ws, ctl)
-    (ctl / "photos-15-prep-log.json").write_text("{corrupt")             # unreadable prior -> ignored
-    assert _run(monkeypatch, ws, "finalize") == 0
-    assert (ctl / "photos-26-complete-log.json").exists()
+    log = ctl / "photos-15-prep-log.json"
+    if damage == "changed":
+        log.write_text("{corrupt")
+    else:
+        log.unlink()
+    capsys.readouterr()
+    assert _run(monkeypatch, ws, "finalize") == 2
+    assert "prep execute" in "".join(capsys.readouterr())
+    assert not (ctl / "photos-26-complete-log.json").exists()
 
 
 def test_finalize_is_idempotent(tmp_path, monkeypatch):

@@ -95,7 +95,7 @@ def test_deterministic_plan_with_jobs(mock_read, mock_popen, workspace):
     plan4 = workflow4.plan()
     # The job count is a transient, machine-dependent runtime knob and is NOT recorded in the plan
     # (spec §17 item 6) — neither summary carries a jobs field.
-    assert "jobs_requested" not in plan4.summary["execution_config"]
+    assert "jobs_requested" not in json.dumps(plan4.summary)
     assert "jobs_requested" not in plan4.summary["performance_and_cache"]
 
 
@@ -224,7 +224,7 @@ def test_quiet_plan_executor_execution(mock_validate, mock_popen, workspace):
         warnings=[],
         operations=[op],
         workspace_file_preconditions=[],
-        metadata_dependencies={"extractor": "fake"}
+        metadata_dependencies=prep.current_metadata_dependencies()
     )
 
     executor = prep.PlanExecutor(workspace)
@@ -315,7 +315,7 @@ def test_cli_jobs_argparse(workspace):
     with open(canonical, "r") as f:
         plan_data_1 = json.load(f)
     # -j is accepted but not persisted to the plan (machine-independent plan, spec §17 item 6).
-    assert "jobs_requested" not in plan_data_1["summary"]["execution_config"]
+    assert "jobs_requested" not in json.dumps(plan_data_1)
 
     res = subprocess.run(
         [*mod, "--jobs", "2", "plan"],
@@ -324,7 +324,7 @@ def test_cli_jobs_argparse(workspace):
 
     with open(canonical, "r") as f:
         plan_data_2 = json.load(f)
-    assert "jobs_requested" not in plan_data_2["summary"]["execution_config"]
+    assert "jobs_requested" not in json.dumps(plan_data_2)
     # the re-plan backed the first plan up rather than clobbering it
     assert os.path.exists(os.path.join(workspace, ".photos-ingest", "photos-10-prep-plan-001.json"))
 

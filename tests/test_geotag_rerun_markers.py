@@ -414,7 +414,23 @@ def test_the_record_follows_the_decision(tmp_path, monkeypatch):
     assert not _cell(ws)["requires_user_input"]
 
 
-def _finalize(monkeypatch, ws):
+def _vouch_prep_log(ws):
+    """Stand in for prep: record in the handoff the hash of prep's log as it now is (an empty one if none),
+    as prep's execution does when it writes them. The pointer is outside the handoff's content, so this
+    makes nothing of geotag's stale."""
+    ctl = ws / ".photos-ingest"
+    log = ctl / "photos-15-prep-log.json"
+    if not log.exists():
+        log.write_text(json.dumps({"photos": {}}))
+    p = ctl / "photos-11-handoff.json"
+    ho = json.loads(p.read_text())
+    ho.setdefault("depends_on", {})["prep_log"] = {"sha256": utils.sha256_file(str(log))}
+    p.write_text(json.dumps(ho))
+
+
+def _finalize(monkeypatch, ws, vouch=True):
+    if vouch:
+        _vouch_prep_log(ws)
     monkeypatch.chdir(str(ws))
     monkeypatch.setattr(sys, "argv", ["photos-2-geotag", "finalize"])
     try:
@@ -490,7 +506,7 @@ def test_a_history_too_thin_is_marked_partial(tmp_path, monkeypatch):
 @pytest.mark.spec("BLD-phase_logs", "RUL-partial_history_shown", "log-carried-unchanged-1", test="TST-geotag_rerun_markers-finalize_carries_prep_s_record_unchanged")
 def test_finalize_carries_prep_s_record_unchanged(tmp_path, monkeypatch):
     """Finalize's log carries prep's every field and step unchanged, a note of prep's among them, and adds
-    only its own: geotag's note goes in a step of its own. A prep log gone is said, never passed over."""
+    only its own: geotag's note goes in a step of its own."""
     ws = _ws(tmp_path, [lambda ws: _rec(ws, f"{T}/2024-07-03--14-30-00.arw", "2024:07:03 14:30:00",
                                         gps=(40.0, 3.0), method="interpolated")])
     p = ws / ".photos-ingest" / "photos-11-handoff.json"
@@ -513,10 +529,6 @@ def test_finalize_carries_prep_s_record_unchanged(tmp_path, monkeypatch):
     log = json.loads((ws / ".photos-ingest" / "photos-26-complete-log.json").read_text())
     assert not any("prep's log" in w for w in log["warnings"])
 
-    (ws / ".photos-ingest" / "photos-15-prep-log.json").unlink()
-    _finalize(monkeypatch, ws)
-    log = json.loads((ws / ".photos-ingest" / "photos-26-complete-log.json").read_text())
-    assert log["partial"] and any("prep's log" in w and "missing" in w for w in log["warnings"])
 
 
 @pytest.mark.spec("BLD-phase_logs", test="TST-geotag_rerun_markers-a_copy_that_would_alter_prep_s_record_is_refused")
@@ -526,6 +538,7 @@ def test_a_copy_that_would_alter_prep_s_record_is_refused(tmp_path, monkeypatch,
     fp = "fp-prep-only"
     (ws / ".photos-ingest" / "photos-15-prep-log.json").write_text(json.dumps(
         {"photos": {fp: {"content_fingerprint": fp, "prep_path": "x", "journey": []}}}))
+    _vouch_prep_log(ws)
     real = cal.build_complete_log
 
     def altering(*a, **k):

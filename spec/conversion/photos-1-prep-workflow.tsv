@@ -98,3 +98,34 @@
 3.2	Prep is the sole writer of the file (it only seeds it once); the user changes configuration by hand-editing the JSON, and geotag reads it but never writes it.	RUL-config_writers	'sole writer' overstated: merge's library setup also writes library_root, as RUL-config_writers says
 3.2	Its field-scoped fingerprints feed dependency staleness (so a config edit invalidates only the artifacts that depend on the changed area), and its whole-file SHA-256 is recorded for integrity and archived in the package.	RUL-staleness_by_area RUL-config_digest_recorded RUL-config_archived	a plan depends on the whole configuration's hash; only a costly result follows the areas it reads (BLD-staleness_by_field_fingerprints)
 3.2	Seeding happens at the start of the run, before any config-dependent fingerprint is computed, so that all fingerprints (and the handoff's recorded config hash) are derived from the on-disk `photos-00-config.json`, never from the in-code defaults directly — on a first run the freshly seeded file is the thing fingerprinted.	BLD-seed_before_fingerprints	
+4	## 4. Core workflow rule	dropped	a heading; the corpus's documents carry their own
+4	Prep is a plan/execute workflow with strict separation:	RUL-planning_changes_no_media RUL-execution_only_the_plan INV-no_stale_use	the separation itself; each step is an item below
+4	```text [sha1:5f002a7e, 6 lines]	RUL-planning_changes_no_media INV-no_stale_use RUL-execution_only_the_plan RUL-every_change_journaled defer:14.3 defer:16	the cache update from plan, journal and filesystem is §14.3; the handoff only after success, §16
+4	Invariants that hold at every gate:	dropped	the list's lead-in; each item is placed below
+4	1. planning is non-mutating — it touches no media, no SQLite, no manifest;	RUL-planning_changes_no_media	not 'no SQLite': planning keeps fingerprints for later runs, and seeds the configuration on the first run; geotag's plan command runs a prep execution first after a sort, which is prep's execution, not planning
+4	2. dry-run validates the real saved plan and reports a concise summary of it (the full exact plan is the saved artifact), never a separate simulation;	RUL-dry_run_summarises_the_real_plan	
+4	3. execution revalidates the plan before any mutation and rejects stale plans;	INV-no_stale_use	
+4	4. all media operations are no-clobber — planned no-clobber *and* re-verified no-clobber at execute time, performed atomically (Section 14.3; shared contract `photos-shared-contract.md` Section 15);	RUL-suffix_no_clobber RUL-target_free_at_execute RUL-operations_atomic	
+4	5. all media mutations are journaled;	RUL-every_change_journaled BLD-prep_journal	
+4	6. `6-photos-by-dest` is never a mutation source or target;	RUL-prep_leaves_by_dest_as_found BLD-by_dest_ops_refused	
+4	7. no downstream artifact is created from stale upstream inputs (Section 5);	INV-no_stale_use	
+4	8. all human-authored config is sanity-validated before use (Section 6.3; shared contract Section 14).	RUL-config_validated_before_use defer:6.3	prep's own checks are §6.3
+4	Execution never re-derives organization decisions.	RUL-execution_only_the_plan	
+4	It applies only the operations already recorded in the plan, after validation.	RUL-execution_only_the_plan BLD-prep_execute_replays	
+5	## 5. Artifact dependency cascade	dropped	a heading; the corpus's documents carry their own
+5	Every durable artifact follows the same discipline:	INV-no_stale_use DEF-dependency_cascade	
+5	```text [sha1:57fddf13, 1 lines]	INV-no_stale_use	
+5	For prep, the cascade is:	BLD-prep_dependencies	
+5	```text [sha1:ed96745b, 10 lines]	BLD-prep_dependencies BLD-prep_log_vouched BLD-finalize_checks_prep_log	the log is now written before the handoff, which records its hash
+5	Durable artifacts (plan, journal, SQLite cache, handoff, prep audit log) must carry a `depends_on` block (or equivalent) recording the upstream fingerprints they relied on.	BLD-prep_dependencies	
+5	Intermediate items (inventory snapshot, freshness maps) are internal pipeline state of a single run, not independently revalidated artifacts.	BLD-prep_dependencies	
+5	At minimum the recorded fingerprints include:	BLD-prep_dependencies	
+5	1. config fingerprint;	BLD-prep_dependencies	
+5	2. CLI-options fingerprint where options affect planning;	dropped	no option affects what prep plans; the fingerprint of none was dead and is gone (BLD-prep_dependencies says so)
+5	3. per-file preconditions (size, mtime) for files involved in operations;	BLD-prep_dependencies	
+5	4. SQLite schema/cache version;	BLD-prep_dependencies	
+5	5. content-fingerprint algorithm/version;	BLD-prep_dependencies	
+5	6. metadata extractor name + version, field-set version, extraction-options fingerprint, metadata-schema version, camera-group-key version;	BLD-prep_dependencies	
+5	7. by-dest read-only preconditions for any by-dest file that influenced a decision;	BLD-prep_dependencies	
+5	8. final workspace/cache fingerprint (handoff only).	BLD-prep_dependencies	
+5	If any recorded dependency is stale, missing, or unverifiable, the script blocks before creating or using the downstream artifact.	INV-no_stale_use RUL-unchecked_counts_as_changed	

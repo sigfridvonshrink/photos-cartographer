@@ -53,3 +53,75 @@ share a folder there.
 Prep SHALL seed the configuration at the start of its run, before any fingerprint of it is taken, so that every
 fingerprint, the handoff's recorded hash among them, is of the file as it stands in the workspace.
 :::
+
+## 4. The plan, validated, then carried out
+
+:::{bld} Prep's execute replays the saved plan
+:id: BLD-prep_execute_replays
+:status: seed
+:realises: RUL-execution_only_the_plan
+
+Prep's execute SHALL apply the operations of `photos-10-prep-plan.json` in their recorded order, to the destinations
+recorded there, running no step of planning.
+:::
+
+:::{bld} Prep journals each operation as it ends
+:id: BLD-prep_journal
+:status: seed
+:realises: RUL-every_change_journaled
+
+Prep's execute SHALL append each operation's outcome to `journal-<plan-id>.json` as the operation ends, saving the
+journal after each.
+:::
+
+## 5. What each of prep's records depends on
+
+:::{bld} Prep's dependencies, in full
+:id: BLD-prep_dependencies
+:status: seed
+:realises: INV-no_stale_use, RUL-unchecked_counts_as_changed
+:aliases: prep-artifacts-carry-depends-on-1, prep-record-min-fingerprints-1
+
+Prep's records SHALL carry their dependencies so:
+
+- **The plan** records its schema version, the configuration's hash, its metadata dependencies — exiftool and its
+  version, and the versions of the field set, the extraction options, the metadata schema and the camera-group
+  derivation — and the size and mtime of every file it reads without changing, those in `6-photos-by-dest` among them.
+  Execute recomputes each and refuses the plan when one differs or is absent.
+- **The journal**'s `depends_on` records the plan's schema version, the configuration's hash, and the cache's schema and
+  fingerprint-algorithm versions.
+- **The handoff**'s `depends_on` records the configuration's hash, the metadata dependencies, the plan's and the cache's
+  schema versions, the fingerprint algorithm and the image engine with its version, the journal's hash, the prep log's
+  hash ({need}`BLD-prep_log_vouched`), and the fingerprint of the final inventory.
+- **The workspace database** records its schema and fingerprint-algorithm versions in its `meta` table.
+
+A run's inventory and freshness maps are its own working state, recorded nowhere. No command option affects what prep
+plans, so no record carries one.
+:::
+
+:::{bld} The handoff vouches for prep's log
+:id: BLD-prep_log_vouched
+:status: seed
+:realises: INV-no_stale_use
+
+Prep's execute SHALL write `photos-15-prep-log.json` before the handoff, and record the log's SHA-256 in the handoff's
+`depends_on.prep_log`, outside its content fingerprint.
+:::
+
+:::{bld} Finalize copies only the log the handoff vouches for
+:id: BLD-finalize_checks_prep_log
+:status: seed
+:realises: INV-no_stale_use, RUL-unchecked_counts_as_changed
+
+Geotag's finalize SHALL copy prep's log only when its bytes hash to the value {need}`BLD-prep_log_vouched` records, and
+stop otherwise — the log missing or unreadable, or the handoff recording no hash, among the cases.
+:::
+
+:::{bld} A log not vouched for is not "nothing to do"
+:id: BLD-prep_fast_stop_checks_log
+:status: seed
+:realises: RUL-unchecked_counts_as_changed
+
+Prep's stop on an already-prepped workspace SHALL not apply while the log's hash differs from what the handoff records,
+so that prep's next execute rewrites both.
+:::
