@@ -340,7 +340,7 @@ missing-GPS and `GPSProcessingMethod` counts, cache freshness, and the duplicate
 
 :::{bld} What prep's plan records
 :id: BLD-prep_plan_contents
-:status: seed
+:status: ruled
 :realises: RUL-plan_carried_out_by_its_code, RUL-new_file_restales_plan
 :aliases: prep-plan-serialized-contents-1
 
@@ -352,7 +352,7 @@ and a summary.
 
 :::{bld} The code's fingerprint
 :id: BLD-code_fingerprint
-:status: seed
+:status: ruled
 :realises: RUL-plan_carried_out_by_its_code
 
 The code's fingerprint SHALL be the SHA-256 over the files of the `cartographer` package the zipapp ships, as loaded —
@@ -362,7 +362,7 @@ the plan's with the running code's, after its schema version and command and bef
 
 :::{bld} Folder removals are `rmdir` operations
 :id: BLD-folder_removals
-:status: seed
+:status: ruled
 :realises: RUL-emptied_folders_removed
 
 Prep's plan SHALL end with an `rmdir` for each folder it leaves holding no file — under `0-sources`,
