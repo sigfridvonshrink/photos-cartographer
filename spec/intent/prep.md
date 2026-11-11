@@ -328,7 +328,7 @@ file as it now is and where it now is, and no row for a file that is gone.
 
 :::{rul} A new or changed file is fingerprinted afresh
 :id: RUL-fingerprint_taken_afresh
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :aliases: prep-fingerprint-compute-if-absent-1, prep-fingerprint-recompute-on-change-1
@@ -340,7 +340,7 @@ one taken when the file had another size or modification time.
 
 :::{rul} A fingerprint is reused only from the method in use
 :id: RUL-fingerprint_method_matches
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-reuse_valid_work
@@ -352,7 +352,7 @@ taking again one that does not record its method in full.
 
 :::{rul} A file read again is read whole
 :id: RUL-reread_whole
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :uses: DEF-fingerprint
@@ -363,7 +363,7 @@ with it.
 
 :::{rul} A database of another schema is not migrated
 :id: RUL-cache_schema_not_migrated
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :uses: DEF-workspace_database
