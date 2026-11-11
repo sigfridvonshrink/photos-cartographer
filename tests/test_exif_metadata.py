@@ -384,3 +384,16 @@ def test_parse_exiftool_item_timestamp_source_fallback():
     assert r["selected_source_naive_timestamp"] == "2018:08:08 08:08:08"
     r = parse({})                                                        # no timestamp at all
     assert r["selected_source_naive_timestamp"] is None
+
+
+@pytest.mark.spec("RUL-recorded_time_order", test="TST-exif_metadata-a_placeholder_time_does_not_hide_a_valid_one")
+def test_a_placeholder_time_does_not_hide_a_valid_one():
+    """A field present but holding no valid time is passed over for the next that holds one; a file whose
+    fields all hold none has no recorded time."""
+    import photos_utils as utils
+    parse = utils.MetadataReader._parse_exiftool_item
+    r = parse({"DateTimeOriginal": "0000:00:00 00:00:00", "CreateDate": "2019:09:09 09:09:09"})
+    assert (r["selected_source_timestamp_tag"], r["selected_source_naive_timestamp"]) == ("CreateDate", "2019:09:09 09:09:09")
+    assert r["has_timestamp"] is True
+    r = parse({"DateTimeOriginal": "    :  :     :  :  ", "ModifyDate": "garbage"})
+    assert r["selected_source_naive_timestamp"] is None and r["has_timestamp"] is False

@@ -836,7 +836,7 @@ class PlanExecutor:
                                     if parsed.get("GPSProcessingMethod"):
                                         df["has_gps_processing_method"] += 1
 
-                                    ts = parsed.get("selected_source_naive_timestamp") or parsed.get("DateTimeOriginal") or parsed.get("CreateDate") or parsed.get("ModifyDate")
+                                    ts = parsed.get("selected_source_naive_timestamp")
                                     if ts:
                                         df["timestamps"].append(ts)
                                 except Exception:
@@ -881,7 +881,7 @@ class PlanExecutor:
                             if not md_record.get("has_timestamp"):
                                 cg["missing_timestamps"] += 1
                             else:
-                                ts = cg_parsed.get("DateTimeOriginal") or cg_parsed.get("CreateDate") or cg_parsed.get("ModifyDate")
+                                ts = cg_parsed.get("selected_source_naive_timestamp")
                                 if ts:
                                     cg["timestamps"].append(ts)
 
@@ -1196,10 +1196,11 @@ class WorkspacePrepWorkflow:
                 blockers.append(f"Forbidden symlink detected: {os.path.relpath(p, self.workspace_root)}")
 
     def _file_datetime(self, f):
-        """The source-naive datetime parsed from a file's cached metadata (DateTimeOriginal, else
-        CreateDate, else ModifyDate), or None if absent/unparseable. Used both to pick the by-date
-        `YYYY-MM-DD/` subfolder and to test whether an already-organized file is in its conforming
-        day folder."""
+        """The file's recorded time (shared `recorded_time`: the first of DateTimeOriginal, CreateDate,
+        ModifyDate holding a valid time) from its cached metadata, as a naive datetime, or None. Used both
+        to pick the by-date `YYYY-MM-DD/` subfolder and to test whether an already-organized file is in
+        its conforming day folder."""
+        from .photos_utils import recorded_time, parse_naive_time
         md = (f.get('metadata') or {}).get('parsed_json')
         if not md:
             return None
@@ -1207,13 +1208,7 @@ class WorkspacePrepWorkflow:
             parsed = json.loads(md)
         except Exception:
             return None
-        dt_str = parsed.get('DateTimeOriginal') or parsed.get('CreateDate') or parsed.get('ModifyDate')
-        if not dt_str:
-            return None
-        try:
-            return datetime.strptime(dt_str[:19], "%Y:%m:%d %H:%M:%S")
-        except ValueError:
-            return None
+        return parse_naive_time(recorded_time(parsed)[1])
 
     def _collect_dump_dotfiles(self, blockers):
         """Hidden (dot-prefixed) files arriving as part of a dump — OS metadata (`.DS_Store`),

@@ -299,7 +299,7 @@ Files (mutable-side **and** by-dest, **excluding `other`-class files, which are 
 
 ### 7.6 Stage 5 — Chronological organization
 
-Every mutable-side file still in `0-sources` after Stages 2–4 (not quarantined, not set aside as a redundant JPEG) is handled by its class and timestamp. The timestamp is read passively from cached metadata in priority order:
+Every mutable-side file still in `0-sources` after Stages 2–4 (not quarantined, not set aside as a redundant JPEG) is handled by its class and timestamp. The timestamp is read passively from cached metadata: the first of these fields, in priority order, that holds a valid time — a field present but holding none (such as `0000:00:00 00:00:00`) is passed over:
 
 ```text
 DateTimeOriginal -> CreateDate -> ModifyDate
