@@ -322,3 +322,51 @@ folder, the first by path.
 A prep execution SHALL leave the workspace database current: a row for each media file prep inventoried, describing the
 file as it now is and where it now is, and no row for a file that is gone.
 :::
+
+
+## 9. Content fingerprinting and cache reuse
+
+:::{rul} A new or changed file is fingerprinted afresh
+:id: RUL-fingerprint_taken_afresh
+:status: seed
+:criticality: high
+:verify: required
+:aliases: prep-fingerprint-compute-if-absent-1, prep-fingerprint-recompute-on-change-1
+:uses: DEF-fingerprint, DEF-workspace_database
+
+Prep SHALL fingerprint a media file afresh when the workspace database holds no fingerprint for it at its path, or holds
+one taken when the file had another size or modification time.
+:::
+
+:::{rul} A fingerprint is reused only from the method in use
+:id: RUL-fingerprint_method_matches
+:status: seed
+:criticality: high
+:verify: required
+:refines: RUL-reuse_valid_work
+:uses: DEF-fingerprint
+
+Prep SHALL reuse a cached fingerprint only when the method that took it is the one now in use for the file's class,
+taking again one that does not record its method in full.
+:::
+
+:::{rul} A file read again is read whole
+:id: RUL-reread_whole
+:status: seed
+:criticality: med
+:verify: required
+:uses: DEF-fingerprint
+
+A media file whose metadata prep reads again — the way metadata is read having changed — SHALL be fingerprinted again
+with it.
+:::
+
+:::{rul} A database of another schema is not migrated
+:id: RUL-cache_schema_not_migrated
+:status: seed
+:criticality: high
+:verify: required
+:uses: DEF-workspace_database
+
+Prep SHALL stop on a workspace database whose recorded schema is not the one it uses, migrating none.
+:::

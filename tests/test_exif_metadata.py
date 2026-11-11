@@ -282,89 +282,17 @@ def test_non_media_is_not_applicable(workspace, monkeypatch):
     assert plan.summary.get("metadata_plan_status", {}).get("0-sources/document.txt") == "not_applicable"
 
 
-def test_schema_migration(workspace):
-    import sqlite3
-    db_path = workspace / ".photos-ingest/photos-00-ingest.db"
-    conn = sqlite3.connect(str(db_path))
-    conn.execute('''
-        CREATE TABLE file_cache (
-            relative_path TEXT PRIMARY KEY,
-            absolute_path TEXT,
-            size INTEGER,
-            mtime_ns INTEGER,
-            inode INTEGER,
-            media_class TEXT,
-            hash TEXT,
-            content_hash TEXT,
-            last_seen_ns INTEGER
-        )
-    ''')
-    conn.execute('''
-        CREATE TABLE metadata_cache (
-            relative_path TEXT PRIMARY KEY,
-            size INTEGER,
-            mtime_ns INTEGER,
-            content_hash TEXT,
-            extractor TEXT,
-            extractor_version TEXT,
-            field_set_version INTEGER,
-            extraction_options_fingerprint TEXT,
-            camera_group_key TEXT,
-            has_native_gps INTEGER,
-            has_timestamp INTEGER,
-            parsed_json TEXT,
-            raw_payload TEXT,
-            FOREIGN KEY(relative_path) REFERENCES file_cache(relative_path) ON DELETE CASCADE
-        )
-    ''')
-    conn.execute('''
-        INSERT INTO file_cache (relative_path, size, mtime_ns) VALUES ('test.jpg', 123, 456)
-    ''')
-    conn.commit()
-    conn.close()
-
-    cache = prep.WorkspaceCache(str(workspace), in_memory=False)
-
-    # Assert missing columns were added by schema migration
-    conn = sqlite3.connect(str(db_path))
-    cur = conn.cursor()
-    cur.execute("PRAGMA table_info(metadata_cache)")
-    columns = {row[1] for row in cur.fetchall()}
-    conn.close()
-
-    assert "metadata_schema_version" in columns
-    assert "camera_group_key_version" in columns
-    assert "extraction_status" in columns
-    assert "extraction_error" in columns
-
-    # Verify upsert succeeds without 'no such column' error
-    data = {
-        "relative_path": "test.jpg",
-        "absolute_path": "/fake/path/test.jpg",
-        "size": 123,
-        "mtime_ns": 456,
-        "inode": 1,
-        "media_class": "image",
-        "hash": None,
-        "content_hash": None,
-        "last_seen_ns": 12345,
-        "metadata": {
-            "extractor": "exiftool",
-            "extractor_version": "1.0",
-            "field_set_version": 1,
-            "extraction_options_fingerprint": "hash",
-            "metadata_schema_version": 1,
-            "camera_group_key_version": 1,
-            "camera_group_key": "cam",
-            "has_native_gps": False,
-            "has_timestamp": True,
-            "extraction_status": "extracted_ok",
-            "extraction_error": None,
-            "parsed_json": "{}",
-            "raw_payload": "{}"
-        }
-    }
-    cache.upsert_file(data)
+@pytest.mark.spec("RUL-cache_schema_not_migrated", "BLD-cache_versions", test="TST-exif_metadata-a_database_of_another_schema_stops_prep")
+def test_a_database_of_another_schema_stops_prep(workspace):
+    """A workspace database recording a schema version not this build's stops prep's plan: it is never
+    migrated."""
+    cache = prep.WorkspaceCache(str(workspace))
+    cache.set_meta("cache_schema_version", "999")
+    cache.close()
+    cache = prep.WorkspaceCache(str(workspace), read_only=True)
+    with pytest.raises(ValueError, match="schema version 999"):
+        prep.WorkspacePrepWorkflow(str(workspace), cache).plan()
+    cache.close()
 
 
 @pytest.mark.spec("prep-timestamp-priority-1", "RUL-recorded_time_order", test="TST-exif_metadata-parse_exiftool_item_timestamp_source_fallback")

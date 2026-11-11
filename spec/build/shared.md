@@ -531,15 +531,17 @@ hashes, and the field-scoped configuration fingerprints ({need}`DEF-config_areas
 :::{bld} How a fingerprint is computed
 :id: BLD-fingerprint
 :status: ruled
+:aliases: prep-fingerprint-decoded-content-1
 :realises: DEF-fingerprint, RUL-fingerprint_survives_mutation
 
 A photo's fingerprint SHALL be ImageMagick `identify`'s signature — a SHA-256 of the normalized pixel stream; a video's,
-the `ffmpeg` stream MD5 (prep §9).
+the `ffmpeg` MD5 of its streams as stored, copied out without decoding (`-c copy`).
 :::
 
 :::{bld} How a hash is computed
 :id: BLD-hash
 :status: ruled
+:aliases: prep-byte-sha-artifacts-only-1
 :realises: DEF-hash, RUL-hash_detects_any_change, RUL-hash_is_the_dependency_check
 
 A hash SHALL be a SHA-256 over the exact bytes of a numbered JSON record or the configuration.

@@ -68,6 +68,108 @@ def _run(ws):
 
 # --- #20 fingerprint/version coverage ---------------------------------------
 
+def _plan_counting(ws, monkeypatch):
+    """Plan once, counting the fingerprints taken; returns the count."""
+    calls = []
+    monkeypatch.setattr(prep.ContentHasher, "fingerprint_image",
+                        lambda p: calls.append(p) or {"status": "valid", "strategy": utils.IMAGE_FINGERPRINT_STRATEGY,
+                                                      "value": "sig-" + os.path.basename(p), "engine_version": "t"})
+    monkeypatch.setattr(prep.ContentHasher, "fingerprint_video",
+                        lambda p: calls.append(p) or {"status": "valid", "strategy": utils.VIDEO_FINGERPRINT_STRATEGY,
+                                                      "value": "md5-" + os.path.basename(p)})
+    cache = prep.WorkspaceCache(str(ws), read_only=True)
+    prep.WorkspacePrepWorkflow(str(ws), cache).plan()
+    cache.close()
+    return len(calls)
+
+
+def _restamp(ws, suffix, **fields):
+    """Rewrite the cached fingerprint of the file whose path ends with `suffix`."""
+    conn = sqlite3.connect(utils.db_path(str(ws)))
+    (path, ch), = [r for r in conn.execute("SELECT relative_path, content_hash FROM file_cache") if r[0].endswith(suffix)]
+    ch = {k: v for k, v in dict(json.loads(ch), **fields).items() if v is not None}
+    conn.execute("UPDATE file_cache SET content_hash = ? WHERE relative_path = ?", (json.dumps(ch), path))
+    conn.commit()
+    conn.close()
+
+
+@pytest.mark.spec("RUL-fingerprint_taken_afresh", "RUL-reuse_valid_work",
+                  test="TST-fingerprints-a_new_or_changed_file_is_fingerprinted_afresh")
+def test_a_new_or_changed_file_is_fingerprinted_afresh(tmp_path, monkeypatch):
+    """A file the database holds no fingerprint for is fingerprinted; an unchanged one is not; one whose
+    modification time changed is fingerprinted again."""
+    _mock(monkeypatch)
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "t")
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    assert _plan_counting(ws, monkeypatch) == 1                     # new
+    _run(ws)
+    assert _plan_counting(ws, monkeypatch) == 0                     # unchanged: reused
+    (filed,) = (ws / "5-photos-by-date").rglob("*.jpg")
+    st = filed.stat()
+    os.utime(filed, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000_000))
+    assert _plan_counting(ws, monkeypatch) == 1                     # changed: taken again
+
+
+@pytest.mark.spec("RUL-reread_whole", test="TST-fingerprints-a_file_whose_metadata_is_read_again_is_fingerprinted_again")
+def test_a_file_whose_metadata_is_read_again_is_fingerprinted_again(tmp_path, monkeypatch):
+    """Metadata read by another way than the one in use is read again, and the file's fingerprint with it."""
+    _mock(monkeypatch)
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "t")
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    _run(ws)
+    assert _plan_counting(ws, monkeypatch) == 0
+    conn = sqlite3.connect(utils.db_path(str(ws)))
+    conn.execute("UPDATE metadata_cache SET metadata_schema_version = metadata_schema_version - 1")
+    conn.commit()
+    conn.close()
+    assert _plan_counting(ws, monkeypatch) == 1
+
+
+@pytest.mark.spec("RUL-fingerprint_method_matches", "BLD-fingerprint", "BLD-fingerprint_method",
+                  test="TST-fingerprints-a_fingerprint_is_reused_only_from_this_method")
+def test_a_fingerprint_is_reused_only_from_this_method(tmp_path, monkeypatch):
+    """A cached fingerprint is reused only when taken by the method this build uses: the same strategy and,
+    for a photo, the same ImageMagick version — one recording none is taken again; a video's is bound to
+    its strategy alone."""
+    _mock(monkeypatch)
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "t")
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    (ws / "0-sources" / "b.mp4").write_bytes(b"BBBB")
+    monkeypatch.setattr(prep.ContentHasher, "fingerprint_video",
+                        lambda p: {"status": "valid", "strategy": utils.VIDEO_FINGERPRINT_STRATEGY, "value": "m"})
+    _run(ws)
+    assert _plan_counting(ws, monkeypatch) == 0                     # all reused
+    _restamp(ws, ".jpg", engine_version=None)
+    assert _plan_counting(ws, monkeypatch) == 1                     # no engine recorded: taken again
+    _restamp(ws, ".jpg", engine_version="t", strategy="image-content-hash-v0")
+    assert _plan_counting(ws, monkeypatch) == 1                     # another strategy: taken again
+    _restamp(ws, ".jpg", strategy=utils.IMAGE_FINGERPRINT_STRATEGY)
+    _restamp(ws, ".mp4", strategy="video-md5-v0")
+    assert _plan_counting(ws, monkeypatch) == 1
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "u")
+    _restamp(ws, ".mp4", strategy=utils.VIDEO_FINGERPRINT_STRATEGY)
+    assert _plan_counting(ws, monkeypatch) == 1                     # a new ImageMagick restales the photo only
+
+
+@pytest.mark.spec("prep-fingerprint-algo-recorded-1", "BLD-prep_dependencies", "BLD-cache_versions",
+                  test="TST-fingerprints-execute_writes_the_database_versions")
+def test_execute_writes_the_database_versions(tmp_path, monkeypatch):
+    """Each execute writes the current versions into the database's version row, over what it held."""
+    _mock(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    _run(ws)
+    cache = prep.WorkspaceCache(str(ws))
+    cache.set_meta("fingerprint_algorithm_version", "0")
+    cache.close()
+    (ws / "0-sources" / "b.jpg").write_bytes(b"BBBB")
+    _run(ws)
+    assert prep.WorkspaceCache(str(ws)).get_meta("fingerprint_algorithm_version") == prep.FINGERPRINT_ALGORITHM_VERSION
+
+
 @pytest.mark.spec("prep-fingerprint-algo-recorded-1")
 def test_cache_meta_records_versions(tmp_path, monkeypatch):
     _mock(monkeypatch)
@@ -164,7 +266,7 @@ def test_media_carries_fingerprint_and_no_byte_hash(tmp_path, monkeypatch):
     row = next(r for k, r in prep.WorkspaceCache(str(ws)).get_all_files().items()
                if k.startswith("5-photos-by-date/"))
     assert row["content_hash"]          # identified by its decoded-content fingerprint
-    assert row["hash"] is None          # media is never byte-hashed (§9.1)
+    assert "hash" not in row            # media is never byte-hashed: the database has no place for one
 
 
 def test_handoff_uses_fingerprint_status(tmp_path, monkeypatch):

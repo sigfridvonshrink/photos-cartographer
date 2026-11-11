@@ -608,6 +608,9 @@ class PlanExecutor:
             if cache is None:
                 cache = WorkspaceCache(self.workspace_root)
             cache.begin_batch()
+            # The database's version row describes the rows this execute leaves (prep §9).
+            cache.set_meta("cache_schema_version", str(CACHE_SCHEMA_VERSION))
+            cache.set_meta("fingerprint_algorithm_version", FINGERPRINT_ALGORITHM_VERSION)
 
             for op in plan.operations:
                 if op.type not in PREP_ALLOWED_OPERATION_TYPES:
@@ -1626,21 +1629,11 @@ class WorkspacePrepWorkflow:
         from .photos_utils import is_metadata_cache_fresh
         md_fresh = is_metadata_cache_fresh(file_record, cached_md, current_metadata_context)
 
-        # Content-hash (pixel signature) freshness: an image/raw content hash is
-        # bound to the ImageMagick version that produced it. If magick changed,
-        # the cached signature is stale and must be recomputed.
-        content_hash_fresh = True
-        if media_class in ('image', 'raw') and cached and cached.get('content_hash'):
-            try:
-                _ch = json.loads(cached['content_hash'])
-                _ev = _ch.get('engine_version')
-                # Only the version-bound pixel signature can be restaled by an engine
-                # change; a record with no recorded engine_version (legacy/mocked) is
-                # judged solely by size/mtime, not falsely restaled.
-                if _ch.get('status') == 'valid' and _ev is not None and _ev != current_magick_version:
-                    content_hash_fresh = False
-            except Exception:
-                content_hash_fresh = False
+        # A cached fingerprint is fresh only when taken by this build's method for its class: the
+        # strategy, and for a photo the ImageMagick version (prep §9).
+        from .photos_utils import fingerprint_reusable
+        content_hash_fresh = (not (cached and cached.get('content_hash'))
+                              or fingerprint_reusable(cached['content_hash'], media_class, current_magick_version))
 
         result = {
             "relative_path": rel_path,
@@ -1689,7 +1682,6 @@ class WorkspacePrepWorkflow:
         # for artifacts and would change under the EXIF/GPS rewrites a fingerprint must survive
         # (shared contract Section 9.1). Non-media (other-class) is not fingerprinted at all
         # (prep Section 9) — it is moved inert to 1-strays and never enters a content decision.
-        file_hash_res = None
         content_hash_res = None
         if media_class in ['image', 'raw']:
             content_hash_res = ContentHasher.fingerprint_image(abs_path)
@@ -1754,7 +1746,6 @@ class WorkspacePrepWorkflow:
             "mtime_ns": stat.st_mtime_ns,
             "inode": stat.st_ino,
             "media_class": media_class,
-            "hash": json.dumps(file_hash_res) if file_hash_res else None,
             "content_hash": json.dumps(content_hash_res) if content_hash_res else None,
             "last_seen_ns": int(datetime.now(timezone.utc).timestamp() * 1e9),
             "metadata": md_record
@@ -2395,6 +2386,10 @@ class WorkspacePrepWorkflow:
             ))
 
     def plan(self) -> Plan:
+        from .photos_utils import cache_schema_mismatch
+        _schema_stop = cache_schema_mismatch(self.cache)
+        if _schema_stop:
+            raise ValueError(_schema_stop)
         operations = []
         blockers = []
         warnings = []

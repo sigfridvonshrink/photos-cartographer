@@ -355,12 +355,12 @@ The timestamp component (`YYYY-MM-DD--HH-MM-SS`) is the raw camera-naive value, 
 
 Content fingerprints back the duplicate and content-uniqueness checks, are persisted in SQLite, and serve as the **identity spine** the later phases rely on (shared contract `photos-shared-contract.md` Section 13.3 item 2).
 
-**The media content fingerprint is over decoded *content*, computed by an external tool — not a byte hash.** Each fingerprinted media file's content fingerprint is derived from its **decoded content**, not its raw file bytes, and the tool differs by class:
+**The media content fingerprint is over *content* — a photo's decoded pixels, a video's streams — computed by an external tool, not a byte hash.** Each fingerprinted media file's content fingerprint is derived from its **content**, not its raw file bytes, and the tool differs by class:
 
 1. **Photos** (`image`/`raw`): the fingerprint is computed with **ImageMagick `identify`** over the normalized decoded image (pixels). This is essential because geotag rewrites photos' EXIF/metadata in place (time, GPS, the `GPSProcessingMethod` marker) and renames them: a file-byte hash would change on every such write, so it could not serve as a stable identity. An `identify` pixel fingerprint is **invariant under in-place metadata writes and renames** — the decoded pixels do not change.
-2. **Videos** (`video`): the fingerprint is the **`ffmpeg` stream MD5** over the decoded media streams. Videos are date-organized and renamed but not otherwise mutated (Section 2.4); a content fingerprint still gives them a stable identity for de-duplication and move-aware recognition, on the same footing as photos.
+2. **Videos** (`video`): the fingerprint is the **`ffmpeg` stream MD5** over the media streams as stored — copied out without decoding (`-c copy`), so no decoder is involved and the container's metadata is not. Videos are date-organized and renamed but not otherwise mutated (Section 2.4); a content fingerprint still gives them a stable identity for de-duplication and move-aware recognition, on the same footing as photos.
 
-A single decoded-content fingerprint is therefore what keys the transformation log (shared contract `photos-shared-contract.md` Section 13.3 item 2), the original-values ledger (geotag `photos-2-geotag-workflow.md` Section 24.2, photos only), content de-duplication (Section 7.5), and merge's collision / already-present checks (`photos-3-merge-workflow.md` Section 7) — *across* the renames, moves, and (for photos) metadata writes the pipeline performs. The fingerprint tool/identity and its version (ImageMagick `identify` for photos, `ffmpeg` stream MD5 for videos) are part of the recorded content-fingerprint algorithm/version (Section 5 item 5; Section 12.1), so a tool change is detectable rather than silently shifting identities.
+A single content fingerprint is therefore what keys the transformation log (shared contract `photos-shared-contract.md` Section 13.3 item 2), the original-values ledger (geotag `photos-2-geotag-workflow.md` Section 24.2, photos only), content de-duplication (Section 7.5), and merge's collision / already-present checks (`photos-3-merge-workflow.md` Section 7) — *across* the renames, moves, and (for photos) metadata writes the pipeline performs. Each fingerprint records the method that took it — its strategy, and for a photo the ImageMagick version; a video's records no `ffmpeg` version, since copying the streams out decodes nothing — so a change of method is detectable rather than silently shifting identities.
 
 **`other`-class files are not fingerprinted at all.** Non-media (`other`-class) files get **no content fingerprint** — there is nothing meaningful to decode and they are never content-deduplicated or organized. They are moved out of `0-sources` into `1-strays/<plan-id>/` and ignored thereafter (Sections 3.2, 6.1, 7.6). This is by design, not a fingerprint failure: the absence of a fingerprint on an `other` file is normal and never a blocker, unlike a *media* fingerprint **failure** (Section 11.3).
 
@@ -368,13 +368,15 @@ A single decoded-content fingerprint is therefore what keys the transformation l
 
 Reuse rules (apply to the fingerprinted media classes — photos and videos; `other` is not fingerprinted):
 
-1. if a path exists in the cache with unchanged size and mtime (and fresh metadata context), reuse the cached content fingerprint;
-2. if a fingerprinted media file is absent from the cache, compute its decoded-content fingerprint (ImageMagick `identify` / `ffmpeg` stream MD5) and store the result;
+1. if a path exists in the cache with unchanged size and mtime (and fresh metadata context), reuse the cached content fingerprint — when it was taken by the method in use for its class: the same strategy and, for a photo, the same ImageMagick version; a cached photo fingerprint recording no ImageMagick version is taken again. A file whose metadata must be read again is fingerprinted again with it;
+2. if a fingerprinted media file is absent from the cache, compute its content fingerprint (ImageMagick `identify` / `ffmpeg` stream MD5) and store the result;
 3. if size or mtime changed, treat the cached fingerprint as stale and recompute — a metadata-only edit (including the pipeline's own EXIF writes) changes size/mtime and forces a recompute, but a photo's `identify` fingerprint (or a video's `ffmpeg` stream MD5) recomputes to the **same** value, so identity is preserved while the cache freshness is refreshed;
 4. if prep moves or case-normalizes a file without changing content, carry the known fingerprint forward to the new workspace-relative path (Section 10);
 5. a fingerprint failure on a media file never implies equality;
 6. an unknown or failed fingerprint on a *media* file blocks any decision that depends on content equality (Section 11.3); an `other` file's absence of a fingerprint is not such a case (it is intentionally unfingerprinted and never enters a content-equality decision);
 7. the fingerprint algorithm — including the tool identity/version (ImageMagick `identify` for photos, `ffmpeg` stream MD5 for videos) — is recorded in the cache and handoff.
+
+The workspace database records its schema version and the fingerprint-algorithm version; each execute writes the current ones. A database recording a schema version other than the one prep uses stops the plan: prep never migrates a database, and the remedy is a fresh workspace.
 
 ---
 
