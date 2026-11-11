@@ -52,7 +52,7 @@ from .photos_utils import (
     missing_managed_folders, top_level_links, misplaced_top_level_entries, by_dest_reprep_pending,
     json_dependency, verify_json_dependency, handoff_content_fingerprint, handoff_filename_format_blocker, write_json_artifact, write_versioned_json, db_path, ensure_control_dir,
     journal_path, ContentHasher, _move_no_clobber,
-    prep_log_path, entries_not_carried, write_db_snapshot, take_zfs_snapshot,
+    prep_log_path, prep_log_blocker, entries_not_carried, write_db_snapshot, take_zfs_snapshot,
     control_archive_members, write_control_archive, workspace_id,
     WorkspaceLock, ProgressCoordinator,
 )
@@ -1577,13 +1577,7 @@ class GeotagWorkflow:
         finally:
             cache.close()
         time_artifact = json.load(open(time_decisions_path(ws)))
-        prep_photos, prep_unread = {}, None
-        try:
-            prep_photos = (json.load(open(prep_log_path(ws))) or {}).get("photos", {}) or {}
-        except FileNotFoundError:
-            prep_unread = "is missing"
-        except Exception:
-            prep_unread = "cannot be read"
+        prep_photos = (json.load(open(prep_log_path(ws))) or {}).get("photos", {}) or {}
         photos = build_complete_log(prep_photos, files, rows, time_artifact, plan,
                                     earlier_passes=self._earlier_passes(plan.get("plan_id")))
         not_carried = entries_not_carried(prep_photos, photos)
@@ -1591,8 +1585,7 @@ class GeotagWorkflow:
             # a defect, not a state of the workspace: the copy would misstate prep's record (§13.0a)
             return [f"{COMPLETE_LOG_ARTIFACT} would not carry prep's record unchanged for {len(not_carried)} "
                     "photo(s); nothing was written."]
-        self.finalize_warnings = ([f"prep's log ({os.path.basename(prep_log_path(ws))}) {prep_unread}: the "
-                                   "prep part of every journey is absent"] if prep_unread else [])
+        self.finalize_warnings = []
         self.finalize_warnings += [f"geotag pass {pid} ran (its journal is kept) but its plan is missing: "
                                    "its steps are not in the log" for pid in self._passes_without_a_plan(plan.get("plan_id"))]
         self.finalize_warnings += [f"{e.get('geotag_path') or e.get('prep_path') or fp}: {s['note']}" for fp, e in sorted(photos.items())
@@ -2101,6 +2094,16 @@ def run(args):
                 for b in blockers:
                     reporter.log(f"  - {b}")
                 emit_next_step(reporter, "resolve the blocker(s) above, then re-run `geotag finalize`.")
+                sys.exit(2)
+            # Prep's log is copied only as the handoff vouches for it, by hash: missing, unreadable or
+            # changed, it cannot be checked, and finalize stops rather than copy a stale record.
+            with open(handoff_path(workspace_root)) as hf:
+                log_blk = prep_log_blocker(workspace_root, json.load(hf))
+            if log_blk:
+                reporter.error("\nFinalize cannot proceed:")
+                reporter.log(f"  - {log_blk[0].upper() + log_blk[1:]}.")
+                emit_next_step(reporter, "`prep plan` and `prep execute`, then `geotag plan` onward as it asks, "
+                                         "then `geotag finalize`.")
                 sys.exit(2)
             now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             fin_blockers = wf.finalize_package(now_iso)

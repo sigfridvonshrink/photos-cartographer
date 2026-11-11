@@ -14,7 +14,7 @@
 
 """Phase 6 — §5 fingerprint/version coverage + §14.3.7 single-transaction cache.
 Phase D — fingerprint/hash terminology (§9.1): media carries a content fingerprint and no
-byte hash; the handoff/cache use fingerprint terms; the legacy version key migrates cleanly.
+byte hash; the handoff/cache use fingerprint terms.
 
 Mocked hashing/metadata, fast. photos_1_prep / photos_utils come from conftest.py.
 """
@@ -91,10 +91,9 @@ def test_journal_is_version_stamped(tmp_path, monkeypatch):
     assert dep["plan_schema_version"] == prep.PLAN_SCHEMA_VERSION
     assert dep["cache_schema_version"] == prep.CACHE_SCHEMA_VERSION
     assert dep["fingerprint_algorithm_version"] == prep.FINGERPRINT_ALGORITHM_VERSION
-    assert dep["cli_options_fingerprint"]
 
 
-@pytest.mark.spec("prep-artifacts-carry-depends-on-1", "prep-record-min-fingerprints-1")
+@pytest.mark.spec("prep-artifacts-carry-depends-on-1", "prep-record-min-fingerprints-1", "BLD-prep_dependencies", test="TST-fingerprints-handoff_depends_on_coverage")
 def test_handoff_depends_on_coverage(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -106,7 +105,52 @@ def test_handoff_depends_on_coverage(tmp_path, monkeypatch):
     assert dep["cache"]["schema_version"] == prep.CACHE_SCHEMA_VERSION
     assert dep["cache"]["fingerprint_algorithm_version"] == prep.FINGERPRINT_ALGORITHM_VERSION
     assert dep["cache"]["image_engine"] == "imagemagick"
-    assert dep["cli_options"]["fingerprint"]
+    assert dep["effective_config"]["fingerprint"]
+    assert dep["metadata_extractor"]["camera_group_key_version"] == utils.CAMERA_GROUP_KEY_VERSION
+    assert dep["final_workspace_inventory"]["content_fingerprint"]
+    assert dep["execution_journal"]["sha256"]
+
+
+@pytest.mark.spec("BLD-prep_log_vouched", test="TST-fingerprints-handoff_vouches_for_the_prep_log")
+def test_handoff_vouches_for_the_prep_log(tmp_path, monkeypatch):
+    """Prep's execution records in its handoff the hash of the log it wrote — outside the handoff's content,
+    so a pointer refreshed by a run that changed nothing makes nothing downstream stale."""
+    _mock(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    _run(ws)
+    with open(utils.handoff_path(str(ws))) as f:
+        handoff = json.load(f)
+    assert handoff["depends_on"]["prep_log"]["sha256"] == utils.sha256_file(utils.prep_log_path(str(ws)))
+    assert utils.prep_log_blocker(str(ws), handoff) is None
+    moved = json.loads(json.dumps(handoff))
+    moved["depends_on"]["prep_log"]["sha256"] = "0" * 64
+    assert utils.handoff_content_fingerprint(moved) == handoff["content_fingerprint"]
+
+
+@pytest.mark.spec("RUL-unchecked_counts_as_changed", test="TST-fingerprints-a_dependency_missing_or_unrecorded_stops_execution")
+@pytest.mark.parametrize("damage", ["sorted_photo_gone", "metadata_dependencies_unrecorded"])
+def test_a_dependency_missing_or_unrecorded_stops_execution(tmp_path, monkeypatch, damage):
+    """A dependency that cannot be checked — its record gone, or the plan recording none — counts as
+    changed: execution refuses the plan before its first change."""
+    _mock(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    sorted_photo = ws / "6-photos-by-dest" / "T" / "2023-01-02--03-04-05.jpg"
+    sorted_photo.parent.mkdir()
+    sorted_photo.write_bytes(b"BBBB")                            # read-only: a precondition of the plan
+    prep.CONFIG["jobs"] = 1
+    cache = prep.WorkspaceCache(str(ws))
+    plan = prep.WorkspacePrepWorkflow(str(ws), cache).plan()
+    cache.close()
+    assert not plan.blockers, plan.blockers
+    if damage == "sorted_photo_gone":
+        sorted_photo.unlink()
+    else:
+        plan.metadata_dependencies = {}
+    with pytest.raises(ValueError, match="Stale plan"):
+        prep.PlanExecutor(str(ws)).execute(plan)
+    assert (ws / "0-sources" / "a.jpg").exists()
 
 
 # --- Phase D: fingerprint/hash terminology (§9.1) ---------------------------
@@ -133,27 +177,6 @@ def test_handoff_uses_fingerprint_status(tmp_path, monkeypatch):
     media = [e for e in handoff["files"] if e["relative_path"].startswith("5-photos-by-date/")]
     assert media and media[0]["fingerprint_status"] == "valid"
     assert "hash_status" not in media[0]
-
-
-def test_legacy_version_key_migrates_cleanly(tmp_path, monkeypatch):
-    _mock(monkeypatch)
-    ws = _ws(tmp_path)
-    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
-    _run(ws)
-    # Simulate a workspace seeded by an older prep: only the legacy meta key is present.
-    db = str(ws / ".photos-ingest" / "photos-00-ingest.db")
-    conn = sqlite3.connect(db)
-    conn.execute("DELETE FROM meta WHERE key='fingerprint_algorithm_version'")
-    conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('hash_algorithm_version', '1')")
-    conn.commit(); conn.close()
-    # The next run must not error; it re-seeds the new key and the read-fallback still reports "1"
-    # (the rename keeps the same VALUE, so it is not a staleness trigger).
-    _run(ws)
-    meta = dict(prep.WorkspaceCache(str(ws)).conn.execute("SELECT key, value FROM meta").fetchall())
-    assert meta["fingerprint_algorithm_version"] == "1"          # re-seeded under the new name
-    with open(utils.handoff_path(str(ws))) as f:
-        cache_block = json.load(f)["depends_on"]["cache"]
-    assert cache_block["fingerprint_algorithm_version"] == "1"   # read-fallback resolves it
 
 
 # --- #21 single-transaction cache effects -----------------------------------

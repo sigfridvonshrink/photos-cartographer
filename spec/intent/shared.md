@@ -1215,11 +1215,22 @@ of the configuration or of the areas the record reads — and each use checks th
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: dep-cascade-reject-stale-1
+:aliases: dep-cascade-reject-stale-1, prep-block-on-stale-dependency-1
 :uses: DEF-dependency_cascade
 
 No phase SHALL use a record once anything it was derived from has changed: each phase validates what it derives from,
 then creates the record, records those dependencies in it, and refuses its use downstream when any of them has changed.
+:::
+
+:::{rul} What cannot be checked counts as changed
+:id: RUL-unchecked_counts_as_changed
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: INV-no_stale_use
+
+A dependency that is missing, or cannot be checked, SHALL count as changed.
 :::
 
 :::{rul} A fingerprint survives what the pipeline does to a file
@@ -2581,7 +2592,7 @@ or rewritten.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: exec-noclobber-recheck-1, exec-noclobber-all-content-ops-1
+:aliases: exec-noclobber-recheck-1, exec-noclobber-all-content-ops-1, prep-no-clobber-1
 :uses: RUL-suffix_no_clobber, DEF-library
 
 Immediately before each change that gives a file a name — prep's moves, renames and setting duplicates aside, geotag's
@@ -2754,4 +2765,40 @@ The failure of an operation that cannot complete SHALL be recorded.
 :refines: RUL-failed_operation_clean
 
 An operation that cannot complete SHALL never be recorded as done, so that a re-run does it again.
+:::
+
+## 16. Nothing changed outside a validated plan
+
+:::{rul} Planning changes no media
+:id: RUL-planning_changes_no_media
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: prep-plan-nonmutating-1
+
+Planning SHALL change no media file, and write nothing but its plan, its decision records, what it keeps so that later
+runs need not compute it again, and — on a workspace's first run — the configuration it seeds.
+:::
+
+:::{rul} Execution carries out the plan, and only the plan
+:id: RUL-execution_only_the_plan
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: prep-execute-no-rederive-1
+:upholds: INV-every_change_from_the_record
+
+Execution SHALL carry out only the operations its plan records, re-deriving no decision.
+:::
+
+:::{rul} Every change is journaled
+:id: RUL-every_change_journaled
+:status: seed
+:criticality: med
+:verify: required
+:aliases: prep-journal-all-mutations-1
+
+Every change an execution makes to a media file SHALL be recorded in that run's journal.
 :::

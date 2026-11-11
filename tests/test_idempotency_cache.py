@@ -203,7 +203,7 @@ def test_quarantine_subtree_is_excluded_from_the_scan(mock_meta, tmp_path):
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("prep-execute-no-rederive-1")
+@pytest.mark.spec("prep-execute-no-rederive-1", "RUL-execution_only_the_plan", test="TST-idempotency_cache-execute_applies_only_recorded_operations_no_rederive")
 def test_execute_applies_only_recorded_operations_no_rederive(mock_meta, tmp_path):
     """§4 (anti): execute applies ONLY the recorded plan operations; it never re-derives the
     organization from the filesystem. Drop the new_img move op from the saved plan before executing:

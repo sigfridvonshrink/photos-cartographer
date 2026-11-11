@@ -455,31 +455,57 @@ def test_initialized_root_dotfile_is_left_alone(tmp_path, monkeypatch):
     assert not any(".DS_Store" in (op.source or "") for op in plan.operations)
 
 
-@pytest.mark.spec("prep-plan-nonmutating-1")
+def _snapshot_tree(root):
+    """{relative path: bytes} of every file under root."""
+    return {os.path.relpath(os.path.join(r, f), root): open(os.path.join(r, f), "rb").read()
+            for r, _dn, fns in os.walk(root) for f in fns}
+
+
+@pytest.mark.spec("prep-plan-nonmutating-1", "RUL-planning_changes_no_media", test="TST-workspace_prep-plan_is_non_mutating")
 def test_plan_is_non_mutating(tmp_path, monkeypatch):
-    """Planning NEVER mutates the workspace: workflow.plan() derives operations but applies none —
-    0-sources is byte-identical afterwards and no journal/handoff artifact is written (those are
-    execute-only)."""
+    """Planning changes nothing: with work to do, every file of a workspace past its first run — media and
+    records, the workspace database among them — is byte-identical afterwards; the only file it adds is the
+    fingerprint memo it keeps for later runs. (This writes no plan: the command saves it, not the planner.)"""
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
     monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image", mock_hash_image)
     photos_ingest.CONFIG["jobs"] = 1
     ws = setup_workspace(tmp_path)
-
-    def snap(d):
-        return {os.path.relpath(os.path.join(r, f), d): open(os.path.join(r, f), "rb").read()
-                for r, _dn, fns in os.walk(d) for f in fns}
-
-    before = snap(str(ws / "0-sources"))
-    cache = photos_ingest.WorkspaceCache(str(ws), in_memory=True)
+    utils.load_or_seed_config(str(ws))                           # seeded already: not the first run
+    cache = photos_ingest.WorkspaceCache(str(ws))               # the real database, on disk
+    before = _snapshot_tree(str(ws))
     plan = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
     cache.close()
 
     assert len(plan.operations) > 0                              # there WAS work to do
-    assert snap(str(ws / "0-sources")) == before                # ...but the inbox is untouched
-    cd = ws / ".photos-ingest"
-    assert not (cd / "journal.json").exists()                   # no journal (execute-only)
-    assert not (cd / "photos-11-handoff.json").exists()         # no handoff (execute-only)
+    after = _snapshot_tree(str(ws))
+    memo = os.path.relpath(utils.plan_memo_db_path(str(ws)), str(ws))
+    assert {k for k in after if not k.startswith(memo)} == set(before)   # nothing added but the memo
+    assert {k: after[k] for k in before} == before                       # nothing changed
+
+
+@pytest.mark.spec("prep-journal-all-mutations-1", "RUL-every_change_journaled", test="TST-workspace_prep-every_executed_operation_is_journaled")
+def test_every_executed_operation_is_journaled(tmp_path, monkeypatch):
+    """Execution records every operation it carries out in the run's journal — moves, renames and setting
+    duplicates aside alike — each with its outcome, and no operation the plan does not hold."""
+    import photos_utils as utils
+    monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
+    monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image", mock_hash_image)
+    photos_ingest.CONFIG["jobs"] = 1
+    ws = setup_workspace(tmp_path)
+    cache = photos_ingest.WorkspaceCache(str(ws))
+    plan = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
+    cache.close()
+    kinds = {op.type for op in plan.operations}
+    assert {"move_no_clobber", "rename_no_clobber", "quarantine_move"} <= kinds
+    journal = str(ws / ".photos-ingest" / "journal-test.json")
+    photos_ingest.PlanExecutor(str(ws)).execute(plan, journal)
+
+    with open(journal) as f:
+        recorded = json.load(f)
+    assert recorded["plan_id"] == plan.plan_id and recorded["status"] == "success"
+    assert [r["operation_id"] for r in recorded["operations"]] == [op.operation_id for op in plan.operations]
+    assert all(r["status"] == "success" for r in recorded["operations"])
 
 
 @pytest.mark.spec("gpx-prep-defensive-skip-1", "prep-gpx-inside-tree-skip-1", "gpx-root-outside-tree-1", "RUL-tracks_outside_managed_folders", test="TST-workspace_prep-gpx_root_inside_managed_tree_is_refused")
@@ -554,6 +580,7 @@ def test_source_changed_after_plan_abort_no_db(tmp_path, monkeypatch):
         summary={},
         blockers=[],
         warnings=[],
+        metadata_dependencies=photos_ingest.current_metadata_dependencies(),
         operations=[
             photos_ingest.Operation(
                 operation_id="op-1",

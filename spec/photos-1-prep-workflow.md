@@ -513,8 +513,8 @@ It must:
 5. journal every operation (move, rename, quarantine, cache write) with its result;
 6. write each quarantined file's manifest entry **before** moving that file into quarantine, so the recoverable record always precedes the move (evidence-before-quarantine, Section 15);
 7. update SQLite/cache from the validated plan and journal in a single controlled writer/transaction after verification;
-8. write the handoff manifest only on overall success (Section 16);
-9. write the end-of-prep audit log `photos-15-prep-log.json` on overall success (Section 16.1);
+8. write the end-of-prep audit log `photos-15-prep-log.json` on overall success (Section 16.1);
+9. write the handoff manifest only on overall success (Section 16), recording the hash of the log just written, so that a crash between the two leaves a handoff that does not vouch for the log, and the next run rewrites both;
 10. capture the end-of-prep database backup snapshot `photos-15-prep-ingest.db` on overall success — a consistent, atomic copy of the live `photos-00-ingest.db` (shared contract `photos-shared-contract.md` Section 13.4a);
 11. on an **init run** (the workspace was uninitialized at start), write the root sentinel `photos-00-workspace-guard` as the **last** durable step, only after every operation above has succeeded (Section 3.1). Because the sentinel is written last, a crash anywhere earlier leaves the workspace uninitialized — the dump is already in `0-sources/` and the next run safely re-enters the init path. On an already-initialized workspace this step is a no-op (the sentinel exists);
 12. emit the summary (the workspace lock is released at process exit per shared contract Section 2, not as a step of `execute`).

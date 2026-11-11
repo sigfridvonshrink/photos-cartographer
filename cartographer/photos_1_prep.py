@@ -273,6 +273,22 @@ class OperationPlanner:
         return OperationPlanner._hash_dict(canonical_rows).value
 
 
+def current_metadata_dependencies() -> dict:
+    """What prep's metadata reading depends on, as of now: the extractor and its version, and the versions
+    of the field set, extraction options, metadata schema and camera-group derivation. A plan records it;
+    execution recomputes it and refuses the plan if it differs (§5)."""
+    from .photos_utils import (get_exiftool_version, FIELD_SET_VERSION, METADATA_SCHEMA_VERSION,
+                               CAMERA_GROUP_KEY_VERSION, EXTRACTION_OPTIONS_FINGERPRINT)
+    return {
+        "extractor": "exiftool",
+        "extractor_version": get_exiftool_version(),
+        "field_set_version": FIELD_SET_VERSION,
+        "extraction_options_fingerprint": EXTRACTION_OPTIONS_FINGERPRINT,
+        "metadata_schema_version": METADATA_SCHEMA_VERSION,
+        "camera_group_key_version": CAMERA_GROUP_KEY_VERSION,
+    }
+
+
 class PlanValidator:
     @staticmethod
     def validate_plan_preflight(plan: Plan, current_workspace: str):
@@ -296,25 +312,10 @@ class PlanValidator:
         if plan.blockers:
             raise ValueError(f"Plan contains blockers and cannot be executed: {', '.join(plan.blockers)}")
 
-        # Prevalidate metadata dependencies
-        if getattr(plan, "metadata_dependencies", None):
-            from .photos_utils import (
-                get_exiftool_version,
-                FIELD_SET_VERSION,
-                METADATA_SCHEMA_VERSION,
-                CAMERA_GROUP_KEY_VERSION,
-                EXTRACTION_OPTIONS_FINGERPRINT
-            )
-            current_md_deps = {
-                "extractor": "exiftool",
-                "extractor_version": get_exiftool_version(),
-                "field_set_version": FIELD_SET_VERSION,
-                "extraction_options_fingerprint": EXTRACTION_OPTIONS_FINGERPRINT,
-                "metadata_schema_version": METADATA_SCHEMA_VERSION,
-                "camera_group_key_version": CAMERA_GROUP_KEY_VERSION
-            }
-            if plan.metadata_dependencies != current_md_deps:
-                raise ValueError(f"Stale plan: metadata dependencies changed since planning. Expected: {plan.metadata_dependencies}, Current: {current_md_deps}")
+        # Metadata dependencies: an absent or empty record is unverifiable, hence stale — never skipped.
+        current_md_deps = current_metadata_dependencies()
+        if plan.metadata_dependencies != current_md_deps:
+            raise ValueError(f"Stale plan: metadata dependencies changed since planning. Expected: {plan.metadata_dependencies}, Current: {current_md_deps}")
 
         # Config staleness: the workspace config must be byte-identical to what the plan
         # was built against (prep Section 21). load_or_seed_config and _hash_file both
@@ -577,7 +578,6 @@ class PlanExecutor:
                 "config_fingerprint": plan.config_fingerprint.value,
                 "cache_schema_version": CACHE_SCHEMA_VERSION,
                 "fingerprint_algorithm_version": FINGERPRINT_ALGORITHM_VERSION,
-                "cli_options_fingerprint": plan.summary.get("cli_options_fingerprint"),
             })
 
             # 3. ZFS Hook (Optional) — pre-mutation snapshot of the workspace dataset (shared helper,
@@ -946,107 +946,13 @@ class PlanExecutor:
 
                     cache_fingerprint = OperationPlanner.compute_index_fingerprint(final_files)
 
-                    # 2. Re-hash journal
-                    journal_hash = OperationPlanner._hash_file(journal_path).value
-
-                    # 3. Create handoff payload
-                    md_deps = plan.metadata_dependencies if hasattr(plan, "metadata_dependencies") and isinstance(plan.metadata_dependencies, dict) else getattr(plan, "metadata_dependencies", {})
-                    from .photos_utils import get_imagemagick_version as _get_imagemagick_version
-                    handoff = {
-                        "schema_version": 1,
-                        "tool": "photos-1-prep",
-                        # Per-run identifiers live in run_metadata, separate from the deterministic
-                        # content, so they don't perturb content_fingerprint across no-op re-runs (§16).
-                        "run_metadata": {"plan_id": plan.plan_id, "execution_id": self.execution_id},
-                        "cache_fingerprint": cache_fingerprint,
-                        "hash_algorithm": "sha256",
-                        # The folders prep actually scans/organizes — `1-strays` is deliberately EXCLUDED:
-                        # strays are abandoned once moved there (written, never re-scanned), so they are
-                        # not part of the deterministic content downstream phases depend on (§3 / §16.2).
-                        "folders_scanned": [
-                            {"name": n, "mutable": n != folder_name('photos_by_dest')}
-                            for n in managed_folder_names(CONFIG)
-                        ],
-                        "files": final_files,
-                        # The format prep named the files in: fixed for the workspace from here (shared §6).
-                        "filename_timestamp_format": CONFIG["filename_timestamp_format"],
-                        "camera_groups": camera_groups,
-                        "destination_folders": destination_folders,
-                        "diagnostics": {
-                            "duplicates_or_conflicts": quarantine_evidence,
-                            "blockers": plan.blockers,
-                            "warnings": plan.warnings,
-                            "quarantine_footprint": plan.summary.get("quarantine_footprint"),
-                        },
-                        "depends_on": {
-                            "effective_config": {
-                                "fingerprint": plan.config_fingerprint.value,
-                                "includes_cli_overrides": True
-                            },
-                            "execution_journal": {
-                                "path": os.path.relpath(journal_path, self.workspace_root),
-                                "sha256": journal_hash,
-                                "status": "success"
-                            },
-                            "final_workspace_inventory": {
-                                "content_fingerprint": cache_fingerprint
-                            },
-                            "metadata_extractor": {
-                                "name": md_deps.get("extractor", "exiftool"),
-                                "version": md_deps.get("extractor_version", "unknown"),
-                                "field_set_version": md_deps.get("field_set_version", 1),
-                                "extraction_options_fingerprint": md_deps.get("extraction_options_fingerprint", "unknown"),
-                                "metadata_schema_version": md_deps.get("metadata_schema_version", 1),
-                                "camera_group_key_version": md_deps.get("camera_group_key_version", 1)
-                            },
-                            "plan": {
-                                "schema_version": plan.plan_version
-                            },
-                            "cache": {
-                                "schema_version": int(cache.get_meta("cache_schema_version") or CACHE_SCHEMA_VERSION),
-                                "fingerprint_algorithm_version": cache.get_meta("fingerprint_algorithm_version") or cache.get_meta("hash_algorithm_version") or FINGERPRINT_ALGORITHM_VERSION,
-                                "image_engine": "imagemagick",
-                                "image_engine_version": _get_imagemagick_version()
-                            },
-                            "cli_options": {
-                                "fingerprint": plan.summary.get("cli_options_fingerprint"),
-                                "execution_config": plan.summary.get("execution_config")
-                            }
-                        }
-                    }
-
-                    # Write out atomically AND deterministically (prep §16.2; shared contract §15): route through
-                    # write_json_artifact (temp → atomic rename, sort_keys) so the handoff bytes are
-                    # byte-stable for a given workspace state. Geotag records a json_dependency on
-                    # this file's exact bytes, so a non-deterministic dump (the old indent-only
-                    # json.dump) could flip its SHA-256 and spuriously restale photos-21/22/23.
-                    from .photos_utils import handoff_path, write_json_artifact, handoff_content_fingerprint
-                    # The content fingerprint over the deterministic content (excludes run_metadata +
-                    # diagnostics + the journal pointer) — geotag depends on THIS, not the volatile
-                    # file bytes, so a no-op re-run does not restale it (§16).
-                    handoff["content_fingerprint"] = handoff_content_fingerprint(handoff)
-                    target_handoff_path = handoff_path(self.workspace_root)
-                    os.makedirs(os.path.dirname(target_handoff_path), exist_ok=True)
-                    try:
-                        write_json_artifact(target_handoff_path, handoff)
-                        # Belt-and-suspenders (§16): the just-written handoff must re-read to the SAME
-                        # content_fingerprint, or geotag's recompute would mismatch — which can only
-                        # happen if a non-round-trip-stable field crept into the handoff. Fail loudly here
-                        # rather than ship a handoff geotag would (silently) treat as forever-stale.
-                        with open(target_handoff_path) as _hf:
-                            if handoff_content_fingerprint(json.load(_hf)) != handoff["content_fingerprint"]:
-                                raise RuntimeError("handoff content_fingerprint is not round-trip stable")
-                        if plan.summary and "performance_and_cache" in plan.summary:
-                            plan.summary["performance_and_cache"]["handoff_written_after_successful_validation"] = True
-                        self.coordinator.finish_phase()
-                    except Exception as e:
-                        raise RuntimeError(f"Failed to write handoff manifest: {e}")
-
                     # End-of-prep transformation log (prep Section 16.1 / shared Section 13.3): a
                     # per-photo, content-fingerprint-keyed, human-readable record of everything prep
                     # did — complete and self-sufficient even if no later phase runs. Derived from
                     # this run's plan + quarantine evidence, merged onto the prior log carried forward
-                    # (incremental, §16.1 item 6), written atomically at this same success gate.
+                    # (incremental, §16.1 item 6). Written BEFORE the handoff, which records its hash:
+                    # a crash between the two leaves a handoff that does not vouch for the log, so
+                    # finalize refuses it and prep's next run rewrites both.
                     from .photos_utils import prep_log_path
                     plp = prep_log_path(self.workspace_root)
                     prior_photos = {}
@@ -1080,6 +986,100 @@ class PlanExecutor:
                                 pass
                         raise RuntimeError(f"Failed to write prep log: {e}")
 
+                    # 2. Re-hash journal
+                    journal_hash = OperationPlanner._hash_file(journal_path).value
+
+                    # 3. Create handoff payload
+                    md_deps = plan.metadata_dependencies
+                    from .photos_utils import get_imagemagick_version as _get_imagemagick_version
+                    handoff = {
+                        "schema_version": 1,
+                        "tool": "photos-1-prep",
+                        # Per-run identifiers live in run_metadata, separate from the deterministic
+                        # content, so they don't perturb content_fingerprint across no-op re-runs (§16).
+                        "run_metadata": {"plan_id": plan.plan_id, "execution_id": self.execution_id},
+                        "cache_fingerprint": cache_fingerprint,
+                        "hash_algorithm": "sha256",
+                        # The folders prep actually scans/organizes — `1-strays` is deliberately EXCLUDED:
+                        # strays are abandoned once moved there (written, never re-scanned), so they are
+                        # not part of the deterministic content downstream phases depend on (§3 / §16.2).
+                        "folders_scanned": [
+                            {"name": n, "mutable": n != folder_name('photos_by_dest')}
+                            for n in managed_folder_names(CONFIG)
+                        ],
+                        "files": final_files,
+                        # The format prep named the files in: fixed for the workspace from here (shared §6).
+                        "filename_timestamp_format": CONFIG["filename_timestamp_format"],
+                        "camera_groups": camera_groups,
+                        "destination_folders": destination_folders,
+                        "diagnostics": {
+                            "duplicates_or_conflicts": quarantine_evidence,
+                            "blockers": plan.blockers,
+                            "warnings": plan.warnings,
+                            "quarantine_footprint": plan.summary.get("quarantine_footprint"),
+                        },
+                        "depends_on": {
+                            "effective_config": {
+                                "fingerprint": plan.config_fingerprint.value
+                            },
+                            "prep_log": {
+                                "path": os.path.relpath(plp, self.workspace_root),
+                                "sha256": OperationPlanner._hash_file(plp).value
+                            },
+                            "execution_journal": {
+                                "path": os.path.relpath(journal_path, self.workspace_root),
+                                "sha256": journal_hash,
+                                "status": "success"
+                            },
+                            "final_workspace_inventory": {
+                                "content_fingerprint": cache_fingerprint
+                            },
+                            "metadata_extractor": {
+                                "name": md_deps["extractor"],
+                                "version": md_deps["extractor_version"],
+                                "field_set_version": md_deps["field_set_version"],
+                                "extraction_options_fingerprint": md_deps["extraction_options_fingerprint"],
+                                "metadata_schema_version": md_deps["metadata_schema_version"],
+                                "camera_group_key_version": md_deps["camera_group_key_version"]
+                            },
+                            "plan": {
+                                "schema_version": plan.plan_version
+                            },
+                            "cache": {
+                                "schema_version": int(cache.get_meta("cache_schema_version")),
+                                "fingerprint_algorithm_version": cache.get_meta("fingerprint_algorithm_version"),
+                                "image_engine": "imagemagick",
+                                "image_engine_version": _get_imagemagick_version()
+                            }
+                        }
+                    }
+
+                    # Write out atomically AND deterministically (prep §16.2; shared contract §15): route through
+                    # write_json_artifact (temp → atomic rename, sort_keys) so the handoff bytes are
+                    # byte-stable for a given workspace state. Geotag records a json_dependency on
+                    # this file's exact bytes, so a non-deterministic dump (the old indent-only
+                    # json.dump) could flip its SHA-256 and spuriously restale photos-21/22/23.
+                    from .photos_utils import handoff_path, write_json_artifact, handoff_content_fingerprint
+                    # The content fingerprint over the deterministic content (excludes run_metadata +
+                    # diagnostics + the journal pointer) — geotag depends on THIS, not the volatile
+                    # file bytes, so a no-op re-run does not restale it (§16).
+                    handoff["content_fingerprint"] = handoff_content_fingerprint(handoff)
+                    target_handoff_path = handoff_path(self.workspace_root)
+                    os.makedirs(os.path.dirname(target_handoff_path), exist_ok=True)
+                    try:
+                        write_json_artifact(target_handoff_path, handoff)
+                        # Belt-and-suspenders (§16): the just-written handoff must re-read to the SAME
+                        # content_fingerprint, or geotag's recompute would mismatch — which can only
+                        # happen if a non-round-trip-stable field crept into the handoff. Fail loudly here
+                        # rather than ship a handoff geotag would (silently) treat as forever-stale.
+                        with open(target_handoff_path) as _hf:
+                            if handoff_content_fingerprint(json.load(_hf)) != handoff["content_fingerprint"]:
+                                raise RuntimeError("handoff content_fingerprint is not round-trip stable")
+                        if plan.summary and "performance_and_cache" in plan.summary:
+                            plan.summary["performance_and_cache"]["handoff_written_after_successful_validation"] = True
+                        self.coordinator.finish_phase()
+                    except Exception as e:
+                        raise RuntimeError(f"Failed to write handoff manifest: {e}")
                 # End-of-prep DB backup snapshot (shared contract Section 13.4a): a transactionally
                 # consistent image of the live cache, captured at the same success gate as the
                 # handoff and written no-clobber + atomically — VACUUM INTO a temp name, then atomic
@@ -2515,11 +2515,8 @@ class WorkspacePrepWorkflow:
 
         # The -j/--jobs count is a transient, machine-dependent runtime knob: it is NOT recorded in the
         # plan (nor in the config file, nor the handoff), so a plan is byte-identical across job counts
-        # and portable between machines — there is no requirement to run a given workspace on the same
-        # machine each time (determinism, prep spec §17 items 3/6). execution_config holds only OUTPUT-AFFECTING
-        # CLI options — none today — so its fingerprint is stable.
-        execution_config = {}
-        cli_options_fingerprint = OperationPlanner._hash_dict(execution_config).value
+        # and portable between machines (determinism, prep spec §17 items 3/6). No command option affects
+        # what prep plans, so the plan records none.
 
         self.coordinator.start_phase("planning - hashing files", len(files))
 
@@ -2621,14 +2618,6 @@ class WorkspacePrepWorkflow:
                     "role": "by_dest_read_only" if f["relative_path"].startswith(folder_name('photos_by_dest') + "/") else "no_op_prepared"
                 })
 
-        from .photos_utils import (
-            get_exiftool_version,
-            FIELD_SET_VERSION,
-            METADATA_SCHEMA_VERSION,
-            CAMERA_GROUP_KEY_VERSION,
-            EXTRACTION_OPTIONS_FINGERPRINT
-        )
-
         # Close the final planning phase ("building duplicate groups") opened above — without this its
         # progress task never gets a FINISH event, so a live observer (the console) would leave the row
         # stuck on screen with a count of 0.
@@ -2653,8 +2642,6 @@ class WorkspacePrepWorkflow:
             "report": report,
             "blockers_found": len(blockers),
             "metadata_plan_status": metadata_plan_status,
-            "execution_config": execution_config,
-            "cli_options_fingerprint": cli_options_fingerprint,
             "performance_and_cache": {
                 "progress_mode": "quiet" if self.coordinator.quiet else "plain",
                 "worker_crashes": self.coordinator.counters.get("worker_crashes", 0),
@@ -2679,14 +2666,7 @@ class WorkspacePrepWorkflow:
             operations=operations,
             workspace_file_preconditions=workspace_file_preconditions,
             inventory=inventory,
-            metadata_dependencies={
-                "extractor": "exiftool",
-                "extractor_version": get_exiftool_version(),
-                "field_set_version": FIELD_SET_VERSION,
-                "extraction_options_fingerprint": EXTRACTION_OPTIONS_FINGERPRINT,
-                "metadata_schema_version": METADATA_SCHEMA_VERSION,
-                "camera_group_key_version": CAMERA_GROUP_KEY_VERSION
-            }
+            metadata_dependencies=current_metadata_dependencies()
         )
 
 def _parse_plan_id_time(plan_id: str):
@@ -2826,7 +2806,7 @@ def _prep_nothing_to_do(workspace_root, reporter) -> bool:
     The by-dest check is essential: after the user moves photos into `6-photos-by-dest`, `0-sources` is
     empty but prep MUST still re-run to record the move and refresh the handoff (geotag refuses until it
     does). Treating that as "nothing to do" would wedge the mandatory re-prep."""
-    from .photos_utils import guard_path, folder_name, handoff_path, by_dest_reprep_pending
+    from .photos_utils import guard_path, folder_name, handoff_path, by_dest_reprep_pending, prep_log_blocker
     src = os.path.join(workspace_root, folder_name('sources'))
     if not os.path.exists(guard_path(workspace_root)):
         return False
@@ -2839,6 +2819,8 @@ def _prep_nothing_to_do(workspace_root, reporter) -> bool:
         _handoff = {}
     if by_dest_reprep_pending(workspace_root, _handoff) is not None:
         return False                    # a by-dest move still needs recording — not nothing-to-do
+    if prep_log_blocker(workspace_root, _handoff) is not None:
+        return False                    # the log is not the one the handoff vouches for — rewrite both
     name = folder_name('sources')
     reporter.log(f"Nothing to do: {name} is empty — this workspace is already prepped.", stream="stdout")
     emit_next_step(reporter, f"sort photos into {folder_name('photos_by_dest')}, then `geotag plan` — or "
