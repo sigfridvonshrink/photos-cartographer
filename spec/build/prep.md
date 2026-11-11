@@ -58,7 +58,7 @@ fingerprint, the handoff's recorded hash among them, is of the file as it stands
 
 :::{bld} Prep's execute replays the saved plan
 :id: BLD-prep_execute_replays
-:status: seed
+:status: ruled
 :realises: RUL-execution_only_the_plan
 
 Prep's execute SHALL apply the operations of `photos-10-prep-plan.json` in their recorded order, to the destinations
@@ -67,7 +67,7 @@ recorded there, running no step of planning.
 
 :::{bld} Prep journals each operation as it ends
 :id: BLD-prep_journal
-:status: seed
+:status: ruled
 :realises: RUL-every_change_journaled
 
 Prep's execute SHALL append each operation's outcome to `journal-<plan-id>.json` as the operation ends, saving the
@@ -78,7 +78,7 @@ journal after each.
 
 :::{bld} Prep's dependencies, in full
 :id: BLD-prep_dependencies
-:status: seed
+:status: ruled
 :realises: INV-no_stale_use, RUL-unchecked_counts_as_changed
 :aliases: prep-artifacts-carry-depends-on-1, prep-record-min-fingerprints-1
 
@@ -101,7 +101,7 @@ plans, so no record carries one.
 
 :::{bld} The handoff vouches for prep's log
 :id: BLD-prep_log_vouched
-:status: seed
+:status: ruled
 :realises: INV-no_stale_use
 
 Prep's execute SHALL write `photos-15-prep-log.json` before the handoff, and record the log's SHA-256 in the handoff's
@@ -110,7 +110,7 @@ Prep's execute SHALL write `photos-15-prep-log.json` before the handoff, and rec
 
 :::{bld} Finalize copies only the log the handoff vouches for
 :id: BLD-finalize_checks_prep_log
-:status: seed
+:status: ruled
 :realises: INV-no_stale_use, RUL-unchecked_counts_as_changed
 
 Geotag's finalize SHALL copy prep's log only when its bytes hash to the value {need}`BLD-prep_log_vouched` records, and
@@ -119,7 +119,7 @@ stop otherwise — the log missing or unreadable, or the handoff recording no ha
 
 :::{bld} A log not vouched for is not "nothing to do"
 :id: BLD-prep_fast_stop_checks_log
-:status: seed
+:status: ruled
 :realises: RUL-unchecked_counts_as_changed
 
 Prep's stop on an already-prepped workspace SHALL not apply while the log's hash differs from what the handoff records,

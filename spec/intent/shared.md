@@ -1224,7 +1224,7 @@ then creates the record, records those dependencies in it, and refuses its use d
 
 :::{rul} What cannot be checked counts as changed
 :id: RUL-unchecked_counts_as_changed
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -2771,7 +2771,7 @@ An operation that cannot complete SHALL never be recorded as done, so that a re-
 
 :::{rul} Planning changes no media
 :id: RUL-planning_changes_no_media
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -2783,7 +2783,7 @@ runs need not compute it again, and — on a workspace's first run — the confi
 
 :::{rul} Execution carries out the plan, and only the plan
 :id: RUL-execution_only_the_plan
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -2795,7 +2795,7 @@ Execution SHALL carry out only the operations its plan records, re-deriving no d
 
 :::{rul} Every change is journaled
 :id: RUL-every_change_journaled
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: prep-journal-all-mutations-1
