@@ -24,7 +24,7 @@ Prep SHALL make no correction to a file's time or position: it plans, infers, wr
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: prep-by-dest-readonly-1, prep-no-perform-bydest-move-1, prep-bydest-never-quarantined-1, prep-scan-split-inventory-1
+:aliases: prep-by-dest-readonly-1, prep-no-perform-bydest-move-1, prep-bydest-never-quarantined-1, prep-scan-split-inventory-1, prep-move-recognition-no-mutate-bydest-1
 :uses: DEF-prep, DEF-managed_folders
 
 Prep SHALL leave photos by destination as it finds it: never moving a file into it, out of it or within it, nor
@@ -369,4 +369,122 @@ with it.
 :uses: DEF-workspace_database
 
 Prep SHALL stop on a workspace database whose recorded schema is not the one it uses, migrating none.
+:::
+
+
+## 10. Files the user moves, and the plan memo
+
+:::{rul} A file the user moved is recognized
+:id: RUL-move_recognized
+:status: seed
+:criticality: med
+:verify: required
+:aliases: prep-recognize-bydest-resort-1, prep-ambiguous-move-rescan-1, prep-content-change-overrides-carry-1, prep-cache-distinguish-cases-1
+:uses: DEF-workspace_database
+
+Prep SHALL recognize as moved a file new to photos by destination whose size, modification time and name are those of
+a file the workspace database holds and that is gone from its path — one only, matched by no other such file and by no
+other new file in photos by destination.
+:::
+
+:::{rul} A moved file's identity is carried, not read again
+:id: RUL-moved_file_carried
+:status: seed
+:criticality: high
+:verify: required
+:aliases: prep-recognize-bydate-to-bydest-move-1, prep-move-carry-forward-drop-old-1
+:refines: RUL-reuse_valid_work
+:uses: DEF-fingerprint, DEF-workspace_database
+
+Prep SHALL carry a moved file's fingerprint and metadata to its new path, reading nothing of the file but its size and
+time, when its row at the old path would have been reused there.
+:::
+
+:::{rul} A quarantined file leaves the database
+:id: RUL-quarantined_leaves_database
+:status: seed
+:criticality: med
+:verify: required
+:refines: RUL-database_matches_files
+:uses: DEF-workspace_database
+
+A file prep has quarantined SHALL be in neither the workspace database nor the handoff.
+:::
+
+:::{def} The plan memo
+:id: DEF-plan_memo
+:status: seed
+:uses: DEF-fingerprint
+
+The **plan memo** is the scratch database where prep's planning keeps what it read of each media file — its fingerprint
+and metadata — with the path, size and modification time it read them at.
+:::
+
+:::{rul} A plan keeps what it read
+:id: RUL-plan_memo_kept
+:status: seed
+:criticality: low
+:verify: required
+:aliases: prep-plan-memo-reuse-1, prep-plan-memo-not-the-cache-1
+:refines: RUL-reuse_valid_work
+:uses: DEF-plan_memo
+
+Prep's planning SHALL keep in the plan memo the fingerprint and metadata of each media file it read, for a later plan
+to reuse.
+:::
+
+:::{rul} The database outranks the memo
+:id: RUL-database_over_memo
+:status: seed
+:criticality: med
+:verify: required
+:aliases: prep-plan-memo-subordinate-1
+:uses: DEF-plan_memo, DEF-workspace_database
+
+Prep SHALL take a file's fingerprint and metadata from the plan memo only where the workspace database holds no row for
+its path.
+:::
+
+:::{rul} A memo entry passes the database's tests
+:id: RUL-memo_entry_same_tests
+:status: seed
+:criticality: high
+:verify: required
+:aliases: prep-plan-memo-freshness-1
+:uses: DEF-plan_memo
+
+Prep SHALL reuse an entry of the plan memo only when a row of the workspace database holding it would be reused.
+:::
+
+:::{rul} The memo proves no move
+:id: RUL-memo_proves_no_move
+:status: seed
+:criticality: med
+:verify: required
+:uses: DEF-plan_memo, DEF-workspace_database
+
+Prep SHALL recognize a moved file from the workspace database alone, never from the plan memo.
+:::
+
+:::{rul} The memo never changes the plan
+:id: RUL-memo_never_changes_plan
+:status: seed
+:criticality: high
+:verify: required
+:aliases: prep-plan-memo-disposable-1
+:uses: DEF-plan_memo
+
+The plan prep makes SHALL be the same whatever the plan memo holds — entries reused, none, or a file that cannot be
+read.
+:::
+
+:::{rul} The memo holds what the latest plan read
+:id: RUL-memo_tracks_workspace
+:status: seed
+:criticality: low
+:verify: required
+:aliases: prep-plan-memo-pruned-1
+:uses: DEF-plan_memo
+
+The plan memo SHALL hold entries only for paths the latest plan read.
 :::

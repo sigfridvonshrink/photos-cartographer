@@ -309,3 +309,59 @@ migration would be code kept for databases that do not exist, run on the one rec
 anything else; a database of another schema read as this one would be read wrong. Stopping says so, and a fresh
 workspace is the remedy.
 :::
+
+
+## 10. Files the user moves, and the plan memo
+
+:::{rat} Sorting costs no reading
+:id: RAT-sort_costs_no_reading
+:status: seed
+:justifies: RUL-move_recognized
+
+Sorting photos into destinations is the user's own work, done between runs, and prep must plan again after it. Were each
+moved photo read again, every sort would cost a decode of everything sorted. A move made by hand keeps a file's size,
+time and name, so that triple, read without opening the file, says which file it was; where it fits more than one, prep
+does not guess, and reads the file as new.
+:::
+
+:::{rat} A move launders no stale row
+:id: RAT-move_launders_nothing
+:status: seed
+:justifies: RUL-moved_file_carried
+
+A move changes where a file is, not what it is, so what prep knows of it still holds — but only as far as it held before
+the move. A row that would have been read again where it was is no better for being carried; carrying it would keep
+under the new path what the old path would have refreshed.
+:::
+
+:::{rat} Quarantine is outside the record
+:id: RAT-quarantine_outside_record
+:status: seed
+:justifies: RUL-quarantined_leaves_database
+
+A quarantined file is a copy set aside, not part of the workspace the later phases work on; its manifest records why it
+was set aside. Kept in the database, it would be listed in the handoff among the photos, and reclaiming quarantine space
+— which touches nothing of the record — would change the handoff at the next run and make geotag's work stale.
+:::
+
+:::{rat} A plan never executed loses nothing it read
+:id: RAT-plan_keeps_its_reading
+:status: seed
+:justifies: RUL-plan_memo_kept, RUL-memo_tracks_workspace
+
+Decoding photos is most of a plan's cost — hours on a large library — and the user often plans again before executing:
+a configuration edited, a folder corrected, a run interrupted. The database speaks only of the executed workspace, so
+a plan's reading is kept apart from it, in scratch; kept only for what the latest plan saw, it stays the size of the
+workspace.
+:::
+
+:::{rat} The memo is an observation, not a record
+:id: RAT-memo_is_observation
+:status: seed
+:justifies: RUL-database_over_memo, RUL-memo_entry_same_tests, RUL-memo_proves_no_move, RUL-memo_never_changes_plan
+
+A memo entry says only that a file at a path read so; the database says what prep's executions left. So the database
+wins where both speak, an entry is held to the database's tests, and an entry proves no move — a plan never executed
+says nothing of where any file went. The memo saves reading and nothing else, so with it, without it, or with it
+broken, prep plans the same.
+:::
