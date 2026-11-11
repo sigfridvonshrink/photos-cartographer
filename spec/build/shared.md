@@ -422,8 +422,7 @@ filename-format fingerprint ({need}`DEF-dependency_cascade`).
 :realises: RUL-suffix_no_clobber, RUL-suffix_choice_by_phase, RUL-merge_suffix_above_highest
 
 The names SHALL be `<timestamp>.ext` for the first file with a free base name, `<timestamp>-001.ext` for the first
-collision, `<timestamp>-002.ext` for the second, and so on. Each phase specifies its allocation where it plans its
-renames: prep §8 and §7.3, geotag §27, merge §7.
+collision, `<timestamp>-002.ext` for the second, and so on.
 :::
 
 :::{bld} Geotag's final name, step by step
@@ -449,10 +448,10 @@ The untimed name SHALL be `UNKN_<name it came with>`, with the `-NNN` suffix whe
 :realises: RUL-misnamed_file_stops_prep, RUL-misnamed_file_named
 
 At plan, prep SHALL check the name of every media file in the dated, missing-metadata, redundant-JPG and by-destination
-folders: without its extension and `-NNN` suffix, it is the file's recorded time (`DateTimeOriginal`, else
-`CreateDate`, else `ModifyDate`) formatted by `filename_timestamp_format`, or starts with `UNKN_` for a file with no
-recorded time and for every file in the missing-metadata folder. A dated file with no recorded time is moved to the
-missing-metadata folder instead, and the strays folder is not checked.
+folders: without its extension and `-NNN` suffix, it is the file's recorded time ({need}`RUL-recorded_time_order`)
+formatted by `filename_timestamp_format`, or starts with `UNKN_` for a file with no recorded time and for every file in
+the missing-metadata folder. A dated file with no recorded time is moved to the missing-metadata folder instead, and the
+strays folder is not checked.
 :::
 
 :::{bld} The format recorded in the handoff

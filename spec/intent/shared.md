@@ -1022,7 +1022,7 @@ so that two files never collide.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: fname-allocation-per-phase-1
+:aliases: fname-allocation-per-phase-1, prep-suffix-bare-first-lowest-free-1
 :refines: RUL-suffix_no_clobber
 
 Prep and geotag SHALL take the first free name — the name with no suffix when it is free, otherwise the lowest free
@@ -1082,6 +1082,17 @@ A file's **untimed name** is the name prep gives a media file with no recorded t
 mark that says so.
 :::
 
+:::{rul} The untimed mark is taken once
+:id: RUL-untimed_mark_once
+:status: seed
+:criticality: low
+:verify: required
+:uses: DEF-untimed_name
+
+A file that comes in under a name already carrying the untimed mark SHALL keep that name as its untimed name, the mark
+not added again.
+:::
+
 :::{rul} A misnamed file outside the inbox stops prep
 :id: RUL-misnamed_file_stops_prep
 :status: ruled
@@ -1110,6 +1121,7 @@ Prep SHALL name every misnamed file it finds, with the name the file should carr
 :criticality: med
 :anti: yes
 :verify: required
+:aliases: prep-no-parse-nonconforming-name-1
 :refines: RUL-misnamed_file_stops_prep
 
 No phase SHALL read meaning from a file's name: its timestamp comes from its metadata.
@@ -1120,9 +1132,10 @@ No phase SHALL read meaning from a file's name: its timestamp comes from its met
 :status: ruled
 :criticality: low
 :verify: required
-:uses: DEF-timestamp_name
+:uses: DEF-timestamp_name, DEF-untimed_name
 
-A JPG prep sets aside as redundant to its RAW SHALL get its timestamp name, as a dated file does.
+A JPG prep sets aside as redundant to its RAW SHALL get its timestamp name, or with no recorded time its untimed name,
+as any file prep files does.
 :::
 
 :::{rul} The format is fixed once files are named in it

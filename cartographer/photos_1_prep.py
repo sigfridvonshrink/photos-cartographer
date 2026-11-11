@@ -39,7 +39,7 @@ import errno
 # ==============================================================================
 # CONFIGURATION BLOCK
 # ==============================================================================
-from .photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, is_track_file, missing_managed_folders, misplaced_top_level_entries, FOLDER_ROLES, UNTIMED_PREFIX, carries_stem, filename_format_changed
+from .photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, is_track_file, missing_managed_folders, misplaced_top_level_entries, FOLDER_ROLES, UNTIMED_PREFIX, untimed_stem, carries_stem, filename_format_changed
 from .reporting import get_reporter, emit_next_step
 from .photos_utils import (_move_no_clobber, _move_link_unlink, _get_renameat2,
                           WorkspaceCache, WorkspaceLock, ContentHasher, PlanFingerprintMemo,
@@ -1992,7 +1992,7 @@ class WorkspacePrepWorkflow:
                             ext = ext.lower()
                             dt = self._file_datetime(f)
                             stem = (dt.strftime(CONFIG["filename_timestamp_format"]) if dt is not None
-                                    else UNTIMED_PREFIX + base)
+                                    else untimed_stem(base))
                             dest = os.path.join(folder_name('redundant_jpgs'),
                                                 self._allocate_suffix(stem, ext.lstrip('.'), taken, bare_first=True))
                             st.media_mutated_originals.add(f["relative_path"])
@@ -2277,7 +2277,7 @@ class WorkspacePrepWorkflow:
                 target_dir = os.path.join(target_folder, dt.strftime("%Y-%m-%d"))
             else:
                 target_dir = folder_name('missing_metadata')   # untimestamped -> flat, no day folder
-                prefix = UNTIMED_PREFIX + base
+                prefix = untimed_stem(base)
 
             # §7.2: the first file at a given timestamp gets the bare name; the -NNN suffix appears only
             # on a genuine collision (matches geotag's final naming, so an uncorrected file's
@@ -2378,6 +2378,10 @@ class WorkspacePrepWorkflow:
                 database_effects_after_verification=cache_upserts
             ))
 
+        # A path a planned move fills again is not a ghost: the move's upsert replaces its row there
+        # (a file the user sent back to the inbox, refiled under the name it had).
+        _refilled = {op.destination for op in st.operations if op.destination}
+        ghost_prunes = [g for g in ghost_prunes if g["relative_path"] not in _refilled]
         if ghost_prunes:
             st.operations.append(Operation(
                 operation_id=f"op-{uuid.uuid4().hex[:8]}",

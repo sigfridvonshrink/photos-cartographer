@@ -324,7 +324,7 @@ The timestamp used here is the raw camera-naive value, used only for organizatio
 
 ### 7.7 Stage 6 — Cache reconciliation
 
-For files that were not mutated and whose cache record is stale (changed size/mtime or stale metadata), a `db_upsert` records the refreshed state. Before treating a cached file whose path has disappeared as a ghost, prep applies the move-recognition rule of Section 10.1: a disappearance explained by a matching new by-dest entry is a move (cache carried forward), not a ghost. Genuinely missing cache rows are pruned with `db_remove` (ghost prune). Unchanged, already-fresh files produce no operation and are reported as `no_op` / `already_correct`.
+For files that were not mutated and whose cache record is stale (changed size/mtime or stale metadata), a `db_upsert` records the refreshed state. Before treating a cached file whose path has disappeared as a ghost, prep applies the move-recognition rule of Section 10.1: a disappearance explained by a matching new by-dest entry is a move (cache carried forward), not a ghost. Genuinely missing cache rows are pruned with `db_remove` (ghost prune) — but not the row of a path a planned move fills again (a file the user sent back to the inbox, refiled under the name it had): that move replaces the row. Unchanged, already-fresh files produce no operation and are reported as `no_op` / `already_correct`.
 
 ---
 
@@ -340,6 +340,8 @@ Date-organized names follow the project standard and are derived from the source
 ```
 
 By-date media is grouped into a `YYYY-MM-DD/` day subfolder (the date portion of the same source-naive timestamp); the filename keeps the full timestamp. Because the filename already encodes the full date, two files can share a name only if they share the whole timestamp — i.e. the same day, hence the same day folder — so a single occupied-name set across the band is sufficient to allocate suffixes (two files in different day folders can never collide on name).
+
+A file that comes in under a name already carrying the `UNKN_` mark — one the user sent back from `2-missing-metadata` still without a time — keeps that name as its untimed name: the mark is not added again. A redundant JPEG with no timestamp takes its untimed name the same way.
 
 The **first** file at a given name takes the **bare** name (no suffix); a `-NNN` zero-padded differentiating suffix (`-001`, `-002`, …) is added only on a collision, allocated deterministically and no-clobber against a per-run, case-insensitive occupied-name set, taking the **lowest free** index, so two files never collide. This bare-first, first-free rule is shared with geotag so an uncorrected file's provisional (prep) and final (geotag) names coincide (Section 7.3; shared contract `photos-shared-contract.md` Section 7.2) — it is **not** monotonic/append-only; only merge appends at `max+1` (for its append-only library). Extensions are normalized to lowercase (Section 7.3). The timestamp shape and the differentiating-suffix convention are defined once in the shared contract (Section 7); prep reads the same shared `filename_timestamp_format` key as geotag.
 
