@@ -6460,7 +6460,7 @@
       "area": "prep",
       "criticality": "med",
       "anti": false,
-      "title": "The organizing timestamp is read passively in priority DateTimeOriginal -> CreateDate -> ModifyDate",
+      "title": "The organizing timestamp is read passively from the first of DateTimeOriginal -> CreateDate -> ModifyDate holding a valid time",
       "spec": {
         "file": "photos-1-prep-workflow.md",
         "section": "7.6"

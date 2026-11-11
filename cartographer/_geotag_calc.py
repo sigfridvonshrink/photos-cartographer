@@ -37,6 +37,7 @@ from .photos_utils import (
     validate_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
     folders_fingerprint, media_extensions_fingerprint,
     selected_gpx_root, is_gpx_file, CAMERA_IDENTITY_FIELDS, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
+    parse_naive_time,
     missing_managed_folders, by_dest_reprep_pending,
     json_dependency, verify_json_dependency, handoff_content_fingerprint, write_json_artifact, write_versioned_json, db_path, ensure_control_dir,
     journal_path, ContentHasher, _move_no_clobber, allocate_suffix, carries_stem, track_memo_db_path,
@@ -332,11 +333,9 @@ def _valid_offset(v):
 # ============================================================================
 
 def _parse_camera_naive(s):
-    """The camera's naive capture time ('YYYY:MM:DD HH:MM:SS') as a naive datetime, or None."""
-    try:
-        return datetime.strptime((s or "")[:19], "%Y:%m:%d %H:%M:%S")
-    except (ValueError, TypeError):
-        return None
+    """The camera's naive capture time ('YYYY:MM:DD HH:MM:SS') as a naive datetime, or None — the same
+    reading prep gives a recorded time (`parse_naive_time`)."""
+    return parse_naive_time(s)
 
 
 def _naive_date(s):

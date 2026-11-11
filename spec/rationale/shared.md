@@ -393,7 +393,8 @@ unknown and geotag asks.
 `DateTimeOriginal` is the moment the shutter fired. `CreateDate` is when the file was written, the same moment for a
 camera's own file but not for a scan or an export; `ModifyDate` is the last edit, a guess at the making when nothing
 else is there. Taking them in that order dates a file as near its making as its metadata allows, and every phase reads
-the same one.
+the same one. Some cameras fill a field they cannot set with a placeholder such as `0000:00:00 00:00:00`; that is no
+time, and stopping at it would leave a file undated whose next field holds its time.
 :::
 
 :::{rat} One key, so the names cannot drift apart

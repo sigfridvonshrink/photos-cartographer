@@ -1325,7 +1325,8 @@ def take_zfs_snapshot(ws: str, snapshot_id: str, label: str, *, target_path=None
     return rec
 
 FIELD_SET_VERSION = 1
-METADATA_SCHEMA_VERSION = 1
+# 2: a file's recorded time is the first field holding a valid time, not the first present.
+METADATA_SCHEMA_VERSION = 2
 CAMERA_GROUP_KEY_VERSION = 1
 
 EXIFTOOL_METADATA_OPTIONS = ["-json", "-n", "-a"]
@@ -1874,6 +1875,29 @@ class ExifToolWorkerPool:
             if worker:
                 self.release(worker)
 
+RECORDED_TIME_TAGS = ("DateTimeOriginal", "CreateDate", "ModifyDate")
+
+
+def parse_naive_time(s):
+    """A metadata time ('YYYY:MM:DD HH:MM:SS', anything after ignored) as a naive datetime, or None when
+    the value holds no valid time — absent, not a string, or a placeholder such as `0000:00:00 00:00:00`."""
+    if not isinstance(s, str):
+        return None
+    try:
+        return datetime.strptime(s[:19], "%Y:%m:%d %H:%M:%S")
+    except ValueError:
+        return None
+
+
+def recorded_time(parsed):
+    """A file's recorded time: `(tag, value)` of the first of RECORDED_TIME_TAGS whose value holds a valid
+    time, or `(None, None)`."""
+    for tag in RECORDED_TIME_TAGS:
+        if parse_naive_time(parsed.get(tag)) is not None:
+            return tag, parsed[tag]
+    return None, None
+
+
 class MetadataReader:
     # Metadata is read by the persistent-worker pool (PersistentExifToolWorker.read_metadata
     # via ExifToolWorkerPool, used by read_metadata_concurrently below). An earlier one-shot
@@ -1959,21 +1983,12 @@ class MetadataReader:
             parsed["extraction_status"] = "extracted_empty"
 
         parsed["has_native_gps"] = bool(parsed.get("GPSLatitude") is not None and parsed.get("GPSLongitude") is not None)
-        parsed["has_timestamp"] = bool(parsed.get("DateTimeOriginal") or parsed.get("CreateDate") or parsed.get("ModifyDate"))
+        parsed["has_timestamp"] = recorded_time(parsed)[0] is not None
 
-        # Timestamp provenance
-        if parsed.get("DateTimeOriginal"):
-            parsed["selected_source_naive_timestamp"] = parsed.get("DateTimeOriginal")
-            parsed["selected_source_timestamp_tag"] = "DateTimeOriginal"
-        elif parsed.get("CreateDate"):
-            parsed["selected_source_naive_timestamp"] = parsed.get("CreateDate")
-            parsed["selected_source_timestamp_tag"] = "CreateDate"
-        elif parsed.get("ModifyDate"):
-            parsed["selected_source_naive_timestamp"] = parsed.get("ModifyDate")
-            parsed["selected_source_timestamp_tag"] = "ModifyDate"
-        else:
-            parsed["selected_source_naive_timestamp"] = None
-            parsed["selected_source_timestamp_tag"] = None
+        # Timestamp provenance: the first field holding a valid time, not merely the first present.
+        tag, value = recorded_time(parsed)
+        parsed["selected_source_naive_timestamp"] = value
+        parsed["selected_source_timestamp_tag"] = tag
 
         return parsed
 

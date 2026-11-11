@@ -979,8 +979,8 @@ uncorrected, with no timezone.
 :aliases: prep-timestamp-priority-1
 :uses: DEF-recorded_time
 
-A file's recorded time SHALL be read from the first of its `DateTimeOriginal`, `CreateDate` and `ModifyDate` that is
-present.
+A file's recorded time SHALL be read from the first of its `DateTimeOriginal`, `CreateDate` and `ModifyDate` that
+holds a valid time; a field present but holding none is passed over.
 :::
 
 :::{def} A timestamp name

@@ -258,7 +258,7 @@
 7.5	5. files with unknown/invalid fingerprints are not grouped as duplicates (Section 11.3).	defer:11.3	
 7.6	### 7.6 Stage 5 — Chronological organization	dropped	a heading; the corpus's documents carry their own
 7.6	Every mutable-side file still in `0-sources` after Stages 2–4 (not quarantined, not set aside as a redundant JPEG) is handled by its class and timestamp.	RUL-photos_by_date RUL-videos_by_date RUL-untimed_to_missing_metadata RUL-inbox_non_media_to_strays	
-7.6	The timestamp is read passively from cached metadata in priority order:	RUL-recorded_time_order	
+7.6	The timestamp is read passively from cached metadata: the first of these fields, in priority order, that holds a valid time — a field present but holding none (such as `0000:00:00 00:00:00`) is passed over:	RUL-recorded_time_order	
 7.6	```text [sha1:ae68f2e2, 1 lines]	RUL-recorded_time_order	
 7.6	Routing:	dropped	the routing table's lead-in; its rows are placed below
 7.6	```text [sha1:5d014076, 4 lines]	RUL-photos_by_date RUL-videos_by_date RUL-untimed_to_missing_metadata RUL-inbox_non_media_to_strays	
