@@ -495,7 +495,7 @@ def test_prep_execute_cache_writes_only_from_main_thread(mock_meta, tmp_path, mo
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("prep-handoff-min-contents-1")
+@pytest.mark.spec("prep-handoff-min-contents-1", "BLD-handoff_content", test="TST-idempotency_cache-handoff_manifest_generated")
 def test_handoff_manifest_generated(mock_meta, tmp_path, monkeypatch):
     ws = setup_workspace(tmp_path)
 

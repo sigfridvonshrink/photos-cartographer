@@ -173,7 +173,7 @@ def test_nonconforming_name_is_ignored_timestamp_comes_from_metadata(tmp_path, m
     assert "2099" not in entry["prep_path"]                        # the misleading name was not parsed
 
 
-@pytest.mark.spec("prep-log-derived-no-new-authority-1")
+@pytest.mark.spec("prep-log-derived-no-new-authority-1", test="TST-prep_log-prep_log_entries_are_derived_from_the_validated_plan")
 def test_prep_log_entries_are_derived_from_the_validated_plan(tmp_path, monkeypatch):
     """§16.1 item 4: the prep log is DERIVED from the validated plan + journals and introduces no new
     authority — its facts trace back to plan operations. Assert the logged final destination equals a
@@ -290,3 +290,27 @@ def test_every_move_names_where_it_came_from(tmp_path, monkeypatch):
     assert by["provisional_rename"]["from"] == "DSC01234.jpg"
     assert by["moved_to_by_dest"]["from"].startswith("5-photos-by-date/")
     assert by["moved_to_by_dest"]["to"].startswith("6-photos-by-dest/Trip/")
+
+
+@pytest.mark.spec("RUL-log_follows_retaken_fingerprint", "BLD-prep_log_build",
+                  test="TST-prep_log-a_retaken_fingerprint_keeps_the_photos_history")
+def test_a_retaken_fingerprint_keeps_the_photos_history(tmp_path, monkeypatch):
+    """A photo fingerprinted again by another method, its value changed, keeps its history: the entry
+    moves to the new value, with a step saying so — no orphan under the old value, nothing partial."""
+    _install(monkeypatch)
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "t")
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.JPG").write_bytes(b"AAAA")
+    _run(ws)
+    (old,) = _log(ws)["photos"]
+    monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", lambda p: {
+        "status": "valid", "strategy": "image-content-hash-v1",
+        "value": "sig2-" + open(p, "rb").read().hex()[:16], "engine_version": "u"})
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "u")
+    _run(ws)
+    photos = _log(ws)["photos"]
+    (new,) = photos
+    entry = photos[new]
+    assert new != old and entry["content_fingerprint"] == new and "partial" not in entry
+    assert [s["action"] for s in entry["journey"]] == ["organized", "provisional_rename", "fingerprint_retaken"]
+    assert entry["journey"][-1]["from"] == old

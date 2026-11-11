@@ -556,3 +556,57 @@ keeping in step with the first ({need}`RAT-fix_through_inbox`). The old record s
 A quarantine that only grows costs space without a word. Reporting its size every run lets the user decide when to
 prune, knowing what it holds.
 :::
+
+
+## 16. The handoff and prep's log
+
+:::{rat} A record speaks for a finished run
+:id: RAT-record_of_a_finished_run
+:status: seed
+:justifies: RUL-prep_records_on_success
+
+The handoff tells geotag what prep left, and the log what prep did; written by a run that failed partway, either would
+describe a workspace that does not exist. Written only at the end of a run that succeeded, and whole each time, they are
+true of the workspace they stand beside, or absent.
+:::
+
+:::{rat} Geotag reads the handoff, not the photos
+:id: RAT-geotag_reads_the_handoff
+:status: seed
+:justifies: RUL-handoff_describes_workspace
+
+Geotag reads no photo: everything it decides from, it takes from the handoff — which files, where, from which camera,
+with what times and positions. What the handoff leaves out, geotag cannot know; the strays, which nothing processes, are
+left out on purpose.
+:::
+
+:::{rat} The handoff changes when the workspace does
+:id: RAT-handoff_changes_with_workspace
+:status: seed
+:justifies: RUL-handoff_deterministic
+
+Geotag's work depends on the handoff and is made stale when it changes. A run that changed nothing must therefore leave
+its content as it was; the run's own identity and diagnostics, which differ every time, are kept apart, so that only a
+real change — a file filed, sorted or changed — restales geotag.
+:::
+
+:::{rat} The log adds no authority
+:id: RAT-log_adds_no_authority
+:status: seed
+:justifies: RUL-prep_log_derived, RUL-prep_log_records_set_aside
+
+The log is for reading, not deciding: it gathers what prep's own records already say into one account per photo. Made
+from them alone, it can be checked against them and never contradicts them; and a set-aside copy appears beside the
+photo it copies, so the account of that photo is whole.
+:::
+
+:::{rat} A new fingerprint is not a new photo
+:id: RAT-new_fingerprint_same_photo
+:status: seed
+:justifies: RUL-log_follows_retaken_fingerprint
+
+The log follows a photo by its fingerprint. When the method that takes it changes — another ImageMagick — the same
+pixels can come out under a new value. Left as it was, the old entry would point at a photo the workspace no longer
+names, and the photo would start again with no history, marked partial. The file it was left at, now holding the new
+value while the old one is nowhere, says it is the same photo.
+:::
