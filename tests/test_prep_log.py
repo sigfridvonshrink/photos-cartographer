@@ -55,7 +55,7 @@ def _install(monkeypatch):
         for fo in folders:
             for fn in os.listdir(fo):
                 res[os.path.join(fo, fn)] = {"DateTimeOriginal": "2023:01:02 03:04:05",
-                                             "extraction_status": "extracted_ok", "raw_payload": "{}"}
+                                             "extraction_status": "extracted_ok"}
         return res, set()
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", meta)
 
@@ -120,7 +120,7 @@ def test_prep_organizes_by_raw_naive_timestamp_no_tz_or_utc_shift(tmp_path, monk
         for fo in folders:
             for fn in os.listdir(fo):
                 res[os.path.join(fo, fn)] = {"DateTimeOriginal": "2023:03:26 23:45:00",
-                                             "extraction_status": "extracted_ok", "raw_payload": "{}"}
+                                             "extraction_status": "extracted_ok"}
         return res, set()
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", meta)
     ws = _ws(tmp_path)

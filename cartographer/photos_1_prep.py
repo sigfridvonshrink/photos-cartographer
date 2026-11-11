@@ -890,7 +890,7 @@ class PlanExecutor:
 
                         filtered_record = {k: v for k, v in record.items() if k not in ["last_seen_ns", "absolute_path"]}
                         if md_record:
-                            filtered_md = {k: v for k, v in md_record.items() if k not in ["relative_path", "raw_payload"]}
+                            filtered_md = {k: v for k, v in md_record.items() if k != "relative_path"}
                             filtered_record["metadata_status"] = filtered_md
 
                         final_files.append({
@@ -1757,8 +1757,7 @@ class WorkspacePrepWorkflow:
                 "has_timestamp": meta.get("has_timestamp", False),
                 "extraction_status": meta.get("extraction_status", "extracted_ok"),
                 "extraction_error": meta.get("extraction_error", None),
-                "parsed_json": json.dumps({k:v for k,v in meta.items() if k != "raw_payload"}),
-                "raw_payload": meta.get("raw_payload", "{}")
+                "parsed_json": json.dumps(meta),
             }
 
         result["db_file"] = {

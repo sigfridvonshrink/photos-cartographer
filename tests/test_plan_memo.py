@@ -59,7 +59,7 @@ def _install_mocks(monkeypatch, hash_calls):
             for f in os.listdir(folder):
                 res[os.path.join(folder, f)] = {
                     "DateTimeOriginal": "2023:01:02 03:04:05",
-                    "extraction_status": "extracted_ok", "raw_payload": "{}",
+                    "extraction_status": "extracted_ok",
                 }
         return res, set()
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", meta)

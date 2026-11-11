@@ -128,17 +128,9 @@ def test_deterministic_plan_with_jobs(mock_read, mock_popen, workspace):
     def canonicalize(value):
         if isinstance(value, dict):
             # Normalise JSON payloads to avoid string formatting issues
-            if "hash" in value and isinstance(value["hash"], str):
-                try:
-                    value["hash"] = json.dumps(json.loads(value["hash"]), sort_keys=True)
-                except: pass
             if "content_hash" in value and isinstance(value["content_hash"], str):
                 try:
                     value["content_hash"] = json.dumps(json.loads(value["content_hash"]), sort_keys=True)
-                except: pass
-            if "raw_payload" in value and isinstance(value["raw_payload"], str):
-                try:
-                    value["raw_payload"] = json.dumps(json.loads(value["raw_payload"]), sort_keys=True)
                 except: pass
             if "parsed_json" in value and isinstance(value["parsed_json"], str):
                 try:
@@ -434,8 +426,7 @@ def test_stale_dependency_under_concurrency_blocks_execution(mock_read_metadata_
                     "SerialNumber": "12345",
                     "camera_group_key": "12345|Canon|EOS R5",
                     "has_native_gps": False,
-                    "has_timestamp": True,
-                    "raw_payload": "{}"
+                    "has_timestamp": True
                 }
         return res, set()
     mock_read_metadata_concurrently.side_effect = _mock_read_concurrently
@@ -494,8 +485,7 @@ def test_progress_summary_fields(mock_read_metadata_concurrently, mock_hash_imag
                     "SerialNumber": "12345",
                     "camera_group_key": "12345|Canon|EOS R5",
                     "has_native_gps": False,
-                    "has_timestamp": True,
-                    "raw_payload": "{}"
+                    "has_timestamp": True
                 }
         return res, set()
     mock_read_metadata_concurrently.side_effect = _mock_read_concurrently

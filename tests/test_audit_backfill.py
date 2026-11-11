@@ -64,7 +64,7 @@ def _install(monkeypatch, meta_for=None, hash_for=None):
         res = {}
         for folder in folders:
             for f in os.listdir(folder):
-                m = {"extraction_status": "extracted_ok", "raw_payload": "{}"}
+                m = {"extraction_status": "extracted_ok"}
                 if meta_for is not None:
                     m.update(meta_for(f) or {})
                 else:

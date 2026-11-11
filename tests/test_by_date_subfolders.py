@@ -53,7 +53,7 @@ def _mock(monkeypatch, date_for):
         for folder in folders:
             for f in os.listdir(folder):
                 d = date_for(f)
-                rec = {"extraction_status": "extracted_ok", "raw_payload": "{}"}
+                rec = {"extraction_status": "extracted_ok"}
                 if d:
                     rec["DateTimeOriginal"] = d
                 res[os.path.join(folder, f)] = rec

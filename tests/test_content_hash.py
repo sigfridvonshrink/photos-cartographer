@@ -248,7 +248,7 @@ def test_filename_format_is_config_driven(tmp_path, monkeypatch, seed_from_live_
             for f in os.listdir(folder):
                 res[os.path.join(folder, f)] = {
                     "DateTimeOriginal": "2023:03:04 05:06:07",
-                    "extraction_status": "extracted_ok", "raw_payload": "{}",
+                    "extraction_status": "extracted_ok",
                 }
         return res, set()
 
@@ -312,3 +312,26 @@ def test_fingerprint_video_uses_nostdin_and_detaches_stdin(monkeypatch):
     assert res["status"] == "valid" and res["value"] == "deadbeef"
     assert "-nostdin" in seen["cmd"], seen["cmd"]
     assert seen["kw"].get("stdin") == subprocess.DEVNULL, seen["kw"]
+
+
+@requires_exiftool
+@pytest.mark.spec("RUL-metadata_group_order", "BLD-metadata_extraction",
+                  test="TST-content_hash-real_metadata_prefers_exif_then_xmp")
+def test_real_metadata_prefers_exif_then_xmp(tmp_path):
+    """Read by the real exiftool: a time present in both EXIF and XMP is taken from EXIF; a shutter time
+    present only in XMP is taken from there, ahead of EXIF's CreateDate."""
+    folder = tmp_path / "f"
+    folder.mkdir()
+    both, xmp_only = folder / "both.jpg", folder / "xmp_only.jpg"
+    for p in (both, xmp_only):
+        shutil.copy(CAM_SMALL, p)
+    subprocess.run(["exiftool", "-q", "-q", "-overwrite_original", "-XMP:CreateDate=2020:01:01 01:01:01",
+                    "-EXIF:CreateDate=2021:02:02 02:02:02", str(both)], check=True)
+    subprocess.run(["exiftool", "-q", "-q", "-overwrite_original", "-EXIF:DateTimeOriginal=",
+                    "-XMP:DateTimeOriginal=2022:03:03 03:03:03", str(xmp_only)], check=True)
+    md, failed = utils.MetadataReader.read_metadata_concurrently([str(folder)], max_workers=1)
+    assert not failed
+    assert md[str(both)]["CreateDate"] == "2021:02:02 02:02:02"
+    r = md[str(xmp_only)]
+    assert (r["selected_source_timestamp_tag"], r["selected_source_naive_timestamp"]) == \
+        ("XMP:DateTimeOriginal", "2022:03:03 03:03:03")

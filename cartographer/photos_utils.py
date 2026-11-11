@@ -1330,12 +1330,16 @@ def take_zfs_snapshot(ws: str, snapshot_id: str, label: str, *, target_path=None
             pass
     return rec
 
-FIELD_SET_VERSION = 1
+# 2: every field taken from an explicit group order (METADATA_GROUP_ORDER), the group-qualified
+#    XMP:/QuickTime: date fields gone (they were never filled), no raw payload kept.
+FIELD_SET_VERSION = 2
 # 2: a file's recorded time is the first field holding a valid time, not the first present.
 METADATA_SCHEMA_VERSION = 2
 CAMERA_GROUP_KEY_VERSION = 1
 
-EXIFTOOL_METADATA_OPTIONS = ["-json", "-n", "-a"]
+# -G0 names each value's group, so prep — not exiftool's own priority — chooses which group a field is
+# taken from; -a keeps a tag present in several groups once per group.
+EXIFTOOL_METADATA_OPTIONS = ["-json", "-n", "-a", "-G0"]
 EXTRACTION_OPTIONS_FINGERPRINT = hashlib.sha256(json.dumps(EXIFTOOL_METADATA_OPTIONS).encode('utf-8')).hexdigest()
 
 def get_exiftool_version() -> str:
@@ -1731,7 +1735,6 @@ class PersistentExifToolWorker:
         if self.closed:
             raise ProcessCrashedError("Worker closed")
         try:
-            # EXIFTOOL_METADATA_OPTIONS is ["-json", "-n", "-a"]
             # We send them via stdin to the stay_open process
             for opt in EXIFTOOL_METADATA_OPTIONS:
                 self.process.stdin.write(f"{opt}\n")
@@ -1895,6 +1898,44 @@ def parse_naive_time(s):
         return None
 
 
+# The groups a metadata field is taken from, in order: the first group holding the field gives its value
+# (for a time field, the first holding a valid time). EXIF is the camera's own record; XMP is where other
+# tools mirror it, and where a file without EXIF keeps its times; the rest hold what neither does.
+METADATA_GROUP_ORDER = ("EXIF", "XMP", "MakerNotes", "IPTC", "QuickTime", "File")
+# The GPS position is taken first from exiftool's Composite group, which signs it by its hemisphere
+# reference; EXIF holds it unsigned beside a separate reference tag.
+POSITION_FIELDS = ("GPSLatitude", "GPSLongitude", "GPSAltitude", "GPSDateTime")
+
+METADATA_FIELDS = (
+    # times, uncorrected
+    "DateTimeOriginal", "CreateDate", "ModifyDate",
+    "SubSecTimeOriginal", "SubSecCreateDate", "SubSecModifyDate",
+    "OffsetTime", "OffsetTimeOriginal", "OffsetTimeDigitized", "TimeZone",
+    "DateCreated", "TrackCreateDate", "TrackModifyDate", "MediaCreateDate", "MediaModifyDate",
+    # camera identity
+    "Make", "Model", "UniqueCameraModel", "BodySerialNumber", "CameraSerialNumber",
+    "InternalSerialNumber", "SerialNumber", "OwnerName", "LensModel", "LensSerialNumber",
+    # native GPS, uncorrected
+    "GPSLatitude", "GPSLatitudeRef", "GPSLongitude", "GPSLongitudeRef", "GPSAltitude", "GPSAltitudeRef",
+    "GPSDateStamp", "GPSTimeStamp", "GPSDateTime", "GPSProcessingMethod",
+    # media facts
+    "ImageWidth", "ImageHeight", "Orientation", "Rotation", "Duration",
+)
+
+
+def metadata_field(item, field, valid=None):
+    """`(group, value)` of `field` in a group-qualified exiftool record: from the first group of its order
+    holding it — with `valid`, the first whose value passes it, else the first holding any — or
+    `(None, None)`."""
+    groups = (("Composite",) if field in POSITION_FIELDS else ()) + METADATA_GROUP_ORDER
+    held = [(g, item[f"{g}:{field}"]) for g in groups if item.get(f"{g}:{field}") is not None]
+    if valid is not None:
+        for g, v in held:
+            if valid(v):
+                return g, v
+    return held[0] if held else (None, None)
+
+
 def recorded_time(parsed):
     """A file's recorded time: `(tag, value)` of the first of RECORDED_TIME_TAGS whose value holds a valid
     time, or `(None, None)`."""
@@ -1915,66 +1956,13 @@ class MetadataReader:
     # it was removed. _parse_exiftool_item (shared with the live worker) stays.
     @staticmethod
     def _parse_exiftool_item(item: Dict[str, Any]) -> Dict[str, Any]:
-        parsed = {
-            # Core timestamp fields
-            "DateTimeOriginal": item.get("DateTimeOriginal"),
-            "CreateDate": item.get("CreateDate"),
-            "ModifyDate": item.get("ModifyDate"),
-
-            # Timestamp sub-seconds and offsets
-            "SubSecTimeOriginal": item.get("SubSecTimeOriginal"),
-            "SubSecCreateDate": item.get("SubSecCreateDate"),
-            "SubSecModifyDate": item.get("SubSecModifyDate"),
-            "OffsetTime": item.get("OffsetTime"),
-            "OffsetTimeOriginal": item.get("OffsetTimeOriginal"),
-            "OffsetTimeDigitized": item.get("OffsetTimeDigitized"),
-            "TimeZone": item.get("TimeZone"),
-
-            # XMP / QuickTime timestamps
-            "XMP:CreateDate": item.get("XMP:CreateDate"),
-            "XMP:ModifyDate": item.get("XMP:ModifyDate"),
-            "DateCreated": item.get("DateCreated"),
-            "QuickTime:CreateDate": item.get("QuickTime:CreateDate"),
-            "QuickTime:ModifyDate": item.get("QuickTime:ModifyDate"),
-            "TrackCreateDate": item.get("TrackCreateDate"),
-            "TrackModifyDate": item.get("TrackModifyDate"),
-            "MediaCreateDate": item.get("MediaCreateDate"),
-            "MediaModifyDate": item.get("MediaModifyDate"),
-
-            # Camera identity fields
-            "Make": item.get("Make"),
-            "Model": item.get("Model"),
-            "UniqueCameraModel": item.get("UniqueCameraModel"),
-            "BodySerialNumber": item.get("BodySerialNumber"),
-            "CameraSerialNumber": item.get("CameraSerialNumber"),
-            "InternalSerialNumber": item.get("InternalSerialNumber"),
-            "SerialNumber": item.get("SerialNumber"),
-            "OwnerName": item.get("OwnerName"),
-            "LensModel": item.get("LensModel"),
-            "LensSerialNumber": item.get("LensSerialNumber"),
-
-            # GPS fields
-            "GPSLatitude": item.get("GPSLatitude"),
-            "GPSLatitudeRef": item.get("GPSLatitudeRef"),
-            "GPSLongitude": item.get("GPSLongitude"),
-            "GPSLongitudeRef": item.get("GPSLongitudeRef"),
-            "GPSAltitude": item.get("GPSAltitude"),
-            "GPSAltitudeRef": item.get("GPSAltitudeRef"),
-            "GPSDateStamp": item.get("GPSDateStamp"),
-            "GPSTimeStamp": item.get("GPSTimeStamp"),
-            "GPSDateTime": item.get("GPSDateTime"),
-            "GPSProcessingMethod": item.get("GPSProcessingMethod"),
-
-            # Dimensions
-            "ImageWidth": item.get("ImageWidth"),
-            "ImageHeight": item.get("ImageHeight"),
-            "Orientation": item.get("Orientation"),
-            "Rotation": item.get("Rotation"),
-            "Duration": item.get("Duration"),
-
-            # Full raw payload (needed by spec for preservation)
-            "raw_payload": json.dumps(item)
-        }
+        """The fields prep keeps of a file, from exiftool's group-qualified record: each from the first
+        group of its order (`metadata_field`), a time field from the first holding a valid time — the same
+        field in the next group before the next field (prep §12)."""
+        parsed, groups = {}, {}
+        for field in METADATA_FIELDS:
+            valid = (lambda v: parse_naive_time(v) is not None) if field in RECORDED_TIME_TAGS else None
+            groups[field], parsed[field] = metadata_field(item, field, valid)
 
         # Build group_key for camera identity grouping based on standard elements
         ident_parts = []
@@ -1995,10 +1983,11 @@ class MetadataReader:
         parsed["has_native_gps"] = bool(parsed.get("GPSLatitude") is not None and parsed.get("GPSLongitude") is not None)
         parsed["has_timestamp"] = recorded_time(parsed)[0] is not None
 
-        # Timestamp provenance: the first field holding a valid time, not merely the first present.
+        # Timestamp provenance: the first field holding a valid time, not merely the first present, named
+        # with the group it was taken from.
         tag, value = recorded_time(parsed)
         parsed["selected_source_naive_timestamp"] = value
-        parsed["selected_source_timestamp_tag"] = tag
+        parsed["selected_source_timestamp_tag"] = f"{groups[tag]}:{tag}" if tag else None
 
         return parsed
 
@@ -2161,7 +2150,7 @@ class ProgressCoordinator:
 # table, the journal, and the handoff depends_on so a stale/foreign cache or journal is
 # detectable downstream (prep Section 5). The per-hash engine binding (e.g. ImageMagick
 # version) is carried separately in each content hash's engine_version.
-CACHE_SCHEMA_VERSION = 2   # 2: file_cache without the byte-hash column
+CACHE_SCHEMA_VERSION = 3   # 2: file_cache without the byte-hash column; 3: metadata_cache without the raw payload
 FINGERPRINT_ALGORITHM_VERSION = "1"
 
 
@@ -2500,7 +2489,6 @@ class WorkspaceCache:
                     has_native_gps INTEGER,
                     has_timestamp INTEGER,
                     parsed_json TEXT,
-                    raw_payload TEXT,
                     extraction_status TEXT,
                     extraction_error TEXT,
                     FOREIGN KEY(relative_path) REFERENCES file_cache(relative_path) ON DELETE CASCADE
@@ -2645,7 +2633,6 @@ class WorkspaceCache:
                     "has_native_gps": 1 if md.get("has_native_gps") else 0,
                     "has_timestamp": 1 if md.get("has_timestamp") else 0,
                     "parsed_json": md.get("parsed_json", "{}"),
-                    "raw_payload": md.get("raw_payload", "{}"),
                     "extraction_status": md.get("extraction_status", "extracted_ok"),
                     "extraction_error": md.get("extraction_error", None)
                 }
@@ -2654,13 +2641,13 @@ class WorkspaceCache:
                         relative_path, size, mtime_ns, content_hash, extractor,
                         extractor_version, field_set_version, extraction_options_fingerprint,
                         metadata_schema_version, camera_group_key_version,
-                        camera_group_key, has_native_gps, has_timestamp, parsed_json, raw_payload,
+                        camera_group_key, has_native_gps, has_timestamp, parsed_json,
                         extraction_status, extraction_error
                     ) VALUES (
                         :relative_path, :size, :mtime_ns, :content_hash, :extractor,
                         :extractor_version, :field_set_version, :extraction_options_fingerprint,
                         :metadata_schema_version, :camera_group_key_version,
-                        :camera_group_key, :has_native_gps, :has_timestamp, :parsed_json, :raw_payload,
+                        :camera_group_key, :has_native_gps, :has_timestamp, :parsed_json,
                         :extraction_status, :extraction_error
                     )
                     ON CONFLICT(relative_path) DO UPDATE SET
@@ -2677,7 +2664,6 @@ class WorkspaceCache:
                         has_native_gps = excluded.has_native_gps,
                         has_timestamp = excluded.has_timestamp,
                         parsed_json = excluded.parsed_json,
-                        raw_payload = excluded.raw_payload,
                         extraction_status = excluded.extraction_status,
                         extraction_error = excluded.extraction_error
                 """, md_row)

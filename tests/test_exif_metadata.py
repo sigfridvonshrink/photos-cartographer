@@ -77,8 +77,7 @@ def create_mock_metadata_reader(monkeypatch):
                     "GPSLongitude": -90.0,
                     "camera_group_key": "12345|Canon|EOS R5",
                     "has_native_gps": True,
-                    "has_timestamp": True,
-                    "raw_payload": "{}"
+                    "has_timestamp": True
                 }
             if "vacation" in folder:
                 res[os.path.join(folder, "2023-01-02--12-00-00.jpg")] = {
@@ -90,8 +89,7 @@ def create_mock_metadata_reader(monkeypatch):
                     "GPSLongitude": -90.0,
                     "camera_group_key": "12345|Canon|EOS R5",
                     "has_native_gps": True,
-                    "has_timestamp": True,
-                    "raw_payload": "{}"
+                    "has_timestamp": True
                 }
         return res, set()
 
@@ -137,12 +135,12 @@ def test_metadata_cache_creation_and_staleness(workspace, monkeypatch):
     # Change FIELD_SET_VERSION to simulate stale metadata and expect a refresh
     # photos-1-prep does an inline import `from photos_utils import FIELD_SET_VERSION`, so we must patch the module.
     import photos_utils as utils
-    monkeypatch.setattr(utils, "FIELD_SET_VERSION", 2)
+    monkeypatch.setattr(utils, "FIELD_SET_VERSION", utils.FIELD_SET_VERSION + 1)
     # Replan without modifying the file (should still trigger metadata scan due to version mismatch)
 
     # Actually mock read to return updated metadata
     def mock_read_updated(folders, max_workers=4, progress_coordinator=None):
-         return { upsert_fx["data"]["absolute_path"]: { "DateTimeOriginal": "2023:01:01 12:00:00", "Make": "Canon", "Model": "EOS R5", "SerialNumber": "12345", "camera_group_key": "12345|Canon|EOS R5", "has_native_gps": False, "has_timestamp": True, "raw_payload": "{}" } }, set()
+         return { upsert_fx["data"]["absolute_path"]: { "DateTimeOriginal": "2023:01:01 12:00:00", "Make": "Canon", "Model": "EOS R5", "SerialNumber": "12345", "camera_group_key": "12345|Canon|EOS R5", "has_native_gps": False, "has_timestamp": True } }, set()
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_updated)
 
@@ -152,9 +150,9 @@ def test_metadata_cache_creation_and_staleness(workspace, monkeypatch):
     assert len(db_upserts2) > 0
     upsert_fx2 = [fx for fx in db_upserts2[0].database_effects_after_verification if fx["action"] == "upsert"][0]
     assert upsert_fx2["data"]["metadata"]["has_native_gps"] is False
-    assert upsert_fx2["data"]["metadata"]["field_set_version"] == 2
+    assert upsert_fx2["data"]["metadata"]["field_set_version"] == utils.FIELD_SET_VERSION
 
-@pytest.mark.spec("prep-passive-grouping-facts-1")
+@pytest.mark.spec("prep-passive-grouping-facts-1", "BLD-handoff_grouping_facts", test="TST-exif_metadata-handoff_manifest_enrichment")
 def test_handoff_manifest_enrichment(workspace, monkeypatch):
     create_mock_metadata_reader(monkeypatch)
 
@@ -209,7 +207,7 @@ def test_handoff_manifest_enrichment(workspace, monkeypatch):
     assert df["cache_freshness"]["metadata_extracted_ok"] == 1
 
 
-@pytest.mark.spec("prep-metadata-freshness-inputs-1")
+@pytest.mark.spec("prep-metadata-freshness-inputs-1", test="TST-exif_metadata-metadata_extractor_version_refreshes")
 def test_metadata_extractor_version_refreshes(workspace, monkeypatch):
     create_mock_metadata_reader(monkeypatch)
 
@@ -296,17 +294,17 @@ def test_a_database_of_another_schema_stops_prep(workspace):
 @pytest.mark.spec("prep-timestamp-priority-1", "RUL-recorded_time_order", test="TST-exif_metadata-parse_exiftool_item_timestamp_source_fallback")
 def test_parse_exiftool_item_timestamp_source_fallback():
     """selected_source_naive_timestamp prefers DateTimeOriginal, then CreateDate, then ModifyDate,
-    else None (photos_utils Section 8)."""
+    else None; its provenance names the group it came from."""
     import photos_utils as utils
     parse = utils.MetadataReader._parse_exiftool_item
-    r = parse({"DateTimeOriginal": "2020:01:01 00:00:00", "CreateDate": "2019:09:09 09:09:09"})
-    assert r["selected_source_timestamp_tag"] == "DateTimeOriginal"
+    r = parse({"EXIF:DateTimeOriginal": "2020:01:01 00:00:00", "EXIF:CreateDate": "2019:09:09 09:09:09"})
+    assert r["selected_source_timestamp_tag"] == "EXIF:DateTimeOriginal"
     assert r["selected_source_naive_timestamp"] == "2020:01:01 00:00:00"
-    r = parse({"CreateDate": "2019:09:09 09:09:09"})                     # no DTO -> CreateDate
-    assert r["selected_source_timestamp_tag"] == "CreateDate"
+    r = parse({"EXIF:CreateDate": "2019:09:09 09:09:09"})                # no DTO -> CreateDate
+    assert r["selected_source_timestamp_tag"] == "EXIF:CreateDate"
     assert r["selected_source_naive_timestamp"] == "2019:09:09 09:09:09"
-    r = parse({"ModifyDate": "2018:08:08 08:08:08"})                     # only ModifyDate
-    assert r["selected_source_timestamp_tag"] == "ModifyDate"
+    r = parse({"QuickTime:ModifyDate": "2018:08:08 08:08:08"})           # only ModifyDate
+    assert r["selected_source_timestamp_tag"] == "QuickTime:ModifyDate"
     assert r["selected_source_naive_timestamp"] == "2018:08:08 08:08:08"
     r = parse({})                                                        # no timestamp at all
     assert r["selected_source_naive_timestamp"] is None
@@ -318,8 +316,28 @@ def test_a_placeholder_time_does_not_hide_a_valid_one():
     fields all hold none has no recorded time."""
     import photos_utils as utils
     parse = utils.MetadataReader._parse_exiftool_item
-    r = parse({"DateTimeOriginal": "0000:00:00 00:00:00", "CreateDate": "2019:09:09 09:09:09"})
-    assert (r["selected_source_timestamp_tag"], r["selected_source_naive_timestamp"]) == ("CreateDate", "2019:09:09 09:09:09")
+    r = parse({"EXIF:DateTimeOriginal": "0000:00:00 00:00:00", "EXIF:CreateDate": "2019:09:09 09:09:09"})
+    assert (r["selected_source_timestamp_tag"], r["selected_source_naive_timestamp"]) == ("EXIF:CreateDate", "2019:09:09 09:09:09")
     assert r["has_timestamp"] is True
-    r = parse({"DateTimeOriginal": "    :  :     :  :  ", "ModifyDate": "garbage"})
+    r = parse({"EXIF:DateTimeOriginal": "    :  :     :  :  ", "EXIF:ModifyDate": "garbage"})
     assert r["selected_source_naive_timestamp"] is None and r["has_timestamp"] is False
+
+
+@pytest.mark.spec("RUL-metadata_group_order", "BLD-metadata_extraction",
+                  test="TST-exif_metadata-a_field_is_taken_from_exif_then_xmp")
+def test_a_field_is_taken_from_exif_then_xmp():
+    """Each field is taken from EXIF when EXIF holds it, else from XMP; a time field missing or holding no
+    valid time in EXIF is taken from the same field in XMP before the next field is tried. The GPS
+    position is taken signed, from exiftool's Composite group."""
+    import photos_utils as utils
+    parse = utils.MetadataReader._parse_exiftool_item
+    r = parse({"XMP:CreateDate": "2020:01:01 01:01:01", "EXIF:CreateDate": "2021:02:02 02:02:02",
+               "XMP:Make": "XmpMake", "EXIF:Make": "ExifMake", "XMP:Model": "OnlyXmp"})
+    assert (r["CreateDate"], r["Make"], r["Model"]) == ("2021:02:02 02:02:02", "ExifMake", "OnlyXmp")
+    r = parse({"EXIF:DateTimeOriginal": "0000:00:00 00:00:00", "XMP:DateTimeOriginal": "2022:03:03 03:03:03",
+               "EXIF:CreateDate": "2019:09:09 09:09:09"})
+    assert (r["selected_source_timestamp_tag"], r["selected_source_naive_timestamp"]) == \
+        ("XMP:DateTimeOriginal", "2022:03:03 03:03:03")
+    r = parse({"EXIF:GPSLatitude": 33.5, "EXIF:GPSLatitudeRef": "S", "Composite:GPSLatitude": -33.5,
+               "EXIF:GPSLongitude": 70.1, "Composite:GPSLongitude": -70.1})
+    assert (r["GPSLatitude"], r["GPSLongitude"], r["GPSLatitudeRef"]) == (-33.5, -70.1, "S")

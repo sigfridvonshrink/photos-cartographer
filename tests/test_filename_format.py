@@ -51,7 +51,7 @@ def mocks(monkeypatch):
         res = {}
         for folder in folders:
             for f in os.listdir(folder):
-                md = {"extraction_status": "extracted_ok", "raw_payload": "{}"}
+                md = {"extraction_status": "extracted_ok"}
                 if "notime" not in f:
                     md["DateTimeOriginal"] = TIME
                 res[os.path.join(folder, f)] = md
