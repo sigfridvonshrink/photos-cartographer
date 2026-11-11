@@ -245,7 +245,7 @@ when its strategy does.
 
 :::{bld} The move is matched on size, time and name
 :id: BLD-move_match
-:status: seed
+:status: ruled
 :realises: RUL-move_recognized, RUL-memo_proves_no_move
 
 Prep's plan SHALL match, before laying the plan memo under the database, the rows of the workspace database whose path
@@ -255,7 +255,7 @@ and exact basename; a triple held by more than one row or more than one file mat
 
 :::{bld} A recognized move is a database write
 :id: BLD-carried_row
-:status: seed
+:status: ruled
 :realises: RUL-moved_file_carried
 :aliases: prep-move-recognition-before-ghost-1
 
@@ -266,7 +266,7 @@ ghost prunes; an unmatched or stale row is a ghost, and its file is read as new.
 
 :::{bld} A planned move carries its row
 :id: BLD-move_row_effects
-:status: seed
+:status: ruled
 :realises: RUL-reuse_valid_work, RUL-database_matches_files, RUL-quarantined_leaves_database
 :aliases: prep-fingerprint-carry-forward-move-1, prep-move-row-carries-facts-1, prep-cache-update-from-validated-plan-1
 
@@ -277,7 +277,7 @@ the operation succeeds.
 
 :::{bld} The plan memo is `photos-00-plan-memo.db`
 :id: BLD-plan_memo
-:status: seed
+:status: ruled
 :realises: RUL-plan_memo_kept, RUL-database_over_memo, RUL-memo_entry_same_tests, RUL-memo_never_changes_plan, RUL-memo_tracks_workspace
 
 The plan memo SHALL be the SQLite file `photos-00-plan-memo.db` in `.photos-ingest/`, one row per path with its size,

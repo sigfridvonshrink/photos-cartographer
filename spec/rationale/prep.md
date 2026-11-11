@@ -315,7 +315,7 @@ workspace is the remedy.
 
 :::{rat} Sorting costs no reading
 :id: RAT-sort_costs_no_reading
-:status: seed
+:status: ruled
 :justifies: RUL-move_recognized
 
 Sorting photos into destinations is the user's own work, done between runs, and prep must plan again after it. Were each
@@ -326,7 +326,7 @@ does not guess, and reads the file as new.
 
 :::{rat} A move launders no stale row
 :id: RAT-move_launders_nothing
-:status: seed
+:status: ruled
 :justifies: RUL-moved_file_carried
 
 A move changes where a file is, not what it is, so what prep knows of it still holds — but only as far as it held before
@@ -336,7 +336,7 @@ under the new path what the old path would have refreshed.
 
 :::{rat} Quarantine is outside the record
 :id: RAT-quarantine_outside_record
-:status: seed
+:status: ruled
 :justifies: RUL-quarantined_leaves_database
 
 A quarantined file is a copy set aside, not part of the workspace the later phases work on; its manifest records why it
@@ -346,7 +346,7 @@ was set aside. Kept in the database, it would be listed in the handoff among the
 
 :::{rat} A plan never executed loses nothing it read
 :id: RAT-plan_keeps_its_reading
-:status: seed
+:status: ruled
 :justifies: RUL-plan_memo_kept, RUL-memo_tracks_workspace
 
 Decoding photos is most of a plan's cost — hours on a large library — and the user often plans again before executing:
@@ -357,7 +357,7 @@ workspace.
 
 :::{rat} The memo is an observation, not a record
 :id: RAT-memo_is_observation
-:status: seed
+:status: ruled
 :justifies: RUL-database_over_memo, RUL-memo_entry_same_tests, RUL-memo_proves_no_move, RUL-memo_never_changes_plan
 
 A memo entry says only that a file at a path read so; the database says what prep's executions left. So the database
