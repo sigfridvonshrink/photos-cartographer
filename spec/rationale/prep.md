@@ -39,7 +39,7 @@ own, out of the sort.
 
 :::{rat} The first gesture bootstraps the workspace
 :id: RAT-bootstrap_once
-:status: seed
+:status: ruled
 :justifies: RUL-init_moves_dump_to_inbox
 
 Dropping a dump into a bare folder is the most natural first gesture, so the first run takes it as it comes: it builds
@@ -49,7 +49,7 @@ meaning — a trip, a day, a card. Afterwards the workspace has an inbox, and th
 
 :::{rat} The structure's names are reserved
 :id: RAT-structure_names_reserved
-:status: seed
+:status: ruled
 :justifies: RUL-dump_folder_named_as_managed
 
 A managed folder's name is reserved for the structure. Moving a folder of that name into the inbox would nest a managed
@@ -58,7 +58,7 @@ folder inside another, where nothing would look for it, and leave its place to b
 
 :::{rat} The mark means the workspace is whole
 :id: RAT-mark_means_whole
-:status: seed
+:status: ruled
 :justifies: RUL-initialized_marked_last
 
 The mark says the workspace is whole. Written before the folders, a run that died halfway would leave a workspace marked
@@ -68,7 +68,7 @@ and the next simply initializes again.
 
 :::{rat} A stray is not the pipeline's to answer for
 :id: RAT-strays_not_the_pipelines
-:status: seed
+:status: ruled
 :justifies: RUL-strays_leave_no_trace
 
 A stray is a file cartographer does not understand — a document, a sidecar it has no use for. Recorded beside the media,

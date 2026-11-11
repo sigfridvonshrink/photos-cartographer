@@ -46,7 +46,7 @@ Prep SHALL put each video it takes in that has a recorded time into videos by da
 
 :::{rul} Initializing, prep moves the dump into the inbox
 :id: RUL-init_moves_dump_to_inbox
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :aliases: prep-init-moves-base-into-sources-1, prep-init-excludes-managed-from-move-1
@@ -58,7 +58,7 @@ records' place — files and whole folders alike, their structure kept — into 
 
 :::{rul} A dump folder named as a managed folder is that folder
 :id: RUL-dump_folder_named_as_managed
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: prep-reserved-names-not-moved-1
@@ -70,7 +70,7 @@ it into the inbox.
 
 :::{rul} A workspace is marked initialized last
 :id: RUL-initialized_marked_last
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :aliases: prep-sentinel-written-last-1
@@ -82,7 +82,7 @@ control records' place in it.
 
 :::{rul} An interrupted initialization is taken up again
 :id: RUL-init_taken_up_again
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: prep-crash-init-reenters-harmlessly-1
@@ -94,7 +94,7 @@ already did: the folders it made, and the dump already in the inbox.
 
 :::{rul} A stray leaves no trace but its move
 :id: RUL-strays_leave_no_trace
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
