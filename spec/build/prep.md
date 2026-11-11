@@ -130,7 +130,7 @@ so that prep's next execute rewrites both.
 
 :::{bld} The sidecars prep refuses
 :id: BLD-sidecar_extensions
-:status: seed
+:status: ruled
 :realises: RUL-sidecar_blocks
 
 The editing sidecars SHALL be the files ending `.xmp`, `.dop` or `.pp3`, matched ignoring case — a fixed list, not
@@ -139,7 +139,7 @@ configuration.
 
 :::{bld} One probe per stray extension
 :id: BLD-stray_media_probe
-:status: seed
+:status: ruled
 :realises: RUL-stray_media_hinted
 
 Prep's plan SHALL ask exiftool the `MIMEType` of one file for each distinct extension among the inbox's files of no
@@ -148,7 +148,7 @@ media class, and warn for each whose type is `image/*` or `video/*`; with exifto
 
 :::{bld} A plan holding a blocker is refused
 :id: BLD-blocked_plan_refused
-:status: seed
+:status: ruled
 :realises: RUL-band_misplacement_blocks, RUL-sidecar_blocks, RUL-other_outside_inbox_blocks, RUL-blockers_all_reported
 
 Prep's dry-run and execute SHALL refuse, before any change, a plan whose `blockers` list — where planning records every

@@ -203,7 +203,7 @@ extension nobody listed is safest set aside, recoverably, rather than guessed at
 
 :::{rat} Case says nothing about a format
 :id: RAT-case_says_nothing
-:status: seed
+:status: ruled
 :justifies: RUL-extension_matched_ignoring_case
 
 One camera writes `JPG`, another `jpg`, and a file copied through another system may come back either way; the format
@@ -1033,7 +1033,7 @@ explained. Checking keeps every change explainable and the user its author.
 
 :::{rat} A folder's name is a place on disk
 :id: RAT-folder_names_are_places
-:status: seed
+:status: ruled
 :justifies: RUL-checked_folder_names
 
 Each managed folder's name becomes a folder at the workspace's top level. A name holding a separator would put it inside
@@ -1043,7 +1043,7 @@ and the control records' or the quarantine's name would mix media with the recor
 
 :::{rat} A list entry that cannot match sets photos aside unseen
 :id: RAT-extension_entries_must_match
-:status: seed
+:status: ruled
 :justifies: RUL-checked_extension_lists
 
 A file's extension is matched lowercase and without its dot, so an entry written otherwise matches nothing, and every
