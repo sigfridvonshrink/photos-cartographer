@@ -964,7 +964,7 @@ unknown otherwise.
 
 :::{def} A recorded time
 :id: DEF-recorded_time
-:status: seed
+:status: ruled
 :uses: DEF-prep
 
 A file's **recorded time** is the time of its making that its own metadata holds, as the camera's clock read it:
@@ -973,7 +973,7 @@ uncorrected, with no timezone.
 
 :::{rul} Which field is the recorded time
 :id: RUL-recorded_time_order
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: prep-timestamp-priority-1

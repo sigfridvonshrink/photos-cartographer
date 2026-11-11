@@ -167,7 +167,7 @@ extension.
 
 :::{rul} A dump keeps its folders in the inbox
 :id: RUL-inbox_kept_as_dumped
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -180,7 +180,7 @@ leaves the inbox.
 
 :::{rul} A filed media file stays in its folder
 :id: RUL-filed_file_stays
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -193,7 +193,7 @@ dated file outside its day folder.
 
 :::{rul} A dated file lies in its day folder
 :id: RUL-by_date_in_day_folder
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: prep-day-subfolder-grouping-1, prep-relocate-misfiled-bydate-1
@@ -205,7 +205,7 @@ band; prep moves one that does not into it — or, with no recorded time, into m
 
 :::{rul} Prep puts photos by date
 :id: RUL-photos_by_date
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: prep-route-by-class-timestamp-1
@@ -216,7 +216,7 @@ Prep SHALL put each photo it takes in that has a recorded time into photos by da
 
 :::{rul} Media with no recorded time goes to missing metadata
 :id: RUL-untimed_to_missing_metadata
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: prep-missing-metadata-flat-1
@@ -228,7 +228,7 @@ under its untimed name.
 
 :::{rul} Non-media leaves the inbox for the strays folder, as it came
 :id: RUL-inbox_non_media_to_strays
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :uses: DEF-strays_folder, DEF-managed_folders
@@ -239,7 +239,7 @@ under the inbox and with its name unchanged.
 
 :::{rul} A file in missing metadata stays there
 :id: RUL-missing_metadata_stays
-:status: seed
+:status: ruled
 :criticality: low
 :anti: yes
 :verify: required
@@ -252,7 +252,7 @@ moving it back into the inbox takes it through prep again.
 
 :::{rul} A media file's extension is lowercase
 :id: RUL-media_extension_lowercase
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :aliases: prep-normalize-extension-case-1
@@ -263,7 +263,7 @@ Each media file prep files, or finds outside the inbox, SHALL end with its exten
 
 :::{rul} A duplicate is set aside as it was found
 :id: RUL-duplicate_set_aside_as_found
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -275,7 +275,7 @@ moving or renaming it first.
 
 :::{rul} A JPEG beside its RAW is set aside
 :id: RUL-redundant_jpeg_set_aside
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: prep-separate-redundant-jpeg-1
@@ -287,7 +287,7 @@ raw file — and no other file with it.
 
 :::{rul} Of identical media, one copy is kept
 :id: RUL-duplicates_quarantined
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :aliases: prep-quarantine-extra-copies-1, prep-group-by-fingerprint-class-1
@@ -299,7 +299,7 @@ every other copy outside photos by destination.
 
 :::{rul} The copy kept is the best filed
 :id: RUL-copy_kept_by_folder
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: prep-retain-by-folder-priority-1
@@ -313,7 +313,7 @@ folder, the first by path.
 
 :::{rul} The workspace database matches the files
 :id: RUL-database_matches_files
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: prep-cache-upsert-stale-1, prep-ghost-prune-1

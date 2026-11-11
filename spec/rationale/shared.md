@@ -387,7 +387,7 @@ unknown and geotag asks.
 
 :::{rat} The shutter's time first
 :id: RAT-shutter_time_first
-:status: seed
+:status: ruled
 :justifies: RUL-recorded_time_order
 
 `DateTimeOriginal` is the moment the shutter fired. `CreateDate` is when the file was written, the same moment for a
