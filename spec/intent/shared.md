@@ -1084,7 +1084,7 @@ mark that says so.
 
 :::{rul} The untimed mark is taken once
 :id: RUL-untimed_mark_once
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :uses: DEF-untimed_name
