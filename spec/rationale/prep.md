@@ -616,7 +616,7 @@ value while the old one is nowhere, says it is the same photo.
 
 :::{rat} Speed is the machine's, the plan is the workspace's
 :id: RAT-speed_is_the_machines
-:status: seed
+:status: ruled
 :justifies: RUL-jobs_change_nothing, RUL-jobs_recorded_nowhere
 
 Running fingerprints and metadata reads in parallel only saves time; how many at once depends on the machine, which may
@@ -627,7 +627,7 @@ nowhere.
 
 :::{rat} A crash is not a verdict
 :id: RAT-crash_not_a_verdict
-:status: seed
+:status: ruled
 :justifies: RUL-tool_failure_retried
 
 A long-lived tool process can die for reasons that have nothing to do with the file it was reading. Restarted and tried
@@ -637,7 +637,7 @@ read.
 
 :::{rat} The costly step is shown
 :id: RAT-costly_step_shown
-:status: seed
+:status: ruled
 :justifies: RUL-rehash_explained
 
 Fingerprinting again is the costliest thing a plan does, and the reasons for it — a new tool version, a move prep could
