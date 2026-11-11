@@ -80,7 +80,7 @@ def mock_read_metadata_concurrently(folders, max_workers=4, progress_coordinator
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
 @pytest.mark.spec("idem-no-op-run-1", "prep-by-dest-readonly-1", "prep-no-requarantine-1", "prep-report-no-op-facts-1", "prep-reuse-cache-unchanged-1", "prep-second-run-zero-mutations-1", "prep-tolerate-populated-folders-1", "prep-unchanged-no-op-1", "RUL-no_op_run_reports_reuse", test="TST-idempotency_cache-prep_idempotency_and_by_dest_accounting")
-def test_prep_idempotency_and_by_dest_accounting(mock_meta, tmp_path):
+def test_prep_idempotency_and_by_dest_accounting(mock_meta, tmp_path, monkeypatch):
     ws = setup_workspace(tmp_path)
 
     # Inject mock hasher so we have valid content_hash values
@@ -90,7 +90,7 @@ def test_prep_idempotency_and_by_dest_accounting(mock_meta, tmp_path):
             v = hashlib.sha256(f.read()).hexdigest()
         return {"status": "valid", "strategy": "sha256-v1", "value": v}
 
-    photos_ingest.ContentHasher.fingerprint_image = mock_hash_image
+    monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image", mock_hash_image)
     photos_ingest.CONFIG["jobs"] = 1
 
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
@@ -139,7 +139,7 @@ def test_prep_idempotency_and_by_dest_accounting(mock_meta, tmp_path):
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
 @pytest.mark.spec("prep-cache-update-from-validated-plan-1")
-def test_cache_rows_written_during_execution_not_planning(mock_meta, tmp_path):
+def test_cache_rows_written_during_execution_not_planning(mock_meta, tmp_path, monkeypatch):
     """§10: cache updates derive from the validated plan and apply during EXECUTION, never
     speculatively during planning. With a fresh (empty) cache, planning derives db_upsert operations
     but writes NO file_cache rows; only execute applies them. Assert the identity cache is empty right
@@ -151,7 +151,7 @@ def test_cache_rows_written_during_execution_not_planning(mock_meta, tmp_path):
         with open(filepath, "rb") as f:
             return {"status": "valid", "strategy": "sha256-v1", "value": hashlib.sha256(f.read()).hexdigest()}
 
-    photos_ingest.ContentHasher.fingerprint_image = mock_hash_image
+    monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image", mock_hash_image)
     photos_ingest.CONFIG["jobs"] = 1
 
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
@@ -168,7 +168,7 @@ def test_cache_rows_written_during_execution_not_planning(mock_meta, tmp_path):
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
 @pytest.mark.spec("prep-quarantine-excluded-scan-1")
-def test_quarantine_subtree_is_excluded_from_the_scan(mock_meta, tmp_path):
+def test_quarantine_subtree_is_excluded_from_the_scan(mock_meta, tmp_path, monkeypatch):
     """§15: the quarantine directory is excluded from the scan, so a rerun neither re-organizes nor
     re-quarantines its contents. A media file sitting under .photos-ingest-quarantine/<id>/ is never
     inventoried: no operation references it and it never enters the cache, while a real 0-sources
@@ -188,7 +188,7 @@ def test_quarantine_subtree_is_excluded_from_the_scan(mock_meta, tmp_path):
         with open(filepath, "rb") as f:
             return {"status": "valid", "strategy": "sha256-v1", "value": hashlib.sha256(f.read()).hexdigest()}
 
-    photos_ingest.ContentHasher.fingerprint_image = mock_hash_image
+    monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image", mock_hash_image)
     photos_ingest.CONFIG["jobs"] = 1
 
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
@@ -204,7 +204,7 @@ def test_quarantine_subtree_is_excluded_from_the_scan(mock_meta, tmp_path):
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
 @pytest.mark.spec("prep-execute-no-rederive-1", "RUL-execution_only_the_plan", test="TST-idempotency_cache-execute_applies_only_recorded_operations_no_rederive")
-def test_execute_applies_only_recorded_operations_no_rederive(mock_meta, tmp_path):
+def test_execute_applies_only_recorded_operations_no_rederive(mock_meta, tmp_path, monkeypatch):
     """§4 (anti): execute applies ONLY the recorded plan operations; it never re-derives the
     organization from the filesystem. Drop the new_img move op from the saved plan before executing:
     if execute re-derived it would still move new_img to 2-missing-metadata. Instead new_img stays
@@ -217,7 +217,7 @@ def test_execute_applies_only_recorded_operations_no_rederive(mock_meta, tmp_pat
         with open(filepath, "rb") as f:
             return {"status": "valid", "strategy": "sha256-v1", "value": hashlib.sha256(f.read()).hexdigest()}
 
-    photos_ingest.ContentHasher.fingerprint_image = mock_hash_image
+    monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image", mock_hash_image)
     photos_ingest.CONFIG["jobs"] = 1
 
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
@@ -243,7 +243,7 @@ def test_execute_applies_only_recorded_operations_no_rederive(mock_meta, tmp_pat
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
 @pytest.mark.spec("prep-path-conflict-bydest-no-clobber-1", test="TST-idempotency_cache-chronological_destination_collision_allocates_safe_name_no_clobber")
-def test_chronological_destination_collision_allocates_safe_name_no_clobber(mock_meta, tmp_path):
+def test_chronological_destination_collision_allocates_safe_name_no_clobber(mock_meta, tmp_path, monkeypatch):
     """§11.2 (anti): a 0-sources file whose computed chronological destination in 5-photos-by-date
     collides with an EXISTING path must not clobber. setup_workspace seeds
     5-photos-by-date/2023-01-01/2023-01-01--12-00-00.jpg = "already_date" and a 0-sources file
@@ -257,7 +257,7 @@ def test_chronological_destination_collision_allocates_safe_name_no_clobber(mock
         with open(filepath, "rb") as f:
             return {"status": "valid", "strategy": "sha256-v1", "value": hashlib.sha256(f.read()).hexdigest()}
 
-    photos_ingest.ContentHasher.fingerprint_image = mock_hash_image
+    monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image", mock_hash_image)
     photos_ingest.CONFIG["jobs"] = 1
 
     occupied = ws / "5-photos-by-date" / "2023-01-01" / "2023-01-01--12-00-00.jpg"
@@ -284,7 +284,7 @@ def test_chronological_destination_collision_allocates_safe_name_no_clobber(mock
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
 @pytest.mark.spec("prep-filesystem-source-of-truth-1", "prep-no-journal-replay-1", "prep-replan-not-resume-1")
-def test_prep_replans_from_filesystem_when_journal_corrupt_or_deleted(mock_meta, tmp_path):
+def test_prep_replans_from_filesystem_when_journal_corrupt_or_deleted(mock_meta, tmp_path, monkeypatch):
     """The prep journal is EVIDENCE, not a resume script: prep re-plans from the filesystem (+ cache)
     as truth. After a successful run, corrupting then deleting the journal must NOT change the re-plan
     — it still derives 0 operations from the on-disk state and never reads the journal to resume."""
@@ -296,7 +296,7 @@ def test_prep_replans_from_filesystem_when_journal_corrupt_or_deleted(mock_meta,
             v = hashlib.sha256(f.read()).hexdigest()
         return {"status": "valid", "strategy": "sha256-v1", "value": v}
 
-    photos_ingest.ContentHasher.fingerprint_image = mock_hash_image
+    monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image", mock_hash_image)
     photos_ingest.CONFIG["jobs"] = 1
 
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
@@ -327,7 +327,7 @@ def test_prep_replans_from_filesystem_when_journal_corrupt_or_deleted(mock_meta,
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
 @pytest.mark.spec("prep-evidence-before-quarantine-1")
-def test_quarantine_manifest_written_before_the_file_is_moved(mock_meta, tmp_path):
+def test_quarantine_manifest_written_before_the_file_is_moved(mock_meta, tmp_path, monkeypatch):
     """§14.3: the manifest evidence entry for a quarantined file is written BEFORE the file is moved
     into quarantine, so a crash never strands a file in quarantine with no record of why. Probe by
     wrapping both _append_quarantine_manifest and the move primitive _move_no_clobber to log a label
@@ -340,7 +340,7 @@ def test_quarantine_manifest_written_before_the_file_is_moved(mock_meta, tmp_pat
         with open(filepath, "rb") as f:
             return {"status": "valid", "strategy": "sha256-v1", "value": hashlib.sha256(f.read()).hexdigest()}
 
-    photos_ingest.ContentHasher.fingerprint_image = mock_hash_image
+    monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image", mock_hash_image)
     photos_ingest.CONFIG["jobs"] = 1
 
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
@@ -382,7 +382,7 @@ def test_quarantine_manifest_written_before_the_file_is_moved(mock_meta, tmp_pat
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
 @pytest.mark.spec("prep-quarantine-restore-normal-1", "prep-restored-requarantine-if-dup-1")
-def test_restored_quarantine_file_reflows_as_a_normal_dump(mock_meta, tmp_path):
+def test_restored_quarantine_file_reflows_as_a_normal_dump(mock_meta, tmp_path, monkeypatch):
     """No un-quarantine path: a file dragged back out of quarantine into 0-sources is re-evaluated as
     an ordinary fresh dump under a NEW plan_id — there is no special 'restore' handling that skips
     dedup. Here the restored file is still a duplicate of a by-dest photo, so it is quarantined AGAIN."""
@@ -394,7 +394,7 @@ def test_restored_quarantine_file_reflows_as_a_normal_dump(mock_meta, tmp_path):
             v = hashlib.sha256(f.read()).hexdigest()
         return {"status": "valid", "strategy": "sha256-v1", "value": v}
 
-    photos_ingest.ContentHasher.fingerprint_image = mock_hash_image
+    monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image", mock_hash_image)
     photos_ingest.CONFIG["jobs"] = 1
 
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
@@ -419,7 +419,7 @@ def test_restored_quarantine_file_reflows_as_a_normal_dump(mock_meta, tmp_path):
 
 
 @pytest.mark.spec("prep-missing-metadata-no-special-path-1", "RUL-missing_metadata_stays", test="TST-idempotency_cache-no_special_reimport_path_from_missing_metadata")
-def test_no_special_reimport_path_from_missing_metadata(tmp_path):
+def test_no_special_reimport_path_from_missing_metadata(tmp_path, monkeypatch):
     """2-missing-metadata is a holding bay, not a re-entry point: prep never reprocesses a file sitting
     there in place. A file still missing a date stays put (no op); the way to re-import is to move it to
     0-sources, where it routes like any ordinary dump — here, to 5-photos-by-date by its (now present)
@@ -445,7 +445,7 @@ def test_no_special_reimport_path_from_missing_metadata(tmp_path):
         with open(filepath, "rb") as f:
             return {"status": "valid", "strategy": "sha256-v1", "value": hashlib.sha256(f.read()).hexdigest()}
 
-    photos_ingest.ContentHasher.fingerprint_image = mock_hash_image
+    monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image", mock_hash_image)
     photos_ingest.CONFIG["jobs"] = 1
     with mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=meta):
         cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
@@ -462,7 +462,7 @@ def test_no_special_reimport_path_from_missing_metadata(tmp_path):
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
 @pytest.mark.spec("prep-cache-single-writer-1")
-def test_prep_execute_cache_writes_only_from_main_thread(mock_meta, tmp_path):
+def test_prep_execute_cache_writes_only_from_main_thread(mock_meta, tmp_path, monkeypatch):
     """Single-writer cache: prep applies its plan in one sequential op loop, so every DB write lands on
     the main thread even with jobs=4 (the concurrency in prep is read-only metadata extraction during
     planning, never DB writes). Probe upsert_file and assert no worker-thread write."""
@@ -474,7 +474,7 @@ def test_prep_execute_cache_writes_only_from_main_thread(mock_meta, tmp_path):
         with open(filepath, "rb") as f:
             return {"status": "valid", "strategy": "sha256-v1", "value": hashlib.sha256(f.read()).hexdigest()}
 
-    photos_ingest.ContentHasher.fingerprint_image = mock_hash_image
+    monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image", mock_hash_image)
     photos_ingest.CONFIG["jobs"] = 4                              # ask for concurrency
 
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
@@ -488,18 +488,15 @@ def test_prep_execute_cache_writes_only_from_main_thread(mock_meta, tmp_path):
         threads.append(threading.current_thread().name)
         return orig(self, *a, **k)
 
-    photos_ingest.WorkspaceCache.upsert_file = spy
-    try:
-        photos_ingest.PlanExecutor(str(ws)).execute(plan1, str(ws / ".photos-ingest/journal.json"))
-    finally:
-        photos_ingest.WorkspaceCache.upsert_file = orig
+    monkeypatch.setattr(photos_ingest.WorkspaceCache, "upsert_file", spy)
+    photos_ingest.PlanExecutor(str(ws)).execute(plan1, str(ws / ".photos-ingest/journal.json"))
     assert threads, "expected at least one cache upsert"
     assert all(t == "MainThread" for t in threads), threads
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
 @pytest.mark.spec("prep-handoff-min-contents-1")
-def test_handoff_manifest_generated(mock_meta, tmp_path):
+def test_handoff_manifest_generated(mock_meta, tmp_path, monkeypatch):
     ws = setup_workspace(tmp_path)
 
     # Inject mock hasher so we have valid content_hash values
@@ -509,7 +506,7 @@ def test_handoff_manifest_generated(mock_meta, tmp_path):
             v = hashlib.sha256(f.read()).hexdigest()
         return {"status": "valid", "strategy": "sha256-v1", "value": v}
 
-    photos_ingest.ContentHasher.fingerprint_image = mock_hash_image
+    monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image", mock_hash_image)
     photos_ingest.CONFIG["jobs"] = 1
 
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
@@ -550,7 +547,7 @@ def test_handoff_manifest_generated(mock_meta, tmp_path):
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
 @pytest.mark.spec("prep-block-on-stale-dependency-1", "prep-bydest-precondition-recorded-1", "prep-execute-revalidates-rejects-stale-1", "prep-handoff-only-on-success-1")
-def test_stale_cache_upsert_fails(mock_meta, tmp_path):
+def test_stale_cache_upsert_fails(mock_meta, tmp_path, monkeypatch):
     ws = setup_workspace(tmp_path)
 
     def mock_hash_image(filepath):
@@ -559,7 +556,7 @@ def test_stale_cache_upsert_fails(mock_meta, tmp_path):
             v = hashlib.sha256(f.read()).hexdigest()
         return {"status": "valid", "strategy": "sha256-v1", "value": v}
 
-    photos_ingest.ContentHasher.fingerprint_image = mock_hash_image
+    monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image", mock_hash_image)
     photos_ingest.CONFIG["jobs"] = 1
 
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
@@ -590,7 +587,7 @@ def test_stale_cache_upsert_fails(mock_meta, tmp_path):
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-def test_cache_fingerprint_changes(mock_meta, tmp_path):
+def test_cache_fingerprint_changes(mock_meta, tmp_path, monkeypatch):
     ws = setup_workspace(tmp_path)
     def mock_hash_image(filepath):
         import hashlib
@@ -598,7 +595,7 @@ def test_cache_fingerprint_changes(mock_meta, tmp_path):
             v = hashlib.sha256(f.read()).hexdigest()
         return {"status": "valid", "strategy": "sha256-v1", "value": v}
 
-    photos_ingest.ContentHasher.fingerprint_image = mock_hash_image
+    monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image", mock_hash_image)
     photos_ingest.CONFIG["jobs"] = 1
 
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
@@ -640,7 +637,7 @@ def test_cache_fingerprint_changes(mock_meta, tmp_path):
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-def test_db_upsert_absolute_path_rejected(mock_meta, tmp_path):
+def test_db_upsert_absolute_path_rejected(mock_meta, tmp_path, monkeypatch):
     ws = setup_workspace(tmp_path)
 
     # Inject mock hasher so we have valid content_hash values
@@ -650,7 +647,7 @@ def test_db_upsert_absolute_path_rejected(mock_meta, tmp_path):
             v = hashlib.sha256(f.read()).hexdigest()
         return {"status": "valid", "strategy": "sha256-v1", "value": v}
 
-    photos_ingest.ContentHasher.fingerprint_image = mock_hash_image
+    monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image", mock_hash_image)
     photos_ingest.CONFIG["jobs"] = 1
 
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
@@ -673,7 +670,7 @@ def test_db_upsert_absolute_path_rejected(mock_meta, tmp_path):
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-def test_stale_already_cached_file_aborts(mock_meta, tmp_path):
+def test_stale_already_cached_file_aborts(mock_meta, tmp_path, monkeypatch):
     ws = setup_workspace(tmp_path)
 
     def mock_hash_image(filepath):
@@ -682,7 +679,7 @@ def test_stale_already_cached_file_aborts(mock_meta, tmp_path):
             v = hashlib.sha256(f.read()).hexdigest()
         return {"status": "valid", "strategy": "sha256-v1", "value": v}
 
-    photos_ingest.ContentHasher.fingerprint_image = mock_hash_image
+    monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image", mock_hash_image)
     photos_ingest.CONFIG["jobs"] = 1
 
     # FIRST RUN: Populate cache
