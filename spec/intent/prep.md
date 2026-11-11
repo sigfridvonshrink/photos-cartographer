@@ -806,7 +806,7 @@ step recording the change.
 
 :::{rul} The job count changes nothing planned
 :id: RUL-jobs_change_nothing
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -819,7 +819,7 @@ fingerprints.
 
 :::{rul} The job count is recorded nowhere
 :id: RUL-jobs_recorded_nowhere
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :aliases: prep-job-count-run-metadata-1
@@ -829,7 +829,7 @@ The number of jobs SHALL be recorded in no plan, configuration or handoff.
 
 :::{rul} A tool's failure is retried before it counts
 :id: RUL-tool_failure_retried
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: prep-worker-crash-safe-retry-1, prep-partial-output-never-cached-1
@@ -840,7 +840,7 @@ fingerprint or metadata is recorded as failed — never as valid.
 
 :::{rul} A fingerprint taken again is explained
 :id: RUL-rehash_explained
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :aliases: prep-rehash-diagnostics-1

@@ -444,7 +444,7 @@ a prep-organized folder with no recorded history gets an entry marked `partial`,
 
 :::{bld} The tools' workers
 :id: BLD-tool_workers
-:status: seed
+:status: ruled
 :realises: RUL-tool_failure_retried
 :aliases: prep-persistent-external-workers-1, prep-persistent-driver-reset-state-1
 
@@ -456,7 +456,7 @@ starts `ffmpeg` per video. Each tool gets two attempts per file, a dead worker r
 
 :::{bld} Planning in a fixed order
 :id: BLD-planning_order
-:status: seed
+:status: ruled
 :realises: RUL-jobs_change_nothing
 
 Prep SHALL walk the workspace and take its files' sizes and times on one thread, sorted, before any parallel work, and
@@ -466,7 +466,7 @@ operations' ids.
 
 :::{bld} The re-fingerprint summary
 :id: BLD-rehash_summary
-:status: seed
+:status: ruled
 :realises: RUL-rehash_explained
 
 The plan's `performance_and_cache.rehash_summary` SHALL count the media files fingerprinted this run by reason — `new`,
