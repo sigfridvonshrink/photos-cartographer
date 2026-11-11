@@ -357,7 +357,7 @@ def test_execute_without_plan_runs_plan_first_even_on_empty_sources(tmp_path, mo
 
 # --- no-flatten --------------------------------------------------------------
 
-@pytest.mark.spec("prep-no-flatten-sources-1")
+@pytest.mark.spec("prep-no-flatten-sources-1", "RUL-inbox_kept_as_dumped", "BLD-planned_paths_tracked", test="TST-lifecycle-no_flatten_organizes_subtree_without_consolidation")
 def test_no_flatten_organizes_subtree_without_consolidation(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _initialized(tmp_path)

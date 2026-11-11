@@ -962,6 +962,27 @@ unknown otherwise.
 
 ## 6. One filename format
 
+:::{def} A recorded time
+:id: DEF-recorded_time
+:status: seed
+:uses: DEF-prep
+
+A file's **recorded time** is the time of its making that its own metadata holds, as the camera's clock read it:
+uncorrected, with no timezone.
+:::
+
+:::{rul} Which field is the recorded time
+:id: RUL-recorded_time_order
+:status: seed
+:criticality: med
+:verify: required
+:aliases: prep-timestamp-priority-1
+:uses: DEF-recorded_time
+
+A file's recorded time SHALL be read from the first of its `DateTimeOriginal`, `CreateDate` and `ModifyDate` that is
+present.
+:::
+
 :::{def} A timestamp name
 :id: DEF-timestamp_name
 :status: ruled
@@ -989,7 +1010,7 @@ the configuration and hard-coded by neither.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: fname-suffix-noclobber-1
+:aliases: fname-suffix-noclobber-1, prep-organized-output-unique-path-1
 
 A file whose timestamp name is already taken SHALL get a zero-padded differentiating suffix, allocated deterministically
 and without clobbering: against every name on disk and every name planned in the run, compared without regard to case,
@@ -1322,6 +1343,7 @@ subfolders of a destination.
 :status: ruled
 :criticality: med
 :verify: required
+:aliases: prep-sources-empty-after-stage5-1
 :uses: DEF-managed_folders
 
 A prep execution SHALL leave the inbox empty.
@@ -1571,7 +1593,7 @@ the run requires of it: a file already in its place, with its name and its metad
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: idem-no-op-run-1
+:aliases: idem-no-op-run-1, prep-unchanged-no-op-1
 :refines: INV-change_only_what_needs
 
 A phase run over a workspace whose relevant state has not changed SHALL change nothing, and produce the same result —

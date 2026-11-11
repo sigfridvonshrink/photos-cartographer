@@ -70,6 +70,13 @@ into `3-redundant-jpgs/`, and non-media into `1-strays/`. `0-sources/` is left e
 > From now on, `0-sources/` is the **only** inbox for new dumps — never drop files at the workspace
 > root again (prep will hard-block on a misplaced entry).
 
+> **Copy each dump so it can't overwrite anything.** The pipeline never overwrites a file — but that
+> protection starts when prep runs. If your own copy command replaces a same-named file while you dump
+> (`cp a/IMG_1234.jpg 0-sources/` then `cp b/IMG_1234.jpg 0-sources/`), the first file is gone before
+> prep ever sees it, and nothing can recover it. Dump each source into its **own subfolder** of
+> `0-sources/` (prep keeps the subfolders and gives same-named files distinct names), or copy with
+> `cp -n` / `rsync --ignore-existing`, and check the file counts before running prep.
+
 ### Review your config (do this once, at the start)
 
 The first `prep` run seeds `.photos-ingest/photos-00-config.json` from built-in defaults, then treats

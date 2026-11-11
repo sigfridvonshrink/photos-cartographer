@@ -59,6 +59,9 @@ def setup_workspace(tmp_path: Path):
     # Source duplicate in 0-sources
     (source_dir / "dup_image.jpg").write_text("duplicate_data")
 
+    # A filed file with an uppercase extension: lowercased in place by the two-step rename
+    (ws / "2-missing-metadata" / "UNKN_old.JPG").write_text("old_untimed_data")
+
     return ws
 
 def mock_hash_file(filepath):
@@ -90,7 +93,7 @@ def mock_read_metadata_concurrently(folders, max_workers=4, progress_coordinator
 
 @mock.patch('photos_1_prep.ContentHasher.fingerprint_image', side_effect=mock_hash_image)
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("prep-normalize-extension-case-1", "prep-paired-jpeg-excluded-dedup-1")
+@pytest.mark.spec("prep-normalize-extension-case-1", "RUL-media_extension_lowercase", "BLD-two_step_case_rename", test="TST-workspace_prep-prep_workflow_plan_and_execute")
 def test_prep_workflow_plan_and_execute(mock_meta, mock_hash_img, tmp_path, monkeypatch):
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
@@ -132,6 +135,8 @@ def test_prep_workflow_plan_and_execute(mock_meta, mock_hash_img, tmp_path, monk
 
     # PR ACCEPTANCE TEST: "IMG.JPG" vs "IMG.jpg" survival with deterministic naming;
     # (Tested implicitly by the above root-to-source case normalizations preserving both files)
+
+    assert (ws / "2-missing-metadata" / "UNKN_old.jpg").exists()      # filed: lowercased in place
 
     # PR ACCEPTANCE TEST: RAW/JPG not treated as disposable duplicates
     # PHOTO_555.CR2 and PHOTO_555.jpg have the same fake hash, but shouldn't quarantine.
@@ -535,27 +540,28 @@ def test_deterministic_temp_names_with_existing(tmp_path, monkeypatch):
     ws.mkdir()
     (ws / ".photos-ingest").mkdir(exist_ok=True); (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
 
-    src_dir = ws / "0-sources"
+    (ws / "0-sources").mkdir()
+    src_dir = ws / "2-missing-metadata"      # outside the inbox: the two-step rename applies
     src_dir.mkdir()
 
     # A single target file requiring extension normalisation
-    (src_dir / "collision_test.JPG").write_text("dummy")
+    (src_dir / "UNKN_collision_test.JPG").write_text("dummy")
 
     # Explicitly pre-create the base temp name and -001 to block them
     # Note we use the target destination for the temp name check
-    (src_dir / "collision_test.__photos_ingest_tmp_extnorm__.jpg").write_text("blocked")
-    (src_dir / "collision_test.__photos_ingest_tmp_extnorm__-001.jpg").write_text("blocked")
+    (src_dir / "UNKN_collision_test.__photos_ingest_tmp_extnorm__.jpg").write_text("blocked")
+    (src_dir / "UNKN_collision_test.__photos_ingest_tmp_extnorm__-001.jpg").write_text("blocked2")
 
     photos_ingest.CONFIG["jobs"] = 1
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=True)
     workflow = photos_ingest.WorkspacePrepWorkflow(str(ws), cache)
     plan = workflow.plan()
 
-    temp_ops = [op for op in plan.operations if "__photos_ingest_tmp_extnorm__" in op.destination]
+    temp_ops = [op for op in plan.operations if op.destination and "__photos_ingest_tmp_extnorm__" in op.destination]
 
     found_002 = False
     for op in temp_ops:
-        if "collision_test.__photos_ingest_tmp_extnorm__-002.jpg" in op.destination.lower():
+        if "unkn_collision_test.__photos_ingest_tmp_extnorm__-002.jpg" in op.destination.lower():
             found_002 = True
             break
 

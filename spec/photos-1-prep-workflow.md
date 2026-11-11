@@ -250,7 +250,7 @@ A validation failure is a hard blocker: prep reports it textually, naming the of
 
 ## 7. The prep pipeline
 
-Planning derives operations in a fixed, deterministic order. Each stage updates an in-memory "current path" for every file so later stages reason about where a file will be, not only where it is. Allowed operation types are:
+Planning derives operations in a fixed, deterministic order: initialization and inventory, then content deduplication (Stage 2, Section 7.5) — before any stage moves or renames a file — then extension case, redundant JPEGs and chronological organization. Each stage updates an in-memory "current path" for every file so later stages reason about where a file will be, not only where it is. Allowed operation types are:
 
 ```text
 mkdir, move_no_clobber, rename_no_clobber, quarantine_move, db_upsert, db_remove
@@ -273,19 +273,19 @@ Then scan `0-sources/` and every managed folder, apply the guards of Section 6.2
 
 > **Caution — protect your originals *during* the dump; a clobber at copy time is invisible to the pipeline.** Every operation the pipeline performs is no-clobber and atomic (Section 14.3; shared contract `photos-shared-contract.md` Section 15), and prep preserves every distinct file it finds — photos and videos are organized under uniquely-allocated by-date names (Section 8), non-media is moved into `1-strays/` (Section 3.2), and nothing is overwritten. **That protection begins only at the first prep invocation.** It cannot cover a file overwritten *while you are dumping*, before prep has run: if your own copy/move command overwrites a same-named file in the same destination folder as you stage files — e.g. `cp a/IMG_1234.jpg 0-sources/` then `cp b/IMG_1234.jpg 0-sources/`, where the second silently replaces the first — that file is gone at the filesystem level and the pipeline has **no record it ever existed**: nothing to detect, nothing to recover. The pipeline cannot see a collision that happened before it was invoked. To stay safe, dump each source into its **own subfolder** under `0-sources/` (prep keeps the subfolder structure on disk and gives same-named files from different subtrees distinct by-date names — it won't conflate them), or use a non-overwriting copy (`cp -n`, `rsync --ignore-existing`, or a tool that refuses to overwrite) and verify file counts before running prep. The dump is the one step where avoiding a clobber is in your hands, not the pipeline's.
 
-### 7.3 Stage 2 — Normalize extension case
+### 7.3 Stage 3 — Normalize extension case
 
-A file whose extension is not lowercase (e.g. `.JPG`, `.ARW`) is renamed to the lowercase form. To stay safe on case-insensitive filesystems this is done as two no-clobber renames (to a unique temporary name, then to the final lowercase name). Collisions are resolved by suffix allocation (Section 8).
+A media file outside `0-sources` whose extension is not lowercase (e.g. `.JPG`, `.ARW`) is renamed in place to the lowercase form. To stay safe on case-insensitive filesystems this is done as two no-clobber renames (to a unique temporary name, then to the final lowercase name). Collisions are resolved by suffix allocation (Section 8). A media file in `0-sources` takes its lowercase extension in the one move that files it (Sections 7.4, 7.6). A file quarantined as a duplicate and a non-media file keep their names as they came.
 
-### 7.4 Stage 3 — Separate redundant JPEGs
+### 7.4 Stage 4 — Separate redundant JPEGs
 
-Files are grouped by `(folder, basename-without-extension)`. If a group contains both a RAW and a `.jpg`, the JPEG is considered redundant (the RAW is the master). A redundant JPEG that is in `0-sources` is moved to `3-redundant-jpgs/`, named from its timestamp like a dated file (Section 8). Paired JPEGs are excluded from the content-dedup stage so a RAW+JPEG pair is never treated as a duplicate of itself.
+Files are grouped by `(folder, basename-without-extension)`. If a group contains both a RAW and a JPEG (`.jpg` or `.jpeg`), the JPEG is considered redundant (the RAW is the master); no other file of the group is. A redundant JPEG that is in `0-sources` is moved to `3-redundant-jpgs/`, named from its timestamp like a dated file (Section 8). A RAW and a JPEG in different folders are not paired: each is organized on its own (Section 7.6).
 
-### 7.5 Stage 4 — Content deduplication and quarantine
+### 7.5 Stage 2 — Content deduplication and quarantine
 
-Remaining files (mutable-side **and** by-dest, excluding paired JPEGs **and excluding `other`-class files, which are not fingerprinted, Section 9**) are grouped by `(content_fingerprint, media_class)`. Within a group of more than one file:
+Files (mutable-side **and** by-dest, **excluding `other`-class files, which are not fingerprinted, Section 9**) are grouped by `(content_fingerprint, media_class)`, so a RAW and a JPEG are never duplicates of each other. Within a group of more than one file:
 
-1. one file is **retained**, chosen by folder priority — by-dest wins, then the more-organized folder:
+1. one file is **retained**, chosen by the folder it lies in when planning — by-dest wins, then the more-organized folder; within one folder, the first by path:
 
 ```text
 6-photos-by-dest  >  5-photos-by-date  >  4-videos-by-date
@@ -299,7 +299,7 @@ Remaining files (mutable-side **and** by-dest, excluding paired JPEGs **and excl
 
 ### 7.6 Stage 5 — Chronological organization
 
-Every mutable-side file still in `0-sources` after Stages 2–4 (not already routed and not quarantined) is handled by its class and timestamp. The timestamp is read passively from cached metadata in priority order:
+Every mutable-side file still in `0-sources` after Stages 2–4 (not quarantined, not set aside as a redundant JPEG) is handled by its class and timestamp. The timestamp is read passively from cached metadata in priority order:
 
 ```text
 DateTimeOriginal -> CreateDate -> ModifyDate
@@ -556,7 +556,7 @@ Quarantine is the recoverable safety net for de-duplication, so prep **never del
 A user may recover a quarantined file at any time by moving it out of `.photos-ingest-quarantine/` back into a managed folder (typically `0-sources/`). Prep does not provide a dedicated "un-quarantine" operation and does not track such a move as a special case; the restored file is simply re-evaluated as a normal newly-seen file on the next run:
 
 1. it is inventoried, fingerprinted, and metadata-extracted like any other new mutable-side file;
-2. it flows through the ordinary pipeline (extension normalization, redundant-JPEG separation, content de-duplication, chronological organization);
+2. it flows through the ordinary pipeline (content de-duplication, extension normalization, redundant-JPEG separation, chronological organization);
 3. if its content still duplicates a retained copy (mutable-side or by-dest), de-duplication will quarantine it again — into the **current** run's `<plan_id>` directory, not the original one. This is safe and predictable: restoring a still-duplicate file simply re-quarantines it;
 4. if the previously retained counterpart no longer exists (the user deleted or moved it), the restored file is no longer a duplicate and is organized normally.
 

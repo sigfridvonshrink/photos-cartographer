@@ -8,6 +8,7 @@ intent it implements. *Why* a choice was made is in [the rationale](../rationale
 :::{bld} Prep's operations hold no metadata write
 :id: BLD-prep_operation_kinds
 :status: ruled
+:aliases: prep-allowed-op-types-1
 :realises: RUL-prep_no_time_or_gps
 
 Prep's execute SHALL carry out only folder creations, moves, renames, quarantine moves and database writes, refusing a
@@ -37,7 +38,7 @@ after every other operation has succeeded; the managed folders it creates are `0
 :::{bld} A run's strays go to `1-strays/<plan-id>/`
 :id: BLD-strays_per_run
 :status: ruled
-:realises: DEF-strays_folder
+:realises: RUL-inbox_non_media_to_strays
 :aliases: prep-strays-per-run-subfolder-1, prep-strays-no-collision-across-runs-1
 
 Prep SHALL move a run's strays into `1-strays/<plan-id>/`, each at its path under `0-sources/`, so that no two runs
@@ -155,3 +156,51 @@ Prep's dry-run and execute SHALL refuse, before any change, a plan whose `blocke
 blocker it finds, the plan still saved — is not empty.
 :::
 
+
+## 7. The prep pipeline
+
+:::{bld} The stages run in a fixed order
+:id: BLD-prep_stage_order
+:status: seed
+:realises: RUL-duplicate_set_aside_as_found, RUL-copy_kept_by_folder
+
+Prep's planning SHALL run its stages in this order: initialization and inventory; duplicates; extension case; redundant
+JPEGs; organization by class and time; database reconciliation.
+:::
+
+:::{bld} Each stage works from the paths the stages before it planned
+:id: BLD-planned_paths_tracked
+:status: seed
+:realises: RUL-suffix_no_clobber, RUL-inbox_kept_as_dumped
+:aliases: prep-collision-resolved-in-memory-1
+
+Each stage of prep's planning SHALL work from the path the stages before it gave each file, allocating every name
+against the names on disk and those already planned.
+:::
+
+:::{bld} A filed file's extension is lowercased in two renames
+:id: BLD-two_step_case_rename
+:status: seed
+:realises: RUL-media_extension_lowercase
+
+A filed media file's extension SHALL be lowercased by two no-clobber renames in its folder, through a temporary name
+free on disk and in the plan; an inbox file's, in the move that files it.
+:::
+
+:::{bld} What counts as a JPEG and a raw file
+:id: BLD-jpeg_extensions
+:status: seed
+:realises: RUL-redundant_jpeg_set_aside
+
+A JPEG SHALL be a file of the `image` class ending `.jpg` or `.jpeg`, matched ignoring case; a raw file, one of the
+`raw` class.
+:::
+
+:::{bld} The database is reconciled by planned operations
+:id: BLD-database_ops
+:status: seed
+:realises: RUL-database_matches_files
+
+Prep's plan SHALL refresh a stale database row with a `db_upsert`, and remove with a `db_remove` the row of a file gone
+that no move explains.
+:::

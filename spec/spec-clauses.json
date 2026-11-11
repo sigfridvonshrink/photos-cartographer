@@ -5480,7 +5480,7 @@
       "area": "prep",
       "criticality": "med",
       "anti": false,
-      "title": "A non-lowercase extension is renamed to lowercase via two no-clobber renames, collisions suffix-allocated",
+      "title": "A media file's extension ends lowercase: two no-clobber renames for a filed file, the filing move for an inbox file",
       "spec": {
         "file": "photos-1-prep-workflow.md",
         "section": "7.3"
@@ -5516,20 +5516,6 @@
       "coverage": "covered",
       "must_cover": true,
       "test": "tests/test_strays.py::test_stray_not_fingerprinted_and_not_cached"
-    },
-    {
-      "id": "prep-paired-jpeg-excluded-dedup-1",
-      "area": "prep",
-      "criticality": "med",
-      "anti": true,
-      "title": "Paired JPEGs are excluded from content-dedup so a RAW+JPEG pair is never a duplicate of itself",
-      "spec": {
-        "file": "photos-1-prep-workflow.md",
-        "section": "7.4"
-      },
-      "coverage": "covered",
-      "must_cover": true,
-      "test": "tests/test_workspace_prep.py::test_prep_workflow_plan_and_execute"
     },
     {
       "id": "prep-partial-output-never-cached-1",
@@ -6012,7 +5998,7 @@
       "area": "prep",
       "criticality": "med",
       "anti": false,
-      "title": "In a duplicate group one file is retained by folder priority (by-dest > 5 > 4 > 3 > 2 > 0-sources)",
+      "title": "In a duplicate group one file is retained by the priority of the folder it lies in when planned (by-dest > 5 > 4 > 3 > 2 > 0-sources), ties by path",
       "spec": {
         "file": "photos-1-prep-workflow.md",
         "section": "7.5"
