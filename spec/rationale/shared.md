@@ -476,7 +476,7 @@ file is.
 
 :::{rat} A file sent back keeps the name it had
 :id: RAT-mark_once
-:status: seed
+:status: ruled
 :justifies: RUL-untimed_mark_once
 
 A file comes in already marked when the user sends it back from missing metadata: they gave it a time, or meant to. If

@@ -210,7 +210,7 @@ that no move explains and whose path no planned move fills again — that row is
 
 :::{bld} A day's folder is named `YYYY-MM-DD`
 :id: BLD-day_folder_name
-:status: seed
+:status: ruled
 :realises: RUL-by_date_in_day_folder
 :aliases: prep-date-name-format-1
 
