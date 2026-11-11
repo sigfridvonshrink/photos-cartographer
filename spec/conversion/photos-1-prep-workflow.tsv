@@ -405,3 +405,16 @@
 12.1	Changing the field set or extractor in a future release makes existing records detectably stale without being confused with content changes.	RAT-reading_change_detectable	
 12.2	### 12.2 Passive grouping facts	dropped	a heading; the corpus's documents carry their own
 12.2	The handoff/summary reports passive grouping facts for later use, with no inference: per camera group (key, file count, contributing identity fields, earliest/latest source-naive timestamp, native-GPS counts, missing-timestamp count, and phone/camera class only if already known from config) and per by-dest folder (path, files scanned, camera groups present, timestamp range, native-GPS/missing-GPS/GPSProcessingMethod counts, cache-freshness summary, and conflicts/duplicates involving files outside by-dest).	RUL-grouping_facts_reported BLD-handoff_grouping_facts	
+13	## 13. Idempotency and incremental operation	dropped	a heading; the corpus's documents carry their own
+13	Prep upholds the shared idempotency principle — change only what needs changing; a no-op run is a no-op (shared contract `photos-shared-contract.md` Section 11).	INV-change_only_what_needs RUL-no_op_run	
+13	Concretely: a second run on an unchanged workspace must produce zero media mutations.	RUL-no_op_run	
+13	Prep must:	dropped	the lead-in of a list; each entry names the items it restates
+13	1. tolerate already-populated by-date and by-dest folders;	RUL-filed_file_stays	
+13	2. recognize files already in their correct location and not move them;	RUL-filed_file_stays	
+13	3. not re-normalize already-normalized extensions;	RUL-media_extension_lowercase	
+13	4. not re-quarantine already-quarantined duplicates;	RUL-not_inventoried	
+13	5. produce the same destination names for the same unchanged input state;	RUL-no_op_run	
+13	6. reuse cached fingerprints and metadata for unchanged files;	RUL-reuse_valid_work	
+13	7. recognize files the user moved from by-date into by-dest and carry their cache identity forward without re-fingerprinting or re-extracting (Section 10.1);	RUL-moved_file_carried	
+13	8. report `no_op` / `already_correct` facts rather than treating prior work as error.	RUL-no_op_run_reports_reuse	
+13	When new files appear in a mutable folder after a previous run, a new plan acts only on the files that require action; existing by-date/by-dest files are still scanned for uniqueness/cache freshness but are not moved or re-fingerprinted unnecessarily.	RUL-reuse_valid_work RUL-filed_file_stays	

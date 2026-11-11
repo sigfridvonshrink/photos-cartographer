@@ -639,8 +639,7 @@ record is missing.
 :realises: RUL-reuse_valid_work
 
 Each phase SHALL reuse what is still valid: prep, the cached fingerprint and metadata of a file whose size and
-modification time are unchanged, carrying a moved file's identity forward without reading it ({need}`RUL-moved_file_carried`;
-prep §13), a plan never executed leaving its fingerprints and metadata for the next plan to reuse
+modification time are unchanged, carrying a moved file's identity forward without reading it ({need}`RUL-moved_file_carried`), a plan never executed leaving its fingerprints and metadata for the next plan to reuse
 ({need}`RUL-plan_memo_kept`); geotag reads no photo,
 taking every photo's metadata from prep, works out its results again on each run — a result that comes out the same
 leaving everything that depends on it as it is — keeps each decision whose target is unchanged (geotag §9, §22.1), and
@@ -648,7 +647,7 @@ reads every track file whole for its fingerprint but parses only one whose bytes
 rest from its track memo, `photos-00-track-memo.db`; merge, a library file's fingerprint while its size and
 modification time are unchanged (merge §7). Fingerprinting (ImageMagick `identify`, `ffmpeg`), metadata extraction
 (`exiftool`) and GPX parsing thus run only for new or changed inputs. Each phase's own consequences are in its spec:
-prep §13 and §21, geotag §29.1 and §30, merge §8.
+{need}`RUL-no_op_run` and prep §21, geotag §29.1 and §30, merge §8.
 :::
 
 :::{bld} Staleness follows the field-scoped fingerprints
