@@ -668,3 +668,63 @@ Prep SHALL remove a folder its plan leaves empty — in the inbox or a by-date f
 After an interrupted execution, prep SHALL plan again from the workspace as it stands, never resuming or replaying the
 interrupted plan.
 :::
+
+
+## 15. The quarantine
+
+:::{rul} A duplicate's evidence is recorded before it is moved
+:id: RUL-evidence_before_quarantine
+:status: seed
+:criticality: high
+:verify: required
+:aliases: prep-evidence-before-quarantine-1
+:refines: RUL-duplicates_quarantined
+
+Prep SHALL record why it quarantines a file — its path, the copy kept and the shared fingerprint — before it moves the
+file into the quarantine.
+:::
+
+:::{rul} No run deletes from the quarantine
+:id: RUL-quarantine_never_auto_deleted
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: prep-quarantine-no-auto-delete-1
+
+No prep run SHALL remove anything from the quarantine, however often it runs and however old the quarantine is.
+:::
+
+:::{rul} Only the user's prune deletes, and only when told to
+:id: RUL-prune_explicit
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: prep-prune-no-managed-1
+
+Prep SHALL delete quarantined files only by its prune command, which lists what it would delete unless told to delete,
+and touches nothing outside the quarantine.
+:::
+
+:::{rul} A file restored from the quarantine is a new file
+:id: RUL-restored_file_is_new
+:status: seed
+:criticality: med
+:verify: required
+:aliases: prep-quarantine-restore-normal-1, prep-restored-requarantine-if-dup-1, prep-no-reconcile-old-quarantine-1
+
+A file the user moves from the quarantine back into the inbox SHALL be handled as a new file of the dump, its earlier
+quarantine record left as it is.
+:::
+
+:::{rul} The quarantine's size is reported
+:id: RUL-quarantine_footprint_reported
+:status: seed
+:criticality: low
+:verify: required
+:aliases: prep-quarantine-footprint-reported-1
+
+Each prep plan SHALL report the quarantine's size — its files, their bytes, and the runs that filled it, oldest and
+newest.
+:::

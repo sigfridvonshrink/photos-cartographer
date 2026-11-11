@@ -167,7 +167,7 @@ def test_cache_rows_written_during_execution_not_planning(mock_meta, tmp_path, m
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("prep-quarantine-excluded-scan-1")
+@pytest.mark.spec("prep-quarantine-excluded-scan-1", test="TST-idempotency_cache-quarantine_subtree_is_excluded_from_the_scan")
 def test_quarantine_subtree_is_excluded_from_the_scan(mock_meta, tmp_path, monkeypatch):
     """§15: the quarantine directory is excluded from the scan, so a rerun neither re-organizes nor
     re-quarantines its contents. A media file sitting under .photos-ingest-quarantine/<id>/ is never
@@ -326,7 +326,7 @@ def test_prep_replans_from_filesystem_when_journal_corrupt_or_deleted(mock_meta,
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("prep-evidence-before-quarantine-1")
+@pytest.mark.spec("prep-evidence-before-quarantine-1", test="TST-idempotency_cache-quarantine_manifest_written_before_the_file_is_moved")
 def test_quarantine_manifest_written_before_the_file_is_moved(mock_meta, tmp_path, monkeypatch):
     """§14.3: the manifest evidence entry for a quarantined file is written BEFORE the file is moved
     into quarantine, so a crash never strands a file in quarantine with no record of why. Probe by
@@ -381,7 +381,7 @@ def test_quarantine_manifest_written_before_the_file_is_moved(mock_meta, tmp_pat
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("prep-quarantine-restore-normal-1", "prep-restored-requarantine-if-dup-1")
+@pytest.mark.spec("prep-quarantine-restore-normal-1", "prep-restored-requarantine-if-dup-1", test="TST-idempotency_cache-restored_quarantine_file_reflows_as_a_normal_dump")
 def test_restored_quarantine_file_reflows_as_a_normal_dump(mock_meta, tmp_path, monkeypatch):
     """No un-quarantine path: a file dragged back out of quarantine into 0-sources is re-evaluated as
     an ordinary fresh dump under a NEW plan_id — there is no special 'restore' handling that skips

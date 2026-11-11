@@ -91,7 +91,7 @@ def test_media_journey_keyed_by_fingerprint(tmp_path, monkeypatch):
     assert all(s.get("run") for s in entry["journey"])     # each step attributed to its run
 
 
-@pytest.mark.spec("prep-log-records-quarantine-dups-1", "prep-quarantine-recoverable-manifest-1")
+@pytest.mark.spec("prep-log-records-quarantine-dups-1", "prep-quarantine-recoverable-manifest-1", test="TST-prep_log-quarantined_duplicate_recorded")
 def test_quarantined_duplicate_recorded(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)

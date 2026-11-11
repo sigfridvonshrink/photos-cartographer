@@ -110,6 +110,7 @@ def test_band_guard_allows_correct_placement(tmp_path, monkeypatch):
 
 # --- prune-quarantine --------------------------------------------------------
 
+@pytest.mark.spec("BLD-prune_command", "RUL-prune_explicit", test="TST-guards_quarantine-prune_dry_run_deletes_nothing")
 def test_prune_dry_run_deletes_nothing(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -118,6 +119,7 @@ def test_prune_dry_run_deletes_nothing(tmp_path, monkeypatch):
     assert os.path.isdir(os.path.join(utils.quarantine_dir(str(ws)), pid))
 
 
+@pytest.mark.spec("BLD-prune_command", "RUL-prune_explicit", test="TST-guards_quarantine-prune_yes_with_plan_id_deletes_only_that")
 def test_prune_yes_with_plan_id_deletes_only_that(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -127,6 +129,7 @@ def test_prune_yes_with_plan_id_deletes_only_that(tmp_path, monkeypatch):
     assert not os.path.exists(os.path.join(qbase, pid))
 
 
+@pytest.mark.spec("BLD-prune_command", "RUL-prune_explicit", test="TST-guards_quarantine-prune_yes_without_selector_or_all_refuses")
 def test_prune_yes_without_selector_or_all_refuses(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -136,9 +139,26 @@ def test_prune_yes_without_selector_or_all_refuses(tmp_path, monkeypatch):
     assert os.path.isdir(os.path.join(utils.quarantine_dir(str(ws)), pid))  # untouched
 
 
+@pytest.mark.spec("BLD-prune_command", test="TST-guards_quarantine-prune_by_age_reads_the_plan_id_time")
+def test_prune_by_age_reads_the_plan_id_time(tmp_path):
+    """A run's age is the time in its plan id; --plan-id and --older-than-days together select the runs
+    either names."""
+    ws = _ws(tmp_path)
+    qbase = utils.quarantine_dir(str(ws))
+    old, new, named = "20200101T000000Z-aaaaaa", "20991231T000000Z-bbbbbb", "20991230T000000Z-cccccc"
+    for pid in (old, new, named):
+        os.makedirs(os.path.join(qbase, pid))
+        with open(os.path.join(qbase, pid, "x.jpg"), "wb") as f:
+            f.write(b"x")
+        os.utime(os.path.join(qbase, pid), (0, 0))         # file times play no part
+    prep.prune_quarantine(str(ws), plan_ids=[named], older_than_days=30, do_delete=True)
+    assert sorted(os.listdir(qbase)) == [new]
+
+
+
 # --- footprint ---------------------------------------------------------------
 
-@pytest.mark.spec("prep-quarantine-footprint-reported-1")
+@pytest.mark.spec("prep-quarantine-footprint-reported-1", test="TST-guards_quarantine-footprint_reports_quarantine")
 def test_footprint_reports_quarantine(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)

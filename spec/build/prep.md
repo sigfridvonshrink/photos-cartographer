@@ -370,3 +370,29 @@ Prep's plan SHALL end with an `rmdir` for each folder it leaves holding no file 
 its moves over the files on disk, hidden ones included, deepest folder first; execute removes one only if it is then
 empty, journals a folder found not empty or not removable as skipped, and warns of it.
 :::
+
+
+## 15. The quarantine
+
+:::{bld} The quarantine's layout and manifest
+:id: BLD-quarantine_layout
+:status: seed
+:realises: RUL-evidence_before_quarantine
+:aliases: prep-quarantine-recoverable-manifest-1
+
+A quarantined file SHALL go to `.photos-ingest-quarantine/<plan-id>/` at its workspace path, its entry — original path,
+quarantine path, the copy kept, the fingerprint and the plan id — appended to that folder's `manifest.json` before the
+move; the manifest is replaced whole at each append, and one found unreadable is set aside as
+`manifest.json.corrupt-<time>-<random>` and a new one begun.
+:::
+
+:::{bld} `prune-quarantine` and its selectors
+:id: BLD-prune_command
+:status: seed
+:realises: RUL-prune_explicit, RUL-quarantine_footprint_reported
+
+`prep prune-quarantine` SHALL remove whole `<plan-id>` folders of the quarantine, selected by `--plan-id` (repeatable)
+or `--older-than-days` — a run's age taken from the time in its plan id, the two selecting the runs either names —
+listing them with their files and bytes and deleting only with `--yes`, and with no selector only with `--all` too; the
+plan's summary carries the quarantine's footprint.
+:::

@@ -514,3 +514,45 @@ Prep's plan holds no decision of the user's — it follows from the files, the c
 interruption the files say what was done; planning again from them finds only what is left, while resuming would trust a
 plan made for a workspace that no longer stands. The journal records what happened; it is evidence, not a script.
 :::
+
+
+## 15. The quarantine
+
+:::{rat} The reason is written down first
+:id: RAT-reason_first
+:status: seed
+:justifies: RUL-evidence_before_quarantine
+
+The quarantine is never scanned, so a file moved there with no record of why would be invisible to every later run, its
+reason lost. Written first, the record survives a crash before the move; the file is still at its source, and the next
+run sets it aside again under a new record — the old one at worst a record of a move that did not happen.
+:::
+
+:::{rat} The safety net stays until the user lifts it
+:id: RAT-safety_net_stays
+:status: seed
+:justifies: RUL-quarantine_never_auto_deleted, RUL-prune_explicit
+
+De-duplication decides by fingerprint; the quarantine is what makes a wrong decision recoverable. Deleting on its own —
+after some runs, or some age — would turn a recoverable decision into a loss nobody chose. So the quarantine grows,
+visibly, until the user prunes it: by a command of its own, which shows what it would delete before it does.
+:::
+
+:::{rat} A restored file goes the way of any file
+:id: RAT-restore_like_any_file
+:status: seed
+:justifies: RUL-restored_file_is_new
+
+Moving a file back is the user's way of saying it should not have been set aside. Handled as a new file it is checked
+afresh — set aside again if it is still a copy, filed if its twin is gone — and no second path into the pipeline needs
+keeping in step with the first ({need}`RAT-fix_through_inbox`). The old record stays: it is history of what that run did.
+:::
+
+:::{rat} A growing cost is shown
+:id: RAT-growth_shown
+:status: seed
+:justifies: RUL-quarantine_footprint_reported
+
+A quarantine that only grows costs space without a word. Reporting its size every run lets the user decide when to
+prune, knowing what it holds.
+:::

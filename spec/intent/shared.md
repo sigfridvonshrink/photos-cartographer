@@ -622,7 +622,7 @@ phase's output.
 :status: ruled
 :criticality: med
 :verify: incidental
-:aliases: ctrl-skip-set-1, prep-scan-skips-control-subtrees-1, prep-no-requarantine-1
+:aliases: ctrl-skip-set-1, prep-scan-skips-control-subtrees-1, prep-no-requarantine-1, prep-quarantine-excluded-scan-1
 :refines: RUL-control_records_never_media
 :uses: DEF-strays_folder
 
@@ -2419,7 +2419,7 @@ Merge's library setup SHALL NOT record a library in a sealed workspace's configu
 :status: ruled
 :criticality: high
 :verify: required
-:aliases: seal-prune-exception-1
+:aliases: seal-prune-exception-1, prep-prune-quarantine-exempt-seal-1
 :uses: DEF-sealed_workspace
 :refines: RUL-sealed_refuses
 
