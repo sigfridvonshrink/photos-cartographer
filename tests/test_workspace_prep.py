@@ -95,8 +95,6 @@ def mock_read_metadata_concurrently(folders, max_workers=4, progress_coordinator
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
 @pytest.mark.spec("prep-normalize-extension-case-1", "RUL-media_extension_lowercase", "BLD-two_step_case_rename", test="TST-workspace_prep-prep_workflow_plan_and_execute")
 def test_prep_workflow_plan_and_execute(mock_meta, mock_hash_img, tmp_path, monkeypatch):
-    import photos_utils as utils
-    monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
 
     ws = setup_workspace(tmp_path)
     photos_ingest.CONFIG["jobs"] = 1
@@ -205,8 +203,6 @@ def test_deterministic_temp_names(tmp_path, monkeypatch):
 @mock.patch('photos_1_prep.ContentHasher.fingerprint_image', side_effect=mock_hash_image)
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
 def test_source_changed_after_plan_abort(mock_meta, mock_hash_img, tmp_path, monkeypatch):
-    import photos_utils as utils
-    monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
 
     ws = setup_workspace(tmp_path)
     photos_ingest.CONFIG["jobs"] = 1
