@@ -449,7 +449,7 @@ and infers nothing: inference is geotag's, made with evidence prep lacks.
 
 :::{rat} A plan is its code's decisions
 :id: RAT-plan_is_its_codes
-:status: seed
+:status: ruled
 :justifies: RUL-plan_carried_out_by_its_code
 
 A saved plan is the decisions of the code that made it: names, copies, places. Carried out by another build, it would
@@ -460,7 +460,7 @@ plan memo keeping what was read.
 
 :::{rat} The plan is of the workspace it saw
 :id: RAT-plan_saw_the_workspace
-:status: seed
+:status: ruled
 :justifies: RUL-new_file_restales_plan
 
 A file that arrived after planning is one the plan never considered: a copy of something it files, or a name it gives
@@ -470,7 +470,7 @@ that is already known.
 
 :::{rat} A dry run is for looking
 :id: RAT-dry_run_for_looking
-:status: seed
+:status: ruled
 :justifies: RUL-prep_dry_run_changes_nothing
 
 A dry run lets the user see what execution would do before it does it. Changing anything would make it a partial
@@ -479,7 +479,7 @@ execution, and the user could no longer look without acting.
 
 :::{rat} An empty inbox is the end state
 :id: RAT-empty_inbox_end_state
-:status: seed
+:status: ruled
 :justifies: RUL-prepped_nothing_to_do
 
 An initialized workspace whose inbox is empty is where every prep run ends. A saved plan there is already carried out:
@@ -488,7 +488,7 @@ replaying it would collide with the files it made. Stopping says there is nothin
 
 :::{rat} The journal is the evidence of an interrupted run
 :id: RAT-journal_is_evidence
-:status: seed
+:status: ruled
 :justifies: RUL-journal_never_torn
 
 After an interruption, the journal is the only record of what the run did. Rewritten in place, a crash mid-save would
@@ -497,7 +497,7 @@ leave it truncated — the evidence lost at the one moment it is needed, and the
 
 :::{rat} A folder is changed like a file
 :id: RAT-folder_changed_like_a_file
-:status: seed
+:status: ruled
 :justifies: RUL-emptied_folders_removed
 
 Moving files out leaves their folders empty, and the inbox must end empty for the next dump; a day emptied by the sort
@@ -507,7 +507,7 @@ only an empty one goes, so nothing a folder holds — even what arrived unplanne
 
 :::{rat} The files say what is done
 :id: RAT-files_say_what_is_done
-:status: seed
+:status: ruled
 :justifies: RUL-prep_replans
 
 Prep's plan holds no decision of the user's — it follows from the files, the configuration and the database. After an

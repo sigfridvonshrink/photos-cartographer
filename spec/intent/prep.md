@@ -591,7 +591,7 @@ their count, their time range, how many carry a GPS position — inferring nothi
 
 :::{rul} A plan is carried out only by the code that made it
 :id: RUL-plan_carried_out_by_its_code
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :aliases: prep-execute-revalidates-rejects-stale-1
@@ -603,7 +603,7 @@ by other code or recording none.
 
 :::{rul} A file that appeared since planning restales the plan
 :id: RUL-new_file_restales_plan
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :aliases: prep-execute-rejects-new-file-1
@@ -615,7 +615,7 @@ any change.
 
 :::{rul} A dry run changes nothing
 :id: RUL-prep_dry_run_changes_nothing
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -627,7 +627,7 @@ Prep's dry run SHALL change nothing in the workspace.
 
 :::{rul} A prepped workspace has nothing to do
 :id: RUL-prepped_nothing_to_do
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: prep-dryrun-empty-sources-nothing-to-do-1, prep-execute-empty-sources-nothing-to-do-1
@@ -638,7 +638,7 @@ not carry out the saved plan.
 
 :::{rul} The journal is never left torn
 :id: RUL-journal_never_torn
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -649,7 +649,7 @@ An interruption SHALL leave prep's journal as its last save left it, never part-
 
 :::{rul} A folder left empty is removed as planned
 :id: RUL-emptied_folders_removed
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-execution_only_the_plan
@@ -660,7 +660,7 @@ Prep SHALL remove a folder its plan leaves empty — in the inbox or a by-date f
 
 :::{rul} An interrupted execution is planned again, not resumed
 :id: RUL-prep_replans
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :aliases: prep-replan-not-resume-1, prep-crash-safe-rerun-1, prep-no-journal-replay-1
