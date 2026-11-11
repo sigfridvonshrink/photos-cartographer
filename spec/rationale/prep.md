@@ -520,7 +520,7 @@ plan made for a workspace that no longer stands. The journal records what happen
 
 :::{rat} The reason is written down first
 :id: RAT-reason_first
-:status: seed
+:status: ruled
 :justifies: RUL-evidence_before_quarantine
 
 The quarantine is never scanned, so a file moved there with no record of why would be invisible to every later run, its
@@ -530,7 +530,7 @@ run sets it aside again under a new record — the old one at worst a record of 
 
 :::{rat} The safety net stays until the user lifts it
 :id: RAT-safety_net_stays
-:status: seed
+:status: ruled
 :justifies: RUL-quarantine_never_auto_deleted, RUL-prune_explicit
 
 De-duplication decides by fingerprint; the quarantine is what makes a wrong decision recoverable. Deleting on its own —
@@ -540,7 +540,7 @@ visibly, until the user prunes it: by a command of its own, which shows what it 
 
 :::{rat} A restored file goes the way of any file
 :id: RAT-restore_like_any_file
-:status: seed
+:status: ruled
 :justifies: RUL-restored_file_is_new
 
 Moving a file back is the user's way of saying it should not have been set aside. Handled as a new file it is checked
@@ -550,7 +550,7 @@ keeping in step with the first ({need}`RAT-fix_through_inbox`). The old record s
 
 :::{rat} A growing cost is shown
 :id: RAT-growth_shown
-:status: seed
+:status: ruled
 :justifies: RUL-quarantine_footprint_reported
 
 A quarantine that only grows costs space without a word. Reporting its size every run lets the user decide when to

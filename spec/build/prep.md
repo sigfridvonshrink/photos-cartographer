@@ -376,7 +376,7 @@ empty, journals a folder found not empty or not removable as skipped, and warns 
 
 :::{bld} The quarantine's layout and manifest
 :id: BLD-quarantine_layout
-:status: seed
+:status: ruled
 :realises: RUL-evidence_before_quarantine
 :aliases: prep-quarantine-recoverable-manifest-1
 
@@ -388,7 +388,7 @@ move; the manifest is replaced whole at each append, and one found unreadable is
 
 :::{bld} `prune-quarantine` and its selectors
 :id: BLD-prune_command
-:status: seed
+:status: ruled
 :realises: RUL-prune_explicit, RUL-quarantine_footprint_reported
 
 `prep prune-quarantine` SHALL remove whole `<plan-id>` folders of the quarantine, selected by `--plan-id` (repeatable)
