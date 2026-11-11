@@ -64,7 +64,7 @@ def test_execute_rejects_forbidden_operation_types(tmp_path):
     executor = photos_1_prep.PlanExecutor(str(tmp_path))
 
     plan = photos_1_prep.Plan(
-        plan_version=photos_1_prep.PLAN_SCHEMA_VERSION,
+        plan_version=photos_1_prep.PLAN_SCHEMA_VERSION, code_fingerprint=photos_1_prep.code_fingerprint(),
         plan_id="test",
         command="prep",
         created_at="now",
@@ -93,7 +93,7 @@ def test_execute_rejects_non_prep_plans(tmp_path):
     executor = photos_1_prep.PlanExecutor(str(tmp_path))
 
     plan = photos_1_prep.Plan(
-        plan_version=photos_1_prep.PLAN_SCHEMA_VERSION,
+        plan_version=photos_1_prep.PLAN_SCHEMA_VERSION, code_fingerprint=photos_1_prep.code_fingerprint(),
         plan_id="test",
         command="geotag",
         created_at="now",
@@ -205,7 +205,7 @@ def test_dry_run_rejects_metadata_write(tmp_path):
     executor = photos_1_prep.PlanExecutor(str(tmp_path))
 
     plan = photos_1_prep.Plan(
-        plan_version=photos_1_prep.PLAN_SCHEMA_VERSION,
+        plan_version=photos_1_prep.PLAN_SCHEMA_VERSION, code_fingerprint=photos_1_prep.code_fingerprint(),
         plan_id="test",
         command="prep",
         created_at="now",
@@ -238,7 +238,7 @@ def test_dry_run_rejects_metadata_write(tmp_path):
 def test_execute_rejects_any_operation_in_by_dest(tmp_path, source, destination):
     executor = photos_1_prep.PlanExecutor(str(tmp_path))
     plan = photos_1_prep.Plan(
-        plan_version=photos_1_prep.PLAN_SCHEMA_VERSION, plan_id="test", command="prep", created_at="now",
+        plan_version=photos_1_prep.PLAN_SCHEMA_VERSION, code_fingerprint=photos_1_prep.code_fingerprint(), plan_id="test", command="prep", created_at="now",
         workspace_root=str(tmp_path), digikam_root=None,
         config_fingerprint=photos_1_prep.Fingerprint("sha256", "val"), instruction_fingerprints={},
         locks_required=[], summary={}, blockers=[], warnings=[],

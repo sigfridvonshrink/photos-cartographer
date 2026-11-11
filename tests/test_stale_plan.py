@@ -172,3 +172,58 @@ def test_replan_incorporates_new_file_reading_only_it(tmp_path, monkeypatch):
     assert read == ["b.jpg"] and hashed == ["b.jpg"]
     prep.PlanExecutor(str(ws)).execute(plan)
     assert not os.listdir(ws / "0-sources")
+
+
+@pytest.mark.spec("RUL-plan_carried_out_by_its_code", "BLD-code_fingerprint",
+                  test="TST-stale_plan-a_plan_made_by_other_code_is_refused")
+def test_a_plan_made_by_other_code_is_refused(tmp_path, monkeypatch):
+    """A saved plan records the code that made it; execute refuses it once the code differs — or when it
+    records none — before any change."""
+    _mock(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    plan = _build_plan(ws)
+    assert plan.code_fingerprint == utils.code_fingerprint()
+    for recorded in ("0" * 64, ""):
+        plan.code_fingerprint = recorded
+        with pytest.raises(ValueError, match="another build"):
+            prep.PlanExecutor(str(ws)).execute(plan)
+        assert (ws / "0-sources" / "a.jpg").exists()
+
+
+@pytest.mark.spec("RUL-journal_never_torn", "BLD-prep_journal",
+                  test="TST-stale_plan-a_failed_journal_save_leaves_the_last_one_whole")
+def test_a_failed_journal_save_leaves_the_last_one_whole(tmp_path, monkeypatch):
+    """The journal is replaced whole: a save that fails partway leaves the journal as the previous save
+    wrote it."""
+    path = tmp_path / "journal.json"
+    jw = prep.JournalWriter(str(path))
+    jw.start_journal("p1")
+    before = path.read_text()
+    real_replace = os.replace
+    monkeypatch.setattr(os, "replace", lambda *a: (_ for _ in ()).throw(OSError("disk full")))
+    with pytest.raises(OSError):
+        jw.finish_journal("success")
+    monkeypatch.setattr(os, "replace", real_replace)
+    assert path.read_text() == before and json.loads(before)["status"] == "started"
+    assert [p.name for p in tmp_path.iterdir()] == ["journal.json"]          # no temporary left
+
+
+@pytest.mark.spec("BLD-code_fingerprint", test="TST-stale_plan-the_build_and_its_checkout_have_one_fingerprint")
+def test_the_build_and_its_checkout_have_one_fingerprint(tmp_path):
+    """The code's fingerprint is the same whether the package runs from its checkout or from the zipapp
+    built from it, and changes with any file the zipapp ships."""
+    import importlib.util, subprocess, sys
+    from importlib.machinery import SourceFileLoader
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    loader = SourceFileLoader("build_pyz", os.path.join(root, "tools", "build-pyz"))
+    build = importlib.util.module_from_spec(importlib.util.spec_from_loader("build_pyz", loader))
+    loader.exec_module(build)
+    pyz = tmp_path / "pc.pyz"
+    pyz.write_bytes(build.build_pyz_bytes())
+    probe = "import sys; sys.path.insert(0, sys.argv[1]); from cartographer.photos_utils import code_fingerprint; print(code_fingerprint())"
+    run = lambda path: subprocess.run([sys.executable, "-c", probe, path], capture_output=True, text=True,
+                                      check=True, cwd=tmp_path).stdout.strip()
+    assert run(str(pyz)) == run(root) == utils.code_fingerprint()
+    pyz.write_bytes(build.build_pyz_bytes(version="9.9.9"))
+    assert run(str(pyz)) != utils.code_fingerprint()

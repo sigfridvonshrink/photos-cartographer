@@ -66,7 +66,7 @@ gone can be told from one whose owner is running.
 :realises: RUL-lock_through_the_run
 
 Each phase's `plan`, `dry-run` and `execute` SHALL run with the lock taken at start already held, none taking it again
-or scoping it on its own (prep §14, geotag §29).
+or scoping it on its own ({need}`RUL-lock_through_the_run`; geotag §29).
 :::
 
 ## 2. A snapshot before changing, optionally
@@ -97,7 +97,7 @@ only after the workspace's has succeeded, and recording both in `photos-31-merge
 :status: ruled
 :realises: RUL-snapshot_optional
 
-The three phases SHALL take their snapshots through one mechanism — prep §14.3, geotag §29 and merge §10.3 invoke it,
+The three phases SHALL take their snapshots through one mechanism — prep's execute, geotag §29 and merge §10.3 invoke it,
 and none redefines it.
 :::
 
@@ -501,7 +501,7 @@ these geotag reads only the `*.gpx` files beneath `gpx_root`.
 :realises: RUL-track_files_block_prep, RUL-track_file_left_in_place
 
 Prep SHALL raise one blocker for each track file it inventories, naming it, and leave it out of the plan (prep §3,
-§6.1); execute raises the same blocker for one that appeared after planning (prep §14.3).
+§6.1); execute raises the same blocker for one that appeared after planning ({need}`RUL-new_file_restales_plan`).
 :::
 
 :::{bld} The GPX fingerprint
@@ -696,7 +696,7 @@ created by geotag and preserved across regeneration (geotag §9, §20), the deci
 :realises: RUL-cause_locatable, RUL-decision_revisable
 
 A change SHALL be traced from its decision record through the `depends_on` fingerprints (§9) to the executable plan and
-the run's journal (prep §14.3; geotag §4–§6, §29). Merge takes no decision; its placement is a fixed rule over recorded
+the run's journal ({need}`BLD-prep_journal`; geotag §4–§6, §29). Merge takes no decision; its placement is a fixed rule over recorded
 inputs, recorded the same way (merge §8–§9).
 :::
 
@@ -831,12 +831,13 @@ the log's `warnings`, the log then `partial`, any pass whose journal is kept but
 :::{bld} The database: its file and its writers
 :id: BLD-workspace_database
 :status: ruled
+:aliases: prep-cache-single-writer-1
 :realises: RUL-one_database, RUL-database_is_record, RUL-database_regions_disjoint, RUL-other_databases_scratch, RUL-finalize_reads_database
 :uses: BLD-record_ownership
 
 The workspace database SHALL be SQLite, `photos-00-ingest.db` in `.photos-ingest/`, written by: prep, of the file and
-metadata caches (`file_cache`, `metadata_cache`) and their version row (`meta`), through its single-writer path (prep
-§14.3); geotag, of the resolved-UTC cache (`resolved_utc_cache`), the values each photo held before geotag first wrote
+metadata caches (`file_cache`, `metadata_cache`) and their version row (`meta`), through its single-writer path (execute's main
+thread); geotag, of the resolved-UTC cache (`resolved_utc_cache`), the values each photo held before geotag first wrote
 to it (`original_values`, geotag §24.2); merge, of the library-file fingerprint cache (`library_fingerprint_cache`,
 keyed by the library file's absolute path with its size and modification time). Where each photo landed is in merge's
 JSON records, not the database. The other databases are scratch, re-derivable and deletable at any time: prep's
@@ -1054,7 +1055,7 @@ Every move and rename that carries content SHALL go through `_move_no_clobber`: 
 across filesystems, for merge alone, `_move_cross_fs_no_clobber`. A refused name stops that operation: prep records it
 failed and stops; geotag and merge record a blocker and leave the photo where it is. Merge also tests its target before
 moving, and geotag compares names ignoring case (geotag §27). The rename that completes an operation is thus itself the
-check that its name is free (prep §14.3–§14.4, geotag §29.1a, merge §11).
+check that its name is free ({need}`RUL-target_free_at_execute`; geotag §29.1a, merge §11).
 :::
 
 :::{bld} Each run checks the workspace's devices
