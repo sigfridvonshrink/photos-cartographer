@@ -3,9 +3,9 @@
 1	This document defines the complete, self-contained workflow for the preparation phase implemented by `photos-1-prep`.	dropped	document structure: the corpus index and each document's introduction replace it
 1	The prep phase exists to take an unorganized workspace and leave it in a clean, deduplicated, date-organized state so the user can then move photos into the correct destination folders under `6-photos-by-dest`, after which the geotag phase (`photos-2-geotag`, see `photos-2-geotag-workflow.md`) takes over.	DEF-prep DEF-operator_loop	
 1	The prep phase:	dropped	the lead-in of a summary list; each entry names the items it restates
-1	1. **initializes** the workspace on first run — creating the `0`–`6` folder structure and control directory, moving any as-arrived base dump into `0-sources/`, and writing the root sentinel last (Sections 3.1, 7.1);	defer:3.1	
+1	1. **initializes** the workspace on first run — creating the `0`–`6` folder structure and control directory, moving any as-arrived base dump into `0-sources/`, and writing the root sentinel last (Sections 3.1, 7.1);	RUL-init_moves_dump_to_inbox RUL-initialized_marked_last BLD-workspace_guard	
 1	2. seeds the workspace configuration (`photos-00-config.json`) on first run if absent, then reads it as authoritative;	RUL-config_seeded_once RUL-config_authoritative	
-1	3. inventories the workspace safely and blocks on unsafe inputs (a sealed workspace; a misplaced root entry — loose file, non-managed folder, or symlink — on an initialized workspace; a missing managed folder; or a symlink anywhere among managed files, including nested directory symlinks, Section 6.2);	defer:6.2	
+1	3. inventories the workspace safely and blocks on unsafe inputs (a sealed workspace; a misplaced root entry — loose file, non-managed folder, or symlink — on an initialized workspace; a missing managed folder; or a symlink anywhere among managed files, including nested directory symlinks, Section 6.2);	RUL-sealed_refuses RUL-top_level_only_managed RUL-missing_folder_blocks RUL-no_links	
 1	4. takes each dump from `0-sources/` (the one inbox) without flattening it, resolving destination-name collisions in memory at planning (Section 7.2);	RUL-inbox_kept_as_dumped RUL-suffix_no_clobber	
 1	5. normalizes file extensions;	RUL-media_extension_lowercase	
 1	6. separates redundant JPEGs that have a RAW sibling;	RUL-redundant_jpeg_set_aside	
@@ -109,7 +109,7 @@
 4	5. all media mutations are journaled;	RUL-every_change_journaled BLD-prep_journal	
 4	6. `6-photos-by-dest` is never a mutation source or target;	RUL-prep_leaves_by_dest_as_found BLD-by_dest_ops_refused	
 4	7. no downstream artifact is created from stale upstream inputs (Section 5);	INV-no_stale_use	
-4	8. all human-authored config is sanity-validated before use (Section 6.3; shared contract Section 14).	RUL-config_validated_before_use defer:6.3	prep's own checks are §6.3
+4	8. all human-authored config is sanity-validated before use (Section 6.3; shared contract Section 14).	RUL-config_validated_before_use BLD-authored_checks_by_phase	prep's own checks are §6.3
 4	Execution never re-derives organization decisions.	RUL-execution_only_the_plan	
 4	It applies only the operations already recorded in the plan, after validation.	RUL-execution_only_the_plan BLD-prep_execute_replays	
 5	## 5. Artifact dependency cascade	dropped	a heading; the corpus's documents carry their own
