@@ -548,6 +548,16 @@ The configuration SHALL list which extensions are images, raw files and videos, 
 An extension the configuration does not list SHALL be `other`.
 :::
 
+:::{rul} An extension is matched ignoring case
+:id: RUL-extension_matched_ignoring_case
+:status: seed
+:criticality: med
+:verify: required
+:refines: RUL-config_lists_extensions
+
+A file's extension SHALL be matched to the configuration's lists ignoring case.
+:::
+
 :::{rul} Every value the user supplies is checked before use
 :id: RUL-config_validated_before_use
 :status: ruled
@@ -2454,6 +2464,30 @@ it must: the tracks' place outside the managed folders, the library's an existin
 
 The settings a snapshot's name is made from SHALL be checked to make a valid snapshot name before any snapshot is
 attempted.
+:::
+
+:::{rul} The managed folders' names are checked
+:id: RUL-checked_folder_names
+:status: seed
+:criticality: med
+:verify: required
+:uses: RUL-folder_names_not_roles
+:refines: INV-authored_values_checked
+
+The managed folders' names SHALL each be one part of a path, not hidden, all different, and none the name of the control
+records' place or of the quarantine.
+:::
+
+:::{rul} The extension lists are checked
+:id: RUL-checked_extension_lists
+:status: seed
+:criticality: med
+:verify: required
+:uses: RUL-config_lists_extensions
+:refines: INV-authored_values_checked
+
+Each class's list of extensions SHALL be non-empty, and each extension in it lowercase, without its dot, and holding no
+separator or space.
 :::
 
 :::{rul} A timezone is a real zone

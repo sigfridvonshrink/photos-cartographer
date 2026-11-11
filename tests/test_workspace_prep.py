@@ -223,7 +223,7 @@ def test_source_changed_after_plan_abort(mock_meta, mock_hash_img, tmp_path, mon
     with pytest.raises(ValueError, match="Precondition failed: size changed"):
         executor.execute(plan, journal_path)
 
-@pytest.mark.spec("prep-forbidden-sidecar-blocks-1")
+@pytest.mark.spec("prep-forbidden-sidecar-blocks-1", "RUL-sidecar_blocks", "BLD-sidecar_extensions", test="TST-workspace_prep-sidecar_blocking")
 def test_sidecar_blocking(tmp_path, monkeypatch):
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
@@ -231,15 +231,17 @@ def test_sidecar_blocking(tmp_path, monkeypatch):
     ws = setup_workspace(tmp_path)
     photos_ingest.CONFIG["jobs"] = 1
 
-    # PR ACCEPTANCE TEST: sidecar blocking
+    # PR ACCEPTANCE TEST: sidecar blocking — in the inbox and among the sorted photos alike
     (ws / "0-sources" / "PHOTO_555.xmp").touch()
+    (ws / "6-photos-by-dest" / "vacation").mkdir(exist_ok=True)
+    (ws / "6-photos-by-dest" / "vacation" / "2023-01-01--12-00-00.dop").touch()
 
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
     workflow = photos_ingest.WorkspacePrepWorkflow(str(ws), cache)
     plan = workflow.plan()
 
-    assert len(plan.blockers) > 0
-    assert "Forbidden sidecar files detected" in plan.blockers[0]
+    sidecar = [b for b in plan.blockers if "Forbidden sidecar files detected" in b]
+    assert sidecar and "PHOTO_555.xmp" in sidecar[0] and "2023-01-01--12-00-00.dop" in sidecar[0], plan.blockers
 
     executor = photos_ingest.PlanExecutor(str(ws))
     journal_path = str(ws / ".photos-ingest/journal.json")
@@ -652,7 +654,7 @@ def test_empty_sources_is_steady_end_state_not_a_missing_folder_block(tmp_path, 
     assert len(plan.operations) == 0                                 # nothing to do — a clean no-op
 
 
-@pytest.mark.spec("prep-blockers-reported-not-skipped-1")
+@pytest.mark.spec("prep-blockers-reported-not-skipped-1", "RUL-blockers_all_reported", "BLD-blocked_plan_refused", test="TST-workspace_prep-a_blocker_is_reported_textually_and_never_silently_skipped")
 def test_a_blocker_is_reported_textually_and_never_silently_skipped(tmp_path, monkeypatch):
     """§6.2 final line ('Blockers are reported textually; the workflow does not silently skip them').
     With a forbidden sidecar present alongside a perfectly organizable photo, prep must (a) SURFACE the
@@ -663,10 +665,14 @@ def test_a_blocker_is_reported_textually_and_never_silently_skipped(tmp_path, mo
     ws = _empty_initialized_ws(tmp_path)
     (ws / "0-sources" / "good.jpg").write_bytes(b"img")              # would organize on its own
     (ws / "0-sources" / "good.xmp").touch()                         # forbidden sidecar -> hard block
+    (ws / "6-photos-by-dest" / "Trip").mkdir()
+    (ws / "6-photos-by-dest" / "Trip" / "clip.mp4").write_bytes(b"vid")   # a second, unrelated blocker
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
     plan = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
-    # (a) reported textually — a descriptive, non-empty message, not a silently-dropped condition.
+    # (a) reported textually — a descriptive, non-empty message, not a silently-dropped condition —
+    # and every one of them, not only the first found.
     assert plan.blockers and any("sidecar" in b.lower() for b in plan.blockers), plan.blockers
+    assert any("clip.mp4" in b for b in plan.blockers), plan.blockers
     assert all(isinstance(b, str) and b.strip() for b in plan.blockers)
     # (b) never silently skipped: the run is refused wholesale; the otherwise-valid photo is NOT moved.
     with pytest.raises(ValueError, match="Plan contains blockers and cannot be executed"):

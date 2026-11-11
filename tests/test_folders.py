@@ -61,6 +61,7 @@ def test_dedup_priority_orders_by_dest_highest_strays_excluded():
     (dict(utils.DEFAULT_FOLDERS, sources=""), "non-empty"),                      # empty
     (dict(utils.DEFAULT_FOLDERS, sources=".photos-ingest"), "single path"),      # leading dot / control
 ])
+@pytest.mark.spec("RUL-checked_folder_names", test="TST-folders-validate_config_rejects_bad_folders")
 def test_validate_config_rejects_bad_folders(bad, needle):
     with pytest.raises(ValueError) as ei:
         utils.validate_config({"folders": bad})

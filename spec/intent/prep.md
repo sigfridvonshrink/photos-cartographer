@@ -104,3 +104,61 @@ already did: the folders it made, and the dump already in the inbox.
 A file prep moves to the strays folder SHALL be recorded nowhere but in the journal of that move: no fingerprint, no row
 in the workspace database, no entry in any log, no place in the archival package.
 :::
+
+## 6. What prep refuses to work on
+
+:::{rul} A file in the other kind's folder blocks prep
+:id: RUL-band_misplacement_blocks
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: prep-band-misplacement-blocks-1, prep-video-only-in-videos-band-1
+
+A video in photos by date or photos by destination, or a photo in videos by date, SHALL block prep's plan.
+:::
+
+:::{rul} An editing sidecar blocks prep
+:id: RUL-sidecar_blocks
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: prep-forbidden-sidecar-blocks-1
+
+An editing sidecar — a file holding a photo's development beside it — found anywhere prep inventories SHALL block
+prep's plan.
+:::
+
+:::{rul} A file of no media class outside the inbox blocks prep
+:id: RUL-other_outside_inbox_blocks
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+
+A file of no media class found in a managed folder other than the inbox SHALL block prep's plan, named.
+:::
+
+:::{rul} Every blocker is reported
+:id: RUL-blockers_all_reported
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:aliases: prep-blockers-reported-not-skipped-1
+
+Prep SHALL report every blocker it finds, each naming what blocks, never skipping one silently.
+:::
+
+:::{rul} Media set aside as strays is pointed out
+:id: RUL-stray_media_hinted
+:status: seed
+:criticality: low
+:verify: required
+:aliases: prep-stray-media-warning-1, prep-stray-media-warning-advisory-1
+
+When files prep is about to set aside as strays are images or videos by their content, prep SHALL warn, naming their
+extension.
+:::
+
