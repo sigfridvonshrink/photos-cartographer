@@ -161,7 +161,7 @@ blocker it finds, the plan still saved — is not empty.
 
 :::{bld} The stages run in a fixed order
 :id: BLD-prep_stage_order
-:status: seed
+:status: ruled
 :realises: RUL-duplicate_set_aside_as_found, RUL-copy_kept_by_folder
 
 Prep's planning SHALL run its stages in this order: initialization and inventory; duplicates; extension case; redundant
@@ -170,7 +170,7 @@ JPEGs; organization by class and time; database reconciliation.
 
 :::{bld} Each stage works from the paths the stages before it planned
 :id: BLD-planned_paths_tracked
-:status: seed
+:status: ruled
 :realises: RUL-suffix_no_clobber, RUL-inbox_kept_as_dumped
 :aliases: prep-collision-resolved-in-memory-1
 
@@ -180,7 +180,7 @@ against the names on disk and those already planned.
 
 :::{bld} A filed file's extension is lowercased in two renames
 :id: BLD-two_step_case_rename
-:status: seed
+:status: ruled
 :realises: RUL-media_extension_lowercase
 
 A filed media file's extension SHALL be lowercased by two no-clobber renames in its folder, through a temporary name
@@ -189,7 +189,7 @@ free on disk and in the plan; an inbox file's, in the move that files it.
 
 :::{bld} What counts as a JPEG and a raw file
 :id: BLD-jpeg_extensions
-:status: seed
+:status: ruled
 :realises: RUL-redundant_jpeg_set_aside
 
 A JPEG SHALL be a file of the `image` class ending `.jpg` or `.jpeg`, matched ignoring case; a raw file, one of the
@@ -198,7 +198,7 @@ A JPEG SHALL be a file of the `image` class ending `.jpg` or `.jpeg`, matched ig
 
 :::{bld} The database is reconciled by planned operations
 :id: BLD-database_ops
-:status: seed
+:status: ruled
 :realises: RUL-database_matches_files
 
 Prep's plan SHALL refresh a stale database row with a `db_upsert`, and remove with a `db_remove` the row of a file gone
