@@ -404,7 +404,7 @@ user can check the pair, and a photo already sorted into a destination is seen t
 
 :::{rat} One read serves both phases
 :id: RAT-one_read_serves_both
-:status: seed
+:status: ruled
 :justifies: RUL-metadata_kept_for_geotag
 
 Prep opens every file anyway, to fingerprint and file it; geotag needs the same files' times, cameras and positions.
@@ -414,7 +414,7 @@ Kept by prep, they are read once, and geotag reads no photo. Prep keeps them as 
 
 :::{rat} The camera's record first, by the pipeline's choice
 :id: RAT-camera_record_first
-:status: seed
+:status: ruled
 :justifies: RUL-metadata_group_order
 
 A file can hold one field in several places: EXIF, written by the camera; XMP, where other tools mirror it, or keep it
@@ -426,7 +426,7 @@ the same field elsewhere before another field is tried.
 
 :::{rat} A change in reading is told apart from a change in the file
 :id: RAT-reading_change_detectable
-:status: seed
+:status: ruled
 :justifies: RUL-metadata_freshness
 
 Metadata kept is reused for every unchanged file, so what it depends on must be recorded with it: the file as it was,
@@ -436,7 +436,7 @@ being taken for a change in the file — and the record is read again whole ({ne
 
 :::{rat} Facts before decisions
 :id: RAT-facts_before_decisions
-:status: seed
+:status: ruled
 :justifies: RUL-grouping_facts_reported
 
 Geotag decides a clock offset per camera and a timezone per destination; before it does, the user and geotag can see

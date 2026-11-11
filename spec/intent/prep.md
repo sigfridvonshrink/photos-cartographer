@@ -541,7 +541,7 @@ Prep SHALL record each duplicate it quarantines with the copy it kept, in the qu
 
 :::{rul} Prep keeps the metadata geotag needs
 :id: RUL-metadata_kept_for_geotag
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :aliases: prep-cache-metadata-fields-1, prep-passive-metadata-cache-1
@@ -553,7 +553,7 @@ identity, the times and the native GPS position as recorded, and the file's dime
 
 :::{rul} A field is taken from the camera's own record first
 :id: RUL-metadata_group_order
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 
@@ -563,7 +563,7 @@ the file records it — a time field from the first of them holding a valid time
 
 :::{rul} Cached metadata is reused only while read the same way
 :id: RUL-metadata_freshness
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :aliases: prep-metadata-freshness-inputs-1
@@ -577,7 +577,7 @@ were when it was read.
 
 :::{rul} The handoff reports what the groups hold
 :id: RUL-grouping_facts_reported
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: prep-passive-grouping-facts-1
