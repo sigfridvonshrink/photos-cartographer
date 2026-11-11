@@ -646,7 +646,7 @@ Expensive work (fingerprinting, metadata extraction) may run concurrently under 
 
 1. filesystem traversal and stat collection are single-threaded and deterministic, fixing the candidate list before any concurrent work;
 2. candidate lists are sorted before submission and worker results aggregated deterministically;
-3. two safe job counts produce the same semantic plan and the same dependency fingerprints for the same workspace — in fact the saved plan is **byte-identical** across job counts, since the count is not recorded in it (item 6);
+3. two safe job counts produce the same semantic plan and the same dependency fingerprints for the same workspace — in fact the saved plans are identical but for what every plan has of its own (its id, its creation time, its operations' ids), since the count is not recorded in it (item 6);
 4. SQLite writes go through a single controlled writer / collect-then-write transaction, never from worker threads;
 5. **External tools run as persistent workers wherever the tool supports a long-lived mode**, to avoid paying process-startup cost per file:
    - **`exiftool`** runs as a persistent `-stay_open` worker — one process serves many files — restarted safely on crash.
@@ -654,7 +654,7 @@ Expensive work (fingerprinting, metadata extraction) may run concurrently under 
    - **`ffmpeg` (the video stream-MD5 fingerprint)** has **no** stay-open/server mode, so a persistent worker is not possible for it — `ffmpeg` is **spawned per file** as a short-lived subprocess (with the same crash-safe restart and bounded per-file retry described below).
 
    In every case the worker is **crash-safe and retried**: a worker crash is recovered by safe restart, and a transient per-file failure is retried a small bounded number of times — equally for the photo (`identify`) and video (`ffmpeg`) fingerprint tools — before the file becomes a blocker. Partial or failed tool output is **never** persisted as a valid cache record; it surfaces as a clear blocker, never a silent success (Section 9);
-6. job count (`-j`/`--jobs`) is a transient, machine-dependent runtime knob, not a semantic dependency: it is **not recorded in the saved plan** (nor in the workspace config file, nor the handoff). A workspace may be processed on different machines across runs, so baking a host's core count into the portable plan would be wrong; keeping it out also makes the plan byte-identical across job counts (item 3). It would only matter if a job count genuinely changed planned behaviour — which it must not.
+6. job count (`-j`/`--jobs`) is a transient, machine-dependent runtime knob, not a semantic dependency: it is **not recorded in the saved plan** (nor in the workspace config file, nor the handoff). A workspace may be processed on different machines across runs, so baking a host's core count into the portable plan would be wrong; keeping it out also keeps the plan the same across job counts (item 3). It would only matter if a job count genuinely changed planned behaviour — which it must not.
 
 Execution is observable, but progress output is never the only record of a mutation — the journal is durable; progress is transient and never a dependency.
 
@@ -662,7 +662,7 @@ Execution is observable, but progress output is never the only record of a mutat
 
 Re-fingerprinting a media file (a full ImageMagick / `ffmpeg` decode) is the dominant cost of a plan, and the cache is path-keyed (Section 10), so an unexpected re-hash is easy to incur and easy to miss. When **any** media file is re-fingerprinted in a run, prep emits an always-on diagnostic that makes the cause visible:
 
-- it splits **expected** new-file hashes from **previously-cached** files that re-hashed, the latter broken down by reason: `new` (first ingest, expected), `moved-unmatched` (an uncached file under `6-photos-by-dest` that failed the unique bijective move match of Section 10.1 — an ambiguous, renamed, or stat-reset move), `size-changed`, `mtime-changed`, `metadata-stale` (an exiftool / field-set / options / schema / camera-group-key stamp moved, Section 9), or `engine-changed` (the ImageMagick / `ffmpeg` version bound to a cached signature changed, Section 10);
+- it splits **expected** new-file hashes from **previously-cached** files that re-hashed, the latter broken down by reason: `new` (first ingest, expected), `moved-unmatched` (an uncached file under `6-photos-by-dest` that failed the unique bijective move match of Section 10.1 — an ambiguous, renamed, or stat-reset move), `size-changed`, `mtime-changed`, `metadata-stale` (an exiftool / field-set / options / schema / camera-group-key stamp moved, Section 9), `failed-before` (a failed fingerprint, taken again on every run, Section 11.3), or `engine-changed` (the method that took the cached fingerprint is not the one in use — its strategy, or for a photo the ImageMagick version, Section 9);
 - the per-reason counts are recorded in the run report under `performance_and_cache.rehash_summary` (machine-readable, diffable across runs).
 
 The diagnostic is unconditional — a re-hash is only observable after the fact. This is **observability only** — it never changes which files are re-hashed, nor the plan itself.

@@ -610,3 +610,37 @@ pixels can come out under a new value. Left as it was, the old entry would point
 names, and the photo would start again with no history, marked partial. The file it was left at, now holding the new
 value while the old one is nowhere, says it is the same photo.
 :::
+
+
+## 17. Concurrency, determinism, and what a run shows
+
+:::{rat} Speed is the machine's, the plan is the workspace's
+:id: RAT-speed_is_the_machines
+:status: seed
+:justifies: RUL-jobs_change_nothing, RUL-jobs_recorded_nowhere
+
+Running fingerprints and metadata reads in parallel only saves time; how many at once depends on the machine, which may
+change between runs of one workspace. A plan that differed with it would depend on where it was made; recorded, the
+count would make two equal plans differ. So the work is listed and gathered in a fixed order, and the count is kept
+nowhere.
+:::
+
+:::{rat} A crash is not a verdict
+:id: RAT-crash_not_a_verdict
+:status: seed
+:justifies: RUL-tool_failure_retried
+
+A long-lived tool process can die for reasons that have nothing to do with the file it was reading. Restarted and tried
+again, the file is judged on its own; still failing, it is recorded as failed and blocks or waits, never passed off as
+read.
+:::
+
+:::{rat} The costly step is shown
+:id: RAT-costly_step_shown
+:status: seed
+:justifies: RUL-rehash_explained
+
+Fingerprinting again is the costliest thing a plan does, and the reasons for it — a new tool version, a move prep could
+not match, a file touched — are invisible until counted. Counting them by reason shows the user why a plan took hours,
+and that an unexpected cause is one.
+:::

@@ -163,6 +163,7 @@ blocker it finds, the plan still saved — is not empty.
 :id: BLD-prep_stage_order
 :status: ruled
 :realises: RUL-duplicate_set_aside_as_found, RUL-copy_kept_by_folder
+:aliases: prep-deterministic-order-1
 
 Prep's planning SHALL run its stages in this order: initialization and inventory; duplicates; extension case; redundant
 JPEGs; organization by class and time; database reconciliation.
@@ -436,4 +437,39 @@ quarantine evidence and the final database rows, merged onto the prior log by fi
 nowhere in the workspace and whose `prep_path` holds a file of a new value moves to it with a `fingerprint_retaken`
 step; an entry whose file is elsewhere with no step of this run gains a `user` step `moved_to_by_dest`; and a file in
 a prep-organized folder with no recorded history gets an entry marked `partial`, with a warning.
+:::
+
+
+## 17. Concurrency, determinism, and what a run shows
+
+:::{bld} The tools' workers
+:id: BLD-tool_workers
+:status: seed
+:realises: RUL-tool_failure_retried
+:aliases: prep-persistent-external-workers-1, prep-persistent-driver-reset-state-1
+
+Prep SHALL read metadata through persistent `exiftool -stay_open` workers and fingerprint photos through a persistent
+`magick -script -` process per thread — each file read, given `-colorspace sRGB -depth 8`, its `%#` printed, then
+`-delete 0--1`, a `{ready}` line closing its reply — falling back to `identify` per file where `magick` is absent; it
+starts `ffmpeg` per video. Each tool gets two attempts per file, a dead worker restarted between them.
+:::
+
+:::{bld} Planning in a fixed order
+:id: BLD-planning_order
+:status: seed
+:realises: RUL-jobs_change_nothing
+
+Prep SHALL walk the workspace and take its files' sizes and times on one thread, sorted, before any parallel work, and
+gather the workers' results by path; two plans of one workspace differ only in `plan_id`, `created_at` and the
+operations' ids.
+:::
+
+:::{bld} The re-fingerprint summary
+:id: BLD-rehash_summary
+:status: seed
+:realises: RUL-rehash_explained
+
+The plan's `performance_and_cache.rehash_summary` SHALL count the media files fingerprinted this run by reason — `new`,
+`moved-unmatched`, `size-changed`, `mtime-changed`, `metadata-stale`, `failed-before`, `engine-changed` — with a sample
+of the unexpected ones, and the fingerprints reused from the plan memo.
 :::
