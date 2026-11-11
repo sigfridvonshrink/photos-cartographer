@@ -264,3 +264,48 @@ The next run reuses the database's fingerprints and metadata for every file whos
 left stale or pointing at a file that is gone would be reused for what it no longer describes; refreshing and pruning at
 each execution keeps reuse safe.
 :::
+
+
+## 9. Content fingerprinting and cache reuse
+
+:::{rat} Size and time are the cheap sign of change
+:id: RAT-size_time_sign_change
+:status: seed
+:justifies: RUL-fingerprint_taken_afresh
+
+Decoding a photo to fingerprint it is the costliest step prep takes, so it is done once per file and kept. Any write to
+a file changes its size or its modification time, and both are read without opening it: an unchanged pair says the
+fingerprint kept still describes the file, a changed one that it may not.
+:::
+
+:::{rat} A fingerprint compares only with one taken the same way
+:id: RAT-fingerprint_same_method
+:status: seed
+:justifies: RUL-fingerprint_method_matches
+
+Duplicates are found and a photo is followed through every phase by comparing fingerprints, and two fingerprints of one
+picture agree only when taken the same way: another ImageMagick may normalize pixels differently, another strategy
+hashes something else. A fingerprint whose method is not the one in use, or is unknown, would set two copies of one
+photo apart or lose a photo's trail; taking it again costs a decode.
+:::
+
+:::{rat} A change in how metadata is read is made on purpose
+:id: RAT-reread_on_purpose
+:status: seed
+:justifies: RUL-reread_whole
+
+The way metadata is read changes only on purpose: more of it is wanted, or what is read must change. Either way every
+file is to be read again, and reading it whole — its fingerprint with its metadata — leaves nothing the database says
+of it from before the change.
+:::
+
+:::{rat} No old workspace to migrate
+:id: RAT-no_migration
+:status: seed
+:justifies: RUL-cache_schema_not_migrated
+
+A workspace lives from one dump to its merge, and the database is rebuilt from the files by any fresh workspace. A
+migration would be code kept for databases that do not exist, run on the one record that cannot be checked against
+anything else; a database of another schema read as this one would be read wrong. Stopping says so, and a fresh
+workspace is the remedy.
+:::

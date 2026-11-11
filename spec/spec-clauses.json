@@ -4682,7 +4682,7 @@
       "area": "prep",
       "criticality": "high",
       "anti": false,
-      "title": "Media content fingerprint is over decoded content (ImageMagick identify / ffmpeg stream MD5), not a byte hash",
+      "title": "Media content fingerprint is over content (ImageMagick identify of decoded pixels / ffmpeg MD5 of streams as stored), not a byte hash",
       "spec": {
         "file": "photos-1-prep-workflow.md",
         "section": "9"

@@ -1583,7 +1583,7 @@ class ContentHasher:
                 try:
                     sig = worker.signature(filepath)
                     if sig:
-                        return {"status": "valid", "strategy": "image-content-hash-v1",
+                        return {"status": "valid", "strategy": IMAGE_FINGERPRINT_STRATEGY,
                                 "value": sig, "engine_version": engine_version}
                     last_error = "ImageMagick produced no signature"
                     worker.restart()
@@ -1593,13 +1593,13 @@ class ContentHasher:
                         worker.restart()
                     except Exception:
                         _magick_tls.worker = None      # drop the dead worker; a fresh one next attempt
-            return {"status": "failed", "strategy": "image-content-hash-v1", "value": None,
+            return {"status": "failed", "strategy": IMAGE_FINGERPRINT_STRATEGY, "value": None,
                     "error": last_error, "engine_version": engine_version}
 
         # Fallback: legacy per-file `identify` (no `magick` script mode on this system).
         identify_cmd = get_identify_command()
         if not identify_cmd:
-            return {"status": "failed", "strategy": "image-content-hash-v1", "value": None,
+            return {"status": "failed", "strategy": IMAGE_FINGERPRINT_STRATEGY, "value": None,
                     "error": "ImageMagick not found", "engine_version": engine_version}
         cmd = identify_cmd + ["-format", "%#", "-colorspace", "sRGB", "-depth", "8", filepath]
         last_error = "ImageMagick failed"
@@ -1619,14 +1619,14 @@ class ContentHasher:
                     stdout_data += chunk
                 proc.wait()
                 if proc.returncode == 0 and stdout_data.strip():
-                    return {"status": "valid", "strategy": "image-content-hash-v1",
+                    return {"status": "valid", "strategy": IMAGE_FINGERPRINT_STRATEGY,
                             "value": stdout_data.strip(), "engine_version": engine_version}
                 last_error = f"ImageMagick exited {proc.returncode}"
             except subprocess.TimeoutExpired:
                 last_error = "ImageMagick timed out"
             except Exception as e:
                 last_error = str(e)
-        return {"status": "failed", "strategy": "image-content-hash-v1", "value": None,
+        return {"status": "failed", "strategy": IMAGE_FINGERPRINT_STRATEGY, "value": None,
                 "error": last_error, "engine_version": engine_version}
 
     @staticmethod
@@ -1643,19 +1643,19 @@ class ContentHasher:
                                      stdin=subprocess.DEVNULL)
                 for line in res.stdout.splitlines():
                     if line.startswith("MD5="):
-                        return {"status": "valid", "strategy": "video-md5-v1", "value": line.split("=")[1].strip()}
+                        return {"status": "valid", "strategy": VIDEO_FINGERPRINT_STRATEGY, "value": line.split("=")[1].strip()}
                 last_error = "No MD5 output"
             except FileNotFoundError:
                 # ffmpeg not installed — decline this fingerprint gracefully (matches the magick-less
                 # image path) instead of letting FileNotFoundError crash the whole scan. A phase
                 # preflight warns up front; here we just mark the file fingerprint-failed and move on.
-                return {"status": "failed", "strategy": "video-md5-v1", "value": None,
+                return {"status": "failed", "strategy": VIDEO_FINGERPRINT_STRATEGY, "value": None,
                         "error": "ffmpeg not found"}
             except subprocess.CalledProcessError as e:
                 last_error = str(e)
                 if attempt == 1:
                     print(f"Warning: ffmpeg failed on {filepath}: {e.stderr}")
-        return {"status": "failed", "strategy": "video-md5-v1", "value": None, "error": last_error}
+        return {"status": "failed", "strategy": VIDEO_FINGERPRINT_STRATEGY, "value": None, "error": last_error}
 
 
 class PersistentExifToolWorker:
@@ -1902,6 +1902,10 @@ def recorded_time(parsed):
         if parse_naive_time(parsed.get(tag)) is not None:
             return tag, parsed[tag]
     return None, None
+
+
+IMAGE_FINGERPRINT_STRATEGY = "image-content-hash-v1"   # ImageMagick signature of the decoded pixels
+VIDEO_FINGERPRINT_STRATEGY = "video-md5-v1"            # ffmpeg MD5 of the streams as stored (-c copy)
 
 
 class MetadataReader:
@@ -2157,8 +2161,36 @@ class ProgressCoordinator:
 # table, the journal, and the handoff depends_on so a stale/foreign cache or journal is
 # detectable downstream (prep Section 5). The per-hash engine binding (e.g. ImageMagick
 # version) is carried separately in each content hash's engine_version.
-CACHE_SCHEMA_VERSION = 1
+CACHE_SCHEMA_VERSION = 2   # 2: file_cache without the byte-hash column
 FINGERPRINT_ALGORITHM_VERSION = "1"
+
+
+def cache_schema_mismatch(cache) -> Optional[str]:
+    """The stop for a workspace database whose recorded schema version is not this build's: prep never
+    migrates one. None when it matches, or when the database records none (it is new)."""
+    recorded = cache.get_meta("cache_schema_version")
+    if recorded is None or recorded == str(CACHE_SCHEMA_VERSION):
+        return None
+    return (f"The workspace database records schema version {recorded}; this build uses "
+            f"{CACHE_SCHEMA_VERSION}. Prep does not migrate a database: plan in a fresh workspace.")
+
+
+def fingerprint_reusable(content_hash_json, media_class, current_magick_version) -> bool:
+    """Whether a cached fingerprint was taken by the method this build uses for its class: the same
+    strategy, and for a photo the same ImageMagick version. A fingerprint that records no ImageMagick
+    version is not reusable. Only a valid fingerprint is judged; a failed one is kept as it is."""
+    try:
+        ch = json.loads(content_hash_json)
+    except (TypeError, ValueError):
+        return False
+    if ch.get("status") != "valid":
+        return True
+    if media_class in ("image", "raw"):
+        return (ch.get("strategy") == IMAGE_FINGERPRINT_STRATEGY
+                and ch.get("engine_version") is not None and ch.get("engine_version") == current_magick_version)
+    if media_class == "video":
+        return ch.get("strategy") == VIDEO_FINGERPRINT_STRATEGY
+    return True
 
 # --- Atomic no-clobber move (prep Section 4 / 14.3.4) -------------------------
 # No-clobber is enforced at plan time (the clobber simulation) AND here at execution
@@ -2440,12 +2472,10 @@ class WorkspaceCache:
                     mtime_ns INTEGER,
                     inode INTEGER,
                     media_class TEXT,
-                    hash TEXT,
                     content_hash TEXT,
                     last_seen_ns INTEGER
                 )
             """)
-            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_hash ON file_cache(hash)")
             self.conn.execute("CREATE INDEX IF NOT EXISTS idx_content_hash ON file_cache(content_hash)")
 
             self.conn.execute("""
@@ -2471,26 +2501,8 @@ class WorkspaceCache:
                 )
             """)
 
-            # Perform idempotent migration for existing databases missing phase 8C columns
-            cur = self.conn.cursor()
-            cur.execute("PRAGMA table_info(metadata_cache)")
-            columns = {row[1] for row in cur.fetchall()}
-
-            missing_columns = []
-            if "metadata_schema_version" not in columns:
-                missing_columns.append("metadata_schema_version INTEGER")
-            if "camera_group_key_version" not in columns:
-                missing_columns.append("camera_group_key_version INTEGER")
-            if "extraction_status" not in columns:
-                missing_columns.append("extraction_status TEXT")
-            if "extraction_error" not in columns:
-                missing_columns.append("extraction_error TEXT")
-
-            for col in missing_columns:
-                self.conn.execute(f"ALTER TABLE metadata_cache ADD COLUMN {col}")
-
-            # Cache identity/version row (prep Section 5). Seeded once and kept, so an older
-            # DB retains its recorded version and a future schema bump becomes detectable.
+            # Cache identity/version row (prep Section 5): seeded at creation; prep's execute rewrites the
+            # fingerprint-algorithm version, and prep's plan stops on a schema version not this build's.
             self.conn.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)")
             self.conn.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)",
                               ("cache_schema_version", str(CACHE_SCHEMA_VERSION)))
@@ -2512,6 +2524,10 @@ class WorkspaceCache:
                     engine_version TEXT
                 )
             """)
+
+    def set_meta(self, key: str, value: str):
+        with self._write_ctx():
+            self.conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, value))
 
     def get_meta(self, key: str) -> Optional[str]:
         with self._lock:
@@ -2590,10 +2606,10 @@ class WorkspaceCache:
             self.conn.execute("""
                 INSERT INTO file_cache (
                     relative_path, absolute_path, size, mtime_ns, inode, media_class,
-                    hash, content_hash, last_seen_ns
+                    content_hash, last_seen_ns
                 ) VALUES (
                     :relative_path, :absolute_path, :size, :mtime_ns, :inode, :media_class,
-                    :hash, :content_hash, :last_seen_ns
+                    :content_hash, :last_seen_ns
                 )
                 ON CONFLICT(relative_path) DO UPDATE SET
                     absolute_path = excluded.absolute_path,
@@ -2601,7 +2617,6 @@ class WorkspaceCache:
                     mtime_ns = excluded.mtime_ns,
                     inode = excluded.inode,
                     media_class = excluded.media_class,
-                    hash = excluded.hash,
                     content_hash = excluded.content_hash,
                     last_seen_ns = excluded.last_seen_ns
             """, data)

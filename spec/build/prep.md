@@ -81,7 +81,7 @@ journal after each.
 :id: BLD-prep_dependencies
 :status: ruled
 :realises: INV-no_stale_use, RUL-unchecked_counts_as_changed
-:aliases: prep-artifacts-carry-depends-on-1, prep-record-min-fingerprints-1
+:aliases: prep-artifacts-carry-depends-on-1, prep-record-min-fingerprints-1, prep-fingerprint-algo-recorded-1
 
 Prep's records SHALL carry their dependencies so:
 
@@ -215,4 +215,27 @@ that no move explains and whose path no planned move fills again — that row is
 :aliases: prep-date-name-format-1
 
 A day's folder SHALL be named `YYYY-MM-DD` from its recorded time's date, whatever `filename_timestamp_format` is.
+:::
+
+
+## 9. Content fingerprinting and cache reuse
+
+:::{bld} The database's version row
+:id: BLD-cache_versions
+:status: seed
+:realises: RUL-cache_schema_not_migrated
+
+The workspace database's `meta` table SHALL hold `cache_schema_version` and `fingerprint_algorithm_version`, written by
+each prep execute; prep's plan stops before reading the database when `cache_schema_version` is present and not this
+build's.
+:::
+
+:::{bld} A fingerprint records its method
+:id: BLD-fingerprint_method
+:status: seed
+:realises: RUL-fingerprint_method_matches
+
+Each fingerprint SHALL record its strategy — `image-content-hash-v1` for a photo, `video-md5-v1` for a video — and a
+photo's the ImageMagick version that took it; a cached photo fingerprint is reused when both match the build's, a video's
+when its strategy does.
 :::

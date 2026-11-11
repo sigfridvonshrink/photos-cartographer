@@ -1230,8 +1230,8 @@ stale.
 :id: DEF-fingerprint
 :status: ruled
 
-A media file's **fingerprint** is the identity of its decoded content — a photo's pixels, a video's streams. Unqualified,
-*fingerprint* means this.
+A media file's **fingerprint** is the identity of its content apart from its metadata — a photo's decoded pixels, a
+video's streams. Unqualified, *fingerprint* means this.
 :::
 
 :::{def} A hash
@@ -1282,7 +1282,7 @@ A dependency that is missing, or cannot be checked, SHALL count as changed.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: dep-fingerprint-invariant-1
+:aliases: dep-fingerprint-invariant-1, prep-fingerprint-invariant-metadata-1
 :uses: DEF-fingerprint
 
 A media file's fingerprint SHALL stay the same when the pipeline rewrites its metadata or its position, or renames it.
@@ -1557,7 +1557,7 @@ be safe, and leaving no file in a state other than its inputs require.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: idem-reuse-not-recompute-1
+:aliases: idem-reuse-not-recompute-1, prep-fingerprint-reuse-unchanged-1
 :refines: INV-change_only_what_needs
 
 Work already done and still valid SHALL be reused, not repeated — a file's content and metadata read, and the tracks
