@@ -568,7 +568,7 @@ after it stale.
 
 :::{rat} Failing to look is no proof that nothing changed
 :id: RAT-unknown_is_not_unchanged
-:status: seed
+:status: ruled
 :justifies: RUL-unchecked_counts_as_changed
 
 A dependency that cannot be checked gives no assurance either way. Counting it unchanged would let a failure to look
@@ -1087,7 +1087,7 @@ library free of litter — hygiene, not safety.
 
 :::{rat} A plan is read before anything moves
 :id: RAT-plan_read_before_anything_moves
-:status: seed
+:status: ruled
 :justifies: RUL-planning_changes_no_media
 
 A plan is there to be read before anything happens — by the user, and by the dry run that checks it. Planning that
@@ -1099,7 +1099,7 @@ and once, the configuration the plan itself is made under.
 
 :::{rat} What was reviewed is what happens
 :id: RAT-what_was_reviewed_happens
-:status: seed
+:status: ruled
 :justifies: RUL-execution_only_the_plan
 
 What the user reviewed — the plan, its dry run — is what must happen. An execution that decided afresh would act on a
@@ -1110,7 +1110,7 @@ again.
 
 :::{rat} The journal is the run's own account
 :id: RAT-journal_is_the_account
-:status: seed
+:status: ruled
 :justifies: RUL-every_change_journaled
 
 The journal is the history of a run: what it changed, in what order, and how each change ended. The logs are built from
