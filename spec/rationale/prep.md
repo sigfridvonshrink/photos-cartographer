@@ -562,7 +562,7 @@ prune, knowing what it holds.
 
 :::{rat} A record speaks for a finished run
 :id: RAT-record_of_a_finished_run
-:status: seed
+:status: ruled
 :justifies: RUL-prep_records_on_success
 
 The handoff tells geotag what prep left, and the log what prep did; written by a run that failed partway, either would
@@ -572,7 +572,7 @@ true of the workspace they stand beside, or absent.
 
 :::{rat} Geotag reads the handoff, not the photos
 :id: RAT-geotag_reads_the_handoff
-:status: seed
+:status: ruled
 :justifies: RUL-handoff_describes_workspace
 
 Geotag reads no photo: everything it decides from, it takes from the handoff — which files, where, from which camera,
@@ -582,7 +582,7 @@ left out on purpose.
 
 :::{rat} The handoff changes when the workspace does
 :id: RAT-handoff_changes_with_workspace
-:status: seed
+:status: ruled
 :justifies: RUL-handoff_deterministic
 
 Geotag's work depends on the handoff and is made stale when it changes. A run that changed nothing must therefore leave
@@ -592,7 +592,7 @@ real change — a file filed, sorted or changed — restales geotag.
 
 :::{rat} The log adds no authority
 :id: RAT-log_adds_no_authority
-:status: seed
+:status: ruled
 :justifies: RUL-prep_log_derived, RUL-prep_log_records_set_aside
 
 The log is for reading, not deciding: it gathers what prep's own records already say into one account per photo. Made
@@ -602,7 +602,7 @@ photo it copies, so the account of that photo is whole.
 
 :::{rat} A new fingerprint is not a new photo
 :id: RAT-new_fingerprint_same_photo
-:status: seed
+:status: ruled
 :justifies: RUL-log_follows_retaken_fingerprint
 
 The log follows a photo by its fingerprint. When the method that takes it changes — another ImageMagick — the same

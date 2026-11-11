@@ -734,7 +734,7 @@ newest.
 
 :::{rul} Prep's records are written only by an execution that succeeded
 :id: RUL-prep_records_on_success
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :aliases: prep-handoff-non-editable-1, prep-handoff-only-on-success-1, prep-prep-log-on-success-1
@@ -745,7 +745,7 @@ written whole, never edited in place.
 
 :::{rul} The handoff describes the workspace geotag works on
 :id: RUL-handoff_describes_workspace
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :aliases: prep-handoff-min-contents-1, prep-handoff-strays-excluded-1
@@ -757,7 +757,7 @@ change; and what the handoff was made from.
 
 :::{rul} One workspace state, one handoff content
 :id: RUL-handoff_deterministic
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :aliases: prep-handoff-deterministic-1, prep-handoff-run-metadata-segregated-1, prep-noop-rerun-stable-fingerprint-1
@@ -769,7 +769,7 @@ kept apart from it.
 
 :::{rul} Prep's log is made from prep's own records
 :id: RUL-prep_log_derived
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: prep-log-derived-no-new-authority-1
@@ -780,7 +780,7 @@ not.
 
 :::{rul} Prep's log names what it set aside
 :id: RUL-prep_log_records_set_aside
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: prep-log-records-quarantine-dups-1
@@ -792,7 +792,7 @@ copy's entry.
 
 :::{rul} A photo keeps its history when its fingerprint is taken again
 :id: RUL-log_follows_retaken_fingerprint
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-log_keyed_by_fingerprint
