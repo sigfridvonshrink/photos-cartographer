@@ -402,7 +402,7 @@ plan's summary carries the quarantine's footprint.
 
 :::{bld} What the handoff holds
 :id: BLD-handoff_content
-:status: seed
+:status: ruled
 :realises: RUL-handoff_describes_workspace, RUL-prep_records_on_success
 
 Prep's execute SHALL write `photos-11-handoff.json` last but for the database image and the mark, through a temporary
@@ -416,7 +416,7 @@ final inventory, metadata extractor, plan and database versions, image engine) a
 
 :::{bld} The handoff's content fingerprint
 :id: BLD-handoff_content_fingerprint
-:status: seed
+:status: ruled
 :realises: RUL-handoff_deterministic
 :aliases: prep-handoff-content-fingerprint-pins-1
 
@@ -428,7 +428,7 @@ duplicates.
 
 :::{bld} How prep's log is built
 :id: BLD-prep_log_build
-:status: seed
+:status: ruled
 :realises: RUL-prep_log_derived, RUL-prep_log_records_set_aside, RUL-log_follows_retaken_fingerprint, RUL-partial_history_shown
 
 Prep's execute SHALL build `photos-15-prep-log.json` from the plan's moves and renames replayed per file, the
