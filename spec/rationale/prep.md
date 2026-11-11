@@ -270,7 +270,7 @@ each execution keeps reuse safe.
 
 :::{rat} Size and time are the cheap sign of change
 :id: RAT-size_time_sign_change
-:status: seed
+:status: ruled
 :justifies: RUL-fingerprint_taken_afresh
 
 Decoding a photo to fingerprint it is the costliest step prep takes, so it is done once per file and kept. Any write to
@@ -280,7 +280,7 @@ fingerprint kept still describes the file, a changed one that it may not.
 
 :::{rat} A fingerprint compares only with one taken the same way
 :id: RAT-fingerprint_same_method
-:status: seed
+:status: ruled
 :justifies: RUL-fingerprint_method_matches
 
 Duplicates are found and a photo is followed through every phase by comparing fingerprints, and two fingerprints of one
@@ -291,7 +291,7 @@ photo apart or lose a photo's trail; taking it again costs a decode.
 
 :::{rat} A change in how metadata is read is made on purpose
 :id: RAT-reread_on_purpose
-:status: seed
+:status: ruled
 :justifies: RUL-reread_whole
 
 The way metadata is read changes only on purpose: more of it is wanted, or what is read must change. Either way every
@@ -301,7 +301,7 @@ of it from before the change.
 
 :::{rat} No old workspace to migrate
 :id: RAT-no_migration
-:status: seed
+:status: ruled
 :justifies: RUL-cache_schema_not_migrated
 
 A workspace lives from one dump to its merge, and the database is rebuilt from the files by any fresh workspace. A

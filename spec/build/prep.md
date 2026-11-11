@@ -222,7 +222,7 @@ A day's folder SHALL be named `YYYY-MM-DD` from its recorded time's date, whatev
 
 :::{bld} The database's version row
 :id: BLD-cache_versions
-:status: seed
+:status: ruled
 :realises: RUL-cache_schema_not_migrated
 
 The workspace database's `meta` table SHALL hold `cache_schema_version` and `fingerprint_algorithm_version`, written by
@@ -232,7 +232,7 @@ build's.
 
 :::{bld} A fingerprint records its method
 :id: BLD-fingerprint_method
-:status: seed
+:status: ruled
 :realises: RUL-fingerprint_method_matches
 
 Each fingerprint SHALL record its strategy — `image-content-hash-v1` for a photo, `video-md5-v1` for a video — and a
