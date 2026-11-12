@@ -36,3 +36,20 @@ handoff's photos by destination joined by fingerprint to `photos-24`'s renames, 
 photo of that set still there with the size and modification time `photos-26-finalized-media.json` recorded. Any
 blocker ends the run with exit status 2 before the library lock, the plan or the summary.
 :::
+
+## 4. Configuration and validation
+
+:::{bld} `init-library`'s four cases
+:id: BLD-init_library_cases
+:status: seed
+:realises: RUL-library_mark_made_by_setup, RUL-library_setup_writes_one_setting, RUL-library_place_checked, RUL-config_validated_before_use
+:aliases: merge-init-library-inside-with-path-writes-config-1, merge-init-library-inside-no-path-reads-config-1, merge-init-library-outside-with-path-bless-only-1, merge-init-library-outside-no-path-error-1
+
+`merge init-library [path]` SHALL resolve a given path to an absolute one and require an existing directory, then:
+inside a workspace with a path, refuse a path `library_place_error` names and, under the lock, check the workspace's
+filesystem and the seal, read the configuration through `load_config`, mark the directory and record it as
+`merge.library_root`; inside a workspace without one, under the lock, read the configuration the same way and mark the
+`library_root` it names, writing nothing in the workspace; outside any workspace with a path, mark the directory and
+write nothing else; outside any workspace without one, stop with exit status 2. A configuration that cannot be read or
+fails its checks stops it with exit status 2, nothing marked and nothing written.
+:::

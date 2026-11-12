@@ -155,9 +155,8 @@ def test_a_library_row_is_reused_only_from_the_method_in_use(tmp_path, row, curr
 
 # --- Deep merge-config validation (merge §4 / shared §14.1) --------------------
 
-def _cfg(lib, placement="preserve_destination_structure", collision="suffix_incoming"):
-    return {"merge": {"library_root": str(lib), "placement_policy": placement,
-                      "collision_policy": collision}}
+def _cfg(lib):
+    return {"merge": {"library_root": str(lib)}}
 
 
 def test_validate_merge_config_accepts_valid(tmp_path):
@@ -181,10 +180,6 @@ def test_validate_merge_config_rejects_bad_inputs(tmp_path):
     inside = ws / "inside"; inside.mkdir()                 # exists, but inside the workspace
     with pytest.raises(ValueError, match="outside the workspace"):
         utils.validate_merge_config(_cfg(inside), str(ws))
-    with pytest.raises(ValueError, match="placement_policy"):
-        utils.validate_merge_config(_cfg(lib, placement="year_prefix"), str(ws))
-    with pytest.raises(ValueError, match="collision_policy"):
-        utils.validate_merge_config(_cfg(lib, collision="overwrite"), str(ws))
 
 
 @pytest.mark.spec("lib-root-validated-outside-1", test="TST-merge_primitives-validate_merge_config_rejects_library_inside_workspace")
@@ -194,6 +189,18 @@ def test_validate_merge_config_rejects_library_inside_workspace(tmp_path):
     inside = ws / "6-photos-by-dest"; inside.mkdir()
     with pytest.raises(ValueError, match="outside the workspace"):
         utils.validate_merge_config(_cfg(inside), str(ws))
+
+
+@pytest.mark.parametrize("holder", ["parent", "ancestor", "root"])
+@pytest.mark.spec("RUL-library_place_checked", "RUL-checked_paths",
+                  test="TST-merge_primitives-a_library_holding_the_workspace_is_refused")
+def test_a_library_holding_the_workspace_is_refused(tmp_path, holder):
+    ws = tmp_path / "pictures" / "inbox" / "ws"; ws.mkdir(parents=True)
+    lib = {"parent": tmp_path / "pictures" / "inbox", "ancestor": tmp_path / "pictures", "root": "/"}[holder]
+    with pytest.raises(ValueError, match="must not hold the workspace"):
+        utils.validate_merge_config(_cfg(lib), str(ws))
+    sibling = tmp_path / "pictures" / "library"; sibling.mkdir()
+    utils.validate_merge_config(_cfg(sibling), str(ws))   # a sibling of the workspace is fine
 
 
 # --- Shared suffix convention (shared §7.2; merge §7 append-at-max+1) ----------

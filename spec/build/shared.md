@@ -198,8 +198,8 @@ The areas SHALL be, at least: the `zfs` block and `snapshots_required` (§2 abov
 `camera_time_and_timezone_policy.device_groups`, with `phones` and `fixed_clock_cameras` ({need}`DEF-camera_group`);
 `filename_timestamp_format` ({need}`BLD-filename_timestamp_format`); `gpx_root` and the GPX thresholds, such as `gpx_direct_match_max_seconds`,
 `gpx_interpolation_max_gap_seconds` and `gpx_interpolation_max_distance_meters` ({need}`DEF-tracks`); the camera-time policy
-flags, such as `single_anchor_auto_apply` and `multi_anchor_auto_apply` (geotag); `library_root` and merge's collision
-and placement policy (merge; {need}`RUL-collision_by_content`); `folders`, a role→name map of the numbered managed folders
+flags, such as `single_anchor_auto_apply` and `multi_anchor_auto_apply` (geotag); `library_root`
+(merge; {need}`DEF-library`); `folders`, a role→name map of the numbered managed folders
 `0-sources`…`6-photos-by-dest` ({need}`DEF-managed_folders`, prep §3), whose code finds each folder by its role; and `media_extensions`,
 mapping `image`, `raw` and `video` to lists of canonical extensions — lowercase, no leading dot (prep §6.1).
 `CAMERA_GROUP_KEY_VERSION` is a code constant, never a configuration field.
@@ -1030,8 +1030,8 @@ from outside any workspace, it writes nothing in the workspace and does not chec
 :uses: BLD-config_values_checked
 
 `validate_config` SHALL check the configuration each time it is read: by prep as it seeds and reads it, by geotag and
-merge as they load it, merge checking besides, with `validate_merge_config`, `merge.library_root` and the merge policy's
-values.
+merge as they load it, merge checking besides, with `validate_merge_config`, that `merge.library_root` is an
+existing folder neither inside the workspace nor holding it.
 :::
 
 :::{bld} Where geotag checks the decisions

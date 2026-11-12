@@ -413,6 +413,34 @@ def test_init_library_refuses_to_record_a_library_in_a_sealed_workspace(tmp_path
     assert cfg_p.read_bytes() == before
 
 
+@pytest.mark.parametrize("with_path", [True, False])
+@pytest.mark.spec("RUL-config_validated_before_use", "BLD-init_library_cases",
+                  test="TST-merge_preflight-init_library_reads_the_configuration_checked")
+def test_init_library_reads_the_configuration_checked(tmp_path, with_path):
+    """init-library reads the workspace's configuration whole and checked, as every command does: a setting
+    cartographer does not know stops it before it blesses or writes anything."""
+    ws, lib = _fresh_ws_and_lib(tmp_path)
+    cfg_p = ws / ".photos-ingest" / "photos-00-config.json"
+    cfg = json.loads(cfg_p.read_text())
+    cfg["merge"]["placement_policy"] = "preserve_destination_structure"   # no longer a setting
+    cfg_p.write_text(json.dumps(cfg))
+    before = cfg_p.read_bytes()
+    assert merge.do_init_library(str(lib) if with_path else None, str(ws)) == 2
+    assert not utils.is_library(str(lib))                # nothing blessed
+    assert cfg_p.read_bytes() == before                  # nothing written
+
+
+@pytest.mark.spec("RUL-library_place_checked", "BLD-init_library_cases",
+                  test="TST-merge_preflight-init_library_refuses_a_library_holding_the_workspace")
+def test_init_library_refuses_a_library_holding_the_workspace(tmp_path):
+    ws, _ = _fresh_ws_and_lib(tmp_path)
+    cfg_p = ws / ".photos-ingest" / "photos-00-config.json"
+    before = cfg_p.read_bytes()
+    assert merge.do_init_library(str(tmp_path), str(ws)) == 2
+    assert not utils.is_library(str(tmp_path))           # nothing blessed
+    assert cfg_p.read_bytes() == before                  # nothing written
+
+
 @pytest.mark.spec("merge-init-library-inside-no-path-reads-config-1")
 def test_init_library_in_workspace_no_path_uses_config(tmp_path):
     ws, lib = _fresh_ws_and_lib(tmp_path)
@@ -583,18 +611,20 @@ def test_bydest_symlink_blocks_run_and_is_never_followed(tmp_path):
     assert list(lib.iterdir()) == [lib / ".photos-library"]    # library untouched (marker only)
 
 
-@pytest.mark.spec("merge-config-validated-1", "validate-fail-closed-1", test="TST-merge_preflight-invalid_merge_policy_blocks_with_no_summary_no_placement")
-def test_invalid_merge_policy_blocks_with_no_summary_no_placement(tmp_path):
-    """A bad merge.placement_policy/collision_policy is caught in the merge data path (validate_merge
-    _config) and surfaces as a preflight blocker: rc 2, no plan, no photos-31 summary, no placement."""
+@pytest.mark.spec("merge-config-validated-1", "validate-fail-closed-1", "RUL-library_place_checked", test="TST-merge_preflight-a_library_holding_the_workspace_blocks_with_no_summary_no_placement")
+def test_a_library_holding_the_workspace_blocks_with_no_summary_no_placement(tmp_path):
+    """A library_root that holds the workspace is caught in the merge data path (validate_merge_config)
+    and surfaces as a preflight blocker: rc 2, no plan, no photos-31 summary, no placement."""
     ws, lib = _make(tmp_path)
+    utils.write_library_marker(str(tmp_path))
     cfg = json.loads((_ctl(ws) / "photos-00-config.json").read_text())
-    cfg["merge"]["placement_policy"] = "definitely-not-a-policy"
+    cfg["merge"]["library_root"] = str(tmp_path)                # holds the workspace
     (_ctl(ws) / "photos-00-config.json").write_text(json.dumps(cfg))
+    before = sorted(p.name for p in tmp_path.iterdir())
     assert merge._run_locked_workflow("plan", str(ws)) == 2
     assert not os.path.exists(merge.merge_plan_path(str(ws)))   # no plan
     assert not os.path.exists(merge.merge_summary_path(str(ws)))  # no summary
-    assert list(lib.iterdir()) == [lib / ".photos-library"]    # nothing placed
+    assert sorted(p.name for p in tmp_path.iterdir()) == before  # nothing placed, no library lock left
 
 
 @pytest.mark.spec("merge-sealed-newdump-warn-1", "RUL-sealed_new_dump_left", test="TST-merge_preflight-sealed_new_dump_left_in_place_and_library_untouched")

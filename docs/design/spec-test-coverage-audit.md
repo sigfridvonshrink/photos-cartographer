@@ -98,7 +98,7 @@ These all assert the refusal/detection but **not** the safety consequence. Group
 - `lock-covers-whole-run-1` — assert lock contention refuses for `execute` and `finalize`, not just `plan`.
 - `merge-seal-blocks-future-scripts-1` — covers refusal for all 3 phases; missing the prune-quarantine sole-exception (see #8).
 - `merge-journal-confirmed-only-1` — read the merge journal after a partial run, assert only the confirmed move present, failed item absent.
-- `merge-config-validated-1` — run a bad placement_policy/collision_policy through the merge data path, assert blocker + no summary + no placement.
+- `merge-config-validated-1` — run an invalid merge config (a library_root holding the workspace) through the merge data path, assert blocker + no summary + no placement.
 - `prep-path-conflict-bydest-1` — exercise §11.2 *case-insensitive* collision against an existing by-dest path → safe-alternative or block.
 - `prep-scan-skip-control-1` — assert `.git` and `.photos-ingest-quarantine/` subtrees are skipped during the media scan.
 - `prep-video-in-photoband-block-1` — add the 6-photos-by-dest video case (only the 5-band is tested) and assert "produces no plan".

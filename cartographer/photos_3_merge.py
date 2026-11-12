@@ -41,7 +41,7 @@ from datetime import datetime, timezone
 
 from .photos_utils import (
     CONFIG, CONTROL_DIR, FINALIZED_MEDIA_ARTIFACT, finalized_media_path, config_path, handoff_path, guard_path, is_sealed,
-    validate_config, load_config, validate_merge_config, sha256_file, sha256_text, media_class_for_ext,
+    validate_config, load_config, validate_merge_config, library_place_error, sha256_file, sha256_text, media_class_for_ext,
     folder_name, FOLDER_ROLES, missing_managed_folders, top_level_links, misplaced_top_level_entries, handoff_content_fingerprint, handoff_filename_format_blocker,
     folders_fingerprint, media_extensions_fingerprint,
     verify_json_dependency, json_dependency, write_json_artifact, write_versioned_json, is_library, write_library_marker,
@@ -561,8 +561,6 @@ class MergeWorkflow:
         plan = {
             "artifact_type": "merge_plan", "artifact_name": MERGE_PLAN_ARTIFACT,
             "schema_version": MERGE_PLAN_SCHEMA_VERSION, "library_root": library_root,
-            "placement_policy": (CONFIG.get("merge") or {}).get("placement_policy"),
-            "collision_policy": (CONFIG.get("merge") or {}).get("collision_policy"),
             "depends_on": depends_on, "destinations": dests, "totals": totals, "blockers": blockers,
         }
         plan["plan_id"] = sha256_text(json.dumps(
@@ -1233,15 +1231,23 @@ def _acquire_workspace_lock(ws, reporter):
     return lock
 
 
+def _read_checked_config(ws, reporter):
+    """The workspace's configuration, read whole and checked as every command reads it (`load_config`),
+    as the file holds it; None, having said why, when it cannot be read or a setting is invalid."""
+    try:
+        load_config(ws)
+        with open(config_path(ws)) as f:
+            return json.load(f)
+    except (OSError, ValueError) as e:
+        reporter.log(f"Workspace config could not be used: {e}")
+        return None
+
+
 def _init_library_from_config(ws, reporter):
     """init-library with no path, in a workspace: bless the library its config already names. The
     caller holds the workspace lock."""
-    cfg_p = config_path(ws)
-    try:
-        with open(cfg_p) as f:
-            cfg = json.load(f)
-    except Exception as e:
-        reporter.log(f"Workspace config could not be read: {e}")
+    cfg = _read_checked_config(ws, reporter)
+    if cfg is None:
         return 2
     library_root = ((cfg.get("merge") or {}).get("library_root") or "")
     if not library_root:
@@ -1314,11 +1320,9 @@ def do_init_library(path_arg, ws):
         return 0
 
     # In a workspace with an explicit path: bless AND record library_root in config (under the lock).
-    ws_real = os.path.realpath(os.path.abspath(ws))
-    lib_real = os.path.realpath(resolved)
-    if lib_real == ws_real or lib_real.startswith(ws_real + os.sep):
-        reporter.log(f"init-library: {resolved} must resolve outside the workspace (it must not be the "
-              "workspace or any path inside it).")
+    place_err = library_place_error(resolved, ws)
+    if place_err:
+        reporter.log(f"init-library: {place_err}")
         return 2
     lock = _acquire_workspace_lock(ws, reporter)
     if lock is None:
@@ -1340,16 +1344,10 @@ def do_init_library(path_arg, ws):
                               "workspace by hand — init-library left it exactly where it is.")
             return 2
         cfg_p = config_path(ws)
-        try:
-            with open(cfg_p) as f:
-                cfg = json.load(f)
-        except Exception as e:
-            reporter.log(f"Workspace config could not be read: {e}")
+        cfg = _read_checked_config(ws, reporter)
+        if cfg is None:
             return 2
-        # §4.1 item 2: the setup command writes the single library_root key — and ONLY that key. Don't
-        # seed placement/collision policy (prep is the config seeder; merge reads those with defaults).
-        if not isinstance(cfg.get("merge"), dict):
-            cfg["merge"] = {}
+        # The setup command writes the single library_root key — and ONLY that key (shared §4.1 item 2).
         cfg["merge"]["library_root"] = resolved
         try:
             validate_merge_config(cfg, ws)

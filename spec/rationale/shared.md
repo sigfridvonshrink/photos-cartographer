@@ -1065,6 +1065,18 @@ coerced, half applied or let through, it spoils a later operation, and the chang
 explained. Checking keeps every change explainable and the user its author.
 :::
 
+:::{rat} The library and the workspace lie apart
+:id: RAT-library_and_workspace_apart
+:status: seed
+:justifies: RUL-library_place_checked, RUL-checked_paths
+
+A library inside the workspace would be merged into itself, the tool walking its own output as input. A workspace
+inside the library is no safer: the library's own tools, digiKam among them, watch the library's folders and would take
+the workspace's working copies — not yet geotagged, not yet named — for photos of the library, each to appear twice once
+merged; and a destination folder named as the workspace would place photos inside it. Kept apart, each is only what it
+claims to be.
+:::
+
 :::{rat} A folder's name is a place on disk
 :id: RAT-folder_names_are_places
 :status: ruled
