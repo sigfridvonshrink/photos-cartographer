@@ -45,6 +45,7 @@ import zoneinfo
 from datetime import datetime, timedelta, timezone
 
 from .photos_utils import (
+    code_fingerprint,
     CONFIG, CONTROL_DIR, control_dir, FINALIZED_MEDIA_ARTIFACT, track_memo_db_path, finalized_media_path, workspace_volume_error, config_path, handoff_path, guard_path, is_sealed, likely_new_dump,
     validate_config, load_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
     folders_fingerprint, media_extensions_fingerprint,
@@ -1240,6 +1241,7 @@ class GeotagWorkflow:
             "gps_decisions": json_dependency(GPS_DECISIONS_ARTIFACT, ws, gps_decisions_path(ws)),
             "resolved_utc_cache_fingerprint": resolved_fp,
             "config_fingerprint": sha256_file(config_path(ws)),
+            "code_fingerprint": code_fingerprint(),   # carried out only by the code that made it
             "camera_group_fingerprint": sha256_text(cam),
             "camera_group_key_version": CAMERA_GROUP_KEY_VERSION,
             "handoff": self._handoff_dependency(ws),
@@ -1294,7 +1296,8 @@ class GeotagWorkflow:
         if not (dep.get("handoff") and self._verify_handoff_dependency(dep["handoff"], ws)):
             stale.append("handoff dependency changed or missing")   # content fingerprint, not file bytes
         policy = json.dumps(CONFIG.get("camera_time_and_timezone_policy") or {}, sort_keys=True)
-        for k, cur in (("config_fingerprint", sha256_file(config_path(ws))),
+        for k, cur in (("code_fingerprint", code_fingerprint()),
+                       ("config_fingerprint", sha256_file(config_path(ws))),
                        ("filename_format_fingerprint", sha256_text(CONFIG["filename_timestamp_format"])),
                        ("folders_fingerprint", folders_fingerprint()),
                        ("media_extensions_fingerprint", media_extensions_fingerprint()),

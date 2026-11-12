@@ -41,7 +41,7 @@ from datetime import datetime, timezone
 
 from .photos_utils import (
     CONFIG, CONTROL_DIR, FINALIZED_MEDIA_ARTIFACT, finalized_media_path, config_path, handoff_path, guard_path, is_sealed,
-    validate_config, load_config, validate_merge_config, library_place_error, sha256_file, sha256_text, media_class_for_ext,
+    validate_config, load_config, validate_merge_config, library_place_error, code_fingerprint, sha256_file, sha256_text, media_class_for_ext,
     folder_name, FOLDER_ROLES, missing_managed_folders, top_level_links, misplaced_top_level_entries, handoff_content_fingerprint, handoff_filename_format_blocker,
     folders_fingerprint, media_extensions_fingerprint,
     verify_json_dependency, json_dependency, write_json_artifact, write_versioned_json, is_library, write_library_marker,
@@ -554,6 +554,7 @@ class MergeWorkflow:
             "handoff": {"dependency_type": "handoff_content", "artifact_name": HANDOFF_ARTIFACT,
                         "content_fingerprint": handoff_content_fingerprint(self.handoff)},
             "config_fingerprint": sha256_file(config_path(ws)),
+            "code_fingerprint": code_fingerprint(),   # carried out only by the code that made it
             "folders_fingerprint": folders_fingerprint(),
             "media_extensions_fingerprint": media_extensions_fingerprint(),
             "image_engine_version": get_imagemagick_version(),
@@ -665,14 +666,15 @@ class MergeWorkflow:
         if not (ho and ho.get("dependency_type") == "handoff_content"
                 and handoff_content_fingerprint(self.handoff) == ho.get("content_fingerprint")):
             stale.append("handoff content fingerprint changed")
-        cfp = dep.get("config_fingerprint")
-        if cfp and cfp != sha256_file(config_path(ws)):
+        if dep.get("code_fingerprint") != code_fingerprint():
+            stale.append("made by another build of cartographer")
+        if dep.get("config_fingerprint") != sha256_file(config_path(ws)):
             stale.append("config changed")
         if dep.get("image_engine_version") != get_imagemagick_version():
             stale.append("ImageMagick version changed")
         for k, cur in (("folders_fingerprint", folders_fingerprint()),
                        ("media_extensions_fingerprint", media_extensions_fingerprint())):
-            if dep.get(k) and dep.get(k) != cur:
+            if dep.get(k) != cur:
                 stale.append(f"{k} changed")
         return stale
 
@@ -733,14 +735,16 @@ class MergeWorkflow:
               f"renamed: {t.get('renamed_for_library', 0)}, blocked: {t.get('blocked', 0)}", stream="stdout")
         _bl = plan.get("blockers") or []
         if _bl:
-            reporter.log(f"  BLOCKERS: {len(_bl)} — execute will refuse:", stream="stdout")
+            reporter.log(f"  BLOCKED: {len(_bl)} — execute leaves these in {folder_name('photos_by_dest')}/, "
+                         "merges the rest, and ends partial without sealing:", stream="stdout")
             for b in _bl[:20]:
                 reporter.log(f"    - {b}", stream="stdout")
             if len(_bl) > 20:
                 reporter.log(f"    … and {len(_bl) - 20} more", stream="stdout")
         reporter.log(f"  Full plan: {p}", stream="stdout")
         if _bl:
-            emit_next_step(reporter, "resolve the blocker(s) shown, then re-run `merge plan`.")
+            emit_next_step(reporter, "resolve the blocker(s) shown and re-run `merge plan`, or `merge execute` "
+                                     "to merge the rest now.")
         else:
             emit_next_step(reporter, "`merge execute` to merge into the library.")
         return 0

@@ -909,8 +909,8 @@ def quarantine_footprint(ws: str) -> dict:
 
 def code_fingerprint() -> str:
     """SHA-256 of the cartographer package as loaded — from a zipapp or a checkout: every file the zipapp
-    ships, its path and bytes, in path order. A plan records it, and execute refuses a
-    plan made by other code (prep §14.3), so a saved plan is never carried out by a build that would
+    ships, its path and bytes, in path order. Every phase's plan records it, and dry run and execute
+    refuse a plan made by other code (shared contract, RUL-plan_carried_out_by_its_code), so a saved plan is never carried out by a build that would
     not have made it."""
     global _CODE_FINGERPRINT
     if _CODE_FINGERPRINT is None:

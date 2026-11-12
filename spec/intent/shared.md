@@ -1260,7 +1260,7 @@ of the configuration or of the areas the record reads — and each use checks th
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: dep-cascade-reject-stale-1, prep-block-on-stale-dependency-1
+:aliases: dep-cascade-reject-stale-1, prep-block-on-stale-dependency-1, merge-execute-revalidate-reject-stale-1
 :uses: DEF-dependency_cascade
 
 No phase SHALL use a record once anything it was derived from has changed: each phase validates what it derives from,
@@ -1772,7 +1772,7 @@ phase not yet run reading as the workspace not having advanced, never as a recor
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: archive-artifact-ownership-1
+:aliases: archive-artifact-ownership-1, merge-writes-only-own-3x-copies-26-forward-1
 :uses: DEF-control_records
 
 Each numbered record SHALL be written by the phase whose number it carries, and by no other: a phase MAY create, rewrite
@@ -2080,7 +2080,7 @@ A workspace is **sealed** once merge has succeeded in it: marked as finished, by
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: merge-library-protected-1
+:aliases: merge-library-protected-1, merge-library-file-never-deleted-written-renamed-1
 :uses: DEF-merge, DEF-library
 
 Merge SHALL never rename, overwrite, move, delete or change a file already in the library, an incoming photo whose place
@@ -2860,7 +2860,7 @@ An operation that cannot complete SHALL never be recorded as done, so that a re-
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: prep-plan-nonmutating-1
+:aliases: prep-plan-nonmutating-1, merge-planning-nonmutating-1
 
 Planning SHALL change no media file, and write nothing but its plan, its decision records, what it keeps so that later
 runs need not compute it again, and — on a workspace's first run — the configuration it seeds.
@@ -2872,10 +2872,22 @@ runs need not compute it again, and — on a workspace's first run — the confi
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: prep-execute-no-rederive-1
+:aliases: prep-execute-no-rederive-1, merge-execute-no-rederive-1
 :upholds: INV-every_change_from_the_record
 
 Execution SHALL carry out only the operations its plan records, re-deriving no decision.
+:::
+
+:::{rul} A plan is carried out only by the code that made it
+:id: RUL-plan_carried_out_by_its_code
+:status: seed
+:criticality: high
+:verify: required
+:aliases: prep-execute-revalidates-rejects-stale-1
+:refines: INV-no_stale_use
+
+Each phase SHALL carry out or summarise a saved plan only with the code that made it, refusing before any change a plan
+made by other code or recording none.
 :::
 
 :::{rul} Every change is journaled

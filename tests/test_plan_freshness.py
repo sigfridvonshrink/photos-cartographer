@@ -95,6 +95,7 @@ def _merge_setup(tmp_path):
         "folders_fingerprint": U.folders_fingerprint(),
         "media_extensions_fingerprint": U.media_extensions_fingerprint(),
         "image_engine_version": merge.get_imagemagick_version(),
+        "code_fingerprint": U.code_fingerprint(),
     }
     plan = {"schema_version": merge.MERGE_PLAN_SCHEMA_VERSION, "depends_on": depends_on}
     # current values the helper compares against (what merge recomputes internally)
@@ -104,6 +105,7 @@ def _merge_setup(tmp_path):
         "folders_fingerprint": U.folders_fingerprint(),
         "media_extensions_fingerprint": U.media_extensions_fingerprint(),
         "image_engine_version": merge.get_imagemagick_version(),
+        "code_fingerprint": U.code_fingerprint(),
     }
     return merge, ws, handoff, plan, cur
 
@@ -134,6 +136,8 @@ def test_helper_matches_merge_for_each_single_mutation(tmp_path):
     scenarios.append(("config", None, {**cur, "config_fingerprint": "DIFFERENT"}))
     # 4. the plan was made under another ImageMagick
     scenarios.append(("engine", None, dict(cur)))
+    # 5. the plan was made by another build of cartographer
+    scenarios.append(("code", None, dict(cur)))
 
     for name, _mutate, _hc in scenarios:
         merge2, ws2, handoff2, plan2, cur2 = _merge_setup(tmp_path / name)
@@ -151,6 +155,8 @@ def test_helper_matches_merge_for_each_single_mutation(tmp_path):
                 json.dump({"sum": 99}, f)
         if name == "engine":
             plan2["depends_on"]["image_engine_version"] = "an older ImageMagick"
+        if name == "code":
+            plan2["depends_on"]["code_fingerprint"] = "another build"
 
         m = _merge_verdict(merge2, handoff2, ws2, plan2)
         h = U.plan_dependencies_fresh(ws2, plan2["depends_on"], hc)
@@ -187,6 +193,7 @@ def _geotag_setup(tmp_path):
                        "content_fingerprint": U.handoff_content_fingerprint(handoff)}
     cam = json.dumps(U.CONFIG.get("camera_time_and_timezone_policy") or {}, sort_keys=True)
     deps["config_fingerprint"] = U.sha256_file(U.config_path(ws))
+    deps["code_fingerprint"] = U.code_fingerprint()
     deps["filename_format_fingerprint"] = U.sha256_text(U.CONFIG["filename_timestamp_format"])
     deps["folders_fingerprint"] = U.folders_fingerprint()
     deps["media_extensions_fingerprint"] = U.media_extensions_fingerprint()
@@ -206,6 +213,7 @@ def _geotag_setup(tmp_path):
         "folders_fingerprint": U.folders_fingerprint(),
         "media_extensions_fingerprint": U.media_extensions_fingerprint(),
         "camera_group_fingerprint": U.sha256_text(cam),
+        "code_fingerprint": U.code_fingerprint(),
     }
     return geo, ws, self_obj, gpx, plan, cur
 
