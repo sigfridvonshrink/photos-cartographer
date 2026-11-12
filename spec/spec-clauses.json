@@ -3212,7 +3212,7 @@
       "area": "merge",
       "criticality": "med",
       "anti": true,
-      "title": "Merge does not re-organize, re-deduplicate, or re-fingerprint by-dest content (prep's fingerprints reused)",
+      "title": "Merge does not re-organize, re-deduplicate, or re-fingerprint by-dest content (prep's fingerprints reused under the same ImageMagick)",
       "spec": {
         "file": "photos-3-merge-workflow.md",
         "section": "2.1"

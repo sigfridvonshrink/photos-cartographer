@@ -117,21 +117,38 @@ def test_library_fingerprint_cache_roundtrip_and_staleness(tmp_path):
     cache = utils.WorkspaceCache(str(tmp_path), in_memory=True)
     try:
         p = "/library/Belgium/Brussels/2024-07-03--14-12-21.arw"
-        assert cache.get_cached_library_fingerprint(p, 100, 111) is None      # cold miss
+        assert cache.get_cached_library_fingerprint(p, 100, 111, "im-7.1") is None      # cold miss
         cache.cache_library_fingerprint(p, 100, 111, _fp("deadbeef"))
-        hit = cache.get_cached_library_fingerprint(p, 100, 111)
+        hit = cache.get_cached_library_fingerprint(p, 100, 111, "im-7.1")
         assert hit["value"] == "deadbeef"
         assert hit["strategy"] == "image-content-hash-v1"
         assert hit["engine_version"] == "im-7.1"
         # Changed file (different size or mtime) -> miss, must be re-fingerprinted.
-        assert cache.get_cached_library_fingerprint(p, 101, 111) is None
-        assert cache.get_cached_library_fingerprint(p, 100, 222) is None
+        assert cache.get_cached_library_fingerprint(p, 101, 111, "im-7.1") is None
+        assert cache.get_cached_library_fingerprint(p, 100, 222, "im-7.1") is None
         # Re-cache (file changed) overwrites in place.
         cache.cache_library_fingerprint(p, 101, 111, _fp("feedface"))
-        assert cache.get_cached_library_fingerprint(p, 101, 111)["value"] == "feedface"
-        # Taken by another ImageMagick version -> miss: it could differ from prep's for the same pixels.
         assert cache.get_cached_library_fingerprint(p, 101, 111, "im-7.1")["value"] == "feedface"
-        assert cache.get_cached_library_fingerprint(p, 101, 111, "im-7.2") is None
+    finally:
+        cache.close()
+
+
+@pytest.mark.spec("RUL-library_file_read_once", "BLD-library_file_fingerprinted",
+                  test="TST-merge_primitives-a_library_row_is_reused_only_from_the_method_in_use")
+@pytest.mark.parametrize("row,current", [
+    ({"engine_version": "im-7.2"}, "im-7.1"),           # another ImageMagick
+    ({"engine_version": None}, "im-7.1"),               # none recorded
+    ({"strategy": "another-method"}, "im-7.1"),         # another method
+    ({}, None),                                         # the current version unknown
+])
+def test_a_library_row_is_reused_only_from_the_method_in_use(tmp_path, row, current):
+    """A cached library fingerprint is reused only when taken by this build's photo method under the
+    current, known ImageMagick; otherwise the file is read again."""
+    cache = utils.WorkspaceCache(str(tmp_path), in_memory=True)
+    try:
+        p = "/library/a.jpg"
+        cache.cache_library_fingerprint(p, 100, 111, dict(_fp("deadbeef"), **row))
+        assert cache.get_cached_library_fingerprint(p, 100, 111, current) is None
     finally:
         cache.close()
 

@@ -869,12 +869,12 @@ Merge SHALL map each photo by destination to its place under `library_root`, and
 
 :::{bld} A library file in the way is fingerprinted, through a cache
 :id: BLD-library_file_fingerprinted
-:status: ruled
-:realises: RUL-collision_by_content, RUL-library_file_read_once, RUL-collision_same_content, RUL-library_file_rechecked_before_removal
+:status: seed
+:realises: RUL-collision_by_content, RUL-library_file_read_once, RUL-collision_same_content, RUL-library_file_rechecked_before_removal, RUL-engine_change_is_checked
 
 Where a file is there, merge SHALL fingerprint it — from `library_fingerprint_cache` when its path, size and
-modification time match a row taken by the current ImageMagick version (or recording none), otherwise by decoding it and
-storing the row — and compare it with the incoming photo's fingerprint from prep.
+modification time match a row taken by this build's photo method under the current, known ImageMagick version,
+otherwise by decoding it and storing the row — and compare it with the incoming photo's fingerprint from prep.
 :::
 
 :::{bld} A different photo under a taken name takes the next suffix

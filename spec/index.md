@@ -10,6 +10,7 @@ the links between items are typed and checked at every build.
 
 intent/shared
 intent/prep
+intent/merge
 ```
 
 ```{toctree}
@@ -19,6 +20,7 @@ intent/prep
 rationale/philosophy
 rationale/shared
 rationale/prep
+rationale/merge
 ```
 
 ```{toctree}
@@ -27,6 +29,7 @@ rationale/prep
 
 build/shared
 build/prep
+build/merge
 ```
 
 ```{toctree}

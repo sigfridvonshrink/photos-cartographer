@@ -579,6 +579,17 @@ renames the file: a media file's identity must survive those mutations, which is
 transformation log and de-duplication rely on.
 :::
 
+:::{rat} A new version may change nothing
+:id: RAT-new_version_may_change_nothing
+:status: seed
+:justifies: RUL-engine_change_is_checked
+
+A new ImageMagick usually decodes the same pixels to the same fingerprint, but nothing promises it. Trusted blindly, a
+fingerprint from the old version compared with one from the new can call one photo two; discarded blindly, a photo
+loses whatever is keyed by its fingerprint. Taking it again settles which: most often the value is the same and nothing
+moves; where it is not, the photo is still the one it was, and what was recorded of it must follow, or wait.
+:::
+
 :::{rat} Detecting change is a hash's whole purpose
 :id: RAT-hash_is_for_change
 :status: ruled

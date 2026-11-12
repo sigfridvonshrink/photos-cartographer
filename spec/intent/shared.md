@@ -1288,6 +1288,18 @@ A dependency that is missing, or cannot be checked, SHALL count as changed.
 A media file's fingerprint SHALL stay the same when the pipeline rewrites its metadata or its position, or renames it.
 :::
 
+:::{rul} Another ImageMagick is a reason to check a fingerprint
+:id: RUL-engine_change_is_checked
+:status: seed
+:criticality: high
+:verify: required
+:uses: DEF-fingerprint
+
+A photo's fingerprint taken under another ImageMagick version SHALL be taken again before a phase relies on it, a new
+value read as the same photo's — its records following it there, or the phase stopping on the photo where they cannot —
+never, for a changed version alone, as a different photo's.
+:::
+
 :::{rul} A hash changes with any byte
 :id: RUL-hash_detects_any_change
 :status: ruled

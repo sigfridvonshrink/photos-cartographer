@@ -2719,13 +2719,13 @@ class WorkspaceCache:
                   "engine_version": fp.get("engine_version")})
 
     def get_cached_library_fingerprint(self, library_path: str, size: int, mtime_ns: int,
-                                       engine_version: Optional[str] = None):
+                                       engine_version: Optional[str]):
         """Return the cached fingerprint dict for a library file iff the cached size + mtime_ns still
-        match the current ones (else None — the file changed, so re-fingerprint) and it was taken by the
-        current image engine `engine_version`: a fingerprint from another ImageMagick version could
-        differ from prep's for the same pixels. As in prep, a row with no recorded engine version is
-        judged by size + mtime alone. Shape mirrors a ContentHasher result: {status: 'valid', value,
-        strategy, engine_version}."""
+        match the current ones (else None — the file changed, so re-fingerprint) and it was taken by this
+        build's photo method under the current, known ImageMagick `engine_version`: a fingerprint from
+        another version could differ from prep's for the same pixels, so it is taken again (as in prep, a
+        row recording no version is never reused). Shape mirrors a ContentHasher result: {status: 'valid',
+        value, strategy, engine_version}."""
         with self._lock:
             cur = self.conn.cursor()
             cur.execute("SELECT size, mtime_ns, fingerprint_value, fingerprint_strategy, engine_version "
@@ -2733,7 +2733,8 @@ class WorkspaceCache:
             row = cur.fetchone()
         if row is None or row["size"] != size or row["mtime_ns"] != mtime_ns:
             return None
-        if engine_version is not None and row["engine_version"] is not None and row["engine_version"] != engine_version:
+        if (row["fingerprint_strategy"] != IMAGE_FINGERPRINT_STRATEGY or engine_version is None
+                or row["engine_version"] != engine_version):
             return None
         return {"status": "valid", "value": row["fingerprint_value"],
                 "strategy": row["fingerprint_strategy"], "engine_version": row["engine_version"]}

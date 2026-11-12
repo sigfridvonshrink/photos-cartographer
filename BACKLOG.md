@@ -164,3 +164,18 @@ Found while ruling §5 of the shared contract.
 file on its own, or as now — state it in the geotag spec, and make the code and a test follow.
 
 **When:** with the conversion of the geotag spec (item 1), where camera groups are classified.
+
+### 11. Records keyed by a fingerprint that changed with ImageMagick
+
+**Why:** a new ImageMagick may decode a photo to a new fingerprint value (`RUL-engine_change_is_checked`). Prep
+follows the value in its own records — the database and prep's log move to it, across a user's move too. Geotag's
+records keyed by the old value do not: its complete log, `original_values`, the finalized-media record. So merge, finding
+a photo whose fingerprint changed, can only leave it unmerged (`RUL-merge_rechecks_under_new_engine`), and the only
+remedy today is the ImageMagick version that prepped the workspace. Found while converting merge §2.
+
+**What to do:** list every record keyed by a fingerprint's value, and decide how it follows a value that changed — a step
+that re-keys them, planned and journaled like any change, its records rewritten whole and what depends on them restaled
+— or leave the block as the answer. Stop where the old-to-new mapping is not one to one, which would change prep's
+duplicate decisions.
+
+**When:** with the conversion of the geotag spec (item 1), where those records are converted.

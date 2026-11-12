@@ -127,7 +127,8 @@ def _build_ws(tmp_path, photos, library_files=()):
         fpath.write_bytes(b"library")
         fp_by_path[str(fpath)] = lf["fp"]
 
-    handoff = {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": ho_files, "content_fingerprint": "whole", "run_metadata": {"started_at": "t"}}
+    handoff = {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": ho_files, "content_fingerprint": "whole", "run_metadata": {"started_at": "t"},
+               "depends_on": {"cache": {"image_engine": "imagemagick", "image_engine_version": "test"}}}
     (ctl / "photos-11-handoff.json").write_text(json.dumps(handoff))
     cfg = {k: v for k, v in utils.CONFIG.items() if k != "jobs"}
     cfg["merge"] = dict(cfg.get("merge") or {})
@@ -157,6 +158,7 @@ def _patch_fp(monkeypatch, fp_by_path):
                     "engine_version": "test"}
         return {"status": "failed", "value": None, "error": "unreadable", "engine_version": "test"}
     monkeypatch.setattr(merge.MergeWorkflow, "_fingerprint_library_file", fake)
+    monkeypatch.setattr(merge, "get_imagemagick_version", lambda: "test")   # the fake's engine, prep's too
 
 
 def _plan_of(ws):
@@ -183,8 +185,8 @@ def test_plan_placed_new(tmp_path, monkeypatch):
 
 @pytest.mark.spec("merge-only-no-reorganize-1")
 def test_plan_reuses_handoff_fingerprint_never_refingerprints_by_dest(tmp_path, monkeypatch):
-    """§2.1 (anti): merge reuses prep's recorded content_fingerprint for each by-dest file and never
-    re-fingerprints / re-organizes / re-dedups by-dest content. The handoff records fp "HANDOFF_ONLY"
+    """§2.1 (anti): under the ImageMagick prep used, merge reuses prep's recorded content_fingerprint for
+    each by-dest file and never re-fingerprints / re-organizes / re-dedups by-dest content. The handoff records fp "HANDOFF_ONLY"
     while the on-disk by-dest bytes are unrelated — if merge recomputed the by-dest fingerprint the
     plan's precondition would differ. Assert (a) the plan's per-file content_fingerprint is the
     handoff's recorded value verbatim, and (b) the by-dest file is NEVER passed to the (only)
@@ -229,7 +231,6 @@ def test_replan_reports_library_fingerprints_reused(tmp_path, monkeypatch, capsy
     ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
                             library_files=[{"fp": "A", "dest": "Trip", "name": "a.jpg"}])
     _patch_fp(monkeypatch, fp)
-    monkeypatch.setattr(merge, "get_imagemagick_version", lambda: "test")   # the fake's engine
     capsys.readouterr()
     assert merge._run_locked_workflow("plan", str(ws)) == 0
     assert "Library files fingerprinted: 1 read, 0 reused from the cache." in capsys.readouterr().out
@@ -432,3 +433,44 @@ def test_entries_not_carried():
     assert nc({"A": e}, {"A": dict(e, journey=[])}) == ["A"]
     assert nc({"A": e}, {"A": dict(e, journey=[{"action": "z"}, {"action": "x"}])}) == ["A"]
     assert nc({"A": e}, {}) == ["A"]
+
+
+@pytest.mark.parametrize("value_changed", [False, True])
+@pytest.mark.spec("RUL-merge_rechecks_under_new_engine", "RUL-engine_change_is_checked", "BLD-merge_engine_recheck",
+                  test="TST-merge_plan-another_imagemagick_has_prep_fingerprints_checked")
+def test_another_imagemagick_has_prep_fingerprints_checked(tmp_path, monkeypatch, capsys, value_changed):
+    """Under an ImageMagick other than prep's, merge takes each photo's fingerprint again: one that still
+    matches prep's is merged as ever — here found already in the library — and one that does not is
+    blocked, left in by-dest, rather than called a different photo and placed again beside itself."""
+    ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
+                            library_files=[{"fp": "A2" if value_changed else "A", "dest": "Trip", "name": "a.jpg"}])
+    src = str(ws / "6-photos-by-dest" / "Trip" / "a.jpg")
+    fp[src] = "A2" if value_changed else "A"                     # the photo's fingerprint under the new version
+    _patch_fp(monkeypatch, fp)
+    monkeypatch.setattr(merge, "get_imagemagick_version", lambda: "newer")
+    capsys.readouterr()
+    merge._run_locked_workflow("plan", str(ws))
+    plan = _plan_of(ws)
+    [f] = _files(plan)
+    if value_changed:
+        assert f["disposition"] == "blocked" and plan["totals"]["renamed_for_library"] == 0
+        assert "under ImageMagick newer is not the one prep took under test" in f["blocked_reason"]
+    else:
+        assert f["disposition"] == "already_present" and not plan["blockers"]
+    assert "1 photo(s) fingerprinted again" in capsys.readouterr().out
+    assert plan["depends_on"]["image_engine_version"] == "newer"
+
+
+@pytest.mark.spec("RUL-merge_rechecks_under_new_engine", "BLD-merge_engine_recheck",
+                  test="TST-merge_plan-a_plan_made_under_another_imagemagick_is_stale")
+def test_a_plan_made_under_another_imagemagick_is_stale(tmp_path, monkeypatch):
+    """A merge plan records the ImageMagick it was made under; under another, its fingerprint comparisons
+    no longer hold, and it is stale."""
+    ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    _patch_fp(monkeypatch, fp)
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    wf = merge.MergeWorkflow(str(ws))
+    wf.handoff = json.load(open(utils.handoff_path(str(ws))))
+    assert wf.revalidate_plan_deps(str(ws), _plan_of(ws)) == []
+    monkeypatch.setattr(merge, "get_imagemagick_version", lambda: "newer")
+    assert "ImageMagick version changed" in wf.revalidate_plan_deps(str(ws), _plan_of(ws))
