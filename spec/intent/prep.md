@@ -389,7 +389,7 @@ other new file in photos by destination.
 
 :::{rul} A moved file's identity is carried, not read again
 :id: RUL-moved_file_carried
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :aliases: prep-recognize-bydate-to-bydest-move-1, prep-move-carry-forward-drop-old-1, prep-handoff-updated-on-move-only-1

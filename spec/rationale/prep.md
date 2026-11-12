@@ -326,7 +326,7 @@ does not guess, and reads the file as new.
 
 :::{rat} A move launders no stale row
 :id: RAT-move_launders_nothing
-:status: seed
+:status: ruled
 :justifies: RUL-moved_file_carried
 
 A move changes where a file is, not what it is, so what prep knows of it still holds — but only as far as it held before
