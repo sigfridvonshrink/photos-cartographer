@@ -627,3 +627,26 @@
 19	11. confirmation that durable artifacts were written only after dependency validation;	RUL-prep_run_summarised RUL-prep_records_on_success	
 19	12. the current quarantine footprint — total quarantined files, total size, number of distinct `<plan_id>` directories, and oldest/newest plan id present — since quarantine is never auto-deleted and grows across runs (Section 15.3);	RUL-prep_run_summarised RUL-quarantine_footprint_reported RUL-quarantine_never_auto_deleted	
 19	13. confirmation that the end-of-prep audit log `photos-15-prep-log.json` was written (a complete, self-sufficient record of the prep phase, Section 16.1), and that the end-of-prep database backup snapshot `photos-15-prep-ingest.db` was captured (shared contract `photos-shared-contract.md` Section 13.4a).	RUL-prep_run_summarised RUL-prep_records_on_success RUL-database_image_each_phase	
+20	## 20. Non-goals (prep must not do)	dropped	a heading; the corpus's documents carry their own
+20	`photos-1-prep` must not expose behaviour for:	dropped	the lead-in of a list; each entry names the items it restates
+20	1. geotag JSON generation or validation;	RUL-user_writes_decisions RUL-prep_takes_no_decision	
+20	2. camera-time policy or folder-timezone decisions;	RUL-prep_takes_no_decision RUL-prep_no_time_or_gps	
+20	3. GPX matching/interpolation/extrapolation;	RUL-tracks_geotag_only	
+20	4. manual GPS fallback planning;	RUL-prep_no_time_or_gps	
+20	5. time-offset calculation;	RUL-prep_no_time_or_gps	
+20	6. EXIF/QuickTime timestamp write planning or execution;	RUL-prep_no_time_or_gps BLD-prep_operation_kinds	
+20	7. GPS metadata write planning or execution;	RUL-prep_no_time_or_gps BLD-prep_operation_kinds	
+20	8. `GPSProcessingMethod` marker writes;	RUL-prep_no_time_or_gps BLD-prep_operation_kinds	
+20	9. rename/relocation caused by corrected timestamps;	RUL-prep_no_time_or_gps RUL-prep_name_provisional	
+20	10. any `geotag` command.	DEF-prep RUL-prep_no_time_or_gps	
+20	Passive extraction and caching of fields the geotag phase will need (Section 12) is allowed and required; making decisions from them is not.	RUL-metadata_kept_for_geotag RUL-prep_takes_no_decision	
+21	## 21. Idempotency and staleness examples	dropped	a heading; the corpus's documents carry their own
+21	```text [sha1:f95ce7df, 79 lines]	RUL-init_moves_dump_to_inbox RUL-initialized_marked_last RUL-init_taken_up_again RUL-dump_hidden_files_quarantined RUL-no_op_run RUL-no_op_run_reports_reuse RUL-unchanged_replan_writes_nothing RUL-reuse_valid_work RUL-inbox_non_media_to_strays RUL-prep_empties_inbox RUL-top_level_only_managed RUL-no_links RUL-missing_folder_blocks RUL-missing_folder_named RUL-structure_built_once RUL-sealed_refuses RUL-sealed_new_dump_warned RUL-sealed_new_dump_left RUL-restored_file_is_new RUL-move_recognized RUL-moved_file_carried BLD-move_row_effects RUL-prep_leaves_by_dest_as_found RUL-fingerprint_taken_afresh RUL-fingerprint_survives_mutation RUL-metadata_freshness RUL-any_config_change_replans RUL-invalid_value_stops RUL-invalid_value_located RUL-checked_snapshot_names RUL-tracks_outside_managed_folders INV-no_stale_use BLD-prep_dependencies RUL-new_file_restales_plan RUL-failed_fingerprint_blocks RUL-strays_leave_no_trace RUL-sidecar_blocks	examples restating the rules; a by-dest change rejects the plan whether or not it bears on a duplicate, since the plan records every file it reads without changing
+22	## 22. Summary	dropped	a heading; the corpus's documents carry their own
+22	This section restates the rules established above as a single reference.	dropped	a restatement; each rule it names is an item, linked in the corpus
+22	On any apparent conflict, the numbered specification sections above govern over this summary.	dropped	a restatement; each rule it names is an item, linked in the corpus
+22	The prep workflow is:	dropped	a restatement; each rule it names is an item, linked in the corpus
+22	```text [sha1:798a1a4b, 24 lines]	dropped	a restatement; each rule it names is an item, linked in the corpus
+22	The most important rules are:	dropped	a restatement; each rule it names is an item, linked in the corpus
+22	```text [sha1:eb02c3d1, 19 lines]	dropped	a restatement; each rule it names is an item, linked in the corpus
+22	Prep ends with media organized into by-date, ready for the user to place into `6-photos-by-dest` before geotag (`photos-2-geotag-workflow.md`) begins.	dropped	a restatement; each rule it names is an item, linked in the corpus
