@@ -627,7 +627,7 @@ Prep's dry run SHALL change nothing in the workspace.
 
 :::{rul} A prepped workspace has nothing to do
 :id: RUL-prepped_nothing_to_do
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: prep-dryrun-empty-sources-nothing-to-do-1, prep-execute-empty-sources-nothing-to-do-1
