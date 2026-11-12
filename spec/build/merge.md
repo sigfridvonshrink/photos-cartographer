@@ -58,7 +58,7 @@ fails its checks stops it with exit status 2, nothing marked and nothing written
 
 :::{bld} A photo's target in the library
 :id: BLD-merge_target
-:status: seed
+:status: ruled
 :realises: RUL-library_mirrors_destinations, RUL-geotag_name_final
 
 Merge's `enumerate_finalized` SHALL take each photo of the handoff under `6-photos-by-dest` and give it, as its target,
