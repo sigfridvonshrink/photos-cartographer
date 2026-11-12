@@ -479,7 +479,7 @@ execution, and the user could no longer look without acting.
 
 :::{rat} An empty inbox is the end state
 :id: RAT-empty_inbox_end_state
-:status: seed
+:status: ruled
 :justifies: RUL-prepped_nothing_to_do
 
 An initialized workspace whose inbox is empty is where every prep run ends. A saved plan there is already carried out:
