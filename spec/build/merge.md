@@ -21,7 +21,7 @@ by-dest photo it plans to place, blocking one whose value is not the handoff's; 
 
 :::{bld} Merge's preflight
 :id: BLD-merge_preflight
-:status: seed
+:status: ruled
 :realises: RUL-merge_rechecks_gates, RUL-merge_blocked_changes_nothing, RUL-merge_takes_finalized_current, RUL-merge_refuses_changed_since_finalize
 
 Merge's `preflight` SHALL run, under the workspace lock and before the library's, stopping at the first that fails:

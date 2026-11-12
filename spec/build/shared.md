@@ -734,7 +734,7 @@ Each copy SHALL carry the earlier log unchanged — every entry, every field and
 
 :::{bld} Prep's log is checked against the handoff
 :id: BLD-prep_log_checked
-:status: seed
+:status: ruled
 :realises: RUL-carry_forward_by_copy, RUL-merge_takes_finalized_current
 
 Finalize and merge SHALL stop while `photos-15-prep-log.json` is not the log the handoff vouches for

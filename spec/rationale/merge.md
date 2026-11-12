@@ -22,7 +22,7 @@ photo into the library's history.
 
 :::{rat} The workspace may have been touched since geotag
 :id: RAT-touched_since_geotag
-:status: seed
+:status: ruled
 :justifies: RUL-merge_rechecks_gates
 
 Geotag's gates held when geotag ran; merge runs later, often much later, and the user may have dropped a new dump into
@@ -34,7 +34,7 @@ the gates leave out are the residue the library never receives; they stay in the
 
 :::{rat} A refused merge leaves nothing to clean up
 :id: RAT-refused_merge_clean
-:status: seed
+:status: ruled
 :justifies: RUL-merge_blocked_changes_nothing
 
 The library is the one place the pipeline cannot simply re-plan from: a photo half placed there, or a summary

@@ -24,7 +24,7 @@ destination, unmerged.
 
 :::{rul} Merge checks geotag's gates again
 :id: RUL-merge_rechecks_gates
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -39,7 +39,7 @@ than geotag.
 
 :::{rul} A merge a precondition stops changes nothing
 :id: RUL-merge_blocked_changes_nothing
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
