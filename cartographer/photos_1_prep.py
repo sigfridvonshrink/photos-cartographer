@@ -1451,7 +1451,6 @@ class WorkspacePrepWorkflow:
             "no_op_already_correct": no_op_count,
             "recognized_moves": len(carried_forward),
             "by_dest_files_scanned_read_only": len(by_dest_files),
-            "by_dest_mutated": 0,
             "duplicates_against_by_dest": _dup_by_dest,
             "duplicates_against_mutable": len(_q_ops) - _dup_by_dest,
             "metadata_reused": _md_counts.get("reused_from_cache", 0),

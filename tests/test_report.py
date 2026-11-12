@@ -20,6 +20,8 @@ photos_1_prep / photos_utils come from conftest.py.
 import glob
 import os
 
+import pytest
+
 import photos_1_prep as prep
 import photos_utils as utils
 
@@ -71,6 +73,7 @@ def test_media_class_for_ext():
     assert utils.media_class_for_ext("") == "other"
 
 
+@pytest.mark.spec("RUL-prep_run_summarised", test="TST-report-report_has_expected_counts")
 def test_report_has_expected_counts(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -86,6 +89,7 @@ def test_report_has_expected_counts(tmp_path, monkeypatch):
     assert r["extractor"] == "exiftool"
 
 
+@pytest.mark.spec("RUL-prep_run_summarised", test="TST-report-duplicate_split_against_by_dest")
 def test_duplicate_split_against_by_dest(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -95,9 +99,9 @@ def test_duplicate_split_against_by_dest(tmp_path, monkeypatch):
     assert r["duplicates_against_by_dest"] == 1
     assert r["duplicates_against_mutable"] == 0
     assert r["by_dest_files_scanned_read_only"] == 1
-    assert r["by_dest_mutated"] == 0
 
 
+@pytest.mark.spec("RUL-prep_run_summarised", test="TST-report-recognized_move_counted_in_report")
 def test_recognized_move_counted_in_report(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -113,12 +117,13 @@ def test_recognized_move_counted_in_report(tmp_path, monkeypatch):
     assert p2.summary["report"]["recognized_moves"] == 1
 
 
+@pytest.mark.spec("RUL-prep_run_summarised", test="TST-report-print_summary_renders_categories")
 def test_print_summary_renders_categories(capsys):
     coord = utils.ProgressCoordinator(quiet=False)
     summary = {
         "report": {
             "media_operations": 3, "cache_operations": 1, "no_op_already_correct": 2,
-            "recognized_moves": 1, "by_dest_files_scanned_read_only": 4, "by_dest_mutated": 0,
+            "recognized_moves": 1, "by_dest_files_scanned_read_only": 4,
             "duplicates_against_mutable": 1, "duplicates_against_by_dest": 1,
             "metadata_reused": 2, "metadata_extracted": 3, "metadata_carried_forward": 1,
             "metadata_failed": 0, "camera_groups_found": 2, "native_gps_files": 1,

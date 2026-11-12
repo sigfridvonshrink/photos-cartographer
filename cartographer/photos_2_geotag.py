@@ -1770,7 +1770,7 @@ def _auto_reprep_for_clean_move(args, workspace_root, reporter):
     geotag. That move leaves the handoff stale (geotag derives each file's calibration `destination`
     from the handoff), so geotag would otherwise hard-stop and tell you to re-run prep by hand. Instead,
     for the *clean* case — workspace initialized, `0-sources` already empty (so this is the stat-only
-    move refresh: no media is moved, `by_dest_mutated: 0`), and a by-date→by-dest move is the one thing
+    move refresh: no media is moved), and a by-date→by-dest move is the one thing
     the handoff hasn't recorded — run the real prep phases (`plan` then `execute`) for the operator,
     announcing what and why. Everything else is left untouched for the in-lock gates to report:
     sealed/uninitialized, a non-empty `0-sources` dump (the cheapest hard gate — a bigger op the
