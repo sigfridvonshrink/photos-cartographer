@@ -581,7 +581,7 @@ transformation log and de-duplication rely on.
 
 :::{rat} A new version may change nothing
 :id: RAT-new_version_may_change_nothing
-:status: seed
+:status: ruled
 :justifies: RUL-engine_change_is_checked
 
 A new ImageMagick usually decodes the same pixels to the same fingerprint, but nothing promises it. Trusted blindly, a
