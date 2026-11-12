@@ -1183,6 +1183,19 @@ Deciding again is planning's work: when the workspace has moved on, the plan is 
 again.
 :::
 
+:::{rat} A plan is the decisions of its code
+:id: RAT-plan_is_its_codes
+:status: seed
+:justifies: RUL-plan_carried_out_by_its_code
+
+A saved plan is the decisions of the code that made it: names, copies, places, a time and a position for each photo,
+a target in the library. Carried out by another build, it would apply decisions the running code would not make — a
+fault the upgrade fixed among them, and at merge into the library, the one place nothing is re-planned from. A version
+number cannot tell builds apart while every local build carries the same one; the code's own fingerprint can. Planning
+again is cheap: prep's memo keeps what it read, merge's cache the library's fingerprints, and geotag plans again from
+its decision records.
+:::
+
 :::{rat} The journal is the run's own account
 :id: RAT-journal_is_the_account
 :status: ruled

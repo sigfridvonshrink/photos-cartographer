@@ -752,14 +752,27 @@ summary — SHALL stay on disk, as do every pass's plan and journal and the deci
 (`BLD-log_format`).
 :::
 
+:::{bld} The code's fingerprint
+:id: BLD-code_fingerprint
+:status: seed
+:realises: RUL-plan_carried_out_by_its_code
+
+The code's fingerprint, `code_fingerprint`, SHALL be the SHA-256 over the files of the `cartographer` package the
+zipapp ships, as loaded — from the zipapp or a checkout, which agree — each one's path and bytes in path order. Prep's
+plan records it as `code_fingerprint`, compared at execute and dry run after the plan's schema version and command and
+before its operations; geotag's executable plan and merge's plan record it in their `depends_on`, a plan recording
+another value or none stale at dry run and execute alike.
+:::
+
 :::{bld} Which phase writes which record
 :id: BLD-record_ownership
-:status: ruled
+:status: seed
 :realises: RUL-phase_writes_own_records
 :uses: BLD-artifact_numbering, BLD-init_library_writes_library_root
 
 A phase SHALL write only records in its own number band of the numbering scheme: prep `photos-1X`, geotag `photos-2X`,
-merge `photos-3X`. The configuration and the database are phase-neutral, each with its own writers' rule: prep seeds
+merge `photos-3X`, and on success the seal, `photos-00-sealed.json`, which merge alone writes. The configuration and
+the database are phase-neutral, each with its own writers' rule: prep seeds
 the configuration, which `init-library` may later extend by `library_root` alone (§4), and prep writes the database's
 cache and identity rows while geotag and merge write only their own regions of it (§13.4). Bundling copies of every phase's records into the archival package reads them, and is no write.
 :::
@@ -960,6 +973,7 @@ found to hold its content.
 :status: ruled
 :realises: RUL-merge_records_landing, RUL-nothing_built_from_merge_records
 :uses: BLD-archive_manifest, BLD-workspace_database
+:aliases: merge-no-stale-summary-1
 
 Merge SHALL write `photos-31-merge-summary.json` on every outcome but a stale plan or a failed precondition: per photo
 and in total, where it landed, whether it was renamed for the library, already present or blocked.

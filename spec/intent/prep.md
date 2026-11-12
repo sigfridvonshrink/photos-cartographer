@@ -590,18 +590,6 @@ their count, their time range, how many carry a GPS position — inferring nothi
 
 ## 14. Plan, dry run, execution
 
-:::{rul} A plan is carried out only by the code that made it
-:id: RUL-plan_carried_out_by_its_code
-:status: ruled
-:criticality: high
-:verify: required
-:aliases: prep-execute-revalidates-rejects-stale-1
-:refines: INV-no_stale_use
-
-Prep SHALL carry out or summarise a saved plan only with the code that made it, refusing before any change a plan made
-by other code or recording none.
-:::
-
 :::{rul} A file that appeared since planning restales the plan
 :id: RUL-new_file_restales_plan
 :status: ruled

@@ -354,16 +354,6 @@ the size and modification time of each file it leaves as it is, its metadata dep
 and a summary.
 :::
 
-:::{bld} The code's fingerprint
-:id: BLD-code_fingerprint
-:status: ruled
-:realises: RUL-plan_carried_out_by_its_code
-
-The code's fingerprint SHALL be the SHA-256 over the files of the `cartographer` package the zipapp ships, as loaded —
-from the zipapp or a checkout, which agree — each one's path and bytes in path order; execute and dry run compare
-the plan's with the running code's, after its schema version and command and before its operations.
-:::
-
 :::{bld} Folder removals are `rmdir` operations
 :id: BLD-folder_removals
 :status: ruled

@@ -423,6 +423,21 @@ def test_revalidate_detects_each_stale_input(tmp_path, monkeypatch):
     assert any("planned operations changed" in s for s in wf.revalidate_plan(pk, gpx))
 
 
+@pytest.mark.spec("RUL-plan_carried_out_by_its_code", "BLD-code_fingerprint",
+                  test="TST-geotag_execution-a_plan_made_by_other_code_is_stale")
+def test_a_plan_made_by_other_code_is_stale(tmp_path, monkeypatch):
+    """Geotag's executable plan records the code that made it; another build, or a plan recording none,
+    makes it stale before any change."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    wf = cal.GeotagWorkflow(str(ws)); wf.preflight(for_execute=True)
+    plan = json.load(open(ctl / "photos-24-executable-plan.json"))
+    gpx = cal.GPXIndex(cal.selected_gpx_root()).build()
+    assert plan["depends_on"]["code_fingerprint"] == utils.code_fingerprint()
+    for recorded in ("0" * 64, None):
+        pk = {**plan, "depends_on": {**plan["depends_on"], "code_fingerprint": recorded}}
+        assert any("code_fingerprint" in s for s in wf.revalidate_plan(pk, gpx)), recorded
+
+
 def test_corrupt_journal_is_ignored(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)

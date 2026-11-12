@@ -449,17 +449,6 @@ and infers nothing: inference is geotag's, made with evidence prep lacks.
 
 ## 14. Plan, dry run, execution
 
-:::{rat} A plan is its code's decisions
-:id: RAT-plan_is_its_codes
-:status: ruled
-:justifies: RUL-plan_carried_out_by_its_code
-
-A saved plan is the decisions of the code that made it: names, copies, places. Carried out by another build, it would
-apply decisions the running code would not make — a fault the upgrade fixed among them. A version number cannot tell
-builds apart while every local build carries the same one; the code's own fingerprint can. Planning again is cheap, the
-plan memo keeping what was read.
-:::
-
 :::{rat} The plan is of the workspace it saw
 :id: RAT-plan_saw_the_workspace
 :status: ruled

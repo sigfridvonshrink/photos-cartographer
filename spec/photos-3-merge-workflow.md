@@ -89,23 +89,23 @@ Merge's **data path is read-only with respect to config** — like geotag, `plan
 Merge is a plan/validate/execute workflow with the same strict separation as the other phases:
 
 ```text
-Plan (non-mutating): map each by-dest file to its library target, detect collisions, resolve them.
+Plan (moves nothing): map each by-dest file to its library target, detect collisions, resolve them; cache the library-file fingerprints it reads in SQLite.
 Validate the plan against current library + by-dest state.
 Execute only the validated plan: MOVE files (place no-clobber + atomic, then remove the by-dest source).
 Journal every move (library placement, then source removal).
-Update SQLite (the library-file fingerprint cache only, populated during planning); each file's library destination is recorded in photos-31/photos-35, not the database.
+Each file's library destination is recorded in photos-31/photos-35, not the database.
 Write photos-31-merge-summary.json on the terminal outcome — success, partial, or a snapshot-abort rejection (for audit); never from a stale-plan rejection or a precondition failure. Write photos-35-merge-log.json (copied forward from photos-26), the end-of-merge DB snapshot, and the re-seal only on overall success.
 ```
 
 Invariants that hold at every gate:
 
-1. planning is non-mutating — it touches no library file, no by-dest file, no artifact;
+1. planning moves and changes no file — no library file, no by-dest file — and writes nothing but its plan and the library fingerprints it keeps;
 2. dry-run validates the real saved plan and reports a concise summary of the moves (counts of new/already-present/renamed/blocked) plus the path to the full plan — never a separate simulation, and never a full dump;
-3. execution revalidates the plan before any mutation and rejects stale plans;
+3. execution revalidates the plan before any mutation and rejects stale plans — a plan made by another build of cartographer, or recording none, among them;
 4. all library placements are no-clobber — planned no-clobber *and* re-verified no-clobber at execute time, performed atomically or atomic-equivalent across filesystems (shared contract Section 15);
 5. a library file is never deleted, written, or renamed — it is read only to fingerprint on a collision;
 6. a by-dest source is removed only after its verified copy is in the library; un-merged files stay in by-dest;
-7. merge writes only its own 3X artifacts and copies the `photos-26` log forward rather than editing it (shared contract Section 13.0a);
+7. merge writes only its own 3X artifacts, and on success the workspace seal, and copies the `photos-26` log forward rather than editing it (shared contract Section 13.0a);
 8. all human-authored config is sanity-validated before use (Section 4; shared contract Section 14);
 9. no summary is written from a stale-plan rejection or a precondition failure — but a partial run, and a snapshot-abort rejection, do write a summary (for audit, Section 9.1 item 8); the merge log, the end-of-merge DB snapshot, and the re-seal are written only on overall success.
 

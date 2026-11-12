@@ -398,6 +398,43 @@ def test_any_config_edit_restales_the_merge_plan(tmp_path, monkeypatch):
     assert "config changed" in wf.revalidate_plan_deps(str(ws), plan)
 
 
+def test_dry_run_says_execute_merges_around_blocked_photos(tmp_path, monkeypatch, capsys):
+    """Dry run describes what execute does with a plan holding blocked photos: it merges the rest, leaves
+    those in photos by destination and ends partial without sealing — it does not refuse."""
+    ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    _patch_fp(monkeypatch, fp)
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    plan = _plan_of(ws)
+    plan["blockers"] = ["6-photos-by-dest/Trip/b.jpg: could not be fingerprinted — left in by-dest."]
+    with open(merge.merge_plan_path(str(ws)), "w") as f:
+        json.dump(plan, f)
+    capsys.readouterr()
+    assert merge._run_locked_workflow("dry-run", str(ws)) == 0
+    out = "".join(capsys.readouterr())
+    assert "merges the rest, and ends partial without sealing" in out and "will refuse" not in out
+
+
+@pytest.mark.parametrize("recorded", ["0" * 64, None])
+@pytest.mark.spec("RUL-plan_carried_out_by_its_code", "BLD-code_fingerprint",
+                  test="TST-merge_plan-a_plan_made_by_other_code_is_refused")
+def test_a_plan_made_by_other_code_is_refused(tmp_path, monkeypatch, recorded):
+    """Merge's plan records the code that made it; dry run and execute refuse one made by another build, or
+    recording none, before any change."""
+    ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    _patch_fp(monkeypatch, fp)
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    plan = _plan_of(ws)
+    assert plan["depends_on"]["code_fingerprint"] == utils.code_fingerprint()
+    plan["depends_on"]["code_fingerprint"] = recorded
+    with open(merge.merge_plan_path(str(ws)), "w") as f:
+        json.dump(plan, f)
+    before = sorted(os.listdir(lib))
+    for command in ("dry-run", "execute"):
+        assert merge._run_locked_workflow(command, str(ws)) == 2, command
+    assert sorted(os.listdir(lib)) == before                       # nothing placed
+    assert not os.path.exists(merge.merge_summary_path(str(ws)))   # no summary from a stale plan
+
+
 @pytest.mark.spec("BLD-phase_logs", "log-carried-unchanged-1", test="TST-merge_plan-a_log_edited_after_finalize_blocks_merge")
 def test_a_log_edited_after_finalize_blocks_merge(tmp_path, monkeypatch, capsys):
     """Each log carries the one before it unchanged and only adds: an entry of prep's that photos-26 no

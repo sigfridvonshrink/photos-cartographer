@@ -111,3 +111,18 @@
 4	- **Run from inside a workspace with no path** → it reads `library_root` from config and blesses that directory (no config write).	BLD-init_library_cases	
 4	- **Run outside any workspace with an explicit path** → it blesses the directory only, and advises the operator to re-run from a workspace if they also want it recorded in config.	BLD-init_library_cases	the advice to re-run is output wording
 4	- **Run outside any workspace with no path** → there is nothing to bless and no config to read; it is an error.	BLD-init_library_cases	
+5	## 5. Core workflow rule	dropped	a heading; the corpus's documents carry their own
+5	Merge is a plan/validate/execute workflow with the same strict separation as the other phases:	RUL-planning_changes_no_media RUL-execution_only_the_plan RUL-dry_run_summarises_the_real_plan	
+5	```text [sha1:7ce974ce, 6 lines]	RUL-planning_changes_no_media RUL-target_free_at_execute RUL-merge_moves RUL-every_change_journaled RUL-library_file_read_once RUL-merge_records_landing BLD-merge_records RUL-seal_on_success_only RUL-merge_reseals	the database step is planning's: merge's plan caches the library fingerprints it reads
+5	Invariants that hold at every gate:	dropped	the lead-in of a list; each entry names the items it restates
+5	1. planning moves and changes no file — no library file, no by-dest file — and writes nothing but its plan and the library fingerprints it keeps;	RUL-planning_changes_no_media	the text said planning wrote no artifact; it writes its plan and the library fingerprints it keeps
+5	2. dry-run validates the real saved plan and reports a concise summary of the moves (counts of new/already-present/renamed/blocked) plus the path to the full plan — never a separate simulation, and never a full dump;	RUL-dry_run_summarises_the_real_plan	dry run's account of blocked photos now says what execute does with them
+5	3. execution revalidates the plan before any mutation and rejects stale plans — a plan made by another build of cartographer, or recording none, among them;	INV-no_stale_use RUL-plan_carried_out_by_its_code BLD-code_fingerprint	merge's plan now records the code that made it
+5	4. all library placements are no-clobber — planned no-clobber *and* re-verified no-clobber at execute time, performed atomically or atomic-equivalent across filesystems (shared contract Section 15);	RUL-target_free_at_execute RUL-cross_fs_all_or_nothing	
+5	5. a library file is never deleted, written, or renamed — it is read only to fingerprint on a collision;	RUL-library_never_altered RUL-library_not_scanned	
+5	6. a by-dest source is removed only after its verified copy is in the library; un-merged files stay in by-dest;	RUL-merge_moves RUL-unplaced_photo_stays	
+5	7. merge writes only its own 3X artifacts, and on success the workspace seal, and copies the `photos-26` log forward rather than editing it (shared contract Section 13.0a);	RUL-phase_writes_own_records BLD-record_ownership RUL-carry_forward_by_copy	the seal is the one record outside merge's band it writes
+5	8. all human-authored config is sanity-validated before use (Section 4; shared contract Section 14);	RUL-config_validated_before_use	
+5	9. no summary is written from a stale-plan rejection or a precondition failure — but a partial run, and a snapshot-abort rejection, do write a summary (for audit, Section 9.1 item 8); the merge log, the end-of-merge DB snapshot, and the re-seal are written only on overall success.	BLD-merge_records RUL-seal_on_success_only RUL-merge_reseals	
+5	Execution never re-derives placement decisions.	RUL-execution_only_the_plan	
+5	It applies only the moves already recorded in the validated plan.	RUL-execution_only_the_plan	
