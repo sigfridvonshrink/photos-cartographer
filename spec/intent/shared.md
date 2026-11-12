@@ -1036,6 +1036,7 @@ suffix — by one identical rule.
 :criticality: med
 :verify: required
 :refines: RUL-suffix_choice_by_phase
+:aliases: merge-suffix-append-at-max-plus-1-1, merge-allocation-treats-existing-and-batch-occupied-1
 
 Merge SHALL take the suffix above the highest already used for a name, never a lower one that has come free.
 :::
@@ -2094,6 +2095,7 @@ is taken giving way instead.
 :anti: yes
 :verify: required
 :uses: DEF-merge, DEF-library
+:aliases: merge-collision-detected-by-existence-check-1, merge-free-target-places-without-library-read-1
 
 Merge SHALL touch the library only at the places its photos go, and read a library file only when one is already there —
 never scanning, indexing or de-duplicating the library.
@@ -2115,7 +2117,7 @@ Where an incoming photo's place in the library is taken, merge SHALL compare the
 :status: ruled
 :criticality: high
 :verify: required
-:aliases: merge-collision-same-content-1
+:aliases: merge-collision-same-content-1, merge-same-content-already-present-remove-source-1
 :refines: RUL-collision_by_content
 
 A taken place holding the same content SHALL mean the photo is already in the library: nothing is written there, and the
@@ -2128,11 +2130,25 @@ workspace's copy is removed.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: merge-collision-diff-content-1
+:aliases: merge-collision-diff-content-1, merge-different-content-rename-incoming-1
 :refines: RUL-collision_by_content
 
 A taken place holding different content SHALL mean two photos share a name: the incoming one is placed under a
 differentiating name.
+:::
+
+:::{rul} A collision that cannot be settled holds the photo back
+:id: RUL-unsettled_collision_blocks
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-collision_by_content
+:aliases: merge-unfingerprintable-library-file-blocker-1
+:uses: DEF-library
+
+Where the library file in an incoming photo's place cannot be fingerprinted, merge SHALL leave that photo in photos by
+destination — neither placing it there nor under another name — and go on with the rest.
 :::
 
 :::{rul} A library file is read at most once while unchanged

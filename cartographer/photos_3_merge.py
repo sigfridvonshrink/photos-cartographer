@@ -460,6 +460,15 @@ class MergeWorkflow:
                 claimed_lower[lib_dest] = {n.lower() for n in (os.listdir(d) if os.path.isdir(d) else [])}
             return claimed_lower[lib_dest]
 
+        def _case_variant(target):
+            """A library file whose name differs from the target's only in case, or None."""
+            d, name = os.path.split(target)
+            try:
+                return next((os.path.join(d, n) for n in sorted(os.listdir(d))
+                             if n.lower() == name.lower() and n != name), None)
+            except OSError:
+                return None
+
         def _alloc_renamed(e, collision):
             """Suffix-allocate a safe destination name (append-at-max+1, case-insensitive) and return
             the renamed_incoming rec fields. Used for a different-content collision AND a case-only
@@ -513,34 +522,36 @@ class MergeWorkflow:
                     dests.setdefault(e["lib_dest"], {"files": []})["files"].append(rec)
                     continue
             cl = _claimed(e["lib_dest"])
-            case_taken = e["final_name"].lower() in cl                # library/sibling case-variant exists
-            if not os.path.exists(target):
-                if not case_taken:
+            # The library file in the way: at the target itself, or under a name differing only in case —
+            # one place on a case-insensitive library, and the same photo perhaps on any. Either is settled
+            # by content, never renamed around unseen.
+            in_way = target if os.path.exists(target) else _case_variant(target)
+            if in_way is None:
+                if e["final_name"].lower() not in cl:
                     rec.update({"disposition": "placed_new", "library_target": target,
                                 "resolved_name": e["final_name"], "renamed_for_library": False})
                     totals["placed_new"] += 1
                     cl.add(e["final_name"].lower())
                 else:
-                    # No exact-case file to fingerprint: the clash is a name-case collision (would
-                    # clobber on a case-insensitive library), not a content collision — rename around it.
+                    # A sibling placed by this run took the name in another case: rename around it.
                     rec.update(_alloc_renamed(e, {"path": None, "reason": "case-insensitive name clash"}))
                     totals["renamed_for_library"] += 1
             else:
-                lib_fp, fp_err = self._library_fingerprint(target, cache)
+                lib_fp, fp_err = self._library_fingerprint(in_way, cache)
                 if lib_fp is None:
-                    reason = f"library file at {target} could not be fingerprinted: {fp_err}"
+                    reason = f"library file at {in_way} could not be fingerprinted: {fp_err}"
                     rec.update({"disposition": "blocked", "library_target": target,
                                 "resolved_name": e["final_name"], "renamed_for_library": False,
                                 "blocked_reason": reason})
                     totals["blocked"] += 1
                     blockers.append(reason + " — left in by-dest.")
                 elif lib_fp == e["content_fingerprint"]:
-                    rec.update({"disposition": "already_present", "library_target": target,
-                                "resolved_name": e["final_name"], "renamed_for_library": False})
+                    rec.update({"disposition": "already_present", "library_target": in_way,
+                                "resolved_name": os.path.basename(in_way), "renamed_for_library": False})
                     totals["already_present"] += 1
                     cl.add(e["final_name"].lower())
                 else:
-                    rec.update(_alloc_renamed(e, {"path": target, "fingerprint": lib_fp}))
+                    rec.update(_alloc_renamed(e, {"path": in_way, "fingerprint": lib_fp}))
                     totals["renamed_for_library"] += 1
             dests.setdefault(e["lib_dest"], {"files": []})["files"].append(rec)
 

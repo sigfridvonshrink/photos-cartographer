@@ -950,13 +950,14 @@ without the tool, that nothing in it has decayed or been altered.
 
 :::{rat} The library is the user's, and already in order
 :id: RAT-library_is_ground_truth
-:status: ruled
-:justifies: RUL-library_never_altered, RUL-library_not_scanned, RUL-collision_by_content, RUL-collision_same_content, RUL-collision_different_content
+:status: seed
+:justifies: RUL-library_never_altered, RUL-library_not_scanned, RUL-collision_by_content, RUL-collision_same_content, RUL-collision_different_content, RUL-unsettled_collision_blocks
 
 The library is the user's curated collection: its organisation and names are the ground truth, and other tools and
 people rely on them. So merge adds to it and changes nothing in it, and assumes it is in order rather than scanning it:
 scanning a whole library to place one batch would cost far more than it saves. Where a name is taken, only the content
-tells a copy already present from a different photo sharing a name.
+tells a copy already present from a different photo sharing a name — and where the content cannot be read, nothing
+does: a guess either way is a duplicate placed or a photo lost from the workspace, so the photo waits.
 :::
 
 :::{rat} A library file costs a full read
