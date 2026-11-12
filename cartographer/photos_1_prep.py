@@ -2874,8 +2874,8 @@ def add_arguments(parser):
 
 def _prep_nothing_to_do(workspace_root, reporter) -> bool:
     """True (after logging a friendly notice) when this workspace is already prepped AND there is
-    genuinely nothing to apply — initialized (guard present), `0-sources` empty (the steady end-state,
-    prep §18), AND no pending by-date→by-dest move the handoff hasn't recorded yet. Both
+    genuinely nothing to apply — initialized (guard present), `0-sources` holding nothing at all (the
+    steady end-state, prep §18: an empty folder left there is work, a planned removal), AND no pending by-date→by-dest move the handoff hasn't recorded yet. Both
     `dry-run` and `execute` use this to stop fast (exit 0) instead of replaying a now-stale saved plan
     (which would clobber the files it already moved). Returns False — logging nothing — otherwise.
 
@@ -2886,8 +2886,8 @@ def _prep_nothing_to_do(workspace_root, reporter) -> bool:
     src = os.path.join(workspace_root, folder_name('sources'))
     if not os.path.exists(guard_path(workspace_root)):
         return False
-    if os.path.isdir(src) and any(fs for _dp, _dn, fs in os.walk(src) if fs):
-        return False
+    if os.path.isdir(src) and os.listdir(src):
+        return False                    # any entry, a leftover folder too: geotag's gate counts them all
     try:
         with open(handoff_path(workspace_root)) as f:
             _handoff = json.load(f)
