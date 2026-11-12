@@ -53,3 +53,16 @@ filesystem and the seal, read the configuration through `load_config`, mark the 
 write nothing else; outside any workspace without one, stop with exit status 2. A configuration that cannot be read or
 fails its checks stops it with exit status 2, nothing marked and nothing written.
 :::
+
+## 6. Destination-to-library mapping
+
+:::{bld} A photo's target in the library
+:id: BLD-merge_target
+:status: seed
+:realises: RUL-library_mirrors_destinations, RUL-geotag_name_final
+
+Merge's `enumerate_finalized` SHALL take each photo of the handoff under `6-photos-by-dest` and give it, as its target,
+`library_root` joined to its folder's path relative to `6-photos-by-dest` — empty for a photo directly in it — and its
+final name: the target of `photos-24`'s `rename_no_clobber` whose `content_fingerprint` precondition is the photo's, or
+its own name where geotag renamed nothing; the entries sorted by their path in the workspace.
+:::

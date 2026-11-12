@@ -60,6 +60,19 @@ def test_enumerate_joins_prerename_handoff_to_final_name():
     assert e["library_target"] == "/lib/Trip/2024-07-03--14-12-21.arw"
 
 
+@pytest.mark.spec("RUL-library_mirrors_destinations", "BLD-merge_target",
+                  test="TST-merge_plan-the_library_mirrors_the_destination_tree")
+def test_the_library_mirrors_the_destination_tree():
+    """Each photo goes to the same path under the library as under photos by destination — nested folders as
+    the user built them, the name geotag gave it, or its own where geotag renamed nothing."""
+    wf, cp = _wf([_ho("6-photos-by-dest/Belgium/Brussels/Grand Place/x.jpg", "A"),
+                  _ho("6-photos-by-dest/Belgium/y.jpg", "B")],
+                 [_rename("A", "2024-07-03--14-12-21.jpg")])
+    targets = {e["content_fingerprint"]: e["library_target"] for e in wf.enumerate_finalized(cp, "/lib")}
+    assert targets == {"A": "/lib/Belgium/Brussels/Grand Place/2024-07-03--14-12-21.jpg",
+                       "B": "/lib/Belgium/y.jpg"}
+
+
 def test_enumerate_robust_to_postrename_handoff():
     # If prep was re-run after geotag, the handoff already carries the FINAL name; the
     # fingerprint join still resolves it (name-independent).
@@ -70,7 +83,7 @@ def test_enumerate_robust_to_postrename_handoff():
     assert e["library_target"] == "/lib/Trip/2024-07-03--14-12-21.arw"
 
 
-@pytest.mark.spec("merge-preserve-geotag-final-name-1")
+@pytest.mark.spec("merge-preserve-geotag-final-name-1", test="TST-merge_plan-enumerate_unrenamed_file_keeps_its_name")
 def test_enumerate_unrenamed_file_keeps_its_name():
     wf, cp = _wf([_ho("6-photos-by-dest/Trip/keep.jpg", "A")], [])
     [e] = wf.enumerate_finalized(cp, "/lib")
@@ -78,7 +91,7 @@ def test_enumerate_unrenamed_file_keeps_its_name():
     assert e["library_target"] == "/lib/Trip/keep.jpg"
 
 
-@pytest.mark.spec("merge-map-preserve-destination-structure-1")
+@pytest.mark.spec("merge-map-preserve-destination-structure-1", test="TST-merge_plan-enumerate_root_level_destination")
 def test_enumerate_root_level_destination():
     wf, cp = _wf([_ho("6-photos-by-dest/top.jpg", "A")], [])
     [e] = wf.enumerate_finalized(cp, "/lib")
@@ -319,7 +332,7 @@ def test_plan_unfingerprintable_library_file_blocks_item(tmp_path, monkeypatch):
     assert f["disposition"] == "blocked"
 
 
-@pytest.mark.spec("merge-deterministic-rerun-same-targets-names-1", "merge-mapping-deterministic-1")
+@pytest.mark.spec("merge-deterministic-rerun-same-targets-names-1", "merge-mapping-deterministic-1", test="TST-merge_plan-plan_is_deterministic")
 def test_plan_is_deterministic(tmp_path, monkeypatch):
     ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
                                        {"fp": "B", "dest": "Spain", "final_name": "b.jpg"}])

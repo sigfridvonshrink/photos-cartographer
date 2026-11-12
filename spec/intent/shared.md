@@ -2217,6 +2217,7 @@ Merge's plan, dry run and execution SHALL only read the library's mark, and stop
 :anti: yes
 :verify: required
 :refines: RUL-library_known_by_mark
+:aliases: merge-create-library-dest-subdir-1
 
 Beyond its mark and its lock, merge SHALL create in the library only the photos it places, the folders they go into,
 and, while a photo crosses filesystems, its temporary copy.
