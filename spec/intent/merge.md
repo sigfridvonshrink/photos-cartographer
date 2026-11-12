@@ -48,3 +48,19 @@ than geotag.
 
 A merge a precondition stops SHALL change nothing in the library, the workspace's photos or merge's records.
 :::
+
+## 6. Destination-to-library mapping
+
+:::{rul} The library mirrors the destination tree
+:id: RUL-library_mirrors_destinations
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-library, DEF-managed_folders
+:aliases: merge-map-preserve-destination-structure-1, merge-mapping-deterministic-1, merge-preserve-geotag-final-name-1
+
+Merge SHALL place each photo at the same path under the library as it holds under photos by destination — its folders
+as the user built them, its name the one geotag gave it — the name an incoming photo is given on a collision the only
+change.
+:::

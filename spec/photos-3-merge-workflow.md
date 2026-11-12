@@ -122,7 +122,7 @@ Each by-dest photo sits in a destination folder under `6-photos-by-dest` (geotag
   ->  <library_root>/<relative-destination-path>/<final-name>.ext
 ```
 
-By default the relative destination path is preserved verbatim, so the library mirrors the destination tree the user built (e.g. `Belgium/Brussels/...`). The mapping is config-driven where the user wants a transform (for example prefixing a year derived from the geotagged date), but the default is the identity mapping above. The mapping is deterministic: the same by-dest file maps to the same library target on every run, which is what makes idempotency (Section 8) and resume work.
+The relative destination path is preserved verbatim, so the library mirrors the destination tree the user built (e.g. `Belgium/Brussels/...`). The mapping is fixed: no setting transforms it. The mapping is deterministic: the same by-dest file maps to the same library target on every run, which is what makes idempotency (Section 8) and resume work.
 
 The **final name** is the name geotag already assigned (destination-local civil time, shared contract Section 7.3). Merge does not recompute it. The only name change merge ever introduces is the anti-collision rename of Section 7, applied to the **incoming** file alone.
 

@@ -42,3 +42,17 @@ claiming a merge that did not happen, would have to be found and undone by hand.
 the first change makes a refusal free — fix the cause, run merge again — and keeps merge's records describing only
 merges that ran.
 :::
+
+## 6. Destination-to-library mapping
+
+:::{rat} The destination tree is the library's organisation
+:id: RAT-destination_tree_is_the_library
+:status: seed
+:justifies: RUL-library_mirrors_destinations
+
+The user builds photos by destination as the library should read — country, city, place — and the library, browsed
+folder by folder, is that tree grown over many workspaces. Any transform on the way in, a year prefixed or a level
+flattened, would be a decision about the library's organisation the user never made, and one a later workspace could
+make differently. Kept the same, a photo's place in the library is the place the user chose for it, and the same on
+every run, which is what lets an interrupted merge find its own work.
+:::
