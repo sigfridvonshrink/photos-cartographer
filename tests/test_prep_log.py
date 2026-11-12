@@ -316,7 +316,7 @@ def test_a_retaken_fingerprint_keeps_the_photos_history(tmp_path, monkeypatch):
     assert entry["journey"][-1]["from"] == old
 
 
-@pytest.mark.spec("RUL-log_follows_retaken_fingerprint", "RUL-moved_file_carried", "BLD-prep_log_build",
+@pytest.mark.spec("RUL-log_follows_retaken_fingerprint", "RUL-moved_file_carried", "RUL-engine_change_is_checked", "BLD-prep_log_build",
                   test="TST-prep_log-a_photo_moved_under_a_new_imagemagick_keeps_its_history")
 def test_a_photo_moved_under_a_new_imagemagick_keeps_its_history(tmp_path, monkeypatch):
     """A photo the user sorts into photos by destination while ImageMagick changes, its fingerprint's value

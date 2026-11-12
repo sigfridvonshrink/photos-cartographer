@@ -154,6 +154,10 @@ def _current_fingerprints(workspace):
     except Exception:
         pass
     try:
+        fps["image_engine_version"] = U.get_imagemagick_version()      # resolved once per process
+    except Exception:
+        pass
+    try:
         hp = U.handoff_path(workspace)
         if os.path.exists(hp):
             with open(hp) as f:

@@ -124,6 +124,7 @@ class MergeWorkflow:
         # Library fingerprints this run took from the cache / read from the file. Reported, never put in
         # the plan, which an unchanged re-plan must leave byte-identical (shared §4).
         self.library_fp_counts = {"cached": 0, "read": 0}
+        self.engine_rechecks = 0    # by-dest photos fingerprinted again under another ImageMagick
 
     # --- preflight (merge spec §3) -------------------------------------------
 
@@ -472,6 +473,7 @@ class MergeWorkflow:
 
         dests, blockers = {}, []
         totals = {"placed_new": 0, "already_present": 0, "renamed_for_library": 0, "blocked": 0}
+        engine_change = self._engine_change()
         for e in entries:
             src_abs = os.path.join(ws, e["by_dest_relpath"])
             if not os.path.exists(src_abs):
@@ -487,6 +489,24 @@ class MergeWorkflow:
                    "preconditions": {"size": st.st_size, "mtime_ns": st.st_mtime_ns,
                                      "content_fingerprint": e["content_fingerprint"]}}
             target = e["library_target"]
+            if engine_change:
+                # Prep's fingerprint was taken by another ImageMagick: compared with a library file's taken
+                # now, it could call the same photo different. Taken again; kept if it still matches.
+                self.engine_rechecks += 1
+                fp = self._fingerprint_library_file(src_abs)
+                if not (fp.get("status") == "valid" and fp.get("value") == e["content_fingerprint"]):
+                    was, now = engine_change
+                    reason = (f"{e['by_dest_relpath']}: its fingerprint under ImageMagick {now} is not the one "
+                              f"prep took under {was or 'an unrecorded version'}" if fp.get("status") == "valid"
+                              else f"{e['by_dest_relpath']} could not be fingerprinted: "
+                                   f"{fp.get('error') or 'fingerprint failed'}")
+                    rec.update({"disposition": "blocked", "library_target": target,
+                                "resolved_name": e["final_name"], "renamed_for_library": False,
+                                "blocked_reason": reason})
+                    totals["blocked"] += 1
+                    blockers.append(reason + " — left in by-dest.")
+                    dests.setdefault(e["lib_dest"], {"files": []})["files"].append(rec)
+                    continue
             cl = _claimed(e["lib_dest"])
             case_taken = e["final_name"].lower() in cl                # library/sibling case-variant exists
             if not os.path.exists(target):
@@ -531,6 +551,7 @@ class MergeWorkflow:
             "config_fingerprint": sha256_file(config_path(ws)),
             "folders_fingerprint": folders_fingerprint(),
             "media_extensions_fingerprint": media_extensions_fingerprint(),
+            "image_engine_version": get_imagemagick_version(),
         }
         plan = {
             "artifact_type": "merge_plan", "artifact_name": MERGE_PLAN_ARTIFACT,
@@ -588,6 +609,16 @@ class MergeWorkflow:
                 "disposition": "blocked", "library_target": e["library_target"],
                 "resolved_name": e["final_name"], "renamed_for_library": False, "blocked_reason": reason}
 
+    def _engine_change(self):
+        """(prep's ImageMagick version, the current one) when they differ, else None. A change is a reason
+        to check prep's fingerprints, not proof they changed. A handoff that records none counts as
+        changed; an unknown current version cannot have changed any value, for nothing fingerprints."""
+        current = get_imagemagick_version()
+        prep_version = (((self.handoff or {}).get("depends_on") or {}).get("cache") or {}).get("image_engine_version")
+        if current in (None, "unknown") or prep_version == current:
+            return None
+        return prep_version, current
+
     def _library_fingerprint(self, abs_path, cache):
         """Content fingerprint of a resident library file, cached by path+size/mtime so it is read at
         most once per run / across re-runs while unchanged and the image engine unchanged (§7). Returns (value, None) on success or
@@ -634,6 +665,8 @@ class MergeWorkflow:
         cfp = dep.get("config_fingerprint")
         if cfp and cfp != sha256_file(config_path(ws)):
             stale.append("config changed")
+        if dep.get("image_engine_version") != get_imagemagick_version():
+            stale.append("ImageMagick version changed")
         for k, cur in (("folders_fingerprint", folders_fingerprint()),
                        ("media_extensions_fingerprint", media_extensions_fingerprint())):
             if dep.get(k) and dep.get(k) != cur:
@@ -653,6 +686,9 @@ class MergeWorkflow:
         reporter.log(f"Wrote {MERGE_PLAN_ARTIFACT}: plan {plan['plan_id']} — {t['placed_new']} new, "
               f"{t['already_present']} already-present, {t['renamed_for_library']} renamed, "
               f"{t['blocked']} blocked.", stream="stdout")
+        if self.engine_rechecks:
+            reporter.log(f"  ImageMagick differs from prep's: {self.engine_rechecks} photo(s) fingerprinted again "
+                         "to check prep's fingerprints.", stream="stdout")
         c = self.library_fp_counts
         if c["cached"] or c["read"]:
             reporter.log(f"  Library files fingerprinted: {c['read']} read, {c['cached']} reused from the cache.",

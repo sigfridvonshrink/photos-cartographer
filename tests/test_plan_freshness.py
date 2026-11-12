@@ -94,6 +94,7 @@ def _merge_setup(tmp_path):
         "config_fingerprint": U.sha256_file(U.config_path(ws)),
         "folders_fingerprint": U.folders_fingerprint(),
         "media_extensions_fingerprint": U.media_extensions_fingerprint(),
+        "image_engine_version": merge.get_imagemagick_version(),
     }
     plan = {"schema_version": merge.MERGE_PLAN_SCHEMA_VERSION, "depends_on": depends_on}
     # current values the helper compares against (what merge recomputes internally)
@@ -102,6 +103,7 @@ def _merge_setup(tmp_path):
         "config_fingerprint": U.sha256_file(U.config_path(ws)),
         "folders_fingerprint": U.folders_fingerprint(),
         "media_extensions_fingerprint": U.media_extensions_fingerprint(),
+        "image_engine_version": merge.get_imagemagick_version(),
     }
     return merge, ws, handoff, plan, cur
 
@@ -130,6 +132,8 @@ def test_helper_matches_merge_for_each_single_mutation(tmp_path):
     scenarios.append(("handoff", None, {**cur, "handoff": "DIFFERENT"}))
     # 3. config changes
     scenarios.append(("config", None, {**cur, "config_fingerprint": "DIFFERENT"}))
+    # 4. the plan was made under another ImageMagick
+    scenarios.append(("engine", None, dict(cur)))
 
     for name, _mutate, _hc in scenarios:
         merge2, ws2, handoff2, plan2, cur2 = _merge_setup(tmp_path / name)
@@ -145,6 +149,8 @@ def test_helper_matches_merge_for_each_single_mutation(tmp_path):
         if name == "artifact":
             with open(os.path.join(ws2, U.CONTROL_DIR, "photos-25-execution-summary.json"), "w") as f:
                 json.dump({"sum": 99}, f)
+        if name == "engine":
+            plan2["depends_on"]["image_engine_version"] = "an older ImageMagick"
 
         m = _merge_verdict(merge2, handoff2, ws2, plan2)
         h = U.plan_dependencies_fresh(ws2, plan2["depends_on"], hc)

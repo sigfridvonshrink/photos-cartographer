@@ -28,7 +28,7 @@ Cross-phase facts shared with prep and geotag — the workspace lock, the librar
 
 ### 2.1 Merge is merge-only
 
-`photos-3-merge` owns one thing: placing a finalized by-dest set into the library, safely and traceably. It must not re-organize, re-deduplicate, re-fingerprint by-dest content (prep already did, and its fingerprints are reused), correct time or GPS (geotag already did), or alter the library's existing organization. It plans and executes additive library placement and nothing else. The full prohibition list is in Section 14.
+`photos-3-merge` owns one thing: placing a finalized by-dest set into the library, safely and traceably. It must not re-organize, re-deduplicate, re-fingerprint by-dest content (prep already did, and its fingerprints are reused — checked again only under an ImageMagick version other than prep's, a photo whose fingerprint changed left unmerged), correct time or GPS (geotag already did), or alter the library's existing organization. It plans and executes additive library placement and nothing else. The full prohibition list is in Section 14.
 
 ### 2.2 The library is authoritative and protected
 
@@ -38,7 +38,7 @@ The permanent library at `library_root` is treated as ground truth. Merge **neve
 
 Merge does **not** build or maintain a full index of the library, and does **not** perform library-wide deduplication. It assumes the library is already well-organized and internally consistent. Merge inspects the library only at the specific destination paths its incoming files map to, and only when a path is already occupied. This keeps merge cheap and bounded by the size of the incoming batch, not the size of the (potentially enormous) library.
 
-The library also has **no database of its own.** When merge needs a library file's fingerprint to resolve a collision, it computes it on the fly and caches the result in the **workspace** SQLite (`photos-00-ingest.db`, the only database; shared contract Section 13.4) so the same library file is fingerprinted at most once per run and across re-runs while unchanged. Nothing about the library's state is persisted library-side — the only library-side construct is the lock keyed to `library_root` (Section 12; shared contract Section 15.2), which serializes concurrent merges and stores nothing.
+The library also has **no database of its own.** When merge needs a library file's fingerprint to resolve a collision, it computes it on the fly and caches the result in the **workspace** SQLite (`photos-00-ingest.db`, the only database; shared contract Section 13.4) so the same library file is fingerprinted at most once per run and across re-runs while it and the ImageMagick version are unchanged. Nothing about the library's state is persisted library-side — the only library-side construct is the lock keyed to `library_root` (Section 12; shared contract Section 15.2), which serializes concurrent merges and stores nothing.
 
 ### 2.4 By-dest is the source; merged files are moved out
 
