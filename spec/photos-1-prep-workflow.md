@@ -862,8 +862,9 @@ The most important rules are:
 
 ```text
 Plan, validate, execute, journal — never re-decide at execution time.
-0-sources is the one inbox; after init the base holds only the managed folders
-  (any root file, stray folder, or symlink blocks; a missing 0-6 folder blocks too).
+0-sources is the one inbox; after init the base holds only the managed folders, the control
+  records, the quarantine and hidden entries (any other root file, stray folder, or symlink
+  blocks; a missing 0-6 folder blocks too).
 Symlinks are never followed — file, nested-directory, managed-folder-as-symlink,
   and root dump symlinks are all forbidden escapes.
 The sentinel is written last, so a crashed init is safely re-runnable.
