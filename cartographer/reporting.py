@@ -319,8 +319,7 @@ class TtySink(Sink):
               f"(cache ops: {r.get('cache_operations', 0)})", file=out)
         print(f"  No-op / already-correct           : {r.get('no_op_already_correct', 0)}", file=out)
         print(f"  Recognized moves (carried forward): {r.get('recognized_moves', 0)}", file=out)
-        print(f"  By-dest files scanned read-only   : {r.get('by_dest_files_scanned_read_only', 0)}  "
-              f"(mutated: {r.get('by_dest_mutated', 0)})", file=out)
+        print(f"  By-dest files scanned read-only   : {r.get('by_dest_files_scanned_read_only', 0)}", file=out)
         print(f"  Duplicates -> quarantine          : {r.get('duplicates_against_mutable', 0)} vs mutable, "
               f"{r.get('duplicates_against_by_dest', 0)} vs by-dest", file=out)
         print(f"  Metadata reused/extracted/carried/failed : "

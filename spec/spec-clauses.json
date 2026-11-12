@@ -6414,20 +6414,6 @@
       "test": "tests/test_concurrency.py::test_progress_summary_fields"
     },
     {
-      "id": "prep-summary-confirm-bydest-not-mutated-1",
-      "area": "prep",
-      "criticality": "med",
-      "anti": false,
-      "title": "The summary confirms by-dest was scanned read-only and not mutated",
-      "spec": {
-        "file": "photos-1-prep-workflow.md",
-        "section": "19"
-      },
-      "coverage": "incidental",
-      "must_cover": false,
-      "omit_reason": "by-dest non-mutation is asserted directly elsewhere but no test checks the summary's confirmation field"
-    },
-    {
       "id": "prep-summary-separates-categories-1",
       "area": "prep",
       "criticality": "low",

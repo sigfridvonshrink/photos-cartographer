@@ -707,7 +707,7 @@ Prep produces a textual summary that lets a reviewer confirm safety and progress
 1. media operations planned/executed;
 2. no-op / already-correct files;
 3. files scanned only for uniqueness/cache;
-4. by-dest files scanned read-only (and confirmation by-dest was not mutated);
+4. by-dest files scanned read-only;
 5. files recognized as moved from by-date into by-dest (cache carried forward, not rescanned);
 6. duplicates against mutable folders vs. against read-only by-dest;
 7. cache records reused, fingerprints recomputed, fingerprints carried forward after moves, cache records updated;

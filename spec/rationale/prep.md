@@ -646,3 +646,15 @@ Fingerprinting again is the costliest thing a plan does, and the reasons for it 
 not match, a file touched — are invisible until counted. Counting them by reason shows the user why a plan took hours,
 and that an unexpected cause is one.
 :::
+
+## 19. What prep reports
+
+:::{rat} The reviewer sees what was touched
+:id: RAT-reviewer_sees_what_was_touched
+:status: seed
+:justifies: RUL-prep_run_summarised
+
+A run changes irreplaceable originals. Counted apart, what prep changed and what it only read let the user confirm the
+run did what they meant and left alone what it must — at a glance, without reading the journal. A figure the code
+fixes in advance is no such confirmation, so the summary reports only what the run counted.
+:::

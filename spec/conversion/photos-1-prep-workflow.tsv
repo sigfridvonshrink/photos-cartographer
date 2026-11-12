@@ -612,3 +612,18 @@
 18	Once the move is complete — `5-photos-by-date` empty, by-dest photo-only, and no `jpg`/`tif` development subfolders present under `6-photos-by-dest` — the geotag phase (`photos-2-geotag-workflow.md`) may run.	RUL-geotag_gates	
 18	Re-running prep after the user's move must **not** re-fingerprint or re-read the moved files: prep recognizes them as moved (Section 10.1), carries their cached fingerprint/metadata forward to the new by-dest path, and simply updates the cache and handoff. by-dest media is never touched.	RUL-sort_recorded_by_stat RUL-move_recognized RUL-moved_file_carried RUL-prep_leaves_by_dest_as_found	
 18	Prep neither performs the move nor enforces the geotag preconditions.	RUL-prep_leaves_by_dest_as_found RUL-geotag_gates	the preconditions are geotag's gates
+19	## 19. User-visible outputs	dropped	a heading; the corpus's documents carry their own
+19	Prep produces a textual summary that lets a reviewer confirm safety and progress, clearly separating:	RUL-prep_run_summarised RAT-reviewer_sees_what_was_touched	
+19	1. media operations planned/executed;	RUL-prep_run_summarised	
+19	2. no-op / already-correct files;	RUL-prep_run_summarised	
+19	3. files scanned only for uniqueness/cache;	RUL-prep_run_summarised	no count of its own: the files already in place (item 2) and those of photos by destination read (item 4) are they
+19	4. by-dest files scanned read-only;	RUL-prep_run_summarised RUL-prep_leaves_by_dest_as_found	the summary's by-dest "mutated" figure was fixed at 0 and is gone; prep leaving photos by destination alone is the rule
+19	5. files recognized as moved from by-date into by-dest (cache carried forward, not rescanned);	RUL-prep_run_summarised RUL-move_recognized RUL-moved_file_carried	
+19	6. duplicates against mutable folders vs. against read-only by-dest;	RUL-prep_run_summarised	
+19	7. cache records reused, fingerprints recomputed, fingerprints carried forward after moves, cache records updated;	RUL-prep_run_summarised RUL-rehash_explained	
+19	8. metadata records reused/extracted/failed, field-set and extractor versions;	RUL-prep_run_summarised RUL-metadata_freshness	the field set's and extractor's versions are what metadata freshness checks
+19	9. camera groups found; native-GPS and missing-timestamp counts;	RUL-prep_run_summarised RUL-grouping_facts_reported	
+19	10. blockers (sealed workspace, loose root file, symlinks, forbidden sidecars, fingerprint failures, stale dependencies) and warnings (including, on a sealed workspace, a detected likely-new-dump);	RUL-prep_run_summarised RUL-blockers_all_reported RUL-sealed_new_dump_warned	
+19	11. confirmation that durable artifacts were written only after dependency validation;	RUL-prep_run_summarised RUL-prep_records_on_success	
+19	12. the current quarantine footprint — total quarantined files, total size, number of distinct `<plan_id>` directories, and oldest/newest plan id present — since quarantine is never auto-deleted and grows across runs (Section 15.3);	RUL-prep_run_summarised RUL-quarantine_footprint_reported RUL-quarantine_never_auto_deleted	
+19	13. confirmation that the end-of-prep audit log `photos-15-prep-log.json` was written (a complete, self-sufficient record of the prep phase, Section 16.1), and that the end-of-prep database backup snapshot `photos-15-prep-ingest.db` was captured (shared contract `photos-shared-contract.md` Section 13.4a).	RUL-prep_run_summarised RUL-prep_records_on_success RUL-database_image_each_phase	

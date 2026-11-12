@@ -848,3 +848,18 @@ fingerprint or metadata is recorded as failed — never as valid.
 Each prep plan SHALL report how many media files it fingerprinted again, and why, and how many fingerprints it took
 from the plan memo — deciding nothing by it.
 :::
+
+## 19. What prep reports
+
+:::{rul} Prep's run is summarised
+:id: RUL-prep_run_summarised
+:status: seed
+:criticality: low
+:verify: required
+:aliases: prep-summary-separates-categories-1, prep-summary-confirm-artifacts-after-validation-1
+
+At the end of an execution prep SHALL report a summary telling what it changed apart from what it only read: its media
+operations, the files already in place, the moves it recognized, the files of photos by destination it read, the
+duplicates of files it may change apart from those of photos by destination, the metadata reused, extracted, carried
+and failed, the blockers and warnings, and which records it wrote.
+:::
