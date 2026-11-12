@@ -2880,7 +2880,7 @@ Execution SHALL carry out only the operations its plan records, re-deriving no d
 
 :::{rul} A plan is carried out only by the code that made it
 :id: RUL-plan_carried_out_by_its_code
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :aliases: prep-execute-revalidates-rejects-stale-1

@@ -1185,7 +1185,7 @@ again.
 
 :::{rat} A plan is the decisions of its code
 :id: RAT-plan_is_its_codes
-:status: seed
+:status: ruled
 :justifies: RUL-plan_carried_out_by_its_code
 
 A saved plan is the decisions of the code that made it: names, copies, places, a time and a position for each photo,
