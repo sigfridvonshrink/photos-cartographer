@@ -479,11 +479,13 @@ execution, and the user could no longer look without acting.
 
 :::{rat} An empty inbox is the end state
 :id: RAT-empty_inbox_end_state
-:status: ruled
+:status: seed
 :justifies: RUL-prepped_nothing_to_do
 
 An initialized workspace whose inbox is empty is where every prep run ends. A saved plan there is already carried out:
-replaying it would collide with the files it made. Stopping says there is nothing to do.
+replaying it would collide with the files it made. Stopping says there is nothing to do. Empty means holding nothing,
+as geotag's gate counts it: a folder left in the inbox blocks geotag, which sends the user back to prep, so prep
+counting it empty would leave neither phase able to go on; its removal is planned, and execution must carry it out.
 :::
 
 :::{rat} The journal is the evidence of an interrupted run

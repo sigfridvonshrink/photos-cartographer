@@ -682,15 +682,15 @@ A successful prep run leaves:
 3-redundant-jpgs/    JPEGs whose RAW master is retained
 2-missing-metadata/  media with no usable timestamp
 1-strays/<plan-id>/  non-media moved out of 0-sources this run (and prior runs' subfolders)
-0-sources/           EMPTY — every file organized, set aside, quarantined, or moved to strays
-workspace root       only folders (no loose files) — the base-is-folders-only invariant (Section 3.1)
+0-sources/           EMPTY — every file organized, set aside, quarantined, or moved to strays, and no folder left
+workspace root       only the managed folders, the control records, the quarantine and hidden entries (Section 3.1)
 .photos-ingest/photos-00-workspace-guard written last on an init run (Section 14.3 step 11)
 .photos-ingest/photos-11-handoff.json   written
 .photos-ingest/photos-15-prep-log.json  written (complete end-of-prep audit log)
 .photos-ingest/photos-15-prep-ingest.db written (end-of-prep DB backup snapshot)
 ```
 
-`0-sources/` is left **empty** at the end of every successful run: media is organized into the by-date bands (or `2-missing-metadata`), duplicates are quarantined, and non-media is moved to `1-strays/<plan-id>/` (Section 7.6). This empty inbox is exactly what geotag's "`0-sources` empty" gate checks (geotag `photos-2-geotag-workflow.md` Section 13). Non-media files are **not** left in `0-sources`; they are the strays in `1-strays/`, which the pipeline never processes again (Section 3.2).
+`0-sources/` is left **empty** at the end of every successful run: media is organized into the by-date bands (or `2-missing-metadata`), duplicates are quarantined, non-media is moved to `1-strays/<plan-id>/` (Section 7.6), and the folders left empty are removed (Section 14). This empty inbox is exactly what geotag's "`0-sources` empty" gate checks (geotag `photos-2-geotag-workflow.md` Section 13), and the gate counts any entry, so a folder left there is work for prep, not a prepped workspace: prep counts its inbox empty only when it holds nothing at all. Non-media files are **not** left in `0-sources`; they are the strays in `1-strays/`, which the pipeline never processes again (Section 3.2).
 
 At this point the workspace already holds a **complete, self-sufficient audit record of everything prep did**: the human-readable `photos-15-prep-log.json` (Section 16.1), a point-in-time backup image of the database as of the end of prep (`photos-15-prep-ingest.db`, shared contract `photos-shared-contract.md` Section 13.4a), the live SQLite database, and the handoff/summary. This record stands on its own — if the user never geotags or merges, it remains a full, honest account of the prep phase, exactly as if the later phases did not exist (shared contract Section 13.0).
 

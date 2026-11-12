@@ -274,6 +274,28 @@ def test_execute_on_prepped_workspace_with_empty_sources_is_nothing_to_do(tmp_pa
     assert any("Nothing to do" in e.msg and f"{src} is empty" in e.msg for e in cap.logs())
 
 
+@pytest.mark.spec("RUL-prepped_nothing_to_do", "RUL-emptied_folders_removed",
+                  test="TST-lifecycle-a_folder_left_in_the_inbox_is_work")
+def test_a_folder_left_in_the_inbox_is_work(tmp_path, monkeypatch):
+    """A prepped workspace whose inbox holds only an empty folder is not "nothing to do": geotag counts any
+    entry there, so prep plans the folder's removal and its execution carries it out, leaving the inbox empty."""
+    from cartographer.reporting import Reporter, CaptureSink, use_reporter
+    _install(monkeypatch)
+    ws = _initialized(tmp_path)
+    _stale_plan(ws)
+    (ws / "0-sources" / "card" / "DCIM").mkdir(parents=True)
+    assert not prep._prep_nothing_to_do(str(ws), Reporter([CaptureSink()]))
+    monkeypatch.chdir(ws)
+    with use_reporter(Reporter([CaptureSink()])):
+        for command in ("plan", "execute"):
+            try:
+                prep.run(types.SimpleNamespace(command=command, jobs=1))
+            except SystemExit as e:
+                assert not e.code, command
+    assert os.listdir(ws / "0-sources") == []
+    assert prep._prep_nothing_to_do(str(ws), Reporter([CaptureSink()]))
+
+
 def test_execute_with_media_in_sources_does_not_short_circuit(tmp_path, monkeypatch):
     # The fast-stop must NOT fire when 0-sources holds files — there is real work, so execute proceeds
     # past the guard into the executor (stubbed here) and emits no "nothing to do".

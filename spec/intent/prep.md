@@ -627,13 +627,13 @@ Prep's dry run SHALL change nothing in the workspace.
 
 :::{rul} A prepped workspace has nothing to do
 :id: RUL-prepped_nothing_to_do
-:status: ruled
+:status: seed
 :criticality: med
 :verify: required
 :aliases: prep-dryrun-empty-sources-nothing-to-do-1, prep-execute-empty-sources-nothing-to-do-1
 
-On an initialized workspace whose inbox holds no file, prep's dry run and execution SHALL stop, changing nothing, and
-not carry out the saved plan.
+On an initialized workspace whose inbox holds nothing — no file, and no folder — prep's dry run and execution SHALL
+stop, changing nothing, and not carry out the saved plan.
 :::
 
 :::{rul} The journal is never left torn
