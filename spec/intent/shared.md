@@ -1290,7 +1290,7 @@ A media file's fingerprint SHALL stay the same when the pipeline rewrites its me
 
 :::{rul} Another ImageMagick is a reason to check a fingerprint
 :id: RUL-engine_change_is_checked
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :uses: DEF-fingerprint

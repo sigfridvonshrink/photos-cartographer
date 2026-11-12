@@ -8,7 +8,7 @@ to — most of merge's rules are there, in its section on the library and the se
 
 :::{rul} Merge checks prep's fingerprints under another ImageMagick
 :id: RUL-merge_rechecks_under_new_engine
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required

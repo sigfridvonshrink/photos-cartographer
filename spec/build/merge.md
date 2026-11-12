@@ -8,7 +8,7 @@ tools and steps. Each item `realises` the intent it implements. *Why* a choice w
 
 :::{bld} Merge checks prep's fingerprints against the handoff's ImageMagick
 :id: BLD-merge_engine_recheck
-:status: seed
+:status: ruled
 :realises: RUL-merge_rechecks_under_new_engine, RUL-engine_change_is_checked
 
 Merge's plan SHALL compare the ImageMagick version now in use with the handoff's `depends_on.cache.image_engine_version`

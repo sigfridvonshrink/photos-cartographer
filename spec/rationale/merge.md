@@ -7,7 +7,7 @@ items it `justifies`, under the same section numbers. Where the two differ, the 
 
 :::{rat} One version on both sides of a comparison
 :id: RAT-one_version_per_comparison
-:status: seed
+:status: ruled
 :justifies: RUL-merge_rechecks_under_new_engine
 
 Merge compares prep's fingerprint of a photo with one it takes now of the library file in its way. Taken by two
