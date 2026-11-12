@@ -314,3 +314,33 @@ def test_a_retaken_fingerprint_keeps_the_photos_history(tmp_path, monkeypatch):
     assert new != old and entry["content_fingerprint"] == new and "partial" not in entry
     assert [s["action"] for s in entry["journey"]] == ["organized", "provisional_rename", "fingerprint_retaken"]
     assert entry["journey"][-1]["from"] == old
+
+
+@pytest.mark.spec("RUL-log_follows_retaken_fingerprint", "RUL-moved_file_carried", "BLD-prep_log_build",
+                  test="TST-prep_log-a_photo_moved_under_a_new_imagemagick_keeps_its_history")
+def test_a_photo_moved_under_a_new_imagemagick_keeps_its_history(tmp_path, monkeypatch):
+    """A photo the user sorts into photos by destination while ImageMagick changes, its fingerprint's value
+    changing with it, keeps its whole history: the entry moves to the new value and records the user's
+    move — none left behind claiming the photo is still where prep put it."""
+    _install(monkeypatch)
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "t")
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.JPG").write_bytes(b"AAAA")
+    _run(ws)
+    (old,) = _log(ws)["photos"]
+    organized = _log(ws)["photos"][old]["prep_path"]
+    (ws / "6-photos-by-dest" / "Rome").mkdir()
+    moved = "6-photos-by-dest/Rome/" + os.path.basename(organized)
+    os.rename(ws / organized, ws / moved)
+    monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", lambda p: {
+        "status": "valid", "strategy": "image-content-hash-v1",
+        "value": "sig2-" + open(p, "rb").read().hex()[:16], "engine_version": "u"})
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "u")
+    _run(ws)
+    photos = _log(ws)["photos"]
+    (new,) = photos
+    entry = photos[new]
+    assert new != old and entry["prep_path"] == moved and "partial" not in entry
+    assert [s["action"] for s in entry["journey"]] == [
+        "organized", "provisional_rename", "fingerprint_retaken", "moved_to_by_dest"]
+    assert entry["journey"][-1]["from"] == organized and entry["journey"][-1]["to"] == moved

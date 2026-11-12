@@ -326,12 +326,14 @@ does not guess, and reads the file as new.
 
 :::{rat} A move launders no stale row
 :id: RAT-move_launders_nothing
-:status: ruled
+:status: seed
 :justifies: RUL-moved_file_carried
 
 A move changes where a file is, not what it is, so what prep knows of it still holds — but only as far as it held before
-the move. A row that would have been read again where it was is no better for being carried; carrying it would keep
-under the new path what the old path would have refreshed.
+the move. A row that would have been read again where it was is no better for being carried; carrying it unread would
+keep under the new path what the old path would have refreshed. Yet it is still the same file: a new ImageMagick or
+exiftool is a reason to check what the row says, never to forget whose it is. Forgotten, the user's sort would read as
+a new file, and a fingerprint that changed with it would part the photo from its history.
 :::
 
 :::{rat} Quarantine is outside the record

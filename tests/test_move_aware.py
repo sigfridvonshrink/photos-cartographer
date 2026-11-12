@@ -314,11 +314,11 @@ def test_rehash_summary_flags_replan_over_an_unexecuted_plan(tmp_path, monkeypat
 
 @pytest.mark.parametrize("stale", ["method", "metadata"])
 @pytest.mark.spec("RUL-moved_file_carried", "BLD-carried_row",
-                  test="TST-move_aware-a_row_stale_where_it_was_is_not_carried")
-def test_a_row_stale_where_it_was_is_not_carried(tmp_path, monkeypatch, stale):
+                  test="TST-move_aware-a_stale_row_follows_the_move_and_is_read_again")
+def test_a_stale_row_follows_the_move_and_is_read_again(tmp_path, monkeypatch, stale):
     """A moved file whose row would have been read again at its old path — its fingerprint taken by
-    another ImageMagick, or its metadata read another way — is read whole at its new path; the old row
-    is pruned."""
+    another ImageMagick, or its metadata read another way — is still recognized as moved, and read whole
+    at its new path, the reason named; the old row is pruned."""
     hash_calls = []
     _install_mocks(monkeypatch, hash_calls)
     ws = _ws(tmp_path)
@@ -332,8 +332,10 @@ def test_a_row_stale_where_it_was_is_not_carried(tmp_path, monkeypatch, stale):
     os.rename(organized, new_abs)
     hash_calls.clear()
     plan = _plan(ws)
-    assert plan.summary["recognized_moves"] == 0
+    assert plan.summary["recognized_moves"] == 1
     assert hash_calls == [str(new_abs)]
+    reasons = plan.summary["performance_and_cache"]["rehash_summary"]["by_reason"]
+    assert reasons == {"engine-changed" if stale == "method" else "metadata-stale": 1}
     prep.PlanExecutor(str(ws)).execute(plan)
     rows = prep.WorkspaceCache(str(ws)).get_all_files()
     assert set(rows) == {os.path.relpath(new_abs, ws)}

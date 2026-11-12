@@ -218,13 +218,17 @@ def build_prep_log(prior_photos, operations, cache_files, quarantine_evidence, i
         })
 
     # 5. A photo whose fingerprint was taken again by another method has a new value: its entry, found by
-    #    the path it was left at, moves to the new value — provided the old value is no longer anywhere in
-    #    the workspace and no step of this run already speaks for the new one.
+    #    the path it was left at — or, for a file the user moved, the path it was moved from — moves to the
+    #    new value, provided the old value is no longer anywhere in the workspace and no step of this run
+    #    already speaks for the new one.
+    moved_from = {fx["data"]["relative_path"]: fx["moved_from"]
+                  for op in operations if op.type == "db_upsert"
+                  for fx in (op.database_effects_after_verification or []) if fx.get("moved_from")}
     prior_photos = dict(prior_photos)
     _old_by_path = {e.get("prep_path"): old for old, e in prior_photos.items()
                     if old not in fp_to_current and e.get("prep_path")}
     for new_fp, path in fp_to_current.items():
-        old = _old_by_path.get(path)
+        old = _old_by_path.get(path) or _old_by_path.get(moved_from.get(path))
         if new_fp not in prior_photos and old in prior_photos:
             entry = prior_photos.pop(old)
             prior_photos[new_fp] = dict(entry, content_fingerprint=new_fp, journey=list(entry.get("journey", [])) + [
@@ -1249,10 +1253,12 @@ class WorkspacePrepWorkflow:
         bijective (size, mtime_ns, basename) stat match, and carry its cached hash + metadata forward
         to the new path instead of re-hashing / re-extracting it. By-dest is read-only, so there is no
         filesystem operation: the old (now-missing) row is dropped by ghost-prune and the carried row is
-        upserted at the new path. A row is carried only if it would be reused where it was — its
-        fingerprint taken by this build's method and its metadata fresh (prep §9); otherwise the file is
-        read whole at its new path. Returns (carried_forward, moved_unmatched). Pure helper — computes
-        the two maps; mutates no plan state."""
+        upserted at the new path. A row is carried whole only if it would be reused where it was — its
+        fingerprint taken by this build's method and its metadata fresh (prep §9). A stale row's move is
+        still recognized — an ImageMagick or exiftool change is a reason to check what the row says, not
+        to forget whose it is — and the file is read whole at its new path, starting from that row.
+        Returns (carried_forward, relocated, moved_unmatched), relocated mapping each such file's new
+        path to its old. Pure helper — computes the maps; mutates no plan state."""
         import collections as _collections
         from .photos_utils import is_metadata_cache_fresh, fingerprint_reusable, media_class_for_ext
 
@@ -1279,6 +1285,7 @@ class WorkspacePrepWorkflow:
             _tgt_stat[_f] = _st
             _tgt_idx[(_st.st_size, _st.st_mtime_ns, os.path.basename(_f))].append(_f)
         carried_forward = {}  # new_by_dest_path -> {"source": old_path, "db_file": carried_db}
+        relocated = {}        # new_by_dest_path -> old_path, for a recognized move whose row is stale
         for _key, _tgts in _tgt_idx.items():
             _srcs = _src_idx.get(_key, [])
             if len(_tgts) == 1 and len(_srcs) == 1:  # bijective unique match only
@@ -1286,6 +1293,7 @@ class WorkspacePrepWorkflow:
                 _old_row = existing_cache[_old_path]
                 _old_md = existing_metadata.get(_old_path)
                 if not _row_reusable(_old_path, _old_row, _old_md):
+                    relocated[_new_path] = _old_path
                     continue
                 _st = _tgt_stat[_new_path]
                 _carried = dict(_old_row,
@@ -1299,8 +1307,8 @@ class WorkspacePrepWorkflow:
         # by-dest files that LOOK moved (new under by-dest, uncached) but failed the unique bijective
         # match (ambiguous, basename changed, or stat reset) — they will re-fingerprint. Tagged
         # `moved-unmatched` so this exact, easy-to-miss cause is visible in the re-hash diagnostics.
-        moved_unmatched = set(_new_by_dest) - set(carried_forward)
-        return carried_forward, moved_unmatched
+        moved_unmatched = set(_new_by_dest) - set(carried_forward) - set(relocated)
+        return carried_forward, relocated, moved_unmatched
 
     def _aggregate_worker_results(self, worker_results, metadata_plan_status, blockers, warnings,
                                   unpersisted_prior_plan=False, memo_paths=frozenset()):
@@ -1421,7 +1429,7 @@ class WorkspacePrepWorkflow:
                 get_reporter().log(f"  Notice: {msg}")
 
     def _build_run_report(self, operations, no_op_count, metadata_plan_status, all_db_files,
-                          carried_forward, by_dest_files, blockers, warnings, qf,
+                          recognized_moves, by_dest_files, blockers, warnings, qf,
                           current_exiftool_version, current_field_set_version):
         """Assemble the user-visible run report (prep §19) — pure read-only re-presentation of data
         already on hand (operation/metadata/camera-group/GPS counts). Returns the report dict. Verbatim
@@ -1449,7 +1457,7 @@ class WorkspacePrepWorkflow:
             "media_operations": sum(1 for op in operations if op.type in _media_op_types),
             "cache_operations": sum(1 for op in operations if op.type in ("db_upsert", "db_remove")),
             "no_op_already_correct": no_op_count,
-            "recognized_moves": len(carried_forward),
+            "recognized_moves": len(recognized_moves),
             "by_dest_files_scanned_read_only": len(by_dest_files),
             "duplicates_against_by_dest": _dup_by_dest,
             "duplicates_against_mutable": len(_q_ops) - _dup_by_dest,
@@ -2339,7 +2347,8 @@ class WorkspacePrepWorkflow:
                 source=rel, destination=None,
                 preconditions={}, verification={}, database_effects_after_verification=[]))
 
-    def _plan_cache_effects(self, st, all_db_files, carried_forward, existing_cache, existing_metadata, current_metadata_context, ghost_prunes):
+    def _plan_cache_effects(self, st, all_db_files, carried_forward, existing_cache, existing_metadata, current_metadata_context, ghost_prunes,
+                            recognized_moves):
         """Cache effects (prep §5/§16): a db_upsert op reconciling unchanged-state cache rows
         (skipping mutated/carried/relocated files and rows already fresh) plus the recognized-move
         carried upserts, and a db_remove op for the ghost prunes. Mutates st.operations. Verbatim
@@ -2374,18 +2383,23 @@ class WorkspacePrepWorkflow:
             from .photos_utils import is_metadata_cache_fresh
             md_fresh = is_metadata_cache_fresh(file_record, cached_md, current_metadata_context)
 
-            if (cached and cached["size"] == f["size"] and cached["mtime_ns"] == f["mtime_ns"]
+            # A moved file's row is not yet at its new path, however like the old one it reads.
+            if (planned_rel not in recognized_moves
+                    and cached and cached["size"] == f["size"] and cached["mtime_ns"] == f["mtime_ns"]
                     and md_fresh and cached.get("content_hash") == f.get("content_hash")):
                 continue
 
-            cache_upserts.append({
+            upsert = {
                 "action": "upsert",
                 "data": dict(f, relative_path=planned_rel, absolute_path=os.path.join(self.workspace_root, planned_rel)),
                 "preconditions": {
                     "size": f["size"],
                     "mtime_ns": f["mtime_ns"]
                 }
-            })
+            }
+            if planned_rel in recognized_moves:
+                upsert["moved_from"] = recognized_moves[planned_rel]     # the user's move, for prep's log
+            cache_upserts.append(upsert)
 
         # Persist recognized moves: upsert the carried row at the new by-dest path
         # (the file exists there, so the executor's upsert precondition holds). The old
@@ -2396,6 +2410,7 @@ class WorkspacePrepWorkflow:
                 "action": "upsert",
                 "data": _cdb,
                 "preconditions": {"size": _cdb["size"], "mtime_ns": _cdb["mtime_ns"]},
+                "moved_from": _cf["source"],
             })
 
         if cache_upserts:
@@ -2521,8 +2536,18 @@ class WorkspacePrepWorkflow:
             "camera_group_key_version": CAMERA_GROUP_KEY_VERSION,
         }
 
-        carried_forward, moved_unmatched = self._recognize_carried_moves(
+        carried_forward, relocated, moved_unmatched = self._recognize_carried_moves(
             files, existing_cache, existing_metadata, current_metadata_context, current_magick_version)
+        # A recognized move whose row is stale: the row follows the file to its new path, where the
+        # freshness gate finds what is stale and takes it again (an engine change: the fingerprint; a
+        # metadata change: the whole file). The old row is still pruned as a ghost.
+        existing_cache, existing_metadata = dict(existing_cache), dict(existing_metadata)
+        for _new, _old in relocated.items():
+            _abs = os.path.join(self.workspace_root, _new)
+            existing_cache[_new] = dict(existing_cache[_old], relative_path=_new, absolute_path=_abs)
+            if existing_metadata.get(_old):
+                existing_metadata[_new] = dict(existing_metadata[_old], relative_path=_new)
+        recognized_moves = {**{n: cf["source"] for n, cf in carried_forward.items()}, **relocated}
 
         # Plan-time decode memo (prep §10.3). Move recognition above deliberately runs against the
         # EXECUTED state only — a memo row proves nothing about where prep has put a file — so the
@@ -2651,7 +2676,8 @@ class WorkspacePrepWorkflow:
         # exactly equivalent to per-folder scoping.
         self._plan_organize(st, db_files, quarantined, plan_id_for_quarantine, blockers, by_dest_files)
 
-        self._plan_cache_effects(st, all_db_files, carried_forward, existing_cache, existing_metadata, current_metadata_context, ghost_prunes)
+        self._plan_cache_effects(st, all_db_files, carried_forward, existing_cache, existing_metadata, current_metadata_context, ghost_prunes,
+                                 recognized_moves)
 
         self._plan_folder_removals(st)
 
@@ -2660,7 +2686,7 @@ class WorkspacePrepWorkflow:
         qf = quarantine_footprint(self.workspace_root)
 
         report = self._build_run_report(st.operations, no_op_count, metadata_plan_status, all_db_files,
-                                        carried_forward, by_dest_files, blockers, warnings, qf,
+                                        recognized_moves, by_dest_files, blockers, warnings, qf,
                                         current_exiftool_version, current_field_set_version)
 
         # Record passive file state dependencies for idempotency and staleness protection
@@ -2693,7 +2719,7 @@ class WorkspacePrepWorkflow:
             "message": "Prep Plan generated",
             "no_op_files": no_op_count,
             "operations_planned": len(st.operations),
-            "recognized_moves": len(carried_forward),
+            "recognized_moves": len(recognized_moves),
             "quarantine_footprint": qf,
             "report": report,
             "blockers_found": len(blockers),
