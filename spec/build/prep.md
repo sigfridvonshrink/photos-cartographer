@@ -256,13 +256,16 @@ and exact basename; a triple held by more than one row or more than one file mat
 
 :::{bld} A recognized move is a database write
 :id: BLD-carried_row
-:status: ruled
-:realises: RUL-moved_file_carried
+:status: seed
+:realises: RUL-moved_file_carried, RUL-log_follows_retaken_fingerprint
 :aliases: prep-move-recognition-before-ghost-1
 
 Prep's plan SHALL carry a matched row whose fingerprint passes {need}`BLD-fingerprint_method` and whose metadata is
-fresh as a `db_upsert` of it at the new path with the file's size, `mtime_ns` and inode, its old path left to the
-ghost prunes; an unmatched or stale row is a ghost, and its file is read as new.
+fresh as a `db_upsert` of it at the new path with the file's size, `mtime_ns` and inode; a matched stale row moves to
+the new path in the planning's working state, where the freshness gate judges it as any row and the file's `db_upsert`
+there is planned whatever it holds; each recognized move's `db_upsert` names the path it came from (`moved_from`), by
+which prep's log finds the entry of a photo whose fingerprint changed with the move. The old path is left to the ghost
+prunes; an unmatched row is a ghost, and its file is read as new.
 :::
 
 :::{bld} A planned move carries its row

@@ -389,15 +389,16 @@ other new file in photos by destination.
 
 :::{rul} A moved file's identity is carried, not read again
 :id: RUL-moved_file_carried
-:status: ruled
+:status: seed
 :criticality: high
 :verify: required
 :aliases: prep-recognize-bydate-to-bydest-move-1, prep-move-carry-forward-drop-old-1, prep-handoff-updated-on-move-only-1
 :refines: RUL-reuse_valid_work
 :uses: DEF-fingerprint, DEF-workspace_database
 
-Prep SHALL carry a moved file's fingerprint and metadata to its new path, reading nothing of the file but its size and
-time, when its row at the old path would have been reused there.
+Prep SHALL carry a moved file's row to its new path — reading nothing of the file but its size and time when the row
+would have been reused at the old path, and otherwise reading the file again there as it would have been read at the
+old.
 :::
 
 :::{rul} A quarantined file leaves the database

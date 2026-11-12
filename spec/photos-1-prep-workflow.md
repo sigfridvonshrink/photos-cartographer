@@ -402,7 +402,7 @@ Safety:
 1. if more than one missing file could match (ambiguous size/mtime/basename), or the move did not preserve mtime, prep does not guess: it treats the by-dest file as a normal newly-seen by-dest file and scans it (Section 9), and the old row is ghost-pruned;
 2. carried-forward identity never overrides a content change — if the by-dest file's size/mtime differ from the cached source, it is rescanned;
 3. move recognition only updates prep's own cache/handoff; it never mutates by-dest media;
-4. a cached row that would not have been reused at its old path — its fingerprint taken by another method, or its metadata stale — is not carried: the by-dest file is read whole as a newly-seen file, and the old row is ghost-pruned.
+4. a cached row that would not have been reused at its old path — its fingerprint taken by another method, or its metadata stale — still follows the file, the move recognized all the same: the by-dest file is read again at its new path as it would have been at its old, and a fingerprint that comes out with a new value takes the photo's history with it (Section 16.1).
 
 This makes the round trip cheap: after the user sorts the by-date working set into by-dest, re-running prep does not re-fingerprint or re-read the moved files — it simply fixes the handoff.
 
