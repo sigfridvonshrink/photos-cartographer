@@ -777,6 +777,7 @@ remove one.
 :anti: yes
 :verify: required
 :refines: RUL-structure_built_once
+:aliases: merge-require-initialized-else-run-prep-1
 
 No phase but prep SHALL create or repair the workspace's structure; the folders merge creates in the library are
 placement, not structure.
@@ -788,7 +789,7 @@ placement, not structure.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: struct-base-folders-only-1, prep-post-init-base-folders-only-1
+:aliases: struct-base-folders-only-1, prep-post-init-base-folders-only-1, merge-block-misplaced-root-entry-1
 :upholds: INV-undisturbed_shape
 
 The top level of an initialized workspace SHALL hold only the managed folders, the control records' place, the
@@ -815,7 +816,7 @@ initialization — a symbolic link there still blocking, as everywhere.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: struct-symlinks-barred-1
+:aliases: struct-symlinks-barred-1, gate-no-symlinks-by-dest-1
 :upholds: INV-undisturbed_shape
 
 A symbolic link anywhere among the managed files SHALL block, never followed, organized or skipped silently: a link to a
@@ -860,7 +861,7 @@ present.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: struct-no-silent-rebuild-1
+:aliases: struct-no-silent-rebuild-1, merge-require-managed-structure-intact-1
 :upholds: INV-undisturbed_shape
 
 On an initialized workspace, a missing managed folder SHALL block every phase, never recreated outside initialization:
@@ -1496,7 +1497,7 @@ Finalize SHALL be a command of its own, never a side effect of geotag's executio
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: merge-preconditions-finalized-1, loop-finalize-before-merge-1
+:aliases: merge-preconditions-finalized-1, loop-finalize-before-merge-1, merge-require-geotag-success-1, merge-require-finalized-else-run-finalize-1
 :uses: DEF-finalize, DEF-merge, DEF-managed_folders
 
 Merge SHALL require that geotag's execution succeeded and the workspace was finalized, and refuse a workspace that was
@@ -1509,7 +1510,7 @@ not.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: merge-revalidates-current-1
+:aliases: merge-revalidates-current-1, merge-post-finalize-currency-check-1, merge-noop-reprep-does-not-trip-currency-1
 :refines: RUL-merge_takes_finalized_current
 
 Merge SHALL refuse when photos by destination has changed since finalize — a refresh that changes only what describes a
@@ -2203,6 +2204,7 @@ Merge's library setup alone SHALL make the library's mark — once, making it ag
 :anti: yes
 :verify: required
 :refines: RUL-library_known_by_mark
+:aliases: merge-require-blessed-library-marker-1
 
 Merge's plan, dry run and execution SHALL only read the library's mark, and stop at once if it is absent.
 :::
@@ -2270,7 +2272,7 @@ A library lock left by a merge that died SHALL be recognisable as stale, and rec
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: merge-lock-after-marker-1
+:aliases: merge-lock-after-marker-1, merge-marker-check-before-liblock-1
 :refines: RUL-library_lock
 
 Merge SHALL take the workspace's lock first, then check the library's place and its mark, and only then take the
@@ -2370,7 +2372,7 @@ Merge SHALL remake the package from the records as they stand, re-deriving nothi
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: seal-success-then-sealed-1, seal-partial-writes-no-marker-1
+:aliases: seal-success-then-sealed-1, seal-partial-writes-no-marker-1, merge-interrupted-not-sealed-resumes-1
 :uses: DEF-sealed_workspace, DEF-merge
 
 Merge SHALL seal the workspace only when it succeeds whole — every photo by destination placed in the library or found
@@ -2395,7 +2397,7 @@ Whether a workspace is finished SHALL be read from its seal alone, never from th
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: seal-scripts-hardstop-1
+:aliases: seal-scripts-hardstop-1, merge-sealed-hardstop-touch-nothing-1
 :uses: DEF-sealed_workspace, DEF-decision
 :refines: RUL-merge_is_terminal
 
@@ -2458,7 +2460,7 @@ there and must go to a fresh workspace.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: seal-new-dump-warn-1
+:aliases: seal-new-dump-warn-1, merge-sealed-newdump-warn-1
 :refines: RUL-sealed_new_dump_warned
 
 A command refusing a sealed workspace SHALL leave a new dump it finds there exactly where it is.

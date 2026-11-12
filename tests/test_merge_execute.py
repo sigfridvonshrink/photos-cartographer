@@ -93,6 +93,8 @@ def _ws(tmp_path, photos, library_files=(), name="ws"):
         (ldir / lf["name"]).write_bytes(_fp_bytes(lf["fp"]))
 
     handoff = {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": ho_files, "content_fingerprint": "whole", "run_metadata": {"started_at": "t"}}
+    (ctl / "photos-15-prep-log.json").write_text(json.dumps({"photos": {}}))
+    handoff.setdefault("depends_on", {})["prep_log"] = {"sha256": utils.sha256_file(str(ctl / "photos-15-prep-log.json"))}
     (ctl / "photos-11-handoff.json").write_text(json.dumps(handoff))
     cfg = {k: v for k, v in utils.CONFIG.items() if k != "jobs"}
     cfg["merge"] = dict(cfg.get("merge") or {})
@@ -648,7 +650,7 @@ def test_stale_plan_rejection_writes_no_summary(tmp_path):
     assert open(_src(ws, "Trip", "a.jpg"), "rb").read() == _fp_bytes("A")
 
 
-@pytest.mark.spec("merge-precond-fail-no-output-1")
+@pytest.mark.spec("merge-precond-fail-no-output-1", test="TST-merge_execute-precondition_failure_writes_no_summary_and_no_placement")
 def test_precondition_failure_writes_no_summary_and_no_placement(tmp_path):
     """A preflight blocker stops merge before execute: no photos-31 summary, library byte-unchanged.
     Here the prep handoff is missing — a precondition the preflight gathers and refuses on."""
@@ -658,6 +660,7 @@ def test_precondition_failure_writes_no_summary_and_no_placement(tmp_path):
     assert merge._run_locked_workflow("execute", str(ws)) == 2    # preflight blocker -> rc 2
     assert not os.path.exists(merge.merge_summary_path(str(ws)))  # no summary written
     assert _tree(str(lib)) == before_lib                          # nothing placed
+    assert open(_src(ws, "Trip", "a.jpg"), "rb").read() == _fp_bytes("A")   # the photo left where it was
 
 
 @pytest.mark.spec("merge-execute-no-rederive-1")

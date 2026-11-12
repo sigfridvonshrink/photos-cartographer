@@ -47,7 +47,7 @@ from .photos_utils import (
     verify_json_dependency, json_dependency, write_json_artifact, write_versioned_json, is_library, write_library_marker,
     library_marker_path, allocate_suffix, suffix_root, max_suffix, ContentHasher, WorkspaceCache,
     journal_path, take_zfs_snapshot, zfs_dataset, _move_no_clobber, get_imagemagick_version, write_db_snapshot, reseal_archival_package,
-    write_sealed_marker, likely_new_dump, entries_not_carried, prep_log_path, WorkspaceLock, LibraryLock, XDEV_TMP_PREFIX, XDEV_TMP_SUFFIX,
+    write_sealed_marker, likely_new_dump, entries_not_carried, prep_log_path, prep_log_blocker, WorkspaceLock, LibraryLock, XDEV_TMP_PREFIX, XDEV_TMP_SUFFIX,
     workspace_volume_error,
 )
 from .reporting import get_reporter, emit_next_step
@@ -241,12 +241,17 @@ class MergeWorkflow:
         calib_plan = self._check_geotag_finalized(ws, handoff, blockers)
         self.calib_plan = calib_plan       # stash for the plan builder (plan/dry-run)
 
-        # 2. The workspace was finalized (§3 precond 2).
+        # 2. The workspace was finalized (§3 precond 2), from the prep log the handoff vouches for: one
+        # missing, unreadable or changed since was touched after finalize, as finalize itself would refuse.
+        log_blk = prep_log_blocker(ws, handoff)
+        if log_blk:
+            blockers.append(f"{log_blk[0].upper() + log_blk[1:]}, then `photos-cartographer geotag finalize`, "
+                            "then merge.")
         if not os.path.exists(complete_log_path(ws)):
             blockers.append("The workspace has not been finalized (photos-26-complete-log.json is "
                             "missing). Run the finalize command (`photos-cartographer geotag finalize`) first, "
                             "then merge.")
-        else:
+        elif not log_blk:
             self._check_logs_carried(ws, blockers)
         if not os.path.exists(archive_manifest_path(ws)):
             blockers.append("The archival package is incomplete (photos-26-archive-manifest.json is "
@@ -935,10 +940,7 @@ class MergeWorkflow:
             blockers.append("photos-26-complete-log.json cannot be read — re-run finalize "
                             "(`photos-cartographer geotag finalize`), then merge.")
             return
-        try:
-            prep = (json.load(open(prep_log_path(ws))) or {}).get("photos") or {}
-        except Exception:
-            return                     # finalize already said so, in the log's warnings
+        prep = (json.load(open(prep_log_path(ws))) or {}).get("photos") or {}   # vouched for by the handoff
         not_carried = entries_not_carried(prep, complete)
         if not_carried:
             blockers.append(f"photos-26-complete-log.json no longer carries prep's record "
