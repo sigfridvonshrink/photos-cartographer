@@ -256,7 +256,7 @@ and exact basename; a triple held by more than one row or more than one file mat
 
 :::{bld} A recognized move is a database write
 :id: BLD-carried_row
-:status: seed
+:status: ruled
 :realises: RUL-moved_file_carried, RUL-log_follows_retaken_fingerprint
 :aliases: prep-move-recognition-before-ghost-1
 
