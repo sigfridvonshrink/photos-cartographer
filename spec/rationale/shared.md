@@ -1067,7 +1067,7 @@ explained. Checking keeps every change explainable and the user its author.
 
 :::{rat} The library and the workspace lie apart
 :id: RAT-library_and_workspace_apart
-:status: seed
+:status: ruled
 :justifies: RUL-library_place_checked, RUL-checked_paths
 
 A library inside the workspace would be merged into itself, the tool walking its own output as input. A workspace
