@@ -47,7 +47,7 @@ merges that ran.
 
 :::{rat} The destination tree is the library's organisation
 :id: RAT-destination_tree_is_the_library
-:status: seed
+:status: ruled
 :justifies: RUL-library_mirrors_destinations
 
 The user builds photos by destination as the library should read — country, city, place — and the library, browsed

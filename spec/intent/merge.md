@@ -53,7 +53,7 @@ A merge a precondition stops SHALL change nothing in the library, the workspace'
 
 :::{rul} The library mirrors the destination tree
 :id: RUL-library_mirrors_destinations
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
