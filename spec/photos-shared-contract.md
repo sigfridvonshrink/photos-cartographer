@@ -78,7 +78,7 @@ Config areas relevant across phases include, at least:
 4. the filename timestamp format, the shared key `filename_timestamp_format` (Section 7);
 5. the GPX root and GPX matching thresholds, e.g. `gpx_root`, `gpx_direct_match_max_seconds`, `gpx_interpolation_max_gap_seconds`, `gpx_interpolation_max_distance_meters` (Section 8);
 6. camera-time/timezone policy flags, e.g. `single_anchor_auto_apply`, `multi_anchor_auto_apply` (consumed by geotag);
-7. the library-merge settings, e.g. `library_root` and the merge collision/placement policy (consumed by merge, Section 13.5 and the merge spec `photos-3-merge-workflow.md`).
+7. the library-merge setting `library_root` (consumed by merge, Section 13.5 and the merge spec `photos-3-merge-workflow.md`).
 8. the **managed folder names**: `folders`, a role→name map for the numbered managed folders (Section 5, prep `photos-1-prep-workflow.md` Section 3). The *names* are config (the user may rename `0-sources`…`6-photos-by-dest`); the *roles* and the 0–6 structure invariant are **not** config — they are pipeline logic (inbox, read-only by-dest, dedup-retention order, photo/video band membership) referenced by role, never by literal name. Same boundary as item 3: the user sets names, never the roles;
 9. the **media-extension classification lists**: `media_extensions`, with the keys `image` / `raw` / `video` mapping to lists of canonical (lowercase, no leading dot) extensions (prep `photos-1-prep-workflow.md` Section 6.1). The *lists* are config; the *class vocabulary* (`image`/`raw`/`video`, with `other` as the residual for any unlisted extension) is code. An extension maps to exactly one class.
 

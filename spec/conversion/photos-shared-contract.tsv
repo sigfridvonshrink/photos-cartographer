@@ -86,7 +86,7 @@
 4.3	4. the filename timestamp format, the shared key `filename_timestamp_format` (Section 7);	DEF-config_areas BLD-config_keys	
 4.3	5. the GPX root and GPX matching thresholds, e.g. `gpx_root`, `gpx_direct_match_max_seconds`, `gpx_interpolation_max_gap_seconds`, `gpx_interpolation_max_distance_meters` (Section 8);	DEF-config_areas BLD-config_keys	
 4.3	6. camera-time/timezone policy flags, e.g. `single_anchor_auto_apply`, `multi_anchor_auto_apply` (consumed by geotag);	DEF-config_areas BLD-config_keys	
-4.3	7. the library-merge settings, e.g. `library_root` and the merge collision/placement policy (consumed by merge, Section 13.5 and the merge spec `photos-3-merge-workflow.md`).	DEF-config_areas BLD-config_keys	
+4.3	7. the library-merge setting `library_root` (consumed by merge, Section 13.5 and the merge spec `photos-3-merge-workflow.md`).	DEF-config_areas BLD-config_keys	
 4.3	8. the **managed folder names**:	DEF-config_areas	
 4.3	`folders`, a role→name map for the numbered managed folders (Section 5, prep `photos-1-prep-workflow.md` Section 3).	BLD-config_keys	
 4.3	The *names* are config (the user may rename `0-sources`…`6-photos-by-dest`); the *roles* and the 0–6 structure invariant are **not** config — they are pipeline logic (inbox, read-only by-dest, dedup-retention order, photo/video band membership) referenced by role, never by literal name.	RUL-folder_names_not_roles RUL-folder_found_by_role BLD-config_keys RAT-folder_roles_are_logic	

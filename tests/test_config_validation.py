@@ -132,7 +132,6 @@ def test_merge_block_seeded_and_default_valid():
     # library_root is seeded with a deployment default (a non-empty path); the merge phase deep-validates
     # its existence, prep only type-checks it.
     assert isinstance(utils.CONFIG["merge"]["library_root"], str) and utils.CONFIG["merge"]["library_root"]
-    assert utils.CONFIG["merge"]["placement_policy"] and utils.CONFIG["merge"]["collision_policy"]
     utils.validate_config(_cfg(merge=dict(utils.CONFIG["merge"], library_root="/srv/library")))
 
 
@@ -140,7 +139,6 @@ def test_merge_block_seeded_and_default_valid():
     ("nope", "merge must be an object"),
     ({"library_root": 123}, "merge.library_root must be a string"),
     ({"library_root": "a\x00b"}, "merge.library_root must not contain a NUL"),
-    ({"placement_policy": 5}, "merge.placement_policy must be a string"),
 ])
 def test_merge_block_rejects_bad(merge, needle):
     with pytest.raises(ValueError) as ei:

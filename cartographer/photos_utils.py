@@ -132,9 +132,7 @@ CONFIG = {
     # validation — library_root must be an existing directory outside the managed 0-6 tree, and
     # the policy values are enum-checked there (merge spec Section 4). Prep only type-validates.
     "merge": {
-        "library_root": "/srv/pictures/5-finished",           # permanent library dir
-        "placement_policy": "preserve_destination_structure", # by-dest -> library subpath mapping
-        "collision_policy": "suffix_incoming"                 # different-content name clash -> rename the incoming file
+        "library_root": "/srv/pictures/5-finished"            # permanent library dir
     }
 }
 
@@ -1194,9 +1192,6 @@ def validate_config(cfg: dict, workspace_root: str = None):
             raise ValueError("config: merge must be an object.")
         if "library_root" in mg:
             _check_path("merge.library_root", mg["library_root"])
-        for k in ("placement_policy", "collision_policy"):
-            if k in mg:
-                _check_string(f"merge.{k}", mg[k])
 
     for k in _GPX_NUMERIC_KEYS:
         if k in cfg:
@@ -1255,14 +1250,12 @@ def _check_gpx_root_outside(cfg, workspace_root):
 
 # Policy values the merge phase currently supports (merge spec §4 / stage-2 decision: v1 is
 # identity placement + incoming-suffix collision only; any other value is a hard blocker).
-_MERGE_PLACEMENT_POLICIES = {"preserve_destination_structure"}
-_MERGE_COLLISION_POLICIES = {"suffix_incoming"}
 
 def validate_merge_config(cfg: dict, ws: str):
     """Deep-validate the library-merge config before the merge phase consumes it (merge spec §4;
     shared contract §14.1). Prep only type-validates merge (validate_config); merge calls THIS, which
-    additionally requires `library_root` to be a non-empty, existing directory resolving OUTSIDE the
-    workspace and its managed 0-6 tree, and the policy values to be supported enums. Raises ValueError
+    additionally requires `library_root` to be a non-empty, existing directory neither inside the
+    workspace nor holding it (`library_place_error`). Raises ValueError
     located to the offending field. Library *identity* (the .photos-library marker) is a separate
     preflight check (is_library), not a config concern."""
     mg = cfg.get("merge")
@@ -1276,18 +1269,22 @@ def validate_merge_config(cfg: dict, ws: str):
     lib_real = os.path.realpath(os.path.abspath(lib))
     if not os.path.isdir(lib_real):
         raise ValueError(f"config: merge.library_root {lib!r} is not an existing directory.")
+    err = library_place_error(lib, ws)
+    if err:
+        raise ValueError(f"config: merge.library_root {err}")
+
+
+def library_place_error(lib: str, ws: str):
+    """Why `lib` cannot be the library of the workspace `ws`, or None: the two must not nest either way —
+    a library inside the workspace would be merged into itself, and a workspace inside the library would
+    have its working copies taken for library photos by the library's own tools."""
+    lib_real = os.path.realpath(os.path.abspath(lib))
     ws_real = os.path.realpath(os.path.abspath(ws))
     if lib_real == ws_real or lib_real.startswith(ws_real + os.sep):
-        raise ValueError(f"config: merge.library_root {lib!r} must resolve outside the workspace "
-                         f"(it must not be the workspace or any path inside it).")
-    pp = mg.get("placement_policy", "preserve_destination_structure")
-    if pp not in _MERGE_PLACEMENT_POLICIES:
-        raise ValueError(f"config: merge.placement_policy {pp!r} is not supported "
-                         f"(allowed: {', '.join(sorted(_MERGE_PLACEMENT_POLICIES))}).")
-    cp = mg.get("collision_policy", "suffix_incoming")
-    if cp not in _MERGE_COLLISION_POLICIES:
-        raise ValueError(f"config: merge.collision_policy {cp!r} is not supported "
-                         f"(allowed: {', '.join(sorted(_MERGE_COLLISION_POLICIES))}).")
+        return f"{lib!r} must resolve outside the workspace (it must not be the workspace or any path inside it)."
+    if ws_real.startswith(lib_real.rstrip(os.sep) + os.sep):
+        return f"{lib!r} must not hold the workspace (the workspace lies inside it)."
+    return None
 
 
 def detect_zfs_dataset(path: str):

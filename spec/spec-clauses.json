@@ -2568,7 +2568,7 @@
       "area": "merge",
       "criticality": "med",
       "anti": true,
-      "title": "bad merge policy -> blocker, no plan, no summary, no placement",
+      "title": "invalid merge config -> blocker, no plan, no summary, no placement",
       "spec": {
         "file": "photos-3-merge-workflow.md",
         "section": "4"

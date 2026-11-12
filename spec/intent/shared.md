@@ -340,7 +340,7 @@ become — the defaults serving only to seed a new workspace.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: config-prep-sole-writer-1, config-merge-readonly-1, prep-sole-config-writer-1
+:aliases: config-prep-sole-writer-1, config-merge-readonly-1, prep-sole-config-writer-1, merge-config-readonly-1
 
 The configuration SHALL be written only when prep seeds it, when the user edits it by hand, and by the library setup
 below — never by geotag, and never by merge's planning, dry run or execution.
@@ -2162,16 +2162,16 @@ fingerprinted again, whatever is kept.
 
 :::{rul} The library's place is checked
 :id: RUL-library_place_checked
-:status: ruled
+:status: seed
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: lib-root-validated-outside-1
+:aliases: lib-root-validated-outside-1, merge-validate-library-root-path-1
 :uses: DEF-library, DEF-workspace
 :refines: RUL-checked_paths
 
 Merge SHALL check the library's configured place like every path the user writes, refusing it unless it is an existing
-folder outside the workspace.
+folder that neither lies inside the workspace nor holds it.
 :::
 
 :::{rul} A library is known by its mark alone
@@ -2193,6 +2193,7 @@ library, which has none of a workspace's folders, guard or lifecycle.
 :criticality: med
 :verify: required
 :refines: RUL-library_known_by_mark
+:aliases: merge-init-library-creates-marker-1
 
 Merge's library setup alone SHALL make the library's mark — once, making it again changing nothing.
 :::
@@ -2491,7 +2492,7 @@ check that it has not changed.
 
 :::{rul} A configured path is checked
 :id: RUL-checked_paths
-:status: ruled
+:status: seed
 :criticality: med
 :anti: yes
 :verify: required
@@ -2500,7 +2501,7 @@ check that it has not changed.
 :refines: INV-authored_values_checked
 
 A path the configuration names SHALL be neither empty nor blank, hold no character the platform forbids, and stay where
-it must: the tracks' place outside the managed folders, the library's an existing folder outside the workspace.
+it must: the tracks' place outside the managed folders, the library's an existing folder that neither lies inside the workspace nor holds it.
 :::
 
 :::{rul} A snapshot's name is checked before any snapshot
@@ -2611,7 +2612,7 @@ a decision's structure whole: a decision whose structure is broken is an error, 
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: validate-fail-closed-1
+:aliases: validate-fail-closed-1, merge-config-validated-1
 :uses: INV-no_stale_use
 :refines: INV-authored_values_checked
 
