@@ -37,7 +37,7 @@ def _ctl(ws):
 
 def _make(tmp_path, *, guard=True, config=True, library_in_config=True, bless_lib=True,
           handoff=True, handoff_current=True, cal_plan=True, cal_summary=True,
-          summary_status="success", complete_log=True, archive_manifest=True, finalized_media=True,
+          summary_status="success", prep_log=True, complete_log=True, archive_manifest=True, finalized_media=True,
           bydest=("6-photos-by-dest/Trip/a.jpg",), sources_files=()):
     """Build a workspace that PASSES preflight by default, plus a sibling blessed library. Each
     keyword turns off / corrupts one precondition's input so a single check can be isolated."""
@@ -63,6 +63,9 @@ def _make(tmp_path, *, guard=True, config=True, library_in_config=True, bless_li
     ho = {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [{"relative_path": rel, "folder_class": "6-photos-by-dest", "media_class": "image",
                      "content_fingerprint": f"fp-{i}"} for i, rel in enumerate(bydest)],
           "content_fingerprint": "whole-file-hash", "run_metadata": {"started_at": "t0"}}
+    if prep_log:
+        (ctl / "photos-15-prep-log.json").write_text(json.dumps({"photos": {}}))
+        ho["depends_on"] = {"prep_log": {"sha256": utils.sha256_file(str(ctl / "photos-15-prep-log.json"))}}
     fp = utils.handoff_content_fingerprint(ho)
     if handoff:
         (ctl / "photos-11-handoff.json").write_text(json.dumps(ho))
@@ -237,7 +240,7 @@ def test_missing_handoff_blocks(tmp_path):
 
 # --- gathered preconditions (0b, 1, 1a, 2, 3) --------------------------------
 
-@pytest.mark.spec("merge-require-0-sources-empty-1")
+@pytest.mark.spec("merge-require-0-sources-empty-1", test="TST-merge_preflight-sources_not_empty_blocks")
 def test_sources_not_empty_blocks(tmp_path):
     ws, _ = _make(tmp_path, sources_files=("dump.jpg",))
     blockers, _, _ = _pf(ws)
@@ -272,6 +275,29 @@ def test_stale_finalized_record_blocks(tmp_path):
     assert any("re-run geotag and re-finalize" in b.lower() for b in blockers), blockers
 
 
+@pytest.mark.parametrize("touch", ["edited", "removed", "unvouched"])
+@pytest.mark.spec("BLD-prep_log_checked", "RUL-merge_takes_finalized_current",
+                  test="TST-merge_preflight-a_prep_log_the_handoff_does_not_vouch_for_blocks")
+def test_a_prep_log_the_handoff_does_not_vouch_for_blocks(tmp_path, touch):
+    """Prep's log touched after finalize — edited, removed, or a handoff recording no hash of it — stops merge,
+    as it stops finalize: photos-26 can no longer be shown to carry prep's record."""
+    ws, _ = _make(tmp_path)
+    log = _ctl(ws) / "photos-15-prep-log.json"
+    if touch == "edited":
+        log.write_text(json.dumps({"photos": {"X": {"content_fingerprint": "X", "journey": []}}}))
+    elif touch == "removed":
+        log.unlink()
+    else:
+        ho_p = _ctl(ws) / "photos-11-handoff.json"
+        ho = json.loads(ho_p.read_text())
+        del ho["depends_on"]["prep_log"]
+        ho_p.write_text(json.dumps(ho))
+    blockers, _, _ = _pf(ws)
+    want = {"edited": "is not the one the handoff records", "removed": "is missing or unreadable",
+            "unvouched": "records no hash of prep's log"}[touch]
+    assert len(blockers) == 1 and want in blockers[0] and "geotag finalize" in blockers[0], blockers
+
+
 @pytest.mark.spec("loop-finalize-before-merge-1", "merge-require-finalized-else-run-finalize-1", test="TST-merge_preflight-not_finalized_blocks")
 def test_not_finalized_blocks(tmp_path):
     ws, _ = _make(tmp_path, complete_log=False)
@@ -285,7 +311,7 @@ def test_missing_archive_manifest_blocks(tmp_path):
     assert any("archival package is incomplete" in b for b in blockers), blockers
 
 
-@pytest.mark.spec("merge-require-by-dest-photo-only-1")
+@pytest.mark.spec("merge-require-by-dest-photo-only-1", test="TST-merge_preflight-video_in_bydest_blocks")
 def test_video_in_bydest_blocks(tmp_path):
     ws, _ = _make(tmp_path, bydest=("6-photos-by-dest/Trip/a.jpg", "6-photos-by-dest/Trip/clip.mp4"))
     blockers, _, _ = _pf(ws)
@@ -296,6 +322,17 @@ def test_nonmedia_in_bydest_blocks(tmp_path):
     ws, _ = _make(tmp_path, bydest=("6-photos-by-dest/Trip/a.jpg", "6-photos-by-dest/Trip/notes.txt"))
     blockers, _, _ = _pf(ws)
     assert any("must contain only photos" in b for b in blockers), blockers
+
+
+@pytest.mark.spec("merge-residual-folders-do-not-block-1", test="TST-merge_preflight-residual_folders_do_not_block")
+def test_residual_folders_do_not_block(tmp_path):
+    """Geotag's gates leave out the videos, the files missing metadata, the redundant JPEGs and the strays; what
+    sits there blocks merge no more than it blocks geotag."""
+    ws, _ = _make(tmp_path)
+    for rel in ("4-videos-by-date/clip.mp4", "2-missing-metadata/x.jpg", "3-redundant-jpgs/y.jpg", "1-strays/notes.txt"):
+        (ws / rel).write_bytes(b"x")
+    blockers, _, _ = _pf(ws)
+    assert blockers == [], blockers
 
 
 @pytest.mark.spec("RUL-development_after_merge", test="TST-merge_preflight-dev_subfolder_blocks")

@@ -129,6 +129,8 @@ def _build_ws(tmp_path, photos, library_files=()):
 
     handoff = {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": ho_files, "content_fingerprint": "whole", "run_metadata": {"started_at": "t"},
                "depends_on": {"cache": {"image_engine": "imagemagick", "image_engine_version": "test"}}}
+    (ctl / "photos-15-prep-log.json").write_text(json.dumps({"photos": {}}))
+    handoff.setdefault("depends_on", {})["prep_log"] = {"sha256": utils.sha256_file(str(ctl / "photos-15-prep-log.json"))}
     (ctl / "photos-11-handoff.json").write_text(json.dumps(handoff))
     cfg = {k: v for k, v in utils.CONFIG.items() if k != "jobs"}
     cfg["merge"] = dict(cfg.get("merge") or {})
@@ -406,6 +408,9 @@ def test_a_log_edited_after_finalize_blocks_merge(tmp_path, monkeypatch, capsys)
     step = {"phase": "prep", "action": "moved_to_by_date", "from": "a", "to": "b"}
     (ctl / "photos-15-prep-log.json").write_text(json.dumps(
         {"photos": {"A": {"content_fingerprint": "A", "prep_path": "b", "journey": [step]}}}))
+    ho = json.loads((ctl / "photos-11-handoff.json").read_text())       # prep vouches for its new log
+    ho["depends_on"]["prep_log"] = {"sha256": utils.sha256_file(str(ctl / "photos-15-prep-log.json"))}
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(ho))
     carried = {"A": {"content_fingerprint": "A", "prep_path": "b", "partial": True,
                      "journey": [step, {"phase": "geotag", "action": "final_rename", "from": "b", "to": "c"}]}}
     (ctl / "photos-26-complete-log.json").write_text(json.dumps({"photos": carried}))

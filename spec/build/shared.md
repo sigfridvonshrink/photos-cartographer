@@ -732,12 +732,14 @@ Each copy SHALL carry the earlier log unchanged — every entry, every field and
 `photos-26-complete-log.json` no longer carries `photos-15-prep-log.json` so, or cannot be read.
 :::
 
-:::{bld} A prep log missing at finalize is named
-:id: BLD-missing_prep_log_warned
-:status: ruled
-:realises: RUL-record_whole_each_phase, RUL-partial_history_shown
+:::{bld} Prep's log is checked against the handoff
+:id: BLD-prep_log_checked
+:status: seed
+:realises: RUL-carry_forward_by_copy, RUL-merge_takes_finalized_current
 
-A prep log missing or unreadable at finalize SHALL be named in the complete log's `warnings`, the log then `partial`.
+Finalize and merge SHALL stop while `photos-15-prep-log.json` is not the log the handoff vouches for
+({need}`BLD-prep_log_vouched`) — missing, unreadable, its SHA-256 other than `depends_on.prep_log`'s, or the handoff
+recording none — through the shared `prep_log_blocker`, merge among its gathered preconditions.
 :::
 
 :::{bld} The job records stay on disk

@@ -19,3 +19,32 @@ Under an ImageMagick version other than the one prep's fingerprints were taken b
 fingerprint again before comparing it with the library's, a photo whose fingerprint changed left in photos by
 destination, unmerged.
 :::
+
+## 3. Preconditions
+
+:::{rul} Merge checks geotag's gates again
+:id: RUL-merge_rechecks_gates
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-geotag_gates
+:uses: DEF-merge, DEF-managed_folders
+:aliases: merge-require-0-sources-empty-1, merge-require-by-dest-photo-only-1, merge-prep-consistency-1, merge-residual-folders-do-not-block-1
+
+Merge SHALL proceed only while the workspace, checked again at merge's own start, satisfies geotag's gates — what the
+gates leave out, the videos, the files missing metadata, the redundant JPEGs and the strays, blocking merge no more
+than geotag.
+:::
+
+:::{rul} A merge a precondition stops changes nothing
+:id: RUL-merge_blocked_changes_nothing
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-merge, DEF-library
+:aliases: merge-precond-fail-no-output-1
+
+A merge a precondition stops SHALL change nothing in the library, the workspace's photos or merge's records.
+:::

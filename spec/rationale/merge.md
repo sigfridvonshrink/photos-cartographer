@@ -17,3 +17,28 @@ use, prep's fingerprint is confirmed and the comparison holds. A photo whose fin
 destination: what geotag recorded of it is keyed by the old value, and merging it would carry a record that names no
 photo into the library's history.
 :::
+
+## 3. Preconditions
+
+:::{rat} The workspace may have been touched since geotag
+:id: RAT-touched_since_geotag
+:status: seed
+:justifies: RUL-merge_rechecks_gates
+
+Geotag's gates held when geotag ran; merge runs later, often much later, and the user may have dropped a new dump into
+the inbox, moved a photo back to photos by date, or put a video or a development folder among the photos by
+destination in between. Merge is the step after which none of that can be undone cheaply: what it places is in the
+library, beside photos it must never disturb. So it asks the workspace again, not geotag's record of it. The folders
+the gates leave out are the residue the library never receives; they stay in the workspace, as they would for geotag.
+:::
+
+:::{rat} A refused merge leaves nothing to clean up
+:id: RAT-refused_merge_clean
+:status: seed
+:justifies: RUL-merge_blocked_changes_nothing
+
+The library is the one place the pipeline cannot simply re-plan from: a photo half placed there, or a summary
+claiming a merge that did not happen, would have to be found and undone by hand. Checking every precondition before
+the first change makes a refusal free — fix the cause, run merge again — and keeps merge's records describing only
+merges that ran.
+:::
