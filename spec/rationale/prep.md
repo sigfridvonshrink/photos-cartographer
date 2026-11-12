@@ -651,7 +651,7 @@ and that an unexpected cause is one.
 
 :::{rat} The reviewer sees what was touched
 :id: RAT-reviewer_sees_what_was_touched
-:status: seed
+:status: ruled
 :justifies: RUL-prep_run_summarised
 
 A run changes irreplaceable originals. Counted apart, what prep changed and what it only read let the user confirm the

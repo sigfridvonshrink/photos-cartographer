@@ -853,7 +853,7 @@ from the plan memo — deciding nothing by it.
 
 :::{rul} Prep's run is summarised
 :id: RUL-prep_run_summarised
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :aliases: prep-summary-separates-categories-1, prep-summary-confirm-artifacts-after-validation-1
