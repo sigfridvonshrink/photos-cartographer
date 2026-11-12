@@ -754,7 +754,7 @@ summary — SHALL stay on disk, as do every pass's plan and journal and the deci
 
 :::{bld} The code's fingerprint
 :id: BLD-code_fingerprint
-:status: seed
+:status: ruled
 :realises: RUL-plan_carried_out_by_its_code
 
 The code's fingerprint, `code_fingerprint`, SHALL be the SHA-256 over the files of the `cartographer` package the
@@ -766,7 +766,7 @@ another value or none stale at dry run and execute alike.
 
 :::{bld} Which phase writes which record
 :id: BLD-record_ownership
-:status: seed
+:status: ruled
 :realises: RUL-phase_writes_own_records
 :uses: BLD-artifact_numbering, BLD-init_library_writes_library_root
 
