@@ -2162,7 +2162,7 @@ fingerprinted again, whatever is kept.
 
 :::{rul} The library's place is checked
 :id: RUL-library_place_checked
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -2492,7 +2492,7 @@ check that it has not changed.
 
 :::{rul} A configured path is checked
 :id: RUL-checked_paths
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required

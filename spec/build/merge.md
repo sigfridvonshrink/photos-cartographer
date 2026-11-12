@@ -41,7 +41,7 @@ blocker ends the run with exit status 2 before the library lock, the plan or the
 
 :::{bld} `init-library`'s four cases
 :id: BLD-init_library_cases
-:status: seed
+:status: ruled
 :realises: RUL-library_mark_made_by_setup, RUL-library_setup_writes_one_setting, RUL-library_place_checked, RUL-config_validated_before_use
 :aliases: merge-init-library-inside-with-path-writes-config-1, merge-init-library-inside-no-path-reads-config-1, merge-init-library-outside-with-path-bless-only-1, merge-init-library-outside-no-path-error-1
 
