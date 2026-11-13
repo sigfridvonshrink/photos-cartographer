@@ -163,7 +163,7 @@ from `default_folder_timezone`.
 :::{bld} How anchors are matched and agreed
 :id: BLD-anchor_matching
 :status: ruled
-:realises: RUL-anchor_within_clock_error, RUL-anchor_consensus, RUL-anchor_offset_auto_as_configured
+:realises: RUL-anchor_within_clock_error, RUL-anchor_consensus, RUL-revisit_matched_to_its_day, RUL-indistinct_visits_wait, RUL-anchor_offset_auto_as_configured
 :aliases: geotag-anchor-matching-1, geotag-conflict-triggers-review-1
 
 For each native-GPS photo of a (camera group, destination, day) bucket, `frame_candidates` SHALL take every track

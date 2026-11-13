@@ -219,3 +219,15 @@ a hotel passed morning and evening. Counting every pass by each photo's place, t
 supports, a coincidence the one only some do. An average of disagreeing offsets is supported by no photo at all. When
 nothing tells two offsets apart, the photos do not say which is right, and the user must.
 :::
+
+:::{rat} A trip comes back to its places
+:id: RAT-trips_revisit
+:status: seed
+:justifies: RUL-revisit_matched_to_its_day, RUL-indistinct_visits_wait
+
+A trip often comes back to its places: a town visited from the same hotel day after day, a square crossed morning and
+evening, with a track for every one. Any of those visits passes where a photo was taken, and which passed closest is
+chance. Matched to the wrong visit, a whole day's photos are corrected by a day, or by hours — written into the
+originals, named by the wrong time, placed on the wrong walk — with no sign anything is off. When the photos cannot
+say which visit is theirs, only the user, who remembers the day, can.
+:::
