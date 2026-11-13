@@ -72,3 +72,39 @@ or `single_anchor_auto_apply` for one; a destination's inherited or `default_fol
 `effective_iana_timezone` likewise; a `timezone_naive` offset proposal and an `inherited` folder fallback become
 effective only with `accept_proposal: true`.
 :::
+
+## 10. Per-destination structure
+
+:::{bld} Geotag's destinations
+:id: BLD-geotag_destinations
+:status: seed
+:realises: DEF-destination, DEF-container_destination, RUL-container_never_waits
+
+A photo's destination SHALL be the `dirname` of its path; the container destinations are every ancestor of a
+destination within `6-photos-by-dest` that is not one, `6-photos-by-dest` included, each marked `file_less: true` in the
+decision records, its timezone and fallback cells never requiring input and its `camera_group_time_decisions` empty;
+destinations are processed parents first.
+:::
+
+:::{bld} Offset buckets
+:id: BLD-offset_buckets
+:status: seed
+:realises: RUL-offset_per_camera_destination_day, RUL-offset_from_own_evidence
+
+Each destination's `camera_group_time_decisions` SHALL hold one cell per camera group present, keyed by its
+`camera_group_key`, or — when the group's photos there span more than one naive date — one per date, keyed
+`<camera_group_key>@<YYYY-MM-DD>` with a `date` field, the date taken from `source_naive_time`. A cell's proposal is
+the GPX self-anchor of that group's native-GPS frames of that date there; else, with the destination's timezone
+resolved, `timezone_naive` at the cell's earliest naive time, DST-aware; else `manual_required`. No cell reads another
+destination's.
+:::
+
+:::{bld} Geotag's records are grouped by destination
+:id: BLD-geotag_records_by_destination
+:status: seed
+:realises: RUL-decision_fields_laid_out
+:aliases: geotag-artifacts-per-destination-1
+
+`photos-21`, `photos-22`, `photos-23` and `photos-24` SHALL each hold a `destinations` object keyed by the
+destination's path under `6-photos-by-dest`, every decision of a destination inside its entry.
+:::

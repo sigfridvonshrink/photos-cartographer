@@ -105,3 +105,37 @@ parent folder assumes the photos were taken near the parent's point. Both are of
 and nothing in the photos can tell which. Applied silently, a wrong one would place a whole day of photos in the wrong
 place or the wrong hour, written into the originals; offered for acceptance, it costs one confirmation.
 :::
+
+## 10. Per-destination structure
+
+:::{rat} A clock is wrong by its own amount, day by day
+:id: RAT-offset_per_day_and_place
+:status: seed
+:justifies: RUL-offset_per_camera_destination_day
+
+A camera's clock drifts, and is set again — to local time, on a trip, often each morning. Its error is one amount for
+one day's shooting and another the next, and destinations are where the user went, not when; one offset per camera, or
+per destination over several days, would be wrong for every day but one. A day in one place is the unit within which
+the error stays put, so it is the unit decided.
+:::
+
+:::{rat} One place's clock evidence says nothing of another's
+:id: RAT-no_borrowed_offsets
+:status: seed
+:justifies: RUL-offset_from_own_evidence
+
+Folders nest by geography, which is why a timezone or a fallback position can pass down them; a clock's error does not
+follow geography. A museum visited inside a city trip may be another day, the camera reset in between; a parent
+folder's offset averaged from its children would be right for none of them. An offset borrowed would look measured
+while it is not — so each is proposed from the camera's own positions that day, or from the timezone, and labelled as
+such.
+:::
+
+:::{rat} A container is a place to put defaults
+:id: RAT-container_holds_defaults
+:status: seed
+:justifies: RUL-container_never_waits
+
+A folder holding only other destinations has no photo to correct: it exists so a timezone or a fallback position can be
+set once and reach every destination beneath it. If it asked for anything, it would add work instead of saving it.
+:::

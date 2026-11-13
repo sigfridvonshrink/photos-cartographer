@@ -63,6 +63,7 @@ def _prior(cells=None):
     return {"destinations": {f"{BYDEST}/D": dest}}
 
 
+@pytest.mark.spec("RUL-offset_per_camera_destination_day", test="TST-geotag_per_date-single_date_keeps_bare_group_key")
 def test_single_date_keeps_bare_group_key(tmp_path):
     _tz()
     wf = _wf(tmp_path)
@@ -74,7 +75,7 @@ def test_single_date_keeps_bare_group_key(tmp_path):
     assert "date" not in cells[CAM]
 
 
-@pytest.mark.spec("geotag-offset-per-date-bucket-1")
+@pytest.mark.spec("geotag-offset-per-date-bucket-1", "RUL-offset_per_camera_destination_day", test="TST-geotag_per_date-multi_date_splits_into_per_day_buckets")
 def test_multi_date_splits_into_per_day_buckets(tmp_path):
     _tz()
     wf = _wf(tmp_path)

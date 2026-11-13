@@ -10,7 +10,7 @@
 1	6. persist resolved UTC for every file in SQLite;	defer:geotag-22	resolved UTC is §22
 1	7. plan GPS decisions only after time is solved;	RUL-time_before_gps	
 1	8. plan timestamp-based no-clobber renames using destination-local civil time;	RUL-geotag_name_final	the renames are §27
-1	9. produce numbered JSON decision artifacts at formal decision stages;	defer:geotag-8	the decision records are §8
+1	9. produce numbered JSON decision artifacts at formal decision stages;	RUL-decision_stage_writes_record BLD-geotag_records_by_destination	
 1	10. execute only a complete, dependency-validated executable plan.	RUL-execution_only_the_plan INV-no_stale_use	
 1	This is a workflow specification, not a script implementation specification.	dropped	a framing note
 1	Cross-phase facts shared with prep — the workspace lock, the pre-mutation snapshot (`zfs`) mechanism, the shared configuration object, the workspace control directory, the camera-group identity key, the filename timestamp format, the GPX root, and the end-to-end operator loop — are defined in `photos-shared-contract.md` and are authoritative there.	dropped	points to the shared contract, whose items the corpus links
@@ -121,19 +121,19 @@
 7	The reason is to push the user to complete prep and place the current batch of files into `6-photos-by-dest` before geotagging that batch.	RUL-geotag_gates	the gate's reason
 7	This is a per-run gate, not a once-ever deadline: more files can be added and geotagged in a later cycle (shared contract `photos-shared-contract.md` Section 10), but each geotag run requires `5-photos-by-date` to be empty at the time it runs.	RUL-geotag_gates RUL-geotag_rerunnable	
 7.0a	### 7.0a Assumption: each destination is time-coherent for a camera	dropped	a heading; the corpus's documents carry their own
-7.0a	Geotag assumes that **a camera's clock error is constant within one destination on one day** — every photo from one camera within one destination *on the same naive calendar date* shares one true clock offset.	defer:geotag-10	the per-day offset bucket is §10.2
-7.0a	Clock corrections therefore vary **between** destinations and **between days within a destination** (a place revisited on different days or seasons), never within a single day's shoot.	defer:geotag-10	the per-day offset bucket is §10.2
-7.0a	The user typically sets the camera to local time each morning, so the offset is a per-day fact; a destination spanning more than one naive date splits into per-day offset buckets (Section 10.2 rule 4).	defer:geotag-10	the per-day offset bucket is §10.2
-7.0a	This is a deliberate assumption about how the user organizes media, and it is *why* the camera clock offset is inferred and applied per **(camera group, destination)** rather than once per camera (Section 10.2):	defer:geotag-10	the per-day offset bucket is §10.2
-7.0a	- A camera's clock **drifts**, and is sometimes **reset**, between trips.	defer:geotag-10	the per-day offset bucket is §10.2
-7.0a	Different destinations correspond to different trips/time-windows, so the same camera's true offset can differ from one destination to the next.	defer:geotag-10	the per-day offset bucket is §10.2
-7.0a	A single global per-camera offset would be wrong the moment the clock moved between two destinations.	defer:geotag-10	the per-day offset bucket is §10.2
-7.0a	- Each destination's offset is anchored only from that camera group's native-GPS frames *in that destination* (Section 19), so each trip is corrected on its own evidence.	defer:geotag-10	the per-day offset bucket is §10.2
-7.0a	- A **nested subfolder is a separate destination** (Section 10.1) with its own offset cell — there is no roll-up.	defer:geotag-10	the per-day offset bucket is §10.2
-7.0a	If you keep a single coherent shoot in one destination (the natural way to organize), this assumption holds automatically; if you deliberately split one shoot across nested destinations, each is corrected independently.	defer:geotag-10	the per-day offset bucket is §10.2
-7.0a	A (camera group, destination, date) bucket with no native-GPS frame of its own does not start blank: when the destination's civil timezone is resolved, geotag proposes a **timezone-derived** offset from the local clock for that day (Section 10.2 rule 4b, Section 19.4), confirmable.	defer:geotag-10	the per-day offset bucket is §10.2
-7.0a	Clock offsets are **not** inherited from ancestor destinations — unlike the timezone and the folder GPS fallback, an offset is a measured/assumed fact tied to a specific place and day, not a folder default to cascade.	defer:geotag-10	the per-day offset bucket is §10.2
-7.0a	A bucket with neither its own GPS frames nor a resolved timezone starts from a blank manual field.	defer:geotag-10	the per-day offset bucket is §10.2
+7.0a	Geotag assumes that **a camera's clock error is constant within one destination on one day** — every photo from one camera within one destination *on the same naive calendar date* shares one true clock offset.	RUL-offset_per_camera_destination_day	
+7.0a	Clock corrections therefore vary **between** destinations and **between days within a destination** (a place revisited on different days or seasons), never within a single day's shoot.	RUL-offset_per_camera_destination_day	
+7.0a	The user typically sets the camera to local time each morning, so the offset is a per-day fact; a destination spanning more than one naive date splits into per-day offset buckets (Section 10.2 rule 4).	RUL-offset_per_camera_destination_day	
+7.0a	This is a deliberate assumption about how the user organizes media, and it is *why* the camera clock offset is inferred and applied per **(camera group, destination)** rather than once per camera (Section 10.2):	RUL-offset_per_camera_destination_day	
+7.0a	- A camera's clock **drifts**, and is sometimes **reset**, between trips.	RUL-offset_per_camera_destination_day	
+7.0a	Different destinations correspond to different trips/time-windows, so the same camera's true offset can differ from one destination to the next.	RUL-offset_per_camera_destination_day	
+7.0a	A single global per-camera offset would be wrong the moment the clock moved between two destinations.	RUL-offset_per_camera_destination_day	
+7.0a	- Each destination's offset is anchored only from that camera group's native-GPS frames *in that destination* (Section 19), so each trip is corrected on its own evidence.	RUL-offset_from_own_evidence	
+7.0a	- A **nested subfolder is a separate destination** (Section 10.1) with its own offset cell — there is no roll-up.	RUL-offset_from_own_evidence	
+7.0a	If you keep a single coherent shoot in one destination (the natural way to organize), this assumption holds automatically; if you deliberately split one shoot across nested destinations, each is corrected independently.	RUL-offset_per_camera_destination_day	
+7.0a	A (camera group, destination, date) bucket with no native-GPS frame of its own does not start blank: when the destination's civil timezone is resolved, geotag proposes a **timezone-derived** offset from the local clock for that day (Section 10.2 rule 4b, Section 19.4), confirmable.	RUL-offset_from_own_evidence RUL-other_proposals_need_acceptance	
+7.0a	Clock offsets are **not** inherited from ancestor destinations — unlike the timezone and the folder GPS fallback, an offset is a measured/assumed fact tied to a specific place and day, not a folder default to cascade.	RUL-offset_from_own_evidence	
+7.0a	A bucket with neither its own GPS frames nor a resolved timezone starts from a blank manual field.	BLD-offset_buckets	
 7.1	### 7.1 Development must not have started	dropped	a heading; the corpus's documents carry their own
 7.1	Breaking a destination's media out into format-specific subfolders (by default `jpg/` and `tif/`, configurable via a `destination_distribution_subfolders` config key) belongs to a *later* development/processing phase that runs only after time and GPS are fixed.	RUL-development_after_merge	
 7.1	Development depends on the corrected timestamps, GPS, and filenames that geotag produces, so it must not run first.	RUL-development_after_merge	
@@ -244,3 +244,77 @@
 9.2	Behaviour follows the shared discipline (shared contract Section 14.2): a validation failure is a **hard blocker** reported textually and located precisely (which artifact, which destination/group/file, which field); geotag produces no downstream artifact and mutates nothing from an invalid value, exactly as for a stale dependency.	RUL-invalid_value_located RUL-planning_changes_no_media	
 9.2	An invalid user decision is **preserved and flagged as requiring correction**, never silently deleted, coerced, or repaired (consistent with Section 9) — the user fixes the source and re-runs.	RUL-invalid_decision_kept RUL-invalid_value_never_repaired	
 9.2	Validation runs whenever the value is consumed on a given run, not cached as permanently valid.	RUL-checked_every_run	
+10	## 10. Per-destination structure	dropped	a heading; the corpus's documents carry their own
+10.1	### 10.1 What a destination is	dropped	a heading; the corpus's documents carry their own
+10.1	A *destination* is the folder that directly contains a logically distinct set of media files.	DEF-destination	
+10.1	At the geotag stage media has not yet been broken out into format-specific subfolders (those belong to a later development phase — see Section 7.1), so the destination is simply the folder a media file sits in.	DEF-destination RUL-development_after_merge	
+10.1	1. A destination is NOT necessarily a leaf folder.	DEF-destination	
+10.1	A destination may itself contain nested destinations.	DEF-destination	
+10.1	Example:	DEF-destination	introduces the example
+10.1	`.../Louvre` is a destination (it directly contains media), and `.../Louvre/Napoleon's Apartments` is a separate, distinct destination, even though it is nested inside Louvre.	DEF-destination	
+10.1	2. The derivation rule for any media file is simply its immediate containing folder:	DEF-destination BLD-geotag_destinations	
+10.1	```text [sha1:2b57e4d7, 1 lines]	BLD-geotag_destinations	
+10.1	A folder is a destination if it directly contains media; nested folders that directly contain media are their own destinations.	DEF-destination	
+10.1	This matches prep's handoff `destination_folders` grouping (immediate parent, `os.path.dirname`), which is correct precisely *because* the format-distribution subfolders (jpg/tif) must not exist yet.	BLD-geotag_destinations	
+10.1	Their presence is a hard-stop blocker, not a grouping case to collapse (Section 7.1).	RUL-development_after_merge	
+10.1	A folder that holds only sub-destinations — with **no media directly in it** — is *also* materialized as a destination, called a **container destination** and flagged `file_less: true`.	DEF-container_destination BLD-geotag_destinations	
+10.1	It exists so an operator can author timezone / folder-GPS-fallback decisions on it that propagate **downward** to its children, through the same nearest-ancestor inheritance those two facts use (Section 18, Section 25.3) — e.g. setting one GPS fallback on a trip's parent folder seeds every leaf beneath it.	DEF-container_destination RUL-timezone_auto_resolves	
+10.1	The container set is derived from the real destinations' ancestor paths within `6-photos-by-dest` (no extra filesystem scan); the by-dest root is itself a container when it holds only sub-destinations, giving a single library-wide default node.	BLD-geotag_destinations	
+10.1	Because a container has no media of its own to act on, its decision cells **never block and never demand input**: its timezone auto-resolves by inheritance (it adopts its nearest-ancestor or config-default proposal without confirmation, like every destination's, Section 9.1) yet stays fully overridable; its folder GPS fallback is a proposal like any other, taking effect only once accepted, and an unconfirmed one is simply reached past by its children to the nearest resolved ancestor (Section 25.3).	RUL-container_never_waits RUL-timezone_auto_resolves RUL-other_proposals_need_acceptance	
+10.1	So containers extend reach without adding to the operator's to-do list.	RUL-container_never_waits	
+10.1	A container carries **no clock-offset cells at all**: offsets neither cascade downward nor roll up (Section 10.2 rules 3–4), and a file-less folder has no media to time-correct, so `camera_group_time_decisions` on a container is empty.	RUL-offset_per_camera_destination_day RUL-offset_from_own_evidence	
+10.1	All numbered geotag JSON artifacts must cover destinations separately.	BLD-geotag_records_by_destination	
+10.1	This applies to:	BLD-geotag_records_by_destination	introduces the list
+10.1	```text [sha1:26c09370, 4 lines]	BLD-geotag_records_by_destination	
+10.1	Each artifact should be grouped by destination under `6-photos-by-dest`.	BLD-geotag_records_by_destination	
+10.1	A global summary section may exist, but decisions must be inspectable per destination.	BLD-geotag_records_by_destination	
+10.2	### 10.2 Destination-scoped vs. group-scoped decisions	dropped	a heading; the corpus's documents carry their own
+10.2	Two scopes coexist, but the split is **not** "timezone is per-folder, clock offset is per-camera." It is:	RUL-offset_per_camera_destination_day	
+10.2	1. **Group-scoped facts** belong to a *camera* and are the same wherever that camera's files land: the camera-group **identity** (`camera_group_key`) and its **classification as a camera or a smartphone** (config-driven, Section 16).	RUL-geotag_reuses_camera_group	
+10.2	The classification decides *how* a group's time is solved at all — a smartphone carries reliable timezone/offset metadata and is solved per file from that metadata; a camera with a wrong, timezone-less clock needs a clock-offset decision.	RUL-geotag_reuses_camera_group	
+10.2	These facts live in config and in camera-group recognition (Section 16); they are not per-destination.	RUL-geotag_reuses_camera_group	
+10.2	2. **Destination-scoped decisions** belong to a *destination folder*: the destination civil timezone (Section 18), folder/destination GPS fallback, **and the camera clock offset / time-anchor calibration** (Section 19).	RUL-offset_per_camera_destination_day	
+10.2	The offset is destination-scoped because a camera's clock error is **not** constant across the user's shoots: clocks drift, and are sometimes reset, *between* trips — and destinations are trips.	RUL-offset_per_camera_destination_day	
+10.2	A single global per-camera offset applied to every destination would be wrong the moment the clock drifted between two of them.	RUL-offset_per_camera_destination_day	
+10.2	So the offset is decided **per (camera group, destination)**: the same camera appearing in two destinations gets two independently-inferred offsets, each anchored only from that group's native-GPS frames *in that destination* (Section 19).	RUL-offset_per_camera_destination_day RUL-offset_from_own_evidence	
+10.2	This is the core assumption stated in Section 7: corrections are made **between destinations, never within one**.	RUL-offset_per_camera_destination_day	
+10.2	Therefore the time-anchor decision lives **inside each per-destination section**, sub-keyed by the camera group(s) present in that destination — there is no separate top-level group-scoped offset block:	BLD-offset_buckets	
+10.2	```json [sha1:4b154cd4, 31 lines]	dropped	an example shape; BLD-offset_buckets names the fields
+10.2	The rules are:	RUL-offset_per_camera_destination_day	introduces the rules
+10.2	1. there is exactly **one** editable clock-offset decision per **(camera group, destination)** — inside that destination's section, keyed by `camera_group_key`.	RUL-offset_per_camera_destination_day BLD-offset_buckets	
+10.2	The same camera group appearing in N destinations has N independent decisions, not one shared one;	RUL-offset_per_camera_destination_day	
+10.2	2. each cell's offset is inferred only from that group's native-GPS frames **in that destination** (Section 19).	RUL-offset_from_own_evidence	
+10.2	The same camera in two destinations is anchored twice, independently — never is one destination's offset carried onto another;	RUL-offset_from_own_evidence	
+10.2	3. a **destination is the immediate containing folder, and a nested subfolder is a separate destination** (Section 10.1): there is **no upward roll-up** — a parent's offset is never computed by aggregating its children, and `.../Louvre` and `.../Louvre/Napoleon's Apartments` are distinct cells each with its own effective offset.	DEF-destination RUL-offset_from_own_evidence	
+10.2	**Clock offsets also do not flow downward**: unlike the civil timezone (Section 18) and the folder GPS fallback (Section 25.3), an offset is *never* inherited from an ancestor destination — it is a measured/assumed clock fact specific to where and when frames were shot, not a folder default to cascade.	RUL-offset_from_own_evidence	
+10.2	A child with no anchor of its own does not borrow its parent's offset;	RUL-offset_from_own_evidence	
+10.2	4. **per-date buckets within a destination.** A user travelling typically **sets the camera to local time each morning**, so the clock offset is constant only *within a naive calendar day*, not across a destination revisited on different days or seasons (nearby attractions hit on separate trips).	RUL-offset_per_camera_destination_day	
+10.2	Therefore the offset cell **splits per naive date** when a (camera group, destination) spans more than one day there: each day gets its own bucket keyed `<camera_group_key>@<YYYY-MM-DD>` and carrying a `date` field.	RUL-offset_per_camera_destination_day BLD-offset_buckets	
+10.2	The common single-day case keeps the bare `<camera_group_key>` key with no `date`.	BLD-offset_buckets	
+10.2	A single visit that crosses local midnight splits into two buckets by design.	RUL-offset_per_camera_destination_day	
+10.2	The naive date is the camera's own wall-clock date (`source_naive_time`), taken before any correction.	RUL-offset_per_camera_destination_day BLD-offset_buckets	
+10.2	Each bucket's proposed offset is chosen independently, in priority order:	RUL-offset_from_own_evidence BLD-offset_buckets	introduces the order
+10.2	- **(a) self-anchored** — if that group has native-GPS frame(s) *for this date in this destination* that produce a GPX anchor (Section 19), that anchor is the proposal;	RUL-offset_from_own_evidence BLD-offset_buckets	
+10.2	- **(b) timezone-derived** — otherwise, if the destination's civil timezone is resolved (Section 18), assume the camera clock tracked that local time and propose `offset = -(timezone UTC offset)` at the bucket's earliest naive instant, DST-aware (Section 19.4).	RUL-offset_from_own_evidence BLD-offset_buckets	
+10.2	`proposal_source:	BLD-offset_buckets RUL-other_proposals_need_acceptance	
+10.2	"timezone_naive"`, confirmable-only (the local-clock assumption can be wrong — e.g. a camera left on home time), never auto-applied;	RUL-other_proposals_need_acceptance	
+10.2	- **(c) manual-required** — otherwise (no self-anchor, no resolved timezone), a blank manual field.	BLD-offset_buckets	
+10.2	There is **no inheritance step** — a bucket is resolved entirely from its own date's evidence or the destination timezone.	RUL-offset_from_own_evidence	
+10.2	A manual offset entered on one bucket applies only to that day; sibling date buckets are untouched.	RUL-offset_per_camera_destination_day	
+10.2	This honors "corrections between destinations, never within" (Section 7) refined to the day: within one day the offset is one constant, across days it is re-derived.	RUL-offset_per_camera_destination_day	
+10.2	The **only** offset auto-resolution is a GPX self-anchor under the Section 9.1 policy flags; timezone-derived and manual buckets are always confirmable;	RUL-anchor_offset_auto_as_configured RUL-other_proposals_need_acceptance	
+10.2	5. camera-group **identity and classification** (camera vs smartphone) remain group-scoped config (Section 16).	RUL-geotag_reuses_camera_group	
+10.2	A cell may surface `camera_group_class` read-only to explain why it needs (camera) or does not need (smartphone solved from its own metadata) a clock-offset decision; the editable offset itself is per (group, destination[, date]);	RUL-geotag_reuses_camera_group	read-only context in the cell
+10.2	6. resolved UTC for a file uses its **(camera group, destination, date) effective offset** — selecting the file's own naive-date bucket, falling back to the bare-group bucket for a single-day destination — together with its **destination effective timezone**.	defer:geotag-22	resolved UTC is §22
+10.2	A file is fully solvable only when **both** are complete.	defer:geotag-22	resolved UTC is §22
+10.2	A **timezone-derived** proposal (rule 4b) is the no-anchor default — e.g. a `…/Kyoto/Kinkaku-ji` day with no native-GPS frame, deriving its offset from Kyoto's resolved `Asia/Tokyo`:	BLD-offset_buckets	
+10.2	```json [sha1:b44fbb96, 16 lines]	dropped	an example cell; BLD-offset_buckets names the fields
+10.2	If the user instead types a `manual_offset_seconds` here, that becomes this bucket's effective offset for that day only.	RUL-offset_per_camera_destination_day	
+10.2	All numbered geotag JSON artifacts are destination-grouped (Section 10.3); the time decisions are no exception — they sit inside their destination's section like everything else.	BLD-geotag_records_by_destination	
+10.3	### 10.3 Per-destination grouping (default)	dropped	a heading; the corpus's documents carry their own
+10.3	All numbered geotag JSON artifacts cover destinations separately — including the time decisions, which (since Section 10.2) now sit inside each destination's section rather than in a separate top-level block.	BLD-geotag_records_by_destination	
+10.3	This applies to:	BLD-geotag_records_by_destination	introduces the list
+10.3	```text [sha1:b55a79dc, 4 lines]	BLD-geotag_records_by_destination	
+10.3	Each artifact should be grouped by destination under `6-photos-by-dest`.	BLD-geotag_records_by_destination	
+10.3	Example shape:	BLD-geotag_records_by_destination	introduces the example
+10.3	```json [sha1:667976f7, 24 lines]	dropped	an example shape; BLD-geotag_records_by_destination names the grouping
