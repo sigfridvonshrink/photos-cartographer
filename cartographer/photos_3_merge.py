@@ -581,44 +581,41 @@ class MergeWorkflow:
         return plan
 
     def _earlier_moves(self, ws):
-        """{content fingerprint: (plan id, record)} for every photo an earlier merge plan of this
-        workspace moved or found already in the library, as its journal confirmed — the saved plan and
-        every plan a re-plan set aside, the latest winning."""
+        """{content fingerprint: [(plan id, record), ...]}, latest plan first, for every photo an earlier
+        merge plan of this workspace placed or found already in the library — the saved plan and every
+        plan a re-plan set aside. Whether a move happened is settled by the library, not the journal:
+        a move can finish without its journal entry (a crash just after it, a Ctrl-C while it ran)."""
         cur = merge_plan_path(ws)
         stem, ext = os.path.splitext(cur)
         found = {}
-        for p in sorted(glob.glob(glob.escape(stem) + "-[0-9]*" + ext)) + [cur]:
+        for p in reversed(sorted(glob.glob(glob.escape(stem) + "-[0-9]*" + ext)) + [cur]):
             try:
                 with open(p) as f:
                     plan = json.load(f)
                 pid = plan["plan_id"]
             except (OSError, ValueError, KeyError, TypeError):
                 continue
-            try:
-                with open(journal_path(ws, pid)) as f:
-                    confirmed = (json.load(f) or {}).get("operations") or {}
-            except (OSError, ValueError):
-                continue
             for d in (plan.get("destinations") or {}).values():
                 for rec in d.get("files") or []:
-                    if rec.get("disposition") != "blocked" and confirmed.get(rec.get("by_dest_source")) == "confirmed":
-                        found[rec.get("content_fingerprint")] = (pid, rec)
+                    if rec.get("disposition") != "blocked" and rec.get("library_target"):
+                        found.setdefault(rec.get("content_fingerprint"), []).append(
+                            (rec.get("carried_from_plan") or pid, rec))
         return found
 
     def _carried_forward(self, e, earlier, blockers):
-        """The plan record of a finalized photo no longer in by-dest: the earlier plan's record for it,
-        once its library place is fingerprinted again — never from the cache — and found to hold it;
-        otherwise a blocker naming why."""
-        if earlier is None:
-            reason = (f"{e['by_dest_relpath']} is no longer in the workspace and no earlier merge of it "
-                      "moved it into the library")
+        """The plan record of a finalized photo no longer in by-dest: the latest earlier plan's record
+        whose library place, fingerprinted again — never from the cache — holds it; otherwise a
+        blocker naming why."""
+        if not earlier:
+            reason = (f"{e['by_dest_relpath']} is no longer in the workspace and no earlier merge plan "
+                      "placed it in the library")
         else:
-            pid, rec = earlier
-            target = rec.get("library_target")
-            if target and self._verify_fp(target, e["content_fingerprint"]):
-                return dict(rec, carried_from_plan=pid)
-            reason = (f"{e['by_dest_relpath']} was moved by an earlier merge to {target}, which no longer "
-                      "holds it")
+            for pid, rec in earlier:
+                if self._verify_fp(rec["library_target"], e["content_fingerprint"]):
+                    return dict(rec, carried_from_plan=pid)
+            places = ", ".join(sorted({rec["library_target"] for _pid, rec in earlier}))
+            reason = (f"{e['by_dest_relpath']} is no longer in the workspace, and the library place an "
+                      f"earlier merge plan gave it ({places}) no longer holds it")
         blockers.append(reason + ".")
         return {"by_dest_source": e["by_dest_relpath"], "content_fingerprint": e["content_fingerprint"],
                 "disposition": "blocked", "library_target": e["library_target"],
@@ -791,24 +788,27 @@ class MergeWorkflow:
         out = {"by_dest_source": src_rel, "library_path": target, "content_fingerprint": fp,
                "final_kind": None, "removed": False, "newly": False, "blocker": None}
 
-        if journal.get(src_rel) == "confirmed":           # already terminal in a prior run
-            out["final_kind"] = self._plan_kind(disp)
-            out["removed"] = True
+        src_present = os.path.exists(src_abs)
+        if disp != "blocked" and not src_present and (journal.get(src_rel) == "confirmed"
+                                                      or disp == "already_present"):
+            # Done by an earlier run, or by hand: counted done only while the library still holds it.
+            # The state is the filesystem's; the journal only says which run did it.
+            if self._verify_fp(target, fp):
+                out["final_kind"] = self._plan_kind(disp)
+                out["removed"] = True
+                return out
+            out["final_kind"] = "blocked"
+            out["blocker"] = (f"{src_rel}: no longer in the workspace, and its library place {target} no "
+                              "longer holds it")
             return out
         if disp == "blocked":                             # plan-time per-item blocker (un-fingerprintable)
             out["final_kind"] = "blocked"
             out["blocker"] = rec.get("blocked_reason") or f"{src_rel}: blocked at plan time"
             return out
 
-        src_present = os.path.exists(src_abs)
-
         if disp == "already_present":
             # Library already holds identical content (verified at plan). Re-confirm it still matches,
             # then remove the source — never delete the only copy if the library file changed.
-            if not src_present:
-                out["final_kind"] = "already_present"
-                out["removed"] = True
-                return out
             if not self._verify_fp(target, fp):
                 out["final_kind"] = "blocked"
                 out["blocker"] = (f"{src_rel}: library file {target} no longer matches the planned "

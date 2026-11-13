@@ -66,3 +66,17 @@ Merge's `enumerate_finalized` SHALL take each photo of the handoff under `6-phot
 final name: the target of `photos-24`'s `rename_no_clobber` whose `content_fingerprint` precondition is the photo's, or
 its own name where geotag renamed nothing; the entries sorted by their path in the workspace.
 :::
+
+## 8. Idempotency, resume, and non-destructiveness
+
+:::{bld} A fresh plan carries forward from the earlier plans
+:id: BLD-merge_carry_forward
+:status: seed
+:realises: RUL-replan_carries_placed
+
+Merge's `build_merge_plan` SHALL give a finalized photo no longer under `6-photos-by-dest` the record of the latest
+plan — `photos-30-merge-plan.json`, then its `-NNN` backups newest first — holding a record for its content fingerprint
+not blocked whose `library_target` fingerprints, through `_fingerprint_library_file`, to it, adding `carried_from_plan`
+(the plan that first placed it); no such record makes it a blocked record whose reason names the places tried, or that
+no earlier plan placed it.
+:::

@@ -64,3 +64,46 @@ Merge SHALL place each photo at the same path under the library as it holds unde
 as the user built them, its name the one geotag gave it — the name an incoming photo is given on a collision the only
 change.
 :::
+
+## 8. Idempotency, resume, and non-destructiveness
+
+:::{rul} A fresh plan is allowed at any time before the seal
+:id: RUL-merge_replan_any_time
+:status: seed
+:criticality: med
+:verify: required
+:refines: RUL-merge_resumable
+:uses: DEF-merge, DEF-sealed_workspace
+:aliases: merge-replan-allowed-after-failed-or-rejected-1
+
+Merge SHALL allow a fresh plan at any time on a workspace not sealed, whatever an earlier run of it left.
+:::
+
+:::{rul} A fresh plan carries the photos earlier plans placed
+:id: RUL-replan_carries_placed
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-merge_resumable
+:uses: DEF-merge, DEF-library, DEF-fingerprint, DEF-managed_folders
+:aliases: merge-resume-via-execute-not-plan-1
+
+A fresh plan SHALL account for every finalized photo no longer in photos by destination: carried forward with the
+library place the latest earlier plan of the workspace gave it whose place, fingerprinted again, holds it — whether or
+not the journal recorded the move — and otherwise blocking, naming why.
+:::
+
+:::{rul} A resumed merge checks the library, not the journal
+:id: RUL-resume_rechecks_library
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-merge_resumable
+:uses: DEF-merge, DEF-library, DEF-fingerprint
+:aliases: merge-resume-state-derivation-1
+
+A photo gone from photos by destination SHALL count as merged only while its library place, fingerprinted again, holds
+it — whatever the journal or the plan says — and otherwise block, the run then partial.
+:::

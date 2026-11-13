@@ -1620,7 +1620,7 @@ the run requires of it: a file already in its place, with its name and its metad
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: idem-no-op-run-1, prep-unchanged-no-op-1, prep-second-run-zero-mutations-1, prep-same-names-same-input-1
+:aliases: idem-no-op-run-1, prep-unchanged-no-op-1, prep-second-run-zero-mutations-1, prep-same-names-same-input-1, merge-deterministic-rerun-same-targets-names-1
 :refines: INV-change_only_what_needs
 
 A phase run over a workspace whose relevant state has not changed SHALL change nothing, and produce the same result —
@@ -2328,7 +2328,7 @@ A photo merge cannot place SHALL stay where it is, the run then partial.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: merge-idempotent-resumable-1
+:aliases: merge-idempotent-resumable-1, merge-resume-completes-crash-window-1
 :uses: DEF-merge
 :refines: RUL-no_op_run
 
