@@ -789,6 +789,64 @@ def test_a_re_plan_after_a_partial_merge_carries_what_was_moved(tmp_path):
     assert log["photos"]["B"]["library_path"] == os.path.join(str(lib), "Trip", "b-001.jpg")
 
 
+@pytest.mark.spec("RUL-replan_carries_placed", test="TST-merge_execute-a_re_plan_carries_a_photo_moved_but_never_journalled")
+def test_a_re_plan_carries_a_photo_moved_but_never_journalled(tmp_path):
+    """A move that finished without its journal entry — a crash just after it, or a Ctrl-C while it
+    ran — is carried by the re-plan on the evidence: its earlier plan's place, fingerprinted again,
+    holds it."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
+                             {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
+                  library_files=[{"fp": "FAIL", "dest": "Trip", "name": "b.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    pid = json.load(open(merge.merge_plan_path(str(ws))))["plan_id"]
+    assert merge._run_locked_workflow("execute", str(ws)) == 3          # a.jpg moved, b.jpg blocked
+    os.remove(utils.journal_path(str(ws), pid))                         # the confirmation never written
+    with open(os.path.join(str(lib), "Trip", "b.jpg"), "wb") as f:
+        f.write(_fp_bytes("OLD"))                                        # the blocker cleared
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    plan = json.load(open(merge.merge_plan_path(str(ws))))
+    recs = {r["by_dest_source"]: r for d in plan["destinations"].values() for r in d["files"]}
+    assert recs["6-photos-by-dest/Trip/a.jpg"].get("carried_from_plan") == pid
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    assert utils.is_sealed(str(ws))
+    log = json.loads(open(_ctl(ws, "photos-35-merge-log.json")).read())
+    assert log["photos"]["A"]["library_path"] == os.path.join(str(lib), "Trip", "a.jpg")
+
+
+@pytest.mark.spec("RUL-resume_rechecks_library", test="TST-merge_execute-a_resumed_execute_checks_a_journalled_photo_is_still_in_the_library")
+def test_a_resumed_execute_checks_a_journalled_photo_is_still_in_the_library(tmp_path):
+    """The journal says a.jpg was moved; its library place no longer holds it. Execute run again
+    blocks it rather than counting it done, and the workspace is not sealed."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
+                             {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
+                  library_files=[{"fp": "FAIL", "dest": "Trip", "name": "b.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 3
+    with open(os.path.join(str(lib), "Trip", "a.jpg"), "wb") as f:
+        f.write(_fp_bytes("X"))                                          # a.jpg's place replaced
+    assert merge._run_locked_workflow("execute", str(ws)) == 3
+    s = _summary(ws)
+    assert s["totals"]["placed_new"] == 0 and s["totals"]["blocked"] == 2
+    assert any("a.jpg" in f and "no longer holds it" in f for f in s["failures"])
+    assert not utils.is_sealed(str(ws))
+
+
+@pytest.mark.spec("RUL-resume_rechecks_library", test="TST-merge_execute-a_photo_already_present_whose_copy_is_gone_is_checked_in_the_library")
+def test_a_photo_already_present_whose_copy_is_gone_is_checked_in_the_library(tmp_path):
+    """A photo planned as already present whose workspace copy is gone counts as done only while the
+    library still holds it."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
+                  library_files=[{"fp": "A", "dest": "Trip", "name": "a.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    os.remove(_src(ws, "Trip", "a.jpg"))
+    with open(os.path.join(str(lib), "Trip", "a.jpg"), "wb") as f:
+        f.write(_fp_bytes("X"))
+    assert merge._run_locked_workflow("execute", str(ws)) == 3
+    assert _summary(ws)["totals"]["blocked"] == 1
+    assert not utils.is_sealed(str(ws))
+
+
+@pytest.mark.spec("RUL-replan_carries_placed", test="TST-merge_execute-a_photo_moved_earlier_but_gone_from_its_place_blocks_the_re_plan")
 def test_a_photo_moved_earlier_but_gone_from_its_place_blocks_the_re_plan(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
                              {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
@@ -803,6 +861,7 @@ def test_a_photo_moved_earlier_but_gone_from_its_place_blocks_the_re_plan(tmp_pa
     assert a["disposition"] == "blocked" and "no longer holds it" in a["blocked_reason"]
 
 
+@pytest.mark.spec("RUL-replan_carries_placed", test="TST-merge_execute-a_photo_gone_from_the_workspace_that_no_merge_moved_blocks_the_plan")
 def test_a_photo_gone_from_the_workspace_that_no_merge_moved_blocks_the_plan(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     os.remove(_src(ws, "Trip", "a.jpg"))                                # gone by other means
@@ -812,7 +871,7 @@ def test_a_photo_gone_from_the_workspace_that_no_merge_moved_blocks_the_plan(tmp
     assert a["disposition"] == "blocked" and "no earlier merge" in a["blocked_reason"]
 
 
-@pytest.mark.spec("merge-replan-allowed-after-failed-or-rejected-1")
+@pytest.mark.spec("merge-replan-allowed-after-failed-or-rejected-1", test="TST-merge_execute-re_plan_after_failed_is_allowed")
 def test_re_plan_after_failed_is_allowed(tmp_path):
     # An all-blocked run is `failed` — nothing was placed, every source is still in by-dest. Like a
     # `rejected` run, it moved nothing, so re-planning is allowed (no moved file to drop from the log);

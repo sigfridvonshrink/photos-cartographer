@@ -56,3 +56,29 @@ flattened, would be a decision about the library's organisation the user never m
 make differently. Kept the same, a photo's place in the library is the place the user chose for it, and the same on
 every run, which is what lets an interrupted merge find its own work.
 :::
+
+## 8. Idempotency, resume, and non-destructiveness
+
+:::{rat} A partial merge is never a dead end
+:id: RAT-partial_merge_no_dead_end
+:status: seed
+:justifies: RUL-merge_replan_any_time
+
+A partial merge leaves the cause of its blockers for the user to fix — a library file that could not be read, a photo
+changed — and some fixes change what the plan must say. Until the seal, nothing merge has done is final, and its
+records describe what happened rather than gate what may happen next; refusing to re-plan would leave the user with a
+plan that can no longer finish and no way to make one that can.
+:::
+
+:::{rat} The library is the evidence of a move
+:id: RAT-library_is_evidence_of_move
+:status: seed
+:justifies: RUL-replan_carries_placed, RUL-resume_rechecks_library
+
+The journal is written after a move, so a crash or a Ctrl-C can leave a photo in the library with no entry for it; and
+the library is the user's, so a photo a journal entry vouches for may since have been moved or replaced there. Either
+way the journal and the library disagree, and only the library says where the photo is. Trusting the journal would
+block forever a photo safely placed, or seal a workspace whose merge log names a library file that no longer holds the
+photo — a record the user would rely on to find it. Fingerprinting the place again settles it, and costs a read only on
+a resume.
+:::

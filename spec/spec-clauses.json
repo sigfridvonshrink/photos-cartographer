@@ -3506,7 +3506,7 @@
       "area": "merge",
       "criticality": "med",
       "anti": true,
-      "title": "Resume is via execute, or a fresh plan, which carries forward every photo an earlier merge plan moved (journal-confirmed, its library place fingerprinted again), so the merge log names every photo",
+      "title": "Resume is via execute, or a fresh plan, which carries forward every photo an earlier merge plan placed whose library place, fingerprinted again, holds it, so the merge log names every photo",
       "spec": {
         "file": "photos-3-merge-workflow.md",
         "section": "8"
