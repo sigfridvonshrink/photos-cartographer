@@ -72,6 +72,7 @@ __all__ = [
     '_equirect_xy',
     '_point_to_segment',
     '_candidate',
+    'frame_candidates',
     'match_frame_to_gpx',
     '_frame_skip_reason',
     '_timezone_naive_offset',
@@ -387,36 +388,35 @@ def _candidate(match_type, gpx_time, distance, src, naive, dur):
             "segment_duration_seconds": (round(dur) if dur is not None else None)}
 
 
-def match_frame_to_gpx(frame, gpx, cfg):
-    """Best GPX time-anchor candidate for one native-GPS frame (§19.1), or None. Prefers a close
-    GPX point; else the closest valid short segment (time interpolated by position projection)."""
+def frame_candidates(frame, gpx, cfg):
+    """Every GPX time-anchor candidate for one native-GPS frame (§19.1): one per PASS of the tracks by the
+    place it was taken — the best match of each pass, a close point before a close short segment, then the
+    closest. A pass is a run of matches with no gap longer than `gpx_interpolation_max_gap_seconds`
+    between them, so the same walk on two days, or a place visited morning and evening, yields one
+    candidate per visit, and the consensus over the camera's frames (infer_anchor_proposal) says which
+    visit is the photo's. Only matches within the plausible-clock-error window of the frame's naive time
+    count. Candidates come in time order; [] if nothing anchors."""
     ng = frame.get("native_gps") or {}
     naive = _parse_camera_naive(frame.get("source_naive_time"))
     if ng.get("lat") is None or ng.get("lon") is None or naive is None or not gpx.points:
-        return None
+        return []
     flat, flon = float(ng["lat"]), float(ng["lon"])
     pt_max = cfg["gpx_anchor_max_point_distance_meters"]
     seg_max = cfg["gpx_anchor_max_segment_distance_meters"]
     gap_max = cfg["gpx_interpolation_max_gap_seconds"]
     # Plausible-clock-error window: a GPX time may anchor this frame only if it is within `window` of the
-    # frame's naive time (read as UTC). Applied DURING the spatial search so a same-place/other-trip point
-    # is skipped even when it is the spatially closest — fixing the years-off false match. None = no bound
+    # frame's naive time (read as UTC). Applied DURING the search so a same-place/other-trip point is
+    # skipped even when it is the spatially closest — fixing the years-off false match. None = no bound
     # (unit tests that omit the knob); real configs always set it (§19.1).
     window = cfg.get("gpx_anchor_max_clock_error_seconds")
     in_window = lambda gt: window is None or abs((gt.replace(tzinfo=None) - naive).total_seconds()) <= window
 
-    best_pt = None
+    matches = []                                      # (gpx time, rank, distance, candidate)
     for p in gpx.points:
-        if not in_window(p.time_utc):
-            continue
-        d = haversine(flat, flon, p.lat, p.lon)
-        if d <= pt_max and (best_pt is None or d < best_pt[0]):
-            best_pt = (d, p)
-    if best_pt is not None:
-        d, p = best_pt
-        return _candidate("gpx_point_match", p.time_utc, d, p.source_file, naive, None)
-
-    best_seg = None
+        if in_window(p.time_utc):
+            d = haversine(flat, flon, p.lat, p.lon)
+            if d <= pt_max:
+                matches.append((p.time_utc, 0, d, ("gpx_point_match", p.time_utc, d, p.source_file, None)))
     pts = gpx.points
     for i in range(len(pts) - 1):
         a, b = pts[i], pts[i + 1]
@@ -425,12 +425,29 @@ def match_frame_to_gpx(frame, gpx, cfg):
             continue
         dist, t = _point_to_segment(flat, flon, a.lat, a.lon, b.lat, b.lon)
         seg_time = a.time_utc + timedelta(seconds=t * dur)
-        if dist <= seg_max and in_window(seg_time) and (best_seg is None or dist < best_seg[0]):
-            best_seg = (dist, seg_time, a.source_file, dur)
-    if best_seg is not None:
-        dist, seg_time, src, dur = best_seg
-        return _candidate("gpx_segment_interpolation", seg_time, dist, src, naive, dur)
-    return None
+        if dist <= seg_max and in_window(seg_time):
+            matches.append((seg_time, 1, dist, ("gpx_segment_interpolation", seg_time, dist, a.source_file, dur)))
+    matches.sort(key=lambda m: (m[0], m[1], m[2]))
+    passes = []
+    for m in matches:
+        if passes and (m[0] - passes[-1][-1][0]).total_seconds() <= gap_max:
+            passes[-1].append(m)
+        else:
+            passes.append([m])
+    out = []
+    for run in passes:
+        _t, _r, _d, (mt, gt, dist, src, dur) = min(run, key=lambda m: (m[1], m[2], m[0]))
+        out.append(_candidate(mt, gt, dist, src, naive, dur))
+    return out
+
+
+def match_frame_to_gpx(frame, gpx, cfg):
+    """The best GPX time-anchor candidate for one native-GPS frame (§19.1), or None: over every pass, a close
+    point before a close short segment, then the closest. Whether the frame anchors at all; which pass is
+    the photo's is the consensus's to say (infer_anchor_proposal)."""
+    cands = frame_candidates(frame, gpx, cfg)
+    return min(cands, key=lambda c: (0 if c["match_type"] == "gpx_point_match" else 1, c["distance_m"])) \
+        if cands else None
 
 
 def _frame_skip_reason(frame, gpx, cfg):
@@ -467,61 +484,74 @@ def _timezone_naive_offset(naive_str, tz):
 
 def infer_anchor_proposal(frames, gpx, cfg):
     """Turn all native-GPS frames' GPX matches for one (camera group, destination) into a single
-    recommended clock-offset proposal (§19.2/§19.3), or None if nothing anchors. The frames' offsets
-    are clustered (a camera's clock error is ~constant across a destination), and the CONSENSUS — the
-    largest agreeing cluster — wins (point-before-segment then closest as the within-cluster tiebreak),
-    so a lone spurious match can't outvote the crowd. Frames with no in-window match are summarized as
-    `skipped`; the clusters are summarized as `groups` for a collapsed editor view."""
-    cands, skipped = [], {"no_nearby_track": 0, "outside_time_window": 0, "examples": []}
+    recommended clock-offset proposal (§19.2/§19.3), or None if nothing anchors. Each frame offers one
+    candidate per pass of the tracks by its place (frame_candidates); the candidates' offsets are clustered
+    (a camera's clock error is ~constant across a destination's day) and the CONSENSUS wins — the cluster
+    the most FRAMES support, each frame counted once however many of its passes fall in it — so a lone
+    spurious match can't outvote the crowd, and the same route walked on two days is settled by the photos
+    that only one day's track explains. Two clusters equally supported are a disagreement: the smaller
+    clock error is recommended, for review. Within the chosen cluster the representative is its best match
+    (point before segment, then closest). Frames with no in-window match are summarized as `skipped`; the
+    clusters as `groups` for a collapsed editor view."""
+    by_frame, skipped = [], {"no_nearby_track": 0, "outside_time_window": 0, "examples": []}
     for f in frames:
-        c = match_frame_to_gpx(f, gpx, cfg)
-        if c:
-            cands.append(dict(c, source_file=f.get("relative_path"), native_gps=f.get("native_gps"),
-                              camera_source_naive_time=f.get("source_naive_time")))
+        cs = frame_candidates(f, gpx, cfg)
+        if cs:
+            n = len(by_frame)                       # the frame's own index: each frame votes once
+            by_frame.append([dict(c, frame=n, source_file=f.get("relative_path"), native_gps=f.get("native_gps"),
+                                  camera_source_naive_time=f.get("source_naive_time")) for c in cs])
         else:
             reason = _frame_skip_reason(f, gpx, cfg)
             skipped[reason] += 1
             if len(skipped["examples"]) < 3:
                 skipped["examples"].append({"source_file": f.get("relative_path"), "reason": reason})
-    if not cands:
+    if not by_frame:
         return None
-    # rank: point-before-segment, then closest, then path (deterministic); first in a cluster is its rep
-    cands.sort(key=lambda c: (0 if c["match_type"] == "gpx_point_match" else 1,
-                              c["distance_m"], c["source_file"] or ""))
+    rank = lambda c: (0 if c["match_type"] == "gpx_point_match" else 1, c["distance_m"], c["source_file"] or "",
+                      c["offset_seconds"])
+    cands = sorted((c for cs in by_frame for c in cs), key=rank)
     spread = cfg["gpx_anchor_offset_spread_max_seconds"]
-    clusters = []                                   # each: {"offset", "rep", "members": [...]}
+    clusters = []                                   # each: {"offset", "rep", "members": [...], "frames": set}
     for c in cands:                                 # rank order → each cluster's rep is its best match
         g = next((g for g in clusters if abs(c["offset_seconds"] - g["offset"]) <= spread), None)
         if g is None:
-            clusters.append({"offset": c["offset_seconds"], "rep": c, "members": [c]})
+            clusters.append({"offset": c["offset_seconds"], "rep": c, "members": [c], "frames": {c["frame"]}})
         else:
             g["members"].append(c)
-    # consensus: largest cluster wins; ties → the earliest (its rep ranks best, since cands are sorted)
-    chosen = max(range(len(clusters)), key=lambda i: (len(clusters[i]["members"]), -i))
-    g = clusters[chosen]
-    best, members = g["rep"], g["members"]
-    supporting_count = len(members) - 1
-    conflicting_count = len(cands) - len(members)
-    if conflicting_count:
+            g["frames"].add(c["frame"])
+    # consensus: most supporting frames; a tie → the smaller clock error, then the best-ranked rep
+    order = sorted(range(len(clusters)), key=lambda i: (-len(clusters[i]["frames"]), abs(clusters[i]["offset"]), i))
+    g = clusters[order[0]]
+    tied = len(order) > 1 and len(clusters[order[1]]["frames"]) == len(g["frames"])
+    best = g["rep"]
+    support = g["frames"]
+    supporting_count = len(support) - 1
+    conflicting_count = len(by_frame) - len(support)        # frames no pass of which agrees
+    if conflicting_count or tied:
         confidence = "review_required"
     elif supporting_count or best["match_type"] == "gpx_point_match":
         confidence = "high"
     else:
         confidence = "medium"
-    ordered = [best] + [c for c in cands if c is not best]    # anchors[0] is the chosen representative
+    # one anchor per frame: its candidate in the chosen cluster, else its best; the representative first
+    chosen = {}
+    for c in g["members"]:
+        chosen.setdefault(c["frame"], c)
+    per_frame = [chosen.get(n) or min(cs, key=rank) for n, cs in enumerate(by_frame)]
+    ordered = [best] + sorted((c for c in per_frame if c is not best), key=rank)
     anchors = [{"proposal_id": f"anchor-{i + 1:03d}", "source_file": c["source_file"],
                 "camera_source_naive_time": c["camera_source_naive_time"], "native_gps": c["native_gps"],
                 "gpx_match": {"match_type": c["match_type"], "gpx_file": c["gpx_file"],
                               "distance_m": c["distance_m"],
                               "segment_duration_seconds": c["segment_duration_seconds"]},
                 "proposed_offset_seconds": c["offset_seconds"]} for i, c in enumerate(ordered)]
-    groups = sorted(({"offset_seconds": gg["offset"], "count": len(gg["members"]),
+    groups = sorted(({"offset_seconds": gg["offset"], "count": len(gg["frames"]),
                       "representative": {"source_file": gg["rep"]["source_file"],
                                          "camera_source_naive_time": gg["rep"]["camera_source_naive_time"],
                                          "real_utc": gg["rep"]["gpx_time"].strftime("%Y-%m-%dT%H:%M:%SZ"),
                                          "match_type": gg["rep"]["match_type"],
                                          "distance_m": gg["rep"]["distance_m"]}}
-                     for gg in clusters), key=lambda x: (-x["count"], x["offset_seconds"]))
+                     for gg in clusters), key=lambda x: (-x["count"], abs(x["offset_seconds"]), x["offset_seconds"]))
     return {
         "proposal_source": "gpx_self_anchor",
         "proposed_offset_seconds": best["offset_seconds"],
@@ -531,8 +561,8 @@ def infer_anchor_proposal(frames, gpx, cfg):
         "recommended_gpx_match": {"match_type": best["match_type"], "gpx_file": best["gpx_file"],
                                   "distance_m": best["distance_m"],
                                   "segment_duration_seconds": best["segment_duration_seconds"]},
-        "anchor_count": len(cands), "supporting_count": supporting_count,
-        "conflicting_count": conflicting_count, "anchors": anchors,
+        "anchor_count": len(by_frame), "supporting_count": supporting_count,
+        "conflicting_count": conflicting_count, "tied": tied, "anchors": anchors,
         "groups": groups, "skipped": skipped,
     }
 

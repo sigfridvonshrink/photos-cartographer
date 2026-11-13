@@ -528,3 +528,64 @@
 18.1	Because the offset is anchored from each destination's own native-GPS frames, moving a file may also change the *anchoring evidence* in both the source and target destinations — both cells are re-evaluated.	RUL-moved_photo_decided_anew RUL-offset_from_own_evidence	
 18.1	Decisions that are genuinely destination-scoped (each destination's timezone and its per-group offset) are unaffected for files that did not move; only the moved file is re-evaluated, and only against its new destination.	RUL-moved_photo_decided_anew RUL-geotag_rerun_keeps_settled	
 18.1	As always, the mandatory re-prep after the move applies (shared contract Section 10) so geotag sees the move at all.	RUL-prep_records_sort	
+19	## 19. GPX/native-GPS time-anchor proposals	dropped	a heading; the corpus's documents carry their own
+19	This stage is part of time calibration, not GPS interpolation.	BLD-geotag_stage_order	
+19	It is used when:	dropped	introduces the list
+19	1. GPX data is available;	BLD-anchor_matching	
+19	2. a camera group has at least one file with native GPS **in a given destination**;	RUL-offset_from_own_evidence BLD-anchor_matching	
+19	3. that native GPS position matches a GPX point or a short GPX segment under configured thresholds.	BLD-anchor_matching	
+19	The purpose is to propose a real UTC timestamp for a photo whose camera clock may be wrong.	RAT-anchor_agreement	
+19	This produces a proposed camera-time calibration for that **(camera group, destination)** — not for the whole camera group.	RUL-offset_per_camera_destination_day RUL-offset_from_own_evidence	
+19	Because the camera's clock error varies between destinations (it drifts, and may be reset, between trips, Section 10.2), the offset is anchored **only from that group's native-GPS frames in that destination** and the resulting decision is **destination-scoped**: it is recorded inside that destination's section, keyed by `camera_group_key` (Section 10.2), not shared across the destinations the group appears in.	RAT-offset_per_camera_destination_day	
+19	The user accepts or overrides it per destination.	RUL-anchor_offset_auto_as_configured RUL-other_proposals_need_acceptance	
+19	The same camera appearing in two destinations yields two independent proposals, each anchored from its own destination's frames, and within a destination it splits per naive date (Section 10.2 rule 4).	RUL-offset_per_camera_destination_day BLD-offset_buckets	
+19	A bucket with **no** native-GPS frame of its own produces no self-anchor here; instead of a blank field it takes a timezone-derived proposal when the destination timezone is resolved (Section 19.4), else manual-required.	RUL-offset_from_own_evidence BLD-timezone_naive_offset	
+19	Offsets are never inherited from an ancestor destination.	RUL-offset_from_own_evidence	
+19.1	### 19.1 Matching cases	dropped	a heading; the corpus's documents carry their own
+19.1	A native-GPS photo may produce a time-anchor proposal if either:	BLD-anchor_matching	
+19.1	1. its native GPS position is close enough to a GPX point with a known timestamp; or	BLD-anchor_matching	
+19.1	2. its native GPS position lies close enough to a GPX segment between two GPX points that are close enough in time.	BLD-anchor_matching	
+19.1	The thresholds are set in the workspace config `photos-00-config.json`, and take part in dependency fingerprints:	RUL-staleness_by_area BLD-config_keys	
+19.1	1. `gpx_anchor_max_point_distance_meters` — the farthest a photo may be from a track point that anchors it;	BLD-anchor_matching	
+19.1	2. `gpx_anchor_max_segment_distance_meters` — the farthest it may be from a segment that anchors it;	BLD-anchor_matching	
+19.1	3. `gpx_interpolation_max_gap_seconds` — the longest time between the two points of a segment, and between two matches of one pass;	BLD-anchor_matching	
+19.1	4. `gpx_anchor_offset_spread_max_seconds` — how far apart two anchors' offsets may be and still agree;	BLD-anchor_matching	
+19.1	5. `gpx_anchor_max_clock_error_seconds` — the plausible-clock-error window below;	RUL-anchor_within_clock_error BLD-anchor_matching	
+19.1	6. `multi_anchor_auto_apply` and `single_anchor_auto_apply` — the evidence an agreed offset needs to apply itself (Section 9.1).	BLD-auto_apply_settings	
+19.1	**Plausible-clock-error window (eligibility).** A candidate anchors a frame only if its GPX timestamp is within a configured window (`gpx_anchor_max_clock_error_seconds`, default 2 days) of the frame's naive capture time read as UTC.	RUL-anchor_within_clock_error BLD-anchor_matching	
+19.1	This is applied *during* the spatial search, so a track that merely passes through the **same place on a different trip** — e.g. the same spot years earlier — is skipped even when it is the spatially closest point, instead of winning on distance and yielding an absurd multi-year "offset".	RUL-anchor_within_clock_error	
+19.1	The window is deliberately wide (it must cover whatever timezone the camera clock was set to, ±14 h, plus drift) yet far below the gap to any realistic prior visit; a genuinely huge clock error (a battery-reset clock) falls outside it and is left to a manual offset.	RAT-clock_error_window	
+19.1	It is **timezone-independent on purpose**: the offset already folds in whatever timezone the camera clock was set to, which is *not* necessarily the destination's civil timezone (a camera left on home time while travelling), so the destination timezone must **not** be used to bound matching.	RUL-anchor_within_clock_error RAT-clock_error_window	
+19.2	### 19.2 Ranking, not averaging	dropped	a heading; the corpus's documents carry their own
+19.2	A photo yields one candidate for each **pass** of the tracks by the place it was taken — a run of matches with no gap longer than `gpx_interpolation_max_gap_seconds` — so the same walk on two days, or a place visited morning and evening, gives one candidate per visit.	BLD-anchor_matching	
+19.2	If multiple native-GPS/GPX time-anchor candidates exist for the same **(camera group, destination)**, the workflow must not average them.	RUL-anchor_consensus	
+19.2	Instead, it should:	dropped	introduces the list
+19.2	1. collect candidate anchors;	BLD-anchor_matching	
+19.2	2. rank them by precision and confidence;	BLD-anchor_matching	
+19.2	3. select the best candidate as the recommended calibration proposal;	BLD-anchor_matching	
+19.2	4. use other candidates only as supporting or conflicting evidence.	BLD-anchor_matching	
+19.2	The best candidate is normally:	dropped	introduces the list
+19.2	1. a near-perfect GPX point match; otherwise	BLD-anchor_matching	
+19.2	2. the closest valid GPX point match; otherwise	BLD-anchor_matching	
+19.2	3. the closest valid short-segment match.	BLD-anchor_matching	
+19.2	Supporting candidates confirm that the selected offset is plausible.	BLD-anchor_matching	
+19.2	Conflicting candidates trigger user review.	RUL-anchor_offset_auto_as_configured BLD-anchor_matching	
+19.2	**Consensus over a lone closest match.** Because a camera's clock error is essentially constant across a destination, the eligible candidates' offsets are clustered (within `gpx_anchor_offset_spread_max_seconds`) and the **cluster the most photos support wins** — each photo counted once, however many of its passes fall in it — the recommended offset being that cluster's best-ranked member, with point-before-segment then closest as the *within-cluster* tiebreak.	RUL-anchor_consensus BLD-anchor_matching	
+19.2	The same route walked on two days is thereby settled by the photos only one day's track explains; when nothing tells two clusters apart, the smaller clock error is recommended and the anchors count as disagreeing, so it waits for review.	RUL-anchor_consensus BLD-anchor_matching	
+19.2	This keeps a single spurious match from outvoting the crowd: candidates inside the chosen cluster are the supporting evidence, those outside are the conflicting evidence.	RAT-anchor_agreement	
+19.2	The proposal also carries, for the editor's collapsed view, a `groups` summary (each cluster's offset, its photo **count**, and one **representative** photo named by its full by-dest relative path, with that photo's GPX-derived real-UTC so the editor can show its corrected local time) and a `skipped` summary (frames that produced no in-window match, split into `outside_time_window` — a track only from another trip — vs `no_nearby_track`), so the operator sees a few grouped proposals instead of every anchor.	dropped	what the editor's collapsed view is given; presentation
+19.3	### 19.3 Human decision fields for time-anchor proposals	dropped	a heading; the corpus's documents carry their own
+19.3	Each proposed anchor should include generated proposal fields and pre-created user decision fields.	RUL-decision_fields_laid_out	
+19.3	Example shape:	dropped	introduces the example
+19.3	```json [sha1:1fcd6844, 29 lines]	BLD-offset_buckets BLD-anchor_matching	the decision fields are the offset cell's; the anchors are listed in its proposal
+19.3	The proposal is anchored only from native-GPS frames of this `camera_group` within this `destination`, and its accepted/effective offset is recorded in that destination's `camera_group_time_decisions[camera_group]` cell (Section 10.2) — it does not affect the same group in any other destination.	RUL-offset_per_camera_destination_day BLD-offset_buckets	
+19.3	The user fills existing fields only.	RUL-user_writes_decisions	
+19.4	### 19.4 Timezone-derived offset (no anchor)	dropped	a heading; the corpus's documents carry their own
+19.4	When a `(camera group, destination, date)` bucket has **no** GPX self-anchor (Section 19.1) but the destination's **civil timezone is resolved** (Section 18), geotag proposes an offset by assuming the camera clock was set to that local time:	BLD-timezone_naive_offset	
+19.4	```text [sha1:88eefdfd, 1 lines]	BLD-timezone_naive_offset	
+19.4	computed DST-aware via `zoneinfo` — so a destination revisited in summer and winter yields the summer or winter offset **per day bucket** (Section 10.2 rule 4), each derived from its own date's local instant.	BLD-timezone_naive_offset	
+19.4	The proposal carries `proposal_source:	BLD-timezone_naive_offset	
+19.4	"timezone_naive"`, the chosen `proposed_offset_seconds`, a `proposed_real_utc`, and `proposed_from_timezone`.	BLD-timezone_naive_offset	
+19.4	It is **confirmable-only** (`confidence: review_required`, never auto-applied) because the local-clock assumption can be wrong — a camera left on home time gives a wrong offset — so the operator reviews it like any non-anchor proposal.	RUL-other_proposals_need_acceptance BLD-timezone_naive_offset	
+19.4	It ranks directly **above** manual-required (there is no inherited offset — offsets do not cascade).	RUL-offset_from_own_evidence BLD-offset_buckets	
+19.4	It needs the destination's timezone; one with no proposal waits for a zone written by hand and a re-run, and until then the bucket is `manual_required` and the editor says so.	RUL-timezone_auto_resolves BLD-timezone_naive_offset	

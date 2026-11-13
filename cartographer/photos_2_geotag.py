@@ -740,7 +740,7 @@ class GeotagWorkflow:
             proposal = {"proposal_source": "manual_required"}
         is_gpx = proposal.get("proposal_source") == "gpx_self_anchor"
         has_offset = "proposed_offset_seconds" in proposal
-        conflicting = proposal.get("conflicting_count", 0) > 0
+        conflicting = proposal.get("conflicting_count", 0) > 0 or bool(proposal.get("tied"))   # anchors disagree
         policy = CONFIG.get("camera_time_and_timezone_policy") or {}
 
         ud = prior_cell.get("user_decision") or {}

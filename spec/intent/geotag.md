@@ -269,3 +269,32 @@ however it was reached there — and the configured default only where none has.
 A photo moved to another destination SHALL be decided under that destination's timezone and clock offset, nothing of
 its old destination carried with it.
 :::
+
+
+## 19. Clock offsets from the camera's own GPS
+
+:::{rul} A track anchors a clock only within the plausible error
+:id: RUL-anchor_within_clock_error
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: geotag-clock-error-window-1, geotag-window-tz-independent-1
+:uses: DEF-tracks
+
+A track SHALL anchor a camera's clock only at times within the largest clock error the configuration allows of the
+camera's own time, whatever timezone the camera was set to.
+:::
+
+:::{rul} The offset is the one most photos agree on
+:id: RUL-anchor_consensus
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: geotag-consensus-cluster-1
+:refines: RUL-offset_from_own_evidence
+
+The offset proposed from a camera's GPS SHALL be the one the most of its photos agree on — each photo counting every
+time the tracks passed where it was taken — never an average, and never one photo's closest match outvoting the rest.
+:::

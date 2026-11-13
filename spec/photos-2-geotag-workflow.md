@@ -931,23 +931,20 @@ A native-GPS photo may produce a time-anchor proposal if either:
 1. its native GPS position is close enough to a GPX point with a known timestamp; or
 2. its native GPS position lies close enough to a GPX segment between two GPX points that are close enough in time.
 
-The relevant thresholds must be defined in the workspace config, for example:
+The thresholds are set in the workspace config `photos-00-config.json`, and take part in dependency fingerprints:
 
-1. maximum distance to GPX point;
-2. maximum distance to GPX segment;
-3. maximum duration between the two GPX points forming a segment;
-4. maximum segment length;
-5. ambiguity policy when multiple possible GPX matches exist;
-6. minimum evidence required for auto-proposal;
-7. maximum allowed offset spread between supporting anchors.
-
-These thresholds are config-driven and several already have homes in the workspace config `photos-00-config.json`, for example `gpx_direct_match_max_seconds` (point match), `gpx_interpolation_max_gap_seconds` and `gpx_interpolation_max_distance_meters` (segment match), and `gpx_root` for the GPX folder. The list above is the conceptual set; the concrete keys live in config and participate in dependency fingerprints.
+1. `gpx_anchor_max_point_distance_meters` — the farthest a photo may be from a track point that anchors it;
+2. `gpx_anchor_max_segment_distance_meters` — the farthest it may be from a segment that anchors it;
+3. `gpx_interpolation_max_gap_seconds` — the longest time between the two points of a segment, and between two matches of one pass;
+4. `gpx_anchor_offset_spread_max_seconds` — how far apart two anchors' offsets may be and still agree;
+5. `gpx_anchor_max_clock_error_seconds` — the plausible-clock-error window below;
+6. `multi_anchor_auto_apply` and `single_anchor_auto_apply` — the evidence an agreed offset needs to apply itself (Section 9.1).
 
 **Plausible-clock-error window (eligibility).** A candidate anchors a frame only if its GPX timestamp is within a configured window (`gpx_anchor_max_clock_error_seconds`, default 2 days) of the frame's naive capture time read as UTC. This is applied *during* the spatial search, so a track that merely passes through the **same place on a different trip** — e.g. the same spot years earlier — is skipped even when it is the spatially closest point, instead of winning on distance and yielding an absurd multi-year "offset". The window is deliberately wide (it must cover whatever timezone the camera clock was set to, ±14 h, plus drift) yet far below the gap to any realistic prior visit; a genuinely huge clock error (a battery-reset clock) falls outside it and is left to a manual offset. It is **timezone-independent on purpose**: the offset already folds in whatever timezone the camera clock was set to, which is *not* necessarily the destination's civil timezone (a camera left on home time while travelling), so the destination timezone must **not** be used to bound matching.
 
 ### 19.2 Ranking, not averaging
 
-If multiple native-GPS/GPX time-anchor candidates exist for the same **(camera group, destination)**, the workflow must not average them.
+A photo yields one candidate for each **pass** of the tracks by the place it was taken — a run of matches with no gap longer than `gpx_interpolation_max_gap_seconds` — so the same walk on two days, or a place visited morning and evening, gives one candidate per visit. If multiple native-GPS/GPX time-anchor candidates exist for the same **(camera group, destination)**, the workflow must not average them.
 
 Instead, it should:
 
@@ -966,7 +963,7 @@ Supporting candidates confirm that the selected offset is plausible.
 
 Conflicting candidates trigger user review.
 
-**Consensus over a lone closest match.** Because a camera's clock error is essentially constant across a destination, the eligible candidates' offsets are clustered (within `gpx_anchor_offset_spread_max_seconds`) and the **largest agreeing cluster wins** — the recommended offset is that cluster's best-ranked member, with point-before-segment then closest as the *within-cluster* tiebreak. This keeps a single spurious match from outvoting the crowd: candidates inside the chosen cluster are the supporting evidence, those outside are the conflicting evidence. The proposal also carries, for the editor's collapsed view, a `groups` summary (each cluster's offset, its photo **count**, and one **representative** photo named by its full by-dest relative path, with that photo's GPX-derived real-UTC so the editor can show its corrected local time) and a `skipped` summary (frames that produced no in-window match, split into `outside_time_window` — a track only from another trip — vs `no_nearby_track`), so the operator sees a few grouped proposals instead of every anchor.
+**Consensus over a lone closest match.** Because a camera's clock error is essentially constant across a destination, the eligible candidates' offsets are clustered (within `gpx_anchor_offset_spread_max_seconds`) and the **cluster the most photos support wins** — each photo counted once, however many of its passes fall in it — the recommended offset being that cluster's best-ranked member, with point-before-segment then closest as the *within-cluster* tiebreak. The same route walked on two days is thereby settled by the photos only one day's track explains; when nothing tells two clusters apart, the smaller clock error is recommended and the anchors count as disagreeing, so it waits for review. This keeps a single spurious match from outvoting the crowd: candidates inside the chosen cluster are the supporting evidence, those outside are the conflicting evidence. The proposal also carries, for the editor's collapsed view, a `groups` summary (each cluster's offset, its photo **count**, and one **representative** photo named by its full by-dest relative path, with that photo's GPX-derived real-UTC so the editor can show its corrected local time) and a `skipped` summary (frames that produced no in-window match, split into `outside_time_window` — a track only from another trip — vs `no_nearby_track`), so the operator sees a few grouped proposals instead of every anchor.
 
 ### 19.3 Human decision fields for time-anchor proposals
 
@@ -999,7 +996,6 @@ Example shape:
   },
   "user_decision": {
     "accept_proposal": false,
-    "manual_real_utc": "",
     "manual_offset_seconds": ""
   },
   "effective_time_anchor": "",
@@ -1017,7 +1013,7 @@ When a `(camera group, destination, date)` bucket has **no** GPX self-anchor (Se
 offset = -(civil timezone's UTC offset at the bucket's earliest naive instant)
 ```
 
-computed DST-aware via `zoneinfo` — so a destination revisited in summer and winter yields the summer or winter offset **per day bucket** (Section 10.2 rule 4), each derived from its own date's local instant. The proposal carries `proposal_source: "timezone_naive"`, the chosen `proposed_offset_seconds`, a `proposed_real_utc`, and `proposed_from_timezone`. It is **confirmable-only** (`confidence: review_required`, never auto-applied) because the local-clock assumption can be wrong — a camera left on home time gives a wrong offset — so the operator reviews it like any non-anchor proposal. It ranks directly **above** manual-required (there is no inherited offset — offsets do not cascade). It needs the timezone first, so the operator resolves the destination timezone and re-runs to obtain it; until then the bucket is `manual_required` and the editor says so.
+computed DST-aware via `zoneinfo` — so a destination revisited in summer and winter yields the summer or winter offset **per day bucket** (Section 10.2 rule 4), each derived from its own date's local instant. The proposal carries `proposal_source: "timezone_naive"`, the chosen `proposed_offset_seconds`, a `proposed_real_utc`, and `proposed_from_timezone`. It is **confirmable-only** (`confidence: review_required`, never auto-applied) because the local-clock assumption can be wrong — a camera left on home time gives a wrong offset — so the operator reviews it like any non-anchor proposal. It ranks directly **above** manual-required (there is no inherited offset — offsets do not cascade). It needs the destination's timezone; one with no proposal waits for a zone written by hand and a re-run, and until then the bucket is `manual_required` and the editor says so.
 
 ---
 

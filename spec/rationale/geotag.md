@@ -193,3 +193,29 @@ A photo's true time and its name come from its destination's timezone and from t
 there. A photo is moved to fix a mis-sort; carrying its old destination's answers with it would keep the mistake in
 its time and its name, now hidden under the right folder.
 :::
+
+
+## 19. Clock offsets from the camera's own GPS
+
+:::{rat} The same place on another trip is not evidence
+:id: RAT-clock_error_window
+:status: seed
+:justifies: RUL-anchor_within_clock_error
+
+A track is matched to a photo by place, and places are revisited: the spot a photo was taken may lie on a track from
+years before. Closest by distance, that track would "correct" the camera by years. A camera's clock is wrong by its
+zone and its drift — hours, not years — so only track times that close to the camera's own count. The window cannot
+be the destination's zone: the camera may have been left on home time, and that is exactly what the offset corrects.
+:::
+
+:::{rat} Agreement is the evidence
+:id: RAT-anchor_agreement
+:status: seed
+:justifies: RUL-anchor_consensus
+
+A camera's clock is wrong by the same amount all day, so every photo it took with a position agrees on the offset —
+and the offset is what they agree on. One photo's closest match can be a coincidence: the same walk on the day before,
+a hotel passed morning and evening. Counting every pass by each photo's place, the true offset is the one every photo
+supports, a coincidence the one only some do. An average of disagreeing offsets is supported by no photo at all. When
+nothing tells two offsets apart, the photos do not say which is right, and the user must.
+:::

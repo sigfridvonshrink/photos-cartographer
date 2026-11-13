@@ -156,3 +156,35 @@ the proposal took effect without the user, `decision_mode: "auto_resolved"`. Des
 each takes the `effective_iana_timezone` of its nearest ancestor that has one, `6-photos-by-dest` itself the first,
 from `default_folder_timezone`.
 :::
+
+
+## 19. Clock offsets from the camera's own GPS
+
+:::{bld} How anchors are matched and agreed
+:id: BLD-anchor_matching
+:status: seed
+:realises: RUL-anchor_within_clock_error, RUL-anchor_consensus, RUL-anchor_offset_auto_as_configured
+:aliases: geotag-anchor-matching-1, geotag-conflict-triggers-review-1
+
+For each native-GPS photo of a (camera group, destination, day) bucket, `frame_candidates` SHALL take every track
+point within `gpx_anchor_max_point_distance_meters` of it and every segment — two consecutive points at most
+`gpx_interpolation_max_gap_seconds` apart — within `gpx_anchor_max_segment_distance_meters`, each at a time within
+`gpx_anchor_max_clock_error_seconds` of the photo's camera time read as UTC; split them into passes where more than
+`gpx_interpolation_max_gap_seconds` separates two in time; and keep each pass's best, a point before a segment, then the
+closest. `infer_anchor_proposal` clusters the candidates' offsets within `gpx_anchor_offset_spread_max_seconds` and
+proposes the cluster the most photos support, a tie going to the smaller offset, its best-ranked candidate the
+representative; its confidence is `review_required` when a photo supports no pass of it or another cluster ties
+(`tied`), else `high` when another photo supports it or it is a point match, else `medium`. Only an agreed offset — no
+conflicting photo, no tie — applies itself, under `multi_anchor_auto_apply` or `single_anchor_auto_apply`.
+:::
+
+:::{bld} The offset derived from the timezone
+:id: BLD-timezone_naive_offset
+:status: seed
+:realises: RUL-offset_from_own_evidence, RUL-other_proposals_need_acceptance
+:aliases: geotag-tz-derived-offset-calc-1
+
+A bucket with no anchor and a destination timezone SHALL be proposed the offset −(the timezone's UTC offset at the
+bucket's earliest camera time), daylight saving included, as `proposal_source: "timezone_naive"` with
+`proposed_offset_seconds`, `proposed_real_utc` and `proposed_from_timezone`; it takes effect only once accepted.
+:::
