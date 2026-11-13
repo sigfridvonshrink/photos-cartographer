@@ -425,7 +425,7 @@ its `status` is `success`, `partial` (anything outstanding, a mismatch always), 
 
 :::{bld} What finalize checks first
 :id: BLD-finalize_preconditions
-:status: seed
+:status: ruled
 :realises: RUL-finalize_requires_success
 
 `geotag finalize` SHALL refuse, writing nothing, unless `photos-24-executable-plan.json` is `ready`,

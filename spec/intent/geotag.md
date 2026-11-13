@@ -512,7 +512,7 @@ the user accepts the new content.
 
 :::{rul} Finalize packages only an execution that succeeded and still holds
 :id: RUL-finalize_requires_success
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
