@@ -115,6 +115,7 @@ This applies to every JSON artifact in the geotag dependency graph, including th
 ```text
 photos-11-handoff.json   (upstream input, produced by prep)
 photos-21-time-decisions.json
+photos-22-gps-drift-validation.json
 photos-23-gps-decisions.json
 photos-24-executable-plan.json
 photos-25-execution-summary.json
@@ -148,7 +149,10 @@ For example, `photos-24-executable-plan.json` must directly include dependencies
 10. metadata field-set version;
 11. media file preconditions;
 12. filename-format config fingerprint;
-13. planned operation fingerprint.
+13. planned operation fingerprint;
+14. the code fingerprint (shared contract, `RUL-plan_carried_out_by_its_code`);
+15. camera-group key version;
+16. folder-names and media-extensions fingerprints.
 
 It must not merely say:
 

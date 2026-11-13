@@ -520,11 +520,11 @@ and `photos-24-executable-plan.json`, and checked before each is used.
 
 :::{bld} Each phase's dependencies, in full
 :id: BLD-phase_dependencies
-:status: ruled
+:status: seed
 :realises: INV-no_stale_use
 
 Each phase SHALL record a record's dependencies in its `depends_on` block and check them before use, as its own spec
-states in full: prep in {need}`BLD-prep_dependencies`; geotag §3–§6; merge §10.3. The cascade consumes media by content fingerprints, records by byte
+states in full: prep in {need}`BLD-prep_dependencies`; geotag in {need}`BLD-geotag_dependencies`; merge in {need}`BLD-merge_plan`. The cascade consumes media by content fingerprints, records by byte
 hashes, and the field-scoped configuration fingerprints ({need}`DEF-config_areas`) that keep staleness surgical.
 :::
 

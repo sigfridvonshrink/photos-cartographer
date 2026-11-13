@@ -26,3 +26,21 @@ Geotag's preflight for `plan` SHALL block on every handoff record of a photo und
 `metadata_status.has_timestamp` — or, failing it, the `has_timestamp` of its `parsed_json` — is false, naming the
 photos and `2-missing-metadata`.
 :::
+
+## 3. Artifact dependencies
+
+:::{bld} Geotag's dependencies, recorded and checked
+:id: BLD-geotag_dependencies
+:status: seed
+:realises: RUL-geotag_plan_carries_every_dependency, INV-no_stale_use, RUL-hash_is_the_dependency_check, RUL-handoff_verified_by_content
+:aliases: geotag-transitive-verify-1, geotag-summary-not-dependency-1
+
+`photos-24-executable-plan.json` SHALL record in `depends_on` the SHA-256 of `photos-21`, `photos-22` and `photos-23`;
+the handoff's `content_fingerprint`; `config_fingerprint`, `code_fingerprint`, `camera_group_fingerprint`,
+`camera_group_key_version`, `gpx_fingerprint`, `metadata_field_set_version`, `filename_format_fingerprint`,
+`folders_fingerprint` and `media_extensions_fingerprint`; `resolved_utc_cache_fingerprint` and
+`prep_cache_fingerprint`; each photo's `media_preconditions`; and `planned_operation_fingerprint`. Execute recomputes
+all but the two cache fingerprints — vouched for by the records and handoff they were derived from, checked where they
+are made — before any change, and each photo's preconditions as it applies it. `photos-25-execution-summary.json` is
+never checked as a dependency.
+:::
