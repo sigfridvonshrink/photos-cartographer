@@ -191,3 +191,20 @@ A bucket with no anchor and a destination timezone SHALL be proposed the offset 
 bucket's earliest camera time), daylight saving included, as `proposal_source: "timezone_naive"` with
 `proposed_offset_seconds`, `proposed_real_utc` and `proposed_from_timezone`; it takes effect only once accepted.
 :::
+
+## 20. The decision records
+
+:::{bld} What every decision record carries
+:id: BLD-decision_record_envelope
+:status: seed
+:realises: RUL-decision_stage_writes_record, INV-no_stale_use
+:aliases: geotag-config-change-restales-21-1
+
+`photos-21-time-decisions.json`, `photos-22-gps-drift-validation.json` and `photos-23-gps-decisions.json` SHALL each
+carry `artifact_type`, `artifact_name`, `status` — `requires_user_input` or `complete` — `requires_user_input`, true
+when any of its cells needs the user, `executable: false`, `depends_on`, and, when complete, `decision_mode`:
+`no_op_or_auto_resolved` for photos-21 and photos-23, `no_op_or_confirmed` for photos-22. The `depends_on` of photos-21
+holds the handoff's content fingerprint, `camera_time_policy_fingerprint` — over the whole
+`camera_time_and_timezone_policy`, the camera groups' classes included — `gpx_fingerprint` and
+`camera_group_key_version`.
+:::

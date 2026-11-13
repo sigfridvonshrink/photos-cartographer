@@ -314,3 +314,26 @@ def test_build_drift_validation_leaves_photos21_byte_unmutated(tmp_path):
     # the in-memory photos-21 cell is likewise not mutated by the drift build
     assert art["destinations"][DRIFT_DEST]["camera_group_time_decisions"][CAM][
         "effective_time_anchor"] == {"offset_seconds": 0, "source": "manual"}
+
+
+@pytest.mark.spec("BLD-decision_record_envelope", "INV-no_stale_use",
+                  test="TST-geotag_time_decisions-classifying_a_camera_again_restales_the_time_decisions")
+def test_classifying_a_camera_again_restales_the_time_decisions(tmp_path, monkeypatch):
+    # The record says what it is and what it was made from; classing the camera a phone changes that, and the
+    # record follows: no offset cell, complete, nothing asked.
+    ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
+             device_groups={"fixed_clock_cameras": [CAM], "phones": []}, default_tz="Europe/Brussels")
+    assert _run(monkeypatch, ws) == 0
+    before = _artifact(ws)
+    assert {k: before[k] for k in ("artifact_type", "artifact_name", "status", "requires_user_input", "executable")} == \
+        {"artifact_type": "time_decisions", "artifact_name": "photos-21-time-decisions.json",
+         "status": "requires_user_input", "requires_user_input": True, "executable": False}
+    cfg_p = ws / ".photos-ingest" / "photos-00-config.json"
+    cfg = json.loads(cfg_p.read_text())
+    cfg["camera_time_and_timezone_policy"]["device_groups"] = {"fixed_clock_cameras": [], "phones": [CAM]}
+    cfg_p.write_text(json.dumps(cfg))
+    assert _run(monkeypatch, ws) == 0
+    after = _artifact(ws)
+    assert after["depends_on"]["camera_time_policy_fingerprint"] != before["depends_on"]["camera_time_policy_fingerprint"]
+    assert after["destinations"]["6-photos-by-dest/Brussels"]["camera_group_time_decisions"] == {}
+    assert after["status"] == "complete" and after["decision_mode"] == "no_op_or_auto_resolved"
