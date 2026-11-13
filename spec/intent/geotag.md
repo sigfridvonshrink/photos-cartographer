@@ -134,7 +134,7 @@ from the destination it lies in — SHALL take effect only once the user accepts
 
 :::{def} A destination
 :id: DEF-destination
-:status: seed
+:status: ruled
 :uses: DEF-managed_folders
 :aliases: geotag-destination-definition-1
 
@@ -144,7 +144,7 @@ photos is a destination of its own.
 
 :::{def} A container destination
 :id: DEF-container_destination
-:status: seed
+:status: ruled
 :uses: DEF-destination
 :aliases: geotag-container-destination-1
 
@@ -154,7 +154,7 @@ photos by destination itself among them, when it holds no photo directly.
 
 :::{rul} One clock offset per camera, destination and day
 :id: RUL-offset_per_camera_destination_day
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :uses: DEF-geotag, DEF-destination, DEF-camera_group
@@ -166,7 +166,7 @@ camera's own clock — a container destination, holding no photo, having none.
 
 :::{rul} An offset is proposed from its own evidence only
 :id: RUL-offset_from_own_evidence
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -180,7 +180,7 @@ it.
 
 :::{rul} A container destination never waits for the user
 :id: RUL-container_never_waits
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :uses: DEF-container_destination
