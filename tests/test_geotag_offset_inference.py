@@ -19,7 +19,7 @@ coverage: the pure helpers directly (point/segment matching, projection clamping
 conflict detection) plus the end-to-end offset cell (auto-resolution, accept, manual). From
 conftest.py.
 """
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from _handoff import match_disk
@@ -170,7 +170,7 @@ def test_proposal_skips_unmatched_frames():
 WCFG = dict(CFG, gpx_anchor_max_clock_error_seconds=172800.0)   # 2-day window
 
 
-@pytest.mark.spec("geotag-clock-error-window-1")
+@pytest.mark.spec("geotag-clock-error-window-1", test="TST-geotag_offset_inference-window_rejects_same_place_other_year")
 def test_window_rejects_same_place_other_year():
     # the SAME spot has a point this trip and one 13 years earlier; the old one would win on distance
     # (a tie at 0 m, listed first) but is out of the window, so the recent point anchors instead.
@@ -180,7 +180,7 @@ def test_window_rejects_same_place_other_year():
     assert c is not None and c["offset_seconds"] == -7200        # 2024 point, not a ~13-year "offset"
 
 
-@pytest.mark.spec("geotag-window-tz-independent-1")
+@pytest.mark.spec("geotag-window-tz-independent-1", test="TST-geotag_offset_inference-clock_error_window_is_timezone_independent")
 def test_clock_error_window_is_timezone_independent():
     """§19.1: the clock-error matching window reads the frame's naive time AS UTC; the destination
     timezone is never used to bound matching. The matcher takes no timezone, and decorating the frame
@@ -211,7 +211,7 @@ def test_window_out_of_window_is_skipped_with_reason():
     assert cal._frame_skip_reason(far, gpx, WCFG) == "no_nearby_track"
 
 
-@pytest.mark.spec("geotag-consensus-cluster-1")
+@pytest.mark.spec("geotag-consensus-cluster-1", test="TST-geotag_offset_inference-consensus_majority_beats_closer_minority")
 def test_consensus_majority_beats_closer_minority():
     # three frames agree on +3600; a fourth exact match says 0 -> the crowd wins, the loner conflicts
     gpx = _gpx([_pt(50.0, 4.0, _utc(15, 0, 0)), _pt(51.0, 5.0, _utc(15, 0, 0)),
@@ -416,3 +416,64 @@ def test_cell_accept_timezone_derived_resolves():
 def test_cell_no_timezone_is_manual_required():
     cell, _ = _tzcell({}, tz=None, rep_naive="2024:07:03 14:00:00")
     assert cell["proposal"] == {"proposal_source": "manual_required"}
+
+
+# --- the same place on several passes: consecutive days, repeated visits ------------------------
+
+def _route_days(days, extra=()):
+    """The same walk through Bruges on each of `days` (July), one point every 10 min from 09:00 UTC, the
+    first day's track a hair closer to the photo spots; plus `extra` (day, lat, lon, minute) points."""
+    route = [(51.2080 + i * 0.0005, 3.2240 + i * 0.0005) for i in range(10)]
+    pts = []
+    for n, day in enumerate(days):
+        nudge = 0.00001 if n == 0 else 0.00004
+        for i, (la, lo) in enumerate(route):
+            pts.append(_pt(la + nudge, lo, datetime(2024, 7, day, 9, 10 * i, tzinfo=timezone.utc) if i < 6
+                           else datetime(2024, 7, day, 10, 10 * (i - 6), tzinfo=timezone.utc), f"day{day}.gpx", i))
+    for day, la, lo, minute in extra:
+        pts.append(_pt(la, lo, datetime(2024, 7, day, 11, minute, tzinfo=timezone.utc), f"day{day}.gpx", 99))
+    return route, _gpx(sorted(pts, key=lambda p: p.time_utc))
+
+
+def _photo(lat, lon, real_utc, i):
+    cam = real_utc.replace(tzinfo=None) + timedelta(hours=2)        # camera on local time: offset -7200
+    return _frame(lat, lon, cam.strftime("%Y:%m:%d %H:%M:%S"), rel=f"6-photos-by-dest/Bruges/p{i}.jpg")
+
+
+@pytest.mark.spec("RUL-anchor_consensus", "BLD-anchor_matching",
+                  test="TST-geotag_offset_inference-each_pass_by_a_place_is_a_candidate")
+def test_each_pass_by_a_place_is_a_candidate():
+    route, gpx = _route_days([3, 4])
+    f = _photo(*route[2], datetime(2024, 7, 4, 9, 20, tzinfo=timezone.utc), 2)
+    cands = cal.frame_candidates(f, gpx, WCFG)
+    assert [c["gpx_file"] for c in cands] == ["day3.gpx", "day4.gpx"]        # one per visit, in time order
+    assert [c["offset_seconds"] for c in cands] == [-7200 - 86400, -7200]
+    assert cal.match_frame_to_gpx(f, gpx, WCFG)["gpx_file"] == "day3.gpx"   # the closest alone: the wrong day
+
+
+@pytest.mark.spec("RUL-anchor_consensus", "BLD-anchor_matching",
+                  test="TST-geotag_offset_inference-a_place_walked_on_two_days_takes_the_photos_day")
+def test_a_place_walked_on_two_days_takes_the_photos_day():
+    # Photos of 4 July along a route also walked on 3 July — whose track passes closer — plus one spot only
+    # the 4 July track knows: every photo supports the 4 July offset, so it wins outright and applies itself.
+    route, gpx = _route_days([3, 4], extra=[(4, 51.2200, 3.2400, 0)])
+    frames = [_photo(*route[i], datetime(2024, 7, 4, 9, 10 * i, tzinfo=timezone.utc), i) for i in (1, 3, 5)]
+    frames.append(_photo(51.2200, 3.2400, datetime(2024, 7, 4, 11, 0, tzinfo=timezone.utc), 9))
+    p = cal.infer_anchor_proposal(frames, gpx, WCFG)
+    assert p["proposed_offset_seconds"] == -7200 and p["confidence"] == "high"
+    assert p["tied"] is False and p["conflicting_count"] == 0 and p["supporting_count"] == 3
+    assert {a["gpx_match"]["gpx_file"] for a in p["anchors"]} == {"day4.gpx"}
+    assert [g["count"] for g in p["groups"]] == [4, 3]                      # 4 July: all four; 3 July: three
+
+
+@pytest.mark.spec("RUL-anchor_consensus", "RUL-anchor_offset_auto_as_configured", "BLD-anchor_matching",
+                  test="TST-geotag_offset_inference-two_days_nothing_tells_apart_wait_for_review")
+def test_two_days_nothing_tells_apart_wait_for_review(monkeypatch):
+    # The same route on two days and no photo only one day explains: the smaller clock error is proposed,
+    # but as a disagreement — it never applies itself.
+    route, gpx = _route_days([3, 4])
+    frames = [_photo(*route[i], datetime(2024, 7, 4, 9, 10 * i, tzinfo=timezone.utc), i) for i in (1, 3, 5)]
+    p = cal.infer_anchor_proposal(frames, gpx, WCFG)
+    assert p["proposed_offset_seconds"] == -7200 and p["tied"] is True and p["confidence"] == "review_required"
+    cell, _ = _cell({}, frames, gpx, multi=True)
+    assert cell["requires_user_input"] is True and cell["effective_time_anchor"] == ""
