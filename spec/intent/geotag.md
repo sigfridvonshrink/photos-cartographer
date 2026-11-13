@@ -194,7 +194,7 @@ A container destination's decisions SHALL never wait for the user.
 
 :::{rul} A track point's time is the instant it states
 :id: RUL-track_time_never_guessed
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -206,7 +206,7 @@ with — never guessing the zone of one that states none.
 
 :::{rul} A track point geotag cannot use is reported
 :id: RUL-unreadable_point_reported
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :uses: DEF-tracks

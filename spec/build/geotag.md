@@ -116,7 +116,7 @@ destination's path under `6-photos-by-dest`, every decision of a destination ins
 
 :::{bld} How track points are read
 :id: BLD-track_points
-:status: seed
+:status: ruled
 :realises: RUL-track_time_never_guessed, RUL-unreadable_point_reported
 :aliases: geotag-gpx-time-xsd-datetime-1, geotag-gpx-rejected-points-reported-1
 
