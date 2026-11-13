@@ -32,8 +32,15 @@ A local web UI to author the geotag decision JSON. The contract only requires th
 fields edited (and that the editor write *only* those — that part is spec); *how* they are edited is
 affordance.
 
-- **Clock offset = three mutually-exclusive click-to-activate modes**, with an impact line showing
-  camera → corrected local — not a free-text field (#109, #112).
+- **Clock offset = two mutually-exclusive choices** — accept the proposal, or an offset of your own, typed on
+  an h/m/s spinner or picked as the anchor photo's real time (both store `manual_offset_seconds`) — with an
+  impact line showing camera → corrected local; not a free-text field (#109, #112).
+- **A GPS proposal's correction groups are choices**: each names its track file and the corrected date, and
+  "use this" picks it in one click for every day bundled with it (the recommended group is "accept"). A tie
+  between visits gets one line asking for the day the user was there, and photos agreeing with no group are
+  named — five at most — with how to read them: scattered, their own positions are off; the last of the
+  day, the camera's clock changed. Code site `offsetProposalBlock` / `groupChoice` / `proposalNotes` in
+  `web/app.js`, tested in `app_offset_buckets.test.mjs`.
 - **Per-date offset buckets**: grouped, collapsible, fan-out edit (#115).
 - **GPS panel**: a single lat/lon field, Google-Maps paste that commits + jumps the map, multi-select,
   seed-the-next-photo-from-the-last-pick, map placed above the photo (#117–#122, #132).

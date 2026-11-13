@@ -4,7 +4,7 @@
   "decision_mode": "no_op_or_auto_resolved",
   "depends_on": {
     "camera_group_key_version": 1,
-    "camera_time_policy_fingerprint": "b4408eeca864f42363502993eca77b997d45bfc985a983448b670a31373ac006",
+    "camera_time_policy_fingerprint": "3725c1a90c0a546ba785f9c1980caadacc3ac137b54d79b3c9b1bcdac5a58565",
     "gpx_fingerprint": "example-gpx-fingerprint",
     "handoff": {
       "artifact_name": "photos-11-handoff.json",
@@ -39,7 +39,7 @@
           "camera_group_class": "camera",
           "effective_time_anchor": {
             "offset_seconds": -7200,
-            "source": "manual"
+            "source": "gpx_anchor_chosen"
           },
           "proposal": {
             "anchor_count": 2,
@@ -79,27 +79,32 @@
             ],
             "confidence": "review_required",
             "conflicting_count": 1,
+            "conflicting_files": [
+              "6-photos-by-dest/Conflict/c2.arw"
+            ],
             "groups": [
-              {
-                "count": 1,
-                "offset_seconds": -18000,
-                "representative": {
-                  "camera_source_naive_time": "2024:07:03 14:00:00",
-                  "distance_m": 0.0,
-                  "match_type": "gpx_point_match",
-                  "real_utc": "2024-07-03T09:00:00Z",
-                  "source_file": "6-photos-by-dest/Conflict/c2.arw"
-                }
-              },
               {
                 "count": 1,
                 "offset_seconds": -7200,
                 "representative": {
                   "camera_source_naive_time": "2024:07:03 14:00:00",
                   "distance_m": 0.0,
+                  "gpx_file": "trip-2024-07-03.gpx",
                   "match_type": "gpx_point_match",
                   "real_utc": "2024-07-03T12:00:00Z",
                   "source_file": "6-photos-by-dest/Conflict/c1.arw"
+                }
+              },
+              {
+                "count": 1,
+                "offset_seconds": -18000,
+                "representative": {
+                  "camera_source_naive_time": "2024:07:03 14:00:00",
+                  "distance_m": 0.0,
+                  "gpx_file": "trip-2024-07-03.gpx",
+                  "match_type": "gpx_point_match",
+                  "real_utc": "2024-07-03T09:00:00Z",
+                  "source_file": "6-photos-by-dest/Conflict/c2.arw"
                 }
               }
             ],
@@ -118,7 +123,8 @@
               "no_nearby_track": 0,
               "outside_time_window": 0
             },
-            "supporting_count": 0
+            "supporting_count": 0,
+            "tied": true
           },
           "requires_user_input": false,
           "stale_user_decision": false,
@@ -132,6 +138,108 @@
         "CAM|conflict|C"
       ],
       "destination_path": "6-photos-by-dest/Conflict",
+      "destination_timezone": {
+        "decision_mode": "auto_resolved",
+        "effective_iana_timezone": "Europe/Brussels",
+        "inherited_from": "6-photos-by-dest",
+        "proposal_confidence": "review_required",
+        "proposal_source": "inherited",
+        "proposed_iana_timezone": "Europe/Brussels",
+        "requires_user_input": false,
+        "stale_user_decision": false,
+        "user_decision": {
+          "manual_iana_timezone": ""
+        }
+      }
+    },
+    "6-photos-by-dest/Revisit": {
+      "camera_group_time_decisions": {
+        "CAM|revisit|R": {
+          "camera_group": "CAM|revisit|R",
+          "camera_group_class": "camera",
+          "effective_time_anchor": {
+            "offset_seconds": -93600,
+            "source": "gpx_anchor_chosen"
+          },
+          "proposal": {
+            "anchor_count": 1,
+            "anchors": [
+              {
+                "camera_source_naive_time": "2024:07:04 14:00:00",
+                "gpx_match": {
+                  "distance_m": 0.0,
+                  "gpx_file": "trip-2024-07-04.gpx",
+                  "match_type": "gpx_point_match",
+                  "segment_duration_seconds": null
+                },
+                "native_gps": {
+                  "lat": 56.0,
+                  "lon": 10.0
+                },
+                "proposal_id": "anchor-001",
+                "proposed_offset_seconds": -7200,
+                "source_file": "6-photos-by-dest/Revisit/r.arw"
+              }
+            ],
+            "confidence": "review_required",
+            "conflicting_count": 0,
+            "conflicting_files": [],
+            "groups": [
+              {
+                "count": 1,
+                "offset_seconds": -7200,
+                "representative": {
+                  "camera_source_naive_time": "2024:07:04 14:00:00",
+                  "distance_m": 0.0,
+                  "gpx_file": "trip-2024-07-04.gpx",
+                  "match_type": "gpx_point_match",
+                  "real_utc": "2024-07-04T12:00:00Z",
+                  "source_file": "6-photos-by-dest/Revisit/r.arw"
+                }
+              },
+              {
+                "count": 1,
+                "offset_seconds": -93600,
+                "representative": {
+                  "camera_source_naive_time": "2024:07:04 14:00:00",
+                  "distance_m": 0.0,
+                  "gpx_file": "trip-2024-07-03.gpx",
+                  "match_type": "gpx_point_match",
+                  "real_utc": "2024-07-03T12:00:00Z",
+                  "source_file": "6-photos-by-dest/Revisit/r.arw"
+                }
+              }
+            ],
+            "proposal_source": "gpx_self_anchor",
+            "proposed_offset_seconds": -7200,
+            "proposed_real_utc": "2024-07-04T12:00:00Z",
+            "rank": "recommended",
+            "recommended_gpx_match": {
+              "distance_m": 0.0,
+              "gpx_file": "trip-2024-07-04.gpx",
+              "match_type": "gpx_point_match",
+              "segment_duration_seconds": null
+            },
+            "skipped": {
+              "examples": [],
+              "no_nearby_track": 0,
+              "outside_time_window": 0
+            },
+            "supporting_count": 0,
+            "tied": true
+          },
+          "requires_user_input": false,
+          "stale_user_decision": false,
+          "user_decision": {
+            "accept_proposal": false,
+            "manual_offset_seconds": -93600
+          }
+        }
+      },
+      "camera_groups_present": [
+        "CAM|revisit|R"
+      ],
+      "destination_path": "6-photos-by-dest/Revisit",
       "destination_timezone": {
         "decision_mode": "auto_resolved",
         "effective_iana_timezone": "Europe/Brussels",
@@ -177,6 +285,7 @@
             ],
             "confidence": "medium",
             "conflicting_count": 0,
+            "conflicting_files": [],
             "groups": [
               {
                 "count": 1,
@@ -184,6 +293,7 @@
                 "representative": {
                   "camera_source_naive_time": "2024:07:03 14:00:15",
                   "distance_m": 33.36,
+                  "gpx_file": "trip-2024-07-03.gpx",
                   "match_type": "gpx_segment_interpolation",
                   "real_utc": "2024-07-03T12:00:15Z",
                   "source_file": "6-photos-by-dest/Segment/g.arw"
@@ -205,7 +315,8 @@
               "no_nearby_track": 0,
               "outside_time_window": 0
             },
-            "supporting_count": 0
+            "supporting_count": 0,
+            "tied": false
           },
           "requires_user_input": false,
           "stale_user_decision": false,
@@ -264,6 +375,7 @@
             ],
             "confidence": "high",
             "conflicting_count": 0,
+            "conflicting_files": [],
             "groups": [
               {
                 "count": 1,
@@ -271,6 +383,7 @@
                 "representative": {
                   "camera_source_naive_time": "2024:07:03 14:00:00",
                   "distance_m": 0.0,
+                  "gpx_file": "trip-2024-07-03.gpx",
                   "match_type": "gpx_point_match",
                   "real_utc": "2024-07-03T12:00:00Z",
                   "source_file": "6-photos-by-dest/SinglePoint/p.arw"
@@ -292,7 +405,8 @@
               "no_nearby_track": 0,
               "outside_time_window": 0
             },
-            "supporting_count": 0
+            "supporting_count": 0,
+            "tied": false
           },
           "requires_user_input": false,
           "stale_user_decision": false,

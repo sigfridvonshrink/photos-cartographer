@@ -162,8 +162,8 @@ from `default_folder_timezone`.
 
 :::{bld} How anchors are matched and agreed
 :id: BLD-anchor_matching
-:status: ruled
-:realises: RUL-anchor_within_clock_error, RUL-anchor_consensus, RUL-revisit_matched_to_its_day, RUL-indistinct_visits_wait, RUL-anchor_offset_auto_as_configured
+:status: seed
+:realises: RUL-anchor_within_clock_error, RUL-anchor_consensus, RUL-revisit_matched_to_its_day, RUL-indistinct_visits_wait, RUL-chosen_group_is_anchored, RUL-anchor_offset_auto_as_configured
 :aliases: geotag-anchor-matching-1, geotag-conflict-triggers-review-1
 
 For each native-GPS photo of a (camera group, destination, day) bucket, `frame_candidates` SHALL take every track
@@ -175,7 +175,10 @@ closest. `infer_anchor_proposal` clusters the candidates' offsets within `gpx_an
 proposes the cluster the most photos support, a tie going to the smaller offset, its best-ranked candidate the
 representative; its confidence is `review_required` when a photo supports no pass of it or another cluster ties
 (`tied`), else `high` when another photo supports it or it is a point match, else `medium`. Only an agreed offset — no
-conflicting photo, no tie — applies itself, under `multi_anchor_auto_apply` or `single_anchor_auto_apply`.
+conflicting photo, no tie — applies itself, under `multi_anchor_auto_apply` or `single_anchor_auto_apply`. The proposal
+names the photos no pass of which agrees (`conflicting_files`), and each cluster in `groups` with its photo count and a
+representative, its track file included; a `manual_offset_seconds` within `gpx_anchor_offset_spread_max_seconds` of a
+group's offset takes effect as `gpx_anchor_chosen`, which no drift check follows.
 :::
 
 :::{bld} The offset derived from the timezone

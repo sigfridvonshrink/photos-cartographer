@@ -322,3 +322,14 @@ visit's track because it passed closer.
 
 Where a camera's photos support two visits equally, its clock offset SHALL NOT take effect without the user's answer.
 :::
+
+:::{rul} An offset the camera's GPS supports is anchored, however chosen
+:id: RUL-chosen_group_is_anchored
+:status: seed
+:criticality: med
+:verify: required
+:refines: RUL-indistinct_visits_wait
+
+A clock offset the user sets that the camera's own GPS positions support SHALL count as anchored by them, as an
+accepted proposal does — never asked to be checked against the tracks again.
+:::

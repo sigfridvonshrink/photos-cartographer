@@ -4,7 +4,7 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **12** — 1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 13 and 14.* 🛑 Numbers are never reused; the next is **15**.
+*Open items: **13** — 1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 13, 14 and 15.* 🛑 Numbers are never reused; the next is **16**.
 
 ---
 
@@ -235,6 +235,21 @@ caught.
 new dependency — and propose it ahead of the inherited one, with a `proposal_source` of its own; decide whether such a
 proposal applies itself like the inherited one, or waits for acceptance, since unlike the tree it can disagree with
 the parent's zone.
+
+**When:** after the conversion (item 1) is complete.
+
+### 15. Split a day's clock offset where the camera's clock changed
+
+**Why:** geotag keeps one clock offset per camera, destination and day (`RUL-offset_per_camera_destination_day`). A
+camera whose clock is changed during the day at one destination — reset, or set to local time at lunch — has two
+offsets that day, and no single one fits: its anchored photos split into two groups, one of them reported as agreeing
+with none (`conflicting_files`). Today the user moves the photos after the change into a sub-folder and re-runs prep,
+changing the folder tree — and so the library — only to work around the limit.
+
+**What to do:** when the photos disagreeing with the agreed offset form one run in time at the start or end of the
+day, propose splitting that day's cell at the change: two offsets, each anchored from its own photos. The photos
+without GPS between the last of one run and the first of the other are the one ambiguity; the editor asks which was
+the first after the change. Rule the change to the per-day model first.
 
 **When:** after the conversion (item 1) is complete.
 

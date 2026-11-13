@@ -31,7 +31,7 @@ test("cellStatus maps the system flags", () => {
   assert.deepEqual(app.cellStatus({ effective_fallback: null }), ["none", "none"]);
 });
 
-test("wouldResolve: each of the three offset modes is independently sufficient", () => {
+test("wouldResolve: each of the two offset modes is independently sufficient", () => {
   const dest = "6-photos-by-dest/B", key = "CAM", ref = { file: "time", dest, kind: "offset", key };
   const mk = (ud, proposal = {}) => setWork(
     { time: { destinations: { [dest]: { camera_group_time_decisions: { [key]: { user_decision: ud, proposal } } } } } });
@@ -39,7 +39,8 @@ test("wouldResolve: each of the three offset modes is independently sufficient",
   mk({ manual_offset_seconds: -3600 });                                         assert.equal(app.wouldResolve(ref), true);
   mk({ accept_proposal: true }, { proposed_offset_seconds: -3600 });            assert.equal(app.wouldResolve(ref), true);
   mk({ accept_proposal: true }, {});                                            assert.equal(app.wouldResolve(ref), false);  // nothing to accept
-  mk({ manual_offset_seconds: 999999 });                                        assert.equal(app.wouldResolve(ref), false);  // out of range
+  mk({ manual_offset_seconds: 999999 });                                        assert.equal(app.wouldResolve(ref), true);   // any size
+  mk({ manual_offset_seconds: 1.5 });                                           assert.equal(app.wouldResolve(ref), false);  // not whole seconds
   mk({});                                                                       assert.equal(app.wouldResolve(ref), false);
 });
 

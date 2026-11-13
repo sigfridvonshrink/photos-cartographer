@@ -262,6 +262,7 @@
             ],
             "confidence": "high",
             "conflicting_count": 0,
+            "conflicting_files": [],
             "groups": [
               {
                 "count": 2,
@@ -269,6 +270,7 @@
                 "representative": {
                   "camera_source_naive_time": "2024:07:03 14:00:00",
                   "distance_m": 0.0,
+                  "gpx_file": "trip-2024-07-03.gpx",
                   "match_type": "gpx_point_match",
                   "real_utc": "2024-07-03T12:00:00Z",
                   "source_file": "6-photos-by-dest/Japan/anchor-1.arw"
@@ -290,7 +292,8 @@
               "no_nearby_track": 0,
               "outside_time_window": 0
             },
-            "supporting_count": 1
+            "supporting_count": 1,
+            "tied": false
           },
           "requires_user_input": false,
           "stale_user_decision": false,

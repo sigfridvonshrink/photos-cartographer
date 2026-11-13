@@ -54,15 +54,16 @@ test("wouldResolve(drift): confirmed (zero scrub or valid correction) resolves; 
   mk({ confirmed: true, corrected_offset_seconds: "" });        assert.equal(app.wouldResolve(ref), true);   // zero scrub
   mk({ confirmed: true, corrected_offset_seconds: -3600 });     assert.equal(app.wouldResolve(ref), true);   // correction
   mk({ confirmed: false, corrected_offset_seconds: "" });       assert.equal(app.wouldResolve(ref), false);  // inaction blocks
-  mk({ confirmed: true, corrected_offset_seconds: 999999 });    assert.equal(app.wouldResolve(ref), false);  // out of range
+  mk({ confirmed: true, corrected_offset_seconds: 12.5 });      assert.equal(app.wouldResolve(ref), false);  // not whole seconds
 });
 
-test("refInvalid(drift): only an out-of-range correction is invalid", () => {
+test("refInvalid(drift): only a correction that is not whole seconds is invalid", () => {
   const dest = "6-photos-by-dest/D", key = "CAM", ref = { file: "drift", dest, kind: "drift", key };
   const mk = (ud) => setWork({ drift: { destinations: { [dest]: { drift_decisions: { [key]: { user_decision: ud, proposal: {} } } } } } });
   mk({ confirmed: true, corrected_offset_seconds: "" });        assert.equal(app.refInvalid(ref), false);
   mk({ confirmed: true, corrected_offset_seconds: -7200 });     assert.equal(app.refInvalid(ref), false);
-  mk({ confirmed: true, corrected_offset_seconds: 1e9 });       assert.equal(app.refInvalid(ref), true);
+  mk({ confirmed: true, corrected_offset_seconds: 1e9 });       assert.equal(app.refInvalid(ref), false);  // any size
+  mk({ confirmed: true, corrected_offset_seconds: 0.25 });      assert.equal(app.refInvalid(ref), true);
 });
 
 test("cellStatus(drift): unconfirmed needs input, confirmed resolves", () => {

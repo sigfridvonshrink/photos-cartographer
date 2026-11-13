@@ -25,9 +25,9 @@ test("validTz accepts real IANA zones / empty, rejects bogus", () => {
   for (const bad of ["Nowhere/Nope", "xyz"]) assert.equal(app.validTz(bad), false);
 });
 
-test("validOffset is empty-or-number within ±86400", () => {
-  for (const ok of ["", null, 0, 86400, -86400, 3600]) assert.equal(app.validOffset(ok), true);
-  for (const bad of [86401, -86401, "x", true, NaN]) assert.equal(app.validOffset(bad), false);
+test("validOffset is empty-or-a-whole-number of seconds, of any size", () => {
+  for (const ok of ["", null, 0, 86400, -93600, 3600, 762000000]) assert.equal(app.validOffset(ok), true);
+  for (const bad of [1.5, "x", true, NaN]) assert.equal(app.validOffset(bad), false);
 });
 
 test("lat/lon ranges and bothOrNeither", () => {
