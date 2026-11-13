@@ -408,7 +408,7 @@ one, so long as the change maps one value to one.
 
 :::{rul} A photo's own position is kept
 :id: RUL-own_position_kept
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -418,7 +418,7 @@ Geotag SHALL never replace a photo's own GPS position.
 
 :::{rul} A photo is placed by the most specific source it has
 :id: RUL-placement_order
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-own_position_kept
@@ -430,7 +430,7 @@ leave it unlocated.
 
 :::{rul} A destination's fallback is the nearest one it lies in
 :id: RUL-fallback_from_nearest
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: geotag-fallback-inherit-1, geotag-fallback-parentfirst-1
@@ -442,7 +442,7 @@ has one.
 
 :::{rul} No destination waits on its fallback
 :id: RUL-fallback_optional
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :aliases: geotag-fallback-never-blocks-1

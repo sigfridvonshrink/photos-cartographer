@@ -312,7 +312,7 @@ it does not say so one for one, no photo's values can be told apart, and geotag 
 
 :::{rat} The camera measured where it was
 :id: RAT-own_position_best
-:status: seed
+:status: ruled
 :justifies: RUL-own_position_kept
 
 A position the camera wrote was measured where the photo was taken. Everything geotag can offer instead is derived —
@@ -322,7 +322,7 @@ the photo less right, not more.
 
 :::{rat} Most specific first
 :id: RAT-placement_most_specific_first
-:status: seed
+:status: ruled
 :justifies: RUL-placement_order
 
 Each source speaks for fewer photos than the one after it: a position the user set speaks for that photo alone, a track
@@ -333,7 +333,7 @@ unlocated.
 
 :::{rat} A place inside a place is near it
 :id: RAT-fallback_nested
-:status: seed
+:status: ruled
 :justifies: RUL-fallback_from_nearest
 
 A destination inside another lies within it, so the place set for the outer one is a fair guess for the inner one —
@@ -343,7 +343,7 @@ user has chosen to inherit, and a fallback changed above flows down to it, as a 
 
 :::{rat} A fallback is a convenience, not a gate
 :id: RAT-fallback_optional
-:status: seed
+:status: ruled
 :justifies: RUL-fallback_optional
 
 The fallback saves answering, photo by photo, for a folder the tracks miss. A destination whose photos the tracks all

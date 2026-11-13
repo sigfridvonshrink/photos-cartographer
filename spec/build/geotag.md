@@ -295,7 +295,7 @@ preflight.
 
 :::{bld} The placement order
 :id: BLD-placement_order
-:status: seed
+:status: ruled
 :realises: RUL-own_position_kept, RUL-placement_order
 :aliases: geotag-fallback-rank-1, geotag-fallback-is-manual-1
 
@@ -308,7 +308,7 @@ and undone like any manual position.
 
 :::{bld} The GPS decisions record
 :id: BLD-gps_decisions_record
-:status: seed
+:status: ruled
 :realises: RUL-placement_order, RUL-decision_fields_laid_out
 :aliases: geotag-23-paths-only-review-1, geotag-24-rederive-auto-gps-1
 
@@ -323,7 +323,7 @@ automatic position again from its own inputs.
 
 :::{bld} The folder-fallback cell
 :id: BLD-folder_fallback_cell
-:status: seed
+:status: ruled
 :realises: RUL-fallback_from_nearest, RUL-fallback_optional, RUL-other_proposals_need_acceptance
 
 Destinations SHALL be built parent first; each one's `folder_fallback` proposes, as `inherited` with `inherited_from`,
