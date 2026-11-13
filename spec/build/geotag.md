@@ -51,7 +51,7 @@ never checked as a dependency.
 
 :::{bld} Geotag's file model
 :id: BLD-geotag_file_model
-:status: seed
+:status: ruled
 :realises: RUL-geotag_changes_only_by_dest
 :aliases: geotag-inmemory-bydest-only-1
 

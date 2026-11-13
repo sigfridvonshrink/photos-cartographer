@@ -47,7 +47,7 @@ itself, every input is checked against what it is now, at the one moment that ma
 
 :::{rat} Only what the user sorted is ready
 :id: RAT-only_sorted_is_ready
-:status: seed
+:status: ruled
 :justifies: RUL-geotag_changes_only_by_dest
 
 A photo's destination is what geotag corrects it by: the timezone of the place, the offset of that camera on that

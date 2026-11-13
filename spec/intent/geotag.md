@@ -54,7 +54,7 @@ dependencies to vouch for what came before it.
 
 :::{rul} Geotag changes only the photos sorted into destinations
 :id: RUL-geotag_changes_only_by_dest
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
