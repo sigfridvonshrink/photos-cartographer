@@ -162,7 +162,7 @@ from `default_folder_timezone`.
 
 :::{bld} How anchors are matched and agreed
 :id: BLD-anchor_matching
-:status: seed
+:status: ruled
 :realises: RUL-anchor_within_clock_error, RUL-anchor_consensus, RUL-anchor_offset_auto_as_configured
 :aliases: geotag-anchor-matching-1, geotag-conflict-triggers-review-1
 
@@ -180,7 +180,7 @@ conflicting photo, no tie — applies itself, under `multi_anchor_auto_apply` or
 
 :::{bld} The offset derived from the timezone
 :id: BLD-timezone_naive_offset
-:status: seed
+:status: ruled
 :realises: RUL-offset_from_own_evidence, RUL-other_proposals_need_acceptance
 :aliases: geotag-tz-derived-offset-calc-1
 

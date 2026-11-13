@@ -275,7 +275,7 @@ its old destination carried with it.
 
 :::{rul} A track anchors a clock only within the plausible error
 :id: RUL-anchor_within_clock_error
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -288,7 +288,7 @@ camera's own time, whatever timezone the camera was set to.
 
 :::{rul} The offset is the one most photos agree on
 :id: RUL-anchor_consensus
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required

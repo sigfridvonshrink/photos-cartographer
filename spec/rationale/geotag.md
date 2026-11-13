@@ -199,7 +199,7 @@ its time and its name, now hidden under the right folder.
 
 :::{rat} The same place on another trip is not evidence
 :id: RAT-clock_error_window
-:status: seed
+:status: ruled
 :justifies: RUL-anchor_within_clock_error
 
 A track is matched to a photo by place, and places are revisited: the spot a photo was taken may lie on a track from
@@ -210,7 +210,7 @@ be the destination's zone: the camera may have been left on home time, and that 
 
 :::{rat} Agreement is the evidence
 :id: RAT-anchor_agreement
-:status: seed
+:status: ruled
 :justifies: RUL-anchor_consensus
 
 A camera's clock is wrong by the same amount all day, so every photo it took with a position agrees on the offset —
