@@ -57,7 +57,7 @@ test("clearing a folder fallback (the Clear button payload) resolves to none", (
 test("previewTz / previewFallback inherit from the nearest resolved ancestor", () => {
   setWork({
     time: { destinations: {
-      "6-photos-by-dest/Japan": { destination_timezone: { proposed_iana_timezone: "Asia/Tokyo", user_decision: { accept_proposed_timezone: true } } },
+      "6-photos-by-dest/Japan": { destination_timezone: { proposed_iana_timezone: "Asia/Tokyo", user_decision: { manual_iana_timezone: "Asia/Tokyo" } } },
       "6-photos-by-dest/Japan/Kyoto": { destination_timezone: { user_decision: {} } },
     } },
     gps: { destinations: {

@@ -226,8 +226,7 @@ def test_apply_edits_timezone_touches_only_user_decision():
     cell = art["destinations"][dest]["destination_timezone"]
     proposal_before = copy.deepcopy(cell.get("proposal"))
     n = serve._apply_edits(art, [{"dest": dest, "kind": "timezone",
-                                  "user_decision": {"accept_proposed_timezone": False,
-                                                    "manual_iana_timezone": "Asia/Tokyo"}}])
+                                  "user_decision": {"manual_iana_timezone": "Asia/Tokyo"}}])
     assert n == 1
     assert cell["user_decision"]["manual_iana_timezone"] == "Asia/Tokyo"
     assert cell.get("proposal") == proposal_before  # everything but user_decision is untouched
@@ -277,8 +276,7 @@ def test_save_round_trips_only_user_decision(tmp_path):
     ws = _workspace_with_fixtures(tmp_path)
     before = json.load(open(os.path.join(ws, serve.CONTROL, serve.TIME_NAME)))
     res = serve._save(ws, {"time": [{"dest": "6-photos-by-dest/Japan", "kind": "timezone",
-                                     "user_decision": {"accept_proposed_timezone": False,
-                                                       "manual_iana_timezone": "Asia/Tokyo"}}]})
+                                     "user_decision": {"manual_iana_timezone": "Asia/Tokyo"}}]})
     assert res == {"ok": True, "written": [serve.TIME_NAME]}
     after = json.load(open(os.path.join(ws, serve.CONTROL, serve.TIME_NAME)))
     edited = after["destinations"]["6-photos-by-dest/Japan"]["destination_timezone"]
@@ -470,8 +468,7 @@ def test_http_post_save_writes_to_workspace(tmp_path):
     with _running(ws) as base:
         status, data = _post_json(base + "/api/save", {
             "time": [{"dest": "6-photos-by-dest/Japan", "kind": "timezone",
-                      "user_decision": {"accept_proposed_timezone": False,
-                                        "manual_iana_timezone": "Asia/Tokyo"}}]})
+                      "user_decision": {"manual_iana_timezone": "Asia/Tokyo"}}]})
         assert status == 200 and data == {"ok": True, "written": [serve.TIME_NAME]}
     saved = json.load(open(os.path.join(ws, serve.CONTROL, serve.TIME_NAME)))
     cell = saved["destinations"]["6-photos-by-dest/Japan"]["destination_timezone"]

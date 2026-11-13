@@ -161,8 +161,6 @@ def scenario_trip():
     def fill_time(a):
         d = a["destinations"]
         d[JP]["destination_timezone"]["user_decision"]["manual_iana_timezone"] = "Asia/Tokyo"
-        for dp in (BD, PHO, BE, BR, BRU):
-            d[dp]["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
         d[BD]["camera_group_time_decisions"][CAM_B]["user_decision"]["manual_offset_seconds"] = 0
         d[BE]["camera_group_time_decisions"][CAM_B]["user_decision"]["manual_offset_seconds"] = 3600  # manual override
         d[BR]["camera_group_time_decisions"][CAM_B]["user_decision"]["accept_proposal"] = True  # accept tz-derived
@@ -171,10 +169,9 @@ def scenario_trip():
         return a
 
     def pre_time(a):
-        # Mid-workflow state for the requires-input fixture: the operator has resolved Brussels'
-        # timezone (so its per-date offset buckets surface DST-aware timezone_naive proposals to
-        # demo §10.2), but every offset — and all other timezones — is still pending.
-        a["destinations"][BRU]["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
+        # Mid-workflow state for the requires-input fixture: Brussels' timezone applies itself (so its
+        # per-date offset buckets surface DST-aware timezone_naive proposals to demo §10.2), but every
+        # offset is still pending.
         return a
 
     wf = _wf()
@@ -244,8 +241,6 @@ def scenario_offset_variants():
 
     def fill(a):
         d = a["destinations"]
-        for dp in (P, S, C, U):
-            d[dp]["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
         d[P]["camera_group_time_decisions"][CAM_PT]["user_decision"]["accept_proposal"] = True     # gpx_anchor_accepted (single)
         d[S]["camera_group_time_decisions"][CAM_SEG]["user_decision"]["accept_proposal"] = True     # gpx_anchor_accepted (medium)
         d[C]["camera_group_time_decisions"][CAM_CONF]["user_decision"]["manual_offset_seconds"] = -7200  # resolve a conflict manually
@@ -289,7 +284,7 @@ def scenario_stale_decision():
     assert not blk, blk
     prior = _copy(base)
     dest = f"{BD}/Stale"
-    # The operator had previously accepted an offset proposal + a timezone proposal that are now gone.
+    # The operator had previously accepted an offset proposal that is now gone.
     prior["destinations"][dest]["camera_group_time_decisions"][CAM_B]["user_decision"]["accept_proposal"] = True
     art, blk = wf.build_time_decisions(files, groups, prior, _gpx([]))
     assert not blk, blk
@@ -317,8 +312,6 @@ def scenario_drift_validation():
 
     def fill_time(a):
         d = a["destinations"]
-        for dp in (BD, DR):
-            d[dp]["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
         d[DR]["camera_group_time_decisions"][CAM_DR]["user_decision"]["accept_proposal"] = True  # tz-derived
         return a
 

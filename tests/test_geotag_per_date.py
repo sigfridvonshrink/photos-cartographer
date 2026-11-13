@@ -55,9 +55,8 @@ def _tz(default="Europe/Brussels"):
 
 
 def _prior(cells=None):
-    # accept the destination timezone so the leaf resolves a tz (needed for tz-derived offsets),
-    # carrying any per-bucket offset decisions alongside.
-    dest = {"destination_timezone": {"user_decision": {"accept_proposed_timezone": True}}}
+    # per-bucket offset decisions; the destination's timezone applies itself (needed for tz-derived offsets).
+    dest = {}
     if cells:
         dest["camera_group_time_decisions"] = cells
     return {"destinations": {f"{BYDEST}/D": dest}}

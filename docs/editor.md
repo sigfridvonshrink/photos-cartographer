@@ -78,8 +78,8 @@ A recursive tree of your destinations. For each one you settle two things:
 
 - **Timezone** — most destinations auto-resolve. A child with no timezone of its own shows a live
   preview of the value it would **inherit** from its nearest resolved ancestor, badged
-  `inherited ⟵ <ancestor>`; the badge updates as you edit ancestors. To override, pick an IANA zone from
-  the dropdown; or tick "accept proposed" to adopt a system proposal. A manual zone you set **re-roots
+  `inherited ⟵ <ancestor>`; the badge updates as you edit ancestors. A proposal applies itself; to
+  override it, pick an IANA zone from the dropdown. A manual zone you set **re-roots
   the chain** — it becomes the basis every destination beneath it inherits (until one of them overrides
   in turn). Authoritative only after you re-run.
 - **Clock offset** — per (camera group, destination, day) bucket. Unlike the timezone, offsets **never

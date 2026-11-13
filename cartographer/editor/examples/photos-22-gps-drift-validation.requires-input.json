@@ -3,9 +3,9 @@
   "artifact_type": "gps_drift_validation",
   "depends_on": {
     "camera_group_key_version": 1,
-    "camera_time_policy_fingerprint": "840f62db228ba45660d44cf8eebbaa8e22405f59a695ce3dc10a4be3c78e4650",
+    "camera_time_policy_fingerprint": "d73ae9e51b28fdb186e822031466c4969195f72a26b25032b3cfbaa7008c6d08",
     "gpx_fingerprint": "example-gpx-fingerprint",
-    "photos_21_sha256": "3066347f113a0e129dce53c4e403a01a6a915c3a6e417e5c9d27ecf9e81ac366"
+    "photos_21_sha256": "7ffccacb8c477f160c31d4d497e78f6b05c8baebeaa8372a22d12935c513bc82"
   },
   "destinations": {
     "6-photos-by-dest/DriftTown": {

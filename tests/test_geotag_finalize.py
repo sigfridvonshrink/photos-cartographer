@@ -225,7 +225,6 @@ def _run(monkeypatch, ws, cmd):
 def _to_executed(monkeypatch, ws, ctl):
     _run(monkeypatch, ws, "plan")
     a = json.load(open(ctl / "photos-21-time-decisions.json"))
-    a["destinations"][f"{BYDEST}/T"]["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
     (ctl / "photos-21-time-decisions.json").write_text(json.dumps(a))
     _run(monkeypatch, ws, "plan")
     _run(monkeypatch, ws, "execute")
@@ -368,7 +367,6 @@ def test_finalize_refuses_without_summary(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _run(monkeypatch, ws, "plan")
     a = json.load(open(ctl / "photos-21-time-decisions.json"))
-    a["destinations"][f"{BYDEST}/T"]["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
     (ctl / "photos-21-time-decisions.json").write_text(json.dumps(a))
     _run(monkeypatch, ws, "plan")                                         # photos-23 ready, NOT executed
     assert (ctl / "photos-24-executable-plan.json").exists()

@@ -117,10 +117,9 @@ def test_rerun_preserves_decisions_and_completes(tmp_path, monkeypatch):
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []}, default_tz="Europe/Brussels")
     _run(monkeypatch, ws)
-    # the user accepts the proposed timezone and sets the camera's clock offset
+    # the user sets the camera's clock offset (the proposed timezone applies itself)
     def fill(art):
         d = art["destinations"]["6-photos-by-dest/Brussels"]
-        d["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
         d["camera_group_time_decisions"][CAM]["user_decision"]["manual_offset_seconds"] = -7187
     _edit(ws, fill)
     assert _run(monkeypatch, ws) == 0
@@ -158,7 +157,6 @@ def test_new_destination_asks_only_its_own_decisions(tmp_path, monkeypatch):
     _run(monkeypatch, ws)
     def fill(art):
         d = art["destinations"]["6-photos-by-dest/Brussels"]
-        d["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
         d["camera_group_time_decisions"][CAM]["user_decision"]["manual_offset_seconds"] = -7187
     _edit(ws, fill)
     assert _run(monkeypatch, ws) == 0 and _artifact(ws)["status"] == "complete"
@@ -297,7 +295,6 @@ def test_build_drift_validation_leaves_photos21_byte_unmutated(tmp_path):
     gpx = _drift_gpx([(50.0, 4.0, datetime(2024, 7, 3, 12, 0, 0, tzinfo=timezone.utc))])
     utils.CONFIG["camera_time_and_timezone_policy"]["default_folder_timezone"] = "Europe/Brussels"
     prior = {"destinations": {DRIFT_DEST: {
-        "destination_timezone": {"user_decision": {"accept_proposed_timezone": True}},
         "camera_group_time_decisions": {CAM: {"user_decision": {"manual_offset_seconds": 0}}}}}}
     art, blk = wf.build_time_decisions(files, groups, prior, gpx)
     assert not blk

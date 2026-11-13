@@ -3,7 +3,7 @@
   "artifact_type": "time_decisions",
   "depends_on": {
     "camera_group_key_version": 1,
-    "camera_time_policy_fingerprint": "f2ba2712166ef2286c42ce9b0f9728c792ad4692131871a7f209de3fed84fb57",
+    "camera_time_policy_fingerprint": "c5ddb9a8cff5b9fab083365e33d50416226a3b21cb1301bee0ade319586c1e3d",
     "gpx_fingerprint": "example-gpx-fingerprint",
     "handoff": {
       "artifact_name": "photos-11-handoff.json",
@@ -25,7 +25,6 @@
         "requires_user_input": false,
         "stale_user_decision": false,
         "user_decision": {
-          "accept_proposed_timezone": false,
           "manual_iana_timezone": ""
         }
       },
@@ -61,7 +60,6 @@
         "requires_user_input": true,
         "stale_user_decision": false,
         "user_decision": {
-          "accept_proposed_timezone": false,
           "manual_iana_timezone": ""
         }
       }

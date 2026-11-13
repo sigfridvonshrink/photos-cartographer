@@ -244,10 +244,7 @@ def _edit(ctl, name, fn):
 
 
 def _drive_ready(monkeypatch, ws, ctl):
-    """Drive _exec_ws to a ready photos-24 (timezone + folder-fallback accepted), c.arw -> manual."""
-    _run(monkeypatch, ws, "plan")
-    _edit(ctl, "photos-21-time-decisions.json", lambda a: a["destinations"][f"{BYDEST}/T"]
-          ["destination_timezone"]["user_decision"].update({"accept_proposed_timezone": True}))
+    """Drive _exec_ws to a ready photos-24 (folder fallback accepted), c.arw -> manual."""
     _run(monkeypatch, ws, "plan")
     _edit(ctl, "photos-23-gps-decisions.json", lambda b: b["destinations"][f"{BYDEST}/T"]
           ["folder_fallback"]["user_decision"].update({"fallback_lat": 48.85, "fallback_lon": 2.35}))
