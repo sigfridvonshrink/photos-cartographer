@@ -209,25 +209,23 @@ def scenario_trip():
 
 # =====================================================================================
 # Scenario 2 — offset proposal/resolution variants (photos-21 only): single-anchor (high,
-# accepted), segment (medium), conflicting (review_required), and manual_real_utc resolution.
+# accepted), segment (medium) and conflicting (review_required), resolved manually.
 # Each camera lives in its own destination + GPX region so matches never cross.
 # =====================================================================================
 
 CAM_PT = "CAM|single-point|S"       # one point anchor -> high, accepted -> gpx_anchor_accepted
 CAM_SEG = "CAM|segment|G"           # one segment anchor -> medium
 CAM_CONF = "CAM|conflict|C"         # two conflicting anchors -> review_required
-CAM_UTC = "CAM|manual-utc|U"        # one point anchor -> resolved via manual_real_utc
-P, S, C, U = f"{BD}/SinglePoint", f"{BD}/Segment", f"{BD}/Conflict", f"{BD}/ManualUtc"
+P, S, C = f"{BD}/SinglePoint", f"{BD}/Segment", f"{BD}/Conflict"
 
 
 def scenario_offset_variants():
-    _set_policy(device_groups={"fixed_clock_cameras": [CAM_PT, CAM_SEG, CAM_CONF, CAM_UTC], "phones": []},
+    _set_policy(device_groups={"fixed_clock_cameras": [CAM_PT, CAM_SEG, CAM_CONF], "phones": []},
                 default_folder_timezone="Europe/Brussels")
     gpx = _gpx([
         _pt(52.0, 6.0, _utc(12, 0, 0)),                                  # SinglePoint anchor
         _pt(53.0, 7.0, _utc(12, 0, 0)), _pt(53.0, 7.003, _utc(12, 0, 30)),  # Segment (~200 m, 30 s apart)
         _pt(54.0, 8.0, _utc(12, 0, 0)), _pt(55.0, 9.0, _utc(9, 0, 0)),    # Conflict (offsets disagree)
-        _pt(56.0, 10.0, _utc(12, 0, 0)),                                  # ManualUtc anchor
     ])
     files = [
         _file(f"{P}/p.arw", CAM_PT, "2024:07:03 14:00:00", gps={"lat": 52.0, "lon": 6.0}),
@@ -235,18 +233,14 @@ def scenario_offset_variants():
         _file(f"{S}/g.arw", CAM_SEG, "2024:07:03 14:00:15", gps={"lat": 53.0003, "lon": 7.0015}),
         _file(f"{C}/c1.arw", CAM_CONF, "2024:07:03 14:00:00", gps={"lat": 54.0, "lon": 8.0}),
         _file(f"{C}/c2.arw", CAM_CONF, "2024:07:03 14:00:00", gps={"lat": 55.0, "lon": 9.0}),
-        _file(f"{U}/u.arw", CAM_UTC, "2024:07:03 14:00:00", gps={"lat": 56.0, "lon": 10.0}),
     ]
-    groups = {k: {"camera_group_class": "camera"} for k in (CAM_PT, CAM_SEG, CAM_CONF, CAM_UTC)}
+    groups = {k: {"camera_group_class": "camera"} for k in (CAM_PT, CAM_SEG, CAM_CONF)}
 
     def fill(a):
         d = a["destinations"]
         d[P]["camera_group_time_decisions"][CAM_PT]["user_decision"]["accept_proposal"] = True     # gpx_anchor_accepted (single)
         d[S]["camera_group_time_decisions"][CAM_SEG]["user_decision"]["accept_proposal"] = True     # gpx_anchor_accepted (medium)
         d[C]["camera_group_time_decisions"][CAM_CONF]["user_decision"]["manual_offset_seconds"] = -7200  # resolve a conflict manually
-        # ManualUtc: enter the recommended anchor's true UTC -> source manual_real_utc.
-        u_prop = d[U]["camera_group_time_decisions"][CAM_UTC]["proposal"]
-        d[U]["camera_group_time_decisions"][CAM_UTC]["user_decision"]["manual_real_utc"] = u_prop["proposed_real_utc"]
         return a
 
     _, comp = _td(_wf(), files, groups, gpx, fill)
@@ -348,7 +342,7 @@ def _verify():
         '"proposal_source": "none"', '"proposal_source": "gpx_self_anchor"',
         '"proposal_source": "timezone_naive"', '"proposal_source": "manual_required"',
         '"source": "gpx_anchor_auto"', '"source": "gpx_anchor_accepted"',
-        '"source": "timezone_accepted"', '"source": "manual"', '"source": "manual_real_utc"',
+        '"source": "timezone_accepted"', '"source": "manual"',
         '"confidence": "high"', '"confidence": "medium"', '"confidence": "review_required"',
         '"stale_user_decision": true',
         '"reason": "no_reliable_gps_source"', '"reason": "manual_locked"', '"reason": "accepted_unlocated"',

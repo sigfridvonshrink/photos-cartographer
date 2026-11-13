@@ -175,8 +175,7 @@ destinations or buckets.
 | `proposal` | object | no | One of three shapes — see below. |
 | **`user_decision.accept_proposal`** | bool | **yes** | Accept the proposal's offset. |
 | **`user_decision.manual_offset_seconds`** | number \| `""` | **yes** | A manual clock offset, seconds (camera_time + offset = real UTC). |
-| **`user_decision.manual_real_utc`** | string (`""`) | **yes** | The true UTC of the recommended anchor frame, ISO-8601 (`"2024-07-03T14:12:21Z"`). **Only meaningful when `proposal.proposal_source == "gpx_self_anchor"`** (geotag derives the offset from the recommended anchor's camera time). |
-| `effective_time_anchor` | `""` \| object | no | `""` if unresolved; else `{ "offset_seconds": int, "source": … }` where source ∈ `manual` \| `manual_real_utc` \| `gpx_anchor_accepted` \| `timezone_accepted` \| `gpx_anchor_auto`. |
+| `effective_time_anchor` | `""` \| object | no | `""` if unresolved; else `{ "offset_seconds": int, "source": … }` where source ∈ `manual` \| `gpx_anchor_accepted` \| `timezone_accepted` \| `gpx_anchor_auto`. |
 | `requires_user_input` | bool | no | `true` ⇔ `effective_time_anchor == ""`. (Containers carry no offset cells, so this is never softened here.) |
 | `stale_user_decision` | bool | no | Accepted a proposal with no offset. |
 | `decision_mode` | `"auto_resolved"` | no | Present when a GPX self-anchor auto-resolved under the policy flags. (Timezone-derived and manual offsets are never auto-resolved.) |
@@ -366,9 +365,8 @@ A cell can carry more than one decision field; geotag applies them in a fixed or
 UI should make the *effective* choice obvious and ideally offer them as mutually-exclusive.
 
 - **Timezone:** `manual_iana_timezone` (if valid) → else the proposal, which applies itself.
-- **Clock offset:** `manual_offset_seconds` (if set & valid) → `manual_real_utc` (GPX proposals only) →
-  `accept_proposal` → automatic GPX resolution (no human input). Setting a manual field overrides
-  `accept_proposal`.
+- **Clock offset:** `manual_offset_seconds` (if set & valid) → `accept_proposal` → automatic GPX
+  resolution (no human input). Setting a manual offset overrides `accept_proposal`.
 - **Folder fallback:** `fallback_lat`+`fallback_lon` (if both set & valid) → `accept_proposal`.
 - **Per-file GPS:** `manual_lat`+`manual_lon` (if both set & valid) → `accept_unlocated`. (If neither and
   no automatic source exists, the file stays blocked = `no_reliable_gps_source`.)
@@ -386,7 +384,6 @@ Mirror these client-side; a value that fails makes geotag reject the whole artif
 |----------|------|
 | `manual_iana_timezone` | Must resolve as a real IANA zone (e.g. `zoneinfo`/`Intl` knows it). `""` allowed (= unset). |
 | `manual_offset_seconds` | A finite number with `abs(v) <= 86400` (±1 day). Not a boolean. `""` allowed. |
-| `manual_real_utc` | ISO-8601 datetime, trailing `Z` accepted (`"2024-07-03T14:12:21Z"`). Only takes effect on GPX-self-anchor proposals. `""` allowed. |
 | `fallback_lat` / `fallback_lon`, `manual_lat` / `manual_lon` | Numbers; latitude ∈ [-90, 90], longitude ∈ [-180, 180]. Set both or neither. `""` allowed (= unset). |
 | `accept_*` / `accept_unlocated` | Booleans; default `false`. |
 

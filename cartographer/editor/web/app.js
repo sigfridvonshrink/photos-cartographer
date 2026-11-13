@@ -45,7 +45,6 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
 const isNum = (v) => typeof v === "number" && isFinite(v) && typeof v !== "boolean";
 function validTz(s) { if (s === "" || s == null) return true; try { new Intl.DateTimeFormat("en", { timeZone: s }); return true; } catch { return false; } }
 function validOffset(v) { return v === "" || v == null || (isNum(v) && Math.abs(v) <= 86400); }
-function validUtc(s) { if (s === "" || s == null) return true; return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})?$/.test(s) && !isNaN(Date.parse(s)); }
 const validLat = (v) => v === "" || v == null || (isNum(v) && v >= -90 && v <= 90);
 const validLon = (v) => v === "" || v == null || (isNum(v) && v >= -180 && v <= 180);
 const bothOrNeither = (a, b) => (a === "" || a == null) === (b === "" || b == null);
@@ -107,7 +106,7 @@ function isDirty(ref) {
 function refInvalid(ref) {
   const c = workCell(ref); if (!c) return false; const u = c.user_decision || {};
   if (ref.kind === "timezone") return !validTz(u.manual_iana_timezone);
-  if (ref.kind === "offset") return !validOffset(u.manual_offset_seconds) || !validUtc(u.manual_real_utc);
+  if (ref.kind === "offset") return !validOffset(u.manual_offset_seconds);
   if (ref.kind === "drift") return !validOffset(u.corrected_offset_seconds);
   if (ref.kind === "fallback") return !validLat(u.fallback_lat) || !validLon(u.fallback_lon) || !bothOrNeither(u.fallback_lat, u.fallback_lon);
   return !validLat(u.manual_lat) || !validLon(u.manual_lon) || !bothOrNeither(u.manual_lat, u.manual_lon);
@@ -138,7 +137,7 @@ function offsetGroups(destCell) {
     const byProp = new Map();                              // cluster key → member buckets
     for (const b of buckets) {
       const u = b.cell.user_decision || {}, p = b.cell.proposal || {};
-      const udSig = `${u.accept_proposal === true ? 1 : 0}|${u.manual_offset_seconds ?? ""}|${u.manual_real_utc ?? ""}`;
+      const udSig = `${u.accept_proposal === true ? 1 : 0}|${u.manual_offset_seconds ?? ""}`;
       const pk = `${udSig}@${"proposed_offset_seconds" in p ? p.proposed_offset_seconds : "none"}`;
       if (!byProp.has(pk)) byProp.set(pk, []);
       byProp.get(pk).push(b);
@@ -211,7 +210,6 @@ function wouldResolve(ref) {
     return (!!u.manual_iana_timezone && validTz(u.manual_iana_timezone)) || !!c.proposed_iana_timezone;   // a proposal applies itself
   if (ref.kind === "offset")
     return (u.manual_offset_seconds !== "" && u.manual_offset_seconds != null && validOffset(u.manual_offset_seconds))
-      || (!!u.manual_real_utc && validUtc(u.manual_real_utc) && p.proposal_source === "gpx_self_anchor")
       || (!!u.accept_proposal && "proposed_offset_seconds" in p);
   if (ref.kind === "drift")                       // confirmed (zero-scrub or a valid correction) resolves
     return !!u.confirmed && validOffset(u.corrected_offset_seconds);
@@ -310,7 +308,6 @@ function previewEffective(ref) {
   if (ref.kind === "offset") {
     if (u.manual_offset_seconds !== "" && u.manual_offset_seconds != null)
       return validOffset(u.manual_offset_seconds) ? `${fmtOffset(u.manual_offset_seconds)} (manual)` : "✗ invalid offset";
-    if (u.manual_real_utc) return validUtc(u.manual_real_utc) ? "via real-UTC (computed on re-run)" : "✗ invalid UTC";
     if (u.accept_proposal && "proposed_offset_seconds" in p) return `${fmtOffset(p.proposed_offset_seconds)} (accept proposal)`;
     return "— (GPX auto-resolves on re-run, else needs input)";
   }
@@ -590,11 +587,10 @@ function tzSelect(value, onchange, disabled) {
 // Offset editor: the h/m/s spinner and a real-UTC datetime picker are two views of one stored value
 // (manual_offset_seconds). Whichever view you click drives editing; the other goes read-only and tracks
 // it. The UTC view only exists for a gpx_self_anchor proposal (it needs the anchor frame's camera time);
-// editing always canonicalizes to the offset and clears manual_real_utc so the stored value is unambiguous.
-// The clock offset is set in exactly ONE of three mutually-exclusive ways — accept the proposal, a
-// manual offset, or the anchor frame's real-UTC — mapped to the three user_decision fields
-// (accept_proposal / manual_offset_seconds / manual_real_utc). Picking one resets the other two, so the
-// reference §6 precedence never has to arbitrate. Anchor real-UTC needs a gpx_self_anchor frame.
+// editing always stores the offset. The clock offset is set in exactly ONE of two mutually-exclusive ways
+// — accept the proposal, or an offset of your own, typed or picked as the anchor frame's real-UTC — mapped
+// to the two user_decision fields (accept_proposal / manual_offset_seconds). Picking one resets the other,
+// so the reference §6 precedence never has to arbitrate.
 // Two exclusive choices: ACCEPT the proposal (the automatic offset) or SET IT YOURSELF. The self-set
 // offset has two ALWAYS-VISIBLE, ALWAYS-SYNCED views — the h/m/s spinner and the anchor real-UTC picker
 // (picker = anchor camera time + offset); editing either updates both. They're editable only while
@@ -613,10 +609,7 @@ function offsetEditor(ref) {
     : (hasProp && p.proposed_real_utc != null && utcStrToMs(p.proposed_real_utc) != null
       ? utcStrToMs(p.proposed_real_utc) - p.proposed_offset_seconds * 1000 : null);
   const accepted = !!u.accept_proposal && hasProp;
-  let manualOff = u.manual_offset_seconds;            // canonical store; tolerate a legacy manual_real_utc
-  if ((manualOff === "" || manualOff == null) && u.manual_real_utc && camMs != null) {
-    const m = utcStrToMs(u.manual_real_utc); if (m != null) manualOff = Math.round((m - camMs) / 1000);
-  }
+  const manualOff = u.manual_offset_seconds;          // the one stored value of a self-set offset
   const manualSet = manualOff !== "" && manualOff != null;
   const selKey = `${ref.dest}|${ref.key}`;
   // Exactly one of three choices is active. For a self-set value the active VIEW (offset spinner vs
@@ -628,9 +621,9 @@ function offsetEditor(ref) {
   const eff = accepted ? p.proposed_offset_seconds : manualSet ? Number(manualOff) : (hasProp ? p.proposed_offset_seconds : null);
   const cur = Number(eff) || 0, abs = Math.abs(cur);
 
-  const setManual = (off, v) => { state.offsetEdit = { key: selKey, view: v }; editMany(ref, { accept_proposal: false, manual_real_utc: "", manual_offset_seconds: off }); };
+  const setManual = (off, v) => { state.offsetEdit = { key: selKey, view: v }; editMany(ref, { accept_proposal: false, manual_offset_seconds: off }); };
   const choose = (v) => { state._focusOffset = v; if (manualSet) { state.offsetEdit = { key: selKey, view: v }; render(); } else setManual(eff ?? 0, v); };
-  const accept = () => { state.offsetEdit = null; editMany(ref, { accept_proposal: true, manual_offset_seconds: "", manual_real_utc: "" }); };
+  const accept = () => { state.offsetEdit = null; editMany(ref, { accept_proposal: true, manual_offset_seconds: "" }); };
   const opt = (on, body, onclick, cls = "") => el("div", { class: "off-opt" + (on ? " on" : "") + cls, onclick },
     el("span", { class: "off-dot" }, on ? "●" : "○"), body);
 
@@ -694,7 +687,7 @@ function offsetEditor(ref) {
     : "no offset proposal — set this destination's timezone (Time view), then re-run `photos-cartographer geotag plan`, to derive one from the local time"));
 
   if (accepted || manualSet) wrap.append(el("button", { class: "mini",
-    onclick: () => { state.offsetEdit = null; editMany(ref, { accept_proposal: false, manual_offset_seconds: "", manual_real_utc: "" }); } },
+    onclick: () => { state.offsetEdit = null; editMany(ref, { accept_proposal: false, manual_offset_seconds: "" }); } },
     "clear (let geotag auto-resolve / re-derive)"));
 
   // restore focus to the view just activated (click-to-activate), so it's ready to edit
@@ -1110,7 +1103,7 @@ async function main() {
 if (typeof document !== "undefined") main();
 
 export {
-  isNum, validTz, validOffset, validUtc, validLat, validLon, bothOrNeither,
+  isNum, validTz, validOffset, validLat, validLon, bothOrNeither,
   fmtOffset, camNaiveMs, dtLocalToMs, msToDtLocal, utcStrToMs, fmtLocal, fmtDT, offsetImpact,
   cellAt, cellStatus, wouldResolve, previewTz, previewFallback, refInvalid, isDirty, state,
   offsetGroups, dateRange, fmtDate, peerKeys, parseLatLon, coordText, contiguousRange,

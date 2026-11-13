@@ -746,7 +746,6 @@ class GeotagWorkflow:
         ud = prior_cell.get("user_decision") or {}
         accept = _decision_flag(ud, "accept_proposal", f"{dest}: camera_group_time_decisions[{loc}].user_decision", blockers)
         manual_off = ud.get("manual_offset_seconds", "")
-        manual_utc = ud.get("manual_real_utc", "") or ""
         effective, stale, decision_mode = "", False, None
 
         if manual_off != "" and manual_off is not None:
@@ -755,17 +754,6 @@ class GeotagWorkflow:
             else:
                 blockers.append(f"{dest}: camera_group_time_decisions[{loc}].user_decision."
                                 "manual_offset_seconds must be a number within +/-86400.")
-        elif manual_utc:
-            dt = _parse_utc(manual_utc)
-            if dt is None:
-                blockers.append(f"{dest}: camera_group_time_decisions[{loc}].user_decision."
-                                f"manual_real_utc {manual_utc!r} is not a valid UTC datetime.")
-            elif is_gpx and proposal["anchors"]:
-                # derive the offset from the recommended anchor's camera naive time
-                # (guaranteed parseable — match_frame_to_gpx rejects frames with an unparseable time)
-                naive = _parse_camera_naive(proposal["anchors"][0]["camera_source_naive_time"])
-                effective = {"offset_seconds": round((dt.replace(tzinfo=None) - naive).total_seconds()),
-                             "source": "manual_real_utc"}
         elif accept:
             if has_offset:                         # accept a GPX self-anchor or a timezone-derived proposal
                 effective = {"offset_seconds": proposal["proposed_offset_seconds"],
@@ -780,7 +768,7 @@ class GeotagWorkflow:
                (n == 1 and policy.get("single_anchor_auto_apply", False)):
                 effective = {"offset_seconds": proposal["proposed_offset_seconds"], "source": "gpx_anchor_auto"}
                 decision_mode = "auto_resolved"
-        if effective == "" and not stale and manual_off in ("", None) and not manual_utc and not accept:
+        if effective == "" and not stale and manual_off in ("", None) and not accept:
             # An offset found from the camera's own GPS stays this camera's offset for the day when the
             # photos that gave it are corrected and later ones bring no anchor. A user's answer needs
             # no such keeping: it is preserved as their decision, and withdrawing it takes effect.
@@ -793,8 +781,7 @@ class GeotagWorkflow:
             "camera_group_class": g.get("camera_group_class", "camera"),
             "proposal": proposal,
             "user_decision": {"accept_proposal": accept,
-                              "manual_offset_seconds": manual_off if manual_off is not None else "",
-                              "manual_real_utc": manual_utc},
+                              "manual_offset_seconds": manual_off if manual_off is not None else ""},
             "effective_time_anchor": effective,
             "requires_user_input": effective == "",
             "stale_user_decision": stale,
@@ -841,7 +828,7 @@ class GeotagWorkflow:
     # confirms each (a zero-scrub "offset was right" must be actively confirmed, never implied), and
     # carries the corrected/validated offset that compute_resolved_utc then re-consumes (§22a).
 
-    _DRIFT_TRIGGER_SOURCES = ("timezone_accepted", "manual", "manual_real_utc")
+    _DRIFT_TRIGGER_SOURCES = ("timezone_accepted", "manual")
 
     def build_drift_validation(self, files, time_artifact, rows0, gpx, prior):
         """Build/regenerate photos-22 from the COMPLETE photos-21 + the resolved UTC under the

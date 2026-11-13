@@ -289,14 +289,6 @@ def test_cell_accept_proposal(monkeypatch):
     assert cell["effective_time_anchor"]["offset_seconds"] == -7200
 
 
-def test_cell_manual_real_utc_derived(monkeypatch):
-    gpx = _gpx([_pt(50.0, 4.0, _utc(12, 0, 0))])
-    frames = [_frame(50.0, 4.0, "2024:07:03 14:00:00")]
-    cell, _ = _cell({"manual_real_utc": "2024-07-03T11:00:00Z"}, frames, gpx)
-    assert cell["effective_time_anchor"]["source"] == "manual_real_utc"
-    assert cell["effective_time_anchor"]["offset_seconds"] == -10800              # 11:00 - 14:00
-
-
 def test_cell_manual_offset_and_bad_offset(monkeypatch):
     gpx = _gpx([])
     cell, _ = _cell({"manual_offset_seconds": -7187}, [], gpx)
@@ -314,14 +306,6 @@ def test_cell_no_anchor_is_manual_required(monkeypatch):
 def test_cell_accept_with_no_proposal_is_stale(monkeypatch):
     cell, _ = _cell({"accept_proposal": True}, [], _gpx([]))      # manual_required -> nothing to accept
     assert cell["stale_user_decision"] is True and cell["requires_user_input"] is True
-
-
-def test_cell_manual_real_utc_invalid_and_nonderivable(monkeypatch):
-    bad, blk = _cell({"manual_real_utc": "not-a-datetime"}, [], _gpx([]))
-    assert blk and bad["effective_time_anchor"] == ""                       # invalid -> located blocker
-    # a parseable manual_real_utc on a non-GPX (manual_required) cell can't derive an offset alone
-    ok, blk2 = _cell({"manual_real_utc": "2024-07-03T11:00:00Z"}, [], _gpx([]))
-    assert not blk2 and ok["effective_time_anchor"] == "" and ok["requires_user_input"] is True
 
 
 def test_config_anchor_thresholds_reject_negative():

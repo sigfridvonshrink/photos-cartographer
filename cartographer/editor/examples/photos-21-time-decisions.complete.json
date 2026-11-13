@@ -35,8 +35,7 @@
           "stale_user_decision": false,
           "user_decision": {
             "accept_proposal": false,
-            "manual_offset_seconds": 0,
-            "manual_real_utc": ""
+            "manual_offset_seconds": 0
           }
         }
       },
@@ -78,8 +77,7 @@
           "stale_user_decision": false,
           "user_decision": {
             "accept_proposal": false,
-            "manual_offset_seconds": 3600,
-            "manual_real_utc": ""
+            "manual_offset_seconds": 3600
           }
         }
       },
@@ -123,8 +121,7 @@
           "stale_user_decision": false,
           "user_decision": {
             "accept_proposal": true,
-            "manual_offset_seconds": "",
-            "manual_real_utc": ""
+            "manual_offset_seconds": ""
           }
         }
       },
@@ -168,8 +165,7 @@
           "stale_user_decision": false,
           "user_decision": {
             "accept_proposal": true,
-            "manual_offset_seconds": "",
-            "manual_real_utc": ""
+            "manual_offset_seconds": ""
           }
         },
         "SONY|ILCE-6400|A@2024-07-04": {
@@ -192,8 +188,7 @@
           "stale_user_decision": false,
           "user_decision": {
             "accept_proposal": true,
-            "manual_offset_seconds": "",
-            "manual_real_utc": ""
+            "manual_offset_seconds": ""
           }
         },
         "SONY|ILCE-6400|A@2024-12-22": {
@@ -216,8 +211,7 @@
           "stale_user_decision": false,
           "user_decision": {
             "accept_proposal": true,
-            "manual_offset_seconds": "",
-            "manual_real_utc": ""
+            "manual_offset_seconds": ""
           }
         }
       },
@@ -321,8 +315,7 @@
           "stale_user_decision": false,
           "user_decision": {
             "accept_proposal": false,
-            "manual_offset_seconds": "",
-            "manual_real_utc": ""
+            "manual_offset_seconds": ""
           }
         }
       },
