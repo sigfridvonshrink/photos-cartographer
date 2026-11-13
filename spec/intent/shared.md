@@ -1263,7 +1263,7 @@ of the configuration or of the areas the record reads — and each use checks th
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: dep-cascade-reject-stale-1, prep-block-on-stale-dependency-1, merge-execute-revalidate-reject-stale-1, geotag-dep-cascade-1, geotag-no-stale-execution-1, geotag-file-exists-not-executable-1, geotag-stale-no-json-1
+:aliases: dep-cascade-reject-stale-1, prep-block-on-stale-dependency-1, merge-execute-revalidate-reject-stale-1, geotag-dep-cascade-1, geotag-no-stale-execution-1, geotag-file-exists-not-executable-1, geotag-stale-no-json-1, geotag-no-preserve-stale-auto-gps-1
 :uses: DEF-dependency_cascade
 
 No phase SHALL use a record once anything it was derived from has changed: each phase validates what it derives from,
@@ -1740,15 +1740,15 @@ mutated files repaired by hand.
 
 :::{rul} Withdrawing a decision undoes it
 :id: RUL-withdrawal_undoes
-:status: ruled
+:status: seed
 :criticality: med
 :verify: required
-:aliases: authored-withdraw-undoes-1
+:aliases: authored-withdraw-undoes-1, geotag-manual-gps-reversible-1, geotag-withdraw-revert-1, geotag-recompute-inplace-1, time-name-never-reverted-1
 :refines: RUL-decision_revisable
 
 Withdrawing a decision SHALL undo its effect, not merely stop asserting it: a manual position withdrawn gives the file
-back the position it held before, or none if it held none; a position derived by the tool is derived again; a time and a
-name are recomputed where the file stands, never moving it out of its destination.
+the position it would have had without it — from the tracks, or none; a position derived by the tool is derived again;
+a time and a name are recomputed where the file stands, never moving it out of its destination.
 :::
 
 ## 12. The record of what was done, kept beyond the workspace
@@ -1900,7 +1900,7 @@ A step that followed from a decision SHALL name that decision, so the why stands
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: log-records-gps-revert-1
+:aliases: log-records-gps-revert-1, geotag-prestate-absent-1, geotag-three-gps-origins-1
 :uses: DEF-transformation_log
 
 A manual position applied, changed or withdrawn SHALL appear in the log with the position it replaced or restored, or

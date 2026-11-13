@@ -612,6 +612,7 @@ own, and the GPS beside it native.
 :id: BLD-original_values_pinned
 :status: ruled
 :realises: RUL-geotag_rerun_keeps_settled
+:aliases: geotag-ledger-per-workspace-1, geotag-originals-pinned-1
 
 Before geotag's first write to a file, execution SHALL pin its own time, offset tag, position and `GPSProcessingMethod`
 in an original-values ledger keyed by fingerprint, once, unless it already carries geotag's mark; a later plan decides
@@ -721,6 +722,7 @@ inputs, recorded the same way (merge §8–§9).
 :id: BLD-decided_from_own_values
 :status: ruled
 :realises: RUL-withdrawal_undoes, RUL-decision_revisable
+:aliases: geotag-automated-gps-no-revert-1
 
 Every plan SHALL decide about a photo from its own values, pinned before geotag first wrote to it (geotag §24.2), so a
 withdrawn manual position is undone like any decision: the photo is placed again, or geotag's position cleared; an
