@@ -849,6 +849,7 @@ ran, oldest first, matched by fingerprint — before the current plan's, from th
 :id: BLD-history_kept
 :status: ruled
 :realises: RUL-history_retained, RUL-log_cites_decisions
+:aliases: geotag-finalize-complete-log-1
 
 Each run's journal SHALL be kept as its own `journal-<run>.json`, each geotag execution keeping the decision records its
 plan depended on, verified by hash, in `executed/<plan id>/`, which a step's `because_record` and

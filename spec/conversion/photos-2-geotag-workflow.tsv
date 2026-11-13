@@ -484,9 +484,9 @@
 18	`photos-21-time-decisions.json` must settle the civil timezone for every destination under `6-photos-by-dest`.	BLD-timezone_cell RUL-timezone_auto_resolves	
 18	The destination civil timezone is used to:	RAT-destination_is_an_input	
 18	1. interpret local/civil destination context;	dropped	vague; the uses that follow are the substance
-18	2. convert resolved UTC to destination-local civil time;	defer:geotag-27	local time from resolved UTC is the renames' stage
-18	3. plan timestamp-based no-clobber renames;	defer:geotag-27	
-18	4. produce filename timestamp components.	defer:geotag-27	
+18	2. convert resolved UTC to destination-local civil time;	RUL-geotag_name_final BLD-geotag_final_name	local time from resolved UTC is the renames' stage
+18	3. plan timestamp-based no-clobber renames;	RUL-geotag_name_final BLD-geotag_final_name	
+18	4. produce filename timestamp components.	RUL-geotag_name_final BLD-geotag_final_name	
 18	The artifact must include, for each destination, pre-created human decision fields.	BLD-timezone_cell RUL-decision_fields_laid_out	
 18	Example shape:	dropped	introduces the example
 18	```json [sha1:99da9774, 15 lines]	BLD-timezone_cell	its proposal_source value is stale: config_default, inherited or none
@@ -1053,3 +1053,71 @@
 30	The workflow should recalculate only the affected downstream artifacts when upstream inputs change.	RUL-rerun_does_what_changed RUL-staleness_by_area	
 30	Examples:	dropped	introduces the examples
 30	```text [sha1:2d511650, 102 lines]	INV-no_stale_use RUL-staleness_by_area	worked examples of rules converted in §9–§29 and the shared contract
+31	## 31. Stage 11 — Finalize and archive (explicit command)	dropped	a heading; the corpus's documents carry their own
+31	Finalize is a **separate, explicitly-invoked command**, not part of `execute` and not run automatically at the end of geotag.	RUL-finalize_explicit	
+31	Because geotag is freely re-runnable (Section 2.1; shared contract `photos-shared-contract.md` Section 10.1), "this dump is done" is a human judgement, so the user invokes finalize when finished with a workspace to produce the durable archival package.	RUL-finalize_explicit	
+31	Finalize must:	dropped	introduces the list
+31	1. run under the workspace lock (shared contract Section 2) and be **non-destructive** — it reads and bundles; it never mutates the workspace, the artifacts, the live SQLite DB, or the library.	RUL-finalize_non_destructive RUL-lock_through_the_run	
+31	(Generating `photos-26-complete-log.json` and capturing the `photos-26-geotag-ingest.db` backup snapshot below are *new-file* writes into `.photos-ingest/`, not mutations of any existing photo, artifact, or the live DB — the snapshot is a read-only copy of the live DB.)	RUL-finalize_non_destructive RUL-finalize_reads_database	
+31	2. require that geotag has ended successfully (a complete, executed `photos-24-executable-plan.json` with a corresponding `photos-25-execution-summary.json`); it refuses to finalize an incomplete or stale state;	RUL-finalize_requires_success BLD-finalize_preconditions	
+31	3. assemble the **archival package** defined in shared contract Section 13.2 — the whole control directory but its transient files, the freshly generated `photos-26-complete-log.json` and the geotag snapshot captured in item 4a among it — listed with their SHA-256s in `photos-26-archive-manifest.json` and archived together with the manifest into `photos-26-archive.tar.gz` in the control directory;	RUL-package_contents BLD-archive_manifest	
+31	4. generate the transformation log `photos-26-complete-log.json` (shared contract Section 13.3) by **carrying prep's end-of-prep audit log (`photos-15-prep-log.json`) forward** — only when its bytes hash to the value the handoff records, finalize stopping otherwise — as the prep portion of each photo's journey and appending geotag's steps — consolidating prep's handoff/journal and geotag's decision artifacts/journal into a per-photo, content-fingerprint-keyed, human-readable JSON record of every transformation between ingestion and successful geotag.	RUL-record_whole_each_phase BLD-history_kept	
+31	It does not re-derive prep's history or discard the prep log;	RUL-record_whole_each_phase	
+31	`photos-26-complete-log.json` is a superset of `photos-15-prep-log.json` (shared contract Section 13.3 item 6).	RUL-record_whole_each_phase	
+31	Geotag's steps cover **every executed pass**, not only the current plan: each superseded plan kept as `photos-24-executable-plan-NNN.json` whose journal shows it ran contributes the steps of its confirmed operations, oldest first and matched to each photo by the fingerprint they were planned against, before the current plan's; each step names its run, and a time write carries what its pass established (resolved UTC, the rule and offset used, the destination timezone), so a later pass replacing the resolved-UTC cache loses none of it.	BLD-history_kept	
+31	What finalize cannot rebuild it marks, never hides (shared contract Section 13.3a): an entry for a photo carrying geotag's mark whose own values this workspace never pinned — corrected elsewhere, or its history lost — is marked `partial`, with a geotag step (`history_incomplete`) saying why — the note is geotag's own, so every field prep's entry has is carried unchanged — and a pass whose journal is kept but whose plan is missing, or a prep log missing or unreadable, is named in the log's `warnings`, the log then marked `partial`; all are reported when finalize runs.	RUL-partial_history_shown BLD-partial_log_marked	
+31	Each entry for a photo geotag handled gains a `geotag_path` — its by-dest folder, under the name its last final rename gave it, or its name unchanged if geotag never renamed it.	BLD-log_format	
+31	Before writing, finalize checks that its log carries prep's unchanged — every entry, field and step, geotag only adding — and writes nothing if it would not (shared contract Section 13.0a); 4a. capture the end-of-geotag database backup snapshot `photos-26-geotag-ingest.db` — a consistent, atomic copy of the live `photos-00-ingest.db` taken at finalize (shared contract Section 13.4a).	RUL-record_whole_each_phase	
+31	This reads the live DB and writes a new immutable file; it does not mutate the live DB (consistent with item 1); 4b. record each photo in `6-photos-by-dest`, under its final path, with its size and modification time as finalize finds it, in `photos-26-finalized-media.json` — what merge checks the by-dest photos against (merge Section 3 precondition 1b);	RUL-images_archived RUL-finalize_reads_database	
+31	5. write a self-describing manifest (workspace identity, plan/execution ids, and SHA-256 of each bundled item, including the DB snapshots) so the package's integrity is verifiable later;	RUL-package_self_describing BLD-archive_manifest	
+31	6. leave the package in a known location the user can move to permanent storage alongside the library.	BLD-archive_manifest	
+31	Finalize creates no new authority and makes no decisions; it is the retention step that makes authored decisions (shared contract Section 12) outlive the transient workspace.	RUL-finalize_non_destructive	
+31	Finalize is followed, when the operator chooses, by the **merge** phase (`photos-3-merge`, spec `photos-3-merge-workflow.md`; shared contract Sections 10.4 and 13.5), which **moves** the finalized photos from `6-photos-by-dest` into the permanent library and writes its own log `photos-35-merge-log.json` (copied forward from `photos-26-complete-log.json`, never editing it) recording each file's final library location.	RUL-merge_takes_finalized_current	
+31	Merge is optional and additive: the finalize archival package — the `photos-26` transformation log, the SQLite database and its snapshots, and the job/decision artifacts — is complete and self-sufficient without it, and a workspace that is never merged keeps that full record intact (shared contract Section 13).	RUL-history_retained	
+31	Merge requires a successfully finalized workspace; geotag and finalize never perform the merge themselves.	RUL-merge_takes_finalized_current RUL-finalize_explicit	
+32	## 32. User-visible outputs	dropped	a heading; the corpus's documents carry their own
+32	The workflow should produce user-facing outputs at each blocked or decision point.	RUL-cause_locatable	
+32	Important textual outputs include:	dropped	introduces the list
+32	1. sealed-workspace hard-stop (with new-dump warning if anything but the managed folders and hidden entries sits at the root, or anything in `0-sources`, Section 13);	dropped	output wording, not behaviour: kept by code comments and tests
+32	2. not-initialized hard-stop (Section 13);	dropped	output wording, not behaviour: kept by code comments and tests
+32	3. misplaced-root-entry hard-stop — loose file, non-managed folder, or symlink at the root (strict, Section 13); 3a. incomplete-structure hard-stop — a missing managed `0`–`6` folder; restore it and re-run prep (Section 13);	dropped	output wording, not behaviour: kept by code comments and tests
+32	4. `0-sources`-not-empty blocker (re-run prep, Section 13);	dropped	output wording, not behaviour: kept by code comments and tests
+32	5. by-date-not-empty blocker;	dropped	output wording, not behaviour: kept by code comments and tests
+32	6. development-already-started (jpg/tif subfolder present) hard-stop;	dropped	output wording, not behaviour: kept by code comments and tests
+32	7. stale prep/by-dest dependency report;	dropped	output wording, not behaviour: kept by code comments and tests
+32	8. unknown camera group report;	dropped	output wording, not behaviour: kept by code comments and tests
+32	9. pasteable config snippets for newly recognised groups;	dropped	output wording, not behaviour: kept by code comments and tests
+32	10. invalid-value blocker — a config or decision field that failed sanity-validation, naming the artifact and field (Section 9.2);	dropped	output wording, not behaviour: kept by code comments and tests
+32	11. reason why no JSON artifact was produced, if blocked before time-decision stage;	dropped	output wording, not behaviour: kept by code comments and tests
+32	12. time-decision summary (including per-(destination, camera group, naive date) clock-offset buckets and their self-anchor/timezone-derived/confirmable proposals, Section 10.2, and per-destination civil-timezone decisions including timezone proposals inherited from the nearest ancestor destination, Section 18);	dropped	output wording, not behaviour: kept by code comments and tests
+32	13. resolved UTC cache summary;	dropped	output wording, not behaviour: kept by code comments and tests
+32	14. GPS-decision summary (including per-destination folder-fallback cells and their inherited/confirmable proposals, Section 25.3);	dropped	output wording, not behaviour: kept by code comments and tests
+32	15. executable plan summary;	dropped	output wording, not behaviour: kept by code comments and tests
+32	16. execution summary — counts applied/skipped, the pre-mutation snapshot record (or "none"), and any **post-write fingerprint mismatches** awaiting `accept_fingerprint_change` review (Section 29).	dropped	output wording, not behaviour: kept by code comments and tests
+32	Important JSON artifacts include:	dropped	introduces the list
+32	```text [sha1:4e80ca23, 4 lines]	BLD-artifact_numbering	
+32	The user should always know:	RUL-cause_locatable	
+32	1. which stage they are in;	dropped	output wording, not behaviour: kept by code comments and tests
+32	2. why the workflow is blocked, if blocked;	RUL-cause_locatable	
+32	3. which artifact was created, if any;	dropped	output wording, not behaviour: kept by code comments and tests
+32	4. what action is needed next.	RUL-cause_locatable	
+33	## 33. Non-goals	dropped	a heading; the corpus's documents carry their own
+33	This workflow does not define:	dropped	a non-goal: the corpus's build items now say how
+33	1. the exact CLI;	dropped	a non-goal: the corpus's build items now say how
+33	2. the exact Python classes;	dropped	a non-goal: the corpus's build items now say how
+33	3. the exact SQLite schema;	dropped	a non-goal: the corpus's build items now say how
+33	4. the exact JSON schema;	dropped	a non-goal: the corpus's build items now say how
+33	5. the exact implementation of GPX parsing;	dropped	a non-goal: the corpus's build items now say how
+33	6. the exact metadata write commands.	dropped	a non-goal: the corpus's build items now say how
+33	Those belong in later script-level specifications.	dropped	a non-goal: the corpus's build items now say how
+33	This document defines only the geotag workflow, artifact states, dependencies, and decision order.	dropped	a non-goal: the corpus's build items now say how
+34	## 34. Summary	dropped	a heading; the corpus's documents carry their own
+34	This section restates the rules established above as a single ordered reference.	dropped	restates the sections above
+34	Sections 11 (data cascade) and 12 (state machine) are two views of the same pipeline.	dropped	restates the sections above
+34	On any apparent conflict, the numbered specification sections above govern over this summary.	dropped	restates the sections above
+34	The geotag workflow is:	dropped	restates the sections above
+34	```text [sha1:1eba7809, 20 lines]	dropped	restates the sections above
+34	The most important workflow rule is:	dropped	restates the sections above
+34	```text [sha1:9c52f201, 1 lines]	dropped	restates the sections above
+34	The artifact rule is:	dropped	restates the sections above
+34	```text [sha1:3313f264, 8 lines]	dropped	restates the sections above

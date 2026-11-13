@@ -196,7 +196,7 @@ group's offset takes effect as `gpx_anchor_chosen`, which no drift check follows
 :id: BLD-timezone_naive_offset
 :status: ruled
 :realises: RUL-offset_from_own_evidence, RUL-other_proposals_need_acceptance
-:aliases: geotag-tz-derived-offset-calc-1
+:aliases: geotag-tz-derived-offset-calc-1, geotag-timezone-derived-confirmable-1
 
 A bucket with no anchor and a destination timezone SHALL be proposed the offset −(the timezone's UTC offset at the
 bucket's earliest camera time), daylight saving included, as `proposal_source: "timezone_naive"` with
@@ -227,7 +227,7 @@ holds the handoff's content fingerprint, `camera_time_policy_fingerprint` — ov
 :id: BLD-resolved_utc
 :status: ruled
 :realises: RUL-phone_time_from_own_offset, RUL-offset_per_camera_destination_day, RUL-time_before_gps
-:aliases: geotag-compute-resolved-utc-1, geotag-utc-after-validation-1
+:aliases: geotag-compute-resolved-utc-1, geotag-utc-after-validation-1, geotag-resolved-utc-needs-both-1
 
 `compute_resolved_utc` SHALL resolve each photo of photos by destination to UTC: a camera's photo by the offset of its
 cell — `<group>@<date>` where the destination has one for its date, else `<group>` — a corrected offset from
@@ -418,4 +418,18 @@ satisfied, failures and blockers, `fingerprint_mismatches` — each with its exp
 `user_decision.accept_fingerprint_change`, the one field a later execution reads — the snapshot, and run metadata apart;
 its `status` is `success`, `partial` (anything outstanding, a mismatch always), `failed` (nothing applied) or
 `rejected` (stopped before any change). It is never a dependency.
+:::
+
+
+## 31. Finalize
+
+:::{bld} What finalize checks first
+:id: BLD-finalize_preconditions
+:status: seed
+:realises: RUL-finalize_requires_success
+
+`geotag finalize` SHALL refuse, writing nothing, unless `photos-24-executable-plan.json` is `ready`,
+`photos-25-execution-summary.json` is `success` for the same `plan_id`, and every dependency of the plan but the
+handoff still holds — the handoff left out because prep, run after execute, records geotag's own writes and renames
+in it.
 :::

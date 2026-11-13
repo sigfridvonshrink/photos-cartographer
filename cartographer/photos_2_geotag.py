@@ -1361,7 +1361,7 @@ class GeotagWorkflow:
         except Exception:
             return {}
 
-    def revalidate_plan(self, plan, gpx):
+    def revalidate_plan(self, plan, gpx, *, with_handoff=True):
         """§29 steps 2-4: recompute every dependency fingerprint and return the stale reasons. A
         non-empty list means reject the plan before ANY mutation (the user re-runs to replan)."""
         ws = self.workspace_root
@@ -1372,7 +1372,7 @@ class GeotagWorkflow:
         for key in ("time_decisions", "drift_validation", "gps_decisions"):
             if not (dep.get(key) and verify_json_dependency(dep[key], ws)):
                 stale.append(f"{key} dependency changed or missing")
-        if not (dep.get("handoff") and self._verify_handoff_dependency(dep["handoff"], ws)):
+        if with_handoff and not (dep.get("handoff") and self._verify_handoff_dependency(dep["handoff"], ws)):
             stale.append("handoff dependency changed or missing")   # content fingerprint, not file bytes
         policy = json.dumps(CONFIG.get("camera_time_and_timezone_policy") or {}, sort_keys=True)
         for k, cur in (("code_fingerprint", code_fingerprint()),
@@ -1662,6 +1662,15 @@ class GeotagWorkflow:
                        f"{EXECUTABLE_PLAN_ARTIFACT} (plan_id mismatch) — re-execute.")
         if blk:
             return blk
+        # The executed plan must still hold (§31): a decision, the configuration or the tracks changed since
+        # would leave the package recording decisions the photos never received. The handoff is left out: a
+        # prep run after execute records geotag's own writes and renames in it, and that is the loop, not a
+        # change of decision.
+        gpx = GPXIndex(selected_gpx_root(), track_memo_db_path(ws)).build(self.coordinator)
+        stale = self.revalidate_plan(plan, gpx, with_handoff=False)
+        if stale:
+            return [f"The executed plan no longer holds ({'; '.join(stale)}) — re-run `geotag plan` and "
+                    "`geotag execute` first."]
 
         files = self.build_file_model()
         cache = GeotagCache(ws)
