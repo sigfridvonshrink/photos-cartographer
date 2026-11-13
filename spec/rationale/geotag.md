@@ -256,3 +256,28 @@ evidence than any zone geotag could assume. But a photo holds several times, eac
 taken, digitized, modified — and an offset describes only the time it was written with; another would be right only by
 chance. Where the photo records none for its time, the destination's zone is the best guess left.
 :::
+
+
+## 22a. The GPS-drift check
+
+:::{rat} A wrong offset moves a whole day along the track
+:id: RAT-drift_invisible
+:status: seed
+:justifies: RUL-unanchored_offset_confirmed
+
+A photo with no position of its own is placed where the track was at its resolved time. With an offset the camera's
+GPS measured, that time is evidence; with one assumed from the timezone or written by hand, nothing has checked it.
+Wrong by an hour, it slides the whole day's photos an hour along the track — each to a real place on the route, so
+none looks wrong — and writes those places into the originals. Seeing a photo against the track at its time is the
+check; leaving it unseen must never pass for having seen it.
+:::
+
+:::{rat} What was seen was one offset
+:id: RAT-confirmed_one_offset
+:status: seed
+:justifies: RUL-confirmation_holds_for_its_offset
+
+Confirming is looking at the photos on the track at the times one offset gives. Another offset puts them elsewhere,
+and that has not been looked at: carried over, the confirmation would pass an offset nobody checked, or let a
+correction found for the old one override the user's new decision.
+:::

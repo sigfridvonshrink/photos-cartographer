@@ -643,3 +643,37 @@
 22.1	The decision artifacts (`photos-21`/`photos-23`) deliberately carry only their **field-scoped** policy fingerprints (the time-policy / GPS-policy subsets), not the whole-file hash, so an unrelated config edit cannot needlessly restale them; the whole-file integrity hash enters the cascade once, at the plan, which is the artifact `execute` revalidates.	BLD-decision_record_envelope BLD-staleness_by_field_fingerprints	
 22.1	Rows must be ordered by workspace path and all values normalized to text before hashing, so the fingerprint is stable across runs with unchanged inputs.	BLD-resolved_utc_fingerprint	
 22.1	This `resolved_utc_cache_fingerprint` is the value referenced as the "resolved UTC cache fingerprint" dependency in Sections 5, 6, 24, and 28.	BLD-geotag_dependencies	
+22a	## 22a. Stage 7a — GPS-drift validation gate (`photos-22-gps-drift-validation.json`)	dropped	a heading; the corpus's documents carry their own
+22a	**The highest-danger gap this gate closes.** GPS placement (Section 23) positions a file purely from its **resolved UTC**: it finds where the GPX track was at that instant.	RAT-drift_invisible	
+22a	That is safe when the file's offset came from a GPX self-anchor (the offset was *derived* from the track) or when the file has its own native-GPS anchor (it is independently placeable).	RAT-drift_invisible	
+22a	But when a bucket's offset is **manual** or **timezone-derived** and the bucket has **no native-GPS anchor**, nothing has ever checked that offset against the track — a wrong offset silently slides the **whole** bucket to the wrong point on the GPX track, drift the operator never sees.	RAT-drift_invisible	
+22a	Stage 7a makes that drift **explicit and gated**: every at-risk bucket must be confirmed before GPS planning runs.	RUL-unanchored_offset_confirmed	
+22a	**This stage runs between resolved UTC (Section 22) and GPS planning (Section 23).** It consumes the **complete** `photos-21-time-decisions.json` and the resolved UTC computed under the *current* offsets, and emits `photos-22-gps-drift-validation.json`.	BLD-geotag_stage_order BLD-drift_validation	
+22a	It mirrors the time→GPS gate: while 22 `requires_user_input`, the workflow stops and does **not** create `photos-23`/`photos-24`.	BLD-drift_validation	
+22a.1	### 22a.1 Trigger	dropped	a heading; the corpus's documents carry their own
+22a.1	A `(camera group, destination[, naive date])` offset bucket — the same buckets as Section 10.2 — becomes a 22 **review item** if and only if **all** hold:	BLD-drift_validation	
+22a.1	1. its **effective offset source** is `timezone_accepted` or `manual` (i.e. *not* `gpx_anchor_auto` / `gpx_anchor_accepted` / `gpx_anchor_chosen` — an offset the camera's own GPS supports is already track-derived);	BLD-drift_validation	
+22a.1	2. the bucket has **no native-GPS anchor** — no frame in it has GPS that matches the track (Section 19.1); with such an anchor the bucket is independently placeable and needs no validation;	BLD-drift_validation	
+22a.1	3. **GPX coverage exists** over the bucket's resolved-UTC interval widened by the plausible-clock-error window (`gpx_anchor_max_clock_error_seconds`, reused from the self-anchor search).	BLD-drift_validation	
+22a.1	With no covering track there is nothing to validate against — GPS planning will treat those files as fallback/lost (Section 25), not as drift.	BLD-drift_validation	no covering track: placement falls back, nothing to check
+22a.1	Buckets that fail any condition produce no 22 item.	BLD-drift_validation	
+22a.1	An artifact with no items is trivially `complete`.	BLD-decision_record_envelope	
+22a.2	### 22a.2 Evidence and decision fields	dropped	a heading; the corpus's documents carry their own
+22a.2	Each review item carries a `proposal` (the `current_offset_seconds`, its `proposal_source`, and the covering **GPX track segment** — the points `lat`/`lon`/`time_utc` within the widened window, the evidence a reviewer scrubs the representative photo along) and a `user_decision`:	BLD-drift_validation	
+22a.2	```text [sha1:690224be, 1 lines]	BLD-drift_validation	
+22a.2	- `confirmed: true` with an **empty** `corrected_offset_seconds` = a **zero scrub** — "the offset was right, leave it."	BLD-drift_validation	
+22a.2	- `confirmed: true` with a **number** = a **corrected** offset for the whole bucket (a whole number of seconds).	BLD-drift_validation RUL-checked_positions_and_times	
+22a.2	- `confirmed_offset_seconds` names the offset the confirmation was made against — the `current_offset_seconds` shown — and a confirmation holds only while it is the bucket's offset.	RUL-confirmation_holds_for_its_offset BLD-drift_validation	
+22a.2	- `confirmed: false` ⇒ `requires_user_input: true`.	RUL-unanchored_offset_confirmed BLD-drift_validation	
+22a.2	**A zero scrub is never implied by inaction** — an untouched bucket blocks the gate; the operator must actively affirm even "no change." This is the load-bearing safety rule.	RUL-unanchored_offset_confirmed	
+22a.2	`corrected_offset_seconds` is sanity-validated like every authored value (Section 9.2): anything but a whole number of seconds is a blocker that leaves the artifact unchanged.	RUL-checked_positions_and_times RUL-invalid_value_stops	
+22a.2	Authored confirmations are **preserved** across reruns.	RUL-decision_kept	
+22a.2	One made against another offset than the bucket's current one — the offset changed in `photos-21` since — is stale-flagged, applies to nothing, and the bucket asks again until confirmed anew; one naming no offset is a blocker.	RUL-confirmation_holds_for_its_offset BLD-drift_validation	
+22a.2	One whose bucket no longer triggers is dropped: nothing is left to check.	BLD-drift_validation	nothing left to check
+22a.3	### 22a.3 Output consumed by resolved UTC	dropped	a heading; the corpus's documents carry their own
+22a.3	Once 22 is complete, resolved UTC is **recomputed** consuming each confirmed bucket's validated offset (`effective_drift_offset`, source `gps_drift_validated`), and only then are the SQLite cache and `resolved_utc_cache_fingerprint` persisted (the fingerprint includes the `photos-22` SHA-256, Section 22.1).	BLD-drift_validation BLD-resolved_utc_fingerprint	
+22a.3	The validated offset lives in `photos-22` and does **not** mutate the `photos-21` decision it refines — `photos-21` stays the immutable record of the time decision; 22 is its GPS-drift check.	BLD-drift_validation RUL-decision_kept	
+22a.3	GPS planning (Section 23) then proceeds on the corrected resolved UTC.	BLD-geotag_stage_order	
+22a.4	### 22a.4 Dependencies	dropped	a heading; the corpus's documents carry their own
+22a.4	`photos-22` records `photos-21-time-decisions.json` SHA-256, the GPX fingerprint, the time-policy fingerprint, and the camera-group-key version.	BLD-drift_validation	
+22a.4	Because the recomputed `resolved_utc_cache_fingerprint` folds in the `photos-22` SHA-256, a changed or withdrawn 22 confirmation restales `photos-23`/`photos-24` through the normal cascade; the executable plan additionally records `photos-22` as a direct dependency so `execute` rejects a plan whose drift confirmation was withdrawn after planning (Section 28, Section 29).	BLD-geotag_dependencies BLD-resolved_utc_fingerprint	

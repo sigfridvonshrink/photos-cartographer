@@ -348,3 +348,30 @@ accepted proposal does — never asked to be checked against the tracks again.
 A phone's photo SHALL take its true time from the offset recorded with the time it was read from, else from its
 destination's timezone.
 :::
+
+
+## 22a. The GPS-drift check
+
+:::{rul} An offset the camera's GPS does not support is confirmed before photos are placed by it
+:id: RUL-unanchored_offset_confirmed
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: geotag-drift-gate-blocks-1, geotag-drift-untouched-blocks-1
+:uses: DEF-tracks
+
+Photos SHALL NOT be placed by the tracks on a clock offset the camera's own GPS does not support until the user has
+confirmed that offset against the tracks — an untouched check never counting as a confirmation.
+:::
+
+:::{rul} A confirmation holds for the offset it confirmed
+:id: RUL-confirmation_holds_for_its_offset
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-unanchored_offset_confirmed
+
+A confirmation SHALL hold only for the offset it confirmed; a changed offset is asked about again.
+:::

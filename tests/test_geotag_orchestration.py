@@ -399,7 +399,7 @@ def test_drift_confirmation_must_be_a_real_yes(tmp_path):
     for value, confirmed, blocked in (("false", False, True), (True, True, False), (None, False, False)):
         blockers = []
         cell = wf._drift_cell("6-photos-by-dest/T", CAM, time_cell, [], [],
-                              {"user_decision": {"confirmed": value}}, blockers)
+                              {"user_decision": {"confirmed": value, "confirmed_offset_seconds": 0}}, blockers)
         assert bool(cell["effective_drift_offset"]) is confirmed, value
         assert bool(blockers) is blocked, (value, blockers)
     _, shape = wf.build_drift_validation([], {"destinations": {}}, [], None,

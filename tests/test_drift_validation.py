@@ -208,7 +208,7 @@ def test_unconfirmed_bucket_blocks(tmp_path):
 
 @pytest.mark.spec("geotag-drift-untouched-blocks-1")
 def test_zero_scrub_must_be_explicit(tmp_path):
-    _, files, _, _, drift, blk = _triggered(tmp_path, {"confirmed": True, "corrected_offset_seconds": ""})
+    _, files, _, _, drift, blk = _triggered(tmp_path, {"confirmed": True, "corrected_offset_seconds": "", "confirmed_offset_seconds": 0})
     assert not blk
     cell = drift["destinations"][DEST]["drift_decisions"][CAM]
     assert cell["requires_user_input"] is False
@@ -218,7 +218,7 @@ def test_zero_scrub_must_be_explicit(tmp_path):
 
 @pytest.mark.spec("geotag-drift-recompute-utc-1")
 def test_correction_changes_resolved_utc(tmp_path):
-    _, files, art, _, drift, blk = _triggered(tmp_path, {"confirmed": True, "corrected_offset_seconds": -3600})
+    _, files, art, _, drift, blk = _triggered(tmp_path, {"confirmed": True, "corrected_offset_seconds": -3600, "confirmed_offset_seconds": 0})
     assert not blk
     overrides = cal.drift_offset_overrides(drift)
     assert overrides == {(DEST, CAM): -3600}
@@ -230,7 +230,7 @@ def test_correction_changes_resolved_utc(tmp_path):
 
 
 def test_zero_scrub_leaves_offset_unchanged(tmp_path):
-    _, files, art, _, drift, _ = _triggered(tmp_path, {"confirmed": True, "corrected_offset_seconds": ""})
+    _, files, art, _, drift, _ = _triggered(tmp_path, {"confirmed": True, "corrected_offset_seconds": "", "confirmed_offset_seconds": 0})
     rows = {r["relative_path"]: r for r in cal.compute_resolved_utc(files, GROUPS, art, cal.drift_offset_overrides(drift))}
     assert rows[f"{DEST}/a.arw"]["utc_offset_used"] == 0                  # same offset, now validated
     assert rows[f"{DEST}/a.arw"]["resolved_utc_provenance"] == "gps_drift_validated"
@@ -239,13 +239,13 @@ def test_zero_scrub_leaves_offset_unchanged(tmp_path):
 # --- Validation of authored input -------------------------------------------
 
 def test_non_numeric_correction_blocks(tmp_path):
-    *_, blk = _triggered(tmp_path, {"confirmed": True, "corrected_offset_seconds": "noon"})
+    *_, blk = _triggered(tmp_path, {"confirmed": True, "corrected_offset_seconds": "noon", "confirmed_offset_seconds": 0})
     assert blk and "corrected_offset_seconds" in blk[0]
 
 
 @pytest.mark.spec("geotag-drift-corrected-validated-1")
 def test_a_correction_not_whole_seconds_blocks(tmp_path):
-    *_, blk = _triggered(tmp_path, {"confirmed": True, "corrected_offset_seconds": 12.5})
+    *_, blk = _triggered(tmp_path, {"confirmed": True, "corrected_offset_seconds": 12.5, "confirmed_offset_seconds": 0})
     assert blk and "whole number of seconds" in blk[0]
 
 
@@ -253,18 +253,18 @@ def test_a_correction_not_whole_seconds_blocks(tmp_path):
 
 @pytest.mark.spec("geotag-drift-confirmation-preserved-1")
 def test_confirmation_preserved_across_rebuild(tmp_path):
-    wf, files, art, gpx, drift, _ = _triggered(tmp_path, {"confirmed": True, "corrected_offset_seconds": -120})
+    wf, files, art, gpx, drift, _ = _triggered(tmp_path, {"confirmed": True, "corrected_offset_seconds": -120, "confirmed_offset_seconds": 0})
     # feed the built artifact back as prior -> the confirmation survives a regenerate
     drift2, blk = _drift(wf, files, art, gpx, drift)
     assert not blk
     cell = drift2["destinations"][DEST]["drift_decisions"][CAM]
-    assert cell["user_decision"] == {"confirmed": True, "corrected_offset_seconds": -120}
+    assert cell["user_decision"] == {"confirmed": True, "corrected_offset_seconds": -120, "confirmed_offset_seconds": 0}
     assert cell["effective_drift_offset"]["offset_seconds"] == -120
 
 
 def test_correction_shifts_resolved_fingerprint(tmp_path):
-    _, files, art, _, d_a, _ = _triggered(tmp_path, {"confirmed": True, "corrected_offset_seconds": -3600})
-    _, _, art_b, _, d_b, _ = _triggered(tmp_path, {"confirmed": True, "corrected_offset_seconds": -7200})
+    _, files, art, _, d_a, _ = _triggered(tmp_path, {"confirmed": True, "corrected_offset_seconds": -3600, "confirmed_offset_seconds": 0})
+    _, _, art_b, _, d_b, _ = _triggered(tmp_path, {"confirmed": True, "corrected_offset_seconds": -7200, "confirmed_offset_seconds": 0})
     rows_a = cal.compute_resolved_utc(files, GROUPS, art, cal.drift_offset_overrides(d_a))
     rows_b = cal.compute_resolved_utc(files, GROUPS, art_b, cal.drift_offset_overrides(d_b))
     fps = {"x": 1}
@@ -347,8 +347,50 @@ def test_e2e_drift_gate_blocks_then_resumes(tmp_path, monkeypatch):
     assert not gdp.exists()                                               # phase 22 BLOCKED by the gate
 
     # Confirm the bucket (zero scrub, explicit) -> the gate opens.
-    _edit(ctl, "photos-22-gps-drift-validation.json", lambda a: a["destinations"][f"{BYDEST}/T"]
-          ["drift_decisions"][CAM]["user_decision"].update({"confirmed": True}))
+    def confirm(a):
+        cell = a["destinations"][f"{BYDEST}/T"]["drift_decisions"][CAM]
+        cell["user_decision"].update({"confirmed": True,
+                                      "confirmed_offset_seconds": cell["proposal"]["current_offset_seconds"]})
+    _edit(ctl, "photos-22-gps-drift-validation.json", confirm)
     _run(monkeypatch, ws, "plan")
     assert json.load(open(dvp))["status"] == "complete"
     assert gdp.exists()                                                   # phase 22 now built
+
+
+@pytest.mark.spec("RUL-confirmation_holds_for_its_offset", "BLD-drift_validation",
+                  test="TST-drift_validation-a_confirmation_holds_only_for_the_offset_it_confirmed")
+@pytest.mark.parametrize("corrected", ["", -3600], ids=["zero_scrub", "correction"])
+def test_a_confirmation_holds_only_for_the_offset_it_confirmed(tmp_path, corrected):
+    # Confirmed against offset 0; the user then changes the offset in photos-21 to -5400. The confirmation was
+    # never made against -5400: it is stale, applies to nothing, and the bucket asks again — kept as written.
+    wf = _wf(tmp_path)
+    files = [_file(f"{DEST}/a.arw", "2024:07:03 14:00:00")]
+    gpx = _gpx([(50.0, 4.0, _utc(12))])
+    art = _complete_time(wf, files, gpx, {CAM: {"user_decision": {"manual_offset_seconds": 0}}})
+    first, _ = _drift(wf, files, art, gpx, None)
+    first["destinations"][DEST]["drift_decisions"][CAM]["user_decision"] = {
+        "confirmed": True, "corrected_offset_seconds": corrected, "confirmed_offset_seconds": 0}
+    held, _ = _drift(wf, files, art, gpx, first)
+    cell = held["destinations"][DEST]["drift_decisions"][CAM]
+    assert cell["effective_drift_offset"] and cell["stale_user_decision"] is False      # same offset: holds
+    art2 = _complete_time(wf, files, gpx, {CAM: {"user_decision": {"manual_offset_seconds": -5400}}})
+    after, blk = _drift(wf, files, art2, gpx, held)
+    assert not blk
+    again, _ = _drift(wf, files, art2, gpx, after)                      # and stays stale on the next run
+    assert again["destinations"][DEST]["drift_decisions"][CAM]["stale_user_decision"] is True
+    cell = after["destinations"][DEST]["drift_decisions"][CAM]
+    assert cell["proposal"]["current_offset_seconds"] == -5400
+    assert cell["effective_drift_offset"] == "" and cell["stale_user_decision"] is True
+    assert cell["requires_user_input"] is True and after["status"] == "requires_user_input"
+    assert cell["user_decision"] == {"confirmed": True, "corrected_offset_seconds": corrected,
+                                     "confirmed_offset_seconds": 0}
+    assert cal.drift_offset_overrides(after) == {}                                         # applied to nothing
+
+
+@pytest.mark.spec("RUL-unanchored_offset_confirmed", "BLD-drift_validation",
+                  test="TST-drift_validation-a_confirmation_naming_no_offset_confirms_nothing")
+def test_a_confirmation_naming_no_offset_confirms_nothing(tmp_path):
+    *_, drift, blk = _triggered(tmp_path, {"confirmed": True, "corrected_offset_seconds": ""})
+    assert drift["status"] == "requires_user_input" and blk == [f"{DEST}: drift_decisions[{CAM}].user_decision.confirmed_offset_seconds must be "
+                                     "the offset confirmed — the current one is 0."]
+

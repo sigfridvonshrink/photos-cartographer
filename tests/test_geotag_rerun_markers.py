@@ -105,8 +105,9 @@ def _confirm_drift(ws, offset, bucket=CAM):
     """Confirm the GPS-drift check a manual offset with track coverage triggers (§22a)."""
     p = ws / ".photos-ingest" / "photos-22-gps-drift-validation.json"
     a = json.loads(p.read_text())
-    a["destinations"][T]["drift_decisions"][bucket]["user_decision"].update(
-        confirmed=True, corrected_offset_seconds=offset)
+    cell = a["destinations"][T]["drift_decisions"][bucket]
+    cell["user_decision"].update(confirmed=True, corrected_offset_seconds=offset,
+                                 confirmed_offset_seconds=cell["proposal"]["current_offset_seconds"])
     p.write_text(json.dumps(a))
 
 
