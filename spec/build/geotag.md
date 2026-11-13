@@ -214,7 +214,7 @@ holds the handoff's content fingerprint, `camera_time_policy_fingerprint` — ov
 
 :::{bld} How each photo's true time is resolved
 :id: BLD-resolved_utc
-:status: seed
+:status: ruled
 :realises: RUL-phone_time_from_own_offset, RUL-offset_per_camera_destination_day, RUL-time_before_gps
 :aliases: geotag-compute-resolved-utc-1, geotag-utc-after-validation-1
 
@@ -232,7 +232,7 @@ geotag already corrected by its own offset, else the timezone (`geotag_corrected
 
 :::{bld} The resolved-UTC fingerprint
 :id: BLD-resolved_utc_fingerprint
-:status: seed
+:status: ruled
 :realises: INV-no_stale_use, RUL-staleness_by_area, RUL-tracks_in_dependencies
 :aliases: geotag-utc-fingerprint-1, geotag-utc-not-restaled-by-unrelated-config-1
 

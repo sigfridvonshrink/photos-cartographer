@@ -339,7 +339,7 @@ accepted proposal does — never asked to be checked against the tracks again.
 
 :::{rul} A phone's time is read by the offset recorded with it
 :id: RUL-phone_time_from_own_offset
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
