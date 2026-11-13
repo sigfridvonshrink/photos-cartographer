@@ -188,3 +188,29 @@ it.
 
 A container destination's decisions SHALL never wait for the user.
 :::
+
+
+## 15. Reading the tracks
+
+:::{rul} A track point's time is the instant it states
+:id: RUL-track_time_never_guessed
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-tracks
+
+Geotag SHALL take a track point's time as the instant it states — whatever its precision or the offset it is written
+with — never guessing the zone of one that states none.
+:::
+
+:::{rul} A track point geotag cannot use is reported
+:id: RUL-unreadable_point_reported
+:status: seed
+:criticality: med
+:verify: required
+:uses: DEF-tracks
+
+A track point geotag cannot use — no position or one out of range, no time, an unreadable time, or one stating no
+zone — SHALL be skipped and reported to the user, naming its file and point.
+:::

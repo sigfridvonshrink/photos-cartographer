@@ -243,7 +243,8 @@ def test_a_run_with_nothing_to_decide_writes_every_record(tmp_path, monkeypatch,
     assert json.load(open(ctl / "photos-24-executable-plan.json"))["status"] == "ready"
 
 
-@pytest.mark.spec("geotag-gpx-rejected-points-reported-1")
+@pytest.mark.spec("geotag-gpx-rejected-points-reported-1", "RUL-unreadable_point_reported",
+                  test="TST-geotag_orchestration-plan_reports_gpx_load_warnings_capped")
 def test_plan_reports_gpx_load_warnings_capped(tmp_path, monkeypatch, capsys):
     # GPX points rejected at load are reported, not silently dropped (an all-rejected track must not
     # read as merely "empty"), and the list is capped with a remainder count.

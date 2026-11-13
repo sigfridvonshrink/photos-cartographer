@@ -114,6 +114,8 @@ def test_gpx_malformed_warns_not_crashes(tmp_path):
     assert idx.status == "empty" and any("Malformed" in w for w in idx.warnings)
 
 
+@pytest.mark.spec("RUL-unreadable_point_reported", "RUL-track_time_never_guessed", "BLD-track_points",
+                  test="TST-geotag_model-gpx_parser_skips_bad_trkpts")
 def test_gpx_parser_skips_bad_trkpts(tmp_path):
     # exercise every reject branch in GPXIndex._parse_bytes (GPS code -> full coverage):
     # missing lon, missing time, out-of-range coord, non-numeric coord, and a naive-time point;
@@ -131,10 +133,12 @@ def test_gpx_parser_skips_bad_trkpts(tmp_path):
     idx = cal.GPXIndex(str(root)).build()
     assert idx.status == "usable" and len(idx.points) == 1                          # only the valid one
     assert idx.points[0].time_utc.hour == 10                                        # 12:00:04+02:00 -> 10:00:04Z
-    assert len(idx.warnings) >= 3                                                   # the rejects warned
+    assert len(idx.warnings) == 5                                                   # every reject warned
+    assert all("edge.gpx" in w and "trkpt" in w for w in idx.warnings)              # named: file and point
 
 
-@pytest.mark.spec("geotag-gpx-time-xsd-datetime-1")
+@pytest.mark.spec("geotag-gpx-time-xsd-datetime-1", "RUL-track_time_never_guessed", "BLD-track_points",
+                  test="TST-geotag_model-gpx_parser_accepts_fractional_and_whole_seconds")
 def test_gpx_parser_accepts_fractional_and_whole_seconds(tmp_path):
     # xsd:dateTime allows optional fractional seconds: Garmin writes `...:SS.000Z`, others `...:SSZ`.
     # Both forms (and a fractional offset-suffixed one) parse; mixing them in one track is fine.
@@ -153,6 +157,25 @@ def test_gpx_parser_accepts_fractional_and_whole_seconds(tmp_path):
         datetime(2024, 7, 3, 12, 0, 1, tzinfo=timezone.utc),
         datetime(2024, 7, 3, 12, 0, 2, 250000, tzinfo=timezone.utc),
         datetime(2024, 7, 3, 12, 0, 3, 500000, tzinfo=timezone.utc)]
+
+
+@pytest.mark.spec("RUL-unreadable_point_reported", "BLD-track_points",
+                  test="TST-geotag_model-a_track_of_untimed_points_is_reported_not_empty")
+def test_a_track_of_untimed_points_is_reported_not_empty(tmp_path):
+    # A track whose every point lacks a time (or a position) yields no point, but never reads as merely
+    # empty: each point is reported, naming its file and index.
+    root = tmp_path / "gpx"; root.mkdir()
+    (root / "untimed.gpx").write_text(
+        '<gpx xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>'
+        '<trkpt lat="50.0" lon="4.0"></trkpt>'
+        '<trkpt lat="50.1" lon="4.1"><time> </time></trkpt>'
+        '<trkpt><time>2024-07-03T12:00:00Z</time></trkpt>'
+        '</trkseg></trk></gpx>')
+    idx = cal.GPXIndex(str(root)).build()
+    assert idx.points == [] and idx.status == "empty"
+    assert idx.warnings == ["GPX point without a time in untimed.gpx at trkpt 0",
+                            "GPX point without a time in untimed.gpx at trkpt 1",
+                            "GPX point without a position in untimed.gpx at trkpt 2"]
 
 
 def test_gpx_unreadable_file_warns_and_skips(tmp_path):

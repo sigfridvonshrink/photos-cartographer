@@ -127,7 +127,7 @@ class GPXPoint:
 
 
 _REL = "\x00rel\x00"            # stands for the file's path in a memoized warning: the memo is keyed by bytes
-GPX_PARSE_VERSION = "gpx-parse-v1"   # bump when the parse below changes what it yields
+GPX_PARSE_VERSION = "gpx-parse-v2"   # bump when the parse below changes what it yields
 
 
 class GPXIndex:
@@ -287,7 +287,14 @@ class GPXIndex:
                 continue
             lat_s, lon_s = elem.attrib.get("lat"), elem.attrib.get("lon")
             time_elem = next((c for c in elem if c.tag.endswith("time")), None)
-            if not lat_s or not lon_s or time_elem is None or not time_elem.text:
+            if not lat_s or not lon_s:
+                warnings.append(f"GPX point without a position in {_REL} at trkpt {idx}")
+                idx += 1
+                continue
+            if time_elem is None or not (time_elem.text or "").strip():
+                # Reported like every unusable point, so a track whose points all lack a time never
+                # reads as merely an empty track (geotag §15).
+                warnings.append(f"GPX point without a time in {_REL} at trkpt {idx}")
                 idx += 1
                 continue
             try:

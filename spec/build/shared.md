@@ -507,11 +507,12 @@ Prep SHALL raise one blocker for each track file it inventories, naming it, and 
 
 :::{bld} The GPX fingerprint
 :id: BLD-gpx_fingerprint
-:status: ruled
+:status: seed
 :realises: RUL-tracks_in_dependencies
+:aliases: geotag-gpx-fingerprint-unconditional-1, geotag-gpx-unavailable-recorded-1
 
 The GPX fingerprint SHALL be a SHA-256 over the resolved `gpx_root`, a version tag, and, in sorted order, each `*.gpx`
-file's path relative to the root and the SHA-256 of its bytes. An empty `gpx_root`, and a `gpx_root` that is not a
+file's path relative to the root and the SHA-256 of its bytes, then every point read from them, in time order. An empty `gpx_root`, and a `gpx_root` that is not a
 directory, each give a fixed value of their own, the second with a warning. It is recorded as `gpx_fingerprint` in the
 `depends_on` of `photos-21-time-decisions.json`, `photos-22-gps-drift-validation.json`, `photos-23-gps-decisions.json`
 and `photos-24-executable-plan.json`, and checked before each is used.

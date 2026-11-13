@@ -393,3 +393,45 @@
 13.1.1	The convenience is in *who types the prep command*, not in *what enforces the contract*.	dropped	restates the above
 13.1.1	(This applies to `geotag plan`;	BLD-loop_gates	
 13.1.1	`geotag execute` validates against the plan's own dependency fingerprints and does not re-prep.)	BLD-loop_gates	
+14	## 14. Stage 2 — Create in-memory by-dest file objects	dropped	a heading; the corpus's documents carry their own
+14	After preflight passes, the workflow creates in-memory file objects for files under `6-photos-by-dest` only.	BLD-geotag_file_model RUL-geotag_changes_only_by_dest	
+14	Each file object should represent facts such as:	dropped	introduces the list
+14	1. workspace-relative path;	BLD-geotag_file_model	a field of the in-memory model
+14	2. destination path;	BLD-geotag_file_model	a field of the in-memory model
+14	3. file size;	BLD-geotag_file_model	a field of the in-memory model
+14	4. mtime;	BLD-geotag_file_model	a field of the in-memory model
+14	5. content fingerprint, if available;	BLD-geotag_file_model	a field of the in-memory model
+14	6. media type;	BLD-geotag_file_model	a field of the in-memory model
+14	7. camera identity fields;	BLD-geotag_file_model	a field of the in-memory model
+14	8. raw timestamp fields;	BLD-geotag_file_model	a field of the in-memory model
+14	9. native GPS fields;	BLD-geotag_file_model	a field of the in-memory model
+14	10. metadata field-set version;	BLD-geotag_file_model	a field of the in-memory model
+14	11. current folder class;	BLD-geotag_file_model	a field of the in-memory model
+14	12. prep handoff/cache provenance;	dropped	nothing uses it; the handoff the model is built from is itself a dependency
+14	13. planned filename (mutable field used for lookahead name de-collisioning).	BLD-geotag_file_model	a field of the in-memory model
+14	These objects are the planning basis for all later stages.	BLD-geotag_file_model	
+15	## 15. Stage 3 — Load, parse, and fingerprint GPX folder	dropped	a heading; the corpus's documents carry their own
+15	GPX folder scanning, parsing, and fingerprinting must happen before the time-decision stage.	BLD-geotag_stage_order	
+15	It is the **disk-heavy** step, so it runs **after** the in-memory camera-group recognition (Section 16): an unknown-group abort then costs nothing in GPX I/O, and a re-run after the operator classifies the group re-ingests GPX only once recognition passes.	BLD-geotag_stage_order	
+15	(GPX ingestion does not depend on camera grouping; the ordering is purely to avoid wasted parsing on an early abort.)	BLD-geotag_stage_order	
+15	This is required because GPX data may be used in two distinct ways:	RAT-tracks_are_geotags_evidence	
+15	1. upstream, as evidence for GPX/native-GPS time-anchor proposals;	RAT-tracks_are_geotags_evidence	
+15	2. downstream, for GPS interpolation/extrapolation after time is solved.	RAT-tracks_are_geotags_evidence	
+15	The workflow must record:	dropped	introduces the list
+15	1. GPX root path;	BLD-gpx_fingerprint	
+15	2. GPX files considered;	BLD-gpx_fingerprint	
+15	3. GPX file size/mtime/hash or equivalent fingerprint;	BLD-gpx_fingerprint	
+15	4. parsed GPX time ranges;	dropped	printed during the run, deciding nothing; the points themselves enter the fingerprint
+15	5. GPX policy/config fingerprint;	RUL-staleness_by_area	the track settings are a configuration area of their own
+15	6. whether GPX was available, disabled, missing, or unusable.	BLD-gpx_fingerprint	disabled and missing each give a fixed fingerprint; the state is printed, deciding nothing
+15	A track point's `<time>` is an `xsd:dateTime` and must be read as one: fractional seconds are optional (`2024-07-03T12:00:04Z` and `2024-07-03T12:00:04.000Z` are both valid — some recorders, e.g. Garmin, always write the fraction), and the zone may be `Z` or a numeric offset, normalized to UTC.	RUL-track_time_never_guessed BLD-track_points	
+15	A point without a timezone, with an unparseable time, or with missing/out-of-range coordinates is skipped with a warning naming the file and point, and those warnings are reported to the operator — a file whose every point was rejected must never read as merely an empty track.	RUL-unreadable_point_reported BLD-track_points	
+15	Every track file is read whole on every run, since its bytes are what the fingerprint checks; but a file whose bytes were parsed on an earlier run is not parsed again — its points come from the track memo `photos-00-track-memo.db`, keyed by the SHA-256 of those bytes, which yields exactly what parsing would.	RUL-reuse_valid_work BLD-idempotency	
+15	The memo is scratch (shared contract §10): deleting it, or finding it unreadable, only means parsing again.	RUL-other_databases_scratch	
+15	If GPX is unavailable or disabled, later artifacts should record that no GPX evidence was used.	BLD-gpx_fingerprint	each placement names its track; with none, no photo names one
+15	If GPX is used for time-anchor proposals, the GPX fingerprint becomes an upstream dependency of `photos-21-time-decisions.json`.	RUL-tracks_in_dependencies BLD-gpx_fingerprint	
+15	If GPX is used for GPS interpolation/extrapolation, the GPX fingerprint becomes an upstream dependency of `photos-23-gps-decisions.json` and `photos-24-executable-plan.json`.	RUL-tracks_in_dependencies BLD-gpx_fingerprint	
+15	The two statements above describe *why* the GPX fingerprint matters.	dropped	a connective
+15	In practice the implementation records the current GPX fingerprint as a dependency **unconditionally whenever a GPX set is loaded** — even for an artifact (or destination) that ended up using no GPX evidence — rather than tracking per-artifact whether GPX actually contributed.	RUL-tracks_in_dependencies BLD-gpx_fingerprint	
+15	This is a deliberate, conservative over-inclusion (Section 22.1): editing the GPX set may restale an artifact that did not depend on GPX, which only costs a recompute and never serves a stale result.	RAT-tracks_change_the_answers	
+15	If GPX is wholly unavailable or disabled, a fixed fingerprint of its own is recorded in their place, so turning GPX on or off restales them too.	BLD-gpx_fingerprint	
