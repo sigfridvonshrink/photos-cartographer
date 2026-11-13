@@ -196,7 +196,7 @@ bucket's earliest camera time), daylight saving included, as `proposal_source: "
 
 :::{bld} What every decision record carries
 :id: BLD-decision_record_envelope
-:status: seed
+:status: ruled
 :realises: RUL-decision_stage_writes_record, INV-no_stale_use
 :aliases: geotag-config-change-restales-21-1
 
