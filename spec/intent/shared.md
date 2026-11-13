@@ -1476,7 +1476,7 @@ prep and sort cycles before geotagging.
 :status: ruled
 :criticality: low
 :verify: required
-:aliases: loop-rerun-may-need-decisions-1
+:aliases: loop-rerun-may-need-decisions-1, geotag-recalc-only-affected-1
 :uses: DEF-dependency_cascade
 :refines: RUL-geotag_rerunnable
 

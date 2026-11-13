@@ -59551,7 +59551,7 @@
      "verify": "required"
     },
     "RUL-rerun_does_what_changed": {
-     "aliases": "loop-rerun-may-need-decisions-1",
+     "aliases": "loop-rerun-may-need-decisions-1, geotag-recalc-only-affected-1",
      "anti": null,
      "arch": {},
      "assumes": [],

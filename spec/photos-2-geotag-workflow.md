@@ -1888,12 +1888,10 @@ Prep cache / by-dest file facts changed
   -> geotag blocked
   -> prep/cache refresh required
 
-Workspace config changed
-  -> camera groups stale
-  -> photos-21-time-decisions.json stale
-  -> resolved UTC stale
-  -> photos-23-gps-decisions.json stale
-  -> photos-24-executable-plan.json stale
+A workspace config area changed
+  -> what depends on that area stale, nothing else (shared contract Section 4):
+     the camera-time policy restales photos-21 onward; the GPS thresholds,
+     photos-23 onward; the whole file's hash, photos-24
 
 Camera group classification changed
   -> photos-21-time-decisions.json stale
@@ -1921,8 +1919,8 @@ Destination timezone changed
   -> photos-24-executable-plan.json stale
 
 Filename format config changed
-  -> local rename plan stale
-  -> photos-24-executable-plan.json stale
+  -> once prep has named the workspace's files in a format, every phase stops
+     (shared contract Section 6); before that, the rename plan is stale
 
 photos-23-gps-decisions.json changed
   -> photos-24-executable-plan.json stale
