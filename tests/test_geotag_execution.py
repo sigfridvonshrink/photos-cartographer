@@ -84,7 +84,6 @@ def _ready_ws(tmp_path, monkeypatch, *, zfs=None):
             pass
     run()
     p = ctl / "photos-21-time-decisions.json"; a = json.load(open(p))
-    a["destinations"]["6-photos-by-dest/T"]["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
     p.write_text(json.dumps(a))
     run()
     assert (ctl / "photos-24-executable-plan.json").exists()
@@ -691,4 +690,4 @@ def test_every_write_traces_back_to_its_decision(tmp_path, monkeypatch):
     for oid in confirmed:                                                 # record -> the decision
         dest = os.path.dirname(ops[oid]["relative_path"])
         tz = times["destinations"][dest]["destination_timezone"]
-        assert tz["user_decision"]["accept_proposed_timezone"] is True and tz["effective_iana_timezone"]
+        assert tz["effective_iana_timezone"]

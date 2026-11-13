@@ -108,7 +108,7 @@ def test_valid_iana_true_and_false():
     assert cal._valid_iana("Nowhere/Nope") is False
 
 
-def test_timezone_manual_valid_and_accept_without_proposal(tmp_path):
+def test_timezone_manual_valid_and_no_proposal(tmp_path):
     ws, ctl = _init_ws(tmp_path)
     (ctl / "photos-11-handoff.json").write_text("{}")
     wf = cal.GeotagWorkflow(str(ws))
@@ -116,10 +116,11 @@ def test_timezone_manual_valid_and_accept_without_proposal(tmp_path):
     blk = []
     tz = wf._timezone_decision("d", {"user_decision": {"manual_iana_timezone": "Europe/Paris"}}, blk)
     assert tz["effective_iana_timezone"] == "Europe/Paris" and not blk
-    # accept with no proposal available (no default_folder_timezone) -> stale, still needs input
+    # no proposal available (no ancestor, no default_folder_timezone) -> needs the user's zone
     utils.CONFIG["camera_time_and_timezone_policy"]["default_folder_timezone"] = ""
-    tz2 = wf._timezone_decision("d", {"user_decision": {"accept_proposed_timezone": True}}, blk)
-    assert tz2["stale_user_decision"] is True and tz2["requires_user_input"] is True
+    tz2 = wf._timezone_decision("d", {"user_decision": {}}, blk)
+    assert tz2["requires_user_input"] is True and tz2["effective_iana_timezone"] == ""
+    assert tz2["user_decision"] == {"manual_iana_timezone": ""}           # the one decision a timezone takes
 
 
 def test_build_file_model_tolerates_malformed_records(tmp_path):
@@ -194,13 +195,6 @@ def _completable_ws(tmp_path):
              rec("6-photos-by-dest/T/c.arw", "2024:07:03 14:30:00")]          # no GPS -> blocked
     (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files), "cache_fingerprint": "pcf"}))
     return ws, ctl
-
-
-def _accept_tz(ctl):
-    p = ctl / "photos-21-time-decisions.json"
-    a = json.load(open(p))
-    a["destinations"]["6-photos-by-dest/T"]["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
-    p.write_text(json.dumps(a))
 
 
 def test_complete_run_writes_photos22_then_bad_coord_aborts(tmp_path, monkeypatch, capsys):
@@ -363,8 +357,8 @@ _T = ["destinations", "6-photos-by-dest/T"]
                   test="TST-geotag_orchestration-broken_decision_is_a_located_blocker")
 @pytest.mark.parametrize("artifact, edit, message", [
     ("photos-21-time-decisions.json",
-     _set(_T + ["destination_timezone", "user_decision", "accept_proposed_timezone"], "false"),
-     "6-photos-by-dest/T: destination_timezone.user_decision.accept_proposed_timezone must be true or false, not 'false'."),
+     _set(_T + ["camera_group_time_decisions", CAM, "user_decision", "accept_proposal"], "false"),
+     f"6-photos-by-dest/T: camera_group_time_decisions[{CAM}].user_decision.accept_proposal must be true or false, not 'false'."),
     ("photos-21-time-decisions.json", _set(_T + ["destination_timezone", "user_decision"], "yes"),
      "6-photos-by-dest/T: destination_timezone.user_decision must be an object."),
     ("photos-21-time-decisions.json", _set(["destinations"], []), "destinations must be an object."),

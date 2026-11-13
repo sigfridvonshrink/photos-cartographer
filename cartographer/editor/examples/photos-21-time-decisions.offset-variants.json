@@ -4,7 +4,7 @@
   "decision_mode": "no_op_or_auto_resolved",
   "depends_on": {
     "camera_group_key_version": 1,
-    "camera_time_policy_fingerprint": "1008657c9f24d8aab5567a64e0113328fedff5dd12ce08e6b5d27985d517ba99",
+    "camera_time_policy_fingerprint": "7484f1acee28dae75c29907d3bddb5d4b71ac8f1698434a2afd89a339998a0a8",
     "gpx_fingerprint": "example-gpx-fingerprint",
     "handoff": {
       "artifact_name": "photos-11-handoff.json",
@@ -27,7 +27,6 @@
         "requires_user_input": false,
         "stale_user_decision": false,
         "user_decision": {
-          "accept_proposed_timezone": false,
           "manual_iana_timezone": ""
         }
       },
@@ -135,6 +134,7 @@
       ],
       "destination_path": "6-photos-by-dest/Conflict",
       "destination_timezone": {
+        "decision_mode": "auto_resolved",
         "effective_iana_timezone": "Europe/Brussels",
         "inherited_from": "6-photos-by-dest",
         "proposal_confidence": "review_required",
@@ -143,7 +143,6 @@
         "requires_user_input": false,
         "stale_user_decision": false,
         "user_decision": {
-          "accept_proposed_timezone": true,
           "manual_iana_timezone": ""
         }
       }
@@ -223,6 +222,7 @@
       ],
       "destination_path": "6-photos-by-dest/ManualUtc",
       "destination_timezone": {
+        "decision_mode": "auto_resolved",
         "effective_iana_timezone": "Europe/Brussels",
         "inherited_from": "6-photos-by-dest",
         "proposal_confidence": "review_required",
@@ -231,7 +231,6 @@
         "requires_user_input": false,
         "stale_user_decision": false,
         "user_decision": {
-          "accept_proposed_timezone": true,
           "manual_iana_timezone": ""
         }
       }
@@ -311,6 +310,7 @@
       ],
       "destination_path": "6-photos-by-dest/Segment",
       "destination_timezone": {
+        "decision_mode": "auto_resolved",
         "effective_iana_timezone": "Europe/Brussels",
         "inherited_from": "6-photos-by-dest",
         "proposal_confidence": "review_required",
@@ -319,7 +319,6 @@
         "requires_user_input": false,
         "stale_user_decision": false,
         "user_decision": {
-          "accept_proposed_timezone": true,
           "manual_iana_timezone": ""
         }
       }
@@ -399,6 +398,7 @@
       ],
       "destination_path": "6-photos-by-dest/SinglePoint",
       "destination_timezone": {
+        "decision_mode": "auto_resolved",
         "effective_iana_timezone": "Europe/Brussels",
         "inherited_from": "6-photos-by-dest",
         "proposal_confidence": "review_required",
@@ -407,7 +407,6 @@
         "requires_user_input": false,
         "stale_user_decision": false,
         "user_decision": {
-          "accept_proposed_timezone": true,
           "manual_iana_timezone": ""
         }
       }

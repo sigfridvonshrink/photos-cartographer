@@ -62,10 +62,8 @@ def _file(rel, naive, *, gps=None):
 
 
 def _prior_time(cells):
-    """A photos-21 prior that accepts the destination tz and carries per-bucket offset decisions."""
-    return {"destinations": {DEST: {
-        "destination_timezone": {"user_decision": {"accept_proposed_timezone": True}},
-        "camera_group_time_decisions": cells}}}
+    """A photos-21 prior carrying per-bucket offset decisions (the destination's timezone applies itself)."""
+    return {"destinations": {DEST: {"camera_group_time_decisions": cells}}}
 
 
 def _complete_time(wf, files, gpx, cells):
@@ -336,12 +334,10 @@ def test_e2e_drift_gate_blocks_then_resumes(tmp_path, monkeypatch):
     dvp = ctl / "photos-22-gps-drift-validation.json"
     gdp = ctl / "photos-23-gps-decisions.json"
 
-    _run(monkeypatch, ws, "plan")                                          # photos-21 needs tz + offset
-    _edit(ctl, "photos-21-time-decisions.json", lambda a: (
-        a["destinations"][f"{BYDEST}/T"]["destination_timezone"]["user_decision"]
-        .update({"accept_proposed_timezone": True}),
-        a["destinations"][f"{BYDEST}/T"]["camera_group_time_decisions"][CAM]["user_decision"]
-        .update({"accept_proposal": True})))                              # tz-derived offset accepted
+    _run(monkeypatch, ws, "plan")                                          # photos-21 needs the offset
+    _edit(ctl, "photos-21-time-decisions.json", lambda a:
+          a["destinations"][f"{BYDEST}/T"]["camera_group_time_decisions"][CAM]["user_decision"]
+          .update({"accept_proposal": True}))                              # tz-derived offset accepted
 
     _run(monkeypatch, ws, "plan")                                          # photos-21 complete -> 22 GATE
     assert dvp.exists()

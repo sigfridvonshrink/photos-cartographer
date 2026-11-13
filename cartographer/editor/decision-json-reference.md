@@ -149,13 +149,13 @@ The editor badges these destinations as `container` and keeps them off the to-do
 | `proposal_confidence` | `"review_required"` \| `"high"` \| `"none"` | no | `inherited` is always `review_required`. |
 | `inherited_from` | string | no | Present only when `proposal_source == "inherited"`: the ancestor destination. |
 | **`user_decision.manual_iana_timezone`** | string (`""`) | **yes** | A human-entered IANA zone (e.g. `"Asia/Tokyo"`). |
-| **`user_decision.accept_proposed_timezone`** | bool | **yes** | Accept `proposed_iana_timezone`. |
 | `effective_iana_timezone` | string (`""` if unresolved) | no | The resolved zone. |
 | `requires_user_input` | bool | no | `true` ⇔ `effective_iana_timezone == ""` **and** no proposal exists (no ancestor zone and no configured `default_folder_timezone`). **Any** destination — `file_less` container *or* real — that has a proposal auto-adopts it and is `false`; only a destination with no proposal at all blocks for review. |
 | `decision_mode` | `"auto_resolved"` | no | Present on **any** destination (container *or* real) that auto-adopted its inherited or config-default zone. |
-| `stale_user_decision` | bool | no | Accepted a proposal that no longer exists. |
+| `stale_user_decision` | bool | no | Always `false`: a zone written by hand is kept, or refused if invalid. |
 
-Resolution: `manual_iana_timezone` (if valid) wins; else `accept_proposed_timezone` applies the proposal.
+Resolution: `manual_iana_timezone` (if valid) wins; else the proposal applies itself; with none, the destination
+needs a zone written by hand.
 
 ### 4.4 `camera_group_time_decisions[<key>]` offset cell
 
@@ -365,7 +365,7 @@ omitted for a single-date bucket.
 A cell can carry more than one decision field; geotag applies them in a fixed order. The editor's
 UI should make the *effective* choice obvious and ideally offer them as mutually-exclusive.
 
-- **Timezone:** `manual_iana_timezone` (if valid) → else `accept_proposed_timezone`.
+- **Timezone:** `manual_iana_timezone` (if valid) → else the proposal, which applies itself.
 - **Clock offset:** `manual_offset_seconds` (if set & valid) → `manual_real_utc` (GPX proposals only) →
   `accept_proposal` → automatic GPX resolution (no human input). Setting a manual field overrides
   `accept_proposal`.

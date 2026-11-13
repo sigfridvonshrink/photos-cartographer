@@ -4,7 +4,7 @@
   "decision_mode": "no_op_or_auto_resolved",
   "depends_on": {
     "camera_group_key_version": 1,
-    "camera_time_policy_fingerprint": "91162f868be20fabdeca9cc1a35beb977d6abf786f01899fadb7b2888ad7c847",
+    "camera_time_policy_fingerprint": "0e6123b50ca057182dbd6fd1585db9e2cabfd6bc2d0c1ce45f239e9a1b7e2ac6",
     "gpx_fingerprint": "example-gpx-fingerprint",
     "handoff": {
       "artifact_name": "photos-11-handoff.json",
@@ -45,6 +45,7 @@
       ],
       "destination_path": "6-photos-by-dest",
       "destination_timezone": {
+        "decision_mode": "auto_resolved",
         "effective_iana_timezone": "Europe/Brussels",
         "proposal_confidence": "high",
         "proposal_source": "config_default",
@@ -52,7 +53,6 @@
         "requires_user_input": false,
         "stale_user_decision": false,
         "user_decision": {
-          "accept_proposed_timezone": true,
           "manual_iana_timezone": ""
         }
       }
@@ -89,6 +89,7 @@
       ],
       "destination_path": "6-photos-by-dest/Belgium",
       "destination_timezone": {
+        "decision_mode": "auto_resolved",
         "effective_iana_timezone": "Europe/Brussels",
         "inherited_from": "6-photos-by-dest",
         "proposal_confidence": "review_required",
@@ -97,7 +98,6 @@
         "requires_user_input": false,
         "stale_user_decision": false,
         "user_decision": {
-          "accept_proposed_timezone": true,
           "manual_iana_timezone": ""
         }
       }
@@ -133,6 +133,7 @@
       ],
       "destination_path": "6-photos-by-dest/Belgium/Bruges",
       "destination_timezone": {
+        "decision_mode": "auto_resolved",
         "effective_iana_timezone": "Europe/Brussels",
         "inherited_from": "6-photos-by-dest/Belgium",
         "proposal_confidence": "review_required",
@@ -141,7 +142,6 @@
         "requires_user_input": false,
         "stale_user_decision": false,
         "user_decision": {
-          "accept_proposed_timezone": true,
           "manual_iana_timezone": ""
         }
       }
@@ -226,6 +226,7 @@
       ],
       "destination_path": "6-photos-by-dest/Belgium/Brussels",
       "destination_timezone": {
+        "decision_mode": "auto_resolved",
         "effective_iana_timezone": "Europe/Brussels",
         "inherited_from": "6-photos-by-dest/Belgium",
         "proposal_confidence": "review_required",
@@ -234,7 +235,6 @@
         "requires_user_input": false,
         "stale_user_decision": false,
         "user_decision": {
-          "accept_proposed_timezone": true,
           "manual_iana_timezone": ""
         }
       }
@@ -339,7 +339,6 @@
         "requires_user_input": false,
         "stale_user_decision": false,
         "user_decision": {
-          "accept_proposed_timezone": false,
           "manual_iana_timezone": "Asia/Tokyo"
         }
       }
@@ -351,6 +350,7 @@
       ],
       "destination_path": "6-photos-by-dest/PhoneOnly",
       "destination_timezone": {
+        "decision_mode": "auto_resolved",
         "effective_iana_timezone": "Europe/Brussels",
         "inherited_from": "6-photos-by-dest",
         "proposal_confidence": "review_required",
@@ -359,7 +359,6 @@
         "requires_user_input": false,
         "stale_user_decision": false,
         "user_decision": {
-          "accept_proposed_timezone": true,
           "manual_iana_timezone": ""
         }
       }

@@ -126,7 +126,6 @@ def test_full_execute_with_real_tools(tmp_path, monkeypatch):
 
     _run(monkeypatch, ws, "plan")
     p = ctl / "photos-21-time-decisions.json"; a = json.load(open(p))
-    a["destinations"]["6-photos-by-dest/T"]["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
     p.write_text(json.dumps(a))
     _run(monkeypatch, ws, "plan")
     assert (ctl / "photos-24-executable-plan.json").exists()

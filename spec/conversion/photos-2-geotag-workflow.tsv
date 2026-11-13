@@ -490,8 +490,8 @@
 18	The artifact must include, for each destination, pre-created human decision fields.	BLD-timezone_cell RUL-decision_fields_laid_out	
 18	Example shape:	dropped	introduces the example
 18	```json [sha1:99da9774, 15 lines]	BLD-timezone_cell	its proposal_source value is stale: config_default, inherited or none
-18	The user may accept the proposal by changing:	RUL-timezone_auto_resolves	the accept flag adds nothing to a proposal that applies itself; whether it stays is open
-18	```json [sha1:168ed09d, 4 lines]	RUL-timezone_auto_resolves	the accept flag adds nothing to a proposal that applies itself; whether it stays is open
+18	The user may accept the proposal by changing:	RUL-timezone_auto_resolves	the accept flag is removed: a proposal applies itself, and a zone written by hand is the one decision
+18	```json [sha1:168ed09d, 4 lines]	RUL-timezone_auto_resolves	the accept flag is removed: a proposal applies itself, and a zone written by hand is the one decision
 18	Or override it by filling:	RUL-user_writes_decisions	
 18	```json [sha1:76788984, 4 lines]	BLD-timezone_cell	
 18	The workflow derives `effective_iana_timezone` during validation.	BLD-timezone_cell	
@@ -514,7 +514,7 @@
 18	To compute this, destinations are processed **parent-first** (the same ordering the fallback inheritance uses), so an ancestor's effective timezone is known before any child that would inherit it is built; inheritance flows **parent → child only**, never sibling → sibling.	BLD-timezone_cell	
 18	A timezone proposal — inherited or config-default — is **auto-applied by default**, not held for per-destination confirmation (Section 9.1 item 2).	RUL-timezone_auto_resolves	
 18	Because destinations are geographically **nested**, a child sits inside its parent and can scarcely cross a timezone boundary the parent did not, so adopting the parent's (or the global default's) zone is the right default at every level: the cell resolves with `decision_mode:	RAT-nested_place_same_timezone	
-18	"auto_resolved"` and `requires_user_input: false`, and stays fully overridable by a manual zone or an explicit `accept_proposed_timezone`.	RUL-timezone_auto_resolves BLD-timezone_cell	the accept flag adds nothing to a proposal that applies itself; whether it stays is open
+18	"auto_resolved"` and `requires_user_input: false`, and stays fully overridable by a manual zone or an explicit `accept_proposed_timezone`.	RUL-timezone_auto_resolves BLD-timezone_cell	the accept flag is removed: a proposal applies itself, and a zone written by hand is the one decision
 18	This holds for **both** real destinations and file-less containers (Section 10.1) — the latter were always auto-resolved; real destinations now are too.	RUL-timezone_auto_resolves RUL-container_never_waits	
 18	A manual zone set at any level **re-roots** the chain there (Section 18 recursion), and any level can still diverge by override.	RUL-timezone_from_nearest	
 18	The **only** timezone that blocks is a destination with no proposal at all — no ancestor timezone and no configured default — which keeps `requires_user_input: true` (priority item 4).	RUL-timezone_auto_resolves	

@@ -695,34 +695,28 @@ class GeotagWorkflow:
             proposed, source, confidence, inherited_from = None, "none", "none", None
         ud = prior_tz.get("user_decision") or {}
         manual = ud.get("manual_iana_timezone", "") or ""
-        accept = _decision_flag(ud, "accept_proposed_timezone", f"{dest}: destination_timezone.user_decision", blockers)
-        effective, stale = "", False
+        effective = ""
         if manual:
             if _valid_iana(manual):
                 effective = manual
             else:
                 blockers.append(f"{dest}: destination_timezone.user_decision.manual_iana_timezone "
                                 f"{manual!r} is not a valid IANA timezone.")
-        elif accept:
-            if proposed:
-                effective = proposed
-            else:
-                stale = True                       # accepted a proposal that no longer exists
-        # Any destination with a proposal auto-adopts it (and re-propagates it downward) without
-        # demanding confirmation — inherited or config-default, container or real — because the nested
-        # geography makes the parent's timezone the right default for the child. A manual entry still
-        # overrides. (File-less containers always took this path; real destinations now do too.)
-        auto = effective == "" and not manual and bool(proposed)
+        # Any destination with a proposal adopts it (and re-propagates it downward) without the user's
+        # answer — inherited or config-default, container or real — because the nested geography makes
+        # the parent's timezone the right default for the child; a manual entry overrides it, and is the
+        # one decision the user makes here, so there is no acceptance to record (§18).
+        auto = not manual and bool(proposed)
         if auto:
             effective = proposed
         block = {
             "proposed_iana_timezone": proposed,
             "proposal_source": source,
             "proposal_confidence": confidence,
-            "user_decision": {"manual_iana_timezone": manual, "accept_proposed_timezone": accept},
+            "user_decision": {"manual_iana_timezone": manual},
             "effective_iana_timezone": effective,
             "requires_user_input": effective == "" and not file_less,   # a container never blocks
-            "stale_user_decision": stale,
+            "stale_user_decision": False,      # a written zone is kept or refused, never left stale
         }
         if auto:
             block["decision_mode"] = "auto_resolved"
