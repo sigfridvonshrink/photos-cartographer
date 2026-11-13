@@ -726,7 +726,7 @@ A re-plan whose result is identical to what is saved SHALL write nothing and set
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: handoff-verified-by-content-1
+:aliases: handoff-verified-by-content-1, geotag-handoff-content-fingerprint-1
 :refines: RUL-hash_detects_any_change
 
 Geotag SHALL verify prep's handoff before using it by the fingerprint of its content — recomputed, and compared with
@@ -1262,7 +1262,7 @@ of the configuration or of the areas the record reads — and each use checks th
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: dep-cascade-reject-stale-1, prep-block-on-stale-dependency-1, merge-execute-revalidate-reject-stale-1
+:aliases: dep-cascade-reject-stale-1, prep-block-on-stale-dependency-1, merge-execute-revalidate-reject-stale-1, geotag-dep-cascade-1, geotag-no-stale-execution-1
 :uses: DEF-dependency_cascade
 
 No phase SHALL use a record once anything it was derived from has changed: each phase validates what it derives from,
@@ -1320,6 +1320,7 @@ A record's hash SHALL change on any change to its bytes.
 :criticality: high
 :verify: required
 :refines: RUL-hash_detects_any_change
+:aliases: geotag-json-dep-sha256-1, geotag-rehash-before-use-1, geotag-no-mtime-reliance-1
 
 A record SHALL be checked as a dependency by its hash — prep's handoff excepted, which is checked by its content.
 :::

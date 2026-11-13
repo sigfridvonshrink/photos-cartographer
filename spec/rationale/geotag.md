@@ -27,3 +27,16 @@ user to deal with by hand. Sorted into a destination anyway, it would pass throu
 ask about it and stop only at the last plan, where nothing the user could decide would clear it. Stopping at the start,
 naming it and where it belongs, makes the one possible fix plain.
 :::
+
+## 5. Linear dependency inclusion
+
+:::{rat} A chain is only as fresh as its weakest link
+:id: RAT-no_chain_of_vouching
+:status: seed
+:justifies: RUL-geotag_plan_carries_every_dependency
+
+The decision records are files the user edits between runs, in the editor or by hand. If the plan named only the last
+of them and trusted it to name the rest, a change upstream of it — a track added, an earlier record edited after the
+later one was written — would pass unseen whenever the later record happened not to be rewritten. Carried in the plan
+itself, every input is checked against what it is now, at the one moment that matters: just before anything changes.
+:::

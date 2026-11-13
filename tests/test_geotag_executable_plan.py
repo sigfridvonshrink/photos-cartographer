@@ -149,7 +149,7 @@ def _row(rel, status="valid", utc=UTC):
             "resolved_utc_status": status}
 
 
-@pytest.mark.spec("geotag-flattened-deps-1", "geotag-json-dep-sha256-1", "geotag-plan-deps-1")
+@pytest.mark.spec("geotag-flattened-deps-1", "geotag-json-dep-sha256-1", "geotag-plan-deps-1", "RUL-geotag_plan_carries_every_dependency", test="TST-geotag_executable_plan-plan_ready_with_ops_and_full_depends_on")
 def test_plan_ready_with_ops_and_full_depends_on(tmp_path):
     files = [_model(f"{BYDEST}/T/a.arw", f"{BYDEST}/T", native=True)]
     wf, t, g = _wf(tmp_path, files=files)
@@ -159,12 +159,16 @@ def test_plan_ready_with_ops_and_full_depends_on(tmp_path):
     d = plan["destinations"][f"{BYDEST}/T"]
     assert d["summary"]["metadata_time_writes"] == 1                                   # native -> time only
     dep = plan["depends_on"]
-    for k in ("time_decisions", "gps_decisions", "resolved_utc_cache_fingerprint", "config_fingerprint",
-              "camera_group_fingerprint", "handoff", "prep_cache_fingerprint", "gpx_fingerprint",
-              "metadata_field_set_version", "filename_format_fingerprint", "media_preconditions",
-              "planned_operation_fingerprint"):
+    for k in ("time_decisions", "drift_validation", "gps_decisions", "resolved_utc_cache_fingerprint",
+              "config_fingerprint", "code_fingerprint", "camera_group_fingerprint", "camera_group_key_version",
+              "handoff", "prep_cache_fingerprint", "gpx_fingerprint", "metadata_field_set_version",
+              "filename_format_fingerprint", "folders_fingerprint", "media_extensions_fingerprint",
+              "media_preconditions", "planned_operation_fingerprint"):
         assert k in dep, k
-    assert dep["time_decisions"]["sha256"] and dep["resolved_utc_cache_fingerprint"] == "rfp"
+    # Each decision record is named and hashed directly — none vouched for through another's depends_on.
+    for k in ("time_decisions", "drift_validation", "gps_decisions"):
+        assert dep[k]["sha256"], k
+    assert dep["resolved_utc_cache_fingerprint"] == "rfp"
 
 
 @pytest.mark.spec("geotag-gps-after-utc-1")

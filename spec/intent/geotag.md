@@ -30,3 +30,20 @@ Geotag SHALL plan no photo's position until every photo's true time is resolved.
 A photo in photos by destination carrying no recorded time SHALL stop geotag before it plans anything, named as
 belonging in missing metadata.
 :::
+
+## 5. Linear dependency inclusion
+
+:::{rul} The executable plan carries every dependency itself
+:id: RUL-geotag_plan_carries_every_dependency
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: INV-no_stale_use
+:uses: DEF-geotag
+:aliases: geotag-flattened-deps-1
+
+Geotag's executable plan SHALL carry every dependency it was made from itself — each decision record, the handoff, the
+tracks, the configuration, the code and each photo's precondition — never relying on a decision record's own
+dependencies to vouch for what came before it.
+:::

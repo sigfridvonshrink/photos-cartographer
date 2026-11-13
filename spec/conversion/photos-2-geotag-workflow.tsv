@@ -32,3 +32,76 @@
 2.1	Geotag is also re-runnable *after* a successful execute — it is not a terminal, run-once phase.	RUL-geotag_rerunnable	
 2.1	Media added later is absorbed by re-running prep (to recognize it) and then geotag, bounded only by geotag's gating preconditions and the rule that development must not have started — and by the fact that this freedom lasts only until the workspace is **merged and sealed** (shared contract `photos-shared-contract.md` Sections 13.7, 10.1): a sealed workspace accepts no further prep or geotag, and more media then means a fresh workspace.	RUL-geotag_rerunnable RUL-geotag_gates RUL-sealed_refuses RUL-merge_is_terminal	
 2.1	The authoritative cross-phase account of this — including why already-processed files are no-ops on rerun and when a rerun legitimately re-enters the decision loop — is in the shared contract (`photos-shared-contract.md` Section 10).	RUL-geotag_rerun_keeps_settled RUL-rerun_does_what_changed	
+3	## 3. Artifact dependency rule	dropped	a heading; the corpus's documents carry their own
+3	Every durable artifact follows the same dependency rule:	INV-no_stale_use	introduces the rule
+3	```text [sha1:57fddf13, 1 lines]	INV-no_stale_use DEF-dependency_cascade	
+3	No artifact may be created from stale upstream inputs.	INV-no_stale_use	
+3	No downstream artifact may be used if any upstream input or artifact recorded in its dependency block has changed.	INV-no_stale_use	
+3	Dependencies must be explicit, flattened, and directly verifiable.	RUL-geotag_plan_carries_every_dependency RUL-hash_is_the_dependency_check	
+4	## 4. JSON artifact dependency representation	dropped	a heading; the corpus's documents carry their own
+4	If an artifact depends on another JSON artifact, the dependency must name that JSON file and store the SHA-256 hash of the exact file bytes.	RUL-hash_is_the_dependency_check BLD-geotag_dependencies	
+4	Example dependency entry:	dropped	introduces the example
+4	```json [sha1:559c077e, 6 lines]	dropped	an example entry; BLD-geotag_dependencies names the fields
+4	Before an artifact is used, each named JSON artifact dependency must be re-read and re-hashed using Python SHA-256 functions.	RUL-hash_is_the_dependency_check BLD-geotag_dependencies	
+4	The computed hash must match the recorded hash.	RUL-hash_is_the_dependency_check	
+4	The workflow must not rely only on:	RUL-hash_is_the_dependency_check RUL-unchecked_counts_as_changed	introduces the list
+4	1. file mtime;	RUL-hash_is_the_dependency_check	
+4	2. file size;	RUL-hash_is_the_dependency_check	
+4	3. cached metadata;	RUL-hash_is_the_dependency_check	
+4	4. recursive dependency blocks;	RUL-geotag_plan_carries_every_dependency	
+4	5. previous validation results.	RUL-hash_is_the_dependency_check	
+4	The rule is:	RUL-hash_is_the_dependency_check	introduces the rule
+4	```text [sha1:beb100d7, 3 lines]	RUL-hash_is_the_dependency_check RUL-geotag_plan_carries_every_dependency	
+4	This applies to every JSON artifact in the geotag dependency graph, including the upstream prep handoff that geotag consumes:	BLD-geotag_dependencies	
+4	```text [sha1:688ce2c2, 6 lines]	BLD-geotag_dependencies	
+4	`photos-11-handoff.json` is the contract geotag receives from prep (prep `photos-1-prep-workflow.md` Section 16).	RUL-handoff_verified_by_content	
+4	It is the **one JSON dependency geotag checks by a recomputed content fingerprint rather than a whole-file byte hash**, and for a specific reason: the handoff deliberately mixes a deterministic description of the post-prep workspace state with per-run audit (the `run_metadata` block, diagnostics, and the `execution_journal` pointer), so its exact bytes change on every prep run even when the organized result did not (prep Section 16.2).	RUL-handoff_verified_by_content RUL-hash_is_the_dependency_check	
+4	Depending on the whole-file SHA-256 would therefore restale geotag on a no-op re-prep, which is wrong.	RUL-handoff_verified_by_content RUL-run_only_refresh_restales_nothing	
+4	Instead, wherever geotag depends on the handoff, the dependency entry records the handoff's top-level **`content_fingerprint`** (the SHA-256 prep computes over the handoff's deterministic content with `run_metadata`, diagnostics, the journal pointer, and the fingerprint field itself removed, prep Section 16.2), and geotag **recomputes that fingerprint from the handoff** and compares it before use — the same recompute-and-verify discipline it applies to every other dependency fingerprint.	RUL-handoff_verified_by_content BLD-geotag_dependencies	
+4	The handoff's **whole-file SHA-256 still exists** as its integrity/archival hash (shared contract Section 13), and geotag may record it for identification, but it is **not** the staleness trigger.	RUL-handoff_verified_by_content BLD-handoff_content	
+4	This keeps the handoff's staleness **surgical** (shared contract Section 4.2): only a change to the deterministic content restales downstream, while a run-only refresh does not.	RUL-run_only_refresh_restales_nothing RUL-remake_only_what_depends	
+4	(Among the numbered `photos-2X` artifacts, which carry no per-run audit of this kind, the dependency check remains the whole-file byte hash as before.)	RUL-hash_is_the_dependency_check	
+4	`photos-25-execution-summary.json` is the terminal artifact.	BLD-geotag_dependencies	
+4	It records the SHA-256 of the JSON artifacts it summarizes (which is why it appears in the list above), but nothing downstream depends on it, so it is never itself re-hashed as an upstream dependency.	BLD-geotag_dependencies RUL-nothing_built_from_merge_records	photos-25 is geotag's summary; nothing depends on it
+5	## 5. Linear dependency inclusion	dropped	a heading; the corpus's documents carry their own
+5	Dependencies must be included linearly.	RUL-geotag_plan_carries_every_dependency	
+5	A downstream artifact must not depend only on the immediately previous artifact and assume that previous artifact’s recursive dependency block is enough.	RUL-geotag_plan_carries_every_dependency	
+5	Each downstream artifact must include the full flattened dependency set it relies on.	RUL-geotag_plan_carries_every_dependency	
+5	For example, `photos-24-executable-plan.json` must directly include dependencies for:	RUL-geotag_plan_carries_every_dependency BLD-geotag_dependencies	introduces the list
+5	1. `photos-21-time-decisions.json` and its SHA-256;	BLD-geotag_dependencies	
+5	2. `photos-22-gps-drift-validation.json` and its SHA-256;	BLD-geotag_dependencies	
+5	3. `photos-23-gps-decisions.json` and its SHA-256;	BLD-geotag_dependencies	
+5	4. resolved UTC cache fingerprint;	BLD-geotag_dependencies	
+5	5. `photos-11-handoff.json` and its **`content_fingerprint`** (recomputed from the handoff's deterministic content, not a whole-file byte hash, Section 4; prep Section 16.2);	BLD-geotag_dependencies	
+5	6. prep SQLite cache fingerprint;	BLD-geotag_dependencies	
+5	7. config fingerprint;	BLD-geotag_dependencies	
+5	8. camera group/config classification fingerprint;	BLD-geotag_dependencies	
+5	9. GPX folder/file fingerprint, if relevant;	BLD-geotag_dependencies	
+5	10. metadata field-set version;	BLD-geotag_dependencies	
+5	11. media file preconditions;	BLD-geotag_dependencies	
+5	12. filename-format config fingerprint;	BLD-geotag_dependencies	
+5	13. planned operation fingerprint;	BLD-geotag_dependencies	
+5	14. the code fingerprint (shared contract, `RUL-plan_carried_out_by_its_code`);	BLD-geotag_dependencies	
+5	15. camera-group key version;	BLD-geotag_dependencies	
+5	16. folder-names and media-extensions fingerprints.	BLD-geotag_dependencies	
+5	It must not merely say:	RUL-geotag_plan_carries_every_dependency	introduces the counter-example
+5	```text [sha1:d866e77a, 1 lines]	dropped	the counter-example
+5	and rely on `photos-23-gps-decisions.json` to prove all earlier dependencies recursively.	RUL-geotag_plan_carries_every_dependency	
+5	The flattened dependency model makes validation simple, auditable, and resistant to stale partial chains.	RUL-geotag_plan_carries_every_dependency	
+6	## 6. Dependency verification rule	dropped	a heading; the corpus's documents carry their own
+6	Before creating or using any downstream artifact, the workflow must validate every dependency listed in that artifact’s dependency block.	INV-no_stale_use	
+6	Validation includes:	INV-no_stale_use BLD-geotag_dependencies	introduces the list
+6	1. re-hashing named JSON artifacts from file bytes using SHA-256 (the numbered `photos-2X` artifacts); 1a. recomputing the prep handoff's `content_fingerprint` from `photos-11-handoff.json` and comparing it to the value recorded in the dependency block — the handoff is verified by recomputed content fingerprint, not whole-file byte hash, so a run-only refresh of the handoff does not register as a change (Section 4; prep Section 16.2);	RUL-hash_is_the_dependency_check RUL-handoff_verified_by_content BLD-geotag_dependencies	
+6	2. recomputing config fingerprints from the active config;	RUL-config_in_dependencies BLD-geotag_dependencies	
+6	3. recomputing GPX folder/file fingerprints where relevant;	RUL-tracks_in_dependencies BLD-geotag_dependencies	
+6	4. validating SQLite cache fingerprints or cache-generation markers;	BLD-geotag_dependencies	
+6	5. validating resolved UTC cache fingerprints;	BLD-geotag_dependencies	
+6	6. checking media file size/mtime/fingerprint preconditions;	BLD-geotag_dependencies RUL-unchecked_counts_as_changed	
+6	7. checking metadata field-set/extractor versions;	RUL-camera_group_derivation_versioned BLD-geotag_dependencies	
+6	8. checking filename-format config fingerprint.	BLD-geotag_dependencies	
+6	If any dependency does not match, the artifact is stale and must not be used.	INV-no_stale_use	
+6	Not every listed check is an independent re-derivation from raw inputs at this step.	BLD-geotag_dependencies	
+6	Some dependencies are verified **transitively** through the linear-inclusion rule (Section 5): a fingerprint that an upstream artifact already validated and recorded — for example the **resolved-UTC cache fingerprint**, the **prep cache fingerprint**, and the **metadata field-set version** — is checked at the point that owns it and then carried forward in each downstream artifact's flattened dependency set, rather than recomputed from scratch every time it is named again.	BLD-geotag_dependencies	
+6	Because each artifact carries the *full* flattened set (Section 5), a change anywhere still surfaces downstream; transitivity is about not redundantly recomputing the same value at every step, not about skipping it.	RUL-geotag_plan_carries_every_dependency BLD-geotag_dependencies	
+6	The values verified directly at a given step are the named JSON artifact hashes and the prep handoff's recomputed content fingerprint (items 1–1a), the config and GPX fingerprints recomputed from their live sources, and the per-file media preconditions; the rest are honored through the chain.	BLD-geotag_dependencies	
+6	Execution must not proceed from stale dependency state.	INV-no_stale_use	
