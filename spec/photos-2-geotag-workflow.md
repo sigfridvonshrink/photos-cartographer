@@ -295,6 +295,7 @@ The required numbered artifacts are:
 
 ```text
 photos-21-time-decisions.json
+photos-22-gps-drift-validation.json
 photos-23-gps-decisions.json
 photos-24-executable-plan.json
 photos-25-execution-summary.json
@@ -314,9 +315,14 @@ All numbered geotag artifacts are written to the workspace control directory use
 
 ```text
 .photos-ingest/photos-21-time-decisions.json
+.photos-ingest/photos-22-gps-drift-validation.json
 .photos-ingest/photos-23-gps-decisions.json
 .photos-ingest/photos-24-executable-plan.json
 .photos-ingest/photos-25-execution-summary.json
+.photos-ingest/photos-26-complete-log.json          (finalize, Section 31)
+.photos-ingest/photos-26-finalized-media.json       (finalize)
+.photos-ingest/photos-26-archive-manifest.json      (finalize)
+.photos-ingest/photos-26-archive.tar.gz             (finalize)
 ```
 
 They must never be written inside `6-photos-by-dest/` (or any scanned media folder), because that tree is read-only for prep and prep would otherwise inventory the artifacts as ordinary files and fold them into its cache fingerprint.

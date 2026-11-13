@@ -163,3 +163,23 @@
 7.3	In the normal flow the video never survives the mandatory re-prep that precedes geotag, because prep blocks first; the geotag check exists so a video can never be silently geotagged even if prep's guard were somehow bypassed.	RUL-band_misplacement_blocks	
 7.3	Because videos never reach by-dest, geotag never plans or applies time/GPS metadata writes or renames for a video, never reasons about them in the camera-group/GPX/original-values machinery, and they never appear in the per-destination artifacts.	RUL-geotag_changes_only_by_dest	
 7.3	If a future need arises to geotag video time/GPS, it is out of scope for this workflow as specified.	RUL-geotag_changes_only_by_dest	
+8	## 8. JSON artifact rule	dropped	a heading; the corpus's documents carry their own
+8	The workflow distinguishes between:	RUL-no_record_before_decisions	introduces the distinction
+8	```text [sha1:9be7a547, 1 lines]	RUL-no_record_before_decisions	
+8	and:	RUL-no_record_before_decisions	
+8	```text [sha1:f2a6497f, 1 lines]	RUL-decision_stage_writes_record	
+8	JSON artifacts must not be produced merely for preliminary reports, blocked preconditions, or suggested config snippets.	RUL-no_record_before_decisions	
+8	However, once the workflow reaches a formal decision stage, that stage must always produce its numbered JSON artifact, even if the artifact records that no user input or no metadata change is required.	RUL-decision_stage_writes_record	
+8	The rule is:	RUL-decision_stage_writes_record RUL-no_record_before_decisions	introduces the rule
+8	```text [sha1:01008f79, 9 lines]	RUL-decision_stage_writes_record RUL-no_record_before_decisions RUL-geotag_plan_carries_every_dependency	
+8	The required numbered artifacts are:	RUL-decision_stage_writes_record	introduces the list
+8	```text [sha1:c3825811, 5 lines]	RUL-decision_stage_writes_record BLD-geotag_stage_order BLD-control_directory_contents	
+8	The first durable geotag artifact is:	RUL-no_record_before_decisions	introduces it
+8	```text [sha1:c28abbd9, 1 lines]	RUL-no_record_before_decisions BLD-geotag_stage_order	
+8	No earlier geotag JSON artifact should be produced.	RUL-no_record_before_decisions	
+8.1	### 8.1 Where geotag artifacts live	dropped	a heading; the corpus's documents carry their own
+8.1	All numbered geotag artifacts are written to the workspace control directory used by prep, flat (no subdirectory):	RUL-control_records_together	
+8.1	```text [sha1:c2b222df, 9 lines]	RUL-control_records_together BLD-control_directory_contents	
+8.1	They must never be written inside `6-photos-by-dest/` (or any scanned media folder), because that tree is read-only for prep and prep would otherwise inventory the artifacts as ordinary files and fold them into its cache fingerprint.	RUL-control_records_never_media	
+8.1	Placing the artifacts in `.photos-ingest/` is sufficient: prep skips that directory wholesale during its media scan (shared contract `photos-shared-contract.md` Section 5), so the artifacts are never inventoried or folded into prep's cache fingerprint.	RUL-control_records_never_media RUL-control_records_together	
+8.1	There is no per-file registry to maintain — keeping every control and artifact file inside `.photos-ingest/` is the whole mechanism.	RUL-control_records_together	

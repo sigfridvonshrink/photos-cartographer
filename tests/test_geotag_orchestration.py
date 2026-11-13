@@ -223,6 +223,25 @@ def test_complete_run_writes_photos22_then_bad_coord_aborts(tmp_path, monkeypatc
     assert (ctl / "photos-23-gps-decisions.json").read_bytes() == before     # left unchanged
 
 
+@pytest.mark.spec("RUL-decision_stage_writes_record", "geotag-always-produce-decision-artifact-1", test="TST-geotag_orchestration-a_run_with_nothing_to_decide_writes_every_record")
+def test_a_run_with_nothing_to_decide_writes_every_record(tmp_path, monkeypatch, capsys):
+    """Every photo has its own position and the camera's offset resolves from them: nothing needs the user.
+    Each decision stage still writes its record, complete, and the executable plan follows."""
+    ws, ctl = _completable_ws(tmp_path)
+    ho = json.load(open(ctl / "photos-11-handoff.json"))
+    c = next(r for r in ho["files"] if r["relative_path"].endswith("c.arw"))
+    parsed = json.loads(c["metadata_status"]["parsed_json"])
+    parsed.update({"has_native_gps": True, "GPSLatitude": 50.5, "GPSLongitude": 4.5})
+    c["metadata_status"].update({"has_native_gps": True, "parsed_json": json.dumps(parsed)})
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(ho))
+    assert _run(monkeypatch, ws) == 0, capsys.readouterr().err
+    for name in ("photos-21-time-decisions.json", "photos-22-gps-drift-validation.json",
+                 "photos-23-gps-decisions.json"):
+        art = json.load(open(ctl / name))
+        assert art["status"] == "complete" and art["requires_user_input"] is False, name
+    assert json.load(open(ctl / "photos-24-executable-plan.json"))["status"] == "ready"
+
+
 @pytest.mark.spec("geotag-gpx-rejected-points-reported-1")
 def test_plan_reports_gpx_load_warnings_capped(tmp_path, monkeypatch, capsys):
     # GPX points rejected at load are reported, not silently dropped (an all-rejected track must not
