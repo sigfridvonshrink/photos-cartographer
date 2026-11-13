@@ -77,10 +77,12 @@ def test_smartphone_native_offset():
 
 @pytest.mark.spec("RUL-phone_time_from_own_offset", "BLD-resolved_utc",
                   test="TST-geotag_resolved_utc-a_phone_time_takes_the_offset_recorded_with_it")
-@pytest.mark.parametrize("tag, offset_tag", [("DateTimeOriginal", "OffsetTimeOriginal"),
-                                             ("CreateDate", "OffsetTimeDigitized"), ("ModifyDate", "OffsetTime")])
+@pytest.mark.parametrize("tag, offset_tag", [("EXIF:DateTimeOriginal", "OffsetTimeOriginal"),
+                                             ("XMP:CreateDate", "OffsetTimeDigitized"), ("EXIF:ModifyDate", "OffsetTime"),
+                                             ("DateTimeOriginal", "OffsetTimeOriginal")])
 def test_a_phone_time_takes_the_offset_recorded_with_it(tag, offset_tag):
-    # Each time field has its own offset field; another field's offset never turns it to UTC.
+    # Each time field has its own offset field; another field's offset never turns it to UTC. Prep names the
+    # field with its group (prep §12), as `EXIF:DateTimeOriginal`.
     others = {t: "+05:00" for t in ("OffsetTimeOriginal", "OffsetTimeDigitized", "OffsetTime") if t != offset_tag}
     f = dict(_file("6-photos-by-dest/B/p.jpg", PHONE, "2024:07:03 14:00:00"), source_time_tag=tag,
              raw_times={offset_tag: "+02:00", **others})
