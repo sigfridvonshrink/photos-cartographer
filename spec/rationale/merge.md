@@ -82,3 +82,25 @@ block forever a photo safely placed, or seal a workspace whose merge log names a
 photo — a record the user would rely on to find it. Fingerprinting the place again settles it, and costs a read only on
 a resume.
 :::
+
+## 9. User-visible outputs and the merge summary
+
+:::{rat} The run's end decides what to do next
+:id: RAT-merge_outcome_decides_next
+:status: seed
+:justifies: RUL-merge_outcome_recorded
+
+What the user does after a merge turns on how it ended: nothing after a whole success, a fix and another run after a
+partial one or a failed one, and after a refusal a fix with nothing to undo, the library untouched. Counts alone cannot
+tell a refusal from a run that found nothing to do; a recorded outcome says which, long after the terminal has gone.
+:::
+
+:::{rat} Merge is the step the user watches
+:id: RAT-merge_report_at_the_end
+:status: seed
+:justifies: RUL-merge_run_reported
+
+Merge is the step that puts photos where the user will look for them, and the one that ends the workspace. Its report
+is the moment the user learns whether the batch is in, which photos are not and what to fix — without opening the
+summary — and that the workspace is now finished, so the next dump belongs in a fresh one.
+:::

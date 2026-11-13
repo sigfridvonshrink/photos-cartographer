@@ -3796,20 +3796,6 @@
       "test": "tests/test_merge_plan.py::test_plan_unfingerprintable_library_file_blocks_item"
     },
     {
-      "id": "merge-update-stored-record-if-already-copied-1",
-      "area": "merge",
-      "criticality": "low",
-      "anti": false,
-      "title": "If the archival package was already copied to permanent storage, photos-35/photos-31 are added so it stays current",
-      "spec": {
-        "file": "photos-3-merge-workflow.md",
-        "section": "9.2"
-      },
-      "coverage": "none",
-      "must_cover": false,
-      "omit_reason": "no test exercises the already-copied-to-permanent-storage update path"
-    },
-    {
       "id": "merge-validate-library-root-path-1",
       "area": "merge",
       "criticality": "high",

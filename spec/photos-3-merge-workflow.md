@@ -168,7 +168,7 @@ It must record at least:
 1. **Artifact identity** — artifact type, name, schema version.
 2. **Run identity** — the merge run id, and the plan/execution ids of the geotag run whose finalized output it merged, plus `library_root`.
 3. **What it merged** — the SHA-256 of the artifacts that pinned the merged state (`photos-24-executable-plan.json`, `photos-25-execution-summary.json`, and the prep handoff `photos-11-handoff.json`), so the merge unambiguously identifies the exact finalized set it placed.
-4. **Per-file placement, per destination and in global total** — for each by-dest photo: its (original) by-dest path, its **final library path**, whether it was **renamed for the library** (and the from/to names if so), whether it was **already present** (identical content already in the library), and whether it was **removed from by-dest** (true for placed and already-present files; false for blocked leftovers that remain). This is the authoritative "where did each file end up, and is it still in the workspace?" record.
+4. **Per-file placement, per destination and in global total** — for each by-dest photo: its (original) by-dest path, its **final library path**, whether it was **renamed for the library**, whether it was **already present** (identical content already in the library), whether it was **removed from by-dest** (true for placed and already-present files; false for blocked leftovers that remain), and, for a **blocked** photo, why — with no library path, since it landed nowhere. This is the authoritative "where did each file end up, and is it still in the workspace?" record.
 5. **Counts** — the per-file dispositions partition the batch into mutually exclusive outcomes: **placed-new** (target was free, placed under the geotagged name), **renamed-to-avoid-collision** (different-content collision, placed under a safe alternative name), **already-present** (identical content already in the library, nothing written), and **blocked** (left in by-dest). Each merged file is in exactly one of the first three. **removed-from-by-dest** is a derived total — the sum of placed-new + renamed + already-present (every successful disposition removes the source) — surfaced separately because it answers "how many sources left the workspace," and equals (batch − blocked).
 6. **Resume facts** — for a re-run after interruption: how many files were newly moved versus treated as already-done/already-in-library.
 7. **Failures and blockers** — any item that could not be placed or fingerprinted (left in by-dest), with enough detail to act on.
@@ -208,7 +208,8 @@ Example shape:
           "library_path": "/library/Belgium/Brussels/2024-07-03--14-12-21.arw",
           "renamed_for_library": false,
           "already_present": false,
-          "removed_from_by_dest": true
+          "removed_from_by_dest": true,
+          "blocked_reason": null
         }
       ]
     }
