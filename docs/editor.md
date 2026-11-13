@@ -18,7 +18,8 @@ photos-cartographer edit
 ```
 
 Like every phase, `edit` operates on the **current-directory workspace** (no workspace-naming
-argument). It refuses to run if the cwd isn't an initialized workspace. It serves on port **8765** by
+argument). It refuses to run if the cwd isn't an initialized workspace, or is a sealed one, and a save fails while a
+phase run holds the workspace lock. It serves on port **8765** by
 default (climbing to the next free port if busy) and binds all interfaces, so you can reach it from a
 laptop browser while SSH'd into a server — it prints a clickable `http://<host>:8765/` link. Use
 `--host 127.0.0.1` for local-only, `--port N` to choose a port. When bound to loopback (`--host

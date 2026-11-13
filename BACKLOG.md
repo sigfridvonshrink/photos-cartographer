@@ -4,7 +4,7 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **8** — 1, 2, 3, 4, 5, 6, 7 and 10.* 🛑 Numbers are never reused; the next is **11**.
+*Open items: **9** — 1, 2, 3, 4, 5, 6, 7, 10 and 11.* 🛑 Numbers are never reused; the next is **12**.
 
 ---
 
@@ -14,7 +14,7 @@
 
 **Why:** the four specs in `spec/` mix four things — behaviour the tool guarantees, how this build delivers it
 (exiftool, ImageMagick `identify`, SQLite, the `photos-NN` artifact names), the justification for a choice, and
-operator guidance and history. The clause index over them, `spec/spec-clauses.json` (623 clauses, 529 CI-gated), is a
+operator guidance and history. The clause index over them, `spec/spec-clauses.json` (633 clauses, 542 CI-gated), is a
 hand-kept list of paraphrases pointing at whole sections. Vasile wants *"a real spec"*, *"a more disciplined spec like
 the heating one"*, with the justifications *"captured and tagged, even if they are not strictly specs."*
 
@@ -73,24 +73,24 @@ written into the spec first, then coded** — the code is never taken as the ans
 
 ---
 
-### 3. The 39 clauses no test asserts
+### 3. The 37 clauses no test asserts
 
-**Why:** the clause index marks 39 clauses `coverage: none` — specified, and nothing checks them. Four are **high**:
+**Why:** the clause index marks 37 clauses `coverage: none` — specified, and nothing checks them. Four are **high**:
 - `geotag-bydest-no-symlink-1` — symlinks under by-dest are barred, never followed;
 - `atomic-inplace-metadata-1` — an in-place metadata write is atomic, so a crash leaves the intact original;
 - `authored-no-autonomous-mutation-1` — every mutation traces to a recorded human decision or a deterministic rule;
 - `lock-stale-takeover-conservative-1` — only a lock whose owner is provably gone may be reclaimed.
 
-The rest: merge 12, prep 11, shared 7, geotag 5 (22 med, 13 low) — `tools/spec-coverage --verbose` lists them.
+The rest: merge 11, prep 11, shared 9, geotag 6 (21 med, 12 low) — `tools/spec-coverage --verbose` lists them.
 
 **Do:** a dedicated test for each, or a ruled reason it needs none. With item 1 they carry over as the must-verify
 items still missing a test, which the gate then names.
 
 ---
 
-### 4. The 55 clauses only incidentally tested
+### 4. The 53 clauses only incidentally tested
 
-**Why:** 55 clauses (prep 20, geotag 16, shared 12, merge 7; 4 high) are exercised by tests written for something
+**Why:** 53 clauses (prep 19, geotag 16, shared 11, merge 7; 4 high) are exercised by tests written for something
 else — a happy path passes through them, nothing asserts them, so a regression there passes CI.
 
 **Do:** as item 3 — a test that asserts each, or a ruled reason.
