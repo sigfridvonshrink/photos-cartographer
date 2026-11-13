@@ -947,7 +947,7 @@ with exit status 1.
 
 :::{bld} Merge's move: one rename, or copy, verify, rename and remove
 :id: BLD-merge_move
-:status: seed
+:status: ruled
 :realises: RUL-library_never_altered, RUL-merge_moves, RUL-unplaced_photo_stays, RUL-target_free_at_execute, RUL-collision_same_content
 :aliases: merge-execute-occupied-different-blocker-1, merge-execute-occupied-identical-treat-present-1, merge-execute-safe-alt-only-if-planned-1, merge-move-place-then-remove-no-loss-1
 
@@ -1124,7 +1124,7 @@ original, having first removed a `<file>_exiftool_tmp` an interrupted write left
 
 :::{bld} The cross-filesystem copy
 :id: BLD-cross_fs_temp
-:status: seed
+:status: ruled
 :realises: RUL-cross_fs_all_or_nothing, RUL-temp_name_own
 :aliases: merge-temp-deterministic-name-1, merge-verify-copy-detect-torn-1
 
