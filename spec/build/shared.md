@@ -389,6 +389,7 @@ the handoff manifest and SQLite (prep §12); geotag consumes and classifies it (
 :id: BLD-camera_group_key_version
 :status: ruled
 :realises: RUL-camera_group_derivation_versioned
+:aliases: geotag-cache-via-handoff-1
 
 The derivation of `camera_group_key` SHALL be versioned by `CAMERA_GROUP_KEY_VERSION`, recorded with each file's
 metadata and in each plan's dependencies, and compared with the running code's: by prep's metadata freshness, by geotag's
@@ -560,13 +561,27 @@ decision editor (`edit`) for what it asks, and `geotag plan` again until `photos
 `photos-26-complete-log.json` and the archival package; and `merge plan`, `dry-run`, `execute`.
 :::
 
-:::{bld} Geotag runs prep itself for a lone sort
+:::{bld} Geotag runs prep itself when the inbox is empty
 :id: BLD-geotag_auto_reprep
-:status: ruled
-:realises: RUL-prep_records_sort, RUL-sort_recorded_by_stat
+:status: seed
+:realises: RUL-prep_records_sort, RUL-sort_recorded_by_stat, RUL-geotag_plans_on_current_record
+:aliases: geotag-auto-reprep-clean-move-1, geotag-auto-reprep-sources-nonempty-skip-1
 
-When the only change prep has not recorded is a sort and the inbox is empty, `geotag plan` SHALL run prep's `plan` and
-`execute` itself, inside its own lock, saying so, before it plans.
+When the only change prep has not recorded is one {need}`BLD-reprep_pending` names and the inbox is empty, `geotag
+plan` SHALL run prep's `plan` and `execute` itself, inside its own lock, saying so, before it plans.
+:::
+
+:::{bld} What prep has yet to record
+:id: BLD-reprep_pending
+:status: seed
+:realises: RUL-prep_records_sort, RUL-geotag_plans_on_current_record
+:aliases: geotag-targeted-reprep-blocker-1
+
+`by_dest_reprep_pending` SHALL name, from sizes and modification times alone, a photo in photos by destination the
+handoff does not record at its path, one the handoff records in photos by date or by destination that is gone, or one
+it records in photos by destination whose size or `mtime_ns` differs from its record: `geotag plan` stops on it with
+the one re-prep blocker, and runs prep itself when {need}`BLD-geotag_auto_reprep` allows; prep's nothing-to-do guard
+does not stop while it names one.
 :::
 
 :::{bld} Where the loop's gates are checked

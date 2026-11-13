@@ -691,6 +691,18 @@ Geotag depends on prep's handoff, and a photo prep has not recorded is not in it
 after geotag has run, keeps the handoff the whole truth about photos by destination.
 :::
 
+:::{rat} A plan on a reading the file no longer holds
+:id: RAT-plan_on_current_record
+:status: seed
+:justifies: RUL-geotag_plans_on_current_record
+
+Geotag decides from what prep read in each photo — its time above all — and never reads the photo again. A photo
+removed since would be planned for nothing; one changed since, its time set in another program say, would have that
+change overwritten by a time worked out from values it no longer holds — and execution, which must accept a change to
+a photo's metadata alone to resume its own writes, cannot tell the two apart. Its size and modification time, against
+prep's record, show it without reading it.
+:::
+
 :::{rat} Safe is not frictionless
 :id: RAT-rerun_not_frictionless
 :status: ruled

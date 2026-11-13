@@ -388,11 +388,13 @@ def handoff_path(ws: str) -> str:
 
 
 def by_dest_reprep_pending(ws: str, handoff: dict):
-    """An example by-dest photo/raw the handoff has NOT recorded — or a by-date photo the handoff still
-    lists but that is gone from disk — else None. Non-None means the user moved files into/within
-    `6-photos-by-dest` since the last prep, so the handoff is stale and a re-prep (`prep plan` then
-    `prep execute`) is needed before geotag. The cheap, exact signal shared by geotag's re-prep gate and
-    prep's nothing-to-do guard, so the two never disagree about whether prep still has work to do."""
+    """An example photo whose record in the handoff no longer holds, else None: a by-dest photo/raw the
+    handoff has NOT recorded, a by-date photo the handoff still lists but that is gone from disk, or a
+    by-dest photo the handoff records that is gone or differs in size or modification time from its
+    record (geotag §13). Non-None means the user moved, removed or changed files since the last prep, so
+    the handoff is stale and a re-prep (`prep plan` then `prep execute`) is needed before geotag.
+    `stat`-level only, no file read. The cheap, exact signal shared by geotag's re-prep gate and prep's
+    nothing-to-do guard, so the two never disagree about whether prep still has work to do."""
     recorded = {f.get("relative_path") for f in (handoff.get("files") or [])}
     by_dest = folder_name('photos_by_dest')
     base = os.path.join(ws, by_dest)
@@ -407,9 +409,17 @@ def by_dest_reprep_pending(ws: str, handoff: dict):
     by_date = folder_name('photos_by_date')
     for f in (handoff.get("files") or []):
         rel = f.get("relative_path") or ""
-        if rel.startswith(by_date + "/") and f.get("media_class") in ("image", "raw") \
-                and not os.path.exists(os.path.join(ws, rel)):
+        if f.get("media_class") not in ("image", "raw"):
+            continue
+        if rel.startswith(by_date + "/") and not os.path.exists(os.path.join(ws, rel)):
             return rel
+        if rel.startswith(by_dest + "/"):
+            try:
+                st = os.stat(os.path.join(ws, rel))
+            except OSError:
+                return rel                  # recorded, now gone
+            if (f.get("size"), f.get("mtime_ns")) != (st.st_size, st.st_mtime_ns):
+                return rel                  # recorded, since changed
     return None
 
 def prep_log_path(ws: str) -> str:

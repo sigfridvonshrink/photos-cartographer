@@ -16,6 +16,7 @@
 (photos-2-geotag, spec §14–§16). Still pre-decision: no JSON artifacts. From conftest.py.
 """
 import json
+from _handoff import match_disk
 import os
 import sys
 from datetime import datetime, timezone
@@ -230,7 +231,7 @@ def _full_ws(tmp_path, *, device_groups, bydest_key="SONY|ILCE-6400|123"):
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
     rel = "6-photos-by-dest/Trip/a.jpg"
     p = ws / rel; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"img")
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [_hfile(rel, key=bydest_key)]}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, [_hfile(rel, key=bydest_key)])}))
     return ws
 
 

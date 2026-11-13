@@ -327,3 +327,69 @@
 12	```text [sha1:deccd2ca, 13 lines]	BLD-geotag_stage_order RUL-decision_stage_writes_record	
 12	A geotag JSON file existing on disk does not automatically mean execution is allowed.	INV-no_stale_use	
 12	Execution is allowed only after `photos-24-executable-plan.json` exists, is current, and validates all upstream dependencies.	RUL-no_plan_no_run INV-no_stale_use BLD-geotag_dependencies	
+13	## 13. Stage 1 — Invoke geotag and validate prep state	dropped	a heading; the corpus's documents carry their own
+13	Geotag may be invoked without assuming upstream prep artifacts are valid.	INV-no_stale_use	
+13	The workspace lock is acquired at process startup, before preflight (shared contract `photos-shared-contract.md` Section 2); if another pipeline run holds it, geotag exits fail-fast without scanning, planning, or writing anything.	RUL-lock_before_reading RUL-lock_fail_fast	
+13	Immediately after, geotag applies the same startup guards every script does (shared contract Section 13.7; prep Section 6.2):	dropped	introduces the guards that follow
+13	- **Sealed workspace → hard-stop, sealed means sealed.** If a **terminal/sealed marker** from a prior successful merge is present (shared contract Section 13.7), geotag **hard-stops immediately, mutating nothing and touching nothing but the owner record of the workspace lock**, and directs the user to a fresh workspace — a merged workspace is done.	RUL-sealed_refuses BLD-phases_check_seal	
+13	There is no recovery utility.	RUL-sealed_refuses	a sealed workspace is final
+13	If an entry sits at the **workspace root** other than its managed folders and hidden entries — a file or a whole folder — or anything sits in **`0-sources`**, geotag additionally warns that a likely new dump was detected and that, because this workspace is sealed, the dump must be moved into a **fresh workspace** by hand; it leaves the dump exactly where it is.	RUL-sealed_new_dump_warned RUL-sealed_new_dump_left	
+13	- **Uninitialized → run prep first.** If the workspace has no root sentinel `photos-00-workspace-guard` (it was never initialized, shared contract Section 5; prep Section 3.1), geotag hard-stops, reporting that the workspace is not initialized and that prep must run first (only prep's init path consumes an as-arrived dump).	RUL-only_prep_builds_structure	
+13	- **Misplaced entry at the workspace root → hard-stop (strict).** On an initialized workspace the base must hold only the managed folders and control/dot directories; any misplaced root entry blocks — a **loose file** (a hidden one excepted, like every hidden entry), a **non-managed folder** (a stray dump folder belongs *inside* `0-sources`, not loose at the base), or a **symlink** (barred outright rather than followed, since following it would escape the workspace).	RUL-top_level_only_managed RUL-no_links	
+13	Dumps belong in `0-sources` (shared contract Section 5.3; prep Section 6.2 items 2–3).	RUL-top_level_only_managed	
+13	Geotag matches prep here so a misplaced dump is caught no matter which phase the operator runs next.	RUL-top_level_only_managed	blocks every phase alike
+13	- **Incomplete managed folder structure → hard-stop.** If any of the managed `0`–`6` folders is missing on an initialized workspace, the structure was disturbed out-of-band; geotag hard-stops and directs the operator to restore it and re-run prep, rather than proceeding against a damaged workspace (shared contract Section 5.3; prep Section 6.2 item 7).	RUL-missing_folder_blocks	
+13	Folder creation is prep's init-only job; geotag never creates or repairs the structure.	RUL-only_prep_builds_structure	
+13	Otherwise, the first workflow action is always preflight validation.	BLD-geotag_stage_order	preflight comes before every stage
+13	The workflow must:	dropped	introduces the list
+13	1. load the available `photos-1-prep` handoff and SQLite cache state;	BLD-geotag_file_model	
+13	2. verify that `5-photos-by-date/` contains no photos, **and that `0-sources/` is empty** — prep leaves `0-sources` empty at the end of every run (prep Sections 7.6, 18), so a non-empty `0-sources` means an un-processed dump is waiting; geotag hard-stops directing the user to re-run prep.	RUL-geotag_gates RUL-prep_empties_inbox BLD-loop_gates	
+13	(Residuals in `1-strays`, `2-missing-metadata`, `3-redundant-jpgs`, and `4-videos-by-date` are tolerated and do not block.);	RUL-geotag_gates	
+13	3. verify that no `destination_distribution_subfolders` (jpg/tif) exist under `6-photos-by-dest` and hard-stop if development has started (Section 7.1);	RUL-development_after_merge BLD-loop_gates	
+13	4. verify that `6-photos-by-dest` contains only photo files and hard-stop on any non-photo file — `other`-class non-media or `video`-class — found under it (Sections 7.2, 7.3);	RUL-sort_photos_only RUL-geotag_changes_only_by_dest	
+13	5. identify files under `6-photos-by-dest`;	BLD-geotag_file_model	
+13	6. detect by-dest media not yet recorded by prep (and/or handoff by-date files now missing) and hard-stop with the targeted "re-run prep" blocker if found (Section 13.1);	RUL-prep_records_sort RUL-geotag_plans_on_current_record BLD-reprep_pending	
+13	7. validate whether the prep/cache state for by-dest files is current;	RUL-geotag_plans_on_current_record INV-no_stale_use	
+13	8. block before producing geotag JSON artifacts if the prep/cache state is stale, missing, incomplete, or unverifiable.	INV-no_stale_use RUL-no_record_before_decisions	
+13	The workflow must validate that:	dropped	introduces the list
+13	1. the workspace config `photos-00-config.json` exists and is read as the authoritative configuration (seeded by prep; shared contract `photos-shared-contract.md` Section 4), with its field-scoped fingerprints used for staleness and its whole-file SHA-256 available for provenance;	RUL-one_configuration RUL-staleness_by_area RUL-config_digest_recorded	
+13	2. the prep handoff exists and its recomputed `content_fingerprint` matches the value recorded wherever it is depended upon (Section 4; prep Section 16.2);	RUL-handoff_verified_by_content BLD-geotag_dependencies	
+13	3. the SQLite schema and cache versions are acceptable **as established via the handoff** — geotag reads the handoff's recorded cache/field-set fingerprints (Section 4; prep Section 16.2) rather than opening and inspecting prep's database directly to check schema/cache versions;	BLD-camera_group_key_version BLD-geotag_dependencies RUL-database_regions_disjoint	the versions are the handoff's; geotag never reads prep's tables
+13	4. expected by-dest media files still exist;	RUL-geotag_plans_on_current_record BLD-reprep_pending	
+13	5. size/mtime/fingerprint preconditions are current;	RUL-geotag_plans_on_current_record BLD-reprep_pending BLD-geotag_dependencies	
+13	6. the metadata field-set version is acceptable;	BLD-geotag_dependencies INV-no_stale_use	
+13	7. prep handoff dependencies are still current;	INV-no_stale_use BLD-geotag_dependencies	
+13	8. by-dest SQLite records are current.	INV-no_stale_use BLD-geotag_dependencies	prep's records are vouched for by the handoff built from them
+13	If validation fails, the workflow prints a textual stale-state report and produces no JSON artifact.	INV-no_stale_use RUL-no_record_before_decisions	
+13	Separately from staleness, every human-authored value geotag consumes — the config it reads and the decision fields it loads — is **sanity-validated before use** (Section 9.2; shared contract `photos-shared-contract.md` Section 14).	RUL-config_validated_before_use RUL-invalid_value_stops	
+13	An invalid value (e.g. a non-resolvable timezone, an out-of-range coordinate, a malformed `zfs` snapshot prefix, or a structurally broken decision object) is a hard blocker located to the offending field; geotag produces no downstream artifact and mutates nothing until the user fixes it.	RUL-invalid_value_located RUL-invalid_value_never_repaired RUL-invalid_decision_kept	
+13	Validation detects invalid *content*; the dependency cascade detects *change* — both run.	RUL-invalid_value_stops INV-no_stale_use	
+13.1	### 13.1 Geotag requires a prep run after the latest by-date → by-dest move	dropped	a heading; the corpus's documents carry their own
+13.1	Prep recognizes a user's by-date → by-dest move and folds it into the handoff/cache only on its *next run* (prep `photos-1-prep-workflow.md` Section 10.1).	RUL-move_recognized RUL-sort_recorded_by_stat	
+13.1	Geotag consumes the handoff and operates on by-dest.	RUL-geotag_changes_only_by_dest	
+13.1	Therefore:	dropped	a connective
+13.1	**A prep run must occur after the most recent by-date → by-dest move, before geotag runs.** This is a hard contract requirement, not merely advisory.	RUL-prep_records_sort	
+13.1	The intended sequence is *move → re-run prep (move recognition) → geotag* (shared contract `photos-shared-contract.md` Section 10).	BLD-loop_commands	
+13.1	A handoff that predates the latest move does not describe the by-dest set geotag sees, so geotagging against it is unsafe.	RAT-never_behind_prep	
+13.1	This requirement is largely self-enforcing through the validations above: a stale handoff fails the content-fingerprint/cache checks, and moved files break the "expected by-dest media files still exist" and "by-dest SQLite records are current" checks.	dropped	restates the checks above
+13.1	But geotag must detect this specific situation and report it **as a targeted, actionable blocker** rather than as a generic hash mismatch or opaque stale-cache message, because the precise fix (re-run prep) differs from other staleness causes.	BLD-reprep_pending	one re-prep blocker; its wording lives in the code
+13.1	Detection (cache/handoff vs. filesystem, `stat`-level, no media re-read):	BLD-reprep_pending	
+13.1	1. one or more media files exist under `6-photos-by-dest` that the handoff/cache does not record at their current by-dest path (unrecorded by-dest media); and/or	BLD-reprep_pending	
+13.1	2. one or more photos the handoff records under `5-photos-by-date` are now missing from there (consistent with having been moved into by-dest).	BLD-reprep_pending	
+13.1	(Videos in `4-videos-by-date` are not part of this check — they are never moved into by-dest, Section 7.3.); and/or	RUL-sort_photos_only	videos never enter photos by destination
+13.1	3. one or more photos the handoff records under `6-photos-by-dest` are gone, or differ in size or modification time from their record (removed, or changed since prep read them).	RUL-geotag_plans_on_current_record BLD-reprep_pending	
+13.1	When any condition holds, geotag hard-stops before creating any geotag JSON artifact and emits the targeted blocker, distinct from a generic hash mismatch, whose remedy is to re-run prep.	BLD-reprep_pending RUL-no_record_before_decisions	
+13.1	Geotag never performs the move recognition itself and never writes to the cache, handoff, or by-dest to "fix" this — recognizing moves and refreshing the handoff is prep's responsibility alone (prep Section 10.1).	RUL-database_regions_disjoint RUL-prep_records_sort	
+13.1	Geotag's only action is to detect the gap and either direct the user to re-run prep or, in the bounded case of Section 13.1.1, run the real prep phases for them.	BLD-geotag_auto_reprep	
+13.1.1	### 13.1.1 Convenience: auto re-prep for a clean by-date → by-dest move	dropped	a heading; the corpus's documents carry their own
+13.1.1	Because *move → re-run prep → geotag* is the overwhelmingly common flow, geotag MAY run the prep re-organization for the operator instead of hard-stopping — but only by invoking the **real prep phases**, never by recognizing the move itself.	BLD-geotag_auto_reprep	
+13.1.1	Under geotag's whole-run lock — taken before anything is read — when **all** of the following hold it runs `prep plan` then `prep execute` inside that lock, announces what and why, then continues into planning:	BLD-geotag_auto_reprep RUL-lock_before_reading	
+13.1.1	- the workspace is initialized and not sealed;	BLD-geotag_auto_reprep	
+13.1.1	- `0-sources` is **empty** — so the prep run moves no media.	BLD-geotag_auto_reprep	
+13.1.1	A non-empty `0-sources` is an unprocessed dump: the cheapest hard gate, left to the Section 13 scope blocker so the operator ingests it knowingly — geotag never silently ingests a dump via auto re-prep;	BLD-geotag_auto_reprep RUL-geotag_gates	
+13.1.1	- the re-prep detection above (unrecorded by-dest media, a handoff by-date photo now gone, or a handoff by-dest photo gone or changed) is the one thing pending.	BLD-geotag_auto_reprep BLD-reprep_pending	
+13.1.1	This preserves every invariant: prep — not geotag — performs the move recognition and is the sole writer of the cache/handoff and its content fingerprint; the run stays plan/validate/execute; and the in-lock blocker of Section 13.1 remains in force as the re-validation fallback — a race, an ambiguous move prep cannot record `stat`-only, or any residual still hard-stops, and an auto-prep that fails (non-zero exit) aborts geotag so nothing is geotagged on a half-done state.	RUL-database_regions_disjoint BLD-geotag_auto_reprep	
+13.1.1	When the conditions are not all met, geotag falls through to the Section 13.1 hard-stop exactly as before.	BLD-reprep_pending	
+13.1.1	The convenience is in *who types the prep command*, not in *what enforces the contract*.	dropped	restates the above
+13.1.1	(This applies to `geotag plan`;	BLD-loop_gates	
+13.1.1	`geotag execute` validates against the plan's own dependency fingerprints and does not re-prep.)	BLD-loop_gates	

@@ -18,6 +18,7 @@ The lifecycle guards + by-dest scope/re-prep gates that must pass before geotag 
 JSON artifacts are produced. photos_2_geotag / photos_utils come from conftest.py.
 """
 import json
+from _handoff import match_disk
 import os
 import sys
 
@@ -52,7 +53,7 @@ def _ws(tmp_path, *, guard=True, sealed=False, config=True, handoff=True,
     if handoff:
         files = handoff_files if handoff_files is not None else \
             [{"relative_path": rel, "media_class": "image"} for rel in bydest]
-        (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files}))
+        (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files)}))
     return ws
 
 
@@ -198,6 +199,25 @@ def test_filename_format_other_than_prep_s_blocks(tmp_path):
 
 # --- by-dest scope gates -----------------------------------------------------
 
+@pytest.mark.spec("RUL-geotag_plans_on_current_record", "BLD-reprep_pending",
+                  test="TST-geotag_preflight-a_photo_removed_or_changed_since_prep_stops_geotag")
+def test_a_photo_removed_or_changed_since_prep_stops_geotag(tmp_path):
+    """A by-dest photo prep recorded that is now gone, or differs in size or modification time from its
+    record (a time edited in another program, say), stops planning with the re-prep blocker: geotag never
+    plans on prep's reading of a file that no longer holds it."""
+    ws = _ws(tmp_path, bydest=("6-photos-by-dest/Trip/a.jpg", "6-photos-by-dest/Trip/b.jpg"))
+    assert _pf(ws)[0] == []
+    a = ws / "6-photos-by-dest" / "Trip" / "a.jpg"
+    st = a.stat()
+    os.utime(a, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000_000))      # same bytes, touched
+    blockers, _, _ = _pf(ws)
+    assert len(blockers) == 1 and "is out of date" in blockers[0] and "Trip/a.jpg" in blockers[0], blockers
+    os.utime(a, ns=(st.st_atime_ns, st.st_mtime_ns))
+    (ws / "6-photos-by-dest" / "Trip" / "b.jpg").unlink()                # removed
+    blockers, _, _ = _pf(ws)
+    assert len(blockers) == 1 and "is out of date" in blockers[0] and "Trip/b.jpg" in blockers[0], blockers
+
+
 @pytest.mark.spec("reprep-geotag-no-fix-1")
 def test_reprep_gate_blocks_and_geotag_never_records_the_move(tmp_path):
     """Geotag does NO move recognition: a by-dest photo absent from the handoff (prep not re-run after
@@ -208,7 +228,7 @@ def test_reprep_gate_blocks_and_geotag_never_records_the_move(tmp_path):
     bd = ws / "6-photos-by-dest" / "Trip" / "a.jpg"
     ho_before, bd_before = ho_p.read_bytes(), bd.read_bytes()
     blockers, _, _ = _pf(ws)
-    assert any("prep has not yet recorded" in b for b in blockers), blockers
+    assert any("is out of date" in b for b in blockers), blockers
     assert ho_p.read_bytes() == ho_before                       # handoff NOT auto-edited by geotag
     assert bd.read_bytes() == bd_before                         # by-dest untouched
     assert json.loads(ho_p.read_text())["files"] == []          # the move was never recorded
@@ -298,7 +318,7 @@ def test_unrecorded_by_dest_photo_demands_reprep(tmp_path):
     ws = _ws(tmp_path)                                        # a.jpg recorded
     (ws / "6-photos-by-dest" / "Trip" / "b.jpg").write_bytes(b"img")   # NOT in the handoff
     blockers, _, _ = _pf(ws)
-    assert any("has not yet recorded" in b and "photos-cartographer prep" in b for b in blockers), blockers
+    assert any("is out of date" in b and "photos-cartographer prep" in b for b in blockers), blockers
 
 
 @pytest.mark.spec("geotag-prep-after-move-required-1")
@@ -308,7 +328,7 @@ def test_missing_by_date_photo_demands_reprep(tmp_path):
              {"relative_path": "5-photos-by-date/old.jpg", "media_class": "image"}]
     ws = _ws(tmp_path, handoff_files=files)                   # 5-photos-by-date/old.jpg not on disk
     blockers, _, _ = _pf(ws)
-    assert any("has not yet recorded" in b for b in blockers), blockers
+    assert any("is out of date" in b for b in blockers), blockers
 
 
 # --- §13.1 auto re-prep for a clean by-dest move -----------------------------
@@ -346,6 +366,19 @@ def test_auto_reprep_runs_prep_plan_then_execute_for_clean_move(tmp_path, monkey
     calls, rep = _autoreprep(ws, monkeypatch)
     assert calls == ["plan", "execute"], calls
     assert any("running prep plan + execute" in m for m in rep.logs), rep.logs
+
+
+@pytest.mark.spec("BLD-geotag_auto_reprep", "BLD-reprep_pending",
+                  test="TST-geotag_preflight-auto_reprep_runs_prep_for_a_photo_changed_since_prep")
+def test_auto_reprep_runs_prep_for_a_photo_changed_since_prep(tmp_path, monkeypatch):
+    """A recorded by-dest photo changed since prep (0-sources empty) is brought up to date the same way: geotag
+    plan runs prep's plan then execute."""
+    ws = _ws(tmp_path)
+    a = ws / "6-photos-by-dest" / "Trip" / "a.jpg"
+    a.write_bytes(b"img, edited")
+    calls, rep = _autoreprep(ws, monkeypatch)
+    assert calls == ["plan", "execute"], calls
+    assert any("is out of date" in m for m in rep.logs), rep.logs
 
 
 def test_auto_reprep_skips_when_nothing_pending(tmp_path, monkeypatch):

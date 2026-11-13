@@ -17,6 +17,7 @@ group, destination) offset cells, with the decision-field / rerun-preservation e
 SHA-256 dependency block (spec §17–§21). The GPX offset inference is Phase 3b. From conftest.py.
 """
 import json
+from _handoff import match_disk
 import os
 import sys
 from datetime import datetime, timezone
@@ -58,7 +59,7 @@ def _ws(tmp_path, *, files, device_groups, default_tz=""):
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
     for rec in files:
         p = ws / rec["relative_path"]; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"img")
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files)}))
     return ws
 
 
@@ -165,10 +166,10 @@ def test_new_destination_asks_only_its_own_decisions(tmp_path, monkeypatch):
 
     ho_p = ws / ".photos-ingest" / "photos-11-handoff.json"
     ho = json.loads(ho_p.read_text())
-    ho["files"].append(_hfile("6-photos-by-dest/Rome/b.jpg"))
-    ho_p.write_text(json.dumps(ho))
     (ws / "6-photos-by-dest" / "Rome").mkdir()
     (ws / "6-photos-by-dest" / "Rome" / "b.jpg").write_bytes(b"img")
+    ho["files"].append(_hfile("6-photos-by-dest/Rome/b.jpg"))
+    ho_p.write_text(json.dumps({**ho, "files": match_disk(ws, ho["files"])}))
     assert _run(monkeypatch, ws) == 0
     art = _artifact(ws)
     assert art["destinations"]["6-photos-by-dest/Brussels"] == settled
