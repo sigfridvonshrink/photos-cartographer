@@ -12,7 +12,7 @@ that only restated others, has no heading here.
 :id: BLD-geotag_stage_order
 :status: ruled
 :realises: RUL-time_before_gps, RUL-decision_stage_writes_record, RUL-no_record_before_decisions
-:aliases: geotag-gpx-after-recognition-1
+:aliases: geotag-gpx-after-recognition-1, geotag-gpx-before-time-1
 
 `geotag plan` SHALL recognise the camera groups — stopping on an unknown one before reading any track — then read the
 tracks, then write `photos-21-time-decisions.json`; only once it is complete resolve each photo's true time and
@@ -109,4 +109,20 @@ destination's.
 
 `photos-21`, `photos-22`, `photos-23` and `photos-24` SHALL each hold a `destinations` object keyed by the
 destination's path under `6-photos-by-dest`, every decision of a destination inside its entry.
+:::
+
+
+## 15. Reading the tracks
+
+:::{bld} How track points are read
+:id: BLD-track_points
+:status: seed
+:realises: RUL-track_time_never_guessed, RUL-unreadable_point_reported
+:aliases: geotag-gpx-time-xsd-datetime-1, geotag-gpx-rejected-points-reported-1
+
+Geotag SHALL read every `<trkpt>` of each `*.gpx` file under `gpx_root`, its `<time>` as an `xsd:dateTime` — fractional
+seconds optional, the zone `Z` or a numeric offset — normalised to UTC; a point lacking `lat` or `lon`, with one out of
+range or not a number, lacking a `<time>`, or with a time unparseable or naive is skipped with a warning naming the
+file and the point's index, as is a file that cannot be read or parsed. `geotag plan` prints the count of warnings and
+the first `GPX_WARNINGS_SHOWN`, with the number of the rest.
 :::

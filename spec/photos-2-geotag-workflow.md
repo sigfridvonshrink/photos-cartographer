@@ -743,7 +743,7 @@ If GPX is used for time-anchor proposals, the GPX fingerprint becomes an upstrea
 
 If GPX is used for GPS interpolation/extrapolation, the GPX fingerprint becomes an upstream dependency of `photos-23-gps-decisions.json` and `photos-24-executable-plan.json`.
 
-The two statements above describe *why* the GPX fingerprint matters. In practice the implementation records the current GPX fingerprint as a dependency **unconditionally whenever a GPX set is loaded** — even for an artifact (or destination) that ended up using no GPX evidence — rather than tracking per-artifact whether GPX actually contributed. This is a deliberate, conservative over-inclusion (Section 22.1): editing the GPX set may restale an artifact that did not depend on GPX, which only costs a recompute and never serves a stale result. If GPX is wholly unavailable or disabled, there is no fingerprint to record and these dependencies are simply absent.
+The two statements above describe *why* the GPX fingerprint matters. In practice the implementation records the current GPX fingerprint as a dependency **unconditionally whenever a GPX set is loaded** — even for an artifact (or destination) that ended up using no GPX evidence — rather than tracking per-artifact whether GPX actually contributed. This is a deliberate, conservative over-inclusion (Section 22.1): editing the GPX set may restale an artifact that did not depend on GPX, which only costs a recompute and never serves a stale result. If GPX is wholly unavailable or disabled, a fixed fingerprint of its own is recorded in their place, so turning GPX on or off restales them too.
 
 ---
 

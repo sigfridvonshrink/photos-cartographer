@@ -139,3 +139,18 @@ such.
 A folder holding only other destinations has no photo to correct: it exists so a timezone or a fallback position can be
 set once and reach every destination beneath it. If it asked for anything, it would add work instead of saving it.
 :::
+
+
+## 15. Reading the tracks
+
+:::{rat} A track is evidence only where it can be read
+:id: RAT-track_points_read_exactly
+:status: seed
+:justifies: RUL-track_time_never_guessed, RUL-unreadable_point_reported
+
+A track's points become positions and clock offsets; a time read an hour wrong, or in a zone guessed, would place
+photos and correct cameras by that hour, and look like evidence. Recorders write the same instant in several valid
+forms, so each is read as the instant it is; one stating no zone could be any of them and is not used. Skipping a
+point silently would let a track whose every point was rejected pass for an empty one, and the user would never learn
+why the photos it should have placed were not.
+:::
