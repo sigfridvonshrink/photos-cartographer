@@ -12,7 +12,7 @@ that only restated others, has no heading here.
 :id: BLD-geotag_stage_order
 :status: ruled
 :realises: RUL-time_before_gps, RUL-decision_stage_writes_record, RUL-no_record_before_decisions
-:aliases: geotag-gpx-after-recognition-1, geotag-gpx-before-time-1
+:aliases: geotag-gpx-after-recognition-1, geotag-gpx-before-time-1, geotag-no-utc-incomplete-tz-1
 
 `geotag plan` SHALL recognise the camera groups — stopping on an unknown one before reading any track — then read the
 tracks, then write `photos-21-time-decisions.json`; only once it is complete resolve each photo's true time and
@@ -138,4 +138,21 @@ the first `GPX_WARNINGS_SHOWN`, with the number of the rest.
 On an unknown camera group, `geotag plan` SHALL print the `device_groups` arrays `fixed_clock_cameras` and `phones`,
 in the configuration's own key order, each the configured list with every unknown key appended, as JSON to paste over
 the configuration's, and exit with status 2 having written no record and read no track.
+:::
+
+
+## 18. Destination civil timezone
+
+:::{bld} The timezone cell
+:id: BLD-timezone_cell
+:status: seed
+:realises: RUL-timezone_from_nearest, RUL-timezone_auto_resolves
+:aliases: geotag-timezone-every-destination-1
+
+Each destination's `destination_timezone` in `photos-21-time-decisions.json` SHALL hold `proposed_iana_timezone` with
+its `proposal_source` — `inherited`, naming the ancestor in `inherited_from`, or `config_default`, or `none` —
+`user_decision.manual_iana_timezone`, `effective_iana_timezone`, `requires_user_input`, `stale_user_decision` and, when
+the proposal took effect without the user, `decision_mode: "auto_resolved"`. Destinations are built parent first, so
+each takes the `effective_iana_timezone` of its nearest ancestor that has one, `6-photos-by-dest` itself the first,
+from `default_folder_timezone`.
 :::

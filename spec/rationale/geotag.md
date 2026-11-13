@@ -169,3 +169,27 @@ Treat a camera as a phone and its error is never corrected; a phone as a camera 
 in a file's metadata tells them apart reliably, so geotag asks rather than guesses — and writes the classification
 out, so only the judgement is the user's.
 :::
+
+
+## 18. Destination civil timezone
+
+:::{rat} The nearest place says the most
+:id: RAT-nearest_timezone
+:status: seed
+:justifies: RUL-timezone_from_nearest
+
+The destination a place lies in is the most specific word on its timezone: Kyoto inside Japan is in Japan's zone. The
+configured default is the user's usual zone, true of no trip in particular, so it fills in only where the tree says
+nothing. And a zone the user sets on a trip's folder should hold for everything beneath it — one answer for the trip,
+not one per folder.
+:::
+
+:::{rat} The destination is an input to the time
+:id: RAT-destination_is_an_input
+:status: seed
+:justifies: RUL-moved_photo_decided_anew
+
+A photo's true time and its name come from its destination's timezone and from the clock offset found for its camera
+there. A photo is moved to fix a mis-sort; carrying its old destination's answers with it would keep the mistake in
+its time and its name, now hidden under the right folder.
+:::

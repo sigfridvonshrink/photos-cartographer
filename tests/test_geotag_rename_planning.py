@@ -108,7 +108,8 @@ def test_only_a_numeric_suffix_counts():
         assert rows[0]["rename"] and rows[0]["planned_name"] == "2024-07-03--14-00-00.jpg", name
 
 
-@pytest.mark.spec("move-reevaluate-dest-1")
+@pytest.mark.spec("move-reevaluate-dest-1", "RUL-moved_photo_decided_anew",
+                  test="TST-geotag_rename_planning-move_between_destinations_reevaluates_under_new_tz_no_carry")
 def test_move_between_destinations_reevaluates_under_new_tz_no_carry():
     """Moving a photo to a new destination re-evaluates its name under the NEW dest's timezone — the
     old destination's local time is never carried. geotag re-derives every run from the handoff (it

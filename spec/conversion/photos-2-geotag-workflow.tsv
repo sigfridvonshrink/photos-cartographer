@@ -475,8 +475,56 @@
 17	3. for a file whose time geotag already corrected, its own recorded offset, else the destination's civil timezone.	RUL-geotag_rerun_keeps_settled	
 17	A camera group present in a destination with **no** anchorable native-GPS frame *for a given day* is not self-solved for that day's bucket; the bucket instead takes a **timezone-derived** proposal from the destination's resolved civil timezone (Section 10.2 rule 4b, Section 19.4), and falls to a blank manual field only if the timezone is unresolved too.	RUL-offset_from_own_evidence BLD-offset_buckets	
 17	Offsets are **not** inherited from ancestor destinations.	RUL-offset_from_own_evidence	
-17	The destination's **civil timezone**, by contrast, *does* inherit: a destination with no timezone of its own takes its nearest ancestor destination's effective timezone as a confirmable proposal (Section 18), seeding downward from a trip's root — so the timezone cascades, while each day's offset is re-derived locally.	defer:geotag-18	timezone inheritance is §18's
+17	The destination's **civil timezone**, by contrast, *does* inherit: a destination with no timezone of its own takes its nearest ancestor destination's effective timezone as a confirmable proposal (Section 18), seeding downward from a trip's root — so the timezone cascades, while each day's offset is re-derived locally.	RUL-timezone_from_nearest	timezone inheritance is §18's
 17	Once this analysis is complete, the workflow has reached the formal time-decision stage.	dropped	a connective
 17	At that point, it must create:	RUL-decision_stage_writes_record	
 17	```text [sha1:c28abbd9, 1 lines]	RUL-decision_stage_writes_record BLD-geotag_stage_order	
 17	even if no user input is required.	RUL-decision_stage_writes_record	
+18	## 18. Destination civil timezone decision	dropped	a heading; the corpus's documents carry their own
+18	`photos-21-time-decisions.json` must settle the civil timezone for every destination under `6-photos-by-dest`.	BLD-timezone_cell RUL-timezone_auto_resolves	
+18	The destination civil timezone is used to:	RAT-destination_is_an_input	
+18	1. interpret local/civil destination context;	dropped	vague; the uses that follow are the substance
+18	2. convert resolved UTC to destination-local civil time;	defer:geotag-27	local time from resolved UTC is the renames' stage
+18	3. plan timestamp-based no-clobber renames;	defer:geotag-27	
+18	4. produce filename timestamp components.	defer:geotag-27	
+18	The artifact must include, for each destination, pre-created human decision fields.	BLD-timezone_cell RUL-decision_fields_laid_out	
+18	Example shape:	dropped	introduces the example
+18	```json [sha1:99da9774, 15 lines]	BLD-timezone_cell	its proposal_source value is stale: config_default, inherited or none
+18	The user may accept the proposal by changing:	RUL-timezone_auto_resolves	the accept flag adds nothing to a proposal that applies itself; whether it stays is open
+18	```json [sha1:168ed09d, 4 lines]	RUL-timezone_auto_resolves	the accept flag adds nothing to a proposal that applies itself; whether it stays is open
+18	Or override it by filling:	RUL-user_writes_decisions	
+18	```json [sha1:76788984, 4 lines]	BLD-timezone_cell	
+18	The workflow derives `effective_iana_timezone` during validation.	BLD-timezone_cell	
+18	The user should not directly edit machine proposal fields or generated effective fields.	RUL-user_writes_decisions	
+18	If destination timezone is unknown or ambiguous **and no ancestor destination supplies one and no configured default applies** (see the priority order below), the artifact must contain an empty manual override field and mark the destination as requiring user input.	RUL-timezone_auto_resolves BLD-timezone_cell	
+18	Resolved UTC must not be finalized for files in a destination whose timezone/time dependencies are incomplete.	BLD-geotag_stage_order	nothing past photos-21 runs until it is complete
+18	**Downward inheritance of the timezone proposal.** A destination whose timezone cannot be proposed on its own evidence **does not start from a blank field — it inherits, downward, auto-adopting that proposal**, reusing the **same nearest-ancestor machinery** as the folder GPS fallback (Section 25.3).	RUL-timezone_from_nearest RUL-timezone_auto_resolves	
+18	(The per-(camera group, destination) clock offset does **not** inherit — Section 10.2 rule 4 — so the timezone and the fallback are the only two facts that cascade down the destination tree.) The `proposed_iana_timezone` for a destination is chosen in priority order:	RUL-offset_from_own_evidence	
+18	1. **(a) self-proposed** — a timezone derived from **this destination's own evidence** (a native-GPS/GPX-derived zone), with the corresponding `proposal_source`.	dropped	never built; BACKLOG item 14
+18	*(Not yet implemented: the code currently has no GPS-derived zone, so in practice the chain starts at (b).)*	dropped	never built; BACKLOG item 14
+18	2. **(b) inherited** — otherwise, the destination takes the **effective timezone of the nearest ancestor destination** that has one, **auto-adopted** (overridable), with `proposal_source:	RUL-timezone_from_nearest BLD-timezone_cell	
+18	"inherited"` and an `inherited_from` field naming the ancestor path;	BLD-timezone_cell	
+18	3. **(c) config default** — otherwise, the configured global **`default_folder_timezone`** is the proposal (`proposal_source:	RUL-timezone_from_nearest BLD-timezone_cell	
+18	"config_default"`).	BLD-timezone_cell	
+18	The configured default is a **global fallback, not per-destination evidence**, so it sits **below** inheritance: a nested destination prefers its nearest ancestor's confirmed timezone over the blunt global default, and only falls to the global default when no ancestor supplies one.	RAT-nearest_timezone	
+18	(Putting the default above inheritance would make inheritance unreachable whenever a default is set, and would contradict the fallback model and Section 17.)	RAT-nearest_timezone	
+18	4. **else** — no self-proposal, no ancestor timezone, and no configured default: the manual field starts blank and the destination is marked `requires_user_input`.	RUL-timezone_auto_resolves BLD-timezone_cell	
+18	Inheritance is **recursive down the destination tree**: a destination's *effective* timezone — however it was reached (self-proposed-and-accepted, inherited-and-confirmed, or manually set) — is the basis propagated to its immediate children, and onward.	RUL-timezone_from_nearest	
+18	A **manual timezone set at a folder re-roots the chain** at that point: that zone becomes the folder's effective timezone and therefore the basis its descendants inherit.	RUL-timezone_from_nearest	
+18	To compute this, destinations are processed **parent-first** (the same ordering the fallback inheritance uses), so an ancestor's effective timezone is known before any child that would inherit it is built; inheritance flows **parent → child only**, never sibling → sibling.	BLD-timezone_cell	
+18	A timezone proposal — inherited or config-default — is **auto-applied by default**, not held for per-destination confirmation (Section 9.1 item 2).	RUL-timezone_auto_resolves	
+18	Because destinations are geographically **nested**, a child sits inside its parent and can scarcely cross a timezone boundary the parent did not, so adopting the parent's (or the global default's) zone is the right default at every level: the cell resolves with `decision_mode:	RAT-nested_place_same_timezone	
+18	"auto_resolved"` and `requires_user_input: false`, and stays fully overridable by a manual zone or an explicit `accept_proposed_timezone`.	RUL-timezone_auto_resolves BLD-timezone_cell	the accept flag adds nothing to a proposal that applies itself; whether it stays is open
+18	This holds for **both** real destinations and file-less containers (Section 10.1) — the latter were always auto-resolved; real destinations now are too.	RUL-timezone_auto_resolves RUL-container_never_waits	
+18	A manual zone set at any level **re-roots** the chain there (Section 18 recursion), and any level can still diverge by override.	RUL-timezone_from_nearest	
+18	The **only** timezone that blocks is a destination with no proposal at all — no ancestor timezone and no configured default — which keeps `requires_user_input: true` (priority item 4).	RUL-timezone_auto_resolves	
+18	An inherited proposal looks like a self-proposed one but names its source ancestor:	BLD-timezone_cell	
+18	```json [sha1:e98e225c, 14 lines]	BLD-timezone_cell	
+18.1	### 18.1 Re-evaluation when a file is moved between destinations	dropped	a heading; the corpus's documents carry their own
+18.1	A file's destination is an input to its time decision: the destination civil timezone, **the clock offset that applies to it (now per (camera group, destination), Section 10.2)**, and downstream the resolved UTC and the local-time rename.	RAT-destination_is_an_input	
+18.1	If the user re-sorts a file from one destination to another inside `6-photos-by-dest` (e.g. fixing a mis-sort), prep recognizes the move and updates the handoff to record the new destination (prep `photos-1-prep-workflow.md` Section 10.2).	RUL-move_recognized RUL-moved_file_carried	
+18.1	On the next geotag run this changes the handoff, which — through the dependency cascade (Section 30; shared contract Section 9) — restales the affected destinations' per-file decisions for that file, so geotag **re-evaluates** it under its **new** destination: it applies the new destination's effective timezone **and the new destination's (group) clock offset**, recomputes resolved UTC and the local-time rename accordingly, and never silently carries the old destination's timezone or offset onto a file that now lives elsewhere.	RUL-moved_photo_decided_anew INV-no_stale_use	
+18.1	The new destination's effective timezone may itself be an **inherited** one (proposed from its nearest ancestor and confirmed, Section 18); the moved file simply takes whatever that destination's effective timezone is.	RUL-moved_photo_decided_anew RUL-timezone_from_nearest	
+18.1	Because the offset is anchored from each destination's own native-GPS frames, moving a file may also change the *anchoring evidence* in both the source and target destinations — both cells are re-evaluated.	RUL-moved_photo_decided_anew RUL-offset_from_own_evidence	
+18.1	Decisions that are genuinely destination-scoped (each destination's timezone and its per-group offset) are unaffected for files that did not move; only the moved file is re-evaluated, and only against its new destination.	RUL-moved_photo_decided_anew RUL-geotag_rerun_keeps_settled	
+18.1	As always, the mandatory re-prep after the move applies (shared contract Section 10) so geotag sees the move at all.	RUL-prep_records_sort	
