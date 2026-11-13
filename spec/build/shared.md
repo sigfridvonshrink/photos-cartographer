@@ -936,7 +936,7 @@ Merge SHALL create a missing destination directory under `library_root` with `os
 :id: BLD-library_lock
 :status: ruled
 :realises: RUL-library_lock, RUL-library_lock_fail_fast, RUL-library_confirmed_before_lock, RUL-library_lock_holds_only_holder, RUL-library_lock_stale_recovered
-:aliases: merge-concurrency-library-lock-throughout-1
+:aliases: merge-concurrency-library-lock-throughout-1, merge-library-lock-is-dotfile-cross-workspace-1
 
 The library lock SHALL be `LibraryLock`: an exclusive, non-blocking `flock` on `.photos-merge.lock` in `library_root`,
 recording its holder's `pid`, `started_at` and `host` and nothing else, released by the kernel when its process dies,

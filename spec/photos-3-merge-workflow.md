@@ -308,7 +308,7 @@ A failed move (copy error, verification mismatch, unexpected occupied target wit
 
 Merge holds **two** locks for the duration of its run:
 
-1. **The workspace lock** (shared contract Section 2), acquired at startup after the workspace root sentinel is verified, guaranteeing no other pipeline process touches this workspace concurrently — fail-fast, stale-detectable, released on exit.
+1. **The workspace lock** (shared contract Section 2), acquired at startup once the control directory is found — the workspace root sentinel and the rest then checked under it — guaranteeing no other pipeline process touches this workspace concurrently — fail-fast, stale-detectable, released on exit.
 2. **The library-side lock** (shared contract Section 15.2), keyed to `library_root` and realized as a **`.photos-merge.lock` dotfile in the library root**, guaranteeing that no two merge runs write the same library concurrently **even when they originate from different workspaces** (each with its own workspace lock). It follows the same fail-fast, stale-detectable discipline: a merge that cannot take the library lock exits without touching the library.
 
 Both must be held before any library *content* access. Acquisition order is: workspace lock, then — still under the workspace lock — `library_root` config-validation and the `.photos-library` marker identity check (Section 3 precondition 5), then the library lock. The marker check necessarily precedes the library lock because the lock file is written into `library_root`: confirming the directory is a blessed library first ensures no `.photos-merge.lock` is ever dropped into a non-library directory. A merge that fails to acquire either lock, or finds the marker absent, exits cleanly having mutated nothing.

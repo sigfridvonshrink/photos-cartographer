@@ -2245,7 +2245,7 @@ and, while a photo crosses filesystems, its temporary copy.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: merge-library-lock-1
+:aliases: merge-library-lock-1, merge-hold-two-locks-1
 :uses: DEF-library, DEF-merge
 
 Merge SHALL hold a lock on the library for its whole run, besides the workspace's lock and not instead of it, so that no
@@ -2290,7 +2290,7 @@ A library lock left by a merge that died SHALL be recognisable as stale, and rec
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: merge-lock-after-marker-1, merge-marker-check-before-liblock-1
+:aliases: merge-lock-after-marker-1, merge-marker-check-before-liblock-1, merge-lock-acquisition-order-1, merge-fail-lock-or-marker-mutates-nothing-1
 :refines: RUL-library_lock
 
 Merge SHALL take the workspace's lock first, then check the library's place and its mark, and only then take the

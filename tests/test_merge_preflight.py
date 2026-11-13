@@ -573,7 +573,7 @@ def test_locked_workflow_exits_1_if_library_locked(tmp_path):
         held.release()
 
 
-@pytest.mark.spec("merge-lock-acquisition-order-1")
+@pytest.mark.spec("merge-lock-acquisition-order-1", test="TST-merge_preflight-locked_workflow_exits_2_on_blocker")
 def test_locked_workflow_exits_2_on_blocker(tmp_path):
     ws, lib = _make(tmp_path, complete_log=False)     # a precondition fails
     assert merge._run_locked_workflow("plan", str(ws)) == 2
