@@ -248,7 +248,7 @@ needed them.
 
 :::{rat} A phone says its own offset
 :id: RAT-phone_records_its_offset
-:status: seed
+:status: ruled
 :justifies: RUL-phone_time_from_own_offset
 
 A phone's clock is set by its network and it records the offset it was at, beside each time it writes: better
