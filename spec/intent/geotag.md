@@ -298,3 +298,27 @@ camera's own time, whatever timezone the camera was set to.
 The offset proposed from a camera's GPS SHALL be the one the most of its photos agree on — each photo counting every
 time the tracks passed where it was taken — never an average, and never one photo's closest match outvoting the rest.
 :::
+
+:::{rul} A place visited on several days is matched to the photo's day
+:id: RUL-revisit_matched_to_its_day
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-anchor_consensus
+
+Photos of a place the tracks passed on several visits — the same destination on consecutive days, a place passed
+morning and evening — SHALL anchor their camera's clock by the visit the camera's photos agree on, never by another
+visit's track because it passed closer.
+:::
+
+:::{rul} Visits the photos cannot tell apart wait for the user
+:id: RUL-indistinct_visits_wait
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-revisit_matched_to_its_day
+
+Where a camera's photos support two visits equally, its clock offset SHALL NOT take effect without the user's answer.
+:::

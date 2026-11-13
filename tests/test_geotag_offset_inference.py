@@ -440,7 +440,7 @@ def _photo(lat, lon, real_utc, i):
     return _frame(lat, lon, cam.strftime("%Y:%m:%d %H:%M:%S"), rel=f"6-photos-by-dest/Bruges/p{i}.jpg")
 
 
-@pytest.mark.spec("RUL-anchor_consensus", "BLD-anchor_matching",
+@pytest.mark.spec("RUL-anchor_consensus", "RUL-revisit_matched_to_its_day", "BLD-anchor_matching",
                   test="TST-geotag_offset_inference-each_pass_by_a_place_is_a_candidate")
 def test_each_pass_by_a_place_is_a_candidate():
     route, gpx = _route_days([3, 4])
@@ -451,7 +451,7 @@ def test_each_pass_by_a_place_is_a_candidate():
     assert cal.match_frame_to_gpx(f, gpx, WCFG)["gpx_file"] == "day3.gpx"   # the closest alone: the wrong day
 
 
-@pytest.mark.spec("RUL-anchor_consensus", "BLD-anchor_matching",
+@pytest.mark.spec("RUL-anchor_consensus", "RUL-revisit_matched_to_its_day", "BLD-anchor_matching",
                   test="TST-geotag_offset_inference-a_place_walked_on_two_days_takes_the_photos_day")
 def test_a_place_walked_on_two_days_takes_the_photos_day():
     # Photos of 4 July along a route also walked on 3 July — whose track passes closer — plus one spot only
@@ -466,8 +466,8 @@ def test_a_place_walked_on_two_days_takes_the_photos_day():
     assert [g["count"] for g in p["groups"]] == [4, 3]                      # 4 July: all four; 3 July: three
 
 
-@pytest.mark.spec("RUL-anchor_consensus", "RUL-anchor_offset_auto_as_configured", "BLD-anchor_matching",
-                  test="TST-geotag_offset_inference-two_days_nothing_tells_apart_wait_for_review")
+@pytest.mark.spec("RUL-anchor_consensus", "RUL-indistinct_visits_wait", "RUL-anchor_offset_auto_as_configured",
+                  "BLD-anchor_matching", test="TST-geotag_offset_inference-two_days_nothing_tells_apart_wait_for_review")
 def test_two_days_nothing_tells_apart_wait_for_review(monkeypatch):
     # The same route on two days and no photo only one day explains: the smaller clock error is proposed,
     # but as a disagreement — it never applies itself.
