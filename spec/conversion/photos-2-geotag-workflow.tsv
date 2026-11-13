@@ -1047,3 +1047,9 @@
 29.3	(Geotag touches photos only, so `ffmpeg`/video is never involved here.) Partial or failed output is never journaled as a confirmed operation or cached as a valid fingerprint — it surfaces as a failure or a held-back mismatch (Section 29.1a items 4–5), not a silent success.	RUL-failure_never_done	
 29.3	6. **Observability.** Long-running execution is visible: phase-level log lines (lock, validate, snapshot, apply, verify, journal, cache, summary) and live aggregate progress for the concurrent apply/verify pass, with the journal — not the progress output — as the durable record (mirroring prep Section 17).	dropped	output and progress, not behaviour
 29.3	Job count is run metadata, not a semantic dependency, unless it genuinely changes planned behaviour (it does not here — it changes only throughput).	RUL-execution_jobs_change_nothing	
+30	## 30. Idempotency and recalculation	dropped	a heading; the corpus's documents carry their own
+30	The geotag workflow must be idempotent, upholding the shared idempotency principle — change only what needs changing; a no-op run is a no-op (shared contract `photos-shared-contract.md` Section 11).	RUL-mutate_on_difference RUL-no_op_run	
+30	Repeated planning with unchanged inputs should produce the same semantic results.	RUL-unchanged_replan_writes_nothing	
+30	The workflow should recalculate only the affected downstream artifacts when upstream inputs change.	RUL-rerun_does_what_changed RUL-staleness_by_area	
+30	Examples:	dropped	introduces the examples
+30	```text [sha1:2d511650, 102 lines]	INV-no_stale_use RUL-staleness_by_area	worked examples of rules converted in §9–§29 and the shared contract
