@@ -32,7 +32,6 @@ The script sits beside `photos_utils.py` and imports the shared infrastructure f
 """
 import argparse
 import concurrent.futures
-import errno
 import glob
 import json
 import os
@@ -765,12 +764,6 @@ class MergeWorkflow:
         r = self._fingerprint_library_file(path)
         return r.get("status") == "valid" and r.get("value") == expected_fp
 
-    def _verify_copy(self, tmp_path, expected_fp):
-        """Cross-fs copy-verify hook (§11.2): raise if the temp copy's fingerprint != the planned one
-        (a torn / silently-corrupted copy), aborting the move before it is exposed under the target."""
-        if not self._verify_fp(tmp_path, expected_fp):
-            raise OSError(errno.EIO, f"library copy fingerprint mismatch (torn copy) for {tmp_path}")
-
     @staticmethod
     def _plan_kind(disp):
         return {"placed_new": "placed_new", "renamed_incoming": "renamed_for_library",
@@ -848,7 +841,7 @@ class MergeWorkflow:
 
         try:
             os.makedirs(os.path.dirname(target) or ".", exist_ok=True)   # additive placement (§6)
-            _move_no_clobber(src_abs, target, verify=lambda s, t: self._verify_copy(t, fp), cross_fs=True)
+            _move_no_clobber(src_abs, target, cross_fs=True)   # byte-checked copy across filesystems
             out.update({"final_kind": self._plan_kind(disp), "removed": True, "newly": True})
         except FileExistsError:                             # target appeared since planning
             if os.path.exists(target) and self._verify_fp(target, fp):

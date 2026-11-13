@@ -947,13 +947,14 @@ with exit status 1.
 
 :::{bld} Merge's move: one rename, or copy, verify, rename and remove
 :id: BLD-merge_move
-:status: ruled
+:status: seed
 :realises: RUL-library_never_altered, RUL-merge_moves, RUL-unplaced_photo_stays, RUL-target_free_at_execute, RUL-collision_same_content
-:aliases: merge-execute-occupied-different-blocker-1, merge-execute-occupied-identical-treat-present-1, merge-execute-safe-alt-only-if-planned-1
+:aliases: merge-execute-occupied-different-blocker-1, merge-execute-occupied-identical-treat-present-1, merge-execute-safe-alt-only-if-planned-1, merge-move-place-then-remove-no-loss-1
 
 Each photo SHALL move into its place without overwriting it: on the library's own filesystem by a single rename that
-refuses an existing name; across filesystems by a copy to a temporary name beside its place, fingerprinted against the
-planned content, renamed into the place only if it is still free, and only then removed from photos by destination.
+refuses an existing name; across filesystems by a copy to a temporary name beside its place, checked byte for byte against
+the photo, renamed into the place only if it is still free, the rename made durable, and only then removed from photos
+by destination.
 A place found taken at execute holding the planned content makes the photo already present; holding other content, it
 blocks the photo — the plan's alternative name used only where the plan recorded one.
 :::
@@ -962,6 +963,7 @@ blocks the photo — the plan's alternative name used only where the plan record
 :id: BLD-merge_journal_resume
 :status: ruled
 :realises: RUL-merge_resumable, RUL-resume_rechecks_library
+:aliases: merge-journal-confirmed-only-1
 
 The journal SHALL record each confirmed photo, a re-run taking a place already holding the planned content,
 fingerprinted again, as done, and removing the workspace copy if it remains; a photo whose workspace copy is gone, the
@@ -1122,17 +1124,20 @@ original, having first removed a `<file>_exiftool_tmp` an interrupted write left
 
 :::{bld} The cross-filesystem copy
 :id: BLD-cross_fs_temp
-:status: ruled
+:status: seed
 :realises: RUL-cross_fs_all_or_nothing, RUL-temp_name_own
+:aliases: merge-temp-deterministic-name-1, merge-verify-copy-detect-torn-1
 
-`_move_cross_fs_no_clobber` SHALL copy to a `.tmp-xdev-<random>.part` file in the destination directory, fingerprint it
-against the planned content, sync it, rename it into its place without overwriting, and then remove the source.
+`_move_cross_fs_no_clobber` SHALL copy to a `.tmp-xdev-<random>.part` file in the destination directory, check it holds
+the source's bytes — the same size, compared byte for byte — sync it, rename it into its place without overwriting, sync
+the destination directory, and then remove the source.
 :::
 
 :::{bld} Merge's sweep of temporary copies
 :id: BLD-temp_sweep
 :status: ruled
 :realises: RUL-crash_temps_cleared
+:aliases: merge-sweep-stale-temps-1
 
 Merge's `execute` SHALL, after revalidating its plan and taking its snapshot and before its first move, remove every
 `.tmp-xdev-*.part` file directly in `library_root` and in each planned target's directory, and record how many in

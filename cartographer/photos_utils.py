@@ -2266,15 +2266,38 @@ XDEV_TMP_PREFIX = ".tmp-xdev-"
 XDEV_TMP_SUFFIX = ".part"
 
 
-def _move_cross_fs_no_clobber(src: str, dest: str, verify=None):
-    """Cross-filesystem no-clobber move (shared contract §15.3) — the fallback when a plain move
-    cannot cross filesystems (EXDEV). Copy src to a temporary name on the DESTINATION filesystem,
-    verify it, fsync it, atomically rename it into the final target (failing if the target exists —
-    no clobber), then remove the source LAST. A crash leaves the source intact (plus at most a
-    discardable temp), never a half-copied file under the final name and never an overwrite.
+def _same_bytes(a: str, b: str, chunk: int = 1 << 20) -> bool:
+    """True iff the two files hold the same bytes: the same size, then compared chunk by chunk."""
+    if os.path.getsize(a) != os.path.getsize(b):
+        return False
+    with open(a, "rb") as fa, open(b, "rb") as fb:
+        while True:
+            x, y = fa.read(chunk), fb.read(chunk)
+            if x != y:
+                return False
+            if not x:
+                return True
 
-    `verify(src, tmp)` runs before the copy is exposed under the final name and must raise to abort;
-    it defaults to a byte-size equality check. (The merge phase, §11, can pass a fingerprint check.)"""
+
+def _fsync_dir(path: str):
+    """Flush a directory's entries to disk, so a rename or creation in it survives a power cut."""
+    fd = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def _move_cross_fs_no_clobber(src: str, dest: str):
+    """Cross-filesystem no-clobber move (shared contract §15.3; merge §11) — the fallback when a plain
+    move cannot cross filesystems (EXDEV). Copy src to a temporary name on the DESTINATION filesystem,
+    check it holds src's very bytes, fsync it, atomically rename it into the final target (failing if
+    the target exists — no clobber), fsync the destination folder so the rename is on disk, then remove
+    the source LAST. A crash or power cut leaves the source intact (plus at most a discardable temp),
+    never a half-copied file under the final name, never an overwrite, never the photo in neither place.
+
+    The check is byte for byte, not by the content fingerprint: that reads the decoded image and is
+    blind to metadata by design, where geotag has just written the position and the corrected times."""
     dest_dir = os.path.dirname(dest) or "."
     fd, tmp = tempfile.mkstemp(dir=dest_dir, prefix=XDEV_TMP_PREFIX, suffix=XDEV_TMP_SUFFIX)
     os.close(fd)
@@ -2284,10 +2307,8 @@ def _move_cross_fs_no_clobber(src: str, dest: str, verify=None):
             shutil.copystat(src, tmp)                   # best-effort mtime/mode
         except OSError:
             pass
-        if verify is not None:
-            verify(src, tmp)
-        elif os.path.getsize(tmp) != os.path.getsize(src):
-            raise OSError(errno.EIO, "cross-filesystem copy size mismatch", src)
+        if not _same_bytes(src, tmp):
+            raise OSError(errno.EIO, "cross-filesystem copy differs from its source", src)
         dfd = os.open(tmp, os.O_RDONLY)                 # durable before we expose it under the final name
         try:
             os.fsync(dfd)
@@ -2301,24 +2322,22 @@ def _move_cross_fs_no_clobber(src: str, dest: str, verify=None):
                 os.remove(tmp)
             except OSError:
                 pass
+    _fsync_dir(dest_dir)                                # the rename on disk before the source goes
     os.unlink(src)                                      # remove the source LAST (crash-safe)
 
-def _move_no_clobber(src: str, dest: str, verify=None, cross_fs=False):
+def _move_no_clobber(src: str, dest: str, cross_fs=False):
     """Move src -> dest, failing (FileExistsError) instead of overwriting an existing destination.
     Primary path is an atomic same-filesystem MOVE (_rename_no_clobber_same_fs). Only a caller that
     passes `cross_fs=True` — merge, whose library may be on another volume — falls back to the cross-fs
     copy-then-remove workaround (§15.3) when the move cannot cross filesystems (EXDEV). A workspace lies
     on one filesystem (checked every run, `workspace_volume_breaks`), so prep and geotag never cross one:
     for them EXDEV is raised like any other failure, never turned into a copy.
-
-    `verify(src, tmp)` applies only to the cross-fs fallback (a same-fs rename is lossless, so there is
-    nothing to verify); it runs against the temp copy before it is exposed under the final name and must
-    raise to abort. The merge phase (§11) passes a content-fingerprint check to catch a torn copy."""
+"""
     try:
         _rename_no_clobber_same_fs(src, dest)
     except OSError as e:
         if cross_fs and e.errno == errno.EXDEV:         # merge crossing into the library's volume
-            _move_cross_fs_no_clobber(src, dest, verify=verify)
+            _move_cross_fs_no_clobber(src, dest)
         else:
             raise                                       # incl. FileExistsError (EEXIST): no-clobber
 
