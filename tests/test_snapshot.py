@@ -54,7 +54,7 @@ def _install(monkeypatch):
         for fo in folders:
             for fn in os.listdir(fo):
                 res[os.path.join(fo, fn)] = {"DateTimeOriginal": "2023:01:02 03:04:05",
-                                             "extraction_status": "extracted_ok", "raw_payload": "{}"}
+                                             "extraction_status": "extracted_ok"}
         return res, set()
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", meta)
 
@@ -85,7 +85,7 @@ def test_snapshot_written_and_matches_live_cache(tmp_path, monkeypatch):
     assert snap_rows == live_rows and len(snap_rows) >= 1
 
 
-@pytest.mark.spec("db-snapshot-atomic-replace-1", "db-snapshot-per-phase-1")
+@pytest.mark.spec("db-snapshot-atomic-replace-1", "db-snapshot-per-phase-1", test="TST-snapshot-snapshot_leaves_no_temp_and_refreshes_on_rerun")
 def test_snapshot_leaves_no_temp_and_refreshes_on_rerun(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -101,7 +101,7 @@ def test_snapshot_leaves_no_temp_and_refreshes_on_rerun(tmp_path, monkeypatch):
     assert not glob.glob(str(ws / ".photos-ingest" / ".tmp-snapshot*"))
 
 
-@pytest.mark.spec("db-snapshot-skip-on-failure-1")
+@pytest.mark.spec("db-snapshot-skip-on-failure-1", test="TST-snapshot-failed_run_leaves_prior_snapshot_intact")
 def test_failed_run_leaves_prior_snapshot_intact(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)

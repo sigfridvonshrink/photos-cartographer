@@ -36,16 +36,31 @@ from .photos_utils import (
     CONFIG, CONTROL_DIR, config_path, handoff_path, guard_path, is_sealed,
     validate_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
     folders_fingerprint, media_extensions_fingerprint,
-    selected_gpx_root, CAMERA_IDENTITY_FIELDS, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
+    selected_gpx_root, is_gpx_file, CAMERA_IDENTITY_FIELDS, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
+    parse_naive_time,
     missing_managed_folders, by_dest_reprep_pending,
     json_dependency, verify_json_dependency, handoff_content_fingerprint, write_json_artifact, write_versioned_json, db_path, ensure_control_dir,
-    journal_path, ContentHasher, _move_no_clobber,
-    prep_log_path, prep_db_snapshot_path, write_db_snapshot, take_zfs_snapshot,
+    journal_path, ContentHasher, _move_no_clobber, allocate_suffix, carries_stem, track_memo_db_path,
+    prep_log_path, write_db_snapshot, take_zfs_snapshot,
     WorkspaceLock, ProgressCoordinator,
 )
 from .reporting import get_reporter
 
 __all__ = [
+    'DECISION_RECORD_DEPS',
+    'describe_offset',
+    'offset_decision_pointer',
+    'manual_gps_pointer',
+    'ORIGINAL_KEYS',
+    'own_values',
+    'from_originals',
+    'device_method',
+    'held_values',
+    'POSITION_MARKERS',
+    'TIME_FIXED_SUFFIX',
+    'geotag_marker',
+    'with_time_fixed',
+    'time_fixed_marker_op',
     'haversine',
     'GPXPoint',
     'GPXIndex',
@@ -72,16 +87,14 @@ __all__ = [
     '_valid_coord',
     '_GPS_PLACE_CATEGORY',
     'classify_gps',
-    '_MANUAL_GPS_CATEGORIES',
-    '_handoff_pre_state',
+    'held_pre_state',
     '_coordinate_tags',
-    '_revert_tags',
+    '_CLEARED_POSITION',
     '_walk_ancestors',
     '_nearest_ancestor',
     '_expand_destinations',
     '_dest_label',
     'destination_local_basename',
-    '_allocate_name',
     'plan_renames',
     '_GPS_OP_ORIGIN',
     '_GPS_OP_MARKER',
@@ -113,19 +126,29 @@ class GPXPoint:
         self.point_index = point_index
 
 
+_REL = "\x00rel\x00"            # stands for the file's path in a memoized warning: the memo is keyed by bytes
+GPX_PARSE_VERSION = "gpx-parse-v1"   # bump when the parse below changes what it yields
+
+
 class GPXIndex:
     """Deterministically ordered, fingerprinted index of all GPX track points under gpx_root.
 
     Availability is recorded in `status` (disabled / missing / empty / usable). The `fingerprint`
     is a SHA-256 over the root, each file's bytes, and each parsed point — it becomes an upstream
-    dependency of the time/GPS artifacts in later phases (§4–§6)."""
+    dependency of the time/GPS artifacts in later phases (§4–§6).
 
-    def __init__(self, gpx_root):
+    Every file is read whole on every build — its bytes are what the fingerprint checks — but with a
+    `memo_path` a file whose bytes were parsed before is not parsed again: its points come from the
+    track memo (shared §10), which yields exactly what parsing would."""
+
+    def __init__(self, gpx_root, memo_path=None):
         self.gpx_root = gpx_root
+        self.memo_path = memo_path
         self.points = []
         self.fingerprint = None
         self.status = "disabled"
         self.warnings = []
+        self.parsed = self.reused = 0      # files parsed this build / taken from the memo
 
     def build(self, coordinator=None):
         if not self.gpx_root:
@@ -141,8 +164,10 @@ class GPXIndex:
         gpx_files = sorted(
             (os.path.relpath(os.path.join(r, f), self.gpx_root), os.path.join(r, f))
             for r, _d, files in os.walk(self.gpx_root) for f in files
-            if f.lower().endswith(".gpx"))
+            if is_gpx_file(f))
 
+        memo = self._open_memo()
+        seen = set()
         if coordinator:                       # per-file progress (count + %), named by GPX file
             coordinator.start_phase("loading GPX tracks", len(gpx_files))
         h = hashlib.sha256()
@@ -152,19 +177,32 @@ class GPXIndex:
             if coordinator:
                 coordinator.set_detail(rel)
             h.update(rel.encode("utf-8"))
-            read_ok = True
             try:
                 with open(abs_path, "rb") as f:
-                    h.update(hashlib.sha256(f.read()).digest())
+                    data = f.read()
             except OSError as e:
                 self.warnings.append(f"Could not read GPX file {rel}: {e}")
-                read_ok = False
-            if read_ok:
-                self._parse_file(rel, abs_path)
+                data = None
+            if data is not None:
+                digest = hashlib.sha256(data).digest()
+                h.update(digest)
+                seen.add(digest.hex())
+                parsed = self._memo_get(memo, digest.hex())
+                if parsed is None:
+                    parsed = self._parse_bytes(data)
+                    self._memo_put(memo, digest.hex(), parsed)
+                    self.parsed += 1
+                else:
+                    self.reused += 1
+                points, warnings = parsed
+                self.points.extend(GPXPoint(lat, lon, datetime.fromisoformat(t), rel, idx)
+                                   for lat, lon, t, idx in points)
+                self.warnings.extend(w.replace(_REL, rel) for w in warnings)
             if coordinator:
                 coordinator.increment_completed(1)
         if coordinator:
             coordinator.finish_phase()
+        self._close_memo(memo, seen)
 
         self.points.sort(key=lambda p: (p.time_utc, p.source_file, p.point_index))
         for p in self.points:
@@ -174,12 +212,75 @@ class GPXIndex:
         self.status = "usable" if self.points else "empty"
         return self
 
-    def _parse_file(self, rel, abs_path):
+    # --- the track memo: scratch, so any failure only means parsing again -----------------
+
+    def _open_memo(self):
+        if not self.memo_path:
+            return None
+        for attempt in (1, 2):                 # a memo that is not a database is replaced: it is scratch
+            conn = None
+            try:
+                conn = sqlite3.connect(self.memo_path)
+                conn.execute("CREATE TABLE IF NOT EXISTS track_memo (sha256 TEXT PRIMARY KEY, "
+                             "parse_version TEXT, parsed_json TEXT)")
+                return conn
+            except sqlite3.Error:
+                if conn is not None:
+                    conn.close()
+                if attempt == 2:
+                    return None
+                try:
+                    os.remove(self.memo_path)
+                except OSError:
+                    return None
+        return None
+
+    @staticmethod
+    def _memo_get(conn, sha):
+        if conn is None:
+            return None
         try:
-            root = ET.parse(abs_path).getroot()
-        except ET.ParseError as e:
-            self.warnings.append(f"Malformed GPX XML in {rel}: {e}")
+            row = conn.execute("SELECT parsed_json FROM track_memo WHERE sha256 = ? AND parse_version = ?",
+                               (sha, GPX_PARSE_VERSION)).fetchone()
+            return tuple(json.loads(row[0])) if row else None
+        except (sqlite3.Error, ValueError):
+            return None
+
+    @staticmethod
+    def _memo_put(conn, sha, parsed):
+        if conn is None:
             return
+        try:
+            with conn:
+                conn.execute("INSERT OR REPLACE INTO track_memo VALUES (?, ?, ?)",
+                             (sha, GPX_PARSE_VERSION, json.dumps(parsed)))
+        except sqlite3.Error:
+            pass
+
+    @staticmethod
+    def _close_memo(conn, seen):
+        """Drop the entries of tracks no longer under gpx_root, so the memo follows the tracks."""
+        if conn is None:
+            return
+        try:
+            with conn:
+                for (sha,) in conn.execute("SELECT sha256 FROM track_memo").fetchall():
+                    if sha not in seen:
+                        conn.execute("DELETE FROM track_memo WHERE sha256 = ?", (sha,))
+        except sqlite3.Error:
+            pass
+        finally:
+            conn.close()
+
+    @staticmethod
+    def _parse_bytes(data):
+        """A track file's points as [lat, lon, UTC time (ISO), index] and its warnings, the file's path
+        written as _REL — what the memo keeps for the file's bytes, wherever the file lies."""
+        points, warnings = [], []
+        try:
+            root = ET.fromstring(data)
+        except ET.ParseError as e:
+            return points, [f"Malformed GPX XML in {_REL}: {e}"]
         idx = 0
         for elem in root.iter():
             if not elem.tag.endswith("trkpt"):
@@ -192,7 +293,7 @@ class GPXIndex:
             try:
                 lat, lon = float(lat_s), float(lon_s)
                 if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
-                    self.warnings.append(f"Out-of-range coordinate in {rel} at trkpt {idx}")
+                    warnings.append(f"Out-of-range coordinate in {_REL} at trkpt {idx}")
                     idx += 1
                     continue
                 ts = time_elem.text.strip()
@@ -202,14 +303,14 @@ class GPXIndex:
                     ts = ts[:-1] + "+00:00"
                 dt = datetime.fromisoformat(ts)
                 if dt.tzinfo is None:
-                    self.warnings.append(f"GPX time without timezone in {rel} at trkpt {idx}")
+                    warnings.append(f"GPX time without timezone in {_REL} at trkpt {idx}")
                     idx += 1
                     continue
-                dt = dt.astimezone(timezone.utc)
-                self.points.append(GPXPoint(lat, lon, dt, rel, idx))
+                points.append([lat, lon, dt.astimezone(timezone.utc).isoformat(), idx])
             except ValueError as e:
-                self.warnings.append(f"Bad trkpt in {rel} at index {idx}: {e}")
+                warnings.append(f"Bad trkpt in {_REL} at index {idx}: {e}")
             idx += 1
+        return points, warnings
 
 
 def _valid_iana(tz):
@@ -232,11 +333,9 @@ def _valid_offset(v):
 # ============================================================================
 
 def _parse_camera_naive(s):
-    """The camera's naive capture time ('YYYY:MM:DD HH:MM:SS') as a naive datetime, or None."""
-    try:
-        return datetime.strptime((s or "")[:19], "%Y:%m:%d %H:%M:%S")
-    except (ValueError, TypeError):
-        return None
+    """The camera's naive capture time ('YYYY:MM:DD HH:MM:SS') as a naive datetime, or None — the same
+    reading prep gives a recorded time (`parse_naive_time`)."""
+    return parse_naive_time(s)
 
 
 def _naive_date(s):
@@ -482,7 +581,18 @@ def compute_resolved_utc(files, groups, artifact, offset_overrides=None):
         cls = (groups.get(key) or {}).get("camera_group_class")
         naive = _parse_camera_naive(f.get("source_naive_time"))
         resolved, status, rule, offset_used, prov = None, "unresolved", "missing_timestamp", None, None
-        if naive is not None:
+        if naive is not None and f.get("geotag_marker"):
+            # geotag corrected this time already: it is destination-local, offset tag beside it
+            own_off = _parse_iso_offset((f.get("raw_times") or {}).get("OffsetTimeOriginal"))
+            if own_off is not None:
+                offset_used, resolved = own_off, naive - timedelta(seconds=own_off)
+                status, rule = "valid", "geotag_corrected"
+            elif tz:
+                resolved = _local_to_utc(naive, tz)
+                status, rule, prov = "valid", "geotag_corrected", tz
+            else:
+                status, rule = "unresolved", "timezone_missing"
+        elif naive is not None:
             if cls == "camera":
                 # per-date offset bucket: a destination split over >1 naive date keys cells
                 # `group@YYYY-MM-DD`; the single-date common case keeps the bare `group` key.
@@ -638,16 +748,13 @@ def classify_gps(file, resolved_utc, gpx, cfg, effective_fallback, file_decision
     return "blocked", None
 
 
-_MANUAL_GPS_CATEGORIES = ("manual_locked", "manual_fallback")
-
-
-def _handoff_pre_state(native_gps):
-    """A manual GPS override's pre-state from prep's scan (§24.1) — the file's original GPS as the
-    handoff recorded it, NOT a re-read at execute time. `native_gps` is {lat, lon, processing_method}
-    or None. Returns the pinned ledger value: the prior coordinates, or the 'absent' sentinel."""
-    if native_gps and native_gps.get("lat") is not None and native_gps.get("lon") is not None:
-        return {"present": True, "GPSLatitude": native_gps["lat"], "GPSLongitude": native_gps["lon"],
-                "GPSProcessingMethod": native_gps.get("processing_method") or ""}
+def held_pre_state(file):
+    """The position `file` holds now, in the pre-state shape the log records beside a write that replaces
+    or clears it (shared contract §13.3): the coordinates with their GPSProcessingMethod, or 'absent'."""
+    h = held_values(file)
+    if h.get("lat") is not None and h.get("lon") is not None:
+        return {"present": True, "GPSLatitude": h["lat"], "GPSLongitude": h["lon"],
+                "GPSProcessingMethod": h.get("method") or ""}
     return {"present": False}
 
 
@@ -664,15 +771,9 @@ def _coordinate_tags(lat, lon):
             "GPSLongitude": lon, "GPSLongitudeRef": "E" if lon >= 0 else "W"}
 
 
-def _revert_tags(pre_state):
-    """The exiftool tag writes that restore a pinned pre-state: the prior coordinates, or empty
-    values that CLEAR the GPS the override added when prep saw no native GPS (§24.1.2). Clearing
-    drops the hemisphere refs too — a ref left behind without its coordinate is a torn fix."""
-    if pre_state.get("present"):
-        return {**_coordinate_tags(pre_state["GPSLatitude"], pre_state["GPSLongitude"]),
-                "GPSProcessingMethod": pre_state.get("GPSProcessingMethod") or ""}
-    return {"GPSLatitude": "", "GPSLatitudeRef": "", "GPSLongitude": "", "GPSLongitudeRef": "",
-            "GPSProcessingMethod": ""}
+# The tag writes that clear a position geotag wrote. The hemisphere refs go too — a ref left behind
+# without its coordinate is a torn fix.
+_CLEARED_POSITION = {"GPSLatitude": "", "GPSLatitudeRef": "", "GPSLongitude": "", "GPSLongitudeRef": ""}
 
 
 def _walk_ancestors(dest):
@@ -741,18 +842,6 @@ def destination_local_basename(resolved_utc, tz, fmt, ext):
     return _parse_utc(resolved_utc).astimezone(zoneinfo.ZoneInfo(tz)).strftime(fmt) + (ext or "")
 
 
-def _allocate_name(stem, ext, occupied):
-    """First free '<stem><ext>' / '<stem>-NNN<ext>' not in `occupied` (compared case-insensitively),
-    added to `occupied` and returned — the deterministic no-clobber suffix allocation (§27)."""
-    cand = stem + ext
-    idx = 0
-    while cand.lower() in occupied:
-        idx += 1
-        cand = f"{stem}-{idx:03d}{ext}"
-    occupied.add(cand.lower())
-    return cand
-
-
 def plan_renames(files, fmt):
     """Plan no-clobber timestamp renames for the files of ONE destination (§27). Returns
     {relative_path, current_name, planned_name, rename} per file, in relative_path order. EVERY
@@ -767,10 +856,13 @@ def plan_renames(files, fmt):
         name = os.path.basename(rel)
         ext = os.path.splitext(name)[1]
         base = destination_local_basename(f.get("resolved_utc"), f.get("destination_timezone"), fmt, ext)
-        if base is None or name.lower() == base.lower():
+        # A name already carrying the timestamp keeps its suffix: renaming it to another suffix of the
+        # same time would change nothing, and on the next run back again.
+        if base is None or carries_stem(name, os.path.splitext(base)[0]):
             out.append({"relative_path": rel, "current_name": name, "planned_name": name, "rename": False})
             continue
-        planned = _allocate_name(os.path.splitext(base)[0], ext, occupied)
+        # The first free name, by the one rule prep also uses (shared §6).
+        planned = allocate_suffix(os.path.splitext(base)[0], ext.lstrip("."), occupied, bare_first=True)
         out.append({"relative_path": rel, "current_name": name, "planned_name": planned, "rename": True})
     return out
 
@@ -786,6 +878,76 @@ _GPS_OP_ORIGIN = {"gpx_interpolation": "recompute_automated", "gpx_extrapolation
                   "manual_locked": "apply_manual", "manual_fallback": "apply_manual"}
 _GPS_OP_MARKER = {"gpx_interpolation": "interpolated", "gpx_extrapolation": "interpolated",
                   "manual_locked": "manual_locked", "manual_fallback": "manual_fallback"}
+# What geotag records in GPSProcessingMethod. A bare position marker means geotag set the position
+# and so fixed the time too; a re-run ignores the position and places the file again. The suffix,
+# appended to whatever the field held (the device's own value, or nothing), means geotag fixed the
+# time and kept the device's GPS or has set none. Anything else is the device's own: GPS native.
+POSITION_MARKERS = ("interpolated", "manual_locked", "manual_fallback")
+TIME_FIXED_SUFFIX = "+carto-time"   # EXIF sets no length on the field; a JPEG's whole EXIF block is 64 KB
+
+
+def geotag_marker(processing_method):
+    """What geotag's mark in a GPSProcessingMethod value says: the bare position marker, the suffix
+    (time fixed, no geotag position), or None for a device's own value or none."""
+    v = processing_method.strip() if isinstance(processing_method, str) else ""
+    if v in POSITION_MARKERS:
+        return v
+    return TIME_FIXED_SUFFIX if v.endswith(TIME_FIXED_SUFFIX) else None
+
+
+def with_time_fixed(processing_method):
+    """`processing_method` with the time-fixed suffix appended once (the device's value is kept)."""
+    v = processing_method.strip() if isinstance(processing_method, str) else ""
+    return v if v.endswith(TIME_FIXED_SUFFIX) else v + TIME_FIXED_SUFFIX
+
+
+def device_method(processing_method):
+    """The device's own GPSProcessingMethod within a value: geotag's suffix and position markers removed."""
+    v = processing_method.strip() if isinstance(processing_method, str) else ""
+    if v in POSITION_MARKERS:
+        return ""
+    return v[:-len(TIME_FIXED_SUFFIX)] if v.endswith(TIME_FIXED_SUFFIX) else v
+
+
+# What the original-values ledger pins of a file before geotag first writes to it (geotag §24.2).
+ORIGINAL_KEYS = ("selected_source_naive_timestamp", "selected_source_timestamp_tag", "DateTimeOriginal",
+                 "OffsetTimeOriginal", "GPSLatitude", "GPSLongitude", "GPSProcessingMethod", "has_native_gps")
+
+
+def own_values(parsed):
+    """A file's own time, offset tag, position and GPSProcessingMethod, from prep's parsed metadata, in
+    the shape the original-values ledger pins."""
+    return {k: parsed.get(k) for k in ORIGINAL_KEYS}
+
+
+def from_originals(file, original):
+    """`file` decided from its pinned `original` values — as the device left it, before geotag's first
+    write — while `held` keeps what it holds now, for the comparison. Pure; returns a new dict."""
+    f = dict(file, held=held_values(file), from_originals=True)
+    rt = {k: v for k, v in (file.get("raw_times") or {}).items() if k not in ("DateTimeOriginal", "OffsetTimeOriginal")}
+    for k in ("DateTimeOriginal", "OffsetTimeOriginal"):
+        if original.get(k) is not None:
+            rt[k] = original[k]
+    method = original.get("GPSProcessingMethod")
+    has_gps = bool(original.get("has_native_gps")) and geotag_marker(method) not in POSITION_MARKERS
+    f.update(raw_times=rt, source_naive_time=original.get("selected_source_naive_timestamp"),
+             source_time_tag=original.get("selected_source_timestamp_tag"),
+             has_timestamp=original.get("selected_source_naive_timestamp") is not None,
+             native_gps=({"lat": original.get("GPSLatitude"), "lon": original.get("GPSLongitude"),
+                          "processing_method": method} if original.get("has_native_gps") else None),
+             has_native_gps=has_gps, geotag_marker=geotag_marker(method), processing_method=method)
+    return f
+
+
+def held_values(file):
+    """What `file` holds now, as the comparison side of planning: its time, offset tag, position and
+    GPSProcessingMethod. Differs from the file's decision basis only where the original-values ledger
+    gave the basis the file's own values from before geotag's first write."""
+    if file.get("held") is not None:
+        return file["held"]
+    rt, ng = file.get("raw_times") or {}, file.get("native_gps") or {}
+    return {"DateTimeOriginal": rt.get("DateTimeOriginal"), "OffsetTimeOriginal": rt.get("OffsetTimeOriginal"),
+            "lat": ng.get("lat"), "lon": ng.get("lon"), "method": file.get("processing_method")}
 
 
 def _local_time_and_offset(resolved_utc, tz):
@@ -809,32 +971,59 @@ def _make_op(typ, rel, reason, semantic, preconditions):
     return op
 
 
-def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename, cfg):
+def time_fixed_marker_op(file, method, clear_position=False):
+    """The marker write recording that geotag fixed `file`'s time and wrote no position: `method`, the
+    device's own GPSProcessingMethod with the suffix appended. With `clear_position`, the position an
+    earlier geotag run wrote is cleared too."""
+    pre = {"content_fingerprint": file.get("content_fingerprint"),
+           "size": file.get("size"), "mtime_ns": file.get("mtime_ns")}
+    writes = {"GPSProcessingMethod": method}
+    if clear_position:
+        writes = {**_CLEARED_POSITION, **writes}
+    return _make_op("gps_marker_write", file["relative_path"], "time provenance", {"writes": writes}, pre)
+
+
+def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename):
     """The ordered executable operations for one file (§28): corrected-time metadata write, GPS
-    write + provenance marker, and no-clobber rename — each gated by the camera_time policy write
-    flags. Returns [] for a file that needs nothing (a no-op)."""
-    pol = cfg.get("camera_time_and_timezone_policy") or {}
+    write + provenance marker, and no-clobber rename — each only where the file does not already
+    hold it. Returns [] for a file that needs nothing (a no-op)."""
     rel = file["relative_path"]
     pre = {"content_fingerprint": file.get("content_fingerprint"),
            "size": file.get("size"), "mtime_ns": file.get("mtime_ns")}
     ops = []
 
-    if pol.get("write_corrected_metadata_times", True):
-        dto, off = _local_time_and_offset(resolved_utc, tz)
-        if dto is not None:
-            writes = {"DateTimeOriginal": dto}
-            if pol.get("write_corrected_offset_tags", True) and off:
-                writes["OffsetTimeOriginal"] = off
+    held = held_values(file)                      # what the file holds now: the comparison side
+    marker = file.get("geotag_marker")            # the decision side: geotag's mark on the basis values
+    time_corrected = bool(marker)                 # geotag wrote this file's time on an earlier run
+    dto, off = _local_time_and_offset(resolved_utc, tz)
+    if dto is not None:
+        writes = {"DateTimeOriginal": dto}
+        if off:
+            writes["OffsetTimeOriginal"] = off
+        time_corrected = True
+        if any(held.get(k) != v for k, v in writes.items()):         # already held -> nothing to write
             ops.append(_make_op("metadata_time_write", rel, "corrected capture time", {"writes": writes}, pre))
 
     if gps_category in _GPS_OP_ORIGIN and gps_coord is not None:
-        ops.append(_make_op("metadata_gps_write", rel, f"gps:{gps_category}",
-                            {"writes": _coordinate_tags(gps_coord["lat"], gps_coord["lon"]),
-                             "gps_origin": _GPS_OP_ORIGIN[gps_category]}, pre))
-        ops.append(_make_op("gps_marker_write", rel, "gps provenance",
-                            {"writes": {"GPSProcessingMethod": _GPS_OP_MARKER[gps_category]}}, pre))
+        new_marker = _GPS_OP_MARKER[gps_category]
+        same_fix = ((held.get("method") or "").strip() == new_marker
+                    and isinstance(held.get("lat"), (int, float)) and isinstance(held.get("lon"), (int, float))
+                    and round(held["lat"], 6) == round(gps_coord["lat"], 6)
+                    and round(held["lon"], 6) == round(gps_coord["lon"], 6))
+        if not same_fix:                          # a re-placed file already holding this fix: no write
+            ops.append(_make_op("metadata_gps_write", rel, f"gps:{gps_category}",
+                                {"writes": _coordinate_tags(gps_coord["lat"], gps_coord["lon"]),
+                                 "gps_origin": _GPS_OP_ORIGIN[gps_category]}, pre))
+            ops.append(_make_op("gps_marker_write", rel, "gps provenance",
+                                {"writes": {"GPSProcessingMethod": new_marker}}, pre))
+    elif time_corrected:
+        target = with_time_fixed(device_method(file.get("processing_method")))
+        if geotag_marker(held.get("method")) in POSITION_MARKERS:
+            ops.append(time_fixed_marker_op(file, target, clear_position=True))   # geotag's old fix: not kept
+        elif (held.get("method") or "").strip() != target:
+            ops.append(time_fixed_marker_op(file, target))
 
-    if pol.get("write_corrected_filename_times", True) and rename and rename.get("rename"):
+    if rename and rename.get("rename"):
         ops.append(_make_op("rename_no_clobber", rel, "destination-local timestamp name",
                             {"from": rename["current_name"], "to": rename["planned_name"]}, pre))
     return ops
@@ -846,19 +1035,135 @@ def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename, cfg):
 # consolidation of artifacts already written — no new authority.
 # ============================================================================
 
-def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, ledger):
+def describe_offset(seconds):
+    """A clock offset as a person reads it (§13.3 item 5). The offset is what is added to the camera's
+    time to reach UTC, so a negative one means the camera's clock ran ahead of UTC."""
+    if not seconds:
+        return "camera clock on UTC"
+    s = abs(int(seconds))
+    parts = [f"{v} {u}" for v, u in ((s // 3600, "h"), (s % 3600 // 60, "min"), (s % 60, "s")) if v]
+    return f"camera clock {' '.join(parts)} {'ahead of' if seconds < 0 else 'behind'} UTC"
+
+
+def offset_decision_pointer(row, dest, cells):
+    """Where the clock offset applied to a photo was decided: its exact (camera group, destination[,
+    day]) cell in photos-21, or — when the drift check's validated offset replaced it — the matching
+    confirmation in photos-22 (§13.3 item 3)."""
+    group = row.get("camera_group")
+    date = _naive_date(row.get("source_naive_time"))
+    bucket = f"{group}@{date}" if f"{group}@{date}" in (cells or {}) else group
+    if row.get("resolved_utc_provenance") == "gps_drift_validated":
+        return f"photos-22 destinations.{dest}.drift_decisions.{bucket}"
+    return f"photos-21 destinations.{dest}.camera_group_time_decisions.{bucket}"
+
+
+def manual_gps_pointer(category, dest, rel, fallback_cell):
+    """Where a manual position was decided: the photo's own pin among photos-23's review items, or the
+    destination's folder fallback (with the destination it was inherited from, when accepted from one)."""
+    if category == "manual_locked":
+        return f"photos-23 destinations.{dest}.gps_decisions.review_items[{os.path.basename(rel)}]"
+    p = f"photos-23 destinations.{dest}.folder_fallback"
+    prop = (fallback_cell or {}).get("proposal") or {}
+    if prop.get("proposal_source") == "inherited" and ((fallback_cell or {}).get("user_decision") or {}).get("accept_proposal"):
+        p += f" (accepted from {prop.get('inherited_from')})"
+    return p
+
+
+_DECISION_RECORD_DEP = {"photos-21": "time_decisions", "photos-22": "drift_validation", "photos-23": "gps_decisions"}
+DECISION_RECORD_DEPS = tuple(_DECISION_RECORD_DEP.values())
+
+
+def _with_record_hashes(steps, plan):
+    """Each step naming a decision also names the exact version of the decision record its pass
+    followed: the copy execution kept of it (`executed/<plan id>/`) and its hash, the one the pass's
+    plan depended on — so the why stays findable after the live record is edited (§13.3a)."""
+    deps = plan.get("depends_on") or {}
+    for s in steps:
+        dep = deps.get(_DECISION_RECORD_DEP.get((s.get("because") or "")[:9]) or "") or {}
+        if dep.get("sha256"):
+            s["because_record_sha256"] = dep["sha256"]
+            if dep.get("artifact_name") and plan.get("plan_id"):
+                s["because_record"] = f"{CONTROL_DIR}/executed/{plan['plan_id']}/{dep['artifact_name']}"
+    return steps
+
+
+def _earlier_pass_steps(plan, confirmed):
+    """{fingerprint: [steps]} for one earlier executed pass: what its confirmed operations did to each
+    photo, matched by the fingerprint the operation was planned against, each step naming the run."""
+    run = plan.get("plan_id")
+    ops_by_fp = {}
+    for dd in (plan.get("destinations") or {}).values():
+        for op in dd.get("operations") or []:
+            fp = (op.get("preconditions") or {}).get("content_fingerprint") or op.get("content_fingerprint")
+            if fp and (confirmed is None or op.get("operation_id") in confirmed):
+                ops_by_fp.setdefault(fp, []).append(op)
+    out = {}
+    for fp, ops in ops_by_fp.items():
+        steps = []
+        time_op = next((o for o in ops if o["type"] == "metadata_time_write"), None)
+        if time_op is not None:
+            prov = time_op.get("provenance") or {}
+            if prov.get("time_rule_used") == "camera_group_offset" and prov.get("utc_offset_used") is not None:
+                steps.append({"phase": "geotag", "action": "clock_offset_applied", "offset_seconds": prov["utc_offset_used"],
+                              "offset_description": describe_offset(prov["utc_offset_used"]),
+                              "because": prov.get("because")})
+            if prov.get("resolved_utc"):
+                steps.append({"phase": "geotag", "action": "resolved_utc", "value": prov["resolved_utc"]})
+            if prov.get("destination_timezone"):
+                steps.append({"phase": "geotag", "action": "timezone_resolved", "value": prov["destination_timezone"],
+                              **({"because": prov["timezone_because"]} if prov.get("timezone_because") else {})})
+            steps.append({"phase": "geotag", "action": "time_written", "writes": time_op.get("writes")})
+        steps += _gps_and_rename_steps(ops, native=False)
+        out[fp] = _with_record_hashes([dict(s, run=run) for s in steps], plan)
+    return out
+
+
+def _gps_and_rename_steps(ops, native):
+    """The GPS and rename steps of one photo's operations in one pass."""
+    steps = []
+    gps_op = next((o for o in ops if o["type"] == "metadata_gps_write"), None)
+    marker = next((o for o in ops if o["type"] == "gps_marker_write"), None)
+    if gps_op is not None:
+        w = gps_op.get("writes") or {}
+        step = {"phase": "geotag", "action": "gps_written", "lat": w.get("GPSLatitude"),
+                "lon": w.get("GPSLongitude"), "origin": gps_op.get("gps_origin"),
+                "gps_processing_method": (marker.get("writes") or {}).get("GPSProcessingMethod") if marker else None}
+        if gps_op.get("gps_origin") == "apply_manual" and gps_op.get("pre_state") is not None:
+            step["pre_state"] = gps_op["pre_state"]
+        if (gps_op.get("provenance") or {}).get("because"):
+            step["because"] = gps_op["provenance"]["because"]
+        steps.append(step)
+    elif marker is not None and (marker.get("writes") or {}).get("GPSLatitude") == "":
+        # geotag's old position cleared: the decision now places none
+        steps.append({"phase": "geotag", "action": "gps_cleared", "pre_state": marker.get("pre_state"),
+                      "gps_processing_method": marker["writes"].get("GPSProcessingMethod")})
+    elif native:
+        steps.append({"phase": "geotag", "action": "gps_preserved"})
+    rename_op = next((o for o in ops if o["type"] == "rename_no_clobber"), None)
+    if rename_op is not None:
+        steps.append({"phase": "geotag", "action": "final_rename", "from": rename_op.get("from"), "to": rename_op["to"]})
+    return steps
+
+
+def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, earlier_passes=()):
     """photos-26-complete-log.json's `photos` (§13.3): a deep copy of prep's per-photo, content-
     fingerprint-keyed journeys with each calibrated photo's `phase:"geotag"` steps APPENDED — a
-    strict superset of the prep log, derived from photos-21 / the resolved-UTC cache / photos-24 /
-    the ledger. Deterministic, fingerprint-keyed. The prep file itself is never edited."""
+    strict superset of the prep log, derived from photos-21 / the resolved-UTC cache / photos-24.
+    `earlier_passes` — [(plan, confirmed operation ids)], oldest first — are the geotag
+    passes executed before the current plan's: their steps come first, so a photo written in an
+    earlier pass keeps the record of it however later passes went. Deterministic, fingerprint-keyed.
+    The prep file itself is never edited."""
     photos = json.loads(json.dumps(prep_photos or {}))            # deep copy; never touch the prep file
     row_by_rel = {r["relative_path"]: r for r in resolved_rows}
     t_dests = (time_artifact or {}).get("destinations") or {}
-    pre_by_fp = {e["content_fingerprint"]: e["pre_state"] for e in (ledger or [])}
-    ops_by_rel = {}
+    ops_by_fp = {}
+    fp_by_rel = {f["relative_path"]: f.get("content_fingerprint") for f in files}
     for dd in (plan.get("destinations") or {}).values():
         for op in dd.get("operations") or []:
-            ops_by_rel.setdefault(op["relative_path"], []).append(op)
+            fp = (op.get("preconditions") or {}).get("content_fingerprint") or fp_by_rel.get(op["relative_path"])
+            ops_by_fp.setdefault(fp, []).append(op)
+    earlier = [_earlier_pass_steps(p, confirmed) for p, confirmed in earlier_passes]
+    run = plan.get("plan_id")
 
     for f in sorted(files, key=lambda x: x["relative_path"]):
         fp = f.get("content_fingerprint")
@@ -867,13 +1172,19 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, l
         rel, dest, group = f["relative_path"], f["destination"], f["camera_group_key"]
         entry = photos.setdefault(fp, {"content_fingerprint": fp, "journey": []})
         steps = entry.setdefault("journey", [])
+        for past in earlier:
+            steps.extend(past.get(fp) or [])
         row = row_by_rel.get(rel) or {}
-        ops = ops_by_rel.get(rel) or []
+        ops = ops_by_fp.get(fp) or []
+        start = len(steps)
 
         if row.get("time_rule_used") == "camera_group_offset" and row.get("utc_offset_used") is not None:
+            cells = (t_dests.get(dest) or {}).get("camera_group_time_decisions") or {}
             steps.append({"phase": "geotag", "action": "clock_offset_applied",
                           "offset_seconds": row["utc_offset_used"],
-                          "because": f"photos-21 destinations.{dest}.camera_group_time_decisions.{group}"})
+                          "offset_description": describe_offset(row["utc_offset_used"]),
+                          "because": offset_decision_pointer(dict(row, camera_group=row.get("camera_group") or group),
+                                                             dest, cells)})
         if row.get("resolved_utc"):
             steps.append({"phase": "geotag", "action": "resolved_utc", "value": row["resolved_utc"]})
         tz = ((t_dests.get(dest, {}).get("destination_timezone")) or {}).get("effective_iana_timezone")
@@ -881,26 +1192,23 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, l
             steps.append({"phase": "geotag", "action": "timezone_resolved", "value": tz,
                           "because": f"photos-21 destinations.{dest}.destination_timezone"})
 
-        revert_op = next((o for o in ops if o["type"] == "revert_manual_gps"), None)
-        gps_op = next((o for o in ops if o["type"] == "metadata_gps_write"), None)
-        marker = next((o for o in ops if o["type"] == "gps_marker_write"), None)
-        if revert_op is not None:
-            steps.append({"phase": "geotag", "action": "gps_reverted",
-                          "pre_state": revert_op.get("pre_state") or pre_by_fp.get(fp)})
-        elif gps_op is not None:
-            w = gps_op.get("writes") or {}
-            step = {"phase": "geotag", "action": "gps_written", "lat": w.get("GPSLatitude"),
-                    "lon": w.get("GPSLongitude"), "origin": gps_op.get("gps_origin"),
-                    "gps_processing_method": (marker.get("writes") or {}).get("GPSProcessingMethod") if marker else None}
-            if gps_op.get("gps_origin") == "apply_manual" and fp in pre_by_fp:
-                step["pre_state"] = pre_by_fp[fp]
-            steps.append(step)
-        elif f.get("has_native_gps"):
-            steps.append({"phase": "geotag", "action": "gps_preserved"})
-
-        rename_op = next((o for o in ops if o["type"] == "rename_no_clobber"), None)
-        if rename_op is not None:
-            steps.append({"phase": "geotag", "action": "final_rename", "to": rename_op["to"]})
+        steps.extend(_gps_and_rename_steps(ops, native=f.get("has_native_gps")))
+        if not f.get("from_originals") and geotag_marker(held_values(f).get("method")):
+            # geotag's mark is on the photo, but this workspace never held its own values: its time was
+            # fixed elsewhere, or that history is lost — say so rather than look whole (§13.3a). The
+            # note is a step of geotag's own: prep's fields, a note among them, are carried unchanged.
+            entry["partial"] = True
+            steps.append({"phase": "geotag", "action": "history_incomplete",
+                          "note": "geotag's mark is on this photo but no pass in this workspace's record "
+                                  "first corrected it: its correction was made elsewhere, or that history "
+                                  "is lost"})
+        if run:
+            steps[start:] = [dict(s, run=run) for s in steps[start:]]
+        _with_record_hashes(steps[start:], plan)
+        # where geotag left the photo: its by-dest folder, under the name its last final rename gave it
+        renamed = [s["to"] for s in steps if s.get("phase") == "geotag" and s.get("action") == "final_rename"
+                   and s.get("to")]
+        entry["geotag_path"] = os.path.join(os.path.dirname(rel), renamed[-1]) if renamed else rel
     return photos
 
 

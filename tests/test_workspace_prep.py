@@ -50,7 +50,7 @@ def setup_workspace(tmp_path: Path):
     # Exact duplicate already organized in 5-photos-by-date
     photos_dir = ws / "5-photos-by-date"
     photos_dir.mkdir()
-    (photos_dir / "20230101_120000-001.jpg").write_text("duplicate_data")
+    (photos_dir / "2023-01-01--12-00-00-001.jpg").write_text("duplicate_data")
 
     # RAW and JPG with SAME content but shouldn't quarantine (in 0-sources)
     (source_dir / "RAW_SAME.CR2").write_text("same_hash_content")
@@ -58,6 +58,9 @@ def setup_workspace(tmp_path: Path):
 
     # Source duplicate in 0-sources
     (source_dir / "dup_image.jpg").write_text("duplicate_data")
+
+    # A filed file with an uppercase extension: lowercased in place by the two-step rename
+    (ws / "2-missing-metadata" / "UNKN_old.JPG").write_text("old_untimed_data")
 
     return ws
 
@@ -80,7 +83,7 @@ def mock_read_metadata_concurrently(folders, max_workers=4, progress_coordinator
     for folder in folders:
         for f in os.listdir(folder):
             abs_path = os.path.join(folder, f)
-            if "duplicate" in abs_path or "20230101_120000" in abs_path:
+            if "duplicate" in abs_path or "2023-01-01--12-00-00" in abs_path:
                 res[abs_path] = {"DateTimeOriginal": "2023:01:01 12:00:00"}
             elif "555" in abs_path:
                 res[abs_path] = {"DateTimeOriginal": "2023:02:02 14:00:00"}
@@ -90,10 +93,8 @@ def mock_read_metadata_concurrently(folders, max_workers=4, progress_coordinator
 
 @mock.patch('photos_1_prep.ContentHasher.fingerprint_image', side_effect=mock_hash_image)
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("prep-normalize-extension-case-1", "prep-paired-jpeg-excluded-dedup-1")
+@pytest.mark.spec("prep-normalize-extension-case-1", "RUL-media_extension_lowercase", "BLD-two_step_case_rename", test="TST-workspace_prep-prep_workflow_plan_and_execute")
 def test_prep_workflow_plan_and_execute(mock_meta, mock_hash_img, tmp_path, monkeypatch):
-    import photos_utils as utils
-    monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
 
     ws = setup_workspace(tmp_path)
     photos_ingest.CONFIG["jobs"] = 1
@@ -133,16 +134,18 @@ def test_prep_workflow_plan_and_execute(mock_meta, mock_hash_img, tmp_path, monk
     # PR ACCEPTANCE TEST: "IMG.JPG" vs "IMG.jpg" survival with deterministic naming;
     # (Tested implicitly by the above root-to-source case normalizations preserving both files)
 
+    assert (ws / "2-missing-metadata" / "UNKN_old.jpg").exists()      # filed: lowercased in place
+
     # PR ACCEPTANCE TEST: RAW/JPG not treated as disposable duplicates
     # PHOTO_555.CR2 and PHOTO_555.jpg have the same fake hash, but shouldn't quarantine.
     # The JPG should be in 3-redundant-jpgs. The RAW should be in 5-photos-by-date.
-    assert (ws / "3-redundant-jpgs" / "PHOTO_555.jpg").exists()
+    # A redundant JPG is named from its timestamp like the RAW it came with (shared §6).
+    assert (ws / "3-redundant-jpgs" / "2023-02-02--14-00-00.jpg").exists()
     assert (ws / "5-photos-by-date" / "2023-02-02" / "2023-02-02--14-00-00.cr2").exists()   # lone file -> bare (§7.2)
 
     # PR ACCEPTANCE TEST: RAW/JPG pair (same content) is NOT quarantined — the jpg is the
     # redundant sibling (-> 3-redundant-jpgs), the raw is the master (-> 2-missing-metadata).
-    assert any("raw_same" in f.name.lower() and f.name.lower().endswith(".jpg")
-               for f in (ws / "3-redundant-jpgs").iterdir())
+    assert any(f.name == "UNKN_RAW_SAME.jpg" for f in (ws / "3-redundant-jpgs").iterdir())   # no time: untimed mark
     names_in_mm = [f.name.lower() for f in (ws / "2-missing-metadata").iterdir()]
     assert any("raw_same" in name and name.endswith(".cr2") for name in names_in_mm)
 
@@ -176,7 +179,7 @@ def test_prep_workflow_plan_and_execute(mock_meta, mock_hash_img, tmp_path, monk
     assert not any("__photos_ingest_tmp_extnorm__" in p for p in db_paths)
     cache_conn.close()
 
-@pytest.mark.spec("prep-deterministic-order-1", "prep-same-names-same-input-1")
+@pytest.mark.spec("prep-deterministic-order-1", "prep-same-names-same-input-1", test="TST-workspace_prep-deterministic_temp_names")
 def test_deterministic_temp_names(tmp_path, monkeypatch):
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
@@ -200,8 +203,6 @@ def test_deterministic_temp_names(tmp_path, monkeypatch):
 @mock.patch('photos_1_prep.ContentHasher.fingerprint_image', side_effect=mock_hash_image)
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
 def test_source_changed_after_plan_abort(mock_meta, mock_hash_img, tmp_path, monkeypatch):
-    import photos_utils as utils
-    monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
 
     ws = setup_workspace(tmp_path)
     photos_ingest.CONFIG["jobs"] = 1
@@ -223,7 +224,7 @@ def test_source_changed_after_plan_abort(mock_meta, mock_hash_img, tmp_path, mon
     with pytest.raises(ValueError, match="Precondition failed: size changed"):
         executor.execute(plan, journal_path)
 
-@pytest.mark.spec("prep-forbidden-sidecar-blocks-1")
+@pytest.mark.spec("prep-forbidden-sidecar-blocks-1", "RUL-sidecar_blocks", "BLD-sidecar_extensions", test="TST-workspace_prep-sidecar_blocking")
 def test_sidecar_blocking(tmp_path, monkeypatch):
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
@@ -231,15 +232,17 @@ def test_sidecar_blocking(tmp_path, monkeypatch):
     ws = setup_workspace(tmp_path)
     photos_ingest.CONFIG["jobs"] = 1
 
-    # PR ACCEPTANCE TEST: sidecar blocking
+    # PR ACCEPTANCE TEST: sidecar blocking — in the inbox and among the sorted photos alike
     (ws / "0-sources" / "PHOTO_555.xmp").touch()
+    (ws / "6-photos-by-dest" / "vacation").mkdir(exist_ok=True)
+    (ws / "6-photos-by-dest" / "vacation" / "2023-01-01--12-00-00.dop").touch()
 
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
     workflow = photos_ingest.WorkspacePrepWorkflow(str(ws), cache)
     plan = workflow.plan()
 
-    assert len(plan.blockers) > 0
-    assert "Forbidden sidecar files detected" in plan.blockers[0]
+    sidecar = [b for b in plan.blockers if "Forbidden sidecar files detected" in b]
+    assert sidecar and "PHOTO_555.xmp" in sidecar[0] and "2023-01-01--12-00-00.dop" in sidecar[0], plan.blockers
 
     executor = photos_ingest.PlanExecutor(str(ws))
     journal_path = str(ws / ".photos-ingest/journal.json")
@@ -249,7 +252,7 @@ def test_sidecar_blocking(tmp_path, monkeypatch):
         executor.execute(plan, journal_path)
 
 
-@pytest.mark.spec("prep-unknown-fingerprint-no-dup-1")
+@pytest.mark.spec("prep-unknown-fingerprint-no-dup-1", "RUL-failed_fingerprint_blocks", test="TST-workspace_prep-hash_failure_preservation")
 def test_hash_failure_preservation(tmp_path, monkeypatch):
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
@@ -260,7 +263,7 @@ def test_hash_failure_preservation(tmp_path, monkeypatch):
 # PR ACCEPTANCE TEST: hash failure preserving files and blocking
     # We mock it to fail for certain files
     def mock_hash_fail(filepath):
-        if "dup_image" in str(filepath) or "20230101_120000" in str(filepath):
+        if "dup_image" in str(filepath) or "2023-01-01--12-00-00" in str(filepath):
             return {"status": "failed", "strategy": "image-content-hash-v1", "value": None, "error": "Mocked failure"}
         import hashlib
         try:
@@ -284,7 +287,7 @@ def test_hash_failure_preservation(tmp_path, monkeypatch):
         op_types = [op.type for op in plan.operations]
         assert "quarantine_move" not in op_types
 
-@pytest.mark.spec("struct-symlinks-barred-1")
+@pytest.mark.spec("struct-symlinks-barred-1", "RUL-link_named", test="TST-workspace_prep-symlink_blocking")
 def test_symlink_blocking(tmp_path, monkeypatch):
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
@@ -307,7 +310,7 @@ def test_symlink_blocking(tmp_path, monkeypatch):
     assert any("Forbidden symlink detected" in b for b in plan.blockers)
 
 
-@pytest.mark.spec("prep-root-symlink-barred-1", "struct-uninit-exception-1")
+@pytest.mark.spec("prep-root-symlink-barred-1", "struct-uninit-exception-1", test="TST-workspace_prep-directory_symlink_at_root_blocked_during_init")
 def test_directory_symlink_at_root_blocked_during_init(tmp_path, monkeypatch):
     """A directory symlink at the root of an UNINITIALIZED workspace must be flagged as a forbidden
     symlink at PLAN time, never followed. os.path.isdir() follows a directory symlink, so the old
@@ -407,7 +410,7 @@ def test_nested_directory_symlink_in_managed_folder_blocked(tmp_path, monkeypatc
     assert any("Forbidden symlink detected" in b and "nested" in b for b in plan.blockers), plan.blockers
 
 
-@pytest.mark.spec("prep-reserved-names-not-moved-1")
+@pytest.mark.spec("prep-reserved-names-not-moved-1", test="TST-workspace_prep-init_does_not_move_a_dump_folder_named_like_a_managed_folder")
 def test_init_does_not_move_a_dump_folder_named_like_a_managed_folder(tmp_path, monkeypatch):
     """Reserved-name guard (prep §6.2): on an INIT run a base entry whose name collides with a managed
     folder (e.g. an as-arrived dump dir named `5-photos-by-date`) is treated AS that managed folder —
@@ -434,11 +437,11 @@ def test_init_does_not_move_a_dump_folder_named_like_a_managed_folder(tmp_path, 
     assert not any("not a managed" in b or "Misplaced" in b for b in plan.blockers), plan.blockers
 
 
-@pytest.mark.spec("prep-root-block-strict-dotfiles-1")
-def test_initialized_root_dotfile_is_a_misplaced_entry_hard_block(tmp_path, monkeypatch):
-    """Root strictness (prep §6.2 item 2): on an INITIALIZED workspace the root holds only the managed
-    folders + control dirs. A plain root dotfile (e.g. `.DS_Store`) is a misplaced dump and a hard
-    block — the dot-prefix earns no exemption for files (only dot DIRS are control/skip dirs)."""
+@pytest.mark.spec("prep-root-dotfile-left-1", "RUL-top_level_only_managed", test="TST-workspace_prep-initialized_root_dotfile_is_left_alone")
+def test_initialized_root_dotfile_is_left_alone(tmp_path, monkeypatch):
+    """The top level of an INITIALIZED workspace holds the managed folders and hidden entries (shared
+    contract §4): a root dotfile (a file manager's `.directory` or `.DS_Store`) is not a misplaced
+    dump — no block — and, the root being no dump area once initialized, no operation touches it."""
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
     monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image",
@@ -451,60 +454,77 @@ def test_initialized_root_dotfile_is_a_misplaced_entry_hard_block(tmp_path, monk
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=True)
     plan = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
     cache.close()
-    assert any("Misplaced entry at workspace root" in b and ".DS_Store" in b
-               for b in plan.blockers), plan.blockers
+    assert not plan.blockers, plan.blockers
+    assert not any(".DS_Store" in (op.source or "") for op in plan.operations)
 
 
-@pytest.mark.spec("prep-plan-nonmutating-1")
+def _snapshot_tree(root):
+    """{relative path: bytes} of every file under root."""
+    return {os.path.relpath(os.path.join(r, f), root): open(os.path.join(r, f), "rb").read()
+            for r, _dn, fns in os.walk(root) for f in fns}
+
+
+@pytest.mark.spec("prep-plan-nonmutating-1", "RUL-planning_changes_no_media", test="TST-workspace_prep-plan_is_non_mutating")
 def test_plan_is_non_mutating(tmp_path, monkeypatch):
-    """Planning NEVER mutates the workspace: workflow.plan() derives operations but applies none —
-    0-sources is byte-identical afterwards and no journal/handoff artifact is written (those are
-    execute-only)."""
+    """Planning changes nothing: with work to do, every file of a workspace past its first run — media and
+    records, the workspace database among them — is byte-identical afterwards; the only file it adds is the
+    fingerprint memo it keeps for later runs. (This writes no plan: the command saves it, not the planner.)"""
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
     monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image", mock_hash_image)
     photos_ingest.CONFIG["jobs"] = 1
     ws = setup_workspace(tmp_path)
-
-    def snap(d):
-        return {os.path.relpath(os.path.join(r, f), d): open(os.path.join(r, f), "rb").read()
-                for r, _dn, fns in os.walk(d) for f in fns}
-
-    before = snap(str(ws / "0-sources"))
-    cache = photos_ingest.WorkspaceCache(str(ws), in_memory=True)
+    utils.load_or_seed_config(str(ws))                           # seeded already: not the first run
+    cache = photos_ingest.WorkspaceCache(str(ws))               # the real database, on disk
+    before = _snapshot_tree(str(ws))
     plan = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
     cache.close()
 
     assert len(plan.operations) > 0                              # there WAS work to do
-    assert snap(str(ws / "0-sources")) == before                # ...but the inbox is untouched
-    cd = ws / ".photos-ingest"
-    assert not (cd / "journal.json").exists()                   # no journal (execute-only)
-    assert not (cd / "photos-11-handoff.json").exists()         # no handoff (execute-only)
+    after = _snapshot_tree(str(ws))
+    memo = os.path.relpath(utils.plan_memo_db_path(str(ws)), str(ws))
+    assert {k for k in after if not k.startswith(memo)} == set(before)   # nothing added but the memo
+    assert {k: after[k] for k in before} == before                       # nothing changed
 
 
-@pytest.mark.spec("gpx-prep-defensive-skip-1", "prep-gpx-inside-tree-skip-1")
-def test_gpx_root_inside_managed_tree_is_skipped(tmp_path, monkeypatch, seed_from_live_config):
-    """Defensive GPX skip (shared contract §8.2): a gpx_root misconfigured to resolve inside a managed
-    folder must be skipped during scanning so the GPX tracks are never organized / swept to strays —
-    while ordinary media in the same managed folder is still organized."""
+@pytest.mark.spec("prep-journal-all-mutations-1", "RUL-every_change_journaled", test="TST-workspace_prep-every_executed_operation_is_journaled")
+def test_every_executed_operation_is_journaled(tmp_path, monkeypatch):
+    """Execution records every operation it carries out in the run's journal — moves, renames and setting
+    duplicates aside alike — each with its outcome, and no operation the plan does not hold."""
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
-    monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image",
-                        lambda p: {"status": "valid", "value": "sig-" + os.path.basename(p),
-                                   "strategy": "image-content-hash-v1", "engine_version": "t"})
+    monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image", mock_hash_image)
     photos_ingest.CONFIG["jobs"] = 1
+    ws = setup_workspace(tmp_path)
+    cache = photos_ingest.WorkspaceCache(str(ws))
+    plan = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
+    cache.close()
+    kinds = {op.type for op in plan.operations}
+    assert {"move_no_clobber", "rename_no_clobber", "quarantine_move"} <= kinds
+    journal = str(ws / ".photos-ingest" / "journal-test.json")
+    photos_ingest.PlanExecutor(str(ws)).execute(plan, journal)
+
+    with open(journal) as f:
+        recorded = json.load(f)
+    assert recorded["plan_id"] == plan.plan_id and recorded["status"] == "success"
+    assert [r["operation_id"] for r in recorded["operations"]] == [op.operation_id for op in plan.operations]
+    assert all(r["status"] == "success" for r in recorded["operations"])
+
+
+@pytest.mark.spec("gpx-prep-defensive-skip-1", "prep-gpx-inside-tree-skip-1", "gpx-root-outside-tree-1", "RUL-tracks_outside_managed_folders", test="TST-workspace_prep-gpx_root_inside_managed_tree_is_refused")
+def test_gpx_root_inside_managed_tree_is_refused(tmp_path, monkeypatch):
+    """Shared contract §8: a gpx_root configured inside the managed tree is an invalid configuration —
+    prep refuses to plan, naming the field, and nothing in the workspace moves."""
     ws = _empty_initialized_ws(tmp_path)
     gpx_dir = ws / "0-sources" / "gpx_tracks"; gpx_dir.mkdir()
     (gpx_dir / "track1.gpx").write_text("<gpx/>")
-    (ws / "0-sources" / "photo.jpg").write_bytes(b"P")            # normal media — still organized
-    monkeypatch.setitem(photos_ingest.CONFIG, "gpx_root", str(gpx_dir))   # misconfigured inside 0-6
-
+    cfg = json.loads(json.dumps(photos_ingest.CONFIG)); cfg["gpx_root"] = "0-sources/gpx_tracks"
+    (ws / ".photos-ingest" / "photos-00-config.json").write_text(json.dumps(cfg))
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=True)
-    plan = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
+    with pytest.raises(ValueError, match="gpx_root"):
+        photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
     cache.close()
-    assert not any(op.source and "track1.gpx" in (op.source or "") for op in plan.operations), \
-        "the misconfigured-in-tree gpx_root subtree must be skipped, not organized"
-    assert any(op.source and op.source.endswith("photo.jpg") for op in plan.operations)
+    assert (gpx_dir / "track1.gpx").exists()
 
 
 def test_deterministic_temp_names_with_existing(tmp_path, monkeypatch):
@@ -516,27 +536,28 @@ def test_deterministic_temp_names_with_existing(tmp_path, monkeypatch):
     ws.mkdir()
     (ws / ".photos-ingest").mkdir(exist_ok=True); (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
 
-    src_dir = ws / "0-sources"
+    (ws / "0-sources").mkdir()
+    src_dir = ws / "2-missing-metadata"      # outside the inbox: the two-step rename applies
     src_dir.mkdir()
 
     # A single target file requiring extension normalisation
-    (src_dir / "collision_test.JPG").write_text("dummy")
+    (src_dir / "UNKN_collision_test.JPG").write_text("dummy")
 
     # Explicitly pre-create the base temp name and -001 to block them
     # Note we use the target destination for the temp name check
-    (src_dir / "collision_test.__photos_ingest_tmp_extnorm__.jpg").write_text("blocked")
-    (src_dir / "collision_test.__photos_ingest_tmp_extnorm__-001.jpg").write_text("blocked")
+    (src_dir / "UNKN_collision_test.__photos_ingest_tmp_extnorm__.jpg").write_text("blocked")
+    (src_dir / "UNKN_collision_test.__photos_ingest_tmp_extnorm__-001.jpg").write_text("blocked2")
 
     photos_ingest.CONFIG["jobs"] = 1
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=True)
     workflow = photos_ingest.WorkspacePrepWorkflow(str(ws), cache)
     plan = workflow.plan()
 
-    temp_ops = [op for op in plan.operations if "__photos_ingest_tmp_extnorm__" in op.destination]
+    temp_ops = [op for op in plan.operations if op.destination and "__photos_ingest_tmp_extnorm__" in op.destination]
 
     found_002 = False
     for op in temp_ops:
-        if "collision_test.__photos_ingest_tmp_extnorm__-002.jpg" in op.destination.lower():
+        if "unkn_collision_test.__photos_ingest_tmp_extnorm__-002.jpg" in op.destination.lower():
             found_002 = True
             break
 
@@ -551,7 +572,7 @@ def test_source_changed_after_plan_abort_no_db(tmp_path, monkeypatch):
 
     # Hand build a plan and verify executor fails it without making a DB
     plan = photos_ingest.Plan(
-        plan_version=1,
+        plan_version=photos_ingest.PLAN_SCHEMA_VERSION, code_fingerprint=photos_ingest.code_fingerprint(),
         plan_id="dummy",
         command="prep",
         created_at="now",
@@ -563,6 +584,7 @@ def test_source_changed_after_plan_abort_no_db(tmp_path, monkeypatch):
         summary={},
         blockers=[],
         warnings=[],
+        metadata_dependencies=photos_ingest.current_metadata_dependencies(),
         operations=[
             photos_ingest.Operation(
                 operation_id="op-1",
@@ -599,7 +621,7 @@ def _mock_for_plan(monkeypatch):
     photos_ingest.CONFIG["jobs"] = 1
 
 
-@pytest.mark.spec("prep-missing-folder-blocks-1", "struct-no-silent-rebuild-1")
+@pytest.mark.spec("prep-missing-folder-blocks-1", "struct-no-silent-rebuild-1", "RUL-missing_folder_named", test="TST-workspace_prep-missing_managed_folder_on_activated_workspace_hard_stops")
 def test_missing_managed_folder_on_activated_workspace_hard_stops(tmp_path, monkeypatch):
     """An activated workspace (guard present) missing managed 0-6 folder(s) is non-conforming — prep
     hard-stops with a blocker rather than silently recreating them (which could mask lost media)."""
@@ -615,7 +637,7 @@ def test_missing_managed_folder_on_activated_workspace_hard_stops(tmp_path, monk
                for b in plan.blockers), plan.blockers
 
 
-@pytest.mark.spec("prep-empty-sources-not-missing-1")
+@pytest.mark.spec("prep-empty-sources-not-missing-1", "RUL-empty_inbox_normal", test="TST-workspace_prep-empty_sources_is_steady_end_state_not_a_missing_folder_block")
 def test_empty_sources_is_steady_end_state_not_a_missing_folder_block(tmp_path, monkeypatch):
     """§6.2 (item 7, final clause): an EMPTY 0-sources is the normal steady end-state (Section 18),
     NOT a missing-folder condition. On an initialized workspace whose 0-sources is present but empty
@@ -634,7 +656,7 @@ def test_empty_sources_is_steady_end_state_not_a_missing_folder_block(tmp_path, 
     assert len(plan.operations) == 0                                 # nothing to do — a clean no-op
 
 
-@pytest.mark.spec("prep-blockers-reported-not-skipped-1")
+@pytest.mark.spec("prep-blockers-reported-not-skipped-1", "RUL-blockers_all_reported", "BLD-blocked_plan_refused", test="TST-workspace_prep-a_blocker_is_reported_textually_and_never_silently_skipped")
 def test_a_blocker_is_reported_textually_and_never_silently_skipped(tmp_path, monkeypatch):
     """§6.2 final line ('Blockers are reported textually; the workflow does not silently skip them').
     With a forbidden sidecar present alongside a perfectly organizable photo, prep must (a) SURFACE the
@@ -645,10 +667,14 @@ def test_a_blocker_is_reported_textually_and_never_silently_skipped(tmp_path, mo
     ws = _empty_initialized_ws(tmp_path)
     (ws / "0-sources" / "good.jpg").write_bytes(b"img")              # would organize on its own
     (ws / "0-sources" / "good.xmp").touch()                         # forbidden sidecar -> hard block
+    (ws / "6-photos-by-dest" / "Trip").mkdir()
+    (ws / "6-photos-by-dest" / "Trip" / "clip.mp4").write_bytes(b"vid")   # a second, unrelated blocker
     cache = photos_ingest.WorkspaceCache(str(ws), in_memory=False)
     plan = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
-    # (a) reported textually — a descriptive, non-empty message, not a silently-dropped condition.
+    # (a) reported textually — a descriptive, non-empty message, not a silently-dropped condition —
+    # and every one of them, not only the first found.
     assert plan.blockers and any("sidecar" in b.lower() for b in plan.blockers), plan.blockers
+    assert any("clip.mp4" in b for b in plan.blockers), plan.blockers
     assert all(isinstance(b, str) and b.strip() for b in plan.blockers)
     # (b) never silently skipped: the run is refused wholesale; the otherwise-valid photo is NOT moved.
     with pytest.raises(ValueError, match="Plan contains blockers and cannot be executed"):
@@ -657,7 +683,7 @@ def test_a_blocker_is_reported_textually_and_never_silently_skipped(tmp_path, mo
     assert not any(p.suffix == ".jpg" for p in (ws / "5-photos-by-date").rglob("*"))
 
 
-@pytest.mark.spec("prep-init-excludes-managed-from-move-1")
+@pytest.mark.spec("prep-init-excludes-managed-from-move-1", test="TST-workspace_prep-init_move_excludes_managed_folders_and_control_dirs")
 def test_init_move_excludes_managed_folders_and_control_dirs(tmp_path, monkeypatch):
     """§3.1: init's base-dump consolidation moves genuine root dumps into 0-sources but EXCLUDES the
     managed 0-6 folders and the control/dot directories (.photos-ingest, .git). A real root dump file
@@ -687,7 +713,7 @@ def test_init_move_excludes_managed_folders_and_control_dirs(tmp_path, monkeypat
                    and op.reason and "Initialize" in op.reason for op in plan.operations)
 
 
-@pytest.mark.spec("prep-no-renormalize-extensions-1")
+@pytest.mark.spec("prep-no-renormalize-extensions-1", test="TST-workspace_prep-already_lowercase_extension_gets_no_rename_op")
 def test_already_lowercase_extension_gets_no_rename_op(tmp_path, monkeypatch):
     """§13 item 3: prep does not re-normalize an already-normalized extension. A file already named
     with a lowercase `.jpg` must produce NO extension-normalization rename op (no two-step temp
@@ -715,3 +741,18 @@ def test_missing_folder_during_init_is_exempt(tmp_path, monkeypatch):
     cache.close()
     assert not any("non-conforming" in b for b in plan.blockers)
     assert any(op.type == "mkdir" for op in plan.operations)           # init plans the structure
+
+
+@pytest.mark.spec("RUL-who_checks_for_links", test="TST-workspace_prep-prep_blocks_a_link_under_the_destination_tree")
+def test_prep_blocks_a_link_under_the_destination_tree(tmp_path, monkeypatch):
+    """Prep never changes 6-photos-by-dest, yet it is the gatekeeper for links there: a link under it
+    blocks prep's plan, so no handoff is built while one is present."""
+    _mock_for_plan(monkeypatch)
+    external = tmp_path / "external"; external.mkdir(); (external / "e.jpg").write_bytes(b"E")
+    ws = _empty_initialized_ws(tmp_path)
+    (ws / "6-photos-by-dest" / "Trip").mkdir()
+    os.symlink(str(external), str(ws / "6-photos-by-dest" / "Trip" / "link"))
+    cache = photos_ingest.WorkspaceCache(str(ws), in_memory=True)
+    plan = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
+    cache.close()
+    assert any("Forbidden symlink" in b and "Trip/link" in b for b in plan.blockers), plan.blockers

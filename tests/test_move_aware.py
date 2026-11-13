@@ -50,6 +50,7 @@ def _install_mocks(monkeypatch, hash_calls):
             return {"status": "valid", "strategy": "image-content-hash-v1",
                     "value": "sig-" + f.read().hex()[:16], "engine_version": "t"}
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", spy)
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "t")   # the version the spy stamps
 
     def meta(folders, max_workers=4, progress_coordinator=None):
         res = {}
@@ -57,7 +58,7 @@ def _install_mocks(monkeypatch, hash_calls):
             for f in os.listdir(folder):
                 res[os.path.join(folder, f)] = {
                     "DateTimeOriginal": "2023:01:02 03:04:05",
-                    "extraction_status": "extracted_ok", "raw_payload": "{}",
+                    "extraction_status": "extracted_ok",
                 }
         return res, set()
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", meta)
@@ -86,7 +87,7 @@ def _media_ops(plan):
             if op.type in ("move_no_clobber", "rename_no_clobber", "quarantine_move")]
 
 
-@pytest.mark.spec("idem-reuse-not-recompute-1", "loop-reprep-mandatory-1", "prep-fingerprint-carry-forward-move-1", "prep-handoff-updated-on-move-only-1", "prep-move-carry-forward-drop-old-1", "prep-move-recognition-before-ghost-1", "prep-move-recognition-no-mutate-bydest-1", "prep-no-perform-bydest-move-1", "prep-recognize-bydate-to-bydest-move-1")
+@pytest.mark.spec("idem-reuse-not-recompute-1", "loop-reprep-mandatory-1", "prep-fingerprint-carry-forward-move-1", "prep-handoff-updated-on-move-only-1", "prep-move-carry-forward-drop-old-1", "prep-move-recognition-before-ghost-1", "prep-move-recognition-no-mutate-bydest-1", "prep-no-perform-bydest-move-1", "prep-recognize-bydate-to-bydest-move-1", test="TST-move_aware-by_date_to_by_dest_move_is_recognized")
 def test_by_date_to_by_dest_move_is_recognized(tmp_path, monkeypatch):
     hash_calls = []
     _install_mocks(monkeypatch, hash_calls)
@@ -119,7 +120,7 @@ def test_by_date_to_by_dest_move_is_recognized(tmp_path, monkeypatch):
     assert any(f["relative_path"] == new_rel for f in handoff["files"])
 
 
-@pytest.mark.spec("prep-recognize-bydest-resort-1")
+@pytest.mark.spec("prep-recognize-bydest-resort-1", test="TST-move_aware-re_sort_between_destinations_is_recognized")
 def test_re_sort_between_destinations_is_recognized(tmp_path, monkeypatch):
     hash_calls = []
     _install_mocks(monkeypatch, hash_calls)
@@ -150,7 +151,7 @@ def test_re_sort_between_destinations_is_recognized(tmp_path, monkeypatch):
     assert any(df["path"] == "6-photos-by-dest/Bruges" for df in handoff["destination_folders"])
 
 
-@pytest.mark.spec("prep-ambiguous-move-rescan-1")
+@pytest.mark.spec("prep-ambiguous-move-rescan-1", test="TST-move_aware-ambiguous_match_is_rescanned_not_carried")
 def test_ambiguous_match_is_rescanned_not_carried(tmp_path, monkeypatch):
     hash_calls = []
     _install_mocks(monkeypatch, hash_calls)
@@ -175,7 +176,7 @@ def test_ambiguous_match_is_rescanned_not_carried(tmp_path, monkeypatch):
     assert len(hash_calls) >= 2
 
 
-@pytest.mark.spec("idem-recompute-staleness-only-1", "prep-content-change-overrides-carry-1", "prep-fingerprint-recompute-on-change-1")
+@pytest.mark.spec("idem-recompute-staleness-only-1", "prep-content-change-overrides-carry-1", "prep-fingerprint-recompute-on-change-1", test="TST-move_aware-content_change_is_rescanned_not_carried")
 def test_content_change_is_rescanned_not_carried(tmp_path, monkeypatch):
     hash_calls = []
     _install_mocks(monkeypatch, hash_calls)
@@ -201,7 +202,7 @@ def _rehash(plan):
     return plan.summary["performance_and_cache"]["rehash_summary"]
 
 
-@pytest.mark.spec("prep-rehash-diagnostics-1")
+@pytest.mark.spec("prep-rehash-diagnostics-1", test="TST-move_aware-rehash_summary_flags_mtime_changed")
 def test_rehash_summary_flags_mtime_changed(tmp_path, monkeypatch):
     """A previously-cached file whose mtime changed is re-fingerprinted and reported as an UNEXPECTED
     re-hash, reason `mtime-changed`, with the file in the first-N sample and the counts in the run report."""
@@ -309,3 +310,49 @@ def test_rehash_summary_flags_replan_over_an_unexecuted_plan(tmp_path, monkeypat
     prep.PlanExecutor(str(ws)).execute(_plan(ws))
     rs4 = _rehash(_plan(ws))
     assert rs4["total"] == 0 and rs4["unpersisted_prior_plan"] is False
+
+
+@pytest.mark.parametrize("stale", ["method", "metadata"])
+@pytest.mark.spec("RUL-moved_file_carried", "BLD-carried_row",
+                  test="TST-move_aware-a_stale_row_follows_the_move_and_is_read_again")
+def test_a_stale_row_follows_the_move_and_is_read_again(tmp_path, monkeypatch, stale):
+    """A moved file whose row would have been read again at its old path — its fingerprint taken by
+    another ImageMagick, or its metadata read another way — is still recognized as moved, and read whole
+    at its new path, the reason named; the old row is pruned."""
+    hash_calls = []
+    _install_mocks(monkeypatch, hash_calls)
+    ws = _ws(tmp_path)
+    organized = _seed_one(ws)
+    if stale == "method":
+        monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "another")
+    else:
+        monkeypatch.setattr(utils, "METADATA_SCHEMA_VERSION", utils.METADATA_SCHEMA_VERSION + 1)
+    (ws / "6-photos-by-dest" / "T").mkdir()
+    new_abs = ws / "6-photos-by-dest" / "T" / os.path.basename(organized)
+    os.rename(organized, new_abs)
+    hash_calls.clear()
+    plan = _plan(ws)
+    assert plan.summary["recognized_moves"] == 1
+    assert hash_calls == [str(new_abs)]
+    reasons = plan.summary["performance_and_cache"]["rehash_summary"]["by_reason"]
+    assert reasons == {"engine-changed" if stale == "method" else "metadata-stale": 1}
+    prep.PlanExecutor(str(ws)).execute(plan)
+    rows = prep.WorkspaceCache(str(ws)).get_all_files()
+    assert set(rows) == {os.path.relpath(new_abs, ws)}
+
+
+@pytest.mark.spec("RUL-move_recognized", "BLD-move_match",
+                  test="TST-move_aware-a_name_changed_in_case_is_not_a_move")
+def test_a_name_changed_in_case_is_not_a_move(tmp_path, monkeypatch):
+    """The name must match exactly: a file whose name differs from the gone file's only in case is read
+    as new."""
+    hash_calls = []
+    _install_mocks(monkeypatch, hash_calls)
+    ws = _ws(tmp_path)
+    organized = _seed_one(ws)
+    (ws / "6-photos-by-dest" / "T").mkdir()
+    os.rename(organized, ws / "6-photos-by-dest" / "T" / os.path.basename(organized).upper())
+    hash_calls.clear()
+    plan = _plan(ws)
+    assert plan.summary["recognized_moves"] == 0
+    assert len(hash_calls) == 1

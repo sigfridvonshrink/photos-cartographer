@@ -67,12 +67,13 @@ def test_every_clause_spec_pointer_resolves_to_a_real_heading():
 
 
 def test_every_must_cover_clause_is_tagged_somewhere():
-    """Text-scan tests/ for `mark.spec("<id>")` — so the suite itself fails if a MUST-COVER clause
-    loses its tag, even without running the standalone tools/spec-coverage gate. (Non-must-cover
-    clauses are part of the index but not gated.)"""
+    """Text-scan both test paths (tests/ and the editor's) for `mark.spec("<id>")` — so the suite
+    itself fails if a MUST-COVER clause loses its tag, even without running the standalone
+    tools/spec-coverage gate. (Non-must-cover clauses are part of the index but not gated.)"""
     tagged = set()
     call = re.compile(r'mark\.spec\(([^)]*)\)')          # whole marker call (may carry multiple ids)
-    for path in glob.glob(os.path.join(ROOT, "tests", "*.py")):
+    for path in (glob.glob(os.path.join(ROOT, "tests", "*.py"))
+                 + glob.glob(os.path.join(ROOT, "cartographer", "editor", "tests", "*.py"))):
         with open(path) as f:
             for argblock in call.findall(f.read()):
                 tagged.update(re.findall(r'"([^"]+)"', argblock))

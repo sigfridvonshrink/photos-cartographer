@@ -209,3 +209,10 @@ __marimo__/
 # Workspace control dir — only ever exists inside a workspace, never in the repo
 # (a stray `python -m cartographer...` run from the repo root would create one here).
 .photos-ingest/
+
+# the spec corpus (tools/spec-build): its venv, its rendered output, its generated pages
+spec/.venv/
+spec/_build/
+spec/_generated/
+# ...but spec/build/ is the corpus's build level, not packaging output (the `build/` rule above)
+!spec/build/

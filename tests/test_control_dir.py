@@ -53,14 +53,14 @@ def _mock(monkeypatch):
             for f in os.listdir(folder):
                 res[os.path.join(folder, f)] = {
                     "DateTimeOriginal": "2023:01:02 03:04:05",
-                    "extraction_status": "extracted_ok", "raw_payload": "{}",
+                    "extraction_status": "extracted_ok",
                 }
         return res, set()
 
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", meta)
 
 
-@pytest.mark.spec("config-in-control-dir-skipped-1", "ctrl-all-in-photos-ingest-1", "plan-canonical-path-1")
+@pytest.mark.spec("config-in-control-dir-skipped-1", "ctrl-all-in-photos-ingest-1", "plan-canonical-path-1", test="TST-control_dir-control_files_land_under_control_dir")
 def test_control_files_land_under_control_dir(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -83,7 +83,7 @@ def test_control_files_land_under_control_dir(tmp_path, monkeypatch):
     assert not any(e.endswith(".photos-ingest/journal.json") or e.startswith("journal") for e in root_entries)
 
 
-@pytest.mark.spec("log-retention-across-runs-1")
+@pytest.mark.spec("log-retention-across-runs-1", test="TST-control_dir-journals_are_per_run_and_retained")
 def test_journals_are_per_run_and_retained(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -139,7 +139,7 @@ def test_backup_existing_artifact_uses_incremental_suffix(tmp_path):
     assert _json.load(open(b1))["v"] == 1 and _json.load(open(b2))["v"] == 2
 
 
-@pytest.mark.spec("plan-replan-no-clobber-1")
+@pytest.mark.spec("plan-replan-no-clobber-1", test="TST-control_dir-write_versioned_json_backs_up_then_writes")
 def test_write_versioned_json_backs_up_then_writes(tmp_path):
     p = tmp_path / "photos-30-merge-plan.json"
     sha1, bak1 = utils.write_versioned_json(str(p), {"plan": "a"})
@@ -151,7 +151,7 @@ def test_write_versioned_json_backs_up_then_writes(tmp_path):
     assert _json.load(open(bak2))["plan"] == "a"              # prior content preserved in the backup
 
 
-@pytest.mark.spec("ctrl-prep-skips-wholesale-1")
+@pytest.mark.spec("ctrl-prep-skips-wholesale-1", test="TST-control_dir-media_inside_control_dir_is_not_inventoried")
 def test_media_inside_control_dir_is_not_inventoried(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)

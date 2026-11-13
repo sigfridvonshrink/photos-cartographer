@@ -33,7 +33,7 @@ def test_default_folders_are_the_0_6_names():
     }
 
 
-@pytest.mark.spec("config-folder-roles-not-config-1")
+@pytest.mark.spec("config-folder-roles-not-config-1", test="TST-folders-accessors_round_trip")
 def test_accessors_round_trip():
     assert utils.folder_name("photos_by_dest") == "6-photos-by-dest"
     assert utils.folder_role("6-photos-by-dest") == "photos_by_dest"
@@ -45,7 +45,7 @@ def test_accessors_round_trip():
     ]
 
 
-@pytest.mark.spec("prep-retain-by-folder-priority-1")
+@pytest.mark.spec("prep-retain-by-folder-priority-1", "RUL-copy_kept_by_folder", test="TST-folders-dedup_priority_orders_by_dest_highest_strays_excluded")
 def test_dedup_priority_orders_by_dest_highest_strays_excluded():
     p = lambda path: utils.dedup_priority(path)
     assert p("6-photos-by-dest/x") < p("5-photos-by-date/x") < p("4-videos-by-date/x") \
@@ -61,6 +61,7 @@ def test_dedup_priority_orders_by_dest_highest_strays_excluded():
     (dict(utils.DEFAULT_FOLDERS, sources=""), "non-empty"),                      # empty
     (dict(utils.DEFAULT_FOLDERS, sources=".photos-ingest"), "single path"),      # leading dot / control
 ])
+@pytest.mark.spec("RUL-checked_folder_names", test="TST-folders-validate_config_rejects_bad_folders")
 def test_validate_config_rejects_bad_folders(bad, needle):
     with pytest.raises(ValueError) as ei:
         utils.validate_config({"folders": bad})

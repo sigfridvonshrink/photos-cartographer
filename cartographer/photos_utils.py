@@ -17,6 +17,7 @@ import sys
 import copy
 import json
 import hashlib
+import math
 import re
 import shutil
 import tempfile
@@ -119,11 +120,7 @@ CONFIG = {
         "phone_gpx_agreement_tolerance_seconds": 60,
         "phone_gpx_conflict_threshold_seconds": 300,
         "dst_conflict_tolerance_seconds": 120,
-        "phone_gpx_max_distance_meters": 250,
-        "write_corrected_metadata_times": True,
-        "write_corrected_offset_tags": True,
-        "write_corrected_filename_times": True,
-        "manual_segment_template_count": 2
+        "phone_gpx_max_distance_meters": 250
     },
     "filename_timestamp_format": "%Y-%m-%d--%H-%M-%S",
     # Format-distribution subfolder names that mark the later development/processing phase
@@ -135,9 +132,7 @@ CONFIG = {
     # validation — library_root must be an existing directory outside the managed 0-6 tree, and
     # the policy values are enum-checked there (merge spec Section 4). Prep only type-validates.
     "merge": {
-        "library_root": "/srv/pictures/5-finished",           # permanent library dir
-        "placement_policy": "preserve_destination_structure", # by-dest -> library subpath mapping
-        "collision_policy": "suffix_incoming"                 # different-content name clash -> rename the incoming file
+        "library_root": "/srv/pictures/5-finished"            # permanent library dir
     }
 }
 
@@ -171,6 +166,14 @@ def default_config() -> dict:
         if src and os.path.isfile(src):
             with open(src) as f:
                 data = json.load(f)
+            missing = missing_config_settings(data)
+            if missing:      # it would seed a configuration every phase then refuses
+                raise ValueError(f"Seed defaults {src} are missing setting(s): "
+                                 + ", ".join(k for k, _ in missing))
+            unknown = [k for k in unknown_config_settings(data) if k != "jobs"]   # jobs is stripped on seeding
+            if unknown:
+                raise ValueError(f"Seed defaults {src} hold setting(s) cartographer does not know: "
+                                 + ", ".join(unknown))
             validate_config(data)
             return data
     return copy.deepcopy(DEFAULT_CONFIG)
@@ -179,6 +182,18 @@ def default_config() -> dict:
 def selected_gpx_root() -> str:
     root = CONFIG.get("gpx_root") or ""
     return os.path.realpath(os.path.abspath(root)) if root else ""
+
+# Track formats (shared contract §8): a file in one of these is a track, never media. Geotag reads only GPX.
+TRACK_EXTENSIONS = (".gpx", ".kml", ".kmz", ".fit", ".tcx", ".nmea", ".igc")
+
+def is_track_file(name: str) -> bool:
+    """A track file in any format, by name (shared contract §8): anywhere prep inventories, one is a
+    blocker, never media."""
+    return name.lower().endswith(TRACK_EXTENSIONS)
+
+def is_gpx_file(name: str) -> bool:
+    """A GPX track file, by name — the one track format geotag reads under gpx_root."""
+    return name.lower().endswith(".gpx")
 
 # Media classification by extension (prep Section 6.1). The ext->class map is DERIVED from the active
 # CONFIG's `media_extensions` lists, rebuilt by _refresh_media_class_map() at import and whenever
@@ -276,6 +291,21 @@ def missing_managed_folders(ws: str, cfg=None) -> list:
     return [folder_name(r, cfg) for r in FOLDER_ROLES
             if not os.path.isdir(os.path.join(ws, folder_name(r, cfg)))]
 
+def top_level_links(ws: str) -> list:
+    """Every symbolic link at the workspace's top level, hidden or not, dangling or not (shared
+    contract §4): each blocks, and none is followed. Sorted names."""
+    return sorted(n for n in os.listdir(ws) if os.path.islink(os.path.join(ws, n)))
+
+def misplaced_top_level_entries(ws: str, cfg=None) -> list:
+    """The entries at an initialized workspace's top level that do not belong there (shared contract
+    §4): anything but a managed folder or a hidden entry — a file, a folder, a named pipe or any other
+    kind. Links are reported by `top_level_links`, and a managed folder's name held by something that
+    is not a folder by `missing_managed_folders`, so neither is listed here. Every phase blocks on
+    the same list. Sorted names."""
+    managed = {folder_name(r, cfg) for r in FOLDER_ROLES}
+    return sorted(n for n in os.listdir(ws)
+                  if not n.startswith('.') and n not in managed and not os.path.islink(os.path.join(ws, n)))
+
 def dedup_priority(path, cfg=None) -> int:
     """Dedup retention priority of `path` by its top folder component (lower = retained)."""
     role = folder_role(path.split('/', 1)[0], cfg)
@@ -310,6 +340,17 @@ def sealed_marker_path(ws: str) -> str:
 def is_sealed(ws: str) -> bool:
     return os.path.exists(sealed_marker_path(ws))
 
+def likely_new_dump(ws: str) -> bool:
+    """Whether anything sits where a dump would land (shared contract §13.7 item 3): an entry at the
+    workspace's top level, file or folder, other than its managed folders and hidden entries, or
+    anything at all in the inbox. Every command refusing a sealed workspace asks this, so each points
+    out a dump dropped there the same way, and none moves it."""
+    managed = {folder_name(r) for r in FOLDER_ROLES}
+    if any(not n.startswith('.') and n not in managed for n in os.listdir(ws)):
+        return True
+    inbox = os.path.join(ws, folder_name('sources'))
+    return os.path.isdir(inbox) and bool(os.listdir(inbox))
+
 def config_path(ws: str) -> str:
     # Path only; load_or_seed_config (below) seeds it on first prep run, then reads it as authoritative.
     return os.path.join(ws, CONTROL_DIR, "photos-00-config.json")
@@ -326,6 +367,12 @@ def plan_memo_db_path(ws: str) -> str:
     file sitting at a given path, so it can be deleted at any moment with no loss beyond the decode cost
     it was saving."""
     return os.path.join(ws, CONTROL_DIR, "photos-00-plan-memo.db")
+
+def track_memo_db_path(ws: str) -> str:
+    """Geotag's parse memo for the tracks (shared §10): each track file's parsed points, keyed by the
+    SHA-256 of its bytes, so a track unchanged since the last run is not parsed again. Scratch: no
+    decision, no history, safe to delete at any time, neither journalled nor archived."""
+    return os.path.join(ws, CONTROL_DIR, "photos-00-track-memo.db")
 
 PREP_PLAN_ARTIFACT = "photos-10-prep-plan.json"
 
@@ -369,9 +416,88 @@ def prep_log_path(ws: str) -> str:
     """End-of-prep transformation log (prep §16.1 / shared §13.3)."""
     return os.path.join(ws, CONTROL_DIR, "photos-15-prep-log.json")
 
+def prep_log_blocker(ws: str, handoff: dict):
+    """None when prep's log is the one the handoff vouches for — its bytes hash to the sha256 the handoff's
+    `depends_on.prep_log` records — else why not. A log missing, unreadable or changed, or a handoff
+    recording no hash, cannot be checked, and so counts as changed: a crash between prep writing its log
+    and its handoff leaves exactly that, and prep's next run rewrites both."""
+    name = os.path.basename(prep_log_path(ws))
+    recorded = ((handoff or {}).get("depends_on") or {}).get("prep_log") or {}
+    if not recorded.get("sha256"):
+        return f"the handoff records no hash of prep's log ({name}) — run `prep plan` and `prep execute` again"
+    try:
+        current = sha256_file(prep_log_path(ws))
+    except OSError:
+        return f"prep's log ({name}) is missing or unreadable — run `prep plan` and `prep execute` again"
+    if current != recorded["sha256"]:
+        return (f"prep's log ({name}) is not the one the handoff records — run `prep plan` and "
+                "`prep execute` again")
+    return None
+
+def entries_not_carried(earlier: dict, later: dict) -> list:
+    """Fingerprints whose entry in an earlier phase's log is not carried whole into a later phase's
+    copy (§13.0a): a later phase only adds, so the later entry keeps every field the earlier one has,
+    unchanged, and its journey begins with the earlier journey, step for step."""
+    out = []
+    for fp, entry in sorted((earlier or {}).items()):
+        copy = (later or {}).get(fp)
+        journey = entry.get("journey") or []
+        if not isinstance(copy, dict) or (copy.get("journey") or [])[:len(journey)] != journey \
+                or any(copy.get(k) != v for k, v in entry.items() if k != "journey"):
+            out.append(fp)
+    return out
+
 def prep_db_snapshot_path(ws: str) -> str:
     """End-of-prep DB backup snapshot (shared §13.4a)."""
     return os.path.join(ws, CONTROL_DIR, "photos-15-prep-ingest.db")
+
+def workspace_id(ws: str):
+    """The workspace's own identity: the id of the prep run that initialized it, which prep records in
+    the guard (prep §3.1) and nothing changes after — unlike the folder's name. None if unreadable."""
+    try:
+        with open(guard_path(ws)) as f:
+            return (json.load(f) or {}).get("initialized_by_run")
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+def _not_archived(name: str) -> bool:
+    """A control-directory file the archival package does not carry: transient (a lock, a temp file,
+    SQLite's rollback journal), the plan and track memos (scratch), or an archive itself."""
+    return (name.endswith(".lock") or name.startswith(".tmp-") or name.endswith("-journal")
+            or name in (os.path.basename(plan_memo_db_path("")), os.path.basename(track_memo_db_path("")))
+            or name.endswith("-archive.tar.gz"))
+
+
+def control_archive_members(ws: str, exclude=()) -> list:
+    """The control directory's files the archival package carries (§13.2), as workspace-relative
+    paths in sorted order: every file but the transient ones and those in `exclude`."""
+    root = os.path.join(ws, CONTROL_DIR)
+    out = []
+    for dp, dns, fns in os.walk(root):
+        dns.sort()
+        for fn in fns:
+            if _not_archived(fn) or fn in exclude:
+                continue
+            out.append(os.path.relpath(os.path.join(dp, fn), ws))
+    return sorted(out)
+
+
+def write_control_archive(ws: str, archive_path: str, members) -> None:
+    """Write the archival package (§13.2): a gzipped tar of `members` (workspace-relative paths), in
+    the given order, to a temp name in the control directory, then an atomic rename."""
+    import tarfile
+    import uuid
+    tmp = os.path.join(os.path.dirname(archive_path), f".tmp-archive-{uuid.uuid4().hex[:8]}.tar.gz")
+    try:
+        with tarfile.open(tmp, "w:gz") as tar:
+            for rel in members:
+                tar.add(os.path.join(ws, rel), arcname=rel, recursive=False)
+        os.replace(tmp, archive_path)
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+
 
 def write_db_snapshot(conn, dest_path: str) -> None:
     """Capture a transactionally-consistent point-in-time image of `conn`'s database to `dest_path`
@@ -439,11 +565,11 @@ def json_dependency(name: str, ws: str, abs_path: str) -> dict:
 
 # Per-run audit keys that describe THIS run, not the organized workspace state, and so must NOT enter
 # the handoff content fingerprint — they change run to run even when the result does not (§16.2):
-# the top-level run_metadata/diagnostics/content_fingerprint + the execution-journal pointer, and —
+# the top-level run_metadata/diagnostics/content_fingerprint + the execution-journal and prep-log pointers, and —
 # nested inside camera_groups / destination_folders — the cache-freshness counts (extracted-vs-reused
 # flips on a no-op re-run) and the conflicts/duplicates (only populated on the run that quarantined).
 _HANDOFF_VOLATILE_KEYS = frozenset({
-    "run_metadata", "content_fingerprint", "diagnostics", "execution_journal",
+    "run_metadata", "content_fingerprint", "diagnostics", "execution_journal", "prep_log",
     "cache_freshness", "conflicts_or_duplicates",
 })
 
@@ -512,6 +638,15 @@ def plan_dependencies_fresh(ws: str, depends_on: dict, current_fingerprints: dic
             if key in cur and cur[key] != val:
                 stale.append(f"{key} changed")
     return stale
+
+
+FINALIZED_MEDIA_ARTIFACT = "photos-26-finalized-media.json"
+
+
+def finalized_media_path(ws: str) -> str:
+    """Where finalize records each by-dest photo as geotag left it (size, mtime): merge refuses a photo
+    that has changed since (shared §9)."""
+    return os.path.join(ws, CONTROL_DIR, FINALIZED_MEDIA_ARTIFACT)
 
 
 def write_json_artifact(path: str, obj: dict) -> str:
@@ -614,6 +749,42 @@ def write_sealed_marker(ws: str, run_id: str, library_root: str) -> str:
 # truth so the phases can never drift in how a differentiating suffix is formed.
 _DEDUP_SUFFIX_RE = re.compile(r"-(\d{3,})$")
 
+UNTIMED_PREFIX = "UNKN_"   # what a media file with no recorded time is named by: its dump name behind this
+
+
+def untimed_stem(base: str) -> str:
+    """The untimed name's stem for a file that came in as `base` (no extension): `base` behind the
+    untimed mark, which a name already carrying it does not take twice."""
+    return base if base.startswith(UNTIMED_PREFIX) else UNTIMED_PREFIX + base
+
+
+def filename_format_changed(recorded, current) -> str:
+    """The blocker for a filename format changed after prep named a workspace's files in another (shared
+    §6): the format is fixed for the workspace, so the way on is to set it back."""
+    return (f"The filename format has changed since prep named this workspace's files ({recorded!r}, now "
+            f"{current!r}). Set filename_timestamp_format back to {recorded!r}; the new format can be used "
+            "in the next workspace.")
+
+
+def handoff_filename_format_blocker(handoff: dict):
+    """Geotag's and merge's check that the configured filename format is the one prep named the files
+    in, as its handoff records; None when it is."""
+    recorded, current = handoff.get("filename_timestamp_format"), CONFIG["filename_timestamp_format"]
+    if recorded is None:
+        return ("The prep handoff records no filename format — re-run prep: `photos-cartographer prep plan` "
+                "then `photos-cartographer prep execute`.")
+    return None if recorded == current else filename_format_changed(recorded, current)
+
+
+def carries_stem(name: str, stem: str) -> bool:
+    """Whether `name`, without its extension, is `stem` or `stem-NNN` (compared without regard to case):
+    the file is named for that timestamp, its differentiating suffix aside."""
+    own = os.path.splitext(name)[0].lower()
+    stem = stem.lower()
+    rest = own[len(stem) + 1:]
+    return own == stem or (own.startswith(stem + "-") and len(rest) >= 3 and rest.isdigit())
+
+
 def allocate_suffix(base: str, ext: str, index: set, start_idx: int = 1, bare_first: bool = False) -> str:
     """Allocate the next free name not already in `index` (compared case-insensitively), adding the
     chosen lower-cased name to `index` so sequential allocations in the same batch never collide.
@@ -667,38 +838,27 @@ def max_suffix(root: str, names) -> int:
 # rewrites another phase's file (shared contract §13.0a). Consumed by photos-3-merge.
 MERGE_ARCHIVE_MANIFEST = "photos-35-archive-manifest.json"
 GEOTAG_ARCHIVE_MANIFEST = "photos-26-archive-manifest.json"
-_MERGE_ARCHIVE_ITEMS = [
-    "photos-00-config.json", "photos-11-handoff.json",
-    "photos-15-prep-log.json", "photos-15-prep-ingest.db",
-    "photos-21-time-decisions.json", "photos-23-gps-decisions.json",
-    "photos-24-executable-plan.json", "photos-25-execution-summary.json",
-    "photos-26-complete-log.json", "photos-26-geotag-ingest.db",
-    GEOTAG_ARCHIVE_MANIFEST,
-    "photos-31-merge-summary.json", "photos-35-merge-log.json", "photos-35-merge-ingest.db",
-    "photos-00-ingest.db",
-]
+MERGE_ARCHIVE = "photos-35-archive.tar.gz"
 
 def merge_archive_manifest_path(ws: str) -> str:
     return os.path.join(ws, CONTROL_DIR, MERGE_ARCHIVE_MANIFEST)
 
 def reseal_archival_package(ws: str, *, workspace_name: str, plan_id: str, execution_id: str,
                             merge_run_id: str, generated_at: str) -> str:
-    """Re-seal the archival package after a successful merge: recompute the SHA-256 of every package
-    artifact present in the control dir (including merge's photos-31/35 artifacts and the live DB) and
-    write merge's own photos-35-archive-manifest.json (supersedes geotag's photos-26 manifest,
-    shared contract §13.6). Reads each artifact; never mutates another phase's file (§13.0a). Returns
-    the manifest's SHA-256."""
-    cd = control_dir(ws)
-    contents = {}
-    for name in _MERGE_ARCHIVE_ITEMS:
-        ap = os.path.join(cd, name)
-        if os.path.isfile(ap):
-            contents[name] = {"path": os.path.relpath(ap, ws), "sha256": sha256_file(ap)}
+    """Re-seal the archival package after a successful merge: list every file of the control directory
+    the package carries (merge's photos-31/35 records and the live DB among them) with its SHA-256 in
+    merge's own photos-35-archive-manifest.json, which supersedes geotag's photos-26 manifest, and
+    archive them with it into photos-35-archive.tar.gz (shared contract §13.6). Reads each file; never
+    mutates another phase's (§13.0a). Returns the manifest's SHA-256."""
+    members = control_archive_members(ws, exclude=(MERGE_ARCHIVE_MANIFEST,))
+    contents = {os.path.relpath(rel, CONTROL_DIR): {"path": rel, "sha256": sha256_file(os.path.join(ws, rel))}
+                for rel in members}
     manifest = {
         "artifact_type": "archive_manifest",
         "artifact_name": MERGE_ARCHIVE_MANIFEST,
         "schema_version": 1,
         "workspace": workspace_name,
+        "workspace_id": workspace_id(ws),
         "plan_id": plan_id,
         "execution_id": execution_id,
         "merge_run_id": merge_run_id,
@@ -706,7 +866,10 @@ def reseal_archival_package(ws: str, *, workspace_name: str, plan_id: str, execu
         "contents": contents,
         "run_metadata": {"generated_at": generated_at},
     }
-    return write_json_artifact(merge_archive_manifest_path(ws), manifest)
+    digest = write_json_artifact(merge_archive_manifest_path(ws), manifest)
+    write_control_archive(ws, os.path.join(control_dir(ws), MERGE_ARCHIVE),
+                          members + [os.path.relpath(merge_archive_manifest_path(ws), ws)])
+    return digest
 
 def quarantine_dir(ws: str) -> str:
     return os.path.join(ws, QUARANTINE_DIR)
@@ -744,6 +907,36 @@ def quarantine_footprint(ws: str) -> dict:
         "newest_plan_id": plan_ids[-1] if plan_ids else None,
     }
 
+def code_fingerprint() -> str:
+    """SHA-256 of the cartographer package as loaded — from a zipapp or a checkout: every file the zipapp
+    ships, its path and bytes, in path order. Every phase's plan records it, and dry run and execute
+    refuse a plan made by other code (shared contract, RUL-plan_carried_out_by_its_code), so a saved plan is never carried out by a build that would
+    not have made it."""
+    global _CODE_FINGERPRINT
+    if _CODE_FINGERPRINT is None:
+        import importlib.resources
+        h = hashlib.sha256()
+
+        def walk(node, prefix):
+            for child in sorted(node.iterdir(), key=lambda c: c.name):
+                # the files the zipapp ships (tools/build-pyz `_included`): no caches, tests, design
+                # notes or the dev-only example generator — so a checkout and its build agree
+                if (child.name in ("__pycache__", "tests", "generate_examples.py")
+                        or child.name.endswith((".pyc", ".md"))):
+                    continue
+                rel = prefix + child.name
+                if child.is_dir():
+                    walk(child, rel + "/")
+                else:
+                    h.update(rel.encode("utf-8") + b"\0" + child.read_bytes() + b"\0")
+        walk(importlib.resources.files(__package__), "")
+        _CODE_FINGERPRINT = h.hexdigest()
+    return _CODE_FINGERPRINT
+
+
+_CODE_FINGERPRINT = None
+
+
 def _atomic_write_text(path: str, text: str) -> None:
     import tempfile
     fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".tmp-", suffix=".json")
@@ -758,22 +951,48 @@ def _atomic_write_text(path: str, text: str) -> None:
             pass
         raise
 
-def load_or_seed_config(workspace_root: str) -> str:
-    """Seed `photos-00-config.json` from `default_config()` on first run (an external
-    `photos-config-defaults.json` beside the executable if present, else the built-in
-    DEFAULT_CONFIG), then read it as the authoritative config for this workspace.
+def missing_config_settings(cfg: dict, template: dict = None, prefix: str = "") -> list:
+    """The settings of the built-in template that `cfg` lacks, as dotted paths, each with the template's
+    value: [(path, value)]. A workspace's configuration names every setting itself (shared contract §3):
+    a missing one is never filled from the program's defaults, which may change between releases."""
+    template = DEFAULT_CONFIG if template is None else template
+    out = []
+    for key, value in template.items():
+        if key == "jobs":
+            continue
+        path = f"{prefix}{key}"
+        if key not in cfg:
+            out.append((path, value))
+        elif isinstance(value, dict) and isinstance(cfg[key], dict):
+            out.extend(missing_config_settings(cfg[key], value, path + "."))
+    return out
 
-    Per the shared contract (Section 4), the on-disk file — not the in-code dict —
-    governs all processing once it exists; prep is its sole writer (seeds once). The
-    user changes configuration by hand-editing the JSON. Returns the whole-file
-    SHA-256 (the config fingerprint). `jobs` is a runtime override and is never
-    persisted to the file.
-    """
-    ensure_control_dir(workspace_root)
+
+def unknown_config_settings(cfg: dict, template: dict = None, prefix: str = "") -> list:
+    """The settings in `cfg` the built-in template does not know, as dotted paths. A workspace's
+    configuration holds exactly the template's settings (shared contract §3): an unknown one — a
+    misspelling, a class or folder role of the user's own, a setting a release removed — would
+    otherwise be ignored while the user believes it took effect. `jobs` is a runtime override, never
+    a setting."""
+    template = DEFAULT_CONFIG if template is None else template
+    out = []
+    for key, value in cfg.items():
+        path = f"{prefix}{key}"
+        if key == "jobs" or key not in template:
+            out.append(path)
+        elif isinstance(template[key], dict) and isinstance(value, dict):
+            out.extend(unknown_config_settings(value, template[key], path + "."))
+    return out
+
+
+def load_config(workspace_root: str) -> str:
+    """Read the workspace's `photos-00-config.json` as the one configuration of this run — every phase
+    reads it through here (shared contract §3). It must exist (only prep seeds it, `load_or_seed_config`),
+    parse, be complete — every setting of the built-in template present — and validate; anything else
+    raises ValueError naming the file and what is wrong. The file then REPLACES the active CONFIG
+    wholesale, the runtime `jobs` override aside, and the extension-to-class map is rebuilt from it.
+    Returns the whole-file SHA-256 (the config fingerprint)."""
     path = config_path(workspace_root)
-    if not os.path.exists(path):
-        seed = {k: v for k, v in default_config().items() if k != "jobs"}
-        _atomic_write_text(path, json.dumps(seed, indent=2, sort_keys=True))
     with open(path, "rb") as f:
         raw = f.read()
     sha = hashlib.sha256(raw).hexdigest()
@@ -783,8 +1002,16 @@ def load_or_seed_config(workspace_root: str) -> str:
         raise ValueError(f"Workspace config {path} is not valid JSON: {e}")
     if not isinstance(loaded, dict):
         raise ValueError(f"Workspace config {path} must be a JSON object.")
-    validate_config(loaded)  # human-authored input is validated before it is accepted
-    # Make the file authoritative; preserve the runtime jobs override.
+    missing = missing_config_settings(loaded)
+    if missing:
+        listed = "; ".join(f"{k} (the default is {json.dumps(v)})" for k, v in missing)
+        raise ValueError(f"Workspace config {path} is missing setting(s): {listed}. Add each to the file — "
+                         "a workspace's configuration names every setting itself.")
+    unknown = unknown_config_settings(loaded)
+    if unknown:
+        raise ValueError(f"Workspace config {path} holds setting(s) cartographer does not know: "
+                         f"{', '.join(unknown)}. Correct or remove each — an unknown setting would be ignored.")
+    validate_config(loaded, workspace_root)  # human-authored input is validated before it is accepted
     jobs = CONFIG.get("jobs")
     CONFIG.clear()
     CONFIG.update(loaded)
@@ -792,6 +1019,20 @@ def load_or_seed_config(workspace_root: str) -> str:
         CONFIG["jobs"] = jobs
     _refresh_media_class_map()   # the workspace config's extension lists are now authoritative
     return sha
+
+
+def load_or_seed_config(workspace_root: str) -> str:
+    """Seed `photos-00-config.json` from `default_config()` on first run (an external
+    `photos-config-defaults.json` beside the executable if present, else the built-in
+    DEFAULT_CONFIG), then read it through `load_config` as the authoritative config for this
+    workspace. Prep alone calls this: it is the configuration's only seeder (shared contract §3).
+    `jobs` is a runtime override and is never persisted to the file."""
+    ensure_control_dir(workspace_root)
+    path = config_path(workspace_root)
+    if not os.path.exists(path):
+        seed = {k: v for k, v in default_config().items() if k != "jobs"}
+        _atomic_write_text(path, json.dumps(seed, indent=2, sort_keys=True))
+    return load_config(workspace_root)
 
 
 # ZFS naming charsets. A snapshot is <dataset>@<snapshot_prefix><plan_id>; the suffix
@@ -812,13 +1053,12 @@ def _check_path(path, v):
     _check_string(path, v)
     if "\x00" in v:
         raise ValueError(f"config: {path} must not contain a NUL byte.")
+    if v and not v.strip():
+        raise ValueError(f"config: {path} must not be blank (leave it empty, or name a path).")
 
-def _check_number(path, v, minimum=None, integer=False):
-    if integer:
-        if not isinstance(v, int) or isinstance(v, bool):
-            raise ValueError(f"config: {path} must be an integer.")
-    elif not isinstance(v, (int, float)) or isinstance(v, bool):
-        raise ValueError(f"config: {path} must be a number.")
+def _check_number(path, v, minimum=None):
+    if not isinstance(v, (int, float)) or isinstance(v, bool) or not math.isfinite(v):
+        raise ValueError(f"config: {path} must be a number.")   # JSON's NaN/Infinity load as floats
     if minimum is not None and v < minimum:
         raise ValueError(f"config: {path} must be >= {minimum}.")
 
@@ -852,12 +1092,13 @@ _GPX_NUMERIC_KEYS = (
     "photo_anchor_interpolation_max_gap_seconds", "photo_anchor_extrapolation_max_seconds",
 )
 
-def validate_config(cfg: dict):
+def validate_config(cfg: dict, workspace_root: str = None):
     """Validate human-authored config before it is accepted — input a human writes is
     sanity-validated (types, ranges, paths, formats), not merely parsed as JSON. Raises
-    ValueError with a clear 'config: <path> ...' message on any violation; missing keys
-    default and unknown keys are ignored. The same validate-on-load discipline applies
-    to the geotag decision JSON ([[validate-human-input]])."""
+    ValueError with a clear 'config: <path> ...' message on any violation. A missing or unknown setting
+    is `load_config`'s refusal (`missing_config_settings`, `unknown_config_settings`), not this check's. The same validate-on-load discipline applies
+    to the geotag decision JSON ([[validate-human-input]]). Given the workspace, it also
+    refuses a gpx_root that overlaps the managed folders (shared contract §8)."""
     if not isinstance(cfg, dict):
         raise ValueError("config: top level must be a JSON object.")
 
@@ -930,6 +1171,8 @@ def validate_config(cfg: dict):
 
     if "gpx_root" in cfg:
         _check_path("gpx_root", cfg["gpx_root"])
+        if workspace_root and cfg["gpx_root"]:
+            _check_gpx_root_outside(cfg, workspace_root)
 
     dds = cfg.get("destination_distribution_subfolders")
     if dds is not None:
@@ -949,9 +1192,6 @@ def validate_config(cfg: dict):
             raise ValueError("config: merge must be an object.")
         if "library_root" in mg:
             _check_path("merge.library_root", mg["library_root"])
-        for k in ("placement_policy", "collision_policy"):
-            if k in mg:
-                _check_string(f"merge.{k}", mg[k])
 
     for k in _GPX_NUMERIC_KEYS:
         if k in cfg:
@@ -961,18 +1201,13 @@ def validate_config(cfg: dict):
     if pol is not None:
         if not isinstance(pol, dict):
             raise ValueError("config: camera_time_and_timezone_policy must be an object.")
-        for bk in ("single_anchor_auto_apply", "multi_anchor_auto_apply",
-                   "write_corrected_metadata_times", "write_corrected_offset_tags",
-                   "write_corrected_filename_times"):
+        for bk in ("single_anchor_auto_apply", "multi_anchor_auto_apply"):
             if bk in pol:
                 _check_bool(f"camera_time_and_timezone_policy.{bk}", pol[bk])
         for nk in ("phone_gpx_agreement_tolerance_seconds", "phone_gpx_conflict_threshold_seconds",
                    "dst_conflict_tolerance_seconds", "phone_gpx_max_distance_meters"):
             if nk in pol:
                 _check_number(f"camera_time_and_timezone_policy.{nk}", pol[nk], minimum=0)
-        if "manual_segment_template_count" in pol:
-            _check_number("camera_time_and_timezone_policy.manual_segment_template_count",
-                          pol["manual_segment_template_count"], minimum=0, integer=True)
         if "default_folder_timezone" in pol:
             tz = pol["default_folder_timezone"]
             _check_string("camera_time_and_timezone_policy.default_folder_timezone", tz)
@@ -987,6 +1222,10 @@ def validate_config(cfg: dict):
         if dg is not None:
             if not isinstance(dg, dict):
                 raise ValueError("config: camera_time_and_timezone_policy.device_groups must be an object.")
+            unknown = sorted(set(dg) - {"phones", "fixed_clock_cameras"})
+            if unknown:   # a misspelt class would silently leave its cameras in the default class
+                raise ValueError(f"config: camera_time_and_timezone_policy.device_groups.{unknown[0]} is not a "
+                                 f"device class (allowed: fixed_clock_cameras, phones).")
             for gk in ("phones", "fixed_clock_cameras"):
                 if gk in dg:
                     lst = dg[gk]
@@ -995,16 +1234,28 @@ def validate_config(cfg: dict):
                                          f"must be a list of strings.")
 
 
+def _check_gpx_root_outside(cfg, workspace_root):
+    """gpx_root must lie outside the managed 0-6 folders (shared contract §8): neither inside one nor
+    containing one, so the tracks never sit where prep inventories. Relative paths resolve against the
+    workspace, links are resolved."""
+    root = cfg["gpx_root"]
+    gpx = os.path.realpath(os.path.join(workspace_root, root))
+    for r in FOLDER_ROLES:
+        name = folder_name(r, cfg)
+        folder = os.path.realpath(os.path.join(workspace_root, name))
+        if os.path.commonpath([gpx, folder]) in (gpx, folder):
+            raise ValueError(f"config: gpx_root {root!r} must lie outside the managed folders; "
+                             f"it overlaps {name}/.")
+
+
 # Policy values the merge phase currently supports (merge spec §4 / stage-2 decision: v1 is
 # identity placement + incoming-suffix collision only; any other value is a hard blocker).
-_MERGE_PLACEMENT_POLICIES = {"preserve_destination_structure"}
-_MERGE_COLLISION_POLICIES = {"suffix_incoming"}
 
 def validate_merge_config(cfg: dict, ws: str):
     """Deep-validate the library-merge config before the merge phase consumes it (merge spec §4;
     shared contract §14.1). Prep only type-validates merge (validate_config); merge calls THIS, which
-    additionally requires `library_root` to be a non-empty, existing directory resolving OUTSIDE the
-    workspace and its managed 0-6 tree, and the policy values to be supported enums. Raises ValueError
+    additionally requires `library_root` to be a non-empty, existing directory neither inside the
+    workspace nor holding it (`library_place_error`). Raises ValueError
     located to the offending field. Library *identity* (the .photos-library marker) is a separate
     preflight check (is_library), not a config concern."""
     mg = cfg.get("merge")
@@ -1018,18 +1269,22 @@ def validate_merge_config(cfg: dict, ws: str):
     lib_real = os.path.realpath(os.path.abspath(lib))
     if not os.path.isdir(lib_real):
         raise ValueError(f"config: merge.library_root {lib!r} is not an existing directory.")
+    err = library_place_error(lib, ws)
+    if err:
+        raise ValueError(f"config: merge.library_root {err}")
+
+
+def library_place_error(lib: str, ws: str):
+    """Why `lib` cannot be the library of the workspace `ws`, or None: the two must not nest either way —
+    a library inside the workspace would be merged into itself, and a workspace inside the library would
+    have its working copies taken for library photos by the library's own tools."""
+    lib_real = os.path.realpath(os.path.abspath(lib))
     ws_real = os.path.realpath(os.path.abspath(ws))
     if lib_real == ws_real or lib_real.startswith(ws_real + os.sep):
-        raise ValueError(f"config: merge.library_root {lib!r} must resolve outside the workspace "
-                         f"(it must not be the workspace or any path inside it).")
-    pp = mg.get("placement_policy", "preserve_destination_structure")
-    if pp not in _MERGE_PLACEMENT_POLICIES:
-        raise ValueError(f"config: merge.placement_policy {pp!r} is not supported "
-                         f"(allowed: {', '.join(sorted(_MERGE_PLACEMENT_POLICIES))}).")
-    cp = mg.get("collision_policy", "suffix_incoming")
-    if cp not in _MERGE_COLLISION_POLICIES:
-        raise ValueError(f"config: merge.collision_policy {cp!r} is not supported "
-                         f"(allowed: {', '.join(sorted(_MERGE_COLLISION_POLICIES))}).")
+        return f"{lib!r} must resolve outside the workspace (it must not be the workspace or any path inside it)."
+    if ws_real.startswith(lib_real.rstrip(os.sep) + os.sep):
+        return f"{lib!r} must not hold the workspace (the workspace lies inside it)."
+    return None
 
 
 def detect_zfs_dataset(path: str):
@@ -1044,6 +1299,15 @@ def detect_zfs_dataset(path: str):
         return name or None
     except Exception:
         return None
+
+def zfs_dataset(ws: str, *, target_path=None, dataset_key: str = "workspace"):
+    """The ZFS dataset a snapshot of `target_path` (default: the workspace) would be taken of — pinned by
+    `zfs.datasets.<dataset_key>`, or detected from the path when that is "auto" — or None if there is
+    none. Takes nothing."""
+    zfs = CONFIG.get("zfs") or {}
+    ds_cfg = (zfs.get("datasets") or {}).get(dataset_key, "auto")
+    return detect_zfs_dataset(target_path or ws) if ds_cfg == "auto" else ds_cfg
+
 
 def take_zfs_snapshot(ws: str, snapshot_id: str, label: str, *, target_path=None,
                       dataset_key: str = "workspace"):
@@ -1067,8 +1331,7 @@ def take_zfs_snapshot(ws: str, snapshot_id: str, label: str, *, target_path=None
         return None
     required = bool(zfs.get("snapshots_required", False))
     detect_path = target_path or ws
-    ds_cfg = (zfs.get("datasets") or {}).get(dataset_key, "auto")
-    dataset = detect_zfs_dataset(detect_path) if ds_cfg == "auto" else ds_cfg
+    dataset = zfs_dataset(ws, target_path=target_path, dataset_key=dataset_key)
     if not dataset:
         return {"required": required, "snapshot_name": None, "command": None, "exit_code": None,
                 "stdout": "", "stderr": f"ZFS enabled but no dataset found for {detect_path}", "ok": False}
@@ -1094,11 +1357,16 @@ def take_zfs_snapshot(ws: str, snapshot_id: str, label: str, *, target_path=None
             pass
     return rec
 
-FIELD_SET_VERSION = 1
-METADATA_SCHEMA_VERSION = 1
+# 2: every field taken from an explicit group order (METADATA_GROUP_ORDER), the group-qualified
+#    XMP:/QuickTime: date fields gone (they were never filled), no raw payload kept.
+FIELD_SET_VERSION = 2
+# 2: a file's recorded time is the first field holding a valid time, not the first present.
+METADATA_SCHEMA_VERSION = 2
 CAMERA_GROUP_KEY_VERSION = 1
 
-EXIFTOOL_METADATA_OPTIONS = ["-json", "-n", "-a"]
+# -G0 names each value's group, so prep — not exiftool's own priority — chooses which group a field is
+# taken from; -a keeps a tag present in several groups once per group.
+EXIFTOOL_METADATA_OPTIONS = ["-json", "-n", "-a", "-G0"]
 EXTRACTION_OPTIONS_FINGERPRINT = hashlib.sha256(json.dumps(EXIFTOOL_METADATA_OPTIONS).encode('utf-8')).hexdigest()
 
 def get_exiftool_version() -> str:
@@ -1346,7 +1614,7 @@ class ContentHasher:
                 try:
                     sig = worker.signature(filepath)
                     if sig:
-                        return {"status": "valid", "strategy": "image-content-hash-v1",
+                        return {"status": "valid", "strategy": IMAGE_FINGERPRINT_STRATEGY,
                                 "value": sig, "engine_version": engine_version}
                     last_error = "ImageMagick produced no signature"
                     worker.restart()
@@ -1356,13 +1624,13 @@ class ContentHasher:
                         worker.restart()
                     except Exception:
                         _magick_tls.worker = None      # drop the dead worker; a fresh one next attempt
-            return {"status": "failed", "strategy": "image-content-hash-v1", "value": None,
+            return {"status": "failed", "strategy": IMAGE_FINGERPRINT_STRATEGY, "value": None,
                     "error": last_error, "engine_version": engine_version}
 
         # Fallback: legacy per-file `identify` (no `magick` script mode on this system).
         identify_cmd = get_identify_command()
         if not identify_cmd:
-            return {"status": "failed", "strategy": "image-content-hash-v1", "value": None,
+            return {"status": "failed", "strategy": IMAGE_FINGERPRINT_STRATEGY, "value": None,
                     "error": "ImageMagick not found", "engine_version": engine_version}
         cmd = identify_cmd + ["-format", "%#", "-colorspace", "sRGB", "-depth", "8", filepath]
         last_error = "ImageMagick failed"
@@ -1382,14 +1650,14 @@ class ContentHasher:
                     stdout_data += chunk
                 proc.wait()
                 if proc.returncode == 0 and stdout_data.strip():
-                    return {"status": "valid", "strategy": "image-content-hash-v1",
+                    return {"status": "valid", "strategy": IMAGE_FINGERPRINT_STRATEGY,
                             "value": stdout_data.strip(), "engine_version": engine_version}
                 last_error = f"ImageMagick exited {proc.returncode}"
             except subprocess.TimeoutExpired:
                 last_error = "ImageMagick timed out"
             except Exception as e:
                 last_error = str(e)
-        return {"status": "failed", "strategy": "image-content-hash-v1", "value": None,
+        return {"status": "failed", "strategy": IMAGE_FINGERPRINT_STRATEGY, "value": None,
                 "error": last_error, "engine_version": engine_version}
 
     @staticmethod
@@ -1406,19 +1674,19 @@ class ContentHasher:
                                      stdin=subprocess.DEVNULL)
                 for line in res.stdout.splitlines():
                     if line.startswith("MD5="):
-                        return {"status": "valid", "strategy": "video-md5-v1", "value": line.split("=")[1].strip()}
+                        return {"status": "valid", "strategy": VIDEO_FINGERPRINT_STRATEGY, "value": line.split("=")[1].strip()}
                 last_error = "No MD5 output"
             except FileNotFoundError:
                 # ffmpeg not installed — decline this fingerprint gracefully (matches the magick-less
                 # image path) instead of letting FileNotFoundError crash the whole scan. A phase
                 # preflight warns up front; here we just mark the file fingerprint-failed and move on.
-                return {"status": "failed", "strategy": "video-md5-v1", "value": None,
+                return {"status": "failed", "strategy": VIDEO_FINGERPRINT_STRATEGY, "value": None,
                         "error": "ffmpeg not found"}
             except subprocess.CalledProcessError as e:
                 last_error = str(e)
                 if attempt == 1:
                     print(f"Warning: ffmpeg failed on {filepath}: {e.stderr}")
-        return {"status": "failed", "strategy": "video-md5-v1", "value": None, "error": last_error}
+        return {"status": "failed", "strategy": VIDEO_FINGERPRINT_STRATEGY, "value": None, "error": last_error}
 
 
 class PersistentExifToolWorker:
@@ -1494,7 +1762,6 @@ class PersistentExifToolWorker:
         if self.closed:
             raise ProcessCrashedError("Worker closed")
         try:
-            # EXIFTOOL_METADATA_OPTIONS is ["-json", "-n", "-a"]
             # We send them via stdin to the stay_open process
             for opt in EXIFTOOL_METADATA_OPTIONS:
                 self.process.stdin.write(f"{opt}\n")
@@ -1644,6 +1911,71 @@ class ExifToolWorkerPool:
             if worker:
                 self.release(worker)
 
+RECORDED_TIME_TAGS = ("DateTimeOriginal", "CreateDate", "ModifyDate")
+
+
+def parse_naive_time(s):
+    """A metadata time ('YYYY:MM:DD HH:MM:SS', anything after ignored) as a naive datetime, or None when
+    the value holds no valid time — absent, not a string, or a placeholder such as `0000:00:00 00:00:00`."""
+    if not isinstance(s, str):
+        return None
+    try:
+        return datetime.strptime(s[:19], "%Y:%m:%d %H:%M:%S")
+    except ValueError:
+        return None
+
+
+# The groups a metadata field is taken from, in order: the first group holding the field gives its value
+# (for a time field, the first holding a valid time). EXIF is the camera's own record; XMP is where other
+# tools mirror it, and where a file without EXIF keeps its times; the rest hold what neither does.
+METADATA_GROUP_ORDER = ("EXIF", "XMP", "MakerNotes", "IPTC", "QuickTime", "File")
+# The GPS position is taken first from exiftool's Composite group, which signs it by its hemisphere
+# reference; EXIF holds it unsigned beside a separate reference tag.
+POSITION_FIELDS = ("GPSLatitude", "GPSLongitude", "GPSAltitude", "GPSDateTime")
+
+METADATA_FIELDS = (
+    # times, uncorrected
+    "DateTimeOriginal", "CreateDate", "ModifyDate",
+    "SubSecTimeOriginal", "SubSecCreateDate", "SubSecModifyDate",
+    "OffsetTime", "OffsetTimeOriginal", "OffsetTimeDigitized", "TimeZone",
+    "DateCreated", "TrackCreateDate", "TrackModifyDate", "MediaCreateDate", "MediaModifyDate",
+    # camera identity
+    "Make", "Model", "UniqueCameraModel", "BodySerialNumber", "CameraSerialNumber",
+    "InternalSerialNumber", "SerialNumber", "OwnerName", "LensModel", "LensSerialNumber",
+    # native GPS, uncorrected
+    "GPSLatitude", "GPSLatitudeRef", "GPSLongitude", "GPSLongitudeRef", "GPSAltitude", "GPSAltitudeRef",
+    "GPSDateStamp", "GPSTimeStamp", "GPSDateTime", "GPSProcessingMethod",
+    # media facts
+    "ImageWidth", "ImageHeight", "Orientation", "Rotation", "Duration",
+)
+
+
+def metadata_field(item, field, valid=None):
+    """`(group, value)` of `field` in a group-qualified exiftool record: from the first group of its order
+    holding it — with `valid`, the first whose value passes it, else the first holding any — or
+    `(None, None)`."""
+    groups = (("Composite",) if field in POSITION_FIELDS else ()) + METADATA_GROUP_ORDER
+    held = [(g, item[f"{g}:{field}"]) for g in groups if item.get(f"{g}:{field}") is not None]
+    if valid is not None:
+        for g, v in held:
+            if valid(v):
+                return g, v
+    return held[0] if held else (None, None)
+
+
+def recorded_time(parsed):
+    """A file's recorded time: `(tag, value)` of the first of RECORDED_TIME_TAGS whose value holds a valid
+    time, or `(None, None)`."""
+    for tag in RECORDED_TIME_TAGS:
+        if parse_naive_time(parsed.get(tag)) is not None:
+            return tag, parsed[tag]
+    return None, None
+
+
+IMAGE_FINGERPRINT_STRATEGY = "image-content-hash-v1"   # ImageMagick signature of the decoded pixels
+VIDEO_FINGERPRINT_STRATEGY = "video-md5-v1"            # ffmpeg MD5 of the streams as stored (-c copy)
+
+
 class MetadataReader:
     # Metadata is read by the persistent-worker pool (PersistentExifToolWorker.read_metadata
     # via ExifToolWorkerPool, used by read_metadata_concurrently below). An earlier one-shot
@@ -1651,66 +1983,13 @@ class MetadataReader:
     # it was removed. _parse_exiftool_item (shared with the live worker) stays.
     @staticmethod
     def _parse_exiftool_item(item: Dict[str, Any]) -> Dict[str, Any]:
-        parsed = {
-            # Core timestamp fields
-            "DateTimeOriginal": item.get("DateTimeOriginal"),
-            "CreateDate": item.get("CreateDate"),
-            "ModifyDate": item.get("ModifyDate"),
-
-            # Timestamp sub-seconds and offsets
-            "SubSecTimeOriginal": item.get("SubSecTimeOriginal"),
-            "SubSecCreateDate": item.get("SubSecCreateDate"),
-            "SubSecModifyDate": item.get("SubSecModifyDate"),
-            "OffsetTime": item.get("OffsetTime"),
-            "OffsetTimeOriginal": item.get("OffsetTimeOriginal"),
-            "OffsetTimeDigitized": item.get("OffsetTimeDigitized"),
-            "TimeZone": item.get("TimeZone"),
-
-            # XMP / QuickTime timestamps
-            "XMP:CreateDate": item.get("XMP:CreateDate"),
-            "XMP:ModifyDate": item.get("XMP:ModifyDate"),
-            "DateCreated": item.get("DateCreated"),
-            "QuickTime:CreateDate": item.get("QuickTime:CreateDate"),
-            "QuickTime:ModifyDate": item.get("QuickTime:ModifyDate"),
-            "TrackCreateDate": item.get("TrackCreateDate"),
-            "TrackModifyDate": item.get("TrackModifyDate"),
-            "MediaCreateDate": item.get("MediaCreateDate"),
-            "MediaModifyDate": item.get("MediaModifyDate"),
-
-            # Camera identity fields
-            "Make": item.get("Make"),
-            "Model": item.get("Model"),
-            "UniqueCameraModel": item.get("UniqueCameraModel"),
-            "BodySerialNumber": item.get("BodySerialNumber"),
-            "CameraSerialNumber": item.get("CameraSerialNumber"),
-            "InternalSerialNumber": item.get("InternalSerialNumber"),
-            "SerialNumber": item.get("SerialNumber"),
-            "OwnerName": item.get("OwnerName"),
-            "LensModel": item.get("LensModel"),
-            "LensSerialNumber": item.get("LensSerialNumber"),
-
-            # GPS fields
-            "GPSLatitude": item.get("GPSLatitude"),
-            "GPSLatitudeRef": item.get("GPSLatitudeRef"),
-            "GPSLongitude": item.get("GPSLongitude"),
-            "GPSLongitudeRef": item.get("GPSLongitudeRef"),
-            "GPSAltitude": item.get("GPSAltitude"),
-            "GPSAltitudeRef": item.get("GPSAltitudeRef"),
-            "GPSDateStamp": item.get("GPSDateStamp"),
-            "GPSTimeStamp": item.get("GPSTimeStamp"),
-            "GPSDateTime": item.get("GPSDateTime"),
-            "GPSProcessingMethod": item.get("GPSProcessingMethod"),
-
-            # Dimensions
-            "ImageWidth": item.get("ImageWidth"),
-            "ImageHeight": item.get("ImageHeight"),
-            "Orientation": item.get("Orientation"),
-            "Rotation": item.get("Rotation"),
-            "Duration": item.get("Duration"),
-
-            # Full raw payload (needed by spec for preservation)
-            "raw_payload": json.dumps(item)
-        }
+        """The fields prep keeps of a file, from exiftool's group-qualified record: each from the first
+        group of its order (`metadata_field`), a time field from the first holding a valid time — the same
+        field in the next group before the next field (prep §12)."""
+        parsed, groups = {}, {}
+        for field in METADATA_FIELDS:
+            valid = (lambda v: parse_naive_time(v) is not None) if field in RECORDED_TIME_TAGS else None
+            groups[field], parsed[field] = metadata_field(item, field, valid)
 
         # Build group_key for camera identity grouping based on standard elements
         ident_parts = []
@@ -1729,21 +2008,13 @@ class MetadataReader:
             parsed["extraction_status"] = "extracted_empty"
 
         parsed["has_native_gps"] = bool(parsed.get("GPSLatitude") is not None and parsed.get("GPSLongitude") is not None)
-        parsed["has_timestamp"] = bool(parsed.get("DateTimeOriginal") or parsed.get("CreateDate") or parsed.get("ModifyDate"))
+        parsed["has_timestamp"] = recorded_time(parsed)[0] is not None
 
-        # Timestamp provenance
-        if parsed.get("DateTimeOriginal"):
-            parsed["selected_source_naive_timestamp"] = parsed.get("DateTimeOriginal")
-            parsed["selected_source_timestamp_tag"] = "DateTimeOriginal"
-        elif parsed.get("CreateDate"):
-            parsed["selected_source_naive_timestamp"] = parsed.get("CreateDate")
-            parsed["selected_source_timestamp_tag"] = "CreateDate"
-        elif parsed.get("ModifyDate"):
-            parsed["selected_source_naive_timestamp"] = parsed.get("ModifyDate")
-            parsed["selected_source_timestamp_tag"] = "ModifyDate"
-        else:
-            parsed["selected_source_naive_timestamp"] = None
-            parsed["selected_source_timestamp_tag"] = None
+        # Timestamp provenance: the first field holding a valid time, not merely the first present, named
+        # with the group it was taken from.
+        tag, value = recorded_time(parsed)
+        parsed["selected_source_naive_timestamp"] = value
+        parsed["selected_source_timestamp_tag"] = f"{groups[tag]}:{tag}" if tag else None
 
         return parsed
 
@@ -1906,8 +2177,42 @@ class ProgressCoordinator:
 # table, the journal, and the handoff depends_on so a stale/foreign cache or journal is
 # detectable downstream (prep Section 5). The per-hash engine binding (e.g. ImageMagick
 # version) is carried separately in each content hash's engine_version.
-CACHE_SCHEMA_VERSION = 1
+CACHE_SCHEMA_VERSION = 3   # 2: file_cache without the byte-hash column; 3: metadata_cache without the raw payload
 FINGERPRINT_ALGORITHM_VERSION = "1"
+
+
+def cache_schema_mismatch(cache) -> Optional[str]:
+    """The stop for a workspace database whose recorded schema version is not this build's: prep never
+    migrates one. None when it matches, or when the database records none (it is new)."""
+    recorded = cache.get_meta("cache_schema_version")
+    if recorded is None or recorded == str(CACHE_SCHEMA_VERSION):
+        return None
+    return (f"The workspace database records schema version {recorded}; this build uses "
+            f"{CACHE_SCHEMA_VERSION}. Prep does not migrate a database: plan in a fresh workspace.")
+
+
+def fingerprint_valid(content_hash_json) -> bool:
+    """Whether a recorded fingerprint is a valid one — not a failure, and readable."""
+    try:
+        return json.loads(content_hash_json).get("status") == "valid"
+    except (TypeError, ValueError, AttributeError):
+        return False
+
+
+def fingerprint_reusable(content_hash_json, media_class, current_magick_version) -> bool:
+    """Whether a cached fingerprint can be reused: a valid one, taken by the method this build uses for
+    its class — the same strategy, and for a photo the same ImageMagick version. A fingerprint that
+    records no ImageMagick version is not reusable, and a failed one never is: the failure may have
+    been the machine's (a tool missing, a decode crashing), so every run takes it again (prep §11.3)."""
+    if not fingerprint_valid(content_hash_json):
+        return False
+    ch = json.loads(content_hash_json)
+    if media_class in ("image", "raw"):
+        return (ch.get("strategy") == IMAGE_FINGERPRINT_STRATEGY
+                and ch.get("engine_version") is not None and ch.get("engine_version") == current_magick_version)
+    if media_class == "video":
+        return ch.get("strategy") == VIDEO_FINGERPRINT_STRATEGY
+    return True
 
 # --- Atomic no-clobber move (prep Section 4 / 14.3.4) -------------------------
 # No-clobber is enforced at plan time (the clobber simulation) AND here at execution
@@ -1961,15 +2266,38 @@ XDEV_TMP_PREFIX = ".tmp-xdev-"
 XDEV_TMP_SUFFIX = ".part"
 
 
-def _move_cross_fs_no_clobber(src: str, dest: str, verify=None):
-    """Cross-filesystem no-clobber move (shared contract §15.3) — the fallback when a plain move
-    cannot cross filesystems (EXDEV). Copy src to a temporary name on the DESTINATION filesystem,
-    verify it, fsync it, atomically rename it into the final target (failing if the target exists —
-    no clobber), then remove the source LAST. A crash leaves the source intact (plus at most a
-    discardable temp), never a half-copied file under the final name and never an overwrite.
+def _same_bytes(a: str, b: str, chunk: int = 1 << 20) -> bool:
+    """True iff the two files hold the same bytes: the same size, then compared chunk by chunk."""
+    if os.path.getsize(a) != os.path.getsize(b):
+        return False
+    with open(a, "rb") as fa, open(b, "rb") as fb:
+        while True:
+            x, y = fa.read(chunk), fb.read(chunk)
+            if x != y:
+                return False
+            if not x:
+                return True
 
-    `verify(src, tmp)` runs before the copy is exposed under the final name and must raise to abort;
-    it defaults to a byte-size equality check. (The merge phase, §11, can pass a fingerprint check.)"""
+
+def _fsync_dir(path: str):
+    """Flush a directory's entries to disk, so a rename or creation in it survives a power cut."""
+    fd = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def _move_cross_fs_no_clobber(src: str, dest: str):
+    """Cross-filesystem no-clobber move (shared contract §15.3; merge §11) — the fallback when a plain
+    move cannot cross filesystems (EXDEV). Copy src to a temporary name on the DESTINATION filesystem,
+    check it holds src's very bytes, fsync it, atomically rename it into the final target (failing if
+    the target exists — no clobber), fsync the destination folder so the rename is on disk, then remove
+    the source LAST. A crash or power cut leaves the source intact (plus at most a discardable temp),
+    never a half-copied file under the final name, never an overwrite, never the photo in neither place.
+
+    The check is byte for byte, not by the content fingerprint: that reads the decoded image and is
+    blind to metadata by design, where geotag has just written the position and the corrected times."""
     dest_dir = os.path.dirname(dest) or "."
     fd, tmp = tempfile.mkstemp(dir=dest_dir, prefix=XDEV_TMP_PREFIX, suffix=XDEV_TMP_SUFFIX)
     os.close(fd)
@@ -1979,10 +2307,8 @@ def _move_cross_fs_no_clobber(src: str, dest: str, verify=None):
             shutil.copystat(src, tmp)                   # best-effort mtime/mode
         except OSError:
             pass
-        if verify is not None:
-            verify(src, tmp)
-        elif os.path.getsize(tmp) != os.path.getsize(src):
-            raise OSError(errno.EIO, "cross-filesystem copy size mismatch", src)
+        if not _same_bytes(src, tmp):
+            raise OSError(errno.EIO, "cross-filesystem copy differs from its source", src)
         dfd = os.open(tmp, os.O_RDONLY)                 # durable before we expose it under the final name
         try:
             os.fsync(dfd)
@@ -1996,24 +2322,63 @@ def _move_cross_fs_no_clobber(src: str, dest: str, verify=None):
                 os.remove(tmp)
             except OSError:
                 pass
+    _fsync_dir(dest_dir)                                # the rename on disk before the source goes
     os.unlink(src)                                      # remove the source LAST (crash-safe)
 
-def _move_no_clobber(src: str, dest: str, verify=None):
+def _move_no_clobber(src: str, dest: str, cross_fs=False):
     """Move src -> dest, failing (FileExistsError) instead of overwriting an existing destination.
-    Primary path is an atomic same-filesystem MOVE (_rename_no_clobber_same_fs). Only when that move
-    cannot cross filesystems (EXDEV) does it fall back to the cross-fs copy-then-remove workaround
-    (§15.3) — a same-fs move never touches the fallback.
-
-    `verify(src, tmp)` applies only to the cross-fs fallback (a same-fs rename is lossless, so there is
-    nothing to verify); it runs against the temp copy before it is exposed under the final name and must
-    raise to abort. The merge phase (§11) passes a content-fingerprint check to catch a torn copy."""
+    Primary path is an atomic same-filesystem MOVE (_rename_no_clobber_same_fs). Only a caller that
+    passes `cross_fs=True` — merge, whose library may be on another volume — falls back to the cross-fs
+    copy-then-remove workaround (§15.3) when the move cannot cross filesystems (EXDEV). A workspace lies
+    on one filesystem (checked every run, `workspace_volume_breaks`), so prep and geotag never cross one:
+    for them EXDEV is raised like any other failure, never turned into a copy.
+"""
     try:
         _rename_no_clobber_same_fs(src, dest)
     except OSError as e:
-        if e.errno == errno.EXDEV:                      # crossing filesystems — use the workaround
-            _move_cross_fs_no_clobber(src, dest, verify=verify)
+        if cross_fs and e.errno == errno.EXDEV:         # merge crossing into the library's volume
+            _move_cross_fs_no_clobber(src, dest)
         else:
             raise                                       # incl. FileExistsError (EEXIST): no-clobber
+
+
+def _dev_of(path: str) -> int:
+    """The filesystem (device) a path itself lies on, links not followed."""
+    return os.lstat(path).st_dev
+
+
+def workspace_volume_breaks(workspace_root: str) -> list:
+    """Workspace-relative folders that lie on another filesystem than the workspace root (shared
+    contract §15): a workspace must lie on one filesystem, so every move within it is one rename. Walks
+    every folder — the control directory and the quarantine included — without following links, and
+    does not descend into a folder found elsewhere. Sorted; empty when the workspace is whole."""
+    root_dev = _dev_of(workspace_root)
+    breaks = []
+    for dirpath, dirnames, _files in os.walk(workspace_root):
+        keep = []
+        for d in sorted(dirnames):
+            p = os.path.join(dirpath, d)
+            try:
+                dev = _dev_of(p)
+            except OSError:
+                continue                                # vanished mid-walk: nothing lies there
+            if dev != root_dev:
+                breaks.append(os.path.relpath(p, workspace_root))
+            else:
+                keep.append(d)
+        dirnames[:] = keep
+    return sorted(breaks)
+
+
+def workspace_volume_error(workspace_root: str):
+    """The message stopping a run on a workspace that spans filesystems, or None when it lies on one."""
+    breaks = workspace_volume_breaks(workspace_root)
+    if not breaks:
+        return None
+    shown = ", ".join(f"{b}/" for b in breaks[:5]) + (f" and {len(breaks) - 5} more" if len(breaks) > 5 else "")
+    return (f"The workspace spans more than one filesystem: {shown} lies on another volume than the "
+            f"workspace root. A workspace must lie on one filesystem; move it onto one and re-run. "
+            f"Nothing was touched.")
 
 class PlanFingerprintMemo:
     """Plan-time decode memo (prep §10.3): the fingerprint + metadata prep observed for a file at a
@@ -2087,8 +2452,8 @@ class PlanFingerprintMemo:
         actually be reused."""
         rows = []
         for rec in records:
-            if not rec or not rec.get("relative_path") or not rec.get("content_hash"):
-                continue
+            if not rec or not rec.get("relative_path") or not fingerprint_valid(rec.get("content_hash")):
+                continue                     # a failed fingerprint is never reused, so never kept
             if not rec.get("metadata"):
                 continue
             stored = {k: v for k, v in rec.items() if k != "absolute_path"}   # path is machine-specific
@@ -2148,12 +2513,10 @@ class WorkspaceCache:
                     mtime_ns INTEGER,
                     inode INTEGER,
                     media_class TEXT,
-                    hash TEXT,
                     content_hash TEXT,
                     last_seen_ns INTEGER
                 )
             """)
-            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_hash ON file_cache(hash)")
             self.conn.execute("CREATE INDEX IF NOT EXISTS idx_content_hash ON file_cache(content_hash)")
 
             self.conn.execute("""
@@ -2172,33 +2535,14 @@ class WorkspaceCache:
                     has_native_gps INTEGER,
                     has_timestamp INTEGER,
                     parsed_json TEXT,
-                    raw_payload TEXT,
                     extraction_status TEXT,
                     extraction_error TEXT,
                     FOREIGN KEY(relative_path) REFERENCES file_cache(relative_path) ON DELETE CASCADE
                 )
             """)
 
-            # Perform idempotent migration for existing databases missing phase 8C columns
-            cur = self.conn.cursor()
-            cur.execute("PRAGMA table_info(metadata_cache)")
-            columns = {row[1] for row in cur.fetchall()}
-
-            missing_columns = []
-            if "metadata_schema_version" not in columns:
-                missing_columns.append("metadata_schema_version INTEGER")
-            if "camera_group_key_version" not in columns:
-                missing_columns.append("camera_group_key_version INTEGER")
-            if "extraction_status" not in columns:
-                missing_columns.append("extraction_status TEXT")
-            if "extraction_error" not in columns:
-                missing_columns.append("extraction_error TEXT")
-
-            for col in missing_columns:
-                self.conn.execute(f"ALTER TABLE metadata_cache ADD COLUMN {col}")
-
-            # Cache identity/version row (prep Section 5). Seeded once and kept, so an older
-            # DB retains its recorded version and a future schema bump becomes detectable.
+            # Cache identity/version row (prep Section 5): seeded at creation; prep's execute rewrites the
+            # fingerprint-algorithm version, and prep's plan stops on a schema version not this build's.
             self.conn.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)")
             self.conn.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)",
                               ("cache_schema_version", str(CACHE_SCHEMA_VERSION)))
@@ -2220,6 +2564,10 @@ class WorkspaceCache:
                     engine_version TEXT
                 )
             """)
+
+    def set_meta(self, key: str, value: str):
+        with self._write_ctx():
+            self.conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, value))
 
     def get_meta(self, key: str) -> Optional[str]:
         with self._lock:
@@ -2298,10 +2646,10 @@ class WorkspaceCache:
             self.conn.execute("""
                 INSERT INTO file_cache (
                     relative_path, absolute_path, size, mtime_ns, inode, media_class,
-                    hash, content_hash, last_seen_ns
+                    content_hash, last_seen_ns
                 ) VALUES (
                     :relative_path, :absolute_path, :size, :mtime_ns, :inode, :media_class,
-                    :hash, :content_hash, :last_seen_ns
+                    :content_hash, :last_seen_ns
                 )
                 ON CONFLICT(relative_path) DO UPDATE SET
                     absolute_path = excluded.absolute_path,
@@ -2309,7 +2657,6 @@ class WorkspaceCache:
                     mtime_ns = excluded.mtime_ns,
                     inode = excluded.inode,
                     media_class = excluded.media_class,
-                    hash = excluded.hash,
                     content_hash = excluded.content_hash,
                     last_seen_ns = excluded.last_seen_ns
             """, data)
@@ -2332,7 +2679,6 @@ class WorkspaceCache:
                     "has_native_gps": 1 if md.get("has_native_gps") else 0,
                     "has_timestamp": 1 if md.get("has_timestamp") else 0,
                     "parsed_json": md.get("parsed_json", "{}"),
-                    "raw_payload": md.get("raw_payload", "{}"),
                     "extraction_status": md.get("extraction_status", "extracted_ok"),
                     "extraction_error": md.get("extraction_error", None)
                 }
@@ -2341,13 +2687,13 @@ class WorkspaceCache:
                         relative_path, size, mtime_ns, content_hash, extractor,
                         extractor_version, field_set_version, extraction_options_fingerprint,
                         metadata_schema_version, camera_group_key_version,
-                        camera_group_key, has_native_gps, has_timestamp, parsed_json, raw_payload,
+                        camera_group_key, has_native_gps, has_timestamp, parsed_json,
                         extraction_status, extraction_error
                     ) VALUES (
                         :relative_path, :size, :mtime_ns, :content_hash, :extractor,
                         :extractor_version, :field_set_version, :extraction_options_fingerprint,
                         :metadata_schema_version, :camera_group_key_version,
-                        :camera_group_key, :has_native_gps, :has_timestamp, :parsed_json, :raw_payload,
+                        :camera_group_key, :has_native_gps, :has_timestamp, :parsed_json,
                         :extraction_status, :extraction_error
                     )
                     ON CONFLICT(relative_path) DO UPDATE SET
@@ -2364,7 +2710,6 @@ class WorkspaceCache:
                         has_native_gps = excluded.has_native_gps,
                         has_timestamp = excluded.has_timestamp,
                         parsed_json = excluded.parsed_json,
-                        raw_payload = excluded.raw_payload,
                         extraction_status = excluded.extraction_status,
                         extraction_error = excluded.extraction_error
                 """, md_row)
@@ -2389,16 +2734,23 @@ class WorkspaceCache:
                   "value": fp.get("value"), "strategy": fp.get("strategy"),
                   "engine_version": fp.get("engine_version")})
 
-    def get_cached_library_fingerprint(self, library_path: str, size: int, mtime_ns: int):
+    def get_cached_library_fingerprint(self, library_path: str, size: int, mtime_ns: int,
+                                       engine_version: Optional[str]):
         """Return the cached fingerprint dict for a library file iff the cached size + mtime_ns still
-        match the current ones (else None — the file changed, so re-fingerprint). Shape mirrors a
-        ContentHasher result: {status: 'valid', value, strategy, engine_version}."""
+        match the current ones (else None — the file changed, so re-fingerprint) and it was taken by this
+        build's photo method under the current, known ImageMagick `engine_version`: a fingerprint from
+        another version could differ from prep's for the same pixels, so it is taken again (as in prep, a
+        row recording no version is never reused). Shape mirrors a ContentHasher result: {status: 'valid',
+        value, strategy, engine_version}."""
         with self._lock:
             cur = self.conn.cursor()
             cur.execute("SELECT size, mtime_ns, fingerprint_value, fingerprint_strategy, engine_version "
                         "FROM library_fingerprint_cache WHERE library_path = ?", (library_path,))
             row = cur.fetchone()
         if row is None or row["size"] != size or row["mtime_ns"] != mtime_ns:
+            return None
+        if (row["fingerprint_strategy"] != IMAGE_FINGERPRINT_STRATEGY or engine_version is None
+                or row["engine_version"] != engine_version):
             return None
         return {"status": "valid", "value": row["fingerprint_value"],
                 "strategy": row["fingerprint_strategy"], "engine_version": row["engine_version"]}
@@ -2499,7 +2851,11 @@ class WorkspaceLock(_FlockLock):
     """The whole-run workspace lock (shared contract §2), keyed to the control dir's
     photos-00-workspace.lock. Inherits the non-blocking flock + owner-identity discipline from
     _FlockLock; only the keyed path (and ensuring the control dir exists) differs."""
-    def __init__(self, workspace_root: str):
+    def __init__(self, workspace_root: str, create: bool = True):
+        # Only prep creates the control directory (shared contract §1, §5.3). Every other taker passes
+        # create=False, having checked the directory exists — so a run in a folder that is not a
+        # workspace leaves nothing behind, not even its lock file.
         from .photos_utils import lock_path, ensure_control_dir
-        ensure_control_dir(workspace_root)
+        if create:
+            ensure_control_dir(workspace_root)
         super().__init__(lock_path(workspace_root))

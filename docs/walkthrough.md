@@ -193,7 +193,7 @@ structure, with no-clobber collision handling.
 
 **Execute → sealed.** It moves the finalized photos into the permanent library, then **seals** the
 workspace: it is terminal — every phase refuses to touch it, and new media goes into a fresh workspace.
-(An optional ZFS snapshot of the library is taken first, if configured.)
+(An optional ZFS snapshot of the workspace, and of the library beside it, is taken first, if configured.)
 
 ![Merge — before](screenshots/carto-38-merge-before.png)
 ![Merge — after, sealed](screenshots/carto-39-merge-after-sealed.png)

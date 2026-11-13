@@ -34,7 +34,7 @@ MANAGED = ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
 
 # --- shared write_db_snapshot helper ----------------------------------------
 
-@pytest.mark.spec("db-snapshot-consistent-1", "geotag-finalize-db-snapshot-1")
+@pytest.mark.spec("db-snapshot-consistent-1", "geotag-finalize-db-snapshot-1", test="TST-geotag_finalize-write_db_snapshot_is_a_valid_copy")
 def test_write_db_snapshot_is_a_valid_copy(tmp_path):
     src = tmp_path / "live.db"
     conn = sqlite3.connect(str(src))
@@ -55,7 +55,7 @@ def _file(rel, fp, *, native=False, group=CAM):
             "camera_group_key": group, "has_native_gps": native}
 
 
-@pytest.mark.spec("archive-complete-each-phase-1", "geotag-finalize-complete-log-1", "log-decision-provenance-1")
+@pytest.mark.spec("archive-complete-each-phase-1", "geotag-finalize-complete-log-1", "log-decision-provenance-1", test="TST-geotag_finalize-complete_log_superset_and_geotag_steps")
 def test_complete_log_superset_and_geotag_steps():
     prep = {"fpA": {"content_fingerprint": "fpA", "journey": [{"phase": "prep", "action": "organized"}]}}
     files = [_file(f"{BYDEST}/T/a.arw", "fpA", native=True)]
@@ -64,9 +64,10 @@ def test_complete_log_superset_and_geotag_steps():
     ta = {"destinations": {f"{BYDEST}/T": {"destination_timezone": {"effective_iana_timezone": "Europe/Brussels"}}}}
     plan = {"destinations": {f"{BYDEST}/T": {"operations": [
         {"type": "rename_no_clobber", "relative_path": f"{BYDEST}/T/a.arw", "to": "2024-07-03--14-00-00.arw"}]}}}
-    photos = cal.build_complete_log(prep, files, rows, ta, plan, [])
+    photos = cal.build_complete_log(prep, files, rows, ta, plan)
     actions = [s["action"] for s in photos["fpA"]["journey"]]
     assert actions[0] == "organized"                                     # prep step preserved (superset)
+    assert photos["fpA"]["geotag_path"] == f"{BYDEST}/T/2024-07-03--14-00-00.arw"   # the name geotag gave
     assert actions[1:] == ["clock_offset_applied", "resolved_utc", "timezone_resolved",
                            "gps_preserved", "final_rename"]
     off = photos["fpA"]["journey"][1]
@@ -78,35 +79,90 @@ def test_complete_log_skips_unfingerprinted_and_offsetless():
              _file(f"{BYDEST}/T/b.arw", "fpB")]
     rows = [{"relative_path": f"{BYDEST}/T/b.arw", "resolved_utc": "2024-07-03T12:00:00Z",
              "time_rule_used": "camera_group_offset", "utc_offset_used": None}]   # offset None -> no step
-    photos = cal.build_complete_log({}, files, rows, {}, {"destinations": {}}, [])
+    photos = cal.build_complete_log({}, files, rows, {}, {"destinations": {}})
     assert None not in photos and "fpB" in photos
     assert [s["action"] for s in photos["fpB"]["journey"]] == ["resolved_utc"]   # offset skipped
 
 
-@pytest.mark.spec("geotag-three-gps-origins-1", "log-records-gps-revert-1")
-def test_complete_log_gps_written_and_reverted():
-    files = [_file(f"{BYDEST}/T/m.jpg", "fpM"), _file(f"{BYDEST}/T/r.jpg", "fpR")]
-    rows = [{"relative_path": f"{BYDEST}/T/m.jpg", "resolved_utc": "2024-07-03T12:00:00Z"},
-            {"relative_path": f"{BYDEST}/T/r.jpg", "resolved_utc": "2024-07-03T12:00:00Z"}]
+@pytest.mark.spec("geotag-three-gps-origins-1", "log-records-gps-revert-1", test="TST-geotag_finalize-complete_log_gps_written")
+def test_complete_log_gps_written():
+    files = [_file(f"{BYDEST}/T/m.jpg", "fpM")]
+    rows = [{"relative_path": f"{BYDEST}/T/m.jpg", "resolved_utc": "2024-07-03T12:00:00Z"}]
     plan = {"destinations": {f"{BYDEST}/T": {"operations": [
         {"type": "metadata_gps_write", "relative_path": f"{BYDEST}/T/m.jpg", "gps_origin": "apply_manual",
-         "writes": {"GPSLatitude": 48.85, "GPSLongitude": 2.35}},
-        {"type": "gps_marker_write", "relative_path": f"{BYDEST}/T/m.jpg", "writes": {"GPSProcessingMethod": "manual_fallback"}},
-        {"type": "revert_manual_gps", "relative_path": f"{BYDEST}/T/r.jpg", "writes": {"GPSLatitude": ""},
-         "pre_state": {"present": False}}]}}}
-    photos = cal.build_complete_log({}, files, rows, {}, plan, [{"content_fingerprint": "fpM", "pre_state": {"present": False}}])
+         "writes": {"GPSLatitude": 48.85, "GPSLongitude": 2.35}, "pre_state": {"present": False}},
+        {"type": "gps_marker_write", "relative_path": f"{BYDEST}/T/m.jpg", "writes": {"GPSProcessingMethod": "manual_fallback"}}]}}}
+    photos = cal.build_complete_log({}, files, rows, {}, plan)
     m = next(s for s in photos["fpM"]["journey"] if s["action"] == "gps_written")
     assert m["lat"] == 48.85 and m["origin"] == "apply_manual" and m["gps_processing_method"] == "manual_fallback"
-    assert m["pre_state"] == {"present": False}                          # manual apply records pre-state
-    r = next(s for s in photos["fpR"]["journey"] if s["action"] == "gps_reverted")
-    assert r["pre_state"] == {"present": False}                          # revert records the pinned pre-state
+    assert m["pre_state"] == {"present": False}                          # manual apply records what it replaced
     # a GPS write with no marker op -> gps_processing_method is None (not an error)
     files2 = [_file(f"{BYDEST}/T/n.jpg", "fpN")]
     plan2 = {"destinations": {f"{BYDEST}/T": {"operations": [
         {"type": "metadata_gps_write", "relative_path": f"{BYDEST}/T/n.jpg", "gps_origin": "recompute_automated",
          "writes": {"GPSLatitude": 1, "GPSLongitude": 2}}]}}}
-    photos2 = cal.build_complete_log({}, files2, [], {}, plan2, [])
+    photos2 = cal.build_complete_log({}, files2, [], {}, plan2)
     assert next(s for s in photos2["fpN"]["journey"] if s["action"] == "gps_written")["gps_processing_method"] is None
+
+
+@pytest.mark.spec("RUL-log_records_gps_reverts", "RUL-record_whole_each_phase", test="TST-geotag_finalize-a_cleared_position_is_logged_with_what_it_held")
+def test_a_cleared_position_is_logged_with_what_it_held():
+    """A position geotag wrote and no longer places is cleared, and the log says so with the position
+    the photo held; a manual position records the one it replaced."""
+    files = [_file(f"{BYDEST}/T/c.jpg", "fpC"), _file(f"{BYDEST}/T/m.jpg", "fpM")]
+    held = {"present": True, "GPSLatitude": 40.0, "GPSLongitude": 3.0, "GPSProcessingMethod": "manual_locked"}
+    plan = {"destinations": {f"{BYDEST}/T": {"operations": [
+        {"type": "gps_marker_write", "relative_path": f"{BYDEST}/T/c.jpg", "pre_state": held,
+         "writes": {"GPSLatitude": "", "GPSLatitudeRef": "", "GPSLongitude": "", "GPSLongitudeRef": "",
+                    "GPSProcessingMethod": "+carto-time"}},
+        {"type": "metadata_gps_write", "relative_path": f"{BYDEST}/T/m.jpg", "gps_origin": "apply_manual",
+         "writes": {"GPSLatitude": 48.85, "GPSLongitude": 2.35}, "pre_state": {"present": False}}]}}}
+    photos = cal.build_complete_log({}, files, [], {}, plan)
+    c = [s for s in photos["fpC"]["journey"] if s["phase"] == "geotag"]
+    assert c == [{"phase": "geotag", "action": "gps_cleared", "pre_state": held,
+                  "gps_processing_method": "+carto-time"}]
+    m = next(s for s in photos["fpM"]["journey"] if s["action"] == "gps_written")
+    assert m["pre_state"] == {"present": False}
+    held_file = dict(_file(f"{BYDEST}/T/x.jpg", "fpX"), native_gps={"lat": 40.0, "lon": 3.0},
+                     processing_method="manual_locked")
+    assert cal.held_pre_state(held_file) == held
+    assert cal.held_pre_state(_file(f"{BYDEST}/T/y.jpg", "fpY")) == {"present": False}
+
+
+@pytest.mark.spec("RUL-log_cites_decisions", "log-decision-provenance-1", "log-names-exact-decision-1", test="TST-geotag_finalize-each_step_names_its_exact_decision")
+def test_each_step_names_its_exact_decision():
+    """The offset names its exact cell — with its day when the camera's photos there span days — or
+    the drift confirmation that replaced it; a manual position names the pin or the folder fallback."""
+    row = {"camera_group": CAM, "source_naive_time": "2024:07:03 14:00:00"}
+    cells = {f"{CAM}@2024-07-02": {}, f"{CAM}@2024-07-03": {}}
+    assert cal.offset_decision_pointer(row, f"{BYDEST}/T", cells) == \
+        f"photos-21 destinations.{BYDEST}/T.camera_group_time_decisions.{CAM}@2024-07-03"
+    assert cal.offset_decision_pointer(dict(row, resolved_utc_provenance="gps_drift_validated"), f"{BYDEST}/T", {CAM: {}}) == \
+        f"photos-22 destinations.{BYDEST}/T.drift_decisions.{CAM}"
+    assert cal.manual_gps_pointer("manual_locked", f"{BYDEST}/T", f"{BYDEST}/T/m.jpg", None) == \
+        f"photos-23 destinations.{BYDEST}/T.gps_decisions.review_items[m.jpg]"
+    inherited = {"proposal": {"proposal_source": "inherited", "inherited_from": BYDEST},
+                 "user_decision": {"accept_proposal": True}}
+    assert cal.manual_gps_pointer("manual_fallback", f"{BYDEST}/T", f"{BYDEST}/T/m.jpg", inherited) == \
+        f"photos-23 destinations.{BYDEST}/T.folder_fallback (accepted from {BYDEST})"
+    files = [_file(f"{BYDEST}/T/m.jpg", "fpM")]
+    plan = {"destinations": {f"{BYDEST}/T": {"operations": [
+        {"type": "metadata_gps_write", "relative_path": f"{BYDEST}/T/m.jpg", "gps_origin": "apply_manual",
+         "writes": {"GPSLatitude": 48.85, "GPSLongitude": 2.35},
+         "provenance": {"because": f"photos-23 destinations.{BYDEST}/T.folder_fallback"}}]}}}
+    step = next(s for s in cal.build_complete_log({}, files, [], {}, plan)["fpM"]["journey"] if s["action"] == "gps_written")
+    assert step["because"] == f"photos-23 destinations.{BYDEST}/T.folder_fallback"
+
+
+@pytest.mark.spec("RUL-log_human_readable", "log-human-readable-json-1", "log-offset-in-words-1", test="TST-geotag_finalize-an_offset_is_described_in_words")
+def test_an_offset_is_described_in_words():
+    assert cal.describe_offset(-6900) == "camera clock 1 h 55 min ahead of UTC"
+    assert cal.describe_offset(3612) == "camera clock 1 h 12 s behind UTC"
+    assert cal.describe_offset(0) == "camera clock on UTC"
+    files = [_file(f"{BYDEST}/T/a.arw", "fpA")]
+    rows = [{"relative_path": f"{BYDEST}/T/a.arw", "utc_offset_used": -7200, "time_rule_used": "camera_group_offset"}]
+    step = cal.build_complete_log({}, files, rows, {}, {"destinations": {}})["fpA"]["journey"][0]
+    assert step["offset_seconds"] == -7200 and step["offset_description"] == "camera clock 2 h ahead of UTC"
 
 
 # --- finalize: readiness + end-to-end ---------------------------------------
@@ -126,8 +182,7 @@ def _ready_ws(tmp_path, monkeypatch):
     cfg["gpx_root"] = str(gpx)
     cfg["camera_time_and_timezone_policy"] = dict(
         cfg["camera_time_and_timezone_policy"], device_groups={"fixed_clock_cameras": [CAM], "phones": []},
-        default_folder_timezone="Europe/Brussels", multi_anchor_auto_apply=True,
-        write_corrected_filename_times=False)
+        default_folder_timezone="Europe/Brussels", multi_anchor_auto_apply=True)
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
     # a prep log to carry forward
     (ctl / "photos-15-prep-log.json").write_text(json.dumps({"schema_version": 1, "tool": "photos-1-prep",
@@ -144,11 +199,13 @@ def _ready_ws(tmp_path, monkeypatch):
         return {"relative_path": rel, "media_class": "image", "folder_class": "6-photos-by-dest",
                 "size": st.st_size, "mtime_ns": st.st_mtime_ns,
                 "content_hash": json.dumps({"value": "fp-" + rel, "status": "valid"}),
-                "metadata_status": {"camera_group_key": CAM, "has_timestamp": True, "has_native_gps": True,
-                                    "field_set_version": 1, "parsed_json": json.dumps(parsed)}}
+                "metadata_status": {"camera_group_key_version": utils.CAMERA_GROUP_KEY_VERSION,
+                                    "camera_group_key": CAM, "has_timestamp": True, "has_native_gps": True,
+                                    "field_set_version": utils.FIELD_SET_VERSION, "parsed_json": json.dumps(parsed)}}
     files = [rec(f"{BYDEST}/T/a.arw", "2024:07:03 14:00:00", (50.0, 4.0)),
              rec(f"{BYDEST}/T/b.arw", "2024:07:03 15:00:00", (51.0, 5.0))]
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"files": files, "cache_fingerprint": "pcf"}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files, "cache_fingerprint": "pcf",
+        "depends_on": {"prep_log": {"sha256": utils.sha256_file(str(ctl / "photos-15-prep-log.json"))}}}))
 
     monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", lambda self, p, t: True)
     monkeypatch.setattr(cal.ContentHasher, "fingerprint_image",
@@ -199,7 +256,7 @@ def test_finalize_refuses_plan_id_mismatch(tmp_path, monkeypatch):
     assert _run(monkeypatch, ws, "finalize") == 2
 
 
-@pytest.mark.spec("archive-finalize-explicit-1", "archive-finalize-nondestructive-1", "archive-no-cross-phase-write-1", "archive-package-contents-1", "archive-self-describing-manifest-1", "db-durable-artifact-1", "geotag-finalize-manifest-1", "geotag-finalize-nondestructive-1")
+@pytest.mark.spec("archive-finalize-explicit-1", "archive-finalize-nondestructive-1", "archive-no-cross-phase-write-1", "archive-package-contents-1", "archive-self-describing-manifest-1", "db-durable-artifact-1", "geotag-finalize-manifest-1", "geotag-finalize-nondestructive-1", test="TST-geotag_finalize-finalize_assembles_package_and_is_nondestructive")
 def test_finalize_assembles_package_and_is_nondestructive(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _to_executed(monkeypatch, ws, ctl)
@@ -225,6 +282,52 @@ def test_finalize_assembles_package_and_is_nondestructive(tmp_path, monkeypatch)
     for name, rec in manifest["contents"].items():
         assert rec["sha256"] == utils.sha256_file(str(ctl / name)), name
     assert "photos-26-complete-log.json" in manifest["contents"] and "photos-00-ingest.db" in manifest["contents"]
+
+
+@pytest.mark.spec("RUL-merge_refuses_changed_since_finalize", test="TST-geotag_finalize-finalize_records_each_photo_as_left")
+def test_finalize_records_each_photo_as_left(tmp_path, monkeypatch):
+    """Finalize records every by-dest photo as geotag left it — under its final, renamed path — by size
+    and modification time, so merge can refuse one changed after."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    assert _run(monkeypatch, ws, "finalize") == 0
+    media = json.load(open(ctl / "photos-26-finalized-media.json"))["media"]
+    on_disk = sorted(os.path.relpath(os.path.join(r, n), str(ws))
+                     for r, _d, fs in os.walk(ws / BYDEST) for n in fs)
+    assert sorted(media) == on_disk and not any(p.endswith(("/a.arw", "/b.arw")) for p in media)  # final names
+    for rel, rec in media.items():
+        st = os.stat(ws / rel)
+        assert rec == {"size": st.st_size, "mtime_ns": st.st_mtime_ns}, rel
+
+
+@pytest.mark.spec("RUL-package_contents", "RUL-package_self_describing", "archive-whole-control-dir-1", "archive-self-describing-manifest-1", "RUL-other_databases_scratch", "RUL-images_archived", "RUL-config_archived", test="TST-geotag_finalize-finalize_archives_the_whole_control_directory")
+def test_finalize_archives_the_whole_control_directory(tmp_path, monkeypatch):
+    """The package is the whole control directory but its transient files — the drift record and every
+    journal among it — listed with their hashes in the manifest and archived, manifest included, into
+    the control directory itself."""
+    import hashlib
+    import tarfile
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    (ctl / "photos-22-gps-drift-validation.json").write_text('{"status": "complete"}')
+    (ctl / "photos-00-plan-memo.db").write_bytes(b"scratch")
+    (ctl / "photos-15-prep-ingest.db").write_bytes(b"prep's database image")
+    (ctl / "photos-00-workspace-guard").write_text('{"initialized": true, "initialized_by_run": "prep-init-1"}')
+    assert _run(monkeypatch, ws, "finalize") == 0
+    manifest = json.load(open(ctl / "photos-26-archive-manifest.json"))
+    assert manifest["workspace_id"] == "prep-init-1"              # the identity a renamed folder keeps
+    listed = set(manifest["contents"])
+    assert {"photos-22-gps-drift-validation.json", "photos-00-config.json", "photos-00-ingest.db"} <= listed
+    assert {"photos-15-prep-ingest.db", "photos-26-geotag-ingest.db"} <= listed      # every database image
+    assert any(n.startswith("journal-") for n in listed)
+    assert not any(n.endswith(".lock") or n.startswith(".tmp-") for n in listed)
+    assert "photos-00-plan-memo.db" not in listed and "photos-26-archive-manifest.json" not in listed
+    with tarfile.open(ctl / "photos-26-archive.tar.gz") as tar:
+        archived = {m.name: tar.extractfile(m).read() for m in tar.getmembers()}
+    assert set(archived) == {rec["path"] for rec in manifest["contents"].values()} | {
+        ".photos-ingest/photos-26-archive-manifest.json"}
+    for rec in manifest["contents"].values():                      # the hashes describe what was archived
+        assert hashlib.sha256(archived[rec["path"]]).hexdigest() == rec["sha256"], rec["path"]
 
 
 @pytest.mark.spec("geotag-finalize-no-merge-1")
@@ -289,12 +392,22 @@ def test_finalize_sealed_workspace_blocks(tmp_path, monkeypatch):
     assert _run(monkeypatch, ws, "finalize") == 2                        # sealed -> preflight blocks
 
 
-def test_finalize_tolerates_corrupt_prep_log(tmp_path, monkeypatch):
+@pytest.mark.spec("RUL-unchecked_counts_as_changed", "BLD-finalize_checks_prep_log", test="TST-geotag_finalize-finalize_refuses_a_prep_log_the_handoff_does_not_vouch_for")
+@pytest.mark.parametrize("damage", ["changed", "missing"])
+def test_finalize_refuses_a_prep_log_the_handoff_does_not_vouch_for(tmp_path, monkeypatch, capsys, damage):
+    """Finalize copies prep's log only as the handoff records it, by hash: a log changed since — or gone,
+    which cannot be checked — stops finalize, nothing written, and sends the user back to prep."""
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _to_executed(monkeypatch, ws, ctl)
-    (ctl / "photos-15-prep-log.json").write_text("{corrupt")             # unreadable prior -> ignored
-    assert _run(monkeypatch, ws, "finalize") == 0
-    assert (ctl / "photos-26-complete-log.json").exists()
+    log = ctl / "photos-15-prep-log.json"
+    if damage == "changed":
+        log.write_text("{corrupt")
+    else:
+        log.unlink()
+    capsys.readouterr()
+    assert _run(monkeypatch, ws, "finalize") == 2
+    assert "prep execute" in "".join(capsys.readouterr())
+    assert not (ctl / "photos-26-complete-log.json").exists()
 
 
 def test_finalize_is_idempotent(tmp_path, monkeypatch):

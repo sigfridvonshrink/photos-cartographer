@@ -180,13 +180,14 @@ def test_resolved_utc_cache_created_only_after_photos21_complete(tmp_path, monke
                   "has_timestamp": True, "has_native_gps": True, "GPSLatitude": lat, "GPSLongitude": lon}
         return {"relative_path": rel, "media_class": "image", "folder_class": "6-photos-by-dest",
                 "size": 1, "mtime_ns": 1, "content_hash": json.dumps({"value": "fp" + rel, "status": "valid"}),
-                "metadata_status": {"camera_group_key": CAM, "has_timestamp": True, "has_native_gps": True,
-                                    "field_set_version": 1, "parsed_json": json.dumps(parsed)}}
+                "metadata_status": {"camera_group_key_version": utils.CAMERA_GROUP_KEY_VERSION,
+                                    "camera_group_key": CAM, "has_timestamp": True, "has_native_gps": True,
+                                    "field_set_version": utils.FIELD_SET_VERSION, "parsed_json": json.dumps(parsed)}}
     files = [rec("6-photos-by-dest/B/a.arw", 50.8467, 4.3525, "2024:07:03 14:12:08"),
              rec("6-photos-by-dest/B/b.arw", 50.8480, 4.3540, "2024:07:03 14:13:08")]
     for f in files:
         p = ws / f["relative_path"]; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"x")
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"files": files, "cache_fingerprint": "pcf"}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files, "cache_fingerprint": "pcf"}))
 
     def run():
         monkeypatch.chdir(str(ws))
@@ -253,14 +254,15 @@ def test_run_populates_cache_when_complete(tmp_path, monkeypatch, capsys):
                   "has_timestamp": True, "has_native_gps": True, "GPSLatitude": lat, "GPSLongitude": lon}
         return {"relative_path": rel, "media_class": "image", "folder_class": "6-photos-by-dest",
                 "size": 1, "mtime_ns": 1, "content_hash": json.dumps({"value": "fp" + rel, "status": "valid"}),
-                "metadata_status": {"camera_group_key": CAM, "has_timestamp": True, "has_native_gps": True,
-                                    "field_set_version": 1, "parsed_json": json.dumps(parsed)}}
+                "metadata_status": {"camera_group_key_version": utils.CAMERA_GROUP_KEY_VERSION,
+                                    "camera_group_key": CAM, "has_timestamp": True, "has_native_gps": True,
+                                    "field_set_version": utils.FIELD_SET_VERSION, "parsed_json": json.dumps(parsed)}}
     files = [rec("6-photos-by-dest/B/a.arw", 50.8467, 4.3525, "2024:07:03 14:12:08"),
              rec("6-photos-by-dest/B/b.arw", 50.8480, 4.3540, "2024:07:03 14:13:08")]
     for f in files:
         p = ws / f["relative_path"]; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"x")
     # the timezone must be accepted for status=complete
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"files": files, "cache_fingerprint": "pcf"}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files, "cache_fingerprint": "pcf"}))
 
     def run():
         monkeypatch.chdir(str(ws))
@@ -296,7 +298,7 @@ def test_run_populates_cache_when_complete(tmp_path, monkeypatch, capsys):
                     ("6-photos-by-dest/B/b.arw", "2024-07-03T12:13:21Z", "camera_group_offset")]
 
 
-@pytest.mark.spec("geotag-utc-not-restaled-by-unrelated-config-1", "config-edit-outside-timepolicy-1")
+@pytest.mark.spec("geotag-utc-not-restaled-by-unrelated-config-1", "config-edit-outside-timepolicy-1", "RUL-remake_only_what_depends", "RUL-costly_results_survive_unrelated_edits", test="TST-geotag_resolved_utc-unrelated_config_edit_replans_but_does_not_restale_resolved_utc")
 def test_unrelated_config_edit_replans_but_does_not_restale_resolved_utc(tmp_path, monkeypatch, capsys):
     """§22.1 / shared §4.2: a config edit OUTSIDE the time-policy subset re-plans but must NOT restale
     already-resolved UTC. The resolved-UTC cache fingerprint is built from time-relevant inputs only
@@ -330,13 +332,14 @@ def test_unrelated_config_edit_replans_but_does_not_restale_resolved_utc(tmp_pat
                   "has_timestamp": True, "has_native_gps": True, "GPSLatitude": lat, "GPSLongitude": lon}
         return {"relative_path": rel, "media_class": "image", "folder_class": "6-photos-by-dest",
                 "size": 1, "mtime_ns": 1, "content_hash": json.dumps({"value": "fp" + rel, "status": "valid"}),
-                "metadata_status": {"camera_group_key": CAM, "has_timestamp": True, "has_native_gps": True,
-                                    "field_set_version": 1, "parsed_json": json.dumps(parsed)}}
+                "metadata_status": {"camera_group_key_version": utils.CAMERA_GROUP_KEY_VERSION,
+                                    "camera_group_key": CAM, "has_timestamp": True, "has_native_gps": True,
+                                    "field_set_version": utils.FIELD_SET_VERSION, "parsed_json": json.dumps(parsed)}}
     files = [rec("6-photos-by-dest/B/a.arw", 50.8467, 4.3525, "2024:07:03 14:12:08"),
              rec("6-photos-by-dest/B/b.arw", 50.8480, 4.3540, "2024:07:03 14:13:08")]
     for f in files:
         p = ws / f["relative_path"]; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"x")
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"files": files, "cache_fingerprint": "pcf"}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files, "cache_fingerprint": "pcf"}))
 
     def run_fingerprint():
         monkeypatch.chdir(str(ws))

@@ -54,7 +54,6 @@ def _pol(**overrides):
     (_cfg(zfs={"snapshot_prefix": "bad name!"}), "snapshot_prefix"),             # illegal zfs prefix
     (_pol(single_anchor_auto_apply="yes"), "must be a boolean"),                 # non-bool flag
     (_pol(default_folder_timezone="Mars/Phobos"), "valid IANA timezone"),        # bad tz
-    (_pol(manual_segment_template_count=1.5), "must be an integer"),             # non-int count
     (_pol(phone_gpx_max_distance_meters=-5), "phone_gpx_max_distance_meters"),   # negative
     (_pol(device_groups={"phones": "nope"}), "list of strings"),                # not a list
     (_pol(device_groups={"phones": [1, 2]}), "list of strings"),                # non-string elems
@@ -62,8 +61,14 @@ def _pol(**overrides):
     (_cfg(camera_time_and_timezone_policy="nope"), "must be an object"),        # policy not a dict
     (_pol(device_groups="nope"), "device_groups must be an object"),           # device_groups not a dict
     (_cfg(zfs={"datasets": "nope"}), "zfs.datasets must be an object"),         # zfs.datasets not a dict
+    (_cfg(gpx_interpolation_max_gap_seconds=json.loads("NaN")), "must be a number"),       # JSON NaN
+    (_cfg(gpx_interpolation_max_distance_meters=json.loads("Infinity")), "must be a number"),  # JSON Infinity
+    (_pol(dst_conflict_tolerance_seconds=float("-inf")), "must be a number"),   # not finite
+    (_cfg(gpx_root="   "), "must not be blank"),                                # blank path
+    (_cfg(merge={"library_root": " \t"}), "must not be blank"),                # blank library path
+    (_pol(device_groups={"phone": ["Pixel"]}), "device_groups.phone is not a device class"),  # misspelt class
 ])
-@pytest.mark.spec("config-values-validated-1", "prep-config-validate-gpx-malformed-1", "prep-config-validate-timestamp-format-1", "validate-enum-structure-1", "validate-filename-format-1", "validate-numeric-thresholds-1", "validate-paths-1")
+@pytest.mark.spec("config-values-validated-1", "prep-config-validate-gpx-malformed-1", "prep-config-validate-timestamp-format-1", "validate-enum-structure-1", "validate-filename-format-1", "validate-numeric-thresholds-1", "validate-paths-1", test="TST-config_validation-validate_config_rejects")
 def test_validate_config_rejects(cfg, needle):
     with pytest.raises(ValueError) as ei:
         utils.validate_config(cfg)
@@ -82,6 +87,19 @@ def test_load_or_seed_config_rejects_non_object_file(tmp_path):
     with pytest.raises(ValueError, match="must be a JSON object"):
         utils.load_or_seed_config(str(tmp_path))
 
+
+@pytest.mark.spec("RUL-checked_every_run", test="TST-config_validation-config_rechecked_on_every_read")
+def test_config_rechecked_on_every_read(tmp_path):
+    (tmp_path / ".photos-ingest").mkdir()
+    utils.load_or_seed_config(str(tmp_path))                 # seeded, read and found valid
+    path = utils.config_path(str(tmp_path))
+    with open(path) as f:
+        cfg = json.load(f)
+    cfg["gpx_direct_match_max_seconds"] = -1                 # edited between runs
+    with open(path, "w") as f:
+        json.dump(cfg, f)
+    with pytest.raises(ValueError, match="gpx_direct_match_max_seconds"):
+        utils.load_or_seed_config(str(tmp_path))             # the next read checks it again
 
 def test_valid_edits_pass():
     utils.validate_config(_pol(default_folder_timezone="Europe/Brussels"))
@@ -114,7 +132,6 @@ def test_merge_block_seeded_and_default_valid():
     # library_root is seeded with a deployment default (a non-empty path); the merge phase deep-validates
     # its existence, prep only type-checks it.
     assert isinstance(utils.CONFIG["merge"]["library_root"], str) and utils.CONFIG["merge"]["library_root"]
-    assert utils.CONFIG["merge"]["placement_policy"] and utils.CONFIG["merge"]["collision_policy"]
     utils.validate_config(_cfg(merge=dict(utils.CONFIG["merge"], library_root="/srv/library")))
 
 
@@ -122,12 +139,31 @@ def test_merge_block_seeded_and_default_valid():
     ("nope", "merge must be an object"),
     ({"library_root": 123}, "merge.library_root must be a string"),
     ({"library_root": "a\x00b"}, "merge.library_root must not contain a NUL"),
-    ({"placement_policy": 5}, "merge.placement_policy must be a string"),
 ])
 def test_merge_block_rejects_bad(merge, needle):
     with pytest.raises(ValueError) as ei:
         utils.validate_config({"merge": merge})
     assert needle in str(ei.value), str(ei.value)
+
+
+@pytest.mark.parametrize("gpx_root", ["0-sources/gpx", "6-photos-by-dest", "1-strays/old", ".", "ABS_INSIDE",
+                                      "LINK_INSIDE"])
+@pytest.mark.spec("RUL-tracks_outside_managed_folders", test="TST-config_validation-gpx_root_overlapping_the_managed_folders_is_refused")
+def test_gpx_root_overlapping_the_managed_folders_is_refused(tmp_path, gpx_root):
+    # Inside a managed folder, a managed folder itself, or containing them (the workspace root): refused,
+    # whether relative, absolute, or reached through a link.
+    ws = tmp_path / "ws"; (ws / "5-photos-by-date").mkdir(parents=True)
+    (tmp_path / "link").symlink_to(ws / "5-photos-by-date")
+    gpx_root = {"ABS_INSIDE": str(ws / "5-photos-by-date" / "gpx"), "LINK_INSIDE": str(tmp_path / "link")}.get(gpx_root, gpx_root)
+    with pytest.raises(ValueError, match="gpx_root .* must lie outside the managed folders"):
+        utils.validate_config(_cfg(gpx_root=gpx_root), str(ws))
+
+
+def test_gpx_root_outside_the_managed_folders_is_accepted(tmp_path):
+    ws = tmp_path / "ws"; ws.mkdir()
+    for root in (".photos-ingest/gpx", str(tmp_path / "tracks"), "", "../tracks"):
+        utils.validate_config(_cfg(gpx_root=root), str(ws))
+    utils.validate_config(_cfg(gpx_root="0-sources/gpx"))       # no workspace given: path syntax only
 
 
 def test_config_without_merge_block_still_valid():
@@ -175,14 +211,14 @@ def test_media_extensions_default_seeded_and_valid():
     (_mx(image=["j pg"], raw=["arw"], video=["mp4"]), "canonical bare extension"), # whitespace
     (_mx(image=[5], raw=["arw"], video=["mp4"]), "must be a non-empty string"),    # wrong type
 ])
-@pytest.mark.spec("prep-config-validate-numeric-lists-1")
+@pytest.mark.spec("prep-config-validate-numeric-lists-1", "RUL-checked_extension_lists", test="TST-config_validation-media_extensions_rejects_bad")
 def test_media_extensions_rejects_bad(cfg, needle):
     with pytest.raises(ValueError) as ei:
         utils.validate_config(cfg)
     assert needle in str(ei.value), str(ei.value)
 
 
-@pytest.mark.spec("config-ext-one-class-1", "prep-classify-by-extension-1", "prep-reads-config-authoritative-1")
+@pytest.mark.spec("config-ext-one-class-1", "prep-classify-by-extension-1", "prep-reads-config-authoritative-1", "RUL-config_lists_extensions", "RUL-unlisted_extension_other", "RUL-extension_matched_ignoring_case", test="TST-config_validation-classification_follows_config_after_load")
 def test_classification_follows_config_after_load(tmp_path, monkeypatch):
     # A user adds .webp to the image list; after load_or_seed_config it classifies as image, not stray.
     ws = tmp_path / "ws"
@@ -200,7 +236,7 @@ def test_classification_follows_config_after_load(tmp_path, monkeypatch):
         utils._refresh_media_class_map()                       # restore global for other tests
 
 
-@pytest.mark.spec("config-surgical-staleness-1", "prep-extension-lists-config-1")
+@pytest.mark.spec("config-surgical-staleness-1", "prep-extension-lists-config-1", test="TST-config_validation-field_fingerprints_change_with_their_area")
 def test_field_fingerprints_change_with_their_area():
     base_fol, base_ext = utils.folders_fingerprint(), utils.media_extensions_fingerprint()
     c = copy.deepcopy(utils.CONFIG); c["media_extensions"]["video"].append("webm")

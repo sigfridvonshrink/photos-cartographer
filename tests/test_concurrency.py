@@ -77,7 +77,7 @@ def test_read_metadata_concurrently(mock_read, mock_popen, workspace):
 
 @patch("subprocess.Popen")
 @patch("photos_utils.PersistentExifToolWorker.read_metadata")
-@pytest.mark.spec("prep-candidates-sorted-deterministic-1", "prep-concurrency-no-semantic-change-1", "prep-job-count-run-metadata-1", "prep-two-job-counts-same-plan-1")
+@pytest.mark.spec("prep-candidates-sorted-deterministic-1", "prep-concurrency-no-semantic-change-1", "prep-job-count-run-metadata-1", "prep-two-job-counts-same-plan-1", test="TST-concurrency-deterministic_plan_with_jobs")
 def test_deterministic_plan_with_jobs(mock_read, mock_popen, workspace):
     mock_process = MagicMock()
     mock_popen.return_value = mock_process
@@ -95,7 +95,7 @@ def test_deterministic_plan_with_jobs(mock_read, mock_popen, workspace):
     plan4 = workflow4.plan()
     # The job count is a transient, machine-dependent runtime knob and is NOT recorded in the plan
     # (spec §17 item 6) — neither summary carries a jobs field.
-    assert "jobs_requested" not in plan4.summary["execution_config"]
+    assert "jobs_requested" not in json.dumps(plan4.summary)
     assert "jobs_requested" not in plan4.summary["performance_and_cache"]
 
 
@@ -128,17 +128,9 @@ def test_deterministic_plan_with_jobs(mock_read, mock_popen, workspace):
     def canonicalize(value):
         if isinstance(value, dict):
             # Normalise JSON payloads to avoid string formatting issues
-            if "hash" in value and isinstance(value["hash"], str):
-                try:
-                    value["hash"] = json.dumps(json.loads(value["hash"]), sort_keys=True)
-                except: pass
             if "content_hash" in value and isinstance(value["content_hash"], str):
                 try:
                     value["content_hash"] = json.dumps(json.loads(value["content_hash"]), sort_keys=True)
-                except: pass
-            if "raw_payload" in value and isinstance(value["raw_payload"], str):
-                try:
-                    value["raw_payload"] = json.dumps(json.loads(value["raw_payload"]), sort_keys=True)
                 except: pass
             if "parsed_json" in value and isinstance(value["parsed_json"], str):
                 try:
@@ -191,7 +183,7 @@ def test_progress_coordinator():
 
 @patch("subprocess.Popen")
 @patch("photos_1_prep.PlanValidator.validate_plan_preflight")
-@pytest.mark.spec("prep-journal-all-mutations-1", "prep-progress-not-only-record-1")
+@pytest.mark.spec("prep-journal-all-mutations-1", "prep-progress-not-only-record-1", test="TST-concurrency-quiet_plan_executor_execution")
 def test_quiet_plan_executor_execution(mock_validate, mock_popen, workspace):
     mock_popen.return_value = MagicMock()
 
@@ -211,7 +203,7 @@ def test_quiet_plan_executor_execution(mock_validate, mock_popen, workspace):
 
     plan = prep.Plan(
         plan_id="test_plan_id",
-        plan_version=1,
+        plan_version=prep.PLAN_SCHEMA_VERSION, code_fingerprint=prep.code_fingerprint(),
         command="prep",
         created_at="now",
         workspace_root=workspace,
@@ -224,7 +216,7 @@ def test_quiet_plan_executor_execution(mock_validate, mock_popen, workspace):
         warnings=[],
         operations=[op],
         workspace_file_preconditions=[],
-        metadata_dependencies={"extractor": "fake"}
+        metadata_dependencies=prep.current_metadata_dependencies()
     )
 
     executor = prep.PlanExecutor(workspace)
@@ -315,7 +307,7 @@ def test_cli_jobs_argparse(workspace):
     with open(canonical, "r") as f:
         plan_data_1 = json.load(f)
     # -j is accepted but not persisted to the plan (machine-independent plan, spec §17 item 6).
-    assert "jobs_requested" not in plan_data_1["summary"]["execution_config"]
+    assert "jobs_requested" not in json.dumps(plan_data_1)
 
     res = subprocess.run(
         [*mod, "--jobs", "2", "plan"],
@@ -324,7 +316,7 @@ def test_cli_jobs_argparse(workspace):
 
     with open(canonical, "r") as f:
         plan_data_2 = json.load(f)
-    assert "jobs_requested" not in plan_data_2["summary"]["execution_config"]
+    assert "jobs_requested" not in json.dumps(plan_data_2)
     # the re-plan backed the first plan up rather than clobbering it
     assert os.path.exists(os.path.join(workspace, ".photos-ingest", "photos-10-prep-plan-001.json"))
 
@@ -333,7 +325,7 @@ def test_cli_jobs_argparse(workspace):
 
 @patch("subprocess.Popen")
 @patch("photos_utils.PersistentExifToolWorker.read_metadata")
-@pytest.mark.spec("prep-partial-output-never-cached-1")
+@pytest.mark.spec("prep-partial-output-never-cached-1", test="TST-concurrency-exiftool_pool_failure_blocks_plan")
 def test_exiftool_pool_failure_blocks_plan(mock_read_metadata, mock_popen, workspace):
     mock_popen.return_value = MagicMock()
     # If the process errors out constantly
@@ -434,15 +426,14 @@ def test_stale_dependency_under_concurrency_blocks_execution(mock_read_metadata_
                     "SerialNumber": "12345",
                     "camera_group_key": "12345|Canon|EOS R5",
                     "has_native_gps": False,
-                    "has_timestamp": True,
-                    "raw_payload": "{}"
+                    "has_timestamp": True
                 }
         return res, set()
     mock_read_metadata_concurrently.side_effect = _mock_read_concurrently
 
     # We should have one file triggering a metadata fetch
     os.makedirs(os.path.join(workspace, "2-missing-metadata"), exist_ok=True)
-    file_path = os.path.join(workspace, "2-missing-metadata", "dummy.jpg")
+    file_path = os.path.join(workspace, "2-missing-metadata", "UNKN_dummy.jpg")
     with open(file_path, "w") as f:
         f.write("dummy")
 
@@ -494,8 +485,7 @@ def test_progress_summary_fields(mock_read_metadata_concurrently, mock_hash_imag
                     "SerialNumber": "12345",
                     "camera_group_key": "12345|Canon|EOS R5",
                     "has_native_gps": False,
-                    "has_timestamp": True,
-                    "raw_payload": "{}"
+                    "has_timestamp": True
                 }
         return res, set()
     mock_read_metadata_concurrently.side_effect = _mock_read_concurrently

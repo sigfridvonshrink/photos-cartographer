@@ -132,14 +132,14 @@
       "area": "geotag",
       "criticality": "high",
       "anti": true,
-      "title": "Automated GPS is never rolled back: no pre-state stored, no revert op emitted; it is recomputed from current inputs",
+      "title": "No GPS is rolled back to a stored value and there is no revert operation: a position is recomputed from current inputs",
       "spec": {
         "file": "photos-2-geotag-workflow.md",
         "section": "24.1"
       },
       "coverage": "covered",
       "must_cover": true,
-      "test": "tests/test_geotag_gps_ledger.py::test_automated_gps_stores_no_prestate_and_emits_no_revert"
+      "test": "tests/test_geotag_gps_ledger.py::test_a_withdrawn_pin_is_placed_again_from_the_tracks"
     },
     {
       "id": "geotag-autoresolve-config-gated-1",
@@ -266,20 +266,6 @@
       "coverage": "covered",
       "must_cover": true,
       "test": "tests/test_geotag_rename_planning.py::test_case_insensitive_collision_suffixes"
-    },
-    {
-      "id": "geotag-change-overwrite-original-pinned-1",
-      "area": "geotag",
-      "criticality": "med",
-      "anti": false,
-      "title": "Changing a manual GPS value overwrites to the new value while the pinned original stays unchanged for later full withdrawal",
-      "spec": {
-        "file": "photos-2-geotag-workflow.md",
-        "section": "24.1"
-      },
-      "coverage": "covered",
-      "must_cover": true,
-      "test": "tests/test_geotag_gps_ledger.py::test_ledger_cache_pin_once_get_consume"
     },
     {
       "id": "geotag-clock-error-window-1",
@@ -490,20 +476,6 @@
       "coverage": "covered",
       "must_cover": true,
       "test": "tests/test_geotag_preflight.py::test_dev_subfolder_blocks"
-    },
-    {
-      "id": "geotag-disappeared-entry-kept-1",
-      "area": "geotag",
-      "criticality": "med",
-      "anti": true,
-      "title": "A ledger entry for a file that no longer exists is kept (not pruned), triggers no operation, and is carried into the archived DB",
-      "spec": {
-        "file": "photos-2-geotag-workflow.md",
-        "section": "24.1"
-      },
-      "coverage": "covered",
-      "must_cover": true,
-      "test": "tests/test_geotag_gps_ledger.py::test_vanished_file_kept_no_revert"
     },
     {
       "id": "geotag-drift-confirmation-preserved-1",
@@ -1196,21 +1168,21 @@
       "area": "geotag",
       "criticality": "high",
       "anti": false,
-      "title": "A manual GPS override is reversible via the pinned pre-state; withdrawing undoes its effect and changing re-applies cleanly",
+      "title": "A manual GPS override is reversible: every plan decides from the photo's own values, so withdrawing undoes its effect and changing re-applies cleanly",
       "spec": {
         "file": "photos-2-geotag-workflow.md",
         "section": "24.1"
       },
       "coverage": "covered",
       "must_cover": true,
-      "test": "tests/test_geotag_gps_ledger.py::test_full_pin_then_withdraw_reverts_and_consumes"
+      "test": "tests/test_geotag_gps_ledger.py::test_a_withdrawn_pin_is_cleared"
     },
     {
       "id": "geotag-misplaced-root-hardstop-1",
       "area": "geotag",
       "criticality": "high",
       "anti": true,
-      "title": "A misplaced root entry (loose file incl. dotfiles, non-managed folder, or symlink) hard-stops geotag strictly",
+      "title": "A misplaced root entry (non-hidden loose file, non-managed folder, or symlink) hard-stops geotag",
       "spec": {
         "file": "photos-2-geotag-workflow.md",
         "section": "13"
@@ -1588,56 +1560,126 @@
       "area": "geotag",
       "criticality": "med",
       "anti": false,
-      "title": "apply_manual only targets files with no native GPS (preserve-native wins), so the captured pre-state is in practice always the absent sentinel",
+      "title": "apply_manual only targets files with no native GPS (preserve-native wins), so a pin never overrides a device's own position",
       "spec": {
         "file": "photos-2-geotag-workflow.md",
         "section": "24.1"
       },
       "coverage": "covered",
       "must_cover": true,
-      "test": "tests/test_geotag_gps_ledger.py::test_full_pin_then_withdraw_reverts_and_consumes"
+      "test": "tests/test_geotag_gps_ledger.py::test_a_pin_never_overrides_native_gps"
+    },
+    {
+      "id": "geotag-marker-time-corrected-1",
+      "area": "geotag",
+      "criticality": "high",
+      "anti": true,
+      "title": "A file carrying a geotag marker has its time corrected already: no clock offset is applied to it, it is no anchor and in no drift check, and a group's offset is asked for and applied over unmarked files alone",
+      "spec": {
+        "file": "photos-2-geotag-workflow.md",
+        "section": "28.2"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_rerun_markers.py::test_manual_offset_is_not_applied_twice"
+    },
+    {
+      "id": "geotag-position-marker-not-native-1",
+      "area": "geotag",
+      "criticality": "high",
+      "anti": true,
+      "title": "A position geotag wrote (a position marker) is not native: the file is placed again and the position overwritten; one ending without a position has geotag's old one cleared",
+      "spec": {
+        "file": "photos-2-geotag-workflow.md",
+        "section": "28.2"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_rerun_markers.py::test_geotag_position_is_placed_again"
+    },
+    {
+      "id": "geotag-device-marker-native-1",
+      "area": "geotag",
+      "criticality": "high",
+      "anti": true,
+      "title": "Only geotag's own GPSProcessingMethod values are markers; a device's own value leaves the GPS native",
+      "spec": {
+        "file": "photos-2-geotag-workflow.md",
+        "section": "28.2"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_rerun_markers.py::test_a_devices_own_marker_is_native"
+    },
+    {
+      "id": "geotag-time-only-marker-1",
+      "area": "geotag",
+      "criticality": "med",
+      "anti": false,
+      "title": "A file whose time geotag fixes without writing a position gets +carto-time appended to its GPSProcessingMethod, the device's own value kept",
+      "spec": {
+        "file": "photos-2-geotag-workflow.md",
+        "section": "28.2"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_rerun_markers.py::test_own_gps_camera_is_marked_time_fixed"
+    },
+    {
+      "id": "geotag-held-write-noop-1",
+      "area": "geotag",
+      "criticality": "med",
+      "anti": false,
+      "title": "A time, position and marker, or name the file already holds is not planned again: a re-run with nothing changed writes nothing",
+      "spec": {
+        "file": "photos-2-geotag-workflow.md",
+        "section": "28.2"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_rerun_markers.py::test_manual_offset_is_not_applied_twice"
+    },
+    {
+      "id": "geotag-offset-kept-1",
+      "area": "geotag",
+      "criticality": "high",
+      "anti": false,
+      "title": "A camera's resolved offset for a day is kept for photos arriving later, derived again from the decision each run; a GPS-derived offset stays when later photos bring no anchor",
+      "spec": {
+        "file": "photos-2-geotag-workflow.md",
+        "section": "28.2"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_rerun_markers.py::test_gps_derived_offset_is_kept_for_later_photos"
+    },
+    {
+      "id": "geotag-originals-pinned-1",
+      "area": "geotag",
+      "criticality": "high",
+      "anti": true,
+      "title": "Before geotag's first write, a photo's own time, offset tag, position and GPSProcessingMethod are pinned once; later plans decide from them, so a changed decision reaches the photo and nothing is corrected twice",
+      "spec": {
+        "file": "photos-2-geotag-workflow.md",
+        "section": "24.2"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_rerun_markers.py::test_changed_offset_after_execute_reaches_the_photo"
     },
     {
       "id": "geotag-prestate-before-write-1",
       "area": "geotag",
       "criticality": "high",
       "anti": false,
-      "title": "For a manual GPS override the pinned pre-state is committed to the ledger before the GPS write that overwrites it",
+      "title": "A photo's own values are committed to the original-values ledger before geotag's first write to it",
       "spec": {
         "file": "photos-2-geotag-workflow.md",
         "section": "29.1a"
       },
       "coverage": "covered",
       "must_cover": true,
-      "test": "tests/test_geotag_gps_ledger.py::test_manual_gps_prestate_pinned_before_the_gps_write"
-    },
-    {
-      "id": "geotag-prestate-capture-1",
-      "area": "geotag",
-      "criticality": "high",
-      "anti": false,
-      "title": "On first application a manual GPS write captures and pins the file's prior GPS (or an absent sentinel) in the ledger, keyed by content fingerprint",
-      "spec": {
-        "file": "photos-2-geotag-workflow.md",
-        "section": "24.1"
-      },
-      "coverage": "covered",
-      "must_cover": true,
-      "test": "tests/test_geotag_gps_ledger.py::test_ledger_cache_pin_once_get_consume"
-    },
-    {
-      "id": "geotag-prestate-immutable-1",
-      "area": "geotag",
-      "criticality": "high",
-      "anti": true,
-      "title": "The pinned pre-state is the true original, written once and never overwritten by subsequent runs of the same or changed decision",
-      "spec": {
-        "file": "photos-2-geotag-workflow.md",
-        "section": "24.1"
-      },
-      "coverage": "covered",
-      "must_cover": true,
-      "test": "tests/test_geotag_gps_ledger.py::test_ledger_cache_pin_once_get_consume"
+      "test": "tests/test_geotag_gps_ledger.py::test_own_values_pinned_before_the_first_write"
     },
     {
       "id": "geotag-recalc-only-affected-1",
@@ -1679,7 +1721,7 @@
       },
       "coverage": "covered",
       "must_cover": true,
-      "test": "tests/test_geotag_gps_ledger.py::test_withdraw_reverts_gps_only_never_time_name_or_destination"
+      "test": "tests/test_geotag_gps_ledger.py::test_a_withdrawal_never_reverts_time_name_or_destination"
     },
     {
       "id": "geotag-rehash-before-use-1",
@@ -1735,7 +1777,7 @@
       },
       "coverage": "covered",
       "must_cover": true,
-      "test": "tests/test_geotag_gps_ledger.py::test_full_pin_then_withdraw_reverts_and_consumes"
+      "test": "tests/test_geotag_gps_ledger.py::test_a_pin_executed_then_withdrawn_plans_and_executes_again"
     },
     {
       "id": "geotag-residuals-ok-1",
@@ -2022,14 +2064,14 @@
       "area": "geotag",
       "criticality": "med",
       "anti": false,
-      "title": "The plan distinguishes three GPS operation origins (apply manual, revert manual, recompute automated) and the transformation log records which applied",
+      "title": "The plan distinguishes the GPS write origins (apply manual, recompute automated) beside the clear, and the transformation log records which applied",
       "spec": {
         "file": "photos-2-geotag-workflow.md",
         "section": "24.1"
       },
       "coverage": "covered",
       "must_cover": true,
-      "test": "tests/test_geotag_finalize.py::test_complete_log_gps_written_and_reverted"
+      "test": "tests/test_geotag_finalize.py::test_complete_log_gps_written"
     },
     {
       "id": "geotag-timezone-autoresolve-1",
@@ -2302,14 +2344,14 @@
       "area": "geotag",
       "criticality": "high",
       "anti": false,
-      "title": "Withdrawing a manual GPS decision emits an explicit revert operation driving the field to the pinned pre-state (restore coords or clear)",
+      "title": "Withdrawing a manual GPS decision plans the photo again from its own values: the tracks' position, or geotag's position cleared",
       "spec": {
         "file": "photos-2-geotag-workflow.md",
         "section": "24.1"
       },
       "coverage": "covered",
       "must_cover": true,
-      "test": "tests/test_geotag_gps_ledger.py::test_withdrawn_override_plans_revert"
+      "test": "tests/test_geotag_gps_ledger.py::test_a_withdrawn_pin_is_cleared"
     },
     {
       "id": "geotag-write-summary-1",
@@ -2358,14 +2400,14 @@
       "area": "geotag",
       "criticality": "med",
       "anti": true,
-      "title": "withdraw reverts GPS only; no time/name revert, never relocates across dests",
+      "title": "withdrawal changes GPS only; no time/name revert, never relocates across dests",
       "spec": {
         "file": "photos-2-geotag-workflow.md",
         "section": "24.1"
       },
       "coverage": "covered",
       "must_cover": true,
-      "test": "tests/test_geotag_gps_ledger.py::test_withdraw_reverts_gps_only_never_time_name_or_destination"
+      "test": "tests/test_geotag_gps_ledger.py::test_a_withdrawal_never_reverts_time_name_or_destination"
     },
     {
       "id": "exec-concurrency-no-semantic-change-1",
@@ -2526,7 +2568,7 @@
       "area": "merge",
       "criticality": "med",
       "anti": true,
-      "title": "bad merge policy -> blocker, no plan, no summary, no placement",
+      "title": "invalid merge config -> blocker, no plan, no summary, no placement",
       "spec": {
         "file": "photos-3-merge-workflow.md",
         "section": "4"
@@ -3170,7 +3212,7 @@
       "area": "merge",
       "criticality": "med",
       "anti": true,
-      "title": "Merge does not re-organize, re-deduplicate, or re-fingerprint by-dest content (prep's fingerprints reused)",
+      "title": "Merge does not re-organize, re-deduplicate, or re-fingerprint by-dest content (prep's fingerprints reused under the same ImageMagick)",
       "spec": {
         "file": "photos-3-merge-workflow.md",
         "section": "2.1"
@@ -3282,7 +3324,7 @@
       "area": "merge",
       "criticality": "med",
       "anti": false,
-      "title": "After a failed (all-blocked) or rejected (pre-mutation) summary, re-planning is allowed (nothing moved)",
+      "title": "Re-planning is allowed at any time on an unsealed workspace, whatever the prior summary says",
       "spec": {
         "file": "photos-3-merge-workflow.md",
         "section": "8"
@@ -3464,14 +3506,14 @@
       "area": "merge",
       "criticality": "med",
       "anti": true,
-      "title": "Resume is via execute; plan refuses while a prior merge is in flight but unsealed (partial/success summary + saved plan)",
+      "title": "Resume is via execute, or a fresh plan, which carries forward every photo an earlier merge plan placed whose library place, fingerprinted again, holds it, so the merge log names every photo",
       "spec": {
         "file": "photos-3-merge-workflow.md",
         "section": "8"
       },
       "coverage": "covered",
       "must_cover": true,
-      "test": "tests/test_merge_execute.py::test_re_plan_after_partial_is_refused"
+      "test": "tests/test_merge_execute.py::test_a_re_plan_after_a_partial_merge_carries_what_was_moved"
     },
     {
       "id": "merge-same-content-already-present-remove-source-1",
@@ -3716,7 +3758,7 @@
       "area": "merge",
       "criticality": "low",
       "anti": false,
-      "title": "The step-1 temporary uses the recognizable deterministic name .tmp-xdev-*.part",
+      "title": "The step-1 temporary uses the recognizable name pattern .tmp-xdev-*.part",
       "spec": {
         "file": "photos-3-merge-workflow.md",
         "section": "11"
@@ -3754,20 +3796,6 @@
       "test": "tests/test_merge_plan.py::test_plan_unfingerprintable_library_file_blocks_item"
     },
     {
-      "id": "merge-update-stored-record-if-already-copied-1",
-      "area": "merge",
-      "criticality": "low",
-      "anti": false,
-      "title": "If the archival package was already copied to permanent storage, photos-35/photos-31 are added so it stays current",
-      "spec": {
-        "file": "photos-3-merge-workflow.md",
-        "section": "9.2"
-      },
-      "coverage": "none",
-      "must_cover": false,
-      "omit_reason": "no test exercises the already-copied-to-permanent-storage update path"
-    },
-    {
       "id": "merge-validate-library-root-path-1",
       "area": "merge",
       "criticality": "high",
@@ -3786,7 +3814,7 @@
       "area": "merge",
       "criticality": "high",
       "anti": false,
-      "title": "The copy is verified by size and content fingerprint against the by-dest fingerprint so a torn copy is detected",
+      "title": "The copy is verified by size and bytes against the by-dest source so a torn or damaged copy is detected",
       "spec": {
         "file": "photos-3-merge-workflow.md",
         "section": "11"
@@ -3968,7 +3996,7 @@
       "area": "prep",
       "criticality": "med",
       "anti": false,
-      "title": "The cache distinguishes move/content-change/different-file/dup-in-by-dest/dup-quarantined",
+      "title": "The cache distinguishes move/content-change/different-file/dup-in-by-dest; a quarantined file leaves it",
       "spec": {
         "file": "photos-1-prep-workflow.md",
         "section": "10"
@@ -3982,7 +4010,7 @@
       "area": "prep",
       "criticality": "med",
       "anti": false,
-      "title": "Prep caches the enumerated per-file fields (camera identity, timestamps, native GPS, media facts, raw payload)",
+      "title": "Prep caches the enumerated per-file fields (camera identity, timestamps, native GPS, media facts), each from an explicit group order",
       "spec": {
         "file": "photos-1-prep-workflow.md",
         "section": "12"
@@ -4482,6 +4510,20 @@
       "test": "tests/test_idempotency_cache.py::test_stale_cache_upsert_fails"
     },
     {
+      "id": "prep-execute-rejects-new-file-1",
+      "area": "prep",
+      "criticality": "high",
+      "anti": true,
+      "title": "A file that appeared anywhere prep scans after planning makes the plan stale: execute rejects it before any mutation",
+      "spec": {
+        "file": "photos-1-prep-workflow.md",
+        "section": "14.3"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_stale_plan.py::test_new_file_since_planning_rejects_plan"
+    },
+    {
       "id": "prep-execute-snapshot-1",
       "area": "prep",
       "criticality": "high",
@@ -4626,7 +4668,7 @@
       "area": "prep",
       "criticality": "high",
       "anti": false,
-      "title": "Media content fingerprint is over decoded content (ImageMagick identify / ffmpeg stream MD5), not a byte hash",
+      "title": "Media content fingerprint is over content (ImageMagick identify of decoded pixels / ffmpeg MD5 of streams as stored), not a byte hash",
       "spec": {
         "file": "photos-1-prep-workflow.md",
         "section": "9"
@@ -4724,14 +4766,14 @@
       "area": "prep",
       "criticality": "med",
       "anti": true,
-      "title": "If gpx_root resolves inside the managed tree, prep skips that subtree so GPX files are never organized",
+      "title": "A gpx_root resolving inside the managed tree is an invalid configuration, so GPX files are never organized",
       "spec": {
         "file": "photos-1-prep-workflow.md",
         "section": "3.2"
       },
       "coverage": "covered",
       "must_cover": true,
-      "test": "tests/test_workspace_prep.py::test_gpx_root_inside_managed_tree_is_skipped"
+      "test": "tests/test_workspace_prep.py::test_gpx_root_inside_managed_tree_is_refused"
     },
     {
       "id": "prep-gpx-unaware-1",
@@ -4745,7 +4787,7 @@
       },
       "coverage": "incidental",
       "must_cover": false,
-      "omit_reason": "gpx-skip test shows tracks not organized but no assertion that prep never reads/parses GPX content"
+      "omit_reason": "the track-file test shows a track is never fingerprinted or moved, but no assertion that prep never reads or parses GPX content"
     },
     {
       "id": "prep-group-by-fingerprint-class-1",
@@ -5424,7 +5466,7 @@
       "area": "prep",
       "criticality": "med",
       "anti": false,
-      "title": "A non-lowercase extension is renamed to lowercase via two no-clobber renames, collisions suffix-allocated",
+      "title": "A media file's extension ends lowercase: two no-clobber renames for a filed file, the filing move for an inbox file",
       "spec": {
         "file": "photos-1-prep-workflow.md",
         "section": "7.3"
@@ -5460,20 +5502,6 @@
       "coverage": "covered",
       "must_cover": true,
       "test": "tests/test_strays.py::test_stray_not_fingerprinted_and_not_cached"
-    },
-    {
-      "id": "prep-paired-jpeg-excluded-dedup-1",
-      "area": "prep",
-      "criticality": "med",
-      "anti": true,
-      "title": "Paired JPEGs are excluded from content-dedup so a RAW+JPEG pair is never a duplicate of itself",
-      "spec": {
-        "file": "photos-1-prep-workflow.md",
-        "section": "7.4"
-      },
-      "coverage": "covered",
-      "must_cover": true,
-      "test": "tests/test_workspace_prep.py::test_prep_workflow_plan_and_execute"
     },
     {
       "id": "prep-partial-output-never-cached-1",
@@ -5522,7 +5550,7 @@
       "area": "prep",
       "criticality": "high",
       "anti": true,
-      "title": "A planned destination colliding with an existing by-dest path must not clobber; allocate or block, by-dest untouched",
+      "title": "No planned destination lies in by-dest; every planned name is allocated free, ignoring case, never clobbering",
       "spec": {
         "file": "photos-1-prep-workflow.md",
         "section": "11.2"
@@ -5956,7 +5984,7 @@
       "area": "prep",
       "criticality": "med",
       "anti": false,
-      "title": "In a duplicate group one file is retained by folder priority (by-dest > 5 > 4 > 3 > 2 > 0-sources)",
+      "title": "In a duplicate group one file is retained by the priority of the folder it lies in when planned (by-dest > 5 > 4 > 3 > 2 > 0-sources), ties by path",
       "spec": {
         "file": "photos-1-prep-workflow.md",
         "section": "7.5"
@@ -5980,18 +6008,18 @@
       "test": "tests/test_idempotency_cache.py::test_prep_idempotency_and_by_dest_accounting"
     },
     {
-      "id": "prep-root-block-strict-dotfiles-1",
+      "id": "prep-root-dotfile-left-1",
       "area": "prep",
       "criticality": "med",
       "anti": true,
-      "title": "plain root dotfile on an initialized workspace hard-blocks",
+      "title": "a hidden root file on an initialized workspace is left where it is, never a block",
       "spec": {
         "file": "photos-1-prep-workflow.md",
         "section": "6.2"
       },
       "coverage": "covered",
       "must_cover": true,
-      "test": "tests/test_workspace_prep.py::test_initialized_root_dotfile_is_a_misplaced_entry_hard_block"
+      "test": "tests/test_workspace_prep.py::test_initialized_root_dotfile_is_left_alone"
     },
     {
       "id": "prep-root-entry-blocks-1",
@@ -6372,20 +6400,6 @@
       "test": "tests/test_concurrency.py::test_progress_summary_fields"
     },
     {
-      "id": "prep-summary-confirm-bydest-not-mutated-1",
-      "area": "prep",
-      "criticality": "med",
-      "anti": false,
-      "title": "The summary confirms by-dest was scanned read-only and not mutated",
-      "spec": {
-        "file": "photos-1-prep-workflow.md",
-        "section": "19"
-      },
-      "coverage": "incidental",
-      "must_cover": false,
-      "omit_reason": "by-dest non-mutation is asserted directly elsewhere but no test checks the summary's confirmation field"
-    },
-    {
       "id": "prep-summary-separates-categories-1",
       "area": "prep",
       "criticality": "low",
@@ -6418,7 +6432,7 @@
       "area": "prep",
       "criticality": "med",
       "anti": false,
-      "title": "The organizing timestamp is read passively in priority DateTimeOriginal -> CreateDate -> ModifyDate",
+      "title": "The organizing timestamp is read passively from the first of DateTimeOriginal -> CreateDate -> ModifyDate holding a valid time",
       "spec": {
         "file": "photos-1-prep-workflow.md",
         "section": "7.6"
@@ -6624,6 +6638,20 @@
       "test": "tests/test_geotag_finalize.py::test_finalize_assembles_package_and_is_nondestructive"
     },
     {
+      "id": "archive-whole-control-dir-1",
+      "area": "shared",
+      "criticality": "med",
+      "anti": false,
+      "title": "The package is the whole control directory but its transient files, listed with SHA-256s in the manifest and archived with it into one file in the control directory; merge's re-seal makes it again",
+      "spec": {
+        "file": "photos-shared-contract.md",
+        "section": "13.2"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_finalize.py::test_finalize_archives_the_whole_control_directory"
+    },
+    {
       "id": "archive-self-describing-manifest-1",
       "area": "shared",
       "criticality": "low",
@@ -6717,9 +6745,10 @@
         "file": "photos-shared-contract.md",
         "section": "12"
       },
-      "coverage": "incidental",
+      "coverage": "covered",
       "must_cover": false,
-      "omit_reason": "provenance exercised via log 'because' fields but no dedicated end-to-end traceability assertion"
+      "omit_reason": "provenance exercised via log 'because' fields but no dedicated end-to-end traceability assertion",
+      "test": "tests/test_geotag_execution.py::test_every_write_traces_back_to_its_decision"
     },
     {
       "id": "authored-no-autonomous-mutation-1",
@@ -6740,14 +6769,14 @@
       "area": "shared",
       "criticality": "med",
       "anti": false,
-      "title": "Withdrawing a manual GPS override undoes its effect via a pinned pre-state ledger; time/filename recomputed in place, never relocating the file",
+      "title": "Withdrawing a manual GPS override undoes its effect, the photo decided again from its own values; time/filename recomputed in place, never relocating the file",
       "spec": {
         "file": "photos-shared-contract.md",
         "section": "12"
       },
       "coverage": "covered",
       "must_cover": true,
-      "test": "tests/test_geotag_gps_ledger.py::test_withdraw_reverts_gps_only_never_time_name_or_destination"
+      "test": "tests/test_geotag_gps_ledger.py::test_a_withdrawn_pin_is_cleared"
     },
     {
       "id": "camera-geotag-reuses-1",
@@ -7412,28 +7441,28 @@
       "area": "shared",
       "criticality": "med",
       "anti": false,
-      "title": "If gpx_root resolves inside the managed tree, prep must skip that subtree during scanning so GPX is never organized",
+      "title": "A gpx_root resolving inside the managed tree is refused, so GPX is never organized",
       "spec": {
         "file": "photos-shared-contract.md",
         "section": "8.2"
       },
       "coverage": "covered",
       "must_cover": true,
-      "test": "tests/test_workspace_prep.py::test_gpx_root_inside_managed_tree_is_skipped"
+      "test": "tests/test_workspace_prep.py::test_gpx_root_inside_managed_tree_is_refused"
     },
     {
       "id": "gpx-prep-unaware-1",
       "area": "shared",
       "criticality": "med",
       "anti": true,
-      "title": "GPX is consumed only by geotag; prep never reads/parses/fingerprints/organizes/moves GPX files",
+      "title": "GPX is consumed only by geotag; prep never reads/parses/fingerprints/organizes/moves GPX files, and a track file anywhere prep inventories blocks the plan",
       "spec": {
         "file": "photos-shared-contract.md",
         "section": "8"
       },
       "coverage": "covered",
       "must_cover": true,
-      "test": "tests/test_strays.py::test_gpx_in_sources_is_an_ordinary_stray_never_parsed"
+      "test": "tests/test_strays.py::test_track_file_blocks_prep_and_stays_put"
     },
     {
       "id": "gpx-root-outside-tree-1",
@@ -7445,9 +7474,9 @@
         "file": "photos-shared-contract.md",
         "section": "8.1"
       },
-      "coverage": "none",
-      "must_cover": false,
-      "omit_reason": "no test asserts gpx_root is validated/required to be outside the 0-6 tree"
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_config_validation.py::test_gpx_root_overlapping_the_managed_folders_is_refused"
     },
     {
       "id": "handoff-runonly-refresh-no-restale-1",
@@ -7716,6 +7745,20 @@
       "test": "tests/test_geotag_finalize.py::test_complete_log_superset_and_geotag_steps"
     },
     {
+      "id": "log-names-exact-decision-1",
+      "area": "shared",
+      "criticality": "low",
+      "anti": false,
+      "title": "A logged step names its decision exactly: the per-day offset cell, the drift confirmation that replaced it, or a manual position's pin or folder fallback",
+      "spec": {
+        "file": "photos-shared-contract.md",
+        "section": "13.3"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_finalize.py::test_each_step_names_its_exact_decision"
+    },
+    {
       "id": "log-entry-append-only-1",
       "area": "shared",
       "criticality": "med",
@@ -7728,6 +7771,20 @@
       "coverage": "covered",
       "must_cover": true,
       "test": "tests/test_prep_log.py::test_recognized_move_appends_moved_to_by_dest"
+    },
+    {
+      "id": "log-every-geotag-pass-1",
+      "area": "shared",
+      "criticality": "med",
+      "anti": true,
+      "title": "Finalize logs every executed geotag pass, oldest first and matched by fingerprint, not only the current plan's operations",
+      "spec": {
+        "file": "photos-shared-contract.md",
+        "section": "13.3"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_rerun_markers.py::test_the_log_keeps_every_geotag_pass"
     },
     {
       "id": "log-fail-if-insufficient-1",
@@ -7744,6 +7801,34 @@
       "test": "tests/test_prep_log.py::test_missing_history_warns_and_marks_partial"
     },
     {
+      "id": "log-partial-geotag-history-1",
+      "area": "shared",
+      "criticality": "med",
+      "anti": true,
+      "title": "Finalize marks partial the entry of a marked photo this workspace never first corrected, and names any executed pass whose plan is missing",
+      "spec": {
+        "file": "photos-shared-contract.md",
+        "section": "13.3a"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_rerun_markers.py::test_a_history_too_thin_is_marked_partial"
+    },
+    {
+      "id": "log-carried-unchanged-1",
+      "area": "shared",
+      "criticality": "med",
+      "anti": true,
+      "title": "Each phase's log carries the earlier one unchanged, only adding; finalize and merge check it, and merge refuses a photos-26 that no longer carries photos-15",
+      "spec": {
+        "file": "photos-shared-contract.md",
+        "section": "13.0a"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_merge_plan.py::test_a_log_edited_after_finalize_blocks_merge"
+    },
+    {
       "id": "log-human-readable-json-1",
       "area": "shared",
       "criticality": "low",
@@ -7756,6 +7841,20 @@
       "coverage": "covered",
       "must_cover": true,
       "test": "tests/test_prep_log.py::test_log_is_deterministic_and_in_control_dir"
+    },
+    {
+      "id": "log-offset-in-words-1",
+      "area": "shared",
+      "criticality": "low",
+      "anti": false,
+      "title": "A logged clock offset carries a description in words beside its seconds: how far the camera's clock ran ahead of or behind UTC",
+      "spec": {
+        "file": "photos-shared-contract.md",
+        "section": "13.3"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_finalize.py::test_an_offset_is_described_in_words"
     },
     {
       "id": "log-keyed-by-fingerprint-1",
@@ -7772,18 +7871,32 @@
       "test": "tests/test_prep_log.py::test_media_journey_keyed_by_fingerprint"
     },
     {
-      "id": "log-records-gps-revert-1",
+      "id": "log-chain-of-names-1",
       "area": "shared",
       "criticality": "med",
       "anti": false,
-      "title": "The log records manual-GPS apply/change/withdraw and the pinned pre-state captured or restored",
+      "title": "Every logged move and rename records where the photo came from as well as where it went; the first step holds its original path in the dump",
       "spec": {
         "file": "photos-shared-contract.md",
         "section": "13.3"
       },
       "coverage": "covered",
       "must_cover": true,
-      "test": "tests/test_geotag_finalize.py::test_complete_log_gps_written_and_reverted"
+      "test": "tests/test_prep_log.py::test_every_move_names_where_it_came_from"
+    },
+    {
+      "id": "log-records-gps-revert-1",
+      "area": "shared",
+      "criticality": "med",
+      "anti": false,
+      "title": "The log records manual-GPS apply/change/withdraw with the position replaced or cleared",
+      "spec": {
+        "file": "photos-shared-contract.md",
+        "section": "13.3"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_finalize.py::test_complete_log_gps_written"
     },
     {
       "id": "log-retention-across-runs-1",
@@ -7798,6 +7911,20 @@
       "coverage": "covered",
       "must_cover": true,
       "test": "tests/test_control_dir.py::test_journals_are_per_run_and_retained"
+    },
+    {
+      "id": "log-decision-version-kept-1",
+      "area": "shared",
+      "criticality": "med",
+      "anti": true,
+      "title": "Each geotag execution keeps the exact decision records its plan was made from, and each logged step names that version, so its why survives the live record's later edits",
+      "spec": {
+        "file": "photos-shared-contract.md",
+        "section": "13.3a"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "tests/test_geotag_rerun_markers.py::test_the_log_keeps_every_geotag_pass"
     },
     {
       "id": "loop-dev-before-geotag-blocks-1",
@@ -8316,6 +8443,20 @@
       "coverage": "covered",
       "must_cover": true,
       "test": "tests/test_merge_execute.py::test_sealed_workspace_rerun_hardstops"
+    },
+    {
+      "id": "edit-sealed-refuses-1",
+      "area": "shared",
+      "criticality": "high",
+      "anti": true,
+      "title": "The decision editor refuses a sealed workspace: it does not open it, and a save from the console writes nothing",
+      "spec": {
+        "file": "photos-shared-contract.md",
+        "section": "13.7"
+      },
+      "coverage": "covered",
+      "must_cover": true,
+      "test": "cartographer/editor/tests/test_serve.py::test_serve_refuses_a_sealed_workspace"
     },
     {
       "id": "seal-success-then-sealed-1",

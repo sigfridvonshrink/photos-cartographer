@@ -53,7 +53,7 @@ def _ws(tmp_path, bydest=("6-photos-by-dest/Trip/a.jpg",)):
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_bytes(b"img")
     files = [{"relative_path": rel, "media_class": "image"} for rel in bydest]
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"files": files}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files}))
     return ws
 
 

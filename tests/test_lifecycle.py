@@ -19,6 +19,7 @@ written last), no-flatten, and the initialized-workspace root-file block. Mocked
 metadata, fast. photos_1_prep / photos_utils come from conftest.py.
 """
 import glob
+import json
 import os
 import types
 
@@ -60,7 +61,7 @@ def _install(monkeypatch):
         for fo in folders:
             for fn in os.listdir(fo):
                 res[os.path.join(fo, fn)] = {"DateTimeOriginal": "2023:01:02 03:04:05",
-                                             "extraction_status": "extracted_ok", "raw_payload": "{}"}
+                                             "extraction_status": "extracted_ok"}
         return res, set()
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", meta)
 
@@ -78,7 +79,7 @@ def _guard(ws):
 
 # --- initialization ----------------------------------------------------------
 
-@pytest.mark.spec("prep-init-creates-structure-1", "prep-init-moves-base-into-sources-1", "prep-post-init-base-folders-only-1")
+@pytest.mark.spec("prep-init-creates-structure-1", "prep-init-moves-base-into-sources-1", "prep-post-init-base-folders-only-1", test="TST-lifecycle-init_creates_structure_and_moves_dump_structure_preserved")
 def test_init_creates_structure_and_moves_dump_structure_preserved(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _bare(tmp_path)
@@ -107,7 +108,7 @@ def test_init_creates_structure_and_moves_dump_structure_preserved(tmp_path, mon
     assert not _plan(ws).blockers
 
 
-@pytest.mark.spec("prep-crash-init-reenters-harmlessly-1", "prep-crash-safe-rerun-1", "prep-sentinel-written-last-1")
+@pytest.mark.spec("prep-crash-init-reenters-harmlessly-1", "prep-crash-safe-rerun-1", "prep-sentinel-written-last-1", test="TST-lifecycle-guard_written_last_then_reentry_is_clean")
 def test_guard_written_last_then_reentry_is_clean(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _bare(tmp_path)
@@ -125,7 +126,7 @@ def test_guard_written_last_then_reentry_is_clean(tmp_path, monkeypatch):
 
 # --- root-file block (initialized) -------------------------------------------
 
-@pytest.mark.spec("prep-root-entry-blocks-1", "struct-base-folders-only-1")
+@pytest.mark.spec("prep-root-entry-blocks-1", "struct-base-folders-only-1", test="TST-lifecycle-loose_root_file_blocks_initialized")
 def test_loose_root_file_blocks_initialized(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _initialized(tmp_path)
@@ -141,6 +142,16 @@ def test_nonmanaged_root_dir_blocks_initialized(tmp_path, monkeypatch):
     (ws / "MyDump" / "a.jpg").write_bytes(b"img")
     plan = _plan(ws)
     assert any("Misplaced entry at workspace root" in b and "MyDump" in b for b in plan.blockers), plan.blockers
+
+
+@pytest.mark.spec("RUL-top_level_only_managed", test="TST-lifecycle-named_pipe_at_root_blocks_initialized")
+def test_named_pipe_at_root_blocks_initialized(tmp_path, monkeypatch):
+    """A top-level entry of any other kind — a named pipe — is misplaced like a file or a folder."""
+    _install(monkeypatch)
+    ws = _initialized(tmp_path)
+    os.mkfifo(str(ws / "pipe"))
+    plan = _plan(ws)
+    assert any("Misplaced entry at workspace root" in b and "pipe" in b for b in plan.blockers), plan.blockers
 
 
 def test_dump_in_sources_works_on_initialized(tmp_path, monkeypatch):
@@ -196,11 +207,30 @@ def test_second_plan_does_not_repeat_config_notice(tmp_path, monkeypatch):
 # --- re-execute on an already-prepped workspace ------------------------------
 
 def _stale_plan(ws):
-    (ws / ".photos-ingest" / "photos-10-prep-plan.json").write_text(
-        '{"plan_id": "stale", "command": "prep", "operations": []}')
+    """A plan lingering after a successful prep — whose handoff vouches for its log, as prep writes them."""
+    ctl = ws / ".photos-ingest"
+    (ctl / "photos-10-prep-plan.json").write_text('{"plan_id": "stale", "command": "prep", "operations": []}')
+    (ctl / "photos-15-prep-log.json").write_text('{"photos": {}}')
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(
+        {"files": [], "depends_on": {"prep_log": {"sha256": utils.sha256_file(str(ctl / "photos-15-prep-log.json"))}}}))
 
 
-@pytest.mark.spec("prep-dryrun-empty-sources-nothing-to-do-1")
+@pytest.mark.spec("RUL-unchecked_counts_as_changed", "BLD-prep_fast_stop_checks_log", test="TST-lifecycle-a_log_the_handoff_does_not_vouch_for_is_rewritten")
+def test_a_log_the_handoff_does_not_vouch_for_is_rewritten(tmp_path, monkeypatch):
+    """A prepped workspace whose log is not the one its handoff records — a crash between the two writes —
+    is not "nothing to do": prep runs its execution again, which rewrites both."""
+    from cartographer.reporting import Reporter, CaptureSink
+    ws = _initialized(tmp_path)
+    _stale_plan(ws)
+    rep = Reporter([CaptureSink()])
+    assert prep._prep_nothing_to_do(str(ws), rep)                       # vouched for: nothing to do
+    (ws / ".photos-ingest" / "photos-15-prep-log.json").write_text('{"photos": {"x": {}}}')
+    assert not prep._prep_nothing_to_do(str(ws), rep)                   # changed: prep runs again
+    (ws / ".photos-ingest" / "photos-15-prep-log.json").unlink()
+    assert not prep._prep_nothing_to_do(str(ws), rep)                   # gone: cannot be checked
+
+
+@pytest.mark.spec("prep-dryrun-empty-sources-nothing-to-do-1", test="TST-lifecycle-dry_run_on_prepped_workspace_with_empty_sources_is_nothing_to_do")
 def test_dry_run_on_prepped_workspace_with_empty_sources_is_nothing_to_do(tmp_path, monkeypatch):
     # dry-run shares execute's fast-stop: an already-prepped, empty-0-sources workspace has nothing to
     # validate, so it stops with "nothing to do" rather than summarizing the stale plan.
@@ -222,7 +252,7 @@ def test_dry_run_on_prepped_workspace_with_empty_sources_is_nothing_to_do(tmp_pa
     assert any("Nothing to do" in e.msg and f"{src} is empty" in e.msg for e in cap.logs())
 
 
-@pytest.mark.spec("prep-execute-empty-sources-nothing-to-do-1")
+@pytest.mark.spec("prep-execute-empty-sources-nothing-to-do-1", test="TST-lifecycle-execute_on_prepped_workspace_with_empty_sources_is_nothing_to_do")
 def test_execute_on_prepped_workspace_with_empty_sources_is_nothing_to_do(tmp_path, monkeypatch):
     # After a successful prep, 0-sources is the empty steady end-state (shared contract §6). With a
     # (now-stale) saved plan present, re-running execute must stop fast with "nothing to do" rather
@@ -242,6 +272,28 @@ def test_execute_on_prepped_workspace_with_empty_sources_is_nothing_to_do(tmp_pa
     assert ei.value.code == 0 and ran == []                    # nothing to do = clean success, no execute
     src = utils.folder_name("sources")                          # message uses the CONFIGURED name
     assert any("Nothing to do" in e.msg and f"{src} is empty" in e.msg for e in cap.logs())
+
+
+@pytest.mark.spec("RUL-prepped_nothing_to_do", "RUL-emptied_folders_removed",
+                  test="TST-lifecycle-a_folder_left_in_the_inbox_is_work")
+def test_a_folder_left_in_the_inbox_is_work(tmp_path, monkeypatch):
+    """A prepped workspace whose inbox holds only an empty folder is not "nothing to do": geotag counts any
+    entry there, so prep plans the folder's removal and its execution carries it out, leaving the inbox empty."""
+    from cartographer.reporting import Reporter, CaptureSink, use_reporter
+    _install(monkeypatch)
+    ws = _initialized(tmp_path)
+    _stale_plan(ws)
+    (ws / "0-sources" / "card" / "DCIM").mkdir(parents=True)
+    assert not prep._prep_nothing_to_do(str(ws), Reporter([CaptureSink()]))
+    monkeypatch.chdir(ws)
+    with use_reporter(Reporter([CaptureSink()])):
+        for command in ("plan", "execute"):
+            try:
+                prep.run(types.SimpleNamespace(command=command, jobs=1))
+            except SystemExit as e:
+                assert not e.code, command
+    assert os.listdir(ws / "0-sources") == []
+    assert prep._prep_nothing_to_do(str(ws), Reporter([CaptureSink()]))
 
 
 def test_execute_with_media_in_sources_does_not_short_circuit(tmp_path, monkeypatch):
@@ -327,7 +379,7 @@ def test_execute_without_plan_runs_plan_first_even_on_empty_sources(tmp_path, mo
 
 # --- no-flatten --------------------------------------------------------------
 
-@pytest.mark.spec("prep-no-flatten-sources-1")
+@pytest.mark.spec("prep-no-flatten-sources-1", "RUL-inbox_kept_as_dumped", "BLD-planned_paths_tracked", test="TST-lifecycle-no_flatten_organizes_subtree_without_consolidation")
 def test_no_flatten_organizes_subtree_without_consolidation(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _initialized(tmp_path)
@@ -352,3 +404,107 @@ def test_no_flatten_same_name_distinct_subtrees_both_survive(tmp_path, monkeypat
     prep.PlanExecutor(str(ws)).execute(_plan(ws))
     organized = glob.glob(str(ws / "5-photos-by-date" / "**" / "*.jpg"), recursive=True)
     assert len(organized) == 2, organized                     # both survive with distinct names
+
+
+@pytest.mark.spec("RUL-structure_built_once", test="TST-lifecycle-prep_builds_the_structure_once_and_never_removes_a_folder")
+def test_prep_builds_the_structure_once_and_never_removes_a_folder(tmp_path, monkeypatch):
+    _install(monkeypatch)
+    ws = _bare(tmp_path)
+    (ws / "photo.jpg").write_bytes(b"img")
+    first = _plan(ws)
+    assert {op.destination for op in first.operations if op.type == "mkdir"} >= set(MANAGED)   # created at init
+    prep.PlanExecutor(str(ws)).execute(first)
+    assert list((ws / "2-missing-metadata").iterdir()) == []   # empty managed folders...
+
+    (ws / "0-sources" / "later.jpg").write_bytes(b"img2")      # a later, non-init run
+    later = _plan(ws)
+    assert not later.blockers, later.blockers
+    assert not {op.destination for op in later.operations if op.type == "mkdir"} & set(MANAGED)
+    prep.PlanExecutor(str(ws)).execute(later)
+    for d in MANAGED:
+        assert (ws / d).is_dir(), d                            # ...are never removed, empty or not
+
+    os.rmdir(ws / "2-missing-metadata")                        # lost out-of-band: blocks, not rebuilt
+    blocked = _plan(ws)
+    assert any("2-missing-metadata" in b for b in blocked.blockers), blocked.blockers
+    assert not any(op.type == "mkdir" and op.destination == "2-missing-metadata" for op in blocked.operations)
+    assert not (ws / "2-missing-metadata").exists()
+
+
+@pytest.mark.spec("RUL-more_dumps_until_merge", test="TST-lifecycle-new_dump_after_successful_geotag_is_organized")
+def test_new_dump_after_successful_geotag_is_organized(tmp_path, monkeypatch):
+    """A dump arriving after geotag executed and finalized is prep's again: the loop resumes from prep."""
+    _install(monkeypatch)
+    ws = _initialized(tmp_path)
+    ctl = ws / ".photos-ingest"
+    (ctl / "photos-25-execution-summary.json").write_text('{"status": "success"}')
+    (ctl / "photos-26-complete-log.json").write_text('{"photos": {}}')
+    (ctl / "photos-26-archive-manifest.json").write_text('{"artifact_name": "m"}')
+    (ws / "6-photos-by-dest" / "Trip").mkdir()
+    (ws / "6-photos-by-dest" / "Trip" / "2023-01-02--03-04-05.jpg").write_bytes(b"geotagged")
+    (ws / "0-sources" / "b.jpg").write_bytes(b"later")
+    plan = _plan(ws)
+    assert not plan.blockers, plan.blockers
+    moves = [op for op in plan.operations if op.type == "move_no_clobber" and op.source.endswith("b.jpg")]
+    assert len(moves) == 1 and "5-photos-by-date" in moves[0].destination
+
+
+@pytest.mark.spec("RUL-prep_takes_no_decision", test="TST-lifecycle-prep_takes_no_decision")
+def test_prep_takes_no_decision(tmp_path, monkeypatch):
+    """Prep asks nothing and carries no decision field: it organizes from the workspace and its config."""
+    _install(monkeypatch)
+    ws = _initialized(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"img")
+    monkeypatch.setattr("builtins.input", lambda *a: pytest.fail("prep asked the user something"))
+    plan = _plan(ws)
+    assert not plan.blockers
+    assert "user_decision" not in plan.to_json()
+    prep.PlanExecutor(str(ws)).execute(plan)
+    records = glob.glob(str(ws / ".photos-ingest" / "photos-1*.json"))
+    assert records                                                        # the plan, the handoff, the log
+    for rec in records:
+        assert "user_decision" not in open(rec).read(), rec
+
+
+@pytest.mark.spec("RUL-record_whole_each_phase", "archive-complete-each-phase-1", test="TST-lifecycle-a_prep_only_workspace_has_a_whole_record")
+def test_a_prep_only_workspace_has_a_whole_record(tmp_path, monkeypatch):
+    """Prepped and never geotagged, the workspace still holds a whole record of prep: every photo's
+    journey keyed by its fingerprint, ending where the photo now is, with prep's database snapshot beside
+    it — and nothing of geotag's or merge's is needed for it."""
+    _install(monkeypatch)
+    ws = _initialized(tmp_path)
+    for name in ("a.jpg", "b.jpg"):
+        (ws / "0-sources" / name).write_bytes(b"img-" + name.encode())
+    prep.PlanExecutor(str(ws)).execute(_plan(ws))
+    ctl = ws / ".photos-ingest"
+    log = json.load(open(ctl / "photos-15-prep-log.json"))["photos"]
+    assert len(log) == 2
+    for fp, entry in log.items():
+        assert entry["journey"] and all(step["phase"] == "prep" for step in entry["journey"])
+        assert (ws / entry["prep_path"]).is_file()
+    assert (ctl / "photos-15-prep-ingest.db").is_file()
+    assert not glob.glob(str(ctl / "photos-2*")) and not glob.glob(str(ctl / "photos-3*"))
+
+
+@pytest.mark.spec("RUL-folder_found_by_role", test="TST-lifecycle-renamed_folders_found_by_role")
+def test_renamed_folders_are_built_and_used_by_role(tmp_path, monkeypatch):
+    """The user names the managed folders; prep finds each by its role. With the inbox and the photos
+    band renamed in the seed defaults, init builds the renamed folders and organizes into them — no
+    default name is created or written into."""
+    import copy
+    seed = copy.deepcopy(utils.DEFAULT_CONFIG)
+    seed["folders"]["sources"] = "0-inbox"
+    seed["folders"]["photos_by_date"] = "5-by-date"
+    seed.pop("jobs", None)
+    defaults = tmp_path / "defaults.json"
+    defaults.write_text(json.dumps(seed))
+    monkeypatch.setenv("PHOTOS_CARTOGRAPHER_CONFIG", str(defaults))
+    _install(monkeypatch)
+    ws = _bare(tmp_path)
+    (ws / "photo.jpg").write_bytes(b"img")
+    plan = _plan(ws)
+    assert not plan.blockers, plan.blockers
+    prep.PlanExecutor(str(ws)).execute(plan)
+    assert (ws / "0-inbox").is_dir() and list((ws / "0-inbox").iterdir()) == []
+    assert len(glob.glob(str(ws / "5-by-date" / "**" / "*.jpg"), recursive=True)) == 1
+    assert not (ws / "0-sources").exists() and not (ws / "5-photos-by-date").exists()

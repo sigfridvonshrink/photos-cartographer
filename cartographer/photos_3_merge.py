@@ -32,21 +32,22 @@ The script sits beside `photos_utils.py` and imports the shared infrastructure f
 """
 import argparse
 import concurrent.futures
-import errno
+import glob
 import json
 import os
 import sys
 from datetime import datetime, timezone
 
 from .photos_utils import (
-    CONFIG, CONTROL_DIR, config_path, handoff_path, guard_path, is_sealed,
-    validate_config, validate_merge_config, sha256_file, sha256_text, media_class_for_ext,
-    folder_name, FOLDER_ROLES, missing_managed_folders, handoff_content_fingerprint,
+    CONFIG, CONTROL_DIR, FINALIZED_MEDIA_ARTIFACT, finalized_media_path, config_path, handoff_path, guard_path, is_sealed,
+    validate_config, load_config, validate_merge_config, library_place_error, code_fingerprint, sha256_file, sha256_text, media_class_for_ext,
+    folder_name, FOLDER_ROLES, missing_managed_folders, top_level_links, misplaced_top_level_entries, handoff_content_fingerprint, handoff_filename_format_blocker,
     folders_fingerprint, media_extensions_fingerprint,
     verify_json_dependency, json_dependency, write_json_artifact, write_versioned_json, is_library, write_library_marker,
     library_marker_path, allocate_suffix, suffix_root, max_suffix, ContentHasher, WorkspaceCache,
-    journal_path, take_zfs_snapshot, _move_no_clobber, write_db_snapshot, reseal_archival_package,
-    write_sealed_marker, WorkspaceLock, LibraryLock, XDEV_TMP_PREFIX, XDEV_TMP_SUFFIX,
+    journal_path, take_zfs_snapshot, zfs_dataset, _move_no_clobber, get_imagemagick_version, write_db_snapshot, reseal_archival_package,
+    write_sealed_marker, likely_new_dump, entries_not_carried, prep_log_path, prep_log_blocker, WorkspaceLock, LibraryLock, XDEV_TMP_PREFIX, XDEV_TMP_SUFFIX,
+    workspace_volume_error,
 )
 from .reporting import get_reporter, emit_next_step
 
@@ -119,6 +120,10 @@ class MergeWorkflow:
         self.workspace_root = workspace_root
         self.handoff = None
         self.calib_plan = None      # photos-24 parsed once in preflight; reused by the plan builder
+        # Library fingerprints this run took from the cache / read from the file. Reported, never put in
+        # the plan, which an unchanged re-plan must leave byte-identical (shared §4).
+        self.library_fp_counts = {"cached": 0, "read": 0}
+        self.engine_rechecks = 0    # by-dest photos fingerprinted again under another ImageMagick
 
     # --- preflight (merge spec §3) -------------------------------------------
 
@@ -138,8 +143,8 @@ class MergeWorkflow:
         if is_sealed(ws):
             blockers.append("Workspace is SEALED (a prior merge fully succeeded): merge will not run. "
                             "Nothing was touched — move any new media into a fresh workspace.")
-            if self._root_files() or self._entries(folder_name('sources')):
-                warnings.append("A likely new dump is present (files at the workspace root or in "
+            if likely_new_dump(ws):
+                warnings.append("A likely new dump is present (at the workspace root or in "
                                 f"{folder_name('sources')}/). A sealed workspace is final; move it into "
                                 "a fresh workspace by hand — merge left it exactly where it is.")
             return blockers, warnings, info
@@ -149,9 +154,9 @@ class MergeWorkflow:
             blockers.append("Not an initialized workspace (no photos-00-workspace-guard) — "
                             "run prep first: `photos-cartographer prep plan` then `photos-cartographer prep execute`.")
             return blockers, warnings, info
-        root_syms = self._root_symlinks()
+        root_syms = top_level_links(ws)
         if root_syms:
-            blockers.append(f"Forbidden symlink at the workspace root: {root_syms[0]}. Symlinks are "
+            blockers.append(f"Forbidden symlink at the workspace root: {', '.join(root_syms)}. Symlinks are "
                             "never followed; remove it before merging.")
             return blockers, warnings, info
         # 0c. The managed 0-6 structure must be intact (§3 precond 0c) — merge never creates/repairs it.
@@ -161,16 +166,11 @@ class MergeWorkflow:
                             f"{', '.join(struct_missing)}. Restore the 0-6 structure (merge never "
                             "creates or repairs it) before merging.")
             return blockers, warnings, info
-        loose = self._root_files()
-        if loose:
-            blockers.append(f"Loose file at the workspace root (dumps belong in "
-                            f"{folder_name('sources')}/): {loose[0]}. The base must hold only folders.")
-            return blockers, warnings, info
-        loose_dirs = self._root_nonmanaged_dirs()
-        if loose_dirs:
-            blockers.append(f"Misplaced folder at the workspace root (dumps belong in "
-                            f"{folder_name('sources')}/): {loose_dirs[0]}. The base must hold only "
-                            "the managed folders.")
+        misplaced = misplaced_top_level_entries(ws)
+        if misplaced:
+            blockers.append(f"Misplaced entry at workspace root (dumps belong in "
+                            f"{folder_name('sources')}/): {', '.join(misplaced)}. The top level holds only "
+                            "the managed folders and hidden entries.")
             return blockers, warnings, info
 
         # Config (read-only) — must exist and be valid; merge's data path never writes it.
@@ -179,16 +179,14 @@ class MergeWorkflow:
             blockers.append("Workspace config photos-00-config.json is missing — run prep first: `photos-cartographer prep plan` then `photos-cartographer prep execute`.")
             return blockers, warnings, info
         try:
-            with open(cfg_p) as f:
-                cfg = json.load(f)
-            validate_config(cfg)
+            load_config(ws)                 # the workspace's file, whole and checked, replaces CONFIG
         except ValueError as e:
             blockers.append(f"Invalid workspace config: {e}")
             return blockers, warnings, info
         except Exception as e:
             blockers.append(f"Workspace config could not be read: {e}")
             return blockers, warnings, info
-        CONFIG.update(cfg)              # adopt the seeded config as authoritative for this run
+        cfg = CONFIG
 
         # 5. Config valid + library_root is a blessed library (§3 precond 5; merge spec §4). The
         # deep merge-config validation and the marker check run before the library lock (§12).
@@ -218,6 +216,12 @@ class MergeWorkflow:
         info["handoff_sha256"] = sha256_file(ho_p)
         self.handoff = handoff
 
+        # The filename format is fixed once prep has named the files in it (shared §6).
+        fmt_blocker = handoff_filename_format_blocker(handoff)
+        if fmt_blocker:
+            blockers.append(fmt_blocker)
+            return blockers, warnings, info
+
         # ---- Gathered preconditions (report every problem at once) ----------
         # External-tool preflight: merge fingerprints library targets with ImageMagick (magick) for
         # de-dup/no-clobber identity. Its absence degrades — affected files report fingerprint-failed —
@@ -236,11 +240,18 @@ class MergeWorkflow:
         calib_plan = self._check_geotag_finalized(ws, handoff, blockers)
         self.calib_plan = calib_plan       # stash for the plan builder (plan/dry-run)
 
-        # 2. The workspace was finalized (§3 precond 2).
+        # 2. The workspace was finalized (§3 precond 2), from the prep log the handoff vouches for: one
+        # missing, unreadable or changed since was touched after finalize, as finalize itself would refuse.
+        log_blk = prep_log_blocker(ws, handoff)
+        if log_blk:
+            blockers.append(f"{log_blk[0].upper() + log_blk[1:]}, then `photos-cartographer geotag finalize`, "
+                            "then merge.")
         if not os.path.exists(complete_log_path(ws)):
             blockers.append("The workspace has not been finalized (photos-26-complete-log.json is "
                             "missing). Run the finalize command (`photos-cartographer geotag finalize`) first, "
                             "then merge.")
+        elif not log_blk:
+            self._check_logs_carried(ws, blockers)
         if not os.path.exists(archive_manifest_path(ws)):
             blockers.append("The archival package is incomplete (photos-26-archive-manifest.json is "
                             "missing) — run `photos-cartographer geotag finalize` before merging.")
@@ -252,8 +263,35 @@ class MergeWorkflow:
         # the handoff⨝photos-24 enumeration because geotag renamed by-dest without re-keying it.
         if calib_plan is not None:
             self._check_prep_consistency(handoff, calib_plan, info["library_root"], blockers)
+            self._check_unchanged_since_finalize(ws, calib_plan, info["library_root"], blockers)
 
         return blockers, warnings, info
+
+    def _check_unchanged_since_finalize(self, ws, calib_plan, library_root, blockers):
+        """Every by-dest photo still there is as finalize recorded it, by size and modification time: an
+        edit after finalize — a metadata write that leaves the pixels, and so the fingerprint, alone —
+        would otherwise reach the library unseen (shared §9). A photo gone is merge's resume case."""
+        try:
+            with open(finalized_media_path(ws)) as f:
+                media = (json.load(f) or {}).get("media") or {}
+        except (OSError, ValueError, AttributeError):
+            blockers.append(f"The finalized record {FINALIZED_MEDIA_ARTIFACT} is missing or unreadable — run "
+                            "`photos-cartographer geotag finalize` before merging.")
+            return
+        changed = []
+        for e in self.enumerate_finalized(calib_plan, library_root):
+            rel = e["by_dest_relpath"]
+            try:
+                st = os.stat(os.path.join(ws, rel))
+            except OSError:
+                continue
+            rec = media.get(rel) or {}
+            if (rec.get("size"), rec.get("mtime_ns")) != (st.st_size, st.st_mtime_ns):
+                changed.append(rel)
+        if changed:
+            blockers.append(f"{len(changed)} photo(s) changed since the workspace was finalized (e.g. {changed[0]}) "
+                            "— what reaches the library must be what geotag treated. Run prep, then geotag "
+                            "plan, execute and finalize again before merging.")
 
     def _check_geotag_finalized(self, ws, handoff, blockers):
         """Preconditions 1 and 1a. Geotag must have produced an executed plan (photos-24) with a
@@ -295,11 +333,7 @@ class MergeWorkflow:
             blockers.append("The geotag plan records no handoff dependency — re-run geotag and "
                             "re-finalize before merging.")
             return plan
-        if dep.get("dependency_type") == "handoff_content":
-            ok = handoff_content_fingerprint(handoff) == dep.get("content_fingerprint")
-        else:
-            ok = verify_json_dependency(dep, ws)   # legacy byte-hash handoff dependency
-        if not ok:
+        if handoff_content_fingerprint(handoff) != dep.get("content_fingerprint"):
             blockers.append("By-dest has changed since geotag was finalized (the current handoff's "
                             "content fingerprint no longer matches the one photos-24-executable-plan.json "
                             "recorded). Re-run geotag and re-finalize before merging — a present but "
@@ -393,6 +427,7 @@ class MergeWorkflow:
         fingerprint (append-at-max+1). Non-mutating except populating the library-file fingerprint
         cache. Returns the serialized plan dict (the photos-30-merge-plan.json body)."""
         entries = self.enumerate_finalized(calib_plan, library_root)
+        earlier = self._earlier_moves(ws)
         # Per-library-dir occupancy: existing library names + this run's whole incoming batch (+ any
         # name allocated so far). max_suffix over it gives max(library, incoming) for append-at-max+1.
         batch_by_dir = {}
@@ -424,6 +459,15 @@ class MergeWorkflow:
                 claimed_lower[lib_dest] = {n.lower() for n in (os.listdir(d) if os.path.isdir(d) else [])}
             return claimed_lower[lib_dest]
 
+        def _case_variant(target):
+            """A library file whose name differs from the target's only in case, or None."""
+            d, name = os.path.split(target)
+            try:
+                return next((os.path.join(d, n) for n in sorted(os.listdir(d))
+                             if n.lower() == name.lower() and n != name), None)
+            except OSError:
+                return None
+
         def _alloc_renamed(e, collision):
             """Suffix-allocate a safe destination name (append-at-max+1, case-insensitive) and return
             the renamed_incoming rec fields. Used for a different-content collision AND a case-only
@@ -442,44 +486,71 @@ class MergeWorkflow:
 
         dests, blockers = {}, []
         totals = {"placed_new": 0, "already_present": 0, "renamed_for_library": 0, "blocked": 0}
+        engine_change = self._engine_change()
         for e in entries:
             src_abs = os.path.join(ws, e["by_dest_relpath"])
             if not os.path.exists(src_abs):
-                continue                       # finalized entry already moved/absent: resume case
+                # Moved by an earlier run: carried forward from the plan that moved it, so the merge log
+                # still says where it landed (§8.3). Never left out quietly.
+                rec = self._carried_forward(e, earlier.get(e["content_fingerprint"]), blockers)
+                totals[rec["disposition"] if rec["disposition"] != "renamed_incoming"
+                       else "renamed_for_library"] += 1
+                dests.setdefault(e["lib_dest"], {"files": []})["files"].append(rec)
+                continue
             st = os.stat(src_abs)
             rec = {"by_dest_source": e["by_dest_relpath"], "content_fingerprint": e["content_fingerprint"],
                    "preconditions": {"size": st.st_size, "mtime_ns": st.st_mtime_ns,
                                      "content_fingerprint": e["content_fingerprint"]}}
             target = e["library_target"]
+            if engine_change:
+                # Prep's fingerprint was taken by another ImageMagick: compared with a library file's taken
+                # now, it could call the same photo different. Taken again; kept if it still matches.
+                self.engine_rechecks += 1
+                fp = self._fingerprint_library_file(src_abs)
+                if not (fp.get("status") == "valid" and fp.get("value") == e["content_fingerprint"]):
+                    was, now = engine_change
+                    reason = (f"{e['by_dest_relpath']}: its fingerprint under ImageMagick {now} is not the one "
+                              f"prep took under {was or 'an unrecorded version'}" if fp.get("status") == "valid"
+                              else f"{e['by_dest_relpath']} could not be fingerprinted: "
+                                   f"{fp.get('error') or 'fingerprint failed'}")
+                    rec.update({"disposition": "blocked", "library_target": target,
+                                "resolved_name": e["final_name"], "renamed_for_library": False,
+                                "blocked_reason": reason})
+                    totals["blocked"] += 1
+                    blockers.append(reason + " — left in by-dest.")
+                    dests.setdefault(e["lib_dest"], {"files": []})["files"].append(rec)
+                    continue
             cl = _claimed(e["lib_dest"])
-            case_taken = e["final_name"].lower() in cl                # library/sibling case-variant exists
-            if not os.path.exists(target):
-                if not case_taken:
+            # The library file in the way: at the target itself, or under a name differing only in case —
+            # one place on a case-insensitive library, and the same photo perhaps on any. Either is settled
+            # by content, never renamed around unseen.
+            in_way = target if os.path.exists(target) else _case_variant(target)
+            if in_way is None:
+                if e["final_name"].lower() not in cl:
                     rec.update({"disposition": "placed_new", "library_target": target,
                                 "resolved_name": e["final_name"], "renamed_for_library": False})
                     totals["placed_new"] += 1
                     cl.add(e["final_name"].lower())
                 else:
-                    # No exact-case file to fingerprint: the clash is a name-case collision (would
-                    # clobber on a case-insensitive library), not a content collision — rename around it.
+                    # A sibling placed by this run took the name in another case: rename around it.
                     rec.update(_alloc_renamed(e, {"path": None, "reason": "case-insensitive name clash"}))
                     totals["renamed_for_library"] += 1
             else:
-                lib_fp, fp_err = self._library_fingerprint(target, cache)
+                lib_fp, fp_err = self._library_fingerprint(in_way, cache)
                 if lib_fp is None:
-                    reason = f"library file at {target} could not be fingerprinted: {fp_err}"
+                    reason = f"library file at {in_way} could not be fingerprinted: {fp_err}"
                     rec.update({"disposition": "blocked", "library_target": target,
                                 "resolved_name": e["final_name"], "renamed_for_library": False,
                                 "blocked_reason": reason})
                     totals["blocked"] += 1
                     blockers.append(reason + " — left in by-dest.")
                 elif lib_fp == e["content_fingerprint"]:
-                    rec.update({"disposition": "already_present", "library_target": target,
-                                "resolved_name": e["final_name"], "renamed_for_library": False})
+                    rec.update({"disposition": "already_present", "library_target": in_way,
+                                "resolved_name": os.path.basename(in_way), "renamed_for_library": False})
                     totals["already_present"] += 1
                     cl.add(e["final_name"].lower())
                 else:
-                    rec.update(_alloc_renamed(e, {"path": target, "fingerprint": lib_fp}))
+                    rec.update(_alloc_renamed(e, {"path": in_way, "fingerprint": lib_fp}))
                     totals["renamed_for_library"] += 1
             dests.setdefault(e["lib_dest"], {"files": []})["files"].append(rec)
 
@@ -493,14 +564,14 @@ class MergeWorkflow:
             "handoff": {"dependency_type": "handoff_content", "artifact_name": HANDOFF_ARTIFACT,
                         "content_fingerprint": handoff_content_fingerprint(self.handoff)},
             "config_fingerprint": sha256_file(config_path(ws)),
+            "code_fingerprint": code_fingerprint(),   # carried out only by the code that made it
             "folders_fingerprint": folders_fingerprint(),
             "media_extensions_fingerprint": media_extensions_fingerprint(),
+            "image_engine_version": get_imagemagick_version(),
         }
         plan = {
             "artifact_type": "merge_plan", "artifact_name": MERGE_PLAN_ARTIFACT,
             "schema_version": MERGE_PLAN_SCHEMA_VERSION, "library_root": library_root,
-            "placement_policy": (CONFIG.get("merge") or {}).get("placement_policy"),
-            "collision_policy": (CONFIG.get("merge") or {}).get("collision_policy"),
             "depends_on": depends_on, "destinations": dests, "totals": totals, "blockers": blockers,
         }
         plan["plan_id"] = sha256_text(json.dumps(
@@ -508,17 +579,71 @@ class MergeWorkflow:
             sort_keys=True))[:16]
         return plan
 
+    def _earlier_moves(self, ws):
+        """{content fingerprint: [(plan id, record), ...]}, latest plan first, for every photo an earlier
+        merge plan of this workspace placed or found already in the library — the saved plan and every
+        plan a re-plan set aside. Whether a move happened is settled by the library, not the journal:
+        a move can finish without its journal entry (a crash just after it, a Ctrl-C while it ran)."""
+        cur = merge_plan_path(ws)
+        stem, ext = os.path.splitext(cur)
+        found = {}
+        for p in reversed(sorted(glob.glob(glob.escape(stem) + "-[0-9]*" + ext)) + [cur]):
+            try:
+                with open(p) as f:
+                    plan = json.load(f)
+                pid = plan["plan_id"]
+            except (OSError, ValueError, KeyError, TypeError):
+                continue
+            for d in (plan.get("destinations") or {}).values():
+                for rec in d.get("files") or []:
+                    if rec.get("disposition") != "blocked" and rec.get("library_target"):
+                        found.setdefault(rec.get("content_fingerprint"), []).append(
+                            (rec.get("carried_from_plan") or pid, rec))
+        return found
+
+    def _carried_forward(self, e, earlier, blockers):
+        """The plan record of a finalized photo no longer in by-dest: the latest earlier plan's record
+        whose library place, fingerprinted again — never from the cache — holds it; otherwise a
+        blocker naming why."""
+        if not earlier:
+            reason = (f"{e['by_dest_relpath']} is no longer in the workspace and no earlier merge plan "
+                      "placed it in the library")
+        else:
+            for pid, rec in earlier:
+                if self._verify_fp(rec["library_target"], e["content_fingerprint"]):
+                    return dict(rec, carried_from_plan=pid)
+            places = ", ".join(sorted({rec["library_target"] for _pid, rec in earlier}))
+            reason = (f"{e['by_dest_relpath']} is no longer in the workspace, and the library place an "
+                      f"earlier merge plan gave it ({places}) no longer holds it")
+        blockers.append(reason + ".")
+        return {"by_dest_source": e["by_dest_relpath"], "content_fingerprint": e["content_fingerprint"],
+                "disposition": "blocked", "library_target": e["library_target"],
+                "resolved_name": e["final_name"], "renamed_for_library": False, "blocked_reason": reason}
+
+    def _engine_change(self):
+        """(prep's ImageMagick version, the current one) when they differ, else None. A change is a reason
+        to check prep's fingerprints, not proof they changed. A handoff that records none counts as
+        changed; an unknown current version cannot have changed any value, for nothing fingerprints."""
+        current = get_imagemagick_version()
+        prep_version = (((self.handoff or {}).get("depends_on") or {}).get("cache") or {}).get("image_engine_version")
+        if current in (None, "unknown") or prep_version == current:
+            return None
+        return prep_version, current
+
     def _library_fingerprint(self, abs_path, cache):
         """Content fingerprint of a resident library file, cached by path+size/mtime so it is read at
-        most once per run / across re-runs while unchanged (§7). Returns (value, None) on success or
+        most once per run / across re-runs while unchanged and the image engine unchanged (§7). Returns (value, None) on success or
         (None, reason) if it cannot be fingerprinted."""
         try:
             st = os.stat(abs_path)
         except OSError as e:
             return None, str(e)
-        hit = cache.get_cached_library_fingerprint(abs_path, st.st_size, st.st_mtime_ns) if cache else None
+        hit = (cache.get_cached_library_fingerprint(abs_path, st.st_size, st.st_mtime_ns, get_imagemagick_version())
+               if cache else None)
         if hit and hit.get("value"):
+            self.library_fp_counts["cached"] += 1
             return hit["value"], None
+        self.library_fp_counts["read"] += 1
         fp = self._fingerprint_library_file(abs_path)
         if fp.get("status") == "valid" and fp.get("value"):
             if cache:
@@ -548,37 +673,20 @@ class MergeWorkflow:
         if not (ho and ho.get("dependency_type") == "handoff_content"
                 and handoff_content_fingerprint(self.handoff) == ho.get("content_fingerprint")):
             stale.append("handoff content fingerprint changed")
-        cfp = dep.get("config_fingerprint")
-        if cfp and cfp != sha256_file(config_path(ws)):
+        if dep.get("code_fingerprint") != code_fingerprint():
+            stale.append("made by another build of cartographer")
+        if dep.get("config_fingerprint") != sha256_file(config_path(ws)):
             stale.append("config changed")
+        if dep.get("image_engine_version") != get_imagemagick_version():
+            stale.append("ImageMagick version changed")
         for k, cur in (("folders_fingerprint", folders_fingerprint()),
                        ("media_extensions_fingerprint", media_extensions_fingerprint())):
-            if dep.get(k) and dep.get(k) != cur:
+            if dep.get(k) != cur:
                 stale.append(f"{k} changed")
         return stale
 
     def do_plan(self, ws, library_root):
         reporter = get_reporter()
-        # Refuse re-plan only over a merge that actually MOVED files but is not sealed — i.e. status
-        # `partial` (some placed, a blocker left in by-dest) or `success` (all placed, crashed before
-        # the seal). Such a run already moved finalized photos into the library (their by-dest sources
-        # are gone), and re-planning would `continue` past them (build_merge_plan) and omit them from
-        # the merge log a later execute writes — an already-placed *renamed* file can't be reliably
-        # re-located on a fresh plan. The correct resume is `execute`, which reuses the saved photos-30
-        # and finishes/seals. A `failed` (all blocked → nothing placed) or `rejected` (pre-mutation
-        # abort) summary moved NOTHING — every source is still in by-dest — so re-planning after it is
-        # safe and allowed (and if upstream inputs changed, execute's staleness check forces a re-plan
-        # anyway). do_plan is only reached on an UNSEALED workspace (precondition 0 blocks a sealed one).
-        if os.path.exists(merge_plan_path(ws)) and \
-                _json_get(merge_summary_path(ws), "status") in ("partial", "success"):
-            reporter.log(f"A prior merge is in flight but not sealed ({MERGE_SUMMARY_ARTIFACT} present on an "
-                  "unsealed workspace): some photos are already in the library. Run `execute` to resume "
-                  f"the saved {MERGE_PLAN_ARTIFACT} — it finishes any remaining moves, writes a log "
-                  "covering every file, and seals. Re-planning now would drop the already-moved files "
-                  f"from the merge log. (To re-plan from scratch instead, remove {MERGE_SUMMARY_ARTIFACT} "
-                  "first.)")
-            emit_next_step(reporter, "`merge execute` to resume the in-flight merge and seal.")
-            return 2
         cache = WorkspaceCache(ws)
         try:
             plan = self.build_merge_plan(ws, self.calib_plan, library_root, cache)
@@ -590,6 +698,13 @@ class MergeWorkflow:
         reporter.log(f"Wrote {MERGE_PLAN_ARTIFACT}: plan {plan['plan_id']} — {t['placed_new']} new, "
               f"{t['already_present']} already-present, {t['renamed_for_library']} renamed, "
               f"{t['blocked']} blocked.", stream="stdout")
+        if self.engine_rechecks:
+            reporter.log(f"  ImageMagick differs from prep's: {self.engine_rechecks} photo(s) fingerprinted again "
+                         "to check prep's fingerprints.", stream="stdout")
+        c = self.library_fp_counts
+        if c["cached"] or c["read"]:
+            reporter.log(f"  Library files fingerprinted: {c['read']} read, {c['cached']} reused from the cache.",
+                         stream="stdout")
         reporter.log(f"  Plan saved to {mpp}", stream="stdout")
         if _mp_bak:
             reporter.log(f"  Previous plan backed up to {_mp_bak}", stream="stdout")
@@ -627,14 +742,16 @@ class MergeWorkflow:
               f"renamed: {t.get('renamed_for_library', 0)}, blocked: {t.get('blocked', 0)}", stream="stdout")
         _bl = plan.get("blockers") or []
         if _bl:
-            reporter.log(f"  BLOCKERS: {len(_bl)} — execute will refuse:", stream="stdout")
+            reporter.log(f"  BLOCKED: {len(_bl)} — execute leaves these in {folder_name('photos_by_dest')}/, "
+                         "merges the rest, and ends partial without sealing:", stream="stdout")
             for b in _bl[:20]:
                 reporter.log(f"    - {b}", stream="stdout")
             if len(_bl) > 20:
                 reporter.log(f"    … and {len(_bl) - 20} more", stream="stdout")
         reporter.log(f"  Full plan: {p}", stream="stdout")
         if _bl:
-            emit_next_step(reporter, "resolve the blocker(s) shown, then re-run `merge plan`.")
+            emit_next_step(reporter, "resolve the blocker(s) shown and re-run `merge plan`, or `merge execute` "
+                                     "to merge the rest now.")
         else:
             emit_next_step(reporter, "`merge execute` to merge into the library.")
         return 0
@@ -646,12 +763,6 @@ class MergeWorkflow:
         or a by-dest source is the planned content before removing/finishing a move."""
         r = self._fingerprint_library_file(path)
         return r.get("status") == "valid" and r.get("value") == expected_fp
-
-    def _verify_copy(self, tmp_path, expected_fp):
-        """Cross-fs copy-verify hook (§11.2): raise if the temp copy's fingerprint != the planned one
-        (a torn / silently-corrupted copy), aborting the move before it is exposed under the target."""
-        if not self._verify_fp(tmp_path, expected_fp):
-            raise OSError(errno.EIO, f"library copy fingerprint mismatch (torn copy) for {tmp_path}")
 
     @staticmethod
     def _plan_kind(disp):
@@ -670,24 +781,27 @@ class MergeWorkflow:
         out = {"by_dest_source": src_rel, "library_path": target, "content_fingerprint": fp,
                "final_kind": None, "removed": False, "newly": False, "blocker": None}
 
-        if journal.get(src_rel) == "confirmed":           # already terminal in a prior run
-            out["final_kind"] = self._plan_kind(disp)
-            out["removed"] = True
+        src_present = os.path.exists(src_abs)
+        if disp != "blocked" and not src_present and (journal.get(src_rel) == "confirmed"
+                                                      or disp == "already_present"):
+            # Done by an earlier run, or by hand: counted done only while the library still holds it.
+            # The state is the filesystem's; the journal only says which run did it.
+            if self._verify_fp(target, fp):
+                out["final_kind"] = self._plan_kind(disp)
+                out["removed"] = True
+                return out
+            out["final_kind"] = "blocked"
+            out["blocker"] = (f"{src_rel}: no longer in the workspace, and its library place {target} no "
+                              "longer holds it")
             return out
         if disp == "blocked":                             # plan-time per-item blocker (un-fingerprintable)
             out["final_kind"] = "blocked"
             out["blocker"] = rec.get("blocked_reason") or f"{src_rel}: blocked at plan time"
             return out
 
-        src_present = os.path.exists(src_abs)
-
         if disp == "already_present":
             # Library already holds identical content (verified at plan). Re-confirm it still matches,
             # then remove the source — never delete the only copy if the library file changed.
-            if not src_present:
-                out["final_kind"] = "already_present"
-                out["removed"] = True
-                return out
             if not self._verify_fp(target, fp):
                 out["final_kind"] = "blocked"
                 out["blocker"] = (f"{src_rel}: library file {target} no longer matches the planned "
@@ -727,7 +841,7 @@ class MergeWorkflow:
 
         try:
             os.makedirs(os.path.dirname(target) or ".", exist_ok=True)   # additive placement (§6)
-            _move_no_clobber(src_abs, target, verify=lambda s, t: self._verify_copy(t, fp))
+            _move_no_clobber(src_abs, target, cross_fs=True)   # byte-checked copy across filesystems
             out.update({"final_kind": self._plan_kind(disp), "removed": True, "newly": True})
         except FileExistsError:                             # target appeared since planning
             if os.path.exists(target) and self._verify_fp(target, fp):
@@ -742,7 +856,7 @@ class MergeWorkflow:
         return out
 
     def execute_plan(self, ws, library_root, jobs, now_iso, execution_id):
-        """Apply photos-30 after revalidating its dependencies, taking the optional library snapshot,
+        """Apply photos-30 after revalidating its dependencies, taking the optional snapshots,
         moving each file (concurrent), journaling confirmed completions (single-writer, main thread),
         and writing photos-31-merge-summary.json. Returns the result dict (status no_plan / rejected /
         success / partial)."""
@@ -755,17 +869,20 @@ class MergeWorkflow:
         if stale:
             return {"status": "rejected", "plan_id": plan.get("plan_id"), "stale": stale}
 
-        # Pre-mutation snapshot of the LIBRARY volume (§10.3 step 3), labelled "merge". A required
-        # snapshot that cannot be taken aborts before any placement; the record goes into the summary.
-        snapshot = take_zfs_snapshot(ws, plan["plan_id"], "merge",
-                                     target_path=library_root, dataset_key="library")
-        if snapshot is not None and snapshot["required"] and not snapshot["ok"]:
-            reason = f"required ZFS pre-mutation snapshot of the library failed: {snapshot['stderr']}"
-            summary = self._build_summary(ws, plan, library_root, [], snapshot, "rejected",
-                                          now_iso, execution_id, jobs, extra_failures=[reason])
-            write_json_artifact(merge_summary_path(ws), summary)
-            return {"status": "rejected", "plan_id": plan.get("plan_id"), "stale": [reason],
-                    "snapshot": snapshot}
+        # Pre-mutation snapshots (§10.3 step 3; shared contract §2), labelled "merge": the workspace, and
+        # the library beside it — merge removes what it places from the workspace, so a snapshot of the
+        # library alone, rolled back, would lose those photos. A required snapshot that cannot be taken
+        # aborts before any placement; an unrequired one is warned and skipped. Recorded in the summary.
+        snapshot, problem = self._take_snapshots(ws, plan["plan_id"], library_root)
+        if problem:
+            if snapshot["required"]:
+                reason = f"required ZFS pre-mutation snapshot failed: {problem}"
+                summary = self._build_summary(ws, plan, library_root, [], snapshot, "rejected",
+                                              now_iso, execution_id, jobs, extra_failures=[reason])
+                write_json_artifact(merge_summary_path(ws), summary)
+                return {"status": "rejected", "plan_id": plan.get("plan_id"), "snapshot_refusal": reason,
+                        "snapshot": snapshot}
+            get_reporter().warn(f"Warning: {problem}")
 
         # Sweep crash-orphaned cross-fs copy temps (<XDEV_TMP_PREFIX>*<XDEV_TMP_SUFFIX>) left by a
         # prior INTERRUPTED run from the dirs this plan targets. Safe: the library lock makes concurrent
@@ -820,28 +937,46 @@ class MergeWorkflow:
         return {"status": status, "plan_id": plan.get("plan_id"), "summary": summary, "finalized": finalized,
                 "blocked": [r for r in results if r["final_kind"] == "blocked"]}
 
+    def _check_logs_carried(self, ws, blockers):
+        """photos-26 still carries prep's record unchanged (§13.0a): each phase's log is a superset of the
+        one before, so an earlier record edited, or a copy edited, after finalize is evident here."""
+        try:
+            complete = (json.load(open(complete_log_path(ws))) or {}).get("photos") or {}
+        except Exception:
+            blockers.append("photos-26-complete-log.json cannot be read — re-run finalize "
+                            "(`photos-cartographer geotag finalize`), then merge.")
+            return
+        prep = (json.load(open(prep_log_path(ws))) or {}).get("photos") or {}   # vouched for by the handoff
+        not_carried = entries_not_carried(prep, complete)
+        if not_carried:
+            blockers.append(f"photos-26-complete-log.json no longer carries prep's record "
+                            f"(photos-15-prep-log.json) unchanged for {len(not_carried)} photo(s): one of the two "
+                            "was edited after finalize. Re-run finalize (`photos-cartographer geotag finalize`), "
+                            "then merge.")
+
     def _build_merge_log(self, ws, results):
         """photos-35-merge-log.json (§9.2): photos-26-complete-log.json copied FORWARD with a per-file
         `merge` step appended to each merged photo's journey (final library path + renamed flag). Built
         fresh from photos-26 every run (never from a prior photos-35), so it is deterministic and
         idempotent under resume; photos-26 itself is never edited (§13.0a)."""
-        base = {}
-        if os.path.exists(complete_log_path(ws)):
-            try:
-                base = json.load(open(complete_log_path(ws)))
-            except Exception:
-                base = {}
+        base = json.load(open(complete_log_path(ws)))          # preconditions proved it readable
         photos = json.loads(json.dumps(base.get("photos") or {}))      # deep copy; never touch photos-26
         for r in sorted(results, key=lambda x: x["by_dest_source"]):
             if r["final_kind"] == "blocked" or not r.get("content_fingerprint"):
                 continue
             fp = r["content_fingerprint"]
             entry = photos.setdefault(fp, {"content_fingerprint": fp, "journey": []})
+            entry["library_path"] = r["library_path"]           # where the photo now is
             entry.setdefault("journey", []).append({
                 "phase": "merge",
                 "action": "already_present" if r["final_kind"] == "already_present" else "placed",
+                "from": r["by_dest_source"],
                 "library_path": r["library_path"],
                 "renamed_for_library": r["final_kind"] == "renamed_for_library"})
+        not_carried = entries_not_carried(base.get("photos"), photos)
+        if not_carried:      # a defect, not a state of the workspace: the copy would misstate photos-26
+            raise RuntimeError(f"{MERGE_LOG_ARTIFACT} would not carry photos-26-complete-log.json unchanged "
+                               f"for {len(not_carried)} photo(s)")
         return {"schema_version": 1, "tool": "photos-3-merge", "artifact_name": MERGE_LOG_ARTIFACT,
                 "photos": photos}
 
@@ -881,8 +1016,12 @@ class MergeWorkflow:
             if r["blocker"]:
                 failures.append(r["blocker"])
             dest = os.path.dirname(os.path.relpath(r["by_dest_source"], by_dest))
+            blocked = r["final_kind"] == "blocked"
             dests.setdefault(dest, {"files": []})["files"].append({
-                "by_dest_path": r["by_dest_source"], "library_path": r["library_path"],
+                "by_dest_path": r["by_dest_source"],
+                # A blocked photo landed nowhere: no library place, and the reason it stayed.
+                "library_path": None if blocked else r["library_path"],
+                "blocked_reason": r["blocker"] if blocked else None,
                 "renamed_for_library": r["final_kind"] == "renamed_for_library",
                 "already_present": r["final_kind"] == "already_present",
                 "removed_from_by_dest": r["removed"]})
@@ -911,6 +1050,40 @@ class MergeWorkflow:
                              "finished_at": finished_at or now_iso, "jobs": jobs,
                              "orphan_temps_swept": orphans_swept},
         }
+
+    def _take_snapshots(self, ws, plan_id, library_root):
+        """Merge's pre-mutation snapshots: the workspace, and the library too where it can be snapshotted
+        — never the library alone (shared contract §2, RUL-merge_snapshots_library and
+        RUL-no_library_only_snapshot). Returns (record, problem): record is None when ZFS is off, else
+        {required, workspace, library} with each side's take_zfs_snapshot record (the library's the
+        workspace's own when both are one dataset; None when not taken); problem is None, or why a
+        snapshot the run wanted is missing — fatal when required, a warning otherwise."""
+        zfs = CONFIG.get("zfs") or {}
+        if not zfs.get("enabled", False):
+            return None, None
+        rec = {"required": bool(zfs.get("snapshots_required", False)), "workspace": None, "library": None}
+        ws_ds = zfs_dataset(ws)
+        lib_ds = zfs_dataset(ws, target_path=library_root, dataset_key="library")
+        if not ws_ds:
+            return rec, (f"no ZFS dataset found for the workspace {ws}; merge takes no snapshot of the "
+                         "library alone, so this merge has no rollback point")
+        if not lib_ds and rec["required"]:
+            return rec, f"no ZFS dataset found for the library {library_root}"
+        rec["workspace"] = take_zfs_snapshot(ws, plan_id, "merge")
+        if not rec["workspace"]["ok"]:
+            return rec, (f"the workspace snapshot failed ({rec['workspace']['stderr']}); merge takes no "
+                         "snapshot of the library alone, so this merge has no rollback point")
+        if not lib_ds:
+            return rec, (f"no ZFS dataset found for the library {library_root}; the snapshot covers the "
+                         "workspace only")
+        if lib_ds == ws_ds:
+            rec["library"] = rec["workspace"]                     # one dataset: one snapshot covers both
+            return rec, None
+        rec["library"] = take_zfs_snapshot(ws, plan_id, "merge", target_path=library_root,
+                                           dataset_key="library")
+        if not rec["library"]["ok"]:
+            return rec, f"the library snapshot failed ({rec['library']['stderr']})"
+        return rec, None
 
     def _sweep_orphan_temps(self, plan, library_root):
         """Remove crash-orphaned cross-fs copy temps (<XDEV_TMP_PREFIX>*<XDEV_TMP_SUFFIX>) from the
@@ -949,6 +1122,12 @@ class MergeWorkflow:
             reporter.log(f"No {MERGE_PLAN_ARTIFACT} — run `plan` first.")
             emit_next_step(reporter, "`merge plan` first to build the plan.")
             return 2
+        if st == "rejected" and result.get("snapshot_refusal"):
+            # A snapshot refusal is not a stale plan: re-planning would not cure it.
+            reporter.error(f"\nExecution refused before any change — {result['snapshot_refusal']}.")
+            emit_next_step(reporter, "make the snapshot possible (or set zfs.snapshots_required to false), "
+                                     "then re-run `merge execute`.")
+            return 2
         if st == "rejected":
             reporter.error("\nExecution rejected — the merge plan is stale; re-run `plan`:")
             for s in result.get("stale", []):
@@ -976,21 +1155,6 @@ class MergeWorkflow:
         return 0
 
     # --- filesystem helpers (mirrors of geotag's; merge is read-only here) ---
-
-    def _root_files(self):
-        ws = self.workspace_root
-        return sorted(f for f in os.listdir(ws) if os.path.isfile(os.path.join(ws, f)))
-
-    def _root_nonmanaged_dirs(self):
-        ws = self.workspace_root
-        managed = {folder_name(r) for r in FOLDER_ROLES}
-        return sorted(f for f in os.listdir(ws)
-                      if not f.startswith('.') and f not in managed
-                      and os.path.isdir(os.path.join(ws, f)))
-
-    def _root_symlinks(self):
-        ws = self.workspace_root
-        return sorted(f for f in os.listdir(ws) if os.path.islink(os.path.join(ws, f)))
 
     def _entries(self, rel_folder):
         d = os.path.join(self.workspace_root, rel_folder)
@@ -1073,17 +1237,67 @@ def _in_workspace(ws):
     return os.path.exists(guard_path(ws))
 
 
+def _acquire_workspace_lock(ws, reporter):
+    """Take the workspace lock for init-library, or say who holds it and return None. Called only in a
+    workspace (its guard present), so the control directory exists and is never created here."""
+    lock = WorkspaceLock(ws, create=False)
+    if not lock.acquire():
+        owner = lock.read_owner() or {}
+        detail = f" (pid {owner.get('pid')}, since {owner.get('started_at')})" if owner else ""
+        reporter.log(f"Workspace is locked by an in-progress run{detail}; try again when it finishes.")
+        return None
+    return lock
+
+
+def _read_checked_config(ws, reporter):
+    """The workspace's configuration, read whole and checked as every command reads it (`load_config`),
+    as the file holds it; None, having said why, when it cannot be read or a setting is invalid."""
+    try:
+        load_config(ws)
+        with open(config_path(ws)) as f:
+            return json.load(f)
+    except (OSError, ValueError) as e:
+        reporter.log(f"Workspace config could not be used: {e}")
+        return None
+
+
+def _init_library_from_config(ws, reporter):
+    """init-library with no path, in a workspace: bless the library its config already names. The
+    caller holds the workspace lock."""
+    cfg = _read_checked_config(ws, reporter)
+    if cfg is None:
+        return 2
+    library_root = ((cfg.get("merge") or {}).get("library_root") or "")
+    if not library_root:
+        reporter.log("No merge.library_root is set in photos-00-config.json — pass a path "
+              "(`photos-cartographer merge init-library <path>`) or set it in config first.")
+        return 2
+    try:
+        validate_merge_config(cfg, ws)          # validates library_root (existing, outside ws)
+    except ValueError as e:
+        reporter.log(str(e))
+        return 2
+    pre = is_library(library_root)
+    marker = write_library_marker(library_root)
+    reporter.log(f"Library {'already blessed' if pre else 'blessed'}: {library_root} "
+          f"({os.path.basename(marker)}). Already named in config; no config change.", stream="stdout")
+    emit_next_step(reporter, "`merge plan` to map the by-dest photos to library targets.")
+    return 0
+
+
 def do_init_library(path_arg, ws):
     """The one-time `init-library` setup command — the sole creator of the `.photos-library` marker
     (merge spec §4). Behavior depends on workspace context and whether a path was given:
 
       in workspace + path  -> bless the resolved path AND record library_root in config (the one
-                              narrow exception to "prep is the config seeder", shared contract §4.1)
+                              narrow exception to "prep is the config seeder", shared contract §4.1);
+                              a sealed workspace refuses it whole (§13.7)
       in workspace, no path -> bless the directory config already names (no config write)
       no workspace + path  -> bless only; advise running from a workspace to record it in config
       no workspace, no path -> error (nothing to bless, no config to read)
 
-    Returns a process exit code."""
+    Both in-workspace forms read the workspace, so both hold its lock; a locked workspace is refused
+    with exit 1, nothing blessed. Returns a process exit code."""
     reporter = get_reporter()
     in_ws = _in_workspace(ws)
 
@@ -1093,29 +1307,18 @@ def do_init_library(path_arg, ws):
                   "(there is no workspace config to read). Pass the library directory, e.g. "
                   "`photos-cartographer merge init-library /srv/library`.")
             return 2
-        cfg_p = config_path(ws)
+        # Reading the workspace's config is reading the workspace: under its lock, like every command.
+        lock = _acquire_workspace_lock(ws, reporter)
+        if lock is None:
+            return 1
         try:
-            with open(cfg_p) as f:
-                cfg = json.load(f)
-        except Exception as e:
-            reporter.log(f"Workspace config could not be read: {e}")
-            return 2
-        library_root = ((cfg.get("merge") or {}).get("library_root") or "")
-        if not library_root:
-            reporter.log("No merge.library_root is set in photos-00-config.json — pass a path "
-                  "(`photos-cartographer merge init-library <path>`) or set it in config first.")
-            return 2
-        try:
-            validate_merge_config(cfg, ws)          # validates library_root (existing, outside ws)
-        except ValueError as e:
-            reporter.log(str(e))
-            return 2
-        pre = is_library(library_root)
-        marker = write_library_marker(library_root)
-        reporter.log(f"Library {'already blessed' if pre else 'blessed'}: {library_root} "
-              f"({os.path.basename(marker)}). Already named in config; no config change.", stream="stdout")
-        emit_next_step(reporter, "`merge plan` to map the by-dest photos to library targets.")
-        return 0
+            vol_err = workspace_volume_error(ws)     # shared §15: a workspace lies on one filesystem
+            if vol_err:
+                reporter.error(vol_err)
+                return 2
+            return _init_library_from_config(ws, reporter)
+        finally:
+            lock.release()
 
     # A path was given: resolve to an absolute path and validate it.
     resolved = os.path.abspath(os.path.expanduser(path_arg))
@@ -1135,30 +1338,34 @@ def do_init_library(path_arg, ws):
         return 0
 
     # In a workspace with an explicit path: bless AND record library_root in config (under the lock).
-    ws_real = os.path.realpath(os.path.abspath(ws))
-    lib_real = os.path.realpath(resolved)
-    if lib_real == ws_real or lib_real.startswith(ws_real + os.sep):
-        reporter.log(f"init-library: {resolved} must resolve outside the workspace (it must not be the "
-              "workspace or any path inside it).")
+    place_err = library_place_error(resolved, ws)
+    if place_err:
+        reporter.log(f"init-library: {place_err}")
         return 2
-    lock = WorkspaceLock(ws)
-    if not lock.acquire():
-        owner = lock.read_owner() or {}
-        detail = f" (pid {owner.get('pid')}, since {owner.get('started_at')})" if owner else ""
-        reporter.log(f"Workspace is locked by an in-progress run{detail}; try again when it finishes.")
+    lock = _acquire_workspace_lock(ws, reporter)
+    if lock is None:
         return 1
     try:
-        cfg_p = config_path(ws)
-        try:
-            with open(cfg_p) as f:
-                cfg = json.load(f)
-        except Exception as e:
-            reporter.log(f"Workspace config could not be read: {e}")
+        vol_err = workspace_volume_error(ws)         # shared §15: a workspace lies on one filesystem
+        if vol_err:
+            reporter.error(vol_err)
             return 2
-        # §4.1 item 2: the setup command writes the single library_root key — and ONLY that key. Don't
-        # seed placement/collision policy (prep is the config seeder; merge reads those with defaults).
-        if not isinstance(cfg.get("merge"), dict):
-            cfg["merge"] = {}
+        # Sealed means sealed (shared contract §13.7): recording the library is a config write, so a
+        # sealed workspace refuses it whole — nothing blessed, nothing written.
+        if is_sealed(ws):
+            reporter.error("Workspace is SEALED (a prior merge fully succeeded): init-library will not record "
+                           "a library in its config. Nothing was blessed or written — to bless the directory "
+                           "alone, run `photos-cartographer merge init-library <path>` from outside any workspace.")
+            if likely_new_dump(ws):
+                reporter.warn("A likely new dump is present (at the workspace root or in "
+                              f"{folder_name('sources')}/). A sealed workspace is final; move it into a fresh "
+                              "workspace by hand — init-library left it exactly where it is.")
+            return 2
+        cfg_p = config_path(ws)
+        cfg = _read_checked_config(ws, reporter)
+        if cfg is None:
+            return 2
+        # The setup command writes the single library_root key — and ONLY that key (shared §4.1 item 2).
         cfg["merge"]["library_root"] = resolved
         try:
             validate_merge_config(cfg, ws)
@@ -1180,7 +1387,13 @@ def _run_locked_workflow(command, ws, jobs=None):
     """plan / dry-run / execute: acquire the workspace lock, validate config + the library marker via
     preflight, then acquire the library lock, then dispatch."""
     reporter = get_reporter()
-    run_lock = WorkspaceLock(ws)
+    # Only prep creates the control directory (shared contract §1, §5.3): a folder without one is not a
+    # workspace, and merge stops there having created nothing — not even its lock file.
+    if not os.path.isdir(os.path.join(ws, CONTROL_DIR)):
+        reporter.error(f"Not an initialized workspace (no {CONTROL_DIR}/) — run prep first: "
+                       "`photos-cartographer prep plan` then `photos-cartographer prep execute`. Nothing was created.")
+        return 2
+    run_lock = WorkspaceLock(ws, create=False)
     if not run_lock.acquire():
         owner = run_lock.read_owner() or {}
         detail = f" (pid {owner.get('pid')}, since {owner.get('started_at')})" if owner else ""
@@ -1188,6 +1401,10 @@ def _run_locked_workflow(command, ws, jobs=None):
         return 1
     reporter.log(f"Lock acquired: {run_lock.lock_path}")
     try:
+        vol_err = workspace_volume_error(ws)         # shared §15: a workspace lies on one filesystem
+        if vol_err:
+            reporter.error(vol_err)
+            return 2
         wf = MergeWorkflow(ws)
         blockers, warnings, info = wf.preflight()
         for w in warnings:

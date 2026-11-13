@@ -102,7 +102,7 @@ def test_pixel_signature_distinct_for_different_photos():
 
 @requires_magick
 @requires_exiftool
-@pytest.mark.spec("prep-fingerprint-invariant-metadata-1")
+@pytest.mark.spec("prep-fingerprint-invariant-metadata-1", "RUL-fingerprint_survives_mutation", test="TST-content_hash-pixel_signature_is_exif_invariant")
 def test_pixel_signature_is_exif_invariant(tmp_path):
     # Copy the JPEG, mutate EXIF (date + GPS) on the copy without touching pixels;
     # the pixel signature must be unchanged. This is the property geotag relies
@@ -121,6 +121,31 @@ def test_pixel_signature_is_exif_invariant(tmp_path):
     edited = prep.ContentHasher.fingerprint_image(str(variant))
     assert original["status"] == "valid" and edited["status"] == "valid"
     assert original["value"] == edited["value"], "pixel signature changed after an EXIF-only edit"
+
+
+@pytest.mark.slow
+@requires_magick
+@requires_exiftool
+@pytest.mark.spec("RUL-fingerprint_survives_mutation", test="TST-content_hash-raw_signature_survives_geotag_s_writes")
+def test_raw_signature_survives_geotag_s_writes(tmp_path):
+    # Geotag writes the corrected time, its offset, a position and its marker into RAW files too: the
+    # RAW's fingerprint must not move. Slow (30 MB RAW decode, twice); CI runs it, pre-push skips it.
+    original = prep.ContentHasher.fingerprint_image(CAM_RAW)
+    if original.get("status") != "valid":
+        pytest.skip(f"ImageMagick lacks RAW decode support here: {original.get('error')}")
+    variant = tmp_path / "variant.ARW"
+    shutil.copy(CAM_RAW, variant)
+    subprocess.run(
+        ["exiftool", "-overwrite_original",
+         "-DateTimeOriginal=2099:12:31 23:59:59", "-OffsetTimeOriginal=+02:00",
+         "-GPSLatitude=12.3456", "-GPSLatitudeRef=N", "-GPSLongitude=65.4321", "-GPSLongitudeRef=E",
+         "-GPSProcessingMethod=geotag:test", str(variant)],
+        check=True, capture_output=True,
+    )
+    assert variant.read_bytes() != open(CAM_RAW, "rb").read()          # the file did change
+    edited = prep.ContentHasher.fingerprint_image(str(variant))
+    assert edited["status"] == "valid"
+    assert edited["value"] == original["value"], "RAW pixel signature changed after geotag's writes"
 
 
 def test_hash_image_failure_is_recorded_when_magick_absent(monkeypatch):
@@ -156,7 +181,7 @@ def test_real_jpeg_organizes_with_spec_filename_and_no_blocker(tmp_path):
 
 @requires_magick
 @requires_exiftool
-@pytest.mark.spec("prep-fingerprint-failure-blocks-1")
+@pytest.mark.spec("prep-fingerprint-failure-blocks-1", test="TST-content_hash-unreadable_image_blocks_with_hash_failure")
 def test_unreadable_image_blocks_with_hash_failure(tmp_path):
     # Negative path: a file that magick cannot decode must surface a §6.2/§11.3
     # hash-failure blocker, not silently pass.
@@ -171,7 +196,7 @@ def test_unreadable_image_blocks_with_hash_failure(tmp_path):
 
 @requires_magick
 @requires_exiftool
-@pytest.mark.spec("prep-quarantine-extra-copies-1")
+@pytest.mark.spec("prep-quarantine-extra-copies-1", "RUL-duplicates_quarantined", test="TST-content_hash-byte_identical_images_dedup_with_real_hasher")
 def test_byte_identical_images_dedup_with_real_hasher(tmp_path):
     ws = _make_ws(tmp_path)
     shutil.copy(CAM_SMALL, ws / "0-sources" / "a.jpg")
@@ -187,7 +212,7 @@ def test_byte_identical_images_dedup_with_real_hasher(tmp_path):
 @pytest.mark.slow
 @requires_magick
 @requires_exiftool
-@pytest.mark.spec("prep-separate-redundant-jpeg-1")
+@pytest.mark.spec("prep-separate-redundant-jpeg-1", "RUL-redundant_jpeg_set_aside", test="TST-content_hash-raw_jpeg_pair_separates_redundant_jpeg")
 def test_raw_jpeg_pair_separates_redundant_jpeg(tmp_path):
     # Uses the real RAW (slow). The JPEG sibling only needs the same basename.
     if prep.ContentHasher.fingerprint_image(CAM_RAW)["status"] != "valid":
@@ -223,7 +248,7 @@ def test_filename_format_is_config_driven(tmp_path, monkeypatch, seed_from_live_
             for f in os.listdir(folder):
                 res[os.path.join(folder, f)] = {
                     "DateTimeOriginal": "2023:03:04 05:06:07",
-                    "extraction_status": "extracted_ok", "raw_payload": "{}",
+                    "extraction_status": "extracted_ok",
                 }
         return res, set()
 
@@ -287,3 +312,26 @@ def test_fingerprint_video_uses_nostdin_and_detaches_stdin(monkeypatch):
     assert res["status"] == "valid" and res["value"] == "deadbeef"
     assert "-nostdin" in seen["cmd"], seen["cmd"]
     assert seen["kw"].get("stdin") == subprocess.DEVNULL, seen["kw"]
+
+
+@requires_exiftool
+@pytest.mark.spec("RUL-metadata_group_order", "BLD-metadata_extraction",
+                  test="TST-content_hash-real_metadata_prefers_exif_then_xmp")
+def test_real_metadata_prefers_exif_then_xmp(tmp_path):
+    """Read by the real exiftool: a time present in both EXIF and XMP is taken from EXIF; a shutter time
+    present only in XMP is taken from there, ahead of EXIF's CreateDate."""
+    folder = tmp_path / "f"
+    folder.mkdir()
+    both, xmp_only = folder / "both.jpg", folder / "xmp_only.jpg"
+    for p in (both, xmp_only):
+        shutil.copy(CAM_SMALL, p)
+    subprocess.run(["exiftool", "-q", "-q", "-overwrite_original", "-XMP:CreateDate=2020:01:01 01:01:01",
+                    "-EXIF:CreateDate=2021:02:02 02:02:02", str(both)], check=True)
+    subprocess.run(["exiftool", "-q", "-q", "-overwrite_original", "-EXIF:DateTimeOriginal=",
+                    "-XMP:DateTimeOriginal=2022:03:03 03:03:03", str(xmp_only)], check=True)
+    md, failed = utils.MetadataReader.read_metadata_concurrently([str(folder)], max_workers=1)
+    assert not failed
+    assert md[str(both)]["CreateDate"] == "2021:02:02 02:02:02"
+    r = md[str(xmp_only)]
+    assert (r["selected_source_timestamp_tag"], r["selected_source_naive_timestamp"]) == \
+        ("XMP:DateTimeOriginal", "2022:03:03 03:03:03")

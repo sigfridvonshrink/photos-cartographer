@@ -65,11 +65,12 @@ def _ready_ws(tmp_path, monkeypatch, *, zfs=None):
         return {"relative_path": rel, "media_class": "image", "folder_class": "6-photos-by-dest",
                 "size": st.st_size, "mtime_ns": st.st_mtime_ns,
                 "content_hash": json.dumps({"value": "fp-" + rel, "status": "valid"}),
-                "metadata_status": {"camera_group_key": CAM, "has_timestamp": True, "has_native_gps": True,
-                                    "field_set_version": 1, "parsed_json": json.dumps(parsed)}}
+                "metadata_status": {"camera_group_key_version": utils.CAMERA_GROUP_KEY_VERSION,
+                                    "camera_group_key": CAM, "has_timestamp": True, "has_native_gps": True,
+                                    "field_set_version": utils.FIELD_SET_VERSION, "parsed_json": json.dumps(parsed)}}
     files = [rec("6-photos-by-dest/T/a.arw", "2024:07:03 14:00:00", 50.0, 4.0),
              rec("6-photos-by-dest/T/b.arw", "2024:07:03 15:00:00", 51.0, 5.0)]
-    ho = {"run_metadata": {"plan_id": "prep-1", "execution_id": "exec-1"},
+    ho = {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "run_metadata": {"plan_id": "prep-1", "execution_id": "exec-1"},
           "files": files, "cache_fingerprint": "pcf"}
     ho["content_fingerprint"] = utils.handoff_content_fingerprint(ho)
     (ctl / "photos-11-handoff.json").write_text(json.dumps(ho))
@@ -139,14 +140,15 @@ def test_content_changed_write_flags_mismatch(tmp_path, monkeypatch):
     assert os.path.exists(ws / "6-photos-by-dest" / "T" / "a.arw")
 
 
-@pytest.mark.spec("geotag-no-partial-persistence-1", "geotag-summary-status-1", "geotag-tool-failure-not-silent-1")
+@pytest.mark.spec("geotag-no-partial-persistence-1", "geotag-summary-status-1", "geotag-tool-failure-not-silent-1", "RUL-failure_recorded", test="TST-geotag_execution-exiftool_failure_records_failure")
 def test_exiftool_failure_records_failure(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws, write_ok=False)
     assert _execute(monkeypatch, ws) == 3
     s = _summary(ctl)
-    # every write fails and nothing is applied/already-satisfied -> total failure (§29.2 item 7)
-    assert s["status"] == "failed" and len(s["failures"]) == 2 and s["totals"]["metadata_time_writes"] == 0
+    # every write fails and nothing is applied/already-satisfied -> total failure (§29.2 item 7);
+    # two files, each a time write and its time-fixed mark
+    assert s["status"] == "failed" and len(s["failures"]) == 4 and s["totals"]["metadata_time_writes"] == 0
 
 
 # --- resume / idempotency ----------------------------------------------------
@@ -159,9 +161,9 @@ def test_resume_skips_confirmed_ops(tmp_path, monkeypatch):
     # second run: everything already confirmed -> skipped, nothing newly applied
     assert _execute(monkeypatch, ws) == 0
     s = _summary(ctl)
-    assert s["resume"]["newly_applied"] == 0 and s["resume"]["already_satisfied_skipped"] == 4
+    assert s["resume"]["newly_applied"] == 0 and s["resume"]["already_satisfied_skipped"] == 6
     # skips are also broken down per destination (§29.2 item 4) and sum to the global skip count
-    assert s["destinations"]["6-photos-by-dest/T"]["skipped"] == 4
+    assert s["destinations"]["6-photos-by-dest/T"]["skipped"] == 6
     assert sum(d["skipped"] for d in s["destinations"].values()) == s["resume"]["already_satisfied_skipped"]
 
 
@@ -262,7 +264,7 @@ def test_geotag_writes_no_artifacts_into_by_dest(tmp_path, monkeypatch):
     assert names == ["2024-07-03--14-00-00.arw", "2024-07-03--15-00-00.arw"]
 
 
-@pytest.mark.spec("config-merge-readonly-1")
+@pytest.mark.spec("config-merge-readonly-1", test="TST-geotag_execution-geotag_leaves_config_byte_identical")
 def test_geotag_leaves_config_byte_identical(tmp_path, monkeypatch):
     """Geotag never writes the workspace config (photos-00-config.json is hand-edited, authoritative).
     Snapshot its bytes, drive the full plan + execute, assert byte-for-byte identical (the geotag half
@@ -298,6 +300,7 @@ def test_missing_plan_errors(tmp_path, monkeypatch):
 
 # --- no-clobber recheck + determinism (unit) --------------------------------
 
+@pytest.mark.spec("RUL-target_free_at_execute", test="TST-geotag_execution-target_occupied_recheck")
 def test_target_occupied_recheck(tmp_path):
     wf = cal.GeotagWorkflow(str(tmp_path))
     (tmp_path / "A.JPG").write_text("x")
@@ -308,6 +311,7 @@ def test_target_occupied_recheck(tmp_path):
 
 # --- unit: _exiftool_write seam --------------------------------------------
 
+@pytest.mark.spec("BLD-metadata_safe_write", test="TST-geotag_execution-exiftool_write_invocation")
 def test_exiftool_write_invocation(tmp_path, monkeypatch):
     wf = cal.GeotagWorkflow(str(tmp_path))
     calls = {}
@@ -402,7 +406,7 @@ def test_apply_file_rename_skip_and_failure(tmp_path, monkeypatch):
     assert r["failed"] == ["oR"] and "rename failed" in r["blocker"]
 
 
-@pytest.mark.spec("geotag-filename-change-invalidates-plan-1", "geotag-no-stale-execution-1")
+@pytest.mark.spec("geotag-filename-change-invalidates-plan-1", "geotag-no-stale-execution-1", "RUL-tracks_in_dependencies", "INV-no_stale_use", "RUL-camera_group_derivation_versioned", test="TST-geotag_execution-revalidate_detects_each_stale_input")
 def test_revalidate_detects_each_stale_input(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     wf = cal.GeotagWorkflow(str(ws)); wf.preflight(for_execute=True)
@@ -411,11 +415,27 @@ def test_revalidate_detects_each_stale_input(tmp_path, monkeypatch):
     assert wf.revalidate_plan(plan, gpx) == []                        # fresh -> nothing stale
     assert any("not 'ready'" in s for s in wf.revalidate_plan({**plan, "status": "blocked"}, gpx))
     for k in ("config_fingerprint", "filename_format_fingerprint", "camera_group_fingerprint",
-              "folders_fingerprint", "media_extensions_fingerprint", "gpx_fingerprint"):
+              "folders_fingerprint", "media_extensions_fingerprint", "gpx_fingerprint",
+              "camera_group_key_version", "metadata_field_set_version"):
         pk = {**plan, "depends_on": {**plan["depends_on"], k: "WRONG"}}
         assert any(k in s for s in wf.revalidate_plan(pk, gpx)), k
     pk = {**plan, "depends_on": {**plan["depends_on"], "planned_operation_fingerprint": "WRONG"}}
     assert any("planned operations changed" in s for s in wf.revalidate_plan(pk, gpx))
+
+
+@pytest.mark.spec("RUL-plan_carried_out_by_its_code", "BLD-code_fingerprint",
+                  test="TST-geotag_execution-a_plan_made_by_other_code_is_stale")
+def test_a_plan_made_by_other_code_is_stale(tmp_path, monkeypatch):
+    """Geotag's executable plan records the code that made it; another build, or a plan recording none,
+    makes it stale before any change."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    wf = cal.GeotagWorkflow(str(ws)); wf.preflight(for_execute=True)
+    plan = json.load(open(ctl / "photos-24-executable-plan.json"))
+    gpx = cal.GPXIndex(cal.selected_gpx_root()).build()
+    assert plan["depends_on"]["code_fingerprint"] == utils.code_fingerprint()
+    for recorded in ("0" * 64, None):
+        pk = {**plan, "depends_on": {**plan["depends_on"], "code_fingerprint": recorded}}
+        assert any("code_fingerprint" in s for s in wf.revalidate_plan(pk, gpx)), recorded
 
 
 def test_corrupt_journal_is_ignored(tmp_path, monkeypatch):
@@ -505,7 +525,7 @@ def _mock_zfs(monkeypatch, *, fail=False):
 @pytest.mark.spec("geotag-snapshot-phase-label-1")
 def test_execute_records_zfs_snapshot(tmp_path, monkeypatch):
     zfs = {"enabled": True, "snapshots_required": True, "snapshot_prefix": "px-",
-           "datasets": {"workspace": "auto"}}
+           "datasets": {"workspace": "auto", "library": "auto"}}
     ws, ctl = _ready_ws(tmp_path, monkeypatch, zfs=zfs)
     _mock_tools(monkeypatch, ws); _mock_zfs(monkeypatch)
     assert _execute(monkeypatch, ws) == 0
@@ -516,7 +536,7 @@ def test_execute_records_zfs_snapshot(tmp_path, monkeypatch):
 @pytest.mark.spec("geotag-snapshot-required-abort-1")
 def test_execute_aborts_when_required_snapshot_fails(tmp_path, monkeypatch):
     zfs = {"enabled": True, "snapshots_required": True, "snapshot_prefix": "px-",
-           "datasets": {"workspace": "auto"}}
+           "datasets": {"workspace": "auto", "library": "auto"}}
     ws, ctl = _ready_ws(tmp_path, monkeypatch, zfs=zfs)
     _mock_tools(monkeypatch, ws); _mock_zfs(monkeypatch, fail=True)
     before = sorted(os.listdir(ws / "6-photos-by-dest" / "T"))
@@ -650,3 +670,25 @@ def test_noop_reprep_does_not_restale_plan(tmp_path, monkeypatch):
     ho["cache_fingerprint"] = "CHANGED-INVENTORY"                         # a real content change
     u.write_json_artifact(str(ctl / "photos-11-handoff.json"), ho)
     assert any("handoff" in s for s in wf.revalidate_plan(plan, gpx))     # now stale
+
+
+@pytest.mark.spec("RUL-cause_locatable", "authored-locatable-cause-1", test="TST-geotag_execution-every_write_traces_back_to_its_decision")
+def test_every_write_traces_back_to_its_decision(tmp_path, monkeypatch):
+    """From the journal of what ran, each confirmed operation is found in the plan, and the plan names
+    by hash the decision records it was made from, which hold the decision for that photo's destination."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _mock_tools(monkeypatch, ws)
+    assert _execute(monkeypatch, ws) == 0
+    plan = json.load(open(ctl / "photos-24-executable-plan.json"))
+    journal = json.load(open(utils.journal_path(str(ws), plan["plan_id"])))
+    ops = {o["operation_id"]: o for d in plan["destinations"].values() for o in d["operations"]}
+    confirmed = [oid for oid, st in journal["operations"].items() if st == "confirmed"]
+    assert confirmed and set(confirmed) <= set(ops)                       # journal -> plan
+    dep = plan["depends_on"]
+    for name in ("time_decisions", "gps_decisions"):                      # plan -> the records, by hash
+        assert dep[name]["sha256"] == utils.sha256_file(str(ws / dep[name]["artifact_path"]))
+    times = json.load(open(ws / dep["time_decisions"]["artifact_path"]))
+    for oid in confirmed:                                                 # record -> the decision
+        dest = os.path.dirname(ops[oid]["relative_path"])
+        tz = times["destinations"][dest]["destination_timezone"]
+        assert tz["user_decision"]["accept_proposed_timezone"] is True and tz["effective_iana_timezone"]

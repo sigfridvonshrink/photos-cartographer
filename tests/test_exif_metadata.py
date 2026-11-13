@@ -77,11 +77,10 @@ def create_mock_metadata_reader(monkeypatch):
                     "GPSLongitude": -90.0,
                     "camera_group_key": "12345|Canon|EOS R5",
                     "has_native_gps": True,
-                    "has_timestamp": True,
-                    "raw_payload": "{}"
+                    "has_timestamp": True
                 }
             if "vacation" in folder:
-                res[os.path.join(folder, "photo2.jpg")] = {
+                res[os.path.join(folder, "2023-01-02--12-00-00.jpg")] = {
                     "DateTimeOriginal": "2023:01:02 12:00:00",
                     "Make": "Canon",
                     "Model": "EOS R5",
@@ -90,8 +89,7 @@ def create_mock_metadata_reader(monkeypatch):
                     "GPSLongitude": -90.0,
                     "camera_group_key": "12345|Canon|EOS R5",
                     "has_native_gps": True,
-                    "has_timestamp": True,
-                    "raw_payload": "{}"
+                    "has_timestamp": True
                 }
         return res, set()
 
@@ -99,7 +97,7 @@ def create_mock_metadata_reader(monkeypatch):
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read)
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", lambda *a, **k: {"status": "valid", "strategy": "image-content-hash-v1", "value": "dummycontenthash"})
 
-@pytest.mark.spec("prep-cache-metadata-fields-1", "prep-cache-upsert-stale-1", "prep-passive-metadata-cache-1")
+@pytest.mark.spec("prep-cache-metadata-fields-1", "prep-cache-upsert-stale-1", "prep-passive-metadata-cache-1", "RUL-database_matches_files", "BLD-database_ops", test="TST-exif_metadata-metadata_cache_creation_and_staleness")
 def test_metadata_cache_creation_and_staleness(workspace, monkeypatch):
     create_mock_metadata_reader(monkeypatch)
 
@@ -137,12 +135,12 @@ def test_metadata_cache_creation_and_staleness(workspace, monkeypatch):
     # Change FIELD_SET_VERSION to simulate stale metadata and expect a refresh
     # photos-1-prep does an inline import `from photos_utils import FIELD_SET_VERSION`, so we must patch the module.
     import photos_utils as utils
-    monkeypatch.setattr(utils, "FIELD_SET_VERSION", 2)
+    monkeypatch.setattr(utils, "FIELD_SET_VERSION", utils.FIELD_SET_VERSION + 1)
     # Replan without modifying the file (should still trigger metadata scan due to version mismatch)
 
     # Actually mock read to return updated metadata
     def mock_read_updated(folders, max_workers=4, progress_coordinator=None):
-         return { upsert_fx["data"]["absolute_path"]: { "DateTimeOriginal": "2023:01:01 12:00:00", "Make": "Canon", "Model": "EOS R5", "SerialNumber": "12345", "camera_group_key": "12345|Canon|EOS R5", "has_native_gps": False, "has_timestamp": True, "raw_payload": "{}" } }, set()
+         return { upsert_fx["data"]["absolute_path"]: { "DateTimeOriginal": "2023:01:01 12:00:00", "Make": "Canon", "Model": "EOS R5", "SerialNumber": "12345", "camera_group_key": "12345|Canon|EOS R5", "has_native_gps": False, "has_timestamp": True } }, set()
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_updated)
 
@@ -152,9 +150,9 @@ def test_metadata_cache_creation_and_staleness(workspace, monkeypatch):
     assert len(db_upserts2) > 0
     upsert_fx2 = [fx for fx in db_upserts2[0].database_effects_after_verification if fx["action"] == "upsert"][0]
     assert upsert_fx2["data"]["metadata"]["has_native_gps"] is False
-    assert upsert_fx2["data"]["metadata"]["field_set_version"] == 2
+    assert upsert_fx2["data"]["metadata"]["field_set_version"] == utils.FIELD_SET_VERSION
 
-@pytest.mark.spec("prep-passive-grouping-facts-1")
+@pytest.mark.spec("prep-passive-grouping-facts-1", "BLD-handoff_grouping_facts", test="TST-exif_metadata-handoff_manifest_enrichment")
 def test_handoff_manifest_enrichment(workspace, monkeypatch):
     create_mock_metadata_reader(monkeypatch)
 
@@ -162,7 +160,7 @@ def test_handoff_manifest_enrichment(workspace, monkeypatch):
     source_file = workspace / "0-sources" / "photo.jpg"
     source_file.write_text("dummy")
 
-    dest_file = workspace / "6-photos-by-dest" / "vacation" / "photo2.jpg"
+    dest_file = workspace / "6-photos-by-dest" / "vacation" / "2023-01-02--12-00-00.jpg"
     dest_file.write_text("dummy2")
 
     cache = prep.WorkspaceCache(str(workspace), in_memory=False)
@@ -190,17 +188,15 @@ def test_handoff_manifest_enrichment(workspace, monkeypatch):
     assert len(handoff["camera_groups"]) == 1
     cg = handoff["camera_groups"][0]
 
-    # 0-sources gets moved to 2-missing-metadata normally, but here it's got no gps so maybe just 2-missing-metadata
-    # Actually wait, why did it go to quarantine? Because it's an exact duplicate of the content_hash returned by the mock.
-    # We should look at whatever files are actually in cg["files"], but they are sorted correctly.
-    assert len(cg["files"]) == 2
-    assert cg["files"] == sorted(cg["files"])
-    assert cg["cache_freshness"]["total_files"] == 2
-    assert cg["cache_freshness"]["metadata_extracted_ok"] == 2
+    # The mock fingerprints both files alike, so the inbox photo is quarantined as a duplicate of the
+    # by-dest one; a quarantined file leaves the database and the handoff.
+    assert cg["files"] == ["6-photos-by-dest/vacation/2023-01-02--12-00-00.jpg"]
+    assert cg["cache_freshness"]["total_files"] == 1
+    assert cg["cache_freshness"]["metadata_extracted_ok"] == 1
     assert cg["cache_freshness"]["metadata_reused_from_cache"] == 0
     assert cg["group_key"] == "12345|Canon|EOS R5"
-    assert cg["file_count"] == 2
-    assert cg["has_native_gps"] == 2
+    assert cg["file_count"] == 1
+    assert cg["has_native_gps"] == 1
 
     assert len(handoff["destination_folders"]) == 1
     df = handoff["destination_folders"][0]
@@ -211,7 +207,7 @@ def test_handoff_manifest_enrichment(workspace, monkeypatch):
     assert df["cache_freshness"]["metadata_extracted_ok"] == 1
 
 
-@pytest.mark.spec("prep-metadata-freshness-inputs-1")
+@pytest.mark.spec("prep-metadata-freshness-inputs-1", test="TST-exif_metadata-metadata_extractor_version_refreshes")
 def test_metadata_extractor_version_refreshes(workspace, monkeypatch):
     create_mock_metadata_reader(monkeypatch)
 
@@ -282,105 +278,66 @@ def test_non_media_is_not_applicable(workspace, monkeypatch):
     assert plan.summary.get("metadata_plan_status", {}).get("0-sources/document.txt") == "not_applicable"
 
 
-def test_schema_migration(workspace):
-    import sqlite3
-    db_path = workspace / ".photos-ingest/photos-00-ingest.db"
-    conn = sqlite3.connect(str(db_path))
-    conn.execute('''
-        CREATE TABLE file_cache (
-            relative_path TEXT PRIMARY KEY,
-            absolute_path TEXT,
-            size INTEGER,
-            mtime_ns INTEGER,
-            inode INTEGER,
-            media_class TEXT,
-            hash TEXT,
-            content_hash TEXT,
-            last_seen_ns INTEGER
-        )
-    ''')
-    conn.execute('''
-        CREATE TABLE metadata_cache (
-            relative_path TEXT PRIMARY KEY,
-            size INTEGER,
-            mtime_ns INTEGER,
-            content_hash TEXT,
-            extractor TEXT,
-            extractor_version TEXT,
-            field_set_version INTEGER,
-            extraction_options_fingerprint TEXT,
-            camera_group_key TEXT,
-            has_native_gps INTEGER,
-            has_timestamp INTEGER,
-            parsed_json TEXT,
-            raw_payload TEXT,
-            FOREIGN KEY(relative_path) REFERENCES file_cache(relative_path) ON DELETE CASCADE
-        )
-    ''')
-    conn.execute('''
-        INSERT INTO file_cache (relative_path, size, mtime_ns) VALUES ('test.jpg', 123, 456)
-    ''')
-    conn.commit()
-    conn.close()
-
-    cache = prep.WorkspaceCache(str(workspace), in_memory=False)
-
-    # Assert missing columns were added by schema migration
-    conn = sqlite3.connect(str(db_path))
-    cur = conn.cursor()
-    cur.execute("PRAGMA table_info(metadata_cache)")
-    columns = {row[1] for row in cur.fetchall()}
-    conn.close()
-
-    assert "metadata_schema_version" in columns
-    assert "camera_group_key_version" in columns
-    assert "extraction_status" in columns
-    assert "extraction_error" in columns
-
-    # Verify upsert succeeds without 'no such column' error
-    data = {
-        "relative_path": "test.jpg",
-        "absolute_path": "/fake/path/test.jpg",
-        "size": 123,
-        "mtime_ns": 456,
-        "inode": 1,
-        "media_class": "image",
-        "hash": None,
-        "content_hash": None,
-        "last_seen_ns": 12345,
-        "metadata": {
-            "extractor": "exiftool",
-            "extractor_version": "1.0",
-            "field_set_version": 1,
-            "extraction_options_fingerprint": "hash",
-            "metadata_schema_version": 1,
-            "camera_group_key_version": 1,
-            "camera_group_key": "cam",
-            "has_native_gps": False,
-            "has_timestamp": True,
-            "extraction_status": "extracted_ok",
-            "extraction_error": None,
-            "parsed_json": "{}",
-            "raw_payload": "{}"
-        }
-    }
-    cache.upsert_file(data)
+@pytest.mark.spec("RUL-cache_schema_not_migrated", "BLD-cache_versions", test="TST-exif_metadata-a_database_of_another_schema_stops_prep")
+def test_a_database_of_another_schema_stops_prep(workspace):
+    """A workspace database recording a schema version not this build's stops prep's plan: it is never
+    migrated."""
+    cache = prep.WorkspaceCache(str(workspace))
+    cache.set_meta("cache_schema_version", "999")
+    cache.close()
+    cache = prep.WorkspaceCache(str(workspace), read_only=True)
+    with pytest.raises(ValueError, match="schema version 999"):
+        prep.WorkspacePrepWorkflow(str(workspace), cache).plan()
+    cache.close()
 
 
-@pytest.mark.spec("prep-timestamp-priority-1")
+@pytest.mark.spec("prep-timestamp-priority-1", "RUL-recorded_time_order", test="TST-exif_metadata-parse_exiftool_item_timestamp_source_fallback")
 def test_parse_exiftool_item_timestamp_source_fallback():
     """selected_source_naive_timestamp prefers DateTimeOriginal, then CreateDate, then ModifyDate,
-    else None (photos_utils Section 8)."""
+    else None; its provenance names the group it came from."""
     import photos_utils as utils
     parse = utils.MetadataReader._parse_exiftool_item
-    r = parse({"DateTimeOriginal": "2020:01:01 00:00:00", "CreateDate": "2019:09:09 09:09:09"})
-    assert r["selected_source_timestamp_tag"] == "DateTimeOriginal"
+    r = parse({"EXIF:DateTimeOriginal": "2020:01:01 00:00:00", "EXIF:CreateDate": "2019:09:09 09:09:09"})
+    assert r["selected_source_timestamp_tag"] == "EXIF:DateTimeOriginal"
     assert r["selected_source_naive_timestamp"] == "2020:01:01 00:00:00"
-    r = parse({"CreateDate": "2019:09:09 09:09:09"})                     # no DTO -> CreateDate
-    assert r["selected_source_timestamp_tag"] == "CreateDate"
+    r = parse({"EXIF:CreateDate": "2019:09:09 09:09:09"})                # no DTO -> CreateDate
+    assert r["selected_source_timestamp_tag"] == "EXIF:CreateDate"
     assert r["selected_source_naive_timestamp"] == "2019:09:09 09:09:09"
-    r = parse({"ModifyDate": "2018:08:08 08:08:08"})                     # only ModifyDate
-    assert r["selected_source_timestamp_tag"] == "ModifyDate"
+    r = parse({"QuickTime:ModifyDate": "2018:08:08 08:08:08"})           # only ModifyDate
+    assert r["selected_source_timestamp_tag"] == "QuickTime:ModifyDate"
     assert r["selected_source_naive_timestamp"] == "2018:08:08 08:08:08"
     r = parse({})                                                        # no timestamp at all
     assert r["selected_source_naive_timestamp"] is None
+
+
+@pytest.mark.spec("RUL-recorded_time_order", test="TST-exif_metadata-a_placeholder_time_does_not_hide_a_valid_one")
+def test_a_placeholder_time_does_not_hide_a_valid_one():
+    """A field present but holding no valid time is passed over for the next that holds one; a file whose
+    fields all hold none has no recorded time."""
+    import photos_utils as utils
+    parse = utils.MetadataReader._parse_exiftool_item
+    r = parse({"EXIF:DateTimeOriginal": "0000:00:00 00:00:00", "EXIF:CreateDate": "2019:09:09 09:09:09"})
+    assert (r["selected_source_timestamp_tag"], r["selected_source_naive_timestamp"]) == ("EXIF:CreateDate", "2019:09:09 09:09:09")
+    assert r["has_timestamp"] is True
+    r = parse({"EXIF:DateTimeOriginal": "    :  :     :  :  ", "EXIF:ModifyDate": "garbage"})
+    assert r["selected_source_naive_timestamp"] is None and r["has_timestamp"] is False
+
+
+@pytest.mark.spec("RUL-metadata_group_order", "BLD-metadata_extraction",
+                  test="TST-exif_metadata-a_field_is_taken_from_exif_then_xmp")
+def test_a_field_is_taken_from_exif_then_xmp():
+    """Each field is taken from EXIF when EXIF holds it, else from XMP; a time field missing or holding no
+    valid time in EXIF is taken from the same field in XMP before the next field is tried. The GPS
+    position is taken signed, from exiftool's Composite group."""
+    import photos_utils as utils
+    parse = utils.MetadataReader._parse_exiftool_item
+    r = parse({"XMP:CreateDate": "2020:01:01 01:01:01", "EXIF:CreateDate": "2021:02:02 02:02:02",
+               "XMP:Make": "XmpMake", "EXIF:Make": "ExifMake", "XMP:Model": "OnlyXmp"})
+    assert (r["CreateDate"], r["Make"], r["Model"]) == ("2021:02:02 02:02:02", "ExifMake", "OnlyXmp")
+    r = parse({"EXIF:DateTimeOriginal": "0000:00:00 00:00:00", "XMP:DateTimeOriginal": "2022:03:03 03:03:03",
+               "EXIF:CreateDate": "2019:09:09 09:09:09"})
+    assert (r["selected_source_timestamp_tag"], r["selected_source_naive_timestamp"]) == \
+        ("XMP:DateTimeOriginal", "2022:03:03 03:03:03")
+    r = parse({"EXIF:GPSLatitude": 33.5, "EXIF:GPSLatitudeRef": "S", "Composite:GPSLatitude": -33.5,
+               "EXIF:GPSLongitude": 70.1, "Composite:GPSLongitude": -70.1})
+    assert (r["GPSLatitude"], r["GPSLongitude"], r["GPSLatitudeRef"]) == (-33.5, -70.1, "S")

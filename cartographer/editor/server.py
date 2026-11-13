@@ -304,19 +304,30 @@ def _apply_edits(art, edits):
 
 def _save(workspace, payload):
     """Write the posted user_decision edits back into the workspace's decision artifacts."""
-    cd = os.path.join(workspace, CONTROL)
-    written = []
-    for key, name in (("time", TIME_NAME), ("drift", DRIFT_NAME), ("gps", GPS_NAME)):
-        edits = (payload or {}).get(key) or []
-        if not edits:
-            continue
-        art = _read_json(os.path.join(cd, name))
-        if not isinstance(art, dict) or "_error" in art:
-            return {"ok": False, "error": f"cannot read {name} to update"}
-        _apply_edits(art, edits)
-        _write_json(os.path.join(cd, name), art)
-        written.append(name)
-    return {"ok": True, "written": written}
+    if photos_utils.is_sealed(workspace):       # the console reaches here without serve()'s check
+        return {"ok": False, "error": "workspace is sealed (already merged): decisions can no longer change"}
+    # A save changes the workspace, so it holds the workspace's lock (shared contract §1): a geotag plan
+    # running now reads these records and rewrites them, and would overwrite a save landing in between.
+    # Fail-fast like every run; the editor's display reads stay unlocked (each file is replaced whole).
+    lock = photos_utils.WorkspaceLock(workspace, create=False)
+    if not lock.acquire():
+        return {"ok": False, "error": "a run is in progress on this workspace — save again when it finishes"}
+    try:
+        cd = os.path.join(workspace, CONTROL)
+        written = []
+        for key, name in (("time", TIME_NAME), ("drift", DRIFT_NAME), ("gps", GPS_NAME)):
+            edits = (payload or {}).get(key) or []
+            if not edits:
+                continue
+            art = _read_json(os.path.join(cd, name))
+            if not isinstance(art, dict) or "_error" in art:
+                return {"ok": False, "error": f"cannot read {name} to update"}
+            _apply_edits(art, edits)
+            _write_json(os.path.join(cd, name), art)
+            written.append(name)
+        return {"ok": True, "written": written}
+    finally:
+        lock.release()
 
 
 def _rerun(workspace):
@@ -447,6 +458,15 @@ def serve(workspace, port=8765, host="0.0.0.0"):
         print(f"{os.path.abspath(workspace)} is not an initialized workspace "
               f"(no {CONTROL}/{GUARD_NAME}). Run `photos-cartographer prep plan` here first, "
               f"or use `photos-cartographer edit --demo` for a read-only fixtures tour.", file=sys.stderr)
+        sys.exit(2)
+    # A sealed (merged) workspace is final (shared contract §13.7): its decisions may no longer change.
+    if workspace and photos_utils.is_sealed(workspace):
+        print(f"{os.path.abspath(workspace)} is SEALED (already merged): the decision editor will not "
+              f"open it. A sealed workspace is final.", file=sys.stderr)
+        if photos_utils.likely_new_dump(workspace):
+            print(f"A likely new dump is present (at the workspace root or in "
+                  f"{photos_utils.folder_name('sources')}/). Move it into a fresh workspace by hand — "
+                  f"the editor left it exactly where it is.", file=sys.stderr)
         sys.exit(2)
     Handler.workspace = workspace
 

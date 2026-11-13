@@ -1,0 +1,4 @@
+# Rules and invariants that no rationale justifies yet, directly or through the item they refine or uphold.
+# tools/spec-build fails on any other such item, and on an id here that has gained a rationale or is gone:
+# this list only shrinks. Emptied 2026-11-10: every rule and invariant of the shared contract has a
+# rationale.

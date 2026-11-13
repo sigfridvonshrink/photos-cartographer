@@ -39,7 +39,7 @@ import errno
 # ==============================================================================
 # CONFIGURATION BLOCK
 # ==============================================================================
-from .photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, selected_gpx_root, missing_managed_folders, FOLDER_ROLES
+from .photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, is_track_file, missing_managed_folders, FOLDER_ROLES
 from .reporting import get_reporter
 from .photos_utils import (_move_no_clobber, _move_link_unlink, _get_renameat2,
                           WorkspaceCache, WorkspaceLock, ContentHasher,
@@ -80,6 +80,7 @@ STATUS_TO_CACHE_FRESHNESS_KEY = {
 
 PREP_ALLOWED_OPERATION_TYPES = {
     "mkdir",
+    "rmdir",
     "move_no_clobber",
     "rename_no_clobber",
     "quarantine_move",
@@ -87,9 +88,9 @@ PREP_ALLOWED_OPERATION_TYPES = {
     "db_remove",
 }
 
-# Plan serialization/schema version. A plan whose version differs from this is from a
-# different tool/schema and is rejected at execute time (prep Section 14.3.2).
-PLAN_SCHEMA_VERSION = 1
+# Plan serialization/schema version. A plan whose version differs from this is rejected at execute
+# time (prep Section 14.3.2). 3: the plan records the code that made it, and plans its folder removals.
+PLAN_SCHEMA_VERSION = 3
 
 
 # ==============================================================================
@@ -105,7 +106,7 @@ class Fingerprint:
 @dataclass
 class Operation:
     operation_id: str
-    type: str  # "mkdir" | "move_no_clobber" | "rename_no_clobber" | "quarantine_move" | "db_upsert" | "db_remove"
+    type: str  # "mkdir" | "rmdir" | "move_no_clobber" | "rename_no_clobber" | "quarantine_move" | "db_upsert" | "db_remove"
     reason: str
     source: Optional[str] = None
     destination: Optional[str] = None
@@ -130,7 +131,9 @@ class Plan:
     warnings: List[str]
     operations: List[Operation]
     workspace_file_preconditions: List[Dict[str, Any]] = field(default_factory=list)
+    inventory: List[str] = field(default_factory=list)   # every path the plan's scan found (prep §14.3)
     metadata_dependencies: Dict[str, Any] = field(default_factory=dict)
+    code_fingerprint: str = ""   # SHA-256 of the code that made the plan (photos_utils.code_fingerprint)
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=2)

@@ -66,7 +66,7 @@ def _dd(art, dest):
 
 # --- classifier branch by branch --------------------------------------------
 
-@pytest.mark.spec("geotag-fallback-rank-1")
+@pytest.mark.spec("geotag-fallback-rank-1", "RUL-geotag_rerun_keeps_settled", test="TST-geotag_gps_decisions-classify_all_branches")
 def test_classify_all_branches():
     g = _gpx()
     cfg = utils.CONFIG
@@ -84,14 +84,14 @@ def test_classify_all_branches():
 
 @pytest.mark.parametrize("lat, lon, ok", [(50, 4, True), (-90, 180, True), (91, 0, False),
                                           (0, 181, False), ("x", 0, False), (0, True, False)])
-@pytest.mark.spec("validate-coords-offsets-1")
+@pytest.mark.spec("validate-coords-offsets-1", test="TST-geotag_gps_decisions-valid_coord")
 def test_valid_coord(lat, lon, ok):
     assert cal._valid_coord(lat, lon) is ok
 
 
 # --- the summary artifact ----------------------------------------------------
 
-@pytest.mark.spec("geotag-23-paths-only-review-1", "gpx-geotag-fingerprint-cascade-1")
+@pytest.mark.spec("geotag-23-paths-only-review-1", "gpx-geotag-fingerprint-cascade-1", test="TST-geotag_gps_decisions-summary_counts_and_review_items")
 def test_summary_counts_and_review_items(tmp_path):
     wf = _wf(tmp_path)
     d = f"{BYDEST}/Trip"
@@ -108,7 +108,7 @@ def test_summary_counts_and_review_items(tmp_path):
     assert art["status"] == "requires_user_input" and art["requires_user_input"]
     dep = art["depends_on"]
     assert dep["resolved_utc_cache_fingerprint"] == "rfp" and dep["gpx_fingerprint"] == "gfp"
-    assert dep["gps_policy_fingerprint"] and dep["handoff"]["sha256"]
+    assert dep["gps_policy_fingerprint"] and dep["handoff"]["content_fingerprint"]
 
 
 def test_extrapolation_counts_in_summary(tmp_path):

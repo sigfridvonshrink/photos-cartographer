@@ -28,7 +28,7 @@ def test_empty_depends_on_is_fresh(tmp_path):
     assert U.plan_dependencies_fresh(str(tmp_path), None) == []
 
 
-@pytest.mark.spec("dep-cascade-reject-stale-1", "dep-hash-sensitive-1")
+@pytest.mark.spec("dep-cascade-reject-stale-1", "dep-hash-sensitive-1", "RUL-hash_is_the_dependency_check", test="TST-plan_freshness-json_artifact_dep_fresh_changed_missing")
 def test_json_artifact_dep_fresh_changed_missing(tmp_path):
     ws = str(tmp_path)
     dep = {"photos-24-executable-plan.json": _art(ws, "photos-24-executable-plan.json", {"v": 1})}
@@ -94,6 +94,8 @@ def _merge_setup(tmp_path):
         "config_fingerprint": U.sha256_file(U.config_path(ws)),
         "folders_fingerprint": U.folders_fingerprint(),
         "media_extensions_fingerprint": U.media_extensions_fingerprint(),
+        "image_engine_version": merge.get_imagemagick_version(),
+        "code_fingerprint": U.code_fingerprint(),
     }
     plan = {"schema_version": merge.MERGE_PLAN_SCHEMA_VERSION, "depends_on": depends_on}
     # current values the helper compares against (what merge recomputes internally)
@@ -102,6 +104,8 @@ def _merge_setup(tmp_path):
         "config_fingerprint": U.sha256_file(U.config_path(ws)),
         "folders_fingerprint": U.folders_fingerprint(),
         "media_extensions_fingerprint": U.media_extensions_fingerprint(),
+        "image_engine_version": merge.get_imagemagick_version(),
+        "code_fingerprint": U.code_fingerprint(),
     }
     return merge, ws, handoff, plan, cur
 
@@ -130,6 +134,10 @@ def test_helper_matches_merge_for_each_single_mutation(tmp_path):
     scenarios.append(("handoff", None, {**cur, "handoff": "DIFFERENT"}))
     # 3. config changes
     scenarios.append(("config", None, {**cur, "config_fingerprint": "DIFFERENT"}))
+    # 4. the plan was made under another ImageMagick
+    scenarios.append(("engine", None, dict(cur)))
+    # 5. the plan was made by another build of cartographer
+    scenarios.append(("code", None, dict(cur)))
 
     for name, _mutate, _hc in scenarios:
         merge2, ws2, handoff2, plan2, cur2 = _merge_setup(tmp_path / name)
@@ -145,6 +153,10 @@ def test_helper_matches_merge_for_each_single_mutation(tmp_path):
         if name == "artifact":
             with open(os.path.join(ws2, U.CONTROL_DIR, "photos-25-execution-summary.json"), "w") as f:
                 json.dump({"sum": 99}, f)
+        if name == "engine":
+            plan2["depends_on"]["image_engine_version"] = "an older ImageMagick"
+        if name == "code":
+            plan2["depends_on"]["code_fingerprint"] = "another build"
 
         m = _merge_verdict(merge2, handoff2, ws2, plan2)
         h = U.plan_dependencies_fresh(ws2, plan2["depends_on"], hc)
@@ -181,10 +193,13 @@ def _geotag_setup(tmp_path):
                        "content_fingerprint": U.handoff_content_fingerprint(handoff)}
     cam = json.dumps(U.CONFIG.get("camera_time_and_timezone_policy") or {}, sort_keys=True)
     deps["config_fingerprint"] = U.sha256_file(U.config_path(ws))
+    deps["code_fingerprint"] = U.code_fingerprint()
     deps["filename_format_fingerprint"] = U.sha256_text(U.CONFIG["filename_timestamp_format"])
     deps["folders_fingerprint"] = U.folders_fingerprint()
     deps["media_extensions_fingerprint"] = U.media_extensions_fingerprint()
     deps["camera_group_fingerprint"] = U.sha256_text(cam)
+    deps["camera_group_key_version"] = U.CAMERA_GROUP_KEY_VERSION
+    deps["metadata_field_set_version"] = U.FIELD_SET_VERSION
     deps["gpx_fingerprint"] = "GPXFP"
     deps["planned_operation_fingerprint"] = U.sha256_text(json.dumps([], sort_keys=True))
     plan = {"status": "ready", "destinations": {}, "depends_on": deps}
@@ -198,6 +213,7 @@ def _geotag_setup(tmp_path):
         "folders_fingerprint": U.folders_fingerprint(),
         "media_extensions_fingerprint": U.media_extensions_fingerprint(),
         "camera_group_fingerprint": U.sha256_text(cam),
+        "code_fingerprint": U.code_fingerprint(),
     }
     return geo, ws, self_obj, gpx, plan, cur
 

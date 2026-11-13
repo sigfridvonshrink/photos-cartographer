@@ -13,11 +13,12 @@ Top-level layout (the package lives at the repo root):
 - **`cartographer/`** — the pipeline package: prep / geotag / merge phases + the decision editor.
 - **`tests/`** — the test suite. **`spec/`** — the authoritative workflow specs (with their own
   `README.md`).
-- **`docs/`** — user-facing guides (`who-is-this-for.md` — fit + the design rationale (the seven roots),
+- **`docs/`** — user-facing guides (`who-is-this-for.md` — fit, naming the seven roots; their rationale is `spec/rationale/philosophy.md`,
   `walkthrough.md` — the screenshot tour, `quickstart.md`, `concepts.md`, `editor.md`) plus
   `screenshots/`, linked from `README.md`.
   These are user docs; `spec/` remains the behavioral source of truth.
-- **`tools/`** — build + test helpers (`build-pyz`, `coverage`, `jstest`, `spec-coverage`).
+- **`tools/`** — build + test helpers (`build-pyz`, `coverage`, `jstest`, `plan-differential`, `spec-build`,
+  `spec-coverage`, `spec-ledger`).
 - **`.githooks/`** — local pre-commit / pre-push hooks. `.github/workflows/` — CI.
 
 See `README.md` for the overview.
@@ -73,7 +74,19 @@ tools/jstest                   # node --test over cartographer/editor/tests/*.te
 # crash-injection / cross-cutting principle). Collection-only (fast); exits non-zero if a must-cover
 # clause lost its test. CI runs it. Complements line/branch coverage — tracks SPEC behaviours, not lines.
 tools/spec-coverage            # report + gate; --verbose for the per-clause table
+
+# The spec corpus (spec/ as one Sphinx project, sphinx-needs items: intent / rationale / build, and the tests
+# as items from their marks). THE GATE: fails on any warning; on success rewrites spec/needs.json -- commit it.
+# The specs move into it one document at a time (BACKLOG item 1); until then spec-clauses.json and
+# tools/spec-coverage keep gating the clauses not yet converted.
+python3 -m venv spec/.venv && spec/.venv/bin/pip install -r spec/requirements.txt   # first time
+tools/spec-build
+tools/spec-ledger check        # every sentence of a converted spec section is accounted for, verbatim
 ```
+
+A test names what it verifies with `@pytest.mark.spec(<ids>..., test="TST-<module>-<name>")`: the ids are corpus
+items (or the clause-index ids an item lists in its `aliases`), and `test=` is the test's own stable id, which makes it
+an item of the corpus. Keep the id when a test is renamed.
 
 Current coverage figures (line/branch + spec-clause) live in `COVERAGE.md` at the repo root; the
 commands above regenerate them. The clause-by-clause audit is `docs/design/spec-test-coverage-audit.md`.
@@ -86,19 +99,23 @@ alias is the *same module object* as the package module, so every import and pat
 identically. (This replaced the old `SourceFileLoader` hack once the scripts became package modules.)
 
 There is no build step and no linter config; runtime deps are system tools (`exiftool`, `magick`,
-`ffmpeg`) plus pip packages listed in `README.md`. The only manifest is
+`ffmpeg`). The only manifest is
 `dev-requirements.txt` — `pytest` + `coverage` for running the suite / measuring coverage (used by
 `tools/coverage` and CI); the pipeline itself needs no pip install.
 
 ### Continuous integration
 
-- **GitHub Actions** (`.github/workflows/tests.yml`) runs `python3 -m pytest -q` on every push to `main`
-  and on every pull request.
+- **GitHub Actions** (`.github/workflows/tests.yml`), on every push to `main` and on every pull request: the
+  suite under coverage (failing below 80%), `tools/spec-coverage`, the editor's front-end tests and
+  `tools/build-pyz --check`; and, in a job of its own, the spec corpus — `tools/spec-build`, a check that the
+  committed `spec/needs.json` is what it writes, and `tools/spec-ledger check`.
 - **Local `pre-push` hook** (`.githooks/pre-push`) runs a static guard
   (`.githooks/check_test_only_functions.py` — fails if any production function is referenced only by
-  tests) and then the suite before a push, aborting on either failure. Enable it per clone with
+  tests), then the suite without its slow tests, the editor's front-end tests, the spec corpus (when
+  `spec/.venv` exists) and `tools/build-pyz --check` before a push, aborting on any failure. Enable it per clone with
   `git config core.hooksPath .githooks`; bypass once with `git push --no-verify`. The guard's
-  `SRC_FILES` covers all three phase modules + `photos_utils` under `cartographer/`.
+  `SRC_FILES` covers the three phase modules, `photos_utils`, `_geotag_calc`, `_prep_models`, `cli` and both
+  web servers.
 - **Local `pre-commit` hook** (`.githooks/pre-commit`) rebuilds `dist/photos-cartographer` on every
   commit so the local executable is never stale. `dist/` is gitignored — this is a LOCAL build
   only; nothing is committed or pushed. It blocks a commit only if the build itself breaks.
@@ -109,87 +126,8 @@ There is no build step and no linter config; runtime deps are system tools (`exi
 
 ### Release history
 
-- **v1.5.2** — bug fix: **GPX track-point times with fractional seconds now parse** (#301). A `<time>`
-  is read as a full `xsd:dateTime` — fractional seconds optional, `Z` or a numeric offset — so Garmin's
-  `…:SS.000Z` loads alongside `…:SSZ`. Previously a `Z`-suffixed time went through a strict
-  whole-seconds format, every point of such a file was rejected, and the GPX set reported as `empty`.
-  `geotag plan` also prints the GPX load warnings now (at most 10, then a remainder count): the parser
-  recorded one per rejected point but nothing surfaced them, which is why a fully rejected file read as
-  silently empty (geotag §15). Patch only; no CLI or workspace break — a track that previously loaded
-  empty now yields points, so its GPX fingerprint changes and existing geotag plans restale; re-run
-  `geotag plan`.
-- **v1.5.1** — bug fix: **a planned GPS write now lands a readable fix.** EXIF stores latitude and
-  longitude as unsigned magnitudes with the hemisphere in the separate `GPSLatitudeRef`/`GPSLongitudeRef`
-  fields, but the plan's `metadata_gps_write` carried the coordinates alone — so every geotagged photo
-  read as having NO location to exiv2/digiKam, PIL, and Lightroom (exiftool's lenient composite still
-  showed a number, which masked it), and because `exiftool -n` stores a negative coordinate as its
-  magnitude, a southern or western position would have been written into the opposite hemisphere. GPS
-  writes now emit all four tags together, derived from the coordinate's sign, and a manual-override
-  revert restores or clears the refs alongside the coordinates (geotag §28.1 — new). Note for an
-  affected workspace: a re-plan alone does not repair it — the coordinate-only files now read as native
-  GPS (`has_native_gps` keys on coordinate presence), so `classify_gps` returns `preserve_native` and
-  plans no write; recover from the pre-execute snapshot, then re-plan and re-execute. Patch only; no CLI
-  or workspace break, and plans restale normally on the changed operation fingerprint.
-- **v1.5.0** — **a plan no longer throws its decode work away.** Cache rows are written by `execute`
-  only (planning never mutates the cache — `plan` opens it read-only), so a plan that was never executed
-  discarded every fingerprint it computed and the next plan re-decoded the whole workspace: hours on a
-  real library whenever the operator re-plans first (a config edit, a corrected folder, an interrupted
-  run). Planning now keeps those observations in a **decode memo** in its own database
-  (`.photos-ingest/photos-00-plan-memo.db`, prep §10.3 — new), consulted only where the cache misses and
-  always outranked by it. Entries are laid *under* the cache and split back into their file and metadata
-  parts, so both freshness gates apply the same size/mtime/engine/field-set tests they apply to a cache
-  row — there is no memo-specific reuse path; move recognition still runs against executed state alone;
-  and a missing or corrupt memo degrades to re-decoding rather than failing a plan. A 39-file re-plan
-  drops from 4.5s to 0.2s with an identical plan. Alongside it, the §17.4 re-hash report accounts for
-  memo reuse and names the cause when a re-plan re-hashes with nothing carried over, and the dead
-  `camera_time_and_timezone_policy.enabled` config flag (seeded and validated, never read) is gone from
-  the seed template. Additive; no CLI or workspace break — existing workspaces gain a memo on their next
-  plan, and configs carrying the removed flag are unaffected.
-- **v1.4.0** — every phase command closes its output with a single `Next: …` line stating the operator's
-  next action for the state it produced: the next command on success (prep `plan` → `dry-run`/`execute`;
-  a complete geotag plan → `geotag execute`; geotag `finalize` → `merge init-library`/`plan`; merge
-  `execute` → a sealed workspace), or the corrective action when it stops on a blocker, a stale plan,
-  decisions still needing the editor, or an unmet precondition. Emitted from the shared phase `run()`, so
-  the CLI and the console show identical guidance (`reporting.emit_next_step`). The hints are an
-  affordance, not part of the behavioural contract — the specs stay silent on output wording (see
-  `docs/design/decisions.md`). Additive; no CLI or workspace break.
-- **v1.3.1** — bug fix: the unknown-camera-group config snippet emitted its `device_groups` arrays in
-  the wrong order (`phones` before `fixed_clock_cameras`), but the seeded config stores them sorted
-  (`fixed_clock_cameras` first), so a first-run whole-block paste-over dropped the comma between the two
-  arrays and produced invalid config. The snippet now follows the config file's own `device_groups` key
-  order (geotag §16). Patch only.
-- **v1.3.0** — **geotag auto-re-preps a clean by-dest move** (§13.1.1: after sorting into
-  `6-photos-by-dest`, go straight to geotag — when `0-sources` is empty it runs the real `prep plan` +
-  `execute` for you before locking; a non-empty `0-sources` is still the hard gate) and **always-on
-  re-hash diagnostics** (prep §17.4: when any media is re-fingerprinted, a per-reason summary —
-  `moved-unmatched`/`mtime-changed`/`engine-changed`/… — splits expected new hashes from unexpected
-  previously-cached ones, with a first-N sample + `performance_and_cache.rehash_summary` in the run
-  report). Plus a screenshot-driven docs overhaul (`docs/walkthrough.md` + the hero GIF + a USP reframe)
-  and a large **internal maintainability refactor** — the geotag pure-calc layer extracted to
-  `_geotag_calc.py`, prep models to `_prep_models.py` (façade re-exports keep the import/patch surface),
-  and `WorkspacePrepWorkflow.plan()` decomposed into ordered `_plan_*` steps over a `_PlanState` carrier
-  — all behaviour-unchanged, gated by the new `tools/plan-differential` harness. Additive/internal; no
-  CLI or workspace break.
-- **v1.2.0** — the **operational web console** (`photos-cartographer console`): run *and monitor* every
-  one of the eleven phase commands from a browser over the cwd workspace, with the decision editor folded
-  in as the 4th tab — built on the shared **reporting event/sink seam** (`cartographer/reporting.py`),
-  with execute behind a per-phase confirm gate and precondition/staleness-aware action enablement. Plus
-  the **`-j`/jobs** control, **spec-clause coverage tooling** (`tools/spec-coverage` + the clause index),
-  and assorted prep/console robustness fixes (Stop/interrupt, stale-lock probe, nothing-to-do fast-stop,
-  first-run config notice). Additive; the CLI and existing workspaces are unchanged.
-- **v1.1.1** — docs fix: correct the destination model in `docs/concepts.md` (an intermediate folder
-  may hold photos *and* sub-destinations; only folders with no direct media are `container` nodes).
-  Docs-only; the binary is unchanged from v1.1.0 (docs are not bundled).
-- **v1.1.0** — **media extensions are now workspace config** (`media_extensions`, seeded then
-  authoritative); folder-set and media-extension changes get field-scoped config fingerprints so they
-  surgically restale the geotag/merge plans. Prep `plan` now **warns on dump files exiftool sees as
-  media** (`image/*`/`video/*`) that aren't listed, suggesting a config add. Added user guides under
-  `docs/`. Renames: package `photos_pipeline` → `cartographer`, `workflows/` → `spec/`, and the
-  config-override env var `PHOTOS_PIPELINE_CONFIG` → `PHOTOS_CARTOGRAPHER_CONFIG` (the only
-  deploy-facing break; the CLI is unchanged and existing workspaces keep working).
-- **v1.0.1** — flatten `ingest/` into the repo root (`photos_pipeline/`, `tests/`, `workflows/`);
-  README destination-folder-format update. No behavioral change.
-- **v1.0.0** — first release: the unified `photos-cartographer` executable (renamed from `photos-ingest`).
+Each release's what and why is in [`HISTORY.md`](HISTORY.md), newest first; open work is in
+[`BACKLOG.md`](BACKLOG.md).
 
 ### CLI contract
 
@@ -206,7 +144,8 @@ entry (`python -m cartographer.photos_1_prep …`) sharing the same `add_argumen
 - `photos-cartographer merge` — `init-library` / `plan` / `dry-run` / `execute`.
 - `photos-cartographer edit` — the decision editor (a local web server; folded into the package at `cartographer/editor/`, web assets served as package data via importlib.resources, no bundler).
   Like every phase it operates on the **cwd workspace** (no workspace-naming argument) and refuses to
-  run if the cwd is not an initialized workspace; `--demo` is the only no-workspace mode (read-only
+  run if the cwd is not an initialized workspace or is a sealed one (a save takes the workspace lock);
+  `--demo` is the only no-workspace mode (read-only
   fixtures tour). Phases share the plan/validate/execute contract; workspace = cwd. The original `prep` / `geotag` /
   `refresh-library` / `merge` monolith they were split from has been removed; `refresh-library` was
   deliberately dropped in favor of on-demand fingerprinting in merge (see its workflow spec).
@@ -238,7 +177,8 @@ entry (`python -m cartographer.photos_1_prep …`) sharing the same `add_argumen
   on the shared event/sink seam (`cartographer/reporting.py`) and design tokens
   (`cartographer/editor/web/tokens.css`).
 - **Canonical plan persistence (all phases):** each phase's plan/decision artifact lives at a fixed
-  control-dir path (`photos-10-prep-plan.json`, geotag `photos-21`/`22`/`23`, `photos-30-merge-plan.json`).
+  control-dir path (`photos-10-prep-plan.json`, geotag's decisions `photos-21`/`22`/`23` and plan `photos-24`,
+  `photos-30-merge-plan.json`).
   The planning command writes it there and prints the location; the validate/apply commands read it from
   there — there are **no** `--output`/`--plan` path flags. Re-planning backs up the prior artifact under
   the shared incremental `-NNN` suffix (never clobbered). See shared contract Section 5 ("Canonical plan
@@ -265,13 +205,14 @@ The whole design exists to safely mutate **irreplaceable originals**. These rule
 
 - **No mutation outside a plan.** Every move/rename/quarantine/metadata-write/DB-mutation is a planned
   operation with a plan ID, op ID, explicit preconditions, expected result, and journal entry. Planning
-  never mutates.
+  mutates nothing but the fingerprints it keeps for later runs (prep's plan memo, geotag's track memo,
+  merge's library cache).
 - **Dry-run is not simulation.** Dry-run validates the *real* serialized plan that execution would
   consume (the persisted canonical plan artifact) and reports a **summary** of it — never a separate
   virtual-filesystem code path. It does not dump every operation: the full exact plan is the saved
   artifact on disk, so dry-run summarizes the real plan rather than flooding the terminal.
-- **Instruction fingerprint.** Execution recomputes the SHA-256 of the human-edited instruction file
-  (e.g. `geotag.json`) and aborts if it differs from what the plan was built against.
+- **Instruction fingerprint.** Execution recomputes the SHA-256 of each human-edited decision file
+  (geotag's `photos-21`/`22`/`23`) and aborts if it differs from what the plan was built against.
 - **No clobber.** No operation ever overwrites existing media. Destinations are reserved/validated first.
 - **Quarantine, not delete.** Duplicates are moved to a recoverable quarantine; permanent purge would be
   a separate explicit command.
@@ -282,7 +223,7 @@ The whole design exists to safely mutate **irreplaceable originals**. These rule
 
 ### Pipeline layout (shared contract)
 
-Defined in `spec/photos-shared-contract.md`:
+Defined in the shared contract (`spec/intent/shared.md`, `spec/build/shared.md`):
 
 - The pipeline is three phases: **prep** (`photos-1-prep`) → **geotag**
   (`photos-2-geotag`) → **merge** (`photos-3-merge`), all implemented.
@@ -291,10 +232,13 @@ Defined in `spec/photos-shared-contract.md`:
   *not* the library).
 - All control/artifact files live in a single `.photos-ingest/` control directory (config, guard
   sentinel `photos-00-workspace-guard`, handoff manifest, decision JSONs, journals, the SQLite cache
-  `photos-00-ingest.db`, default `gpx/` root). Prep skips this subtree wholesale, so artifacts can never
-  be mistaken for media. One file there is **scratch, not record**: `photos-00-plan-memo.db`, the
+  `photos-00-ingest.db`, and `gpx/` when `gpx_root` is configured to live there). Prep skips this
+  subtree wholesale, so artifacts can never be mistaken for media. Two files there are **scratch, not record**: `photos-00-plan-memo.db`, the
   plan-time decode memo (prep §10.3) — re-derivable fingerprints of files at the paths they were read
-  from, written outside the plan/execute op model, never journalled or archived, safe to delete.
+  from — and `photos-00-track-memo.db`, the tracks geotag has parsed; both written outside the
+  plan/execute op model, never journalled or archived, safe to delete. Finalize adds
+  `photos-26-finalized-media.json` and the archival package (`photos-26-archive-manifest.json` +
+  `photos-26-archive.tar.gz`); merge remakes it as `photos-35-*`.
 - `photos-00-config.json` is the **workspace config**: seeded on first prep run from the in-code template
   `photos_utils.CONFIG`, then authoritative and hand-edited thereafter.
 - A whole-run lock covers planning *and* execution so runs never overlap.
@@ -316,10 +260,12 @@ Defined in `spec/photos-shared-contract.md`:
 
 ## Specs are the source of truth
 
-The pipeline is **specification-driven**: behavior is defined by `spec/*.md` — the three
-per-phase workflows (prep / geotag / merge) plus `photos-shared-contract.md`. When changing pipeline
-behavior, update the governing spec; the markdown is authoritative, not just the code, so reconcile
-differences between a script and its spec rather than treating the existing code as ground truth.
+The pipeline is **specification-driven**: behavior is defined by the spec corpus in `spec/` — `intent/`
+(what the tool guarantees), `rationale/` (why) and `build/` (how this build does it) — into which the shared
+contract, prep and merge are converted; `spec/photos-2-geotag-workflow.md` stays authoritative for the geotag
+sections not yet converted. When changing pipeline behavior, update the governing spec; the spec is
+authoritative, not just the code, so reconcile differences between a script and its spec rather than treating
+the existing code as ground truth.
 
 The specs carry **behaviour only** — never output wording, UI, log lines, or implementation/comfort
 detail. Affordance decisions (the console/editor and their sub-decisions, output phrasing, and
