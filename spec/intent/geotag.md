@@ -301,7 +301,7 @@ time the tracks passed where it was taken — never an average, and never one ph
 
 :::{rul} A place visited on several days is matched to the photo's day
 :id: RUL-revisit_matched_to_its_day
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -314,7 +314,7 @@ visit's track because it passed closer.
 
 :::{rul} Visits the photos cannot tell apart wait for the user
 :id: RUL-indistinct_visits_wait
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
