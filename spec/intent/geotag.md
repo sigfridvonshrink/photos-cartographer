@@ -220,7 +220,7 @@ zone — SHALL be skipped and reported to the user, naming its file and point.
 
 :::{rul} An unknown camera group stops geotag
 :id: RUL-unknown_group_stops_geotag
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -232,7 +232,7 @@ Geotag SHALL NOT decide anything while a camera group in photos by destination i
 
 :::{rul} The classification is offered ready to paste
 :id: RUL-unknown_group_classification_offered
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :aliases: geotag-unknown-group-snippets-1

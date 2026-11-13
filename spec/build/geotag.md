@@ -132,7 +132,7 @@ the first `GPX_WARNINGS_SHOWN`, with the number of the rest.
 
 :::{bld} The classification snippet
 :id: BLD-unknown_group_snippet
-:status: seed
+:status: ruled
 :realises: RUL-unknown_group_stops_geotag, RUL-unknown_group_classification_offered
 
 On an unknown camera group, `geotag plan` SHALL print the `device_groups` arrays `fixed_clock_cameras` and `phones`,
