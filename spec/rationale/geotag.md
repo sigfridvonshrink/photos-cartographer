@@ -374,3 +374,28 @@ A clock offset belongs to the camera on that day; every photo it took that day s
 Once the photos that gave it are corrected, they no longer anchor anything — dropping the offset then would ask again a
 question already settled, or leave the later photos an offset nobody checked.
 :::
+
+
+## 29. Execution
+
+:::{rat} A crash leaves work, not damage
+:id: RAT-execution_resumable
+:status: seed
+:justifies: RUL-geotag_execution_resumable
+
+Execution writes into hundreds of originals one after another, and anything can stop it partway. Run again, it must
+know what is done and do only the rest — writing nothing twice, choosing no other name — or a crash would leave a
+day half corrected or corrected twice. And what it finds changed since the plan may be its own interrupted write or
+the user's edit: only the first is its to finish.
+:::
+
+:::{rat} Metadata never moves a pixel
+:id: RAT-content_changed_held
+:status: seed
+:justifies: RUL-content_changed_write_held
+
+Writing a time or a position changes a photo's metadata and nothing it shows; its fingerprint, taken over the decoded
+picture, holds through it — which is why every phase can follow a photo by it. A write after which the picture
+differs is something wrong — a tool, a format — that the user must see, not something to record as done; and the
+photo's identity is at stake, so only the user can take the new content for it.
+:::

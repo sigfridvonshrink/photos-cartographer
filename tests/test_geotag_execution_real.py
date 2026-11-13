@@ -143,3 +143,23 @@ def test_full_execute_with_real_tools(tmp_path, monkeypatch):
     got = subprocess.run(["exiftool", "-s3", "-DateTimeOriginal", str(out / "2024-07-03--14-00-00.jpg")],
                          capture_output=True, text=True).stdout.strip()
     assert got == "2024:07:03 14:00:00"
+
+
+@pytest.mark.parametrize("lat, lon", [(50.8467, 4.3525), (-33.865143, -70.6)])
+@pytest.mark.spec("BLD-geotag_execution", test="TST-geotag_execution_real-a_written_photo_reads_back_as_its_planned_values")
+def test_a_written_photo_reads_back_as_its_planned_values(tmp_path, lat, lon):
+    """Against the real binary: a photo geotag wrote reads back as holding every planned value — time, offset,
+    position, references, marker — which is how execute tells its own interrupted write from an edit made since
+    the plan; an edit to one tag no longer reads back as the plan."""
+    img = tmp_path / "img.jpg"; shutil.copy(FIXTURE, img)
+    ops = cal.plan_file_ops({"relative_path": "img.jpg", "content_fingerprint": "fp", "size": 1, "mtime_ns": 1},
+                            "2024-07-03T12:12:21Z", "Europe/Brussels", "gpx_interpolation",
+                            {"lat": lat, "lon": lon}, None)
+    writes = {}
+    for o in ops:
+        writes.update(o.get("writes") or {})
+    wf = cal.GeotagWorkflow(str(tmp_path))
+    assert wf._exiftool_write(str(img), writes)
+    assert cal._holds_writes(wf._exiftool_read(str(img), sorted(writes)), writes)
+    assert wf._exiftool_write(str(img), {"DateTimeOriginal": "2024:07:03 09:00:00"})        # edited elsewhere
+    assert not cal._holds_writes(wf._exiftool_read(str(img), sorted(writes)), writes)
