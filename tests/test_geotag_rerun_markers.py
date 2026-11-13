@@ -584,3 +584,51 @@ def test_geotag_writes_only_its_own_part_of_the_database(tmp_path, monkeypatch):
     _finalize(monkeypatch, ws)
     assert rows() == before
     conn.close()
+
+
+def _retake_fingerprint(ws, old, new, *, also=None):
+    """A new ImageMagick gave the photo fingerprinted `old` the value `new`: the handoff holds `new`, and prep's log —
+    vouched for by the handoff — records the step (`also`: one more step, to make the mapping not one to one)."""
+    ctl = ws / ".photos-ingest"
+    ho = json.loads((ctl / "photos-11-handoff.json").read_text())
+    for f in ho["files"]:
+        if json.loads(f["content_hash"])["value"] == old:
+            f["content_hash"] = json.dumps({"value": new, "status": "valid"})
+    steps = [{"phase": "prep", "action": "fingerprint_retaken", "run": "r2", "from": old, "to": new}]
+    if also:
+        steps.append({"phase": "prep", "action": "fingerprint_retaken", "run": "r2", "from": also, "to": new})
+    (ctl / "photos-15-prep-log.json").write_text(json.dumps({"photos": {new: {"journey": steps}}}))
+    ho.setdefault("depends_on", {})["prep_log"] = {"sha256": utils.sha256_file(str(ctl / "photos-15-prep-log.json"))}
+    _write_handoff(ws, ho["files"])
+    ho2 = json.loads((ctl / "photos-11-handoff.json").read_text())
+    ho2["depends_on"] = ho["depends_on"]
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(ho2))
+
+
+@pytest.mark.spec("RUL-own_values_follow_new_fingerprint", "BLD-original_values_follow_fingerprint",
+                  test="TST-geotag_rerun_markers-a_photo_whose_fingerprint_changed_keeps_its_own_values")
+def test_a_photo_whose_fingerprint_changed_keeps_its_own_values(tmp_path, monkeypatch):
+    # After an ImageMagick upgrade the photo's fingerprint has a new value: geotag still decides from the values it
+    # pinned under the old one — a changed offset reaches the photo from its own camera time — and execute moves
+    # the pin to the new value.
+    ws = _executed_round(tmp_path, monkeypatch)
+    pinned = _originals(ws)["fp-a.arw"]
+    _retake_fingerprint(ws, "fp-a.arw", "fp-new")
+    _confirm_drift(ws, SLOW - 300)
+    _plan(monkeypatch, ws)
+    e = _ops(ws)[f"{T}/2024-07-03--14-30-00.arw"]
+    assert e["writes"]["DateTimeOriginal"] == "2024:07:03 14:25:00"          # from its own 14:20, once
+    _execute(monkeypatch, ws)
+    assert _originals(ws) == {"fp-new": pinned}                               # the pin followed the value
+
+
+@pytest.mark.spec("RUL-own_values_follow_new_fingerprint", "BLD-original_values_follow_fingerprint",
+                  test="TST-geotag_rerun_markers-a_fingerprint_mapping_not_one_to_one_stops_geotag")
+def test_a_fingerprint_mapping_not_one_to_one_stops_geotag(tmp_path, monkeypatch):
+    ws = _executed_round(tmp_path, monkeypatch)
+    _retake_fingerprint(ws, "fp-a.arw", "fp-new", also="fp-other")
+    blockers, _, _ = cal.GeotagWorkflow(str(ws)).preflight()
+    assert any("more than one value" in b and "re-run prep" in b for b in blockers), blockers
+    earlier, problem = utils.retaken_fingerprints({"photos": {"x": {"journey": [
+        {"action": "fingerprint_retaken", "from": "a", "to": "b"}, {"action": "fingerprint_retaken", "from": "b", "to": "c"}]}}})
+    assert earlier == {"b": "a", "c": "b"} and problem is None                # a chain is one to one

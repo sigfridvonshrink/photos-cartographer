@@ -263,3 +263,18 @@ naming none, a blocker. Until every cell has taken effect, photos-23 and photos-
 is computed again with the validated offsets, photos-21 left as it is. photos-22's `depends_on` holds photos-21's
 SHA-256, `gpx_fingerprint`, `camera_time_policy_fingerprint` and `camera_group_key_version`.
 :::
+
+
+## 24. Every photo's own values
+
+:::{bld} The pinned values follow a retaken fingerprint
+:id: BLD-original_values_follow_fingerprint
+:status: seed
+:realises: RUL-own_values_follow_new_fingerprint
+
+`build_file_model` SHALL find a photo's pinned values under its fingerprint or, failing it, under the value it was
+taken again from, step by step back through the `fingerprint_retaken` steps of prep's log (`retaken_fingerprints`),
+when the handoff vouches for the log; execution then moves the pin to the current value, unless one is held there. A
+log holding two steps that give one value two predecessors, or one value two successors, is a blocker of geotag's
+preflight.
+:::

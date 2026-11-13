@@ -375,3 +375,18 @@ confirmed that offset against the tracks — an untouched check never counting a
 
 A confirmation SHALL hold only for the offset it confirmed; a changed offset is asked about again.
 :::
+
+
+## 24. Every photo's own values
+
+:::{rul} A photo's own values follow its fingerprint's new value
+:id: RUL-own_values_follow_new_fingerprint
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-geotag_rerun_keeps_settled
+
+A photo whose fingerprint is taken again with a new value SHALL keep the own values geotag pinned for it under the old
+one, so long as the change maps one value to one.
+:::

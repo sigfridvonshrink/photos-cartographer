@@ -1288,6 +1288,10 @@ changed clock offset corrects the photo's own camera time once, a GPS camera's p
 on every run, and a position derived from the tracks is derived again from the photo's own time. Geotag's mark governs
 only a photo with no pinned values — one corrected in another workspace, or before the ledger existed.
 
+A photo whose fingerprint was taken again with a new value — under another ImageMagick, say — keeps its pinned values:
+geotag follows the change prep's log records, from the old value to the new, and execution moves the pin to the new
+value; a mapping that is not one to one stops geotag.
+
 The ledger lives beside the resolved-UTC cache in geotag's region of the workspace database,
 which the archival package's database snapshot carries (shared contract Section 13).
 

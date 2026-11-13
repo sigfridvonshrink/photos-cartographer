@@ -53,7 +53,7 @@ from .photos_utils import (
     missing_managed_folders, top_level_links, misplaced_top_level_entries, by_dest_reprep_pending,
     json_dependency, verify_json_dependency, handoff_content_fingerprint, handoff_filename_format_blocker, write_json_artifact, write_versioned_json, db_path, ensure_control_dir,
     journal_path, ContentHasher, _move_no_clobber,
-    prep_log_path, prep_log_blocker, entries_not_carried, write_db_snapshot, take_zfs_snapshot,
+    prep_log_path, prep_log_blocker, entries_not_carried, retaken_fingerprints, write_db_snapshot, take_zfs_snapshot,
     control_archive_members, write_control_archive, workspace_id,
     WorkspaceLock, ProgressCoordinator,
 )
@@ -158,6 +158,13 @@ class GeotagCache:
             self.conn.execute(
                 "INSERT OR IGNORE INTO original_values (content_fingerprint, relative_path, original, captured_at) "
                 "VALUES (?,?,?,?)", (fp, rel, json.dumps(original, sort_keys=True), captured_at))
+
+    def originals_rekey(self, old, new):
+        """Move a pin to the value a photo's fingerprint was taken again with, unless one is held there."""
+        with self.conn:
+            self.conn.execute(
+                "UPDATE original_values SET content_fingerprint = ? WHERE content_fingerprint = ? "
+                "AND NOT EXISTS (SELECT 1 FROM original_values WHERE content_fingerprint = ?)", (new, old, new))
 
     def originals_all(self):
         cur = self.conn.execute("SELECT content_fingerprint, original FROM original_values")
@@ -415,6 +422,17 @@ class GeotagWorkflow:
         # cartographer: a key derived the old way would be matched against a config written for the new.
         self._check_derivation_versions(handoff, blockers)
 
+        # 5b. A photo whose fingerprint was taken again keeps its pinned values only through a mapping that is
+        # one to one; one that is not leaves geotag unable to say whose values are whose (§24.2).
+        if not prep_log_blocker(ws, handoff):
+            try:
+                with open(prep_log_path(ws)) as f:
+                    _earlier, problem = retaken_fingerprints(json.load(f))
+            except (OSError, ValueError):
+                problem = None
+            if problem:
+                blockers.append(f"{problem.capitalize()}, which prep never writes: re-run prep — `photos-cartographer prep plan` then `photos-cartographer prep execute`.")
+
         # 6. Every photo must carry a recorded time: one with none can never be resolved to its true
         # time, and no decision of geotag's could supply one (prep sends such a photo to missing
         # metadata; one sorted into a destination by hand stops geotag here, before any planning).
@@ -493,6 +511,18 @@ class GeotagWorkflow:
 
     # --- Stage 2: in-memory by-dest file model (geotag spec §14) --------
 
+    def _retaken(self):
+        """{new: old} fingerprint values from prep's log — only one the handoff vouches for, and only one to
+        one — so a photo whose fingerprint a new ImageMagick changed keeps its pinned values (§24.2)."""
+        if not self.handoff or prep_log_blocker(self.workspace_root, self.handoff):
+            return {}
+        try:
+            with open(prep_log_path(self.workspace_root)) as f:
+                earlier, _problem = retaken_fingerprints(json.load(f))
+        except (OSError, ValueError):
+            return {}
+        return earlier
+
     def build_file_model(self):
         """One object per by-dest photo, built from the handoff's records (+ the EXIF prep already
         extracted into metadata_status.parsed_json). Geotag never re-reads the file — a stale
@@ -504,6 +534,7 @@ class GeotagWorkflow:
             originals = cache.originals_all()
         finally:
             cache.close()
+        earlier = self._retaken()
         for rec in (self.handoff.get("files") or []):
             if rec.get("folder_class") != by_dest or rec.get("media_class") not in ("image", "raw"):
                 continue
@@ -550,8 +581,11 @@ class GeotagWorkflow:
                 "folder_class": rec.get("folder_class"),
                 "planned_filename": None,                    # set during the rename lookahead (Phase 6)
             })
-            if fp in originals:                              # decide from the file's own values (§24.2)
-                files[-1] = from_originals(files[-1], originals[fp])
+            key = fp
+            while key is not None and key not in originals:  # a fingerprint taken again: the pin before it
+                key = earlier.get(key)
+            if key is not None:                              # decide from the file's own values (§24.2)
+                files[-1] = dict(from_originals(files[-1], originals[key]), original_key=key)
         files.sort(key=lambda f: f["relative_path"])
         return files
 
@@ -1459,6 +1493,8 @@ class GeotagWorkflow:
             model = self.build_file_model()
             for f in model:
                 fp = f.get("content_fingerprint")
+                if fp and f.get("original_key") not in (None, fp):
+                    cache.originals_rekey(f["original_key"], fp)   # the pin follows the new value (§24.2)
                 if (fp and f["relative_path"] in by_file and not f.get("from_originals")
                         and geotag_marker(held_values(f).get("method")) is None):
                     cache.originals_pin(fp, f["relative_path"], f["own_values"], now_iso)
