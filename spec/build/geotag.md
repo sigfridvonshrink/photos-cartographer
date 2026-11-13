@@ -331,3 +331,19 @@ the `effective_fallback` of its nearest ancestor that has one, else `manual_requ
 `fallback_lat`/`fallback_lon` written there, else the inherited proposal when `accept_proposal` is true, else none; an
 accepted proposal that does not exist is `stale_user_decision`. Its `requires_user_input` is always false.
 :::
+
+
+## 27. Renames
+
+:::{bld} How renames are planned
+:id: BLD-rename_planning
+:status: seed
+:realises: RUL-suffix_no_clobber, RUL-uncorrected_keeps_its_name, RUL-geotag_name_final
+:aliases: geotag-plan-renames-1, geotag-no-clobber-planning-1, geotag-case-insensitive-conflict-1, geotag-execute-no-new-rename-1
+
+For each destination, `plan_renames` SHALL count every current name of its photos as taken, case folded, and never
+freed by a rename it plans — two photos that would trade names both take a suffix — then, in path order, leave a photo
+whose name already carries its timestamp, suffix and all, as it is, and give any other the first free name of its
+timestamp by `allocate_suffix`, adding it to the names taken. Execution applies these renames and no other, each by a
+no-clobber move.
+:::

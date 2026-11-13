@@ -856,3 +856,30 @@
 26	7. once prep has named a workspace's files in a format, changing it stops every phase (shared contract Section 6).	RUL-format_fixed_once_named	
 26	The default timestamp format is supplied by the shared, phase-neutral config key `filename_timestamp_format` (in the workspace config `photos-00-config.json`, default `%Y-%m-%d--%H-%M-%S`), defined authoritatively in the shared contract (`photos-shared-contract.md` Sections 4 and 7).	RUL-one_filename_format BLD-filename_timestamp_format	
 26	The same key is read by prep from the same file, so the format is never hard-coded and cannot drift between phases; its value feeds the filename-format dependency fingerprint.	RUL-one_filename_format	
+27	## 27. Stage 9 — Plan timestamp-based no-clobber renames	dropped	a heading; the corpus's documents carry their own
+27	The executable plan must include no-clobber rename operations where the corrected timestamp implies a different filename under the project’s timestamp naming pattern.	BLD-rename_planning RUL-uncorrected_keeps_its_name	
+27	The planning must account for cases where files might effectively trade names.	BLD-rename_planning	
+27	During the planning phase, never optimize by assuming a currently occupied filename will become free due to a planned rename.	BLD-rename_planning	
+27	Always treat existing disk files as permanently occupied for the duration of the suffix allocation loop.	BLD-rename_planning	
+27	It is vastly safer to end up with a -001 suffix than to accidentally clobber a file because an execution sequence ran slightly out of order.	RUL-suffix_no_clobber	the reason the occupied names are never freed
+27	The rename time basis is:	dropped	introduces the basis
+27	```text [sha1:dbe234c1, 4 lines]	RUL-geotag_name_final BLD-geotag_final_name	
+27	Filenames are based on destination-local civil time, not raw camera time and not UTC text.	RUL-geotag_name_final BLD-geotag_final_name	
+27	Correct example:	dropped	introduces the example
+27	```text [sha1:eb3786ee, 5 lines]	RUL-geotag_name_final BLD-geotag_final_name	
+27	If that name already exists and the no-clobber allocator chooses the first suffix:	dropped	introduces the example
+27	```text [sha1:8a56ae00, 1 lines]	BLD-name_suffix	
+27	If both the base name and `-001` exist:	dropped	introduces the example
+27	```text [sha1:2ed5114a, 1 lines]	BLD-name_suffix	
+27	The executable plan must:	dropped	introduces the list
+27	1. compute planned destination-local naive timestamp for each file;	RUL-geotag_name_final BLD-geotag_final_name	
+27	2. apply the configured filename format;	BLD-filename_timestamp_format	
+27	3. compare it to the current filename/path;	BLD-rename_planning	
+27	4. plan a rename only if needed;	RUL-uncorrected_keeps_its_name RUL-mutate_on_difference	
+27	5. allocate unique target names sequentially, updating each object's planned filename field and evaluating collisions strictly against the current filename and planned filename of all other in-memory objects;	BLD-rename_planning	
+27	6. detect case-insensitive conflicts;	BLD-rename_planning	
+27	7. reject unsafe rename plans;	RUL-suffix_no_clobber BLD-rename_planning	an unsafe rename is a no-clobber move refused
+27	8. record rename dependencies, including filename-format config fingerprint;	BLD-format_recorded BLD-geotag_dependencies	
+27	9. execute only the planned rename operations after stale-plan validation.	RUL-execution_only_the_plan INV-no_stale_use	
+27	Execution must not invent new rename decisions or choose a different suffix.	RUL-execution_only_the_plan BLD-rename_planning	
+27	It only applies renames already present in `photos-24-executable-plan.json`.	RUL-execution_only_the_plan	
