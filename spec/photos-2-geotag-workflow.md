@@ -774,6 +774,8 @@ If camera group classification is incomplete:
 
 Unknown camera group snippets are not JSON artifacts.
 
+A file whose metadata names no camera — `camera_group_key` `unknown`: a screenshot, a scan, a photo a messaging app stripped — belongs to no camera group: it is solved on its own like a phone's photo, by the offset recorded with its time, else its destination's timezone, and is never asked to be classified.
+
 Camera-group identity reuses prep's grouping rather than reinventing it: prep already computes a `camera_group_key` (at `CAMERA_GROUP_KEY_VERSION`) from serial/make/model/owner fields and emits it in both the handoff and SQLite. Mobile vs fixed-clock classification reuses the existing config in `camera_time_and_timezone_policy.device_groups` (workspace config `photos-00-config.json`), where `phones` denotes mobile and `fixed_clock_cameras` denotes fixed-clock. A group is "known" when its key is listed under one of those classes; unknown groups are exactly what the pasteable config snippets ask the user to classify.
 
 ---

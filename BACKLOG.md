@@ -4,7 +4,7 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **14** — 1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 13, 14, 15 and 16.* 🛑 Numbers are never reused; the next is **17**.
+*Open items: **13** — 1, 2, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15 and 16.* 🛑 Numbers are never reused; the next is **17**.
 
 ---
 
@@ -152,18 +152,6 @@ following, as `RUL-failed_operation_clean` was split into it, `RUL-failure_recor
 **Blocked by:** item 1. Vasile: *"maybe we can do this at the very end after the full conversion to sphinx-needs? I am
 worried that we are piling too much work in one strand and doing it now might break other links, too."* So it waits
 until every spec is converted, and is done once, over the whole corpus.
-
-### 10. Files without a camera identity share one camera group
-
-**Why:** a file whose metadata names no serial number, make, model or owner gets the camera-group key `unknown`, and
-every such file shares it: screenshots, scans, photos a messaging app stripped. They are not one camera, as a camera
-group is defined to be. Classed under `fixed_clock_cameras`, they would all get one clock offset per destination.
-Found while ruling §5 of the shared contract.
-
-**What to do:** decide how geotag treats files with no identity — a group of their own that can never be classed, each
-file on its own, or as now — state it in the geotag spec, and make the code and a test follow.
-
-**When:** with the conversion of the geotag spec (item 1), where camera groups are classified.
 
 ### 11. Records keyed by a fingerprint that changed with ImageMagick
 

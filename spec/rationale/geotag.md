@@ -170,6 +170,17 @@ in a file's metadata tells them apart reliably, so geotag asks rather than guess
 out, so only the judgement is the user's.
 :::
 
+:::{rat} No camera, no clock to correct
+:id: RAT-no_identity_no_group
+:status: seed
+:justifies: RUL-unidentified_files_solved_alone
+
+Screenshots, scans and photos a messaging app stripped name no camera, and share nothing but that. Taken for one camera,
+they would be asked to be classed as one and, classed a camera, given one clock offset per destination and day — an
+offset no camera of theirs had. Each carries what time it has; read alone, as a phone's photo is, by its own offset or
+the place's zone, it asks nothing and borrows nothing.
+:::
+
 
 ## 18. Destination civil timezone
 

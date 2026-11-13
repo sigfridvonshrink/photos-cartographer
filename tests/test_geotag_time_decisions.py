@@ -337,3 +337,26 @@ def test_classifying_a_camera_again_restales_the_time_decisions(tmp_path, monkey
     assert after["depends_on"]["camera_time_policy_fingerprint"] != before["depends_on"]["camera_time_policy_fingerprint"]
     assert after["destinations"]["6-photos-by-dest/Brussels"]["camera_group_time_decisions"] == {}
     assert after["status"] == "complete" and after["decision_mode"] == "no_op_or_auto_resolved"
+
+
+@pytest.mark.spec("RUL-unidentified_files_solved_alone", "BLD-unidentified_files",
+                  test="TST-geotag_time_decisions-a_file_naming_no_camera_is_solved_alone_never_asked")
+def test_a_file_naming_no_camera_is_solved_alone_never_asked(tmp_path, monkeypatch):
+    # A screenshot or a stripped photo names no camera: geotag never asks to class it, gives it no clock offset,
+    # and resolves it by the offset recorded with its time, else by its destination's timezone.
+    ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/shot.png", key=utils.NO_IDENTITY_KEY)],
+             device_groups={"fixed_clock_cameras": [], "phones": []}, default_tz="Europe/Brussels")
+    assert _run(monkeypatch, ws) == 0                                         # not stopped as an unknown group
+    art = _artifact(ws)
+    assert art["destinations"]["6-photos-by-dest/Brussels"]["camera_group_time_decisions"] == {}
+    assert art["status"] == "complete"
+    wf = cal.GeotagWorkflow(str(ws))
+    groups, unknown = wf.recognize_camera_groups([{"camera_group_key": utils.NO_IDENTITY_KEY}])
+    assert groups[utils.NO_IDENTITY_KEY]["camera_group_class"] == "unidentified" and unknown == []
+    f = {"relative_path": "6-photos-by-dest/Brussels/shot.png", "destination": "6-photos-by-dest/Brussels",
+         "camera_group_key": utils.NO_IDENTITY_KEY, "source_naive_time": "2024:07:03 14:00:00",
+         "source_time_tag": "EXIF:DateTimeOriginal", "raw_times": {"OffsetTimeOriginal": "+03:00"}}
+    rows = cal.compute_resolved_utc([f, dict(f, relative_path="6-photos-by-dest/Brussels/b.png", raw_times={})],
+                                    groups, art)
+    assert [(r["time_rule_used"], r["resolved_utc"]) for r in rows] == [
+        ("destination_timezone", "2024-07-03T12:00:00Z"), ("unidentified_native_offset", "2024-07-03T11:00:00Z")]

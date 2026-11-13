@@ -49,7 +49,7 @@ from .photos_utils import (
     CONFIG, CONTROL_DIR, control_dir, FINALIZED_MEDIA_ARTIFACT, track_memo_db_path, finalized_media_path, workspace_volume_error, config_path, handoff_path, guard_path, is_sealed, likely_new_dump,
     validate_config, load_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
     folders_fingerprint, media_extensions_fingerprint,
-    selected_gpx_root, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
+    selected_gpx_root, NO_IDENTITY_KEY, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
     missing_managed_folders, top_level_links, misplaced_top_level_entries, by_dest_reprep_pending,
     json_dependency, verify_json_dependency, handoff_content_fingerprint, handoff_filename_format_blocker, write_json_artifact, write_versioned_json, db_path, ensure_control_dir,
     journal_path, ContentHasher, _move_no_clobber,
@@ -558,7 +558,7 @@ class GeotagWorkflow:
                 "mtime_ns": rec.get("mtime_ns"),
                 "content_fingerprint": fp,
                 "media_class": rec.get("media_class"),
-                "camera_group_key": md.get("camera_group_key") or parsed.get("camera_group_key") or "unknown",
+                "camera_group_key": md.get("camera_group_key") or parsed.get("camera_group_key") or NO_IDENTITY_KEY,
                 "source_naive_time": parsed.get("selected_source_naive_timestamp"),
                 "source_time_tag": parsed.get("selected_source_timestamp_tag"),
                 "raw_times": {k: parsed.get(k) for k in
@@ -610,7 +610,9 @@ class GeotagWorkflow:
         fixed = set(dg.get("fixed_clock_cameras") or [])
         groups = {}
         for key in sorted({f["camera_group_key"] for f in files}):
-            cls = "smartphone" if key in phones else ("camera" if key in fixed else "unknown")
+            # A file naming no camera is no group to class: solved on its own, never asked about (§16).
+            cls = "unidentified" if key == NO_IDENTITY_KEY else \
+                "smartphone" if key in phones else ("camera" if key in fixed else "unknown")
             groups[key] = {"camera_group_key": key, "camera_group_class": cls}
         unknown = [k for k, g in groups.items() if g["camera_group_class"] == "unknown"]
         return groups, unknown

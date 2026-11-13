@@ -242,6 +242,18 @@ Geotag SHALL offer the classification of every unknown camera group ready to pas
 group already classed kept as it is.
 :::
 
+:::{rul} A file naming no camera is solved on its own
+:id: RUL-unidentified_files_solved_alone
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:uses: DEF-camera_group
+
+A file whose metadata names no camera SHALL be solved on its own — by the offset recorded with its time, else its
+destination's timezone — never asked to be classed, nor given a camera's clock offset.
+:::
+
 
 ## 18. Destination civil timezone
 

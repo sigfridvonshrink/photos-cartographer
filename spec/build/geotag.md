@@ -140,6 +140,17 @@ in the configuration's own key order, each the configured list with every unknow
 the configuration's, and exit with status 2 having written no record and read no track.
 :::
 
+:::{bld} Files naming no camera
+:id: BLD-unidentified_files
+:status: seed
+:realises: RUL-unidentified_files_solved_alone
+
+A file whose `camera_group_key` is `NO_IDENTITY_KEY` (`unknown`), the key prep gives a file with no serial, make, model
+or owner, SHALL be classed `unidentified` by `recognize_camera_groups` whatever the configuration lists, never among the
+unknown groups, given no offset cell, and resolved as a phone's photo is, its own offset's rule being
+`unidentified_native_offset`.
+:::
+
 
 ## 18. Destination civil timezone
 
