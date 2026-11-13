@@ -472,12 +472,12 @@ class GeotagWorkflow:
         from .photos_utils import by_dest_reprep_pending
         ex = by_dest_reprep_pending(self.workspace_root, handoff)
         if ex:
+            # One message for a photo moved in, removed or changed: the remedy is the same re-prep.
             blockers.append(
-                f"{by_dest} contains photos prep has not yet recorded (the handoff predates your most "
-                f"recent move from {by_date} into {by_dest}; e.g. {ex}). Re-run prep to record the move "
-                "and refresh the handoff: run `photos-cartographer prep plan` then "
-                "`photos-cartographer prep execute` (the move is recognized stat-only — no re-fingerprint, "
-                "no re-read). Then geotag can proceed.")
+                f"Prep's record of {by_dest} is out of date — a photo was moved there from {by_date}, or "
+                f"one it recorded has since been removed or changed (e.g. {ex}). Re-run prep to record "
+                "it and refresh the handoff: run `photos-cartographer prep plan` then "
+                "`photos-cartographer prep execute`. Then geotag can proceed.")
 
     @staticmethod
     def _check_derivation_versions(handoff, blockers):
@@ -1801,9 +1801,9 @@ def _auto_reprep_for_clean_move(args, workspace_root, reporter):
     The common operator flow is: move photos from by-date into the by-dest tree, then go straight to
     geotag. That move leaves the handoff stale (geotag derives each file's calibration `destination`
     from the handoff), so geotag would otherwise hard-stop and tell you to re-run prep by hand. Instead,
-    for the *clean* case — workspace initialized, `0-sources` already empty (so this is the stat-only
-    move refresh: no media is moved), and a by-date→by-dest move is the one thing
-    the handoff hasn't recorded — run the real prep phases (`plan` then `execute`) for the operator,
+    for the *clean* case — workspace initialized, `0-sources` already empty (so no media is moved), and
+    what the handoff no longer records truly (a move, or a by-dest photo removed or changed since, per
+    `by_dest_reprep_pending`) the one thing pending — run the real prep phases (`plan` then `execute`) for the operator,
     announcing what and why. Everything else is left untouched for the in-lock gates to report:
     sealed/uninitialized, a non-empty `0-sources` dump (the cheapest hard gate — a bigger op the
     operator should launch knowingly), or nothing pending. Prep's commands run through
@@ -1830,9 +1830,9 @@ def _auto_reprep_for_clean_move(args, workspace_root, reporter):
     if not example:
         return                          # nothing pending — straight to geotag
     by_dest = folder_name('photos_by_dest')
-    reporter.log(f"{by_dest}/ has photo(s) prep hasn't recorded yet (e.g. {example}), and {sources}/ is "
-                 f"empty — recording your move before geotag: running prep plan + execute "
-                 f"(stat-only, no media moved)…")
+    reporter.log(f"Prep's record of {by_dest}/ is out of date (e.g. {example}), and {sources}/ is "
+                 f"empty — bringing it up to date before geotag: running prep plan + execute "
+                 f"(no media moved)…")
     import types
     from . import photos_1_prep
     for cmd in ("plan", "execute"):

@@ -18,6 +18,7 @@ bad-coord abort), and a few helper edge branches (scans, malformed handoff recor
 stale, _valid_iana). Complements the per-stage suites. From conftest.py.
 """
 import json
+from _handoff import match_disk
 import os
 import sys
 from datetime import datetime, timezone
@@ -191,7 +192,7 @@ def _completable_ws(tmp_path):
     files = [rec("6-photos-by-dest/T/a.arw", "2024:07:03 14:00:00", gps=(50.0, 4.0)),
              rec("6-photos-by-dest/T/b.arw", "2024:07:03 15:00:00", gps=(51.0, 5.0)),
              rec("6-photos-by-dest/T/c.arw", "2024:07:03 14:30:00")]          # no GPS -> blocked
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files, "cache_fingerprint": "pcf"}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files), "cache_fingerprint": "pcf"}))
     return ws, ctl
 
 
@@ -343,6 +344,7 @@ def test_unknown_group_template_is_valid_full_json(tmp_path, monkeypatch, capsys
     extra["metadata_status"]["parsed_json"] = json.dumps(parsed)
     (ws / "6-photos-by-dest/T/z.nef").write_bytes(b"x")
     h["files"].append(extra)
+    match_disk(ws, h["files"])
     (ctl / "photos-11-handoff.json").write_text(json.dumps(h))
 
     assert _run(monkeypatch, ws) == 2

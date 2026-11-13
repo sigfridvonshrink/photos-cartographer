@@ -119,7 +119,7 @@ A run SHALL hold the lock until it ends — through planning, dry run, execution
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: lock-failfast-1
+:aliases: lock-failfast-1, geotag-lock-failfast-1
 :upholds: INV-one_run_at_a_time
 
 A run that finds the workspace locked SHALL stop at once, never waiting for it, saying the workspace is locked by a run
@@ -777,7 +777,7 @@ remove one.
 :anti: yes
 :verify: required
 :refines: RUL-structure_built_once
-:aliases: merge-require-initialized-else-run-prep-1
+:aliases: merge-require-initialized-else-run-prep-1, geotag-uninitialized-hardstop-1
 
 No phase but prep SHALL create or repair the workspace's structure; the folders merge creates in the library are
 placement, not structure.
@@ -789,7 +789,7 @@ placement, not structure.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: struct-base-folders-only-1, prep-post-init-base-folders-only-1, merge-block-misplaced-root-entry-1
+:aliases: struct-base-folders-only-1, prep-post-init-base-folders-only-1, merge-block-misplaced-root-entry-1, geotag-misplaced-root-hardstop-1
 :upholds: INV-undisturbed_shape
 
 The top level of an initialized workspace SHALL hold only the managed folders, the control records' place, the
@@ -863,7 +863,7 @@ present.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: struct-no-silent-rebuild-1, merge-require-managed-structure-intact-1
+:aliases: struct-no-silent-rebuild-1, merge-require-managed-structure-intact-1, geotag-incomplete-structure-hardstop-1
 :upholds: INV-undisturbed_shape
 
 On an initialized workspace, a missing managed folder SHALL block every phase, never recreated outside initialization:
@@ -1263,7 +1263,7 @@ of the configuration or of the areas the record reads — and each use checks th
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: dep-cascade-reject-stale-1, prep-block-on-stale-dependency-1, merge-execute-revalidate-reject-stale-1, geotag-dep-cascade-1, geotag-no-stale-execution-1, geotag-file-exists-not-executable-1
+:aliases: dep-cascade-reject-stale-1, prep-block-on-stale-dependency-1, merge-execute-revalidate-reject-stale-1, geotag-dep-cascade-1, geotag-no-stale-execution-1, geotag-file-exists-not-executable-1, geotag-stale-no-json-1
 :uses: DEF-dependency_cascade
 
 No phase SHALL use a record once anything it was derived from has changed: each phase validates what it derives from,
@@ -1398,7 +1398,7 @@ there — geotag refusing to run while it holds anything else.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: loop-no-behind-preps-back-1
+:aliases: loop-no-behind-preps-back-1, geotag-prep-after-move-required-1
 :uses: DEF-operator_loop, DEF-prep, DEF-geotag
 
 Geotag SHALL NOT plan while photos by destination holds a photo prep has not recorded where it now is.
@@ -1414,6 +1414,18 @@ Geotag SHALL NOT plan while photos by destination holds a photo prep has not rec
 
 A prep run after the latest sort SHALL record the moves from the files' sizes and modification times alone, carrying
 each moved file's identity forward without reading it again.
+:::
+
+:::{rul} Geotag plans only on a record that still holds
+:id: RUL-geotag_plans_on_current_record
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-prep_records_sort
+
+Geotag SHALL NOT plan while a photo prep recorded in photos by destination is gone, or differs in size or modification
+time from prep's record.
 :::
 
 :::{rul} Geotag may be re-run until merge
@@ -1449,7 +1461,7 @@ decisions, and files already right, it keeps as every run does.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: loop-geotag-gating-preconditions-1, geotag-bydate-empty-gate-1, geotag-residuals-ok-1
+:aliases: loop-geotag-gating-preconditions-1, geotag-bydate-empty-gate-1, geotag-residuals-ok-1, geotag-sources-empty-gate-1
 :uses: DEF-geotag, DEF-managed_folders
 
 Geotag SHALL proceed when, and only when, the workspace now satisfies its gates: photos by date holds no photo; photos
@@ -1994,7 +2006,7 @@ workspace as a cache would be.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: db-disjoint-writers-1, prep-sole-cache-writer-1
+:aliases: db-disjoint-writers-1, prep-sole-cache-writer-1, reprep-geotag-no-fix-1
 :uses: DEF-workspace_database
 :refines: RUL-phase_writes_own_records
 
@@ -2421,7 +2433,7 @@ Whether a workspace is finished SHALL be read from its seal alone, never from th
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: seal-scripts-hardstop-1, merge-sealed-hardstop-touch-nothing-1, merge-sealed-all-scripts-refuse-prune-excepted-1
+:aliases: seal-scripts-hardstop-1, merge-sealed-hardstop-touch-nothing-1, merge-sealed-all-scripts-refuse-prune-excepted-1, geotag-sealed-hardstop-1
 :uses: DEF-sealed_workspace, DEF-decision
 :refines: RUL-merge_is_terminal
 
@@ -2472,6 +2484,7 @@ Pruning the quarantine SHALL remain allowed in a sealed workspace — the only c
 :verify: required
 :uses: DEF-sealed_workspace
 :refines: RUL-sealed_refuses
+:aliases: geotag-sealed-newdump-warn-1
 
 A command refusing a sealed workspace that finds anything where a dump would land — an entry at the workspace's top
 level other than its managed folders and hidden entries, or anything in the inbox — SHALL say that a new dump is likely
