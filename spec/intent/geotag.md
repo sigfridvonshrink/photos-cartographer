@@ -333,3 +333,18 @@ Where a camera's photos support two visits equally, its clock offset SHALL NOT t
 A clock offset the user sets that the camera's own GPS positions support SHALL count as anchored by them, as an
 accepted proposal does — never asked to be checked against the tracks again.
 :::
+
+
+## 22. Resolved UTC
+
+:::{rul} A phone's time is read by the offset recorded with it
+:id: RUL-phone_time_from_own_offset
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-camera_group
+
+A phone's photo SHALL take its true time from the offset recorded with the time it was read from, else from its
+destination's timezone.
+:::

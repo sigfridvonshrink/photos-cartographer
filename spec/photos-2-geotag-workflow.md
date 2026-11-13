@@ -1107,21 +1107,17 @@ file_id / workspace_path
 destination_path
 destination_timezone
 camera_group
-time_decision_scope        (the (camera_group, destination_path) pair this file's offset came from)
+time_decision_scope        (the offset cell this file's offset came from — (camera_group[@date], destination_path))
 source_naive_time
 source_time_provenance
 time_rule_used
-utc_offset_used            (the effective offset for this file's (camera_group, destination))
+utc_offset_used            (the effective offset for this file's (camera_group, destination, date))
 resolved_utc
 resolved_utc_status
 resolved_utc_provenance
-config_fingerprint
-camera_group_fingerprint
-photos-21-time-decisions.json fingerprint
-prep_cache_fingerprint
-metadata_field_set_version
-gpx_fingerprint if GPX-derived time anchors influenced time decisions
 ```
+
+The inputs the rows were made from — the time policy, the camera-group key version, `photos-21-time-decisions.json`, the prep cache, the metadata field-set version and the GPX set — are not stored per row: they enter the cache's fingerprint (Section 22.1).
 
 The resolved UTC cache is an artifact even though it is stored in SQLite rather than as a standalone JSON file.
 

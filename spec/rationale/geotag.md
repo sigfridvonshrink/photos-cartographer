@@ -242,3 +242,17 @@ by the camera's own positions on the tracks as much as the recommended one; chec
 would ask the user to confirm on a map what those photos already show — work added to the one case that already
 needed them.
 :::
+
+
+## 22. Resolved UTC
+
+:::{rat} A phone says its own offset
+:id: RAT-phone_records_its_offset
+:status: seed
+:justifies: RUL-phone_time_from_own_offset
+
+A phone's clock is set by its network and it records the offset it was at, beside each time it writes: better
+evidence than any zone geotag could assume. But a photo holds several times, each with its offset — when it was
+taken, digitized, modified — and an offset describes only the time it was written with; another would be right only by
+chance. Where the photo records none for its time, the destination's zone is the best guess left.
+:::

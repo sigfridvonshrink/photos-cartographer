@@ -532,7 +532,8 @@ class GeotagWorkflow:
                 "source_time_tag": parsed.get("selected_source_timestamp_tag"),
                 "raw_times": {k: parsed.get(k) for k in
                               ("DateTimeOriginal", "CreateDate", "ModifyDate",
-                               "OffsetTimeOriginal", "OffsetTime", "TimeZone") if parsed.get(k) is not None},
+                               "OffsetTimeOriginal", "OffsetTimeDigitized", "OffsetTime", "TimeZone")
+                              if parsed.get(k) is not None},
                 "has_timestamp": _has_recorded_time(rec),
                 "native_gps": ({"lat": parsed.get("GPSLatitude"), "lon": parsed.get("GPSLongitude"),
                                 "processing_method": parsed.get("GPSProcessingMethod")}

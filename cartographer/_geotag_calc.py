@@ -80,6 +80,8 @@ __all__ = [
     '_parse_iso_offset',
     '_local_to_utc',
     'drift_offset_overrides',
+    'OFFSET_TAG_FOR',
+    '_own_offset',
     'compute_resolved_utc',
     'resolved_utc_fingerprint',
     '_interp',
@@ -606,10 +608,23 @@ def drift_offset_overrides(drift_artifact):
     return out
 
 
+# EXIF pairs each time field with the offset field recorded with it (geotag §22): a time read from one is
+# turned to UTC by its own offset, never by another field's.
+OFFSET_TAG_FOR = {"DateTimeOriginal": "OffsetTimeOriginal", "CreateDate": "OffsetTimeDigitized",
+                  "ModifyDate": "OffsetTime"}
+
+
+def _own_offset(f):
+    """The offset, in seconds, recorded with the field `f`'s time was read from, or None."""
+    tag = OFFSET_TAG_FOR.get(f.get("source_time_tag") or "")
+    return _parse_iso_offset((f.get("raw_times") or {}).get(tag)) if tag else None
+
+
 def compute_resolved_utc(files, groups, artifact, offset_overrides=None):
     """Resolve every by-dest photo to real UTC from the completed time decisions (§22). Camera
     groups use their (group, destination) effective offset (absolute camera->UTC correction);
-    smartphones use their own EXIF offset, else the destination timezone. `offset_overrides`
+    smartphones the offset recorded with the field their time was read from, else the destination
+    timezone. `offset_overrides`
     (from photos-22, §22a) replaces a bucket's offset with the operator-validated one. Returns
     per-file rows (the §22 fields), path-sorted and deterministic."""
     dests = artifact.get("destinations") or {}
@@ -622,9 +637,10 @@ def compute_resolved_utc(files, groups, artifact, offset_overrides=None):
         cls = (groups.get(key) or {}).get("camera_group_class")
         naive = _parse_camera_naive(f.get("source_naive_time"))
         resolved, status, rule, offset_used, prov = None, "unresolved", "missing_timestamp", None, None
+        scope = key
         if naive is not None and f.get("geotag_marker"):
             # geotag corrected this time already: it is destination-local, offset tag beside it
-            own_off = _parse_iso_offset((f.get("raw_times") or {}).get("OffsetTimeOriginal"))
+            own_off = _own_offset(f)
             if own_off is not None:
                 offset_used, resolved = own_off, naive - timedelta(seconds=own_off)
                 status, rule = "valid", "geotag_corrected"
@@ -640,6 +656,7 @@ def compute_resolved_utc(files, groups, artifact, offset_overrides=None):
                 cells = d.get("camera_group_time_decisions") or {}
                 date = _naive_date(f.get("source_naive_time"))
                 bucket_key = f"{key}@{date}" if f"{key}@{date}" in cells else key
+                scope = bucket_key                         # the cell this photo's offset comes from
                 cell = cells.get(bucket_key) or {}
                 eff = cell.get("effective_time_anchor")
                 if (dest, bucket_key) in overrides:        # §22a: operator-validated offset wins
@@ -653,7 +670,7 @@ def compute_resolved_utc(files, groups, artifact, offset_overrides=None):
                 else:
                     status, rule = "unresolved", "offset_missing"
             else:                                       # smartphone (unknown groups were hard-stopped)
-                native_off = _parse_iso_offset((f.get("raw_times") or {}).get("OffsetTimeOriginal"))
+                native_off = _own_offset(f)
                 if native_off is not None:
                     offset_used, resolved = native_off, naive - timedelta(seconds=native_off)
                     status, rule = "valid", "smartphone_native_offset"
@@ -664,7 +681,7 @@ def compute_resolved_utc(files, groups, artifact, offset_overrides=None):
                     status, rule = "unresolved", "timezone_missing"
         rows.append({
             "relative_path": f["relative_path"], "destination_path": dest, "destination_timezone": tz,
-            "camera_group": key, "time_decision_scope": f"{key}|{dest}",
+            "camera_group": key, "time_decision_scope": f"{scope}|{dest}",
             "source_naive_time": f.get("source_naive_time"), "source_time_provenance": f.get("source_time_tag"),
             "time_rule_used": rule, "utc_offset_used": offset_used,
             "resolved_utc": (resolved.strftime("%Y-%m-%dT%H:%M:%SZ") if resolved is not None else None),

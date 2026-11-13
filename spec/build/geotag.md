@@ -208,3 +208,37 @@ holds the handoff's content fingerprint, `camera_time_policy_fingerprint` — ov
 `camera_time_and_timezone_policy`, the camera groups' classes included — `gpx_fingerprint` and
 `camera_group_key_version`.
 :::
+
+
+## 22. Resolved UTC
+
+:::{bld} How each photo's true time is resolved
+:id: BLD-resolved_utc
+:status: seed
+:realises: RUL-phone_time_from_own_offset, RUL-offset_per_camera_destination_day, RUL-time_before_gps
+:aliases: geotag-compute-resolved-utc-1, geotag-utc-after-validation-1
+
+`compute_resolved_utc` SHALL resolve each photo of photos by destination to UTC: a camera's photo by the offset of its
+cell — `<group>@<date>` where the destination has one for its date, else `<group>` — a corrected offset from
+`photos-22-gps-drift-validation.json` taking its place (`camera_group_offset`); a phone's by the offset recorded with
+its time's field — `OffsetTimeOriginal` for `DateTimeOriginal`, `OffsetTimeDigitized` for `CreateDate`, `OffsetTime`
+for `ModifyDate` (`smartphone_native_offset`) — else its destination's timezone (`destination_timezone`); and a time
+geotag already corrected by its own offset, else the timezone (`geotag_corrected`); every other photo `unresolved`.
+`geotag plan` writes the rows — `relative_path`, `destination_path`, `destination_timezone`, `camera_group`,
+`time_decision_scope` (the cell, `<group>[@<date>]|<destination>`), `source_naive_time`, `source_time_provenance`,
+`time_rule_used`, `utc_offset_used`, `resolved_utc`, `resolved_utc_status`, `resolved_utc_provenance` — into the
+`resolved_utc_cache` table once photos-22 is complete, replacing the table whole.
+:::
+
+:::{bld} The resolved-UTC fingerprint
+:id: BLD-resolved_utc_fingerprint
+:status: seed
+:realises: INV-no_stale_use, RUL-staleness_by_area, RUL-tracks_in_dependencies
+:aliases: geotag-utc-fingerprint-1, geotag-utc-not-restaled-by-unrelated-config-1
+
+`resolved_utc_cache_fingerprint` SHALL be the SHA-256 over the rows ordered by path — each its `relative_path`,
+`resolved_utc`, `resolved_utc_status`, `time_rule_used`, `utc_offset_used` and `source_time_provenance` as text — and
+the inputs, sorted by name: `camera_time_policy_fingerprint`, `camera_group_key_version`, the SHA-256 of photos-21 and
+of photos-22, `prep_cache_fingerprint`, `metadata_field_set_version` and `gpx_fingerprint`, the last whether or not a
+track decided anything.
+:::
