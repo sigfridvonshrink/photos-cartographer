@@ -354,7 +354,7 @@ destination's timezone.
 
 :::{rul} An offset the camera's GPS does not support is confirmed before photos are placed by it
 :id: RUL-unanchored_offset_confirmed
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -367,7 +367,7 @@ confirmed that offset against the tracks — an untouched check never counting a
 
 :::{rul} A confirmation holds for the offset it confirmed
 :id: RUL-confirmation_holds_for_its_offset
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required

@@ -248,7 +248,7 @@ track decided anything.
 
 :::{bld} The drift check
 :id: BLD-drift_validation
-:status: seed
+:status: ruled
 :realises: RUL-unanchored_offset_confirmed, RUL-confirmation_holds_for_its_offset
 :aliases: geotag-drift-trigger-1, geotag-drift-gate-position-1, geotag-drift-confirmation-preserved-1, geotag-drift-corrected-validated-1, geotag-drift-not-mutate-21-1, geotag-drift-recompute-utc-1, geotag-drift-withdrawal-rejects-plan-1
 

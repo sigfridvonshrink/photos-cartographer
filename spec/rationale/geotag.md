@@ -262,7 +262,7 @@ chance. Where the photo records none for its time, the destination's zone is the
 
 :::{rat} A wrong offset moves a whole day along the track
 :id: RAT-drift_invisible
-:status: seed
+:status: ruled
 :justifies: RUL-unanchored_offset_confirmed
 
 A photo with no position of its own is placed where the track was at its resolved time. With an offset the camera's
@@ -274,7 +274,7 @@ check; leaving it unseen must never pass for having seen it.
 
 :::{rat} What was seen was one offset
 :id: RAT-confirmed_one_offset
-:status: seed
+:status: ruled
 :justifies: RUL-confirmation_holds_for_its_offset
 
 Confirming is looking at the photos on the track at the times one offset gives. Another offset puts them elsewhere,
