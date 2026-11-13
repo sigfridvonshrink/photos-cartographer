@@ -274,7 +274,7 @@ def test_own_gps_camera_is_marked_time_fixed(tmp_path, monkeypatch):
     assert _ops(ws) == {}
 
 
-@pytest.mark.spec("geotag-offset-kept-1", test="TST-geotag_rerun_markers-gps_derived_offset_is_kept_for_later_photos")
+@pytest.mark.spec("geotag-offset-kept-1", "BLD-day_offset_kept", test="TST-geotag_rerun_markers-gps_derived_offset_is_kept_for_later_photos")
 def test_gps_derived_offset_is_kept_for_later_photos(tmp_path, monkeypatch):
     """An offset found from the camera's own GPS stays the camera's offset for the day once those
     photos are corrected, so a later photo without GPS needs no answer."""

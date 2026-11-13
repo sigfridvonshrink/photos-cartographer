@@ -451,3 +451,30 @@ has one.
 A destination SHALL never wait on its folder fallback: without one, its photos the tracks cannot place each ask on
 their own.
 :::
+
+
+## 28. The executable plan
+
+:::{rul} A position is written whole
+:id: RUL-position_written_whole
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: geotag-gps-write-complete-fix-1
+
+A position geotag writes SHALL be written whole — latitude, longitude and their hemisphere references together — and
+one it clears cleared whole.
+:::
+
+:::{rul} A camera's offset for a day holds for its later photos
+:id: RUL-day_offset_kept_for_later_photos
+:status: seed
+:criticality: high
+:verify: required
+:aliases: geotag-offset-kept-1
+:refines: RUL-offset_per_camera_destination_day
+
+A camera's clock offset for a day, once resolved, SHALL stay that day's offset for photos of that camera arriving
+later — one found from its own GPS included, though the later photos bring no anchor.
+:::

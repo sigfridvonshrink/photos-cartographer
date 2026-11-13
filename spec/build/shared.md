@@ -602,6 +602,7 @@ destination holds only photos (merge §3). A development subfolder is one named 
 :id: BLD-rerun_recognition
 :status: ruled
 :realises: RUL-geotag_rerun_keeps_settled
+:aliases: geotag-device-marker-native-1, geotag-time-only-marker-1
 
 Geotag SHALL record what it wrote in the file's `GPSProcessingMethod`: the bare value `interpolated`, `manual_locked` or
 `manual_fallback` beside each position it writes, and, when it fixes the time and writes no position, the suffix
@@ -624,6 +625,7 @@ about a pinned file from those values and plans only the writes that differ from
 :id: BLD-marked_file_rerun
 :status: ruled
 :realises: RUL-geotag_rerun_keeps_settled
+:aliases: geotag-marker-time-corrected-1, geotag-position-marker-not-native-1
 
 On a re-run, a file with no pinned values carrying a position marker or the suffix SHALL be resolved from its own time
 and offset tag with no clock offset, as no clock anchor and in no drift check, a camera group's offset cells being built
