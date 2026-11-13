@@ -950,7 +950,7 @@ without the tool, that nothing in it has decayed or been altered.
 
 :::{rat} The library is the user's, and already in order
 :id: RAT-library_is_ground_truth
-:status: seed
+:status: ruled
 :justifies: RUL-library_never_altered, RUL-library_not_scanned, RUL-collision_by_content, RUL-collision_same_content, RUL-collision_different_content, RUL-unsettled_collision_blocks
 
 The library is the user's curated collection: its organisation and names are the ground truth, and other tools and
