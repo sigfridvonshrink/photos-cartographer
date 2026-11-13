@@ -677,3 +677,31 @@
 22a.4	### 22a.4 Dependencies	dropped	a heading; the corpus's documents carry their own
 22a.4	`photos-22` records `photos-21-time-decisions.json` SHA-256, the GPX fingerprint, the time-policy fingerprint, and the camera-group-key version.	BLD-drift_validation	
 22a.4	Because the recomputed `resolved_utc_cache_fingerprint` folds in the `photos-22` SHA-256, a changed or withdrawn 22 confirmation restales `photos-23`/`photos-24` through the normal cascade; the executable plan additionally records `photos-22` as a direct dependency so `execute` rejects a plan whose drift confirmation was withdrawn after planning (Section 28, Section 29).	BLD-geotag_dependencies BLD-resolved_utc_fingerprint	
+23	## 23. Stage 8 — GPS planning begins only after time is solved	dropped	a heading; the corpus's documents carry their own
+23	GPS planning must not start until every file has valid resolved UTC.	RUL-time_before_gps BLD-geotag_stage_order	
+23	The GPS planning stage consumes:	dropped	introduces the list
+23	1. resolved UTC per file;	BLD-resolved_utc	
+23	2. destination timezone per destination;	dropped	placement reads no timezone; the renames do (§27)
+23	3. native GPS facts;	defer:geotag-24	the placement policy is §24–§25's
+23	4. GPX folder/index/fingerprint;	BLD-gpx_fingerprint	
+23	5. manual GPS overrides;	defer:geotag-24	the placement policy is §24–§25's
+23	6. folder fallback rules — the per-destination folder GPS fallback, inherited downward from the nearest ancestor as a confirmable proposal (Section 25.3);	defer:geotag-25.3	the folder fallback is §25.3's
+23	7. existing GPS markers;	RUL-geotag_rerun_keeps_settled	a position geotag wrote is never kept as the file's own
+23	8. device class: mobile or fixed-clock camera;	dropped	placement does not depend on the device class; only time does
+23	9. destination-folder context;	BLD-geotag_destinations	
+23	10. GPS policy config (workspace config).	RUL-staleness_by_area	
+23	The workflow then decides, for each file, whether to:	dropped	introduces the list
+23	1. preserve native GPS;	defer:geotag-24	the placement policy is §24–§25's
+23	2. use manual locked GPS;	defer:geotag-24	the placement policy is §24–§25's
+23	3. use manual fallback GPS;	defer:geotag-24	the placement policy is §24–§25's
+23	4. use GPX interpolation;	defer:geotag-24	the placement policy is §24–§25's
+23	5. use GPX extrapolation;	defer:geotag-24	the placement policy is §24–§25's
+23	6. block because no reliable GPS source exists;	defer:geotag-24	the placement policy is §24–§25's
+23	7. skip because no GPS change is needed.	defer:geotag-24	the placement policy is §24–§25's
+23	This stage is separate from GPX/native-GPS time-anchor proposals.	RAT-tracks_are_geotags_evidence	
+23	The earlier stage uses native GPS + GPX to infer time.	RUL-time_before_gps	
+23	This stage uses solved time + GPX/manual/native data to plan GPS placement.	RUL-time_before_gps	
+23	Once GPS decisions have been analysed, the workflow has reached the formal GPS-decision stage.	RUL-decision_stage_writes_record	
+23	At this point, it must create:	RUL-decision_stage_writes_record	
+23	```text [sha1:1d83aff8, 1 lines]	RUL-decision_stage_writes_record BLD-geotag_stage_order	
+23	even if no GPS changes are required.	RUL-decision_stage_writes_record	
