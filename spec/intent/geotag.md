@@ -68,7 +68,7 @@ Geotag SHALL change only the photos in photos by destination — never a video, 
 
 :::{rul} A decision stage reached writes its record
 :id: RUL-decision_stage_writes_record
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :uses: DEF-geotag, DEF-decision
@@ -79,7 +79,7 @@ Each decision stage geotag reaches SHALL write its record, even when nothing in 
 
 :::{rul} No record before the first decision stage
 :id: RUL-no_record_before_decisions
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required

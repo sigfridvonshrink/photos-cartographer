@@ -10,7 +10,7 @@ that only restated others, has no heading here.
 
 :::{bld} Geotag's planning stages, in order
 :id: BLD-geotag_stage_order
-:status: seed
+:status: ruled
 :realises: RUL-time_before_gps, RUL-decision_stage_writes_record, RUL-no_record_before_decisions
 
 `geotag plan` SHALL write `photos-21-time-decisions.json`; only once it is complete resolve each photo's true time and

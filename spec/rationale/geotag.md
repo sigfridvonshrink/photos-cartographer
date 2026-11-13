@@ -61,7 +61,7 @@ the user's statement that it is ready.
 
 :::{rat} A missing record should mean one thing
 :id: RAT-record_means_stage_reached
-:status: seed
+:status: ruled
 :justifies: RUL-decision_stage_writes_record, RUL-no_record_before_decisions
 
 The decision records are what the user, the editor and the next stage read. Written at every stage reached — even
