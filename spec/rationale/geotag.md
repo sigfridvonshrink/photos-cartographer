@@ -160,7 +160,7 @@ why the photos it should have placed were not.
 
 :::{rat} The class decides how a photo's time is found
 :id: RAT-class_decides_time_model
-:status: seed
+:status: ruled
 :justifies: RUL-unknown_group_stops_geotag, RUL-unknown_group_classification_offered
 
 A phone's clock is set by its network and its zone recorded or found per photo, so each photo is solved alone; a
