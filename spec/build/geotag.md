@@ -391,7 +391,7 @@ are all corrected keeps its decision and its drift confirmation, the effective v
 
 :::{bld} How execution applies the plan
 :id: BLD-geotag_execution
-:status: seed
+:status: ruled
 :realises: RUL-geotag_execution_resumable, RUL-content_changed_write_held, RUL-execution_only_the_plan, RUL-every_change_journaled
 :aliases: geotag-journal-every-op-1, geotag-reject-stale-before-mutation-1, geotag-execute-noclobber-recheck-1, geotag-prestate-before-write-1, geotag-tool-failure-not-silent-1, geotag-atomic-ops-1, geotag-snapshot-phase-label-1, geotag-snapshot-required-abort-1, geotag-concurrency-determinism-1, geotag-deterministic-aggregation-1, geotag-no-concurrent-decision-1, geotag-single-writer-1, geotag-no-partial-persistence-1
 
@@ -408,7 +408,7 @@ the target checked free. The results merge in path order into the journal, kept 
 
 :::{bld} The execution summary
 :id: BLD-execution_summary
-:status: seed
+:status: ruled
 :realises: RUL-content_changed_write_held, RUL-failure_recorded
 :aliases: geotag-write-summary-1, geotag-summary-contents-1, geotag-summary-status-1
 
