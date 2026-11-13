@@ -399,3 +399,17 @@ picture, holds through it — which is why every phase can follow a photo by it.
 differs is something wrong — a tool, a format — that the user must see, not something to record as done; and the
 photo's identity is at stake, so only the user can take the new content for it.
 :::
+
+
+## 31. Finalize
+
+:::{rat} The package records what was done
+:id: RAT-package_records_what_was_done
+:status: seed
+:justifies: RUL-finalize_requires_success
+
+The archival package is what outlives the workspace: the account of what geotag did to each photo and why. Made
+from an execution that did not finish, it would record changes the photos lack; made after a decision was edited
+and not executed, it would record a decision they never received. Either way the record would lie about the
+library.
+:::

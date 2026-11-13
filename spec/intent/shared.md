@@ -1502,7 +1502,7 @@ resumes from prep.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: archive-finalize-explicit-1
+:aliases: archive-finalize-explicit-1, geotag-finalize-explicit-1, geotag-finalize-no-merge-1
 :uses: DEF-finalize, DEF-merge
 
 Finalize SHALL be a command of its own, never a side effect of geotag's execution.
@@ -1719,7 +1719,7 @@ Prep SHALL ask the user for no decision, organizing from the state of the worksp
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: authored-locatable-cause-1
+:aliases: authored-locatable-cause-1, geotag-user-outputs-1
 :uses: DEF-decision, DEF-dependency_cascade
 
 Every change a phase executes SHALL be traceable in the records, from the decision and the inputs it was made from,
@@ -1817,7 +1817,7 @@ the earlier one untouched, and never deriving an earlier phase's history again.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: archive-finalize-nondestructive-1
+:aliases: archive-finalize-nondestructive-1, geotag-finalize-nondestructive-1
 :uses: DEF-finalize, DEF-archival_package
 
 Finalize SHALL change nothing in the workspace's media, its other records or the library, only reading the record that
@@ -1843,7 +1843,7 @@ run's journal.
 :status: ruled
 :criticality: low
 :verify: required
-:aliases: archive-self-describing-manifest-1
+:aliases: archive-self-describing-manifest-1, geotag-finalize-manifest-1
 :uses: DEF-archival_package
 
 The package SHALL say which workspace it came from and which plan and execution it records, and list its contents with
@@ -2055,6 +2055,7 @@ A database image SHALL never be read back as working data.
 :criticality: med
 :verify: required
 :refines: RUL-database_image_each_phase
+:aliases: geotag-finalize-db-snapshot-1
 
 Every database image present SHALL be archived in the package.
 :::

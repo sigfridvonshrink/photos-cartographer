@@ -308,7 +308,7 @@ def test_finalize_archives_the_whole_control_directory(tmp_path, monkeypatch):
     import tarfile
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _to_executed(monkeypatch, ws, ctl)
-    (ctl / "photos-22-gps-drift-validation.json").write_text('{"status": "complete"}')
+    assert (ctl / "photos-22-gps-drift-validation.json").exists()
     (ctl / "photos-00-plan-memo.db").write_bytes(b"scratch")
     (ctl / "photos-15-prep-ingest.db").write_bytes(b"prep's database image")
     (ctl / "photos-00-workspace-guard").write_text('{"initialized": true, "initialized_by_run": "prep-init-1"}')
@@ -417,3 +417,17 @@ def test_finalize_is_idempotent(tmp_path, monkeypatch):
     assert _run(monkeypatch, ws, "finalize") == 0
     assert (ctl / "photos-26-complete-log.json").read_bytes() == log1     # deterministic
     assert (ctl / "photos-15-prep-log.json").read_bytes() == prep1        # prep untouched
+
+
+@pytest.mark.spec("RUL-finalize_requires_success", "BLD-finalize_preconditions",
+                  test="TST-geotag_finalize-a_decision_changed_since_execution_stops_finalize")
+def test_a_decision_changed_since_execution_stops_finalize(tmp_path, monkeypatch):
+    # Executed, then a decision edited without planning again: the package would record a decision the photos
+    # never received, so finalize writes nothing and asks for the plan and execute again.
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    p = ctl / "photos-23-gps-decisions.json"
+    a = json.loads(p.read_text()); a["note"] = "edited after execute"; p.write_text(json.dumps(a))
+    assert _run(monkeypatch, ws, "finalize") == 2
+    assert not (ctl / "photos-26-complete-log.json").exists()
+

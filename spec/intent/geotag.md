@@ -506,3 +506,18 @@ fully applied plan changing nothing, and an edit made to a photo since the plan 
 A write after which a photo's decoded content differs SHALL NOT count as done — its rename held back with it — until
 the user accepts the new content.
 :::
+
+
+## 31. Finalize
+
+:::{rul} Finalize packages only an execution that succeeded and still holds
+:id: RUL-finalize_requires_success
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: geotag-finalize-requires-success-1
+:uses: DEF-finalize
+
+Finalize SHALL refuse unless geotag's current plan was executed successfully and still holds.
+:::
