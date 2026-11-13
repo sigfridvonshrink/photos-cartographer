@@ -110,7 +110,7 @@ configuration's settings for one anchor and for several allow, and never while i
 :criticality: med
 :verify: required
 :uses: DEF-geotag, DEF-decision
-:aliases: geotag-timezone-autoresolve-1, geotag-no-proposal-requires-input-1
+:aliases: geotag-timezone-autoresolve-1, geotag-no-proposal-requires-input-1, geotag-timezone-unresolved-requires-input-1
 
 A destination's proposed timezone — inherited from the destination it lies in, or the configured default — SHALL take
 effect without the user's answer, a timezone the user writes overriding it; a destination with no proposal waits for the
@@ -240,4 +240,32 @@ Geotag SHALL NOT decide anything while a camera group in photos by destination i
 
 Geotag SHALL offer the classification of every unknown camera group ready to paste into the configuration, every
 group already classed kept as it is.
+:::
+
+
+## 18. Destination civil timezone
+
+:::{rul} A destination takes the nearest timezone it lies in
+:id: RUL-timezone_from_nearest
+:status: seed
+:criticality: med
+:verify: required
+:aliases: geotag-timezone-inherit-parentfirst-1, geotag-timezone-inherit-priority-1, geotag-timezone-manual-reroot-1
+:refines: RUL-timezone_auto_resolves
+
+A destination's proposed timezone SHALL be the one in effect at the nearest destination it lies in that has one —
+however it was reached there — and the configured default only where none has.
+:::
+
+:::{rul} A moved photo is decided where it now is
+:id: RUL-moved_photo_decided_anew
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: move-reevaluate-dest-1
+:uses: DEF-destination
+
+A photo moved to another destination SHALL be decided under that destination's timezone and clock offset, nothing of
+its old destination carried with it.
 :::

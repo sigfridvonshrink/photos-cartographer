@@ -4,7 +4,7 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **11** — 1, 2, 3, 4, 5, 6, 7, 10, 11, 12 and 13.* 🛑 Numbers are never reused; the next is **14**.
+*Open items: **12** — 1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 13 and 14.* 🛑 Numbers are never reused; the next is **15**.
 
 ---
 
@@ -220,6 +220,21 @@ during the process, in the form used during the decisioning, which would make th
   or new tracks under `gpx_root`, grows it.
 - The GPX fingerprint becomes the hash of the points in the window, so tracks added for another time restale nothing.
 - Rule it: this reverses the ruled "every track file is read whole on every run" (geotag §15, `BLD-idempotency`).
+
+**When:** after the conversion (item 1) is complete.
+
+### 14. Propose a destination's timezone from its photos' positions
+
+**Why:** a destination's timezone is proposed only from the destination it lies in, or from the configured default
+(`RUL-timezone_from_nearest`). The photos' own positions — native GPS, or placed from the tracks — say where they were
+taken, and so which timezone; geotag §18 described this as the first of the proposals, never built. A trip's root
+would then need no zone set by hand, and a destination that crosses into another zone than its parent's would be
+caught.
+
+**What to do:** derive a zone from the positions of a destination's photos — through a timezone-boundary database, a
+new dependency — and propose it ahead of the inherited one, with a `proposal_source` of its own; decide whether such a
+proposal applies itself like the inherited one, or waits for acceptance, since unlike the tree it can disagree with
+the parent's zone.
 
 **When:** after the conversion (item 1) is complete.
 
