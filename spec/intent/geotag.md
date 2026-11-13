@@ -94,7 +94,7 @@ its output.
 
 :::{rul} A camera's offset from its own GPS applies itself only as configured
 :id: RUL-anchor_offset_auto_as_configured
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :uses: DEF-geotag, DEF-decision
@@ -106,7 +106,7 @@ configuration's settings for one anchor and for several allow, and never while i
 
 :::{rul} A destination's timezone applies itself
 :id: RUL-timezone_auto_resolves
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :uses: DEF-geotag, DEF-decision
@@ -119,7 +119,7 @@ user.
 
 :::{rul} Every other proposal waits for the user's acceptance
 :id: RUL-other_proposals_need_acceptance
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
