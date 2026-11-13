@@ -448,7 +448,8 @@ def test_corrupt_journal_is_ignored(tmp_path, monkeypatch):
     assert _summary(ctl)["status"] == "success"
 
 
-@pytest.mark.spec("geotag-execute-no-new-rename-1", "geotag-execute-noclobber-recheck-1")
+@pytest.mark.spec("geotag-execute-no-new-rename-1", "geotag-execute-noclobber-recheck-1",
+                  test="TST-geotag_execution-rename_target_occupied_at_execute_blocks")
 def test_rename_target_occupied_at_execute_blocks(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)

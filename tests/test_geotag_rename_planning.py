@@ -81,13 +81,14 @@ def test_allocate_name_case_insensitive():
 
 # --- plan_renames ------------------------------------------------------------
 
-@pytest.mark.spec("fname-uncorrected-no-rename-1", "geotag-plan-renames-1", "idem-mutate-on-real-diff-1", "RUL-geotag_rerun_keeps_settled", test="TST-geotag_rename_planning-already_correctly_named_is_no_rename")
+@pytest.mark.spec("fname-uncorrected-no-rename-1", "geotag-plan-renames-1", "idem-mutate-on-real-diff-1", "RUL-geotag_rerun_keeps_settled",
+                  "BLD-rename_planning", test="TST-geotag_rename_planning-already_correctly_named_is_no_rename")
 def test_already_correctly_named_is_no_rename():
     rows = cal.plan_renames([_f("6-photos-by-dest/T/2024-07-03--14-12-21.jpg", "2024-07-03T12:12:21Z")], FMT)
     assert _names(rows) == [("2024-07-03--14-12-21.jpg", "2024-07-03--14-12-21.jpg", False)]
 
 
-@pytest.mark.spec("RUL-uncorrected_keeps_its_name", test="TST-geotag_rename_planning-suffixed_name_of_the_right_time_kept")
+@pytest.mark.spec("RUL-uncorrected_keeps_its_name", "BLD-rename_planning", test="TST-geotag_rename_planning-suffixed_name_of_the_right_time_kept")
 def test_suffixed_name_of_the_right_time_kept():
     # A burst prep named 12-00-00 and 12-00-00-001, its time not corrected: neither is renamed, run
     # after run. (Before, -001 went to -002, and on the next run back to -001.)
@@ -131,7 +132,7 @@ def test_collision_gets_suffix():
                             ("b.jpg", "2024-07-03--14-12-21-001.jpg", True)]
 
 
-@pytest.mark.spec("geotag-no-clobber-planning-1")
+@pytest.mark.spec("geotag-no-clobber-planning-1", "BLD-rename_planning", test="TST-geotag_rename_planning-name_trade_neither_clobbers")
 def test_name_trade_neither_clobbers():
     # f1 (->15-00-00) and f2 (->13-00-00); f1's target name is f2's CURRENT name -> f1 must suffix.
     rows = cal.plan_renames([_f("6-photos-by-dest/T/2024-07-03--14-00-00.jpg", "2024-07-03T13:00:00Z"),
@@ -142,7 +143,8 @@ def test_name_trade_neither_clobbers():
     assert len({v.lower() for v in planned.values()}) == 2                            # distinct, no clobber
 
 
-@pytest.mark.spec("fname-suffix-noclobber-1", "geotag-case-insensitive-conflict-1", test="TST-geotag_rename_planning-case_insensitive_collision_suffixes")
+@pytest.mark.spec("fname-suffix-noclobber-1", "geotag-case-insensitive-conflict-1", "BLD-rename_planning",
+                  test="TST-geotag_rename_planning-case_insensitive_collision_suffixes")
 def test_case_insensitive_collision_suffixes():
     # a file currently named with different case than another's planned target must still not clobber
     rows = cal.plan_renames([_f("6-photos-by-dest/T/A.JPG", "2024-07-03T12:00:00Z"),
