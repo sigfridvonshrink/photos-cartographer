@@ -563,7 +563,7 @@ decision editor (`edit`) for what it asks, and `geotag plan` again until `photos
 
 :::{bld} Geotag runs prep itself when the inbox is empty
 :id: BLD-geotag_auto_reprep
-:status: seed
+:status: ruled
 :realises: RUL-prep_records_sort, RUL-sort_recorded_by_stat, RUL-geotag_plans_on_current_record
 :aliases: geotag-auto-reprep-clean-move-1, geotag-auto-reprep-sources-nonempty-skip-1
 
@@ -573,7 +573,7 @@ plan` SHALL run prep's `plan` and `execute` itself, inside its own lock, saying 
 
 :::{bld} What prep has yet to record
 :id: BLD-reprep_pending
-:status: seed
+:status: ruled
 :realises: RUL-prep_records_sort, RUL-geotag_plans_on_current_record
 :aliases: geotag-targeted-reprep-blocker-1
 

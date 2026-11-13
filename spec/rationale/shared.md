@@ -693,7 +693,7 @@ after geotag has run, keeps the handoff the whole truth about photos by destinat
 
 :::{rat} A plan on a reading the file no longer holds
 :id: RAT-plan_on_current_record
-:status: seed
+:status: ruled
 :justifies: RUL-geotag_plans_on_current_record
 
 Geotag decides from what prep read in each photo — its time above all — and never reads the photo again. A photo
