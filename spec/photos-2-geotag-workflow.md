@@ -419,7 +419,7 @@ A folder is a destination if it directly contains media; nested folders that dir
 
 This matches prep's handoff `destination_folders` grouping (immediate parent, `os.path.dirname`), which is correct precisely *because* the format-distribution subfolders (jpg/tif) must not exist yet. Their presence is a hard-stop blocker, not a grouping case to collapse (Section 7.1).
 
-A folder that holds only sub-destinations — with **no media directly in it** — is *also* materialized as a destination, called a **container destination** and flagged `file_less: true`. It exists so an operator can author timezone / folder-GPS-fallback decisions on it that propagate **downward** to its children, through the same nearest-ancestor inheritance those two facts use (Section 18, Section 25.3) — e.g. setting one GPS fallback on a trip's parent folder seeds every leaf beneath it. The container set is derived from the real destinations' ancestor paths within `6-photos-by-dest` (no extra filesystem scan); the by-dest root is itself a container when it holds only sub-destinations, giving a single library-wide default node. Because a container has no media of its own to act on, its decision cells **never block and never demand input**: each cell **auto-resolves by inheritance** (it adopts its own nearest-ancestor or config-default proposal without confirmation) yet stays fully overridable, so containers extend reach without adding to the operator's to-do list. A container carries **no clock-offset cells at all**: offsets neither cascade downward nor roll up (Section 10.2 rules 3–4), and a file-less folder has no media to time-correct, so `camera_group_time_decisions` on a container is empty.
+A folder that holds only sub-destinations — with **no media directly in it** — is *also* materialized as a destination, called a **container destination** and flagged `file_less: true`. It exists so an operator can author timezone / folder-GPS-fallback decisions on it that propagate **downward** to its children, through the same nearest-ancestor inheritance those two facts use (Section 18, Section 25.3) — e.g. setting one GPS fallback on a trip's parent folder seeds every leaf beneath it. The container set is derived from the real destinations' ancestor paths within `6-photos-by-dest` (no extra filesystem scan); the by-dest root is itself a container when it holds only sub-destinations, giving a single library-wide default node. Because a container has no media of its own to act on, its decision cells **never block and never demand input**: its timezone auto-resolves by inheritance (it adopts its nearest-ancestor or config-default proposal without confirmation, like every destination's, Section 9.1) yet stays fully overridable; its folder GPS fallback is a proposal like any other, taking effect only once accepted, and an unconfirmed one is simply reached past by its children to the nearest resolved ancestor (Section 25.3). So containers extend reach without adding to the operator's to-do list. A container carries **no clock-offset cells at all**: offsets neither cascade downward nor roll up (Section 10.2 rules 3–4), and a file-less folder has no media to time-correct, so `camera_group_time_decisions` on a container is empty.
 
 All numbered geotag JSON artifacts must cover destinations separately.
 
@@ -427,6 +427,7 @@ This applies to:
 
 ```text
 photos-21-time-decisions.json
+photos-22-gps-drift-validation.json
 photos-23-gps-decisions.json
 photos-24-executable-plan.json
 ```
@@ -525,6 +526,7 @@ This applies to:
 
 ```text
 photos-21-time-decisions.json   (destination sections; each carries its timezone + per-group time decisions)
+photos-22-gps-drift-validation.json
 photos-23-gps-decisions.json
 photos-24-executable-plan.json
 ```

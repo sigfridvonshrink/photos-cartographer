@@ -61,7 +61,7 @@ def _gfile(rel, dest):
 
 # --- enumeration -------------------------------------------------------------
 
-@pytest.mark.spec("geotag-container-destination-1")
+@pytest.mark.spec("geotag-container-destination-1", "RUL-container_never_waits", test="TST-geotag_containers-container_materialized_with_no_offset_cells")
 def test_container_materialized_with_no_offset_cells(tmp_path):
     wf = _wf(tmp_path)
     # CAM lives under Trip/Day1; CAM2 lives two levels down under Trip/Day2/Sub.
@@ -79,7 +79,7 @@ def test_container_materialized_with_no_offset_cells(tmp_path):
     assert set(d[f"{BYDEST}/Trip/Day2/Sub"]["camera_group_time_decisions"]) == {CAM2}
 
 
-@pytest.mark.spec("geotag-container-no-block-1")
+@pytest.mark.spec("geotag-container-no-block-1", "RUL-container_never_waits", test="TST-geotag_containers-containers_never_block")
 def test_containers_never_block(tmp_path):
     wf = _wf(tmp_path)
     files = [_tfile(f"{BYDEST}/Trip/Day1/a.arw", f"{BYDEST}/Trip/Day1")]
@@ -107,7 +107,7 @@ def test_container_timezone_autoresolves_from_default(tmp_path):
     assert leaf["requires_user_input"] is False
 
 
-@pytest.mark.spec("geotag-container-no-offset-1", "geotag-offset-no-rollup-1")
+@pytest.mark.spec("geotag-container-no-offset-1", "geotag-offset-no-rollup-1", "RUL-offset_from_own_evidence", test="TST-geotag_containers-child_offset_decision_is_not_pooled_upward")
 def test_child_offset_decision_is_not_pooled_upward(tmp_path):
     wf = _wf(tmp_path)
     files = [_tfile(f"{BYDEST}/Trip/Day1/a.arw", f"{BYDEST}/Trip/Day1")]

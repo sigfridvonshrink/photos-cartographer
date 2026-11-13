@@ -129,3 +129,62 @@ user.
 Every other proposal — a clock offset derived from the destination's timezone, a folder fallback position inherited
 from the destination it lies in — SHALL take effect only once the user accepts it.
 :::
+
+## 10. Per-destination structure
+
+:::{def} A destination
+:id: DEF-destination
+:status: seed
+:uses: DEF-managed_folders
+:aliases: geotag-destination-definition-1
+
+A **destination** is the folder in photos by destination that directly holds a photo; a folder nested in it that holds
+photos is a destination of its own.
+:::
+
+:::{def} A container destination
+:id: DEF-container_destination
+:status: seed
+:uses: DEF-destination
+:aliases: geotag-container-destination-1
+
+A **container destination** is a folder in photos by destination that holds destinations but no photo of its own —
+photos by destination itself among them, when it holds no photo directly.
+:::
+
+:::{rul} One clock offset per camera, destination and day
+:id: RUL-offset_per_camera_destination_day
+:status: seed
+:criticality: high
+:verify: required
+:uses: DEF-geotag, DEF-destination, DEF-camera_group
+:aliases: geotag-offset-per-date-bucket-1, geotag-offset-per-group-dest-1, geotag-container-no-offset-1
+
+Geotag SHALL decide a camera's clock offset once for each destination and each day it took photos there, by the
+camera's own clock — a container destination, holding no photo, having none.
+:::
+
+:::{rul} An offset is proposed from its own evidence only
+:id: RUL-offset_from_own_evidence
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-offset_per_camera_destination_day
+:aliases: geotag-offset-anchored-locally-1, geotag-offset-no-inherit-1, geotag-offset-no-rollup-1, geotag-bucket-no-inherit-1, geotag-bucket-proposal-priority-1
+
+Each offset SHALL be proposed only from that camera's own positions in that destination on that day, or from the
+destination's timezone — never from the offset of another destination, whether one it lies in, one in it, or one beside
+it.
+:::
+
+:::{rul} A container destination never waits for the user
+:id: RUL-container_never_waits
+:status: seed
+:criticality: med
+:verify: required
+:uses: DEF-container_destination
+:aliases: geotag-container-no-block-1
+
+A container destination's decisions SHALL never wait for the user.
+:::

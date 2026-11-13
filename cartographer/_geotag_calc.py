@@ -789,8 +789,9 @@ def _walk_ancestors(dest):
 
 def _nearest_ancestor(dest, eff, key):
     """The deepest ancestor of `dest` with a RESOLVED value in `eff` for `key`, as (path, value), or
-    None. Shared by the §10.2 clock-offset and the §25 folder-fallback downward inheritance: `eff`
-    maps (destination, key) -> resolved value; only already-processed, resolved ancestors qualify."""
+    None. Shared by the two facts that cascade downward — the destination timezone (§18) and the folder
+    GPS fallback (§25.3); a clock offset never does (§10.2). `eff` maps (destination, key) -> resolved
+    value; only already-processed, resolved ancestors qualify, so an unconfirmed one is reached past."""
     for d in _walk_ancestors(dest):
         v = eff.get((d, key))
         if v is not None:

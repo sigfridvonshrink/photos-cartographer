@@ -77,7 +77,7 @@ def test_no_method_named_nearest_ancestor_offset():
     assert not hasattr(cal.GeotagWorkflow, "_nearest_ancestor_offset")
 
 
-@pytest.mark.spec("geotag-offset-no-inherit-1")
+@pytest.mark.spec("geotag-offset-no-inherit-1", "RUL-offset_from_own_evidence", test="TST-geotag_offset_no_inheritance-child_does_not_inherit_resolved_parent_offset")
 def test_child_does_not_inherit_resolved_parent_offset(tmp_path):
     wf = _wf(tmp_path)
     files = PARENT_FRAMES + [_file(f"{BYDEST}/Trip/Sub/c.arw", f"{BYDEST}/Trip/Sub")]   # no GPS, no tz
@@ -96,7 +96,7 @@ def test_no_ancestor_is_manual_required(tmp_path):
     assert _cell(art, f"{BYDEST}/Alone")["proposal"] == {"proposal_source": "manual_required"}
 
 
-@pytest.mark.spec("geotag-offset-anchored-locally-1")
+@pytest.mark.spec("geotag-offset-anchored-locally-1", "RUL-offset_from_own_evidence", test="TST-geotag_offset_no_inheritance-sibling_offset_does_not_leak")
 def test_sibling_offset_does_not_leak(tmp_path):
     wf = _wf(tmp_path)
     # Trip/A self-anchors; Trip/B (sibling, no GPS) must NOT adopt A — offsets never cross destinations.
