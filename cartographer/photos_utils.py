@@ -2006,6 +2006,11 @@ IMAGE_FINGERPRINT_STRATEGY = "image-content-hash-v1"   # ImageMagick signature o
 VIDEO_FINGERPRINT_STRATEGY = "video-md5-v1"            # ffmpeg MD5 of the streams as stored (-c copy)
 
 
+# The camera-group key of a file whose metadata names no camera — no serial, make, model or owner: a screenshot,
+# a scan, a photo a messaging app stripped. It is no camera group; geotag solves each such file on its own (§16).
+NO_IDENTITY_KEY = "unknown"
+
+
 class MetadataReader:
     # Metadata is read by the persistent-worker pool (PersistentExifToolWorker.read_metadata
     # via ExifToolWorkerPool, used by read_metadata_concurrently below). An earlier one-shot
@@ -2027,7 +2032,7 @@ class MetadataReader:
             v = parsed.get(k)
             if v is not None:
                 ident_parts.append(str(v).strip())
-        parsed["camera_group_key"] = "|".join(ident_parts) if ident_parts else "unknown"
+        parsed["camera_group_key"] = "|".join(ident_parts) if ident_parts else NO_IDENTITY_KEY
 
         # Passive boolean helper checks
 

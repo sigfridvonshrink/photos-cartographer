@@ -670,11 +670,12 @@ def compute_resolved_utc(files, groups, artifact, offset_overrides=None):
                     status, rule, prov = "valid", "camera_group_offset", eff.get("source")
                 else:
                     status, rule = "unresolved", "offset_missing"
-            else:                                       # smartphone (unknown groups were hard-stopped)
+            else:   # a phone, or a file naming no camera, each solved on its own (unknown groups were hard-stopped)
                 native_off = _own_offset(f)
                 if native_off is not None:
                     offset_used, resolved = native_off, naive - timedelta(seconds=native_off)
-                    status, rule = "valid", "smartphone_native_offset"
+                    status = "valid"
+                    rule = "unidentified_native_offset" if cls == "unidentified" else "smartphone_native_offset"
                 elif tz:
                     resolved = _local_to_utc(naive, tz)
                     status, rule, prov = "valid", "destination_timezone", tz
