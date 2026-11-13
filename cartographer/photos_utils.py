@@ -444,6 +444,26 @@ def prep_log_blocker(ws: str, handoff: dict):
                 "`prep execute` again")
     return None
 
+def retaken_fingerprints(prep_log: dict):
+    """`(earlier, problem)` from prep's log: for each photo whose fingerprint was taken again with a new
+    value, the value before it — `{new: old}`, one step back per `fingerprint_retaken` step — or, where one
+    value is said to follow from two, or two from one, the old-to-new mapping not being one to one, `({}, why)`
+    (BACKLOG 11; geotag §24.2)."""
+    earlier, later = {}, {}
+    for entry in ((prep_log or {}).get("photos") or {}).values():
+        for st in (entry or {}).get("journey") or []:
+            if not isinstance(st, dict) or st.get("action") != "fingerprint_retaken":
+                continue
+            old, new = st.get("from"), st.get("to")
+            if not old or not new:
+                continue
+            if earlier.get(new, old) != old or later.get(old, new) != new:
+                return {}, (f"prep's log maps fingerprint {old[:12]}… or {new[:12]}… to more than one value; "
+                            "a photo's own values cannot follow it")
+            earlier[new], later[old] = old, new
+    return earlier, None
+
+
 def entries_not_carried(earlier: dict, later: dict) -> list:
     """Fingerprints whose entry in an earlier phase's log is not carried whole into a later phase's
     copy (§13.0a): a later phase only adds, so the later entry keeps every field the earlier one has,

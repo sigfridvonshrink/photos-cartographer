@@ -281,3 +281,17 @@ Confirming is looking at the photos on the track at the times one offset gives. 
 and that has not been looked at: carried over, the confirmation would pass an offset nobody checked, or let a
 correction found for the old one override the user's new decision.
 :::
+
+
+## 24. Every photo's own values
+
+:::{rat} A new decoder does not make a new photo
+:id: RAT-same_photo_new_fingerprint
+:status: seed
+:justifies: RUL-own_values_follow_new_fingerprint
+
+A new ImageMagick may decode a photo to a new fingerprint; the photo is the same, and so are its own time and
+position. Lost with the old value, they would leave geotag taking the photo's corrected time for its own: a changed
+offset would never reach it, a withdrawn one never undo. Prep's log says which old value became which new one; where
+it does not say so one for one, no photo's values can be told apart, and geotag stops rather than guess.
+:::
