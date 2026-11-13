@@ -3,9 +3,9 @@
 1	This document defines the high-level workflow for the geotag phase that follows `photos-1-prep`.	dropped	frames the document; DEF-geotag says what geotag is
 1	The geotag phase exists to:	DEF-geotag	introduces the list
 1	1. validate that prep has produced a current by-dest working set;	RUL-prep_records_sort RUL-handoff_verified_by_content	
-1	2. operate only on files under `6-photos-by-dest`;	defer:geotag-7	geotag's scope is §7
+1	2. operate only on files under `6-photos-by-dest`;	RUL-geotag_changes_only_by_dest	
 1	3. require `5-photos-by-date` to contain no photos before geotag can proceed;	RUL-geotag_gates	
-1	4. require that destination development (the jpg/tif breakout) has not yet started;	defer:geotag-7	the development gate is §7.1
+1	4. require that destination development (the jpg/tif breakout) has not yet started;	RUL-development_after_merge	
 1	5. ensure every file can be resolved to real UTC;	RUL-time_before_gps RUL-untimed_photo_stops_geotag	
 1	6. persist resolved UTC for every file in SQLite;	defer:geotag-22	resolved UTC is §22
 1	7. plan GPS decisions only after time is solved;	RUL-time_before_gps	
@@ -105,3 +105,61 @@
 6	Because each artifact carries the *full* flattened set (Section 5), a change anywhere still surfaces downstream; transitivity is about not redundantly recomputing the same value at every step, not about skipping it.	RUL-geotag_plan_carries_every_dependency BLD-geotag_dependencies	
 6	The values verified directly at a given step are the named JSON artifact hashes and the prep handoff's recomputed content fingerprint (items 1–1a), the config and GPX fingerprints recomputed from their live sources, and the per-file media preconditions; the rest are honored through the chain.	BLD-geotag_dependencies	
 6	Execution must not proceed from stale dependency state.	INV-no_stale_use	
+7	## 7. Geotag scope	dropped	a heading; the corpus's documents carry their own
+7	Geotag operates only on files under:	RUL-geotag_changes_only_by_dest	
+7	```text [sha1:0c44e3fe, 1 lines]	RUL-geotag_changes_only_by_dest	
+7	The workflow must not geotag files still in:	RUL-geotag_changes_only_by_dest	
+7	```text [sha1:af57311e, 6 lines]	RUL-geotag_changes_only_by_dest RUL-geotag_gates	
+7	These folders are not geotag's concern for *processing*.	RUL-geotag_changes_only_by_dest	
+7	Residual content in `1-strays/` (the non-media prep moved out of `0-sources`, prep Section 3.2), `2-missing-metadata`, `3-redundant-jpgs`, or `4-videos-by-date` is expected and **does not block** geotag.	RUL-geotag_gates	
+7	Two of these folders are **gated**, however (Section 13):	RUL-geotag_gates	introduces the gated two
+7	`0-sources/` must be **empty** (prep leaves it empty after every run, so a non-empty `0-sources` means an un-processed dump is waiting and the user should re-run prep), and `5-photos-by-date/` must contain no photos (a non-empty one means the user has not finished placing photos into by-dest).	RUL-geotag_gates	
+7	Before geotag may proceed, the workflow must verify that:	RUL-geotag_gates	introduces the gate
+7	```text [sha1:cf1be22c, 1 lines]	RUL-geotag_gates	
+7	contains no photos.	RUL-geotag_gates	
+7	If `5-photos-by-date/` still contains photos, geotag must block before creating any geotag JSON artifact.	RUL-geotag_gates RUL-planning_changes_no_media	
+7	The reason is to push the user to complete prep and place the current batch of files into `6-photos-by-dest` before geotagging that batch.	RUL-geotag_gates	the gate's reason
+7	This is a per-run gate, not a once-ever deadline: more files can be added and geotagged in a later cycle (shared contract `photos-shared-contract.md` Section 10), but each geotag run requires `5-photos-by-date` to be empty at the time it runs.	RUL-geotag_gates RUL-geotag_rerunnable	
+7.0a	### 7.0a Assumption: each destination is time-coherent for a camera	dropped	a heading; the corpus's documents carry their own
+7.0a	Geotag assumes that **a camera's clock error is constant within one destination on one day** — every photo from one camera within one destination *on the same naive calendar date* shares one true clock offset.	defer:geotag-10	the per-day offset bucket is §10.2
+7.0a	Clock corrections therefore vary **between** destinations and **between days within a destination** (a place revisited on different days or seasons), never within a single day's shoot.	defer:geotag-10	the per-day offset bucket is §10.2
+7.0a	The user typically sets the camera to local time each morning, so the offset is a per-day fact; a destination spanning more than one naive date splits into per-day offset buckets (Section 10.2 rule 4).	defer:geotag-10	the per-day offset bucket is §10.2
+7.0a	This is a deliberate assumption about how the user organizes media, and it is *why* the camera clock offset is inferred and applied per **(camera group, destination)** rather than once per camera (Section 10.2):	defer:geotag-10	the per-day offset bucket is §10.2
+7.0a	- A camera's clock **drifts**, and is sometimes **reset**, between trips.	defer:geotag-10	the per-day offset bucket is §10.2
+7.0a	Different destinations correspond to different trips/time-windows, so the same camera's true offset can differ from one destination to the next.	defer:geotag-10	the per-day offset bucket is §10.2
+7.0a	A single global per-camera offset would be wrong the moment the clock moved between two destinations.	defer:geotag-10	the per-day offset bucket is §10.2
+7.0a	- Each destination's offset is anchored only from that camera group's native-GPS frames *in that destination* (Section 19), so each trip is corrected on its own evidence.	defer:geotag-10	the per-day offset bucket is §10.2
+7.0a	- A **nested subfolder is a separate destination** (Section 10.1) with its own offset cell — there is no roll-up.	defer:geotag-10	the per-day offset bucket is §10.2
+7.0a	If you keep a single coherent shoot in one destination (the natural way to organize), this assumption holds automatically; if you deliberately split one shoot across nested destinations, each is corrected independently.	defer:geotag-10	the per-day offset bucket is §10.2
+7.0a	A (camera group, destination, date) bucket with no native-GPS frame of its own does not start blank: when the destination's civil timezone is resolved, geotag proposes a **timezone-derived** offset from the local clock for that day (Section 10.2 rule 4b, Section 19.4), confirmable.	defer:geotag-10	the per-day offset bucket is §10.2
+7.0a	Clock offsets are **not** inherited from ancestor destinations — unlike the timezone and the folder GPS fallback, an offset is a measured/assumed fact tied to a specific place and day, not a folder default to cascade.	defer:geotag-10	the per-day offset bucket is §10.2
+7.0a	A bucket with neither its own GPS frames nor a resolved timezone starts from a blank manual field.	defer:geotag-10	the per-day offset bucket is §10.2
+7.1	### 7.1 Development must not have started	dropped	a heading; the corpus's documents carry their own
+7.1	Breaking a destination's media out into format-specific subfolders (by default `jpg/` and `tif/`, configurable via a `destination_distribution_subfolders` config key) belongs to a *later* development/processing phase that runs only after time and GPS are fixed.	RUL-development_after_merge	
+7.1	Development depends on the corrected timestamps, GPS, and filenames that geotag produces, so it must not run first.	RUL-development_after_merge	
+7.1	Therefore, before geotag may proceed, the workflow must verify that no such distribution subfolder exists anywhere under `6-photos-by-dest`.	RUL-development_after_merge	
+7.1	The check is strict: the mere existence of a folder whose name matches `destination_distribution_subfolders` triggers the hard-stop, **even if that folder is empty**.	RUL-development_after_merge	
+7.1	The workflow must not attempt to decide whether the folder "really" holds development output — presence alone is the signal.	RUL-development_after_merge	
+7.1	On detecting one, the workflow must hard-stop before creating any geotag JSON artifact: it means development has already begun and would be invalidated by the time/GPS corrections geotag is about to plan.	RUL-development_after_merge RUL-planning_changes_no_media	
+7.1	This presence check is **re-evaluated at every invocation — `plan`, `execute`, and `finalize` alike**, not only at planning: a breakout begun *between* `plan` and `execute` moves no planned file, so the per-operation media preconditions (Section 29) would not catch it; the existence check is the only thing that does, so `execute`/`finalize` hard-stop on it before any mutation or bundling.	BLD-loop_gates	
+7.2	### 7.2 By-dest must contain only photos	dropped	a heading; the corpus's documents carry their own
+7.2	`6-photos-by-dest` is the user-curated **staging area** that geotag operates on: the user organizes a dump into destination folders here, geotag corrects time/GPS and finalizes names, and the result is then **merged into** the user's permanent library (e.g. digiKam) elsewhere.	RUL-sort_photos_only DEF-managed_folders	
+7.2	The workspace is not the library — it is transient working space for one or more dumps — but by-dest is structured to merge cleanly into the library, so it must contain **only photo files** (`image`/`raw` classes): the photos the user actively moved from by-date.	RUL-sort_photos_only	
+7.2	It must not contain `other`-class non-media files, stray sidecars, notes, archives, or any non-media artifact — and it must not contain **videos** (Section 7.3); videos stay in `4-videos-by-date`.	RUL-sort_photos_only	
+7.2	Before geotag may proceed, the workflow must verify that under `6-photos-by-dest` (recursively) there is no `other`-class non-media file **and no `video`-class file** — only `image`/`raw` photo files are permitted.	RUL-sort_photos_only RUL-geotag_gates	
+7.2	Media classes are the project's `image`/`raw`/`video` extensions;	RUL-unlisted_extension_other	
+7.2	`other` is non-media, and `video` belongs in `4-videos-by-date`, not by-dest (Section 7.3).	RUL-sort_photos_only	
+7.2	The pipeline's own control artifacts are not affected because they never live under `6-photos-by-dest` — the numbered geotag artifacts are written to `.photos-ingest/` (Section 8.1), and `gpx_root` resolves outside the managed tree (shared contract Section 8).	RUL-tracks_outside_managed_folders RUL-config_never_media	
+7.2	If any non-photo file (non-media or video) is found under by-dest, geotag must hard-stop before creating any geotag JSON artifact and report the offending path(s); it does not silently ignore or skip the file, because its presence means by-dest is not the clean photo-only set that geotag and the later merge into the library assume.	RUL-sort_photos_only RUL-geotag_gates	
+7.2	**Symlinks under by-dest are barred, including nested directory symlinks.** A symlink anywhere under `6-photos-by-dest` — a file symlink, or a **nested directory symlink** — is forbidden for the same escape reason it is forbidden elsewhere in the managed tree (shared contract `photos-shared-contract.md` Section 5.3; prep `photos-1-prep-workflow.md` Section 6.2 item 3): the pipeline never follows or organizes a link.	RUL-who_checks_for_links	
+7.2	Because `6-photos-by-dest` is **read-only for prep** yet still **scanned by prep as a managed folder**, prep is the gatekeeper that detects and blocks such a symlink, and the mandatory re-prep after any by-dest change (Section 13.1; shared contract Section 10) means a link that slipped in is caught at the prep run that must precede geotag — geotag consumes prep's handoff, which is built only when prep found no forbidden symlink.	RUL-who_checks_for_links	
+7.2	Geotag itself bars symlinks at the **workspace root** (Section 13) and never follows a link when reading by-dest; it relies on prep's symlink guard for nested links *inside* by-dest rather than re-walking the tree to re-flag them.	RUL-who_checks_for_links RUL-geotag_merge_check_top_level_links	
+7.3	### 7.3 Videos are semi-foreign and never reach by-dest	dropped	a heading; the corpus's documents carry their own
+7.3	Geotag's target is **photos**.	RUL-geotag_changes_only_by_dest	
+7.3	Videos are **semi-foreign** (prep `photos-1-prep-workflow.md` Section 2.4): prep date-organizes and naively renames them into `4-videos-by-date` and they **stay there** — they are never sorted into destinations.	RUL-sort_photos_only RUL-videos_by_date	
+7.3	Videos must **never** appear in `5-photos-by-date` or `6-photos-by-dest`.	RUL-sort_photos_only RUL-band_misplacement_blocks	
+7.3	This is a hard invariant, not a preference, and **prep is the primary guard that enforces it**: prep's band-misplacement check hard-blocks a `video`-class file found under **either** `5-photos-by-date` **or** `6-photos-by-dest` (prep `photos-1-prep-workflow.md` Section 6.1, Section 6.2 item 6) — prep reports the offending path and produces no plan.	RUL-band_misplacement_blocks	
+7.3	Geotag **re-guards** the by-dest case as a **second line of defence**, not as the primary stop: the by-dest verification of Section 7.2 — rejecting both `other`-class non-media and `video`-class files so only `image`/`raw` photos remain — also rejects a video under `6-photos-by-dest`, so even on the (not-expected) path where geotag runs against a by-dest that still holds a video, geotag hard-stops before creating any artifact.	RUL-sort_photos_only RUL-geotag_gates	
+7.3	In the normal flow the video never survives the mandatory re-prep that precedes geotag, because prep blocks first; the geotag check exists so a video can never be silently geotagged even if prep's guard were somehow bypassed.	RUL-band_misplacement_blocks	
+7.3	Because videos never reach by-dest, geotag never plans or applies time/GPS metadata writes or renames for a video, never reasons about them in the camera-group/GPX/original-values machinery, and they never appear in the per-destination artifacts.	RUL-geotag_changes_only_by_dest	
+7.3	If a future need arises to geotag video time/GPS, it is out of scope for this workflow as specified.	RUL-geotag_changes_only_by_dest	

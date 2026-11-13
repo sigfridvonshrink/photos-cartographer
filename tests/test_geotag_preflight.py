@@ -274,6 +274,23 @@ def test_other_file_in_by_dest_blocks(tmp_path):
     assert any("must contain only photos" in b and "non-media" in b for b in blockers), blockers
 
 
+def test_every_offending_file_is_named_up_to_five(tmp_path):
+    """Output wording, not a rule (geotag preflight: _named): a gate names the files it found — every one up to
+    five, then how many more — not one example, so the user can clear them in one pass."""
+    ws = _ws(tmp_path)
+    for i in range(7):
+        (ws / "5-photos-by-date" / f"2023-01-01--00-00-0{i}.jpg").write_bytes(b"x")
+    (ws / "6-photos-by-dest" / "Trip" / "notes.txt").write_text("hi")
+    (ws / "6-photos-by-dest" / "Trip" / "list.csv").write_text("a")
+    (ws / "6-photos-by-dest" / "Trip" / "clip.mp4").write_bytes(b"v")
+    blockers, _, _ = _pf(ws)
+    by_date = next(b for b in blockers if "5-photos-by-date/ still contains" in b)
+    assert all(f"--00-00-0{i}.jpg" in by_date for i in range(5)) and "and 2 more" in by_date
+    assert "--00-00-05.jpg" not in by_date
+    only = next(b for b in blockers if "must contain only photos" in b)
+    assert all(n in only for n in ("notes.txt", "list.csv", "clip.mp4")), only
+
+
 # --- §13.1 re-prep-after-move gate -------------------------------------------
 
 @pytest.mark.spec("geotag-targeted-reprep-blocker-1", "loop-no-behind-preps-back-1", test="TST-geotag_preflight-unrecorded_by_dest_photo_demands_reprep")

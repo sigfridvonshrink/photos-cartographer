@@ -46,3 +46,15 @@ all but the two cache fingerprints — vouched for by the records and handoff th
 are made — before any change, and each photo's preconditions as it applies it. `photos-25-execution-summary.json` is
 never checked as a dependency.
 :::
+
+## 7. Geotag scope
+
+:::{bld} Geotag's file model
+:id: BLD-geotag_file_model
+:status: seed
+:realises: RUL-geotag_changes_only_by_dest
+:aliases: geotag-inmemory-bydest-only-1
+
+Geotag's `build_file_model` SHALL take, from the handoff, only the records whose `folder_class` is `6-photos-by-dest`
+and whose `media_class` is `image` or `raw`; every operation of `photos-24-executable-plan.json` names one of them.
+:::

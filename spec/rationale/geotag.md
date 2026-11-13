@@ -42,3 +42,17 @@ of them and trusted it to name the rest, a change upstream of it — a track add
 later one was written — would pass unseen whenever the later record happened not to be rewritten. Carried in the plan
 itself, every input is checked against what it is now, at the one moment that matters: just before anything changes.
 :::
+
+## 7. Geotag scope
+
+:::{rat} Only what the user sorted is ready
+:id: RAT-only_sorted_is_ready
+:status: seed
+:justifies: RUL-geotag_changes_only_by_dest
+
+A photo's destination is what geotag corrects it by: the timezone of the place, the offset of that camera on that
+day, the fallback position of the folder. A photo not yet sorted has none of these, and a file in the other folders is
+not a photo to place — a stray, one missing metadata, a JPEG set aside beside its RAW. Videos stay where prep put them:
+the pipeline does not place them, and a tag written into one would be a guess. Sorting a photo into a destination is
+the user's statement that it is ready.
+:::

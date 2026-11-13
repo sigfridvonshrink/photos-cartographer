@@ -840,6 +840,7 @@ A phase a link blocks SHALL name the link, and produce no executable plan and no
 :criticality: med
 :verify: required
 :refines: RUL-no_links
+:aliases: geotag-bydest-no-symlink-1
 
 Prep SHALL check for links across the whole tree it walks, the destination tree included though prep never changes it.
 :::
@@ -1384,7 +1385,7 @@ A prep execution SHALL leave the inbox empty.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: loop-sort-photo-only-1
+:aliases: loop-sort-photo-only-1, geotag-bydest-photo-only-1, geotag-bydest-no-video-1
 :uses: DEF-operator_loop, DEF-managed_folders
 
 Photos by destination SHALL hold only photos — videos stay in videos by date, and no file of no media class belongs
@@ -1448,7 +1449,7 @@ decisions, and files already right, it keeps as every run does.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: loop-geotag-gating-preconditions-1
+:aliases: loop-geotag-gating-preconditions-1, geotag-bydate-empty-gate-1, geotag-residuals-ok-1
 :uses: DEF-geotag, DEF-managed_folders
 
 Geotag SHALL proceed when, and only when, the workspace now satisfies its gates: photos by date holds no photo; photos
@@ -1547,7 +1548,7 @@ The library SHALL accept merges from many workspaces.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: loop-dev-before-geotag-blocks-1, merge-nongoal-no-jpg-tif-breakout-1
+:aliases: loop-dev-before-geotag-blocks-1, merge-nongoal-no-jpg-tif-breakout-1, geotag-development-check-strict-empty-1
 :uses: DEF-development, DEF-managed_folders
 
 Development SHALL happen in the library, after merge: a development subfolder anywhere in photos by destination — even
