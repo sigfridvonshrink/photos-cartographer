@@ -32,7 +32,7 @@ naming it and where it belongs, makes the one possible fix plain.
 
 :::{rat} A chain is only as fresh as its weakest link
 :id: RAT-no_chain_of_vouching
-:status: seed
+:status: ruled
 :justifies: RUL-geotag_plan_carries_every_dependency
 
 The decision records are files the user edits between runs, in the editor or by hand. If the plan named only the last
