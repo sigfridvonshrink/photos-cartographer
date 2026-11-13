@@ -154,3 +154,18 @@ forms, so each is read as the instant it is; one stating no zone could be any of
 point silently would let a track whose every point was rejected pass for an empty one, and the user would never learn
 why the photos it should have placed were not.
 :::
+
+
+## 16. Camera groups
+
+:::{rat} The class decides how a photo's time is found
+:id: RAT-class_decides_time_model
+:status: seed
+:justifies: RUL-unknown_group_stops_geotag, RUL-unknown_group_classification_offered
+
+A phone's clock is set by its network and its zone recorded or found per photo, so each photo is solved alone; a
+camera's clock is set by hand, wrong by its own amount each day, so geotag finds one offset per destination and day.
+Treat a camera as a phone and its error is never corrected; a phone as a camera and a correct clock is offset. Nothing
+in a file's metadata tells them apart reliably, so geotag asks rather than guesses — and writes the classification
+out, so only the judgement is the user's.
+:::

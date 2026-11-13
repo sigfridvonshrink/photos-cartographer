@@ -126,3 +126,16 @@ range or not a number, lacking a `<time>`, or with a time unparseable or naive i
 file and the point's index, as is a file that cannot be read or parsed. `geotag plan` prints the count of warnings and
 the first `GPX_WARNINGS_SHOWN`, with the number of the rest.
 :::
+
+
+## 16. Camera groups
+
+:::{bld} The classification snippet
+:id: BLD-unknown_group_snippet
+:status: seed
+:realises: RUL-unknown_group_stops_geotag, RUL-unknown_group_classification_offered
+
+On an unknown camera group, `geotag plan` SHALL print the `device_groups` arrays `fixed_clock_cameras` and `phones`,
+in the configuration's own key order, each the configured list with every unknown key appended, as JSON to paste over
+the configuration's, and exit with status 2 having written no record and read no track.
+:::

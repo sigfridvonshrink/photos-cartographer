@@ -749,7 +749,7 @@ The two statements above describe *why* the GPX fingerprint matters. In practice
 
 ## 16. Stage 4 — Camera group recognition and classification
 
-The workflow groups by-dest media by camera/device identity using SQLite metadata and the workspace config.
+The workflow groups by-dest media by the camera group key prep recorded in the handoff, and classifies each group from the workspace config.
 
 For each group, the workflow determines:
 

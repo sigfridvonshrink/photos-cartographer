@@ -52,7 +52,7 @@ def _gpx():
 def _tfile(rel, dest, *, key=CAM, naive="2024:07:03 14:00:00"):
     return {"relative_path": rel, "destination": dest, "camera_group_key": key,
             "native_gps": None, "has_native_gps": False, "has_timestamp": True,
-            "source_naive_time": naive, "camera_identity": {}}
+            "source_naive_time": naive}
 
 
 def _gfile(rel, dest):

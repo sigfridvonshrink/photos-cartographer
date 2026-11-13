@@ -43,8 +43,7 @@ def _pt(lat, lon, t):
 def _file(rel, dest, *, gps=None, naive="2024:07:03 14:00:00", key=CAM):
     return {"relative_path": rel, "destination": dest, "camera_group_key": key,
             "native_gps": ({"lat": gps[0], "lon": gps[1]} if gps else None),
-            "has_native_gps": bool(gps), "has_timestamp": True, "source_naive_time": naive,
-            "camera_identity": {}}
+            "has_native_gps": bool(gps), "has_timestamp": True, "source_naive_time": naive}
 
 
 def _wf(tmp_path):

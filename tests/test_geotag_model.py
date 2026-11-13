@@ -188,6 +188,8 @@ def test_gpx_unreadable_file_warns_and_skips(tmp_path):
 
 # --- Stage 4: camera groups + classification ---------------------------------
 
+@pytest.mark.spec("RUL-known_when_classified", "BLD-known_camera_group",
+                  test="TST-geotag_model-camera_group_classification")
 def test_camera_group_classification(tmp_path, monkeypatch):
     monkeypatch.setitem(utils.CONFIG["camera_time_and_timezone_policy"], "device_groups",
                         {"phones": ["APPLE|iPhone|p1"], "fixed_clock_cameras": ["SONY|ILCE-6400|123"]})
@@ -198,12 +200,9 @@ def test_camera_group_classification(tmp_path, monkeypatch):
         _hfile("6-photos-by-dest/A/u.jpg", key="CANON|R5|999"),
     ])
     groups, unknown = wf.recognize_camera_groups(wf.build_file_model())
-    assert groups["SONY|ILCE-6400|123"]["camera_group_class"] == "camera"
-    assert groups["SONY|ILCE-6400|123"]["file_count"] == 2
-    assert groups["SONY|ILCE-6400|123"]["destinations"] == ["6-photos-by-dest/A"]
-    assert groups["SONY|ILCE-6400|123"]["has_native_gps"] == 1
-    assert groups["APPLE|iPhone|p1"]["camera_group_class"] == "smartphone"
-    assert groups["CANON|R5|999"]["camera_group_class"] == "unknown"
+    assert groups == {"APPLE|iPhone|p1": {"camera_group_key": "APPLE|iPhone|p1", "camera_group_class": "smartphone"},
+                      "CANON|R5|999": {"camera_group_key": "CANON|R5|999", "camera_group_class": "unknown"},
+                      "SONY|ILCE-6400|123": {"camera_group_key": "SONY|ILCE-6400|123", "camera_group_class": "camera"}}
     assert unknown == ["CANON|R5|999"]
 
 
@@ -230,8 +229,7 @@ def test_geotag_reuses_handoff_camera_group_key_never_recomputes(tmp_path):
     wf = _wf(tmp_path, [rec])
     files = wf.build_file_model()
     assert files[0]["camera_group_key"] == sentinel                  # handoff value, not recomputed
-    # the identity fields are surfaced (for display) but were NOT used to derive the key
-    assert files[0]["camera_identity"]["BodySerialNumber"] == "SN-12345"
+    assert "camera_identity" not in files[0]                         # geotag keeps no identity to derive from
     assert sentinel != "SN-12345|SONY|ILCE-6400"
     policy = utils.CONFIG["camera_time_and_timezone_policy"]
     policy["device_groups"] = {"fixed_clock_cameras": [sentinel], "phones": []}
@@ -278,7 +276,7 @@ def test_run_known_group_builds_model(tmp_path, monkeypatch, capsys):
     assert os.path.exists(ws / ".photos-ingest" / "photos-21-time-decisions.json")
 
 
-@pytest.mark.spec("geotag-incomplete-classification-block-1", "RUL-no_record_before_decisions", test="TST-geotag_model-run_unknown_group_prints_snippet_and_exits")
+@pytest.mark.spec("geotag-incomplete-classification-block-1", "RUL-no_record_before_decisions", "BLD-unknown_group_snippet", test="TST-geotag_model-run_unknown_group_prints_snippet_and_exits")
 def test_run_unknown_group_prints_snippet_and_exits(tmp_path, monkeypatch, capsys):
     ws = _full_ws(tmp_path, device_groups={"fixed_clock_cameras": [], "phones": []})
     code = _main(monkeypatch, ws)

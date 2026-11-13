@@ -47,7 +47,7 @@ def _gpx():
 def _file(rel, dest, naive):
     return {"relative_path": rel, "destination": dest, "camera_group_key": CAM,
             "native_gps": None, "has_native_gps": False, "has_timestamp": True,
-            "source_naive_time": naive, "camera_identity": {}}
+            "source_naive_time": naive}
 
 
 def _tz(default="Europe/Brussels"):
