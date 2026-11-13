@@ -1506,7 +1506,7 @@ The default timestamp format should therefore be equivalent to:
 YYYY-MM-DD--HH-MM-SS
 ```
 
-The full filename pattern should be configurable, with the default behaviour conceptually equivalent to:
+Only the timestamp format is configurable; the suffix and the extension follow it, so a name is:
 
 ```text
 {destination_local_datetime:%Y-%m-%d--%H-%M-%S}{dedupe_suffix}{ext}
@@ -1546,9 +1546,9 @@ The requirements are:
 4. differentiating suffix is no-clobber and deterministic;
 5. extension is preserved according to the project’s extension-normalisation rules;
 6. filename-format config participates in dependency fingerprints;
-7. changing the filename format invalidates the executable rename plan.
+7. once prep has named a workspace's files in a format, changing it stops every phase (shared contract Section 6).
 
-The default timestamp format is supplied by the shared, phase-neutral config key `filename_timestamp_format` (in the workspace config `photos-00-config.json`, default `%Y-%m-%d--%H-%M-%S`), defined authoritatively in the shared contract (`photos-shared-contract.md` Sections 4 and 7). The same key is read by prep from the same file, so the format is never hard-coded and cannot drift between phases; its value feeds the filename-format dependency fingerprint. (The name `geotag_filename_timestamp_format` used elsewhere historically is an alias for this shared key — see shared contract Section 7.1.)
+The default timestamp format is supplied by the shared, phase-neutral config key `filename_timestamp_format` (in the workspace config `photos-00-config.json`, default `%Y-%m-%d--%H-%M-%S`), defined authoritatively in the shared contract (`photos-shared-contract.md` Sections 4 and 7). The same key is read by prep from the same file, so the format is never hard-coded and cannot drift between phases; its value feeds the filename-format dependency fingerprint.
 
 ---
 
