@@ -31,7 +31,7 @@ photos and `2-missing-metadata`.
 
 :::{bld} Geotag's dependencies, recorded and checked
 :id: BLD-geotag_dependencies
-:status: seed
+:status: ruled
 :realises: RUL-geotag_plan_carries_every_dependency, INV-no_stale_use, RUL-hash_is_the_dependency_check, RUL-handoff_verified_by_content
 :aliases: geotag-transitive-verify-1, geotag-summary-not-dependency-1
 

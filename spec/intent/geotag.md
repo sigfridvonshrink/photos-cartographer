@@ -35,7 +35,7 @@ belonging in missing metadata.
 
 :::{rul} The executable plan carries every dependency itself
 :id: RUL-geotag_plan_carries_every_dependency
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required

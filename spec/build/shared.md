@@ -520,7 +520,7 @@ and `photos-24-executable-plan.json`, and checked before each is used.
 
 :::{bld} Each phase's dependencies, in full
 :id: BLD-phase_dependencies
-:status: seed
+:status: ruled
 :realises: INV-no_stale_use
 
 Each phase SHALL record a record's dependencies in its `depends_on` block and check them before use, as its own spec
