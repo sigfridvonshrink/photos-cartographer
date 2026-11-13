@@ -563,7 +563,7 @@ A file's extension SHALL be matched to the configuration's lists ignoring case.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: config-values-validated-1
+:aliases: config-values-validated-1, geotag-sanity-validate-1
 :refines: INV-authored_values_checked
 
 Every value of the configuration that comes from the user SHALL be validated before it is used, as part of reading the
@@ -1588,6 +1588,7 @@ parsed, only for inputs that are new or have changed.
 :anti: yes
 :verify: required
 :refines: INV-change_only_what_needs
+:aliases: geotag-preserve-user-decisions-1
 
 A decision the user made SHALL be kept, by every phase and through every run, while what it decides about is
 unchanged.
@@ -1673,7 +1674,7 @@ inputs — never from a choice the tool makes on its own; an execution acts only
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: authored-fields-not-overwritten-1
+:aliases: authored-fields-not-overwritten-1, geotag-recalc-proposals-1
 :uses: DEF-decision, RUL-decision_kept
 
 A decision field SHALL be written by the user alone, no phase ever overwriting what the user wrote.
@@ -1685,6 +1686,7 @@ A decision field SHALL be written by the user alone, no phase ever overwriting w
 :criticality: med
 :verify: required
 :refines: RUL-user_writes_decisions
+:aliases: geotag-decision-fields-precreated-1, geotag-no-manual-structure-1
 
 A phase SHALL create every field a decision needs, so the user fills in values, never structure.
 :::
@@ -2646,7 +2648,7 @@ A value found invalid SHALL stop the phase as a stale dependency does, nothing m
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: validate-locate-no-repair-1
+:aliases: validate-locate-no-repair-1, geotag-validation-hard-blocker-1
 :uses: DEF-authored_value, RUL-cause_locatable
 :refines: INV-authored_values_checked
 
@@ -2672,6 +2674,7 @@ A value SHALL be used as written or not at all: never repaired.
 :anti: yes
 :verify: required
 :refines: INV-authored_values_checked
+:aliases: geotag-validate-every-consume-1
 
 A value SHALL be checked every time a run uses it, never taken as valid because an earlier run found it so.
 :::
@@ -2682,7 +2685,7 @@ A value SHALL be checked every time a run uses it, never taken as valid because 
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: validate-preserve-invalid-1
+:aliases: validate-preserve-invalid-1, geotag-invalid-preserved-1, geotag-stale-decision-preserved-1
 :uses: DEF-decision, RUL-decision_kept
 :refines: RUL-invalid_value_stops
 

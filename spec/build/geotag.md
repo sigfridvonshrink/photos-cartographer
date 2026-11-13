@@ -58,3 +58,17 @@ never checked as a dependency.
 Geotag's `build_file_model` SHALL take, from the handoff, only the records whose `folder_class` is `6-photos-by-dest`
 and whose `media_class` is `image` or `raw`; every operation of `photos-24-executable-plan.json` names one of them.
 :::
+
+## 9. Human decision field rule
+
+:::{bld} The auto-apply settings
+:id: BLD-auto_apply_settings
+:status: seed
+:realises: RUL-anchor_offset_auto_as_configured, RUL-timezone_auto_resolves, RUL-other_proposals_need_acceptance
+
+A GPX self-anchor offset SHALL be set as `effective_time_anchor` with `decision_mode: "auto_resolved"` when its
+anchors do not conflict and `camera_time_and_timezone_policy.multi_anchor_auto_apply` holds for two or more anchors,
+or `single_anchor_auto_apply` for one; a destination's inherited or `default_folder_timezone` proposal is set as its
+`effective_iana_timezone` likewise; a `timezone_naive` offset proposal and an `inherited` folder fallback become
+effective only with `accept_proposal: true`.
+:::

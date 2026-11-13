@@ -183,3 +183,64 @@
 8.1	They must never be written inside `6-photos-by-dest/` (or any scanned media folder), because that tree is read-only for prep and prep would otherwise inventory the artifacts as ordinary files and fold them into its cache fingerprint.	RUL-control_records_never_media	
 8.1	Placing the artifacts in `.photos-ingest/` is sufficient: prep skips that directory wholesale during its media scan (shared contract `photos-shared-contract.md` Section 5), so the artifacts are never inventoried or folded into prep's cache fingerprint.	RUL-control_records_never_media RUL-control_records_together	
 8.1	There is no per-file registry to maintain — keeping every control and artifact file inside `.photos-ingest/` is the whole mechanism.	RUL-control_records_together	
+9	## 9. Human decision field rule	dropped	a heading; the corpus's documents carry their own
+9	This rule is the mechanism behind the pipeline's authored-decisions principle (shared contract `photos-shared-contract.md` Section 12): the tool never mutates autonomously — it proposes, the user disposes by filling decision fields, and the executor acts only on what the user wrote down.	RUL-user_writes_decisions RUL-other_proposals_need_acceptance	
+9	These fields are therefore the durable, traceable record of *why* every time/GPS/rename change happens, and editing them and re-running is how a decision is revised and re-derived.	RUL-decision_revisable RUL-user_writes_decisions	
+9	Geotag JSON artifacts must be generated with all human-decision fields already present.	RUL-decision_fields_laid_out	
+9	The user should never have to add object structure, brackets, keys, arrays, commas, or new decision sections manually.	RUL-decision_fields_laid_out	
+9	Human input should be limited to filling existing empty fields or changing explicit boolean/string decision values.	RUL-decision_fields_laid_out	
+9	The general pattern is:	RUL-decision_fields_laid_out	introduces the pattern
+9	```text [sha1:a6d7d799, 3 lines]	RUL-decision_fields_laid_out RUL-user_writes_decisions	
+9	When an artifact is generated, manual override fields must exist and be empty unless the user has already filled them in a previous version of the same logical section.	RUL-decision_fields_laid_out RUL-decision_kept	
+9	When an artifact is regenerated, existing user-filled decision fields must be preserved where the logical target is still the same, for example the same destination, camera group, file, or decision item.	RUL-decision_kept	
+9	Machine-generated proposal fields may be recalculated.	RUL-user_writes_decisions	
+9	User decision fields must not be silently overwritten.	RUL-user_writes_decisions	
+9	If a user decision can no longer be safely applied because its upstream context changed, the workflow should preserve the value but mark it stale or requiring review rather than deleting it.	RUL-invalid_decision_kept RUL-decision_kept	
+9	This applies to:	RUL-decision_kept	introduces the list
+9	1. destination timezone decisions;	RUL-decision_kept	
+9	2. **(camera group, destination)** time offset decisions — the logical target is the pair, so a user-filled offset for a group in one destination is preserved independently of the same group's decision in another destination (Section 10.2);	RUL-decision_kept	
+9	3. GPX/native-GPS time-anchor acceptance;	RUL-decision_kept	
+9	4. destination/folder GPS fallback decisions (the per-destination folder fallback, inherited downward as a confirmable proposal, Section 25.3);	RUL-decision_kept	
+9	5. file-level manual GPS overrides;	RUL-decision_kept	
+9	6. ambiguous GPX interpolation/extrapolation decisions;	RUL-decision_kept	
+9	7. any other human-reviewed decision.	RUL-decision_kept	
+9.1	### 9.1 Auto-resolution policy	dropped	a heading; the corpus's documents carry their own
+9.1	A machine proposal may be *auto-resolved* (its `effective_*` value set without an explicit `user_decision`) only when the workspace config opts into it, and the governing flag depends on the proposal class:	RUL-anchor_offset_auto_as_configured RUL-timezone_auto_resolves RUL-other_proposals_need_acceptance	
+9.1	1. Time-anchor proposals (Section 19) are governed by the existing flags in `camera_time_and_timezone_policy` (workspace config `photos-00-config.json`):	RUL-anchor_offset_auto_as_configured	
+9.1	```text [sha1:c83b32bc, 2 lines]	RUL-anchor_offset_auto_as_configured BLD-auto_apply_settings	
+9.1	2. The **destination timezone auto-resolves by default**, with no policy flag.	RUL-timezone_auto_resolves	
+9.1	A destination is geographically **nested** inside its parent, so it can scarcely cross a timezone boundary the parent did not — its inherited (or config-default) proposal is therefore adopted as the `effective_iana_timezone` without per-destination confirmation (`decision_mode:	RUL-timezone_auto_resolves	
+9.1	"auto_resolved"`, `requires_user_input: false`), while staying overridable by a manual zone (Section 18).	RUL-timezone_auto_resolves	
+9.1	Only a destination with **no proposal at all** (no ancestor timezone and no configured default) keeps `requires_user_input: true`.	RUL-timezone_auto_resolves	
+9.1	Any *other* non-anchor proposal class auto-resolves only if a corresponding policy flag is enabled; with no such flag the default is conservative and it keeps `requires_user_input: true`.	RUL-other_proposals_need_acceptance	
+9.1	The default posture for anchors and other proposal classes is therefore conservative.	RUL-anchor_offset_auto_as_configured RUL-other_proposals_need_acceptance	
+9.1	A single high-confidence time-anchor proposal with `single_anchor_auto_apply` false still sets `requires_user_input: true`; the destination-timezone proposal in the Section 18 example, by contrast, auto-resolves (`requires_user_input: false`, `decision_mode:	RUL-anchor_offset_auto_as_configured	
+9.1	"auto_resolved"`) under the nested-geography rule above.	RUL-timezone_auto_resolves	
+9.1	When a policy flag enables auto-apply for a given class, the workflow may set the effective value directly and mark that section `requires_user_input: false` with `decision_mode:	RUL-anchor_offset_auto_as_configured RUL-other_proposals_need_acceptance	
+9.1	"auto_resolved"`.	RUL-anchor_offset_auto_as_configured	
+9.1	This is what makes the no-op/`complete` artifact path of Sections 20.2 and 25.2 reachable: a `complete` artifact is produced only for sections that are either genuinely no-op or auto-resolved under an enabled policy flag.	RUL-decision_stage_writes_record RUL-anchor_offset_auto_as_configured RUL-timezone_auto_resolves	
+9.1	When auto-apply is disabled, every proposal requires confirmation and resolved UTC is not finalized until the user acts.	RUL-other_proposals_need_acceptance RUL-time_before_gps	
+9.2	### 9.2 Decision and config sanity-validation	dropped	a heading; the corpus's documents carry their own
+9.2	Every human-authored value geotag consumes — the workspace config it reads (Section 13) and the decision fields the user fills in the numbered JSON artifacts — must be **sanity-validated before use**, per the shared input-validation discipline (shared contract `photos-shared-contract.md` Section 14).	RUL-config_validated_before_use RUL-config_validated_before_use	
+9.2	This is in addition to the dependency-fingerprint/SHA-256 verification of Sections 3–6: the hash checks detect that an artifact *changed*; validation detects that a value *inside* it is invalid.	RUL-hash_is_the_dependency_check RUL-config_validated_before_use	
+9.2	A decision file can re-hash correctly and still contain a malformed timezone or an out-of-range coordinate, and that must be caught.	RUL-config_validated_before_use	
+9.2	Geotag validates at least:	RUL-config_validated_before_use	introduces the list
+9.2	1. **Config it reads** (read-only — geotag never writes config): the `gpx_root` resolves sanely; the `zfs` block's snapshot prefix is a valid snapshot-name component (no whitespace, `/`, or second `@`);	RUL-config_validated_before_use RUL-config_writers	
+9.2	`filename_timestamp_format` produces a filesystem-safe, non-empty component;	RUL-config_validated_before_use	
+9.2	GPX thresholds are non-negative numbers;	RUL-config_validated_before_use	
+9.2	`camera_time_and_timezone_policy.device_groups` classifications are well-formed and reference permitted classes.	RUL-config_validated_before_use RUL-checked_shapes	
+9.2	(Geotag does not consume `library_root` or the merge/placement config — those are merge's to validate, shared contract Section 14.1.	RUL-config_validated_before_use RUL-merge_rechecks_gates	merge validates its own
+9.2	Prep is the sole writer of config and validates it on seeding/read too, prep Section 6.3; geotag re-validates the values it actually consumes.)	RUL-config_validated_before_use RUL-config_writers	
+9.2	2. **Destination timezone decisions** (Section 18): a user-entered `manual_iana_timezone` must be a real, resolvable IANA zone;	RUL-checked_positions_and_times RUL-checked_shapes	
+9.2	`accept_proposed_timezone` must be boolean; a destination cannot end with an empty effective timezone and still be treated as solved.	RUL-checked_shapes	
+9.2	3. **Camera-group time decisions** (Sections 10.2, 19): a `manual_real_utc` must parse as a valid UTC datetime; a `manual_offset_seconds` must be a number within sane bounds;	RUL-checked_positions_and_times	
+9.2	`accept_proposal` must be boolean; an accepted anchor must reference an anchor that exists.	RUL-checked_shapes RUL-invalid_decision_kept	
+9.2	4. **Manual GPS decisions** (Section 24.1): entered coordinates must be in range (latitude −90…90, longitude −180…180) and numerically well-formed, a latitude and its longitude entered together or not at all — in a review item and in a folder fallback alike;	RUL-checked_positions_and_times	
+9.2	`accept_unlocated` and a fallback's `accept_proposal` must be boolean; a structurally malformed GPS decision object is a validation error, not a silently-skipped one.	RUL-checked_shapes	
+9.2	5. **GPS-drift confirmations** (Section 22a):	RUL-checked_shapes	introduces the item
+9.2	`confirmed` must be boolean — nothing but a written `true` confirms a bucket; a `corrected_offset_seconds` must be empty or a number within sane bounds.	RUL-checked_shapes RUL-checked_positions_and_times	
+9.2	6. **Decision structure** (Section 9): the user fills *values*, not structure.	RUL-checked_shapes	
+9.2	A decision object whose shape was broken by hand-editing (missing required keys, wrong types, malformed JSON in a section) is a validation blocker located to the exact artifact, destination/group/file, and field.	RUL-checked_shapes RUL-invalid_value_located	
+9.2	Behaviour follows the shared discipline (shared contract Section 14.2): a validation failure is a **hard blocker** reported textually and located precisely (which artifact, which destination/group/file, which field); geotag produces no downstream artifact and mutates nothing from an invalid value, exactly as for a stale dependency.	RUL-invalid_value_located RUL-planning_changes_no_media	
+9.2	An invalid user decision is **preserved and flagged as requiring correction**, never silently deleted, coerced, or repaired (consistent with Section 9) — the user fixes the source and re-runs.	RUL-invalid_decision_kept RUL-invalid_value_never_repaired	
+9.2	Validation runs whenever the value is consumed on a given run, not cached as permanently valid.	RUL-checked_every_run	
