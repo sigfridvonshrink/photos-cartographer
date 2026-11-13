@@ -615,8 +615,9 @@ OFFSET_TAG_FOR = {"DateTimeOriginal": "OffsetTimeOriginal", "CreateDate": "Offse
 
 
 def _own_offset(f):
-    """The offset, in seconds, recorded with the field `f`'s time was read from, or None."""
-    tag = OFFSET_TAG_FOR.get(f.get("source_time_tag") or "")
+    """The offset, in seconds, recorded with the field `f`'s time was read from, or None. Prep names the field
+    with its group (`EXIF:DateTimeOriginal`, prep §12); the offset is the paired field's, from its own group."""
+    tag = OFFSET_TAG_FOR.get((f.get("source_time_tag") or "").rsplit(":", 1)[-1])
     return _parse_iso_offset((f.get("raw_times") or {}).get(tag)) if tag else None
 
 
