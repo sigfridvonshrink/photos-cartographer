@@ -380,7 +380,7 @@ question already settled, or leave the later photos an offset nobody checked.
 
 :::{rat} A crash leaves work, not damage
 :id: RAT-execution_resumable
-:status: seed
+:status: ruled
 :justifies: RUL-geotag_execution_resumable
 
 Execution writes into hundreds of originals one after another, and anything can stop it partway. Run again, it must
@@ -391,7 +391,7 @@ the user's edit: only the first is its to finish.
 
 :::{rat} Metadata never moves a pixel
 :id: RAT-content_changed_held
-:status: seed
+:status: ruled
 :justifies: RUL-content_changed_write_held
 
 Writing a time or a position changes a photo's metadata and nothing it shows; its fingerprint, taken over the decoded

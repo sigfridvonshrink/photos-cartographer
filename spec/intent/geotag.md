@@ -484,7 +484,7 @@ later — one found from its own GPS included, though the later photos bring no 
 
 :::{rul} An interrupted execution is finished by running it again
 :id: RUL-geotag_execution_resumable
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :aliases: geotag-resume-safe-1, geotag-rerun-noop-1, geotag-skip-satisfied-1, geotag-resume-rederive-1
@@ -496,7 +496,7 @@ fully applied plan changing nothing, and an edit made to a photo since the plan 
 
 :::{rul} A write that changes the picture is held back
 :id: RUL-content_changed_write_held
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
