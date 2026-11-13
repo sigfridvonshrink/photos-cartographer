@@ -587,7 +587,7 @@ control records: each belongs to the quarantine folder whose duplicates it descr
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: ctrl-all-in-photos-ingest-1
+:aliases: ctrl-all-in-photos-ingest-1, geotag-artifacts-in-control-dir-1
 :uses: DEF-control_records
 
 Every control record SHALL be kept in the workspace's one place for them, none among the media or at the workspace's top
@@ -600,7 +600,7 @@ level.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: ctrl-prep-skips-wholesale-1
+:aliases: ctrl-prep-skips-wholesale-1, geotag-artifacts-not-in-bydest-1
 :refines: RUL-control_records_together
 
 The control records' place SHALL be left out of every inventory of media as a whole — not file by file — so that no

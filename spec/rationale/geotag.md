@@ -56,3 +56,17 @@ not a photo to place — a stray, one missing metadata, a JPEG set aside beside 
 the pipeline does not place them, and a tag written into one would be a guess. Sorting a photo into a destination is
 the user's statement that it is ready.
 :::
+
+## 8. JSON artifact rule
+
+:::{rat} A missing record should mean one thing
+:id: RAT-record_means_stage_reached
+:status: seed
+:justifies: RUL-decision_stage_writes_record, RUL-no_record_before_decisions
+
+The decision records are what the user, the editor and the next stage read. Written at every stage reached — even
+when it holds nothing to decide — a record's presence says the stage ran and its status says what is left; its absence
+can only mean the stage was not reached. Were an all-automatic stage to write nothing, an absent record would mean either
+"nothing to decide" or "never got here", and a record written by a run that stopped at a gate would look like a
+decision to act on when there was none.
+:::

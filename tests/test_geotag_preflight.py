@@ -416,7 +416,7 @@ def test_main_blocker_exits_2(tmp_path, monkeypatch, capsys):
     assert "Geotag cannot proceed" in capsys.readouterr().err
 
 
-@pytest.mark.spec("geotag-no-json-before-decision-stage-1", "geotag-stale-no-json-1")
+@pytest.mark.spec("geotag-no-json-before-decision-stage-1", "geotag-stale-no-json-1", "RUL-no_record_before_decisions", test="TST-geotag_preflight-preflight_writes_no_json")
 def test_preflight_writes_no_json(tmp_path):
     ws = _ws(tmp_path)
     _pf(ws)

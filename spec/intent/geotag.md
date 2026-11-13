@@ -63,3 +63,29 @@ dependencies to vouch for what came before it.
 
 Geotag SHALL change only the photos in photos by destination — never a video, and never a file in any other folder.
 :::
+
+## 8. JSON artifact rule
+
+:::{rul} A decision stage reached writes its record
+:id: RUL-decision_stage_writes_record
+:status: seed
+:criticality: med
+:verify: required
+:uses: DEF-geotag, DEF-decision
+:aliases: geotag-always-produce-decision-artifact-1
+
+Each decision stage geotag reaches SHALL write its record, even when nothing in it needs the user.
+:::
+
+:::{rul} No record before the first decision stage
+:id: RUL-no_record_before_decisions
+:status: seed
+:criticality: med
+:anti: yes
+:verify: required
+:uses: DEF-geotag
+:aliases: geotag-no-json-before-decision-stage-1, geotag-first-artifact-21-1
+
+A geotag plan stopped before its first decision stage SHALL write no record of its own, saying what stopped it only in
+its output.
+:::
