@@ -145,7 +145,7 @@ the configuration's, and exit with status 2 having written no record and read no
 
 :::{bld} The timezone cell
 :id: BLD-timezone_cell
-:status: seed
+:status: ruled
 :realises: RUL-timezone_from_nearest, RUL-timezone_auto_resolves
 :aliases: geotag-timezone-every-destination-1
 

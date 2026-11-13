@@ -175,7 +175,7 @@ out, so only the judgement is the user's.
 
 :::{rat} The nearest place says the most
 :id: RAT-nearest_timezone
-:status: seed
+:status: ruled
 :justifies: RUL-timezone_from_nearest
 
 The destination a place lies in is the most specific word on its timezone: Kyoto inside Japan is in Japan's zone. The
@@ -186,7 +186,7 @@ not one per folder.
 
 :::{rat} The destination is an input to the time
 :id: RAT-destination_is_an_input
-:status: seed
+:status: ruled
 :justifies: RUL-moved_photo_decided_anew
 
 A photo's true time and its name come from its destination's timezone and from the clock offset found for its camera

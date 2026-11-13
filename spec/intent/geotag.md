@@ -247,7 +247,7 @@ group already classed kept as it is.
 
 :::{rul} A destination takes the nearest timezone it lies in
 :id: RUL-timezone_from_nearest
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: geotag-timezone-inherit-parentfirst-1, geotag-timezone-inherit-priority-1, geotag-timezone-manual-reroot-1
@@ -259,7 +259,7 @@ however it was reached there — and the configured default only where none has.
 
 :::{rul} A moved photo is decided where it now is
 :id: RUL-moved_photo_decided_anew
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
