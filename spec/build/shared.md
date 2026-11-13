@@ -885,7 +885,7 @@ Merge SHALL map each photo by destination to its place under `library_root`, and
 
 :::{bld} A library file in the way is fingerprinted, through a cache
 :id: BLD-library_file_fingerprinted
-:status: seed
+:status: ruled
 :realises: RUL-collision_by_content, RUL-library_file_read_once, RUL-collision_same_content, RUL-library_file_rechecked_before_removal, RUL-engine_change_is_checked
 :aliases: merge-execute-no-db-rows-1
 
@@ -947,7 +947,7 @@ with exit status 1.
 
 :::{bld} Merge's move: one rename, or copy, verify, rename and remove
 :id: BLD-merge_move
-:status: seed
+:status: ruled
 :realises: RUL-library_never_altered, RUL-merge_moves, RUL-unplaced_photo_stays, RUL-target_free_at_execute, RUL-collision_same_content
 :aliases: merge-execute-occupied-different-blocker-1, merge-execute-occupied-identical-treat-present-1, merge-execute-safe-alt-only-if-planned-1
 

@@ -2898,7 +2898,7 @@ Execution SHALL carry out only the operations its plan records, re-deriving no d
 
 :::{rul} The job count changes nothing an execution does
 :id: RUL-execution_jobs_change_nothing
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
