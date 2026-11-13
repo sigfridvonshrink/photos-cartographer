@@ -2,6 +2,8 @@
 
 **Not normative.** Each item here is the reasoning behind the [intent](../intent/geotag.md) or [build](../build/geotag.md)
 items it `justifies`, under the same section numbers. Where the two differ, the intent wins and this is stale.
+Sections are numbered as in the phase's original spec; a section whose content lives in the shared contract, or
+that only restated others, has no heading here.
 
 ## 2. Core workflow rule
 

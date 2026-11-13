@@ -2,6 +2,8 @@
 
 How this build meets [prep's intent](../intent/prep.md): the files, names, tools and steps. Each item `realises` the
 intent it implements. *Why* a choice was made is in [the rationale](../rationale/prep.md).
+Sections are numbered as in the phase's original spec; a section whose content lives in the shared contract, or
+that only restated others, has no heading here.
 
 ## 2. What prep does, and what it leaves alone
 

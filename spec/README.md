@@ -5,6 +5,9 @@ markdown here, and the code follows it — when a script and its spec disagree, 
 is reconciled to it, not the other way around. When you change pipeline behaviour, update the governing
 spec first.
 
+The corpus, rendered, is at **[sigfridvonshrink.github.io/photos-cartographer](https://sigfridvonshrink.github.io/photos-cartographer/)**, rebuilt on
+every push to `main`.
+
 For the project overview, motivation, and safety rationale, see the [main README](../README.md); for who
 it's for and the design reasoning, [Who is this for?](../docs/who-is-this-for.md); for a hands-on tour,
 the guides under [`../docs/`](../docs/).

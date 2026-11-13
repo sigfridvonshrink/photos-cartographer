@@ -171,7 +171,8 @@ Photos are irreplaceable, so the whole design is **plan → validate → execute
 The pipeline is **specification-driven** — behavior is defined by the specification in
 [`spec/`](spec/), and the code follows it. The specification is a corpus of linked items — what the tool
 guarantees (`spec/intent/`), why (`spec/rationale/`) and how this build does it (`spec/build/`) — rendered and
-checked by `tools/spec-build`. The shared contract, prep and merge are converted into it; geotag is being converted
+checked by `tools/spec-build` and published at
+**[sigfridvonshrink.github.io/photos-cartographer](https://sigfridvonshrink.github.io/photos-cartographer/)**. The shared contract, prep and merge are converted into it; geotag is being converted
 section by section, its document staying authoritative for the sections not yet converted. Start with
 **[`spec/README.md`](spec/README.md)** for how the specification is organized and its discipline. The original
 documents, each phase's starting point:

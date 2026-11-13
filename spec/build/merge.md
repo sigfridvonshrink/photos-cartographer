@@ -3,6 +3,8 @@
 How this build meets [merge's intent](../intent/merge.md) and the shared contract's merge rules: the files, names,
 tools and steps. Each item `realises` the intent it implements. *Why* a choice was made is in
 [the rationale](../rationale/merge.md).
+Sections are numbered as in the phase's original spec; a section whose content lives in the shared contract, or
+that only restated others, has no heading here.
 
 ## 2. Scope and boundary
 
