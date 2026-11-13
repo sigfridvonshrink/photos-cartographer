@@ -86,7 +86,8 @@ yours — **open it and tune it before you go further.** Worth checking:
 - **`media_extensions`** — which extensions count as `image` / `raw` / `video`. Anything not listed is
   treated as non-media and parked in `1-strays/`. If you shoot a RAW format that isn't in the list
   (e.g. Fuji `.raf`, Olympus `.orf`), add it here or those files won't be organized or geotagged.
-- **`gpx_root`** — where geotag looks for your GPX tracks.
+- **`gpx_root`** — where geotag looks for your GPX tracks. It must lie outside the workspace's managed
+  folders — and keep track files (`.gpx`, `.kml`, `.kmz`, `.igc`, …) out of the dump: prep stops on one.
 - **`merge.library_root`** — the permanent library merge writes into.
 - **folder names**, timezone defaults, and the GPX matching thresholds.
 
@@ -95,8 +96,9 @@ the file actually is, and if that's an image or video it **warns you in the plan
 *"Dump contains .raf files that exiftool sees as media … add '.raf' to media_extensions and re-run."*
 It never reclassifies on its own; you decide, edit the config, and re-run `prep`.
 
-Config edits are **fingerprinted**: changing the extension or folder settings restales exactly the
-downstream stages that depend on them, so a later re-run recomputes what's needed and nothing else.
+Config edits are **fingerprinted**: any edit makes every saved plan stale — re-plan before executing — while
+costly work (fingerprints, parsed tracks) is redone only where the area it depends on changed. A setting
+cartographer does not know, or one missing from the file, stops the run, named.
 
 Re-planning is cheap even before you execute anything: a plan remembers the fingerprints it computed,
 so tuning the config and running `prep plan` again reuses them instead of re-reading every photo. Only
@@ -107,7 +109,8 @@ so tuning the config and running `prep plan` again reuses them instead of re-rea
 ## 3. Sort photos into destinations
 
 This is the one step only you can do: move photos from `5-photos-by-date/` into a destination tree
-under `6-photos-by-dest/`. Use a geographic hierarchy — ideally `year/country/city/location`:
+under `6-photos-by-dest/`. Move them, don't rename them — a file outside the inbox named outside the
+filename format stops prep. Use a geographic hierarchy — ideally `year/country/city/location`:
 
 ```
 6-photos-by-dest/2026/Belgium/Brussels/Atomium/
@@ -129,8 +132,8 @@ photos-cartographer prep plan && photos-cartographer prep execute
 
 A prep run **must** happen after your most recent by-date → by-dest move, before geotag. It's a hard
 requirement, not advice: prep recognizes the moves (stat-only, no re-reading pixels), carries identity
-forward, and refreshes the handoff geotag depends on. Skip it and geotag hard-stops, telling you to
-re-run prep.
+forward, and refreshes the handoff geotag depends on. If `0-sources/` is empty, `geotag plan` runs this
+re-prep for you; otherwise it stops and tells you to re-run prep.
 
 The plan → dry-run → execute rhythm still applies; for this quick path the `dry-run` step is skipped,
 but `photos-cartographer prep dry-run` is available between plan and execute if you want to inspect the
@@ -171,6 +174,7 @@ executable plan is ready and clean. Full editor mechanics: [editor guide](editor
 ```bash
 photos-cartographer geotag execute    # apply the validated time/GPS plan to the photos
 photos-cartographer geotag finalize   # seal the audit record + archival package
+# From here, leave 6-photos-by-dest/ alone: merge refuses a photo changed since finalize.
 
 # One-time, the first time you point at a library:
 photos-cartographer merge init-library /path/to/your/library

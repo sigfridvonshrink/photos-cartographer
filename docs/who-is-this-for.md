@@ -21,7 +21,7 @@ The roots are what is open to debate; the rest follows from them. **If one accep
 the architecture is largely not negotiable; if one rejects them, one is simply not the intended
 user — and in neither case are the downstream details the place to start.**
 
-So this is where you fine the project's **opinions**: a few high-level commitments, and then
+So this is where you find the project's **opinions**: a few high-level commitments, and then
 the chain by which each forces the engineering visible in the code and the specs.
 
 ---
@@ -33,7 +33,7 @@ certainly already familiar even if never filed as a *kind* of problem. The recog
 point: these are potholes, not opinions one has to adopt.
 
 The three facts — `FCT-large_batches` (F1), `FCT-clocks_drift` (F2), `FCT-partial_track_coverage` (F3) — are
-items of [the specification's philosophy](https://github.com/sigfridvonshrink/photos-cartographer/blob/main/spec/rationale/philosophy.md), each with what it means and where one has met it.
+items of [the specification's philosophy](../spec/rationale/philosophy.md), each with what it means and where one has met it.
 
 Then, given those facts, four **choices** (`Px`) — the arguable part, where someone else
 could have gone another way. These can be argued with.
@@ -53,7 +53,7 @@ or no appetite for a plan-driven pipeline. Disagree with a choice and the script
 
 ## The entailment: premise → forced consequence → concrete mechanism
 
-Everything below the roots is their consequence, and [the philosophy](https://github.com/sigfridvonshrink/photos-cartographer/blob/main/spec/rationale/philosophy.md) records each step as an item that names
+Everything below the roots is their consequence, and [the philosophy](../spec/rationale/philosophy.md) records each step as an item that names
 what it follows from: from P1, the non-destructive core; from F2 + P3, the per-(camera group, destination, day) offset,
 the format + editor split and the minimal, cascading asks; from P1 + F3, the recoverable core; from P4 + F3, the
 total-coverage cascade; from F1 + P4, the multi-session job and the durable record it forces. Each says the concrete

@@ -12,7 +12,7 @@ tool comparison, [How this compares](comparison.md).
 All work happens inside a **workspace**: a transient working area, separate from your permanent photo
 library. A workspace is *initialized* the first time you run `prep` in a folder — that creates the
 managed structure and a hidden control directory `.photos-ingest/` (config, decision files, journals,
-the SQLite cache, and a disposable memo of the fingerprints planning computed; `prep` skips this subtree
+the SQLite cache, and disposable memos of the fingerprints planning computed and the tracks it parsed; `prep` skips this subtree
 wholesale, so it can never be mistaken for a photo).
 
 The managed folders, by number:
@@ -207,10 +207,10 @@ Two areas matter for the concepts above:
 - **`folders`** — the names of the numbered managed folders. You can rename them; their *roles* (inbox,
   read-only staging, etc.) are fixed.
 
-Config is **fingerprinted for surgical staleness**: each area has a field-scoped fingerprint, so editing
-one area restales only the stages that depend on it — a GPX-threshold change doesn't touch your renames;
-a `media_extensions` or `folders` change restales the organization-shaped stages (the geotag executable
-plan and the merge plan). A re-run then recomputes exactly what's affected and nothing else. Every
+Config is **fingerprinted**: any edit makes every saved plan stale, so you re-plan before executing; but
+each area also has a field-scoped fingerprint, so the costly results — fingerprints, parsed tracks, your
+time decisions — are redone only where the area they read changed: a GPX-threshold change doesn't touch your
+renames. A setting cartographer does not know, or one missing from the file, stops the run. Every
 authored value is validated before use — a bad timezone, out-of-range coordinate, or extension collision
 is rejected with a specific error, not silently coerced.
 

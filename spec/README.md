@@ -33,14 +33,15 @@ rule and invariant has a reason, a rationale that justifies it or the item it re
 listed in [`unjustified.txt`](unjustified.txt), a list that only shrinks); the tests are items too, from their `@pytest.mark.spec(..., test="TST-...")` marks. `tools/spec-build` renders
 it and fails on any warning; `spec/needs.json` is its committed export. Each old document's sentences are recorded,
 verbatim, with where each went, in [`conversion/`](conversion/) — `tools/spec-ledger check` proves none was lost.
-Converted so far: the shared contract, §1–§15 (under review), and the user guide's roots and what they force,
+Converted so far: the shared contract, prep and merge in full, geotag §1–§6, and the user guide's roots and what they force,
 [`rationale/philosophy.md`](rationale/philosophy.md) — facts (`FCT`) and choices (`CHC`) nothing follows from, and the
 rationale that follows from them. Until a document is converted, the one below stays authoritative.
 
 ## The documents
 
-The four documents below are the **authoritative** behavioral specs. Read the shared contract first for
-the cross-phase facts, then the per-phase specs in pipeline order.
+The four documents below were the behavioral specs; each is authoritative only for the sections not yet converted
+(today: geotag §7 onward). Read the shared contract first for the cross-phase facts, then the per-phase specs in
+pipeline order.
 
 | Document | Scope |
 |---|---|

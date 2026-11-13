@@ -17,7 +17,8 @@ Top-level layout (the package lives at the repo root):
   `walkthrough.md` — the screenshot tour, `quickstart.md`, `concepts.md`, `editor.md`) plus
   `screenshots/`, linked from `README.md`.
   These are user docs; `spec/` remains the behavioral source of truth.
-- **`tools/`** — build + test helpers (`build-pyz`, `coverage`, `jstest`, `spec-coverage`).
+- **`tools/`** — build + test helpers (`build-pyz`, `coverage`, `jstest`, `plan-differential`, `spec-build`,
+  `spec-coverage`, `spec-ledger`).
 - **`.githooks/`** — local pre-commit / pre-push hooks. `.github/workflows/` — CI.
 
 See `README.md` for the overview.
@@ -98,19 +99,23 @@ alias is the *same module object* as the package module, so every import and pat
 identically. (This replaced the old `SourceFileLoader` hack once the scripts became package modules.)
 
 There is no build step and no linter config; runtime deps are system tools (`exiftool`, `magick`,
-`ffmpeg`) plus pip packages listed in `README.md`. The only manifest is
+`ffmpeg`). The only manifest is
 `dev-requirements.txt` — `pytest` + `coverage` for running the suite / measuring coverage (used by
 `tools/coverage` and CI); the pipeline itself needs no pip install.
 
 ### Continuous integration
 
-- **GitHub Actions** (`.github/workflows/tests.yml`) runs `python3 -m pytest -q` on every push to `main`
-  and on every pull request.
+- **GitHub Actions** (`.github/workflows/tests.yml`), on every push to `main` and on every pull request: the
+  suite under coverage (failing below 80%), `tools/spec-coverage`, the editor's front-end tests and
+  `tools/build-pyz --check`; and, in a job of its own, the spec corpus — `tools/spec-build`, a check that the
+  committed `spec/needs.json` is what it writes, and `tools/spec-ledger check`.
 - **Local `pre-push` hook** (`.githooks/pre-push`) runs a static guard
   (`.githooks/check_test_only_functions.py` — fails if any production function is referenced only by
-  tests) and then the suite before a push, aborting on either failure. Enable it per clone with
+  tests), then the suite without its slow tests, the editor's front-end tests, the spec corpus (when
+  `spec/.venv` exists) and `tools/build-pyz --check` before a push, aborting on any failure. Enable it per clone with
   `git config core.hooksPath .githooks`; bypass once with `git push --no-verify`. The guard's
-  `SRC_FILES` covers all three phase modules + `photos_utils` under `cartographer/`.
+  `SRC_FILES` covers the three phase modules, `photos_utils`, `_geotag_calc`, `_prep_models`, `cli` and both
+  web servers.
 - **Local `pre-commit` hook** (`.githooks/pre-commit`) rebuilds `dist/photos-cartographer` on every
   commit so the local executable is never stale. `dist/` is gitignored — this is a LOCAL build
   only; nothing is committed or pushed. It blocks a commit only if the build itself breaks.
@@ -139,7 +144,8 @@ entry (`python -m cartographer.photos_1_prep …`) sharing the same `add_argumen
 - `photos-cartographer merge` — `init-library` / `plan` / `dry-run` / `execute`.
 - `photos-cartographer edit` — the decision editor (a local web server; folded into the package at `cartographer/editor/`, web assets served as package data via importlib.resources, no bundler).
   Like every phase it operates on the **cwd workspace** (no workspace-naming argument) and refuses to
-  run if the cwd is not an initialized workspace; `--demo` is the only no-workspace mode (read-only
+  run if the cwd is not an initialized workspace or is a sealed one (a save takes the workspace lock);
+  `--demo` is the only no-workspace mode (read-only
   fixtures tour). Phases share the plan/validate/execute contract; workspace = cwd. The original `prep` / `geotag` /
   `refresh-library` / `merge` monolith they were split from has been removed; `refresh-library` was
   deliberately dropped in favor of on-demand fingerprinting in merge (see its workflow spec).
@@ -171,7 +177,8 @@ entry (`python -m cartographer.photos_1_prep …`) sharing the same `add_argumen
   on the shared event/sink seam (`cartographer/reporting.py`) and design tokens
   (`cartographer/editor/web/tokens.css`).
 - **Canonical plan persistence (all phases):** each phase's plan/decision artifact lives at a fixed
-  control-dir path (`photos-10-prep-plan.json`, geotag `photos-21`/`22`/`23`, `photos-30-merge-plan.json`).
+  control-dir path (`photos-10-prep-plan.json`, geotag's decisions `photos-21`/`22`/`23` and plan `photos-24`,
+  `photos-30-merge-plan.json`).
   The planning command writes it there and prints the location; the validate/apply commands read it from
   there — there are **no** `--output`/`--plan` path flags. Re-planning backs up the prior artifact under
   the shared incremental `-NNN` suffix (never clobbered). See shared contract Section 5 ("Canonical plan
@@ -198,13 +205,14 @@ The whole design exists to safely mutate **irreplaceable originals**. These rule
 
 - **No mutation outside a plan.** Every move/rename/quarantine/metadata-write/DB-mutation is a planned
   operation with a plan ID, op ID, explicit preconditions, expected result, and journal entry. Planning
-  mutates nothing but the fingerprints it keeps for later runs (prep's plan memo, merge's library cache).
+  mutates nothing but the fingerprints it keeps for later runs (prep's plan memo, geotag's track memo,
+  merge's library cache).
 - **Dry-run is not simulation.** Dry-run validates the *real* serialized plan that execution would
   consume (the persisted canonical plan artifact) and reports a **summary** of it — never a separate
   virtual-filesystem code path. It does not dump every operation: the full exact plan is the saved
   artifact on disk, so dry-run summarizes the real plan rather than flooding the terminal.
-- **Instruction fingerprint.** Execution recomputes the SHA-256 of the human-edited instruction file
-  (e.g. `geotag.json`) and aborts if it differs from what the plan was built against.
+- **Instruction fingerprint.** Execution recomputes the SHA-256 of each human-edited decision file
+  (geotag's `photos-21`/`22`/`23`) and aborts if it differs from what the plan was built against.
 - **No clobber.** No operation ever overwrites existing media. Destinations are reserved/validated first.
 - **Quarantine, not delete.** Duplicates are moved to a recoverable quarantine; permanent purge would be
   a separate explicit command.
@@ -215,7 +223,7 @@ The whole design exists to safely mutate **irreplaceable originals**. These rule
 
 ### Pipeline layout (shared contract)
 
-Defined in `spec/photos-shared-contract.md`:
+Defined in the shared contract (`spec/intent/shared.md`, `spec/build/shared.md`):
 
 - The pipeline is three phases: **prep** (`photos-1-prep`) → **geotag**
   (`photos-2-geotag`) → **merge** (`photos-3-merge`), all implemented.
@@ -225,9 +233,12 @@ Defined in `spec/photos-shared-contract.md`:
 - All control/artifact files live in a single `.photos-ingest/` control directory (config, guard
   sentinel `photos-00-workspace-guard`, handoff manifest, decision JSONs, journals, the SQLite cache
   `photos-00-ingest.db`, and `gpx/` when `gpx_root` is configured to live there). Prep skips this
-  subtree wholesale, so artifacts can never be mistaken for media. One file there is **scratch, not record**: `photos-00-plan-memo.db`, the
+  subtree wholesale, so artifacts can never be mistaken for media. Two files there are **scratch, not record**: `photos-00-plan-memo.db`, the
   plan-time decode memo (prep §10.3) — re-derivable fingerprints of files at the paths they were read
-  from, written outside the plan/execute op model, never journalled or archived, safe to delete.
+  from — and `photos-00-track-memo.db`, the tracks geotag has parsed; both written outside the
+  plan/execute op model, never journalled or archived, safe to delete. Finalize adds
+  `photos-26-finalized-media.json` and the archival package (`photos-26-archive-manifest.json` +
+  `photos-26-archive.tar.gz`); merge remakes it as `photos-35-*`.
 - `photos-00-config.json` is the **workspace config**: seeded on first prep run from the in-code template
   `photos_utils.CONFIG`, then authoritative and hand-edited thereafter.
 - A whole-run lock covers planning *and* execution so runs never overlap.
@@ -249,10 +260,12 @@ Defined in `spec/photos-shared-contract.md`:
 
 ## Specs are the source of truth
 
-The pipeline is **specification-driven**: behavior is defined by `spec/*.md` — the three
-per-phase workflows (prep / geotag / merge) plus `photos-shared-contract.md`. When changing pipeline
-behavior, update the governing spec; the markdown is authoritative, not just the code, so reconcile
-differences between a script and its spec rather than treating the existing code as ground truth.
+The pipeline is **specification-driven**: behavior is defined by the spec corpus in `spec/` — `intent/`
+(what the tool guarantees), `rationale/` (why) and `build/` (how this build does it) — into which the shared
+contract, prep and merge are converted; `spec/photos-2-geotag-workflow.md` stays authoritative for the geotag
+sections not yet converted. When changing pipeline behavior, update the governing spec; the spec is
+authoritative, not just the code, so reconcile differences between a script and its spec rather than treating
+the existing code as ground truth.
 
 The specs carry **behaviour only** — never output wording, UI, log lines, or implementation/comfort
 detail. Affordance decisions (the console/editor and their sub-decisions, output phrasing, and

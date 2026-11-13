@@ -215,11 +215,11 @@ loses its test — so this audit is no longer purely a point-in-time snapshot.
 The registry `spec/spec-clauses.json` was then **grown into a living clause index** (PR #220) and
 **refined + broadly gated** (PR #221): the behavioral clauses across the four spec files were
 enumerated, over-granular entries merged, each clause mapped to a genuine test, and HIGH-criticality
-gaps closed with new tests. The current index is **609 clauses** (prep / shared / geotag / merge),
+gaps closed with new tests. The current index is **633 clauses** (prep / shared / geotag / merge),
 each carrying a **spec pointer** (`file` + section heading) that `tests/test_spec_coverage_registry.py`
-keeps in sync (it fails if a pointer stops resolving to a real heading — drift protection). **497 are
-`must_cover`** (CI-gated: a tagged test must exist); the other **112 are omitted with a recorded
-`omit_reason`** — 73 `incidental` (happy-path only, no dedicated assertion) and 39 `none`. Only **8
+keeps in sync (it fails if a pointer stops resolving to a real heading — drift protection). **542 are
+`must_cover`** (CI-gated: a tagged test must exist); the other **91 are omitted with a recorded
+`omit_reason`** — 53 `incidental` (happy-path only, no dedicated assertion), 37 `none`, and 1 with a tagged test that does not assert it whole. Only **8
 omitted clauses are HIGH-criticality**, each for a documented reason: crash-injection atomicity (out of
 scope, this section), cross-cutting principles asserted only in aggregate, flock lock-takeover
 (OS-released, no reclaim code), a symlink guard delegated to prep, and a concurrency property implied
