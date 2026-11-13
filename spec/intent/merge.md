@@ -14,6 +14,7 @@ to — most of merge's rules are there, in its section on the library and the se
 :verify: required
 :refines: RUL-engine_change_is_checked
 :uses: DEF-fingerprint, DEF-library
+:aliases: merge-only-no-reorganize-1
 
 Under an ImageMagick version other than the one prep's fingerprints were taken by, merge SHALL take each photo's
 fingerprint again before comparing it with the library's, a photo whose fingerprint changed left in photos by
@@ -58,7 +59,7 @@ A merge a precondition stops SHALL change nothing in the library, the workspace'
 :anti: yes
 :verify: required
 :uses: DEF-library, DEF-managed_folders
-:aliases: merge-map-preserve-destination-structure-1, merge-mapping-deterministic-1, merge-preserve-geotag-final-name-1
+:aliases: merge-map-preserve-destination-structure-1, merge-mapping-deterministic-1, merge-preserve-geotag-final-name-1, merge-no-mutate-by-dest-content-or-name-1
 
 Merge SHALL place each photo at the same path under the library as it holds under photos by destination — its folders
 as the user built them, its name the one geotag gave it — the name an incoming photo is given on a collision the only
@@ -87,7 +88,7 @@ Merge SHALL allow a fresh plan at any time on a workspace not sealed, whatever a
 :verify: required
 :refines: RUL-merge_resumable
 :uses: DEF-merge, DEF-library, DEF-fingerprint, DEF-managed_folders
-:aliases: merge-resume-via-execute-not-plan-1
+:aliases: merge-resume-via-execute-not-plan-1, merge-finalized-entry-absent-not-blocker-1
 
 A fresh plan SHALL account for every finalized photo no longer in photos by destination: carried forward with the
 library place the latest earlier plan of the workspace gave it whose place, fingerprinted again, holds it — whether or
