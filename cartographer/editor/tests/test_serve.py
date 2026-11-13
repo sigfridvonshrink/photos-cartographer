@@ -520,3 +520,71 @@ def test_edit_has_no_workspace_arg_and_demo_is_the_only_no_workspace_mode():
     a = p.parse_args([])
     assert a.demo is False and not hasattr(a, "workspace")   # no workspace-naming argument
     assert p.parse_args(["--demo"]).demo is True
+
+
+def _seal(ws):
+    (open(os.path.join(ws, serve.CONTROL, "photos-00-sealed.json"), "w")
+     .write('{"sealed": true, "merged_run_id": "r1"}'))
+
+
+@pytest.mark.spec("edit-sealed-refuses-1", test="TST-serve-serve_refuses_a_sealed_workspace")
+def test_serve_refuses_a_sealed_workspace(tmp_path):
+    # A merged workspace is final: the editor will not open it, so its decisions cannot change.
+    ws = _workspace_with_fixtures(tmp_path)
+    open(os.path.join(ws, serve.CONTROL, serve.GUARD_NAME), "w").close()
+    _seal(ws)
+    with pytest.raises(SystemExit) as e:
+        serve.serve(ws, port=0)
+    assert e.value.code == 2
+    assert not os.path.exists(os.path.join(ws, serve.CONTROL, serve.EDITOR_LOCK))
+
+
+@pytest.mark.spec("RUL-sealed_new_dump_warned", "RUL-sealed_new_dump_left", test="TST-serve-serve_points_out_a_dump_in_a_sealed_workspace")
+def test_serve_points_out_a_dump_in_a_sealed_workspace(tmp_path, capsys):
+    # Refusing a sealed workspace, the editor says a dump dropped in its inbox is likely new, and leaves it.
+    ws = _workspace_with_fixtures(tmp_path)
+    open(os.path.join(ws, serve.CONTROL, serve.GUARD_NAME), "w").close()
+    _seal(ws)
+    inbox = os.path.join(ws, "0-sources")
+    os.makedirs(inbox, exist_ok=True)
+    open(os.path.join(inbox, "new.jpg"), "wb").write(b"img")
+    with pytest.raises(SystemExit) as e:
+        serve.serve(ws, port=0)
+    assert e.value.code == 2
+    assert "new dump" in capsys.readouterr().err.lower()
+    assert os.listdir(inbox) == ["new.jpg"]
+
+
+@pytest.mark.spec("edit-sealed-refuses-1", test="TST-serve-save_refuses_a_sealed_workspace")
+def test_save_refuses_a_sealed_workspace(tmp_path):
+    # The console calls _save directly, without serve()'s startup check: the save refuses on its own.
+    ws = _workspace_with_fixtures(tmp_path)
+    _seal(ws)
+    before = open(os.path.join(ws, serve.CONTROL, serve.TIME_NAME), "rb").read()
+    res = serve._save(ws, {"time": [{"dest": "6-photos-by-dest/Japan", "kind": "timezone",
+                                     "user_decision": {"manual_iana_timezone": "Asia/Tokyo"}}]})
+    assert res["ok"] is False and "sealed" in res["error"]
+    assert open(os.path.join(ws, serve.CONTROL, serve.TIME_NAME), "rb").read() == before
+
+
+@pytest.mark.spec("RUL-every_command_locks", test="TST-serve-save_refuses_while_a_run_holds_the_lock")
+def test_save_refuses_while_a_run_holds_the_lock(tmp_path):
+    """A save changes the workspace, so it takes the workspace's lock: while a run holds it, the save
+    refuses and writes nothing — it cannot land between a geotag plan's read and its rewrite. Once the
+    run ends, the same save goes through, and leaves the lock free."""
+    ws = _workspace_with_fixtures(tmp_path)
+    edit = {"time": [{"dest": "6-photos-by-dest/Japan", "kind": "timezone",
+                      "user_decision": {"manual_iana_timezone": "Asia/Tokyo"}}]}
+    path = os.path.join(ws, serve.CONTROL, serve.TIME_NAME)
+    before = open(path, "rb").read()
+    run = serve.photos_utils.WorkspaceLock(ws, create=False)
+    assert run.acquire()
+    try:
+        res = serve._save(ws, edit)
+        assert res["ok"] is False and "run is in progress" in res["error"]
+        assert open(path, "rb").read() == before
+    finally:
+        run.release()
+    assert serve._save(ws, edit)["ok"] is True
+    assert open(path, "rb").read() != before
+    assert serve.photos_utils.WorkspaceLock(ws, create=False).held_owner() is None

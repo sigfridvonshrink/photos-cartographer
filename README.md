@@ -102,7 +102,7 @@ the diff and are resumable after a crash.
 - **[Editor guide](docs/editor.md)** — driving the browser decision editor: the three views, validating drift,
   placing GPS, shift-click multi-select, and how edits reset/cascade.
 
-The authoritative behavioral specifications live in [`spec/`](spec/) (see *How it works (the detail)* below).
+The authoritative behavioral specification lives in [`spec/`](spec/) (see *How it works (the detail)* below).
 
 ## Decide in the browser
 
@@ -153,25 +153,28 @@ common case costs zero clicks. → **[Concepts](docs/concepts.md)** for the full
 
 Photos are irreplaceable, so the whole design is **plan → validate → execute**:
 
-- **No mutation outside a plan.** Planning never touches files; execution applies only a validated plan whose
-  preconditions still hold. **The dry-run *is* the real plan**, serialized and shown — not a separate simulation.
+- **No mutation outside a plan.** Planning never touches a photo; execution applies only a validated plan whose
+  preconditions still hold. **The dry-run summarizes the real saved plan** — not a separate simulation.
 - **No clobber; quarantine, not delete.** No operation overwrites existing media; duplicates move to a
   recoverable quarantine, never auto-removed.
 - **Idempotent & resumable.** Re-runs act only on the diff; a crash mid-run is recoverable; already-placed
   files are recognized and skipped.
 - **Stable identity.** Each photo's identity is a decoded-pixel fingerprint, invariant under in-place metadata
   writes and renames — so its full history stays attached across every transformation.
-- **Reversible & traceable.** A pre-state ledger remembers what each file held before a manual override, so a
-  decision can be withdrawn; and finalize writes a per-photo **journey log** — every clock offset, resolved
+- **Reversible & traceable.** An original-values ledger keeps what each photo held before geotag first changed it,
+  and every plan decides from it, so any decision can be withdrawn; and finalize writes a per-photo **journey log** — every clock offset, resolved
   UTC, timezone, GPS method (native / GPX direct-match / interpolation / extrapolation / manual) and rename,
   each linked to the decision that caused it, carried forward by merge with the final library path.
 
 ## How it works (the detail)
 
-The pipeline is **specification-driven** — behavior is defined by the documents in
-[`spec/`](spec/), and the code follows them. Start with
-**[`spec/README.md`](spec/README.md)** for how the specs are organized and the spec discipline, then the
-shared contract and the per-phase specs:
+The pipeline is **specification-driven** — behavior is defined by the specification in
+[`spec/`](spec/), and the code follows it. The specification is a corpus of linked items — what the tool
+guarantees (`spec/intent/`), why (`spec/rationale/`) and how this build does it (`spec/build/`) — rendered and
+checked by `tools/spec-build`. The shared contract, prep and merge are converted into it; geotag is being converted
+section by section, its document staying authoritative for the sections not yet converted. Start with
+**[`spec/README.md`](spec/README.md)** for how the specification is organized and its discipline. The original
+documents, each phase's starting point:
 
 | Document | Scope |
 |---|---|
@@ -204,11 +207,12 @@ its map tiles and place search use OpenStreetMap/Nominatim at runtime and degrad
   or build the self-contained `photos-cartographer` zipapp with `tools/build-pyz`.
 - `spec/` — the authoritative specifications. `tests/` — the test suite.
   `tools/` — build + test helpers. `.githooks/` — pre-commit / pre-push.
+- [`BACKLOG.md`](BACKLOG.md) — what is open. [`HISTORY.md`](HISTORY.md) — why, and every release.
 
 ## Tests and coverage
 
 The geotag phase — the one that writes time and GPS into irreplaceable originals — is the most heavily
-tested (~98% line / ~97% branch). Coverage is tracked on two axes — line/branch and **spec-clause**
+tested. Coverage is tracked on two axes — line/branch and **spec-clause**
 (which behavioral clauses in `spec/` have a dedicated test) — both reported in **[`COVERAGE.md`](COVERAGE.md)**.
 
 Run the suite from the repository root (`conftest.py` puts the repo root on `sys.path`):
@@ -230,7 +234,8 @@ archive and shared as-is, in case it's useful to anyone with the same problem.
 
 The **design and specifications are mine**; the **implementation is AI-written**. The design documents
 were turned into the behavior specifications in [`spec/`](spec/), whose clauses are indexed: each
-CI-gated clause is backed by a test, and the remaining omissions are tracked explicitly — so the
+CI-gated clause is backed by a test, the corpus build fails on any rule that must be verified and no test
+verifies, and the remaining omissions are tracked explicitly — so the
 AI-written code is held to a human-authored spec and verified mechanically. Full statement:
 **[`AI-DISCLOSURE.md`](AI-DISCLOSURE.md)**.
 

@@ -64,7 +64,7 @@ def _install(monkeypatch, meta_for=None, hash_for=None):
         res = {}
         for folder in folders:
             for f in os.listdir(folder):
-                m = {"extraction_status": "extracted_ok", "raw_payload": "{}"}
+                m = {"extraction_status": "extracted_ok"}
                 if meta_for is not None:
                     m.update(meta_for(f) or {})
                 else:
@@ -165,6 +165,24 @@ def test_bare_timestamp_name_used_when_free(tmp_path, monkeypatch):
     assert (ws / "5-photos-by-date" / "2023-01-02" / "2023-01-02--03-04-05-001.jpg").exists()   # untouched
 
 
+@pytest.mark.spec("RUL-suffix_choice_by_phase", test="TST-audit_backfill-first_free_suffix_fills_a_gap")
+def test_first_free_suffix_fills_a_gap(tmp_path, monkeypatch):
+    # Prep takes the FIRST free name, not the one above the highest used: with the bare name and -002
+    # already on disk, a new file at the same timestamp takes the free -001 (merge alone appends at
+    # max+1). Both residents are untouched.
+    _install(monkeypatch, meta_for=lambda f: {"DateTimeOriginal": "2023:01:02 03:04:05"})
+    ws = _ws(tmp_path)
+    day = ws / "5-photos-by-date" / "2023-01-02"
+    day.mkdir()
+    (day / "2023-01-02--03-04-05.jpg").write_bytes(b"bare")
+    (day / "2023-01-02--03-04-05-002.jpg").write_bytes(b"two")
+    (ws / "0-sources" / "new.jpg").write_bytes(b"new")
+    plan = _plan(ws)
+    org = [op for op in _moves(plan) if op.source == "0-sources/new.jpg"]
+    assert org and org[0].destination == "5-photos-by-date/2023-01-02/2023-01-02--03-04-05-001.jpg", org[0].destination
+    assert not [op for op in _moves(plan) if op.source.startswith("5-photos-by-date/")]
+
+
 def test_same_timestamp_collision_suffixes_after_bare(tmp_path, monkeypatch):
     # Two fresh files at the SAME timestamp: the first takes the bare name, the second collides and
     # gets -001 (bare-first then the differentiating suffix, §7.2).
@@ -221,17 +239,18 @@ def test_quarantine_writes_evidence_before_moving(tmp_path, monkeypatch):
 
 def test_by_dest_hash_failure_skipped_mutable_blocks(tmp_path, monkeypatch):
     def hash_for(p):
-        if "fail" in os.path.basename(p):
+        if "fail" in os.path.basename(p) or "/6-photos-by-dest/" in p:
             return {"status": "failed", "strategy": "image-content-hash-v1", "error": "boom"}
         return None
     _install(monkeypatch, hash_for=hash_for)
     ws = _ws(tmp_path)
+    bd = "2023-01-02--03-04-05.jpg"
     (ws / "6-photos-by-dest" / "Trip").mkdir(parents=True)
-    (ws / "6-photos-by-dest" / "Trip" / "failbd.jpg").write_bytes(b"x")   # by-dest fail -> skip
+    (ws / "6-photos-by-dest" / "Trip" / bd).write_bytes(b"x")             # by-dest fail -> skip
     (ws / "0-sources" / "failmut.jpg").write_bytes(b"y")                   # mutable fail -> block
     blockers = _plan(ws).blockers
     assert any("failmut.jpg" in b for b in blockers), blockers
-    assert not any("failbd.jpg" in b for b in blockers), blockers
+    assert not any(bd in b for b in blockers), blockers
 
 
 def test_redundant_jpeg_only_separated_from_source(tmp_path, monkeypatch):
@@ -246,7 +265,7 @@ def test_redundant_jpeg_only_separated_from_source(tmp_path, monkeypatch):
     assert [op.source for op in seps] == ["0-sources/shot.jpg"], [op.source for op in seps]
 
 
-@pytest.mark.spec("camera-version-detectable-1")
+@pytest.mark.spec("camera-version-detectable-1", test="TST-audit_backfill-camera_group_key_version_staleness_refreshes")
 def test_camera_group_key_version_staleness_refreshes(tmp_path, monkeypatch):
     _install(monkeypatch, meta_for=lambda f: {"DateTimeOriginal": "2023:01:02 03:04:05",
                                               "Make": "M", "Model": "D"})
@@ -267,7 +286,7 @@ def test_by_dest_change_rejects_plan_at_execute(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
     (ws / "6-photos-by-dest" / "Trip").mkdir(parents=True)
-    bd = ws / "6-photos-by-dest" / "Trip" / "keep.jpg"
+    bd = ws / "6-photos-by-dest" / "Trip" / "2023-01-02--03-04-05.jpg"
     bd.write_bytes(b"original")
     (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
     plan = _plan(ws)

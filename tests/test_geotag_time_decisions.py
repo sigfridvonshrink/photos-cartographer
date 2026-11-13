@@ -39,8 +39,9 @@ def _hfile(rel, *, key=CAM, dto="2024:07:03 14:12:08"):
     return {"relative_path": rel, "media_class": "image", "folder_class": "6-photos-by-dest",
             "size": 100, "mtime_ns": 1,
             "content_hash": json.dumps({"value": "fp-" + rel, "status": "valid"}),
-            "metadata_status": {"camera_group_key": key, "has_timestamp": True,
-                                "has_native_gps": False, "field_set_version": 1,
+            "metadata_status": {"camera_group_key_version": utils.CAMERA_GROUP_KEY_VERSION,
+                                "camera_group_key": key, "has_timestamp": True,
+                                "has_native_gps": False, "field_set_version": utils.FIELD_SET_VERSION,
                                 "parsed_json": json.dumps(parsed)}}
 
 
@@ -57,7 +58,7 @@ def _ws(tmp_path, *, files, device_groups, default_tz=""):
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
     for rec in files:
         p = ws / rec["relative_path"]; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"img")
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"files": files}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files}))
     return ws
 
 
@@ -96,7 +97,7 @@ def test_first_run_writes_artifact_requiring_input(tmp_path, monkeypatch):
     assert list(d["camera_group_time_decisions"]) == [CAM]
     assert d["camera_group_time_decisions"][CAM]["proposal"]["proposal_source"] == "manual_required"
     dep = art["depends_on"]
-    assert dep["handoff"]["sha256"] and dep["camera_time_policy_fingerprint"] and dep["gpx_fingerprint"]
+    assert dep["handoff"]["content_fingerprint"] and dep["camera_time_policy_fingerprint"] and dep["gpx_fingerprint"]
 
 
 def test_smartphone_group_gets_no_offset_cell(tmp_path, monkeypatch):
@@ -110,7 +111,7 @@ def test_smartphone_group_gets_no_offset_cell(tmp_path, monkeypatch):
 
 # --- rerun preservation + completion -----------------------------------------
 
-@pytest.mark.spec("authored-fields-not-overwritten-1", "geotag-decision-fields-precreated-1", "geotag-preserve-user-decisions-1", "loop-geotag-rerun-safe-1")
+@pytest.mark.spec("authored-fields-not-overwritten-1", "geotag-decision-fields-precreated-1", "geotag-preserve-user-decisions-1", "loop-geotag-rerun-safe-1", "RUL-decision_kept", "RUL-decision_fields_laid_out", test="TST-geotag_time_decisions-rerun_preserves_decisions_and_completes")
 def test_rerun_preserves_decisions_and_completes(tmp_path, monkeypatch):
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []}, default_tz="Europe/Brussels")
@@ -129,6 +130,53 @@ def test_rerun_preserves_decisions_and_completes(tmp_path, monkeypatch):
     assert art["status"] == "complete" and art["requires_user_input"] is False
 
 
+@pytest.mark.spec("RUL-geotag_rerunnable", "loop-geotag-rerunnable-1", test="TST-geotag_time_decisions-rerun_after_success_admitted_until_sealed")
+def test_rerun_after_success_admitted_until_sealed(tmp_path, monkeypatch):
+    """A successful execution and a finalize leave geotag re-runnable; only merge's seal stops it."""
+    ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
+             device_groups={"fixed_clock_cameras": [CAM], "phones": []}, default_tz="Europe/Brussels")
+    ctl = ws / ".photos-ingest"
+    (ctl / "photos-25-execution-summary.json").write_text('{"status": "success"}')
+    (ctl / "photos-26-complete-log.json").write_text('{"photos": {}}')
+    (ctl / "photos-26-archive-manifest.json").write_text('{"artifact_name": "m"}')
+    assert _run(monkeypatch, ws) == 0
+    first = _artifact(ws)
+    assert _run(monkeypatch, ws) == 0 and _artifact(ws) == first
+    (ctl / "photos-00-sealed.json").write_text('{"sealed": true, "merged_run_id": "r1"}')
+    (ctl / cal.TIME_DECISIONS_ARTIFACT).unlink()
+    assert _run(monkeypatch, ws) == 2
+    assert not (ctl / cal.TIME_DECISIONS_ARTIFACT).exists()
+
+
+@pytest.mark.spec("RUL-rerun_does_what_changed", "loop-rerun-may-need-decisions-1", "RUL-decision_kept", test="TST-geotag_time_decisions-new_destination_asks_only_its_own_decisions")
+def test_new_destination_asks_only_its_own_decisions(tmp_path, monkeypatch):
+    """Media added to a new destination asks for that destination's decisions alone; every settled
+    decision elsewhere stays as the user left it."""
+    ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
+             device_groups={"fixed_clock_cameras": [CAM], "phones": []}, default_tz="Europe/Brussels")
+    _run(monkeypatch, ws)
+    def fill(art):
+        d = art["destinations"]["6-photos-by-dest/Brussels"]
+        d["destination_timezone"]["user_decision"]["accept_proposed_timezone"] = True
+        d["camera_group_time_decisions"][CAM]["user_decision"]["manual_offset_seconds"] = -7187
+    _edit(ws, fill)
+    assert _run(monkeypatch, ws) == 0 and _artifact(ws)["status"] == "complete"
+    settled = _artifact(ws)["destinations"]["6-photos-by-dest/Brussels"]
+
+    ho_p = ws / ".photos-ingest" / "photos-11-handoff.json"
+    ho = json.loads(ho_p.read_text())
+    ho["files"].append(_hfile("6-photos-by-dest/Rome/b.jpg"))
+    ho_p.write_text(json.dumps(ho))
+    (ws / "6-photos-by-dest" / "Rome").mkdir()
+    (ws / "6-photos-by-dest" / "Rome" / "b.jpg").write_bytes(b"img")
+    assert _run(monkeypatch, ws) == 0
+    art = _artifact(ws)
+    assert art["destinations"]["6-photos-by-dest/Brussels"] == settled
+    rome = art["destinations"]["6-photos-by-dest/Rome"]
+    assert rome["camera_group_time_decisions"][CAM]["requires_user_input"]
+    assert art["status"] == "requires_user_input"
+
+
 @pytest.mark.spec("geotag-recalc-only-affected-1")
 def test_determinism_unchanged_rerun_is_byte_identical(tmp_path, monkeypatch):
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
@@ -141,7 +189,7 @@ def test_determinism_unchanged_rerun_is_byte_identical(tmp_path, monkeypatch):
 
 # --- validation (§9.2) -------------------------------------------------------
 
-@pytest.mark.spec("geotag-invalid-preserved-1", "geotag-validation-hard-blocker-1", "validate-everything-authored-1", "validate-preserve-invalid-1", "validate-timezone-1")
+@pytest.mark.spec("geotag-invalid-preserved-1", "geotag-validation-hard-blocker-1", "validate-everything-authored-1", "validate-preserve-invalid-1", "validate-timezone-1", "RUL-invalid_value_never_repaired", test="TST-geotag_time_decisions-bad_timezone_blocks_and_leaves_artifact")
 def test_bad_timezone_blocks_and_leaves_artifact(tmp_path, monkeypatch, capsys):
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []})
@@ -154,7 +202,7 @@ def test_bad_timezone_blocks_and_leaves_artifact(tmp_path, monkeypatch, capsys):
     assert (ws / ".photos-ingest" / cal.TIME_DECISIONS_ARTIFACT).read_bytes() == before   # untouched
 
 
-@pytest.mark.spec("geotag-sanity-validate-1", "validate-locate-no-repair-1")
+@pytest.mark.spec("geotag-sanity-validate-1", "validate-locate-no-repair-1", test="TST-geotag_time_decisions-bad_offset_blocks")
 def test_bad_offset_blocks(tmp_path, monkeypatch, capsys):
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []})
@@ -173,9 +221,9 @@ def test_depends_on_reverifies(tmp_path, monkeypatch):
              device_groups={"fixed_clock_cameras": [CAM], "phones": []})
     _run(monkeypatch, ws)
     dep = _artifact(ws)["depends_on"]["handoff"]
-    assert utils.verify_json_dependency(dep, str(ws))                 # matches as written
+    assert cal.GeotagWorkflow._verify_handoff_dependency(dep, str(ws))   # matches as written
     (ws / ".photos-ingest" / "photos-11-handoff.json").write_text('{"files": []}')
-    assert not utils.verify_json_dependency(dep, str(ws))             # change detected
+    assert not cal.GeotagWorkflow._verify_handoff_dependency(dep, str(ws))   # change detected
 
 
 @pytest.mark.spec("geotag-timezone-autoresolve-1", "geotag-timezone-inherit-priority-1", "geotag-timezone-unresolved-requires-input-1")

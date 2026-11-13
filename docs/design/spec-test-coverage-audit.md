@@ -76,7 +76,7 @@ These all assert the refusal/detection but **not** the safety consequence. Group
 **Missing "ordering / single-threaded-before-concurrency" assertion:**
 - `exec-concurrency-no-semantic-change-1` — run the *same geotag plan* under `-j1` vs `-jN`, assert identical photos-25 + file tree.
 - `merge-moveset-fixed-before-concurrency-1` — assert snapshot + revalidation precede the parallel move pass (sequencing probe).
-- `exec-single-writer-journal-1` — assert journal/SQLite/ledger writes never originate from worker threads; pre-state pass completes before the write pass.
+- `exec-single-writer-journal-1` — assert journal/SQLite/ledger writes never originate from worker threads; the pinning pass completes before the write pass.
 - `prep-cache-single-writer-1` / `prep-db-disjoint-writers-1` / `prep-execute-no-patch-stale-1` — assert no two phases write the same rows / no worker-thread DB write.
 
 **Missing "library/by-dest untouched / never-follows / never-fixes" assertion:**
@@ -98,7 +98,7 @@ These all assert the refusal/detection but **not** the safety consequence. Group
 - `lock-covers-whole-run-1` — assert lock contention refuses for `execute` and `finalize`, not just `plan`.
 - `merge-seal-blocks-future-scripts-1` — covers refusal for all 3 phases; missing the prune-quarantine sole-exception (see #8).
 - `merge-journal-confirmed-only-1` — read the merge journal after a partial run, assert only the confirmed move present, failed item absent.
-- `merge-config-validated-1` — run a bad placement_policy/collision_policy through the merge data path, assert blocker + no summary + no placement.
+- `merge-config-validated-1` — run an invalid merge config (a library_root holding the workspace) through the merge data path, assert blocker + no summary + no placement.
 - `prep-path-conflict-bydest-1` — exercise §11.2 *case-insensitive* collision against an existing by-dest path → safe-alternative or block.
 - `prep-scan-skip-control-1` — assert `.git` and `.photos-ingest-quarantine/` subtrees are skipped during the media scan.
 - `prep-video-in-photoband-block-1` — add the 6-photos-by-dest video case (only the 5-band is tested) and assert "produces no plan".
@@ -215,11 +215,11 @@ loses its test — so this audit is no longer purely a point-in-time snapshot.
 The registry `spec/spec-clauses.json` was then **grown into a living clause index** (PR #220) and
 **refined + broadly gated** (PR #221): the behavioral clauses across the four spec files were
 enumerated, over-granular entries merged, each clause mapped to a genuine test, and HIGH-criticality
-gaps closed with new tests. The current index is **609 clauses** (prep / shared / geotag / merge),
+gaps closed with new tests. The current index is **633 clauses** (prep / shared / geotag / merge),
 each carrying a **spec pointer** (`file` + section heading) that `tests/test_spec_coverage_registry.py`
-keeps in sync (it fails if a pointer stops resolving to a real heading — drift protection). **497 are
-`must_cover`** (CI-gated: a tagged test must exist); the other **112 are omitted with a recorded
-`omit_reason`** — 73 `incidental` (happy-path only, no dedicated assertion) and 39 `none`. Only **8
+keeps in sync (it fails if a pointer stops resolving to a real heading — drift protection). **542 are
+`must_cover`** (CI-gated: a tagged test must exist); the other **91 are omitted with a recorded
+`omit_reason`** — 53 `incidental` (happy-path only, no dedicated assertion), 37 `none`, and 1 with a tagged test that does not assert it whole. Only **8
 omitted clauses are HIGH-criticality**, each for a documented reason: crash-injection atomicity (out of
 scope, this section), cross-cutting principles asserted only in aggregate, flock lock-takeover
 (OS-released, no reclaim code), a symlink guard delegated to prep, and a concurrency property implied

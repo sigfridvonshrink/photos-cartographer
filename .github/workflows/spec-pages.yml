@@ -1,0 +1,45 @@
+name: spec-pages
+
+# Publishes the spec corpus (spec/, built by tools/spec-build) to GitHub Pages on every push to main.
+# Needs Pages enabled with "GitHub Actions" as its source (repository Settings -> Pages).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: spec-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Build the corpus
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y --no-install-recommends graphviz
+          python -m venv spec/.venv
+          spec/.venv/bin/pip install -r spec/requirements.txt
+          tools/spec-build
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: spec/_build/html
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -85,12 +85,12 @@ def _install(monkeypatch):
         for folder in folders:
             for f in os.listdir(folder):
                 res[os.path.join(folder, f)] = {"DateTimeOriginal": "2023:01:02 03:04:05",
-                                                "extraction_status": "extracted_ok", "raw_payload": "{}"}
+                                                "extraction_status": "extracted_ok"}
         return res, set()
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", meta)
 
 
-@pytest.mark.spec("exec-noclobber-all-content-ops-1", "prep-execute-time-no-clobber-recheck-1")
+@pytest.mark.spec("exec-noclobber-all-content-ops-1", "prep-execute-time-no-clobber-recheck-1", test="TST-no_clobber-execute_time_no_clobber_preserves_existing")
 def test_execute_time_no_clobber_preserves_existing(tmp_path, monkeypatch):
     # The user's "planning somehow failed to catch it" case: bypass the plan-time clobber
     # simulation, place a file at the planned destination, and confirm the executor itself

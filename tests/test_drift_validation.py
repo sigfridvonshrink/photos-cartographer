@@ -296,7 +296,7 @@ def _e2e_ws(tmp_path):
     cfg["gpx_root"] = str(gpx)
     cfg["camera_time_and_timezone_policy"] = dict(
         cfg["camera_time_and_timezone_policy"], device_groups={"fixed_clock_cameras": [CAM], "phones": []},
-        default_folder_timezone="Europe/Brussels", write_corrected_filename_times=False)
+        default_folder_timezone="Europe/Brussels")
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
 
     def rec(rel, dto):
@@ -308,11 +308,12 @@ def _e2e_ws(tmp_path):
         return {"relative_path": rel, "media_class": "image", "folder_class": "6-photos-by-dest",
                 "size": st.st_size, "mtime_ns": st.st_mtime_ns,
                 "content_hash": json.dumps({"value": "fp-" + rel, "status": "valid"}),
-                "metadata_status": {"camera_group_key": CAM, "has_timestamp": True, "has_native_gps": False,
-                                    "field_set_version": 1, "parsed_json": json.dumps(parsed)}}
+                "metadata_status": {"camera_group_key_version": utils.CAMERA_GROUP_KEY_VERSION,
+                                    "camera_group_key": CAM, "has_timestamp": True, "has_native_gps": False,
+                                    "field_set_version": utils.FIELD_SET_VERSION, "parsed_json": json.dumps(parsed)}}
     files = [rec(f"{BYDEST}/T/a.arw", "2024:07:03 14:00:00"),
              rec(f"{BYDEST}/T/b.arw", "2024:07:03 14:30:00")]
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"files": files, "cache_fingerprint": "pcf"}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files, "cache_fingerprint": "pcf"}))
     return ws, ctl
 
 

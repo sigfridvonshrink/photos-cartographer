@@ -29,12 +29,6 @@ BYDEST = "6-photos-by-dest"
 UTC = "2024-07-03T12:12:21Z"
 
 
-def _pol(**over):
-    p = copy.deepcopy(utils.CONFIG["camera_time_and_timezone_policy"])
-    p.update(over)
-    return dict(utils.CONFIG, camera_time_and_timezone_policy=p)
-
-
 def _file(rel=f"{BYDEST}/T/a.arw"):
     return {"relative_path": rel, "content_fingerprint": "fp" + rel, "size": 10, "mtime_ns": 1}
 
@@ -45,18 +39,18 @@ def _types(ops):
 
 # --- plan_file_ops: branch by branch ----------------------------------------
 
-def test_time_write_honors_flags():
+def test_time_write_carries_its_offset():
     f = _file()
-    full = cal.plan_file_ops(f, UTC, "Europe/Brussels", "preserve_native", None, None, utils.CONFIG)
+    full = cal.plan_file_ops(f, UTC, "Europe/Brussels", "preserve_native", None, None)
     w = next(o for o in full if o["type"] == "metadata_time_write")["writes"]
     assert w == {"DateTimeOriginal": "2024:07:03 14:12:21", "OffsetTimeOriginal": "+02:00"}
-    # offset tag off -> no OffsetTimeOriginal
-    no_off = cal.plan_file_ops(f, UTC, "Europe/Brussels", "preserve_native", None, None,
-                               _pol(write_corrected_offset_tags=False))
-    assert "OffsetTimeOriginal" not in no_off[0]["writes"]
-    # metadata times off -> no time op at all (and preserve_native -> true no-op)
-    assert cal.plan_file_ops(f, UTC, "Europe/Brussels", "preserve_native", None, None,
-                             _pol(write_corrected_metadata_times=False)) == []
+
+
+@pytest.mark.spec("RUL-mutate_on_difference", test="TST-geotag_executable_plan-a_time_the_file_holds_is_not_written_again")
+def test_a_time_the_file_holds_is_not_written_again():
+    f = dict(_file(), raw_times={"DateTimeOriginal": "2024:07:03 14:12:21", "OffsetTimeOriginal": "+02:00"})
+    assert "metadata_time_write" not in _types(
+        cal.plan_file_ops(f, UTC, "Europe/Brussels", "preserve_native", None, None))
 
 
 @pytest.mark.parametrize("cat, origin, marker", [
@@ -66,8 +60,7 @@ def test_time_write_honors_flags():
     ("manual_fallback", "apply_manual", "manual_fallback")])
 @pytest.mark.spec("geotag-fallback-is-manual-1")
 def test_gps_write_and_marker(cat, origin, marker):
-    ops = cal.plan_file_ops(_file(), UTC, "Europe/Brussels", cat, {"lat": 50.0, "lon": 4.0}, None,
-                            _pol(write_corrected_metadata_times=False))
+    ops = cal.plan_file_ops(_file(), UTC, "Europe/Brussels", cat, {"lat": 50.0, "lon": 4.0}, None)
     gw = next(o for o in ops if o["type"] == "metadata_gps_write")
     assert gw["writes"] == {"GPSLatitude": 50.0, "GPSLatitudeRef": "N",
                             "GPSLongitude": 4.0, "GPSLongitudeRef": "E"}
@@ -84,40 +77,34 @@ def test_gps_write_carries_hemisphere_refs(lat, lon, refs):
     """§28.1: EXIF coordinates are unsigned magnitudes — a write without GPSLatitudeRef/
     GPSLongitudeRef reads as NO location to a conforming reader, and flips the hemisphere of a
     southern/western position for a lenient one. The refs ship in the same operation."""
-    ops = cal.plan_file_ops(_file(), UTC, "Europe/Brussels", "gpx_interpolation", {"lat": lat, "lon": lon},
-                            None, _pol(write_corrected_metadata_times=False))
+    ops = cal.plan_file_ops(_file(), UTC, "Europe/Brussels", "gpx_interpolation", {"lat": lat, "lon": lon}, None)
     gw = next(o for o in ops if o["type"] == "metadata_gps_write")
     assert (gw["writes"]["GPSLatitudeRef"], gw["writes"]["GPSLongitudeRef"]) == refs
     assert (gw["writes"]["GPSLatitude"], gw["writes"]["GPSLongitude"]) == (lat, lon)
 
 
 def test_no_gps_write_for_preserve_or_no_change_or_missing_coord():
-    pol = _pol(write_corrected_metadata_times=False)
-    assert cal.plan_file_ops(_file(), UTC, "x", "preserve_native", {"lat": 1, "lon": 2}, None, pol) == []
-    assert cal.plan_file_ops(_file(), UTC, "x", "no_change", None, None, pol) == []
-    assert cal.plan_file_ops(_file(), UTC, "x", "gpx_interpolation", None, None, pol) == []  # no coord
+    for cat, coord in (("preserve_native", {"lat": 1, "lon": 2}), ("no_change", None), ("gpx_interpolation", None)):
+        assert "metadata_gps_write" not in _types(cal.plan_file_ops(_file(), UTC, "Europe/Brussels", cat, coord, None))
 
 
-def test_rename_op_by_flag():
+def test_rename_op_only_when_planned():
     f = _file()
     ren = {"rename": True, "current_name": "a.arw", "planned_name": "2024-07-03--14-12-21.arw"}
-    pol = _pol(write_corrected_metadata_times=False)
-    op = cal.plan_file_ops(f, UTC, "Europe/Brussels", "preserve_native", None, ren, pol)
-    assert _types(op) == ["rename_no_clobber"] and op[0]["from"] == "a.arw" and op[0]["to"].endswith(".arw")
-    assert cal.plan_file_ops(f, UTC, "x", "preserve_native", None, {"rename": False}, pol) == []  # no rename
-    assert cal.plan_file_ops(f, UTC, "x", "preserve_native", None, ren,
-                             _pol(write_corrected_metadata_times=False,
-                                  write_corrected_filename_times=False)) == []   # flag off
+    op = [o for o in cal.plan_file_ops(f, UTC, "Europe/Brussels", "preserve_native", None, ren)
+          if o["type"] == "rename_no_clobber"]
+    assert len(op) == 1 and op[0]["from"] == "a.arw" and op[0]["to"].endswith(".arw")
+    assert "rename_no_clobber" not in _types(
+        cal.plan_file_ops(f, UTC, "Europe/Brussels", "preserve_native", None, {"rename": False}))
 
 
 def test_operation_id_deterministic_and_distinct():
     f = _file()
-    a = cal.plan_file_ops(f, UTC, "Europe/Brussels", "preserve_native", None, None, utils.CONFIG)
-    b = cal.plan_file_ops(f, UTC, "Europe/Brussels", "preserve_native", None, None, utils.CONFIG)
+    a = cal.plan_file_ops(f, UTC, "Europe/Brussels", "preserve_native", None, None)
+    b = cal.plan_file_ops(f, UTC, "Europe/Brussels", "preserve_native", None, None)
     assert a[0]["operation_id"] == b[0]["operation_id"]                                # stable
-    g = cal.plan_file_ops(f, UTC, "Europe/Brussels", "gpx_interpolation", {"lat": 1, "lon": 2}, None,
-                          _pol(write_corrected_metadata_times=False))
-    assert len({o["operation_id"] for o in g}) == 2                                    # distinct per op
+    g = cal.plan_file_ops(f, UTC, "Europe/Brussels", "gpx_interpolation", {"lat": 1, "lon": 2}, None)
+    assert len({o["operation_id"] for o in g}) == len(g) == 3                          # distinct per op
 
 
 def test_local_time_and_offset_unpositionable():
@@ -162,7 +149,7 @@ def _row(rel, status="valid", utc=UTC):
             "resolved_utc_status": status}
 
 
-@pytest.mark.spec("geotag-flattened-deps-1", "geotag-json-dep-sha256-1", "geotag-plan-deps-1")
+@pytest.mark.spec("geotag-flattened-deps-1", "geotag-json-dep-sha256-1", "geotag-plan-deps-1", "RUL-geotag_plan_carries_every_dependency", test="TST-geotag_executable_plan-plan_ready_with_ops_and_full_depends_on")
 def test_plan_ready_with_ops_and_full_depends_on(tmp_path):
     files = [_model(f"{BYDEST}/T/a.arw", f"{BYDEST}/T", native=True)]
     wf, t, g = _wf(tmp_path, files=files)
@@ -172,12 +159,16 @@ def test_plan_ready_with_ops_and_full_depends_on(tmp_path):
     d = plan["destinations"][f"{BYDEST}/T"]
     assert d["summary"]["metadata_time_writes"] == 1                                   # native -> time only
     dep = plan["depends_on"]
-    for k in ("time_decisions", "gps_decisions", "resolved_utc_cache_fingerprint", "config_fingerprint",
-              "camera_group_fingerprint", "handoff", "prep_cache_fingerprint", "gpx_fingerprint",
-              "metadata_field_set_version", "filename_format_fingerprint", "media_preconditions",
-              "planned_operation_fingerprint"):
+    for k in ("time_decisions", "drift_validation", "gps_decisions", "resolved_utc_cache_fingerprint",
+              "config_fingerprint", "code_fingerprint", "camera_group_fingerprint", "camera_group_key_version",
+              "handoff", "prep_cache_fingerprint", "gpx_fingerprint", "metadata_field_set_version",
+              "filename_format_fingerprint", "folders_fingerprint", "media_extensions_fingerprint",
+              "media_preconditions", "planned_operation_fingerprint"):
         assert k in dep, k
-    assert dep["time_decisions"]["sha256"] and dep["resolved_utc_cache_fingerprint"] == "rfp"
+    # Each decision record is named and hashed directly — none vouched for through another's depends_on.
+    for k in ("time_decisions", "drift_validation", "gps_decisions"):
+        assert dep[k]["sha256"], k
+    assert dep["resolved_utc_cache_fingerprint"] == "rfp"
 
 
 @pytest.mark.spec("geotag-gps-after-utc-1")

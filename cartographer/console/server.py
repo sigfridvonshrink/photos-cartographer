@@ -154,6 +154,14 @@ def _current_fingerprints(workspace):
     except Exception:
         pass
     try:
+        fps["code_fingerprint"] = U.code_fingerprint()
+    except Exception:
+        pass
+    try:
+        fps["image_engine_version"] = U.get_imagemagick_version()      # resolved once per process
+    except Exception:
+        pass
+    try:
         hp = U.handoff_path(workspace)
         if os.path.exists(hp):
             with open(hp) as f:
@@ -391,7 +399,7 @@ def _runnable_actions(workspace, phases, sealed, busy, initialized=True):
 def _state(workspace):
     """Transient state for the chrome: workspace flags, lock, current job, per-phase hints (incl.
     staleness) and per-command affordance (`actions`). Cheap, best-effort — never the source of truth."""
-    lock = U.WorkspaceLock(workspace)
+    lock = U.WorkspaceLock(workspace, create=False)   # a status probe never creates the control directory
     try:
         # held_owner (not read_owner): only report a holder if the flock is LIVE. read_owner reflects
         # the last writer and is never cleared, so a finished/interrupted CLI run would otherwise look

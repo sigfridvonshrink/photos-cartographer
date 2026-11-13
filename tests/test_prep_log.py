@@ -55,7 +55,7 @@ def _install(monkeypatch):
         for fo in folders:
             for fn in os.listdir(fo):
                 res[os.path.join(fo, fn)] = {"DateTimeOriginal": "2023:01:02 03:04:05",
-                                             "extraction_status": "extracted_ok", "raw_payload": "{}"}
+                                             "extraction_status": "extracted_ok"}
         return res, set()
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", meta)
 
@@ -72,25 +72,26 @@ def _log(ws):
         return json.load(f)
 
 
-@pytest.mark.spec("log-keyed-by-fingerprint-1", "prep-log-per-photo-fingerprint-keyed-1", "prep-log-records-journey-1")
+@pytest.mark.spec("log-keyed-by-fingerprint-1", "prep-log-per-photo-fingerprint-keyed-1", "prep-log-records-journey-1", test="TST-prep_log-media_journey_keyed_by_fingerprint")
 def test_media_journey_keyed_by_fingerprint(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
-    (ws / "0-sources" / "IMG.JPG").write_bytes(b"AAAA")     # uppercase ext -> normalized
+    (ws / "0-sources" / "IMG.JPG").write_bytes(b"AAAA")     # uppercase ext -> lowercased as it is filed
     _run(ws)
     photos = _log(ws)["photos"]
     assert len(photos) == 1
     fp, entry = next(iter(photos.items()))
-    assert entry["content_sha256"] == fp                   # keyed by content fingerprint
+    assert entry["content_fingerprint"] == fp              # keyed by content fingerprint
     actions = [(s["action"], s.get("to") or s.get("from")) for s in entry["journey"]]
-    assert ("extension_normalized", "IMG.JPG") in [(s["action"], s.get("from")) for s in entry["journey"]]
     assert any(a == "organized" for a, _ in actions)
-    assert any(a == "provisional_rename" for a, _ in actions)
-    assert entry["final_path"].startswith("5-photos-by-date/")
+    renames = [(s["from"], s["to"]) for s in entry["journey"] if s["action"] == "provisional_rename"]
+    assert renames == [("IMG.JPG", "2023-01-02--03-04-05.jpg")]
+    assert not any(a == "extension_normalized" for a, _ in actions)   # one move, not a rename pair
+    assert entry["prep_path"].startswith("5-photos-by-date/")
     assert all(s.get("run") for s in entry["journey"])     # each step attributed to its run
 
 
-@pytest.mark.spec("prep-log-records-quarantine-dups-1", "prep-quarantine-recoverable-manifest-1")
+@pytest.mark.spec("prep-log-records-quarantine-dups-1", "prep-quarantine-recoverable-manifest-1", test="TST-prep_log-quarantined_duplicate_recorded")
 def test_quarantined_duplicate_recorded(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -100,7 +101,7 @@ def test_quarantined_duplicate_recorded(tmp_path, monkeypatch):
     photos = _log(ws)["photos"]
     assert len(photos) == 1                                # one content, one entry
     entry = next(iter(photos.values()))
-    assert entry["deduplicated"]["retained"] == entry["final_path"]   # final location of the kept file
+    assert entry["deduplicated"]["retained"] == entry["prep_path"]   # final location of the kept file
     dq = entry["deduplicated"]["quarantined"]
     assert len(dq) == 1
     assert dq[0]["origin"].startswith("0-sources/")
@@ -119,7 +120,7 @@ def test_prep_organizes_by_raw_naive_timestamp_no_tz_or_utc_shift(tmp_path, monk
         for fo in folders:
             for fn in os.listdir(fo):
                 res[os.path.join(fo, fn)] = {"DateTimeOriginal": "2023:03:26 23:45:00",
-                                             "extraction_status": "extracted_ok", "raw_payload": "{}"}
+                                             "extraction_status": "extracted_ok"}
         return res, set()
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", meta)
     ws = _ws(tmp_path)
@@ -127,7 +128,7 @@ def test_prep_organizes_by_raw_naive_timestamp_no_tz_or_utc_shift(tmp_path, monk
     _run(ws)
     entry = next(iter(_log(ws)["photos"].values()))
     # raw 2023:03:26 23:45:00 -> exact same date folder + civil time, no shift to 21:45 / 03-27 / etc.
-    assert entry["final_path"] == "5-photos-by-date/2023-03-26/2023-03-26--23-45-00.jpg"
+    assert entry["prep_path"] == "5-photos-by-date/2023-03-26/2023-03-26--23-45-00.jpg"
 
 
 @pytest.mark.spec("prep-log-self-sufficient-1")
@@ -150,7 +151,7 @@ def test_prep_log_is_complete_and_standalone_without_geotag_or_merge(tmp_path, m
     assert len(photos) == 1
     entry = next(iter(photos.values()))
     assert not entry.get("partial")                                   # complete, nothing missing
-    assert entry["final_path"].startswith("5-photos-by-date/")        # full journey to its destination
+    assert entry["prep_path"].startswith("5-photos-by-date/")        # full journey to its destination
     actions = [s["action"] for s in entry["journey"]]
     assert "organized" in actions and "provisional_rename" in actions
     assert all(s.get("run") for s in entry["journey"])                # every step attributed to its run
@@ -168,11 +169,11 @@ def test_nonconforming_name_is_ignored_timestamp_comes_from_metadata(tmp_path, m
     _run(ws)
     entry = next(iter(_log(ws)["photos"].values()))
     # Date + provisional name come from EXIF metadata, not the filename.
-    assert entry["final_path"] == "5-photos-by-date/2023-01-02/2023-01-02--03-04-05.jpg"
-    assert "2099" not in entry["final_path"]                        # the misleading name was not parsed
+    assert entry["prep_path"] == "5-photos-by-date/2023-01-02/2023-01-02--03-04-05.jpg"
+    assert "2099" not in entry["prep_path"]                        # the misleading name was not parsed
 
 
-@pytest.mark.spec("prep-log-derived-no-new-authority-1")
+@pytest.mark.spec("prep-log-derived-no-new-authority-1", test="TST-prep_log-prep_log_entries_are_derived_from_the_validated_plan")
 def test_prep_log_entries_are_derived_from_the_validated_plan(tmp_path, monkeypatch):
     """§16.1 item 4: the prep log is DERIVED from the validated plan + journals and introduces no new
     authority — its facts trace back to plan operations. Assert the logged final destination equals a
@@ -180,7 +181,8 @@ def test_prep_log_entries_are_derived_from_the_validated_plan(tmp_path, monkeypa
     the plan's rename source — the log records nothing the plan/journal did not establish."""
     _install(monkeypatch)
     ws = _ws(tmp_path)
-    (ws / "0-sources" / "IMG.JPG").write_bytes(b"AAAA")             # uppercase ext -> a rename op
+    day = ws / "5-photos-by-date" / "2023-01-02"; day.mkdir()
+    (day / "2023-01-02--03-04-05.JPG").write_bytes(b"AAAA")         # filed, uppercase ext -> a rename op
     cache = prep.WorkspaceCache(str(ws))
     plan = prep.WorkspacePrepWorkflow(str(ws), cache).plan()
     cache.close()
@@ -191,16 +193,15 @@ def test_prep_log_entries_are_derived_from_the_validated_plan(tmp_path, monkeypa
     planned_names = {os.path.basename(p) for p in op_dests | op_srcs}
     entry = next(iter(_log(ws)["photos"].values()))
     # The log's terminal location is one the plan actually planned — not a fact the log invented.
-    assert entry["final_path"] in op_dests, (entry["final_path"], sorted(op_dests))
+    assert entry["prep_path"] in op_dests, (entry["prep_path"], sorted(op_dests))
     # The extension-normalization step's 'from' name is the plan's rename source — derived, not new.
     norm = [s for s in entry["journey"] if s["action"] == "extension_normalized"]
-    assert norm and norm[0]["from"] == "IMG.JPG"
-    assert "IMG.JPG" in planned_names, sorted(planned_names)
-    # The provisional rename's target filename is the basename of a path the plan planned.
-    prov = [s for s in entry["journey"] if s["action"] == "provisional_rename"]
-    assert prov and os.path.basename(prov[0]["to"]) in planned_names, (prov, sorted(planned_names))
+    assert norm and norm[0]["from"] == "2023-01-02--03-04-05.JPG"
+    assert "2023-01-02--03-04-05.JPG" in planned_names, sorted(planned_names)
+    assert os.path.basename(norm[0]["to"]) in planned_names, (norm, sorted(planned_names))
 
 
+@pytest.mark.spec("RUL-no_log_entry_for_other", test="TST-prep_log-strays_and_other_not_logged")
 def test_strays_and_other_not_logged(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -223,7 +224,7 @@ def test_noop_rerun_leaves_log_byte_identical(tmp_path, monkeypatch):
     assert open(utils.prep_log_path(str(ws)), "rb").read() == first
 
 
-@pytest.mark.spec("log-entry-append-only-1")
+@pytest.mark.spec("log-entry-append-only-1", test="TST-prep_log-recognized_move_appends_moved_to_by_dest")
 def test_recognized_move_appends_moved_to_by_dest(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -237,14 +238,14 @@ def test_recognized_move_appends_moved_to_by_dest(tmp_path, monkeypatch):
     os.rename(organized, dest_dir / os.path.basename(organized))
     _run(ws)                                                 # prep recognizes the move
     entry = _log(ws)["photos"][fp_before]                    # same fingerprint key
-    assert entry["final_path"].startswith("6-photos-by-dest/Trip/")
+    assert entry["prep_path"].startswith("6-photos-by-dest/Trip/")
     moves = [s for s in entry["journey"] if s["action"] == "moved_to_by_dest"]
     assert len(moves) == 1 and moves[0]["to"].startswith("6-photos-by-dest/Trip/")
     # the unmoved prep steps were carried forward, not re-derived (still exactly one organize)
     assert sum(1 for s in entry["journey"] if s["action"] == "organized") == 1
 
 
-@pytest.mark.spec("log-human-readable-json-1", "prep-prep-log-on-success-1")
+@pytest.mark.spec("log-human-readable-json-1", "prep-prep-log-on-success-1", test="TST-prep_log-log_is_deterministic_and_in_control_dir")
 def test_log_is_deterministic_and_in_control_dir(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -257,7 +258,7 @@ def test_log_is_deterministic_and_in_control_dir(tmp_path, monkeypatch):
     assert list(_log(ws)["photos"]) == sorted(_log(ws)["photos"])  # fingerprint-sorted
 
 
-@pytest.mark.spec("log-fail-if-insufficient-1", "prep-log-fail-if-history-insufficient-1")
+@pytest.mark.spec("log-fail-if-insufficient-1", "prep-log-fail-if-history-insufficient-1", test="TST-prep_log-missing_history_warns_and_marks_partial")
 def test_missing_history_warns_and_marks_partial(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -268,3 +269,78 @@ def test_missing_history_warns_and_marks_partial(tmp_path, monkeypatch):
     entry = next(iter(_log(ws)["photos"].values()))
     assert entry.get("partial") is True
     assert "incomplete" in entry.get("note", "")
+
+
+@pytest.mark.spec("RUL-log_keyed_by_fingerprint", "log-chain-of-names-1", test="TST-prep_log-every_move_names_where_it_came_from")
+def test_every_move_names_where_it_came_from(tmp_path, monkeypatch):
+    """The journey keeps the chain of names and places: each move and rename records where the photo
+    came from as well as where it went, so the first step holds its original path in the dump."""
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "card").mkdir()
+    (ws / "0-sources" / "card" / "DSC01234.jpg").write_bytes(b"AAAA")
+    _run(ws)
+    organized = glob.glob(str(ws / "5-photos-by-date" / "**" / "*.jpg"), recursive=True)[0]
+    (ws / "6-photos-by-dest" / "Trip").mkdir(parents=True)
+    os.rename(organized, ws / "6-photos-by-dest" / "Trip" / os.path.basename(organized))
+    _run(ws)
+    journey = next(iter(_log(ws)["photos"].values()))["journey"]
+    by = {s["action"]: s for s in journey}
+    assert by["organized"]["from"] == "0-sources/card/DSC01234.jpg"
+    assert by["provisional_rename"]["from"] == "DSC01234.jpg"
+    assert by["moved_to_by_dest"]["from"].startswith("5-photos-by-date/")
+    assert by["moved_to_by_dest"]["to"].startswith("6-photos-by-dest/Trip/")
+
+
+@pytest.mark.spec("RUL-log_follows_retaken_fingerprint", "BLD-prep_log_build",
+                  test="TST-prep_log-a_retaken_fingerprint_keeps_the_photos_history")
+def test_a_retaken_fingerprint_keeps_the_photos_history(tmp_path, monkeypatch):
+    """A photo fingerprinted again by another method, its value changed, keeps its history: the entry
+    moves to the new value, with a step saying so — no orphan under the old value, nothing partial."""
+    _install(monkeypatch)
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "t")
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.JPG").write_bytes(b"AAAA")
+    _run(ws)
+    (old,) = _log(ws)["photos"]
+    monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", lambda p: {
+        "status": "valid", "strategy": "image-content-hash-v1",
+        "value": "sig2-" + open(p, "rb").read().hex()[:16], "engine_version": "u"})
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "u")
+    _run(ws)
+    photos = _log(ws)["photos"]
+    (new,) = photos
+    entry = photos[new]
+    assert new != old and entry["content_fingerprint"] == new and "partial" not in entry
+    assert [s["action"] for s in entry["journey"]] == ["organized", "provisional_rename", "fingerprint_retaken"]
+    assert entry["journey"][-1]["from"] == old
+
+
+@pytest.mark.spec("RUL-log_follows_retaken_fingerprint", "RUL-moved_file_carried", "RUL-engine_change_is_checked", "BLD-prep_log_build",
+                  test="TST-prep_log-a_photo_moved_under_a_new_imagemagick_keeps_its_history")
+def test_a_photo_moved_under_a_new_imagemagick_keeps_its_history(tmp_path, monkeypatch):
+    """A photo the user sorts into photos by destination while ImageMagick changes, its fingerprint's value
+    changing with it, keeps its whole history: the entry moves to the new value and records the user's
+    move — none left behind claiming the photo is still where prep put it."""
+    _install(monkeypatch)
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "t")
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.JPG").write_bytes(b"AAAA")
+    _run(ws)
+    (old,) = _log(ws)["photos"]
+    organized = _log(ws)["photos"][old]["prep_path"]
+    (ws / "6-photos-by-dest" / "Rome").mkdir()
+    moved = "6-photos-by-dest/Rome/" + os.path.basename(organized)
+    os.rename(ws / organized, ws / moved)
+    monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", lambda p: {
+        "status": "valid", "strategy": "image-content-hash-v1",
+        "value": "sig2-" + open(p, "rb").read().hex()[:16], "engine_version": "u"})
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "u")
+    _run(ws)
+    photos = _log(ws)["photos"]
+    (new,) = photos
+    entry = photos[new]
+    assert new != old and entry["prep_path"] == moved and "partial" not in entry
+    assert [s["action"] for s in entry["journey"]] == [
+        "organized", "provisional_rename", "fingerprint_retaken", "moved_to_by_dest"]
+    assert entry["journey"][-1]["from"] == organized and entry["journey"][-1]["to"] == moved

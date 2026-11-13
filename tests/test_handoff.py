@@ -53,7 +53,7 @@ def _mock(monkeypatch):
                     "Make": "TestMake", "Model": "TestModel",
                     "camera_group_key": "test-cam",
                     "has_native_gps": False, "has_timestamp": True,
-                    "extraction_status": "extracted_ok", "raw_payload": "{}",
+                    "extraction_status": "extracted_ok",
                 }
         return res, set()
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", meta)
@@ -103,12 +103,12 @@ def test_real_duplicate_evidence_against_mutable(tmp_path, monkeypatch):
     assert diag["blockers"] == []
 
 
-@pytest.mark.spec("prep-dup-against-bydest-quarantine-mutable-1")
+@pytest.mark.spec("prep-dup-against-bydest-quarantine-mutable-1", "BLD-duplicate_evidence", test="TST-handoff-conflict_attributed_to_by_dest_folder")
 def test_conflict_attributed_to_by_dest_folder(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
     (ws / "6-photos-by-dest" / "Trip").mkdir(parents=True)
-    (ws / "6-photos-by-dest" / "Trip" / "keep.jpg").write_bytes(b"SAME")  # retained
+    (ws / "6-photos-by-dest" / "Trip" / "2023-01-02--03-04-05.jpg").write_bytes(b"SAME")  # retained
     (ws / "0-sources" / "dup.jpg").write_bytes(b"SAME")                   # mutable duplicate
     _run(ws)
     h = _handoff(ws)
@@ -119,7 +119,7 @@ def test_conflict_attributed_to_by_dest_folder(tmp_path, monkeypatch):
     assert trip["conflicts_or_duplicates"][0]["original_path"] == "0-sources/dup.jpg"
 
 
-@pytest.mark.spec("camera-prep-computes-key-1")
+@pytest.mark.spec("camera-prep-computes-key-1", test="TST-handoff-grouping_facts_identity_and_device_class")
 def test_grouping_facts_identity_and_device_class(tmp_path, monkeypatch, seed_from_live_config):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -134,7 +134,7 @@ def test_grouping_facts_identity_and_device_class(tmp_path, monkeypatch, seed_fr
     assert g["device_class"] == "phone"
 
 
-@pytest.mark.spec("camera-known-when-classified-1")
+@pytest.mark.spec("camera-known-when-classified-1", test="TST-handoff-unknown_device_class_when_not_configured")
 def test_unknown_device_class_when_not_configured(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -160,7 +160,7 @@ def test_handoff_written_sorted_and_deterministic(tmp_path, monkeypatch):
     assert raw == json.dumps(obj, indent=2, sort_keys=True)
 
 
-@pytest.mark.spec("handoff-verified-by-content-1", "prep-handoff-content-fingerprint-pins-1")
+@pytest.mark.spec("handoff-verified-by-content-1", "prep-handoff-content-fingerprint-pins-1", test="TST-handoff-handoff_content_fingerprint_ignores_run_metadata_and_audit")
 def test_handoff_content_fingerprint_ignores_run_metadata_and_audit():
     """The content fingerprint is byte-stable across no-op reruns: it excludes run_metadata,
     diagnostics, the execution-journal pointer, itself, and the NESTED per-run audit (cache_freshness
@@ -187,7 +187,7 @@ def test_handoff_content_fingerprint_ignores_run_metadata_and_audit():
         {**base, "camera_groups": [{"group_key": "g2", "cache_freshness": {"metadata_extracted_ok": 1}}]}) != fp1
 
 
-@pytest.mark.spec("dep-handoff-dual-key-1", "handoff-runonly-refresh-no-restale-1", "prep-noop-rerun-stable-fingerprint-1")
+@pytest.mark.spec("dep-handoff-dual-key-1", "handoff-runonly-refresh-no-restale-1", "prep-noop-rerun-stable-fingerprint-1", test="TST-handoff-handoff_content_fingerprint_stable_across_real_noop_rerun")
 def test_handoff_content_fingerprint_stable_across_real_noop_rerun(tmp_path, monkeypatch):
     """End-to-end (§16.2): a second prep run that changes nothing organized produces the SAME handoff
     content_fingerprint, even though run_metadata + cache-freshness counts differ run to run."""

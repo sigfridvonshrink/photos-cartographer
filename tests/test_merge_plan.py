@@ -35,7 +35,7 @@ MANAGED = ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
 
 def _wf(handoff_files, rename_ops):
     wf = merge.MergeWorkflow("/ws")
-    wf.handoff = {"files": handoff_files}
+    wf.handoff = {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": handoff_files}
     return wf, {"destinations": {"only": {"operations": rename_ops}}}
 
 
@@ -48,7 +48,7 @@ def _rename(fp, to):
     return {"type": "rename_no_clobber", "to": to, "preconditions": {"content_fingerprint": fp}}
 
 
-@pytest.mark.spec("merge-plan-built-from-finalized-record-1")
+@pytest.mark.spec("merge-plan-built-from-finalized-record-1", test="TST-merge_plan-enumerate_joins_prerename_handoff_to_final_name")
 def test_enumerate_joins_prerename_handoff_to_final_name():
     # Handoff carries the PRE-rename name; the rename op (keyed by fingerprint) gives the final name.
     wf, cp = _wf([_ho("6-photos-by-dest/Trip/IMG_1.arw", "A")],
@@ -58,6 +58,19 @@ def test_enumerate_joins_prerename_handoff_to_final_name():
     assert e["lib_dest"] == "Trip"
     assert e["by_dest_relpath"] == "6-photos-by-dest/Trip/2024-07-03--14-12-21.arw"
     assert e["library_target"] == "/lib/Trip/2024-07-03--14-12-21.arw"
+
+
+@pytest.mark.spec("RUL-library_mirrors_destinations", "BLD-merge_target",
+                  test="TST-merge_plan-the_library_mirrors_the_destination_tree")
+def test_the_library_mirrors_the_destination_tree():
+    """Each photo goes to the same path under the library as under photos by destination — nested folders as
+    the user built them, the name geotag gave it, or its own where geotag renamed nothing."""
+    wf, cp = _wf([_ho("6-photos-by-dest/Belgium/Brussels/Grand Place/x.jpg", "A"),
+                  _ho("6-photos-by-dest/Belgium/y.jpg", "B")],
+                 [_rename("A", "2024-07-03--14-12-21.jpg")])
+    targets = {e["content_fingerprint"]: e["library_target"] for e in wf.enumerate_finalized(cp, "/lib")}
+    assert targets == {"A": "/lib/Belgium/Brussels/Grand Place/2024-07-03--14-12-21.jpg",
+                       "B": "/lib/Belgium/y.jpg"}
 
 
 def test_enumerate_robust_to_postrename_handoff():
@@ -70,7 +83,7 @@ def test_enumerate_robust_to_postrename_handoff():
     assert e["library_target"] == "/lib/Trip/2024-07-03--14-12-21.arw"
 
 
-@pytest.mark.spec("merge-preserve-geotag-final-name-1")
+@pytest.mark.spec("merge-preserve-geotag-final-name-1", test="TST-merge_plan-enumerate_unrenamed_file_keeps_its_name")
 def test_enumerate_unrenamed_file_keeps_its_name():
     wf, cp = _wf([_ho("6-photos-by-dest/Trip/keep.jpg", "A")], [])
     [e] = wf.enumerate_finalized(cp, "/lib")
@@ -78,7 +91,7 @@ def test_enumerate_unrenamed_file_keeps_its_name():
     assert e["library_target"] == "/lib/Trip/keep.jpg"
 
 
-@pytest.mark.spec("merge-map-preserve-destination-structure-1")
+@pytest.mark.spec("merge-map-preserve-destination-structure-1", test="TST-merge_plan-enumerate_root_level_destination")
 def test_enumerate_root_level_destination():
     wf, cp = _wf([_ho("6-photos-by-dest/top.jpg", "A")], [])
     [e] = wf.enumerate_finalized(cp, "/lib")
@@ -127,7 +140,10 @@ def _build_ws(tmp_path, photos, library_files=()):
         fpath.write_bytes(b"library")
         fp_by_path[str(fpath)] = lf["fp"]
 
-    handoff = {"files": ho_files, "content_fingerprint": "whole", "run_metadata": {"started_at": "t"}}
+    handoff = {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": ho_files, "content_fingerprint": "whole", "run_metadata": {"started_at": "t"},
+               "depends_on": {"cache": {"image_engine": "imagemagick", "image_engine_version": "test"}}}
+    (ctl / "photos-15-prep-log.json").write_text(json.dumps({"photos": {}}))
+    handoff.setdefault("depends_on", {})["prep_log"] = {"sha256": utils.sha256_file(str(ctl / "photos-15-prep-log.json"))}
     (ctl / "photos-11-handoff.json").write_text(json.dumps(handoff))
     cfg = {k: v for k, v in utils.CONFIG.items() if k != "jobs"}
     cfg["merge"] = dict(cfg.get("merge") or {})
@@ -141,6 +157,11 @@ def _build_ws(tmp_path, photos, library_files=()):
     (ctl / "photos-25-execution-summary.json").write_text(json.dumps({"status": "success"}))
     (ctl / "photos-26-complete-log.json").write_text(json.dumps({"photos": {}}))
     (ctl / "photos-26-archive-manifest.json").write_text(json.dumps({"artifact_name": "m"}))
+    _bd = ws / "6-photos-by-dest"          # finalize's record of each by-dest photo as geotag left it
+    (ctl / "photos-26-finalized-media.json").write_text(json.dumps({"media": {
+        os.path.relpath(os.path.join(r, n), ws): {"size": os.stat(os.path.join(r, n)).st_size,
+                                                  "mtime_ns": os.stat(os.path.join(r, n)).st_mtime_ns}
+        for r, _d, fs in os.walk(_bd) for n in fs}}))
     return ws, lib, fp_by_path
 
 
@@ -152,6 +173,7 @@ def _patch_fp(monkeypatch, fp_by_path):
                     "engine_version": "test"}
         return {"status": "failed", "value": None, "error": "unreadable", "engine_version": "test"}
     monkeypatch.setattr(merge.MergeWorkflow, "_fingerprint_library_file", fake)
+    monkeypatch.setattr(merge, "get_imagemagick_version", lambda: "test")   # the fake's engine, prep's too
 
 
 def _plan_of(ws):
@@ -178,8 +200,8 @@ def test_plan_placed_new(tmp_path, monkeypatch):
 
 @pytest.mark.spec("merge-only-no-reorganize-1")
 def test_plan_reuses_handoff_fingerprint_never_refingerprints_by_dest(tmp_path, monkeypatch):
-    """§2.1 (anti): merge reuses prep's recorded content_fingerprint for each by-dest file and never
-    re-fingerprints / re-organizes / re-dedups by-dest content. The handoff records fp "HANDOFF_ONLY"
+    """§2.1 (anti): under the ImageMagick prep used, merge reuses prep's recorded content_fingerprint for
+    each by-dest file and never re-fingerprints / re-organizes / re-dedups by-dest content. The handoff records fp "HANDOFF_ONLY"
     while the on-disk by-dest bytes are unrelated — if merge recomputed the by-dest fingerprint the
     plan's precondition would differ. Assert (a) the plan's per-file content_fingerprint is the
     handoff's recorded value verbatim, and (b) the by-dest file is NEVER passed to the (only)
@@ -203,7 +225,7 @@ def test_plan_reuses_handoff_fingerprint_never_refingerprints_by_dest(tmp_path, 
     assert not any("6-photos-by-dest" in p for p in fingerprinted), fingerprinted
 
 
-@pytest.mark.spec("merge-same-content-already-present-remove-source-1")
+@pytest.mark.spec("merge-same-content-already-present-remove-source-1", test="TST-merge_plan-plan_already_present")
 def test_plan_already_present(tmp_path, monkeypatch):
     # Library already holds identical content at the target -> already_present (remove source, no write).
     ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
@@ -217,7 +239,24 @@ def test_plan_already_present(tmp_path, monkeypatch):
     assert f["renamed_for_library"] is False
 
 
-@pytest.mark.spec("merge-suffix-append-at-max-plus-1-1")
+@pytest.mark.spec("RUL-no_op_run_reports_reuse", "RUL-unchanged_replan_writes_nothing", test="TST-merge_plan-replan_reports_library_fingerprints_reused")
+def test_replan_reports_library_fingerprints_reused(tmp_path, monkeypatch, capsys):
+    """A re-plan says how many library fingerprints it took from the cache — and the plan it writes is
+    the same file, the count kept out of it."""
+    ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
+                            library_files=[{"fp": "A", "dest": "Trip", "name": "a.jpg"}])
+    _patch_fp(monkeypatch, fp)
+    capsys.readouterr()
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert "Library files fingerprinted: 1 read, 0 reused from the cache." in capsys.readouterr().out
+    first = open(merge.merge_plan_path(str(ws)), "rb").read()
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert "Library files fingerprinted: 0 read, 1 reused from the cache." in capsys.readouterr().out
+    assert open(merge.merge_plan_path(str(ws)), "rb").read() == first
+    assert not [n for n in os.listdir(ws / ".photos-ingest") if n.startswith("photos-30-merge-plan-")]
+
+
+@pytest.mark.spec("merge-suffix-append-at-max-plus-1-1", test="TST-merge_plan-plan_renamed_incoming_append_at_max_plus_one")
 def test_plan_renamed_incoming_append_at_max_plus_one(tmp_path, monkeypatch):
     # Different content at the target; library also has root-002 -> incoming becomes root-003.
     ws, lib, fp = _build_ws(
@@ -235,7 +274,7 @@ def test_plan_renamed_incoming_append_at_max_plus_one(tmp_path, monkeypatch):
     assert f["library_target"] == os.path.join(str(lib), "Trip", "ts-003.jpg")
 
 
-@pytest.mark.spec("merge-allocation-treats-existing-and-batch-occupied-1")
+@pytest.mark.spec("merge-allocation-treats-existing-and-batch-occupied-1", test="TST-merge_plan-plan_two_incoming_case_variants_resolve_at_plan_time")
 def test_plan_two_incoming_case_variants_resolve_at_plan_time(tmp_path, monkeypatch):
     """Case-insensitive no-clobber (§7.2): two incoming photos whose final names differ ONLY in case
     target the same (empty) library dir. On a case-insensitive library they would collide; the plan
@@ -253,18 +292,27 @@ def test_plan_two_incoming_case_variants_resolve_at_plan_time(tmp_path, monkeypa
     assert len({n.lower() for n in names}) == 2                 # the two targets are case-distinct
 
 
-def test_plan_incoming_renamed_around_case_variant_already_in_library(tmp_path, monkeypatch):
-    """An incoming name whose case-variant already sits in the library is suffix-renamed at plan time
-    (it would clobber on a case-insensitive library), even though no EXACT-case file exists to compare."""
+@pytest.mark.parametrize("variant_fp, disposition", [("X", "renamed_incoming"), ("A", "already_present")])
+@pytest.mark.spec("RUL-collision_by_content", "BLD-library_file_fingerprinted",
+                  test="TST-merge_plan-a_case_variant_in_the_library_is_settled_by_content")
+def test_a_case_variant_in_the_library_is_settled_by_content(tmp_path, monkeypatch, variant_fp, disposition):
+    """A library file whose name differs from the target's only in case takes the place on a case-insensitive
+    library and may be the same photo on any: it is fingerprinted like a file at the target itself — the same
+    content already present there, different content renamed around."""
     ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "photo.jpg"}],
-                            library_files=[{"fp": "X", "dest": "Trip", "name": "PHOTO.JPG"}])
+                            library_files=[{"fp": variant_fp, "dest": "Trip", "name": "PHOTO.JPG"}])
     _patch_fp(monkeypatch, fp)
     assert merge._run_locked_workflow("plan", str(ws)) == 0
-    plan = _plan_of(ws)
-    assert plan["totals"] == {"placed_new": 0, "already_present": 0, "renamed_for_library": 1, "blocked": 0}
-    [f] = _files(plan)
-    assert f["disposition"] == "renamed_incoming" and f["resolved_name"] == "photo-001.jpg"
-    assert f["library_collision"]["reason"] == "case-insensitive name clash"
+    [f] = _files(_plan_of(ws))
+    assert f["disposition"] == disposition
+    if disposition == "already_present":
+        assert f["library_target"] == os.path.join(str(lib), "Trip", "PHOTO.JPG")
+        assert merge._run_locked_workflow("execute", str(ws)) == 0
+        assert sorted(os.listdir(lib / "Trip")) == ["PHOTO.JPG"]          # no second copy
+        assert not (ws / "6-photos-by-dest" / "Trip" / "photo.jpg").exists()
+    else:
+        assert f["resolved_name"] == "photo-001.jpg"
+        assert f["library_collision"]["path"] == os.path.join(str(lib), "Trip", "PHOTO.JPG")
 
 
 def test_plan_rename_accounts_for_incoming_suffix(tmp_path, monkeypatch):
@@ -279,21 +327,23 @@ def test_plan_rename_accounts_for_incoming_suffix(tmp_path, monkeypatch):
     assert f["resolved_name"] == "ts-005.jpg"
 
 
-@pytest.mark.spec("merge-unfingerprintable-library-file-blocker-1")
+@pytest.mark.spec("merge-unfingerprintable-library-file-blocker-1", "RUL-unsettled_collision_blocks",
+                  test="TST-merge_plan-plan_unfingerprintable_library_file_blocks_item")
 def test_plan_unfingerprintable_library_file_blocks_item(tmp_path, monkeypatch):
-    # Collision but the library file can't be fingerprinted -> per-item blocker, left in by-dest.
-    ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
+    # Collision but the library file can't be fingerprinted -> per-item blocker, left in by-dest; the rest go on.
+    ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
+                                       {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
                             library_files=[{"fp": None, "dest": "Trip", "name": "a.jpg"}])
     _patch_fp(monkeypatch, fp)            # fp None -> mock returns status failed
     assert merge._run_locked_workflow("plan", str(ws)) == 0   # plan still written
     plan = _plan_of(ws)
-    assert plan["totals"]["blocked"] == 1
+    assert plan["totals"]["blocked"] == 1 and plan["totals"]["placed_new"] == 1
     assert plan["blockers"]
-    [f] = _files(plan)
-    assert f["disposition"] == "blocked"
+    disp = {f["by_dest_source"]: f["disposition"] for f in _files(plan)}
+    assert disp == {"6-photos-by-dest/Trip/a.jpg": "blocked", "6-photos-by-dest/Trip/b.jpg": "placed_new"}
 
 
-@pytest.mark.spec("merge-deterministic-rerun-same-targets-names-1", "merge-mapping-deterministic-1")
+@pytest.mark.spec("merge-deterministic-rerun-same-targets-names-1", "merge-mapping-deterministic-1", test="TST-merge_plan-plan_is_deterministic")
 def test_plan_is_deterministic(tmp_path, monkeypatch):
     ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
                                        {"fp": "B", "dest": "Spain", "final_name": "b.jpg"}])
@@ -304,7 +354,7 @@ def test_plan_is_deterministic(tmp_path, monkeypatch):
     assert _plan_of(ws)["plan_id"] == first
 
 
-@pytest.mark.spec("dryrun-summary-not-dump-1", "merge-dryrun-summarizes-real-plan-1")
+@pytest.mark.spec("dryrun-summary-not-dump-1", "merge-dryrun-summarizes-real-plan-1", test="TST-merge_plan-dry_run_summarizes_validated_plan")
 def test_dry_run_summarizes_validated_plan(tmp_path, monkeypatch, capsys):
     ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     _patch_fp(monkeypatch, fp)
@@ -319,7 +369,7 @@ def test_dry_run_summarizes_validated_plan(tmp_path, monkeypatch, capsys):
         json.loads(out)
 
 
-@pytest.mark.spec("merge-dryrun-requires-saved-plan-1")
+@pytest.mark.spec("merge-dryrun-requires-saved-plan-1", test="TST-merge_plan-dry_run_without_plan_errors")
 def test_dry_run_without_plan_errors(tmp_path, monkeypatch):
     ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     _patch_fp(monkeypatch, fp)
@@ -337,7 +387,7 @@ def test_dry_run_rejects_stale_plan(tmp_path, monkeypatch):
     assert merge._run_locked_workflow("dry-run", str(ws)) == 2
 
 
-@pytest.mark.spec("config-folderset-ext-restale-1")
+@pytest.mark.spec("config-folderset-ext-restale-1", test="TST-merge_plan-merge_plan_records_folder_and_extension_fingerprints")
 def test_merge_plan_records_folder_and_extension_fingerprints(tmp_path, monkeypatch):
     ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     _patch_fp(monkeypatch, fp)
@@ -353,3 +403,140 @@ def test_merge_plan_records_folder_and_extension_fingerprints(tmp_path, monkeypa
     for k in ("folders_fingerprint", "media_extensions_fingerprint"):
         doctored = {**plan, "depends_on": {**dep, k: "WRONG"}}
         assert any(k in s for s in wf.revalidate_plan_deps(str(ws), doctored)), k
+
+
+@pytest.mark.spec("RUL-any_config_change_replans", test="TST-merge_plan-any_config_edit_restales_the_merge_plan")
+def test_any_config_edit_restales_the_merge_plan(tmp_path, monkeypatch):
+    ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    _patch_fp(monkeypatch, fp)
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    plan = json.load(open(os.path.join(str(ws), ".photos-ingest", "photos-30-merge-plan.json")))
+    wf = merge.MergeWorkflow(str(ws))
+    wf.handoff = json.load(open(utils.handoff_path(str(ws))))
+    assert wf.revalidate_plan_deps(str(ws), plan) == []
+    # An edit in an area merge does not read: the whole-file fingerprint still restales its plan.
+    cfg_path = utils.config_path(str(ws))
+    cfg = json.load(open(cfg_path))
+    cfg["gpx_direct_match_max_seconds"] = cfg.get("gpx_direct_match_max_seconds", 60.0) + 1
+    open(cfg_path, "w").write(json.dumps(cfg))
+    assert "config changed" in wf.revalidate_plan_deps(str(ws), plan)
+
+
+def test_dry_run_says_execute_merges_around_blocked_photos(tmp_path, monkeypatch, capsys):
+    """Dry run describes what execute does with a plan holding blocked photos: it merges the rest, leaves
+    those in photos by destination and ends partial without sealing — it does not refuse."""
+    ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    _patch_fp(monkeypatch, fp)
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    plan = _plan_of(ws)
+    plan["blockers"] = ["6-photos-by-dest/Trip/b.jpg: could not be fingerprinted — left in by-dest."]
+    with open(merge.merge_plan_path(str(ws)), "w") as f:
+        json.dump(plan, f)
+    capsys.readouterr()
+    assert merge._run_locked_workflow("dry-run", str(ws)) == 0
+    out = "".join(capsys.readouterr())
+    assert "merges the rest, and ends partial without sealing" in out and "will refuse" not in out
+
+
+@pytest.mark.parametrize("recorded", ["0" * 64, None])
+@pytest.mark.spec("RUL-plan_carried_out_by_its_code", "BLD-code_fingerprint",
+                  test="TST-merge_plan-a_plan_made_by_other_code_is_refused")
+def test_a_plan_made_by_other_code_is_refused(tmp_path, monkeypatch, recorded):
+    """Merge's plan records the code that made it; dry run and execute refuse one made by another build, or
+    recording none, before any change."""
+    ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    _patch_fp(monkeypatch, fp)
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    plan = _plan_of(ws)
+    assert plan["depends_on"]["code_fingerprint"] == utils.code_fingerprint()
+    plan["depends_on"]["code_fingerprint"] = recorded
+    with open(merge.merge_plan_path(str(ws)), "w") as f:
+        json.dump(plan, f)
+    before = sorted(os.listdir(lib))
+    for command in ("dry-run", "execute"):
+        assert merge._run_locked_workflow(command, str(ws)) == 2, command
+    assert sorted(os.listdir(lib)) == before                       # nothing placed
+    assert not os.path.exists(merge.merge_summary_path(str(ws)))   # no summary from a stale plan
+
+
+@pytest.mark.spec("BLD-phase_logs", "log-carried-unchanged-1", test="TST-merge_plan-a_log_edited_after_finalize_blocks_merge")
+def test_a_log_edited_after_finalize_blocks_merge(tmp_path, monkeypatch, capsys):
+    """Each log carries the one before it unchanged and only adds: an entry of prep's that photos-26 no
+    longer carries whole — either edited after finalize — blocks merge; one carried whole does not."""
+    ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    _patch_fp(monkeypatch, fp)
+    ctl = ws / ".photos-ingest"
+    step = {"phase": "prep", "action": "moved_to_by_date", "from": "a", "to": "b"}
+    (ctl / "photos-15-prep-log.json").write_text(json.dumps(
+        {"photos": {"A": {"content_fingerprint": "A", "prep_path": "b", "journey": [step]}}}))
+    ho = json.loads((ctl / "photos-11-handoff.json").read_text())       # prep vouches for its new log
+    ho["depends_on"]["prep_log"] = {"sha256": utils.sha256_file(str(ctl / "photos-15-prep-log.json"))}
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(ho))
+    carried = {"A": {"content_fingerprint": "A", "prep_path": "b", "partial": True,
+                     "journey": [step, {"phase": "geotag", "action": "final_rename", "from": "b", "to": "c"}]}}
+    (ctl / "photos-26-complete-log.json").write_text(json.dumps({"photos": carried}))
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert not _plan_of(ws)["blockers"]
+
+    carried["A"]["journey"][0] = dict(step, to="elsewhere")
+    (ctl / "photos-26-complete-log.json").write_text(json.dumps({"photos": carried}))
+    capsys.readouterr()
+    assert merge._run_locked_workflow("plan", str(ws)) != 0
+    assert "no longer carries prep's record" in "".join(capsys.readouterr())
+
+    (ctl / "photos-26-complete-log.json").write_text("{not json")
+    assert merge._run_locked_workflow("plan", str(ws)) != 0
+    assert "photos-26-complete-log.json cannot be read" in "".join(capsys.readouterr())
+
+
+def test_entries_not_carried():
+    """Only additions pass: a field changed or dropped, a step changed or dropped, or an entry gone, fails."""
+    e = {"content_fingerprint": "A", "prep_path": "b", "journey": [{"action": "x"}]}
+    nc = utils.entries_not_carried
+    assert nc({"A": e}, {"A": dict(e, partial=True, journey=e["journey"] + [{"action": "y"}])}) == []
+    assert nc({"A": e}, {"A": dict(e, prep_path="c")}) == ["A"]
+    assert nc({"A": e}, {"A": {k: v for k, v in e.items() if k != "prep_path"}}) == ["A"]
+    assert nc({"A": e}, {"A": dict(e, journey=[])}) == ["A"]
+    assert nc({"A": e}, {"A": dict(e, journey=[{"action": "z"}, {"action": "x"}])}) == ["A"]
+    assert nc({"A": e}, {}) == ["A"]
+
+
+@pytest.mark.parametrize("value_changed", [False, True])
+@pytest.mark.spec("RUL-merge_rechecks_under_new_engine", "RUL-engine_change_is_checked", "BLD-merge_engine_recheck",
+                  test="TST-merge_plan-another_imagemagick_has_prep_fingerprints_checked")
+def test_another_imagemagick_has_prep_fingerprints_checked(tmp_path, monkeypatch, capsys, value_changed):
+    """Under an ImageMagick other than prep's, merge takes each photo's fingerprint again: one that still
+    matches prep's is merged as ever — here found already in the library — and one that does not is
+    blocked, left in by-dest, rather than called a different photo and placed again beside itself."""
+    ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
+                            library_files=[{"fp": "A2" if value_changed else "A", "dest": "Trip", "name": "a.jpg"}])
+    src = str(ws / "6-photos-by-dest" / "Trip" / "a.jpg")
+    fp[src] = "A2" if value_changed else "A"                     # the photo's fingerprint under the new version
+    _patch_fp(monkeypatch, fp)
+    monkeypatch.setattr(merge, "get_imagemagick_version", lambda: "newer")
+    capsys.readouterr()
+    merge._run_locked_workflow("plan", str(ws))
+    plan = _plan_of(ws)
+    [f] = _files(plan)
+    if value_changed:
+        assert f["disposition"] == "blocked" and plan["totals"]["renamed_for_library"] == 0
+        assert "under ImageMagick newer is not the one prep took under test" in f["blocked_reason"]
+    else:
+        assert f["disposition"] == "already_present" and not plan["blockers"]
+    assert "1 photo(s) fingerprinted again" in capsys.readouterr().out
+    assert plan["depends_on"]["image_engine_version"] == "newer"
+
+
+@pytest.mark.spec("RUL-merge_rechecks_under_new_engine", "BLD-merge_engine_recheck",
+                  test="TST-merge_plan-a_plan_made_under_another_imagemagick_is_stale")
+def test_a_plan_made_under_another_imagemagick_is_stale(tmp_path, monkeypatch):
+    """A merge plan records the ImageMagick it was made under; under another, its fingerprint comparisons
+    no longer hold, and it is stale."""
+    ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    _patch_fp(monkeypatch, fp)
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    wf = merge.MergeWorkflow(str(ws))
+    wf.handoff = json.load(open(utils.handoff_path(str(ws))))
+    assert wf.revalidate_plan_deps(str(ws), _plan_of(ws)) == []
+    monkeypatch.setattr(merge, "get_imagemagick_version", lambda: "newer")
+    assert "ImageMagick version changed" in wf.revalidate_plan_deps(str(ws), _plan_of(ws))

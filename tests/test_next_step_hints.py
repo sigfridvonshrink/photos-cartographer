@@ -1,3 +1,4 @@
+import json
 # Copyright 2026 sigfridvonshrink
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -53,7 +54,7 @@ def _install(monkeypatch):
         for fo in folders:
             for fn in os.listdir(fo):
                 res[os.path.join(fo, fn)] = {"DateTimeOriginal": "2023:01:02 03:04:05",
-                                             "extraction_status": "extracted_ok", "raw_payload": "{}"}
+                                             "extraction_status": "extracted_ok"}
         return res, set()
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", meta)
 
@@ -96,8 +97,11 @@ def test_prep_nothing_to_do_hints_sort_then_geotag(tmp_path, monkeypatch):
     # sort into by-dest and run geotag, so the hint points there.
     _install(monkeypatch)
     ws = _initialized(tmp_path)                     # empty 0-sources
-    (ws / ".photos-ingest" / "photos-10-prep-plan.json").write_text(
-        '{"plan_id": "stale", "command": "prep", "operations": []}')
+    ctl = ws / ".photos-ingest"
+    (ctl / "photos-10-prep-plan.json").write_text('{"plan_id": "stale", "command": "prep", "operations": []}')
+    (ctl / "photos-15-prep-log.json").write_text('{"photos": {}}')
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(
+        {"files": [], "depends_on": {"prep_log": {"sha256": utils.sha256_file(str(ctl / "photos-15-prep-log.json"))}}}))
     blob = _run(monkeypatch, ws, "execute")
     bd = utils.folder_name("photos_by_dest")
     assert f"Next: sort photos into {bd}, then `geotag plan`" in blob

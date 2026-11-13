@@ -39,6 +39,7 @@ MANAGED = ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
            "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"]
 
 
+@pytest.mark.spec("RUL-fingerprint_survives_mutation", test="TST-geotag_execution_real-exif_write_preserves_content_fingerprint")
 def test_exif_write_preserves_content_fingerprint(tmp_path):
     """The seam the executor relies on, against the real binaries: write EXIF, fingerprint is stable."""
     img = tmp_path / "img.jpg"; shutil.copy(FIXTURE, img)
@@ -64,7 +65,7 @@ def test_planned_gps_write_lands_a_readable_fix(tmp_path, lat, lon, refs):
     img = tmp_path / "img.jpg"; shutil.copy(FIXTURE, img)
     ops = cal.plan_file_ops({"relative_path": "img.jpg", "content_fingerprint": "fp", "size": 1, "mtime_ns": 1},
                             "2024-07-03T12:12:21Z", "Europe/Brussels", "gpx_interpolation",
-                            {"lat": lat, "lon": lon}, None, utils.CONFIG)
+                            {"lat": lat, "lon": lon}, None)
     writes = next(o for o in ops if o["type"] == "metadata_gps_write")["writes"]
     assert cal.GeotagWorkflow(str(tmp_path))._exiftool_write(str(img), writes)
 
@@ -116,11 +117,12 @@ def test_full_execute_with_real_tools(tmp_path, monkeypatch):
         return {"relative_path": rel, "media_class": "image", "folder_class": "6-photos-by-dest",
                 "size": st.st_size, "mtime_ns": st.st_mtime_ns,
                 "content_hash": json.dumps({"value": real_fp, "status": "valid"}),
-                "metadata_status": {"camera_group_key": CAM, "has_timestamp": True, "has_native_gps": True,
-                                    "field_set_version": 1, "parsed_json": json.dumps(parsed)}}
+                "metadata_status": {"camera_group_key_version": utils.CAMERA_GROUP_KEY_VERSION,
+                                    "camera_group_key": CAM, "has_timestamp": True, "has_native_gps": True,
+                                    "field_set_version": utils.FIELD_SET_VERSION, "parsed_json": json.dumps(parsed)}}
     files = [rec("6-photos-by-dest/T/a.jpg", "2024:07:03 14:00:00", 50.0, 4.0),
              rec("6-photos-by-dest/T/b.jpg", "2024:07:03 15:00:00", 51.0, 5.0)]
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"files": files, "cache_fingerprint": "pcf"}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files, "cache_fingerprint": "pcf"}))
 
     _run(monkeypatch, ws, "plan")
     p = ctl / "photos-21-time-decisions.json"; a = json.load(open(p))

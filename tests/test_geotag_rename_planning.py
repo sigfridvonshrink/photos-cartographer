@@ -21,6 +21,7 @@ coverage. Pure functions, unit-tested directly. From conftest.py.
 import pytest
 
 import photos_2_geotag as cal
+import photos_utils as utils
 
 FMT = "%Y-%m-%d--%H-%M-%S"
 TZ = "Europe/Brussels"
@@ -36,7 +37,7 @@ def _names(rows):
 
 # --- destination_local_basename ---------------------------------------------
 
-@pytest.mark.spec("fname-geotag-final-1", "geotag-filename-from-local-time-1")
+@pytest.mark.spec("fname-geotag-final-1", "geotag-filename-from-local-time-1", test="TST-geotag_rename_planning-local_basename_dst_and_standard")
 def test_local_basename_dst_and_standard():
     assert cal.destination_local_basename("2024-07-03T12:12:21Z", TZ, FMT, ".jpg") == "2024-07-03--14-12-21.jpg"  # +2
     assert cal.destination_local_basename("2024-01-03T12:00:00Z", TZ, FMT, ".arw") == "2024-01-03--13-00-00.arw"  # +1
@@ -54,27 +55,57 @@ def test_local_basename_unpositionable_is_none():
     assert cal.destination_local_basename("2024-07-03T12:00:00Z", "", FMT, ".jpg") is None  # no timezone
 
 
-# --- _allocate_name ----------------------------------------------------------
+# --- the shared first-free allocation geotag uses ----------------------------------------------------------
 
 @pytest.mark.spec("geotag-suffix-sequential-1")
 def test_allocate_name_suffix_progression():
     occ = set()
-    assert cal._allocate_name("2024-07-03--14-00-00", ".jpg", occ) == "2024-07-03--14-00-00.jpg"
-    assert cal._allocate_name("2024-07-03--14-00-00", ".jpg", occ) == "2024-07-03--14-00-00-001.jpg"
-    assert cal._allocate_name("2024-07-03--14-00-00", ".jpg", occ) == "2024-07-03--14-00-00-002.jpg"
+    assert utils.allocate_suffix("2024-07-03--14-00-00", "jpg", occ, bare_first=True) == "2024-07-03--14-00-00.jpg"
+    assert utils.allocate_suffix("2024-07-03--14-00-00", "jpg", occ, bare_first=True) == "2024-07-03--14-00-00-001.jpg"
+    assert utils.allocate_suffix("2024-07-03--14-00-00", "jpg", occ, bare_first=True) == "2024-07-03--14-00-00-002.jpg"
+
+
+@pytest.mark.spec("RUL-suffix_choice_by_phase", test="TST-geotag_rename_planning-first_free_suffix_fills_a_gap")
+def test_first_free_suffix_fills_a_gap():
+    # Geotag takes the FIRST free name, by the same rule as prep: with the bare name and -002 taken,
+    # the next is -001, never -003 (merge alone appends at max+1).
+    occ = {"2024-07-03--14-00-00.jpg", "2024-07-03--14-00-00-002.jpg"}
+    assert utils.allocate_suffix("2024-07-03--14-00-00", "jpg", occ, bare_first=True) == "2024-07-03--14-00-00-001.jpg"
+    assert utils.allocate_suffix("2024-07-03--14-00-00", "jpg", occ, bare_first=True) == "2024-07-03--14-00-00-003.jpg"
 
 
 def test_allocate_name_case_insensitive():
     occ = {"stamp.jpg"}
-    assert cal._allocate_name("STAMP", ".JPG", occ) == "STAMP-001.JPG"                # collides with stamp.jpg
+    assert utils.allocate_suffix("STAMP", "JPG", occ, bare_first=True) == "STAMP-001.JPG"                # collides with stamp.jpg
 
 
 # --- plan_renames ------------------------------------------------------------
 
-@pytest.mark.spec("fname-uncorrected-no-rename-1", "geotag-plan-renames-1", "idem-mutate-on-real-diff-1")
+@pytest.mark.spec("fname-uncorrected-no-rename-1", "geotag-plan-renames-1", "idem-mutate-on-real-diff-1", "RUL-geotag_rerun_keeps_settled", test="TST-geotag_rename_planning-already_correctly_named_is_no_rename")
 def test_already_correctly_named_is_no_rename():
     rows = cal.plan_renames([_f("6-photos-by-dest/T/2024-07-03--14-12-21.jpg", "2024-07-03T12:12:21Z")], FMT)
     assert _names(rows) == [("2024-07-03--14-12-21.jpg", "2024-07-03--14-12-21.jpg", False)]
+
+
+@pytest.mark.spec("RUL-uncorrected_keeps_its_name", test="TST-geotag_rename_planning-suffixed_name_of_the_right_time_kept")
+def test_suffixed_name_of_the_right_time_kept():
+    # A burst prep named 12-00-00 and 12-00-00-001, its time not corrected: neither is renamed, run
+    # after run. (Before, -001 went to -002, and on the next run back to -001.)
+    names = ["2024-07-03--14-00-00.jpg", "2024-07-03--14-00-00-001.jpg"]
+    for _run in range(3):
+        rows = cal.plan_renames([_f("6-photos-by-dest/T/" + n, "2024-07-03T12:00:00Z") for n in names], FMT)
+        assert not any(r["rename"] for r in rows), rows
+    # A lone -001 whose sibling went elsewhere keeps its suffix too: its time is not corrected.
+    rows = cal.plan_renames([_f("6-photos-by-dest/T/2024-07-03--14-00-00-001.jpg", "2024-07-03T12:00:00Z")], FMT)
+    assert _names(rows) == [("2024-07-03--14-00-00-001.jpg", "2024-07-03--14-00-00-001.jpg", False)]
+
+
+@pytest.mark.spec("RUL-geotag_name_final", test="TST-geotag_rename_planning-only_a_numeric_suffix_counts")
+def test_only_a_numeric_suffix_counts():
+    # Another time that merely starts with the right one, or a non-numeric tail, is renamed.
+    for name in ("2024-07-03--14-00-00-x.jpg", "2024-07-03--14-00-00-01.jpg", "2024-07-03--14-00-00copy.jpg"):
+        rows = cal.plan_renames([_f("6-photos-by-dest/T/" + name, "2024-07-03T12:00:00Z")], FMT)
+        assert rows[0]["rename"] and rows[0]["planned_name"] == "2024-07-03--14-00-00.jpg", name
 
 
 @pytest.mark.spec("move-reevaluate-dest-1")
@@ -110,7 +141,7 @@ def test_name_trade_neither_clobbers():
     assert len({v.lower() for v in planned.values()}) == 2                            # distinct, no clobber
 
 
-@pytest.mark.spec("fname-suffix-noclobber-1", "geotag-case-insensitive-conflict-1")
+@pytest.mark.spec("fname-suffix-noclobber-1", "geotag-case-insensitive-conflict-1", test="TST-geotag_rename_planning-case_insensitive_collision_suffixes")
 def test_case_insensitive_collision_suffixes():
     # a file currently named with different case than another's planned target must still not clobber
     rows = cal.plan_renames([_f("6-photos-by-dest/T/A.JPG", "2024-07-03T12:00:00Z"),

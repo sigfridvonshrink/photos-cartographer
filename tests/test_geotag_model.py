@@ -46,14 +46,15 @@ def _hfile(rel, *, key="SONY|ILCE-6400|123", dto="2024:07:03 14:12:08", gps=None
     return {"relative_path": rel, "media_class": media_class, "folder_class": folder_class,
             "size": 100, "mtime_ns": 1,
             "content_hash": json.dumps({"value": "fp-" + rel, "status": "valid"}),
-            "metadata_status": {"camera_group_key": key, "has_timestamp": bool(dto),
-                                "has_native_gps": bool(gps), "field_set_version": 1,
+            "metadata_status": {"camera_group_key_version": utils.CAMERA_GROUP_KEY_VERSION,
+                                "camera_group_key": key, "has_timestamp": bool(dto),
+                                "has_native_gps": bool(gps), "field_set_version": utils.FIELD_SET_VERSION,
                                 "parsed_json": json.dumps(parsed)}}
 
 
 def _wf(tmp_path, handoff_files):
     wf = cal.GeotagWorkflow(str(tmp_path))
-    wf.handoff = {"files": handoff_files}
+    wf.handoff = {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": handoff_files}
     return wf
 
 
@@ -113,7 +114,7 @@ def test_gpx_malformed_warns_not_crashes(tmp_path):
 
 
 def test_gpx_parser_skips_bad_trkpts(tmp_path):
-    # exercise every reject branch in GPXIndex._parse_file (GPS code -> full coverage):
+    # exercise every reject branch in GPXIndex._parse_bytes (GPS code -> full coverage):
     # missing lon, missing time, out-of-range coord, non-numeric coord, and a naive-time point;
     # the one fully-valid trkpt survives.
     root = tmp_path / "gpx"; root.mkdir()
@@ -182,7 +183,7 @@ def test_camera_group_classification(tmp_path, monkeypatch):
     assert unknown == ["CANON|R5|999"]
 
 
-@pytest.mark.spec("camera-geotag-reuses-1")
+@pytest.mark.spec("camera-geotag-reuses-1", test="TST-geotag_model-geotag_reuses_handoff_camera_group_key_never_recomputes")
 def test_geotag_reuses_handoff_camera_group_key_never_recomputes(tmp_path):
     """Shared §6: geotag reuses prep's camera_group_key from the handoff and never recomputes camera
     identity. The handoff carries a SENTINEL group key that the identity fields (Make/Model/serial)
@@ -198,8 +199,9 @@ def test_geotag_reuses_handoff_camera_group_key_never_recomputes(tmp_path):
     rec = {"relative_path": "6-photos-by-dest/Trip/a.arw", "media_class": "image",
            "folder_class": "6-photos-by-dest", "size": 1, "mtime_ns": 1,
            "content_hash": json.dumps({"value": "fp", "status": "valid"}),
-           "metadata_status": {"camera_group_key": sentinel, "has_timestamp": True,
-                               "has_native_gps": False, "field_set_version": 1,
+           "metadata_status": {"camera_group_key_version": utils.CAMERA_GROUP_KEY_VERSION,
+                               "camera_group_key": sentinel, "has_timestamp": True,
+                               "has_native_gps": False, "field_set_version": utils.FIELD_SET_VERSION,
                                "parsed_json": json.dumps(parsed)}}
     wf = _wf(tmp_path, [rec])
     files = wf.build_file_model()
@@ -228,7 +230,7 @@ def _full_ws(tmp_path, *, device_groups, bydest_key="SONY|ILCE-6400|123"):
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
     rel = "6-photos-by-dest/Trip/a.jpg"
     p = ws / rel; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"img")
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"files": [_hfile(rel, key=bydest_key)]}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [_hfile(rel, key=bydest_key)]}))
     return ws
 
 

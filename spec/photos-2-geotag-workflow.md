@@ -35,6 +35,8 @@ Rename/metadata execution last.
 
 GPS planning must not begin until every file has valid resolved UTC.
 
+A photo in by-dest carrying no recorded time can never be resolved to UTC, and no decision of geotag's can supply one: it stops geotag before any planning, named as belonging in `2-missing-metadata` (where prep sends such a photo).
+
 Execution must not recalculate decisions. Execution only validates and applies decisions already recorded in the executable plan.
 
 If an executable plan says GPS metadata, time metadata, markers, or filenames need to change, execution applies those planned changes after dependency validation.
@@ -113,6 +115,7 @@ This applies to every JSON artifact in the geotag dependency graph, including th
 ```text
 photos-11-handoff.json   (upstream input, produced by prep)
 photos-21-time-decisions.json
+photos-22-gps-drift-validation.json
 photos-23-gps-decisions.json
 photos-24-executable-plan.json
 photos-25-execution-summary.json
@@ -146,7 +149,10 @@ For example, `photos-24-executable-plan.json` must directly include dependencies
 10. metadata field-set version;
 11. media file preconditions;
 12. filename-format config fingerprint;
-13. planned operation fingerprint.
+13. planned operation fingerprint;
+14. the code fingerprint (shared contract, `RUL-plan_carried_out_by_its_code`);
+15. camera-group key version;
+16. folder-names and media-extensions fingerprints.
 
 It must not merely say:
 
@@ -249,7 +255,7 @@ Geotag's target is **photos**. Videos are **semi-foreign** (prep `photos-1-prep-
 
 This is a hard invariant, not a preference, and **prep is the primary guard that enforces it**: prep's band-misplacement check hard-blocks a `video`-class file found under **either** `5-photos-by-date` **or** `6-photos-by-dest` (prep `photos-1-prep-workflow.md` Section 6.1, Section 6.2 item 6) — prep reports the offending path and produces no plan. Geotag **re-guards** the by-dest case as a **second line of defence**, not as the primary stop: the by-dest verification of Section 7.2 — rejecting both `other`-class non-media and `video`-class files so only `image`/`raw` photos remain — also rejects a video under `6-photos-by-dest`, so even on the (not-expected) path where geotag runs against a by-dest that still holds a video, geotag hard-stops before creating any artifact. In the normal flow the video never survives the mandatory re-prep that precedes geotag, because prep blocks first; the geotag check exists so a video can never be silently geotagged even if prep's guard were somehow bypassed.
 
-Because videos never reach by-dest, geotag never plans or applies time/GPS metadata writes or renames for a video, never reasons about them in the camera-group/GPX/pre-state machinery, and they never appear in the per-destination artifacts. If a future need arises to geotag video time/GPS, it is out of scope for this workflow as specified.
+Because videos never reach by-dest, geotag never plans or applies time/GPS metadata writes or renames for a video, never reasons about them in the camera-group/GPX/original-values machinery, and they never appear in the per-destination artifacts. If a future need arises to geotag video time/GPS, it is out of scope for this workflow as specified.
 
 ---
 
@@ -382,8 +388,9 @@ Geotag validates at least:
 1. **Config it reads** (read-only — geotag never writes config): the `gpx_root` resolves sanely; the `zfs` block's snapshot prefix is a valid snapshot-name component (no whitespace, `/`, or second `@`); `filename_timestamp_format` produces a filesystem-safe, non-empty component; GPX thresholds are non-negative numbers; `camera_time_and_timezone_policy.device_groups` classifications are well-formed and reference permitted classes. (Geotag does not consume `library_root` or the merge/placement config — those are merge's to validate, shared contract Section 14.1. Prep is the sole writer of config and validates it on seeding/read too, prep Section 6.3; geotag re-validates the values it actually consumes.)
 2. **Destination timezone decisions** (Section 18): a user-entered `manual_iana_timezone` must be a real, resolvable IANA zone; `accept_proposed_timezone` must be boolean; a destination cannot end with an empty effective timezone and still be treated as solved.
 3. **Camera-group time decisions** (Sections 10.2, 19): a `manual_real_utc` must parse as a valid UTC datetime; a `manual_offset_seconds` must be a number within sane bounds; `accept_proposal` must be boolean; an accepted anchor must reference an anchor that exists.
-4. **Manual GPS decisions** (Section 24.1): entered coordinates must be in range (latitude −90…90, longitude −180…180) and numerically well-formed; a structurally malformed GPS decision object is a validation error, not a silently-skipped one.
-5. **Decision structure** (Section 9): the user fills *values*, not structure. A decision object whose shape was broken by hand-editing (missing required keys, wrong types, malformed JSON in a section) is a validation blocker located to the exact artifact, destination/group/file, and field.
+4. **Manual GPS decisions** (Section 24.1): entered coordinates must be in range (latitude −90…90, longitude −180…180) and numerically well-formed, a latitude and its longitude entered together or not at all — in a review item and in a folder fallback alike; `accept_unlocated` and a fallback's `accept_proposal` must be boolean; a structurally malformed GPS decision object is a validation error, not a silently-skipped one.
+5. **GPS-drift confirmations** (Section 22a): `confirmed` must be boolean — nothing but a written `true` confirms a bucket; a `corrected_offset_seconds` must be empty or a number within sane bounds.
+6. **Decision structure** (Section 9): the user fills *values*, not structure. A decision object whose shape was broken by hand-editing (missing required keys, wrong types, malformed JSON in a section) is a validation blocker located to the exact artifact, destination/group/file, and field.
 
 Behaviour follows the shared discipline (shared contract Section 14.2): a validation failure is a **hard blocker** reported textually and located precisely (which artifact, which destination/group/file, which field); geotag produces no downstream artifact and mutates nothing from an invalid value, exactly as for a stale dependency. An invalid user decision is **preserved and flagged as requiring correction**, never silently deleted, coerced, or repaired (consistent with Section 9) — the user fixes the source and re-runs. Validation runs whenever the value is consumed on a given run, not cached as permanently valid.
 
@@ -610,9 +617,9 @@ Geotag may be invoked without assuming upstream prep artifacts are valid.
 
 The workspace lock is acquired at process startup, before preflight (shared contract `photos-shared-contract.md` Section 2); if another pipeline run holds it, geotag exits fail-fast without scanning, planning, or writing anything. Immediately after, geotag applies the same startup guards every script does (shared contract Section 13.7; prep Section 6.2):
 
-- **Sealed workspace → hard-stop, sealed means sealed.** If a **terminal/sealed marker** from a prior successful merge is present (shared contract Section 13.7), geotag **hard-stops immediately, mutating nothing and touching nothing**, and directs the user to a fresh workspace — a merged workspace is done. There is no recovery utility. If files are seen at the **workspace root** or in **`0-sources`**, geotag additionally warns that a likely new dump was detected and that, because this workspace is sealed, the dump must be moved into a **fresh workspace** by hand; it leaves the dump exactly where it is.
+- **Sealed workspace → hard-stop, sealed means sealed.** If a **terminal/sealed marker** from a prior successful merge is present (shared contract Section 13.7), geotag **hard-stops immediately, mutating nothing and touching nothing but the owner record of the workspace lock**, and directs the user to a fresh workspace — a merged workspace is done. There is no recovery utility. If an entry sits at the **workspace root** other than its managed folders and hidden entries — a file or a whole folder — or anything sits in **`0-sources`**, geotag additionally warns that a likely new dump was detected and that, because this workspace is sealed, the dump must be moved into a **fresh workspace** by hand; it leaves the dump exactly where it is.
 - **Uninitialized → run prep first.** If the workspace has no root sentinel `photos-00-workspace-guard` (it was never initialized, shared contract Section 5; prep Section 3.1), geotag hard-stops, reporting that the workspace is not initialized and that prep must run first (only prep's init path consumes an as-arrived dump).
-- **Misplaced entry at the workspace root → hard-stop (strict).** On an initialized workspace the base must hold only the managed folders and control/dot directories; any misplaced root entry blocks — a **loose file** (dotfiles included), a **non-managed folder** (a stray dump folder belongs *inside* `0-sources`, not loose at the base), or a **symlink** (barred outright rather than followed, since following it would escape the workspace). Dumps belong in `0-sources` (shared contract Section 5.3; prep Section 6.2 items 2–3). Geotag matches prep here so a misplaced dump is caught no matter which phase the operator runs next.
+- **Misplaced entry at the workspace root → hard-stop (strict).** On an initialized workspace the base must hold only the managed folders and control/dot directories; any misplaced root entry blocks — a **loose file** (a hidden one excepted, like every hidden entry), a **non-managed folder** (a stray dump folder belongs *inside* `0-sources`, not loose at the base), or a **symlink** (barred outright rather than followed, since following it would escape the workspace). Dumps belong in `0-sources` (shared contract Section 5.3; prep Section 6.2 items 2–3). Geotag matches prep here so a misplaced dump is caught no matter which phase the operator runs next.
 - **Incomplete managed folder structure → hard-stop.** If any of the managed `0`–`6` folders is missing on an initialized workspace, the structure was disturbed out-of-band; geotag hard-stops and directs the operator to restore it and re-run prep, rather than proceeding against a damaged workspace (shared contract Section 5.3; prep Section 6.2 item 7). Folder creation is prep's init-only job; geotag never creates or repairs the structure.
 
 Otherwise, the first workflow action is always preflight validation.
@@ -665,7 +672,7 @@ Geotag never performs the move recognition itself and never writes to the cache,
 Because *move → re-run prep → geotag* is the overwhelmingly common flow, geotag MAY run the prep re-organization for the operator instead of hard-stopping — but only by invoking the **real prep phases**, never by recognizing the move itself. Before geotag acquires the whole-run lock, when **all** of the following hold it runs `prep plan` then `prep execute` (each taking and releasing the whole-run lock in turn — hence this must precede geotag's own lock), announces what and why, then continues into planning:
 
 - the workspace is initialized and not sealed;
-- `0-sources` is **empty** — so the prep run is the `stat`-only move refresh (`by_dest_mutated: 0`, no media moved). A non-empty `0-sources` is an unprocessed dump: the cheapest hard gate, left to the Section 13 scope blocker so the operator ingests it knowingly — geotag never silently ingests a dump via auto re-prep;
+- `0-sources` is **empty** — so the prep run is the `stat`-only move refresh (no media moved). A non-empty `0-sources` is an unprocessed dump: the cheapest hard gate, left to the Section 13 scope blocker so the operator ingests it knowingly — geotag never silently ingests a dump via auto re-prep;
 - the re-prep detection above (unrecorded by-dest media, or a handoff by-date photo now gone) is the one thing pending.
 
 This preserves every invariant: prep — not geotag — performs the move recognition and is the sole writer of the cache/handoff and its content fingerprint; the run stays plan/validate/execute; and the in-lock blocker of Section 13.1 remains in force as the re-validation fallback — a race, an ambiguous move prep cannot record `stat`-only, or any residual still hard-stops, and an auto-prep that fails (non-zero exit) aborts geotag so nothing is geotagged on a half-done state. When the conditions are not all met, geotag falls through to the Section 13.1 hard-stop exactly as before. The convenience is in *who types the prep command*, not in *what enforces the contract*. (This applies to `geotag plan`; `geotag execute` validates against the plan's own dependency fingerprints and does not re-prep.)
@@ -719,6 +726,8 @@ The workflow must record:
 6. whether GPX was available, disabled, missing, or unusable.
 
 A track point's `<time>` is an `xsd:dateTime` and must be read as one: fractional seconds are optional (`2024-07-03T12:00:04Z` and `2024-07-03T12:00:04.000Z` are both valid — some recorders, e.g. Garmin, always write the fraction), and the zone may be `Z` or a numeric offset, normalized to UTC. A point without a timezone, with an unparseable time, or with missing/out-of-range coordinates is skipped with a warning naming the file and point, and those warnings are reported to the operator — a file whose every point was rejected must never read as merely an empty track.
+
+Every track file is read whole on every run, since its bytes are what the fingerprint checks; but a file whose bytes were parsed on an earlier run is not parsed again — its points come from the track memo `photos-00-track-memo.db`, keyed by the SHA-256 of those bytes, which yields exactly what parsing would. The memo is scratch (shared contract §10): deleting it, or finding it unreadable, only means parsing again.
 
 If GPX is unavailable or disabled, later artifacts should record that no GPX evidence was used.
 
@@ -1255,39 +1264,39 @@ Human-filled GPS decision fields should still be preserved across regeneration w
 
 If a preserved human decision no longer safely applies, it must be marked stale or requiring review rather than silently used.
 
-### 24.1 Reversible manual GPS overrides (pre-state ledger)
+### 24.1 Reversible manual GPS overrides
 
-A **manual GPS override is reversible**: withdrawing it undoes its effect, and changing it re-applies cleanly. Automated GPS values are **not** rolled back — they are overwritten or recomputed (below). This reversibility is scoped **only to manual GPS**; time and filename are never undone (they position the file and are always recomputed, see the end of this section).
+A **manual GPS override is reversible**: withdrawing it undoes its effect, and changing it re-applies cleanly. The reversibility comes from the original-values ledger (Section 24.2), not from a store of its own: every plan decides about a pinned photo from the values the device left, so a manual position is one decision among the rest, and its withdrawal is planned like any other change.
 
-The mechanism is a **pre-state ledger** in SQLite, archived with the database (shared contract `photos-shared-contract.md` Section 13.4):
+1. **Apply and change.** A manual position (locked or fallback) is written with its marker (Section 28.2); a changed value is written over it. A manual override is only ever *selected* for a photo with no native GPS: `classify_gps` returns `preserve_native` for a photo carrying native GPS **before** it ever consults the manual coordinates (Section 23 resolution order; Section 25.3 — preserve-native wins).
+2. **Withdraw → placed again from its own values.** With the decision removed, the next plan places the photo through the ordinary order from its own values: from the tracks where they place it, or nowhere — and then geotag's position and its marker are cleared, the hemisphere reference fields with them (Section 28.1; Section 28.2 item 2). Withdrawal therefore *undoes*; it does not merely stop re-asserting. ("Tag a photo that had no GPS, then withdraw" leaves it with no GPS, or with the position the tracks give it — never with the tagged value.)
+3. **Traceable.** On each manual position write, and on each write that clears geotag's position, the plan records the position the photo held when the plan was made, and the transformation log carries it (shared contract `photos-shared-contract.md` Section 13.3 item 4).
+4. **A photo corrected elsewhere.** A photo geotag corrected in another workspace carries geotag's mark and has no pinned values here (Section 24.2). Its earlier position is geotag's, ignored like any position geotag wrote (Section 28.2 item 2), so withdrawing a pin on it places it again or clears it.
 
-1. **Capture on first application.** The first time a manual GPS decision causes the executor to write GPS to a file, it captures that file's GPS EXIF *as it was immediately before the write* and pins it in the ledger, keyed by content fingerprint. The captured pre-state is one of:
-   - the **previous GPS coordinates** (and related GPS fields) that were present, or
-   - an explicit **"absent" sentinel** meaning the file had no GPS before the override.
-   This pinned value is the **true original**: it is written once and never overwritten by subsequent runs of the same or a changed decision, so it always represents the state before the pipeline first touched the file's GPS via a manual decision.
-
-   **The "previous coordinates present" pre-state is a completeness case, intentionally unreachable via `apply_manual`.** A manual override (locked or fallback) is only ever *selected* for a file that has **no native GPS**: `classify_gps` returns `preserve_native` for any file that already carries native GPS **before** it ever consults the manual coordinates (Section 23 resolution order; Section 25.3 — preserve-native wins). So an `apply_manual` operation never targets a file whose GPS field was occupied, and the pre-state captured on first application is therefore **always the "absent" sentinel**, never a set of previous coordinates. The crucial corollary: if a file *did* already hold GPS — including the case where a manual coordinate written on an earlier run has since been **re-folded into the file's native EXIF** (e.g. the file was re-imported with that GPS baked in) — it now **reads as native GPS and is preserved, not overridden**, so it is never an `apply_manual` target in the first place. The "previous GPS coordinates were present" branch above is thus kept only for **completeness and robustness** (it keeps the ledger correct should that precedence ever be relaxed); under the current rules the ledger only ever pins, and reverts to, "absent" — withdrawal *clears* the GPS the override added rather than restoring a prior coordinate. Consistent with this, the pinned pre-state is the GPS value **prep recorded in its scan/handoff** (which the executor pins before the write), not a fresh execute-time re-read — for a file with no native GPS the two coincide at "absent."
-
-2. **Withdraw → restore.** If, before a later run, the user **removes** the manual GPS decision, the next run's plan must include an explicit **revert operation** that drives the field back to the pinned pre-state: write the previous coordinates back, or — if the pre-state was "absent" — **clear** the GPS the override added. Either way the hemisphere reference fields move with the coordinates (Section 28.1). Withdrawal therefore *undoes*; it does not merely stop re-asserting. ("Tag a file that had no GPS, then withdraw" correctly leaves the file with no GPS, not with the tagged value.)
-
-3. **Change → overwrite, original stays pinned.** If the user **changes** the manual GPS to a new value, the executor overwrites to the new value; the pinned pre-state is unchanged, so a later full withdrawal still restores the true original.
-
-4. **Once restored, the ledger entry is consumed.** After a withdrawal has restored the pre-state of a file that still exists, the override is gone and the file is back to original; a subsequent fresh manual decision on the same file pins the (now original) pre-state again on its first application. (This consume-on-restore applies only to files still present; an entry for a file that has disappeared is kept — item 5.)
-
-5. **A disappeared file's entry is kept for reference.** If a file that has a pre-state ledger entry no longer exists at the next run (deleted, or removed from the workspace), prep/geotag must **not** prune its ledger entry. The pinned pre-state is retained as a historical record — it documents that the pipeline once overrode that file's GPS and what the original was — keyed by the content fingerprint that identified it. A retained entry for an absent file triggers no operation (there is nothing to revert), and it is carried into the archived `photos-00-ingest.db`. Keeping it preserves the "every change is explainable from the record" guarantee (shared contract Section 12) even for files that later left the workspace; the cost (a few stale rows) is accepted in exchange for never silently dropping evidence of a past mutation.
-
-6. **The ledger is per-workspace.** The pre-state ledger lives in that workspace's `photos-00-ingest.db` and is meaningful only within it. If a workspace is finalized and torn down and the same photos are later re-imported into a **fresh** workspace, the new workspace starts with no ledger: a manual GPS override there pins whatever GPS the files *now* carry (i.e. the previously-applied value) as that workspace's "original." This is intended and correct — within any one workspace, "original" means the state before that workspace first touched the field. The archived `photos-00-ingest.db` (shared contract Section 13.4) preserves the original ledger as a historical record of the finalized workspace; it is not auto-merged into a new workspace's live ledger. Reversibility is therefore a within-workspace guarantee, not a cross-workspace one — consistent with the workspace being transient and decisions being re-authored per workspace.
-
-**Manual vs. automated is the dividing line.** Two GPS writes can target the same field, but only the manual override is reversible:
-
-- **Manual GPS** (locked or fallback, authored by the user) — reversible via the pinned pre-state as above.
-- **Automated GPS** (GPX interpolation/extrapolation, preserved native GPS) — **not** rolled back. Withdrawing or invalidating an automated decision simply means it is not re-derived; the field is recomputed from current inputs and whatever recomputation yields is written. No pre-state is stored for automated values, and no revert operation is emitted for them. This must be explicit in the plan: a revert operation exists *only* for a withdrawn manual GPS override.
+**Manual and automated positions are both re-derived.** Every plan derives each photo's position from current inputs: a manual one from its decision, an automated one (GPX interpolation/extrapolation) recomputed, a native one preserved. Nothing is rolled back to a stored value and there is no revert operation; a position geotag wrote that no decision places any more is cleared.
 
 **Time and filename are never reverted.** Resolved UTC and the destination-local filename position the file *within its destination*. They are always **recomputed** to match current decisions, never rolled back to a pre-pipeline value — reverting them would un-position an already-organized file, which is meaningless. Recomputation only rewrites the timestamp metadata and the filename **in place within `6-photos-by-dest`**; it never moves the file to a different destination or anywhere else in the tree — the file stays in the destination folder the user placed it in. So: GPS manual overrides are reversible from stored pre-state; time and naming are recomputed in place within by-dest; automated GPS is overwritten by recomputation.
 
-The plan therefore distinguishes three operation origins for a GPS field — *apply manual*, *revert manual to pinned pre-state*, and *recompute automated* — and the transformation log (shared contract Section 13.3) records which applied to each file, including a revert and the pre-state it restored.
+The plan therefore distinguishes two origins of a GPS write — *apply manual* and *recompute automated* — beside the write that clears geotag's position, and the transformation log (shared contract Section 13.3) records which applied to each file, with the position a manual write replaced or a clear removed.
 
 ---
+
+### 24.2 Every photo's own values, kept before geotag first writes to it (original-values ledger)
+
+Before geotag's first write to a photo in a workspace, execution pins the photo's own values — the capture time and the
+tag it came from, the time's offset tag, its position, and its `GPSProcessingMethod` — exactly as prep's handoff
+recorded them, keyed by content fingerprint, once and never overwritten. A photo that already carries geotag's mark
+(Section 28.2) holds no original values any more and is not pinned.
+
+Every later plan in the workspace decides about a pinned photo from those values — as the device left it — and compares
+the result with what the photo holds now, planning only the writes that differ. A changed decision therefore reaches the
+photo however often geotag has written to it, a withdrawn one undoes its effect, and nothing is corrected twice: a
+changed clock offset corrects the photo's own camera time once, a GPS camera's photos give their camera's offset again
+on every run, and a position derived from the tracks is derived again from the photo's own time. Geotag's mark governs
+only a photo with no pinned values — one corrected in another workspace, or before the ledger existed.
+
+The ledger lives beside the resolved-UTC cache in geotag's region of the workspace database,
+which the archival package's database snapshot carries (shared contract Section 13).
 
 ## 25. Create `photos-23-gps-decisions.json`
 
@@ -1460,7 +1469,7 @@ The cell resolves its `effective_fallback` during validation:
 
 The fallback is **optional and never blocks**: a destination with no effective fallback is fine — its un-located photos simply fall through to the remaining Section 23 options (accept-unlocated if the operator marked the file so, otherwise a per-file blocker). Accordingly the cell's `requires_user_input` is always `false`; the inherited proposal is a convenience the operator *may* validate, not a gate. An authored coordinate that is out of range is a validation blocker located to the destination's `folder_fallback` (Section 9.2), preserved and flagged rather than silently dropped; accepting a proposal that no longer exists marks the cell `stale_user_decision` rather than failing.
 
-A file placed from the effective folder fallback is a **manual** GPS placement (origin *apply manual*, marker `manual_fallback`), so it is reversible via the pre-state ledger exactly like a per-file manual lock (Section 24.1) — withdrawing the destination's fallback (or moving the file out of a destination that had one) restores the file's pinned pre-state. In the `photos-23` per-destination summary it is counted under `automatic_folder_fallback`; the exact per-file write is re-derived in `photos-24-executable-plan.json` from the resolved inputs (the effective fallback among them), never read from the summary (Section 25).
+A file placed from the effective folder fallback is a **manual** GPS placement (origin *apply manual*, marker `manual_fallback`), so it is reversible exactly like a per-file manual lock (Section 24.1) — withdrawing the destination's fallback (or moving the file out of a destination that had one) places the file again from its own values. In the `photos-23` per-destination summary it is counted under `automatic_folder_fallback`; the exact per-file write is re-derived in `photos-24-executable-plan.json` from the resolved inputs (the effective fallback among them), never read from the summary (Section 25).
 
 ---
 
@@ -1640,7 +1649,7 @@ It must be grouped by destination.
 Per destination, it should include:
 
 1. metadata time writes;
-2. metadata GPS writes, distinguishing their origin: *apply manual* GPS, *recompute automated* GPS (interpolation/extrapolation/preserved native), and *revert manual* — restoring the pinned pre-state of a withdrawn manual GPS override (previous coordinates, or clearing GPS if the pre-state was "absent"), per Section 24.1;
+2. metadata GPS writes, distinguishing their origin: *apply manual* GPS and *recompute automated* GPS (interpolation/extrapolation/preserved native), and the write that clears a position geotag wrote that no decision places any more (Section 24.1; Section 28.2 item 2);
 3. GPSProcessingMethod marker writes, if applicable;
 4. no-clobber timestamp rename operations;
 5. no-op files;
@@ -1684,10 +1693,27 @@ EXIF records latitude and longitude as **unsigned magnitudes**; the hemisphere i
 Therefore every planned GPS coordinate write must carry the matching reference fields, derived from the sign of the planned coordinate, in the same operation:
 
 1. a write that **sets** a position writes latitude, longitude, and both reference fields together;
-2. a revert that **restores** a pinned pre-state's coordinates likewise restores both reference fields, derived from the restored coordinates;
-3. a revert that **clears** GPS (an "absent" pre-state, Section 24.1) clears the reference fields along with the coordinates — a reference field left behind without its coordinate is a torn fix.
+2. a write that **clears** a position geotag wrote (Section 24.1) clears the reference fields along with the coordinates — a reference field left behind without its coordinate is a torn fix.
 
-This applies to every GPS write origin without exception (*apply manual*, *recompute automated*, *revert manual*). Reference fields are part of the coordinate value, not optional decoration, so they are never planned or applied as a separate operation from the coordinate they describe.
+This applies to every GPS write without exception (*apply manual*, *recompute automated*, and a clear). Reference fields are part of the coordinate value, not optional decoration, so they are never planned or applied as a separate operation from the coordinate they describe.
+
+### 28.2 Geotag's markers: what a re-run reads back
+
+Geotag records what it did to a file in the file's `GPSProcessingMethod`:
+
+1. `interpolated` (a position from the tracks, interpolated or extrapolated), `manual_locked` (a per-file manual position) or `manual_fallback` (the destination's folder fallback) — the **position markers**, written bare with every GPS write. Setting a position means geotag fixed the time too, so a position marker needs nothing more;
+2. the **time mark** `+carto-time` — appended to whatever the field holds when geotag fixes a file's time and writes no position: the device's own value is kept in front of it (`fused` becomes `fused+carto-time`), and an empty field becomes `+carto-time`. The mark is never appended twice. It means the time is fixed and the GPS is the device's own, or not set yet.
+
+Only these are geotag's. Any other value — a phone writes its own, such as `GPS`, `NETWORK` or `fused` — is the device's, and the GPS beside it is native.
+
+Read back on a later run, for a photo whose own values are not pinned (Section 24.2) — a pinned photo is decided from
+those instead:
+
+1. **a position marker or the time mark means the time is already corrected.** The file's time is destination-local civil time with its offset tag beside it; geotag resolves it from those, applies no clock offset to it, and does not use it as a clock-offset anchor or in a drift check. A camera group's offset is proposed, asked for and applied over the files that carry no geotag marker alone, so photos added later are corrected without disturbing those already corrected. The camera's offset for a day is the same for every photo it took that day, so an answer once resolved is kept for later arrivals: a bucket whose photos are all corrected keeps its resolved offset decision, and its drift confirmation, and asks nothing — the effective value derived again from the decision on each run, never copied, so the record always says what the decision says; an offset geotag found from the camera's own GPS stays the bucket's offset when later photos bring no anchor of their own; and a bucket's days are counted over all the group's photos in the destination, corrected ones included, so its key does not change as photos arrive;
+2. **a position marker means the position is geotag's, not native.** Geotag ignores it and places the file again through the ordinary order (Section 23), overwriting the position with the one it now derives; a file that ends without a position (accepted unlocated) has geotag's old position and its marker cleared and carries the time mark alone, so the old position is never read back as native; a file with the time mark that geotag later places gets the bare position marker;
+3. **neither means the file is as the device left it**: a position is native and preserved, and the time is corrected as for any new file — a camera's by its group offset, a phone's by its own offset or the destination timezone.
+
+A write the file already holds is not planned: a time, a position and its marker, or a name the file already carries is a no-op, so a re-run with nothing changed writes nothing.
 
 ---
 
@@ -1703,6 +1729,7 @@ Execution must:
 2. re-hash all named JSON artifact dependencies using SHA-256;
 3. validate all non-JSON upstream dependencies;
 4. reject stale plans before mutation;
+4a. keep, once per plan, the decision records it was made from — `photos-21`, `photos-22`, `photos-23` exactly as the plan's dependency hashes name them — in `executed/<plan id>/` in the control directory, so a later finalize's log names the precise version each pass followed (shared contract Section 13.3a);
 5. confirm the workspace lock is held (acquired at run start per shared contract Section 2);
 6. take a pre-mutation snapshot where configured, reusing the **same optional ZFS snapshot mechanism prep uses** (the `zfs` block in the workspace config `photos-00-config.json`, keyed by plan id; shared contract `photos-shared-contract.md` Section 3), and honoring the same `snapshots_required` semantics (abort before any mutation if a required snapshot fails, and carry the snapshot record into `photos-25` either way). Snapshots are **strictly optional** — disabled by default and never a prerequisite for the safety model, which rests on the plan/validate/execute discipline, the journal, no-clobber, and the pre-state ledger (shared contract Section 3); they add a clean-slate rollback path for operators on ZFS. The snapshot is **labelled for its phase** (e.g. a `geotag` label distinct from prep's) so that, even on a dataset shared with prep, geotag's pre-mutation snapshot never collides in name with a prep snapshot for the same plan id;
 7. apply only planned operations, each re-verified no-clobber **at execute time** and performed atomically (Section 29.1a; shared contract `photos-shared-contract.md` Section 15): immediately before each rename, confirm the target name is not already occupied (case-insensitively where applicable) rather than trusting the plan's suffix allocation, and apply the rename as a single atomic filesystem operation; metadata writes are applied atomically (write-and-atomic-rename or safe-write mode). Per-file operations may be applied **concurrently** under `-j`/`--jobs` without changing semantic results (Section 29.3). An unexpectedly occupied rename target at execute time is a blocker, never a clobber;
@@ -1737,7 +1764,7 @@ Execution mutates the photographic files' metadata and names, so each operation 
 
 1. **Atomic writes, no-clobber re-checked at execute time.** A metadata write or rename either fully takes effect or not at all. Metadata writes are performed so that the original file is never left partially overwritten — e.g. write to a temporary copy and atomically rename it into place, or use the tool's safe-write mode — so an interruption leaves either the pre-write file or the fully-written file, never a corrupt intermediate. Renames are single atomic filesystem operations and are no-clobber **verified at the moment of execution**: immediately before the rename, execution confirms the planned target name is not already present (case-insensitively where the filesystem is case-insensitive) rather than relying solely on the plan's suffix allocation (Section 27). The planner treats every on-disk and planned name as permanently occupied; the executor independently re-verifies the actual target is free. An unexpectedly occupied target is a blocker, never a clobber (shared contract `photos-shared-contract.md` Section 15).
 2. **Confirmation journal + state re-derivation on resume.** The journal records a **confirmation** record after each operation succeeds (with enough identity — content fingerprint, target field/name, and the resulting value — to verify completion). On resume, execution does **not** rely on a pre-mutation *intent* record; it **re-derives each file's actual current state** and acts on what it finds: if the renamed target is already present (the source is gone), the operation is already done and is **skipped**; if the source is present and its content fingerprint still matches the plan's precondition, the operation is **re-applied idempotently**; only a *differing* content fingerprint **blocks**. Because writes are atomic (point 1), the file is always in exactly one of those states, never a corrupt third — so no pre-mutation intent record is needed to disambiguate a torn write.
-3. **Pre-state captured before the overwrite it protects.** For a manual GPS override, the pinned pre-state (Section 24.1) must be committed to the ledger **before** the GPS write that overwrites it is applied. If the capture and the write were ordered the other way, a crash between them could lose the true original. So the ordering is: capture-and-commit pre-state → then write. A crash after capture but before write leaves a pinned pre-state equal to the current file state, which is harmless (a later revert simply restores what is already there).
+3. **Own values pinned before the write they protect.** A photo's own values (Section 24.2) must be committed to the ledger **before** geotag's first write to the photo is applied. If the pin and the write were ordered the other way, a crash between them could lose the values every later plan decides from. So the ordering is: pin-and-commit → then write. A crash after the pin but before the write leaves pinned values equal to the photo's current state, which is harmless.
 4. **Tool failure is fatal to that operation, not silent.** If `exiftool` reports failure for a file, execution records the failure (Section 29.2 item 6), leaves that file at its pre-operation state (point 1 guarantees it is intact), and continues or aborts per policy — it never records the operation as applied. A failed write is never treated as a no-op on the next run.
 5. **Post-write content-fingerprint verification.** After a file's metadata write succeeds, execution **recomputes the photo's decoded-content fingerprint** (ImageMagick `identify`, prep Section 9) and compares it to the fingerprint recorded for that file in the plan's per-operation preconditions. The fingerprint is the file's identity spine precisely *because* it is invariant under an in-place EXIF/GPS write (prep Section 9; shared contract Section 9.1), so the expected result is that it is **unchanged**:
    - **unchanged → the write is confirmed.** Only then are the write operation (and any rename that depends on it) eligible to proceed and be journaled as confirmed.
@@ -1806,7 +1833,7 @@ Execution's per-file work — the `exiftool` metadata/marker writes, the post-wr
 1. **The operation set is fixed before any concurrent work.** The plan is loaded, dependency-revalidated, and the optional pre-mutation snapshot taken (Section 29 steps 1–6) single-threaded; the per-file operation batches are then derived deterministically. Only the application of those already-decided per-file batches is parallelized — execution never *decides* anything concurrently (it never recalculates time, GPS, filename, or rename, Section 29).
 2. **Per-file isolation.** Each file's batch (its metadata write, fingerprint verify, and rename) is applied as an independent unit of work that touches only that file; a worker mutates no shared state and returns a per-file result the executor aggregates. Two files never contend, because the no-clobber rename targets were allocated against the whole destination's occupied-name set at plan time (Section 27) and are re-verified free at execute time (Section 29.1a item 1).
 3. **Deterministic aggregation.** Results are merged in a deterministic (path-sorted) order so the journal, the per-destination and global totals, the resume facts, and the `fingerprint_mismatches` list (Section 29.2) are identical regardless of job count or completion order. Two different safe job counts produce the same `photos-25-execution-summary.json` content (modulo run-metadata timestamps and the recorded `jobs` value, which are run metadata, not semantic fingerprints, Section 29.2 item 9).
-4. **Single-writer journal and cache.** The execution journal and the SQLite writes (including the manual-GPS pre-state ledger captures, which are committed **before** the writes they protect, Section 29.1a item 3) go through a single controlled writer, never from worker threads. The pre-state capture pass therefore completes before the concurrent write pass begins, so no worker races the ledger.
+4. **Single-writer journal and cache.** The execution journal and the SQLite writes (including the original-values pins, which are committed **before** the writes they protect, Section 29.1a item 3) go through a single controlled writer, never from worker threads. The pinning pass therefore completes before the concurrent write pass begins, so no worker races the ledger.
 5. **Tool workers, safe restart, no partial persistence.** `exiftool` runs as a persistent `-stay_open` worker, and the `identify` fingerprint tool can likewise run as a persistent worker via ImageMagick's script/command-stream mode (resetting per-image state between commands), falling back to per-file spawn where that is unavailable (prep `photos-1-prep-workflow.md` Section 17 item 5). Either way a worker crash is recoverable and a transient per-file failure is retried, bounded, before becoming a blocker. (Geotag touches photos only, so `ffmpeg`/video is never involved here.) Partial or failed worker output is never journaled as a confirmed operation or cached as a valid fingerprint — it surfaces as a failure or a held-back mismatch (Section 29.1a items 4–5), not a silent success.
 6. **Observability.** Long-running execution is visible: phase-level log lines (lock, validate, snapshot, apply, verify, journal, cache, summary) and live aggregate progress for the concurrent apply/verify pass, with the journal — not the progress output — as the durable record (mirroring prep Section 17).
 
@@ -1828,14 +1855,15 @@ Examples:
 ```text
 Workspace sealed (prior successful merge)
   -> geotag hard-stops; nothing touched (sealed means sealed, Section 13)
-  -> if files sit at the root or in 0-sources, also warn "likely new dump;
+  -> if anything but the managed folders and hidden entries is at the root, or
+     anything is in 0-sources, also warn "likely new dump;
      this workspace is done; move it to a fresh workspace; left untouched"
 
 Workspace not initialized (no root sentinel)
   -> geotag hard-stops because the workspace is not initialized (Section 13)
 
 Loose file at the workspace root (initialized workspace)
-  -> geotag hard-stops (strict: any root file, dotfiles included; Section 13)
+  -> geotag hard-stops (any root file but a hidden one; Section 13)
 
 Non-managed folder or symlink at the workspace root (initialized)
   -> geotag hard-stops, same as a loose root file (Section 13):
@@ -1941,9 +1969,10 @@ Finalize must:
 
 1. run under the workspace lock (shared contract Section 2) and be **non-destructive** — it reads and bundles; it never mutates the workspace, the artifacts, the live SQLite DB, or the library. (Generating `photos-26-complete-log.json` and capturing the `photos-26-geotag-ingest.db` backup snapshot below are *new-file* writes into `.photos-ingest/`, not mutations of any existing photo, artifact, or the live DB — the snapshot is a read-only copy of the live DB.)
 2. require that geotag has ended successfully (a complete, executed `photos-24-executable-plan.json` with a corresponding `photos-25-execution-summary.json`); it refuses to finalize an incomplete or stale state;
-3. assemble the **archival package** defined in shared contract Section 13 — `photos-00-config.json`, the live SQLite database `photos-00-ingest.db`, the per-phase DB backup snapshots present (`photos-15-prep-ingest.db` and the geotag snapshot captured in item 4a), the JSON artifacts `photos-11-handoff.json`, `photos-15-prep-log.json`, `photos-21-time-decisions.json`, `photos-23-gps-decisions.json`, `photos-24-executable-plan.json`, `photos-25-execution-summary.json`, and a freshly generated `photos-26-complete-log.json`;
-4. generate the transformation log `photos-26-complete-log.json` (shared contract Section 13.3) by **carrying prep's end-of-prep audit log (`photos-15-prep-log.json`) forward** as the prep portion of each photo's journey and appending geotag's steps — consolidating prep's handoff/journal and geotag's decision artifacts/journal into a per-photo, content-fingerprint-keyed, human-readable JSON record of every transformation between ingestion and successful geotag. It does not re-derive prep's history or discard the prep log; `photos-26-complete-log.json` is a superset of `photos-15-prep-log.json` (shared contract Section 13.3 item 6);
+3. assemble the **archival package** defined in shared contract Section 13.2 — the whole control directory but its transient files, the freshly generated `photos-26-complete-log.json` and the geotag snapshot captured in item 4a among it — listed with their SHA-256s in `photos-26-archive-manifest.json` and archived together with the manifest into `photos-26-archive.tar.gz` in the control directory;
+4. generate the transformation log `photos-26-complete-log.json` (shared contract Section 13.3) by **carrying prep's end-of-prep audit log (`photos-15-prep-log.json`) forward** — only when its bytes hash to the value the handoff records, finalize stopping otherwise — as the prep portion of each photo's journey and appending geotag's steps — consolidating prep's handoff/journal and geotag's decision artifacts/journal into a per-photo, content-fingerprint-keyed, human-readable JSON record of every transformation between ingestion and successful geotag. It does not re-derive prep's history or discard the prep log; `photos-26-complete-log.json` is a superset of `photos-15-prep-log.json` (shared contract Section 13.3 item 6). Geotag's steps cover **every executed pass**, not only the current plan: each superseded plan kept as `photos-24-executable-plan-NNN.json` whose journal shows it ran contributes the steps of its confirmed operations, oldest first and matched to each photo by the fingerprint they were planned against, before the current plan's; each step names its run, and a time write carries what its pass established (resolved UTC, the rule and offset used, the destination timezone), so a later pass replacing the resolved-UTC cache loses none of it. What finalize cannot rebuild it marks, never hides (shared contract Section 13.3a): an entry for a photo carrying geotag's mark whose own values this workspace never pinned — corrected elsewhere, or its history lost — is marked `partial`, with a geotag step (`history_incomplete`) saying why — the note is geotag's own, so every field prep's entry has is carried unchanged — and a pass whose journal is kept but whose plan is missing, or a prep log missing or unreadable, is named in the log's `warnings`, the log then marked `partial`; all are reported when finalize runs. Each entry for a photo geotag handled gains a `geotag_path` — its by-dest folder, under the name its last final rename gave it, or its name unchanged if geotag never renamed it. Before writing, finalize checks that its log carries prep's unchanged — every entry, field and step, geotag only adding — and writes nothing if it would not (shared contract Section 13.0a);
 4a. capture the end-of-geotag database backup snapshot `photos-26-geotag-ingest.db` — a consistent, atomic copy of the live `photos-00-ingest.db` taken at finalize (shared contract Section 13.4a). This reads the live DB and writes a new immutable file; it does not mutate the live DB (consistent with item 1);
+4b. record each photo in `6-photos-by-dest`, under its final path, with its size and modification time as finalize finds it, in `photos-26-finalized-media.json` — what merge checks the by-dest photos against (merge Section 3 precondition 1b);
 5. write a self-describing manifest (workspace identity, plan/execution ids, and SHA-256 of each bundled item, including the DB snapshots) so the package's integrity is verifiable later;
 6. leave the package in a known location the user can move to permanent storage alongside the library.
 
@@ -1959,7 +1988,7 @@ The workflow should produce user-facing outputs at each blocked or decision poin
 
 Important textual outputs include:
 
-1. sealed-workspace hard-stop (with new-dump warning if files sit at the root or in `0-sources`, Section 13);
+1. sealed-workspace hard-stop (with new-dump warning if anything but the managed folders and hidden entries sits at the root, or anything in `0-sources`, Section 13);
 2. not-initialized hard-stop (Section 13);
 3. misplaced-root-entry hard-stop — loose file, non-managed folder, or symlink at the root (strict, Section 13);
 3a. incomplete-structure hard-stop — a missing managed `0`–`6` folder; restore it and re-run prep (Section 13);
