@@ -4,7 +4,7 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **13** — 1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 13, 14 and 15.* 🛑 Numbers are never reused; the next is **16**.
+*Open items: **14** — 1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 13, 14, 15 and 16.* 🛑 Numbers are never reused; the next is **17**.
 
 ---
 
@@ -243,8 +243,9 @@ the parent's zone.
 **Why:** geotag keeps one clock offset per camera, destination and day (`RUL-offset_per_camera_destination_day`). A
 camera whose clock is changed during the day at one destination — reset, or set to local time at lunch — has two
 offsets that day, and no single one fits: its anchored photos split into two groups, one of them reported as agreeing
-with none (`conflicting_files`). Today the user moves the photos after the change into a sub-folder and re-runs prep,
-changing the folder tree — and so the library — only to work around the limit.
+with none (`conflicting_files`). Today the editor tells the user to read the pattern and, for this one, move the photos
+after the change into a sub-folder and re-run prep — changing the folder tree, and so the library, only to work around
+the limit. That advice is a stopgap; this item replaces it.
 
 **What to do:** when the photos disagreeing with the agreed offset form one run in time at the start or end of the
 day, propose splitting that day's cell at the change: two offsets, each anchored from its own photos. The photos
@@ -252,4 +253,21 @@ without GPS between the last of one run and the first of the other are the one a
 the first after the change. Rule the change to the per-day model first.
 
 **When:** after the conversion (item 1) is complete.
+
+### 16. Photos whose own position the agreed clock offset contradicts
+
+**Why:** a photo with a native GPS position that agrees with none of its camera's anchor groups (`conflicting_files`),
+scattered among photos that agree, most likely carries a wrong position of its own — GPS jitter, a fix from minutes
+before, a position another program wrote. Geotag never changes a photo's own position, so accepting the agreed offset
+corrects its time and leaves the wrong place in it; the editor can only tell the user to read the pattern and fix it
+by hand elsewhere. Together with item 15, the user would no longer interpret the disagreeing photos at all.
+
+**What to do:** have geotag tell the two cases apart itself — a run at one end of the day is item 15's clock change,
+scattered photos are suspect positions — and for each suspect one, compare its own position with the track's at its
+corrected time; where they differ beyond the anchor distance, raise it as a GPS review item in photos-23, the track's
+position proposed, the photo's own kept unless the user takes the proposal. Rule first that a photo's own position may
+be replaced this way, on the user's answer only — today `preserve-native` is unconditional — and drop the editor's
+interim advice once both items are built.
+
+**When:** after the conversion (item 1) is complete; with or after item 15.
 
