@@ -325,7 +325,7 @@ Where a camera's photos support two visits equally, its clock offset SHALL NOT t
 
 :::{rul} An offset the camera's GPS supports is anchored, however chosen
 :id: RUL-chosen_group_is_anchored
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-indistinct_visits_wait

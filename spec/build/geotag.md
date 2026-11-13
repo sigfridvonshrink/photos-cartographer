@@ -162,7 +162,7 @@ from `default_folder_timezone`.
 
 :::{bld} How anchors are matched and agreed
 :id: BLD-anchor_matching
-:status: seed
+:status: ruled
 :realises: RUL-anchor_within_clock_error, RUL-anchor_consensus, RUL-revisit_matched_to_its_day, RUL-indistinct_visits_wait, RUL-chosen_group_is_anchored, RUL-anchor_offset_auto_as_configured
 :aliases: geotag-anchor-matching-1, geotag-conflict-triggers-review-1
 

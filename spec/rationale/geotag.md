@@ -234,7 +234,7 @@ say which visit is theirs, only the user, who remembers the day, can.
 
 :::{rat} The evidence is the same whichever offset the user takes
 :id: RAT-chosen_offset_has_evidence
-:status: seed
+:status: ruled
 :justifies: RUL-chosen_group_is_anchored
 
 Where the photos support several offsets, the user picks the one for the day they were there. That offset is backed
