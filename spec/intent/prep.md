@@ -3,6 +3,8 @@
 What the first phase, {need}`DEF-prep`, guarantees, beyond what [the shared contract](shared.md) binds every phase
 to. *Why* each holds is in [the rationale](../rationale/prep.md); *how this build meets it*, in
 [the build](../build/prep.md).
+Sections are numbered as in the phase's original spec; a section whose content lives in the shared contract, or
+that only restated others, has no heading here.
 
 ## 2. What prep does, and what it leaves alone
 

@@ -3,6 +3,8 @@
 How this build meets [geotag's intent](../intent/geotag.md) and the shared contract's geotag rules: the files, names,
 tools and steps. Each item `realises` the intent it implements. *Why* a choice was made is in
 [the rationale](../rationale/geotag.md).
+Sections are numbered as in the phase's original spec; a section whose content lives in the shared contract, or
+that only restated others, has no heading here.
 
 ## 2. Core workflow rule
 

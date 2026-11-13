@@ -3,6 +3,8 @@
 What the last phase, {need}`DEF-merge`, guarantees, beyond what [the shared contract](shared.md) binds every phase
 to — most of merge's rules are there, in its section on the library and the seal. *Why* each holds is in
 [the rationale](../rationale/merge.md); *how this build meets it*, in [the build](../build/merge.md).
+Sections are numbered as in the phase's original spec; a section whose content lives in the shared contract, or
+that only restated others, has no heading here.
 
 ## 2. Scope and boundary
 

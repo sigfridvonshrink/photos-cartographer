@@ -4,7 +4,7 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **9** — 1, 2, 3, 4, 5, 6, 7, 10 and 11.* 🛑 Numbers are never reused; the next is **12**.
+*Open items: **10** — 1, 2, 3, 4, 5, 6, 7, 10, 11 and 12.* 🛑 Numbers are never reused; the next is **13**.
 
 ---
 
@@ -179,3 +179,20 @@ that re-keys them, planned and journaled like any change, its records rewritten 
 duplicate decisions.
 
 **When:** with the conversion of the geotag spec (item 1), where those records are converted.
+
+---
+
+### 12. Number the phase documents' sections 1…n
+
+**Why:** the phase documents of the corpus (`spec/intent|rationale|build/{prep,geotag,merge}.md`) number their headings
+as in the phase's original spec, so a section with no items of its own has no heading and the numbers skip — `intent/
+geotag.md` holds §2 and §5 only. While the original documents are being converted the numbers are the way back to them:
+the ledger maps each sentence by section and build items cite "geotag §13.3". Once every document is converted and
+retired, they only puzzle a reader. Vasile: *"1 now, and add a step (or backlog) after the conversion to renumber."*
+
+**What to do:** renumber each phase document's sections 1…n, the same number for the same section across intent,
+rationale and build; rewrite the section citations in the build items to links or the new numbers; drop the
+explanatory sentence from each document's introduction. The ledgers keep the old numbers — they record the old specs.
+
+**When:** after the conversion (item 1) is complete.
+
