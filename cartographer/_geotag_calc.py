@@ -331,8 +331,10 @@ def _valid_iana(tz):
 
 
 def _valid_offset(v):
-    """True iff `v` is a finite number of seconds within +/- one day (geotag §9.2)."""
-    return isinstance(v, (int, float)) and not isinstance(v, bool) and abs(v) <= 86400
+    """True iff `v` is a whole number of seconds (geotag §9.2) — of any size: a clock reset to its factory
+    date is years out, and a typo shows in the corrected time the editor previews and in the drift check
+    every manual offset goes through."""
+    return (isinstance(v, int) and not isinstance(v, bool)) or (isinstance(v, float) and v.is_integer())
 
 
 # ============================================================================
@@ -526,6 +528,7 @@ def infer_anchor_proposal(frames, gpx, cfg):
     best = g["rep"]
     support = g["frames"]
     supporting_count = len(support) - 1
+    conflicting = sorted({cs[0]["source_file"] or "" for n, cs in enumerate(by_frame) if n not in support})
     conflicting_count = len(by_frame) - len(support)        # frames no pass of which agrees
     if conflicting_count or tied:
         confidence = "review_required"
@@ -550,6 +553,7 @@ def infer_anchor_proposal(frames, gpx, cfg):
                                          "camera_source_naive_time": gg["rep"]["camera_source_naive_time"],
                                          "real_utc": gg["rep"]["gpx_time"].strftime("%Y-%m-%dT%H:%M:%SZ"),
                                          "match_type": gg["rep"]["match_type"],
+                                         "gpx_file": gg["rep"]["gpx_file"],
                                          "distance_m": gg["rep"]["distance_m"]}}
                      for gg in clusters), key=lambda x: (-x["count"], abs(x["offset_seconds"]), x["offset_seconds"]))
     return {
@@ -562,7 +566,7 @@ def infer_anchor_proposal(frames, gpx, cfg):
                                   "distance_m": best["distance_m"],
                                   "segment_duration_seconds": best["segment_duration_seconds"]},
         "anchor_count": len(by_frame), "supporting_count": supporting_count,
-        "conflicting_count": conflicting_count, "tied": tied, "anchors": anchors,
+        "conflicting_count": conflicting_count, "conflicting_files": conflicting, "tied": tied, "anchors": anchors,
         "groups": groups, "skipped": skipped,
     }
 

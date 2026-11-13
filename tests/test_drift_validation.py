@@ -244,9 +244,9 @@ def test_non_numeric_correction_blocks(tmp_path):
 
 
 @pytest.mark.spec("geotag-drift-corrected-validated-1")
-def test_out_of_range_correction_blocks(tmp_path):
-    *_, blk = _triggered(tmp_path, {"confirmed": True, "corrected_offset_seconds": 99999})
-    assert blk
+def test_a_correction_not_whole_seconds_blocks(tmp_path):
+    *_, blk = _triggered(tmp_path, {"confirmed": True, "corrected_offset_seconds": 12.5})
+    assert blk and "whole number of seconds" in blk[0]
 
 
 # --- Preservation / fingerprint cascade -------------------------------------

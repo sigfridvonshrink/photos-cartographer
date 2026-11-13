@@ -2588,18 +2588,17 @@ separator or space.
 A timezone the user writes SHALL be a real zone that resolves, never an arbitrary string.
 :::
 
-:::{rul} A position, an offset and a true time are in range
+:::{rul} A position and a clock offset are well formed
 :id: RUL-checked_positions_and_times
-:status: ruled
+:status: seed
 :criticality: high
 :verify: required
 :aliases: validate-coords-offsets-1
 :uses: DEF-decision
 :refines: INV-authored_values_checked
 
-A position, a clock offset or a true time the user writes SHALL be in range: a position two well-formed numbers —
-latitude −90 to 90, longitude −180 to 180, both or neither; a clock offset a number within a day either way; a true time
-a date and time that parses.
+A position or a clock offset the user writes SHALL be well formed: a position two numbers — latitude −90 to 90,
+longitude −180 to 180, both or neither; a clock offset a whole number of seconds, of any size.
 :::
 
 :::{rul} The filename format makes a safe name

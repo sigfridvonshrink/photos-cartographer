@@ -750,10 +750,16 @@ class GeotagWorkflow:
 
         if manual_off != "" and manual_off is not None:
             if _valid_offset(manual_off):
-                effective = {"offset_seconds": int(manual_off), "source": "manual"}
+                # An offset the camera's own GPS supports — one of the proposal's groups, picked instead
+                # of the recommended one — is anchored like an accepted proposal, so no drift check asks
+                # again what its photos already show (§19.2).
+                spread = CONFIG.get("gpx_anchor_offset_spread_max_seconds") or 0
+                chosen = is_gpx and any(abs(int(manual_off) - gg["offset_seconds"]) <= spread
+                                        for gg in proposal.get("groups") or [])
+                effective = {"offset_seconds": int(manual_off), "source": "gpx_anchor_chosen" if chosen else "manual"}
             else:
                 blockers.append(f"{dest}: camera_group_time_decisions[{loc}].user_decision."
-                                "manual_offset_seconds must be a number within +/-86400.")
+                                "manual_offset_seconds must be a whole number of seconds.")
         elif accept:
             if has_offset:                         # accept a GPX self-anchor or a timezone-derived proposal
                 effective = {"offset_seconds": proposal["proposed_offset_seconds"],
@@ -918,7 +924,7 @@ class GeotagWorkflow:
                 effective = {"offset_seconds": int(corrected), "source": "gps_drift_validated"}
             else:
                 blockers.append(f"{dest}: drift_decisions[{loc}].user_decision.corrected_offset_seconds "
-                                "must be empty or a number within +/-86400.")
+                                "must be empty or a whole number of seconds.")
         # The editor scrubs a representative photo along the track: corrected_offset = (chosen track
         # time) - (that photo's camera naive). Expose every bucket frame (earliest first) so it can
         # default to one and let the operator cross-check others; re-extracted every run with the track.

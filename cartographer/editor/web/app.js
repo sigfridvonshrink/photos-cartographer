@@ -44,7 +44,7 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
 // --- validation (mirrors decision-json-reference §7) -------------------------
 const isNum = (v) => typeof v === "number" && isFinite(v) && typeof v !== "boolean";
 function validTz(s) { if (s === "" || s == null) return true; try { new Intl.DateTimeFormat("en", { timeZone: s }); return true; } catch { return false; } }
-function validOffset(v) { return v === "" || v == null || (isNum(v) && Math.abs(v) <= 86400); }
+function validOffset(v) { return v === "" || v == null || (isNum(v) && Number.isInteger(Number(v))); }
 const validLat = (v) => v === "" || v == null || (isNum(v) && v >= -90 && v <= 90);
 const validLon = (v) => v === "" || v == null || (isNum(v) && v >= -180 && v <= 180);
 const bothOrNeither = (a, b) => (a === "" || a == null) === (b === "" || b == null);
@@ -306,8 +306,12 @@ function previewEffective(ref) {
     return "— (needs input)";
   }
   if (ref.kind === "offset") {
-    if (u.manual_offset_seconds !== "" && u.manual_offset_seconds != null)
-      return validOffset(u.manual_offset_seconds) ? `${fmtOffset(u.manual_offset_seconds)} (manual)` : "✗ invalid offset";
+    if (u.manual_offset_seconds !== "" && u.manual_offset_seconds != null) {
+      if (!validOffset(u.manual_offset_seconds)) return "✗ invalid offset";
+      // one of the GPS groups, picked: geotag records it as anchored (gpx_anchor_chosen), not as a manual guess
+      const picked = (p.groups || []).some((g) => g.offset_seconds === Number(u.manual_offset_seconds));
+      return `${fmtOffset(u.manual_offset_seconds)} (${picked ? "GPS group, picked" : "manual"})`;
+    }
     if (u.accept_proposal && "proposed_offset_seconds" in p) return `${fmtOffset(p.proposed_offset_seconds)} (accept proposal)`;
     return "— (GPX auto-resolves on re-run, else needs input)";
   }
@@ -638,7 +642,7 @@ function offsetEditor(ref) {
 
   // choice 2 — manual offset (h/m/s spinner). Editable only when active; otherwise click to activate.
   const editO = active === "offset";
-  const bump = (secs, dir) => setManual(Math.max(-86400, Math.min(86400, cur + dir * secs)), "offset");
+  const bump = (secs, dir) => setManual(cur + dir * secs, "offset");
   const unit = (label, secs, value) => {
     const box = el("div", { class: "spin-unit", tabindex: editO ? "0" : null,
       title: editO ? `scroll or ↑/↓ to adjust ${label}` : "click to set the offset" },
@@ -658,7 +662,7 @@ function offsetEditor(ref) {
   if (editO) numI.addEventListener("change", () => setManual(numI.value === "" ? "" : Number(numI.value), "offset"));
   wrap.append(opt(editO, el("div", { class: "ctl-field off-field" }, el("span", {}, "manual offset"),
     el("div", { class: "spin-wrap" }, units, numI)), editO ? undefined : () => choose("offset")));
-  if (editO && !validOffset(manualOff)) wrap.append(el("div", { class: "err" }, "offset must be within ±86400 s"));
+  if (editO && !validOffset(manualOff)) wrap.append(el("div", { class: "err" }, "offset must be a whole number of seconds"));
 
   // choice 3 — anchor real-UTC (datetime picker), only with an anchor frame. Editable only when active.
   if (camMs != null) {
@@ -939,6 +943,36 @@ function hideHoverPreview() { if (_hoverImg) { _hoverImg.hidden = true; _hoverPa
 // --- side panel --------------------------------------------------------------
 function jsonBlock(title, obj) { return obj === undefined ? null : el("div", { class: "pblock" }, el("h3", {}, title), el("pre", { class: "json" }, JSON.stringify(obj, null, 2))); }
 
+// Picking a correction group of a GPX self-anchor proposal (§19.2): the recommended one is accepting the proposal;
+// any other sets its offset — which geotag counts as anchored by the GPS (gpx_anchor_chosen), so no drift check
+// follows. One click, for every day bundled with this proposal.
+function groupChoice(p, g) {
+  return g.offset_seconds === p.proposed_offset_seconds
+    ? { accept_proposal: true, manual_offset_seconds: "" }
+    : { accept_proposal: false, manual_offset_seconds: g.offset_seconds };
+}
+// The working decision's offset, to mark the group it picks (null while nothing is chosen).
+function chosenOffset(p, u) {
+  if (u.manual_offset_seconds !== "" && u.manual_offset_seconds != null) return Number(u.manual_offset_seconds);
+  return u.accept_proposal && "proposed_offset_seconds" in p ? p.proposed_offset_seconds : null;
+}
+// What the user must settle, said in one line each: a tie between visits, and photos agreeing with no group.
+function proposalNotes(p) {
+  const out = [], groups = p.groups || [];
+  if (p.tied && groups.length) {
+    const n = groups.filter((g) => g.count === groups[0].count).length;
+    out.push(`These photos lie on ${n} visits of the tracks equally — pick the day you were there.`);
+  }
+  const files = p.conflicting_files || [];
+  if (files.length) {
+    const shown = files.slice(0, 5).join(", ") + (files.length > 5 ? ` and ${files.length - 5} more` : "");
+    out.push(`${files.length} photo${files.length === 1 ? "" : "s"} agree${files.length === 1 ? "s" : ""} with none of these: ${shown}. ` +
+      "Scattered, their own positions are off — accept; the last of the day, the camera's clock changed — move them " +
+      "into a sub-folder and re-run.");
+  }
+  return out;
+}
+
 // A GPX self-anchor offset proposal, collapsed: the consensus correction, then up to three
 // "N photos → ±Xh Ym" groups (each with one named photo at its FULL by-dest path and that photo's
 // corrected local time), plus a note for frames skipped (no track / track from another trip).
@@ -956,7 +990,9 @@ function offsetProposalBlock(ref, p) {
   const wrap = el("div", { class: "pblock" }, el("h3", {}, "Proposal — suggested clock correction"),
     el("div", { class: "prop-head" }, fmtOffset(p.proposed_offset_seconds),
       el("span", { class: "muted" }, ` (${p.confidence}; ${p.anchor_count} geotagged photo${p.anchor_count === 1 ? "" : "s"})`)));
+  for (const note of proposalNotes(p)) wrap.append(el("div", { class: "hint warn" }, note));
   const groups = p.groups || [];
+  const u = workCell(ref)?.user_decision || {}, picked = chosenOffset(p, u);
   for (const g of groups.slice(0, 3)) {
     // camera (naive wall time) → corrected (real UTC in the destination tz), both formatted identically;
     // when the date is unchanged it's shown once and the arrow carries only the time correction.
@@ -968,9 +1004,14 @@ function offsetProposalBlock(ref, p) {
       : `${cdt.date} ${cdt.time} → ${rdt.date} ${rdt.time} (${tz})`;
     else if (cdt) line = `${cdt.date} ${cdt.time} → ${g.representative.real_utc} — set this destination's timezone to see local time`;
     else line = `camera ${g.representative.camera_source_naive_time} → ${g.representative.real_utc}`;
-    wrap.append(el("div", { class: "prop-group" },
-      el("div", { class: "prop-group-h" }, `${g.count} photo${g.count === 1 ? "" : "s"} → ${fmtOffset(g.offset_seconds)}`),
-      el("div", { class: "hint" }, `e.g. ${g.representative.source_file}`),
+    const on = picked === g.offset_seconds;
+    wrap.append(el("div", { class: "prop-group" + (on ? " on" : "") },
+      el("div", { class: "prop-group-h" }, `${g.count} photo${g.count === 1 ? "" : "s"} → ${fmtOffset(g.offset_seconds)}`,
+        on ? el("span", { class: "muted" }, " ✓ chosen")
+          : el("button", { class: "mini", onclick: () => { state.offsetEdit = null; editMany(ref, groupChoice(p, g)); } },
+            g.offset_seconds === p.proposed_offset_seconds ? "accept" : "use this")),
+      el("div", { class: "hint" }, `e.g. ${g.representative.source_file}` +
+        (g.representative.gpx_file ? ` · track ${g.representative.gpx_file}` : "")),
       el("div", { class: "hint" }, line)));
   }
   if (groups.length > 3) wrap.append(el("div", { class: "hint" }, `+ ${groups.length - 3} more correction group(s)`));
@@ -1107,5 +1148,6 @@ export {
   fmtOffset, camNaiveMs, dtLocalToMs, msToDtLocal, utcStrToMs, fmtLocal, fmtDT, offsetImpact,
   cellAt, cellStatus, wouldResolve, previewTz, previewFallback, refInvalid, isDirty, state,
   offsetGroups, dateRange, fmtDate, peerKeys, parseLatLon, coordText, contiguousRange,
+  groupChoice, chosenOffset, proposalNotes,
   scrubOffset, scrubSeedIndex, mapKeyFor,
 };

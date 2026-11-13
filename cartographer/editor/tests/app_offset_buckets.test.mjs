@@ -111,3 +111,23 @@ test("peerKeys: cluster ref fans out to its peers, plain ref to itself", () => {
   assert.deepEqual(app.peerKeys({ key: "A", peers: ["A", "B", "C"] }), ["A", "B", "C"]);
   assert.deepEqual(app.peerKeys({ key: "A" }), ["A"]);
 });
+
+// --- picking a correction group (a place visited on several days, §19.2) ----------------------------
+test("groupChoice: the recommended group accepts the proposal, another sets its offset", () => {
+  const p = { proposed_offset_seconds: -7200, groups: [{ offset_seconds: -7200, count: 3 }, { offset_seconds: -93600, count: 3 }] };
+  assert.deepEqual(app.groupChoice(p, p.groups[0]), { accept_proposal: true, manual_offset_seconds: "" });
+  assert.deepEqual(app.groupChoice(p, p.groups[1]), { accept_proposal: false, manual_offset_seconds: -93600 });
+  assert.equal(app.chosenOffset(p, { accept_proposal: true, manual_offset_seconds: "" }), -7200);
+  assert.equal(app.chosenOffset(p, { accept_proposal: false, manual_offset_seconds: -93600 }), -93600);
+  assert.equal(app.chosenOffset(p, { accept_proposal: false, manual_offset_seconds: "" }), null);
+});
+
+test("proposalNotes: a tie asks for the day; disagreeing photos are named, five at most", () => {
+  const tied = { tied: true, groups: [{ offset_seconds: -7200, count: 3 }, { offset_seconds: -93600, count: 3 }, { offset_seconds: 0, count: 1 }] };
+  assert.deepEqual(app.proposalNotes(tied), ["These photos lie on 2 visits of the tracks equally — pick the day you were there."]);
+  const files = ["a", "b", "c", "d", "e", "f", "g"].map((x) => `6-photos-by-dest/B/${x}.jpg`);
+  const [note] = app.proposalNotes({ tied: false, groups: [], conflicting_files: files });
+  assert.match(note, /^7 photos agree with none of these: 6-photos-by-dest\/B\/a\.jpg, .*e\.jpg and 2 more\./);
+  assert.match(app.proposalNotes({ conflicting_files: [files[0]] })[0], /^1 photo agrees with none of these/);
+  assert.deepEqual(app.proposalNotes({ tied: false, groups: [], conflicting_files: [] }), []);
+});

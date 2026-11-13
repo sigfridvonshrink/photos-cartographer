@@ -128,6 +128,9 @@ main { flex: 1; display: grid; grid-template-columns: var(--list-w, minmax(360px
 .prop-group { border-left: 2px solid var(--line); padding: 1px 0 1px 8px; margin: 6px 0; }
 .prop-group-h { font: 13px var(--mono); color: var(--fg); }
 .hint.skip { color: var(--warn); font-style: normal; }
+.hint.warn { color: var(--warn); font-style: normal; font-size: 12px; margin: 4px 0; }
+.prop-group.on { border-left-color: var(--ok); }
+.prop-group-h .mini { margin-left: 8px; }
 
 /* the effective decision — the focal block the operator is confirming; loudest thing in the panel */
 .pblock.eff { background: var(--ok-bg); border: 1px solid #2c4434; border-radius: var(--r-lg); padding: 12px 14px; }

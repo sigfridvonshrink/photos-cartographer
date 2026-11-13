@@ -477,3 +477,34 @@ def test_two_days_nothing_tells_apart_wait_for_review(monkeypatch):
     assert p["proposed_offset_seconds"] == -7200 and p["tied"] is True and p["confidence"] == "review_required"
     cell, _ = _cell({}, frames, gpx, multi=True)
     assert cell["requires_user_input"] is True and cell["effective_time_anchor"] == ""
+
+
+@pytest.mark.spec("RUL-chosen_group_is_anchored", "BLD-anchor_matching",
+                  test="TST-geotag_offset_inference-a_picked_group_counts_as_gps_backed")
+def test_a_picked_group_counts_as_gps_backed(monkeypatch):
+    # On a tie the user picks the other day's group: its offset is anchored by the camera's GPS like an accepted
+    # proposal (no drift check follows); an offset no group supports stays a manual one.
+    route, gpx = _route_days([3, 4])
+    frames = [_photo(*route[i], datetime(2024, 7, 4, 9, 10 * i, tzinfo=timezone.utc), i) for i in (1, 3, 5)]
+    p = cal.infer_anchor_proposal(frames, gpx, WCFG)
+    assert [(g["offset_seconds"], g["representative"]["gpx_file"]) for g in p["groups"]] == \
+        [(-7200, "day4.gpx"), (-93600, "day3.gpx")]                          # each group names its track
+    other, _ = _cell({"manual_offset_seconds": -93600}, frames, gpx)
+    assert other["effective_time_anchor"] == {"offset_seconds": -93600, "source": "gpx_anchor_chosen"}
+    near, _ = _cell({"manual_offset_seconds": -7200 + 60}, frames, gpx)       # within the spread: that group
+    assert near["effective_time_anchor"]["source"] == "gpx_anchor_chosen"
+    own, _ = _cell({"manual_offset_seconds": -3600}, frames, gpx)
+    assert own["effective_time_anchor"] == {"offset_seconds": -3600, "source": "manual"}
+    assert "gpx_anchor_chosen" not in cal.GeotagWorkflow._DRIFT_TRIGGER_SOURCES
+
+
+@pytest.mark.spec("BLD-anchor_matching", test="TST-geotag_offset_inference-conflicting_photos_are_named")
+def test_conflicting_photos_are_named():
+    # Photos that support no pass of the agreed offset are named, so the user can tell scattered bad positions
+    # from a clock changed during the day.
+    route, gpx = _route_days([4], extra=[(4, 51.2300, 3.2500, 30)])
+    frames = [_photo(*route[i], datetime(2024, 7, 4, 9, 10 * i, tzinfo=timezone.utc), i) for i in (1, 3, 5)]
+    frames.append(_photo(51.2300, 3.2500, datetime(2024, 7, 4, 15, 0, tzinfo=timezone.utc), 8))  # clock off by 3.5 h
+    p = cal.infer_anchor_proposal(frames, gpx, WCFG)
+    assert p["proposed_offset_seconds"] == -7200 and p["conflicting_count"] == 1
+    assert p["conflicting_files"] == ["6-photos-by-dest/Bruges/p8.jpg"] and p["confidence"] == "review_required"

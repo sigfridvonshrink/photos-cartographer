@@ -231,3 +231,14 @@ chance. Matched to the wrong visit, a whole day's photos are corrected by a day,
 originals, named by the wrong time, placed on the wrong walk — with no sign anything is off. When the photos cannot
 say which visit is theirs, only the user, who remembers the day, can.
 :::
+
+:::{rat} The evidence is the same whichever offset the user takes
+:id: RAT-chosen_offset_has_evidence
+:status: seed
+:justifies: RUL-chosen_group_is_anchored
+
+Where the photos support several offsets, the user picks the one for the day they were there. That offset is backed
+by the camera's own positions on the tracks as much as the recommended one; checking it against the tracks again
+would ask the user to confirm on a map what those photos already show — work added to the one case that already
+needed them.
+:::

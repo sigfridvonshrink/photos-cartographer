@@ -346,7 +346,7 @@ photos-21 offset cell it refines — bare `<camera_group_key>` or `<camera_group
 - `user_decision.confirmed` (bool) — the **only** thing that satisfies the gate. `false` (the default)
   blocks. **A "zero scrub" / "the offset was right" must be set explicitly** (`confirmed: true` with an
   empty `corrected_offset_seconds`) — inaction never counts.
-- `user_decision.corrected_offset_seconds` — empty for a zero scrub, or a number (seconds, ±86400) to
+- `user_decision.corrected_offset_seconds` — empty for a zero scrub, or a whole number of seconds to
   correct the whole bucket's offset.
 - `effective_drift_offset` — `""` until confirmed, then `{ "offset_seconds": N, "source":
   "gps_drift_validated" }`. Geotag recomputes resolved UTC consuming this; the value does **not**
@@ -383,7 +383,7 @@ Mirror these client-side; a value that fails makes geotag reject the whole artif
 | Field(s) | Rule |
 |----------|------|
 | `manual_iana_timezone` | Must resolve as a real IANA zone (e.g. `zoneinfo`/`Intl` knows it). `""` allowed (= unset). |
-| `manual_offset_seconds` | A finite number with `abs(v) <= 86400` (±1 day). Not a boolean. `""` allowed. |
+| `manual_offset_seconds` | A whole number of seconds, of any size (a clock reset to its factory date is years out). Not a boolean. `""` allowed. |
 | `fallback_lat` / `fallback_lon`, `manual_lat` / `manual_lon` | Numbers; latitude ∈ [-90, 90], longitude ∈ [-180, 180]. Set both or neither. `""` allowed (= unset). |
 | `accept_*` / `accept_unlocated` | Booleans; default `false`. |
 

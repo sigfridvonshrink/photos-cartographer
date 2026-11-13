@@ -113,7 +113,7 @@ then the proposal evidence last; non-coord cells just show the proposal.
     **locks** the drop-down (unaccepting frees it). The "accept" box is disabled when there's nothing to accept.
   - **Clock offset:** **three always-visible choices, click-to-activate** — *accept proposal* (the
     automatic offset, never edited → `accept_proposal`), *manual offset* (the **h/m/s spinner**:
-    hover-scroll or focus + ↑/↓ nudges just that unit by ±3600/±60/±1 s, clamped to ±86400 s;
+    hover-scroll or focus + ↑/↓ nudges just that unit by ±3600/±60/±1 s;
     `preventDefault` keeps the wheel off page scroll), and *anchor real-UTC* (a `datetime-local` picker,
     only for a `gpx_self_anchor` proposal). Exactly one is active; clicking another **deactivates the
     others and they update to the active value** — the two manual views are synced (offset ⟷ anchor camera
@@ -170,7 +170,7 @@ then the proposal evidence last; non-coord cells just show the proposal.
       `review_item` is on the list precisely because no reliable GPS source placed it, so the
       `photos-23` artifact carries no track/anchor/candidate for it. The crosshair pick + photo are the
       manual-placement aid; the fallback pins are the only positional evidence the artifact provides.*
-- **Validation** mirrors the reference (IANA tz, offset ±86400, ISO-UTC, lat/lon ranges); invalid input is
+- **Validation** mirrors the reference (IANA tz, offset in whole seconds, lat/lon ranges); invalid input is
   blocked client-side so geotag never rejects the save.
 
 ## 5. Build plan (phased)
