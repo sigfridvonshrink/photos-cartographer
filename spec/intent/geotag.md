@@ -214,3 +214,30 @@ with — never guessing the zone of one that states none.
 A track point geotag cannot use — no position or one out of range, no time, an unreadable time, or one stating no
 zone — SHALL be skipped and reported to the user, naming its file and point.
 :::
+
+
+## 16. Camera groups
+
+:::{rul} An unknown camera group stops geotag
+:id: RUL-unknown_group_stops_geotag
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: geotag-incomplete-classification-block-1
+:uses: RUL-known_when_classified
+
+Geotag SHALL NOT decide anything while a camera group in photos by destination is unknown.
+:::
+
+:::{rul} The classification is offered ready to paste
+:id: RUL-unknown_group_classification_offered
+:status: seed
+:criticality: low
+:verify: required
+:aliases: geotag-unknown-group-snippets-1
+:refines: RUL-unknown_group_stops_geotag
+
+Geotag SHALL offer the classification of every unknown camera group ready to paste into the configuration, every
+group already classed kept as it is.
+:::

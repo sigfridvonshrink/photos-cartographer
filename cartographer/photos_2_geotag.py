@@ -49,7 +49,7 @@ from .photos_utils import (
     CONFIG, CONTROL_DIR, control_dir, FINALIZED_MEDIA_ARTIFACT, track_memo_db_path, finalized_media_path, workspace_volume_error, config_path, handoff_path, guard_path, is_sealed, likely_new_dump,
     validate_config, load_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
     folders_fingerprint, media_extensions_fingerprint,
-    selected_gpx_root, CAMERA_IDENTITY_FIELDS, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
+    selected_gpx_root, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
     missing_managed_folders, top_level_links, misplaced_top_level_entries, by_dest_reprep_pending,
     json_dependency, verify_json_dependency, handoff_content_fingerprint, handoff_filename_format_blocker, write_json_artifact, write_versioned_json, db_path, ensure_control_dir,
     journal_path, ContentHasher, _move_no_clobber,
@@ -528,7 +528,6 @@ class GeotagWorkflow:
                 "content_fingerprint": fp,
                 "media_class": rec.get("media_class"),
                 "camera_group_key": md.get("camera_group_key") or parsed.get("camera_group_key") or "unknown",
-                "camera_identity": {k: parsed.get(k) for k in CAMERA_IDENTITY_FIELDS if parsed.get(k) is not None},
                 "source_naive_time": parsed.get("selected_source_naive_timestamp"),
                 "source_time_tag": parsed.get("selected_source_timestamp_tag"),
                 "raw_times": {k: parsed.get(k) for k in
@@ -565,39 +564,20 @@ class GeotagWorkflow:
     # --- Stage 4: camera-group recognition + classification (§16) ------------
 
     def recognize_camera_groups(self, files):
-        """Group the file objects by camera_group_key; classify each via config device_groups.
-        Returns (groups_by_key, unknown_keys). A camera_group_key listed in `phones` is a
-        smartphone (solved per-file); in `fixed_clock_cameras` a camera (needs a per-(group,
-        destination) offset); otherwise it is unknown and must be classified before geotag."""
+        """Group the file objects by camera_group_key and classify each via config device_groups.
+        Returns (groups_by_key, unknown_keys), each group holding its key and `camera_group_class`. A key
+        listed in `phones` is a smartphone (solved per-file); in `fixed_clock_cameras` a camera (needs a
+        per-(group, destination, day) offset); otherwise it is unknown and must be classified before geotag.
+        The class is all geotag needs of a group: its facts — files, span, positions — are prep's to report,
+        in the handoff's `camera_groups`."""
         dg = (CONFIG.get("camera_time_and_timezone_policy") or {}).get("device_groups") or {}
         phones = set(dg.get("phones") or [])
         fixed = set(dg.get("fixed_clock_cameras") or [])
         groups = {}
-        for f in files:
-            key = f["camera_group_key"]
-            g = groups.get(key)
-            if g is None:
-                cls = "smartphone" if key in phones else ("camera" if key in fixed else "unknown")
-                g = groups[key] = {
-                    "camera_group_key": key, "camera_group_class": cls,
-                    "contributing_identity_fields": dict(f["camera_identity"]),
-                    "file_count": 0, "destinations": set(),
-                    "has_native_gps": 0, "missing_timestamp": 0, "timestamps": [],
-                }
-            g["file_count"] += 1
-            g["destinations"].add(f["destination"])
-            if f["has_native_gps"]:
-                g["has_native_gps"] += 1
-            if not f["has_timestamp"]:
-                g["missing_timestamp"] += 1
-            elif f["source_naive_time"]:
-                g["timestamps"].append(f["source_naive_time"])
-        for g in groups.values():
-            ts = sorted(g.pop("timestamps"))
-            g["destinations"] = sorted(g["destinations"])
-            g["earliest_source_time"] = ts[0] if ts else None
-            g["latest_source_time"] = ts[-1] if ts else None
-        unknown = sorted(k for k, g in groups.items() if g["camera_group_class"] == "unknown")
+        for key in sorted({f["camera_group_key"] for f in files}):
+            cls = "smartphone" if key in phones else ("camera" if key in fixed else "unknown")
+            groups[key] = {"camera_group_key": key, "camera_group_class": cls}
+        unknown = [k for k, g in groups.items() if g["camera_group_class"] == "unknown"]
         return groups, unknown
 
     # --- Stages 5–6: time decisions (photos-21, §17–§21) ---------------------

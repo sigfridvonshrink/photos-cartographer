@@ -283,22 +283,6 @@ def test_unparseable_decision_artifact_blocks_and_is_kept(tmp_path, monkeypatch,
     assert sorted(x.name for x in ctl.iterdir()) == before                    # no backup, no new version
 
 
-def test_recognize_camera_groups_records_timestamps(tmp_path):
-    ws, ctl = _init_ws(tmp_path)
-    wf = cal.GeotagWorkflow(str(ws))
-    utils.CONFIG["camera_time_and_timezone_policy"]["device_groups"] = {"fixed_clock_cameras": [CAM], "phones": []}
-    files = [{"camera_group_key": CAM, "destination": "6-photos-by-dest/T", "has_native_gps": False,
-              "has_timestamp": True, "source_naive_time": "2024:07:03 14:00:00", "camera_identity": {}},
-             {"camera_group_key": CAM, "destination": "6-photos-by-dest/T", "has_native_gps": False,
-              "has_timestamp": False, "source_naive_time": None, "camera_identity": {}},   # missing timestamp
-             {"camera_group_key": CAM, "destination": "6-photos-by-dest/T", "has_native_gps": False,
-              "has_timestamp": True, "source_naive_time": None, "camera_identity": {}}]     # timestamp flag, no value
-    groups, _ = wf.recognize_camera_groups(files)
-    assert groups[CAM]["earliest_source_time"] == "2024:07:03 14:00:00"
-    assert groups[CAM]["latest_source_time"] == "2024:07:03 14:00:00"
-    assert groups[CAM]["missing_timestamp"] == 1
-
-
 @pytest.mark.spec("geotag-sealed-newdump-warn-1", "RUL-sealed_new_dump_left", test="TST-geotag_orchestration-sealed_workspace_with_dump_warns_and_blocks")
 def test_sealed_workspace_with_dump_warns_and_blocks(tmp_path, monkeypatch, capsys):
     ws, ctl = _init_ws(tmp_path)
@@ -330,7 +314,8 @@ def test_unknown_group_aborts_before_gpx_ingest(tmp_path, monkeypatch):
     assert called == []                        # GPX ingest never reached
 
 
-@pytest.mark.spec("geotag-unknown-group-snippets-1")
+@pytest.mark.spec("geotag-unknown-group-snippets-1", "BLD-unknown_group_snippet",
+                  test="TST-geotag_orchestration-unknown_group_template_is_valid_full_json")
 def test_unknown_group_template_is_valid_full_json(tmp_path, monkeypatch, capsys):
     # The cut/paste template must be VALID JSON (no trailing comma -> the ",]" reader-rejection bug)
     # and the COMPLETE final list: each array carries the operator's known groups plus the new one.

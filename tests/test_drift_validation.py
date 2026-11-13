@@ -58,7 +58,7 @@ def _gpx(points=()):
 def _file(rel, naive, *, gps=None):
     return {"relative_path": rel, "destination": DEST, "camera_group_key": CAM,
             "native_gps": gps, "has_native_gps": bool(gps), "has_timestamp": True,
-            "source_naive_time": naive, "source_time_tag": "DateTimeOriginal", "camera_identity": {}}
+            "source_naive_time": naive, "source_time_tag": "DateTimeOriginal"}
 
 
 def _prior_time(cells):

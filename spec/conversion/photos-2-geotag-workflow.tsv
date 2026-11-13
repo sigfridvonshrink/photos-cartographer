@@ -435,3 +435,25 @@
 15	In practice the implementation records the current GPX fingerprint as a dependency **unconditionally whenever a GPX set is loaded** — even for an artifact (or destination) that ended up using no GPX evidence — rather than tracking per-artifact whether GPX actually contributed.	RUL-tracks_in_dependencies BLD-gpx_fingerprint	
 15	This is a deliberate, conservative over-inclusion (Section 22.1): editing the GPX set may restale an artifact that did not depend on GPX, which only costs a recompute and never serves a stale result.	RAT-tracks_change_the_answers	
 15	If GPX is wholly unavailable or disabled, a fixed fingerprint of its own is recorded in their place, so turning GPX on or off restales them too.	BLD-gpx_fingerprint	
+16	## 16. Stage 4 — Camera group recognition and classification	dropped	a heading; the corpus's documents carry their own
+16	The workflow groups by-dest media by the camera group key prep recorded in the handoff, and classifies each group from the workspace config.	RUL-geotag_reuses_camera_group BLD-known_camera_group	
+16	For each group, the workflow determines:	dropped	introduces the list
+16	1. camera group key;	BLD-camera_group_key	
+16	2. device identity fields used;	dropped	a fact prep reports in the handoff's camera groups (RUL-grouping_facts_reported); geotag needs only the class
+16	3. number of files;	dropped	a fact prep reports in the handoff's camera groups (RUL-grouping_facts_reported); geotag needs only the class
+16	4. destinations in which the group appears;	dropped	a fact prep reports in the handoff's camera groups (RUL-grouping_facts_reported); geotag needs only the class
+16	5. earliest/latest source-naive timestamp;	dropped	a fact prep reports in the handoff's camera groups (RUL-grouping_facts_reported); geotag needs only the class
+16	6. whether the group is known;	RUL-known_when_classified BLD-known_camera_group	
+16	7. whether the group is classified as mobile or fixed-clock camera;	RUL-known_when_classified BLD-known_camera_group	
+16	8. whether the group has native GPS on some/all files;	dropped	a fact prep reports in the handoff's camera groups (RUL-grouping_facts_reported); geotag needs only the class
+16	9. whether the group has missing or ambiguous timestamp metadata.	RUL-untimed_photo_stops_geotag	a photo with no recorded time stops geotag before it groups anything
+16	If unknown camera groups are found, the workflow should output a directly pasteable config snippet (for the workspace config `photos-00-config.json`, under `device_groups`) so the user can classify each unknown group into `fixed_clock_cameras` or `phones`.	RUL-unknown_group_classification_offered BLD-unknown_group_snippet	
+16	If camera group classification is incomplete:	dropped	introduces the list
+16	1. do not create `photos-21-time-decisions.json`;	RUL-unknown_group_stops_geotag RUL-no_record_before_decisions BLD-geotag_stage_order	
+16	2. print textual config snippets;	BLD-unknown_group_snippet	
+16	3. stop and require the user to update the workspace config;	RUL-unknown_group_stops_geotag BLD-unknown_group_snippet	
+16	4. require the workflow to be rerun.	BLD-unknown_group_snippet	a re-run takes the new classification
+16	Unknown camera group snippets are not JSON artifacts.	RUL-no_record_before_decisions	
+16	Camera-group identity reuses prep's grouping rather than reinventing it: prep already computes a `camera_group_key` (at `CAMERA_GROUP_KEY_VERSION`) from serial/make/model/owner fields and emits it in both the handoff and SQLite.	RUL-geotag_reuses_camera_group RUL-prep_derives_camera_group BLD-camera_group_key BLD-camera_group_key_version	
+16	Mobile vs fixed-clock classification reuses the existing config in `camera_time_and_timezone_policy.device_groups` (workspace config `photos-00-config.json`), where `phones` denotes mobile and `fixed_clock_cameras` denotes fixed-clock.	RUL-camera_classes_not_derivation BLD-known_camera_group	
+16	A group is "known" when its key is listed under one of those classes; unknown groups are exactly what the pasteable config snippets ask the user to classify.	RUL-known_when_classified RUL-unknown_group_classification_offered	

@@ -292,7 +292,7 @@ def test_build_drift_validation_leaves_photos21_byte_unmutated(tmp_path):
     files = [{"relative_path": f"{DRIFT_DEST}/a.arw", "destination": DRIFT_DEST,
               "camera_group_key": CAM, "native_gps": None, "has_native_gps": False,
               "has_timestamp": True, "source_naive_time": "2024:07:03 14:00:00",
-              "source_time_tag": "DateTimeOriginal", "camera_identity": {}}]
+              "source_time_tag": "DateTimeOriginal"}]
     groups = {CAM: {"camera_group_class": "camera"}}
     gpx = _drift_gpx([(50.0, 4.0, datetime(2024, 7, 3, 12, 0, 0, tzinfo=timezone.utc))])
     utils.CONFIG["camera_time_and_timezone_policy"]["default_folder_timezone"] = "Europe/Brussels"
