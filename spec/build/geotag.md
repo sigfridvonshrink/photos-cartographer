@@ -8,7 +8,7 @@ tools and steps. Each item `realises` the intent it implements. *Why* a choice w
 
 :::{bld} Geotag's planning stages, in order
 :id: BLD-geotag_stage_order
-:status: seed
+:status: ruled
 :realises: RUL-time_before_gps
 
 `geotag plan` SHALL write `photos-21-time-decisions.json`; only once it is complete resolve each photo's true time and
@@ -19,7 +19,7 @@ resolved time.
 
 :::{bld} Geotag's preflight refuses a photo with no recorded time
 :id: BLD-geotag_untimed_gate
-:status: seed
+:status: ruled
 :realises: RUL-untimed_photo_stops_geotag
 
 Geotag's preflight for `plan` SHALL block on every handoff record of a photo under `6-photos-by-dest` whose
