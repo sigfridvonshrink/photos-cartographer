@@ -1418,7 +1418,7 @@ each moved file's identity forward without reading it again.
 
 :::{rul} Geotag plans only on a record that still holds
 :id: RUL-geotag_plans_on_current_record
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
