@@ -705,3 +705,49 @@
 23	At this point, it must create:	RUL-decision_stage_writes_record	
 23	```text [sha1:1d83aff8, 1 lines]	RUL-decision_stage_writes_record BLD-geotag_stage_order	
 23	even if no GPS changes are required.	RUL-decision_stage_writes_record	
+24	## 24. Automated GPS recalculation policy	dropped	a heading; the corpus's documents carry their own
+24	Automated GPS decisions, including GPX interpolation and extrapolation, are ordinary derived decisions in the dependency cascade.	INV-no_stale_use	
+24	If any upstream dependency used by automated GPS planning changes, the affected GPS decision artifact becomes stale and must be regenerated before execution.	INV-no_stale_use	
+24	Relevant upstream dependencies include:	dropped	introduces the list
+24	1. GPX folder/file fingerprints;	BLD-gpx_fingerprint	
+24	2. GPX parsing/config thresholds;	RUL-staleness_by_area	
+24	3. resolved UTC cache fingerprint;	BLD-resolved_utc_fingerprint	
+24	4. destination grouping;	BLD-geotag_destinations	
+24	5. native GPS metadata facts;	BLD-handoff_content_fingerprint	
+24	6. manual GPS decision fields;	RUL-decision_kept	
+24	7. GPS policy config (workspace config).	RUL-staleness_by_area	
+24	There is no special forced recalculation mode.	INV-no_stale_use	staleness alone triggers recomputation
+24	The rule is:	dropped	introduces the rule
+24	```text [sha1:81fecf78, 4 lines]	INV-no_stale_use RUL-mutate_on_difference	
+24	The workflow must not preserve outdated automated GPS decisions merely to avoid touching media files.	BLD-decided_from_own_values	
+24	Human-filled GPS decision fields should still be preserved across regeneration where the logical target is unchanged.	RUL-decision_kept	
+24	If a preserved human decision no longer safely applies, it must be marked stale or requiring review rather than silently used.	RUL-invalid_decision_kept	a decision that no longer applies is kept and flagged, never used
+24.1	### 24.1 Reversible manual GPS overrides	dropped	a heading; the corpus's documents carry their own
+24.1	A **manual GPS override is reversible**: withdrawing it undoes its effect, and changing it re-applies cleanly.	RUL-withdrawal_undoes	
+24.1	The reversibility comes from the original-values ledger (Section 24.2), not from a store of its own: every plan decides about a pinned photo from the values the device left, so a manual position is one decision among the rest, and its withdrawal is planned like any other change.	BLD-decided_from_own_values	
+24.1	1. **Apply and change.** A manual position (locked or fallback) is written with its marker (Section 28.2); a changed value is written over it.	BLD-rerun_recognition	
+24.1	A manual override is only ever *selected* for a photo with no native GPS:	defer:geotag-25.3	preserve-native first is the placement order's
+24.1	`classify_gps` returns `preserve_native` for a photo carrying native GPS **before** it ever consults the manual coordinates (Section 23 resolution order;	defer:geotag-25.3	
+24.1	Section 25.3 — preserve-native wins).	defer:geotag-25.3	
+24.1	2. **Withdraw → placed again from its own values.** With the decision removed, the next plan places the photo through the ordinary order from its own values: from the tracks where they place it, or nowhere — and then geotag's position and its marker are cleared, the hemisphere reference fields with them (Section 28.1;	RUL-withdrawal_undoes BLD-decided_from_own_values	
+24.1	Section 28.2 item 2).	BLD-decided_from_own_values	
+24.1	Withdrawal therefore *undoes*; it does not merely stop re-asserting.	RUL-withdrawal_undoes	
+24.1	("Tag a photo that had no GPS, then withdraw" leaves it with no GPS, or with the position the tracks give it — never with the tagged value.)	RUL-withdrawal_undoes	
+24.1	3. **Traceable.** On each manual position write, and on each write that clears geotag's position, the plan records the position the photo held when the plan was made, and the transformation log carries it (shared contract `photos-shared-contract.md` Section 13.3 item 4).	RUL-log_records_gps_reverts	
+24.1	4. **A photo corrected elsewhere.** A photo geotag corrected in another workspace carries geotag's mark and has no pinned values here (Section 24.2).	BLD-marked_file_rerun	
+24.1	Its earlier position is geotag's, ignored like any position geotag wrote (Section 28.2 item 2), so withdrawing a pin on it places it again or clears it.	BLD-marked_file_rerun	
+24.1	**Manual and automated positions are both re-derived.** Every plan derives each photo's position from current inputs: a manual one from its decision, an automated one (GPX interpolation/extrapolation) recomputed, a native one preserved.	BLD-decided_from_own_values	
+24.1	Nothing is rolled back to a stored value and there is no revert operation; a position geotag wrote that no decision places any more is cleared.	BLD-decided_from_own_values	
+24.1	**Time and filename are never reverted.** Resolved UTC and the destination-local filename position the file *within its destination*.	RUL-withdrawal_undoes	
+24.1	They are always **recomputed** to match current decisions, never rolled back to a pre-pipeline value — reverting them would un-position an already-organized file, which is meaningless.	RUL-withdrawal_undoes	
+24.1	Recomputation only rewrites the timestamp metadata and the filename **in place within `6-photos-by-dest`**; it never moves the file to a different destination or anywhere else in the tree — the file stays in the destination folder the user placed it in.	RUL-withdrawal_undoes	
+24.1	So:	dropped	a connective
+24.1	GPS manual overrides are reversible from stored pre-state; time and naming are recomputed in place within by-dest; automated GPS is overwritten by recomputation.	RUL-withdrawal_undoes	
+24.1	The plan therefore distinguishes two origins of a GPS write — *apply manual* and *recompute automated* — beside the write that clears geotag's position, and the transformation log (shared contract Section 13.3) records which applied to each file, with the position a manual write replaced or a clear removed.	RUL-log_records_gps_reverts	
+24.2	### 24.2 Every photo's own values, kept before geotag first writes to it (original-values ledger)	dropped	a heading; the corpus's documents carry their own
+24.2	Before geotag's first write to a photo in a workspace, execution pins the photo's own values — the capture time and the tag it came from, the time's offset tag, its position, and its `GPSProcessingMethod` — exactly as prep's handoff recorded them, keyed by content fingerprint, once and never overwritten.	BLD-original_values_pinned	
+24.2	A photo that already carries geotag's mark (Section 28.2) holds no original values any more and is not pinned.	BLD-original_values_pinned	
+24.2	Every later plan in the workspace decides about a pinned photo from those values — as the device left it — and compares the result with what the photo holds now, planning only the writes that differ.	BLD-original_values_pinned BLD-decided_from_own_values	
+24.2	A changed decision therefore reaches the photo however often geotag has written to it, a withdrawn one undoes its effect, and nothing is corrected twice: a changed clock offset corrects the photo's own camera time once, a GPS camera's photos give their camera's offset again on every run, and a position derived from the tracks is derived again from the photo's own time.	RUL-geotag_rerun_keeps_settled BLD-decided_from_own_values	
+24.2	Geotag's mark governs only a photo with no pinned values — one corrected in another workspace, or before the ledger existed.	BLD-marked_file_rerun	
+24.2	The ledger lives beside the resolved-UTC cache in geotag's region of the workspace database, which the archival package's database snapshot carries (shared contract Section 13).	RUL-database_regions_disjoint BLD-original_values_pinned	
