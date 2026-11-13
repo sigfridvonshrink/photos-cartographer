@@ -949,7 +949,7 @@ with exit status 1.
 :id: BLD-merge_move
 :status: ruled
 :realises: RUL-library_never_altered, RUL-merge_moves, RUL-unplaced_photo_stays, RUL-target_free_at_execute, RUL-collision_same_content
-:aliases: merge-execute-occupied-different-blocker-1, merge-execute-occupied-identical-treat-present-1, merge-execute-safe-alt-only-if-planned-1, merge-move-place-then-remove-no-loss-1
+:aliases: merge-execute-occupied-different-blocker-1, merge-execute-occupied-identical-treat-present-1, merge-execute-safe-alt-only-if-planned-1, merge-move-place-then-remove-no-loss-1, merge-no-time-gps-changes-1
 
 Each photo SHALL move into its place without overwriting it: on the library's own filesystem by a single rename that
 refuses an existing name; across filesystems by a copy to a temporary name beside its place, checked byte for byte against

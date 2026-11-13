@@ -850,6 +850,7 @@ Prep SHALL check for links across the whole tree it walks, the destination tree 
 :criticality: med
 :verify: required
 :refines: RUL-who_checks_for_links
+:aliases: merge-nongoal-no-follow-symlink-into-out-1
 
 Geotag and merge SHALL check the top level for links themselves, and consume only a handoff prep built with no link
 present.
@@ -1545,7 +1546,7 @@ The library SHALL accept merges from many workspaces.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: loop-dev-before-geotag-blocks-1
+:aliases: loop-dev-before-geotag-blocks-1, merge-nongoal-no-jpg-tif-breakout-1
 :uses: DEF-development, DEF-managed_folders
 
 Development SHALL happen in the library, after merge: a development subfolder anywhere in photos by destination — even
@@ -2095,7 +2096,7 @@ is taken giving way instead.
 :anti: yes
 :verify: required
 :uses: DEF-merge, DEF-library
-:aliases: merge-collision-detected-by-existence-check-1, merge-free-target-places-without-library-read-1
+:aliases: merge-collision-detected-by-existence-check-1, merge-free-target-places-without-library-read-1, merge-no-library-wide-index-1
 
 Merge SHALL touch the library only at the places its photos go, and read a library file only when one is already there —
 never scanning, indexing or de-duplicating the library.
@@ -2117,7 +2118,7 @@ Where an incoming photo's place in the library is taken, merge SHALL compare the
 :status: ruled
 :criticality: high
 :verify: required
-:aliases: merge-collision-same-content-1, merge-same-content-already-present-remove-source-1
+:aliases: merge-collision-same-content-1, merge-same-content-already-present-remove-source-1, merge-no-duplicate-of-library-file-1
 :refines: RUL-collision_by_content
 
 A taken place holding the same content SHALL mean the photo is already in the library: nothing is written there, and the
@@ -2156,7 +2157,7 @@ destination — neither placing it there nor under another name — and go on wi
 :status: ruled
 :criticality: low
 :verify: required
-:aliases: merge-fingerprint-cached-onfly-1
+:aliases: merge-fingerprint-cached-onfly-1, merge-cache-library-fingerprint-in-workspace-db-1
 :uses: DEF-library, DEF-fingerprint, DEF-workspace_database
 
 A library file's fingerprint SHALL be computed only when a collision needs it, and kept, so that a library file
@@ -2233,7 +2234,7 @@ Merge's plan, dry run and execution SHALL only read the library's mark, and stop
 :anti: yes
 :verify: required
 :refines: RUL-library_known_by_mark
-:aliases: merge-create-library-dest-subdir-1
+:aliases: merge-create-library-dest-subdir-1, merge-no-library-side-state-persist-1
 
 Beyond its mark and its lock, merge SHALL create in the library only the photos it places, the folders they go into,
 and, while a photo crosses filesystems, its temporary copy.
@@ -2304,7 +2305,7 @@ having changed nothing in the library.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: merge-move-leaves-bydest-empty-1, merge-move-atomic-source-last-1
+:aliases: merge-move-leaves-bydest-empty-1, merge-move-atomic-source-last-1, merge-move-placed-out-of-by-dest-1, merge-source-removed-only-after-verified-copy-1
 :uses: DEF-merge, DEF-library, DEF-managed_folders
 
 Merge SHALL move each photo it places, removing the workspace's copy only once the library's is verified in place — and
@@ -2317,7 +2318,7 @@ a photo already in the library likewise.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: merge-blocker-left-in-bydest-1
+:aliases: merge-blocker-left-in-bydest-1, merge-nongoal-no-by-dest-teardown-1, merge-blocker-left-in-by-dest-partial-1
 :refines: RUL-merge_moves
 
 A photo merge cannot place SHALL stay where it is, the run then partial.

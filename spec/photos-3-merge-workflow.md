@@ -343,9 +343,9 @@ Incoming file collides, library file has different content
      by-dest source removed; library file untouched
 
 Library file at a collision cannot be read/fingerprinted
-  -> that item is a blocker (no overwrite, no blind duplicate); LEFT in by-dest; rest continue per policy
+  -> that item is a blocker (no overwrite, no blind duplicate); LEFT in by-dest; the rest continue
 
-library_root invalid (missing, malformed, or inside the workspace)
+library_root invalid (missing, malformed, or inside the workspace or holding it)
   -> config sanity-validation fails (Section 4); hard blocker; nothing moved
 
 Workspace not finalized (no photos-26-complete-log.json)
@@ -391,13 +391,13 @@ Operator drops a NEW dump into a sealed workspace and runs any script
 
 1. rename or overwrite any existing library file (only incoming files are ever renamed);
 2. build or maintain a library-wide index, or perform library-wide deduplication;
-3. re-organize, re-deduplicate, or re-fingerprint by-dest content (prep's fingerprints are reused);
+3. re-organize, re-deduplicate, or re-fingerprint by-dest content (prep's fingerprints are reused — taken again only under an ImageMagick other than prep's, Section 2, or for a photo whose size or modification time no longer matches the plan, Section 10.3);
 4. correct, recompute, or rewrite time, GPS, or filenames (geotag owns those; merge preserves geotag's final names except for the anti-collision incoming rename);
-5. write the shared config `photos-00-config.json` (read-only, like geotag);
+5. write the shared config `photos-00-config.json` (read-only, like geotag — `init-library` recording `library_root` the one exception, Section 4);
 6. delete or mutate a **library** file, or remove an **un-merged** by-dest file (merge removes a by-dest source only after its verified copy is in the library — moving it, not deleting it; blockers and un-merged files are left in by-dest, Sections 8, 11). Merge does not tear down the workspace or clear leftovers — that is a separate operator decision;
 7. perform the jpg/tif development breakout (a later library-side processing phase, geotag Section 7.1);
 8. merge an un-finalized or stale workspace (Section 3);
-9. write into, overwrite, or invalidate another phase's artifacts (shared contract Section 13.0a). The prep and geotag logs (`photos-15-prep-log.json`, `photos-26-complete-log.json`), the geotag job/decision artifacts, and the prep/geotag DB snapshots are complete before merge runs; merge writes only its **own** 3X artifacts (`photos-31-merge-summary.json`, `photos-35-merge-log.json`, `photos-35-merge-ingest.db`), copying the geotag log forward rather than editing it. A workspace that is never merged retains the full geotag-time record, intact, exactly as if this phase were not specified (shared contract Sections 13, 13.0a, 13.3 item 6, 13.5 item 4);
+9. write into, overwrite, or invalidate another phase's artifacts (shared contract Section 13.0a). The prep and geotag logs (`photos-15-prep-log.json`, `photos-26-complete-log.json`), the geotag job/decision artifacts, and the prep/geotag DB snapshots are complete before merge runs; merge writes only its **own** records (`photos-30-merge-plan.json` and its journal, `photos-31-merge-summary.json`, `photos-35-merge-log.json`, `photos-35-merge-ingest.db`, `photos-35-archive-manifest.json` and `photos-35-archive.tar.gz`, and the seal `photos-00-sealed.json`), copying the geotag log forward rather than editing it. A workspace that is never merged retains the full geotag-time record, intact, exactly as if this phase were not specified (shared contract Sections 13, 13.0a, 13.3 item 6, 13.5 item 4);
 10. create or repair the workspace's managed `0`–`6` structure, or follow a symlink into or out of the managed tree. Folder creation is prep's init-only job; a missing managed folder is a hard-stop, not something merge rebuilds (precondition 0c), and a misplaced root entry or any symlink is blocked, never followed (precondition 0a; precondition 3; shared contract Section 5.3). (Creating a missing destination subdirectory *under `library_root`* to place a file is ordinary additive **library** placement, Section 6 — not a workspace-structure repair.)
 
 ---
@@ -428,9 +428,9 @@ The merge workflow is:
 8. MOVE files: copy to library (atomic / atomic-equivalent), verify, atomically
    rename into the re-verified-free target, then remove the by-dest source last.
    Already-in-library files: remove the by-dest source (no library write).
-   Blockers: leave in by-dest. Journal both sub-steps per file.
+   Blockers: leave in by-dest. Journal each file's confirmed completion.
 9. Update SQLite (the library-file fingerprint cache only, from planning); record each file's library destination in photos-31/photos-35, not the database.
-10. Write photos-31-merge-summary.json (on the terminal outcome — success/partial,
+10. Write photos-31-merge-summary.json (on the terminal outcome — success/partial/failed,
     or a snapshot-abort rejection for audit; not on a stale-plan rejection or a
     precondition failure). Then, only on overall success: write photos-35-merge-log.json
     (copied forward from photos-26-complete-log.json and extended — never editing it),

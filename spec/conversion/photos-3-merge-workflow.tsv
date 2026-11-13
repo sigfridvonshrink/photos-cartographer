@@ -302,3 +302,32 @@
 12	Acquisition order is: workspace lock, then — still under the workspace lock — `library_root` config-validation and the `.photos-library` marker identity check (Section 3 precondition 5), then the library lock.	RUL-library_confirmed_before_lock BLD-library_lock	
 12	The marker check necessarily precedes the library lock because the lock file is written into `library_root`: confirming the directory is a blessed library first ensures no `.photos-merge.lock` is ever dropped into a non-library directory.	RUL-library_confirmed_before_lock	
 12	A merge that fails to acquire either lock, or finds the marker absent, exits cleanly having mutated nothing.	RUL-library_confirmed_before_lock RUL-library_lock_fail_fast	
+13	## 13. Idempotency and staleness examples	dropped	a heading; the corpus's documents carry their own
+13	```text [sha1:421766df, 63 lines]	RUL-sealed_refuses RUL-sealed_new_dump_warned RUL-sealed_new_dump_left RUL-top_level_only_managed RUL-geotag_merge_check_top_level_links RUL-missing_folder_named RUL-only_prep_builds_structure RUL-library_mirrors_destinations RUL-merge_moves RUL-collision_same_content RUL-collision_different_content RUL-unsettled_collision_blocks RUL-config_validated_before_use RUL-library_place_checked RUL-merge_takes_finalized_current RUL-merge_refuses_changed_since_finalize RUL-merge_rechecks_gates RUL-merge_resumable RUL-seal_on_success_only RUL-merge_reseals RUL-unplaced_photo_stays	the cases, each a rule linked in the corpus
+14	## 14. Non-goals (merge must not do)	dropped	a heading; the corpus's documents carry their own
+14	`photos-3-merge` must not:	dropped	introduces the list
+14	1. rename or overwrite any existing library file (only incoming files are ever renamed);	RUL-library_never_altered RUL-collision_different_content	
+14	2. build or maintain a library-wide index, or perform library-wide deduplication;	RUL-library_not_scanned	
+14	3. re-organize, re-deduplicate, or re-fingerprint by-dest content (prep's fingerprints are reused — taken again only under an ImageMagick other than prep's, Section 2, or for a photo whose size or modification time no longer matches the plan, Section 10.3);	RUL-fingerprint_survives_mutation RUL-reuse_valid_work RUL-merge_rechecks_under_new_engine RUL-sort_photos_only	
+14	4. correct, recompute, or rewrite time, GPS, or filenames (geotag owns those; merge preserves geotag's final names except for the anti-collision incoming rename);	RUL-geotag_name_final RUL-library_mirrors_destinations	
+14	5. write the shared config `photos-00-config.json` (read-only, like geotag — `init-library` recording `library_root` the one exception, Section 4);	RUL-config_writers RUL-library_setup_writes_one_setting	
+14	6. delete or mutate a **library** file, or remove an **un-merged** by-dest file (merge removes a by-dest source only after its verified copy is in the library — moving it, not deleting it; blockers and un-merged files are left in by-dest, Sections 8, 11).	RUL-library_never_altered RUL-merge_moves RUL-unplaced_photo_stays	
+14	Merge does not tear down the workspace or clear leftovers — that is a separate operator decision;	RUL-unplaced_photo_stays	
+14	7. perform the jpg/tif development breakout (a later library-side processing phase, geotag Section 7.1);	RUL-development_after_merge	
+14	8. merge an un-finalized or stale workspace (Section 3);	RUL-merge_takes_finalized_current RUL-merge_rechecks_gates	
+14	9. write into, overwrite, or invalidate another phase's artifacts (shared contract Section 13.0a).	RUL-phase_writes_own_records RUL-carry_forward_by_copy	
+14	The prep and geotag logs (`photos-15-prep-log.json`, `photos-26-complete-log.json`), the geotag job/decision artifacts, and the prep/geotag DB snapshots are complete before merge runs; merge writes only its **own** records (`photos-30-merge-plan.json` and its journal, `photos-31-merge-summary.json`, `photos-35-merge-log.json`, `photos-35-merge-ingest.db`, `photos-35-archive-manifest.json` and `photos-35-archive.tar.gz`, and the seal `photos-00-sealed.json`), copying the geotag log forward rather than editing it.	RUL-phase_writes_own_records BLD-record_ownership	
+14	A workspace that is never merged retains the full geotag-time record, intact, exactly as if this phase were not specified (shared contract Sections 13, 13.0a, 13.3 item 6, 13.5 item 4);	RUL-record_whole_each_phase	
+14	10. create or repair the workspace's managed `0`–`6` structure, or follow a symlink into or out of the managed tree.	RUL-only_prep_builds_structure RUL-geotag_merge_check_top_level_links	
+14	Folder creation is prep's init-only job; a missing managed folder is a hard-stop, not something merge rebuilds (precondition 0c), and a misplaced root entry or any symlink is blocked, never followed (precondition 0a; precondition 3; shared contract Section 5.3).	RUL-only_prep_builds_structure RUL-missing_folder_named RUL-top_level_only_managed	
+14	(Creating a missing destination subdirectory *under `library_root`* to place a file is ordinary additive **library** placement, Section 6 — not a workspace-structure repair.)	RUL-library_creates_only_placements	
+15	## 15. Summary	dropped	a heading; the corpus's documents carry their own
+15	This section restates the rules established above as a single reference.	dropped	a restatement; each rule it names is an item, linked in the corpus
+15	On any apparent conflict, the numbered sections above govern over this summary.	dropped	a restatement; each rule it names is an item, linked in the corpus
+15	The merge workflow is:	dropped	introduces the restatement
+15	```text [sha1:581dceaa, 27 lines]	dropped	a restatement; each rule it names is an item, linked in the corpus
+15	The most important rules are:	dropped	introduces the restatement
+15	```text [sha1:c4bc337f, 10 lines]	dropped	a restatement; each rule it names is an item, linked in the corpus
+15	Merge is the terminal pipeline step for a workspace: it moves the geotagged, finalized photos into the permanent library, writes its own complete log, and — once by-dest is clear of photos — re-seals the archive and seals the workspace.	RUL-merge_is_terminal RUL-record_whole_each_phase RUL-merge_reseals	
+15	Any file that cannot be merged is left in by-dest as a blocker and keeps the run `partial` (no seal) until the operator resolves it and re-runs.	RUL-unplaced_photo_stays RUL-seal_on_success_only	
+15	The library and the archival package live on; the workspace does not invite reuse — more media means a fresh workspace.	RUL-merge_is_terminal RUL-library_takes_many_workspaces	
