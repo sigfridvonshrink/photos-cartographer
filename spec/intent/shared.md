@@ -1419,7 +1419,7 @@ each moved file's identity forward without reading it again.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: loop-geotag-rerunnable-1
+:aliases: loop-geotag-rerunnable-1, geotag-rerunnable-after-execute-1
 :uses: DEF-geotag, DEF-merge
 
 Geotag SHALL be re-runnable any number of times — after a successful execution too — for as long as the workspace has
@@ -2891,7 +2891,7 @@ runs need not compute it again, and — on a workspace's first run — the confi
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: prep-execute-no-rederive-1, merge-execute-no-rederive-1
+:aliases: prep-execute-no-rederive-1, merge-execute-no-rederive-1, geotag-execute-no-recalc-1
 :upholds: INV-every_change_from_the_record
 
 Execution SHALL carry out only the operations its plan records, re-deriving no decision.
