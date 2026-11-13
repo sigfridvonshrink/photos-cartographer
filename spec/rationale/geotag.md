@@ -110,7 +110,7 @@ place or the wrong hour, written into the originals; offered for acceptance, it 
 
 :::{rat} A clock is wrong by its own amount, day by day
 :id: RAT-offset_per_day_and_place
-:status: seed
+:status: ruled
 :justifies: RUL-offset_per_camera_destination_day
 
 A camera's clock drifts, and is set again — to local time, on a trip, often each morning. Its error is one amount for
@@ -121,7 +121,7 @@ the error stays put, so it is the unit decided.
 
 :::{rat} One place's clock evidence says nothing of another's
 :id: RAT-no_borrowed_offsets
-:status: seed
+:status: ruled
 :justifies: RUL-offset_from_own_evidence
 
 Folders nest by geography, which is why a timezone or a fallback position can pass down them; a clock's error does not
@@ -133,7 +133,7 @@ such.
 
 :::{rat} A container is a place to put defaults
 :id: RAT-container_holds_defaults
-:status: seed
+:status: ruled
 :justifies: RUL-container_never_waits
 
 A folder holding only other destinations has no photo to correct: it exists so a timezone or a fallback position can be

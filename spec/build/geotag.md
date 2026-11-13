@@ -77,7 +77,7 @@ effective only with `accept_proposal: true`.
 
 :::{bld} Geotag's destinations
 :id: BLD-geotag_destinations
-:status: seed
+:status: ruled
 :realises: DEF-destination, DEF-container_destination, RUL-container_never_waits
 
 A photo's destination SHALL be the `dirname` of its path; the container destinations are every ancestor of a
@@ -88,7 +88,7 @@ destinations are processed parents first.
 
 :::{bld} Offset buckets
 :id: BLD-offset_buckets
-:status: seed
+:status: ruled
 :realises: RUL-offset_per_camera_destination_day, RUL-offset_from_own_evidence
 
 Each destination's `camera_group_time_decisions` SHALL hold one cell per camera group present, keyed by its
@@ -101,7 +101,7 @@ destination's.
 
 :::{bld} Geotag's records are grouped by destination
 :id: BLD-geotag_records_by_destination
-:status: seed
+:status: ruled
 :realises: RUL-decision_fields_laid_out
 :aliases: geotag-artifacts-per-destination-1
 
