@@ -2139,7 +2139,7 @@ differentiating name.
 
 :::{rul} A collision that cannot be settled holds the photo back
 :id: RUL-unsettled_collision_blocks
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
