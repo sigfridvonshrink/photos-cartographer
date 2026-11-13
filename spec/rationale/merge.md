@@ -61,7 +61,7 @@ every run, which is what lets an interrupted merge find its own work.
 
 :::{rat} A partial merge is never a dead end
 :id: RAT-partial_merge_no_dead_end
-:status: seed
+:status: ruled
 :justifies: RUL-merge_replan_any_time
 
 A partial merge leaves the cause of its blockers for the user to fix — a library file that could not be read, a photo
@@ -72,7 +72,7 @@ plan that can no longer finish and no way to make one that can.
 
 :::{rat} The library is the evidence of a move
 :id: RAT-library_is_evidence_of_move
-:status: seed
+:status: ruled
 :justifies: RUL-replan_carries_placed, RUL-resume_rechecks_library
 
 The journal is written after a move, so a crash or a Ctrl-C can leave a photo in the library with no entry for it; and

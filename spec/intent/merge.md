@@ -69,7 +69,7 @@ change.
 
 :::{rul} A fresh plan is allowed at any time before the seal
 :id: RUL-merge_replan_any_time
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-merge_resumable
@@ -81,7 +81,7 @@ Merge SHALL allow a fresh plan at any time on a workspace not sealed, whatever a
 
 :::{rul} A fresh plan carries the photos earlier plans placed
 :id: RUL-replan_carries_placed
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -96,7 +96,7 @@ not the journal recorded the move — and otherwise blocking, naming why.
 
 :::{rul} A resumed merge checks the library, not the journal
 :id: RUL-resume_rechecks_library
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required

@@ -953,7 +953,7 @@ planned content, renamed into the place only if it is still free, and only then 
 
 :::{bld} Merge's journal, and how a re-run resumes
 :id: BLD-merge_journal_resume
-:status: seed
+:status: ruled
 :realises: RUL-merge_resumable, RUL-resume_rechecks_library
 
 The journal SHALL record each confirmed photo, a re-run taking a place already holding the planned content,
