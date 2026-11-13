@@ -43,8 +43,7 @@
           "stale_user_decision": false,
           "user_decision": {
             "accept_proposal": false,
-            "manual_offset_seconds": "",
-            "manual_real_utc": ""
+            "manual_offset_seconds": ""
           }
         }
       },

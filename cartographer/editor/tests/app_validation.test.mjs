@@ -30,12 +30,6 @@ test("validOffset is empty-or-number within ±86400", () => {
   for (const bad of [86401, -86401, "x", true, NaN]) assert.equal(app.validOffset(bad), false);
 });
 
-test("validUtc requires ISO-8601 with T and seconds, no millis", () => {
-  for (const ok of ["", "2024-07-03T14:12:21Z", "2024-07-03T14:12:21+02:00"]) assert.equal(app.validUtc(ok), true);
-  for (const bad of ["2024-07-03 14:12:21", "2024-07-03T14:12:21.000Z", "2024-07-03T14:12", "nope"])
-    assert.equal(app.validUtc(bad), false);
-});
-
 test("lat/lon ranges and bothOrNeither", () => {
   assert.equal(app.validLat(90), true); assert.equal(app.validLat(-90), true); assert.equal(app.validLat(91), false);
   assert.equal(app.validLon(180), true); assert.equal(app.validLon(-181), false);

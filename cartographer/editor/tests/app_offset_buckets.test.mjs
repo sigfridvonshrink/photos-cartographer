@@ -64,8 +64,8 @@ test("offsetGroups: a day with its own decision is NOT pooled with equal-proposa
 
 test("offsetGroups: equal-proposal days that share an identical decision stay clustered", () => {
   const cells = {                                  // both summer days accepted → one cluster, still collapsed
-    "CAM@2024-07-03": cell("CAM", "2024-07-03", -7200, { accept_proposal: true, manual_offset_seconds: "", manual_real_utc: "" }),
-    "CAM@2024-07-04": cell("CAM", "2024-07-04", -7200, { accept_proposal: true, manual_offset_seconds: "", manual_real_utc: "" }),
+    "CAM@2024-07-03": cell("CAM", "2024-07-03", -7200, { accept_proposal: true, manual_offset_seconds: "" }),
+    "CAM@2024-07-04": cell("CAM", "2024-07-04", -7200, { accept_proposal: true, manual_offset_seconds: "" }),
   };
   const g = app.offsetGroups({ camera_group_time_decisions: cells });
   assert.equal(g[0].proposals.length, 1);

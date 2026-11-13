@@ -38,7 +38,6 @@ test("wouldResolve: each of the three offset modes is independently sufficient",
 
   mk({ manual_offset_seconds: -3600 });                                         assert.equal(app.wouldResolve(ref), true);
   mk({ accept_proposal: true }, { proposed_offset_seconds: -3600 });            assert.equal(app.wouldResolve(ref), true);
-  mk({ manual_real_utc: "2026-03-22T13:00:00Z" }, { proposal_source: "gpx_self_anchor" }); assert.equal(app.wouldResolve(ref), true);
   mk({ accept_proposal: true }, {});                                            assert.equal(app.wouldResolve(ref), false);  // nothing to accept
   mk({ manual_offset_seconds: 999999 });                                        assert.equal(app.wouldResolve(ref), false);  // out of range
   mk({});                                                                       assert.equal(app.wouldResolve(ref), false);

@@ -120,13 +120,11 @@ then the proposal evidence last; non-coord cells just show the proposal.
     time + offset), while the automatic stays the proposal. Only the active view is editable; the rest are
     read-only but **still show the effective offset** (nothing hidden). Manual offset and anchor-UTC are
     both stored canonically as `manual_offset_seconds` (which one is active is per-cell UI state); the
-    picker writes the derived offset, so the editor never persists `manual_real_utc` (a hand-edited one is
-    still honored). Below the choices a common **Impact** line shows what the effective offset does to the
+    picker writes the derived offset. Below the choices a common **Impact** line shows what the effective offset does to the
     anchor photo: `camera local → corrected local (tz, UTC …)` — same compact format as the proposal
     groups (one date copy when invariant; UTC in parens after), with a no-anchor fallback (offset +
     formula). A small "clear"
-    returns the cell to unset (geotag auto-resolves / inherits). The picker writes the derived
-    offset, so `manual_real_utc` isn't persisted by the editor (a hand-edited one is still honored). The
+    returns the cell to unset (geotag auto-resolves / inherits). The
     *accept* row notes the proposal's source (`from timezone <tz>` for a `timezone_naive` proposal); when
     there's no proposal at all the editor says to set the destination timezone and Re-run to derive one
     from the local time. **Per-date buckets:** a destination spanning >1 naive day keys its offset cells
