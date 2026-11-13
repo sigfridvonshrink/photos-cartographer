@@ -35,6 +35,8 @@ Rename/metadata execution last.
 
 GPS planning must not begin until every file has valid resolved UTC.
 
+A photo in by-dest carrying no recorded time can never be resolved to UTC, and no decision of geotag's can supply one: it stops geotag before any planning, named as belonging in `2-missing-metadata` (where prep sends such a photo).
+
 Execution must not recalculate decisions. Execution only validates and applies decisions already recorded in the executable plan.
 
 If an executable plan says GPS metadata, time metadata, markers, or filenames need to change, execution applies those planned changes after dependency validation.

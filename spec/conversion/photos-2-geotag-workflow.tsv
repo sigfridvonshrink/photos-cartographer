@@ -1,0 +1,34 @@
+# section	sentence (verbatim)	to	note -- the ledger of the geotag spec's conversion (tools/spec-ledger)
+1	## 1. Purpose	dropped	a heading; the corpus's documents carry their own
+1	This document defines the high-level workflow for the geotag phase that follows `photos-1-prep`.	dropped	frames the document; DEF-geotag says what geotag is
+1	The geotag phase exists to:	DEF-geotag	introduces the list
+1	1. validate that prep has produced a current by-dest working set;	RUL-prep_records_sort RUL-handoff_verified_by_content	
+1	2. operate only on files under `6-photos-by-dest`;	defer:geotag-7	geotag's scope is §7
+1	3. require `5-photos-by-date` to contain no photos before geotag can proceed;	RUL-geotag_gates	
+1	4. require that destination development (the jpg/tif breakout) has not yet started;	defer:geotag-7	the development gate is §7.1
+1	5. ensure every file can be resolved to real UTC;	RUL-time_before_gps RUL-untimed_photo_stops_geotag	
+1	6. persist resolved UTC for every file in SQLite;	defer:geotag-22	resolved UTC is §22
+1	7. plan GPS decisions only after time is solved;	RUL-time_before_gps	
+1	8. plan timestamp-based no-clobber renames using destination-local civil time;	RUL-geotag_name_final	the renames are §27
+1	9. produce numbered JSON decision artifacts at formal decision stages;	defer:geotag-8	the decision records are §8
+1	10. execute only a complete, dependency-validated executable plan.	RUL-execution_only_the_plan INV-no_stale_use	
+1	This is a workflow specification, not a script implementation specification.	dropped	a framing note
+1	Cross-phase facts shared with prep — the workspace lock, the pre-mutation snapshot (`zfs`) mechanism, the shared configuration object, the workspace control directory, the camera-group identity key, the filename timestamp format, the GPX root, and the end-to-end operator loop — are defined in `photos-shared-contract.md` and are authoritative there.	dropped	points to the shared contract, whose items the corpus links
+1	This document references that contract rather than restating it.	dropped	points to the shared contract, whose items the corpus links
+2	## 2. Core workflow rule	dropped	a heading; the corpus's documents carry their own
+2	The workflow is ordered as:	RUL-time_before_gps	introduces the order
+2	```text [sha1:f99e6ae5, 3 lines]	RUL-time_before_gps RUL-planning_changes_no_media RUL-execution_only_the_plan	
+2	GPS planning must not begin until every file has valid resolved UTC.	RUL-time_before_gps BLD-geotag_stage_order	
+2	A photo in by-dest carrying no recorded time can never be resolved to UTC, and no decision of geotag's can supply one: it stops geotag before any planning, named as belonging in `2-missing-metadata` (where prep sends such a photo).	RUL-untimed_photo_stops_geotag BLD-geotag_untimed_gate	
+2	Execution must not recalculate decisions.	RUL-execution_only_the_plan	
+2	Execution only validates and applies decisions already recorded in the executable plan.	RUL-execution_only_the_plan	
+2	If an executable plan says GPS metadata, time metadata, markers, or filenames need to change, execution applies those planned changes after dependency validation.	RUL-execution_only_the_plan	
+2.1	### 2.1 The workflow is a convergent rerun loop, not a single pass	dropped	a heading; the corpus's documents carry their own
+2.1	Geotag is not a one-shot batch.	RUL-geotag_rerunnable	
+2.1	The normal operation mode is:	RUL-geotag_rerunnable	introduces the loop
+2.1	```text [sha1:411ca0f5, 7 lines]	RUL-geotag_rerunnable RUL-decision_kept RUL-rerun_does_what_changed	
+2.1	Each rerun is idempotent for unchanged inputs (Section 30) and preserves prior user decisions whose logical target is unchanged (Sections 9, 21, 24).	RUL-no_op_run RUL-decision_kept	
+2.1	The ordered list in Section 34 describes one pass through this loop, not a workflow that runs exactly once.	dropped	points to the summary, §34
+2.1	Geotag is also re-runnable *after* a successful execute — it is not a terminal, run-once phase.	RUL-geotag_rerunnable	
+2.1	Media added later is absorbed by re-running prep (to recognize it) and then geotag, bounded only by geotag's gating preconditions and the rule that development must not have started — and by the fact that this freedom lasts only until the workspace is **merged and sealed** (shared contract `photos-shared-contract.md` Sections 13.7, 10.1): a sealed workspace accepts no further prep or geotag, and more media then means a fresh workspace.	RUL-geotag_rerunnable RUL-geotag_gates RUL-sealed_refuses RUL-merge_is_terminal	
+2.1	The authoritative cross-phase account of this — including why already-processed files are no-ops on rerun and when a rerun legitimately re-enters the decision loop — is in the shared contract (`photos-shared-contract.md` Section 10).	RUL-geotag_rerun_keeps_settled RUL-rerun_does_what_changed	

@@ -242,6 +242,18 @@ def _half_position(lat, lon):
     return (lat in (None, "")) != (lon in (None, ""))
 
 
+def _has_recorded_time(rec):
+    """Whether a handoff record's photo carries a recorded time, as prep extracted it."""
+    md = rec.get("metadata_status") or {}
+    if md.get("has_timestamp") is not None:
+        return bool(md["has_timestamp"])
+    try:
+        parsed = json.loads(md["parsed_json"]) if md.get("parsed_json") else {}
+    except Exception:
+        parsed = {}
+    return bool(parsed.get("has_timestamp"))
+
+
 class GeotagWorkflow:
     """Stages 1–11: validate the workspace, build the model, produce photos-21/22/23 decision artifacts,
     compute resolved UTC, assemble photos-24-executable-plan.json (when decisions are complete),
@@ -397,6 +409,19 @@ class GeotagWorkflow:
         # cartographer: a key derived the old way would be matched against a config written for the new.
         self._check_derivation_versions(handoff, blockers)
 
+        # 6. Every photo must carry a recorded time: one with none can never be resolved to its true
+        # time, and no decision of geotag's could supply one (prep sends such a photo to missing
+        # metadata; one sorted into a destination by hand stops geotag here, before any planning).
+        untimed = sorted(rec.get("relative_path") or "" for rec in (handoff.get("files") or [])
+                         if rec.get("folder_class") == by_dest and rec.get("media_class") in ("image", "raw")
+                         and not _has_recorded_time(rec))
+        if untimed:
+            shown = ", ".join(untimed[:5]) + (f" and {len(untimed) - 5} more" if len(untimed) > 5 else "")
+            blockers.append(f"{len(untimed)} photo(s) in {by_dest}/ have no recorded time, so their true "
+                            f"time cannot be resolved: {shown}. They belong in "
+                            f"{folder_name('missing_metadata')}/ — move them there (or give them a time "
+                            "and re-run prep), then re-run geotag.")
+
         info["by_dest_photos"] = sum(1 for _, mc in self._scan_media(by_dest) if mc in ("image", "raw"))
         return blockers, warnings, info
 
@@ -504,8 +529,7 @@ class GeotagWorkflow:
                 "raw_times": {k: parsed.get(k) for k in
                               ("DateTimeOriginal", "CreateDate", "ModifyDate",
                                "OffsetTimeOriginal", "OffsetTime", "TimeZone") if parsed.get(k) is not None},
-                "has_timestamp": bool(md.get("has_timestamp") if md.get("has_timestamp") is not None
-                                      else parsed.get("has_timestamp")),
+                "has_timestamp": _has_recorded_time(rec),
                 "native_gps": ({"lat": parsed.get("GPSLatitude"), "lon": parsed.get("GPSLongitude"),
                                 "processing_method": parsed.get("GPSProcessingMethod")}
                                if (md.get("has_native_gps") or parsed.get("has_native_gps")) else None),

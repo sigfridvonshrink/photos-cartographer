@@ -10,6 +10,7 @@ the links between items are typed and checked at every build.
 
 intent/shared
 intent/prep
+intent/geotag
 intent/merge
 ```
 
@@ -20,6 +21,7 @@ intent/merge
 rationale/philosophy
 rationale/shared
 rationale/prep
+rationale/geotag
 rationale/merge
 ```
 
@@ -29,6 +31,7 @@ rationale/merge
 
 build/shared
 build/prep
+build/geotag
 build/merge
 ```
 
