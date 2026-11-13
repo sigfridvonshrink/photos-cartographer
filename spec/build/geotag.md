@@ -337,7 +337,7 @@ accepted proposal that does not exist is `stale_user_decision`. Its `requires_us
 
 :::{bld} How renames are planned
 :id: BLD-rename_planning
-:status: seed
+:status: ruled
 :realises: RUL-suffix_no_clobber, RUL-uncorrected_keeps_its_name, RUL-geotag_name_final
 :aliases: geotag-plan-renames-1, geotag-no-clobber-planning-1, geotag-case-insensitive-conflict-1, geotag-execute-no-new-rename-1
 
