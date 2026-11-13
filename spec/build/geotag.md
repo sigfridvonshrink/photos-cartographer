@@ -242,3 +242,24 @@ the inputs, sorted by name: `camera_time_policy_fingerprint`, `camera_group_key_
 of photos-22, `prep_cache_fingerprint`, `metadata_field_set_version` and `gpx_fingerprint`, the last whether or not a
 track decided anything.
 :::
+
+
+## 22a. The GPS-drift check
+
+:::{bld} The drift check
+:id: BLD-drift_validation
+:status: seed
+:realises: RUL-unanchored_offset_confirmed, RUL-confirmation_holds_for_its_offset
+:aliases: geotag-drift-trigger-1, geotag-drift-gate-position-1, geotag-drift-confirmation-preserved-1, geotag-drift-corrected-validated-1, geotag-drift-not-mutate-21-1, geotag-drift-recompute-utc-1, geotag-drift-withdrawal-rejects-plan-1
+
+Once photos-21 is complete, `geotag plan` SHALL write `photos-22-gps-drift-validation.json` with a cell for each
+offset cell whose effective source is `timezone_accepted` or `manual`, none of whose photos not yet corrected anchors on
+the tracks, and whose photos' resolved times lie within `gpx_anchor_max_clock_error_seconds` of track points: its
+`proposal` holding `current_offset_seconds`, its source, the photos and that track segment; its `user_decision`
+`confirmed`, `corrected_offset_seconds` and `confirmed_offset_seconds`. A cell confirmed with `confirmed_offset_seconds`
+equal to its current offset takes effect as `gps_drift_validated` — the current offset when no correction is given,
+else the correction; confirmed against another offset it is `stale_user_decision` and takes no effect; confirmed
+naming none, a blocker. Until every cell has taken effect, photos-23 and photos-24 are not written; then resolved UTC
+is computed again with the validated offsets, photos-21 left as it is. photos-22's `depends_on` holds photos-21's
+SHA-256, `gpx_fingerprint`, `camera_time_policy_fingerprint` and `camera_group_key_version`.
+:::

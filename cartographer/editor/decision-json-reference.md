@@ -327,7 +327,7 @@ photos-21 offset cell it refines — bare `<camera_group_key>` or `<camera_group
     "frames": [ { "source_file": "6-photos-by-dest/Belgium/Brussels/a.arw", "camera_naive": "2024:07:03 14:00:00" }, ... ],
     "track_segment": [ { "lat": 50.0, "lon": 4.0, "time_utc": "2024-07-03T12:00:00Z" }, ... ]
   },
-  "user_decision": { "confirmed": false, "corrected_offset_seconds": "" },
+  "user_decision": { "confirmed": false, "corrected_offset_seconds": "", "confirmed_offset_seconds": "" },
   "effective_drift_offset": "",
   "requires_user_input": true,
   "stale_user_decision": false
@@ -348,6 +348,11 @@ photos-21 offset cell it refines — bare `<camera_group_key>` or `<camera_group
   empty `corrected_offset_seconds`) — inaction never counts.
 - `user_decision.corrected_offset_seconds` — empty for a zero scrub, or a whole number of seconds to
   correct the whole bucket's offset.
+- `user_decision.confirmed_offset_seconds` — the offset the confirmation was made against: the
+  `proposal.current_offset_seconds` shown when confirming (the editor writes it). A confirmation holds only
+  while it equals the current offset; the offset changed in photos-21 since, the cell is
+  `stale_user_decision: true` and asks again until confirmed anew. `confirmed: true` with it empty is a
+  located blocker naming the current offset.
 - `effective_drift_offset` — `""` until confirmed, then `{ "offset_seconds": N, "source":
   "gps_drift_validated" }`. Geotag recomputes resolved UTC consuming this; the value does **not**
   mutate the photos-21 decision it refines.

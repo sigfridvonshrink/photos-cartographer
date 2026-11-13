@@ -1148,7 +1148,7 @@ Rows must be ordered by workspace path and all values normalized to text before 
 
 A `(camera group, destination[, naive date])` offset bucket — the same buckets as Section 10.2 — becomes a 22 **review item** if and only if **all** hold:
 
-1. its **effective offset source** is `timezone_accepted`, `manual`, or `manual_real_utc` (i.e. *not* `gpx_anchor_auto` / `gpx_anchor_accepted` — a GPX self-anchor offset is already track-derived);
+1. its **effective offset source** is `timezone_accepted` or `manual` (i.e. *not* `gpx_anchor_auto` / `gpx_anchor_accepted` / `gpx_anchor_chosen` — an offset the camera's own GPS supports is already track-derived);
 2. the bucket has **no native-GPS anchor** — no frame in it has GPS that matches the track (Section 19.1); with such an anchor the bucket is independently placeable and needs no validation;
 3. **GPX coverage exists** over the bucket's resolved-UTC interval widened by the plausible-clock-error window (`gpx_anchor_max_clock_error_seconds`, reused from the self-anchor search). With no covering track there is nothing to validate against — GPS planning will treat those files as fallback/lost (Section 25), not as drift.
 
@@ -1159,14 +1159,15 @@ Buckets that fail any condition produce no 22 item. An artifact with no items is
 Each review item carries a `proposal` (the `current_offset_seconds`, its `proposal_source`, and the covering **GPX track segment** — the points `lat`/`lon`/`time_utc` within the widened window, the evidence a reviewer scrubs the representative photo along) and a `user_decision`:
 
 ```text
-"user_decision": { "confirmed": false, "corrected_offset_seconds": "" }
+"user_decision": { "confirmed": false, "corrected_offset_seconds": "", "confirmed_offset_seconds": "" }
 ```
 
 - `confirmed: true` with an **empty** `corrected_offset_seconds` = a **zero scrub** — "the offset was right, leave it."
-- `confirmed: true` with a **number** = a **corrected** offset for the whole bucket (within ±86400 s).
+- `confirmed: true` with a **number** = a **corrected** offset for the whole bucket (a whole number of seconds).
+- `confirmed_offset_seconds` names the offset the confirmation was made against — the `current_offset_seconds` shown — and a confirmation holds only while it is the bucket's offset.
 - `confirmed: false` ⇒ `requires_user_input: true`. **A zero scrub is never implied by inaction** — an untouched bucket blocks the gate; the operator must actively affirm even "no change." This is the load-bearing safety rule.
 
-`corrected_offset_seconds` is sanity-validated like every authored value (Section 9.2): non-numeric or out-of-range is a blocker that leaves the artifact unchanged. Authored confirmations are **preserved** across reruns; a confirmation whose bucket no longer triggers is stale-flagged.
+`corrected_offset_seconds` is sanity-validated like every authored value (Section 9.2): anything but a whole number of seconds is a blocker that leaves the artifact unchanged. Authored confirmations are **preserved** across reruns. One made against another offset than the bucket's current one — the offset changed in `photos-21` since — is stale-flagged, applies to nothing, and the bucket asks again until confirmed anew; one naming no offset is a blocker. One whose bucket no longer triggers is dropped: nothing is left to check.
 
 ### 22a.3 Output consumed by resolved UTC
 

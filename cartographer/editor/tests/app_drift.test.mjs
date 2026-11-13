@@ -47,14 +47,27 @@ test("scrubSeedIndex lands on the track point implied by the current offset", ()
   assert.equal(app.scrubSeedIndex(track, frame, null), 0);
 });
 
-test("wouldResolve(drift): confirmed (zero scrub or valid correction) resolves; bad/unconfirmed does not", () => {
+test("wouldResolve(drift): confirmed for this offset (zero scrub or valid correction) resolves; else not", () => {
   const dest = "6-photos-by-dest/D", key = "CAM", ref = { file: "drift", dest, kind: "drift", key };
-  const mk = (ud) => setWork({ drift: { destinations: { [dest]: { drift_decisions: { [key]: { user_decision: ud, proposal: {} } } } } } });
+  const mk = (ud) => setWork({ drift: { destinations: { [dest]: { drift_decisions: { [key]: {
+    user_decision: { confirmed_offset_seconds: -7200, ...ud }, proposal: { current_offset_seconds: -7200 } } } } } } });
 
   mk({ confirmed: true, corrected_offset_seconds: "" });        assert.equal(app.wouldResolve(ref), true);   // zero scrub
   mk({ confirmed: true, corrected_offset_seconds: -3600 });     assert.equal(app.wouldResolve(ref), true);   // correction
   mk({ confirmed: false, corrected_offset_seconds: "" });       assert.equal(app.wouldResolve(ref), false);  // inaction blocks
   mk({ confirmed: true, corrected_offset_seconds: 12.5 });      assert.equal(app.wouldResolve(ref), false);  // not whole seconds
+  mk({ confirmed: true, corrected_offset_seconds: "", confirmed_offset_seconds: 0 });
+  assert.equal(app.wouldResolve(ref), false);                                                                 // another offset's
+  mk({ confirmed: true, corrected_offset_seconds: "", confirmed_offset_seconds: "" });
+  assert.equal(app.wouldResolve(ref), false);                                                                 // names none
+});
+
+test("driftConfirmFields: confirming names the offset shown; unconfirming clears it", () => {
+  const c = { user_decision: {}, proposal: { current_offset_seconds: -5400 } };
+  assert.deepEqual(app.driftConfirmFields(c, true), { confirmed: true, confirmed_offset_seconds: -5400 });
+  assert.deepEqual(app.driftConfirmFields(c, false), { confirmed: false, confirmed_offset_seconds: "" });
+  assert.equal(app.driftConfirmHolds({ ...c, user_decision: { confirmed: true, confirmed_offset_seconds: -5400 } }), true);
+  assert.equal(app.driftConfirmHolds({ ...c, user_decision: { confirmed: true, confirmed_offset_seconds: 0 } }), false);
 });
 
 test("refInvalid(drift): only a correction that is not whole seconds is invalid", () => {

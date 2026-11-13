@@ -328,7 +328,8 @@ def scenario_drift_validation():
     assert not blk, blk
 
     def fill_drift(a):                                                   # confirm the bucket (zero scrub)
-        a["destinations"][DR]["drift_decisions"][CAM_DR]["user_decision"]["confirmed"] = True
+        cell = a["destinations"][DR]["drift_decisions"][CAM_DR]
+        cell["user_decision"].update(confirmed=True, confirmed_offset_seconds=cell["proposal"]["current_offset_seconds"])
         return a
 
     drift_comp, blk = wf.build_drift_validation(files, time_comp, rows0, gpx, fill_drift(_copy(drift_req)))

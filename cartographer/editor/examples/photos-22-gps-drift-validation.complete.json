@@ -93,6 +93,7 @@
           "stale_user_decision": false,
           "user_decision": {
             "confirmed": true,
+            "confirmed_offset_seconds": -7200,
             "corrected_offset_seconds": ""
           }
         }

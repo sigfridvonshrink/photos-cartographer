@@ -211,8 +211,8 @@ function wouldResolve(ref) {
   if (ref.kind === "offset")
     return (u.manual_offset_seconds !== "" && u.manual_offset_seconds != null && validOffset(u.manual_offset_seconds))
       || (!!u.accept_proposal && "proposed_offset_seconds" in p);
-  if (ref.kind === "drift")                       // confirmed (zero-scrub or a valid correction) resolves
-    return !!u.confirmed && validOffset(u.corrected_offset_seconds);
+  if (ref.kind === "drift")                       // confirmed for this offset (zero-scrub or a valid correction)
+    return driftConfirmHolds(c) && validOffset(u.corrected_offset_seconds);
   if (ref.kind === "fallback")
     return (u.fallback_lat !== "" && u.fallback_lat != null && u.fallback_lon !== "" && u.fallback_lon != null)
       || (!!u.accept_proposal && !!p.proposed_fallback);
@@ -317,6 +317,7 @@ function previewEffective(ref) {
   }
   if (ref.kind === "drift") {
     if (!u.confirmed) return "— (needs confirmation)";
+    if (!driftConfirmHolds(c)) return "— (confirmed for another offset — confirm again)";
     if (u.corrected_offset_seconds === "" || u.corrected_offset_seconds == null)
       return `${fmtOffset(p.current_offset_seconds)} (confirmed — offset was right)`;
     return validOffset(u.corrected_offset_seconds)
@@ -736,11 +737,25 @@ function controls(ref) {
 // GPS-drift bucket: confirm the current offset as-is (zero scrub — must be explicit) or show the
 // scrubbed correction. The scrub itself happens on the track map below (it sets `confirmed` +
 // `corrected_offset_seconds`); this pinned control is the affirmation + readout + a clear-back.
+// A drift confirmation names the offset it was made against and holds only while that is the bucket's
+// offset (§22a.2): confirming writes the offset shown; one made against another offset is stale.
+function driftConfirmHolds(c) {
+  const u = c.user_decision || {}, p = c.proposal || {};
+  return !!u.confirmed && u.confirmed_offset_seconds !== "" && u.confirmed_offset_seconds != null
+    && Number(u.confirmed_offset_seconds) === p.current_offset_seconds;
+}
+function driftConfirmFields(c, on) {
+  return on ? { confirmed: true, confirmed_offset_seconds: (c.proposal || {}).current_offset_seconds }
+    : { confirmed: false, confirmed_offset_seconds: "" };
+}
 function driftControls(ref) {
   const c = workCell(ref), u = c.user_decision || {}, p = c.proposal || {}, wrap = el("div", { class: "ctl-block" });
   wrap.append(el("div", { class: "hint" },
     `Current offset ${fmtOffset(p.current_offset_seconds)} (${p.proposal_source || "?"}). Scroll the photo along the track below to correct it, or confirm it as-is.`));
-  wrap.append(checkbox("confirm this bucket (offset is right as shown)", u.confirmed, (v) => edit(ref, "confirmed", v)));
+  const holds = driftConfirmHolds(c);
+  if (u.confirmed && !holds) wrap.append(el("div", { class: "hint warn" },
+    `Confirmed for ${fmtOffset(u.confirmed_offset_seconds)}; the offset is now ${fmtOffset(p.current_offset_seconds)} — check it on the track and confirm again.`));
+  wrap.append(checkbox("confirm this bucket (offset is right as shown)", holds, (v) => editMany(ref, driftConfirmFields(c, v))));
   const corr = u.corrected_offset_seconds;
   if (corr !== "" && corr != null) {
     const delta = isNum(corr) ? corr - (p.current_offset_seconds || 0) : null;
@@ -748,7 +763,7 @@ function driftControls(ref) {
       el("span", {}, `scrubbed correction: ${fmtOffset(corr)}${delta != null ? ` (Δ ${fmtOffset(delta)})` : ""}`),
       el("button", { class: "mini", onclick: () => editMany(ref, { corrected_offset_seconds: "" }) }, "clear — offset was right")));
   }
-  if (!validOffset(corr)) wrap.append(el("div", { class: "err" }, "scrubbed point is more than 24h off the camera clock — pick a nearer point"));
+  if (!validOffset(corr)) wrap.append(el("div", { class: "err" }, "the correction must be a whole number of seconds"));
   return wrap;
 }
 
@@ -896,7 +911,8 @@ function driftMap(ref, frame, fi) {
     teardownMap();
     const p = workCell(ref).proposal || {}, track = p.track_segment || [];
     _map = mapPicker({ track, scrubIndex: scrubSeedIndex(track, frame, p.current_offset_seconds),
-      onScrub: (i, pt) => { const off = scrubOffset(pt, frame); if (off != null) editMany(ref, { confirmed: true, corrected_offset_seconds: off }); } });
+      onScrub: (i, pt) => { const off = scrubOffset(pt, frame);
+        if (off != null) editMany(ref, { ...driftConfirmFields(workCell(ref), true), corrected_offset_seconds: off }); } });
     _mapKey = key;
   }
   setTimeout(() => _map && _map.refresh(), 0);
@@ -1148,6 +1164,6 @@ export {
   fmtOffset, camNaiveMs, dtLocalToMs, msToDtLocal, utcStrToMs, fmtLocal, fmtDT, offsetImpact,
   cellAt, cellStatus, wouldResolve, previewTz, previewFallback, refInvalid, isDirty, state,
   offsetGroups, dateRange, fmtDate, peerKeys, parseLatLon, coordText, contiguousRange,
-  groupChoice, chosenOffset, proposalNotes,
+  groupChoice, chosenOffset, proposalNotes, driftConfirmHolds, driftConfirmFields,
   scrubOffset, scrubSeedIndex, mapKeyFor,
 };

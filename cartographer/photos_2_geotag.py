@@ -841,7 +841,8 @@ class GeotagWorkflow:
         """Build/regenerate photos-22 from the COMPLETE photos-21 + the resolved UTC under the
         current offsets (`rows0`). One review item per at-risk bucket (manual/tz-derived offset, no
         native-GPS anchor, and GPX coverage over its plausible time window). Authored confirmations
-        are preserved across reruns; a confirmation whose bucket no longer triggers is stale-flagged.
+        are preserved across reruns, each holding only for the offset it confirmed — a changed offset
+        makes it stale; one whose bucket no longer triggers is dropped, nothing being left to check.
         Returns (artifact, blockers); a bad authored value is a blocker (leave the artifact as-is)."""
         blockers = _decision_shape_blockers(prior, "drift")
         if blockers:
@@ -917,8 +918,23 @@ class GeotagWorkflow:
         prior_ud = prior_cell.get("user_decision") or {}
         confirmed = _decision_flag(prior_ud, "confirmed", f"{dest}: drift_decisions[{loc}].user_decision", blockers)
         corrected = prior_ud.get("corrected_offset_seconds", "")
-        effective = ""
-        if confirmed:
+        against = prior_ud.get("confirmed_offset_seconds", "")
+        effective, stale = "", False
+        # A confirmation names the offset it was made against (§22a.2), and holds only while that is the
+        # offset: changed in photos-21 since, it is stale — kept as written, applied to nothing, the bucket
+        # asking again until confirmed anew. One naming none confirms nothing: a zero scrub is never implied.
+        if confirmed and (against == "" or against is None):
+            blockers.append(f"{dest}: drift_decisions[{loc}].user_decision.confirmed_offset_seconds must be the "
+                            f"offset confirmed — the current one is {current}.")
+            confirmed_ok = False
+        elif confirmed and not _valid_offset(against):
+            blockers.append(f"{dest}: drift_decisions[{loc}].user_decision.confirmed_offset_seconds "
+                            "must be a whole number of seconds.")
+            confirmed_ok = False
+        else:
+            stale = bool(confirmed) and int(against) != current
+            confirmed_ok = bool(confirmed) and not stale
+        if confirmed_ok:
             if corrected == "" or corrected is None:
                 effective = {"offset_seconds": current, "source": "gps_drift_validated"}   # zero scrub
             elif _valid_offset(corrected):
@@ -943,10 +959,11 @@ class GeotagWorkflow:
                                   for p in track_segment],
             },
             "user_decision": {"confirmed": confirmed,
-                              "corrected_offset_seconds": corrected if corrected is not None else ""},
+                              "corrected_offset_seconds": corrected if corrected is not None else "",
+                              "confirmed_offset_seconds": against if against is not None else ""},
             "effective_drift_offset": effective,
             "requires_user_input": effective == "",
-            "stale_user_decision": False,
+            "stale_user_decision": stale,
         }
         if date is not None:
             cell["date"] = date
