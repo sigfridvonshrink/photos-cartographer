@@ -75,7 +75,7 @@ decision to act on when there was none.
 
 :::{rat} The camera's own GPS is evidence; the user decides how much
 :id: RAT-anchor_evidence_trusted_as_configured
-:status: seed
+:status: ruled
 :justifies: RUL-anchor_offset_auto_as_configured
 
 An offset measured from the camera's own positions against the tracks is evidence, not a guess: several frames agreeing
@@ -86,7 +86,7 @@ disagree mean something is off — a clock reset in the day, a wrong track — a
 
 :::{rat} A nested place is in its parent's timezone
 :id: RAT-nested_place_same_timezone
-:status: seed
+:status: ruled
 :justifies: RUL-timezone_auto_resolves
 
 Destinations nest geographically — a city in a country, a museum in a city — so one inside a destination of known
@@ -97,7 +97,7 @@ answer.
 
 :::{rat} An assumption is the user's to accept
 :id: RAT-assumptions_need_acceptance
-:status: seed
+:status: ruled
 :justifies: RUL-other_proposals_need_acceptance
 
 An offset derived from the timezone assumes the camera was set to local time that day; a fallback inherited from a

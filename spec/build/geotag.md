@@ -63,7 +63,7 @@ and whose `media_class` is `image` or `raw`; every operation of `photos-24-execu
 
 :::{bld} The auto-apply settings
 :id: BLD-auto_apply_settings
-:status: seed
+:status: ruled
 :realises: RUL-anchor_offset_auto_as_configured, RUL-timezone_auto_resolves, RUL-other_proposals_need_acceptance
 
 A GPX self-anchor offset SHALL be set as `effective_time_anchor` with `decision_mode: "auto_resolved"` when its
