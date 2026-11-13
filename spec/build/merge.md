@@ -86,7 +86,7 @@ no earlier plan placed it.
 
 :::{bld} Merge's plan
 :id: BLD-merge_plan
-:status: seed
+:status: ruled
 :realises: RUL-execution_only_the_plan, RUL-plan_carried_out_by_its_code
 :uses: BLD-merge_target
 :aliases: merge-plan-records-current-size-mtime-1
@@ -101,7 +101,7 @@ fingerprint, the ImageMagick version, and the fingerprints of the folder names a
 
 :::{bld} Merge's execute, in order
 :id: BLD-merge_execute
-:status: seed
+:status: ruled
 :realises: RUL-execution_jobs_change_nothing, RUL-execution_only_the_plan
 :uses: BLD-merge_plan, BLD-merge_move, BLD-merge_journal_resume
 :aliases: merge-moveset-fixed-before-concurrency-1, merge-concurrency-deterministic-aggregation-1, exec-single-writer-journal-1

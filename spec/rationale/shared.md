@@ -1186,7 +1186,7 @@ again.
 
 :::{rat} Jobs buy time, not outcomes
 :id: RAT-jobs_buy_time
-:status: seed
+:status: ruled
 :justifies: RUL-execution_jobs_change_nothing
 
 Applying a plan in parallel only saves time, and how many jobs suit depends on the machine of the day. If the count
