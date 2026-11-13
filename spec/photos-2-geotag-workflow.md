@@ -1043,15 +1043,14 @@ The artifact should indicate:
 }
 ```
 
-It should include only the sections needed to solve time, such as:
+It holds every destination, each section carrying what solves its time:
 
-1. destination timezone decisions (per-destination scope);
-2. camera groups requiring time calibration, **per (group, destination)** inside each destination section (Section 10.2);
-3. GPX/native-GPS time-anchor proposals (recorded against the camera group **within its destination**, Section 19);
-4. manual fixed-offset fields (per (group, destination), used when a cell has no anchorable native-GPS frame);
-5. manual segment templates (per (group, destination));
-6. explicit accept/reject fields for proposed time anchors (per (group, destination));
-7. blockers preventing resolved UTC computation.
+1. the destination timezone decision (per-destination scope);
+2. one clock-offset cell per camera group present, **per (group, destination, day)** inside each destination section (Section 10.2);
+3. in each cell, the GPX/native-GPS time-anchor proposal (recorded against the camera group **within its destination**, Section 19) or the timezone-derived one (Section 19.4);
+4. in each cell, the manual fixed-offset field and the field accepting the proposal.
+
+Blockers preventing resolved UTC computation are reported in the output, not recorded in the artifact.
 
 The user should not have to create JSON structure manually. Required sections should already exist and be fillable.
 
@@ -1080,13 +1079,10 @@ Downstream stages must depend on it and validate it.
 
 If `photos-21-time-decisions.json` requires user input, the user may resolve time calibration by:
 
-1. accepting a proposed destination timezone;
-2. entering a manual destination timezone;
-3. accepting a GPX/native-GPS time-anchor proposal;
-4. entering a manual fixed UTC offset;
-5. filling manual time segments;
-6. updating the workspace config with camera group classifications;
-7. correcting or confirming other required time policy fields.
+1. entering a manual destination timezone;
+2. accepting a clock-offset proposal — GPX/native-GPS anchored or timezone-derived — or picking another of its anchor groups;
+3. entering a manual fixed UTC offset;
+4. updating the workspace config with camera group classifications.
 
 After edits, the workflow must validate `photos-21-time-decisions.json`.
 

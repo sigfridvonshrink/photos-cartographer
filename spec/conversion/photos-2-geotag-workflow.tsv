@@ -589,3 +589,35 @@
 19.4	It is **confirmable-only** (`confidence: review_required`, never auto-applied) because the local-clock assumption can be wrong — a camera left on home time gives a wrong offset — so the operator reviews it like any non-anchor proposal.	RUL-other_proposals_need_acceptance BLD-timezone_naive_offset	
 19.4	It ranks directly **above** manual-required (there is no inherited offset — offsets do not cascade).	RUL-offset_from_own_evidence BLD-offset_buckets	
 19.4	It needs the destination's timezone; one with no proposal waits for a zone written by hand and a re-run, and until then the bucket is `manual_required` and the editor says so.	RUL-timezone_auto_resolves BLD-timezone_naive_offset	
+20	## 20. Create `photos-21-time-decisions.json`	dropped	a heading; the corpus's documents carry their own
+20	Once the time-decision stage is reached, the workflow must create:	RUL-decision_stage_writes_record	
+20	```text [sha1:c28abbd9, 1 lines]	RUL-decision_stage_writes_record	
+20	This artifact exists even if no user input is required.	RUL-decision_stage_writes_record	
+20	It is grouped by destination; each destination section carries its timezone decision and one time decision per camera group present (per (group, destination), Section 10.2).	BLD-geotag_records_by_destination BLD-offset_buckets	
+20	There is no separate top-level group-scoped block.	BLD-geotag_records_by_destination	
+20.1	### 20.1 If user time decisions are required	dropped	a heading; the corpus's documents carry their own
+20.1	The artifact should indicate:	dropped	introduces the example
+20.1	```json [sha1:f64bbca4, 7 lines]	BLD-decision_record_envelope	
+20.1	It holds every destination, each section carrying what solves its time:	BLD-geotag_records_by_destination	
+20.1	1. the destination timezone decision (per-destination scope);	BLD-timezone_cell	
+20.1	2. one clock-offset cell per camera group present, **per (group, destination, day)** inside each destination section (Section 10.2);	BLD-offset_buckets	
+20.1	3. in each cell, the GPX/native-GPS time-anchor proposal (recorded against the camera group **within its destination**, Section 19) or the timezone-derived one (Section 19.4);	BLD-anchor_matching BLD-timezone_naive_offset	
+20.1	4. in each cell, the manual fixed-offset field and the field accepting the proposal.	RUL-decision_fields_laid_out BLD-offset_buckets	
+20.1	Blockers preventing resolved UTC computation are reported in the output, not recorded in the artifact.	RUL-no_record_before_decisions	what stopped a plan is said in its output
+20.1	The user should not have to create JSON structure manually.	RUL-decision_fields_laid_out	
+20.1	Required sections should already exist and be fillable.	RUL-decision_fields_laid_out	
+20.2	### 20.2 If no user time decisions are required	dropped	a heading; the corpus's documents carry their own
+20.2	The artifact should still be created and should indicate:	RUL-decision_stage_writes_record	
+20.2	```json [sha1:f4a05f23, 8 lines]	BLD-decision_record_envelope	
+20.2	This no-op/complete artifact becomes part of the dependency cascade.	RUL-decision_stage_writes_record BLD-geotag_dependencies	
+20.2	Downstream stages must depend on it and validate it.	INV-no_stale_use BLD-geotag_dependencies	
+21	## 21. Stage 6 — User completes or accepts time decisions	dropped	a heading; the corpus's documents carry their own
+21	If `photos-21-time-decisions.json` requires user input, the user may resolve time calibration by:	RUL-user_writes_decisions	
+21	1. entering a manual destination timezone;	BLD-timezone_cell	
+21	2. accepting a clock-offset proposal — GPX/native-GPS anchored or timezone-derived — or picking another of its anchor groups;	BLD-anchor_matching RUL-chosen_group_is_anchored	
+21	3. entering a manual fixed UTC offset;	BLD-offset_buckets	
+21	4. updating the workspace config with camera group classifications.	RUL-known_when_classified BLD-known_camera_group	
+21	After edits, the workflow must validate `photos-21-time-decisions.json`.	INV-authored_values_checked	
+21	If the workspace config changed, the time-decision artifact may become stale and must be regenerated or revalidated.	INV-no_stale_use RUL-staleness_by_area BLD-decision_record_envelope	
+21	If camera group classification changed, time-geotag requirements must be recomputed and the time-decision artifact becomes stale.	RUL-staleness_by_area BLD-decision_record_envelope	
+21	User-filled fields should be preserved across regeneration where the logical target is still the same.	RUL-decision_kept	
