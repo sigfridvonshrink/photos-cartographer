@@ -318,3 +318,12 @@
 10.3	Each artifact should be grouped by destination under `6-photos-by-dest`.	BLD-geotag_records_by_destination	
 10.3	Example shape:	BLD-geotag_records_by_destination	introduces the example
 10.3	```json [sha1:667976f7, 24 lines]	dropped	an example shape; BLD-geotag_records_by_destination names the grouping
+11	## 11. High-level artifact cascade	dropped	a heading; the corpus's documents carry their own
+11	The geotag workflow follows this cascade:	BLD-geotag_stage_order	introduces the cascade
+11	```text [sha1:db563962, 17 lines]	BLD-geotag_stage_order RUL-time_before_gps RUL-execution_only_the_plan BLD-geotag_dependencies	
+11	If any upstream dependency changes, all downstream artifacts that depend on it become stale.	INV-no_stale_use DEF-dependency_cascade	
+12	## 12. Workflow states	dropped	a heading; the corpus's documents carry their own
+12	The workflow should be understood as a state machine:	BLD-geotag_stage_order	introduces the states
+12	```text [sha1:deccd2ca, 13 lines]	BLD-geotag_stage_order RUL-decision_stage_writes_record	
+12	A geotag JSON file existing on disk does not automatically mean execution is allowed.	INV-no_stale_use	
+12	Execution is allowed only after `photos-24-executable-plan.json` exists, is current, and validates all upstream dependencies.	RUL-no_plan_no_run INV-no_stale_use BLD-geotag_dependencies	

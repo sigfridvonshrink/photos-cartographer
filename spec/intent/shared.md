@@ -681,7 +681,7 @@ No command SHALL take an option saying where to put a plan or where to find one;
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: plan-missing-stops-1, prep-dryrun-no-plan-stops-1, prep-execute-no-plan-stops-1, merge-dryrun-requires-saved-plan-1
+:aliases: plan-missing-stops-1, prep-dryrun-no-plan-stops-1, prep-execute-no-plan-stops-1, merge-dryrun-requires-saved-plan-1, geotag-execute-requires-valid-plan-1
 
 A dry run or an execution that finds no plan in its place SHALL stop, and tell the user to plan first.
 :::
@@ -1263,7 +1263,7 @@ of the configuration or of the areas the record reads — and each use checks th
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: dep-cascade-reject-stale-1, prep-block-on-stale-dependency-1, merge-execute-revalidate-reject-stale-1, geotag-dep-cascade-1, geotag-no-stale-execution-1
+:aliases: dep-cascade-reject-stale-1, prep-block-on-stale-dependency-1, merge-execute-revalidate-reject-stale-1, geotag-dep-cascade-1, geotag-no-stale-execution-1, geotag-file-exists-not-executable-1
 :uses: DEF-dependency_cascade
 
 No phase SHALL use a record once anything it was derived from has changed: each phase validates what it derives from,

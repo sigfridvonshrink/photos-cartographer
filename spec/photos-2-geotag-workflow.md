@@ -577,9 +577,9 @@ geotag invocation
   -> GPX folder parsing/fingerprinting          (disk-heavy; only after recognition passes)
   -> time-decision stage
   -> photos-21-time-decisions.json
-  -> resolved UTC per file in SQLite
+  -> resolved UTC per file (in memory)
   -> GPS-drift validation gate (photos-22-gps-drift-validation.json)
-  -> resolved UTC recomputed with validated offsets
+  -> resolved UTC recomputed with validated offsets and persisted in SQLite
   -> GPS-decision stage
   -> photos-23-gps-decisions.json
   -> photos-24-executable-plan.json
@@ -604,7 +604,7 @@ STATE 4 — GPX indexed/fingerprinted
 STATE 5 — time-decision stage reached
 STATE 6 — photos-21-time-decisions.json created
 STATE 7 — resolved UTC computed (current offsets)
-STATE 7a — photos-22-gps-drift-validation.json created (gate; resolved UTC re-persisted once complete)
+STATE 7a — photos-22-gps-drift-validation.json created (gate; resolved UTC persisted once complete)
 STATE 8 — GPS-decision stage reached
 STATE 9 — photos-23-gps-decisions.json created
 STATE 10 — photos-24-executable-plan.json ready
