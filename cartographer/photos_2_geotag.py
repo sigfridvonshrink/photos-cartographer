@@ -267,6 +267,25 @@ def _has_recorded_time(rec):
     return bool(parsed.get("has_timestamp"))
 
 
+def _holds_writes(held, writes):
+    """Whether a file's read-back tags (`held`) already are the planned `writes`: an empty write means the tag is
+    gone; a coordinate is compared by magnitude — EXIF keeps its sign in the reference tag — to a millionth."""
+    for k, want in writes.items():
+        got = held.get(k)
+        if want == "" or want is None:
+            if got not in (None, ""):
+                return False
+        elif isinstance(want, (int, float)) and not isinstance(want, bool):
+            try:
+                if abs(abs(float(got)) - abs(float(want))) > 1e-6:
+                    return False
+            except (TypeError, ValueError):
+                return False
+        elif str(got) != str(want):
+            return False
+    return True
+
+
 class GeotagWorkflow:
     """Stages 1–11: validate the workspace, build the model, produce photos-21/22/23 decision artifacts,
     compute resolved UTC, assemble photos-24-executable-plan.json (when decisions are complete),
@@ -1332,6 +1351,16 @@ class GeotagWorkflow:
         except Exception:
             return False
 
+    def _exiftool_read(self, abs_path, keys):
+        """The file's current values of `keys`, numeric (-n), as exiftool reports them; {} if it cannot be read.
+        The seam the tests mock, beside `_exiftool_write`."""
+        try:
+            out = subprocess.run(["exiftool", "-j", "-n"] + [f"-{k}" for k in keys] + [abs_path],
+                                 capture_output=True, text=True, stdin=subprocess.DEVNULL)
+            return (json.loads(out.stdout) or [{}])[0] if out.returncode == 0 else {}
+        except Exception:
+            return {}
+
     def revalidate_plan(self, plan, gpx):
         """§29 steps 2-4: recompute every dependency fingerprint and return the stale reasons. A
         non-empty list means reject the plan before ANY mutation (the user re-runs to replan)."""
@@ -1399,24 +1428,33 @@ class GeotagWorkflow:
             res["blocker"] = f"{rel}: file is missing at execute time"
             return res
 
+        write_ops = [o for o in ops if o["type"] in self._META_OP_TYPES]
+        tags = {}
+        for o in write_ops:
+            tags.update(o.get("writes") or {})
         st = os.stat(abs_path)
+        already_written = False
         if (pre.get("size") is not None and st.st_size != pre["size"]) or \
            (pre.get("mtime_ns") is not None and st.st_mtime_ns != pre["mtime_ns"]):
-            # The file differs from plan time. If its decoded-content fingerprint still matches, the
-            # change is a metadata write — ours from a crashed prior run, or a benign touch — so the
-            # ops are re-applied idempotently. If the content fingerprint differs, the image itself
-            # changed externally: block (unless the operator already accepted this file's new identity).
+            # The file differs from plan time. A differing decoded-content fingerprint is the image itself
+            # changed: block (unless the operator already accepted this file's new identity). Otherwise its
+            # metadata changed — geotag's own write from an interrupted run, which left it holding the planned
+            # values, or an edit made since the plan, which would be overwritten: read the tags back and tell
+            # them apart (§29.1a). A file with no write planned was not written by geotag at all.
             cur_fp = (ContentHasher.fingerprint_image(abs_path) or {}).get("value")
             if cur_fp != pre.get("content_fingerprint") and rel not in accepted_mismatches:
                 res["blocker"] = f"{rel}: size/mtime changed and content fingerprint differs since planning"
                 return res
+            if not tags or not _holds_writes(self._exiftool_read(abs_path, sorted(tags)), tags):
+                res["blocker"] = (f"{rel}: its metadata changed since the plan was made — re-run `geotag plan` "
+                                  "to plan from what it holds now")
+                return res
+            already_written = True                    # geotag's own interrupted write: apply nothing again
 
         # the metadata ops produce a single batched, idempotent exiftool tag write
-        write_ops = [o for o in ops if o["type"] in self._META_OP_TYPES]
-        if write_ops:
-            tags = {}
-            for o in write_ops:
-                tags.update(o.get("writes") or {})
+        if write_ops and already_written:
+            res["applied"].extend(o["operation_id"] for o in write_ops)
+        elif write_ops:
             if not self._exiftool_write(abs_path, tags):
                 res["failed"] = [o["operation_id"] for o in write_ops]
                 return res                          # tool failure: leave file as-is, never confirm

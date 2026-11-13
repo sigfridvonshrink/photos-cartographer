@@ -478,3 +478,31 @@ one it clears cleared whole.
 A camera's clock offset for a day, once resolved, SHALL stay that day's offset for photos of that camera arriving
 later — one found from its own GPS included, though the later photos bring no anchor.
 :::
+
+
+## 29. Execution
+
+:::{rul} An interrupted execution is finished by running it again
+:id: RUL-geotag_execution_resumable
+:status: seed
+:criticality: high
+:verify: required
+:aliases: geotag-resume-safe-1, geotag-rerun-noop-1, geotag-skip-satisfied-1, geotag-resume-rederive-1
+:uses: DEF-geotag
+
+A geotag execution interrupted SHALL be finished by running it again, which applies only what is outstanding — a
+fully applied plan changing nothing, and an edit made to a photo since the plan never written over.
+:::
+
+:::{rul} A write that changes the picture is held back
+:id: RUL-content_changed_write_held
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: geotag-postwrite-fingerprint-verify-1, geotag-accept-fingerprint-change-1
+:refines: RUL-fingerprint_survives_mutation
+
+A write after which a photo's decoded content differs SHALL NOT count as done — its rename held back with it — until
+the user accepts the new content.
+:::

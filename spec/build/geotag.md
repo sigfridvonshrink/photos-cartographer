@@ -385,3 +385,37 @@ holds as photos arrive. A cell that would ask, its decision not given, takes the
 that came from the camera's own GPS (`gpx_anchor_auto`), as `decision_mode: "kept_from_earlier"`; a cell whose photos
 are all corrected keeps its decision and its drift confirmation, the effective values derived again each run.
 :::
+
+
+## 29. Execution
+
+:::{bld} How execution applies the plan
+:id: BLD-geotag_execution
+:status: seed
+:realises: RUL-geotag_execution_resumable, RUL-content_changed_write_held, RUL-execution_only_the_plan, RUL-every_change_journaled
+:aliases: geotag-journal-every-op-1, geotag-reject-stale-before-mutation-1, geotag-execute-noclobber-recheck-1, geotag-prestate-before-write-1, geotag-tool-failure-not-silent-1, geotag-atomic-ops-1, geotag-snapshot-phase-label-1, geotag-snapshot-required-abort-1, geotag-concurrency-determinism-1, geotag-deterministic-aggregation-1, geotag-no-concurrent-decision-1, geotag-single-writer-1, geotag-no-partial-persistence-1
+
+`geotag execute` SHALL, under the workspace lock: revalidate every dependency of photos-24 and stop before any change if
+one moved; keep photos-21, -22 and -23 in `executed/<plan id>/`; take the snapshot labelled `geotag`, a required one
+that fails ending the run as `rejected`; pin and move the own values, single-threaded; then, per photo and under
+`-j`, skip one whose operations the journal confirms, find one renamed already by its target in place, and for one whose
+size or modification time changed since the plan block if its decoded content differs and is not accepted, else read
+its tags back — holding the planned values it is counted applied, otherwise, or with only a rename planned, it blocks
+as edited since the plan. Otherwise it writes the photo's tags in one `exiftool -overwrite_original` call, retakes its
+fingerprint — a changed one, not accepted, a mismatch that holds the photo's writes and rename back — and renames it,
+the target checked free. The results merge in path order into the journal, kept per plan id, and photos-25.
+:::
+
+:::{bld} The execution summary
+:id: BLD-execution_summary
+:status: seed
+:realises: RUL-content_changed_write_held, RUL-failure_recorded
+:aliases: geotag-write-summary-1, geotag-summary-contents-1, geotag-summary-status-1
+
+`photos-25-execution-summary.json` SHALL record the plan and execution ids, the SHA-256 of photos-24 and the
+dependencies it was validated against, counts per destination and in total, what was newly applied and what found
+satisfied, failures and blockers, `fingerprint_mismatches` — each with its expected and actual fingerprint and
+`user_decision.accept_fingerprint_change`, the one field a later execution reads — the snapshot, and run metadata apart;
+its `status` is `success`, `partial` (anything outstanding, a mismatch always), `failed` (nothing applied) or
+`rejected` (stopped before any change). It is never a dependency.
+:::

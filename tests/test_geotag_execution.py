@@ -127,7 +127,8 @@ def test_clean_execute_applies_and_renames(tmp_path, monkeypatch):
     assert names == ["2024-07-03--14-00-00.arw", "2024-07-03--15-00-00.arw"]
 
 
-@pytest.mark.spec("geotag-postwrite-fingerprint-verify-1")
+@pytest.mark.spec("geotag-postwrite-fingerprint-verify-1", "BLD-execution_summary",
+                  test="TST-geotag_execution-content_changed_write_flags_mismatch")
 def test_content_changed_write_flags_mismatch(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws, content_changed=True)
@@ -168,7 +169,8 @@ def test_resume_skips_confirmed_ops(tmp_path, monkeypatch):
 
 # --- reconciliation ----------------------------------------------------------
 
-@pytest.mark.spec("geotag-accept-fingerprint-change-1")
+@pytest.mark.spec("geotag-accept-fingerprint-change-1", "BLD-geotag_execution",
+                  test="TST-geotag_execution-accept_fingerprint_change_finalizes")
 def test_accept_fingerprint_change_finalizes(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws, content_changed=True)
@@ -384,12 +386,44 @@ def test_apply_file_precondition_and_resume_branches(tmp_path, monkeypatch):
     r = wf._apply_file("f.arw", [_op("o", "metadata_time_write", "f.arw",
                        pre={"size": 999, "content_fingerprint": "FP"})], {}, set())
     assert "content fingerprint differs" in r["blocker"]
-    # size/mtime changed BUT the content fingerprint still matches -> resume: re-apply, no block
+    # size/mtime changed BUT the content fingerprint still matches, and the file holds the planned values ->
+    # geotag's own interrupted write: counted applied, written nothing again
     monkeypatch.setattr(cal.ContentHasher, "fingerprint_image", staticmethod(lambda path: {"value": "FP"}))
+    written = []
+    monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", lambda self, path, t: written.append(t) or True)
+    monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_read", lambda self, path, keys: {"DateTimeOriginal": "x"})
     r = wf._apply_file("f.arw", [_op("o", "metadata_time_write", "f.arw",
                        pre={"size": 999, "mtime_ns": 1, "content_fingerprint": "FP"},
                        writes={"DateTimeOriginal": "x"})], {}, set())
-    assert r["blocker"] is None and r["applied"] == ["o"]
+    assert r["blocker"] is None and r["applied"] == ["o"] and written == []
+
+
+@pytest.mark.spec("RUL-geotag_execution_resumable", "BLD-geotag_execution",
+                  test="TST-geotag_execution-an_edit_made_since_the_plan_is_never_overwritten")
+def test_an_edit_made_since_the_plan_is_never_overwritten(tmp_path, monkeypatch):
+    # The photo's metadata changed between plan and execute — its time edited in another program — and its image
+    # did not: execute cannot take it for its own interrupted write, since the photo holds none of the planned
+    # values; it stops on the photo rather than writing over the edit. A photo with only a rename planned, changed
+    # since, was not written by geotag at all, and stops too.
+    wf = cal.GeotagWorkflow(str(tmp_path))
+    (tmp_path / "f.arw").write_bytes(b"data")
+    monkeypatch.setattr(cal.ContentHasher, "fingerprint_image", staticmethod(lambda path: {"value": "FP"}))
+    written = []
+    monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", lambda self, path, t: written.append(t) or True)
+    monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_read",
+                        lambda self, path, keys: {"DateTimeOriginal": "2024:07:03 09:00:00"})
+    pre = {"size": 999, "mtime_ns": 1, "content_fingerprint": "FP"}
+    r = wf._apply_file("f.arw", [_op("o", "metadata_time_write", "f.arw", pre=pre,
+                       writes={"DateTimeOriginal": "2024:07:03 14:25:00"})], {}, set())
+    assert "changed since the plan" in r["blocker"] and r["applied"] == [] and written == []
+    ren = _op("oR", "rename_no_clobber", "f.arw", pre=pre, **{"from": "f.arw", "to": "g.arw"})
+    r = wf._apply_file("f.arw", [ren], {}, set())
+    assert "changed since the plan" in r["blocker"] and (tmp_path / "f.arw").exists()
+    # the comparison: a coordinate by magnitude (its sign is in the reference tag), a cleared tag absent
+    assert cal._holds_writes({"GPSLatitude": 33.865143, "GPSLatitudeRef": "S"},
+                             {"GPSLatitude": -33.865143, "GPSLatitudeRef": "S"})
+    assert cal._holds_writes({}, {"GPSLatitude": "", "GPSLatitudeRef": ""})
+    assert not cal._holds_writes({"GPSLatitude": 33.9}, {"GPSLatitude": 33.865143})
 
 
 def test_apply_file_rename_skip_and_failure(tmp_path, monkeypatch):
