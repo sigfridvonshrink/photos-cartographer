@@ -72,7 +72,8 @@ def test_gps_write_and_marker(cat, origin, marker):
 @pytest.mark.parametrize("lat, lon, refs", [
     (50.0, 4.0, ("N", "E")), (-33.9, -70.6, ("S", "W")),
     (-1.29, 36.82, ("S", "E")), (14.6, -90.5, ("N", "W")), (0.0, 0.0, ("N", "E"))])
-@pytest.mark.spec("geotag-gps-write-complete-fix-1")
+@pytest.mark.spec("geotag-gps-write-complete-fix-1", "BLD-position_tags",
+                  test="TST-geotag_executable_plan-gps_write_carries_hemisphere_refs")
 def test_gps_write_carries_hemisphere_refs(lat, lon, refs):
     """§28.1: EXIF coordinates are unsigned magnitudes — a write without GPSLatitudeRef/
     GPSLongitudeRef reads as NO location to a conforming reader, and flips the hemisphere of a
@@ -180,7 +181,7 @@ def test_unresolved_utc_blocks(tmp_path):
     assert any("no valid resolved UTC" in b for b in blk)
 
 
-@pytest.mark.spec("geotag-plan-preconditions-1")
+@pytest.mark.spec("geotag-plan-preconditions-1", "BLD-executable_plan", test="TST-geotag_executable_plan-incomplete_decisions_block")
 def test_incomplete_decisions_block(tmp_path):
     files = [_model(f"{BYDEST}/T/a.arw", f"{BYDEST}/T", native=True)]
     rows = [_row(f"{BYDEST}/T/a.arw")]

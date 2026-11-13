@@ -90,7 +90,8 @@ def _ops(plan, rel=None):
 _FORWARD = {"metadata_time_write", "metadata_gps_write", "gps_marker_write", "rename_no_clobber"}
 
 
-@pytest.mark.spec("geotag-gps-write-complete-fix-1")
+@pytest.mark.spec("geotag-gps-write-complete-fix-1", "BLD-position_tags",
+                  test="TST-geotag_gps_ledger-a_cleared_position_takes_its_hemisphere_refs_with_it")
 def test_a_cleared_position_takes_its_hemisphere_refs_with_it():
     """§28.1: a clear drops the refs with the coordinates — a ref left behind without its coordinate is a
     torn fix."""

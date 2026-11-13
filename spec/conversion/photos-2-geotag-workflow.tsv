@@ -766,7 +766,7 @@
 25	3. a photo the user chose to leave unlocated (`accepted_unlocated`).	BLD-gps_decisions_record	
 25	The exact file-level operation list belongs in:	dropped	introduces the plan's name
 25	```text [sha1:1cf57045, 1 lines]	BLD-geotag_dependencies	
-25	That executable plan must include the actual file paths, metadata writes, marker writes, and rename operations to be executed.	defer:geotag-28	the executable plan is §28's
+25	That executable plan must include the actual file paths, metadata writes, marker writes, and rename operations to be executed.	BLD-executable_plan	
 25	The GPS decision artifact therefore follows this rule:	dropped	introduces the rule
 25	```text [sha1:fbbc0c51, 6 lines]	BLD-gps_decisions_record	
 25	Because `photos-23-gps-decisions.json` only *summarizes* automatic and no-op GPS decisions (it enumerates individual file paths solely for user-review and blocker items), it is NOT the source of the per-file automatic GPS operations.	BLD-gps_decisions_record	
@@ -883,3 +883,71 @@
 27	9. execute only the planned rename operations after stale-plan validation.	RUL-execution_only_the_plan INV-no_stale_use	
 27	Execution must not invent new rename decisions or choose a different suffix.	RUL-execution_only_the_plan BLD-rename_planning	
 27	It only applies renames already present in `photos-24-executable-plan.json`.	RUL-execution_only_the_plan	
+28	## 28. Create `photos-24-executable-plan.json`	dropped	a heading; the corpus's documents carry their own
+28	An executable geotag plan may be produced only when:	BLD-geotag_stage_order BLD-executable_plan	
+28	1. `photos-21-time-decisions.json` exists and completely covers each destination;	BLD-geotag_stage_order	
+28	2. destination timezone is known;	RUL-timezone_auto_resolves BLD-geotag_stage_order	
+28	3. resolved UTC exists for every file and is current;	BLD-resolved_utc BLD-geotag_stage_order	
+28	4. `photos-22-gps-drift-validation.json` is complete — every at-risk bucket explicitly confirmed (Section 22a);	RUL-unanchored_offset_confirmed BLD-geotag_stage_order	
+28	5. `photos-23-gps-decisions.json` exists and completely covers each destination;	BLD-geotag_stage_order	
+28	6. all GPS decisions are complete;	BLD-geotag_stage_order	
+28	7. planned timestamp renames are no-clobber and safe;	BLD-rename_planning	
+28	8. no blockers remain;	BLD-executable_plan	
+28	9. config dependencies are current;	BLD-geotag_dependencies INV-no_stale_use	
+28	10. GPX dependencies are current, where relevant;	BLD-geotag_dependencies	
+28	11. prep handoff/cache dependencies are current;	BLD-geotag_dependencies	
+28	12. media file size/mtime/fingerprint preconditions are current.	BLD-geotag_dependencies	
+28	The plan records `photos-22-gps-drift-validation.json` as a direct dependency (alongside `photos-21`/`photos-23`), so a drift confirmation withdrawn after planning restales the plan and `execute` rejects it (Section 29).	BLD-geotag_dependencies BLD-drift_validation	
+28	The executable artifact is:	dropped	introduces the name
+28	```text [sha1:1cf57045, 1 lines]	BLD-executable_plan	
+28	It must be grouped by destination.	BLD-geotag_records_by_destination	
+28	Per destination, it should include:	dropped	introduces the list
+28	1. metadata time writes;	BLD-executable_plan	
+28	2. metadata GPS writes, distinguishing their origin:	BLD-executable_plan	
+28	*apply manual* GPS and *recompute automated* GPS (interpolation/extrapolation/preserved native), and the write that clears a position geotag wrote that no decision places any more (Section 24.1;	BLD-executable_plan RUL-log_records_gps_reverts	
+28	Section 28.2 item 2);	BLD-executable_plan	
+28	3. GPSProcessingMethod marker writes, if applicable;	BLD-executable_plan BLD-rerun_recognition	
+28	4. no-clobber timestamp rename operations;	BLD-executable_plan	
+28	5. no-op files.	BLD-executable_plan	
+28	Blockers, and the dependency fingerprints, are the plan's, not a destination's.	BLD-executable_plan BLD-geotag_dependencies	
+28	It should clearly indicate:	dropped	introduces the example
+28	```json [sha1:8d687cea, 6 lines]	BLD-executable_plan	
+28	The executable plan must include dependency fingerprints sufficient to reject stale execution.	BLD-geotag_dependencies INV-no_stale_use	
+28	It must include a flattened dependency list that directly names and fingerprints all required upstream artifacts and inputs.	BLD-geotag_dependencies RUL-geotag_plan_carries_every_dependency	
+28	It must depend on:	dropped	introduces the list
+28	1. `photos-21-time-decisions.json` path and SHA-256;	BLD-geotag_dependencies	
+28	2. resolved UTC cache fingerprint;	BLD-geotag_dependencies	
+28	3. `photos-23-gps-decisions.json` path and SHA-256;	BLD-geotag_dependencies	
+28	4. config fingerprint;	BLD-geotag_dependencies	
+28	5. camera group/config classification fingerprint;	BLD-geotag_dependencies	
+28	6. `photos-11-handoff.json` path and its `content_fingerprint` (the content-scoped staleness key, not a whole-file byte hash, Section 4; prep Section 16.2);	BLD-geotag_dependencies	
+28	7. prep SQLite cache fingerprint;	BLD-geotag_dependencies	
+28	8. GPX fingerprint (recorded unconditionally where a GPX set is loaded — a conservative over-inclusion, Sections 15, 22.1);	BLD-geotag_dependencies	
+28	9. media file preconditions;	BLD-geotag_dependencies	
+28	10. metadata field-set version;	BLD-geotag_dependencies	
+28	11. filename-format config fingerprint;	BLD-geotag_dependencies	
+28	12. planned operation fingerprint.	BLD-geotag_dependencies	
+28.1	### 28.1 A GPS write must be a complete EXIF fix	dropped	a heading; the corpus's documents carry their own
+28.1	EXIF records latitude and longitude as **unsigned magnitudes**; the hemisphere is carried by the separate `GPSLatitudeRef` (`N`/`S`) and `GPSLongitudeRef` (`E`/`W`) fields.	RAT-position_whole	
+28.1	A coordinate written without its reference field is not an under-specified fix, it is an **unreadable** one: a spec-conforming reader reports the file as having no location at all, and a lenient one assumes the northern/eastern hemisphere — placing a southern or western position on the wrong side of the equator or the meridian.	RAT-position_whole	
+28.1	Therefore every planned GPS coordinate write must carry the matching reference fields, derived from the sign of the planned coordinate, in the same operation:	RUL-position_written_whole BLD-position_tags	
+28.1	1. a write that **sets** a position writes latitude, longitude, and both reference fields together;	RUL-position_written_whole BLD-position_tags	
+28.1	2. a write that **clears** a position geotag wrote (Section 24.1) clears the reference fields along with the coordinates — a reference field left behind without its coordinate is a torn fix.	RUL-position_written_whole BLD-position_tags	
+28.1	This applies to every GPS write without exception (*apply manual*, *recompute automated*, and a clear).	RUL-position_written_whole	
+28.1	Reference fields are part of the coordinate value, not optional decoration, so they are never planned or applied as a separate operation from the coordinate they describe.	BLD-position_tags	
+28.2	### 28.2 Geotag's markers: what a re-run reads back	dropped	a heading; the corpus's documents carry their own
+28.2	Geotag records what it did to a file in the file's `GPSProcessingMethod`:	BLD-rerun_recognition	
+28.2	1. `interpolated` (a position from the tracks, interpolated or extrapolated), `manual_locked` (a per-file manual position) or `manual_fallback` (the destination's folder fallback) — the **position markers**, written bare with every GPS write.	BLD-rerun_recognition	
+28.2	Setting a position means geotag fixed the time too, so a position marker needs nothing more;	BLD-rerun_recognition	
+28.2	2. the **time mark** `+carto-time` — appended to whatever the field holds when geotag fixes a file's time and writes no position: the device's own value is kept in front of it (`fused` becomes `fused+carto-time`), and an empty field becomes `+carto-time`.	BLD-rerun_recognition	
+28.2	The mark is never appended twice.	BLD-rerun_recognition	
+28.2	It means the time is fixed and the GPS is the device's own, or not set yet.	BLD-rerun_recognition	
+28.2	Only these are geotag's.	BLD-rerun_recognition	
+28.2	Any other value — a phone writes its own, such as `GPS`, `NETWORK` or `fused` — is the device's, and the GPS beside it is native.	BLD-rerun_recognition	
+28.2	Read back on a later run, for a photo whose own values are not pinned (Section 24.2) — a pinned photo is decided from those instead:	BLD-marked_file_rerun BLD-decided_from_own_values	
+28.2	1. **a position marker or the time mark means the time is already corrected.** The file's time is destination-local civil time with its offset tag beside it; geotag resolves it from those, applies no clock offset to it, and does not use it as a clock-offset anchor or in a drift check.	BLD-marked_file_rerun	
+28.2	A camera group's offset is proposed, asked for and applied over the files that carry no geotag marker alone, so photos added later are corrected without disturbing those already corrected.	BLD-marked_file_rerun	
+28.2	The camera's offset for a day is the same for every photo it took that day, so an answer once resolved is kept for later arrivals: a bucket whose photos are all corrected keeps its resolved offset decision, and its drift confirmation, and asks nothing — the effective value derived again from the decision on each run, never copied, so the record always says what the decision says; an offset geotag found from the camera's own GPS stays the bucket's offset when later photos bring no anchor of their own; and a bucket's days are counted over all the group's photos in the destination, corrected ones included, so its key does not change as photos arrive;	RUL-day_offset_kept_for_later_photos BLD-day_offset_kept	
+28.2	2. **a position marker means the position is geotag's, not native.** Geotag ignores it and places the file again through the ordinary order (Section 23), overwriting the position with the one it now derives; a file that ends without a position (accepted unlocated) has geotag's old position and its marker cleared and carries the time mark alone, so the old position is never read back as native; a file with the time mark that geotag later places gets the bare position marker;	BLD-marked_file_rerun	
+28.2	3. **neither means the file is as the device left it**: a position is native and preserved, and the time is corrected as for any new file — a camera's by its group offset, a phone's by its own offset or the destination timezone.	BLD-rerun_recognition RUL-own_position_kept	
+28.2	A write the file already holds is not planned: a time, a position and its marker, or a name the file already carries is a no-op, so a re-run with nothing changed writes nothing.	RUL-mutate_on_difference BLD-executable_plan	

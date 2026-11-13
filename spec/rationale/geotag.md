@@ -350,3 +350,27 @@ The fallback saves answering, photo by photo, for a folder the tracks miss. A de
 place needs none, and one that does can still be answered photo by photo; to make every destination ask for one would
 add the work it exists to save.
 :::
+
+
+## 28. The executable plan
+
+:::{rat} Half a position is a wrong one
+:id: RAT-position_whole
+:status: seed
+:justifies: RUL-position_written_whole
+
+EXIF stores a latitude and a longitude without their signs: the hemisphere is in a field of its own. A coordinate
+written without it is read as no location at all, or put north and east of where it was — a photo from Sydney placed
+in the Pacific off Japan. Left behind when the coordinate is cleared, the reference is half a position that some
+reader will complete. Whole or not at all is the only safe write.
+:::
+
+:::{rat} The offset is the camera's that day, not the photos'
+:id: RAT-day_offset_is_the_cameras
+:status: seed
+:justifies: RUL-day_offset_kept_for_later_photos
+
+A clock offset belongs to the camera on that day; every photo it took that day shares it, however many arrive later.
+Once the photos that gave it are corrected, they no longer anchor anything — dropping the offset then would ask again a
+question already settled, or leave the later photos an offset nobody checked.
+:::

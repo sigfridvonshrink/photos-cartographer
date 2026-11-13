@@ -37,7 +37,7 @@ photos and `2-missing-metadata`.
 :id: BLD-geotag_dependencies
 :status: ruled
 :realises: RUL-geotag_plan_carries_every_dependency, INV-no_stale_use, RUL-hash_is_the_dependency_check, RUL-handoff_verified_by_content
-:aliases: geotag-transitive-verify-1, geotag-summary-not-dependency-1
+:aliases: geotag-transitive-verify-1, geotag-summary-not-dependency-1, geotag-plan-deps-1
 
 `photos-24-executable-plan.json` SHALL record in `depends_on` the SHA-256 of `photos-21`, `photos-22` and `photos-23`;
 the handoff's `content_fingerprint`; `config_fingerprint`, `code_fingerprint`, `camera_group_fingerprint`,
@@ -346,4 +346,42 @@ freed by a rename it plans — two photos that would trade names both take a suf
 whose name already carries its timestamp, suffix and all, as it is, and give any other the first free name of its
 timestamp by `allocate_suffix`, adding it to the names taken. Execution applies these renames and no other, each by a
 no-clobber move.
+:::
+
+
+## 28. The executable plan
+
+:::{bld} The executable plan
+:id: BLD-executable_plan
+:status: seed
+:realises: RUL-time_before_gps, RUL-execution_only_the_plan, RUL-mutate_on_difference
+:aliases: geotag-plan-preconditions-1, geotag-held-write-noop-1
+
+`photos-24-executable-plan.json` SHALL hold `status` — `ready`, or `blocked` with the plan's `blockers` — `executable`,
+`depends_on`, `plan_id` (the first 16 hex digits of the SHA-256 of `depends_on`), and per destination its `operations`,
+`no_ops` (the photos it holds already as planned) and a `summary`. An operation is `metadata_time_write`, carrying the
+resolved time, its rule, offset and timezone, and the decision it followed; `metadata_gps_write`, its origin
+`apply_manual` — with the decision and the position it replaces — or `recompute_automated`; `gps_marker_write`, one that
+clears geotag's position carrying the position it removes; or `rename_no_clobber`. A write the photo already holds is
+not planned.
+:::
+
+:::{bld} Position tags
+:id: BLD-position_tags
+:status: seed
+:realises: RUL-position_written_whole
+
+Every position geotag writes SHALL carry, in the same operation, `GPSLatitude`, `GPSLatitudeRef` (`N` or `S` by the
+sign), `GPSLongitude` and `GPSLongitudeRef` (`E` or `W`); clearing one empties all four.
+:::
+
+:::{bld} A day's offset kept
+:id: BLD-day_offset_kept
+:status: seed
+:realises: RUL-day_offset_kept_for_later_photos
+
+A cell's dates SHALL be counted over all its group's photos in the destination, corrected ones included, so its key
+holds as photos arrive. A cell that would ask, its decision not given, takes the previous run's effective offset when
+that came from the camera's own GPS (`gpx_anchor_auto`), as `decision_mode: "kept_from_earlier"`; a cell whose photos
+are all corrected keeps its decision and its drift confirmation, the effective values derived again each run.
 :::

@@ -55,7 +55,8 @@ def test_exif_write_preserves_content_fingerprint(tmp_path):
 
 
 @pytest.mark.parametrize("lat, lon, refs", [(50.8467, 4.3525, ("N", "E")), (-33.9, -70.6, ("S", "W"))])
-@pytest.mark.spec("geotag-gps-write-complete-fix-1")
+@pytest.mark.spec("geotag-gps-write-complete-fix-1", "BLD-position_tags",
+                  test="TST-geotag_execution_real-planned_gps_write_lands_a_readable_fix")
 def test_planned_gps_write_lands_a_readable_fix(tmp_path, lat, lon, refs):
     """§28.1 against the real binary: the tags `plan_file_ops` plans must land a fix a conforming
     reader can use. Coordinate-only writes were readable to exiftool's lenient composite but carried

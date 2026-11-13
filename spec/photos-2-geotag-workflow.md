@@ -1642,9 +1642,9 @@ Per destination, it should include:
 2. metadata GPS writes, distinguishing their origin: *apply manual* GPS and *recompute automated* GPS (interpolation/extrapolation/preserved native), and the write that clears a position geotag wrote that no decision places any more (Section 24.1; Section 28.2 item 2);
 3. GPSProcessingMethod marker writes, if applicable;
 4. no-clobber timestamp rename operations;
-5. no-op files;
-6. blockers;
-7. dependency fingerprints.
+5. no-op files.
+
+Blockers, and the dependency fingerprints, are the plan's, not a destination's.
 
 It should clearly indicate:
 
