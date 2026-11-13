@@ -682,22 +682,22 @@
 23	The GPS planning stage consumes:	dropped	introduces the list
 23	1. resolved UTC per file;	BLD-resolved_utc	
 23	2. destination timezone per destination;	dropped	placement reads no timezone; the renames do (§27)
-23	3. native GPS facts;	defer:geotag-24	the placement policy is §24–§25's
+23	3. native GPS facts;	RUL-own_position_kept BLD-placement_order	the placement policy is §24–§25's
 23	4. GPX folder/index/fingerprint;	BLD-gpx_fingerprint	
-23	5. manual GPS overrides;	defer:geotag-24	the placement policy is §24–§25's
-23	6. folder fallback rules — the per-destination folder GPS fallback, inherited downward from the nearest ancestor as a confirmable proposal (Section 25.3);	defer:geotag-25.3	the folder fallback is §25.3's
+23	5. manual GPS overrides;	RUL-placement_order BLD-placement_order	the placement policy is §24–§25's
+23	6. folder fallback rules — the per-destination folder GPS fallback, inherited downward from the nearest ancestor as a confirmable proposal (Section 25.3);	RUL-fallback_from_nearest BLD-folder_fallback_cell	the folder fallback is §25.3's
 23	7. existing GPS markers;	RUL-geotag_rerun_keeps_settled	a position geotag wrote is never kept as the file's own
 23	8. device class: mobile or fixed-clock camera;	dropped	placement does not depend on the device class; only time does
 23	9. destination-folder context;	BLD-geotag_destinations	
 23	10. GPS policy config (workspace config).	RUL-staleness_by_area	
 23	The workflow then decides, for each file, whether to:	dropped	introduces the list
-23	1. preserve native GPS;	defer:geotag-24	the placement policy is §24–§25's
-23	2. use manual locked GPS;	defer:geotag-24	the placement policy is §24–§25's
-23	3. use manual fallback GPS;	defer:geotag-24	the placement policy is §24–§25's
-23	4. use GPX interpolation;	defer:geotag-24	the placement policy is §24–§25's
-23	5. use GPX extrapolation;	defer:geotag-24	the placement policy is §24–§25's
-23	6. block because no reliable GPS source exists;	defer:geotag-24	the placement policy is §24–§25's
-23	7. skip because no GPS change is needed.	defer:geotag-24	the placement policy is §24–§25's
+23	1. preserve native GPS;	RUL-own_position_kept BLD-placement_order	the placement policy is §24–§25's
+23	2. use manual locked GPS;	RUL-placement_order BLD-placement_order	the placement policy is §24–§25's
+23	3. use manual fallback GPS;	RUL-placement_order BLD-placement_order	the placement policy is §24–§25's
+23	4. use GPX interpolation;	RUL-placement_order BLD-placement_order	the placement policy is §24–§25's
+23	5. use GPX extrapolation;	RUL-placement_order BLD-placement_order	the placement policy is §24–§25's
+23	6. block because no reliable GPS source exists;	RUL-placement_order BLD-placement_order	the placement policy is §24–§25's
+23	7. skip because no GPS change is needed.	RUL-placement_order BLD-placement_order	the placement policy is §24–§25's
 23	This stage is separate from GPX/native-GPS time-anchor proposals.	RAT-tracks_are_geotags_evidence	
 23	The earlier stage uses native GPS + GPX to infer time.	RUL-time_before_gps	
 23	This stage uses solved time + GPX/manual/native data to plan GPS placement.	RUL-time_before_gps	
@@ -726,9 +726,9 @@
 24.1	A **manual GPS override is reversible**: withdrawing it undoes its effect, and changing it re-applies cleanly.	RUL-withdrawal_undoes	
 24.1	The reversibility comes from the original-values ledger (Section 24.2), not from a store of its own: every plan decides about a pinned photo from the values the device left, so a manual position is one decision among the rest, and its withdrawal is planned like any other change.	BLD-decided_from_own_values	
 24.1	1. **Apply and change.** A manual position (locked or fallback) is written with its marker (Section 28.2); a changed value is written over it.	BLD-rerun_recognition	
-24.1	A manual override is only ever *selected* for a photo with no native GPS:	defer:geotag-25.3	preserve-native first is the placement order's
-24.1	`classify_gps` returns `preserve_native` for a photo carrying native GPS **before** it ever consults the manual coordinates (Section 23 resolution order;	defer:geotag-25.3	
-24.1	Section 25.3 — preserve-native wins).	defer:geotag-25.3	
+24.1	A manual override is only ever *selected* for a photo with no native GPS:	RUL-placement_order BLD-placement_order	preserve-native first is the placement order's
+24.1	`classify_gps` returns `preserve_native` for a photo carrying native GPS **before** it ever consults the manual coordinates (Section 23 resolution order;	RUL-own_position_kept BLD-placement_order	
+24.1	Section 25.3 — preserve-native wins).	RUL-own_position_kept BLD-placement_order	
 24.1	2. **Withdraw → placed again from its own values.** With the decision removed, the next plan places the photo through the ordinary order from its own values: from the tracks where they place it, or nowhere — and then geotag's position and its marker are cleared, the hemisphere reference fields with them (Section 28.1;	RUL-withdrawal_undoes BLD-decided_from_own_values	
 24.1	Section 28.2 item 2).	BLD-decided_from_own_values	
 24.1	Withdrawal therefore *undoes*; it does not merely stop re-asserting.	RUL-withdrawal_undoes	
@@ -753,3 +753,71 @@
 24.2	The ledger lives beside the resolved-UTC cache in geotag's region of the workspace database, which the archival package's database snapshot carries (shared contract Section 13).	RUL-database_regions_disjoint BLD-original_values_pinned	
 24.2	A photo whose fingerprint was taken again with a new value — under another ImageMagick, say — keeps its pinned values: geotag follows the change prep's log records, from the old value to the new, and execution moves the pin to the new value; a mapping that is not one to one stops geotag.	RUL-own_values_follow_new_fingerprint BLD-original_values_follow_fingerprint	
 16	A file whose metadata names no camera — `camera_group_key` `unknown`: a screenshot, a scan, a photo a messaging app stripped — belongs to no camera group: it is solved on its own like a phone's photo, by the offset recorded with its time, else its destination's timezone, and is never asked to be classified.	RUL-unidentified_files_solved_alone BLD-unidentified_files	
+25	## 25. Create `photos-23-gps-decisions.json`	dropped	a heading; the corpus's documents carry their own
+25	Once the GPS-decision stage is reached, the workflow must create:	RUL-decision_stage_writes_record	
+25	```text [sha1:1d83aff8, 1 lines]	RUL-decision_stage_writes_record	
+25	This artifact exists even if no GPS changes are required.	RUL-decision_stage_writes_record	
+25	It must be grouped by destination.	BLD-geotag_records_by_destination	
+25	`photos-23-gps-decisions.json` is a GPS decision artifact, not the executable operation list.	BLD-gps_decisions_record	
+25	For files whose GPS decision is automatic, no-op, or automatically correctable without user review, the JSON should contain per-destination summaries rather than enumerating every file path.	BLD-gps_decisions_record	
+25	File paths should appear in `photos-23-gps-decisions.json` only for items where the user must make or review a decision:	BLD-gps_decisions_record	
+25	1. a photo nothing places — no position of its own, none set for it, no track at its time and no folder fallback — which waits for the user (`no_reliable_gps_source`);	BLD-gps_decisions_record	
+25	2. a photo the user set a position for (`manual_locked`);	BLD-gps_decisions_record	
+25	3. a photo the user chose to leave unlocated (`accepted_unlocated`).	BLD-gps_decisions_record	
+25	The exact file-level operation list belongs in:	dropped	introduces the plan's name
+25	```text [sha1:1cf57045, 1 lines]	BLD-geotag_dependencies	
+25	That executable plan must include the actual file paths, metadata writes, marker writes, and rename operations to be executed.	defer:geotag-28	the executable plan is §28's
+25	The GPS decision artifact therefore follows this rule:	dropped	introduces the rule
+25	```text [sha1:fbbc0c51, 6 lines]	BLD-gps_decisions_record	
+25	Because `photos-23-gps-decisions.json` only *summarizes* automatic and no-op GPS decisions (it enumerates individual file paths solely for user-review and blocker items), it is NOT the source of the per-file automatic GPS operations.	BLD-gps_decisions_record	
+25	`photos-24-executable-plan.json` re-derives every automatic GPS decision deterministically from its own validated inputs (resolved-UTC cache, GPX index/fingerprint, native GPS facts, folder fallback rules, and GPS policy config).	BLD-gps_decisions_record BLD-geotag_dependencies	
+25	`photos-23-gps-decisions.json` contributes to the plan only (a) the human-reviewed decisions and (b) its SHA-256 as a dependency proving the review state the plan was built against.	BLD-geotag_dependencies	
+25	Automatic decisions must be reproducible from inputs alone, so the summary-only artifact never needs to carry per-file automatic data.	BLD-gps_decisions_record	
+25	For each destination, `photos-23-gps-decisions.json` should summarize automatic categories such as:	dropped	introduces the list
+25	1. number of files preserving native GPS;	BLD-gps_decisions_record	
+25	2. number of files with no GPS change needed;	BLD-gps_decisions_record	
+25	3. number of files automatically assigned GPX interpolation;	BLD-gps_decisions_record	
+25	4. number of files automatically assigned GPX extrapolation;	BLD-gps_decisions_record	
+25	5. number of files placed by the destination's folder fallback;	BLD-gps_decisions_record	
+25	6. number of files blocked;	BLD-gps_decisions_record	
+25	7. number of files requiring user review;	BLD-gps_decisions_record	
+25	8. GPX sources used;	BLD-gps_decisions_record	
+25	9. confidence/quality summary;	dropped	a label the record carries, deciding nothing
+25	10. dependency fingerprints.	BLD-decision_record_envelope	
+25	Example shape:	dropped	introduces the example
+25	```json [sha1:950f0db6, 27 lines]	BLD-gps_decisions_record	
+25.1	### 25.1 If user GPS decisions are required	dropped	a heading; the corpus's documents carry their own
+25.1	The artifact should indicate:	dropped	introduces the example
+25.1	```json [sha1:f4a93efa, 7 lines]	BLD-decision_record_envelope	
+25.1	It holds every destination, each with its folder-fallback cell and its summary; its review items are the photos the user must place or leave unlocated, each with the fields to do so.	BLD-gps_decisions_record	
+25.1	Blockers preventing executable planning are reported in the output, not recorded in the artifact.	RUL-no_record_before_decisions	what stopped a plan is said in its output
+25.2	### 25.2 If no user GPS decisions are required	dropped	a heading; the corpus's documents carry their own
+25.2	The artifact should still be created and should indicate:	RUL-decision_stage_writes_record	
+25.2	```json [sha1:a56c7a7c, 8 lines]	BLD-decision_record_envelope	
+25.2	This no-op/complete artifact becomes part of the dependency cascade.	RUL-decision_stage_writes_record BLD-geotag_dependencies	
+25.2	Downstream stages must depend on it and validate it.	INV-no_stale_use BLD-geotag_dependencies	
+25.3	### 25.3 Per-destination folder GPS fallback (downward inheritance)	dropped	a heading; the corpus's documents carry their own
+25.3	The **folder GPS fallback** is a per-destination decision that supplies a single coordinate to place any photo in that destination which has no native GPS, no per-file manual lock, and no usable GPX match.	BLD-folder_fallback_cell RUL-placement_order	
+25.3	In the resolution order geotag applies, it ranks **after** preserve-native, the per-file manual lock, and GPX interpolation/extrapolation, and **before** accept-unlocated or block (the seven GPS outcomes of Section 23).	RUL-placement_order BLD-placement_order	
+25.3	It is the destination-level analogue of the per-(camera group, destination) clock offset (Section 10.2): a destination-scoped value that a nested subfolder does not have to re-author from scratch.	RAT-fallback_nested	its analogy with the clock offset is wrong: offsets never inherit
+25.3	Its decision cell lives **inside each per-destination section** of `photos-23-gps-decisions.json` (alongside that destination's `gps_decisions` summary), with pre-created human-decision fields exactly like every other decision (Section 9).	BLD-folder_fallback_cell	
+25.3	It carries a machine `proposal`, a `user_decision` the operator fills, and a derived `effective_fallback`:	BLD-folder_fallback_cell	
+25.3	```json [sha1:fba16d65, 15 lines]	BLD-folder_fallback_cell	
+25.3	The fallback proposal is chosen by **downward inheritance**, as the destination timezone is (Section 18), reusing the same nearest-ancestor walk — but an inherited fallback takes effect only once the user accepts it (Section 9.1):	RUL-fallback_from_nearest RUL-other_proposals_need_acceptance	
+25.3	1. **(a) inherited** — if a **nearest ancestor destination** has a resolved effective fallback, this cell's proposal is that ancestor's fallback, surfaced as a **proposal to confirm** and labelled with the `inherited_from` ancestor path.	RUL-fallback_from_nearest BLD-folder_fallback_cell	
+25.3	Inheritance is **recursive down the destination tree**: a destination's *effective* fallback — however it was reached, whether authored here or inherited-and-accepted — is the basis propagated to its immediate children, and onward to grandchildren.	RUL-fallback_from_nearest	
+25.3	A **fallback authored at a folder resets the chain** at that point: that coordinate becomes the folder's effective fallback and therefore the basis its descendants inherit, replacing whatever would have flowed down from further up.	RUL-fallback_from_nearest	
+25.3	2. **(b) manual-required** — otherwise (no ancestor has a fallback), the proposal is `manual_required` and the manual coordinate fields start blank.	BLD-folder_fallback_cell	
+25.3	To compute inheritance correctly, destinations are processed **parent-first**, so an ancestor's effective fallback is known before any child cell that would inherit it is built — the same ordering the timezone inheritance uses (Section 18).	BLD-folder_fallback_cell	
+25.3	Accepting the inherited proposal is choosing to inherit: should the ancestor's fallback change, the accepted one follows it.	RAT-fallback_nested BLD-folder_fallback_cell	
+25.3	Inheritance flows **parent → child only** (never sibling → sibling).	BLD-folder_fallback_cell	
+25.3	A **file-less container** destination (Section 10.1) carries a `folder_fallback` cell for exactly this purpose — to seed its children — even though it holds no media itself; like every fallback cell it never blocks (`requires_user_input: false`), so a coordinate authored on a container simply becomes the effective fallback its descendants inherit.	BLD-folder_fallback_cell RUL-container_never_waits	
+25.3	The cell resolves its `effective_fallback` during validation:	BLD-folder_fallback_cell	
+25.3	1. if the operator fills `fallback_lat`/`fallback_lon` with an in-range coordinate (latitude −90…90, longitude −180…180, Section 9.2), that authored coordinate is the effective fallback (and re-roots inheritance for descendants);	BLD-folder_fallback_cell RUL-checked_positions_and_times	
+25.3	2. else if the operator sets `accept_proposal: true` and the proposal is `inherited`, the inherited coordinate becomes the effective fallback;	BLD-folder_fallback_cell	
+25.3	3. else the effective fallback is **absent** (`null`).	BLD-folder_fallback_cell	
+25.3	The fallback is **optional and never blocks**: a destination with no effective fallback is fine — its un-located photos simply fall through to the remaining Section 23 options (accept-unlocated if the operator marked the file so, otherwise a per-file blocker).	RUL-fallback_optional	
+25.3	Accordingly the cell's `requires_user_input` is always `false`; the inherited proposal is a convenience the operator *may* validate, not a gate.	BLD-folder_fallback_cell	
+25.3	An authored coordinate that is out of range is a validation blocker located to the destination's `folder_fallback` (Section 9.2), preserved and flagged rather than silently dropped; accepting a proposal that no longer exists marks the cell `stale_user_decision` rather than failing.	RUL-invalid_value_located BLD-folder_fallback_cell	
+25.3	A file placed from the effective folder fallback is a **manual** GPS placement (origin *apply manual*, marker `manual_fallback`), so it is reversible exactly like a per-file manual lock (Section 24.1) — withdrawing the destination's fallback (or moving the file out of a destination that had one) places the file again from its own values.	BLD-placement_order RUL-withdrawal_undoes	
+25.3	In the `photos-23` per-destination summary it is counted under `automatic_folder_fallback`; the exact per-file write is re-derived in `photos-24-executable-plan.json` from the resolved inputs (the effective fallback among them), never read from the summary (Section 25).	BLD-gps_decisions_record BLD-geotag_dependencies	

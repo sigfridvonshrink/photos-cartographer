@@ -402,3 +402,52 @@ A confirmation SHALL hold only for the offset it confirmed; a changed offset is 
 A photo whose fingerprint is taken again with a new value SHALL keep the own values geotag pinned for it under the old
 one, so long as the change maps one value to one.
 :::
+
+
+## 25. Placing each photo
+
+:::{rul} A photo's own position is kept
+:id: RUL-own_position_kept
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+
+Geotag SHALL never replace a photo's own GPS position.
+:::
+
+:::{rul} A photo is placed by the most specific source it has
+:id: RUL-placement_order
+:status: seed
+:criticality: high
+:verify: required
+:refines: RUL-own_position_kept
+
+A photo with no position of its own SHALL be placed by the first that applies: a position the user set for it, the
+tracks at its resolved time, its destination's folder fallback; one none places waits for the user to set one or to
+leave it unlocated.
+:::
+
+:::{rul} A destination's fallback is the nearest one it lies in
+:id: RUL-fallback_from_nearest
+:status: seed
+:criticality: med
+:verify: required
+:aliases: geotag-fallback-inherit-1, geotag-fallback-parentfirst-1
+:refines: RUL-placement_order
+
+A destination's folder-fallback proposal SHALL be the fallback in effect at the nearest destination it lies in that
+has one.
+:::
+
+:::{rul} No destination waits on its fallback
+:id: RUL-fallback_optional
+:status: seed
+:criticality: low
+:verify: required
+:aliases: geotag-fallback-never-blocks-1
+:refines: RUL-placement_order
+
+A destination SHALL never wait on its folder fallback: without one, its photos the tracks cannot place each ask on
+their own.
+:::

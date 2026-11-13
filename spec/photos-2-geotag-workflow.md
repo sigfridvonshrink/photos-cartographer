@@ -1313,13 +1313,11 @@ It must be grouped by destination.
 
 For files whose GPS decision is automatic, no-op, or automatically correctable without user review, the JSON should contain per-destination summaries rather than enumerating every file path.
 
-File paths should appear in `photos-23-gps-decisions.json` only for items where the user must make or review a decision, for example:
+File paths should appear in `photos-23-gps-decisions.json` only for items where the user must make or review a decision:
 
-1. manual GPS fallback needed;
-2. ambiguous GPX match;
-3. conflicting GPS evidence;
-4. stale preserved user decision;
-5. blocker that the user must resolve.
+1. a photo nothing places — no position of its own, none set for it, no track at its time and no folder fallback — which waits for the user (`no_reliable_gps_source`);
+2. a photo the user set a position for (`manual_locked`);
+3. a photo the user chose to leave unlocated (`accepted_unlocated`).
 
 The exact file-level operation list belongs in:
 
@@ -1348,7 +1346,7 @@ For each destination, `photos-23-gps-decisions.json` should summarize automatic 
 2. number of files with no GPS change needed;
 3. number of files automatically assigned GPX interpolation;
 4. number of files automatically assigned GPX extrapolation;
-5. number of files automatically assigned manual/folder fallback GPS, if policy allows;
+5. number of files placed by the destination's folder fallback;
 6. number of files blocked;
 7. number of files requiring user review;
 8. GPX sources used;
@@ -1401,14 +1399,7 @@ The artifact should indicate:
 }
 ```
 
-It should include only the sections needed to complete GPS decisions, such as:
-
-1. files requiring manual GPS fallback;
-2. destination folders requiring fallback coordinates;
-3. GPX interpolation/extrapolation candidates requiring review;
-4. ambiguous GPS decisions;
-5. explicit accept/reject/fillable decision fields;
-6. blockers preventing executable planning.
+It holds every destination, each with its folder-fallback cell and its summary; its review items are the photos the user must place or leave unlocated, each with the fields to do so. Blockers preventing executable planning are reported in the output, not recorded in the artifact.
 
 ### 25.2 If no user GPS decisions are required
 
@@ -1453,12 +1444,12 @@ Its decision cell lives **inside each per-destination section** of `photos-23-gp
 }
 ```
 
-The fallback proposal is chosen by **downward inheritance**, mirroring the clock-offset rule of Section 10.2 rule 4 (and reusing the same nearest-ancestor walk):
+The fallback proposal is chosen by **downward inheritance**, as the destination timezone is (Section 18), reusing the same nearest-ancestor walk — but an inherited fallback takes effect only once the user accepts it (Section 9.1):
 
 1. **(a) inherited** — if a **nearest ancestor destination** has a resolved effective fallback, this cell's proposal is that ancestor's fallback, surfaced as a **proposal to confirm** and labelled with the `inherited_from` ancestor path. Inheritance is **recursive down the destination tree**: a destination's *effective* fallback — however it was reached, whether authored here or inherited-and-accepted — is the basis propagated to its immediate children, and onward to grandchildren. A **fallback authored at a folder resets the chain** at that point: that coordinate becomes the folder's effective fallback and therefore the basis its descendants inherit, replacing whatever would have flowed down from further up.
 2. **(b) manual-required** — otherwise (no ancestor has a fallback), the proposal is `manual_required` and the manual coordinate fields start blank.
 
-To compute inheritance correctly, destinations are processed **parent-first**, so an ancestor's effective fallback is known before any child cell that would inherit it is built — the same ordering the clock-offset inheritance uses (Section 10.2). Inheritance flows **parent → child only** (never sibling → sibling). A **file-less container** destination (Section 10.1) carries a `folder_fallback` cell for exactly this purpose — to seed its children — even though it holds no media itself; like every fallback cell it never blocks (`requires_user_input: false`), so a coordinate authored on a container simply becomes the effective fallback its descendants inherit.
+To compute inheritance correctly, destinations are processed **parent-first**, so an ancestor's effective fallback is known before any child cell that would inherit it is built — the same ordering the timezone inheritance uses (Section 18). Accepting the inherited proposal is choosing to inherit: should the ancestor's fallback change, the accepted one follows it. Inheritance flows **parent → child only** (never sibling → sibling). A **file-less container** destination (Section 10.1) carries a `folder_fallback` cell for exactly this purpose — to seed its children — even though it holds no media itself; like every fallback cell it never blocks (`requires_user_input: false`), so a coordinate authored on a container simply becomes the effective fallback its descendants inherit.
 
 The cell resolves its `effective_fallback` during validation:
 

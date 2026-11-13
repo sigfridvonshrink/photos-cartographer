@@ -66,7 +66,8 @@ def _dd(art, dest):
 
 # --- classifier branch by branch --------------------------------------------
 
-@pytest.mark.spec("geotag-fallback-rank-1", "RUL-geotag_rerun_keeps_settled", test="TST-geotag_gps_decisions-classify_all_branches")
+@pytest.mark.spec("geotag-fallback-rank-1", "RUL-geotag_rerun_keeps_settled", "RUL-own_position_kept", "RUL-placement_order",
+                  "BLD-placement_order", test="TST-geotag_gps_decisions-classify_all_branches")
 def test_classify_all_branches():
     g = _gpx()
     cfg = utils.CONFIG
@@ -91,7 +92,8 @@ def test_valid_coord(lat, lon, ok):
 
 # --- the summary artifact ----------------------------------------------------
 
-@pytest.mark.spec("geotag-23-paths-only-review-1", "gpx-geotag-fingerprint-cascade-1", test="TST-geotag_gps_decisions-summary_counts_and_review_items")
+@pytest.mark.spec("geotag-23-paths-only-review-1", "gpx-geotag-fingerprint-cascade-1", "BLD-gps_decisions_record",
+                  test="TST-geotag_gps_decisions-summary_counts_and_review_items")
 def test_summary_counts_and_review_items(tmp_path):
     wf = _wf(tmp_path)
     d = f"{BYDEST}/Trip"
@@ -168,7 +170,8 @@ def _with_fallback(parent, lat, lon):
             {"fallback_lat": lat, "fallback_lon": lon}}}}}
 
 
-@pytest.mark.spec("geotag-fallback-inherit-1", "RUL-other_proposals_need_acceptance", test="TST-geotag_gps_decisions-child_inherits_parent_fallback_as_proposal")
+@pytest.mark.spec("geotag-fallback-inherit-1", "RUL-other_proposals_need_acceptance", "RUL-fallback_from_nearest",
+                  "BLD-folder_fallback_cell", test="TST-geotag_gps_decisions-child_inherits_parent_fallback_as_proposal")
 def test_child_inherits_parent_fallback_as_proposal(tmp_path):
     wf = _wf(tmp_path)
     p, c = f"{BYDEST}/Trip", f"{BYDEST}/Trip/Sub"
@@ -193,7 +196,8 @@ def test_accepting_inherited_fallback_resolves_child_block(tmp_path):
     assert _dd(art, c)["gps_decisions"]["summary"]["automatic_folder_fallback"] == 1   # b resolved
 
 
-@pytest.mark.spec("geotag-fallback-parentfirst-1")
+@pytest.mark.spec("geotag-fallback-parentfirst-1", "RUL-fallback_from_nearest",
+                  test="TST-geotag_gps_decisions-manual_fallback_reroots_and_grandchild_skips_unconfirmed")
 def test_manual_fallback_reroots_and_grandchild_skips_unconfirmed(tmp_path):
     wf = _wf(tmp_path)
     p, c, gc = f"{BYDEST}/Trip", f"{BYDEST}/Trip/Sub", f"{BYDEST}/Trip/Sub/Deep"
@@ -256,3 +260,36 @@ def test_determinism(tmp_path):
     a1, _ = _build(wf, files, rows, _gpx())
     a2, _ = _build(wf, files, rows, _gpx(), a1)
     assert json.dumps(a1, sort_keys=True) == json.dumps(a2, sort_keys=True)
+
+
+@pytest.mark.spec("RUL-fallback_from_nearest", "BLD-folder_fallback_cell",
+                  test="TST-geotag_gps_decisions-an_accepted_inheritance_follows_the_parent")
+def test_an_accepted_inheritance_follows_the_parent(tmp_path):
+    # Accepting the inherited fallback is choosing to inherit: the parent's fallback changed, the child follows it.
+    wf = _wf(tmp_path)
+    p, c = f"{BYDEST}/Trip", f"{BYDEST}/Trip/Sub"
+    files = [_file(f"{p}/a.jpg", p), _file(f"{c}/b.jpg", c)]
+    prior = {"destinations": {
+        p: {"folder_fallback": {"user_decision": {"fallback_lat": 10.0, "fallback_lon": 20.0}}},
+        c: {"folder_fallback": {"user_decision": {"accept_proposal": True}}}}}
+    prior["destinations"][p]["folder_fallback"]["user_decision"] = {"fallback_lat": 11.0, "fallback_lon": 21.0}
+    art, _ = _build(wf, files, [], _gpx(), prior)
+    cfb = _dd(art, c)["folder_fallback"]
+    assert cfb["effective_fallback"] == {"lat": 11.0, "lon": 21.0} and cfb["stale_user_decision"] is False
+
+
+@pytest.mark.spec("geotag-fallback-never-blocks-1", "RUL-fallback_optional", "BLD-folder_fallback_cell",
+                  test="TST-geotag_gps_decisions-a_destination_never_waits_on_its_fallback")
+def test_a_destination_never_waits_on_its_fallback(tmp_path):
+    # No fallback anywhere: no fallback cell asks for anything — a container's included; only the photo nothing
+    # places waits, and on its own.
+    wf = _wf(tmp_path)
+    c = f"{BYDEST}/Trip/Sub"
+    art, _ = _build(wf, [_file(f"{c}/b.jpg", c)], [], _gpx(), None)
+    for dest in (BYDEST, f"{BYDEST}/Trip", c):
+        fb = _dd(art, dest)["folder_fallback"]
+        assert fb["requires_user_input"] is False and fb["effective_fallback"] is None, dest
+    items = _dd(art, c)["gps_decisions"]["review_items"]
+    assert [(i["relative_path"], i["reason"], i["requires_user_input"]) for i in items] == [
+        (f"{c}/b.jpg", "no_reliable_gps_source", True)]
+
