@@ -7,7 +7,7 @@
 1	3. require `5-photos-by-date` to contain no photos before geotag can proceed;	RUL-geotag_gates	
 1	4. require that destination development (the jpg/tif breakout) has not yet started;	RUL-development_after_merge	
 1	5. ensure every file can be resolved to real UTC;	RUL-time_before_gps RUL-untimed_photo_stops_geotag	
-1	6. persist resolved UTC for every file in SQLite;	defer:geotag-22	resolved UTC is §22
+1	6. persist resolved UTC for every file in SQLite;	BLD-resolved_utc	resolved UTC is §22
 1	7. plan GPS decisions only after time is solved;	RUL-time_before_gps	
 1	8. plan timestamp-based no-clobber renames using destination-local civil time;	RUL-geotag_name_final	the renames are §27
 1	9. produce numbered JSON decision artifacts at formal decision stages;	RUL-decision_stage_writes_record BLD-geotag_records_by_destination	
@@ -305,8 +305,8 @@
 10.2	The **only** offset auto-resolution is a GPX self-anchor under the Section 9.1 policy flags; timezone-derived and manual buckets are always confirmable;	RUL-anchor_offset_auto_as_configured RUL-other_proposals_need_acceptance	
 10.2	5. camera-group **identity and classification** (camera vs smartphone) remain group-scoped config (Section 16).	RUL-geotag_reuses_camera_group	
 10.2	A cell may surface `camera_group_class` read-only to explain why it needs (camera) or does not need (smartphone solved from its own metadata) a clock-offset decision; the editable offset itself is per (group, destination[, date]);	RUL-geotag_reuses_camera_group	read-only context in the cell
-10.2	6. resolved UTC for a file uses its **(camera group, destination, date) effective offset** — selecting the file's own naive-date bucket, falling back to the bare-group bucket for a single-day destination — together with its **destination effective timezone**.	defer:geotag-22	resolved UTC is §22
-10.2	A file is fully solvable only when **both** are complete.	defer:geotag-22	resolved UTC is §22
+10.2	6. resolved UTC for a file uses its **(camera group, destination, date) effective offset** — selecting the file's own naive-date bucket, falling back to the bare-group bucket for a single-day destination — together with its **destination effective timezone**.	BLD-resolved_utc RUL-time_before_gps	resolved UTC is §22
+10.2	A file is fully solvable only when **both** are complete.	BLD-resolved_utc RUL-time_before_gps	resolved UTC is §22
 10.2	A **timezone-derived** proposal (rule 4b) is the no-anchor default — e.g. a `…/Kyoto/Kinkaku-ji` day with no native-GPS frame, deriving its offset from Kyoto's resolved `Asia/Tokyo`:	BLD-offset_buckets	
 10.2	```json [sha1:b44fbb96, 16 lines]	dropped	an example cell; BLD-offset_buckets names the fields
 10.2	If the user instead types a `manual_offset_seconds` here, that becomes this bucket's effective offset for that day only.	RUL-offset_per_camera_destination_day	
@@ -465,13 +465,13 @@
 17	2. destination civil timezone proposal/status;	BLD-geotag_records_by_destination	
 17	3. camera groups present;	BLD-offset_buckets	
 17	4. source-naive timestamp range;	dropped	never computed; prep's handoff reports each destination folder's span
-17	5. whether each file can be mapped to real UTC;	defer:geotag-22	whether each file resolves is the resolved-UTC stage's
+17	5. whether each file can be mapped to real UTC;	BLD-resolved_utc RUL-time_before_gps	whether each file resolves is the resolved-UTC stage's
 17	6. for each camera group present, whether **this destination's** clock-offset decision for that group is needed and whether it can be auto-anchored or needs manual input (Section 10.2) — a *camera* group needs a per-(group, destination) offset; a *smartphone* group is solved per file from its own metadata and needs no offset cell;	RUL-offset_per_camera_destination_day BLD-offset_buckets	
 17	7. whether GPX/native-GPS time-anchor proposals are available **for that (group, destination)** — i.e. whether that group has native-GPS frames *in this destination* to anchor from;	RUL-offset_from_own_evidence BLD-offset_buckets	
 17	8. whether blockers remain.	RUL-no_record_before_decisions	
 17	For each camera group **present in the destination**, the workflow determines whether that destination's time can be solved from:	dropped	introduces the list
 17	1. for a *camera* group, the offset of each (group, destination, day) bucket — anchored from that group's native-GPS frames in this destination that day (Section 19), derived from the destination's civil timezone (Section 19.4), or entered by the user as a manual offset or a real time (Section 19.3);	RUL-offset_per_camera_destination_day RUL-offset_from_own_evidence BLD-offset_buckets	
-17	2. for a *smartphone* group, each file's own recorded offset, else the destination's civil timezone (no per-destination offset needed);	defer:geotag-22	a phone's per-photo time is the resolved-UTC stage's
+17	2. for a *smartphone* group, each file's own recorded offset, else the destination's civil timezone (no per-destination offset needed);	RUL-phone_time_from_own_offset BLD-resolved_utc	a phone's per-photo time is the resolved-UTC stage's
 17	3. for a file whose time geotag already corrected, its own recorded offset, else the destination's civil timezone.	RUL-geotag_rerun_keeps_settled	
 17	A camera group present in a destination with **no** anchorable native-GPS frame *for a given day* is not self-solved for that day's bucket; the bucket instead takes a **timezone-derived** proposal from the destination's resolved civil timezone (Section 10.2 rule 4b, Section 19.4), and falls to a blank manual field only if the timezone is unresolved too.	RUL-offset_from_own_evidence BLD-offset_buckets	
 17	Offsets are **not** inherited from ancestor destinations.	RUL-offset_from_own_evidence	
@@ -621,3 +621,25 @@
 21	If the workspace config changed, the time-decision artifact may become stale and must be regenerated or revalidated.	INV-no_stale_use RUL-staleness_by_area BLD-decision_record_envelope	
 21	If camera group classification changed, time-geotag requirements must be recomputed and the time-decision artifact becomes stale.	RUL-staleness_by_area BLD-decision_record_envelope	
 21	User-filled fields should be preserved across regeneration where the logical target is still the same.	RUL-decision_kept	
+22	## 22. Stage 7 — Compute resolved UTC per file	dropped	a heading; the corpus's documents carry their own
+22	Once time decisions are complete, the workflow computes resolved UTC for every media file.	BLD-resolved_utc RUL-time_before_gps	
+22	The result should be persisted into SQLite as a derived calibration cache.	BLD-resolved_utc	
+22	SQLite should contain per-file facts such as:	dropped	introduces the list
+22	```text [sha1:ae49a4bd, 12 lines]	BLD-resolved_utc	
+22	The inputs the rows were made from — the time policy, the camera-group key version, `photos-21-time-decisions.json`, the prep cache, the metadata field-set version and the GPX set — are not stored per row: they enter the cache's fingerprint (Section 22.1).	BLD-resolved_utc_fingerprint	
+22	The resolved UTC cache is an artifact even though it is stored in SQLite rather than as a standalone JSON file.	BLD-resolved_utc_fingerprint INV-no_stale_use	
+22	It must be created only after validating all upstream dependencies, including `photos-21-time-decisions.json`.	BLD-geotag_stage_order BLD-resolved_utc	
+22	If config, camera grouping, `photos-21-time-decisions.json`, prep cache, metadata field-set version, GPX dependency, or relevant source file facts change, resolved UTC becomes stale and must be recomputed.	BLD-resolved_utc_fingerprint INV-no_stale_use	
+22.1	### 22.1 Resolved-UTC cache fingerprint	dropped	a heading; the corpus's documents carry their own
+22.1	Because the resolved-UTC cache lives in SQLite rather than as a hashable file, it must expose a deterministic fingerprint so downstream JSON artifacts can record and re-verify it the same way they re-hash JSON dependencies.	BLD-resolved_utc_fingerprint	
+22.1	The `resolved_utc_cache_fingerprint` must be a SHA-256 computed over a canonical, deterministically ordered serialization of:	BLD-resolved_utc_fingerprint	
+22.1	1. every per-file resolved row (`file_id`/workspace path, `resolved_utc`, `resolved_utc_status`, `time_rule_used`, `utc_offset_used`, `source_time_provenance`);	BLD-resolved_utc_fingerprint	
+22.1	2. the input fingerprints that produced those rows: the **time-policy fingerprint** (a SHA-256 over just the `camera_time_and_timezone_policy` config area — *not* the whole-config hash), the camera-group-key version, `photos-21-time-decisions.json` SHA-256, **`photos-22-gps-drift-validation.json` SHA-256** (so an operator-validated/corrected offset restales resolved UTC — Section 22a), the prep cache fingerprint, the metadata field-set version, and the **GPX fingerprint**.	BLD-resolved_utc_fingerprint RUL-staleness_by_area	
+22.1	The GPX fingerprint is included **unconditionally** — a deliberate, conservative over-inclusion: even a destination whose UTC was resolved entirely without GPX (e.g. from native EXIF plus a manual offset) still carries the current GPX fingerprint, so editing the GPX set conservatively restales resolved UTC even where GPX had no effect on the result.	BLD-resolved_utc_fingerprint RUL-tracks_in_dependencies	
+22.1	This errs toward re-resolving rather than risk serving a stale value, and the cost is bounded (resolved UTC is recomputed, not the expensive media work).	RAT-tracks_change_the_answers	
+22.1	The config input is deliberately the **time-policy subset**, not the whole-config file hash, so resolved-UTC staleness stays **surgical** (shared contract `photos-shared-contract.md` Section 4.2): a config edit *outside* the time policy — for example to `library_root`, the GPX matching thresholds, the filename format, or the `zfs` block — must **not** restale already-resolved UTC, because none of those affect how UTC is computed.	RUL-staleness_by_area BLD-resolved_utc_fingerprint	
+22.1	Only a change to the time policy (or to one of the other listed inputs) restales it.	RUL-staleness_by_area	
+22.1	The whole-config SHA-256 still appears as `config_fingerprint` in the **executable plan's** (`photos-24`) `depends_on` for end-to-end **integrity and change-detection** (it is the byte hash the dependency cascade re-verifies, shared contract Section 9), but it is **not** the resolved-UTC staleness trigger — the two roles are kept distinct exactly as Section 4.2 prescribes (field-scoped fingerprints drive staleness; the whole-file hash is for integrity, not staleness).	BLD-geotag_dependencies BLD-staleness_by_field_fingerprints	
+22.1	The decision artifacts (`photos-21`/`photos-23`) deliberately carry only their **field-scoped** policy fingerprints (the time-policy / GPS-policy subsets), not the whole-file hash, so an unrelated config edit cannot needlessly restale them; the whole-file integrity hash enters the cascade once, at the plan, which is the artifact `execute` revalidates.	BLD-decision_record_envelope BLD-staleness_by_field_fingerprints	
+22.1	Rows must be ordered by workspace path and all values normalized to text before hashing, so the fingerprint is stable across runs with unchanged inputs.	BLD-resolved_utc_fingerprint	
+22.1	This `resolved_utc_cache_fingerprint` is the value referenced as the "resolved UTC cache fingerprint" dependency in Sections 5, 6, 24, and 28.	BLD-geotag_dependencies	

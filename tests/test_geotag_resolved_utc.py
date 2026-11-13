@@ -75,6 +75,35 @@ def test_smartphone_native_offset():
     assert r["utc_offset_used"] == 7200
 
 
+@pytest.mark.spec("RUL-phone_time_from_own_offset", "BLD-resolved_utc",
+                  test="TST-geotag_resolved_utc-a_phone_time_takes_the_offset_recorded_with_it")
+@pytest.mark.parametrize("tag, offset_tag", [("DateTimeOriginal", "OffsetTimeOriginal"),
+                                             ("CreateDate", "OffsetTimeDigitized"), ("ModifyDate", "OffsetTime")])
+def test_a_phone_time_takes_the_offset_recorded_with_it(tag, offset_tag):
+    # Each time field has its own offset field; another field's offset never turns it to UTC.
+    others = {t: "+05:00" for t in ("OffsetTimeOriginal", "OffsetTimeDigitized", "OffsetTime") if t != offset_tag}
+    f = dict(_file("6-photos-by-dest/B/p.jpg", PHONE, "2024:07:03 14:00:00"), source_time_tag=tag,
+             raw_times={offset_tag: "+02:00", **others})
+    r = _one(f)
+    assert r["resolved_utc"] == "2024-07-03T12:00:00Z" and r["utc_offset_used"] == 7200
+    assert r["time_rule_used"] == "smartphone_native_offset"
+    # with only another field's offset recorded, the destination's timezone decides (London, summer: +1)
+    f2 = dict(f, raw_times=others)
+    r2 = _one(f2, _art(tz="Europe/London"))
+    assert r2["time_rule_used"] == "destination_timezone" and r2["resolved_utc"] == "2024-07-03T13:00:00Z"
+
+
+@pytest.mark.spec("BLD-resolved_utc", test="TST-geotag_resolved_utc-a_photos_scope_names_the_cell_its_offset_came_from")
+def test_a_photos_scope_names_the_cell_its_offset_came_from():
+    art = {"destinations": {"6-photos-by-dest/B": {
+        "destination_timezone": {"effective_iana_timezone": "Europe/Brussels"},
+        "camera_group_time_decisions": {
+            f"{CAM}@2024-07-03": {"effective_time_anchor": {"offset_seconds": -7200, "source": "manual"}},
+            f"{CAM}@2024-07-04": {"effective_time_anchor": {"offset_seconds": -3600, "source": "manual"}}}}}}
+    r = _one(_file("6-photos-by-dest/B/a.arw", CAM, "2024:07:04 09:00:00"), art)
+    assert r["time_decision_scope"] == f"{CAM}@2024-07-04|6-photos-by-dest/B" and r["utc_offset_used"] == -3600
+
+
 def test_smartphone_destination_timezone_dst():
     summer = _one(_file("6-photos-by-dest/B/s.jpg", PHONE, "2024:07:03 14:00:00"))   # CEST = UTC+2
     assert summer["resolved_utc"] == "2024-07-03T12:00:00Z" and summer["time_rule_used"] == "destination_timezone"
