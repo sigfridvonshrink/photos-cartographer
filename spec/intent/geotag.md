@@ -244,7 +244,7 @@ group already classed kept as it is.
 
 :::{rul} A file naming no camera is solved on its own
 :id: RUL-unidentified_files_solved_alone
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -393,7 +393,7 @@ A confirmation SHALL hold only for the offset it confirmed; a changed offset is 
 
 :::{rul} A photo's own values follow its fingerprint's new value
 :id: RUL-own_values_follow_new_fingerprint
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required

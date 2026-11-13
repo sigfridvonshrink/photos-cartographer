@@ -142,7 +142,7 @@ the configuration's, and exit with status 2 having written no record and read no
 
 :::{bld} Files naming no camera
 :id: BLD-unidentified_files
-:status: seed
+:status: ruled
 :realises: RUL-unidentified_files_solved_alone
 
 A file whose `camera_group_key` is `NO_IDENTITY_KEY` (`unknown`), the key prep gives a file with no serial, make, model
@@ -280,7 +280,7 @@ SHA-256, `gpx_fingerprint`, `camera_time_policy_fingerprint` and `camera_group_k
 
 :::{bld} The pinned values follow a retaken fingerprint
 :id: BLD-original_values_follow_fingerprint
-:status: seed
+:status: ruled
 :realises: RUL-own_values_follow_new_fingerprint
 
 `build_file_model` SHALL find a photo's pinned values under its fingerprint or, failing it, under the value it was
