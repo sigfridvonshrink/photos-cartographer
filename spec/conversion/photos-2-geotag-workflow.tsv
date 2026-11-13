@@ -457,3 +457,26 @@
 16	Camera-group identity reuses prep's grouping rather than reinventing it: prep already computes a `camera_group_key` (at `CAMERA_GROUP_KEY_VERSION`) from serial/make/model/owner fields and emits it in both the handoff and SQLite.	RUL-geotag_reuses_camera_group RUL-prep_derives_camera_group BLD-camera_group_key BLD-camera_group_key_version	
 16	Mobile vs fixed-clock classification reuses the existing config in `camera_time_and_timezone_policy.device_groups` (workspace config `photos-00-config.json`), where `phones` denotes mobile and `fixed_clock_cameras` denotes fixed-clock.	RUL-camera_classes_not_derivation BLD-known_camera_group	
 16	A group is "known" when its key is listed under one of those classes; unknown groups are exactly what the pasteable config snippets ask the user to classify.	RUL-known_when_classified RUL-unknown_group_classification_offered	
+17	## 17. Stage 5 — Determine per-destination time requirements	dropped	a heading; the corpus's documents carry their own
+17	Once camera groups are known and classified, the workflow determines whether every media item can be mapped from source media time to real UTC.	RUL-unknown_group_stops_geotag BLD-geotag_stage_order	
+17	This analysis must be grouped by destination.	BLD-geotag_records_by_destination	
+17	For each destination, the workflow determines:	dropped	introduces the list
+17	1. destination path;	BLD-geotag_records_by_destination	
+17	2. destination civil timezone proposal/status;	BLD-geotag_records_by_destination	
+17	3. camera groups present;	BLD-offset_buckets	
+17	4. source-naive timestamp range;	dropped	never computed; prep's handoff reports each destination folder's span
+17	5. whether each file can be mapped to real UTC;	defer:geotag-22	whether each file resolves is the resolved-UTC stage's
+17	6. for each camera group present, whether **this destination's** clock-offset decision for that group is needed and whether it can be auto-anchored or needs manual input (Section 10.2) — a *camera* group needs a per-(group, destination) offset; a *smartphone* group is solved per file from its own metadata and needs no offset cell;	RUL-offset_per_camera_destination_day BLD-offset_buckets	
+17	7. whether GPX/native-GPS time-anchor proposals are available **for that (group, destination)** — i.e. whether that group has native-GPS frames *in this destination* to anchor from;	RUL-offset_from_own_evidence BLD-offset_buckets	
+17	8. whether blockers remain.	RUL-no_record_before_decisions	
+17	For each camera group **present in the destination**, the workflow determines whether that destination's time can be solved from:	dropped	introduces the list
+17	1. for a *camera* group, the offset of each (group, destination, day) bucket — anchored from that group's native-GPS frames in this destination that day (Section 19), derived from the destination's civil timezone (Section 19.4), or entered by the user as a manual offset or a real time (Section 19.3);	RUL-offset_per_camera_destination_day RUL-offset_from_own_evidence BLD-offset_buckets	
+17	2. for a *smartphone* group, each file's own recorded offset, else the destination's civil timezone (no per-destination offset needed);	defer:geotag-22	a phone's per-photo time is the resolved-UTC stage's
+17	3. for a file whose time geotag already corrected, its own recorded offset, else the destination's civil timezone.	RUL-geotag_rerun_keeps_settled	
+17	A camera group present in a destination with **no** anchorable native-GPS frame *for a given day* is not self-solved for that day's bucket; the bucket instead takes a **timezone-derived** proposal from the destination's resolved civil timezone (Section 10.2 rule 4b, Section 19.4), and falls to a blank manual field only if the timezone is unresolved too.	RUL-offset_from_own_evidence BLD-offset_buckets	
+17	Offsets are **not** inherited from ancestor destinations.	RUL-offset_from_own_evidence	
+17	The destination's **civil timezone**, by contrast, *does* inherit: a destination with no timezone of its own takes its nearest ancestor destination's effective timezone as a confirmable proposal (Section 18), seeding downward from a trip's root — so the timezone cascades, while each day's offset is re-derived locally.	defer:geotag-18	timezone inheritance is §18's
+17	Once this analysis is complete, the workflow has reached the formal time-decision stage.	dropped	a connective
+17	At that point, it must create:	RUL-decision_stage_writes_record	
+17	```text [sha1:c28abbd9, 1 lines]	RUL-decision_stage_writes_record BLD-geotag_stage_order	
+17	even if no user input is required.	RUL-decision_stage_writes_record	

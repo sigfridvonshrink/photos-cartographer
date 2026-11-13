@@ -797,13 +797,9 @@ For each destination, the workflow determines:
 
 For each camera group **present in the destination**, the workflow determines whether that destination's time can be solved from:
 
-1. trustworthy native UTC timestamps;
-2. mobile-device timestamps with reliable timezone/offset metadata (smartphone groups; no per-destination offset needed);
-3. existing user calibration rules;
-4. a manual fixed UTC offset for this (group, destination);
-5. manual time segments;
-6. GPX/native-GPS time-anchor proposals anchored from that group's native-GPS frames in this destination (Section 19);
-7. other explicitly supported calibration evidence.
+1. for a *camera* group, the offset of each (group, destination, day) bucket — anchored from that group's native-GPS frames in this destination that day (Section 19), derived from the destination's civil timezone (Section 19.4), or entered by the user as a manual offset or a real time (Section 19.3);
+2. for a *smartphone* group, each file's own recorded offset, else the destination's civil timezone (no per-destination offset needed);
+3. for a file whose time geotag already corrected, its own recorded offset, else the destination's civil timezone.
 
 A camera group present in a destination with **no** anchorable native-GPS frame *for a given day* is not self-solved for that day's bucket; the bucket instead takes a **timezone-derived** proposal from the destination's resolved civil timezone (Section 10.2 rule 4b, Section 19.4), and falls to a blank manual field only if the timezone is unresolved too. Offsets are **not** inherited from ancestor destinations. The destination's **civil timezone**, by contrast, *does* inherit: a destination with no timezone of its own takes its nearest ancestor destination's effective timezone as a confirmable proposal (Section 18), seeding downward from a trip's root — so the timezone cascades, while each day's offset is re-derived locally.
 
