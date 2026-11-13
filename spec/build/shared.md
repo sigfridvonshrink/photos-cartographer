@@ -974,7 +974,7 @@ found to hold its content.
 
 :::{bld} The merge summary
 :id: BLD-merge_records
-:status: seed
+:status: ruled
 :realises: RUL-merge_records_landing, RUL-nothing_built_from_merge_records, RUL-merge_outcome_recorded
 :uses: BLD-archive_manifest, BLD-workspace_database
 :aliases: merge-no-stale-summary-1, merge-summary-counts-partition-1, merge-summary-grouped-determinism-1, merge-summary-records-merged-sha256-1

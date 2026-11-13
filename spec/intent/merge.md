@@ -112,7 +112,7 @@ it — whatever the journal or the plan says — and otherwise block, the run th
 
 :::{rul} Merge records how its run ended
 :id: RUL-merge_outcome_recorded
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-merge_records_landing
@@ -124,7 +124,7 @@ Merge SHALL record whether its run succeeded whole, in part or not at all, or wa
 
 :::{rul} Merge tells how its run ended
 :id: RUL-merge_run_reported
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :uses: DEF-merge, DEF-library, DEF-managed_folders, DEF-sealed_workspace
