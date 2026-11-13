@@ -885,13 +885,15 @@ Merge SHALL map each photo by destination to its place under `library_root`, and
 
 :::{bld} A library file in the way is fingerprinted, through a cache
 :id: BLD-library_file_fingerprinted
-:status: ruled
+:status: seed
 :realises: RUL-collision_by_content, RUL-library_file_read_once, RUL-collision_same_content, RUL-library_file_rechecked_before_removal, RUL-engine_change_is_checked
+:aliases: merge-execute-no-db-rows-1
 
 Where a file is there, merge SHALL fingerprint it — from `library_fingerprint_cache` when its path, size and
 modification time match a row taken by this build's photo method under the current, known ImageMagick version,
 otherwise by decoding it and storing the row — and compare it with the incoming photo's fingerprint from prep. A file
 whose name differs from the target's only in case is such a file: the same content is already present at its name.
+Only planning writes these rows; execute fingerprints afresh and writes no row.
 :::
 
 :::{bld} A different photo under a taken name takes the next suffix
@@ -934,6 +936,7 @@ Merge SHALL create a missing destination directory under `library_root` with `os
 :id: BLD-library_lock
 :status: ruled
 :realises: RUL-library_lock, RUL-library_lock_fail_fast, RUL-library_confirmed_before_lock, RUL-library_lock_holds_only_holder, RUL-library_lock_stale_recovered
+:aliases: merge-concurrency-library-lock-throughout-1
 
 The library lock SHALL be `LibraryLock`: an exclusive, non-blocking `flock` on `.photos-merge.lock` in `library_root`,
 recording its holder's `pid`, `started_at` and `host` and nothing else, released by the kernel when its process dies,
@@ -944,12 +947,15 @@ with exit status 1.
 
 :::{bld} Merge's move: one rename, or copy, verify, rename and remove
 :id: BLD-merge_move
-:status: ruled
-:realises: RUL-library_never_altered, RUL-merge_moves, RUL-unplaced_photo_stays
+:status: seed
+:realises: RUL-library_never_altered, RUL-merge_moves, RUL-unplaced_photo_stays, RUL-target_free_at_execute, RUL-collision_same_content
+:aliases: merge-execute-occupied-different-blocker-1, merge-execute-occupied-identical-treat-present-1, merge-execute-safe-alt-only-if-planned-1
 
 Each photo SHALL move into its place without overwriting it: on the library's own filesystem by a single rename that
 refuses an existing name; across filesystems by a copy to a temporary name beside its place, fingerprinted against the
 planned content, renamed into the place only if it is still free, and only then removed from photos by destination.
+A place found taken at execute holding the planned content makes the photo already present; holding other content, it
+blocks the photo — the plan's alternative name used only where the plan recorded one.
 :::
 
 :::{bld} Merge's journal, and how a re-run resumes
@@ -992,6 +998,7 @@ geotag plan and execution ids, the photos it newly moved and those an earlier ru
 :id: BLD-merge_success_sequence
 :status: ruled
 :realises: RUL-merge_reseals, RUL-seal_on_success_only, RUL-reseal_rederives_nothing
+:aliases: merge-execute-db-snapshot-on-success-1
 
 Only on success — every photo placed or already present, none left — SHALL merge then, in order, write
 `photos-35-merge-log.json`, `photos-35-merge-ingest.db`, the package's `photos-35-archive-manifest.json` and

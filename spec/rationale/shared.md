@@ -1184,6 +1184,17 @@ Deciding again is planning's work: when the workspace has moved on, the plan is 
 again.
 :::
 
+:::{rat} Jobs buy time, not outcomes
+:id: RAT-jobs_buy_time
+:status: seed
+:justifies: RUL-execution_jobs_change_nothing
+
+Applying a plan in parallel only saves time, and how many jobs suit depends on the machine of the day. If the count
+could change which name a photo got, or what a record says, the outcome would turn on how a run happened to be timed —
+neither reproducible nor what the user reviewed. So every choice is made before the parallel work starts, each worker
+touches only its own files, and the results are gathered in a fixed order.
+:::
+
 :::{rat} A plan is the decisions of its code
 :id: RAT-plan_is_its_codes
 :status: ruled

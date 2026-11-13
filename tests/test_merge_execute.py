@@ -524,7 +524,7 @@ def _comparable(s):
     return {"totals": s["totals"], "resume": s["resume"], "status": s["status"], "dests": dests}
 
 
-@pytest.mark.spec("merge-concurrency-deterministic-aggregation-1")
+@pytest.mark.spec("merge-concurrency-deterministic-aggregation-1", "RUL-execution_jobs_change_nothing", test="TST-merge_execute-execute_jobs_determinism")
 def test_execute_jobs_determinism(tmp_path):
     photos = [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
               {"fp": "B", "dest": "Trip", "final_name": "b.jpg"},
@@ -555,7 +555,7 @@ def test_execute_sweeps_crash_orphaned_cross_fs_temps(tmp_path):
     assert _summary(ws)["run_metadata"]["orphan_temps_swept"] >= 1
 
 
-@pytest.mark.spec("exec-concurrency-no-semantic-change-1")
+@pytest.mark.spec("exec-concurrency-no-semantic-change-1", "RUL-execution_jobs_change_nothing", test="TST-merge_execute-execute_jobs_identical_library_file_tree")
 def test_execute_jobs_identical_library_file_tree(tmp_path):
     """Beyond the summary, the placed LIBRARY file tree is byte-identical under -j1 vs -j4 — the
     move pass has no concurrency-dependent semantics (relative paths + bytes match exactly)."""
@@ -609,7 +609,7 @@ def test_snapshot_and_revalidation_precede_the_parallel_move_pass(tmp_path, monk
     assert events.count("move") == 3                              # all three files still placed
 
 
-@pytest.mark.spec("merge-concurrency-library-lock-throughout-1")
+@pytest.mark.spec("merge-concurrency-library-lock-throughout-1", test="TST-merge_execute-library_lock_held_throughout_concurrent_move_pass")
 def test_library_lock_held_throughout_concurrent_move_pass(tmp_path, monkeypatch):
     """§10.4: the library lock is held for the WHOLE concurrent move pass — concurrency never relaxes
     cross-run exclusion. Probe by wrapping _move_file (the per-file placement that runs during the
@@ -640,7 +640,7 @@ def test_library_lock_held_throughout_concurrent_move_pass(tmp_path, monkeypatch
     assert _summary(ws)["status"] == "success"
 
 
-@pytest.mark.spec("exec-single-writer-journal-1")
+@pytest.mark.spec("exec-single-writer-journal-1", test="TST-merge_execute-merge_journal_writes_only_from_the_main_thread")
 def test_merge_journal_writes_only_from_the_main_thread(tmp_path, monkeypatch):
     """Single-writer journal (§8.3): under -j4 the merge confirmation journal is persisted ONLY by the
     main thread; worker threads move files but never touch the journal. Probe every journal write."""

@@ -48,7 +48,7 @@ def _rename(fp, to):
     return {"type": "rename_no_clobber", "to": to, "preconditions": {"content_fingerprint": fp}}
 
 
-@pytest.mark.spec("merge-plan-built-from-finalized-record-1")
+@pytest.mark.spec("merge-plan-built-from-finalized-record-1", test="TST-merge_plan-enumerate_joins_prerename_handoff_to_final_name")
 def test_enumerate_joins_prerename_handoff_to_final_name():
     # Handoff carries the PRE-rename name; the rename op (keyed by fingerprint) gives the final name.
     wf, cp = _wf([_ho("6-photos-by-dest/Trip/IMG_1.arw", "A")],
@@ -369,7 +369,7 @@ def test_dry_run_summarizes_validated_plan(tmp_path, monkeypatch, capsys):
         json.loads(out)
 
 
-@pytest.mark.spec("merge-dryrun-requires-saved-plan-1")
+@pytest.mark.spec("merge-dryrun-requires-saved-plan-1", test="TST-merge_plan-dry_run_without_plan_errors")
 def test_dry_run_without_plan_errors(tmp_path, monkeypatch):
     ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     _patch_fp(monkeypatch, fp)
