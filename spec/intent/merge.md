@@ -107,3 +107,29 @@ not the journal recorded the move — and otherwise blocking, naming why.
 A photo gone from photos by destination SHALL count as merged only while its library place, fingerprinted again, holds
 it — whatever the journal or the plan says — and otherwise block, the run then partial.
 :::
+
+## 9. User-visible outputs and the merge summary
+
+:::{rul} Merge records how its run ended
+:id: RUL-merge_outcome_recorded
+:status: seed
+:criticality: med
+:verify: required
+:refines: RUL-merge_records_landing
+:uses: DEF-merge
+:aliases: merge-summary-final-status-values-1
+
+Merge SHALL record whether its run succeeded whole, in part or not at all, or was refused before changing anything.
+:::
+
+:::{rul} Merge tells how its run ended
+:id: RUL-merge_run_reported
+:status: seed
+:criticality: low
+:verify: required
+:uses: DEF-merge, DEF-library, DEF-managed_folders, DEF-sealed_workspace
+:aliases: merge-textual-output-separation-1
+
+At the end of an execution merge SHALL report what it placed in the library, what was already there, each photo left in
+photos by destination with why, and whether the workspace is now sealed.
+:::

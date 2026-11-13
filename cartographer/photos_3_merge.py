@@ -887,7 +887,7 @@ class MergeWorkflow:
                 summary = self._build_summary(ws, plan, library_root, [], snapshot, "rejected",
                                               now_iso, execution_id, jobs, extra_failures=[reason])
                 write_json_artifact(merge_summary_path(ws), summary)
-                return {"status": "rejected", "plan_id": plan.get("plan_id"), "stale": [reason],
+                return {"status": "rejected", "plan_id": plan.get("plan_id"), "snapshot_refusal": reason,
                         "snapshot": snapshot}
             get_reporter().warn(f"Warning: {problem}")
 
@@ -1023,8 +1023,12 @@ class MergeWorkflow:
             if r["blocker"]:
                 failures.append(r["blocker"])
             dest = os.path.dirname(os.path.relpath(r["by_dest_source"], by_dest))
+            blocked = r["final_kind"] == "blocked"
             dests.setdefault(dest, {"files": []})["files"].append({
-                "by_dest_path": r["by_dest_source"], "library_path": r["library_path"],
+                "by_dest_path": r["by_dest_source"],
+                # A blocked photo landed nowhere: no library place, and the reason it stayed.
+                "library_path": None if blocked else r["library_path"],
+                "blocked_reason": r["blocker"] if blocked else None,
                 "renamed_for_library": r["final_kind"] == "renamed_for_library",
                 "already_present": r["final_kind"] == "already_present",
                 "removed_from_by_dest": r["removed"]})
@@ -1124,6 +1128,12 @@ class MergeWorkflow:
         if st == "no_plan":
             reporter.log(f"No {MERGE_PLAN_ARTIFACT} — run `plan` first.")
             emit_next_step(reporter, "`merge plan` first to build the plan.")
+            return 2
+        if st == "rejected" and result.get("snapshot_refusal"):
+            # A snapshot refusal is not a stale plan: re-planning would not cure it.
+            reporter.error(f"\nExecution refused before any change — {result['snapshot_refusal']}.")
+            emit_next_step(reporter, "make the snapshot possible (or set zfs.snapshots_required to false), "
+                                     "then re-run `merge execute`.")
             return 2
         if st == "rejected":
             reporter.error("\nExecution rejected — the merge plan is stale; re-run `plan`:")

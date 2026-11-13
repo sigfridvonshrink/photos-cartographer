@@ -716,6 +716,7 @@ automatic position is recomputed, never rolled back.
 :id: BLD-phase_logs
 :status: ruled
 :realises: RUL-record_whole_each_phase, RUL-carry_forward_by_copy
+:aliases: merge-log-copy-26-forward-append-1
 
 Each phase SHALL write its log: prep `photos-15-prep-log.json` at the end of every prep run ({need}`BLD-prep_log_build`); geotag's
 finalize copies it to `photos-26-complete-log.json` and appends each photo's geotag steps (§13.3); merge copies that to
@@ -973,13 +974,18 @@ found to hold its content.
 
 :::{bld} The merge summary
 :id: BLD-merge_records
-:status: ruled
-:realises: RUL-merge_records_landing, RUL-nothing_built_from_merge_records
+:status: seed
+:realises: RUL-merge_records_landing, RUL-nothing_built_from_merge_records, RUL-merge_outcome_recorded
 :uses: BLD-archive_manifest, BLD-workspace_database
-:aliases: merge-no-stale-summary-1
+:aliases: merge-no-stale-summary-1, merge-summary-counts-partition-1, merge-summary-grouped-determinism-1, merge-summary-records-merged-sha256-1
 
-Merge SHALL write `photos-31-merge-summary.json` on every outcome but a stale plan or a failed precondition: per photo
-and in total, where it landed, whether it was renamed for the library, already present or blocked.
+Merge SHALL write `photos-31-merge-summary.json` on every outcome but a stale plan or a failed precondition: per photo,
+grouped by destination, where it landed, whether it was renamed for the library or already present, whether it left
+photos by destination, and, blocked, why — with no library path; in total, the photos placed new, renamed, already
+present and blocked, the removed the sum of the first three; the status `success`, `partial`, `failed` (every photo
+blocked) or `rejected` (a required snapshot not taken, nothing changed); the merge run and plan ids, `library_root`, the
+geotag plan and execution ids, the photos it newly moved and those an earlier run had, and the SHA-256 of `photos-24-executable-plan.json`,
+`photos-25-execution-summary.json` and `photos-11-handoff.json`; and, apart, the run's times and job count.
 :::
 
 :::{bld} What a whole merge writes, and the seal last
@@ -996,6 +1002,7 @@ Only on success — every photo placed or already present, none left — SHALL m
 :id: BLD-seal_marker
 :status: ruled
 :realises: RUL-seal_is_authority
+:aliases: merge-seal-separate-file-not-guard-field-1
 
 The seal SHALL be `photos-00-sealed.json` in the control directory, its own file beside the workspace guard — which only
 prep writes — recording `sealed`, the merge run id (`merged_run_id`) and `library_root`; its presence alone seals.

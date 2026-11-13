@@ -1759,7 +1759,7 @@ through the pipeline — what was done to its photos and why. It is what the use
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: archive-complete-each-phase-1, prep-log-self-sufficient-1
+:aliases: archive-complete-each-phase-1, prep-log-self-sufficient-1, merge-never-merged-no-35-log-1
 :uses: DEF-transformation_log, DEF-control_records
 
 At the end of every phase the workspace SHALL hold a complete, self-sufficient, human-readable record of everything done
@@ -2341,7 +2341,7 @@ already merged changing nothing.
 :status: ruled
 :criticality: low
 :verify: required
-:aliases: merge-records-summary-1
+:aliases: merge-records-summary-1, merge-summary-per-file-placement-1
 :uses: DEF-merge, DEF-transformation_log
 :refines: RUL-phase_writes_own_records
 
@@ -2356,6 +2356,7 @@ already present, and what blocked the rest.
 :verify: none
 :omit_reason: no test asserts it (backlog item 3)
 :refines: RUL-merge_records_landing
+:aliases: merge-summary-artifact-not-dependency-1
 
 Nothing SHALL be built from merge's records.
 :::
@@ -2365,7 +2366,7 @@ Nothing SHALL be built from merge's records.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: merge-reseals-automatically-1
+:aliases: merge-reseals-automatically-1, merge-reseal-archive-automatic-1
 :uses: DEF-merge, DEF-archival_package
 
 A merge that succeeds SHALL remake the archival package to hold its own records too, as part of the same run and with no
@@ -2378,7 +2379,7 @@ command of its own.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: merge-reseal-no-rederive-1
+:aliases: merge-reseal-no-rederive-1, merge-reseal-reads-not-rederive-geotag-1
 :refines: RUL-merge_reseals
 
 Merge SHALL remake the package from the records as they stand, re-deriving nothing of an earlier phase.
@@ -2390,7 +2391,7 @@ Merge SHALL remake the package from the records as they stand, re-deriving nothi
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: seal-success-then-sealed-1, seal-partial-writes-no-marker-1, merge-interrupted-not-sealed-resumes-1
+:aliases: seal-success-then-sealed-1, seal-partial-writes-no-marker-1, merge-interrupted-not-sealed-resumes-1, merge-seal-only-on-full-success-1
 :uses: DEF-sealed_workspace, DEF-merge
 
 Merge SHALL seal the workspace only when it succeeds whole — every photo by destination placed in the library or found
@@ -2403,7 +2404,7 @@ already there, none left — a partial, failed or interrupted merge leaving it u
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: seal-marker-is-authority-1, seal-marker-separate-file-1
+:aliases: seal-marker-is-authority-1, seal-marker-separate-file-1, merge-seal-marker-is-authority-not-emptiness-1
 :uses: DEF-sealed_workspace, DEF-managed_folders
 
 Whether a workspace is finished SHALL be read from its seal alone, never from the state of its folders.
@@ -2415,7 +2416,7 @@ Whether a workspace is finished SHALL be read from its seal alone, never from th
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: seal-scripts-hardstop-1, merge-sealed-hardstop-touch-nothing-1
+:aliases: seal-scripts-hardstop-1, merge-sealed-hardstop-touch-nothing-1, merge-sealed-all-scripts-refuse-prune-excepted-1
 :uses: DEF-sealed_workspace, DEF-decision
 :refines: RUL-merge_is_terminal
 
