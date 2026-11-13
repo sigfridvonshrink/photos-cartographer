@@ -74,7 +74,7 @@ def test_file_model_builds_by_dest_photos(tmp_path):
     assert f["planned_filename"] is None
 
 
-@pytest.mark.spec("geotag-inmemory-bydest-only-1", "geotag-never-touch-video-1", "geotag-scope-bydest-only-1")
+@pytest.mark.spec("geotag-inmemory-bydest-only-1", "geotag-never-touch-video-1", "geotag-scope-bydest-only-1", "RUL-geotag_changes_only_by_dest", test="TST-geotag_model-file_model_excludes_non_bydest_and_videos")
 def test_file_model_excludes_non_bydest_and_videos(tmp_path):
     wf = _wf(tmp_path, [
         _hfile("6-photos-by-dest/T/a.jpg"),

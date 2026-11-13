@@ -573,6 +573,7 @@ When the only change prep has not recorded is a sort and the inbox is empty, `ge
 :id: BLD-loop_gates
 :status: ruled
 :realises: RUL-geotag_gates, RUL-sort_photos_only, RUL-development_after_merge
+:aliases: geotag-development-check-all-phases-1
 
 The gates SHALL be checked as follows: `geotag plan` checks every gate; `geotag execute` and `finalize` check the
 development gate and the workspace's shape, and validate against the plan's own dependencies instead of the scope and

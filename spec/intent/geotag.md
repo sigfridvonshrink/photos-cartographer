@@ -49,3 +49,17 @@ Geotag's executable plan SHALL carry every dependency it was made from itself �
 tracks, the configuration, the code and each photo's precondition — never relying on a decision record's own
 dependencies to vouch for what came before it.
 :::
+
+## 7. Geotag scope
+
+:::{rul} Geotag changes only the photos sorted into destinations
+:id: RUL-geotag_changes_only_by_dest
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-geotag, DEF-managed_folders
+:aliases: geotag-scope-bydest-only-1, geotag-never-touch-video-1
+
+Geotag SHALL change only the photos in photos by destination — never a video, and never a file in any other folder.
+:::

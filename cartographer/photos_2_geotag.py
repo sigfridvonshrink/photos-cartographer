@@ -242,6 +242,12 @@ def _half_position(lat, lon):
     return (lat in (None, "")) != (lon in (None, ""))
 
 
+def _named(paths, shown=5):
+    """A gate's list of the files it found: every one up to `shown`, then how many more (output wording —
+    a user clears them in one pass rather than one per run; test_every_offending_file_is_named_up_to_five)."""
+    return ", ".join(paths[:shown]) + (f" and {len(paths) - shown} more" if len(paths) > shown else "")
+
+
 def _has_recorded_time(rec):
     """Whether a handoff record's photo carries a recorded time, as prep extracted it."""
     md = rec.get("metadata_status") or {}
@@ -385,20 +391,20 @@ class GeotagWorkflow:
             blockers.append(f"{sources}/ is not empty — prep leaves it empty after every run; an "
                             "unprocessed dump is waiting. Re-run prep to process it: `photos-cartographer prep plan` then `photos-cartographer prep execute`.")
 
-        stray = [rel for rel, mc in self._scan_media(by_date) if mc in ("image", "raw")]
+        stray = sorted(rel for rel, mc in self._scan_media(by_date) if mc in ("image", "raw"))
         if stray:
             blockers.append(f"{by_date}/ still contains {len(stray)} photo(s) — finish moving them "
-                            f"into {by_dest}/ before geotagging (e.g. {stray[0]}).")
+                            f"into {by_dest}/ before geotagging: {_named(stray)}.")
 
         if nonphoto:
-            videos = [p for p, mc in nonphoto if mc == "video"]
-            others = [p for p, mc in nonphoto if mc != "video"]
+            videos = sorted(p for p, mc in nonphoto if mc == "video")
+            others = sorted(p for p, mc in nonphoto if mc != "video")
             parts = []
             if others:
-                parts.append(f"{len(others)} non-media file(s) (e.g. {others[0]})")
+                parts.append(f"{len(others)} non-media file(s): {_named(others)}")
             if videos:
-                parts.append(f"{len(videos)} video(s) (e.g. {videos[0]} — belongs in "
-                             f"{folder_name('videos_by_date')}/)")
+                parts.append(f"{len(videos)} video(s), which belong in {folder_name('videos_by_date')}/: "
+                             f"{_named(videos)}")
             blockers.append(f"{by_dest}/ must contain only photos. Found " + " and ".join(parts) +
                             ". Remove or relocate them before geotagging.")
 
@@ -416,9 +422,8 @@ class GeotagWorkflow:
                          if rec.get("folder_class") == by_dest and rec.get("media_class") in ("image", "raw")
                          and not _has_recorded_time(rec))
         if untimed:
-            shown = ", ".join(untimed[:5]) + (f" and {len(untimed) - 5} more" if len(untimed) > 5 else "")
             blockers.append(f"{len(untimed)} photo(s) in {by_dest}/ have no recorded time, so their true "
-                            f"time cannot be resolved: {shown}. They belong in "
+                            f"time cannot be resolved: {_named(untimed)}. They belong in "
                             f"{folder_name('missing_metadata')}/ — move them there (or give them a time "
                             "and re-run prep), then re-run geotag.")
 
