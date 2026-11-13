@@ -60,6 +60,7 @@ fails its checks stops it with exit status 2, nothing marked and nothing written
 :id: BLD-merge_target
 :status: ruled
 :realises: RUL-library_mirrors_destinations, RUL-geotag_name_final
+:aliases: merge-plan-built-from-finalized-record-1
 
 Merge's `enumerate_finalized` SHALL take each photo of the handoff under `6-photos-by-dest` and give it, as its target,
 `library_root` joined to its folder's path relative to `6-photos-by-dest` — empty for a photo directly in it — and its
@@ -79,4 +80,34 @@ plan — `photos-30-merge-plan.json`, then its `-NNN` backups newest first — h
 not blocked whose `library_target` fingerprints, through `_fingerprint_library_file`, to it, adding `carried_from_plan`
 (the plan that first placed it); no such record makes it a blocked record whose reason names the places tried, or that
 no earlier plan placed it.
+:::
+
+## 10. Plan / dry-run / execute lifecycle
+
+:::{bld} Merge's plan
+:id: BLD-merge_plan
+:status: seed
+:realises: RUL-execution_only_the_plan, RUL-plan_carried_out_by_its_code
+:uses: BLD-merge_target
+:aliases: merge-plan-records-current-size-mtime-1
+
+`photos-30-merge-plan.json` SHALL hold the plan id, schema version and `library_root`; per destination, each photo's
+record — its path in the workspace, content fingerprint, library target and disposition (`placed_new`,
+`renamed_incoming` with its new name, `already_present`, or `blocked` with why), and as preconditions its fingerprint
+and its size and modification time as they stand at planning; the blockers and the totals; and `depends_on`: the
+SHA-256 of `photos-24` and `photos-25`, the handoff's content fingerprint, the configuration's SHA-256, the code
+fingerprint, the ImageMagick version, and the fingerprints of the folder names and media extensions.
+:::
+
+:::{bld} Merge's execute, in order
+:id: BLD-merge_execute
+:status: seed
+:realises: RUL-execution_jobs_change_nothing, RUL-execution_only_the_plan
+:uses: BLD-merge_plan, BLD-merge_move, BLD-merge_journal_resume
+:aliases: merge-moveset-fixed-before-concurrency-1, merge-concurrency-deterministic-aggregation-1, exec-single-writer-journal-1
+
+Merge's execute SHALL, on its main thread, revalidate the plan's `depends_on`, take the snapshots and sweep the
+temporaries a crash left; then move the photos on a pool of `jobs` workers, each touching only its own photo and
+returning a result; the main thread alone writing the journal, as each result arrives, and sorting the results by path
+before the summary is built.
 :::

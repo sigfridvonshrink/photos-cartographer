@@ -229,7 +229,7 @@ the plan's first change.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: snapshot-required-fatal-1
+:aliases: snapshot-required-fatal-1, merge-snapshot-required-aborts-1
 :refines: RUL-snapshot_timing
 
 When the configuration requires snapshots, a run that cannot take one SHALL stop before it changes anything.
@@ -681,7 +681,7 @@ No command SHALL take an option saying where to put a plan or where to find one;
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: plan-missing-stops-1, prep-dryrun-no-plan-stops-1, prep-execute-no-plan-stops-1
+:aliases: plan-missing-stops-1, prep-dryrun-no-plan-stops-1, prep-execute-no-plan-stops-1, merge-dryrun-requires-saved-plan-1
 
 A dry run or an execution that finds no plan in its place SHALL stop, and tell the user to plan first.
 :::
@@ -692,7 +692,7 @@ A dry run or an execution that finds no plan in its place SHALL stop, and tell t
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: dryrun-summary-not-dump-1
+:aliases: dryrun-summary-not-dump-1, merge-dryrun-summarizes-real-plan-1
 
 A dry run SHALL validate the saved plan that execution would carry out, and report on that plan — never on a separate
 simulation.
@@ -2695,7 +2695,7 @@ or rewritten.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: exec-noclobber-recheck-1, exec-noclobber-all-content-ops-1, prep-no-clobber-1, prep-execute-time-no-clobber-recheck-1
+:aliases: exec-noclobber-recheck-1, exec-noclobber-all-content-ops-1, prep-no-clobber-1, prep-execute-time-no-clobber-recheck-1, merge-execute-no-clobber-at-execute-time-1
 :uses: RUL-suffix_no_clobber, DEF-library
 
 Immediately before each change that gives a file a name — prep's moves, renames and setting duplicates aside, geotag's
@@ -2894,6 +2894,19 @@ runs need not compute it again, and — on a workspace's first run — the confi
 :upholds: INV-every_change_from_the_record
 
 Execution SHALL carry out only the operations its plan records, re-deriving no decision.
+:::
+
+:::{rul} The job count changes nothing an execution does
+:id: RUL-execution_jobs_change_nothing
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:aliases: exec-concurrency-no-semantic-change-1
+:refines: RUL-execution_only_the_plan
+
+An execution SHALL change the same files in the same way, and record the same, whatever number of jobs it runs with —
+the job count and the run's times in its run metadata the only difference.
 :::
 
 :::{rul} A plan is carried out only by the code that made it
