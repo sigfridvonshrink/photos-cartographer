@@ -2590,7 +2590,7 @@ A timezone the user writes SHALL be a real zone that resolves, never an arbitrar
 
 :::{rul} A position and a clock offset are well formed
 :id: RUL-checked_positions_and_times
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :aliases: validate-coords-offsets-1
