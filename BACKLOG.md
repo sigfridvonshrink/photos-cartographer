@@ -255,7 +255,7 @@ by hand elsewhere. Together with item 15, the user would no longer interpret the
 scattered photos are suspect positions — and for each suspect one, compare its own position with the track's at its
 corrected time; where they differ beyond the anchor distance, raise it as a GPS review item in photos-23, the track's
 position proposed, the photo's own kept unless the user takes the proposal. Rule first that a photo's own position may
-be replaced this way, on the user's answer only — today `preserve-native` is unconditional — and drop the editor's
+be replaced this way, on the user's answer only — today it never is (`RUL-own_position_kept`) — and drop the editor's
 interim advice once both items are built.
 
 **When:** after the conversion (item 1) is complete; with or after item 15.

@@ -289,3 +289,45 @@ when the handoff vouches for the log; execution then moves the pin to the curren
 log holding two steps that give one value two predecessors, or one value two successors, is a blocker of geotag's
 preflight.
 :::
+
+
+## 25. Placing each photo
+
+:::{bld} The placement order
+:id: BLD-placement_order
+:status: seed
+:realises: RUL-own_position_kept, RUL-placement_order
+:aliases: geotag-fallback-rank-1, geotag-fallback-is-manual-1
+
+`classify_gps` SHALL return, for each photo, the first of: `preserve_native` for a photo with its own position; its
+review item's `manual_lat`/`manual_lon` as `manual_locked`; the tracks at its resolved time as `gpx_interpolation` or
+`gpx_extrapolation`; its destination's effective fallback as `manual_fallback`; `no_change` for a photo marked
+`accept_unlocated`; else `blocked`. A position from `manual_locked` or `manual_fallback` is written with that marker,
+and undone like any manual position.
+:::
+
+:::{bld} The GPS decisions record
+:id: BLD-gps_decisions_record
+:status: seed
+:realises: RUL-placement_order, RUL-decision_fields_laid_out
+:aliases: geotag-23-paths-only-review-1, geotag-24-rederive-auto-gps-1
+
+Each destination's entry in `photos-23-gps-decisions.json` SHALL hold its `folder_fallback` cell and `gps_decisions`:
+a `summary` counting `files_total`, `preserve_native_gps`, `automatic_gpx_interpolation`,
+`automatic_gpx_extrapolation`, `automatic_folder_fallback`, `manual_locked`, `no_gps_change_needed`, `blocked` and
+`manual_review_required`; an `automatic_decision_summary` naming the track files used; and `review_items` — one per
+photo `blocked` (`no_reliable_gps_source`, requiring input), `manual_locked` or `no_change` (`accepted_unlocated`),
+each with `manual_lat`, `manual_lon` and `accept_unlocated`. No other photo is named: the executable plan derives every
+automatic position again from its own inputs.
+:::
+
+:::{bld} The folder-fallback cell
+:id: BLD-folder_fallback_cell
+:status: seed
+:realises: RUL-fallback_from_nearest, RUL-fallback_optional, RUL-other_proposals_need_acceptance
+
+Destinations SHALL be built parent first; each one's `folder_fallback` proposes, as `inherited` with `inherited_from`,
+the `effective_fallback` of its nearest ancestor that has one, else `manual_required`. Its `effective_fallback` is the
+`fallback_lat`/`fallback_lon` written there, else the inherited proposal when `accept_proposal` is true, else none; an
+accepted proposal that does not exist is `stale_user_decision`. Its `requires_user_input` is always false.
+:::

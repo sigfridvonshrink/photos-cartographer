@@ -306,3 +306,47 @@ position. Lost with the old value, they would leave geotag taking the photo's co
 offset would never reach it, a withdrawn one never undo. Prep's log says which old value became which new one; where
 it does not say so one for one, no photo's values can be told apart, and geotag stops rather than guess.
 :::
+
+
+## 25. Placing each photo
+
+:::{rat} The camera measured where it was
+:id: RAT-own_position_best
+:status: seed
+:justifies: RUL-own_position_kept
+
+A position the camera wrote was measured where the photo was taken. Everything geotag can offer instead is derived —
+from a track and a corrected time, from a folder — and so weaker evidence: replacing the measurement with it would make
+the photo less right, not more.
+:::
+
+:::{rat} Most specific first
+:id: RAT-placement_most_specific_first
+:status: seed
+:justifies: RUL-placement_order
+
+Each source speaks for fewer photos than the one after it: a position the user set speaks for that photo alone, a track
+for the instant it was taken, a fallback for a whole folder. The first that applies is the most specific word on where
+the photo was; a photo none of them places is one only the user can answer for — with a place, or by leaving it
+unlocated.
+:::
+
+:::{rat} A place inside a place is near it
+:id: RAT-fallback_nested
+:status: seed
+:justifies: RUL-fallback_from_nearest
+
+A destination inside another lies within it, so the place set for the outer one is a fair guess for the inner one —
+and the nearer the ancestor, the fairer. It is only a guess, so it waits for the user's acceptance; once accepted, the
+user has chosen to inherit, and a fallback changed above flows down to it, as a timezone does.
+:::
+
+:::{rat} A fallback is a convenience, not a gate
+:id: RAT-fallback_optional
+:status: seed
+:justifies: RUL-fallback_optional
+
+The fallback saves answering, photo by photo, for a folder the tracks miss. A destination whose photos the tracks all
+place needs none, and one that does can still be answered photo by photo; to make every destination ask for one would
+add the work it exists to save.
+:::
