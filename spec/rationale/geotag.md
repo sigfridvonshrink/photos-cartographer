@@ -7,7 +7,7 @@ items it `justifies`, under the same section numbers. Where the two differ, the 
 
 :::{rat} A position is looked up by time
 :id: RAT-position_follows_time
-:status: seed
+:status: ruled
 :justifies: RUL-time_before_gps
 
 A photo with no position of its own is placed where the track was at the moment it was taken — its true time, after
@@ -18,7 +18,7 @@ is settled for every photo first, and only then is any position planned.
 
 :::{rat} No phase invents a time
 :id: RAT-no_phase_invents_time
-:status: seed
+:status: ruled
 :justifies: RUL-untimed_photo_stops_geotag
 
 A photo with no recorded time has nothing to correct and nothing to look up: its true time is unknown, and no

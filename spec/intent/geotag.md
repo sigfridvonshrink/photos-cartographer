@@ -8,7 +8,7 @@ to. *Why* each holds is in [the rationale](../rationale/geotag.md); *how this bu
 
 :::{rul} Time first, then position
 :id: RUL-time_before_gps
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -20,7 +20,7 @@ Geotag SHALL plan no photo's position until every photo's true time is resolved.
 
 :::{rul} A photo with no recorded time stops geotag
 :id: RUL-untimed_photo_stops_geotag
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
