@@ -821,3 +821,38 @@
 25.3	An authored coordinate that is out of range is a validation blocker located to the destination's `folder_fallback` (Section 9.2), preserved and flagged rather than silently dropped; accepting a proposal that no longer exists marks the cell `stale_user_decision` rather than failing.	RUL-invalid_value_located BLD-folder_fallback_cell	
 25.3	A file placed from the effective folder fallback is a **manual** GPS placement (origin *apply manual*, marker `manual_fallback`), so it is reversible exactly like a per-file manual lock (Section 24.1) — withdrawing the destination's fallback (or moving the file out of a destination that had one) places the file again from its own values.	BLD-placement_order RUL-withdrawal_undoes	
 25.3	In the `photos-23` per-destination summary it is counted under `automatic_folder_fallback`; the exact per-file write is re-derived in `photos-24-executable-plan.json` from the resolved inputs (the effective fallback among them), never read from the summary (Section 25).	BLD-gps_decisions_record BLD-geotag_dependencies	
+26	## 26. Filename format configuration	dropped	a heading; the corpus's documents carry their own
+26	Timestamp rename format must be part of the workspace config.	RUL-one_filename_format BLD-filename_timestamp_format	
+26	The workflow must not hard-code a single filename format.	RUL-one_filename_format	
+26	The default filename pattern should produce names like:	dropped	introduces the example
+26	```text [sha1:715eee2d, 3 lines]	BLD-filename_timestamp_format	
+26	where:	dropped	a connective
+26	```text [sha1:2583bd04, 1 lines]	BLD-filename_timestamp_format	
+26	is the destination-local naive timestamp derived from:	RUL-geotag_name_final BLD-geotag_final_name	
+26	```text [sha1:2793c4e4, 4 lines]	RUL-geotag_name_final BLD-geotag_final_name	
+26	and:	dropped	a connective
+26	```text [sha1:8cfc6c27, 1 lines]	RUL-suffix_choice_by_phase BLD-name_suffix	
+26	is the first differentiating no-clobber suffix allocated when needed.	RUL-suffix_no_clobber	
+26	The default timestamp format should therefore be equivalent to:	dropped	introduces the format
+26	```text [sha1:10ed321c, 1 lines]	BLD-filename_timestamp_format	
+26	Only the timestamp format is configurable; the suffix and the extension follow it, so a name is:	BLD-filename_timestamp_format	
+26	```text [sha1:56247251, 1 lines]	BLD-filename_timestamp_format BLD-name_suffix	
+26	The differentiating suffix must be allocated deterministically and safely.	RUL-suffix_no_clobber	
+26	The first file with a given timestamp receives no suffix if the base name is free.	RUL-suffix_choice_by_phase BLD-name_suffix	
+26	The first collision receives:	dropped	introduces the example
+26	```text [sha1:8cfc6c27, 1 lines]	RUL-suffix_choice_by_phase BLD-name_suffix	
+26	The second collision receives:	dropped	introduces the example
+26	```text [sha1:1e5b94c4, 1 lines]	RUL-suffix_choice_by_phase BLD-name_suffix	
+26	and so on.	dropped	a connective
+26	Examples:	dropped	introduces the examples
+26	```text [sha1:715eee2d, 3 lines]	BLD-filename_timestamp_format	
+26	The requirements are:	dropped	introduces the list
+26	1. filename format is config-driven;	RUL-one_filename_format	
+26	2. default timestamp format is `YYYY-MM-DD--HH-MM-SS`;	BLD-filename_timestamp_format	
+26	3. timestamp is computed from resolved UTC converted to destination civil timezone;	RUL-geotag_name_final BLD-geotag_final_name	
+26	4. differentiating suffix is no-clobber and deterministic;	RUL-suffix_no_clobber	
+26	5. extension is preserved according to the project’s extension-normalisation rules;	RUL-media_extension_lowercase	
+26	6. filename-format config participates in dependency fingerprints;	BLD-format_recorded BLD-geotag_dependencies	
+26	7. once prep has named a workspace's files in a format, changing it stops every phase (shared contract Section 6).	RUL-format_fixed_once_named	
+26	The default timestamp format is supplied by the shared, phase-neutral config key `filename_timestamp_format` (in the workspace config `photos-00-config.json`, default `%Y-%m-%d--%H-%M-%S`), defined authoritatively in the shared contract (`photos-shared-contract.md` Sections 4 and 7).	RUL-one_filename_format BLD-filename_timestamp_format	
+26	The same key is read by prep from the same file, so the format is never hard-coded and cannot drift between phases; its value feeds the filename-format dependency fingerprint.	RUL-one_filename_format	

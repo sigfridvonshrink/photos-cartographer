@@ -459,6 +459,7 @@ strays folder is not checked.
 :id: BLD-format_recorded
 :status: ruled
 :realises: RUL-format_fixed_once_named
+:aliases: geotag-filename-fingerprint-1
 
 The handoff SHALL record the format prep named the files in as `filename_timestamp_format`; prep compares it with the
 configured format at plan once a file outside the inbox carries a timestamp name, and geotag and merge at their start.

@@ -1000,7 +1000,7 @@ sets, followed by a differentiating suffix when that name is taken.
 :status: ruled
 :criticality: med
 :verify: incidental
-:aliases: fname-single-shared-key-1
+:aliases: fname-single-shared-key-1, geotag-filename-config-driven-1
 :uses: DEF-timestamp_name
 
 Prep and geotag SHALL name files from a timestamp in one format for the whole pipeline, not one for each phase, set by
@@ -1025,7 +1025,7 @@ so that two files never collide.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: fname-allocation-per-phase-1, prep-suffix-bare-first-lowest-free-1
+:aliases: fname-allocation-per-phase-1, prep-suffix-bare-first-lowest-free-1, geotag-suffix-sequential-1
 :refines: RUL-suffix_no_clobber
 
 Prep and geotag SHALL take the first free name — the name with no suffix when it is free, otherwise the lowest free
@@ -1059,7 +1059,7 @@ provisional name, which prep never corrects, resolves to a timezone or converts 
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: fname-geotag-final-1
+:aliases: fname-geotag-final-1, geotag-filename-from-local-time-1
 
 Geotag SHALL recompute a file's name from its corrected local time at the destination — its resolved true time, in the
 destination's civil timezone — and rename it to that final name.
@@ -1148,6 +1148,7 @@ as any file prep files does.
 :criticality: med
 :verify: required
 :uses: RUL-one_filename_format
+:aliases: geotag-filename-change-invalidates-plan-1
 
 Once prep has named a workspace's files in a format, a change to the format SHALL stop every phase.
 :::
