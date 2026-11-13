@@ -507,7 +507,7 @@ Prep SHALL raise one blocker for each track file it inventories, naming it, and 
 
 :::{bld} The GPX fingerprint
 :id: BLD-gpx_fingerprint
-:status: seed
+:status: ruled
 :realises: RUL-tracks_in_dependencies
 :aliases: geotag-gpx-fingerprint-unconditional-1, geotag-gpx-unavailable-recorded-1
 

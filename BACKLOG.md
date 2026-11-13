@@ -4,7 +4,7 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **10** — 1, 2, 3, 4, 5, 6, 7, 10, 11 and 12.* 🛑 Numbers are never reused; the next is **13**.
+*Open items: **11** — 1, 2, 3, 4, 5, 6, 7, 10, 11, 12 and 13.* 🛑 Numbers are never reused; the next is **14**.
 
 ---
 
@@ -193,6 +193,33 @@ retired, they only puzzle a reader. Vasile: *"1 now, and add a step (or backlog)
 **What to do:** renumber each phase document's sections 1…n, the same number for the same section across intent,
 rationale and build; rewrite the section citations in the build items to links or the new numbers; drop the
 explanatory sentence from each document's introduction. The ledgers keep the old numbers — they record the old specs.
+
+**When:** after the conversion (item 1) is complete.
+
+### 13. Keep the track points geotag used in the workspace, sealed with it
+
+**Why:** every `geotag plan` reads every track file under `gpx_root` whole, to hash it, and keeps the parsed points
+only in the scratch track memo, which is neither archived nor sealed. The sealed workspace records the GPX fingerprint
+and, per photo, the name of the track that placed it — not the points — so once `gpx_root` changes or is gone, the
+evidence behind a placement or a clock offset can no longer be seen. Vasile: *"I will have always the gps data used
+during the process, in the form used during the decisioning, which would make the workspace truly self-contained."*
+
+**What to do:**
+
+- A geotag region of `photos-00-ingest.db` — the one record database, snapshotted into the archive at finalize and
+  merge, so sealed with the workspace — holding a catalogue of every track file under `gpx_root` (path, size,
+  modification time, SHA-256, first and last point time) and the points that fall in the window, as decided on (UTC
+  time, latitude, longitude, file, index). It replaces the scratch track memo.
+- Refresh on every run by size and modification time, as prep's plan memo does: an unchanged file is not read; a new
+  or changed one is read and parsed; one gone is dropped **with a warning naming it** — the one reason to take a track
+  out is that it records someone else's trip at the same time, and the user should see that it went.
+- The window: the union of a window around each photo day — of the photos in photos by destination with a recorded
+  time — with a margin of at least `gpx_anchor_max_clock_error_seconds` (2 days by default) each side, since offset
+  inference looks that far from a camera's time; and, once `photos-21` is complete, a window around each photo's
+  corrected time too, since placement uses it and a manual real time can lie far from the camera's. Sorting photos in,
+  or new tracks under `gpx_root`, grows it.
+- The GPX fingerprint becomes the hash of the points in the window, so tracks added for another time restale nothing.
+- Rule it: this reverses the ruled "every track file is read whole on every run" (geotag §15, `BLD-idempotency`).
 
 **When:** after the conversion (item 1) is complete.
 

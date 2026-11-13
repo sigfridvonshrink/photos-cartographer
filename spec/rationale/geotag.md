@@ -145,7 +145,7 @@ set once and reach every destination beneath it. If it asked for anything, it wo
 
 :::{rat} A track is evidence only where it can be read
 :id: RAT-track_points_read_exactly
-:status: seed
+:status: ruled
 :justifies: RUL-track_time_never_guessed, RUL-unreadable_point_reported
 
 A track's points become positions and clock offsets; a time read an hour wrong, or in a zone guessed, would place
