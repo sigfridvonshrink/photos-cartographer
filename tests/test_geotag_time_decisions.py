@@ -226,7 +226,7 @@ def test_depends_on_reverifies(tmp_path, monkeypatch):
     assert not cal.GeotagWorkflow._verify_handoff_dependency(dep, str(ws))   # change detected
 
 
-@pytest.mark.spec("geotag-timezone-autoresolve-1", "geotag-timezone-inherit-priority-1", "geotag-timezone-unresolved-requires-input-1")
+@pytest.mark.spec("geotag-timezone-autoresolve-1", "geotag-timezone-inherit-priority-1", "geotag-timezone-unresolved-requires-input-1", "RUL-timezone_auto_resolves", test="TST-geotag_time_decisions-timezone_proposal_inherits_nearest_resolved_ancestor")
 def test_timezone_proposal_inherits_nearest_resolved_ancestor():
     """A destination's timezone proposal prefers the nearest RESOLVED ancestor's timezone over the
     generic global default; an inherited (or config-default) proposal auto-resolves without per-

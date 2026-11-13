@@ -362,11 +362,10 @@ This applies to:
 1. destination timezone decisions;
 2. **(camera group, destination)** time offset decisions — the logical target is the pair, so a user-filled offset for a group in one destination is preserved independently of the same group's decision in another destination (Section 10.2);
 3. GPX/native-GPS time-anchor acceptance;
-4. manual time segment decisions;
-5. destination/folder GPS fallback decisions (the per-destination folder fallback, inherited downward as a confirmable proposal, Section 25.3);
-6. file-level manual GPS overrides;
-7. ambiguous GPX interpolation/extrapolation decisions;
-8. any other human-reviewed decision.
+4. destination/folder GPS fallback decisions (the per-destination folder fallback, inherited downward as a confirmable proposal, Section 25.3);
+5. file-level manual GPS overrides;
+6. ambiguous GPX interpolation/extrapolation decisions;
+7. any other human-reviewed decision.
 
 ### 9.1 Auto-resolution policy
 
@@ -375,8 +374,8 @@ A machine proposal may be *auto-resolved* (its `effective_*` value set without a
 1. Time-anchor proposals (Section 19) are governed by the existing flags in `camera_time_and_timezone_policy` (workspace config `photos-00-config.json`):
 
 ```text
-single_anchor_auto_apply   (default false)
-multi_anchor_auto_apply    (default true)
+single_anchor_auto_apply
+multi_anchor_auto_apply
 ```
 
 2. The **destination timezone auto-resolves by default**, with no policy flag. A destination is geographically **nested** inside its parent, so it can scarcely cross a timezone boundary the parent did not — its inherited (or config-default) proposal is therefore adopted as the `effective_iana_timezone` without per-destination confirmation (`decision_mode: "auto_resolved"`, `requires_user_input: false`), while staying overridable by a manual zone (Section 18). Only a destination with **no proposal at all** (no ancestor timezone and no configured default) keeps `requires_user_input: true`. Any *other* non-anchor proposal class auto-resolves only if a corresponding policy flag is enabled; with no such flag the default is conservative and it keeps `requires_user_input: true`.

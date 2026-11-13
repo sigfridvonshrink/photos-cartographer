@@ -262,7 +262,7 @@ def test_cell_multi_anchor_auto_resolves(monkeypatch):
     assert cell["effective_time_anchor"]["source"] == "gpx_anchor_auto"
 
 
-@pytest.mark.spec("geotag-autoresolve-config-gated-1")
+@pytest.mark.spec("geotag-autoresolve-config-gated-1", "RUL-anchor_offset_auto_as_configured", test="TST-geotag_offset_inference-cell_single_anchor_conservative_then_flag")
 def test_cell_single_anchor_conservative_then_flag(monkeypatch):
     gpx = _gpx([_pt(50.0, 4.0, _utc(12, 0, 0))])
     frames = [_frame(50.0, 4.0, "2024:07:03 14:00:00")]
@@ -272,7 +272,7 @@ def test_cell_single_anchor_conservative_then_flag(monkeypatch):
     assert cell2["requires_user_input"] is False and cell2["decision_mode"] == "auto_resolved"
 
 
-@pytest.mark.spec("geotag-conflict-triggers-review-1")
+@pytest.mark.spec("geotag-conflict-triggers-review-1", "RUL-anchor_offset_auto_as_configured", test="TST-geotag_offset_inference-cell_conflict_requires_input_even_with_autoapply")
 def test_cell_conflict_requires_input_even_with_autoapply(monkeypatch):
     gpx = _gpx([_pt(50.0, 4.0, _utc(12, 0, 0)), _pt(51.0, 5.0, _utc(9, 0, 0))])
     frames = [_frame(50.0, 4.0, "2024:07:03 14:00:00"), _frame(51.0, 5.0, "2024:07:03 14:00:00")]
@@ -405,7 +405,7 @@ def test_timezone_naive_offset_is_dst_aware():
         assert cal._timezone_naive_offset(*bad) is None
 
 
-@pytest.mark.spec("geotag-bucket-proposal-priority-1", "geotag-timezone-derived-confirmable-1")
+@pytest.mark.spec("geotag-bucket-proposal-priority-1", "geotag-timezone-derived-confirmable-1", "RUL-other_proposals_need_acceptance", test="TST-geotag_offset_inference-cell_timezone_derived_when_no_anchor")
 def test_cell_timezone_derived_when_no_anchor():
     cell, _ = _tzcell({}, tz="Europe/Brussels", rep_naive="2024:07:03 14:00:00")
     p = cell["proposal"]

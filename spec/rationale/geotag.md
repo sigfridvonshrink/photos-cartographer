@@ -70,3 +70,38 @@ can only mean the stage was not reached. Were an all-automatic stage to write no
 "nothing to decide" or "never got here", and a record written by a run that stopped at a gate would look like a
 decision to act on when there was none.
 :::
+
+## 9. Human decision field rule
+
+:::{rat} The camera's own GPS is evidence; the user decides how much
+:id: RAT-anchor_evidence_trusted_as_configured
+:status: seed
+:justifies: RUL-anchor_offset_auto_as_configured
+
+An offset measured from the camera's own positions against the tracks is evidence, not a guess: several frames agreeing
+on it is hard to get by accident; one frame could be a coincidence of a slow walk. How much of that to accept without a
+look is the user's choice, made once in the configuration rather than asked for every camera on every day. Anchors that
+disagree mean something is off — a clock reset in the day, a wrong track — and no setting should paper over that.
+:::
+
+:::{rat} A nested place is in its parent's timezone
+:id: RAT-nested_place_same_timezone
+:status: seed
+:justifies: RUL-timezone_auto_resolves
+
+Destinations nest geographically — a city in a country, a museum in a city — so one inside a destination of known
+timezone can scarcely lie in another. Asking the user to confirm it for every folder would be asking what the tree
+already says. Where the tree says nothing — no ancestor and no default — there is nothing to propose, and the user must
+answer.
+:::
+
+:::{rat} An assumption is the user's to accept
+:id: RAT-assumptions_need_acceptance
+:status: seed
+:justifies: RUL-other_proposals_need_acceptance
+
+An offset derived from the timezone assumes the camera was set to local time that day; a fallback inherited from a
+parent folder assumes the photos were taken near the parent's point. Both are often right and sometimes badly wrong,
+and nothing in the photos can tell which. Applied silently, a wrong one would place a whole day of photos in the wrong
+place or the wrong hour, written into the originals; offered for acceptance, it costs one confirmation.
+:::

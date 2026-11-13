@@ -168,7 +168,7 @@ def _with_fallback(parent, lat, lon):
             {"fallback_lat": lat, "fallback_lon": lon}}}}}
 
 
-@pytest.mark.spec("geotag-fallback-inherit-1")
+@pytest.mark.spec("geotag-fallback-inherit-1", "RUL-other_proposals_need_acceptance", test="TST-geotag_gps_decisions-child_inherits_parent_fallback_as_proposal")
 def test_child_inherits_parent_fallback_as_proposal(tmp_path):
     wf = _wf(tmp_path)
     p, c = f"{BYDEST}/Trip", f"{BYDEST}/Trip/Sub"

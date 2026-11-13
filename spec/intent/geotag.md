@@ -89,3 +89,43 @@ Each decision stage geotag reaches SHALL write its record, even when nothing in 
 A geotag plan stopped before its first decision stage SHALL write no record of its own, saying what stopped it only in
 its output.
 :::
+
+## 9. Human decision field rule
+
+:::{rul} A camera's offset from its own GPS applies itself only as configured
+:id: RUL-anchor_offset_auto_as_configured
+:status: seed
+:criticality: high
+:verify: required
+:uses: DEF-geotag, DEF-decision
+:aliases: geotag-autoresolve-config-gated-1
+
+A clock offset proposed from a camera's own GPS positions SHALL take effect without the user's answer only as the
+configuration's settings for one anchor and for several allow, and never while its anchors disagree.
+:::
+
+:::{rul} A destination's timezone applies itself
+:id: RUL-timezone_auto_resolves
+:status: seed
+:criticality: med
+:verify: required
+:uses: DEF-geotag, DEF-decision
+:aliases: geotag-timezone-autoresolve-1, geotag-no-proposal-requires-input-1
+
+A destination's proposed timezone — inherited from the destination it lies in, or the configured default — SHALL take
+effect without the user's answer, a timezone the user writes overriding it; a destination with no proposal waits for the
+user.
+:::
+
+:::{rul} Every other proposal waits for the user's acceptance
+:id: RUL-other_proposals_need_acceptance
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-geotag, DEF-decision
+:aliases: geotag-no-autonomous-mutation-1
+
+Every other proposal — a clock offset derived from the destination's timezone, a folder fallback position inherited
+from the destination it lies in — SHALL take effect only once the user accepts it.
+:::
