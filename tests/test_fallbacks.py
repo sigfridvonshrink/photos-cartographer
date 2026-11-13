@@ -75,15 +75,40 @@ def test_cross_fs_move_is_no_clobber(tmp_path):
     assert not list(tmp_path.glob(".tmp-xdev-*"))
 
 
-def test_cross_fs_move_aborts_on_verify_failure(tmp_path):
-    src = tmp_path / "s"; src.write_bytes(b"Z")
+@pytest.mark.spec("RUL-cross_fs_all_or_nothing", "BLD-cross_fs_temp", test="TST-fallbacks-cross_fs_move_refuses_a_copy_differing_in_any_byte")
+def test_cross_fs_move_refuses_a_copy_differing_in_any_byte(tmp_path, monkeypatch):
+    """A copy of the right size but one byte off — damage a fingerprint of the decoded image would not
+    see, in the metadata geotag wrote, say — is refused: the source kept, no destination, no temp."""
+    src = tmp_path / "s"; src.write_bytes(b"PIXELS+GPS=48.85")
     dest = tmp_path / "x.jpg"
-    def bad_verify(s, t):
-        raise OSError("verify failed")
-    with pytest.raises(OSError):
-        utils._move_cross_fs_no_clobber(str(src), str(dest), verify=bad_verify)
-    assert src.exists() and not dest.exists()                   # source kept, no destination
+    monkeypatch.setattr(utils.shutil, "copyfile",
+                        lambda s, d: open(d, "wb").write(b"PIXELS+GPS=48.86"))
+    with pytest.raises(OSError, match="differs from its source"):
+        utils._move_cross_fs_no_clobber(str(src), str(dest))
+    assert src.exists() and not dest.exists()
     assert not list(tmp_path.glob(".tmp-xdev-*"))
+
+
+@pytest.mark.spec("RUL-cross_fs_all_or_nothing", "BLD-cross_fs_temp", test="TST-fallbacks-cross_fs_move_makes_the_rename_durable_before_removing_the_source")
+def test_cross_fs_move_makes_the_rename_durable_before_removing_the_source(tmp_path, monkeypatch):
+    """The source is removed only after the destination folder — holding the rename into place — is
+    flushed to disk: a power cut cannot keep the removal and lose the rename."""
+    sub = tmp_path / "lib"; sub.mkdir()
+    src = tmp_path / "s"; src.write_bytes(b"PHOTO")
+    dest = sub / "x.jpg"
+    events = []
+    real_fsync, real_unlink = os.fsync, os.unlink
+    def fsync(fd):
+        events.append(("fsync", os.readlink(f"/proc/self/fd/{fd}")))
+        return real_fsync(fd)
+    def unlink(p, *a, **k):
+        events.append(("unlink", str(p)))
+        return real_unlink(p, *a, **k)
+    monkeypatch.setattr(utils.os, "fsync", fsync)
+    monkeypatch.setattr(utils.os, "unlink", unlink)
+    utils._move_cross_fs_no_clobber(str(src), str(dest))
+    assert ("fsync", str(sub)) in events
+    assert events.index(("fsync", str(sub))) < events.index(("unlink", str(src)))
 
 
 def _exdev_seam(monkeypatch):
@@ -147,12 +172,12 @@ def test_rename_same_fs_raises_on_unexpected_errno(tmp_path, monkeypatch):
 
 
 def test_cross_fs_move_aborts_on_size_mismatch(tmp_path, monkeypatch):
-    """The default verify (byte-size equality) catches a short/torn copy and aborts, keeping src."""
+    """A short/torn copy is caught and aborts, keeping src."""
     src = tmp_path / "s"; src.write_bytes(b"FULL-CONTENT")
     dest = tmp_path / "d.jpg"
     monkeypatch.setattr(utils.shutil, "copyfile",
                         lambda s, d: open(d, "wb").write(b"short"))   # fewer bytes than src
-    with pytest.raises(OSError, match="size mismatch"):
+    with pytest.raises(OSError, match="differs from its source"):
         utils._move_cross_fs_no_clobber(str(src), str(dest))
     assert src.exists() and not dest.exists()
     assert not list(tmp_path.glob(".tmp-xdev-*"))

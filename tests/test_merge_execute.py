@@ -513,6 +513,27 @@ def test_execute_torn_copy_blocks_and_keeps_source(tmp_path, monkeypatch):
     assert _summary(ws)["totals"]["blocked"] == 1
 
 
+@pytest.mark.spec("RUL-merge_moves", "BLD-merge_move", test="TST-merge_execute-a_copy_damaged_where_the_fingerprint_cannot_see_is_refused")
+def test_a_copy_damaged_where_the_fingerprint_cannot_see_is_refused(tmp_path, monkeypatch):
+    """The content fingerprint reads the decoded image, blind to metadata by design. A cross-filesystem
+    copy damaged only there — same size, same fingerprint, other bytes — is refused all the same: the
+    photo stays in the workspace, nothing under its name in the library."""
+    _force_cross_fs(monkeypatch)
+    def pixels_only(self, abs_path):        # the fingerprint ignores case, as pixels ignore EXIF
+        v = _parse_fp(abs_path)
+        return {"status": "valid", "value": v.upper(), "strategy": "image-content-hash-v1",
+                "engine_version": "test"}
+    monkeypatch.setattr(merge.MergeWorkflow, "_fingerprint_library_file", pixels_only)
+    monkeypatch.setattr(utils.shutil, "copyfile",
+                        lambda src, dst: open(dst, "wb").write(b"FP=a"))   # same size, one byte off
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 3
+    assert open(_src(ws, "Trip", "a.jpg"), "rb").read() == _fp_bytes("A")
+    assert not os.path.exists(os.path.join(str(lib), "Trip", "a.jpg"))
+    assert not list((lib / "Trip").glob(".tmp-xdev-*"))
+
+
 # --- concurrency determinism + lifecycle errors ------------------------------
 
 def _comparable(s):

@@ -3758,7 +3758,7 @@
       "area": "merge",
       "criticality": "low",
       "anti": false,
-      "title": "The step-1 temporary uses the recognizable deterministic name .tmp-xdev-*.part",
+      "title": "The step-1 temporary uses the recognizable name pattern .tmp-xdev-*.part",
       "spec": {
         "file": "photos-3-merge-workflow.md",
         "section": "11"
@@ -3814,7 +3814,7 @@
       "area": "merge",
       "criticality": "high",
       "anti": false,
-      "title": "The copy is verified by size and content fingerprint against the by-dest fingerprint so a torn copy is detected",
+      "title": "The copy is verified by size and bytes against the by-dest source so a torn or damaged copy is detected",
       "spec": {
         "file": "photos-3-merge-workflow.md",
         "section": "11"
