@@ -87,7 +87,7 @@ a resume.
 
 :::{rat} The run's end decides what to do next
 :id: RAT-merge_outcome_decides_next
-:status: seed
+:status: ruled
 :justifies: RUL-merge_outcome_recorded
 
 What the user does after a merge turns on how it ended: nothing after a whole success, a fix and another run after a
@@ -97,7 +97,7 @@ tell a refusal from a run that found nothing to do; a recorded outcome says whic
 
 :::{rat} Merge is the step the user watches
 :id: RAT-merge_report_at_the_end
-:status: seed
+:status: ruled
 :justifies: RUL-merge_run_reported
 
 Merge is the step that puts photos where the user will look for them, and the one that ends the workspace. Its report
