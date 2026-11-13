@@ -222,7 +222,7 @@ nothing tells two offsets apart, the photos do not say which is right, and the u
 
 :::{rat} A trip comes back to its places
 :id: RAT-trips_revisit
-:status: seed
+:status: ruled
 :justifies: RUL-revisit_matched_to_its_day, RUL-indistinct_visits_wait
 
 A trip often comes back to its places: a town visited from the same hotel day after day, a square crossed morning and
