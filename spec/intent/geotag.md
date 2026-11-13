@@ -457,7 +457,7 @@ their own.
 
 :::{rul} A position is written whole
 :id: RUL-position_written_whole
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -469,7 +469,7 @@ one it clears cleared whole.
 
 :::{rul} A camera's offset for a day holds for its later photos
 :id: RUL-day_offset_kept_for_later_photos
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :aliases: geotag-offset-kept-1

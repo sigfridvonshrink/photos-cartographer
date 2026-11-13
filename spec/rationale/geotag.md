@@ -356,7 +356,7 @@ add the work it exists to save.
 
 :::{rat} Half a position is a wrong one
 :id: RAT-position_whole
-:status: seed
+:status: ruled
 :justifies: RUL-position_written_whole
 
 EXIF stores a latitude and a longitude without their signs: the hemisphere is in a field of its own. A coordinate
@@ -367,7 +367,7 @@ reader will complete. Whole or not at all is the only safe write.
 
 :::{rat} The offset is the camera's that day, not the photos'
 :id: RAT-day_offset_is_the_cameras
-:status: seed
+:status: ruled
 :justifies: RUL-day_offset_kept_for_later_photos
 
 A clock offset belongs to the camera on that day; every photo it took that day shares it, however many arrive later.

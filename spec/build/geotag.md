@@ -353,7 +353,7 @@ no-clobber move.
 
 :::{bld} The executable plan
 :id: BLD-executable_plan
-:status: seed
+:status: ruled
 :realises: RUL-time_before_gps, RUL-execution_only_the_plan, RUL-mutate_on_difference
 :aliases: geotag-plan-preconditions-1, geotag-held-write-noop-1
 
@@ -368,7 +368,7 @@ not planned.
 
 :::{bld} Position tags
 :id: BLD-position_tags
-:status: seed
+:status: ruled
 :realises: RUL-position_written_whole
 
 Every position geotag writes SHALL carry, in the same operation, `GPSLatitude`, `GPSLatitudeRef` (`N` or `S` by the
@@ -377,7 +377,7 @@ sign), `GPSLongitude` and `GPSLongitudeRef` (`E` or `W`); clearing one empties a
 
 :::{bld} A day's offset kept
 :id: BLD-day_offset_kept
-:status: seed
+:status: ruled
 :realises: RUL-day_offset_kept_for_later_photos
 
 A cell's dates SHALL be counted over all its group's photos in the destination, corrected ones included, so its key
