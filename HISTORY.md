@@ -2,6 +2,51 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-13 — v2.0.0
+
+**The specification becomes a checked corpus, and every rule in it is now met by the code.** The four specs are
+converted, one section at a time, into one Sphinx project of sphinx-needs items (`spec/`): what cartographer
+guarantees (`intent/`), why (`rationale/`), how this build does it (`build/`), and the tests as items of their own.
+`tools/spec-build` fails on any broken link, any rule without a rationale, and any required rule no test verifies;
+`tools/spec-ledger` checks that every sentence of a converted spec is accounted for, word for word. The shared
+contract, prep and merge are converted and ruled; geotag is under way. Checking each section against the code found
+defects, fixed in the same pass:
+
+- **prep** — a file in the dump that is a GPS track (`.gpx`, `.kml`, `.kmz`, `.igc`, …) stops prep instead of being
+  sorted as a stray, and a `gpx_root` inside the workspace is refused. A file named outside the filename format and
+  sitting outside the inbox stops prep, named; the format is fixed once a workspace's files carry it. A file's recorded
+  time is taken from the first field holding a valid time, EXIF before XMP in a stated order. A move the user made is
+  recognised even when the file's database row is stale. A fingerprint that failed is never reused. A plan goes stale
+  when a file appears. A hidden file at the workspace's top level is now left alone.
+- **geotag** — a time geotag corrected is recognised on a re-run and never corrected twice, and a camera's offset for a
+  day is kept for photos arriving later. A burst's `-001` no longer flips to `-002` and back on every run. Every photo's
+  own values are pinned before geotag first writes to it, so any decision can be withdrawn. A decision file that does
+  not parse stops geotag, kept as written, instead of being regenerated over. A track is parsed only when its bytes are
+  new. A photo in photos by destination with no recorded time stops geotag before it plans anything.
+- **finalize and the record** — the archival package is the control directory, archived with its manifest. Each log
+  is checked to carry the one before it unchanged, records every move and rename with where it came from, every
+  position write with what it replaced, and the exact decision behind each step. Finalize records each photo's size and
+  modification time, and merge refuses a photo changed since.
+- **merge** — the workspace is snapshotted, and the library beside it where it can be, never the library alone. A
+  library inside the workspace, or holding it, is refused. Merge stops on a prep log the handoff does not vouch for. A
+  library file whose name differs only in case is settled by its content, so a case-insensitive library never gets a
+  second copy. A re-plan or a resumed execute goes by what the library holds, not by the journal, so a photo moved just
+  before a crash is never stranded or wrongly counted. A copy across filesystems is checked byte for byte against the
+  photo — the content fingerprint cannot see damage to the metadata geotag wrote — and the library folder is flushed
+  to disk before the workspace's copy is removed. A blocked photo's summary entry says why it stayed.
+- **every phase** — the workspace lock is taken before anything is read, and only prep creates the control directory;
+  the decision editor's save takes the lock and the editor refuses a sealed workspace. The configuration is read
+  through one loader: a missing setting, a setting cartographer does not know, a NaN, a blank path or a misspelt
+  device class stops the run, named. A workspace must lie on one filesystem. A plan is carried out only by the code
+  that made it. Under another ImageMagick version a fingerprint is taken again and compared, never assumed changed.
+
+**Major: a workspace begun under v1.5.x cannot be continued.** Its configuration still carries settings this version
+removes (`merge.placement_policy`, `merge.collision_policy`, `manual_segment_template_count`) and is refused; its
+database is of an older schema and is not migrated; its handoff's metadata fields are of an older version; and its
+saved plans record no code fingerprint. Finish an open workspace with v1.5.2 — merge it into the library — or start
+it again under v2.0.0. Replace a deployed `photos-config-defaults.json` with this release's too: one from v1.5.x
+would seed a new workspace with the removed settings. The library itself needs nothing: merge reads it as before.
+
 ## 2026-11-10 — §0–§10 of the shared contract ruled; every rule justified
 
 Asked whether to convert every spec first and rule at the end, or rule now: *"What do you think is best: convert
