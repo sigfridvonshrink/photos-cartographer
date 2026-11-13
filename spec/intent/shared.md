@@ -1740,7 +1740,7 @@ mutated files repaired by hand.
 
 :::{rul} Withdrawing a decision undoes it
 :id: RUL-withdrawal_undoes
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :aliases: authored-withdraw-undoes-1, geotag-manual-gps-reversible-1, geotag-withdraw-revert-1, geotag-recompute-inplace-1, time-name-never-reverted-1

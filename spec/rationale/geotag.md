@@ -172,7 +172,7 @@ out, so only the judgement is the user's.
 
 :::{rat} No camera, no clock to correct
 :id: RAT-no_identity_no_group
-:status: seed
+:status: ruled
 :justifies: RUL-unidentified_files_solved_alone
 
 Screenshots, scans and photos a messaging app stripped name no camera, and share nothing but that. Taken for one camera,
@@ -298,7 +298,7 @@ correction found for the old one override the user's new decision.
 
 :::{rat} A new decoder does not make a new photo
 :id: RAT-same_photo_new_fingerprint
-:status: seed
+:status: ruled
 :justifies: RUL-own_values_follow_new_fingerprint
 
 A new ImageMagick may decode a photo to a new fingerprint; the photo is the same, and so are its own time and
