@@ -131,7 +131,7 @@ def test_timezone_manual_valid_and_no_proposal(tmp_path):
     utils.CONFIG["camera_time_and_timezone_policy"]["default_folder_timezone"] = ""
     tz2 = wf._timezone_decision("d", {"user_decision": {}}, blk)
     assert tz2["requires_user_input"] is True and tz2["effective_iana_timezone"] == ""
-    assert tz2["user_decision"] == {"manual_iana_timezone": "",           # the decisions a timezone takes
+    assert tz2["user_decision"] == {"manual_iana_timezone": "", "country": "",   # the decisions a timezone takes
                                     "confirmed_despite_recorded_offsets": []}
 
 

@@ -89,3 +89,36 @@ test("timezone: an inherited zone applies itself, the configured default is only
        user_decision: { manual_iana_timezone: "Asia/Tokyo" } });
   assert.equal(app.wouldResolve(ref), true);
 });
+
+test("a country is chosen once, at the top of its tree; one of several timezones gives none down", () => {
+  const y = "6-photos-by-dest/2024", cell = (ud = {}) => ({ destination_timezone: { user_decision: { manual_iana_timezone: "", country: "", ...ud } } });
+  const work = { time: { countries: { JP: { name: "Japan", zones: ["Asia/Tokyo"] },
+                                     US: { name: "United States", zones: ["America/New_York", "America/Phoenix"] } },
+    destinations: {
+      [y]: cell({ manual_iana_timezone: "Europe/Bucharest" }),
+      [`${y}/Japonia`]: cell({ country: "JP" }), [`${y}/Japonia/Kyoto`]: cell(),
+      [`${y}/SUA`]: cell({ country: "US" }), [`${y}/SUA/Arizona`]: cell({ manual_iana_timezone: "America/Phoenix" }),
+      [`${y}/SUA/Arizona/Canyon`]: cell({ country: "JP" }), [`${y}/SUA/Oregon`]: cell(),
+    } } };
+  setWork(work);
+  assert.deepEqual(app.effectiveCountry(`${y}/Japonia/Kyoto`), { code: "JP", from: `${y}/Japonia`, zones: ["Asia/Tokyo"] });
+  assert.equal(app.effectiveCountry(y), null);
+  assert.deepEqual(app.previewTz(`${y}/Japonia/Kyoto`), { tz: "Asia/Tokyo", source: "country", from: `${y}/Japonia` });
+  // the choice highest in the tree stands, whatever is written inside it
+  assert.equal(app.effectiveCountry(`${y}/SUA/Arizona/Canyon`).code, "US");
+  // several timezones: nothing from the country, nothing from above it — only from inside it
+  assert.equal(app.previewTz(`${y}/SUA/Oregon`), null);
+  assert.equal(app.previewTz(`${y}/SUA/Arizona/Canyon`).tz, "America/Phoenix");
+  // a zone written inside a country is one of that country's
+  const ref = { file: "time", dest: `${y}/SUA/Oregon`, kind: "timezone" };
+  work.time.destinations[`${y}/SUA/Oregon`].destination_timezone.user_decision.manual_iana_timezone = "Europe/Paris";
+  assert.equal(app.refInvalid(ref), true);
+  work.time.destinations[`${y}/SUA/Oregon`].destination_timezone.user_decision.manual_iana_timezone = "America/Phoenix";
+  assert.equal(app.refInvalid(ref), false);
+  // choosing a country takes out every one chosen inside it
+  assert.deepEqual(app.clearCountriesInside(`${y}/SUA`), [`${y}/SUA/Arizona/Canyon`]);
+  assert.equal(work.time.destinations[`${y}/SUA/Arizona/Canyon`].destination_timezone.user_decision.country, "");
+  assert.equal(work.time.destinations[`${y}/Japonia`].destination_timezone.user_decision.country, "JP");   // not inside it
+  // a country of one timezone resolves the cell by itself
+  assert.equal(app.wouldResolve({ file: "time", dest: `${y}/Japonia/Kyoto`, kind: "timezone" }), true);
+});

@@ -584,31 +584,24 @@ touched; "corrected" is defined nowhere.
 **Open:** define it as resolved (state it), or mark only a photo whose time geotag changed and recognise the others
 on a re-run by their unchanged values.
 
-### 47. Countries of several timezones, and how a folder is known to be one
+### 47. What the country choice leaves open
 
-**Ruled 2026-11-14:** the rule is not "a tree of places" but **a destination holding photos has one timezone**
-(`RUL-destination_has_one_timezone`); a folder holding none may lie above destinations of any zones —
-`USA/{NY, Arizona, Oregon}`, `2024/…` — and may still be given a zone, which passes down. A zone, written or
-inherited, is set against the destination's own photos and stands against them only on the user's explicit word
-(`RUL-zone_against_photos_needs_word`, built). The list of countries of several timezones is to be derived from the
-zone database (`zone1970.tab` lists every zone's countries), not kept by hand — confirmed.
+**Built 2026-11-14:** a destination holding photos has one timezone (`RUL-destination_has_one_timezone`); a folder
+is said to be a country by the user, by code, from the zone database's own list (`RUL-country_gives_its_timezone`):
+one timezone — given to everything inside; several — none given, none let through from above, every zone written
+inside held to the country's. A country is chosen once, at the top of its tree; one chosen inside another is taken
+out with a warning (`RUL-country_chosen_once`). Recognising a country by its folder's name was rejected: names are
+spelt as their owner spells them, in any language.
 
-**Why it is still open:** the checks built rest on photos that record their own offset (phones). A destination of
-camera photos alone under a container given one zone — `USA` answered `America/New_York`, `Arizona` beneath it —
-still inherits unasked. The list would stop that, if the tool knew which folder is the country.
-
-**Open — how a folder is known to be a country:** the owner: *"they may be spelt in many ways in different languages"*.
-- **By name:** needs every country's name in every language used (CLDR data bundled into the executable), and still
-  fails on spelling, abbreviations and names that are two things (Georgia, Jersey). Not recommended.
-- **By the zone written on it:** the zone database says which country a zone belongs to, so a container given
-  `America/New_York` is in a country of several zones. But so is a container `New York` whose museums rightly inherit
-  it: the zone says the country, not that this folder *is* the country.
-- **By the user saying so:** the container's cell carries a country (picked from the zone database's list, by code)
-  in place of a zone. A one-zone country gives its zone to everything below; a several-zone one gives none, and each
-  destination below asks — choosing among that country's zones only, which also catches a wrong zone written below.
-  One answer per country, language-free. Recommended.
-- **By evidence only:** no list; rely on the photos' offsets (built) and on positions once item 14 gives a zone from
-  a place. Costs nothing, protects camera-only destinations only after 14.
-
-**Also open:** the wording of ruled items that speak of a trip's folder — `RAT-home_zone_offered` ("one answer per
-trip, at the trip's folder"), `RAT-decisions_cascade` ("set once at a trip's root") — and the docs' `year/country/city/location`.
+**Open:**
+- A destination under a country of several timezones could be *proposed* its zone where its photos say: the one
+  zone of that country that fits the offsets its phone photos record. Today it only asks.
+- A tree with no country chosen anywhere behaves as before: a zone answered on a container passes down unchecked to
+  destinations of camera photos alone. Whether a zone answered on a container should itself ask "is this a country"
+  where the zone belongs to a country of several.
+- The wording of ruled items that speak of a trip's folder — `RAT-home_zone_offered` ("one answer per trip, at the
+  trip's folder"), `RAT-decisions_cascade` ("set once at a trip's root") — and the docs' `year/country/city/location`,
+  to be put in terms of places and countries.
+- Regions that are not countries and span zones (an island group, a cross-border park): nothing to pick them from.
+- A host whose zone database ships without `zone.tab` (some minimal images): the choice is refused there; whether
+  the table should travel inside the executable.

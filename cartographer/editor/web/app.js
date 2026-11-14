@@ -105,7 +105,10 @@ function isDirty(ref) {
 }
 function refInvalid(ref) {
   const c = workCell(ref); if (!c) return false; const u = c.user_decision || {};
-  if (ref.kind === "timezone") return !validTz(u.manual_iana_timezone);
+  if (ref.kind === "timezone") {
+    const k = effectiveCountry(ref.dest);            // a zone written inside a country is one of that country's
+    return !validTz(u.manual_iana_timezone) || (!!u.manual_iana_timezone && !!k && k.zones.length > 0 && !k.zones.includes(u.manual_iana_timezone));
+  }
   if (ref.kind === "offset") return !validOffset(u.manual_offset_seconds);
   if (ref.kind === "drift") return !validOffset(u.corrected_offset_seconds);
   if (ref.kind === "fallback") return !validLat(u.fallback_lat) || !validLon(u.fallback_lon) || !bothOrNeither(u.fallback_lat, u.fallback_lon);
@@ -208,6 +211,7 @@ function wouldResolve(ref) {
   const u = c.user_decision || {}, p = c.proposal || {};
   if (ref.kind === "timezone")
     return ((!!u.manual_iana_timezone && validTz(u.manual_iana_timezone))
+      || tzOwnDecision(ref.dest)?.source === "country"                         // a country of one timezone gives it
       || (!!c.proposed_iana_timezone && c.proposal_source === "inherited"))   // an inherited zone applies itself...
       && zoneSpokenFor(c);                                                     // ...unless the photos here say otherwise
   if (ref.kind === "offset")
@@ -345,19 +349,47 @@ function previewEffective(ref) {
 // after Re-run. A zone written by hand is the one decision a timezone takes; an inherited one applies itself,
 // the configured default is only proposed — so a destination's own value is its manual zone or nothing.
 const leaf = (p) => (p || "").split("/").pop();
+// --- a country, chosen once at the top of its tree (geotag §18) ---
+const tzCell = (dest) => state.work.time?.destinations?.[dest]?.destination_timezone;
+const countryInfo = (code) => (state.work.time?.countries || {})[code] || null;
+// The country in effect at `dest` in the WORKING decisions: the one chosen highest above it, or at it.
+// {code, from, zones} or null. The choice highest in the tree stands; nothing inside it chooses another.
+function effectiveCountry(dest) {
+  const parts = dest.split("/");
+  for (let i = 1; i <= parts.length; i++) {
+    const at = parts.slice(0, i).join("/"), code = tzCell(at)?.user_decision?.country;
+    if (code) return { code, from: at, zones: countryInfo(code)?.zones || [] };
+  }
+  return null;
+}
+// Choosing a country at `dest` takes out every country chosen inside it. Returns the destinations it was
+// taken out of, for the warning. Mutates the working decisions.
+function clearCountriesInside(dest) {
+  const out = [];
+  for (const [d, v] of Object.entries(state.work.time?.destinations || {})) {
+    const u = v.destination_timezone?.user_decision;
+    if (d.startsWith(dest + "/") && u && u.country) { u.country = ""; out.push(d); }
+  }
+  return out;
+}
 function tzOwnDecision(dest) {
-  const c = state.work.time?.destinations?.[dest]?.destination_timezone;
+  const c = tzCell(dest);
   if (!c) return null;
   const u = c.user_decision || {};
   if (u.manual_iana_timezone) return { tz: u.manual_iana_timezone, source: "manual" };
+  const k = effectiveCountry(dest);                  // a country of one timezone: that is the zone
+  if (k && k.zones.length === 1) return { tz: k.zones[0], source: "country", from: k.from };
   return null;
 }
 function previewTz(dest) {
   const own = tzOwnDecision(dest);
   if (own) return own;
   const parts = dest.split("/");
+  const k = effectiveCountry(dest);
   for (let i = parts.length - 1; i > 0; i--) {
     const anc = parts.slice(0, i).join("/");
+    // a country of several timezones gives none to what lies inside it, and lets none through from above
+    if (k && k.zones.length > 1 && (anc === k.from || !anc.startsWith(k.from + "/"))) break;
     if (state.work.time?.destinations?.[anc]) {
       const a = previewTz(anc);
       if (a && a.tz) return { tz: a.tz, source: "inherited", from: anc };
@@ -579,8 +611,8 @@ function tzZones() {
   try { TZ_ZONES = Intl.supportedValuesOf("timeZone"); } catch { TZ_ZONES = ["UTC", "Europe/Brussels", "Asia/Tokyo", "America/New_York"]; }
   return TZ_ZONES;
 }
-function tzSelect(value, onchange, disabled) {
-  const cur = value || "", zones = tzZones();
+function tzSelect(value, onchange, disabled, only) {
+  const cur = value || "", zones = only && only.length ? only : tzZones();
   const opts = [el("option", { value: "" }, "— none —"), ...zones.map((z) => el("option", { value: z }, z))];
   // Keep a pre-existing value the browser doesn't know about visible/selectable rather than silently dropping it.
   if (cur && !zones.includes(cur)) opts.splice(1, 0, el("option", { value: cur }, cur + " (unknown)"));
@@ -721,9 +753,31 @@ function controls(ref) {
     if ((c.proposal_source === "config_default" || c.contradicted_by) && c.proposed_iana_timezone && !u.manual_iana_timezone)
       wrap.append(el("button", { class: "mini", onclick: () => edit(ref, "manual_iana_timezone", c.proposed_iana_timezone) },
         `use ${c.proposed_iana_timezone}`));
-    const sel = tzSelect(u.manual_iana_timezone, (v) => edit(ref, "manual_iana_timezone", v), false);
+    // The country this folder is — whatever it is called. Chosen once, at the top of its tree: inside a country
+    // none is chosen, and choosing one here takes out any chosen inside.
+    const k = effectiveCountry(ref.dest), above = k && k.from !== ref.dest, table = state.work.time?.countries || {};
+    if (Object.keys(table).length) {
+      const csel = el("select", { disabled: above ? "" : null },
+        el("option", { value: "" }, "— none —"),
+        ...Object.entries(table).sort((a, b) => a[1].name.localeCompare(b[1].name)).map(([code, v]) =>
+          el("option", { value: code }, `${v.name} (${code}) — ${v.zones.length === 1 ? v.zones[0] : v.zones.length + " timezones"}`)));
+      csel.value = above ? k.code : (u.country || "");
+      csel.addEventListener("change", () => {
+        const removed = csel.value ? clearCountriesInside(ref.dest) : [];
+        if (removed.length) state.message = `Country removed from ${removed.length} folder${removed.length === 1 ? "" : "s"} inside ` +
+          `(${removed.map(leaf).join(", ")}): a country is chosen once, at the top of its tree — that is how photos by destination must be laid out.`;
+        edit(ref, "country", csel.value);
+      });
+      wrap.append(el("label", { class: "ctl-field" }, el("span", {}, "Country"), csel));
+      if (above) wrap.append(el("div", { class: "hint" }, `${countryInfo(k.code)?.name || k.code}, chosen at ${leaf(k.from)}: a country is chosen once, at the top of its tree.`));
+      else if (k && k.zones.length > 1) wrap.append(el("div", { class: "hint" }, `${k.zones.length} timezones: each folder inside answers for itself; none is passed down from here.`));
+      if (c.country_removed) wrap.append(el("div", { class: "hint warn" },
+        `The country chosen here (${c.country_removed.country}) was removed by the last run: ${leaf(c.country_removed.because)} above is ${c.country_removed.country_there}, and nothing inside a country chooses another.`));
+    }
+    const sel = tzSelect(u.manual_iana_timezone, (v) => edit(ref, "manual_iana_timezone", v), false, k ? k.zones : null);
     wrap.append(el("label", { class: "ctl-field" }, el("span", {}, "Manual timezone"), sel));
     if (!validTz(u.manual_iana_timezone)) wrap.append(el("div", { class: "err" }, "not a valid IANA timezone"));
+    else if (refInvalid(ref)) wrap.append(el("div", { class: "err" }, `not a timezone of ${countryInfo(k.code)?.name || k.code}`));
   } else if (ref.kind === "offset") {
     for (const note of offsetCellNotes(c)) wrap.append(el("div", { class: "hint warn" }, note));
     wrap.append(offsetEditor(ref));
@@ -1247,6 +1301,6 @@ export {
   cellAt, cellStatus, wouldResolve, previewTz, previewFallback, refInvalid, isDirty, state,
   offsetGroups, dateRange, fmtDate, peerKeys, parseLatLon, coordText, contiguousRange,
   groupChoice, chosenOffset, proposalNotes, driftConfirmHolds, driftConfirmFields, acceptFields, acceptHolds, tracksNote,
-  zoneContradiction, offsetCellNotes, zoneSpokenFor, zoneDespiteFields,
+  zoneContradiction, offsetCellNotes, zoneSpokenFor, zoneDespiteFields, effectiveCountry, clearCountriesInside,
   scrubOffset, scrubSeedIndex, mapKeyFor,
 };

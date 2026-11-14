@@ -133,6 +133,29 @@ nor in a destination lying within it.
 A destination holding photos SHALL have one timezone for all of them.
 :::
 
+:::{rul} A country gives its timezone, or none
+:id: RUL-country_gives_its_timezone
+:status: ruled
+:criticality: high
+:verify: required
+:uses: DEF-geotag, DEF-decision
+
+A destination the user says is a country SHALL give its timezone to every destination within it where the country has
+one, and none where it has several — each destination within then answering for itself, among that country's
+timezones only.
+:::
+
+:::{rul} A country is chosen once, at the top of its tree
+:id: RUL-country_chosen_once
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-country_gives_its_timezone
+
+A country chosen within a destination that is a country SHALL be taken out of the decision, the user told that it was
+and why.
+:::
+
 :::{rul} A timezone stands against the photos only on the user's word
 :id: RUL-zone_against_photos_needs_word
 :status: ruled

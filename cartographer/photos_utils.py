@@ -224,6 +224,47 @@ def valid_iana_timezone(tz) -> bool:
         return False
 
 
+_COUNTRY_TABLE = None
+
+
+def _zone_database_file(name):
+    """The text of one of the zone database's tables (`zone.tab`, `iso3166.tab`), from where this Python
+    reads its zones — the system's database, else the `tzdata` package — or None where neither has it."""
+    import zoneinfo
+    for root in zoneinfo.TZPATH:
+        try:
+            with open(os.path.join(root, name), encoding="utf-8") as f:
+                return f.read()
+        except OSError:
+            continue
+    try:
+        from importlib import resources
+        return (resources.files("tzdata") / "zoneinfo" / name).read_text(encoding="utf-8")
+    except Exception:
+        return None
+
+
+def country_table() -> dict:
+    """{ISO 3166 code: {"name": English name, "zones": [its timezones, sorted]}} from the zone database's
+    own tables — every country a timezone belongs to, and so every country of more than one. {} where the
+    host's zone database ships without them. Read once."""
+    global _COUNTRY_TABLE
+    if _COUNTRY_TABLE is None:
+        zones, names = {}, {}
+        for line in (_zone_database_file("zone.tab") or "").splitlines():
+            cols = line.split("\t")
+            if line.startswith("#") or len(cols) < 3:
+                continue
+            if valid_iana_timezone(cols[2]):
+                zones.setdefault(cols[0], set()).add(cols[2])
+        for line in (_zone_database_file("iso3166.tab") or "").splitlines():
+            cols = line.split("\t")
+            if not line.startswith("#") and len(cols) >= 2:
+                names[cols[0]] = cols[1].strip()
+        _COUNTRY_TABLE = {c: {"name": names.get(c, c), "zones": sorted(z)} for c, z in sorted(zones.items())}
+    return _COUNTRY_TABLE
+
+
 def selected_gpx_root() -> str:
     root = CONFIG.get("gpx_root") or ""
     return os.path.realpath(os.path.abspath(root)) if root else ""

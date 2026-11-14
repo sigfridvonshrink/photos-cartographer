@@ -155,6 +155,24 @@ zone, or keeps it by a word that names the offsets it was given for — a phone 
 enough to be said.
 :::
 
+:::{rat} The user says which folder is a country; the zone database says the rest
+:id: RAT-country_said_not_guessed
+:status: ruled
+:forced: no
+:follows_from: RAT-one_zone_can_be_checked, RAT-nested_place_same_timezone
+:justifies: RUL-country_gives_its_timezone, RUL-country_chosen_once
+
+A zone passed down from a country of several is false for most of what lies inside it, and where the photos record no
+offset of their own nothing shows it. The zone database knows which countries those are; it cannot know which folder
+is one — a name is spelt as its owner spells it, in any language, and some names are two places. So the user says it,
+once, by picking the country from the database's own list, and the tool does what follows: a country of one timezone
+gives it to everything inside, as an answered zone would; a country of several gives none, lets none through from
+above, and holds every zone written inside it to its own. A country lies in no other country, so one chosen inside
+another is a slip or a tree laid out by something other than place: it is taken out, aloud, rather than left to
+contradict the one above — the by-destination tree is one of places, and this is the one place the tool can hold it
+to that.
+:::
+
 :::{rat} The clock is the camera's for the day, not the folder's
 :id: RAT-clock_is_the_cameras_for_the_day
 :status: ruled

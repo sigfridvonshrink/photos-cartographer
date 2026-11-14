@@ -45,6 +45,7 @@ import zoneinfo
 from datetime import datetime, timedelta, timezone
 
 from .photos_utils import (
+    country_table,
     code_fingerprint,
     CONFIG, CONTROL_DIR, control_dir, FINALIZED_MEDIA_ARTIFACT, track_memo_db_path, finalized_media_path, workspace_volume_error, config_path, handoff_path, guard_path, is_sealed, likely_new_dump,
     validate_config, load_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
@@ -692,6 +693,10 @@ class GeotagWorkflow:
         # offsets do NOT inherit across destinations (§10.2): each (group, date) bucket proposes its own.
         eff_tz = {}
         recall = {}                                  # (destination, bucket) -> what its cell was built from
+        # A country is chosen once, at the top of its tree (§18): `eff_country` maps a destination to
+        # (code, the destination it was chosen at) for itself and everything inside it.
+        eff_country, table = {}, country_table()
+        self.country_removals = []
         ordered, containers = _expand_destinations(by_dest)
         self.coordinator.start_phase("calibrating clock offsets", len(ordered))
         for dest in ordered:
@@ -701,19 +706,47 @@ class GeotagWorkflow:
             inherited_tz = _nearest_ancestor(dest, eff_tz, "tz")        # confirmable basis if no default
             if inherited_tz is not None and inherited_tz[1] is _ZONE_WAITS:
                 inherited_tz = None                 # the destination above waits on its own photos: so does this
+            prior_ud = (prior_d.get("destination_timezone") or {}).get("user_decision") or {}
+            own_country, removed = prior_ud.get("country", "") or "", None
+            above = next((eff_country[a] for a in _walk_ancestors(dest) if a in eff_country), None)
+            if own_country and above:
+                # Nothing inside a country chooses a country: the choice above stands, this one is taken out
+                # of the decision — said aloud, and left in the record of this run.
+                removed = {"country": own_country, "because": above[1], "country_there": above[0]}
+                self.country_removals.append(dict(removed, destination=dest))
+                own_country = ""
+            if own_country and own_country not in table:
+                blockers.append(f"{dest}: destination_timezone.user_decision.country {own_country!r} is not a "
+                                + ("country code of the zone database (two letters, such as \"US\")." if table else
+                                   "choice this host can read: its zone database has no table of countries."))
+                own_country = ""
+            country = (own_country, dest) if own_country else above
+            if country:
+                eff_country[dest] = country
+            zones = table.get(country[0], {}).get("zones", []) if country else []
+            if len(zones) == 1:
+                inherited_tz = (country[1], zones[0])       # a country of one timezone: that is the zone
+            elif zones and inherited_tz is not None and (own_country or inherited_tz[1] not in zones):
+                inherited_tz = None                         # a zone from above the country is none of its own
             # A destination holding photos has one timezone for all of them (§18): the zone it would take —
             # the one written for it, else the one it inherits — is set against what its own photos record.
-            written = ((prior_d.get("destination_timezone") or {}).get("user_decision") or {}).get("manual_iana_timezone")
+            written = prior_ud.get("manual_iana_timezone")
             candidate = written if written and _valid_iana(written) else (inherited_tz[1] if inherited_tz else None)
             against = _offsets_against_zone(by_dest[dest], groups, candidate) if candidate and not is_container else None
             tz_block = self._timezone_decision(dest, prior_d.get("destination_timezone") or {},
-                                               blockers, inherited_tz, file_less=is_container, against=against)
+                                               blockers, inherited_tz, file_less=is_container, against=against,
+                                               country=country, zones=zones, own_country=own_country,
+                                               removed=removed)
             # what children inherit: the zone in effect; or, where this destination's own photos speak
             # against the zone it would inherit and the user has not answered, that it waits — a
             # destination inside it does not reach past it to the zone its photos contradict
             eff_tz[(dest, "tz")] = tz_block["effective_iana_timezone"] or (_ZONE_WAITS if against else None)
             if tz_block["effective_iana_timezone"] == "" and against:
                 tz_block["requires_user_input"] = True
+            if own_country and len(zones) > 1:
+                # A country of several timezones gives none to what lies inside it, whatever zone its own
+                # photos are in, and lets none through from above: each destination below answers for itself.
+                eff_tz[(dest, "tz")] = _ZONE_WAITS
             tz = tz_block["effective_iana_timezone"] or None
             prior_cells = prior_d.get("camera_group_time_decisions") or {}
             cells, present = {}, []
@@ -778,6 +811,9 @@ class GeotagWorkflow:
             "executable": False,
             "destinations": destinations,
             "depends_on": self._time_depends_on(),
+            # the countries a destination can be said to lie in, with their timezones, as the zone database
+            # this run read has them: what a choice of country was made from, and rested on
+            "countries": table,
         }
         if not requires:
             artifact["decision_mode"] = "no_op_or_auto_resolved"
@@ -849,7 +885,8 @@ class GeotagWorkflow:
             seg = near(min(clock), max(clock)) if clock else []
         return seg
 
-    def _timezone_decision(self, dest, prior_tz, blockers, inherited=None, file_less=False, against=None):
+    def _timezone_decision(self, dest, prior_tz, blockers, inherited=None, file_less=False, against=None,
+                           country=None, zones=(), own_country="", removed=None):
         # Proposal precedence (§18): the nearest RESOLVED ancestor destination's timezone (a more
         # specific signal than the generic global default — e.g. a Japan/Kyoto leaf inheriting Japan's
         # Asia/Tokyo over a Europe/Brussels home default) wins; else the config default; else none.
@@ -858,7 +895,11 @@ class GeotagWorkflow:
         # default) auto-resolves without per-destination confirmation, staying overridable by a manual
         # entry. Only a destination with NO proposal at all (no ancestor, no default) blocks.
         default = (CONFIG.get("camera_time_and_timezone_policy") or {}).get("default_folder_timezone") or None
-        if inherited is not None:
+        if country and default not in zones:
+            default = None                          # the usual zone is no zone of the country chosen here
+        if inherited is not None and country and len(zones) == 1 and inherited[1] == zones[0]:
+            proposed, source, confidence, inherited_from = zones[0], "country", "high", None
+        elif inherited is not None:
             anc_path, anc_tz = inherited
             proposed, source, confidence, inherited_from = anc_tz, "inherited", "review_required", anc_path
         elif default:
@@ -884,6 +925,10 @@ class GeotagWorkflow:
             if not _valid_iana(manual):
                 blockers.append(f"{dest}: destination_timezone.user_decision.manual_iana_timezone "
                                 f"{manual!r} is not a valid IANA timezone.")
+            elif country and zones and manual not in zones:
+                blockers.append(f"{dest}: destination_timezone.user_decision.manual_iana_timezone {manual!r} is "
+                                f"not a timezone of {country[0]}, the country chosen at {country[1]}: "
+                                + ", ".join(zones) + ".")
             elif not unanswered:
                 effective = manual
         # An inherited zone is adopted (and re-propagated downward) without the user's answer — container or
@@ -895,14 +940,14 @@ class GeotagWorkflow:
         # ...unless this destination's own photos say otherwise: a phone's photo here that records an offset
         # the inherited zone does not have at that time was taken in another zone, and the one zone change
         # of a trip is not adopted unasked. The user writes the zone — the inherited one, if it is right.
-        auto = not manual and bool(proposed) and source == "inherited" and not unanswered
+        auto = not manual and bool(proposed) and source in ("inherited", "country") and not unanswered
         if auto:
             effective = proposed
         block = {
             "proposed_iana_timezone": proposed,
             "proposal_source": source,
             "proposal_confidence": confidence,
-            "user_decision": {"manual_iana_timezone": manual,
+            "user_decision": {"manual_iana_timezone": manual, "country": own_country,
                               "confirmed_despite_recorded_offsets": [int(o) for o in despite]},
             "effective_iana_timezone": effective,
             "requires_user_input": effective == "" and not file_less,   # a container never blocks
@@ -915,6 +960,13 @@ class GeotagWorkflow:
             block["inherited_from"] = inherited_from
         if against:
             block["contradicted_by"] = against
+        if country:
+            block["country"] = country[0]           # the country in effect here, and where it was chosen
+            if country[1] != dest:
+                block["country_from"] = country[1]
+            block["country_zones"] = list(zones)
+        if removed:
+            block["country_removed"] = removed
         return block
 
     def _offset_cell(self, dest, key, g, prior_cell, frames, gpx, blockers, tz=None, rep_naive=None, date=None,
@@ -2392,6 +2444,11 @@ def run(args):
             _, _td_bak = write_versioned_json(tdp, artifact)
             if _td_bak:
                 reporter.log(f"  Previous {TIME_DECISIONS_ARTIFACT} backed up to {_td_bak}")
+            for cr in wf.country_removals:
+                reporter.warn(f"  Warning: {cr['destination']}: the country chosen there ({cr['country']}) was removed — "
+                              f"{cr['because']}, which it lies in, is {cr['country_there']}. A country is chosen "
+                              "once, at the top of its tree, and nothing inside it chooses another: that is how "
+                              f"{folder_name('photos_by_dest')} must be laid out.")
             need_tz = sum(1 for d in artifact["destinations"].values()
                           if d["destination_timezone"]["requires_user_input"])
             need_off = sum(1 for d in artifact["destinations"].values()

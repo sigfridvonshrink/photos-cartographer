@@ -320,3 +320,83 @@ def test_a_timezone_s_guess_is_asked_about_once_where_it_can_be_checked(tmp_path
     art, _ = _build(wf, files, _gpx([]), zone)
     cell = _cell(art, dest)
     assert cell["effective_time_anchor"] == "" and cell["requires_user_input"] and art["requires_user_input"]
+
+
+# --- a country, chosen once at the top of its tree (§18) ------------------------------------------------------
+
+def _country(code):
+    return {"destination_timezone": {"user_decision": {"country": code}}}
+
+
+def _tz(zone):
+    return {"destination_timezone": {"user_decision": {"manual_iana_timezone": zone}}}
+
+
+@pytest.mark.spec("RUL-country_gives_its_timezone", "BLD-country_choice",
+                  test="TST-geotag_offset_no_inheritance-a_country_gives_its_timezone_or_none")
+def test_a_country_of_one_timezone_gives_it_and_one_of_several_gives_none(tmp_path):
+    """The user says which country a folder is, whatever it is called. A country of one timezone gives that
+    zone to everything inside. One of several gives none: each destination inside answers for itself, among
+    that country's zones only — and nothing reaches past it to a zone given above."""
+    table = utils.country_table()
+    assert table["JP"]["zones"] == ["Asia/Tokyo"] and len(table["US"]["zones"]) > 5 and table["US"]["name"] == "United States"
+    wf = _wf(tmp_path)
+    y = f"{BYDEST}/2024"
+    files = [_file(f"{y}/Japonia/Kyoto/a.arw", f"{y}/Japonia/Kyoto"),
+             _file(f"{y}/SUA/Arizona/Canyon/b.arw", f"{y}/SUA/Arizona/Canyon"),
+             _file(f"{y}/SUA/Oregon/c.arw", f"{y}/SUA/Oregon")]
+    prior = {"destinations": {y: _tz("Europe/Bucharest"),                # the year, given the home zone
+                              f"{y}/Japonia": _country("JP"), f"{y}/SUA": _country("US")}}
+    art, blk = wf.build_time_decisions(files, BOTH, prior, _gpx([]))
+    assert not blk, blk
+    tz = {d: v["destination_timezone"] for d, v in art["destinations"].items()}
+    kyoto = tz[f"{y}/Japonia/Kyoto"]
+    assert kyoto["effective_iana_timezone"] == "Asia/Tokyo" and kyoto["proposal_source"] == "country"
+    assert (kyoto["country"], kyoto["country_from"], kyoto["country_zones"]) == ("JP", f"{y}/Japonia", ["Asia/Tokyo"])
+    assert kyoto["decision_mode"] == "auto_resolved" and not kyoto["requires_user_input"]
+    assert tz[f"{y}/Japonia"]["effective_iana_timezone"] == "Asia/Tokyo" and "country_from" not in tz[f"{y}/Japonia"]
+    sua = tz[f"{y}/SUA"]                                                  # several zones: none of its own, none given down
+    assert sua["effective_iana_timezone"] == "" and not sua["requires_user_input"]       # a container never waits
+    for d in (f"{y}/SUA/Arizona/Canyon", f"{y}/SUA/Oregon"):
+        assert tz[d]["effective_iana_timezone"] == "" and tz[d]["requires_user_input"]   # not Bucharest, from above
+        assert tz[d]["proposal_source"] == "none" and tz[d]["country"] == "US" and tz[d]["country_from"] == f"{y}/SUA"
+        assert "America/Phoenix" in tz[d]["country_zones"]
+    assert art["countries"]["US"]["zones"] == table["US"]["zones"]       # what the choice was made from, recorded
+    # a zone answered inside the country passes down as ever
+    prior["destinations"][f"{y}/SUA/Arizona"] = _tz("America/Phoenix")
+    prior["destinations"][f"{y}/SUA/Oregon"] = _tz("America/Los_Angeles")
+    art, blk = wf.build_time_decisions(files, BOTH, prior, _gpx([]))
+    assert not blk and art["destinations"][f"{y}/SUA/Arizona/Canyon"]["destination_timezone"]["effective_iana_timezone"] == "America/Phoenix"
+    # ...and one that is not the country's is refused
+    prior["destinations"][f"{y}/SUA/Oregon"] = _tz("Europe/Paris")
+    _art, blk = wf.build_time_decisions(files, BOTH, prior, _gpx([]))
+    assert len(blk) == 1 and "Europe/Paris" in blk[0] and "not a timezone of US" in blk[0] and f"{y}/SUA" in blk[0]
+    # a code that is no country's is refused
+    prior["destinations"][f"{y}/SUA/Oregon"] = _tz("America/Los_Angeles")
+    prior["destinations"][f"{y}/Japonia"] = _country("Japan")
+    _art, blk = wf.build_time_decisions(files, BOTH, prior, _gpx([]))
+    assert len(blk) == 1 and "country 'Japan'" in blk[0]
+
+
+@pytest.mark.spec("RUL-country_chosen_once", "BLD-country_choice",
+                  test="TST-geotag_offset_no_inheritance-nothing_inside_a_country_chooses_a_country")
+def test_nothing_inside_a_country_chooses_a_country(tmp_path, monkeypatch, capsys):
+    """A country is chosen once, at the top of its tree. One chosen inside another is taken out of the
+    decision — whichever was written first — and the run says so, and why."""
+    wf = _wf(tmp_path)
+    root = f"{BYDEST}/SUA"
+    files = [_file(f"{root}/Hawaii/Maui/a.arw", f"{root}/Hawaii/Maui")]
+    prior = {"destinations": {root: _country("US"), f"{root}/Hawaii": _country("JP"), f"{root}/Hawaii/Maui": _country("US")}}
+    art, blk = wf.build_time_decisions(files, BOTH, prior, _gpx([]))
+    assert not blk
+    hawaii, maui = (art["destinations"][d]["destination_timezone"] for d in (f"{root}/Hawaii", f"{root}/Hawaii/Maui"))
+    assert hawaii["user_decision"]["country"] == "" and maui["user_decision"]["country"] == ""     # taken out
+    assert hawaii["country"] == "US" and hawaii["country_from"] == root
+    assert hawaii["country_removed"] == {"country": "JP", "because": root, "country_there": "US"}
+    assert maui["country_removed"] == {"country": "US", "because": root, "country_there": "US"}
+    assert maui["effective_iana_timezone"] == "" and maui["requires_user_input"]                   # not Japan's zone
+    assert wf.country_removals == [dict(hawaii["country_removed"], destination=f"{root}/Hawaii"),
+                                   dict(maui["country_removed"], destination=f"{root}/Hawaii/Maui")]
+    # said once: the next run finds nothing to remove
+    art2, _ = wf.build_time_decisions(files, BOTH, art, _gpx([]))
+    assert wf.country_removals == [] and "country_removed" not in art2["destinations"][f"{root}/Hawaii"]["destination_timezone"]
