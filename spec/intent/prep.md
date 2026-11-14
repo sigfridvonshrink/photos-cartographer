@@ -14,7 +14,7 @@ that only restated others, has no heading here.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: prep-no-time-gps-correction-1, prep-no-timestamp-correction-1
+:aliases: prep-no-time-gps-correction-1, prep-no-timestamp-correction-1, prep-no-geotag-command-1
 :uses: DEF-prep
 
 Prep SHALL make no correction to a file's time or position: it plans, infers, writes and applies none.
@@ -644,6 +644,7 @@ An interruption SHALL leave prep's journal as its last save left it, never part-
 :criticality: med
 :verify: required
 :refines: RUL-execution_only_the_plan
+:aliases: prep-prune-empty-day-folders-1
 
 Prep SHALL remove a folder its plan leaves empty — in the inbox or a by-date folder, or a dump's folder on the first run
 — only as a planned operation, and only while the folder is empty.
@@ -847,7 +848,7 @@ from the plan memo — deciding nothing by it.
 :status: ruled
 :criticality: low
 :verify: required
-:aliases: prep-summary-separates-categories-1, prep-summary-confirm-artifacts-after-validation-1
+:aliases: prep-summary-separates-categories-1, prep-summary-confirm-artifacts-after-validation-1, prep-execution-visible-logs-1
 
 At the end of an execution prep SHALL report a summary telling what it changed apart from what it only read: its media
 operations, the files already in place, the moves it recognized, the files of photos by destination it read, the
