@@ -2,6 +2,75 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-14 — v3.0.0
+
+**The conversion is finished: geotag is in the corpus, the original specs are retired, and every rule has a test.**
+The specification is now only the corpus (`spec/`): 503 rules and invariants, each stating one obligation, each with
+its reason, and each named by a test that fails when it is broken — or, for the three invariants, verified through
+the rules that uphold them, which `tools/spec-build` checks. The four original documents, the conversion ledgers and
+the clause index are kept at the tag `specs-before-corpus` and nowhere else. The phase documents' sections are
+numbered 1…n, and code, tests and corpus cite items, never sections. Converting geotag, then reviewing it twice
+against its own promise — *"geotagging all photos with minimum human input and ensuring that all decisions are
+explicit and recorded"* — changed what it does:
+
+- **the clock offset** — the offset a camera's own positions agree on is found whichever day a place was visited, a
+  revisit matched to its own day and a tie between visits asked, one click to answer. An accepted proposal names the
+  offset it accepted (`accepted_offset_seconds`) and is asked again when the proposal becomes another; the earlier
+  answer stays as the user wrote it. An offset the camera's own positions gave is shared across the destinations of
+  the same day, and two that disagree are shown against each other. A timezone-derived offset is asked about once, at
+  the tracks, where it can be checked. A stay in one place fixes no time and goes through the drift check. A drift
+  confirmation holds for the offset it confirmed.
+- **the timezone** — the configured default is offered, never applied. A destination is said to be *in* a country,
+  chosen once on the way down the tree, and a country of one timezone gives it; a destination has one timezone, and
+  one that its photos' own recorded offsets speak against takes effect only on the user's word. `by-dest` is a tree of
+  places, not of trips.
+- **reading times** — a phone's time is read by the offset recorded with that very field; an offset written inside
+  the time's value is read, and before one beside it; an offset that is not an offset is read as none, strictly; a
+  time out of range stops with the photo named. The log's `time_written` step records what was replaced, where the
+  time was read from, and by which rule.
+- **the tracks** — each track file is one device's record: no photo is placed, and no clock anchored, from a point
+  of one file taken with a point of another, between them or beyond them. Tracks that disagree about where a photo
+  was place nothing and are named. A tracks folder that is configured and not there stops the plan. Every position
+  written is marked `matched`, `interpolated` or `extrapolated`. Each threshold now has one purpose and its own
+  setting; none is read for two.
+- **execution and the record** — execute never writes over a photo edited since the plan, and finalize refuses a
+  plan no longer current and a photo changed since execute. Every step of every log names the run that made it —
+  merge's did not. A file naming no camera is solved on its own. A new ImageMagick changing a fingerprint keeps the
+  photo's pinned own values.
+
+**Safety, from asserting every rule.** Writing a test for each rule that had none, or was only passed through,
+found the code short of five of them:
+
+- **Every rewrite is on disk before it replaces the earlier file.** A rename can reach the disk before the bytes it
+  names, so a power cut could leave a record — or a photo — empty. Asked whether to narrow the rule to a killed
+  process or to sync: *"B. Sync - I don't care if slow, the script promises absolute safety."* The photo's metadata
+  write no longer lets exiftool rename over the photo: exiftool writes the new file beside it, geotag syncs it and
+  renames it into place.
+- **A link among the photos stops geotag.** It checked the top level only; a photo replaced since prep by a link to
+  the same file elsewhere was planned and written through, into a file outside the workspace.
+- **A disturbed workspace stops prep before it scans**, and geotag before it runs prep for the user. Both used to
+  fingerprint every file and write a plan first.
+- **Geotag and merge read the configuration before checking the folders it names.** Run on their own, they looked
+  for the built-in folder names and refused any workspace whose folders were renamed.
+- **The editor reads the seal under the workspace's lock**, not before taking it.
+
+Two rules were narrowed to what is true rather than built out: a lock is taken over once the system reports no
+running process holds it, never on its owner record, and guards the runs of one machine; and only the snapshot uses
+a feature of one particular filesystem, the rule now naming what cartographer does require of one — locks, an atomic
+rename, a move that refuses a taken name, syncing to disk.
+
+**Major: a workspace begun under v2.0.0 cannot be continued without edits.** Its configuration lacks the settings
+that replaced the shared thresholds (`gpx_extrapolation_*`, `gpx_tracks_agree_max_distance_meters`, `gpx_anchor_*`,
+`drift_check_track_window_seconds`, `clock_offset_same_day_max_difference_seconds`) and is refused until they are
+added; `photo_anchor_interpolation_max_gap_seconds` and `photo_anchor_extrapolation_max_seconds` are gone. Two
+decision fields are removed — `accept_proposed_timezone`, `manual_real_utc` — and an `accept_proposal` without
+`accepted_offset_seconds` is a blocker, so earlier answers are asked again. The plan and the journal carry new fields
+(`placement`, `left_unlocated`, `media_after`). Replace a deployed `photos-config-defaults.json` with this release's.
+The library itself needs nothing.
+
+**Not yet caught up:** the walkthrough and its screenshots show v2.0.0 and say so; the user guides are to be redone
+against this version (BACKLOG 17, 49).
+
 ## 2026-11-13 — v2.0.0
 
 **The specification becomes a checked corpus, and every rule in it is now met by the code.** The four specs are

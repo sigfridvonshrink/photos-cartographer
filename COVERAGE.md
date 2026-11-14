@@ -17,17 +17,17 @@ same plan/validate/execute core the phases provide, neither of which writes meta
 
 | Component | Line | Branch |
 |---|---:|---:|
-| prep (`photos_1_prep`) | 92.1% | 86.4% |
+| prep (`photos_1_prep`) | 93.0% | 87.2% |
 | prep models (`_prep_models`) | 100.0% | 100.0% |
-| geotag (`photos_2_geotag`) | 95.6% | 94.5% |
-| geotag calc (`_geotag_calc`) | 98.1% | 94.7% |
-| merge (`photos_3_merge`) | 92.4% | 91.2% |
-| shared (`photos_utils`) | 90.6% | 87.2% |
+| geotag (`photos_2_geotag`) | 95.8% | 95.0% |
+| geotag calc (`_geotag_calc`) | 98.0% | 96.2% |
+| merge (`photos_3_merge`) | 92.5% | 92.0% |
+| shared (`photos_utils`) | 90.7% | 87.7% |
 | reporting (`reporting`) | 93.6% | 74.3% |
 | cli | 90.9% | 83.3% |
 | console server | 58.2% | 47.0% |
 | editor server | 78.6% | 77.1% |
-| **Total** | **90.9%** | **87.3%** |
+| **Total** | **91.3%** | **88.2%** |
 
 Regenerate (branch coverage; report scoped to the production code via `.coveragerc`):
 
