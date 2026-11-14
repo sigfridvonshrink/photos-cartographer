@@ -569,7 +569,7 @@ Of the ways a track can place a photo, geotag SHALL take the first that applies:
 :verify: required
 :refines: RUL-track_placement_bounded
 
-Where tracks that cover a photo's time put it in places farther apart than the configuration joins points across, the tracks SHALL NOT place it, and the user is told which tracks disagree.
+Where tracks that cover a photo's time put it in places farther apart than the configuration lets tracks differ, the tracks SHALL NOT place it, and the user is told which tracks disagree.
 :::
 
 :::{rul} A position says how it was found

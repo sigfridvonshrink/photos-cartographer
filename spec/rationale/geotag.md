@@ -478,7 +478,7 @@ add the work it exists to save.
 :follows_from: RAT-track_squeezed, RAT-coordinate_carries_its_method
 :justifies: RUL-track_placement_bounded, RUL-track_evidence_order
 
-Squeezing the track means using it wherever it says something: at a point, between two, and a little past where a recording stops — each track's own stop, since a logger switched off at the car is an end whatever was recorded the month after. Past an end there is only a heading, and a heading read off the last two points is mostly receiver jitter: twenty metres in one second, carried five minutes, is six kilometres. So the heading is read over the track's last stretch, and a projection that still lands farther or faster than points are ever joined across is dropped for the end itself — rough, marked as such, and wrong by no more than the user allowed.
+Squeezing the track means using it wherever it says something: at a point, between two, and a little past where a recording stops — each track's own stop, since a logger switched off at the car is an end whatever was recorded the month after. Past an end there is only a heading, and a heading read off the last two points is mostly receiver jitter: twenty metres in one second, carried five minutes, is six kilometres. So the heading is read over the track's last stretch, and a projection that still lands farther or faster than the configuration lets one go is dropped for the end itself — rough, marked as such, and wrong by no more than the user allowed.
 :::
 
 :::{rat} The remainder is a worklist only if it says why
