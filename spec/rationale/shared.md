@@ -7,7 +7,9 @@ items it `justifies`, under the same section numbers. Where the two differ, the 
 
 :::{rat} A plan made beside another run cannot be trusted
 :id: RAT-planning_inside_lock
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-no_mutation_outside_plan
 :justifies: RUL-lock_before_reading
 
 Planning changes nothing but the fingerprints it keeps for later runs, but it must still not run concurrently: a plan
@@ -16,7 +18,9 @@ computed against a workspace another process is reading or changing is untrustwo
 
 :::{rat} The lock and revalidation guard different things
 :id: RAT-lock_and_revalidation
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-planning_inside_lock, RAT-no_mutation_outside_plan
 :justifies: INV-one_run_at_a_time
 
 This whole-run lock is independent of, and stricter than, the dependency-revalidation discipline: revalidation guards
@@ -25,7 +29,9 @@ against *stale* inputs across separate runs, while the lock guarantees runs neve
 
 :::{rat} A crash never locks a workspace for good
 :id: RAT-crash_never_locks_for_good
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-recoverable_core
 :justifies: RUL-stale_lock_recovered
 
 Runs can die — a power cut, a killed terminal, the system running out of memory — and a dead run cannot release its
@@ -35,7 +41,9 @@ never asks of them; recognised as stale, it lets the next run go on.
 
 :::{rat} A live lock is never taken
 :id: RAT-live_lock_never_taken
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-crash_never_locks_for_good, RAT-non_destructive_core
 :justifies: RUL-stale_takeover_conservative
 
 Taking over a lock whose owner is still running would let two runs change the same originals at once — the very thing
@@ -47,7 +55,9 @@ owner counts as alive.
 
 :::{rat} A snapshot is an extra layer, not the safety model
 :id: RAT-snapshot_is_extra
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-non_destructive_core
 :justifies: RUL-snapshot_optional, RUL-unrequired_snapshot_proceeds
 
 **Snapshots are an optional extra safety layer, not a requirement.** The pipeline operates fully and safely without
@@ -58,7 +68,9 @@ filesystem supports it; they are not the basis of the safety model.
 
 :::{rat} Why the snapshot alone may touch the filesystem
 :id: RAT-one_filesystem_specific_part
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-snapshot_is_extra, RAT-linux_and_open_source_not_roots
 :justifies: RUL-filesystem_agnostic, BLD-snapshot_is_zfs
 
 The mechanism is named for ZFS because that is the reference implementation, but it is deliberately the *only* part
@@ -67,7 +79,9 @@ of the pipeline that touches a specific filesystem feature, and it is optional; 
 
 :::{rat} A rollback point is the state just before the change
 :id: RAT-snapshot_just_before
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-snapshot_is_extra, RAT-planning_inside_lock
 :justifies: RUL-snapshot_timing
 
 A snapshot restores the state just before a plan's changes. Taken before the plan is validated, it may precede a plan
@@ -77,7 +91,9 @@ taken after a change, it no longer restores the state before it.
 
 :::{rat} Required means a condition of changing anything
 :id: RAT-required_means_condition
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-snapshot_is_extra
 :justifies: RUL-required_snapshot_or_nothing
 
 An operator who requires snapshots has made a rollback point a condition of any change. Going on without one would break
@@ -86,7 +102,9 @@ that condition silently, so the run stops before its first change, when stopping
 
 :::{rat} A rollback is chosen by hand, later
 :id: RAT-rollback_chosen_by_hand
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-snapshot_is_extra, RAT-consolidated_log
 :justifies: RUL-snapshot_per_plan
 
 A rollback is done by hand, often long after the run. The snapshot must say which plan's changes it precedes, so the
@@ -95,7 +113,9 @@ operator can find the right one and tell the phases' snapshots apart.
 
 :::{rat} A snapshot of the library alone would lose what merge moved
 :id: RAT-library_snapshot_alone_loses
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-snapshot_is_extra, RAT-non_destructive_core
 :justifies: RUL-merge_snapshots_library, RUL-no_library_only_snapshot
 
 Merge's changes land in two places: it adds each photo to the library and removes it from the workspace. Rolled back
@@ -108,7 +128,9 @@ library alone; with no snapshot of the workspace it takes none at all, and says 
 
 :::{rat} One mechanism, so the phases cannot diverge
 :id: RAT-one_snapshot_mechanism
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-snapshot_is_extra, RAT-one_source_per_fact
 :justifies: BLD-one_snapshot_mechanism
 
 Each phase that mutates uses the same mechanism so the phases behave identically and cannot diverge.
@@ -118,7 +140,9 @@ Each phase that mutates uses the same mechanism so the phases behave identically
 
 :::{rat} One place for every setting
 :id: RAT-one_place_for_settings
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-consolidated_log, RAT-idempotent_reruns
 :justifies: RUL-one_configuration
 
 Settings read from more than one place — a phase's own file, an environment variable, the program's defaults — can
@@ -128,7 +152,9 @@ workspace, everything that governed a run is in one file, hashed, checked and ar
 
 :::{rat} A workspace keeps the settings it started with
 :id: RAT-workspace_keeps_its_settings
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-multi_session_job, RAT-idempotent_reruns
 :justifies: RUL-config_seeded_once, RUL-config_authoritative
 
 A workspace's runs, spread over days or weeks, must all read the settings it was set up with, or a later run could
@@ -139,7 +165,9 @@ archived, and from then on the copy governs, not the program.
 
 :::{rat} Every change to the configuration is one someone chose
 :id: RAT-config_changes_chosen
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-why_did_this_change, RAT-idempotent_reruns
 :justifies: RUL-config_writers, RUL-library_setup_writes_one_setting
 
 Prep's seeding happens once, before anything is made under the configuration; the user's own edits are the intended way
@@ -150,7 +178,9 @@ user can find.
 
 :::{rat} A configuration in a file is bound to what it governed
 :id: RAT-config_is_a_file
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-one_place_for_settings, RAT-consolidated_log
 :justifies: DEF-configuration, RUL-config_in_dependencies, RUL-config_archived, RUL-config_digest_recorded
 
 Making the config a file binds it intrinsically to the workspace and to everything processed in it. Hashed and folded
@@ -160,7 +190,9 @@ archived, it lets a future reader know not only what was decided but **under wha
 
 :::{rat} Surgical staleness: one hash for everything would restale everything
 :id: RAT-surgical_staleness
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-idempotent_reruns
 :justifies: RUL-staleness_by_area
 
 Collapsing all staleness to a single whole-file hash would needlessly restale unrelated artifacts on any edit, and is
@@ -169,7 +201,9 @@ explicitly not done.
 
 :::{rat} A coarse trigger for the cheap plan, a precise one for the costly caches
 :id: RAT-coarse_trigger_for_the_cheap_plan
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-surgical_staleness, RAT-no_mutation_outside_plan
 :justifies: RUL-any_config_change_replans, RUL-costly_results_survive_unrelated_edits, RUL-times_survive_unrelated_config_edits
 
 The whole-file fingerprint restaling the plan is a catch-all guaranteeing no config-driven change is ever silently
@@ -182,7 +216,9 @@ coarse trigger for a cheap artifact is consistent with — indeed protective of 
 
 :::{rat} Folder names and media classes decide which files exist where
 :id: RAT-organization_decides_where_files_are
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-surgical_staleness, RAT-discrete_stages
 :justifies: RUL-organization_settings_restale, BLD-prep_guards_with_the_whole_hash
 
 Geotag's and merge's plans locate the destination tree by name and classify the tree, and renaming a managed folder or
@@ -192,7 +228,9 @@ run and guards execution with the whole-file hash, so it needs no separate folde
 
 :::{rat} A file's class decides how it is handled
 :id: RAT-class_decides_handling
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-non_destructive_core
 :justifies: RUL-extension_one_class, RUL-config_lists_extensions, RUL-unlisted_extension_other
 
 A file's class decides everything the pipeline does with it: a photo is organized by date and geotagged, a video goes to
@@ -203,7 +241,9 @@ extension nobody listed is safest set aside, recoverably, rather than guessed at
 
 :::{rat} Case says nothing about a format
 :id: RAT-case_says_nothing
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-class_decides_handling, RAT-idempotent_reruns
 :justifies: RUL-extension_matched_ignoring_case
 
 One camera writes `JPG`, another `jpg`, and a file copied through another system may come back either way; the format
@@ -212,7 +252,9 @@ is the same. Matching by case would make the same photo a stray in one dump and 
 
 :::{rat} The control records are found before anything is read
 :id: RAT-control_records_found_first
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-consolidated_log
 :justifies: RUL-control_directory_fixed
 
 Every phase, the editor and the console must find the control records before reading any of them — and the
@@ -222,7 +264,9 @@ it out wholesale, and lets anyone opening an old workspace find its record.
 
 :::{rat} A folder's role is pipeline logic
 :id: RAT-folder_roles_are_logic
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-configurable_folder_names
 :justifies: RUL-folder_names_not_roles, RUL-folder_found_by_role
 
 The roles — the inbox, the read-only destination tree, the order in which duplicates are retained, which folders are
@@ -231,7 +275,9 @@ the photo and video bands — are pipeline logic, so the user sets the names and
 
 :::{rat} The derivation's version must stay the code's
 :id: RAT-derivation_version_is_code
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-one_source_per_fact, RAT-grouping_computed_once
 :justifies: RUL-camera_classes_not_derivation
 
 The version of the camera-group derivation takes part in the dependency fingerprints, so a change to the derivation is
@@ -242,17 +288,20 @@ detectable; it versions the code that computes the key, so only the code can set
 
 :::{rat} One skipped place instead of a list of names
 :id: RAT-one_skipped_place
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-consolidated_log
 :justifies: RUL-control_records_together, RUL-control_records_never_media
 
 Skipping the control directory wholesale means a control or artifact file can never be mistaken for a photo. There is
-no per-file "ignore list" to maintain — consolidating everything in one skipped directory replaces the basename
-registry that earlier designs needed.
+no per-file "ignore list" to maintain: whatever the control directory holds, now or later, is skipped with it.
 :::
 
 :::{rat} A duplicate and its explanation are not separated
 :id: RAT-quarantine_manifest_beside_duplicates
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-no_automatic_deletion, RAT-consolidated_log
 :justifies: RUL-control_records_together
 
 A quarantine manifest says why each file beside it was set aside. Kept in the quarantine folder it describes, it cannot
@@ -263,7 +312,9 @@ transformation log, so pruning loses nothing of the record.
 
 :::{rat} A dump leaves no hidden litter
 :id: RAT-no_hidden_litter
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-no_automatic_deletion, RAT-empty_inbox_means_nothing_waits
 :justifies: RUL-dump_hidden_files_quarantined
 
 Hidden dotfiles are swept to the recoverable quarantine, not merely skipped, so a dump leaves no hidden litter.
@@ -271,7 +322,9 @@ Hidden dotfiles are swept to the recoverable quarantine, not merely skipped, so 
 
 :::{rat} A plan in one known place is the plan that runs
 :id: RAT-one_place_per_plan
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-no_mutation_outside_plan
 :justifies: RUL-plan_at_fixed_place, RUL-no_plan_location_option
 
 A plan kept in one known place is the plan that runs: the dry run and the execution read exactly what the last planning
@@ -282,7 +335,9 @@ it, in a tool used a few times a year.
 
 :::{rat} Nothing runs that the user could not review
 :id: RAT-plan_before_run
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-no_mutation_outside_plan
 :justifies: RUL-no_plan_no_run
 
 Execution carries out only a plan the user could review first. With none saved, there is nothing reviewed to carry out,
@@ -291,7 +346,9 @@ and planning on the spot would skip the review the plan exists for.
 
 :::{rat} The dry run reads the persisted plan
 :id: RAT-dry_run_reads_the_saved_plan
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-no_mutation_outside_plan
 :justifies: RUL-dry_run_summarises_the_real_plan
 
 A simulation is a second path that can disagree with execution: it can pass where execution would fail, or the
@@ -301,7 +358,9 @@ enough because the whole plan is on disk to read.
 
 :::{rat} A superseded plan stays recoverable; an unchanged one adds nothing
 :id: RAT-superseded_plans_recoverable
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-non_destructive_core, RAT-idempotent_reruns
 :justifies: RUL-replanning_keeps_the_prior, RUL-unchanged_replan_writes_nothing
 
 Setting the prior artifact aside keeps a superseded plan and any authored decisions recoverable; writing nothing on an
@@ -310,7 +369,9 @@ unchanged re-run means the iterative decision-editing loop does not accumulate r
 
 :::{rat} The handoff is invisible to the scan, yet verified
 :id: RAT-handoff_by_content
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-one_skipped_place, RAT-bytes_are_the_safe_check
 :justifies: RUL-handoff_verified_by_content, RUL-run_only_refresh_restales_nothing
 
 Living in the skipped directory is independent of the handoff's role as a dependency: it is invisible to prep's media
@@ -320,7 +381,9 @@ it does not restale downstream.
 
 :::{rat} Every phase relies on the shape when it scans
 :id: RAT-phases_rely_on_the_shape
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-discrete_stages
 :justifies: INV-undisturbed_shape, RUL-shape_checked_first
 
 The structural facts are shared by every phase because each relies on them when it scans, and a violation of any one
@@ -331,7 +394,9 @@ itself*.
 
 :::{rat} A followed link escapes the managed tree
 :id: RAT-a_link_escapes_the_tree
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-non_destructive_core, RAT-decoded_pixel_identity
 :justifies: RUL-no_links, RUL-link_named
 
 Following a symbolic link would let a planned read or write reach a target **outside** the managed tree — a pipeline
@@ -341,7 +406,9 @@ fingerprint and de-duplication rest on.
 
 :::{rat} Prep is the gatekeeper for links under the destination tree
 :id: RAT-prep_gatekeeps_links
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-a_link_escapes_the_tree, RAT-never_behind_prep
 :justifies: RUL-who_checks_for_links, RUL-geotag_merge_check_top_level_links
 
 The destination tree is read-only for prep yet still scanned by it, so prep is also the gatekeeper for links that
@@ -351,7 +418,9 @@ built with no forbidden link present.
 
 :::{rat} A rebuilt structure could mask a loss
 :id: RAT-rebuild_masks_loss
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-phases_rely_on_the_shape, RAT-non_destructive_core
 :justifies: RUL-missing_folder_blocks, RUL-structure_built_once, RUL-only_prep_builds_structure, RUL-missing_folder_named, RUL-empty_inbox_normal
 
 Since prep creates the structure once and never removes a folder, a missing one is evidence the structure was deleted
@@ -364,7 +433,9 @@ operator's task.
 
 :::{rat} Grouping computed once is never reinvented
 :id: RAT-grouping_computed_once
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-offset_per_camera_destination_day, RAT-camera_groups_generated
 :justifies: RUL-prep_derives_camera_group, RUL-geotag_reuses_camera_group
 
 Two derivations of a camera's identity could disagree: a file grouped one way by prep and another way by geotag would
@@ -374,7 +445,9 @@ everywhere it appears. One derivation, by prep, recorded with the file and reuse
 
 :::{rat} Only the user knows a group's class
 :id: RAT-class_from_the_user
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-class_decides_time_model, CHC-ask_only_what_data_cannot_settle
 :justifies: RUL-known_when_classified
 
 Geotag treats the two classes differently: a phone keeps network time and is solved file by file, while a camera's clock
@@ -387,7 +460,9 @@ unknown and geotag asks.
 
 :::{rat} The shutter's time first
 :id: RAT-shutter_time_first
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-position_follows_time, RAT-one_source_per_fact
 :justifies: RUL-recorded_time_order
 
 `DateTimeOriginal` is the moment the shutter fired. `CreateDate` is when the file was written, the same moment for a
@@ -399,7 +474,9 @@ time, and stopping at it would leave a file undated whose next field holds its t
 
 :::{rat} One key, so the names cannot drift apart
 :id: RAT-one_format_no_drift
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-idempotent_reruns, RAT-one_source_per_fact
 :justifies: RUL-one_filename_format
 
 With one format key for the whole pipeline, the provisional names prep assigns and the final names geotag assigns are
@@ -408,7 +485,9 @@ guaranteed to share the same textual shape and can never drift apart; there is n
 
 :::{rat} The same shape, a different value, on purpose
 :id: RAT-same_shape_different_value
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-one_format_no_drift, RAT-prep_cannot_know_the_time
 :justifies: RUL-prep_name_provisional, RUL-geotag_name_final, RUL-uncorrected_keeps_its_name
 
 Both phases use the same format, but the **value** differs by phase and that difference is intentional. Because the
@@ -418,7 +497,9 @@ file's provisional and final names coincide, so geotag plans no needless rename 
 
 :::{rat} The first free name makes the two names coincide
 :id: RAT-bare_first
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-same_shape_different_value
 :justifies: RUL-suffix_choice_by_phase, RUL-uncorrected_keeps_its_name
 
 Bare-first is what makes an uncorrected file's provisional (prep) and final (geotag) names coincide, so geotag plans no
@@ -427,7 +508,9 @@ needless rename; the two phases use the identical rule so they never disagree on
 
 :::{rat} The library is append-only
 :id: RAT-merge_appends
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-library_is_ground_truth, RAT-names_never_collide
 :justifies: RUL-merge_suffix_above_highest
 
 In the library a gap in the numbers is a photo the user deleted; giving its number to a new photo would hand it a name
@@ -436,7 +519,9 @@ a backup or an export may still use for the deleted one.
 
 :::{rat} Prep cannot know a photo's true time
 :id: RAT-prep_cannot_know_the_time
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-offset_per_camera_destination_day, RAT-prep_has_no_evidence
 :justifies: RUL-prep_name_provisional
 
 Prep runs before anyone knows a photo's true time: the camera's clock offset comes from geotag, by matching against the
@@ -446,7 +531,9 @@ the camera recorded — enough to put a day's photos in order, not enough for a 
 
 :::{rat} A name in the time of day where the photo was taken
 :id: RAT-name_in_local_time
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: CHC-local_folder_library, RAT-destination_is_an_input
 :justifies: RUL-geotag_name_final
 
 A name is read by a person looking for a photo, who remembers the time of day where it was taken. A camera's clock may
@@ -456,7 +543,9 @@ matches the memory.
 
 :::{rat} Outside the inbox, every name is the pipeline's
 :id: RAT-misnamed_not_ignored
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-phases_rely_on_the_shape, RAT-why_did_this_change
 :justifies: RUL-misnamed_file_stops_prep
 
 Outside the inbox every name is one the pipeline gave. A name that is not means a file was renamed or put there by
@@ -466,7 +555,9 @@ name that looks trusted. Only the inbox takes files as they come.
 
 :::{rat} The JPG named like its RAW
 :id: RAT-redundant_named_like_its_raw
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-raw_is_master, RAT-misnamed_not_ignored
 :justifies: RUL-redundant_jpg_timestamp_named
 
 A redundant JPG is the same shot as the RAW kept in the dated folders: named from the same time, the two names show it,
@@ -476,7 +567,9 @@ file is.
 
 :::{rat} A file sent back keeps the name it had
 :id: RAT-mark_once
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-idempotent_reruns, RAT-fix_through_inbox
 :justifies: RUL-untimed_mark_once
 
 A file comes in already marked when the user sends it back from missing metadata: they gave it a time, or meant to. If
@@ -486,7 +579,9 @@ again would grow its name on every round and say nothing new.
 
 :::{rat} One format for a workspace's life
 :id: RAT-format_fixed_per_workspace
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-workspace_keeps_its_settings, RAT-non_destructive_core
 :justifies: RUL-format_fixed_once_named
 
 Merge never renames a file in the library, so after a change the library holds both formats whatever the workspace
@@ -497,7 +592,9 @@ costs nothing.
 
 :::{rat} Two files never share a name
 :id: RAT-names_never_collide
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-non_destructive_core, RAT-idempotent_reruns
 :justifies: RUL-suffix_no_clobber
 
 Photos taken in the same second — a burst, two cameras — get the same timestamp name, and a name given twice would
@@ -510,7 +607,9 @@ Allocated deterministically, a re-run gives each file the name it gave before.
 
 :::{rat} Where the tracks live is what keeps them geotag's
 :id: RAT-tracks_kept_outside
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-tracks_are_geotags_evidence, RAT-tracks_never_strays
 :justifies: RUL-tracks_outside_managed_folders, RUL-tracks_geotag_only
 
 The shared rule that makes it safe for geotag alone to own the tracks is where they live. Kept outside the managed
@@ -520,7 +619,9 @@ into the inbox and organized.
 
 :::{rat} The tracks are geotag's evidence
 :id: RAT-tracks_are_geotags_evidence
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-prep_has_no_evidence, RAT-surgical_staleness
 :justifies: RUL-tracks_geotag_only
 
 The tracks are evidence for a photo's time and place, and only geotag decides those: prep never plans a time or a
@@ -530,7 +631,9 @@ to its own records.
 
 :::{rat} A track among the strays could be deleted with them
 :id: RAT-tracks_never_strays
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-non_destructive_core, RAT-track_squeezed
 :justifies: RUL-track_files_block_prep, RUL-track_file_left_in_place
 
 Parked among the strays, a track could be deleted when the strays are cleared in bulk, and a lost track is evidence no
@@ -539,7 +642,9 @@ re-run can recover. Refusing to run leaves it where the user put it until they m
 
 :::{rat} Changed tracks can change the answers
 :id: RAT-tracks_change_the_answers
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-no_mutation_outside_plan, RAT-coordinate_carries_its_method
 :justifies: RUL-tracks_in_dependencies
 
 The tracks are evidence for the clock offsets and positions geotag proposes, and a track added, corrected or removed can
@@ -551,7 +656,9 @@ settled; the tracks' fingerprint in each record turns the change into staleness 
 
 :::{rat} One source for each shared fact
 :id: RAT-one_source_per_fact
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-surgical_staleness, RAT-no_mutation_outside_plan
 :justifies: INV-no_stale_use
 
 The facts the dependencies are built from — the configuration, the control records, the camera-group derivation's
@@ -561,7 +668,9 @@ single change has one authoritative source and a predictable staleness footprint
 
 :::{rat} Opposite jobs, so different names
 :id: RAT-fingerprint_and_hash_opposite_jobs
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-decoded_pixel_identity
 :justifies: DEF-fingerprint, DEF-hash
 
 The two words name a value by the role it plays, not by the algorithm underneath, and the two roles are opposite: one
@@ -571,7 +680,9 @@ itself computed with a hash function.
 
 :::{rat} A file's identity outlives its edits
 :id: RAT-identity_survives_edits
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-decoded_pixel_identity
 :justifies: RUL-fingerprint_survives_mutation
 
 A fingerprint is chosen precisely so it stays the same when the pipeline rewrites a photo's metadata or position or
@@ -581,7 +692,9 @@ transformation log and de-duplication rely on.
 
 :::{rat} A new version may change nothing
 :id: RAT-new_version_may_change_nothing
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-fingerprint_same_method, RAT-decoded_pixel_identity
 :justifies: RUL-engine_change_is_checked
 
 A new ImageMagick usually decodes the same pixels to the same fingerprint, but nothing promises it. Trusted blindly, a
@@ -592,7 +705,9 @@ moves; where it is not, the photo is still the one it was, and what was recorded
 
 :::{rat} Detecting change is a hash's whole purpose
 :id: RAT-hash_is_for_change
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-no_mutation_outside_plan
 :justifies: RUL-hash_detects_any_change
 
 A hash is chosen precisely so it changes on any byte change: detecting change is its whole purpose.
@@ -600,7 +715,9 @@ A hash is chosen precisely so it changes on any byte change: detecting change is
 
 :::{rat} A record's every byte can matter
 :id: RAT-bytes_are_the_safe_check
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-hash_is_for_change, RAT-idempotent_reruns
 :justifies: RUL-hash_is_the_dependency_check
 
 A record is small and every byte of it can matter — a decision, an offset, a timezone — so the safe check is its exact
@@ -611,7 +728,9 @@ after it stale.
 
 :::{rat} Failing to look is no proof that nothing changed
 :id: RAT-unknown_is_not_unchanged
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-no_mutation_outside_plan, RAT-non_destructive_core
 :justifies: RUL-unchecked_counts_as_changed
 
 A dependency that cannot be checked gives no assurance either way. Counting it unchanged would let a failure to look
@@ -623,7 +742,9 @@ nothing would all pass. Refusing costs a re-plan; trusting could cost a photo it
 
 :::{rat} A steady state to return to
 :id: RAT-loop_is_steady_state
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-recoverable_core, RAT-discrete_stages
 :justifies: RUL-geotag_gates, RUL-more_dumps_until_merge
 
 The loop is a steady state to return to, not a one-way pipeline: a batch can be imported, sorted, and followed by
@@ -633,7 +754,9 @@ the present state need not.
 
 :::{rat} Bounded by what is true now, not by a flag
 :id: RAT-gates_not_history
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-loop_is_steady_state, RAT-discrete_stages
 :justifies: RUL-geotag_gates, RUL-geotag_rerunnable
 
 What bounds geotag's freedom is a small, fixed set of conditions on the workspace, not a "has geotag run before?" flag.
@@ -642,9 +765,10 @@ Each gate names a state geotag cannot work correctly from; none says anything ab
 
 :::{rat} Re-running is safe because nothing settled is redone
 :id: RAT-rerun_is_safe
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-idempotent_reruns, RAT-mark_in_the_file
 :justifies: RUL-geotag_rerunnable
-:follows_from: RUL-geotag_rerun_keeps_settled
 
 Geotag can be re-run freely because a re-run redoes nothing settled: the user's decisions live in geotag's records and
 survive their regeneration, what geotag wrote into a file is recognised there, so a corrected time is never corrected
@@ -654,7 +778,9 @@ the same.
 
 :::{rat} The file carries the record of what geotag did
 :id: RAT-mark_in_the_file
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-idempotent_reruns, RAT-coordinate_carries_its_method
 :justifies: RUL-geotag_rerun_keeps_settled
 
 What geotag did to a photo is marked in the photo itself rather than kept only in the workspace: the mark survives the
@@ -664,7 +790,9 @@ recognised as corrected whichever workspace it is in.
 
 :::{rat} An empty inbox means nothing is waiting
 :id: RAT-empty_inbox_means_nothing_waits
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-discrete_stages
 :justifies: RUL-prep_empties_inbox
 
 An empty inbox is the one sign that nothing is waiting to be organized: geotag and merge refuse to run while it holds
@@ -674,7 +802,9 @@ it.
 
 :::{rat} Only what geotag treats goes to the library
 :id: RAT-only_what_geotag_treats
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-videos_kept_not_corrected, RAT-bands_never_mix
 :justifies: RUL-sort_photos_only
 
 Geotag corrects only photos: it reads and writes photo metadata and places photos on the map. A video or any other file
@@ -684,7 +814,9 @@ destination's set one geotag has wholly treated.
 
 :::{rat} New photos never reach geotag behind prep's back
 :id: RAT-never_behind_prep
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-geotag_reads_the_handoff, RAT-discrete_stages
 :justifies: RUL-prep_records_sort, RUL-sort_recorded_by_stat
 
 Geotag depends on prep's handoff, and a photo prep has not recorded is not in it. Re-prepping after every sort, even
@@ -693,7 +825,9 @@ after geotag has run, keeps the handoff the whole truth about photos by destinat
 
 :::{rat} A plan on a reading the file no longer holds
 :id: RAT-plan_on_current_record
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-geotag_reads_the_handoff, RAT-non_destructive_core
 :justifies: RUL-geotag_plans_on_current_record
 
 Geotag decides from what prep read in each photo — its time above all — and never reads the photo again. A photo
@@ -705,7 +839,9 @@ prep's record, show it without reading it.
 
 :::{rat} Safe is not frictionless
 :id: RAT-rerun_not_frictionless
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-idempotent_reruns, RAT-surgical_staleness
 :justifies: RUL-rerun_does_what_changed
 
 "Freely re-runnable" does not mean "always a no-op". Any change upstream — not only new media — restales exactly what
@@ -714,7 +850,9 @@ depends on it, and may raise new questions about the items it touches; a re-run 
 
 :::{rat} Finalize stays apart because geotag is re-run
 :id: RAT-finalize_apart
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-rerun_is_safe, RAT-idempotent_reruns
 :justifies: RUL-finalize_explicit
 
 Geotag is re-run freely, and assembling the permanent record on each pass would be wasted work. Finalize marks the one
@@ -723,7 +861,9 @@ moment the user declares the dump done.
 
 :::{rat} Never a half-geotagged set in the library
 :id: RAT-merge_never_half_done
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-gates_not_history, RAT-finalize_apart
 :justifies: RUL-merge_takes_finalized_current, RUL-merge_refuses_changed_since_finalize
 
 Finalize is a point in time, and photos by destination can change after it. Merge checks the finalized set against the
@@ -732,7 +872,9 @@ present one rather than trusting finalize was last, so a half-geotagged set cann
 
 :::{rat} A merged workspace is not a clean slate
 :id: RAT-workspace_not_recycled
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-consolidated_log, RAT-record_outlives_workspace
 :justifies: RUL-merge_is_terminal, RUL-library_takes_many_workspaces
 
 Even with photos by destination empty, a merged workspace keeps its database, ledgers, caches, snapshots and sealed
@@ -741,7 +883,9 @@ record. Starting afresh keeps each workspace's record about one batch.
 
 :::{rat} Corrections would invalidate development
 :id: RAT-development_after_corrections
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: CHC-local_folder_library, RAT-discrete_stages
 :justifies: RUL-development_after_merge
 
 Distribution copies made before geotag's time and position corrections would be made from uncorrected photos, and the
@@ -753,7 +897,9 @@ to the library. A development folder's presence alone is the signal; nothing gue
 
 :::{rat} Redoing settled work buys no safety
 :id: RAT-no_redo_to_be_safe
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-idempotent_reruns
 :justifies: INV-change_only_what_needs
 
 Settled work done again "to be safe" makes nothing safer: a file written with what it already holds gains nothing and
@@ -764,7 +910,9 @@ risks a failed write, and reading a library's content again can cost hours.
 
 :::{rat} A user who distrusts opaque mutation can always ask why
 :id: RAT-why_did_this_change
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-consolidated_log, RAT-decision_withdrawable
 :justifies: INV-every_change_from_the_record, RUL-cause_locatable, RUL-decision_revisable
 
 For irreplaceable photos, a user who distrusts opaque, automatic change must always be able to answer *why did this
@@ -774,7 +922,9 @@ record that the change can be traced back to, and revising the record revises th
 
 :::{rat} A time and a name are recomputed, not reverted
 :id: RAT-time_name_recomputed
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-decision_withdrawable, RAT-by_dest_is_the_users
 :justifies: RUL-withdrawal_undoes
 
 A file's time and name are not rolled back when a decision is withdrawn but recomputed in place: reverting them would
@@ -783,7 +933,9 @@ un-position a file the user has already organized.
 
 :::{rat} A decision is what only the user knows
 :id: RAT-decisions_are_the_users
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-editor_writes_only_decisions, RAT-why_did_this_change
 :justifies: RUL-user_writes_decisions
 
 A decision is a fact only the user knows — which timezone a trip was in, which offset a camera had, where a photo with
@@ -793,7 +945,9 @@ in place of the user's knowledge; so the tool proposes in fields of its own and 
 
 :::{rat} The tool lays out, the user fills in
 :id: RAT-structure_from_the_tool
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-camera_groups_generated, RAT-format_editor_split
 :justifies: RUL-decision_fields_laid_out
 
 The user edits these records a few times a year, by hand or in the editor. A field they had to add would need its exact
@@ -803,7 +957,9 @@ one value to fill in, its place already right.
 
 :::{rat} Prep has nothing to ask
 :id: RAT-prep_needs_no_answers
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-prep_has_no_evidence, CHC-ask_only_what_data_cannot_settle
 :justifies: RUL-prep_takes_no_decision
 
 Prep's work — sorting by type and date, setting duplicates aside, recording what is where — follows from the files and
@@ -815,7 +971,9 @@ geotag's; a prep that asked would hold up the inbox on questions it does not nee
 
 :::{rat} The workspace is transient; the record must not be
 :id: RAT-record_outlives_workspace
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-consolidated_log, RAT-durable_record
 :justifies: RUL-record_whole_each_phase
 
 The decisions drive a run, but their lasting value is as the record of what was done to the archive and why — and the
@@ -827,7 +985,9 @@ must be whole at each.
 
 :::{rat} A record no later phase can silently alter
 :id: RAT-records_attributable
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-consolidated_log, RAT-discrete_stages
 :justifies: RUL-phase_writes_own_records, RUL-carry_forward_by_copy
 
 With each phase writing only its own records and carrying earlier ones forward by copy, every phase's output stays a
@@ -839,7 +999,9 @@ account of each phase: a second, rebuilt account could disagree with the first.
 
 :::{rat} A name cannot key the log
 :id: RAT-names_cannot_key_the_log
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-decoded_pixel_identity, RAT-identity_survives_edits
 :justifies: RUL-log_keyed_by_fingerprint, RUL-no_log_entry_for_other
 
 A photo is renamed up to twice in the workspace — a provisional name, then its final one — and may be renamed again on
@@ -849,7 +1011,9 @@ move and metadata write the pipeline makes.
 
 :::{rat} Retention serves the log, nothing more
 :id: RAT-retention_serves_the_log
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-consolidated_log, RAT-multi_session_job
 :justifies: RUL-history_retained, RUL-partial_history_shown
 
 A journey spans many runs — prep, re-prep after moves, repeated geotag passes, merge — so a log rebuilt from the last
@@ -859,7 +1023,9 @@ open-ended store of events.
 
 :::{rat} The database holds what the record cannot rebuild
 :id: RAT-database_is_record
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-decisions_reread_cache_only, RAT-decision_withdrawable, CHC-local_folder_library
 :justifies: RUL-database_is_record, RUL-one_database, RUL-other_databases_scratch
 
 The database is not only a cache that makes re-runs cheap: it holds what nothing else does — the values a photo held
@@ -870,7 +1036,9 @@ database because it is the user's own collection, organised as they choose, and 
 
 :::{rat} A database shows only now
 :id: RAT-database_shows_only_now
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-database_is_record, RAT-records_attributable
 :justifies: RUL-database_image_each_phase, RUL-image_never_working_data, RUL-images_archived
 
 The live database is one file that every phase changes, so at any moment it shows only the latest state: what prep
@@ -880,7 +1048,9 @@ boundary, to be opened later and compared.
 
 :::{rat} An image is regenerable; a photo is not
 :id: RAT-image_replaced_not_kept
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-database_shows_only_now
 :justifies: RUL-database_image_each_phase, RUL-database_image_whole, RUL-image_never_working_data, RUL-images_archived, RUL-image_capture_atomic
 
 Never overwriting guards photos, which cannot be made again. An image can: it is a copy of the live database, and only
@@ -890,7 +1060,9 @@ capture interrupted leaves a usable image either way.
 
 :::{rat} Finalize records what geotag left
 :id: RAT-finalize_only_records
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-finalize_apart, RAT-idempotent_reruns
 :justifies: RUL-finalize_non_destructive
 
 Finalize is the moment the user declares the workspace done, and the package must record what geotag actually left. Were
@@ -900,7 +1072,9 @@ could record another; reading only, it can be run again at any time and records 
 
 :::{rat} The why beside the what
 :id: RAT-why_beside_what
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-consolidated_log
 :justifies: RUL-log_cites_decisions
 
 A step alone says what happened to a photo — its time moved by three hours — not why. Years later, the decision behind
@@ -910,7 +1084,9 @@ may be long gone with the workspace.
 
 :::{rat} Each phase writes only its own steps
 :id: RAT-each_phase_owns_its_steps
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-records_attributable
 :justifies: RUL-log_entry_grows
 
 Each phase knows only its own work, so each appends only its own steps; rewriting an earlier phase's would put words in
@@ -920,7 +1096,9 @@ record of what its phase saw.
 
 :::{rat} The log is read by people, years on
 :id: RAT-log_read_by_people
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-consolidated_log
 :justifies: RUL-log_human_readable
 
 The log outlives the tool that wrote it: it is read by a person, years on, perhaps without cartographer at hand. A
@@ -930,7 +1108,9 @@ offset in hours and minutes — need no program to decode.
 
 :::{rat} Undoing a position is a step too
 :id: RAT-reverts_are_steps_too
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-coordinate_carries_its_method, RAT-consolidated_log
 :justifies: RUL-log_records_gps_reverts
 
 Withdrawing a manual position changes the photo as much as applying one: its position goes back to what it held, or to
@@ -940,7 +1120,9 @@ would show a position the photo no longer has.
 
 :::{rat} The package answers what the workspace could
 :id: RAT-package_answers_later
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-record_outlives_workspace
 :justifies: RUL-package_contents
 
 The workspace is transient; the package is what remains of it beside the library. It must answer later what the
@@ -950,7 +1132,9 @@ saw. Anything left out — a journal, a snapshot — is a question no one can an
 
 :::{rat} The package can be checked without the tool
 :id: RAT-package_checks_itself
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-package_answers_later
 :justifies: RUL-package_self_describing
 
 A package moved to long-term storage is parted from the workspace that made it and may sit untouched for years. Naming
@@ -962,7 +1146,9 @@ without the tool, that nothing in it has decayed or been altered.
 
 :::{rat} The library is the user's, and already in order
 :id: RAT-library_is_ground_truth
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: CHC-local_folder_library, RAT-non_destructive_core
 :justifies: RUL-library_never_altered, RUL-library_not_scanned, RUL-collision_by_content, RUL-collision_same_content, RUL-collision_different_content, RUL-unsettled_collision_blocks
 
 The library is the user's curated collection: its organisation and names are the ground truth, and other tools and
@@ -974,7 +1160,9 @@ does: a guess either way is a duplicate placed or a photo lost from the workspac
 
 :::{rat} A library file costs a full read
 :id: RAT-library_reads_cost
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-idempotent_reruns, RAT-safety_not_on_the_plan
 :justifies: RUL-library_file_read_once, RUL-library_file_rechecked_before_removal
 
 Fingerprinting a library file means reading and decoding it whole, and the library may sit across a network. Kept in the workspace, a
@@ -985,7 +1173,9 @@ it cannot be undone: that one decision reads the file again rather than trust wh
 
 :::{rat} One library, many workspaces
 :id: RAT-library_shared
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-lock_and_revalidation, CHC-local_folder_library
 :justifies: RUL-library_lock, RUL-library_lock_fail_fast, RUL-library_lock_holds_only_holder, RUL-library_lock_stale_recovered
 
 Many workspaces merge into one library, each under its own lock. Only a lock on the library itself keeps two of their
@@ -994,7 +1184,9 @@ merges from writing it at once.
 
 :::{rat} A library has nothing of the tool's to inspect
 :id: RAT-library_mark
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-library_is_ground_truth, RAT-non_destructive_core
 :justifies: RUL-library_known_by_mark, RUL-library_confirmed_before_lock, RUL-library_place_checked, RUL-library_mark_made_by_setup, RUL-library_mark_required, RUL-library_creates_only_placements
 
 The library is the user's: it has no structure of the tool's to inspect, so one mark, made once and on purpose, is
@@ -1004,7 +1196,9 @@ keeps the tool from writing into a folder that was never made a library.
 
 :::{rat} The workspace keeps only what still needs attention
 :id: RAT-move_not_copy
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-recoverable_core, RAT-remainder_worklist
 :justifies: RUL-merge_moves, RUL-merge_resumable, RUL-unplaced_photo_stays
 
 A copy left in the workspace of a photo already in the library is a duplicate that invites confusion and wastes space,
@@ -1015,7 +1209,9 @@ interruption never loses a photo: running merge again finishes the work.
 
 :::{rat} Merge is the end, so the package is remade at once
 :id: RAT-reseal_automatic
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-package_answers_later, RAT-finalize_apart
 :justifies: RUL-merge_reseals, RUL-reseal_rederives_nothing
 
 Merge adds to the record finalize packaged, so the existing package no longer describes the whole journey. Since merge
@@ -1025,7 +1221,9 @@ command because geotag is freely re-run, and re-packaging after every pass would
 
 :::{rat} An empty folder means two things; a mark means one
 :id: RAT-seal_not_folder_state
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-gates_not_history, RAT-partial_merge_no_dead_end
 :justifies: RUL-seal_is_authority, RUL-seal_on_success_only
 
 Photos by destination is empty both in a workspace just sorted and in one merged and finished, so its state cannot say
@@ -1035,7 +1233,9 @@ none, so it can be finished by running it again.
 
 :::{rat} A finished workspace is read, not reprocessed
 :id: RAT-sealed_is_final
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-workspace_not_recycled, RAT-non_destructive_core
 :justifies: RUL-sealed_refuses, RUL-sealed_new_dump_warned, RUL-editor_refuses_sealed, RUL-sealed_no_library_recorded, RUL-sealed_new_dump_left
 
 A second batch processed in a merged workspace would interleave with the first's database, logs and package, and its
@@ -1046,7 +1246,9 @@ automated move inside a finished workspace.
 
 :::{rat} Pruning the quarantine changes nothing controlled
 :id: RAT-prune_harms_nothing
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-no_automatic_deletion, RAT-sealed_is_final
 :justifies: RUL-sealed_prune_allowed
 
 The quarantine holds only spare copies of duplicates, which a sealed workspace still keeps. Deleting them, with the
@@ -1059,7 +1261,9 @@ so the seal's reasons do not reach it, and the space can be reclaimed.
 
 :::{rat} A current value can still be wrong
 :id: RAT-valid_is_not_unchanged
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-hand_written_fallible, RAT-hash_is_for_change
 :justifies: INV-authored_values_checked, RUL-checked_every_run
 
 A fingerprint tells whether a value changed, not whether it makes sense. A value can match its fingerprint and still be
@@ -1069,7 +1273,9 @@ both checks are needed, every time.
 
 :::{rat} What is typed by hand can be mistyped
 :id: RAT-hand_written_fallible
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-plain_json_record, RAT-why_did_this_change
 :justifies: INV-authored_values_checked, RUL-checked_paths, RUL-checked_timezones, RUL-checked_positions_and_times, RUL-checked_filename_format, RUL-checked_numbers, RUL-checked_shapes, RUL-invalid_value_stops, RUL-invalid_value_located, RUL-invalid_value_never_repaired
 
 The user writes the configuration and the decisions by hand, so the tool cannot assume they are well formed. A
@@ -1080,7 +1286,9 @@ explained. Checking keeps every change explainable and the user its author.
 
 :::{rat} The library and the workspace lie apart
 :id: RAT-library_and_workspace_apart
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-hand_written_fallible, RAT-library_is_ground_truth, CHC-local_folder_library
 :justifies: RUL-library_place_checked, RUL-checked_paths
 
 A library inside the workspace would be merged into itself, the tool walking its own output as input. A workspace
@@ -1092,7 +1300,9 @@ claims to be.
 
 :::{rat} A folder's name is a place on disk
 :id: RAT-folder_names_are_places
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-configurable_folder_names, RAT-hand_written_fallible
 :justifies: RUL-checked_folder_names
 
 Each managed folder's name becomes a folder at the workspace's top level. A name holding a separator would put it inside
@@ -1102,7 +1312,9 @@ and the control records' or the quarantine's name would mix media with the recor
 
 :::{rat} A list entry that cannot match sets photos aside unseen
 :id: RAT-extension_entries_must_match
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-hand_written_fallible, RAT-class_decides_handling
 :justifies: RUL-checked_extension_lists
 
 A file's extension is matched lowercase and without its dot, so an entry written otherwise matches nothing, and every
@@ -1112,7 +1324,9 @@ Checking the lists turns that silent loss into a named mistake.
 
 :::{rat} A snapshot fails before anything changes, not midway
 :id: RAT-snapshot_name_early
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-hand_written_fallible, RAT-required_means_condition
 :justifies: RUL-checked_snapshot_names
 
 A snapshot's name the snapshot tool would refuse is found when the configuration is read, not when the snapshot is
@@ -1121,7 +1335,9 @@ taken, so a bad name never surprises an execution midway.
 
 :::{rat} The user keeps what they wrote
 :id: RAT-invalid_decision_shown
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-decisions_are_the_users, RAT-hand_written_fallible
 :justifies: RUL-invalid_decision_kept
 
 Erasing an invalid decision would take away the very thing the user must see to correct it. Kept and marked, it shows
@@ -1132,7 +1348,9 @@ what was written and what is wrong with it.
 
 :::{rat} A plan describes the workspace as it was
 :id: RAT-plan_can_be_overtaken
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-safety_not_on_the_plan
 :justifies: RUL-target_free_at_execute
 
 A plan is made from the filesystem at one moment, and the workspace or the library can change before it runs. The
@@ -1142,7 +1360,9 @@ which no plan, however careful, can stand in for.
 
 :::{rat} Safety and resuming rest on the moment of each change
 :id: RAT-safe_at_each_change
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-safety_not_on_the_plan, RAT-recoverable_core
 :justifies: RUL-operations_atomic, RUL-split_move_never_lost, RUL-rewrite_in_place_atomic, RUL-cross_fs_all_or_nothing, RUL-failed_operation_clean, RUL-failure_recorded, RUL-failure_never_done
 
 That nothing is overwritten, and that an interrupted run is finished by running it again, hold only if each change is
@@ -1152,7 +1372,9 @@ plan can see it.
 
 :::{rat} Within a workspace, every move is one rename
 :id: RAT-workspace_one_filesystem
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-safe_at_each_change
 :justifies: RUL-workspace_one_filesystem, RUL-one_filesystem_checked_every_run, RUL-workspace_moves_one_filesystem
 
 On one filesystem every move a workspace sees is a single rename: nothing to copy, nothing to verify, no temporary copy
@@ -1163,7 +1385,9 @@ crosses into it. Checking every run, not once, catches a volume mounted into the
 
 :::{rat} A temporary copy left behind is debris
 :id: RAT-temps_are_debris
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-library_shared, RAT-safe_at_each_change
 :justifies: RUL-crash_temps_cleared, RUL-temp_name_own
 
 Merge holds the library's lock, so a temporary copy found in a folder it places into was left by an interrupted earlier
@@ -1175,7 +1399,9 @@ library free of litter — hygiene, not safety.
 
 :::{rat} A plan is read before anything moves
 :id: RAT-plan_read_before_anything_moves
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-no_mutation_outside_plan
 :justifies: RUL-planning_changes_no_media
 
 A plan is there to be read before anything happens — by the user, and by the dry run that checks it. Planning that
@@ -1187,7 +1413,9 @@ and once, the configuration the plan itself is made under.
 
 :::{rat} What was reviewed is what happens
 :id: RAT-what_was_reviewed_happens
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-no_mutation_outside_plan, RAT-why_did_this_change
 :justifies: RUL-execution_only_the_plan
 
 What the user reviewed — the plan, its dry run — is what must happen. An execution that decided afresh would act on a
@@ -1198,7 +1426,9 @@ again.
 
 :::{rat} Jobs buy time, not outcomes
 :id: RAT-jobs_buy_time
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-what_was_reviewed_happens, RAT-idempotent_reruns
 :justifies: RUL-execution_jobs_change_nothing
 
 Applying a plan in parallel only saves time, and how many jobs suit depends on the machine of the day. If the count
@@ -1209,7 +1439,9 @@ touches only its own files, and the results are gathered in a fixed order.
 
 :::{rat} A plan is the decisions of its code
 :id: RAT-plan_is_its_codes
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-what_was_reviewed_happens, RAT-no_mutation_outside_plan
 :justifies: RUL-plan_carried_out_by_its_code
 
 A saved plan is the decisions of the code that made it: names, copies, places, a time and a position for each photo,
@@ -1222,7 +1454,9 @@ its decision records.
 
 :::{rat} The journal is the run's own account
 :id: RAT-journal_is_the_account
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-no_mutation_outside_plan, RAT-consolidated_log
 :justifies: RUL-every_change_journaled
 
 The journal is the history of a run: what it changed, in what order, and how each change ended. The logs are built from

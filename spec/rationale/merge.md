@@ -9,7 +9,9 @@ that only restated others, has no heading here.
 
 :::{rat} One version on both sides of a comparison
 :id: RAT-one_version_per_comparison
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-decoded_pixel_identity, RAT-fingerprint_same_method
 :justifies: RUL-merge_rechecks_under_new_engine
 
 Merge compares prep's fingerprint of a photo with one it takes now of the library file in its way. Taken by two
@@ -24,7 +26,9 @@ photo into the library's history.
 
 :::{rat} The workspace may have been touched since geotag
 :id: RAT-touched_since_geotag
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-discrete_stages, RAT-non_destructive_core
 :justifies: RUL-merge_rechecks_gates
 
 Geotag's gates held when geotag ran; merge runs later, often much later, and the user may have dropped a new dump into
@@ -36,7 +40,9 @@ the gates leave out are the residue the library never receives; they stay in the
 
 :::{rat} A refused merge leaves nothing to clean up
 :id: RAT-refused_merge_clean
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-no_mutation_outside_plan, RAT-recoverable_core
 :justifies: RUL-merge_blocked_changes_nothing
 
 The library is the one place the pipeline cannot simply re-plan from: a photo half placed there, or a summary
@@ -49,7 +55,9 @@ merges that ran.
 
 :::{rat} The destination tree is the library's organisation
 :id: RAT-destination_tree_is_the_library
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-piggyback_on_the_destination_sort, CHC-local_folder_library
 :justifies: RUL-library_mirrors_destinations
 
 The user builds photos by destination as the library should read — country, city, place — and the library, browsed
@@ -63,7 +71,9 @@ every run, which is what lets an interrupted merge find its own work.
 
 :::{rat} A partial merge is never a dead end
 :id: RAT-partial_merge_no_dead_end
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-recoverable_core, RAT-idempotent_reruns
 :justifies: RUL-merge_replan_any_time
 
 A partial merge leaves the cause of its blockers for the user to fix — a library file that could not be read, a photo
@@ -74,7 +84,9 @@ plan that can no longer finish and no way to make one that can.
 
 :::{rat} The library is the evidence of a move
 :id: RAT-library_is_evidence_of_move
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-discrete_stages, RAT-decoded_pixel_identity
 :justifies: RUL-replan_carries_placed, RUL-resume_rechecks_library
 
 The journal is written after a move, so a crash or a Ctrl-C can leave a photo in the library with no entry for it; and
@@ -89,7 +101,9 @@ a resume.
 
 :::{rat} The run's end decides what to do next
 :id: RAT-merge_outcome_decides_next
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-consolidated_log
 :justifies: RUL-merge_outcome_recorded
 
 What the user does after a merge turns on how it ended: nothing after a whole success, a fix and another run after a
@@ -99,7 +113,9 @@ tell a refusal from a run that found nothing to do; a recorded outcome says whic
 
 :::{rat} Merge is the step the user watches
 :id: RAT-merge_report_at_the_end
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-remainder_worklist, RAT-workspace_not_recycled
 :justifies: RUL-merge_run_reported
 
 Merge is the step that puts photos where the user will look for them, and the one that ends the workspace. Its report
