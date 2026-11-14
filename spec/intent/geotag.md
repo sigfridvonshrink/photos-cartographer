@@ -275,7 +275,7 @@ however it was reached there — and the configured default only where none has.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: move-reevaluate-dest-1
+:aliases: move-reevaluate-dest-1, prep-resort-restales-decisions-1
 :uses: DEF-destination
 
 A photo moved to another destination SHALL be decided under that destination's timezone and clock offset, nothing of

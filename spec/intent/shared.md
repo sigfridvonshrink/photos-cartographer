@@ -173,7 +173,7 @@ Merge also takes a lock on the library it writes into, so that two merges into o
 :status: ruled
 :criticality: med
 :verify: incidental
-:aliases: snapshot-optional-1
+:aliases: snapshot-optional-1, prep-snapshot-rollback-option-1
 
 A phase that changes files MAY first take a snapshot of what it is about to change, from which the whole change can be
 rolled back. Cartographer SHALL be complete and safe without one, no guarantee depending on a snapshot having been
@@ -534,6 +534,7 @@ An extension SHALL be in exactly one class of media.
 :criticality: med
 :verify: required
 :refines: RUL-extension_one_class
+:aliases: prep-extension-lists-config-1
 
 The configuration SHALL list which extensions are images, raw files and videos, never the classes themselves.
 :::
@@ -544,6 +545,7 @@ The configuration SHALL list which extensions are images, raw files and videos, 
 :criticality: med
 :verify: required
 :refines: RUL-extension_one_class
+:aliases: prep-other-not-fingerprinted-1
 
 An extension the configuration does not list SHALL be `other`.
 :::
@@ -554,6 +556,7 @@ An extension the configuration does not list SHALL be `other`.
 :criticality: med
 :verify: required
 :refines: RUL-config_lists_extensions
+:aliases: prep-classify-by-extension-1
 
 A file's extension SHALL be matched to the configuration's lists ignoring case.
 :::
@@ -563,7 +566,7 @@ A file's extension SHALL be matched to the configuration's lists ignoring case.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: config-values-validated-1, geotag-sanity-validate-1
+:aliases: config-values-validated-1, geotag-sanity-validate-1, prep-config-sanity-validated-1
 :refines: INV-authored_values_checked
 
 Every value of the configuration that comes from the user SHALL be validated before it is used, as part of reading the
@@ -669,7 +672,7 @@ phase's planning writes it and its dry run and its execution read it.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: plan-no-path-flag-1
+:aliases: plan-no-path-flag-1, plan-prints-path-1
 :refines: RUL-plan_at_fixed_place
 
 No command SHALL take an option saying where to put a plan or where to find one; the fixed place is the contract.
@@ -789,7 +792,7 @@ placement, not structure.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: struct-base-folders-only-1, prep-post-init-base-folders-only-1, merge-block-misplaced-root-entry-1, geotag-misplaced-root-hardstop-1
+:aliases: struct-base-folders-only-1, prep-post-init-base-folders-only-1, merge-block-misplaced-root-entry-1, geotag-misplaced-root-hardstop-1, prep-block-msg-points-to-sources-1, prep-root-dotfile-left-1, prep-root-entry-blocks-1
 :upholds: INV-undisturbed_shape
 
 The top level of an initialized workspace SHALL hold only the managed folders, the control records' place, the
@@ -816,7 +819,7 @@ initialization — a symbolic link there still blocking, as everywhere.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: struct-symlinks-barred-1, gate-no-symlinks-by-dest-1
+:aliases: struct-symlinks-barred-1, gate-no-symlinks-by-dest-1, prep-root-symlink-barred-1, prep-symlink-managed-blocks-1
 :upholds: INV-undisturbed_shape
 
 A symbolic link anywhere among the managed files SHALL block, never followed, organized or skipped silently: a link to a
@@ -876,6 +879,7 @@ no phase organizes media into a structure it had to rebuild.
 :criticality: med
 :verify: required
 :refines: RUL-missing_folder_blocks
+:aliases: prep-missing-folder-blocks-1
 
 The block of a missing managed folder SHALL name the missing folders, say that something is wrong, and tell the user to
 restore them and run again; an empty folder restores one.
@@ -888,6 +892,7 @@ restore them and run again; an empty folder restores one.
 :anti: yes
 :verify: required
 :refines: RUL-missing_folder_blocks
+:aliases: prep-empty-sources-not-missing-1
 
 An empty inbox SHALL be normal — the steady state, not a missing folder.
 :::
@@ -1399,7 +1404,7 @@ there — geotag refusing to run while it holds anything else.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: loop-no-behind-preps-back-1, geotag-prep-after-move-required-1
+:aliases: loop-no-behind-preps-back-1, geotag-prep-after-move-required-1, prep-reprep-mandatory-1
 :uses: DEF-operator_loop, DEF-prep, DEF-geotag
 
 Geotag SHALL NOT plan while photos by destination holds a photo prep has not recorded where it now is.
@@ -1462,7 +1467,7 @@ decisions, and files already right, it keeps as every run does.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: loop-geotag-gating-preconditions-1, geotag-bydate-empty-gate-1, geotag-residuals-ok-1, geotag-sources-empty-gate-1
+:aliases: loop-geotag-gating-preconditions-1, geotag-bydate-empty-gate-1, geotag-residuals-ok-1, geotag-sources-empty-gate-1, prep-missing-metadata-no-block-geotag-1
 :uses: DEF-geotag, DEF-managed_folders
 
 Geotag SHALL proceed when, and only when, the workspace now satisfies its gates: photos by date holds no photo; photos
@@ -1710,6 +1715,7 @@ A phase SHALL create every field a decision needs, so the user fills in values, 
 :criticality: med
 :verify: required
 :uses: DEF-prep
+:aliases: prep-no-geotag-json-1
 
 Prep SHALL ask the user for no decision, organizing from the state of the workspace and its configuration alone.
 :::
@@ -1777,7 +1783,7 @@ through the pipeline — what was done to its photos and why. It is what the use
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: archive-complete-each-phase-1, prep-log-self-sufficient-1, merge-never-merged-no-35-log-1
+:aliases: archive-complete-each-phase-1, prep-log-self-sufficient-1, merge-never-merged-no-35-log-1, prep-end-self-sufficient-record-1, log-copy-forward-extend-1
 :uses: DEF-transformation_log, DEF-control_records
 
 At the end of every phase the workspace SHALL hold a complete, self-sufficient, human-readable record of everything done
@@ -1856,7 +1862,7 @@ each item's hash, so its integrity can be checked later.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: log-entry-append-only-1, prep-log-incremental-1, prep-log-carried-forward-1
+:aliases: log-entry-append-only-1, prep-log-incremental-1, prep-log-carried-forward-1, log-carried-unchanged-1
 :uses: DEF-transformation_log
 
 A photo's entry in the log SHALL gather the steps of every phase it passes through and be whole through the latest of
@@ -1913,7 +1919,7 @@ that there was none.
 :status: ruled
 :criticality: low
 :verify: required
-:aliases: log-human-readable-json-1
+:aliases: log-human-readable-json-1, log-offset-in-words-1
 :uses: DEF-transformation_log
 
 The log SHALL be readable as it stands, with no separate report: stably ordered, with descriptive names, and values as a
@@ -1940,7 +1946,7 @@ Anything beyond that MAY be pruned.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: log-fail-if-insufficient-1, prep-log-fail-if-history-insufficient-1
+:aliases: log-fail-if-insufficient-1, prep-log-fail-if-history-insufficient-1, log-partial-geotag-history-1
 :refines: RUL-history_retained
 
 A phase whose kept history cannot rebuild a photo's journey through it SHALL fail, or mark its record plainly partial —
@@ -2114,7 +2120,7 @@ is taken giving way instead.
 :anti: yes
 :verify: required
 :uses: DEF-merge, DEF-library
-:aliases: merge-collision-detected-by-existence-check-1, merge-free-target-places-without-library-read-1, merge-no-library-wide-index-1
+:aliases: merge-collision-detected-by-existence-check-1, merge-free-target-places-without-library-read-1, merge-no-library-wide-index-1, lib-never-rescanned-1
 
 Merge SHALL touch the library only at the places its photos go, and read a library file only when one is already there —
 never scanning, indexing or de-duplicating the library.
@@ -2435,7 +2441,7 @@ Whether a workspace is finished SHALL be read from its seal alone, never from th
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: seal-scripts-hardstop-1, merge-sealed-hardstop-touch-nothing-1, merge-sealed-all-scripts-refuse-prune-excepted-1, geotag-sealed-hardstop-1
+:aliases: seal-scripts-hardstop-1, merge-sealed-hardstop-touch-nothing-1, merge-sealed-all-scripts-refuse-prune-excepted-1, geotag-sealed-hardstop-1, prep-sealed-workspace-blocks-1
 :uses: DEF-sealed_workspace, DEF-decision
 :refines: RUL-merge_is_terminal
 
@@ -2499,7 +2505,7 @@ there and must go to a fresh workspace.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: seal-new-dump-warn-1, merge-sealed-newdump-warn-1
+:aliases: seal-new-dump-warn-1, merge-sealed-newdump-warn-1, prep-sealed-new-dump-warning-1
 :refines: RUL-sealed_new_dump_warned
 
 A command refusing a sealed workspace SHALL leave a new dump it finds there exactly where it is.
@@ -2534,7 +2540,7 @@ check that it has not changed.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: validate-paths-1
+:aliases: validate-paths-1, prep-config-validate-paths-1
 :uses: DEF-configuration, DEF-managed_folders, DEF-tracks
 :refines: INV-authored_values_checked
 
@@ -2547,7 +2553,7 @@ it must: the tracks' place outside the managed folders, the library's an existin
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: validate-zfs-prefix-1
+:aliases: validate-zfs-prefix-1, prep-config-validate-zfs-prefix-1
 :uses: RUL-snapshot_optional
 :refines: INV-authored_values_checked
 
@@ -2608,7 +2614,7 @@ longitude −180 to 180, both or neither; a clock offset a whole number of secon
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: validate-filename-format-1
+:aliases: validate-filename-format-1, prep-config-validate-timestamp-format-1
 :uses: RUL-one_filename_format
 :refines: INV-authored_values_checked
 
@@ -2621,7 +2627,7 @@ and no character a filename may not hold.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: validate-numeric-thresholds-1
+:aliases: validate-numeric-thresholds-1, prep-config-validate-numeric-lists-1
 :uses: DEF-configuration
 :refines: INV-authored_values_checked
 
@@ -2649,7 +2655,7 @@ a decision's structure whole: a decision whose structure is broken is an error, 
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: validate-fail-closed-1, merge-config-validated-1
+:aliases: validate-fail-closed-1, merge-config-validated-1, prep-config-validation-failure-blocks-1
 :uses: INV-no_stale_use
 :refines: INV-authored_values_checked
 

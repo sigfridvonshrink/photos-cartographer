@@ -483,6 +483,7 @@ their detail is geotag §15 and §19.
 :id: BLD-gpx_root_checked
 :status: ruled
 :realises: RUL-tracks_outside_managed_folders
+:aliases: prep-config-validate-gpx-malformed-1
 
 Configuration validation, in every phase, SHALL resolve `gpx_root` against the workspace, through links, and refuse it
 when it is a managed folder, lies inside one, or contains one — the workspace root among them.
@@ -819,6 +820,7 @@ and requiring a ready plan whose execution succeeded (geotag §31). Merge's re-s
 :id: BLD-log_format
 :status: ruled
 :realises: RUL-log_entry_grows, RUL-log_keyed_by_fingerprint, RUL-log_cites_decisions, RUL-log_human_readable, RUL-no_log_entry_for_other
+:aliases: log-names-exact-decision-1, log-chain-of-names-1
 
 Each log SHALL be pretty-printed JSON with sorted keys, its `photos` keyed by the content fingerprint
 (`content_fingerprint`), each entry carrying where each phase left the photo — `prep_path`, written by prep and updated
@@ -849,7 +851,7 @@ ran, oldest first, matched by fingerprint — before the current plan's, from th
 :id: BLD-history_kept
 :status: ruled
 :realises: RUL-history_retained, RUL-log_cites_decisions
-:aliases: geotag-finalize-complete-log-1
+:aliases: geotag-finalize-complete-log-1, log-every-geotag-pass-1, log-decision-version-kept-1
 
 Each run's journal SHALL be kept as its own `journal-<run>.json`, each geotag execution keeping the decision records its
 plan depended on, verified by hash, in `executed/<plan id>/`, which a step's `because_record` and
@@ -1044,6 +1046,7 @@ prep writes — recording `sealed`, the merge run id (`merged_run_id`) and `libr
 :id: BLD-phases_check_seal
 :status: ruled
 :realises: RUL-sealed_refuses, RUL-sealed_new_dump_warned, RUL-sealed_new_dump_left
+:aliases: prep-seal-check-at-startup-1
 
 Prep's `plan`, `dry-run` and `execute`, every geotag command, and merge's `plan`, `dry-run` and `execute` SHALL check
 the seal under the workspace lock before reading anything else, and stop with exit status 2 if it is there, adding the
