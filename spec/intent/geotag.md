@@ -15,7 +15,6 @@ that only restated others, has no heading here.
 :anti: yes
 :verify: required
 :uses: DEF-geotag
-:aliases: geotag-gps-after-utc-1, geotag-order-time-gps-rename-1
 
 Geotag SHALL plan no photo's position until every photo's true time is resolved.
 :::
@@ -43,7 +42,6 @@ belonging in missing metadata.
 :verify: required
 :refines: INV-no_stale_use
 :uses: DEF-geotag
-:aliases: geotag-flattened-deps-1
 
 Geotag's executable plan SHALL carry every dependency it was made from itself — each decision record, the handoff, the
 tracks, the configuration, the code and each photo's precondition — never relying on a decision record's own
@@ -59,7 +57,6 @@ dependencies to vouch for what came before it.
 :anti: yes
 :verify: required
 :uses: DEF-geotag, DEF-managed_folders
-:aliases: geotag-scope-bydest-only-1, geotag-never-touch-video-1
 
 Geotag SHALL change only the photos in photos by destination — never a video, and never a file in any other folder.
 :::
@@ -72,7 +69,6 @@ Geotag SHALL change only the photos in photos by destination — never a video, 
 :criticality: med
 :verify: required
 :uses: DEF-geotag, DEF-decision
-:aliases: geotag-always-produce-decision-artifact-1
 
 Each decision stage geotag reaches SHALL write its record, even when nothing in it needs the user.
 :::
@@ -84,7 +80,6 @@ Each decision stage geotag reaches SHALL write its record, even when nothing in 
 :anti: yes
 :verify: required
 :uses: DEF-geotag
-:aliases: geotag-no-json-before-decision-stage-1, geotag-first-artifact-21-1
 
 A geotag plan stopped before its first decision stage SHALL write no record of its own, saying what stopped it only in
 its output.
@@ -98,7 +93,6 @@ its output.
 :criticality: high
 :verify: required
 :uses: DEF-geotag, DEF-decision
-:aliases: geotag-autoresolve-config-gated-1
 
 A clock offset proposed from a camera's own GPS positions SHALL take effect without the user's answer only as the
 configuration's settings for one anchor and for several allow, and never while its anchors disagree.
@@ -110,7 +104,6 @@ configuration's settings for one anchor and for several allow, and never while i
 :criticality: med
 :verify: required
 :uses: DEF-geotag, DEF-decision
-:aliases: geotag-timezone-autoresolve-1, geotag-no-proposal-requires-input-1, geotag-timezone-unresolved-requires-input-1
 
 A destination's proposed timezone — inherited from the destination it lies in, or the configured default — SHALL take
 effect without the user's answer, a timezone the user writes overriding it; a destination with no proposal waits for the
@@ -124,7 +117,6 @@ user.
 :anti: yes
 :verify: required
 :uses: DEF-geotag, DEF-decision
-:aliases: geotag-no-autonomous-mutation-1
 
 Every other proposal — a clock offset derived from the destination's timezone, a folder fallback position inherited
 from the destination it lies in — SHALL take effect only once the user accepts it.
@@ -136,7 +128,6 @@ from the destination it lies in — SHALL take effect only once the user accepts
 :id: DEF-destination
 :status: ruled
 :uses: DEF-managed_folders
-:aliases: geotag-destination-definition-1
 
 A **destination** is the folder in photos by destination that directly holds a photo; a folder nested in it that holds
 photos is a destination of its own.
@@ -146,7 +137,6 @@ photos is a destination of its own.
 :id: DEF-container_destination
 :status: ruled
 :uses: DEF-destination
-:aliases: geotag-container-destination-1
 
 A **container destination** is a folder in photos by destination that holds destinations but no photo of its own —
 photos by destination itself among them, when it holds no photo directly.
@@ -158,7 +148,6 @@ photos by destination itself among them, when it holds no photo directly.
 :criticality: high
 :verify: required
 :uses: DEF-geotag, DEF-destination, DEF-camera_group
-:aliases: geotag-offset-per-date-bucket-1, geotag-offset-per-group-dest-1, geotag-container-no-offset-1
 
 Geotag SHALL decide a camera's clock offset once for each destination and each day it took photos there, by the
 camera's own clock — a container destination, holding no photo, having none.
@@ -171,7 +160,6 @@ camera's own clock — a container destination, holding no photo, having none.
 :anti: yes
 :verify: required
 :refines: RUL-offset_per_camera_destination_day
-:aliases: geotag-offset-anchored-locally-1, geotag-offset-no-inherit-1, geotag-offset-no-rollup-1, geotag-bucket-no-inherit-1, geotag-bucket-proposal-priority-1
 
 Each offset SHALL be proposed only from that camera's own positions in that destination on that day, or from the
 destination's timezone — never from the offset of another destination, whether one it lies in, one in it, or one beside
@@ -184,7 +172,6 @@ it.
 :criticality: med
 :verify: required
 :uses: DEF-container_destination
-:aliases: geotag-container-no-block-1
 
 A container destination's decisions SHALL never wait for the user.
 :::
@@ -224,7 +211,6 @@ zone — SHALL be skipped and reported to the user, naming its file and point.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: geotag-incomplete-classification-block-1
 :uses: RUL-known_when_classified
 
 Geotag SHALL NOT decide anything while a camera group in photos by destination is unknown.
@@ -235,7 +221,6 @@ Geotag SHALL NOT decide anything while a camera group in photos by destination i
 :status: ruled
 :criticality: low
 :verify: required
-:aliases: geotag-unknown-group-snippets-1
 :refines: RUL-unknown_group_stops_geotag
 
 Geotag SHALL offer the classification of every unknown camera group ready to paste into the configuration, every
@@ -262,7 +247,6 @@ destination's timezone — never asked to be classed, nor given a camera's clock
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: geotag-timezone-inherit-parentfirst-1, geotag-timezone-inherit-priority-1, geotag-timezone-manual-reroot-1
 :refines: RUL-timezone_auto_resolves
 
 A destination's proposed timezone SHALL be the one in effect at the nearest destination it lies in that has one —
@@ -275,7 +259,6 @@ however it was reached there — and the configured default only where none has.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: move-reevaluate-dest-1, prep-resort-restales-decisions-1
 :uses: DEF-destination
 
 A photo moved to another destination SHALL be decided under that destination's timezone and clock offset, nothing of
@@ -291,7 +274,6 @@ its old destination carried with it.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: geotag-clock-error-window-1, geotag-window-tz-independent-1
 :uses: DEF-tracks
 
 A track SHALL anchor a camera's clock only at times within the largest clock error the configuration allows of the
@@ -304,7 +286,6 @@ camera's own time, whatever timezone the camera was set to.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: geotag-consensus-cluster-1
 :refines: RUL-offset_from_own_evidence
 
 The offset proposed from a camera's GPS SHALL be the one the most of its photos agree on — each photo counting every
@@ -370,7 +351,6 @@ destination's timezone.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: geotag-drift-gate-blocks-1, geotag-drift-untouched-blocks-1
 :uses: DEF-tracks
 
 Photos SHALL NOT be placed by the tracks on a clock offset the camera's own GPS does not support until the user has
@@ -433,7 +413,6 @@ leave it unlocated.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: geotag-fallback-inherit-1, geotag-fallback-parentfirst-1
 :refines: RUL-placement_order
 
 A destination's folder-fallback proposal SHALL be the fallback in effect at the nearest destination it lies in that
@@ -445,7 +424,6 @@ has one.
 :status: ruled
 :criticality: low
 :verify: required
-:aliases: geotag-fallback-never-blocks-1
 :refines: RUL-placement_order
 
 A destination SHALL never wait on its folder fallback: without one, its photos the tracks cannot place each ask on
@@ -461,7 +439,6 @@ their own.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: geotag-gps-write-complete-fix-1
 
 A position geotag writes SHALL be written whole — latitude, longitude and their hemisphere references together — and
 one it clears cleared whole.
@@ -472,7 +449,6 @@ one it clears cleared whole.
 :status: ruled
 :criticality: high
 :verify: required
-:aliases: geotag-offset-kept-1
 :refines: RUL-offset_per_camera_destination_day
 
 A camera's clock offset for a day, once resolved, SHALL stay that day's offset for photos of that camera arriving
@@ -487,7 +463,6 @@ later — one found from its own GPS included, though the later photos bring no 
 :status: ruled
 :criticality: high
 :verify: required
-:aliases: geotag-resume-safe-1, geotag-rerun-noop-1, geotag-skip-satisfied-1, geotag-resume-rederive-1
 :uses: DEF-geotag
 
 A geotag execution interrupted SHALL be finished by running it again, which applies only what is outstanding — a
@@ -500,7 +475,6 @@ fully applied plan changing nothing, and an edit made to a photo since the plan 
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: geotag-postwrite-fingerprint-verify-1, geotag-accept-fingerprint-change-1
 :refines: RUL-fingerprint_survives_mutation
 
 A write after which a photo's decoded content differs SHALL NOT count as done — its rename held back with it — until
@@ -516,7 +490,6 @@ the user accepts the new content.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: geotag-finalize-requires-success-1
 :uses: DEF-finalize
 
 Finalize SHALL refuse unless geotag's current plan was executed successfully and still holds.

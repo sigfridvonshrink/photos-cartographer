@@ -53,7 +53,7 @@ def _run(monkeypatch, ws):
 
 # --- main(): lock + config/handoff error paths ------------------------------
 
-@pytest.mark.spec("geotag-lock-failfast-1")
+@pytest.mark.spec("RUL-lock_fail_fast")
 def test_lock_contention_exits_1(tmp_path, monkeypatch, capsys):
     ws, ctl = _init_ws(tmp_path)
     (ctl / "photos-00-config.json").write_text(json.dumps({k: v for k, v in utils.CONFIG.items() if k != "jobs"}))
@@ -218,7 +218,7 @@ def test_complete_run_writes_photos22_then_bad_coord_aborts(tmp_path, monkeypatc
     assert (ctl / "photos-23-gps-decisions.json").read_bytes() == before     # left unchanged
 
 
-@pytest.mark.spec("RUL-decision_stage_writes_record", "geotag-always-produce-decision-artifact-1", test="TST-geotag_orchestration-a_run_with_nothing_to_decide_writes_every_record")
+@pytest.mark.spec("RUL-decision_stage_writes_record", test="TST-geotag_orchestration-a_run_with_nothing_to_decide_writes_every_record")
 def test_a_run_with_nothing_to_decide_writes_every_record(tmp_path, monkeypatch, capsys):
     """Every photo has its own position and the camera's offset resolves from them: nothing needs the user.
     Each decision stage still writes its record, complete, and the executable plan follows."""
@@ -237,7 +237,7 @@ def test_a_run_with_nothing_to_decide_writes_every_record(tmp_path, monkeypatch,
     assert json.load(open(ctl / "photos-24-executable-plan.json"))["status"] == "ready"
 
 
-@pytest.mark.spec("geotag-gpx-rejected-points-reported-1", "RUL-unreadable_point_reported",
+@pytest.mark.spec("BLD-track_points", "RUL-unreadable_point_reported",
                   test="TST-geotag_orchestration-plan_reports_gpx_load_warnings_capped")
 def test_plan_reports_gpx_load_warnings_capped(tmp_path, monkeypatch, capsys):
     # GPX points rejected at load are reported, not silently dropped (an all-rejected track must not
@@ -277,7 +277,7 @@ def test_unparseable_decision_artifact_blocks_and_is_kept(tmp_path, monkeypatch,
     assert sorted(x.name for x in ctl.iterdir()) == before                    # no backup, no new version
 
 
-@pytest.mark.spec("geotag-sealed-newdump-warn-1", "RUL-sealed_new_dump_left", test="TST-geotag_orchestration-sealed_workspace_with_dump_warns_and_blocks")
+@pytest.mark.spec("RUL-sealed_new_dump_warned", "RUL-sealed_new_dump_left", test="TST-geotag_orchestration-sealed_workspace_with_dump_warns_and_blocks")
 def test_sealed_workspace_with_dump_warns_and_blocks(tmp_path, monkeypatch, capsys):
     ws, ctl = _init_ws(tmp_path)
     (ctl / "photos-00-config.json").write_text(json.dumps({k: v for k, v in utils.CONFIG.items() if k != "jobs"}))
@@ -294,7 +294,7 @@ def test_sealed_workspace_with_dump_warns_and_blocks(tmp_path, monkeypatch, caps
     assert any("SEALED" in b for b in blk) and not warn
 
 
-@pytest.mark.spec("geotag-gpx-after-recognition-1", test="TST-geotag_orchestration-unknown_group_aborts_before_gpx_ingest")
+@pytest.mark.spec("BLD-geotag_stage_order", test="TST-geotag_orchestration-unknown_group_aborts_before_gpx_ingest")
 def test_unknown_group_aborts_before_gpx_ingest(tmp_path, monkeypatch):
     # In-memory camera-group recognition runs BEFORE disk-heavy GPX ingestion, so an unknown-group
     # abort costs no GPX I/O (the next run re-ingests GPX only once recognition passes).
@@ -308,7 +308,7 @@ def test_unknown_group_aborts_before_gpx_ingest(tmp_path, monkeypatch):
     assert called == []                        # GPX ingest never reached
 
 
-@pytest.mark.spec("geotag-unknown-group-snippets-1", "BLD-unknown_group_snippet",
+@pytest.mark.spec("RUL-unknown_group_classification_offered", "BLD-unknown_group_snippet",
                   test="TST-geotag_orchestration-unknown_group_template_is_valid_full_json")
 def test_unknown_group_template_is_valid_full_json(tmp_path, monkeypatch, capsys):
     # The cut/paste template must be VALID JSON (no trailing comma -> the ",]" reader-rejection bug)

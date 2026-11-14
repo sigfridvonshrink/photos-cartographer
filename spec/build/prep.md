@@ -10,7 +10,6 @@ that only restated others, has no heading here.
 :::{bld} Prep's operations hold no metadata write
 :id: BLD-prep_operation_kinds
 :status: ruled
-:aliases: prep-allowed-op-types-1
 :realises: RUL-prep_no_time_or_gps
 
 Prep's execute SHALL carry out only folder creations, moves, renames, quarantine moves and database writes, refusing a
@@ -41,7 +40,6 @@ after every other operation has succeeded; the managed folders it creates are `0
 :id: BLD-strays_per_run
 :status: ruled
 :realises: RUL-inbox_non_media_to_strays
-:aliases: prep-strays-per-run-subfolder-1, prep-strays-no-collision-across-runs-1
 
 Prep SHALL move a run's strays into `1-strays/<plan-id>/`, each at its path under `0-sources/`, so that no two runs
 share a folder there.
@@ -51,7 +49,6 @@ share a folder there.
 :id: BLD-seed_before_fingerprints
 :status: ruled
 :realises: RUL-config_seeded_once
-:aliases: prep-seed-before-fingerprint-1
 
 Prep SHALL seed the configuration at the start of its run, before any fingerprint of it is taken, so that every
 fingerprint, the handoff's recorded hash among them, is of the file as it stands in the workspace.
@@ -83,7 +80,6 @@ journal after each by replacing it whole — written to a temporary file in its 
 :id: BLD-prep_dependencies
 :status: ruled
 :realises: INV-no_stale_use, RUL-unchecked_counts_as_changed
-:aliases: prep-artifacts-carry-depends-on-1, prep-record-min-fingerprints-1, prep-fingerprint-algo-recorded-1, prep-bydest-precondition-recorded-1
 
 Prep's records SHALL carry their dependencies so:
 
@@ -165,7 +161,6 @@ blocker it finds, the plan still saved — is not empty.
 :id: BLD-prep_stage_order
 :status: ruled
 :realises: RUL-duplicate_set_aside_as_found, RUL-copy_kept_by_folder
-:aliases: prep-deterministic-order-1
 
 Prep's planning SHALL run its stages in this order: initialization and inventory; duplicates; extension case; redundant
 JPEGs; organization by class and time; database reconciliation.
@@ -175,7 +170,6 @@ JPEGs; organization by class and time; database reconciliation.
 :id: BLD-planned_paths_tracked
 :status: ruled
 :realises: RUL-suffix_no_clobber, RUL-inbox_kept_as_dumped
-:aliases: prep-collision-resolved-in-memory-1
 
 Each stage of prep's planning SHALL work from the path the stages before it gave each file, allocating every name
 against the names on disk and those already planned.
@@ -215,7 +209,6 @@ that no move explains and whose path no planned move fills again — that row is
 :id: BLD-day_folder_name
 :status: ruled
 :realises: RUL-by_date_in_day_folder
-:aliases: prep-date-name-format-1
 
 A day's folder SHALL be named `YYYY-MM-DD` from its recorded time's date, whatever `filename_timestamp_format` is.
 :::
@@ -260,7 +253,6 @@ and exact basename; a triple held by more than one row or more than one file mat
 :id: BLD-carried_row
 :status: ruled
 :realises: RUL-moved_file_carried, RUL-log_follows_retaken_fingerprint
-:aliases: prep-move-recognition-before-ghost-1
 
 Prep's plan SHALL carry a matched row whose fingerprint passes {need}`BLD-fingerprint_method` and whose metadata is
 fresh as a `db_upsert` of it at the new path with the file's size, `mtime_ns` and inode; a matched stale row moves to
@@ -274,7 +266,6 @@ prunes; an unmatched row is a ghost, and its file is read as new.
 :id: BLD-move_row_effects
 :status: ruled
 :realises: RUL-reuse_valid_work, RUL-database_matches_files, RUL-quarantined_leaves_database
-:aliases: prep-fingerprint-carry-forward-move-1, prep-move-row-carries-facts-1, prep-cache-update-from-validated-plan-1, prep-cache-write-after-fs-verified-1
 
 Each move or rename in prep's plan SHALL carry its database effects — the row of its source removed and, but for a
 quarantine move, the file's row with its fingerprint and metadata written at its destination — applied by execute once
@@ -348,7 +339,6 @@ missing-GPS and `GPSProcessingMethod` counts, cache freshness, and the duplicate
 :id: BLD-prep_plan_contents
 :status: ruled
 :realises: RUL-plan_carried_out_by_its_code, RUL-new_file_restales_plan
-:aliases: prep-plan-serialized-contents-1
 
 `photos-10-prep-plan.json` SHALL record its id, its schema version, its command, the configuration's hash, the
 fingerprint of the code that made it ({need}`BLD-code_fingerprint`), its operations in order, its blockers and warnings,
@@ -374,7 +364,6 @@ empty, journals a folder found not empty or not removable as skipped, and warns 
 :id: BLD-quarantine_layout
 :status: ruled
 :realises: RUL-evidence_before_quarantine
-:aliases: prep-quarantine-recoverable-manifest-1
 
 A quarantined file SHALL go to `.photos-ingest-quarantine/<plan-id>/` at its workspace path, its entry — original path,
 quarantine path, the copy kept, the fingerprint and the plan id — appended to that folder's `manifest.json` before the
@@ -414,7 +403,6 @@ final inventory, metadata extractor, plan and database versions, image engine) a
 :id: BLD-handoff_content_fingerprint
 :status: ruled
 :realises: RUL-handoff_deterministic
-:aliases: prep-handoff-content-fingerprint-pins-1
 
 `content_fingerprint` SHALL be the SHA-256 of the handoff serialized with sorted keys, without the keys `run_metadata`,
 `diagnostics`, `execution_journal`, `prep_log`, `content_fingerprint`, `cache_freshness` and `conflicts_or_duplicates`
@@ -441,7 +429,6 @@ a prep-organized folder with no recorded history gets an entry marked `partial`,
 :id: BLD-tool_workers
 :status: ruled
 :realises: RUL-tool_failure_retried
-:aliases: prep-persistent-external-workers-1, prep-persistent-driver-reset-state-1
 
 Prep SHALL read metadata through persistent `exiftool -stay_open` workers and fingerprint photos through a persistent
 `magick -script -` process per thread — each file read, given `-colorspace sRGB -depth 8`, its `%#` printed, then

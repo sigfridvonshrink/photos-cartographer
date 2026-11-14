@@ -74,7 +74,7 @@ def test_single_date_keeps_bare_group_key(tmp_path):
     assert "date" not in cells[CAM]
 
 
-@pytest.mark.spec("geotag-offset-per-date-bucket-1", "RUL-offset_per_camera_destination_day", test="TST-geotag_per_date-multi_date_splits_into_per_day_buckets")
+@pytest.mark.spec("RUL-offset_per_camera_destination_day", test="TST-geotag_per_date-multi_date_splits_into_per_day_buckets")
 def test_multi_date_splits_into_per_day_buckets(tmp_path):
     _tz()
     wf = _wf(tmp_path)
@@ -90,7 +90,7 @@ def test_multi_date_splits_into_per_day_buckets(tmp_path):
     assert winter["proposal"]["proposed_offset_seconds"] == -3600
 
 
-@pytest.mark.spec("geotag-bucket-no-inherit-1")
+@pytest.mark.spec("RUL-offset_from_own_evidence")
 def test_per_bucket_manual_decision_is_independent(tmp_path):
     _tz()
     wf = _wf(tmp_path)

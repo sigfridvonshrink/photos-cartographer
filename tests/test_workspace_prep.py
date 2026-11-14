@@ -93,7 +93,7 @@ def mock_read_metadata_concurrently(folders, max_workers=4, progress_coordinator
 
 @mock.patch('photos_1_prep.ContentHasher.fingerprint_image', side_effect=mock_hash_image)
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("prep-normalize-extension-case-1", "RUL-media_extension_lowercase", "BLD-two_step_case_rename", test="TST-workspace_prep-prep_workflow_plan_and_execute")
+@pytest.mark.spec("RUL-media_extension_lowercase", "BLD-two_step_case_rename", test="TST-workspace_prep-prep_workflow_plan_and_execute")
 def test_prep_workflow_plan_and_execute(mock_meta, mock_hash_img, tmp_path, monkeypatch):
 
     ws = setup_workspace(tmp_path)
@@ -179,7 +179,7 @@ def test_prep_workflow_plan_and_execute(mock_meta, mock_hash_img, tmp_path, monk
     assert not any("__photos_ingest_tmp_extnorm__" in p for p in db_paths)
     cache_conn.close()
 
-@pytest.mark.spec("prep-deterministic-order-1", "prep-same-names-same-input-1", test="TST-workspace_prep-deterministic_temp_names")
+@pytest.mark.spec("BLD-prep_stage_order", "RUL-no_op_run", test="TST-workspace_prep-deterministic_temp_names")
 def test_deterministic_temp_names(tmp_path, monkeypatch):
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
@@ -224,7 +224,7 @@ def test_source_changed_after_plan_abort(mock_meta, mock_hash_img, tmp_path, mon
     with pytest.raises(ValueError, match="Precondition failed: size changed"):
         executor.execute(plan, journal_path)
 
-@pytest.mark.spec("prep-forbidden-sidecar-blocks-1", "RUL-sidecar_blocks", "BLD-sidecar_extensions", test="TST-workspace_prep-sidecar_blocking")
+@pytest.mark.spec("RUL-sidecar_blocks", "BLD-sidecar_extensions", test="TST-workspace_prep-sidecar_blocking")
 def test_sidecar_blocking(tmp_path, monkeypatch):
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
@@ -252,7 +252,7 @@ def test_sidecar_blocking(tmp_path, monkeypatch):
         executor.execute(plan, journal_path)
 
 
-@pytest.mark.spec("prep-unknown-fingerprint-no-dup-1", "RUL-failed_fingerprint_blocks", test="TST-workspace_prep-hash_failure_preservation")
+@pytest.mark.spec("RUL-failed_fingerprint_no_duplicate", "RUL-failed_fingerprint_blocks", test="TST-workspace_prep-hash_failure_preservation")
 def test_hash_failure_preservation(tmp_path, monkeypatch):
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
@@ -287,7 +287,7 @@ def test_hash_failure_preservation(tmp_path, monkeypatch):
         op_types = [op.type for op in plan.operations]
         assert "quarantine_move" not in op_types
 
-@pytest.mark.spec("struct-symlinks-barred-1", "RUL-link_named", test="TST-workspace_prep-symlink_blocking")
+@pytest.mark.spec("RUL-no_links", "RUL-link_named", test="TST-workspace_prep-symlink_blocking")
 def test_symlink_blocking(tmp_path, monkeypatch):
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
@@ -310,7 +310,7 @@ def test_symlink_blocking(tmp_path, monkeypatch):
     assert any("Forbidden symlink detected" in b for b in plan.blockers)
 
 
-@pytest.mark.spec("prep-root-symlink-barred-1", "struct-uninit-exception-1", test="TST-workspace_prep-directory_symlink_at_root_blocked_during_init")
+@pytest.mark.spec("RUL-no_links", "RUL-first_dump_at_top_level", test="TST-workspace_prep-directory_symlink_at_root_blocked_during_init")
 def test_directory_symlink_at_root_blocked_during_init(tmp_path, monkeypatch):
     """A directory symlink at the root of an UNINITIALIZED workspace must be flagged as a forbidden
     symlink at PLAN time, never followed. os.path.isdir() follows a directory symlink, so the old
@@ -390,7 +390,7 @@ def test_symlinked_managed_folder_blocked(tmp_path, monkeypatch):
     assert not any(op.source and "e.jpg" in (op.source or "") for op in plan.operations)
 
 
-@pytest.mark.spec("prep-symlink-managed-blocks-1")
+@pytest.mark.spec("RUL-no_links")
 def test_nested_directory_symlink_in_managed_folder_blocked(tmp_path, monkeypatch):
     """os.walk does not descend into a subdirectory symlink (so it never escapes), but it must still
     be FLAGGED as forbidden rather than silently ignored."""
@@ -410,7 +410,7 @@ def test_nested_directory_symlink_in_managed_folder_blocked(tmp_path, monkeypatc
     assert any("Forbidden symlink detected" in b and "nested" in b for b in plan.blockers), plan.blockers
 
 
-@pytest.mark.spec("prep-reserved-names-not-moved-1", test="TST-workspace_prep-init_does_not_move_a_dump_folder_named_like_a_managed_folder")
+@pytest.mark.spec("RUL-dump_folder_named_as_managed", test="TST-workspace_prep-init_does_not_move_a_dump_folder_named_like_a_managed_folder")
 def test_init_does_not_move_a_dump_folder_named_like_a_managed_folder(tmp_path, monkeypatch):
     """Reserved-name guard (prep §6.2): on an INIT run a base entry whose name collides with a managed
     folder (e.g. an as-arrived dump dir named `5-photos-by-date`) is treated AS that managed folder —
@@ -437,7 +437,7 @@ def test_init_does_not_move_a_dump_folder_named_like_a_managed_folder(tmp_path, 
     assert not any("not a managed" in b or "Misplaced" in b for b in plan.blockers), plan.blockers
 
 
-@pytest.mark.spec("prep-root-dotfile-left-1", "RUL-top_level_only_managed", test="TST-workspace_prep-initialized_root_dotfile_is_left_alone")
+@pytest.mark.spec("RUL-top_level_only_managed", test="TST-workspace_prep-initialized_root_dotfile_is_left_alone")
 def test_initialized_root_dotfile_is_left_alone(tmp_path, monkeypatch):
     """The top level of an INITIALIZED workspace holds the managed folders and hidden entries (shared
     contract §4): a root dotfile (a file manager's `.directory` or `.DS_Store`) is not a misplaced
@@ -464,7 +464,7 @@ def _snapshot_tree(root):
             for r, _dn, fns in os.walk(root) for f in fns}
 
 
-@pytest.mark.spec("prep-plan-nonmutating-1", "RUL-planning_changes_no_media", test="TST-workspace_prep-plan_is_non_mutating")
+@pytest.mark.spec("RUL-planning_changes_no_media", test="TST-workspace_prep-plan_is_non_mutating")
 def test_plan_is_non_mutating(tmp_path, monkeypatch):
     """Planning changes nothing: with work to do, every file of a workspace past its first run — media and
     records, the workspace database among them — is byte-identical afterwards; the only file it adds is the
@@ -487,7 +487,7 @@ def test_plan_is_non_mutating(tmp_path, monkeypatch):
     assert {k: after[k] for k in before} == before                       # nothing changed
 
 
-@pytest.mark.spec("prep-journal-all-mutations-1", "RUL-every_change_journaled", test="TST-workspace_prep-every_executed_operation_is_journaled")
+@pytest.mark.spec("RUL-every_change_journaled", test="TST-workspace_prep-every_executed_operation_is_journaled")
 def test_every_executed_operation_is_journaled(tmp_path, monkeypatch):
     """Execution records every operation it carries out in the run's journal — moves, renames and setting
     duplicates aside alike — each with its outcome, and no operation the plan does not hold."""
@@ -511,7 +511,7 @@ def test_every_executed_operation_is_journaled(tmp_path, monkeypatch):
     assert all(r["status"] == "success" for r in recorded["operations"])
 
 
-@pytest.mark.spec("gpx-prep-defensive-skip-1", "prep-gpx-inside-tree-skip-1", "gpx-root-outside-tree-1", "RUL-tracks_outside_managed_folders", test="TST-workspace_prep-gpx_root_inside_managed_tree_is_refused")
+@pytest.mark.spec("RUL-tracks_outside_managed_folders", test="TST-workspace_prep-gpx_root_inside_managed_tree_is_refused")
 def test_gpx_root_inside_managed_tree_is_refused(tmp_path, monkeypatch):
     """Shared contract §8: a gpx_root configured inside the managed tree is an invalid configuration —
     prep refuses to plan, naming the field, and nothing in the workspace moves."""
@@ -621,7 +621,7 @@ def _mock_for_plan(monkeypatch):
     photos_ingest.CONFIG["jobs"] = 1
 
 
-@pytest.mark.spec("prep-missing-folder-blocks-1", "struct-no-silent-rebuild-1", "RUL-missing_folder_named", test="TST-workspace_prep-missing_managed_folder_on_activated_workspace_hard_stops")
+@pytest.mark.spec("RUL-missing_folder_named", "RUL-missing_folder_blocks", test="TST-workspace_prep-missing_managed_folder_on_activated_workspace_hard_stops")
 def test_missing_managed_folder_on_activated_workspace_hard_stops(tmp_path, monkeypatch):
     """An activated workspace (guard present) missing managed 0-6 folder(s) is non-conforming — prep
     hard-stops with a blocker rather than silently recreating them (which could mask lost media)."""
@@ -637,7 +637,7 @@ def test_missing_managed_folder_on_activated_workspace_hard_stops(tmp_path, monk
                for b in plan.blockers), plan.blockers
 
 
-@pytest.mark.spec("prep-empty-sources-not-missing-1", "RUL-empty_inbox_normal", test="TST-workspace_prep-empty_sources_is_steady_end_state_not_a_missing_folder_block")
+@pytest.mark.spec("RUL-empty_inbox_normal", test="TST-workspace_prep-empty_sources_is_steady_end_state_not_a_missing_folder_block")
 def test_empty_sources_is_steady_end_state_not_a_missing_folder_block(tmp_path, monkeypatch):
     """§6.2 (item 7, final clause): an EMPTY 0-sources is the normal steady end-state (Section 18),
     NOT a missing-folder condition. On an initialized workspace whose 0-sources is present but empty
@@ -656,7 +656,7 @@ def test_empty_sources_is_steady_end_state_not_a_missing_folder_block(tmp_path, 
     assert len(plan.operations) == 0                                 # nothing to do — a clean no-op
 
 
-@pytest.mark.spec("prep-blockers-reported-not-skipped-1", "RUL-blockers_all_reported", "BLD-blocked_plan_refused", test="TST-workspace_prep-a_blocker_is_reported_textually_and_never_silently_skipped")
+@pytest.mark.spec("RUL-blockers_all_reported", "BLD-blocked_plan_refused", test="TST-workspace_prep-a_blocker_is_reported_textually_and_never_silently_skipped")
 def test_a_blocker_is_reported_textually_and_never_silently_skipped(tmp_path, monkeypatch):
     """§6.2 final line ('Blockers are reported textually; the workflow does not silently skip them').
     With a forbidden sidecar present alongside a perfectly organizable photo, prep must (a) SURFACE the
@@ -683,7 +683,7 @@ def test_a_blocker_is_reported_textually_and_never_silently_skipped(tmp_path, mo
     assert not any(p.suffix == ".jpg" for p in (ws / "5-photos-by-date").rglob("*"))
 
 
-@pytest.mark.spec("prep-init-excludes-managed-from-move-1", test="TST-workspace_prep-init_move_excludes_managed_folders_and_control_dirs")
+@pytest.mark.spec("RUL-init_moves_dump_to_inbox", test="TST-workspace_prep-init_move_excludes_managed_folders_and_control_dirs")
 def test_init_move_excludes_managed_folders_and_control_dirs(tmp_path, monkeypatch):
     """§3.1: init's base-dump consolidation moves genuine root dumps into 0-sources but EXCLUDES the
     managed 0-6 folders and the control/dot directories (.photos-ingest, .git). A real root dump file
@@ -713,7 +713,7 @@ def test_init_move_excludes_managed_folders_and_control_dirs(tmp_path, monkeypat
                    and op.reason and "Initialize" in op.reason for op in plan.operations)
 
 
-@pytest.mark.spec("prep-no-renormalize-extensions-1", test="TST-workspace_prep-already_lowercase_extension_gets_no_rename_op")
+@pytest.mark.spec("RUL-media_extension_lowercase", test="TST-workspace_prep-already_lowercase_extension_gets_no_rename_op")
 def test_already_lowercase_extension_gets_no_rename_op(tmp_path, monkeypatch):
     """§13 item 3: prep does not re-normalize an already-normalized extension. A file already named
     with a lowercase `.jpg` must produce NO extension-normalization rename op (no two-step temp

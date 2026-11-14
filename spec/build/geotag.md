@@ -12,7 +12,6 @@ that only restated others, has no heading here.
 :id: BLD-geotag_stage_order
 :status: ruled
 :realises: RUL-time_before_gps, RUL-decision_stage_writes_record, RUL-no_record_before_decisions
-:aliases: geotag-gpx-after-recognition-1, geotag-gpx-before-time-1, geotag-no-utc-incomplete-tz-1
 
 `geotag plan` SHALL recognise the camera groups — stopping on an unknown one before reading any track — then read the
 tracks, then write `photos-21-time-decisions.json`; only once it is complete resolve each photo's true time and
@@ -37,7 +36,6 @@ photos and `2-missing-metadata`.
 :id: BLD-geotag_dependencies
 :status: ruled
 :realises: RUL-geotag_plan_carries_every_dependency, INV-no_stale_use, RUL-hash_is_the_dependency_check, RUL-handoff_verified_by_content
-:aliases: geotag-transitive-verify-1, geotag-summary-not-dependency-1, geotag-plan-deps-1
 
 `photos-24-executable-plan.json` SHALL record in `depends_on` the SHA-256 of `photos-21`, `photos-22` and `photos-23`;
 the handoff's `content_fingerprint`; `config_fingerprint`, `code_fingerprint`, `camera_group_fingerprint`,
@@ -55,7 +53,6 @@ never checked as a dependency.
 :id: BLD-geotag_file_model
 :status: ruled
 :realises: RUL-geotag_changes_only_by_dest
-:aliases: geotag-inmemory-bydest-only-1
 
 Geotag's `build_file_model` SHALL take, from the handoff, only the records whose `folder_class` is `6-photos-by-dest`
 and whose `media_class` is `image` or `raw`; every operation of `photos-24-executable-plan.json` names one of them.
@@ -105,7 +102,6 @@ destination's.
 :id: BLD-geotag_records_by_destination
 :status: ruled
 :realises: RUL-decision_fields_laid_out
-:aliases: geotag-artifacts-per-destination-1
 
 `photos-21`, `photos-22`, `photos-23` and `photos-24` SHALL each hold a `destinations` object keyed by the
 destination's path under `6-photos-by-dest`, every decision of a destination inside its entry.
@@ -118,7 +114,6 @@ destination's path under `6-photos-by-dest`, every decision of a destination ins
 :id: BLD-track_points
 :status: ruled
 :realises: RUL-track_time_never_guessed, RUL-unreadable_point_reported
-:aliases: geotag-gpx-time-xsd-datetime-1, geotag-gpx-rejected-points-reported-1
 
 Geotag SHALL read every `<trkpt>` of each `*.gpx` file under `gpx_root`, its `<time>` as an `xsd:dateTime` — fractional
 seconds optional, the zone `Z` or a numeric offset — normalised to UTC; a point lacking `lat` or `lon`, with one out of
@@ -158,7 +153,6 @@ unknown groups, given no offset cell, and resolved as a phone's photo is, its ow
 :id: BLD-timezone_cell
 :status: ruled
 :realises: RUL-timezone_from_nearest, RUL-timezone_auto_resolves
-:aliases: geotag-timezone-every-destination-1
 
 Each destination's `destination_timezone` in `photos-21-time-decisions.json` SHALL hold `proposed_iana_timezone` with
 its `proposal_source` — `inherited`, naming the ancestor in `inherited_from`, or `config_default`, or `none` —
@@ -175,7 +169,6 @@ from `default_folder_timezone`.
 :id: BLD-anchor_matching
 :status: ruled
 :realises: RUL-anchor_within_clock_error, RUL-anchor_consensus, RUL-revisit_matched_to_its_day, RUL-indistinct_visits_wait, RUL-chosen_group_is_anchored, RUL-anchor_offset_auto_as_configured
-:aliases: geotag-anchor-matching-1, geotag-conflict-triggers-review-1
 
 For each native-GPS photo of a (camera group, destination, day) bucket, `frame_candidates` SHALL take every track
 point within `gpx_anchor_max_point_distance_meters` of it and every segment — two consecutive points at most
@@ -196,7 +189,6 @@ group's offset takes effect as `gpx_anchor_chosen`, which no drift check follows
 :id: BLD-timezone_naive_offset
 :status: ruled
 :realises: RUL-offset_from_own_evidence, RUL-other_proposals_need_acceptance
-:aliases: geotag-tz-derived-offset-calc-1, geotag-timezone-derived-confirmable-1
 
 A bucket with no anchor and a destination timezone SHALL be proposed the offset −(the timezone's UTC offset at the
 bucket's earliest camera time), daylight saving included, as `proposal_source: "timezone_naive"` with
@@ -209,7 +201,6 @@ bucket's earliest camera time), daylight saving included, as `proposal_source: "
 :id: BLD-decision_record_envelope
 :status: ruled
 :realises: RUL-decision_stage_writes_record, INV-no_stale_use
-:aliases: geotag-config-change-restales-21-1
 
 `photos-21-time-decisions.json`, `photos-22-gps-drift-validation.json` and `photos-23-gps-decisions.json` SHALL each
 carry `artifact_type`, `artifact_name`, `status` — `requires_user_input` or `complete` — `requires_user_input`, true
@@ -227,7 +218,6 @@ holds the handoff's content fingerprint, `camera_time_policy_fingerprint` — ov
 :id: BLD-resolved_utc
 :status: ruled
 :realises: RUL-phone_time_from_own_offset, RUL-offset_per_camera_destination_day, RUL-time_before_gps
-:aliases: geotag-compute-resolved-utc-1, geotag-utc-after-validation-1, geotag-resolved-utc-needs-both-1
 
 `compute_resolved_utc` SHALL resolve each photo of photos by destination to UTC: a camera's photo by the offset of its
 cell — `<group>@<date>` where the destination has one for its date, else `<group>` — a corrected offset from
@@ -245,7 +235,6 @@ geotag already corrected by its own offset, else the timezone (`geotag_corrected
 :id: BLD-resolved_utc_fingerprint
 :status: ruled
 :realises: INV-no_stale_use, RUL-staleness_by_area, RUL-tracks_in_dependencies
-:aliases: geotag-utc-fingerprint-1, geotag-utc-not-restaled-by-unrelated-config-1
 
 `resolved_utc_cache_fingerprint` SHALL be the SHA-256 over the rows ordered by path — each its `relative_path`,
 `resolved_utc`, `resolved_utc_status`, `time_rule_used`, `utc_offset_used` and `source_time_provenance` as text — and
@@ -261,7 +250,6 @@ track decided anything.
 :id: BLD-drift_validation
 :status: ruled
 :realises: RUL-unanchored_offset_confirmed, RUL-confirmation_holds_for_its_offset
-:aliases: geotag-drift-trigger-1, geotag-drift-gate-position-1, geotag-drift-confirmation-preserved-1, geotag-drift-corrected-validated-1, geotag-drift-not-mutate-21-1, geotag-drift-recompute-utc-1, geotag-drift-withdrawal-rejects-plan-1
 
 Once photos-21 is complete, `geotag plan` SHALL write `photos-22-gps-drift-validation.json` with a cell for each
 offset cell whose effective source is `timezone_accepted` or `manual`, none of whose photos not yet corrected anchors on
@@ -297,7 +285,6 @@ preflight.
 :id: BLD-placement_order
 :status: ruled
 :realises: RUL-own_position_kept, RUL-placement_order
-:aliases: geotag-fallback-rank-1, geotag-fallback-is-manual-1
 
 `classify_gps` SHALL return, for each photo, the first of: `preserve_native` for a photo with its own position; its
 review item's `manual_lat`/`manual_lon` as `manual_locked`; the tracks at its resolved time as `gpx_interpolation` or
@@ -310,7 +297,6 @@ and undone like any manual position.
 :id: BLD-gps_decisions_record
 :status: ruled
 :realises: RUL-placement_order, RUL-decision_fields_laid_out
-:aliases: geotag-23-paths-only-review-1, geotag-24-rederive-auto-gps-1
 
 Each destination's entry in `photos-23-gps-decisions.json` SHALL hold its `folder_fallback` cell and `gps_decisions`:
 a `summary` counting `files_total`, `preserve_native_gps`, `automatic_gpx_interpolation`,
@@ -339,7 +325,6 @@ accepted proposal that does not exist is `stale_user_decision`. Its `requires_us
 :id: BLD-rename_planning
 :status: ruled
 :realises: RUL-suffix_no_clobber, RUL-uncorrected_keeps_its_name, RUL-geotag_name_final
-:aliases: geotag-plan-renames-1, geotag-no-clobber-planning-1, geotag-case-insensitive-conflict-1, geotag-execute-no-new-rename-1
 
 For each destination, `plan_renames` SHALL count every current name of its photos as taken, case folded, and never
 freed by a rename it plans — two photos that would trade names both take a suffix — then, in path order, leave a photo
@@ -355,7 +340,6 @@ no-clobber move.
 :id: BLD-executable_plan
 :status: ruled
 :realises: RUL-time_before_gps, RUL-execution_only_the_plan, RUL-mutate_on_difference
-:aliases: geotag-plan-preconditions-1, geotag-held-write-noop-1
 
 `photos-24-executable-plan.json` SHALL hold `status` — `ready`, or `blocked` with the plan's `blockers` — `executable`,
 `depends_on`, `plan_id` (the first 16 hex digits of the SHA-256 of `depends_on`), and per destination its `operations`,
@@ -393,7 +377,6 @@ are all corrected keeps its decision and its drift confirmation, the effective v
 :id: BLD-geotag_execution
 :status: ruled
 :realises: RUL-geotag_execution_resumable, RUL-content_changed_write_held, RUL-execution_only_the_plan, RUL-every_change_journaled
-:aliases: geotag-journal-every-op-1, geotag-reject-stale-before-mutation-1, geotag-execute-noclobber-recheck-1, geotag-prestate-before-write-1, geotag-tool-failure-not-silent-1, geotag-atomic-ops-1, geotag-snapshot-phase-label-1, geotag-snapshot-required-abort-1, geotag-concurrency-determinism-1, geotag-deterministic-aggregation-1, geotag-no-concurrent-decision-1, geotag-single-writer-1, geotag-no-partial-persistence-1
 
 `geotag execute` SHALL, under the workspace lock: revalidate every dependency of photos-24 and stop before any change if
 one moved; keep photos-21, -22 and -23 in `executed/<plan id>/`; take the snapshot labelled `geotag`, a required one
@@ -410,7 +393,6 @@ the target checked free. The results merge in path order into the journal, kept 
 :id: BLD-execution_summary
 :status: ruled
 :realises: RUL-content_changed_write_held, RUL-failure_recorded
-:aliases: geotag-write-summary-1, geotag-summary-contents-1, geotag-summary-status-1
 
 `photos-25-execution-summary.json` SHALL record the plan and execution ids, the SHA-256 of photos-24 and the
 dependencies it was validated against, counts per destination and in total, what was newly applied and what found

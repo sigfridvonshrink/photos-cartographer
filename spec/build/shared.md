@@ -228,7 +228,7 @@ The control records SHALL be these files in `.photos-ingest/` ({need}`DEF-archiv
   photos-00-config.json            workspace configuration (seeded by prep, Section 4)
   photos-00-workspace.lock         the workspace lock: held by every run while it plans or executes (Section 2)
   photos-00-decision-editor.lock   the decision editor's lock: one editor at a time on a workspace
-  photos-00-workspace-guard        workspace root sentinel: marks the workspace as INITIALIZED (written last by prep on init, prep photos-1-prep-workflow.md Section 3.1)
+  photos-00-workspace-guard        workspace root sentinel: marks the workspace as INITIALIZED (written last by prep on init)
   photos-00-sealed.json            terminal/sealed marker, written by a successful merge ALONGSIDE the guard (a separate file, not a field inside the guard) — its presence seals the workspace (Section 13.7)
   photos-00-ingest.db              SQLite identity/metadata cache + derived caches (live working DB, Section 13.4)
   photos-00-plan-memo.db           prep-phase scratch: plan memo, what planning read of each media file (disposable, NOT part of the record)
@@ -389,7 +389,6 @@ the handoff manifest and SQLite (prep §12); geotag consumes and classifies it (
 :id: BLD-camera_group_key_version
 :status: ruled
 :realises: RUL-camera_group_derivation_versioned
-:aliases: geotag-cache-via-handoff-1
 
 The derivation of `camera_group_key` SHALL be versioned by `CAMERA_GROUP_KEY_VERSION`, recorded with each file's
 metadata and in each plan's dependencies, and compared with the running code's: by prep's metadata freshness, by geotag's
@@ -459,7 +458,6 @@ strays folder is not checked.
 :id: BLD-format_recorded
 :status: ruled
 :realises: RUL-format_fixed_once_named
-:aliases: geotag-filename-fingerprint-1
 
 The handoff SHALL record the format prep named the files in as `filename_timestamp_format`; prep compares it with the
 configured format at plan once a file outside the inbox carries a timestamp name, and geotag and merge at their start.
@@ -483,7 +481,6 @@ their detail is geotag §15 and §19.
 :id: BLD-gpx_root_checked
 :status: ruled
 :realises: RUL-tracks_outside_managed_folders
-:aliases: prep-config-validate-gpx-malformed-1
 
 Configuration validation, in every phase, SHALL resolve `gpx_root` against the workspace, through links, and refuse it
 when it is a managed folder, lies inside one, or contains one — the workspace root among them.
@@ -511,7 +508,6 @@ Prep SHALL raise one blocker for each track file it inventories, naming it, and 
 :id: BLD-gpx_fingerprint
 :status: ruled
 :realises: RUL-tracks_in_dependencies
-:aliases: geotag-gpx-fingerprint-unconditional-1, geotag-gpx-unavailable-recorded-1
 
 The GPX fingerprint SHALL be a SHA-256 over the resolved `gpx_root`, a version tag, and, in sorted order, each `*.gpx`
 file's path relative to the root and the SHA-256 of its bytes, then every point read from them, in time order. An empty `gpx_root`, and a `gpx_root` that is not a
@@ -535,7 +531,6 @@ hashes, and the field-scoped configuration fingerprints ({need}`DEF-config_areas
 :::{bld} How a fingerprint is computed
 :id: BLD-fingerprint
 :status: ruled
-:aliases: prep-fingerprint-decoded-content-1
 :realises: DEF-fingerprint, RUL-fingerprint_survives_mutation
 
 A photo's fingerprint SHALL be ImageMagick `identify`'s signature — a SHA-256 of the normalized pixel stream; a video's,
@@ -545,7 +540,6 @@ the `ffmpeg` MD5 of its streams as stored, copied out without decoding (`-c copy
 :::{bld} How a hash is computed
 :id: BLD-hash
 :status: ruled
-:aliases: prep-byte-sha-artifacts-only-1
 :realises: DEF-hash, RUL-hash_detects_any_change, RUL-hash_is_the_dependency_check
 
 A hash SHALL be a SHA-256 over the exact bytes of a numbered JSON record or the configuration.
@@ -568,7 +562,6 @@ decision editor (`edit`) for what it asks, and `geotag plan` again until `photos
 :id: BLD-geotag_auto_reprep
 :status: ruled
 :realises: RUL-prep_records_sort, RUL-sort_recorded_by_stat, RUL-geotag_plans_on_current_record
-:aliases: geotag-auto-reprep-clean-move-1, geotag-auto-reprep-sources-nonempty-skip-1
 
 When the only change prep has not recorded is one {need}`BLD-reprep_pending` names and the inbox is empty, `geotag
 plan` SHALL run prep's `plan` and `execute` itself, inside its own lock, saying so, before it plans.
@@ -578,7 +571,6 @@ plan` SHALL run prep's `plan` and `execute` itself, inside its own lock, saying 
 :id: BLD-reprep_pending
 :status: ruled
 :realises: RUL-prep_records_sort, RUL-geotag_plans_on_current_record
-:aliases: geotag-targeted-reprep-blocker-1
 
 `by_dest_reprep_pending` SHALL name, from sizes and modification times alone, a photo in photos by destination the
 handoff does not record at its path, one the handoff records in photos by date or by destination that is gone, or one
@@ -591,7 +583,6 @@ does not stop while it names one.
 :id: BLD-loop_gates
 :status: ruled
 :realises: RUL-geotag_gates, RUL-sort_photos_only, RUL-development_after_merge
-:aliases: geotag-development-check-all-phases-1
 
 The gates SHALL be checked as follows: `geotag plan` checks every gate; `geotag execute` and `finalize` check the
 development gate and the workspace's shape, and validate against the plan's own dependencies instead of the scope and
@@ -603,7 +594,6 @@ destination holds only photos (merge §3). A development subfolder is one named 
 :id: BLD-rerun_recognition
 :status: ruled
 :realises: RUL-geotag_rerun_keeps_settled
-:aliases: geotag-device-marker-native-1, geotag-time-only-marker-1
 
 Geotag SHALL record what it wrote in the file's `GPSProcessingMethod`: the bare value `interpolated`, `manual_locked` or
 `manual_fallback` beside each position it writes, and, when it fixes the time and writes no position, the suffix
@@ -615,7 +605,6 @@ own, and the GPS beside it native.
 :id: BLD-original_values_pinned
 :status: ruled
 :realises: RUL-geotag_rerun_keeps_settled
-:aliases: geotag-ledger-per-workspace-1, geotag-originals-pinned-1
 
 Before geotag's first write to a file, execution SHALL pin its own time, offset tag, position and `GPSProcessingMethod`
 in an original-values ledger keyed by fingerprint, once, unless it already carries geotag's mark; a later plan decides
@@ -626,7 +615,6 @@ about a pinned file from those values and plans only the writes that differ from
 :id: BLD-marked_file_rerun
 :status: ruled
 :realises: RUL-geotag_rerun_keeps_settled
-:aliases: geotag-marker-time-corrected-1, geotag-position-marker-not-native-1
 
 On a re-run, a file with no pinned values carrying a position marker or the suffix SHALL be resolved from its own time
 and offset tag with no clock offset, as no clock anchor and in no drift check, a camera group's offset cells being built
@@ -726,7 +714,6 @@ inputs, recorded the same way (merge §8–§9).
 :id: BLD-decided_from_own_values
 :status: ruled
 :realises: RUL-withdrawal_undoes, RUL-decision_revisable
-:aliases: geotag-automated-gps-no-revert-1
 
 Every plan SHALL decide about a photo from its own values, pinned before geotag first wrote to it (geotag §24.2), so a
 withdrawn manual position is undone like any decision: the photo is placed again, or geotag's position cleared; an
@@ -739,7 +726,6 @@ automatic position is recomputed, never rolled back.
 :id: BLD-phase_logs
 :status: ruled
 :realises: RUL-record_whole_each_phase, RUL-carry_forward_by_copy
-:aliases: merge-log-copy-26-forward-append-1
 
 Each phase SHALL write its log: prep `photos-15-prep-log.json` at the end of every prep run ({need}`BLD-prep_log_build`); geotag's
 finalize copies it to `photos-26-complete-log.json` and appends each photo's geotag steps (§13.3); merge copies that to
@@ -820,7 +806,6 @@ and requiring a ready plan whose execution succeeded (geotag §31). Merge's re-s
 :id: BLD-log_format
 :status: ruled
 :realises: RUL-log_entry_grows, RUL-log_keyed_by_fingerprint, RUL-log_cites_decisions, RUL-log_human_readable, RUL-no_log_entry_for_other
-:aliases: log-names-exact-decision-1, log-chain-of-names-1
 
 Each log SHALL be pretty-printed JSON with sorted keys, its `photos` keyed by the content fingerprint
 (`content_fingerprint`), each entry carrying where each phase left the photo — `prep_path`, written by prep and updated
@@ -851,7 +836,6 @@ ran, oldest first, matched by fingerprint — before the current plan's, from th
 :id: BLD-history_kept
 :status: ruled
 :realises: RUL-history_retained, RUL-log_cites_decisions
-:aliases: geotag-finalize-complete-log-1, log-every-geotag-pass-1, log-decision-version-kept-1
 
 Each run's journal SHALL be kept as its own `journal-<run>.json`, each geotag execution keeping the decision records its
 plan depended on, verified by hash, in `executed/<plan id>/`, which a step's `because_record` and
@@ -872,7 +856,6 @@ the log's `warnings`, the log then `partial`, any pass whose journal is kept but
 :::{bld} The database: its file and its writers
 :id: BLD-workspace_database
 :status: ruled
-:aliases: prep-cache-single-writer-1
 :realises: RUL-one_database, RUL-database_is_record, RUL-database_regions_disjoint, RUL-other_databases_scratch, RUL-finalize_reads_database
 :uses: BLD-record_ownership
 
@@ -912,7 +895,6 @@ Merge SHALL map each photo by destination to its place under `library_root`, and
 :id: BLD-library_file_fingerprinted
 :status: ruled
 :realises: RUL-collision_by_content, RUL-library_file_read_once, RUL-collision_same_content, RUL-library_file_rechecked_before_removal, RUL-engine_change_is_checked
-:aliases: merge-execute-no-db-rows-1
 
 Where a file is there, merge SHALL fingerprint it — from `library_fingerprint_cache` when its path, size and
 modification time match a row taken by this build's photo method under the current, known ImageMagick version,
@@ -961,7 +943,6 @@ Merge SHALL create a missing destination directory under `library_root` with `os
 :id: BLD-library_lock
 :status: ruled
 :realises: RUL-library_lock, RUL-library_lock_fail_fast, RUL-library_confirmed_before_lock, RUL-library_lock_holds_only_holder, RUL-library_lock_stale_recovered
-:aliases: merge-concurrency-library-lock-throughout-1, merge-library-lock-is-dotfile-cross-workspace-1
 
 The library lock SHALL be `LibraryLock`: an exclusive, non-blocking `flock` on `.photos-merge.lock` in `library_root`,
 recording its holder's `pid`, `started_at` and `host` and nothing else, released by the kernel when its process dies,
@@ -974,7 +955,6 @@ with exit status 1.
 :id: BLD-merge_move
 :status: ruled
 :realises: RUL-library_never_altered, RUL-merge_moves, RUL-unplaced_photo_stays, RUL-target_free_at_execute, RUL-collision_same_content
-:aliases: merge-execute-occupied-different-blocker-1, merge-execute-occupied-identical-treat-present-1, merge-execute-safe-alt-only-if-planned-1, merge-move-place-then-remove-no-loss-1, merge-no-time-gps-changes-1
 
 Each photo SHALL move into its place without overwriting it: on the library's own filesystem by a single rename that
 refuses an existing name; across filesystems by a copy to a temporary name beside its place, checked byte for byte against
@@ -988,7 +968,6 @@ blocks the photo — the plan's alternative name used only where the plan record
 :id: BLD-merge_journal_resume
 :status: ruled
 :realises: RUL-merge_resumable, RUL-resume_rechecks_library
-:aliases: merge-journal-confirmed-only-1
 
 The journal SHALL record each confirmed photo, a re-run taking a place already holding the planned content,
 fingerprinted again, as done, and removing the workspace copy if it remains; a photo whose workspace copy is gone, the
@@ -1010,7 +989,6 @@ found to hold its content.
 :status: ruled
 :realises: RUL-merge_records_landing, RUL-nothing_built_from_merge_records, RUL-merge_outcome_recorded
 :uses: BLD-archive_manifest, BLD-workspace_database
-:aliases: merge-no-stale-summary-1, merge-summary-counts-partition-1, merge-summary-grouped-determinism-1, merge-summary-records-merged-sha256-1
 
 Merge SHALL write `photos-31-merge-summary.json` on every outcome but a stale plan or a failed precondition: per photo,
 grouped by destination, where it landed, whether it was renamed for the library or already present, whether it left
@@ -1025,7 +1003,6 @@ geotag plan and execution ids, the photos it newly moved and those an earlier ru
 :id: BLD-merge_success_sequence
 :status: ruled
 :realises: RUL-merge_reseals, RUL-seal_on_success_only, RUL-reseal_rederives_nothing
-:aliases: merge-execute-db-snapshot-on-success-1
 
 Only on success — every photo placed or already present, none left — SHALL merge then, in order, write
 `photos-35-merge-log.json`, `photos-35-merge-ingest.db`, the package's `photos-35-archive-manifest.json` and
@@ -1036,7 +1013,6 @@ Only on success — every photo placed or already present, none left — SHALL m
 :id: BLD-seal_marker
 :status: ruled
 :realises: RUL-seal_is_authority
-:aliases: merge-seal-separate-file-not-guard-field-1
 
 The seal SHALL be `photos-00-sealed.json` in the control directory, its own file beside the workspace guard — which only
 prep writes — recording `sealed`, the merge run id (`merged_run_id`) and `library_root`; its presence alone seals.
@@ -1046,7 +1022,6 @@ prep writes — recording `sealed`, the merge run id (`merged_run_id`) and `libr
 :id: BLD-phases_check_seal
 :status: ruled
 :realises: RUL-sealed_refuses, RUL-sealed_new_dump_warned, RUL-sealed_new_dump_left
-:aliases: prep-seal-check-at-startup-1
 
 Prep's `plan`, `dry-run` and `execute`, every geotag command, and merge's `plan`, `dry-run` and `execute` SHALL check
 the seal under the workspace lock before reading anything else, and stop with exit status 2 if it is there, adding the
@@ -1152,7 +1127,6 @@ original, having first removed a `<file>_exiftool_tmp` an interrupted write left
 :id: BLD-cross_fs_temp
 :status: ruled
 :realises: RUL-cross_fs_all_or_nothing, RUL-temp_name_own
-:aliases: merge-temp-deterministic-name-1, merge-verify-copy-detect-torn-1
 
 `_move_cross_fs_no_clobber` SHALL copy to a `.tmp-xdev-<random>.part` file in the destination directory, check it holds
 the source's bytes — the same size, compared byte for byte — sync it, rename it into its place without overwriting, sync
@@ -1163,7 +1137,6 @@ the destination directory, and then remove the source.
 :id: BLD-temp_sweep
 :status: ruled
 :realises: RUL-crash_temps_cleared
-:aliases: merge-sweep-stale-temps-1
 
 Merge's `execute` SHALL, after revalidating its plan and taking its snapshot and before its first move, remove every
 `.tmp-xdev-*.part` file directly in `library_root` and in each planned target's directory, and record how many in

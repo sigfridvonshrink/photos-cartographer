@@ -25,33 +25,23 @@ Three phases over a transient **workspace**, each on the same plan → validate 
 - **merge** (`photos-3-merge`) — move the finalized `6-photos-by-dest` staging tree into the permanent
   library, never renaming or overwriting anything already there, then seal the workspace.
 
-## The corpus — the specs as sphinx-needs items (the move is in progress)
+## The corpus — the specs as sphinx-needs items
 
-The specs are being restructured into **one Sphinx corpus** of [sphinx-needs](https://sphinx-needs.readthedocs.io/)
+The specs are **one Sphinx corpus** of [sphinx-needs](https://sphinx-needs.readthedocs.io/)
 items, in three levels with the same four documents each (and the rationale's `philosophy`, the roots): [`intent/`](intent/) — what cartographer guarantees, naming
 no tool, file or database; [`rationale/`](rationale/) — why, the justifications, tagged and never normative;
 [`build/`](build/) — how this build meets the intent. Each item has an id, a status (`seed` until ruled) and typed
 links, and states one obligation, in one SHALL — a second obligation is an item of its own, refining the first; every
 rule and invariant has a reason, a rationale that justifies it or the item it refines (the few still without one are
 listed in [`unjustified.txt`](unjustified.txt), a list that only shrinks); the tests are items too, from their `@pytest.mark.spec(..., test="TST-...")` marks. `tools/spec-build` renders
-it and fails on any warning; `spec/needs.json` is its committed export. Each old document's sentences are recorded,
-verbatim, with where each went, in [`conversion/`](conversion/) — `tools/spec-ledger check` proves none was lost.
-Converted so far: the shared contract, prep and merge in full, geotag §1–§6, and the user guide's roots and what they force,
+it and fails on any warning; `spec/needs.json` is its committed export. The user guide's roots and what they force are
 [`rationale/philosophy.md`](rationale/philosophy.md) — facts (`FCT`) and choices (`CHC`) nothing follows from, and the
-rationale that follows from them. Until a document is converted, the one below stays authoritative.
+rationale that follows from them. Read the shared contract first for the cross-phase facts, then prep, geotag and merge
+in pipeline order.
 
-## The documents
-
-The four documents below were the behavioral specs; each is authoritative only for the sections not yet converted
-(today: geotag §7 onward). Read the shared contract first for the cross-phase facts, then the per-phase specs in
-pipeline order.
-
-| Document | Scope |
-|---|---|
-| [`photos-shared-contract.md`](photos-shared-contract.md) | Facts the phases share: the run lock, the `.photos-ingest/` control dir, `photos-00-config.json`, formats, `gpx_root`, the input-validation discipline, the execute-time no-clobber/atomicity rule, the archival package, the end-to-end operator loop, and the workspace lifecycle (init → strays → sealed terminal state). |
-| [`photos-1-prep-workflow.md`](photos-1-prep-workflow.md) | **Phase 1 — prep.** |
-| [`photos-2-geotag-workflow.md`](photos-2-geotag-workflow.md) | **Phase 2 — geotag.** |
-| [`photos-3-merge-workflow.md`](photos-3-merge-workflow.md) | **Phase 3 — merge.** |
+The corpus was converted from four documents — the shared contract and one spec per phase — sentence by sentence, each
+recorded verbatim with where it went in a ledger that proved none was lost. Those documents, the ledgers and the old
+clause index are kept at the git tag `specs-before-corpus`.
 
 ## What belongs here — and what doesn't
 

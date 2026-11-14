@@ -79,7 +79,7 @@ def mock_read_metadata_concurrently(folders, max_workers=4, progress_coordinator
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("idem-no-op-run-1", "prep-by-dest-readonly-1", "prep-no-requarantine-1", "prep-report-no-op-facts-1", "prep-reuse-cache-unchanged-1", "prep-second-run-zero-mutations-1", "prep-tolerate-populated-folders-1", "prep-unchanged-no-op-1", "RUL-no_op_run_reports_reuse", test="TST-idempotency_cache-prep_idempotency_and_by_dest_accounting")
+@pytest.mark.spec("RUL-no_op_run", "RUL-prep_leaves_by_dest_as_found", "RUL-not_inventoried", "RUL-no_op_run_reports_reuse", "RUL-reuse_valid_work", "RUL-filed_file_stays", test="TST-idempotency_cache-prep_idempotency_and_by_dest_accounting")
 def test_prep_idempotency_and_by_dest_accounting(mock_meta, tmp_path, monkeypatch):
     ws = setup_workspace(tmp_path)
 
@@ -138,7 +138,7 @@ def test_prep_idempotency_and_by_dest_accounting(mock_meta, tmp_path, monkeypatc
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("prep-cache-update-from-validated-plan-1")
+@pytest.mark.spec("BLD-move_row_effects")
 def test_cache_rows_written_during_execution_not_planning(mock_meta, tmp_path, monkeypatch):
     """§10: cache updates derive from the validated plan and apply during EXECUTION, never
     speculatively during planning. With a fresh (empty) cache, planning derives db_upsert operations
@@ -167,7 +167,7 @@ def test_cache_rows_written_during_execution_not_planning(mock_meta, tmp_path, m
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("prep-quarantine-excluded-scan-1", test="TST-idempotency_cache-quarantine_subtree_is_excluded_from_the_scan")
+@pytest.mark.spec("RUL-not_inventoried", test="TST-idempotency_cache-quarantine_subtree_is_excluded_from_the_scan")
 def test_quarantine_subtree_is_excluded_from_the_scan(mock_meta, tmp_path, monkeypatch):
     """§15: the quarantine directory is excluded from the scan, so a rerun neither re-organizes nor
     re-quarantines its contents. A media file sitting under .photos-ingest-quarantine/<id>/ is never
@@ -203,7 +203,7 @@ def test_quarantine_subtree_is_excluded_from_the_scan(mock_meta, tmp_path, monke
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("prep-execute-no-rederive-1", "RUL-execution_only_the_plan", test="TST-idempotency_cache-execute_applies_only_recorded_operations_no_rederive")
+@pytest.mark.spec("RUL-execution_only_the_plan", test="TST-idempotency_cache-execute_applies_only_recorded_operations_no_rederive")
 def test_execute_applies_only_recorded_operations_no_rederive(mock_meta, tmp_path, monkeypatch):
     """§4 (anti): execute applies ONLY the recorded plan operations; it never re-derives the
     organization from the filesystem. Drop the new_img move op from the saved plan before executing:
@@ -242,7 +242,7 @@ def test_execute_applies_only_recorded_operations_no_rederive(mock_meta, tmp_pat
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("prep-path-conflict-bydest-no-clobber-1", test="TST-idempotency_cache-chronological_destination_collision_allocates_safe_name_no_clobber")
+@pytest.mark.spec("RUL-suffix_no_clobber", test="TST-idempotency_cache-chronological_destination_collision_allocates_safe_name_no_clobber")
 def test_chronological_destination_collision_allocates_safe_name_no_clobber(mock_meta, tmp_path, monkeypatch):
     """§11.2 (anti): a 0-sources file whose computed chronological destination in 5-photos-by-date
     collides with an EXISTING path must not clobber. setup_workspace seeds
@@ -283,7 +283,7 @@ def test_chronological_destination_collision_allocates_safe_name_no_clobber(mock
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("prep-filesystem-source-of-truth-1", "prep-no-journal-replay-1", "prep-replan-not-resume-1")
+@pytest.mark.spec("RUL-database_matches_files", "RUL-prep_replans")
 def test_prep_replans_from_filesystem_when_journal_corrupt_or_deleted(mock_meta, tmp_path, monkeypatch):
     """The prep journal is EVIDENCE, not a resume script: prep re-plans from the filesystem (+ cache)
     as truth. After a successful run, corrupting then deleting the journal must NOT change the re-plan
@@ -326,7 +326,7 @@ def test_prep_replans_from_filesystem_when_journal_corrupt_or_deleted(mock_meta,
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("prep-evidence-before-quarantine-1", test="TST-idempotency_cache-quarantine_manifest_written_before_the_file_is_moved")
+@pytest.mark.spec("RUL-evidence_before_quarantine", test="TST-idempotency_cache-quarantine_manifest_written_before_the_file_is_moved")
 def test_quarantine_manifest_written_before_the_file_is_moved(mock_meta, tmp_path, monkeypatch):
     """§14.3: the manifest evidence entry for a quarantined file is written BEFORE the file is moved
     into quarantine, so a crash never strands a file in quarantine with no record of why. Probe by
@@ -381,7 +381,7 @@ def test_quarantine_manifest_written_before_the_file_is_moved(mock_meta, tmp_pat
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("prep-quarantine-restore-normal-1", "prep-restored-requarantine-if-dup-1", test="TST-idempotency_cache-restored_quarantine_file_reflows_as_a_normal_dump")
+@pytest.mark.spec("RUL-restored_file_is_new", test="TST-idempotency_cache-restored_quarantine_file_reflows_as_a_normal_dump")
 def test_restored_quarantine_file_reflows_as_a_normal_dump(mock_meta, tmp_path, monkeypatch):
     """No un-quarantine path: a file dragged back out of quarantine into 0-sources is re-evaluated as
     an ordinary fresh dump under a NEW plan_id — there is no special 'restore' handling that skips
@@ -418,7 +418,7 @@ def test_restored_quarantine_file_reflows_as_a_normal_dump(mock_meta, tmp_path, 
                for op in plan2.operations), [(o.type, o.source) for o in plan2.operations]
 
 
-@pytest.mark.spec("prep-missing-metadata-no-special-path-1", "RUL-missing_metadata_stays", test="TST-idempotency_cache-no_special_reimport_path_from_missing_metadata")
+@pytest.mark.spec("RUL-missing_metadata_stays", test="TST-idempotency_cache-no_special_reimport_path_from_missing_metadata")
 def test_no_special_reimport_path_from_missing_metadata(tmp_path, monkeypatch):
     """2-missing-metadata is a holding bay, not a re-entry point: prep never reprocesses a file sitting
     there in place. A file still missing a date stays put (no op); the way to re-import is to move it to
@@ -461,7 +461,7 @@ def test_no_special_reimport_path_from_missing_metadata(tmp_path, monkeypatch):
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("prep-cache-single-writer-1")
+@pytest.mark.spec("BLD-workspace_database")
 def test_prep_execute_cache_writes_only_from_main_thread(mock_meta, tmp_path, monkeypatch):
     """Single-writer cache: prep applies its plan in one sequential op loop, so every DB write lands on
     the main thread even with jobs=4 (the concurrency in prep is read-only metadata extraction during
@@ -495,7 +495,7 @@ def test_prep_execute_cache_writes_only_from_main_thread(mock_meta, tmp_path, mo
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("prep-handoff-min-contents-1", "BLD-handoff_content", test="TST-idempotency_cache-handoff_manifest_generated")
+@pytest.mark.spec("RUL-handoff_describes_workspace", "BLD-handoff_content", test="TST-idempotency_cache-handoff_manifest_generated")
 def test_handoff_manifest_generated(mock_meta, tmp_path, monkeypatch):
     ws = setup_workspace(tmp_path)
 
@@ -546,7 +546,7 @@ def test_handoff_manifest_generated(mock_meta, tmp_path, monkeypatch):
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("prep-block-on-stale-dependency-1", "prep-bydest-precondition-recorded-1", "prep-execute-revalidates-rejects-stale-1", "prep-handoff-only-on-success-1")
+@pytest.mark.spec("INV-no_stale_use", "BLD-prep_dependencies", "RUL-plan_carried_out_by_its_code", "RUL-prep_records_on_success")
 def test_stale_cache_upsert_fails(mock_meta, tmp_path, monkeypatch):
     ws = setup_workspace(tmp_path)
 
@@ -714,7 +714,7 @@ def test_stale_already_cached_file_aborts(mock_meta, tmp_path, monkeypatch):
     assert (ws / "5-photos-by-date" / "2023-01-01" / "2023-01-01--12-00-00-001.jpg").exists()
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("prep-ghost-prune-1", "RUL-database_matches_files", "BLD-database_ops", test="TST-idempotency_cache-stale_ghost_prune_reappeared_file_aborts_before_cache_remove")
+@pytest.mark.spec("RUL-database_matches_files", "BLD-database_ops", test="TST-idempotency_cache-stale_ghost_prune_reappeared_file_aborts_before_cache_remove")
 def test_stale_ghost_prune_reappeared_file_aborts_before_cache_remove(mock_meta, tmp_path):
     ws = tmp_path / "workspace"
     ws.mkdir()

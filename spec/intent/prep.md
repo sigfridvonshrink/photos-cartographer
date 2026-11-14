@@ -14,7 +14,6 @@ that only restated others, has no heading here.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: prep-no-time-gps-correction-1, prep-no-timestamp-correction-1, prep-no-geotag-command-1
 :uses: DEF-prep
 
 Prep SHALL make no correction to a file's time or position: it plans, infers, writes and applies none.
@@ -26,7 +25,6 @@ Prep SHALL make no correction to a file's time or position: it plans, infers, wr
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: prep-by-dest-readonly-1, prep-no-perform-bydest-move-1, prep-bydest-never-quarantined-1, prep-scan-split-inventory-1, prep-move-recognition-no-mutate-bydest-1
 :uses: DEF-prep, DEF-managed_folders
 
 Prep SHALL leave photos by destination as it finds it: never moving a file into it, out of it or within it, nor
@@ -38,7 +36,6 @@ renaming, quarantining, deleting or writing one there.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: prep-videos-date-organized-1
 :uses: DEF-prep, DEF-managed_folders, DEF-timestamp_name
 
 Prep SHALL put each video it takes in that has a recorded time into videos by date, under its timestamp name.
@@ -51,7 +48,6 @@ Prep SHALL put each video it takes in that has a recorded time into videos by da
 :status: ruled
 :criticality: high
 :verify: required
-:aliases: prep-init-moves-base-into-sources-1, prep-init-excludes-managed-from-move-1
 :uses: RUL-first_dump_at_top_level, DEF-managed_folders, DEF-control_records
 
 Initializing a workspace, prep SHALL move every entry at its top level that is not a managed folder or the control
@@ -63,7 +59,6 @@ records' place — files and whole folders alike, their structure kept — into 
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: prep-reserved-names-not-moved-1
 :refines: RUL-init_moves_dump_to_inbox
 
 Initializing, prep SHALL take a folder at the top level named as a managed folder for that managed folder, never moving
@@ -75,7 +70,6 @@ it into the inbox.
 :status: ruled
 :criticality: high
 :verify: required
-:aliases: prep-sentinel-written-last-1
 :uses: RUL-structure_built_once
 
 Prep SHALL mark a workspace initialized only once its initializing run has succeeded, every managed folder and the
@@ -87,7 +81,6 @@ control records' place in it.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: prep-crash-init-reenters-harmlessly-1
 :refines: RUL-initialized_marked_last
 
 A run that finds a workspace not marked initialized SHALL initialize it, keeping what an interrupted initialization
@@ -100,7 +93,6 @@ already did: the folders it made, and the dump already in the inbox.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: prep-strays-inert-1
 :uses: DEF-strays_folder
 
 A file prep moves to the strays folder SHALL be recorded nowhere but in the journal of that move: no fingerprint, no row
@@ -115,7 +107,6 @@ in the workspace database, no entry in any log, no place in the archival package
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: prep-band-misplacement-blocks-1, prep-video-only-in-videos-band-1
 
 A video in photos by date or photos by destination, or a photo in videos by date, SHALL block prep's plan.
 :::
@@ -126,7 +117,6 @@ A video in photos by date or photos by destination, or a photo in videos by date
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: prep-forbidden-sidecar-blocks-1
 
 An editing sidecar — a file holding a photo's development beside it — found anywhere prep inventories SHALL block
 prep's plan.
@@ -148,7 +138,6 @@ A file of no media class found in a managed folder other than the inbox SHALL bl
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: prep-blockers-reported-not-skipped-1
 
 Prep SHALL report every blocker it finds, each naming what blocks, never skipping one silently.
 :::
@@ -158,7 +147,6 @@ Prep SHALL report every blocker it finds, each naming what blocks, never skippin
 :status: ruled
 :criticality: low
 :verify: required
-:aliases: prep-stray-media-warning-1, prep-stray-media-warning-advisory-1
 
 When files prep is about to set aside as strays are images or videos by their content, prep SHALL warn, naming their
 extension.
@@ -173,7 +161,6 @@ extension.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: prep-no-flatten-sources-1
 :uses: DEF-managed_folders
 
 Prep SHALL move no file from one place in the inbox to another: a dump's folders stay as they arrived until each file
@@ -186,7 +173,6 @@ leaves the inbox.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: prep-files-in-managed-left-1, prep-recognize-correct-location-1, prep-tolerate-populated-folders-1
 :uses: DEF-managed_folders
 
 A media file outside the inbox SHALL stay in the folder it is in, unless prep sets it aside as a duplicate or it is a
@@ -198,7 +184,6 @@ dated file outside its day folder.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: prep-day-subfolder-grouping-1, prep-relocate-misfiled-bydate-1
 :uses: DEF-managed_folders, DEF-recorded_time
 
 Each file in photos by date or videos by date SHALL lie in the folder of its recorded time's day, directly under its
@@ -210,7 +195,6 @@ band; prep moves one that does not into it — or, with no recorded time, into m
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: prep-route-by-class-timestamp-1
 :uses: DEF-prep, DEF-managed_folders, DEF-timestamp_name, DEF-recorded_time
 
 Prep SHALL put each photo it takes in that has a recorded time into photos by date, under its timestamp name.
@@ -221,7 +205,6 @@ Prep SHALL put each photo it takes in that has a recorded time into photos by da
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: prep-missing-metadata-flat-1
 :uses: DEF-managed_folders, DEF-untimed_name, DEF-recorded_time
 
 Prep SHALL put each media file it takes in with no recorded time directly into missing metadata, no day folder between,
@@ -245,7 +228,6 @@ under the inbox and with its name unchanged.
 :criticality: low
 :anti: yes
 :verify: required
-:aliases: prep-missing-metadata-no-special-path-1
 :uses: DEF-managed_folders, DEF-recorded_time
 
 Prep SHALL leave a file in missing metadata where it is, though it has since gained a recorded time: only the user
@@ -257,7 +239,6 @@ moving it back into the inbox takes it through prep again.
 :status: ruled
 :criticality: low
 :verify: required
-:aliases: prep-normalize-extension-case-1, prep-no-renormalize-extensions-1
 :uses: DEF-managed_folders
 
 Each media file prep files, or finds outside the inbox, SHALL end with its extension in lowercase.
@@ -280,7 +261,6 @@ moving or renaming it first.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: prep-separate-redundant-jpeg-1
 :uses: DEF-managed_folders
 
 Prep SHALL move into redundant JPEGs each JPEG in the inbox that shares its folder and its name, extension aside, with a
@@ -292,7 +272,6 @@ raw file — and no other file with it.
 :status: ruled
 :criticality: high
 :verify: required
-:aliases: prep-quarantine-extra-copies-1, prep-group-by-fingerprint-class-1
 :uses: DEF-fingerprint, DEF-managed_folders
 
 Of the media files prep inventories that share one fingerprint and one media class, prep SHALL keep one and quarantine
@@ -304,7 +283,6 @@ every other copy outside photos by destination.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: prep-retain-by-folder-priority-1
 :refines: RUL-duplicates_quarantined
 :uses: DEF-managed_folders
 
@@ -318,7 +296,6 @@ folder, the first by path.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: prep-cache-upsert-stale-1, prep-ghost-prune-1, prep-filesystem-source-of-truth-1
 :uses: DEF-workspace_database
 
 A prep execution SHALL leave the workspace database current: a row for each media file prep inventoried, describing the
@@ -333,7 +310,6 @@ file as it now is and where it now is, and no row for a file that is gone.
 :status: ruled
 :criticality: high
 :verify: required
-:aliases: prep-fingerprint-compute-if-absent-1, prep-fingerprint-recompute-on-change-1
 :uses: DEF-fingerprint, DEF-workspace_database
 
 Prep SHALL fingerprint a media file afresh when the workspace database holds no fingerprint for it at its path, or holds
@@ -381,7 +357,6 @@ Prep SHALL stop on a workspace database whose recorded schema is not the one it 
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: prep-recognize-bydest-resort-1, prep-ambiguous-move-rescan-1, prep-content-change-overrides-carry-1, prep-cache-distinguish-cases-1
 :uses: DEF-workspace_database
 
 Prep SHALL recognize as moved a file new to photos by destination whose size, modification time and name are those of
@@ -394,7 +369,6 @@ other new file in photos by destination.
 :status: ruled
 :criticality: high
 :verify: required
-:aliases: prep-recognize-bydate-to-bydest-move-1, prep-move-carry-forward-drop-old-1, prep-handoff-updated-on-move-only-1
 :refines: RUL-reuse_valid_work
 :uses: DEF-fingerprint, DEF-workspace_database
 
@@ -428,7 +402,6 @@ and metadata — with the path, size and modification time it read them at.
 :status: ruled
 :criticality: low
 :verify: required
-:aliases: prep-plan-memo-reuse-1, prep-plan-memo-not-the-cache-1
 :refines: RUL-reuse_valid_work
 :uses: DEF-plan_memo
 
@@ -441,7 +414,6 @@ to reuse.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: prep-plan-memo-subordinate-1
 :uses: DEF-plan_memo, DEF-workspace_database
 
 Prep SHALL take a file's fingerprint and metadata from the plan memo only where the workspace database holds no row for
@@ -453,7 +425,6 @@ its path.
 :status: ruled
 :criticality: high
 :verify: required
-:aliases: prep-plan-memo-freshness-1
 :uses: DEF-plan_memo
 
 Prep SHALL reuse an entry of the plan memo only when a row of the workspace database holding it would be reused.
@@ -474,7 +445,6 @@ Prep SHALL recognize a moved file from the workspace database alone, never from 
 :status: ruled
 :criticality: high
 :verify: required
-:aliases: prep-plan-memo-disposable-1
 :uses: DEF-plan_memo
 
 The plan prep makes SHALL be the same whatever the plan memo holds — entries reused, none, or a file that cannot be
@@ -486,7 +456,6 @@ read.
 :status: ruled
 :criticality: low
 :verify: required
-:aliases: prep-plan-memo-pruned-1
 :uses: DEF-plan_memo
 
 The plan memo SHALL hold entries only for paths the latest plan read.
@@ -501,7 +470,6 @@ The plan memo SHALL hold entries only for paths the latest plan read.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: prep-unknown-fingerprint-no-dup-1
 :uses: DEF-fingerprint
 
 A media file whose fingerprint failed SHALL be found the duplicate of no file, and no file its duplicate.
@@ -512,7 +480,6 @@ A media file whose fingerprint failed SHALL be found the duplicate of no file, a
 :status: ruled
 :criticality: high
 :verify: required
-:aliases: prep-fingerprint-failure-blocks-1
 :uses: DEF-fingerprint
 
 A media file outside photos by destination whose fingerprint failed SHALL block prep's plan.
@@ -533,7 +500,6 @@ Prep SHALL take a media file's fingerprint again at every run while it has faile
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: prep-dup-against-bydest-quarantine-mutable-1
 :refines: RUL-duplicates_quarantined
 
 Prep SHALL record each duplicate it quarantines with the copy it kept, in the quarantine manifest and the handoff.
@@ -547,7 +513,6 @@ Prep SHALL record each duplicate it quarantines with the copy it kept, in the qu
 :status: ruled
 :criticality: high
 :verify: required
-:aliases: prep-cache-metadata-fields-1, prep-passive-metadata-cache-1
 :uses: DEF-workspace_database
 
 Prep SHALL keep in the workspace database, for each media file it reads, the metadata geotag works from — the camera's
@@ -569,7 +534,6 @@ the file records it — a time field from the first of them holding a valid time
 :status: ruled
 :criticality: high
 :verify: required
-:aliases: prep-metadata-freshness-inputs-1
 :refines: RUL-reuse_valid_work
 :uses: DEF-workspace_database
 
@@ -583,7 +547,6 @@ were when it was read.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: prep-passive-grouping-facts-1
 
 Prep's handoff SHALL report, for each camera group and each folder of photos by destination, facts of the files in it —
 their count, their time range, how many carry a GPS position — inferring nothing from them.
@@ -597,7 +560,6 @@ their count, their time range, how many carry a GPS position — inferring nothi
 :status: ruled
 :criticality: high
 :verify: required
-:aliases: prep-execute-rejects-new-file-1
 :refines: INV-no_stale_use
 
 A file found, at execution, anywhere prep scans that its plan did not record SHALL make the plan stale, refused before
@@ -610,7 +572,6 @@ any change.
 :criticality: med
 :anti: yes
 :verify: required
-:aliases: prep-dryrun-mutates-nothing-1, prep-dryrun-not-simulation-1, prep-dryrun-summary-not-dump-1
 :refines: RUL-dry_run_summarises_the_real_plan
 
 Prep's dry run SHALL change nothing in the workspace.
@@ -621,7 +582,6 @@ Prep's dry run SHALL change nothing in the workspace.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: prep-dryrun-empty-sources-nothing-to-do-1, prep-execute-empty-sources-nothing-to-do-1
 
 On an initialized workspace whose inbox holds nothing — no file, and no folder — prep's dry run and execution SHALL
 stop, changing nothing, and not carry out the saved plan.
@@ -644,7 +604,6 @@ An interruption SHALL leave prep's journal as its last save left it, never part-
 :criticality: med
 :verify: required
 :refines: RUL-execution_only_the_plan
-:aliases: prep-prune-empty-day-folders-1
 
 Prep SHALL remove a folder its plan leaves empty — in the inbox or a by-date folder, or a dump's folder on the first run
 — only as a planned operation, and only while the folder is empty.
@@ -655,7 +614,6 @@ Prep SHALL remove a folder its plan leaves empty — in the inbox or a by-date f
 :status: ruled
 :criticality: high
 :verify: required
-:aliases: prep-replan-not-resume-1, prep-crash-safe-rerun-1, prep-no-journal-replay-1
 
 After an interrupted execution, prep SHALL plan again from the workspace as it stands, never resuming or replaying the
 interrupted plan.
@@ -669,7 +627,6 @@ interrupted plan.
 :status: ruled
 :criticality: high
 :verify: required
-:aliases: prep-evidence-before-quarantine-1
 :refines: RUL-duplicates_quarantined
 
 Prep SHALL record why it quarantines a file — its path, the copy kept and the shared fingerprint — before it moves the
@@ -682,7 +639,6 @@ file into the quarantine.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: prep-quarantine-no-auto-delete-1
 
 No prep run SHALL remove anything from the quarantine, however often it runs and however old the quarantine is.
 :::
@@ -693,7 +649,6 @@ No prep run SHALL remove anything from the quarantine, however often it runs and
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: prep-prune-no-managed-1
 
 Prep SHALL delete quarantined files only by its prune command, which lists what it would delete unless told to delete,
 and touches nothing outside the quarantine.
@@ -704,7 +659,6 @@ and touches nothing outside the quarantine.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: prep-quarantine-restore-normal-1, prep-restored-requarantine-if-dup-1, prep-no-reconcile-old-quarantine-1
 
 A file the user moves from the quarantine back into the inbox SHALL be handled as a new file of the dump, its earlier
 quarantine record left as it is.
@@ -715,7 +669,6 @@ quarantine record left as it is.
 :status: ruled
 :criticality: low
 :verify: required
-:aliases: prep-quarantine-footprint-reported-1
 
 Each prep plan SHALL report the quarantine's size — its files, their bytes, and the runs that filled it, oldest and
 newest.
@@ -729,7 +682,6 @@ newest.
 :status: ruled
 :criticality: high
 :verify: required
-:aliases: prep-handoff-non-editable-1, prep-handoff-only-on-success-1, prep-prep-log-on-success-1
 
 Prep SHALL write its log and its handoff only at the end of an execution all of whose operations succeeded, each
 written whole, never edited in place.
@@ -740,7 +692,6 @@ written whole, never edited in place.
 :status: ruled
 :criticality: high
 :verify: required
-:aliases: prep-handoff-min-contents-1, prep-handoff-strays-excluded-1
 
 Prep's handoff SHALL describe the workspace as prep leaves it: every media file with its place, its fingerprint's state
 and its metadata; the camera groups and the destination folders; the folders prep organizes and which of them it may
@@ -752,7 +703,6 @@ change; and what the handoff was made from.
 :status: ruled
 :criticality: high
 :verify: required
-:aliases: prep-handoff-deterministic-1, prep-handoff-run-metadata-segregated-1, prep-noop-rerun-stable-fingerprint-1
 :refines: RUL-run_only_refresh_restales_nothing
 
 Prep's handoff SHALL hold the same content for the same workspace state, whatever run wrote it — what describes the run
@@ -764,7 +714,6 @@ kept apart from it.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: prep-log-derived-no-new-authority-1
 
 Prep's log SHALL be made from prep's plans, journals, quarantine evidence and database alone, holding nothing they do
 not.
@@ -775,7 +724,6 @@ not.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: prep-log-records-quarantine-dups-1
 :refines: RUL-duplicate_recorded_with_kept
 
 Prep's log SHALL record each duplicate prep quarantined — where it was, where it went, and the copy kept — with the kept
@@ -802,7 +750,6 @@ step recording the change.
 :criticality: high
 :anti: yes
 :verify: required
-:aliases: prep-concurrency-no-semantic-change-1, prep-two-job-counts-same-plan-1, prep-candidates-sorted-deterministic-1, prep-traversal-single-threaded-1
 :refines: RUL-no_op_run
 
 Prep's plan of a workspace SHALL be the same whatever number of jobs it runs with: the same operations, names and
@@ -814,7 +761,6 @@ fingerprints.
 :status: ruled
 :criticality: low
 :verify: required
-:aliases: prep-job-count-run-metadata-1
 
 The number of jobs SHALL be recorded in no plan, configuration or handoff.
 :::
@@ -824,7 +770,6 @@ The number of jobs SHALL be recorded in no plan, configuration or handoff.
 :status: ruled
 :criticality: med
 :verify: required
-:aliases: prep-worker-crash-safe-retry-1, prep-partial-output-never-cached-1
 
 A tool that fails or crashes on a file SHALL be restarted and tried again a bounded number of times before the file's
 fingerprint or metadata is recorded as failed — never as valid.
@@ -835,7 +780,6 @@ fingerprint or metadata is recorded as failed — never as valid.
 :status: ruled
 :criticality: low
 :verify: required
-:aliases: prep-rehash-diagnostics-1
 
 Each prep plan SHALL report how many media files it fingerprinted again, and why, and how many fingerprints it took
 from the plan memo — deciding nothing by it.
@@ -848,7 +792,6 @@ from the plan memo — deciding nothing by it.
 :status: ruled
 :criticality: low
 :verify: required
-:aliases: prep-summary-separates-categories-1, prep-summary-confirm-artifacts-after-validation-1, prep-execution-visible-logs-1
 
 At the end of an execution prep SHALL report a summary telling what it changed apart from what it only read: its media
 operations, the files already in place, the moves it recognized, the files of photos by destination it read, the

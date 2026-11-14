@@ -87,7 +87,7 @@ def _media_ops(plan):
             if op.type in ("move_no_clobber", "rename_no_clobber", "quarantine_move")]
 
 
-@pytest.mark.spec("idem-reuse-not-recompute-1", "loop-reprep-mandatory-1", "prep-fingerprint-carry-forward-move-1", "prep-handoff-updated-on-move-only-1", "prep-move-carry-forward-drop-old-1", "prep-move-recognition-before-ghost-1", "prep-move-recognition-no-mutate-bydest-1", "prep-no-perform-bydest-move-1", "prep-recognize-bydate-to-bydest-move-1", test="TST-move_aware-by_date_to_by_dest_move_is_recognized")
+@pytest.mark.spec("RUL-reuse_valid_work", "RUL-sort_recorded_by_stat", "BLD-move_row_effects", "RUL-moved_file_carried", "BLD-carried_row", "RUL-prep_leaves_by_dest_as_found", test="TST-move_aware-by_date_to_by_dest_move_is_recognized")
 def test_by_date_to_by_dest_move_is_recognized(tmp_path, monkeypatch):
     hash_calls = []
     _install_mocks(monkeypatch, hash_calls)
@@ -120,7 +120,7 @@ def test_by_date_to_by_dest_move_is_recognized(tmp_path, monkeypatch):
     assert any(f["relative_path"] == new_rel for f in handoff["files"])
 
 
-@pytest.mark.spec("prep-recognize-bydest-resort-1", test="TST-move_aware-re_sort_between_destinations_is_recognized")
+@pytest.mark.spec("RUL-move_recognized", test="TST-move_aware-re_sort_between_destinations_is_recognized")
 def test_re_sort_between_destinations_is_recognized(tmp_path, monkeypatch):
     hash_calls = []
     _install_mocks(monkeypatch, hash_calls)
@@ -151,7 +151,7 @@ def test_re_sort_between_destinations_is_recognized(tmp_path, monkeypatch):
     assert any(df["path"] == "6-photos-by-dest/Bruges" for df in handoff["destination_folders"])
 
 
-@pytest.mark.spec("prep-ambiguous-move-rescan-1", test="TST-move_aware-ambiguous_match_is_rescanned_not_carried")
+@pytest.mark.spec("RUL-move_recognized", test="TST-move_aware-ambiguous_match_is_rescanned_not_carried")
 def test_ambiguous_match_is_rescanned_not_carried(tmp_path, monkeypatch):
     hash_calls = []
     _install_mocks(monkeypatch, hash_calls)
@@ -176,7 +176,7 @@ def test_ambiguous_match_is_rescanned_not_carried(tmp_path, monkeypatch):
     assert len(hash_calls) >= 2
 
 
-@pytest.mark.spec("idem-recompute-staleness-only-1", "prep-content-change-overrides-carry-1", "prep-fingerprint-recompute-on-change-1", test="TST-move_aware-content_change_is_rescanned_not_carried")
+@pytest.mark.spec("RUL-remake_only_what_depends", "RUL-move_recognized", "RUL-fingerprint_taken_afresh", test="TST-move_aware-content_change_is_rescanned_not_carried")
 def test_content_change_is_rescanned_not_carried(tmp_path, monkeypatch):
     hash_calls = []
     _install_mocks(monkeypatch, hash_calls)
@@ -202,7 +202,7 @@ def _rehash(plan):
     return plan.summary["performance_and_cache"]["rehash_summary"]
 
 
-@pytest.mark.spec("prep-rehash-diagnostics-1", test="TST-move_aware-rehash_summary_flags_mtime_changed")
+@pytest.mark.spec("RUL-rehash_explained", test="TST-move_aware-rehash_summary_flags_mtime_changed")
 def test_rehash_summary_flags_mtime_changed(tmp_path, monkeypatch):
     """A previously-cached file whose mtime changed is re-fingerprinted and reported as an UNEXPECTED
     re-hash, reason `mtime-changed`, with the file in the first-N sample and the counts in the run report."""

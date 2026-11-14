@@ -72,7 +72,7 @@ def _log(ws):
         return json.load(f)
 
 
-@pytest.mark.spec("log-keyed-by-fingerprint-1", "prep-log-per-photo-fingerprint-keyed-1", "prep-log-records-journey-1", test="TST-prep_log-media_journey_keyed_by_fingerprint")
+@pytest.mark.spec("RUL-log_keyed_by_fingerprint", test="TST-prep_log-media_journey_keyed_by_fingerprint")
 def test_media_journey_keyed_by_fingerprint(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -91,7 +91,7 @@ def test_media_journey_keyed_by_fingerprint(tmp_path, monkeypatch):
     assert all(s.get("run") for s in entry["journey"])     # each step attributed to its run
 
 
-@pytest.mark.spec("prep-log-records-quarantine-dups-1", "prep-quarantine-recoverable-manifest-1", test="TST-prep_log-quarantined_duplicate_recorded")
+@pytest.mark.spec("RUL-prep_log_records_set_aside", "BLD-quarantine_layout", test="TST-prep_log-quarantined_duplicate_recorded")
 def test_quarantined_duplicate_recorded(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -109,7 +109,7 @@ def test_quarantined_duplicate_recorded(tmp_path, monkeypatch):
     assert dq[0]["retained_counterpart"]                              # the kept file at dedup time
 
 
-@pytest.mark.spec("prep-no-timestamp-correction-1")
+@pytest.mark.spec("RUL-prep_no_time_or_gps")
 def test_prep_organizes_by_raw_naive_timestamp_no_tz_or_utc_shift(tmp_path, monkeypatch):
     """§7.6 (anti): prep organizes by the RAW camera-naive timestamp and never timezone/UTC-corrects
     it (that is geotag's job). Use a late-evening naive time that ANY tz/UTC conversion would push to
@@ -131,7 +131,7 @@ def test_prep_organizes_by_raw_naive_timestamp_no_tz_or_utc_shift(tmp_path, monk
     assert entry["prep_path"] == "5-photos-by-date/2023-03-26/2023-03-26--23-45-00.jpg"
 
 
-@pytest.mark.spec("prep-log-self-sufficient-1")
+@pytest.mark.spec("RUL-record_whole_each_phase")
 def test_prep_log_is_complete_and_standalone_without_geotag_or_merge(tmp_path, monkeypatch):
     """§16.1: the prep log (photos-15) is complete and self-sufficient even if geotag/merge never run.
     After a prep-only run, NO geotag (photos-2x) / merge (photos-3x) artifact exists, yet photos-15
@@ -157,7 +157,7 @@ def test_prep_log_is_complete_and_standalone_without_geotag_or_merge(tmp_path, m
     assert all(s.get("run") for s in entry["journey"])                # every step attributed to its run
 
 
-@pytest.mark.spec("prep-no-parse-nonconforming-name-1")
+@pytest.mark.spec("RUL-no_meaning_from_names")
 def test_nonconforming_name_is_ignored_timestamp_comes_from_metadata(tmp_path, monkeypatch):
     """§8: prep never parses meaning from a non-conforming filename — it re-ingests the file and takes
     the timestamp from metadata. A file whose name MISLEADINGLY encodes 2099 but whose EXIF
@@ -173,7 +173,7 @@ def test_nonconforming_name_is_ignored_timestamp_comes_from_metadata(tmp_path, m
     assert "2099" not in entry["prep_path"]                        # the misleading name was not parsed
 
 
-@pytest.mark.spec("prep-log-derived-no-new-authority-1", test="TST-prep_log-prep_log_entries_are_derived_from_the_validated_plan")
+@pytest.mark.spec("RUL-prep_log_derived", test="TST-prep_log-prep_log_entries_are_derived_from_the_validated_plan")
 def test_prep_log_entries_are_derived_from_the_validated_plan(tmp_path, monkeypatch):
     """§16.1 item 4: the prep log is DERIVED from the validated plan + journals and introduces no new
     authority — its facts trace back to plan operations. Assert the logged final destination equals a
@@ -213,7 +213,7 @@ def test_strays_and_other_not_logged(tmp_path, monkeypatch):
     assert not any("notes" in json.dumps(e) for e in photos.values())
 
 
-@pytest.mark.spec("prep-log-incremental-1")
+@pytest.mark.spec("RUL-log_entry_grows")
 def test_noop_rerun_leaves_log_byte_identical(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -224,7 +224,7 @@ def test_noop_rerun_leaves_log_byte_identical(tmp_path, monkeypatch):
     assert open(utils.prep_log_path(str(ws)), "rb").read() == first
 
 
-@pytest.mark.spec("log-entry-append-only-1", test="TST-prep_log-recognized_move_appends_moved_to_by_dest")
+@pytest.mark.spec("RUL-log_entry_grows", test="TST-prep_log-recognized_move_appends_moved_to_by_dest")
 def test_recognized_move_appends_moved_to_by_dest(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -245,7 +245,7 @@ def test_recognized_move_appends_moved_to_by_dest(tmp_path, monkeypatch):
     assert sum(1 for s in entry["journey"] if s["action"] == "organized") == 1
 
 
-@pytest.mark.spec("log-human-readable-json-1", "prep-prep-log-on-success-1", test="TST-prep_log-log_is_deterministic_and_in_control_dir")
+@pytest.mark.spec("RUL-log_human_readable", "RUL-prep_records_on_success", test="TST-prep_log-log_is_deterministic_and_in_control_dir")
 def test_log_is_deterministic_and_in_control_dir(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -258,7 +258,7 @@ def test_log_is_deterministic_and_in_control_dir(tmp_path, monkeypatch):
     assert list(_log(ws)["photos"]) == sorted(_log(ws)["photos"])  # fingerprint-sorted
 
 
-@pytest.mark.spec("log-fail-if-insufficient-1", "prep-log-fail-if-history-insufficient-1", test="TST-prep_log-missing_history_warns_and_marks_partial")
+@pytest.mark.spec("RUL-partial_history_shown", test="TST-prep_log-missing_history_warns_and_marks_partial")
 def test_missing_history_warns_and_marks_partial(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -271,7 +271,7 @@ def test_missing_history_warns_and_marks_partial(tmp_path, monkeypatch):
     assert "incomplete" in entry.get("note", "")
 
 
-@pytest.mark.spec("RUL-log_keyed_by_fingerprint", "log-chain-of-names-1", test="TST-prep_log-every_move_names_where_it_came_from")
+@pytest.mark.spec("RUL-log_keyed_by_fingerprint", "BLD-log_format", test="TST-prep_log-every_move_names_where_it_came_from")
 def test_every_move_names_where_it_came_from(tmp_path, monkeypatch):
     """The journey keeps the chain of names and places: each move and rename records where the photo
     came from as well as where it went, so the first step holds its original path in the dump."""

@@ -77,7 +77,7 @@ def test_read_metadata_concurrently(mock_read, mock_popen, workspace):
 
 @patch("subprocess.Popen")
 @patch("photos_utils.PersistentExifToolWorker.read_metadata")
-@pytest.mark.spec("prep-candidates-sorted-deterministic-1", "prep-concurrency-no-semantic-change-1", "prep-job-count-run-metadata-1", "prep-two-job-counts-same-plan-1", test="TST-concurrency-deterministic_plan_with_jobs")
+@pytest.mark.spec("RUL-jobs_change_nothing", "RUL-jobs_recorded_nowhere", test="TST-concurrency-deterministic_plan_with_jobs")
 def test_deterministic_plan_with_jobs(mock_read, mock_popen, workspace):
     mock_process = MagicMock()
     mock_popen.return_value = mock_process
@@ -183,7 +183,7 @@ def test_progress_coordinator():
 
 @patch("subprocess.Popen")
 @patch("photos_1_prep.PlanValidator.validate_plan_preflight")
-@pytest.mark.spec("prep-journal-all-mutations-1", "prep-progress-not-only-record-1", test="TST-concurrency-quiet_plan_executor_execution")
+@pytest.mark.spec("RUL-every_change_journaled", test="TST-concurrency-quiet_plan_executor_execution")
 def test_quiet_plan_executor_execution(mock_validate, mock_popen, workspace):
     mock_popen.return_value = MagicMock()
 
@@ -325,7 +325,7 @@ def test_cli_jobs_argparse(workspace):
 
 @patch("subprocess.Popen")
 @patch("photos_utils.PersistentExifToolWorker.read_metadata")
-@pytest.mark.spec("prep-partial-output-never-cached-1", test="TST-concurrency-exiftool_pool_failure_blocks_plan")
+@pytest.mark.spec("RUL-tool_failure_retried", test="TST-concurrency-exiftool_pool_failure_blocks_plan")
 def test_exiftool_pool_failure_blocks_plan(mock_read_metadata, mock_popen, workspace):
     mock_popen.return_value = MagicMock()
     # If the process errors out constantly
@@ -468,7 +468,7 @@ def test_stale_dependency_under_concurrency_blocks_execution(mock_read_metadata_
 @patch("subprocess.Popen")
 @patch("photos_1_prep.ContentHasher.fingerprint_image")
 @patch("photos_utils.MetadataReader.read_metadata_concurrently")
-@pytest.mark.spec("prep-summary-confirm-artifacts-after-validation-1")
+@pytest.mark.spec("RUL-prep_run_summarised")
 def test_progress_summary_fields(mock_read_metadata_concurrently, mock_hash_image, mock_popen, workspace):
     mock_hash_image.return_value = {"status": "valid", "strategy": "image-content-hash", "value": "dummyhash"}
     mock_popen.return_value = MagicMock()

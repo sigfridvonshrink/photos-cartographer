@@ -16,12 +16,10 @@
 
 - **The tests.** Before the corpus is read, pytest collects the suite (no test runs) and writes every
   `@pytest.mark.spec(<ids>..., test="TST-...")` it finds; `_generated/tests.md` is written from that, one `tst` item per
-  marked test, `verifies` the items it names. A mark may name an item by its id or by one of its `aliases` (the
-  clause-index ids it replaced) -- resolved here, so the suite's marks need not change while the specs are converted.
+  marked test, `verifies` the items it names.
 - **The checks**, each a warning, which fails the build:
-  - a mark naming an id that is neither an item nor an alias;
+  - a mark naming an id that is no item;
   - an item whose `verify` is `required` that no test verifies;
-  - an alias claimed by two items;
   - a link against the levels' direction: an intent item naming a build item; a rationale named by any link but
     `follows_from` (a rationale is never binding); a `follows_from` from anything but a rationale;
   - a fact or a choice nothing follows from;
@@ -69,36 +67,23 @@ def _md_escape(text):
 
 
 def _corpus_items(srcdir):
-    """{id: aliases} of every item in the corpus sources, read from their `:id:` and `:aliases:` lines."""
+    """The id of every item in the corpus sources, read from their `:id:` lines."""
     import glob
     import re
-    items = {}
+    items = set()
     for path in sorted(glob.glob(os.path.join(srcdir, "*", "*.md"))):
         if os.sep + GENERATED + os.sep in path:
             continue
-        current = None
         for line in open(path, encoding="utf-8"):
-            if line.startswith(":::{"):
-                current = None
             m = re.match(r":id:\s*(\S+)", line)
             if m:
-                current = m.group(1)
-                items[current] = []
-            m = re.match(r":aliases:\s*(.+)", line)
-            if m and current:
-                items[current] = m.group(1).replace(",", " ").split()
+                items.add(m.group(1))
     return items
 
 
 def _write_tests_page(app):
     root = _repo_root(app)
     items = _corpus_items(app.srcdir)
-    owner = {}
-    for item_id, aliases in items.items():
-        for alias in aliases:
-            if alias in owner:
-                LOG.warning(f"alias {alias} claimed by {owner[alias]} and {item_id}", type="corpus", subtype="aliases")
-            owner[alias] = item_id
     by_test = {}
     for m in _collect_marks(root):
         if len(m.get("tests") or []) > 1:
@@ -122,25 +107,16 @@ def _write_tests_page(app):
     os.makedirs(out_dir, exist_ok=True)
     lines = ["# The tests", "",
              "*Generated at every build from the suite's `@pytest.mark.spec(…, test=\"TST-…\")` marks — never edited. "
-             "Each test verifies the items its mark names; a mark naming a clause-index id verifies the item that lists "
-             "it in `aliases`.*", ""]
+             "Each test verifies the items its mark names.*", ""]
     for m in sorted(marks, key=lambda m: m["test"]):
-        verifies, unknown = [], []
-        for target in m["ids"]:
-            if target in items:
-                verifies.append(target)
-            elif target in owner:
-                verifies.append(owner[target])
-            elif target[:4].rstrip("-").isupper() and target[3:4] == "-":
-                verifies.append(target)  # a corpus id that does not exist: sphinx-needs reports the dead link
-            else:
-                unknown.append(target)  # a clause of a spec not yet converted
+        unknown = sorted(t for t in m["ids"] if t not in items)
+        if unknown:
+            LOG.warning(f"{m['nodeid']} marks {', '.join(unknown)}, which no item is", type="corpus", subtype="tests")
+        verifies = sorted(set(t for t in m["ids"] if t in items))
         block = [f":::{{tst}} {_md_escape(m['title'])}", f":id: {m['test']}", f":nodeid: {' '.join(m['nodeids'])}"]
         if verifies:
-            block.append(":verifies: " + ", ".join(sorted(set(verifies))))
+            block.append(":verifies: " + ", ".join(verifies))
         block += ["", f"`{m['file']}:{m['line']}`"]
-        if unknown:
-            block += ["", "Also marked with clause-index ids not yet converted: " + ", ".join(f"`{u}`" for u in unknown)]
         lines += block + [":::", ""]
     text = "\n".join(lines)
     path = os.path.join(out_dir, "tests.md")

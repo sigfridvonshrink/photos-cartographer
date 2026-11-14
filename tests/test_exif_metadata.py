@@ -97,7 +97,7 @@ def create_mock_metadata_reader(monkeypatch):
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read)
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", lambda *a, **k: {"status": "valid", "strategy": "image-content-hash-v1", "value": "dummycontenthash"})
 
-@pytest.mark.spec("prep-cache-metadata-fields-1", "prep-cache-upsert-stale-1", "prep-passive-metadata-cache-1", "RUL-database_matches_files", "BLD-database_ops", test="TST-exif_metadata-metadata_cache_creation_and_staleness")
+@pytest.mark.spec("RUL-metadata_kept_for_geotag", "RUL-database_matches_files", "BLD-database_ops", test="TST-exif_metadata-metadata_cache_creation_and_staleness")
 def test_metadata_cache_creation_and_staleness(workspace, monkeypatch):
     create_mock_metadata_reader(monkeypatch)
 
@@ -152,7 +152,7 @@ def test_metadata_cache_creation_and_staleness(workspace, monkeypatch):
     assert upsert_fx2["data"]["metadata"]["has_native_gps"] is False
     assert upsert_fx2["data"]["metadata"]["field_set_version"] == utils.FIELD_SET_VERSION
 
-@pytest.mark.spec("prep-passive-grouping-facts-1", "BLD-handoff_grouping_facts", test="TST-exif_metadata-handoff_manifest_enrichment")
+@pytest.mark.spec("RUL-grouping_facts_reported", "BLD-handoff_grouping_facts", test="TST-exif_metadata-handoff_manifest_enrichment")
 def test_handoff_manifest_enrichment(workspace, monkeypatch):
     create_mock_metadata_reader(monkeypatch)
 
@@ -207,7 +207,7 @@ def test_handoff_manifest_enrichment(workspace, monkeypatch):
     assert df["cache_freshness"]["metadata_extracted_ok"] == 1
 
 
-@pytest.mark.spec("prep-metadata-freshness-inputs-1", test="TST-exif_metadata-metadata_extractor_version_refreshes")
+@pytest.mark.spec("RUL-metadata_freshness", test="TST-exif_metadata-metadata_extractor_version_refreshes")
 def test_metadata_extractor_version_refreshes(workspace, monkeypatch):
     create_mock_metadata_reader(monkeypatch)
 
@@ -291,7 +291,7 @@ def test_a_database_of_another_schema_stops_prep(workspace):
     cache.close()
 
 
-@pytest.mark.spec("prep-timestamp-priority-1", "RUL-recorded_time_order", test="TST-exif_metadata-parse_exiftool_item_timestamp_source_fallback")
+@pytest.mark.spec("RUL-recorded_time_order", test="TST-exif_metadata-parse_exiftool_item_timestamp_source_fallback")
 def test_parse_exiftool_item_timestamp_source_fallback():
     """selected_source_naive_timestamp prefers DateTimeOriginal, then CreateDate, then ModifyDate,
     else None; its provenance names the group it came from."""

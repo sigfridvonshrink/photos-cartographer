@@ -90,7 +90,7 @@ def _ops(plan, rel=None):
 _FORWARD = {"metadata_time_write", "metadata_gps_write", "gps_marker_write", "rename_no_clobber"}
 
 
-@pytest.mark.spec("geotag-gps-write-complete-fix-1", "BLD-position_tags",
+@pytest.mark.spec("RUL-position_written_whole", "BLD-position_tags",
                   test="TST-geotag_gps_ledger-a_cleared_position_takes_its_hemisphere_refs_with_it")
 def test_a_cleared_position_takes_its_hemisphere_refs_with_it():
     """§28.1: a clear drops the refs with the coordinates — a ref left behind without its coordinate is a
@@ -100,7 +100,7 @@ def test_a_cleared_position_takes_its_hemisphere_refs_with_it():
                             "GPSProcessingMethod": "+carto-time"}
 
 
-@pytest.mark.spec("geotag-withdraw-revert-1", "geotag-manual-gps-reversible-1", "authored-withdraw-undoes-1", test="TST-geotag_gps_ledger-a_withdrawn_pin_is_cleared")
+@pytest.mark.spec("RUL-withdrawal_undoes", test="TST-geotag_gps_ledger-a_withdrawn_pin_is_cleared")
 def test_a_withdrawn_pin_is_cleared(tmp_path):
     """A pin withdrawn from a photo that had no GPS, the photo accepted as unlocated: the plan, deciding
     from its own values, clears geotag's position, and records the position it clears."""
@@ -117,7 +117,7 @@ def test_a_withdrawn_pin_is_cleared(tmp_path):
     assert not any(o["type"] == "metadata_gps_write" for o in _ops(plan, rel))
 
 
-@pytest.mark.spec("geotag-automated-gps-no-revert-1", test="TST-geotag_gps_ledger-a_withdrawn_pin_is_placed_again_from_the_tracks")
+@pytest.mark.spec("BLD-decided_from_own_values", test="TST-geotag_gps_ledger-a_withdrawn_pin_is_placed_again_from_the_tracks")
 def test_a_withdrawn_pin_is_placed_again_from_the_tracks(tmp_path):
     """Withdrawn, the pin gives way to the position the tracks give the photo's own time: recomputed, not
     rolled back to anything stored."""
@@ -134,7 +134,7 @@ def test_a_withdrawn_pin_is_placed_again_from_the_tracks(tmp_path):
     assert {o["type"] for o in _ops(plan)} <= _FORWARD
 
 
-@pytest.mark.spec("geotag-recompute-inplace-1", "time-name-never-reverted-1", test="TST-geotag_gps_ledger-a_withdrawal_never_reverts_time_name_or_destination")
+@pytest.mark.spec("RUL-withdrawal_undoes", test="TST-geotag_gps_ledger-a_withdrawal_never_reverts_time_name_or_destination")
 def test_a_withdrawal_never_reverts_time_name_or_destination(tmp_path):
     """Withdrawing a decision changes GPS only as any plan would: geotag has no revert operation at all
     (time writes and renames are forward-idempotent), and it never moves a photo across destinations."""
@@ -169,7 +169,7 @@ def test_a_changed_pin_is_written_over_the_old_one(tmp_path):
                               "GPSProcessingMethod": "manual_locked"}      # the position it replaces
 
 
-@pytest.mark.spec("geotag-prestate-absent-1")
+@pytest.mark.spec("RUL-log_records_gps_reverts")
 def test_a_pin_never_overrides_native_gps(tmp_path):
     """Preserve-native wins: a photo carrying its own GPS keeps it, whatever pin it is given."""
     rel = f"{BYDEST}/T/a.jpg"
@@ -253,7 +253,7 @@ def _drive_ready(monkeypatch, ws, ctl):
     assert (ctl / "photos-24-executable-plan.json").exists()
 
 
-@pytest.mark.spec("geotag-prestate-before-write-1", test="TST-geotag_gps_ledger-own_values_pinned_before_the_first_write")
+@pytest.mark.spec("BLD-geotag_execution", test="TST-geotag_gps_ledger-own_values_pinned_before_the_first_write")
 def test_own_values_pinned_before_the_first_write(tmp_path, monkeypatch):
     """§29.1a: a photo's own values are committed to the ledger BEFORE geotag's first write to it.
     Order-probe both seams during execute and assert the pin precedes the write."""
@@ -280,7 +280,7 @@ def test_own_values_pinned_before_the_first_write(tmp_path, monkeypatch):
     assert events.index(("pin", manual)) < events.index(("write", manual)), events
 
 
-@pytest.mark.spec("geotag-rerunnable-after-execute-1", test="TST-geotag_gps_ledger-a_pin_executed_then_withdrawn_plans_and_executes_again")
+@pytest.mark.spec("RUL-geotag_rerunnable", test="TST-geotag_gps_ledger-a_pin_executed_then_withdrawn_plans_and_executes_again")
 def test_a_pin_executed_then_withdrawn_plans_and_executes_again(tmp_path, monkeypatch):
     ws, ctl = _exec_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)

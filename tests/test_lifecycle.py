@@ -79,7 +79,7 @@ def _guard(ws):
 
 # --- initialization ----------------------------------------------------------
 
-@pytest.mark.spec("prep-init-creates-structure-1", "prep-init-moves-base-into-sources-1", "prep-post-init-base-folders-only-1", test="TST-lifecycle-init_creates_structure_and_moves_dump_structure_preserved")
+@pytest.mark.spec("RUL-structure_built_once", "RUL-init_moves_dump_to_inbox", "RUL-top_level_only_managed", test="TST-lifecycle-init_creates_structure_and_moves_dump_structure_preserved")
 def test_init_creates_structure_and_moves_dump_structure_preserved(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _bare(tmp_path)
@@ -108,7 +108,7 @@ def test_init_creates_structure_and_moves_dump_structure_preserved(tmp_path, mon
     assert not _plan(ws).blockers
 
 
-@pytest.mark.spec("prep-crash-init-reenters-harmlessly-1", "prep-crash-safe-rerun-1", "prep-sentinel-written-last-1", test="TST-lifecycle-guard_written_last_then_reentry_is_clean")
+@pytest.mark.spec("RUL-init_taken_up_again", "RUL-prep_replans", "RUL-initialized_marked_last", test="TST-lifecycle-guard_written_last_then_reentry_is_clean")
 def test_guard_written_last_then_reentry_is_clean(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _bare(tmp_path)
@@ -126,7 +126,7 @@ def test_guard_written_last_then_reentry_is_clean(tmp_path, monkeypatch):
 
 # --- root-file block (initialized) -------------------------------------------
 
-@pytest.mark.spec("prep-root-entry-blocks-1", "struct-base-folders-only-1", test="TST-lifecycle-loose_root_file_blocks_initialized")
+@pytest.mark.spec("RUL-top_level_only_managed", test="TST-lifecycle-loose_root_file_blocks_initialized")
 def test_loose_root_file_blocks_initialized(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _initialized(tmp_path)
@@ -230,7 +230,7 @@ def test_a_log_the_handoff_does_not_vouch_for_is_rewritten(tmp_path, monkeypatch
     assert not prep._prep_nothing_to_do(str(ws), rep)                   # gone: cannot be checked
 
 
-@pytest.mark.spec("prep-dryrun-empty-sources-nothing-to-do-1", test="TST-lifecycle-dry_run_on_prepped_workspace_with_empty_sources_is_nothing_to_do")
+@pytest.mark.spec("RUL-prepped_nothing_to_do", test="TST-lifecycle-dry_run_on_prepped_workspace_with_empty_sources_is_nothing_to_do")
 def test_dry_run_on_prepped_workspace_with_empty_sources_is_nothing_to_do(tmp_path, monkeypatch):
     # dry-run shares execute's fast-stop: an already-prepped, empty-0-sources workspace has nothing to
     # validate, so it stops with "nothing to do" rather than summarizing the stale plan.
@@ -252,7 +252,7 @@ def test_dry_run_on_prepped_workspace_with_empty_sources_is_nothing_to_do(tmp_pa
     assert any("Nothing to do" in e.msg and f"{src} is empty" in e.msg for e in cap.logs())
 
 
-@pytest.mark.spec("prep-execute-empty-sources-nothing-to-do-1", test="TST-lifecycle-execute_on_prepped_workspace_with_empty_sources_is_nothing_to_do")
+@pytest.mark.spec("RUL-prepped_nothing_to_do", test="TST-lifecycle-execute_on_prepped_workspace_with_empty_sources_is_nothing_to_do")
 def test_execute_on_prepped_workspace_with_empty_sources_is_nothing_to_do(tmp_path, monkeypatch):
     # After a successful prep, 0-sources is the empty steady end-state (shared contract §6). With a
     # (now-stale) saved plan present, re-running execute must stop fast with "nothing to do" rather
@@ -419,7 +419,7 @@ def test_execute_without_plan_runs_plan_first_even_on_empty_sources(tmp_path, mo
 
 # --- no-flatten --------------------------------------------------------------
 
-@pytest.mark.spec("prep-no-flatten-sources-1", "RUL-inbox_kept_as_dumped", "BLD-planned_paths_tracked", test="TST-lifecycle-no_flatten_organizes_subtree_without_consolidation")
+@pytest.mark.spec("RUL-inbox_kept_as_dumped", "BLD-planned_paths_tracked", test="TST-lifecycle-no_flatten_organizes_subtree_without_consolidation")
 def test_no_flatten_organizes_subtree_without_consolidation(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _initialized(tmp_path)
@@ -433,7 +433,7 @@ def test_no_flatten_organizes_subtree_without_consolidation(tmp_path, monkeypatc
     assert org and org[0].destination.startswith("5-photos-by-date/"), org
 
 
-@pytest.mark.spec("prep-organized-output-unique-path-1")
+@pytest.mark.spec("RUL-suffix_no_clobber")
 def test_no_flatten_same_name_distinct_subtrees_both_survive(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _initialized(tmp_path)
@@ -506,7 +506,7 @@ def test_prep_takes_no_decision(tmp_path, monkeypatch):
         assert "user_decision" not in open(rec).read(), rec
 
 
-@pytest.mark.spec("RUL-record_whole_each_phase", "archive-complete-each-phase-1", test="TST-lifecycle-a_prep_only_workspace_has_a_whole_record")
+@pytest.mark.spec("RUL-record_whole_each_phase", test="TST-lifecycle-a_prep_only_workspace_has_a_whole_record")
 def test_a_prep_only_workspace_has_a_whole_record(tmp_path, monkeypatch):
     """Prepped and never geotagged, the workspace still holds a whole record of prep: every photo's
     journey keyed by its fingerprint, ending where the photo now is, with prep's database snapshot beside

@@ -59,7 +59,7 @@ def _main(monkeypatch, ws, *argv):
 
 # --- happy path --------------------------------------------------------------
 
-@pytest.mark.spec("prep-plan-canonical-path-1", "prep-run-under-single-lock-1")
+@pytest.mark.spec("RUL-plan_at_fixed_place", "RUL-lock_through_the_run")
 def test_plan_saves_canonical_and_locks(tmp_path, monkeypatch, capsys):
     ws = _ws(tmp_path)
     code = _main(monkeypatch, ws, "plan")
@@ -95,7 +95,7 @@ def test_plan_dryrun_execute_roundtrip(tmp_path, monkeypatch, capsys):
     assert _main(monkeypatch, ws, "execute") == 0             # reads it, no flag needed
 
 
-@pytest.mark.spec("prep-dryrun-not-simulation-1", "prep-dryrun-summary-not-dump-1", test="TST-cli-dry_run_summarizes_not_dumps")
+@pytest.mark.spec("RUL-prep_dry_run_changes_nothing", test="TST-cli-dry_run_summarizes_not_dumps")
 def test_dry_run_summarizes_not_dumps(tmp_path, monkeypatch, capsys):
     ws = _ws(tmp_path)
     (ws / "0-sources" / "note.txt").write_text("stray")       # a real plan to summarize (not nothing-to-do)
@@ -110,7 +110,7 @@ def test_dry_run_summarizes_not_dumps(tmp_path, monkeypatch, capsys):
         json.loads(out)
 
 
-@pytest.mark.spec("prep-replan-never-clobbers-1")
+@pytest.mark.spec("RUL-replanning_keeps_the_prior")
 def test_replan_backs_up_previous_plan(tmp_path, monkeypatch, capsys):
     ws = _ws(tmp_path)
     assert _main(monkeypatch, ws, "plan") == 0
@@ -136,7 +136,7 @@ def test_prune_quarantine_dry_run_and_delete(tmp_path, monkeypatch, capsys):
 
 # --- sealed-workspace guard --------------------------------------------------
 
-@pytest.mark.spec("prep-sealed-workspace-blocks-1")
+@pytest.mark.spec("RUL-sealed_refuses")
 def test_sealed_workspace_refuses_and_releases_lock(tmp_path, monkeypatch, capsys):
     ws = _ws(tmp_path)
     (ws / ".photos-ingest" / "photos-00-sealed.json").write_text('{"sealed": true}')
@@ -155,7 +155,7 @@ def test_sealed_workspace_warns_on_new_dump(tmp_path, monkeypatch, capsys):
     assert "new dump" in capsys.readouterr().err.lower()
 
 
-@pytest.mark.spec("prep-sealed-new-dump-warning-1", "seal-new-dump-warn-1", "RUL-sealed_new_dump_left", test="TST-cli-sealed_new_dump_is_left_exactly_in_place")
+@pytest.mark.spec("RUL-sealed_new_dump_left", test="TST-cli-sealed_new_dump_is_left_exactly_in_place")
 def test_sealed_new_dump_is_left_exactly_in_place(tmp_path, monkeypatch, capsys):
     """The sealed-workspace new-dump path only WARNS — it never relocates the dumped file. After the
     refusal the file is byte-identical at its original 0-sources path (the operator must move it to a
@@ -169,7 +169,7 @@ def test_sealed_new_dump_is_left_exactly_in_place(tmp_path, monkeypatch, capsys)
     assert os.listdir(ws / "0-sources") == ["newdump.jpg"]     # nothing relocated
 
 
-@pytest.mark.spec("prep-prune-quarantine-exempt-seal-1", "seal-prune-exception-1", test="TST-cli-prune_quarantine_is_the_sole_op_allowed_on_a_sealed_workspace")
+@pytest.mark.spec("RUL-sealed_prune_allowed", test="TST-cli-prune_quarantine_is_the_sole_op_allowed_on_a_sealed_workspace")
 def test_prune_quarantine_is_the_sole_op_allowed_on_a_sealed_workspace(tmp_path, monkeypatch, capsys):
     """The seal blocks ONLY plan/dry-run/execute; prune-quarantine is the sole maintenance op that
     still runs on a sealed (terminal) workspace — quarantine cleanup must survive the seal. Assert it
@@ -188,7 +188,7 @@ def test_prune_quarantine_is_the_sole_op_allowed_on_a_sealed_workspace(tmp_path,
     assert not qd.exists()                                       # delete worked on the sealed ws
 
 
-@pytest.mark.spec("merge-sealed-all-scripts-refuse-prune-excepted-1")
+@pytest.mark.spec("RUL-sealed_refuses")
 def test_seal_refuses_all_three_phases_except_prune_quarantine(tmp_path, monkeypatch, capsys):
     """§9.4 / shared §13.7: once a workspace is SEALED, every media-mutating phase refuses on it —
     prep plan, geotag plan, AND merge plan all hard-stop with exit 2 — with the SOLE exception of prep
@@ -225,7 +225,7 @@ def test_seal_refuses_all_three_phases_except_prune_quarantine(tmp_path, monkeyp
     assert "SEALED" not in capsys.readouterr().err   # prune itself never hit the seal guard
 
 
-@pytest.mark.spec("prep-quarantine-no-auto-delete-1", test="TST-cli-prep_plan_never_auto_deletes_quarantine")
+@pytest.mark.spec("RUL-quarantine_never_auto_deleted", test="TST-cli-prep_plan_never_auto_deletes_quarantine")
 def test_prep_plan_never_auto_deletes_quarantine(tmp_path, monkeypatch, capsys):
     """Quarantine is recoverable and is NEVER auto-purged: an ordinary prep `plan` leaves a populated
     quarantine completely intact (only the explicit `prune-quarantine` command may remove it)."""
@@ -237,7 +237,7 @@ def test_prep_plan_never_auto_deletes_quarantine(tmp_path, monkeypatch, capsys):
     assert qd.exists() and (qd / "dup.jpg").read_bytes() == b"recoverable"   # untouched by plan
 
 
-@pytest.mark.spec("prep-prune-no-managed-1", test="TST-cli-prune_quarantine_preserves_managed_folders")
+@pytest.mark.spec("RUL-prune_explicit", test="TST-cli-prune_quarantine_preserves_managed_folders")
 def test_prune_quarantine_preserves_managed_folders(tmp_path, monkeypatch, capsys):
     """prune-quarantine removes only quarantine contents — the managed 0-6 tree (incl. 6-photos-by-dest)
     is never touched by a prune run."""
@@ -270,7 +270,7 @@ def test_locked_workspace_fails_fast(tmp_path, monkeypatch, capsys):
         fcntl.flock(fd, fcntl.LOCK_UN); os.close(fd)
 
 
-@pytest.mark.spec("prep-dryrun-mutates-nothing-1", test="TST-cli-dry_run_mutates_nothing_on_disk")
+@pytest.mark.spec("RUL-prep_dry_run_changes_nothing", test="TST-cli-dry_run_mutates_nothing_on_disk")
 def test_dry_run_mutates_nothing_on_disk(tmp_path, monkeypatch, capsys):
     """Dry-run is validation, not simulation, and is strictly read-only: it loads the saved plan,
     validates it against an in-memory DB, and prints a summary. Snapshot the whole control dir + a
@@ -291,7 +291,7 @@ def test_dry_run_mutates_nothing_on_disk(tmp_path, monkeypatch, capsys):
     assert after == before                                      # dry-run wrote nothing to disk
 
 
-@pytest.mark.spec("lock-covers-planning-1", "lock-failfast-1", test="TST-cli-locked_workspace_failfast_produces_no_artifact")
+@pytest.mark.spec("RUL-lock_before_reading", "RUL-lock_fail_fast", test="TST-cli-locked_workspace_failfast_produces_no_artifact")
 def test_locked_workspace_failfast_produces_no_artifact(tmp_path, monkeypatch, capsys):
     """Lock contention is fail-fast and pre-mutation: a `plan` that can't take the workspace lock
     produces NO plan artifact and NO journal — the run never got past lock acquisition."""
@@ -307,14 +307,14 @@ def test_locked_workspace_failfast_produces_no_artifact(tmp_path, monkeypatch, c
     assert not (ws / ".photos-ingest" / "journal.json").exists()  # no journal written
 
 
-@pytest.mark.spec("prep-execute-no-plan-stops-1")
+@pytest.mark.spec("RUL-no_plan_no_run")
 def test_execute_without_saved_plan_exits_nonzero(tmp_path, monkeypatch, capsys):
     code = _main(monkeypatch, _ws(tmp_path), "execute")       # no plan generated yet
     assert code != 0
     assert "run `plan` first" in capsys.readouterr().err
 
 
-@pytest.mark.spec("prep-config-sanity-validated-1")
+@pytest.mark.spec("RUL-config_validated_before_use")
 def test_invalid_config_rejected_at_load(tmp_path, monkeypatch, capsys):
     bad = {k: v for k, v in utils.CONFIG.items() if k != "jobs"}
     bad = dict(bad); bad["zfs"] = dict(bad["zfs"], enabled=False)

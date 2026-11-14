@@ -45,7 +45,6 @@ blocker ends the run with exit status 2 before the library lock, the plan or the
 :id: BLD-init_library_cases
 :status: ruled
 :realises: RUL-library_mark_made_by_setup, RUL-library_setup_writes_one_setting, RUL-library_place_checked, RUL-config_validated_before_use
-:aliases: merge-init-library-inside-with-path-writes-config-1, merge-init-library-inside-no-path-reads-config-1, merge-init-library-outside-with-path-bless-only-1, merge-init-library-outside-no-path-error-1
 
 `merge init-library [path]` SHALL resolve a given path to an absolute one and require an existing directory, then:
 inside a workspace with a path, refuse a path `library_place_error` names and, under the lock, check the workspace's
@@ -62,7 +61,6 @@ fails its checks stops it with exit status 2, nothing marked and nothing written
 :id: BLD-merge_target
 :status: ruled
 :realises: RUL-library_mirrors_destinations, RUL-geotag_name_final
-:aliases: merge-plan-built-from-finalized-record-1
 
 Merge's `enumerate_finalized` SHALL take each photo of the handoff under `6-photos-by-dest` and give it, as its target,
 `library_root` joined to its folder's path relative to `6-photos-by-dest` — empty for a photo directly in it — and its
@@ -91,7 +89,6 @@ no earlier plan placed it.
 :status: ruled
 :realises: RUL-execution_only_the_plan, RUL-plan_carried_out_by_its_code
 :uses: BLD-merge_target
-:aliases: merge-plan-records-current-size-mtime-1
 
 `photos-30-merge-plan.json` SHALL hold the plan id, schema version and `library_root`; per destination, each photo's
 record — its path in the workspace, content fingerprint, library target and disposition (`placed_new`,
@@ -106,7 +103,6 @@ fingerprint, the ImageMagick version, and the fingerprints of the folder names a
 :status: ruled
 :realises: RUL-execution_jobs_change_nothing, RUL-execution_only_the_plan
 :uses: BLD-merge_plan, BLD-merge_move, BLD-merge_journal_resume
-:aliases: merge-moveset-fixed-before-concurrency-1, merge-concurrency-deterministic-aggregation-1, exec-single-writer-journal-1
 
 Merge's execute SHALL, on its main thread, revalidate the plan's `depends_on`, take the snapshots and sweep the
 temporaries a crash left; then move the photos on a pool of `jobs` workers, each touching only its own photo and

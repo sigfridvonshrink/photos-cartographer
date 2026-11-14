@@ -40,7 +40,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 999,
+     "lineno": 978,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -83,7 +83,7 @@
      "verify": null
     },
     "BLD-anchor_matching": {
-     "aliases": "geotag-anchor-matching-1, geotag-conflict-triggers-review-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -118,7 +118,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 174,
+     "lineno": 168,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -207,7 +207,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 804,
+     "lineno": 790,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -367,7 +367,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1085,
+     "lineno": 1060,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -449,7 +449,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 66,
+     "lineno": 63,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -528,7 +528,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 152,
+     "lineno": 148,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -610,7 +610,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 20,
+     "lineno": 19,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -689,7 +689,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 226,
+     "lineno": 219,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -813,7 +813,7 @@
      "verify": null
     },
     "BLD-camera_group_key_version": {
-     "aliases": "geotag-cache-via-handoff-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -969,7 +969,7 @@
      "verify": null
     },
     "BLD-carried_row": {
-     "aliases": "prep-move-recognition-before-ghost-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -1004,7 +1004,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 259,
+     "lineno": 252,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -1085,7 +1085,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 715,
+     "lineno": 703,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -1163,7 +1163,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 779,
+     "lineno": 765,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -1245,7 +1245,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 924,
+     "lineno": 906,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -1858,7 +1858,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "The control records SHALL be these files in `.photos-ingest/` ({need}`DEF-archival_package` and {need}`DEF-workspace_database` for the archival and database ones):\n\n```text\n.photos-ingest/\n  photos-00-config.json            workspace configuration (seeded by prep, Section 4)\n  photos-00-workspace.lock         the workspace lock: held by every run while it plans or executes (Section 2)\n  photos-00-decision-editor.lock   the decision editor's lock: one editor at a time on a workspace\n  photos-00-workspace-guard        workspace root sentinel: marks the workspace as INITIALIZED (written last by prep on init, prep photos-1-prep-workflow.md Section 3.1)\n  photos-00-sealed.json            terminal/sealed marker, written by a successful merge ALONGSIDE the guard (a separate file, not a field inside the guard) — its presence seals the workspace (Section 13.7)\n  photos-00-ingest.db              SQLite identity/metadata cache + derived caches (live working DB, Section 13.4)\n  photos-00-plan-memo.db           prep-phase scratch: plan memo, what planning read of each media file (disposable, NOT part of the record)\n  photos-00-track-memo.db          geotag-phase scratch: each track file's parsed points, by the SHA-256 of its bytes (disposable, NOT part of the record)\n  photos-15-prep-ingest.db         prep-phase artifact: DB backup snapshot, end of prep (Section 13.4a)\n  journal-*.json                   execution journals\n  photos-10-prep-plan.json         prep-phase artifact: prep plan (written by `plan`, consumed by `dry-run`/`execute`; see \"Canonical plan persistence\" below)\n  photos-11-handoff.json           prep-phase artifact: handoff manifest\n  photos-15-prep-log.json          prep-phase artifact: end-of-prep audit log (Section 13.3 / prep 16.1)\n  photos-21-time-decisions.json    geotag-phase artifact\n  photos-22-gps-drift-validation.json  geotag-phase artifact: GPS-drift validation gate (§22a)\n  photos-23-gps-decisions.json     geotag-phase artifact\n  photos-24-executable-plan.json   geotag-phase artifact\n  photos-25-execution-summary.json geotag-phase artifact\n  photos-26-complete-log.json      geotag-phase artifact: full transformation log (prep+geotag, at finalize, Section 13.3)\n  photos-26-geotag-ingest.db       geotag-phase artifact: DB backup snapshot, end of geotag (Section 13.4a)\n  photos-26-finalized-media.json   geotag-phase artifact: each by-dest photo's size and mtime as finalize found it\n  photos-26-archive-manifest.json  geotag-phase artifact: the archival package's manifest, at finalize (Section 13.2)\n  photos-26-archive.tar.gz         geotag-phase artifact: the archival package, at finalize (Section 13.2)\n  photos-30-merge-plan.json        merge-phase artifact: merge plan (written by `plan`, consumed by `dry-run`/`execute`)\n  photos-31-merge-summary.json     merge-phase artifact: library-merge summary (Section 13.5)\n  photos-35-merge-log.json         merge-phase artifact: full transformation log (prep+geotag+merge, Section 13.3)\n  photos-35-merge-ingest.db        merge-phase artifact: DB backup snapshot, end of merge (Section 13.4a)\n  photos-35-archive-manifest.json  merge-phase artifact: the re-sealed package's manifest, superseding photos-26's (Section 13.6)\n  photos-35-archive.tar.gz         merge-phase artifact: the re-sealed archival package (Section 13.6)\n  executed/<plan id>/              geotag: the decision records each executed plan ran against (Section 13.3a)\n  <artifact>-NNN.<ext>             a superseded plan or decision record, kept when it was replaced (Section 5)\n  gpx/                             gpx_root, when configured to live here (Section 8)\n```\n\nThe section numbers in it are the shared contract's.",
+     "content": "The control records SHALL be these files in `.photos-ingest/` ({need}`DEF-archival_package` and {need}`DEF-workspace_database` for the archival and database ones):\n\n```text\n.photos-ingest/\n  photos-00-config.json            workspace configuration (seeded by prep, Section 4)\n  photos-00-workspace.lock         the workspace lock: held by every run while it plans or executes (Section 2)\n  photos-00-decision-editor.lock   the decision editor's lock: one editor at a time on a workspace\n  photos-00-workspace-guard        workspace root sentinel: marks the workspace as INITIALIZED (written last by prep on init)\n  photos-00-sealed.json            terminal/sealed marker, written by a successful merge ALONGSIDE the guard (a separate file, not a field inside the guard) — its presence seals the workspace (Section 13.7)\n  photos-00-ingest.db              SQLite identity/metadata cache + derived caches (live working DB, Section 13.4)\n  photos-00-plan-memo.db           prep-phase scratch: plan memo, what planning read of each media file (disposable, NOT part of the record)\n  photos-00-track-memo.db          geotag-phase scratch: each track file's parsed points, by the SHA-256 of its bytes (disposable, NOT part of the record)\n  photos-15-prep-ingest.db         prep-phase artifact: DB backup snapshot, end of prep (Section 13.4a)\n  journal-*.json                   execution journals\n  photos-10-prep-plan.json         prep-phase artifact: prep plan (written by `plan`, consumed by `dry-run`/`execute`; see \"Canonical plan persistence\" below)\n  photos-11-handoff.json           prep-phase artifact: handoff manifest\n  photos-15-prep-log.json          prep-phase artifact: end-of-prep audit log (Section 13.3 / prep 16.1)\n  photos-21-time-decisions.json    geotag-phase artifact\n  photos-22-gps-drift-validation.json  geotag-phase artifact: GPS-drift validation gate (§22a)\n  photos-23-gps-decisions.json     geotag-phase artifact\n  photos-24-executable-plan.json   geotag-phase artifact\n  photos-25-execution-summary.json geotag-phase artifact\n  photos-26-complete-log.json      geotag-phase artifact: full transformation log (prep+geotag, at finalize, Section 13.3)\n  photos-26-geotag-ingest.db       geotag-phase artifact: DB backup snapshot, end of geotag (Section 13.4a)\n  photos-26-finalized-media.json   geotag-phase artifact: each by-dest photo's size and mtime as finalize found it\n  photos-26-archive-manifest.json  geotag-phase artifact: the archival package's manifest, at finalize (Section 13.2)\n  photos-26-archive.tar.gz         geotag-phase artifact: the archival package, at finalize (Section 13.2)\n  photos-30-merge-plan.json        merge-phase artifact: merge plan (written by `plan`, consumed by `dry-run`/`execute`)\n  photos-31-merge-summary.json     merge-phase artifact: library-merge summary (Section 13.5)\n  photos-35-merge-log.json         merge-phase artifact: full transformation log (prep+geotag+merge, Section 13.3)\n  photos-35-merge-ingest.db        merge-phase artifact: DB backup snapshot, end of merge (Section 13.4a)\n  photos-35-archive-manifest.json  merge-phase artifact: the re-sealed package's manifest, superseding photos-26's (Section 13.6)\n  photos-35-archive.tar.gz         merge-phase artifact: the re-sealed archival package (Section 13.6)\n  executed/<plan id>/              geotag: the decision records each executed plan ran against (Section 13.3a)\n  <artifact>-NNN.<ext>             a superseded plan or decision record, kept when it was replaced (Section 5)\n  gpx/                             gpx_root, when configured to live here (Section 8)\n```\n\nThe section numbers in it are the shared contract's.",
      "criticality": null,
      "docname": "build/shared",
      "doctype": ".md",
@@ -2115,7 +2115,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1133,
+     "lineno": 1108,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -2157,7 +2157,7 @@
      "verify": null
     },
     "BLD-cross_fs_temp": {
-     "aliases": "merge-temp-deterministic-name-1, merge-verify-copy-detect-torn-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -2192,7 +2192,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1151,
+     "lineno": 1126,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -2274,7 +2274,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 888,
+     "lineno": 871,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -2355,7 +2355,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 202,
+     "lineno": 196,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -2401,7 +2401,7 @@
      "verify": null
     },
     "BLD-day_folder_name": {
-     "aliases": "prep-date-name-format-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -2436,7 +2436,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 214,
+     "lineno": 208,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -2515,7 +2515,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 378,
+     "lineno": 362,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -2559,7 +2559,7 @@
      "verify": null
     },
     "BLD-decided_from_own_values": {
-     "aliases": "geotag-automated-gps-no-revert-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -2594,7 +2594,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 725,
+     "lineno": 713,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -2639,7 +2639,7 @@
      "verify": null
     },
     "BLD-decision_record_envelope": {
-     "aliases": "geotag-config-change-restales-21-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -2674,7 +2674,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 208,
+     "lineno": 200,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -2754,7 +2754,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 706,
+     "lineno": 694,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -2797,7 +2797,7 @@
      "verify": null
     },
     "BLD-drift_validation": {
-     "aliases": "geotag-drift-trigger-1, geotag-drift-gate-position-1, geotag-drift-confirmation-preserved-1, geotag-drift-corrected-validated-1, geotag-drift-not-mutate-21-1, geotag-drift-recompute-utc-1, geotag-drift-withdrawal-rejects-plan-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -2832,7 +2832,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 260,
+     "lineno": 249,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -2990,7 +2990,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 308,
+     "lineno": 299,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -3069,7 +3069,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1057,
+     "lineno": 1032,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -3190,7 +3190,7 @@
      "verify": null
     },
     "BLD-executable_plan": {
-     "aliases": "geotag-plan-preconditions-1, geotag-held-write-noop-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -3225,7 +3225,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 354,
+     "lineno": 339,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -3272,7 +3272,7 @@
      "verify": null
     },
     "BLD-execution_summary": {
-     "aliases": "geotag-write-summary-1, geotag-summary-contents-1, geotag-summary-status-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -3307,7 +3307,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 409,
+     "lineno": 392,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -3388,7 +3388,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 298,
+     "lineno": 289,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -3469,7 +3469,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1173,
+     "lineno": 1146,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -3548,7 +3548,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 410,
+     "lineno": 409,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -3626,7 +3626,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 114,
+     "lineno": 110,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -3706,7 +3706,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 426,
+     "lineno": 408,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -3785,7 +3785,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 646,
+     "lineno": 634,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -3827,7 +3827,7 @@
      "verify": null
     },
     "BLD-fingerprint": {
-     "aliases": "prep-fingerprint-decoded-content-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -3862,7 +3862,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 535,
+     "lineno": 531,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -3942,7 +3942,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 236,
+     "lineno": 229,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -4021,7 +4021,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 324,
+     "lineno": 310,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -4104,7 +4104,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 359,
+     "lineno": 349,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -4149,7 +4149,7 @@
      "verify": null
     },
     "BLD-format_recorded": {
-     "aliases": "geotag-filename-fingerprint-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -4184,7 +4184,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 458,
+     "lineno": 457,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -4226,7 +4226,7 @@
      "verify": null
     },
     "BLD-geotag_auto_reprep": {
-     "aliases": "geotag-auto-reprep-clean-move-1, geotag-auto-reprep-sources-nonempty-skip-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -4261,7 +4261,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 567,
+     "lineno": 561,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -4342,7 +4342,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1096,
+     "lineno": 1071,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -4391,7 +4391,7 @@
      "verify": null
     },
     "BLD-geotag_dependencies": {
-     "aliases": "geotag-transitive-verify-1, geotag-summary-not-dependency-1, geotag-plan-deps-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -4426,7 +4426,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 36,
+     "lineno": 35,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -4508,7 +4508,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 80,
+     "lineno": 77,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -4552,7 +4552,7 @@
      "verify": null
     },
     "BLD-geotag_execution": {
-     "aliases": "geotag-journal-every-op-1, geotag-reject-stale-before-mutation-1, geotag-execute-noclobber-recheck-1, geotag-prestate-before-write-1, geotag-tool-failure-not-silent-1, geotag-atomic-ops-1, geotag-snapshot-phase-label-1, geotag-snapshot-required-abort-1, geotag-concurrency-determinism-1, geotag-deterministic-aggregation-1, geotag-no-concurrent-decision-1, geotag-single-writer-1, geotag-no-partial-persistence-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -4587,7 +4587,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 392,
+     "lineno": 376,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -4674,7 +4674,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1181,
+     "lineno": 1154,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -4718,7 +4718,7 @@
      "verify": null
     },
     "BLD-geotag_file_model": {
-     "aliases": "geotag-inmemory-bydest-only-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -4753,7 +4753,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 54,
+     "lineno": 52,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -4832,7 +4832,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 429,
+     "lineno": 428,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -4909,7 +4909,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 836,
+     "lineno": 821,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -4952,7 +4952,7 @@
      "verify": null
     },
     "BLD-geotag_records_by_destination": {
-     "aliases": "geotag-artifacts-per-destination-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -4987,7 +4987,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 104,
+     "lineno": 101,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -5029,7 +5029,7 @@
      "verify": null
     },
     "BLD-geotag_stage_order": {
-     "aliases": "geotag-gpx-after-recognition-1, geotag-gpx-before-time-1, geotag-no-utc-incomplete-tz-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -5145,7 +5145,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 24,
+     "lineno": 23,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -5187,7 +5187,7 @@
      "verify": null
     },
     "BLD-gps_decisions_record": {
-     "aliases": "geotag-23-paths-only-review-1, geotag-24-rederive-auto-gps-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -5222,7 +5222,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 309,
+     "lineno": 296,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -5267,7 +5267,7 @@
      "verify": null
     },
     "BLD-gpx_fingerprint": {
-     "aliases": "geotag-gpx-fingerprint-unconditional-1, geotag-gpx-unavailable-recorded-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -5302,7 +5302,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 510,
+     "lineno": 507,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -5379,7 +5379,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 470,
+     "lineno": 468,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -5422,7 +5422,7 @@
      "verify": null
     },
     "BLD-gpx_root_checked": {
-     "aliases": "prep-config-validate-gpx-malformed-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -5457,7 +5457,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 482,
+     "lineno": 480,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -5536,7 +5536,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 399,
+     "lineno": 388,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -5581,7 +5581,7 @@
      "verify": null
     },
     "BLD-handoff_content_fingerprint": {
-     "aliases": "prep-handoff-content-fingerprint-pins-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -5616,7 +5616,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 413,
+     "lineno": 402,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -5695,7 +5695,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 333,
+     "lineno": 324,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -5817,7 +5817,7 @@
      "verify": null
     },
     "BLD-hash": {
-     "aliases": "prep-byte-sha-artifacts-only-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -5852,7 +5852,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 545,
+     "lineno": 540,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -5898,7 +5898,7 @@
      "verify": null
     },
     "BLD-history_kept": {
-     "aliases": "geotag-finalize-complete-log-1, log-every-geotag-pass-1, log-decision-version-kept-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -5933,7 +5933,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 850,
+     "lineno": 835,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -6014,7 +6014,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 658,
+     "lineno": 646,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -6133,7 +6133,7 @@
      "verify": null
     },
     "BLD-init_library_cases": {
-     "aliases": "merge-init-library-inside-with-path-writes-config-1, merge-init-library-inside-no-path-reads-config-1, merge-init-library-outside-with-path-bless-only-1, merge-init-library-outside-no-path-error-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -6252,7 +6252,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1065,
+     "lineno": 1040,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -6408,7 +6408,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 769,
+     "lineno": 755,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -6485,7 +6485,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 193,
+     "lineno": 187,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -6564,7 +6564,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 399,
+     "lineno": 398,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -6608,7 +6608,7 @@
      "verify": null
     },
     "BLD-library_file_fingerprinted": {
-     "aliases": "merge-execute-no-db-rows-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -6643,7 +6643,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 911,
+     "lineno": 894,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -6727,7 +6727,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 952,
+     "lineno": 934,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -6769,7 +6769,7 @@
      "verify": null
     },
     "BLD-library_lock": {
-     "aliases": "merge-concurrency-library-lock-throughout-1, merge-library-lock-is-dotfile-cross-workspace-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -6804,7 +6804,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 960,
+     "lineno": 942,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -6888,7 +6888,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 933,
+     "lineno": 915,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -6967,7 +6967,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 943,
+     "lineno": 925,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -7198,7 +7198,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 749,
+     "lineno": 735,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -7240,7 +7240,7 @@
      "verify": null
     },
     "BLD-log_format": {
-     "aliases": "log-names-exact-decision-1, log-chain-of-names-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -7275,7 +7275,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 819,
+     "lineno": 805,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -7360,7 +7360,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 556,
+     "lineno": 550,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -7403,7 +7403,7 @@
      "verify": null
     },
     "BLD-loop_gates": {
-     "aliases": "geotag-development-check-all-phases-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -7438,7 +7438,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 590,
+     "lineno": 582,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -7484,7 +7484,7 @@
      "verify": null
     },
     "BLD-marked_file_rerun": {
-     "aliases": "geotag-marker-time-corrected-1, geotag-position-marker-not-native-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -7519,7 +7519,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 625,
+     "lineno": 614,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -7601,7 +7601,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 75,
+     "lineno": 73,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -7678,7 +7678,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 901,
+     "lineno": 884,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -7803,7 +7803,7 @@
      "verify": null
     },
     "BLD-merge_execute": {
-     "aliases": "merge-moveset-fixed-before-concurrency-1, merge-concurrency-deterministic-aggregation-1, exec-single-writer-journal-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -7838,7 +7838,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 104,
+     "lineno": 101,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -7924,7 +7924,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1190,
+     "lineno": 1163,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -7968,7 +7968,7 @@
      "verify": null
     },
     "BLD-merge_journal_resume": {
-     "aliases": "merge-journal-confirmed-only-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -8003,7 +8003,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 987,
+     "lineno": 967,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -8048,7 +8048,7 @@
      "verify": null
     },
     "BLD-merge_move": {
-     "aliases": "merge-execute-occupied-different-blocker-1, merge-execute-occupied-identical-treat-present-1, merge-execute-safe-alt-only-if-planned-1, merge-move-place-then-remove-no-loss-1, merge-no-time-gps-changes-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -8083,7 +8083,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 973,
+     "lineno": 954,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -8136,7 +8136,7 @@
      "verify": null
     },
     "BLD-merge_plan": {
-     "aliases": "merge-plan-records-current-size-mtime-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -8171,7 +8171,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 89,
+     "lineno": 87,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -8298,7 +8298,7 @@
      "verify": null
     },
     "BLD-merge_records": {
-     "aliases": "merge-no-stale-summary-1, merge-summary-counts-partition-1, merge-summary-grouped-determinism-1, merge-summary-records-merged-sha256-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -8333,7 +8333,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1008,
+     "lineno": 987,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -8460,7 +8460,7 @@
      "verify": null
     },
     "BLD-merge_success_sequence": {
-     "aliases": "merge-execute-db-snapshot-on-success-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -8495,7 +8495,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1024,
+     "lineno": 1002,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -8541,7 +8541,7 @@
      "verify": null
     },
     "BLD-merge_target": {
-     "aliases": "merge-plan-built-from-finalized-record-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -8576,7 +8576,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 61,
+     "lineno": 60,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -8659,7 +8659,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 321,
+     "lineno": 312,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -8741,7 +8741,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1142,
+     "lineno": 1117,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -8820,7 +8820,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 249,
+     "lineno": 242,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -8866,7 +8866,7 @@
      "verify": null
     },
     "BLD-move_row_effects": {
-     "aliases": "prep-fingerprint-carry-forward-move-1, prep-move-row-carries-facts-1, prep-cache-update-from-validated-plan-1, prep-cache-write-after-fs-verified-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -8901,7 +8901,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 273,
+     "lineno": 265,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -8983,7 +8983,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 446,
+     "lineno": 445,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -9061,7 +9061,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 420,
+     "lineno": 419,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -9140,7 +9140,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1109,
+     "lineno": 1084,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -9296,7 +9296,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 91,
+     "lineno": 88,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -9530,7 +9530,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 684,
+     "lineno": 672,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -9608,7 +9608,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 281,
+     "lineno": 269,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -9653,7 +9653,7 @@
      "verify": null
     },
     "BLD-original_values_pinned": {
-     "aliases": "geotag-ledger-per-workspace-1, geotag-originals-pinned-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -9688,7 +9688,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 614,
+     "lineno": 604,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -9770,7 +9770,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 861,
+     "lineno": 845,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -9926,7 +9926,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 525,
+     "lineno": 521,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -9968,7 +9968,7 @@
      "verify": null
     },
     "BLD-phase_logs": {
-     "aliases": "merge-log-copy-26-forward-append-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -10003,7 +10003,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 738,
+     "lineno": 725,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -10050,7 +10050,7 @@
      "verify": null
     },
     "BLD-phases_check_seal": {
-     "aliases": "prep-seal-check-at-startup-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -10085,7 +10085,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1045,
+     "lineno": 1021,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -10206,7 +10206,7 @@
      "verify": null
     },
     "BLD-placement_order": {
-     "aliases": "geotag-fallback-rank-1, geotag-fallback-is-manual-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -10241,7 +10241,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 296,
+     "lineno": 284,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -10398,7 +10398,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 284,
+     "lineno": 275,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -10446,7 +10446,7 @@
      "verify": null
     },
     "BLD-planned_paths_tracked": {
-     "aliases": "prep-collision-resolved-in-memory-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -10481,7 +10481,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 174,
+     "lineno": 169,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -10561,7 +10561,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 452,
+     "lineno": 439,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -10638,7 +10638,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 369,
+     "lineno": 353,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -10684,7 +10684,7 @@
      "verify": null
     },
     "BLD-prep_dependencies": {
-     "aliases": "prep-artifacts-carry-depends-on-1, prep-record-min-fingerprints-1, prep-fingerprint-algo-recorded-1, prep-bydest-precondition-recorded-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -10719,7 +10719,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 82,
+     "lineno": 79,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -10800,7 +10800,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 62,
+     "lineno": 59,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -10877,7 +10877,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 123,
+     "lineno": 119,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -11035,7 +11035,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 71,
+     "lineno": 68,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -11115,7 +11115,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 425,
+     "lineno": 413,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -11198,7 +11198,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 759,
+     "lineno": 745,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -11278,7 +11278,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 105,
+     "lineno": 101,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -11322,7 +11322,7 @@
      "verify": null
     },
     "BLD-prep_operation_kinds": {
-     "aliases": "prep-allowed-op-types-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -11401,7 +11401,7 @@
      "verify": null
     },
     "BLD-prep_plan_contents": {
-     "aliases": "prep-plan-serialized-contents-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -11436,7 +11436,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 347,
+     "lineno": 338,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -11560,7 +11560,7 @@
      "verify": null
     },
     "BLD-prep_stage_order": {
-     "aliases": "prep-deterministic-order-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -11595,7 +11595,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 164,
+     "lineno": 160,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -11677,7 +11677,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 385,
+     "lineno": 374,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -11760,7 +11760,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1075,
+     "lineno": 1050,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -11802,7 +11802,7 @@
      "verify": null
     },
     "BLD-quarantine_layout": {
-     "aliases": "prep-quarantine-recoverable-manifest-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -11837,7 +11837,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 373,
+     "lineno": 363,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -11916,7 +11916,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 791,
+     "lineno": 777,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -11998,7 +11998,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 462,
+     "lineno": 449,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -12040,7 +12040,7 @@
      "verify": null
     },
     "BLD-rename_planning": {
-     "aliases": "geotag-plan-renames-1, geotag-no-clobber-planning-1, geotag-case-insensitive-conflict-1, geotag-execute-no-new-rename-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -12075,7 +12075,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 338,
+     "lineno": 324,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -12125,7 +12125,7 @@
      "verify": null
     },
     "BLD-reprep_pending": {
-     "aliases": "geotag-targeted-reprep-blocker-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -12160,7 +12160,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 577,
+     "lineno": 570,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -12209,7 +12209,7 @@
      "verify": null
     },
     "BLD-rerun_recognition": {
-     "aliases": "geotag-device-marker-native-1, geotag-time-only-marker-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -12244,7 +12244,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 602,
+     "lineno": 593,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -12324,7 +12324,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 637,
+     "lineno": 625,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -12366,7 +12366,7 @@
      "verify": null
     },
     "BLD-resolved_utc": {
-     "aliases": "geotag-compute-resolved-utc-1, geotag-utc-after-validation-1, geotag-resolved-utc-needs-both-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -12401,7 +12401,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 226,
+     "lineno": 217,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -12448,7 +12448,7 @@
      "verify": null
     },
     "BLD-resolved_utc_fingerprint": {
-     "aliases": "geotag-utc-fingerprint-1, geotag-utc-not-restaled-by-unrelated-config-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -12483,7 +12483,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 244,
+     "lineno": 234,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -12529,7 +12529,7 @@
      "verify": null
     },
     "BLD-seal_marker": {
-     "aliases": "merge-seal-separate-file-not-guard-field-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -12564,7 +12564,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1035,
+     "lineno": 1012,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -12608,7 +12608,7 @@
      "verify": null
     },
     "BLD-seed_before_fingerprints": {
-     "aliases": "prep-seed-before-fingerprint-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -12643,7 +12643,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 50,
+     "lineno": 48,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -12804,7 +12804,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 134,
+     "lineno": 130,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -12965,7 +12965,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 675,
+     "lineno": 663,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -13042,7 +13042,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 143,
+     "lineno": 139,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -13086,7 +13086,7 @@
      "verify": null
     },
     "BLD-strays_per_run": {
-     "aliases": "prep-strays-per-run-subfolder-1, prep-strays-no-collision-across-runs-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -13121,7 +13121,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 40,
+     "lineno": 39,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -13200,7 +13200,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 694,
+     "lineno": 682,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -13242,7 +13242,7 @@
      "verify": null
     },
     "BLD-temp_sweep": {
-     "aliases": "merge-sweep-stale-temps-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -13277,7 +13277,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1162,
+     "lineno": 1136,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -13321,7 +13321,7 @@
      "verify": null
     },
     "BLD-timezone_cell": {
-     "aliases": "geotag-timezone-every-destination-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -13356,7 +13356,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 157,
+     "lineno": 152,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -13401,7 +13401,7 @@
      "verify": null
     },
     "BLD-timezone_naive_offset": {
-     "aliases": "geotag-tz-derived-offset-calc-1, geotag-timezone-derived-confirmable-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -13436,7 +13436,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 195,
+     "lineno": 188,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -13481,7 +13481,7 @@
      "verify": null
     },
     "BLD-tool_workers": {
-     "aliases": "prep-persistent-external-workers-1, prep-persistent-driver-reset-state-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -13516,7 +13516,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 440,
+     "lineno": 428,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -13676,7 +13676,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 492,
+     "lineno": 489,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -13753,7 +13753,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 501,
+     "lineno": 498,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -13796,7 +13796,7 @@
      "verify": null
     },
     "BLD-track_points": {
-     "aliases": "geotag-gpx-time-xsd-datetime-1, geotag-gpx-rejected-points-reported-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -13831,7 +13831,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 117,
+     "lineno": 113,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -13914,7 +13914,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 184,
+     "lineno": 178,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -13994,7 +13994,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 143,
+     "lineno": 138,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -14073,7 +14073,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 133,
+     "lineno": 128,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -14154,7 +14154,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 438,
+     "lineno": 437,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -14275,7 +14275,7 @@
      "verify": null
     },
     "BLD-workspace_database": {
-     "aliases": "prep-cache-single-writer-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -14310,7 +14310,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 872,
+     "lineno": 856,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -14396,7 +14396,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 31,
+     "lineno": 30,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -14473,7 +14473,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1122,
+     "lineno": 1097,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -14870,7 +14870,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1772,
+     "lineno": 1670,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -14955,7 +14955,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 2516,
+     "lineno": 2366,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -15036,7 +15036,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 914,
+     "lineno": 858,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -15118,7 +15118,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 476,
+     "lineno": 451,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -15201,7 +15201,7 @@
       "RAT-config_is_a_file"
      ],
      "layout": null,
-     "lineno": 272,
+     "lineno": 258,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -15251,7 +15251,7 @@
      "verify": null
     },
     "DEF-container_destination": {
-     "aliases": "geotag-container-destination-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -15286,7 +15286,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 145,
+     "lineno": 136,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -15369,7 +15369,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 578,
+     "lineno": 546,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -15457,7 +15457,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1966,
+     "lineno": 1851,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -15537,7 +15537,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1666,
+     "lineno": 1570,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -15629,7 +15629,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1255,
+     "lineno": 1181,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -15681,7 +15681,7 @@
      "verify": null
     },
     "DEF-destination": {
-     "aliases": "geotag-destination-definition-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -15716,7 +15716,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 135,
+     "lineno": 127,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -15799,7 +15799,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1368,
+     "lineno": 1290,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -15878,7 +15878,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1359,
+     "lineno": 1281,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -15964,7 +15964,7 @@
       "RAT-fingerprint_and_hash_opposite_jobs"
      ],
      "layout": null,
-     "lineno": 1239,
+     "lineno": 1165,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -16166,7 +16166,7 @@
       "RAT-fingerprint_and_hash_opposite_jobs"
      ],
      "layout": null,
-     "lineno": 1247,
+     "lineno": 1173,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -16344,7 +16344,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1337,
+     "lineno": 1259,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -16560,7 +16560,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1348,
+     "lineno": 1270,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -16646,7 +16646,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 417,
+     "lineno": 391,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -16824,7 +16824,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 973,
+     "lineno": 913,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -16908,7 +16908,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 2095,
+     "lineno": 1973,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -16994,7 +16994,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 613,
+     "lineno": 579,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -17079,7 +17079,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 994,
+     "lineno": 933,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -17165,7 +17165,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1163,
+     "lineno": 1092,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -17256,7 +17256,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1763,
+     "lineno": 1661,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -17344,7 +17344,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1085,
+     "lineno": 1017,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -17516,7 +17516,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1956,
+     "lineno": 1841,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -17812,7 +17812,7 @@
      "verify": null
     },
     "INV-authored_values_checked": {
-     "aliases": "validate-everything-authored-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -17850,7 +17850,7 @@
       "RAT-valid_is_not_unchanged"
      ],
      "layout": null,
-     "lineno": 2524,
+     "lineno": 2374,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -17948,7 +17948,7 @@
       "RAT-no_redo_to_be_safe"
      ],
      "layout": null,
-     "lineno": 1578,
+     "lineno": 1488,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -17998,7 +17998,7 @@
      "verify": "incidental"
     },
     "INV-every_change_from_the_record": {
-     "aliases": "authored-no-autonomous-mutation-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -18035,7 +18035,7 @@
       "RAT-why_did_this_change"
      ],
      "layout": null,
-     "lineno": 1676,
+     "lineno": 1580,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -18079,7 +18079,7 @@
      "verify": "incidental"
     },
     "INV-no_stale_use": {
-     "aliases": "dep-cascade-reject-stale-1, prep-block-on-stale-dependency-1, merge-execute-revalidate-reject-stale-1, geotag-dep-cascade-1, geotag-no-stale-execution-1, geotag-file-exists-not-executable-1, geotag-stale-no-json-1, geotag-no-preserve-stale-auto-gps-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -18116,7 +18116,7 @@
       "RAT-one_source_per_fact"
      ],
      "layout": null,
-     "lineno": 1266,
+     "lineno": 1192,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -18178,7 +18178,7 @@
      "verify": "required"
     },
     "INV-one_run_at_a_time": {
-     "aliases": "lock-mutual-exclusion-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -18299,7 +18299,7 @@
       "RAT-phases_rely_on_the_shape"
      ],
      "layout": null,
-     "lineno": 752,
+     "lineno": 707,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -37931,7 +37931,7 @@
      "verify": null
     },
     "RUL-anchor_consensus": {
-     "aliases": "geotag-consensus-cluster-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -37968,7 +37968,7 @@
       "RAT-anchor_agreement"
      ],
      "layout": null,
-     "lineno": 301,
+     "lineno": 283,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -38019,7 +38019,7 @@
      "verify": "required"
     },
     "RUL-anchor_offset_auto_as_configured": {
-     "aliases": "geotag-autoresolve-config-gated-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -38056,7 +38056,7 @@
       "RAT-anchor_evidence_trusted_as_configured"
      ],
      "layout": null,
-     "lineno": 95,
+     "lineno": 90,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -38106,7 +38106,7 @@
      "verify": "required"
     },
     "RUL-anchor_within_clock_error": {
-     "aliases": "geotag-clock-error-window-1, geotag-window-tz-independent-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -38143,7 +38143,7 @@
       "RAT-clock_error_window"
      ],
      "layout": null,
-     "lineno": 288,
+     "lineno": 271,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -38190,7 +38190,7 @@
      "verify": "required"
     },
     "RUL-any_config_change_replans": {
-     "aliases": "config-wholehash-coarse-replan-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -38227,7 +38227,7 @@
       "RAT-coarse_trigger_for_the_cheap_plan"
      ],
      "layout": null,
-     "lineno": 441,
+     "lineno": 418,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -38273,7 +38273,7 @@
      "verify": "required"
     },
     "RUL-band_misplacement_blocks": {
-     "aliases": "prep-band-misplacement-blocks-1, prep-video-only-in-videos-band-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -38310,7 +38310,7 @@
       "RAT-bands_never_mix"
      ],
      "layout": null,
-     "lineno": 112,
+     "lineno": 104,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -38355,7 +38355,7 @@
      "verify": "required"
     },
     "RUL-blockers_all_reported": {
-     "aliases": "prep-blockers-reported-not-skipped-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -38392,7 +38392,7 @@
       "RAT-every_blocker_at_once"
      ],
      "layout": null,
-     "lineno": 145,
+     "lineno": 135,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -38436,7 +38436,7 @@
      "verify": "required"
     },
     "RUL-by_date_in_day_folder": {
-     "aliases": "prep-day-subfolder-grouping-1, prep-relocate-misfiled-bydate-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -38473,7 +38473,7 @@
       "RAT-day_folder"
      ],
      "layout": null,
-     "lineno": 196,
+     "lineno": 182,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -38558,7 +38558,7 @@
       "RAT-no_migration"
      ],
      "layout": null,
-     "lineno": 366,
+     "lineno": 342,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -38604,7 +38604,7 @@
      "verify": "required"
     },
     "RUL-camera_classes_not_derivation": {
-     "aliases": "config-camerakey-version-not-config-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -38641,7 +38641,7 @@
       "RAT-derivation_version_is_code"
      ],
      "layout": null,
-     "lineno": 508,
+     "lineno": 482,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -38685,7 +38685,7 @@
      "verify": "none"
     },
     "RUL-camera_group_derivation_versioned": {
-     "aliases": "camera-version-detectable-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -38720,7 +38720,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 946,
+     "lineno": 888,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -38768,7 +38768,7 @@
      "verify": "required"
     },
     "RUL-carry_forward_by_copy": {
-     "aliases": "archive-no-cross-phase-write-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -38805,7 +38805,7 @@
       "RAT-records_attributable"
      ],
      "layout": null,
-     "lineno": 1807,
+     "lineno": 1703,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -38853,7 +38853,7 @@
      "verify": "required"
     },
     "RUL-cause_locatable": {
-     "aliases": "authored-locatable-cause-1, geotag-user-outputs-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -38890,7 +38890,7 @@
       "RAT-why_did_this_change"
      ],
      "layout": null,
-     "lineno": 1723,
+     "lineno": 1623,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -38940,7 +38940,7 @@
      "verify": "required"
     },
     "RUL-checked_every_run": {
-     "aliases": "geotag-validate-every-consume-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -38977,7 +38977,7 @@
       "RAT-valid_is_not_unchanged"
      ],
      "layout": null,
-     "lineno": 2690,
+     "lineno": 2530,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -39061,7 +39061,7 @@
       "RAT-extension_entries_must_match"
      ],
      "layout": null,
-     "lineno": 2576,
+     "lineno": 2423,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -39107,7 +39107,7 @@
      "verify": "required"
     },
     "RUL-checked_filename_format": {
-     "aliases": "validate-filename-format-1, prep-config-validate-timestamp-format-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -39144,7 +39144,7 @@
       "RAT-hand_written_fallible"
      ],
      "layout": null,
-     "lineno": 2612,
+     "lineno": 2457,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -39229,7 +39229,7 @@
       "RAT-folder_names_are_places"
      ],
      "layout": null,
-     "lineno": 2564,
+     "lineno": 2411,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -39275,7 +39275,7 @@
      "verify": "required"
     },
     "RUL-checked_numbers": {
-     "aliases": "validate-numeric-thresholds-1, prep-config-validate-numeric-lists-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -39312,7 +39312,7 @@
       "RAT-hand_written_fallible"
      ],
      "layout": null,
-     "lineno": 2625,
+     "lineno": 2469,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -39361,7 +39361,7 @@
      "verify": "required"
     },
     "RUL-checked_paths": {
-     "aliases": "validate-paths-1, prep-config-validate-paths-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -39399,7 +39399,7 @@
       "RAT-library_and_workspace_apart"
      ],
      "layout": null,
-     "lineno": 2537,
+     "lineno": 2386,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -39452,7 +39452,7 @@
      "verify": "required"
     },
     "RUL-checked_positions_and_times": {
-     "aliases": "validate-coords-offsets-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -39489,7 +39489,7 @@
       "RAT-hand_written_fallible"
      ],
      "layout": null,
-     "lineno": 2599,
+     "lineno": 2445,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -39538,7 +39538,7 @@
      "verify": "required"
     },
     "RUL-checked_shapes": {
-     "aliases": "validate-enum-structure-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -39575,7 +39575,7 @@
       "RAT-hand_written_fallible"
      ],
      "layout": null,
-     "lineno": 2638,
+     "lineno": 2481,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -39627,7 +39627,7 @@
      "verify": "required"
     },
     "RUL-checked_snapshot_names": {
-     "aliases": "validate-zfs-prefix-1, prep-config-validate-zfs-prefix-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -39664,7 +39664,7 @@
       "RAT-snapshot_name_early"
      ],
      "layout": null,
-     "lineno": 2551,
+     "lineno": 2399,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -39712,7 +39712,7 @@
      "verify": "required"
     },
     "RUL-checked_timezones": {
-     "aliases": "validate-timezone-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -39749,7 +39749,7 @@
       "RAT-hand_written_fallible"
      ],
      "layout": null,
-     "lineno": 2588,
+     "lineno": 2435,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -39832,7 +39832,7 @@
       "RAT-chosen_offset_has_evidence"
      ],
      "layout": null,
-     "lineno": 338,
+     "lineno": 319,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -39915,7 +39915,7 @@
       "RAT-library_is_ground_truth"
      ],
      "layout": null,
-     "lineno": 2129,
+     "lineno": 2005,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -39970,7 +39970,7 @@
      "verify": "required"
     },
     "RUL-collision_different_content": {
-     "aliases": "merge-collision-diff-content-1, merge-different-content-rename-incoming-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -40007,7 +40007,7 @@
       "RAT-library_is_ground_truth"
      ],
      "layout": null,
-     "lineno": 2152,
+     "lineno": 2027,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -40053,7 +40053,7 @@
      "verify": "required"
     },
     "RUL-collision_same_content": {
-     "aliases": "merge-collision-same-content-1, merge-same-content-already-present-remove-source-1, merge-no-duplicate-of-library-file-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -40090,7 +40090,7 @@
       "RAT-library_is_ground_truth"
      ],
      "layout": null,
-     "lineno": 2140,
+     "lineno": 2016,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -40175,7 +40175,7 @@
       "RAT-config_is_a_file"
      ],
      "layout": null,
-     "lineno": 383,
+     "lineno": 363,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -40217,7 +40217,7 @@
      "verify": "required"
     },
     "RUL-config_authoritative": {
-     "aliases": "config-file-authoritative-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -40254,7 +40254,7 @@
       "RAT-workspace_keeps_its_settings"
      ],
      "layout": null,
-     "lineno": 325,
+     "lineno": 309,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -40335,7 +40335,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 292,
+     "lineno": 277,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -40418,7 +40418,7 @@
       "RAT-config_is_a_file"
      ],
      "layout": null,
-     "lineno": 373,
+     "lineno": 353,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -40464,7 +40464,7 @@
      "verify": "required"
     },
     "RUL-config_in_dependencies": {
-     "aliases": "config-hashed-cascade-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -40501,7 +40501,7 @@
       "RAT-config_is_a_file"
      ],
      "layout": null,
-     "lineno": 362,
+     "lineno": 343,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -40547,7 +40547,7 @@
      "verify": "required"
     },
     "RUL-config_lists_extensions": {
-     "aliases": "prep-extension-lists-config-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -40584,7 +40584,7 @@
       "RAT-class_decides_handling"
      ],
      "layout": null,
-     "lineno": 531,
+     "lineno": 503,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -40635,7 +40635,7 @@
      "verify": "required"
     },
     "RUL-config_never_media": {
-     "aliases": "config-in-control-dir-skipped-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -40670,7 +40670,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 392,
+     "lineno": 372,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -40752,7 +40752,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 303,
+     "lineno": 288,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -40798,7 +40798,7 @@
      "verify": "required"
     },
     "RUL-config_seeded_once": {
-     "aliases": "config-seeded-by-prep-1, prep-seeds-config-if-absent-1, prep-reads-config-authoritative-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -40835,7 +40835,7 @@
       "RAT-workspace_keeps_its_settings"
      ],
      "layout": null,
-     "lineno": 314,
+     "lineno": 299,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -40883,7 +40883,7 @@
      "verify": "required"
     },
     "RUL-config_validated_before_use": {
-     "aliases": "config-values-validated-1, geotag-sanity-validate-1, prep-config-sanity-validated-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -40918,7 +40918,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 564,
+     "lineno": 533,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -40969,7 +40969,7 @@
      "verify": "required"
     },
     "RUL-config_writers": {
-     "aliases": "config-prep-sole-writer-1, config-merge-readonly-1, prep-sole-config-writer-1, merge-config-readonly-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -41006,7 +41006,7 @@
       "RAT-config_changes_chosen"
      ],
      "layout": null,
-     "lineno": 337,
+     "lineno": 320,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -41088,7 +41088,7 @@
       "RAT-confirmed_one_offset"
      ],
      "layout": null,
-     "lineno": 380,
+     "lineno": 360,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -41134,7 +41134,7 @@
      "verify": "required"
     },
     "RUL-container_never_waits": {
-     "aliases": "geotag-container-no-block-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -41171,7 +41171,7 @@
       "RAT-container_holds_defaults"
      ],
      "layout": null,
-     "lineno": 181,
+     "lineno": 169,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -41218,7 +41218,7 @@
      "verify": "required"
     },
     "RUL-content_changed_write_held": {
-     "aliases": "geotag-postwrite-fingerprint-verify-1, geotag-accept-fingerprint-change-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -41255,7 +41255,7 @@
       "RAT-content_changed_held"
      ],
      "layout": null,
-     "lineno": 497,
+     "lineno": 472,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -41340,7 +41340,7 @@
       "RAT-control_records_found_first"
      ],
      "layout": null,
-     "lineno": 464,
+     "lineno": 439,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -41382,7 +41382,7 @@
      "verify": "none"
     },
     "RUL-control_records_never_media": {
-     "aliases": "ctrl-prep-skips-wholesale-1, geotag-artifacts-not-in-bydest-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -41419,7 +41419,7 @@
       "RAT-one_skipped_place"
      ],
      "layout": null,
-     "lineno": 600,
+     "lineno": 567,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -41468,7 +41468,7 @@
      "verify": "required"
     },
     "RUL-control_records_together": {
-     "aliases": "ctrl-all-in-photos-ingest-1, geotag-artifacts-in-control-dir-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -41506,7 +41506,7 @@
       "RAT-quarantine_manifest_beside_duplicates"
      ],
      "layout": null,
-     "lineno": 588,
+     "lineno": 556,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -41554,7 +41554,7 @@
      "verify": "required"
     },
     "RUL-copy_kept_by_folder": {
-     "aliases": "prep-retain-by-folder-priority-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -41591,7 +41591,7 @@
       "RAT-keep_further_along"
      ],
      "layout": null,
-     "lineno": 302,
+     "lineno": 281,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -41678,7 +41678,7 @@
       "RAT-coarse_trigger_for_the_cheap_plan"
      ],
      "layout": null,
-     "lineno": 418,
+     "lineno": 396,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -41726,7 +41726,7 @@
      "verify": "required"
     },
     "RUL-crash_temps_cleared": {
-     "aliases": "atomic-crossfs-temp-sweep-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -41763,7 +41763,7 @@
       "RAT-temps_are_debris"
      ],
      "layout": null,
-     "lineno": 2844,
+     "lineno": 2678,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -41813,7 +41813,7 @@
      "verify": "required"
     },
     "RUL-cross_fs_all_or_nothing": {
-     "aliases": "atomic-crossfs-equivalent-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -41850,7 +41850,7 @@
       "RAT-safe_at_each_change"
      ],
      "layout": null,
-     "lineno": 2830,
+     "lineno": 2665,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -41901,7 +41901,7 @@
      "verify": "required"
     },
     "RUL-database_image_each_phase": {
-     "aliases": "db-snapshot-per-phase-1, db-snapshot-skip-on-failure-1, prep-db-backup-on-success-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -41939,7 +41939,7 @@
       "RAT-image_replaced_not_kept"
      ],
      "layout": null,
-     "lineno": 2034,
+     "lineno": 1916,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -41990,7 +41990,7 @@
      "verify": "required"
     },
     "RUL-database_image_whole": {
-     "aliases": "db-snapshot-consistent-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -42027,7 +42027,7 @@
       "RAT-image_replaced_not_kept"
      ],
      "layout": null,
-     "lineno": 2069,
+     "lineno": 1949,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -42075,7 +42075,7 @@
      "verify": "required"
     },
     "RUL-database_is_record": {
-     "aliases": "db-durable-artifact-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -42112,7 +42112,7 @@
       "RAT-database_is_record"
      ],
      "layout": null,
-     "lineno": 1998,
+     "lineno": 1882,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -42159,7 +42159,7 @@
      "verify": "required"
     },
     "RUL-database_matches_files": {
-     "aliases": "prep-cache-upsert-stale-1, prep-ghost-prune-1, prep-filesystem-source-of-truth-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -42196,7 +42196,7 @@
       "RAT-database_trusted_next"
      ],
      "layout": null,
-     "lineno": 316,
+     "lineno": 294,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -42247,7 +42247,7 @@
      "verify": "required"
     },
     "RUL-database_over_memo": {
-     "aliases": "prep-plan-memo-subordinate-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -42284,7 +42284,7 @@
       "RAT-memo_is_observation"
      ],
      "layout": null,
-     "lineno": 439,
+     "lineno": 412,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -42331,7 +42331,7 @@
      "verify": "required"
     },
     "RUL-database_regions_disjoint": {
-     "aliases": "db-disjoint-writers-1, prep-sole-cache-writer-1, reprep-geotag-no-fix-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -42366,7 +42366,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 2010,
+     "lineno": 1893,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -42417,7 +42417,7 @@
      "verify": "required"
     },
     "RUL-day_offset_kept_for_later_photos": {
-     "aliases": "geotag-offset-kept-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -42454,7 +42454,7 @@
       "RAT-day_offset_is_the_cameras"
      ],
      "layout": null,
-     "lineno": 470,
+     "lineno": 447,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -42501,7 +42501,7 @@
      "verify": "required"
     },
     "RUL-decision_fields_laid_out": {
-     "aliases": "geotag-decision-fields-precreated-1, geotag-no-manual-structure-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -42538,7 +42538,7 @@
       "RAT-structure_from_the_tool"
      ],
      "layout": null,
-     "lineno": 1701,
+     "lineno": 1603,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -42586,7 +42586,7 @@
      "verify": "required"
     },
     "RUL-decision_kept": {
-     "aliases": "geotag-preserve-user-decisions-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -42621,7 +42621,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1602,
+     "lineno": 1511,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -42707,7 +42707,7 @@
       "RAT-why_did_this_change"
      ],
      "layout": null,
-     "lineno": 1735,
+     "lineno": 1634,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -42757,7 +42757,7 @@
      "verify": "required"
     },
     "RUL-decision_stage_writes_record": {
-     "aliases": "geotag-always-produce-decision-artifact-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -42794,7 +42794,7 @@
       "RAT-record_means_stage_reached"
      ],
      "layout": null,
-     "lineno": 69,
+     "lineno": 66,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -42842,7 +42842,7 @@
      "verify": "required"
     },
     "RUL-development_after_merge": {
-     "aliases": "loop-dev-before-geotag-blocks-1, merge-nongoal-no-jpg-tif-breakout-1, geotag-development-check-strict-empty-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -42879,7 +42879,7 @@
       "RAT-development_after_corrections"
      ],
      "layout": null,
-     "lineno": 1563,
+     "lineno": 1474,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -42928,7 +42928,7 @@
      "verify": "required"
     },
     "RUL-dry_run_summarises_the_real_plan": {
-     "aliases": "dryrun-summary-not-dump-1, merge-dryrun-summarizes-real-plan-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -42965,7 +42965,7 @@
       "RAT-dry_run_reads_the_saved_plan"
      ],
      "layout": null,
-     "lineno": 692,
+     "lineno": 652,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -43009,7 +43009,7 @@
      "verify": "required"
     },
     "RUL-dump_folder_named_as_managed": {
-     "aliases": "prep-reserved-names-not-moved-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -43046,7 +43046,7 @@
       "RAT-structure_names_reserved"
      ],
      "layout": null,
-     "lineno": 61,
+     "lineno": 57,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -43090,7 +43090,7 @@
      "verify": "required"
     },
     "RUL-dump_hidden_files_quarantined": {
-     "aliases": "ctrl-dotfiles-swept-quarantine-1, prep-hidden-dump-sweep-1, prep-init-sweeps-hidden-to-quarantine-1, prep-no-sweep-non-dump-dotfiles-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -43127,7 +43127,7 @@
       "RAT-no_hidden_litter"
      ],
      "layout": null,
-     "lineno": 647,
+     "lineno": 611,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -43171,7 +43171,7 @@
      "verify": "required"
     },
     "RUL-duplicate_recorded_with_kept": {
-     "aliases": "prep-dup-against-bydest-quarantine-mutable-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -43208,7 +43208,7 @@
       "RAT-duplicate_points_at_twin"
      ],
      "layout": null,
-     "lineno": 531,
+     "lineno": 498,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -43293,7 +43293,7 @@
       "RAT-duplicate_found_as_it_was"
      ],
      "layout": null,
-     "lineno": 266,
+     "lineno": 247,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -43339,7 +43339,7 @@
      "verify": "required"
     },
     "RUL-duplicates_quarantined": {
-     "aliases": "prep-quarantine-extra-copies-1, prep-group-by-fingerprint-class-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -43376,7 +43376,7 @@
       "RAT-identical_kept_once"
      ],
      "layout": null,
-     "lineno": 290,
+     "lineno": 270,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -43426,7 +43426,7 @@
      "verify": "required"
     },
     "RUL-editor_refuses_sealed": {
-     "aliases": "edit-sealed-refuses-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -43463,7 +43463,7 @@
       "RAT-sealed_is_final"
      ],
      "layout": null,
-     "lineno": 2452,
+     "lineno": 2306,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -43510,7 +43510,7 @@
      "verify": "required"
     },
     "RUL-emptied_folders_removed": {
-     "aliases": "prep-prune-empty-day-folders-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -43547,7 +43547,7 @@
       "RAT-folder_changed_like_a_file"
      ],
      "layout": null,
-     "lineno": 641,
+     "lineno": 601,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -43596,7 +43596,7 @@
      "verify": "required"
     },
     "RUL-empty_inbox_normal": {
-     "aliases": "prep-empty-sources-not-missing-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -43633,7 +43633,7 @@
       "RAT-rebuild_masks_loss"
      ],
      "layout": null,
-     "lineno": 888,
+     "lineno": 834,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -43716,7 +43716,7 @@
       "RAT-new_version_may_change_nothing"
      ],
      "layout": null,
-     "lineno": 1301,
+     "lineno": 1225,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -43766,7 +43766,7 @@
      "verify": "required"
     },
     "RUL-every_change_journaled": {
-     "aliases": "prep-journal-all-mutations-1, prep-progress-not-only-record-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -43803,7 +43803,7 @@
       "RAT-journal_is_the_account"
      ],
      "layout": null,
-     "lineno": 2950,
+     "lineno": 2778,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -43851,7 +43851,7 @@
      "verify": "required"
     },
     "RUL-every_command_locks": {
-     "aliases": "lock-every-command-takes-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -43886,7 +43886,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 69,
+     "lineno": 68,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -43935,7 +43935,7 @@
      "verify": "incidental"
     },
     "RUL-evidence_before_quarantine": {
-     "aliases": "prep-evidence-before-quarantine-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -43972,7 +43972,7 @@
       "RAT-reason_first"
      ],
      "layout": null,
-     "lineno": 667,
+     "lineno": 625,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -44018,7 +44018,7 @@
      "verify": "required"
     },
     "RUL-execution_jobs_change_nothing": {
-     "aliases": "exec-concurrency-no-semantic-change-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -44055,7 +44055,7 @@
       "RAT-jobs_buy_time"
      ],
      "layout": null,
-     "lineno": 2925,
+     "lineno": 2755,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -44102,7 +44102,7 @@
      "verify": "required"
     },
     "RUL-execution_only_the_plan": {
-     "aliases": "prep-execute-no-rederive-1, merge-execute-no-rederive-1, geotag-execute-no-recalc-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -44139,7 +44139,7 @@
       "RAT-what_was_reviewed_happens"
      ],
      "layout": null,
-     "lineno": 2913,
+     "lineno": 2744,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -44192,7 +44192,7 @@
      "verify": "required"
     },
     "RUL-extension_matched_ignoring_case": {
-     "aliases": "prep-classify-by-extension-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -44229,7 +44229,7 @@
       "RAT-case_says_nothing"
      ],
      "layout": null,
-     "lineno": 553,
+     "lineno": 523,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -44273,7 +44273,7 @@
      "verify": "required"
     },
     "RUL-extension_one_class": {
-     "aliases": "config-ext-one-class-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -44310,7 +44310,7 @@
       "RAT-class_decides_handling"
      ],
      "layout": null,
-     "lineno": 521,
+     "lineno": 494,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -44357,7 +44357,7 @@
      "verify": "required"
     },
     "RUL-failed_fingerprint_blocks": {
-     "aliases": "prep-fingerprint-failure-blocks-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -44394,7 +44394,7 @@
       "RAT-failure_says_nothing"
      ],
      "layout": null,
-     "lineno": 510,
+     "lineno": 478,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -44441,7 +44441,7 @@
      "verify": "required"
     },
     "RUL-failed_fingerprint_no_duplicate": {
-     "aliases": "prep-unknown-fingerprint-no-dup-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -44478,7 +44478,7 @@
       "RAT-failure_says_nothing"
      ],
      "layout": null,
-     "lineno": 498,
+     "lineno": 467,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -44561,7 +44561,7 @@
       "RAT-failure_may_be_the_machines"
      ],
      "layout": null,
-     "lineno": 521,
+     "lineno": 488,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -44607,7 +44607,7 @@
      "verify": "required"
     },
     "RUL-failed_operation_clean": {
-     "aliases": "exec-failed-op-clean-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -44646,7 +44646,7 @@
       "RAT-safe_at_each_change"
      ],
      "layout": null,
-     "lineno": 2867,
+     "lineno": 2700,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -44732,7 +44732,7 @@
       "RAT-safe_at_each_change"
      ],
      "layout": null,
-     "lineno": 2888,
+     "lineno": 2720,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -44817,7 +44817,7 @@
       "RAT-safe_at_each_change"
      ],
      "layout": null,
-     "lineno": 2878,
+     "lineno": 2710,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -44867,7 +44867,7 @@
      "verify": "required"
     },
     "RUL-fallback_from_nearest": {
-     "aliases": "geotag-fallback-inherit-1, geotag-fallback-parentfirst-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -44904,7 +44904,7 @@
       "RAT-fallback_nested"
      ],
      "layout": null,
-     "lineno": 431,
+     "lineno": 411,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -44952,7 +44952,7 @@
      "verify": "required"
     },
     "RUL-fallback_optional": {
-     "aliases": "geotag-fallback-never-blocks-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -44989,7 +44989,7 @@
       "RAT-fallback_optional"
      ],
      "layout": null,
-     "lineno": 443,
+     "lineno": 422,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -45035,7 +45035,7 @@
      "verify": "required"
     },
     "RUL-filed_file_stays": {
-     "aliases": "prep-files-in-managed-left-1, prep-recognize-correct-location-1, prep-tolerate-populated-folders-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -45072,7 +45072,7 @@
       "RAT-filed_is_settled"
      ],
      "layout": null,
-     "lineno": 183,
+     "lineno": 170,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -45154,7 +45154,7 @@
       "RAT-one_filesystem_specific_part"
      ],
      "layout": null,
-     "lineno": 194,
+     "lineno": 184,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -45194,7 +45194,7 @@
      "verify": "none"
     },
     "RUL-finalize_explicit": {
-     "aliases": "archive-finalize-explicit-1, geotag-finalize-explicit-1, geotag-finalize-no-merge-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -45231,7 +45231,7 @@
       "RAT-finalize_apart"
      ],
      "layout": null,
-     "lineno": 1504,
+     "lineno": 1418,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -45276,7 +45276,7 @@
      "verify": "required"
     },
     "RUL-finalize_non_destructive": {
-     "aliases": "archive-finalize-nondestructive-1, geotag-finalize-nondestructive-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -45313,7 +45313,7 @@
       "RAT-finalize_only_records"
      ],
      "layout": null,
-     "lineno": 1820,
+     "lineno": 1715,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -45395,7 +45395,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 2023,
+     "lineno": 1905,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -45439,7 +45439,7 @@
      "verify": "incidental"
     },
     "RUL-finalize_requires_success": {
-     "aliases": "geotag-finalize-requires-success-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -45476,7 +45476,7 @@
       "RAT-package_records_what_was_done"
      ],
      "layout": null,
-     "lineno": 513,
+     "lineno": 487,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -45559,7 +45559,7 @@
       "RAT-fingerprint_same_method"
      ],
      "layout": null,
-     "lineno": 343,
+     "lineno": 319,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -45608,7 +45608,7 @@
      "verify": "required"
     },
     "RUL-fingerprint_survives_mutation": {
-     "aliases": "dep-fingerprint-invariant-1, prep-fingerprint-invariant-metadata-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -45645,7 +45645,7 @@
       "RAT-identity_survives_edits"
      ],
      "layout": null,
-     "lineno": 1290,
+     "lineno": 1215,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -45696,7 +45696,7 @@
      "verify": "required"
     },
     "RUL-fingerprint_taken_afresh": {
-     "aliases": "prep-fingerprint-compute-if-absent-1, prep-fingerprint-recompute-on-change-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -45733,7 +45733,7 @@
       "RAT-size_time_sign_change"
      ],
      "layout": null,
-     "lineno": 331,
+     "lineno": 308,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -45779,7 +45779,7 @@
      "verify": "required"
     },
     "RUL-first_dump_at_top_level": {
-     "aliases": "struct-uninit-exception-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -45814,7 +45814,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 804,
+     "lineno": 756,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -45899,7 +45899,7 @@
       "RAT-folder_roles_are_logic"
      ],
      "layout": null,
-     "lineno": 498,
+     "lineno": 472,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -45945,7 +45945,7 @@
      "verify": "required"
     },
     "RUL-folder_names_not_roles": {
-     "aliases": "config-folder-roles-not-config-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -45982,7 +45982,7 @@
       "RAT-folder_roles_are_logic"
      ],
      "layout": null,
-     "lineno": 487,
+     "lineno": 462,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -46030,7 +46030,7 @@
      "verify": "required"
     },
     "RUL-format_fixed_once_named": {
-     "aliases": "geotag-filename-change-invalidates-plan-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -46067,7 +46067,7 @@
       "RAT-format_fixed_per_workspace"
      ],
      "layout": null,
-     "lineno": 1150,
+     "lineno": 1080,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -46117,7 +46117,7 @@
      "verify": "required"
     },
     "RUL-geotag_changes_only_by_dest": {
-     "aliases": "geotag-scope-bydest-only-1, geotag-never-touch-video-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -46154,7 +46154,7 @@
       "RAT-only_sorted_is_ready"
      ],
      "layout": null,
-     "lineno": 55,
+     "lineno": 53,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -46201,7 +46201,7 @@
      "verify": "required"
     },
     "RUL-geotag_execution_resumable": {
-     "aliases": "geotag-resume-safe-1, geotag-rerun-noop-1, geotag-skip-satisfied-1, geotag-resume-rederive-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -46238,7 +46238,7 @@
       "RAT-execution_resumable"
      ],
      "layout": null,
-     "lineno": 485,
+     "lineno": 461,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -46284,7 +46284,7 @@
      "verify": "required"
     },
     "RUL-geotag_gates": {
-     "aliases": "loop-geotag-gating-preconditions-1, geotag-bydate-empty-gate-1, geotag-residuals-ok-1, geotag-sources-empty-gate-1, prep-missing-metadata-no-block-geotag-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -46322,7 +46322,7 @@
       "RAT-loop_is_steady_state"
      ],
      "layout": null,
-     "lineno": 1464,
+     "lineno": 1380,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -46373,7 +46373,7 @@
      "verify": "required"
     },
     "RUL-geotag_merge_check_top_level_links": {
-     "aliases": "merge-nongoal-no-follow-symlink-into-out-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -46410,7 +46410,7 @@
       "RAT-prep_gatekeeps_links"
      ],
      "layout": null,
-     "lineno": 851,
+     "lineno": 800,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -46457,7 +46457,7 @@
      "verify": "required"
     },
     "RUL-geotag_name_final": {
-     "aliases": "fname-geotag-final-1, geotag-filename-from-local-time-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -46495,7 +46495,7 @@
       "RAT-same_shape_different_value"
      ],
      "layout": null,
-     "lineno": 1062,
+     "lineno": 996,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -46544,7 +46544,7 @@
      "verify": "required"
     },
     "RUL-geotag_plan_carries_every_dependency": {
-     "aliases": "geotag-flattened-deps-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -46581,7 +46581,7 @@
       "RAT-no_chain_of_vouching"
      ],
      "layout": null,
-     "lineno": 38,
+     "lineno": 37,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -46666,7 +46666,7 @@
       "RAT-plan_on_current_record"
      ],
      "layout": null,
-     "lineno": 1425,
+     "lineno": 1343,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -46714,7 +46714,7 @@
      "verify": "required"
     },
     "RUL-geotag_rerun_keeps_settled": {
-     "aliases": "loop-geotag-rerun-safe-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -46753,7 +46753,7 @@
       "RAT-mark_in_the_file"
      ],
      "layout": null,
-     "lineno": 1449,
+     "lineno": 1366,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -46813,7 +46813,7 @@
      "verify": "required"
     },
     "RUL-geotag_rerunnable": {
-     "aliases": "loop-geotag-rerunnable-1, geotag-rerunnable-after-execute-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -46851,7 +46851,7 @@
       "RAT-rerun_is_safe"
      ],
      "layout": null,
-     "lineno": 1437,
+     "lineno": 1355,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -46900,7 +46900,7 @@
      "verify": "required"
     },
     "RUL-geotag_reuses_camera_group": {
-     "aliases": "camera-geotag-reuses-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -46937,7 +46937,7 @@
       "RAT-grouping_computed_once"
      ],
      "layout": null,
-     "lineno": 934,
+     "lineno": 877,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -46983,7 +46983,7 @@
      "verify": "required"
     },
     "RUL-grouping_facts_reported": {
-     "aliases": "prep-passive-grouping-facts-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -47020,7 +47020,7 @@
       "RAT-facts_before_decisions"
      ],
      "layout": null,
-     "lineno": 581,
+     "lineno": 545,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -47064,7 +47064,7 @@
      "verify": "required"
     },
     "RUL-handoff_describes_workspace": {
-     "aliases": "prep-handoff-min-contents-1, prep-handoff-strays-excluded-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -47101,7 +47101,7 @@
       "RAT-geotag_reads_the_handoff"
      ],
      "layout": null,
-     "lineno": 738,
+     "lineno": 690,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -47145,7 +47145,7 @@
      "verify": "required"
     },
     "RUL-handoff_deterministic": {
-     "aliases": "prep-handoff-deterministic-1, prep-handoff-run-metadata-segregated-1, prep-noop-rerun-stable-fingerprint-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -47182,7 +47182,7 @@
       "RAT-handoff_changes_with_workspace"
      ],
      "layout": null,
-     "lineno": 750,
+     "lineno": 701,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -47228,7 +47228,7 @@
      "verify": "required"
     },
     "RUL-handoff_verified_by_content": {
-     "aliases": "handoff-verified-by-content-1, geotag-handoff-content-fingerprint-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -47265,7 +47265,7 @@
       "RAT-handoff_by_content"
      ],
      "layout": null,
-     "lineno": 727,
+     "lineno": 684,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -47314,7 +47314,7 @@
      "verify": "required"
     },
     "RUL-hash_detects_any_change": {
-     "aliases": "dep-hash-sensitive-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -47351,7 +47351,7 @@
       "RAT-hash_is_for_change"
      ],
      "layout": null,
-     "lineno": 1313,
+     "lineno": 1237,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -47400,7 +47400,7 @@
      "verify": "required"
     },
     "RUL-hash_is_the_dependency_check": {
-     "aliases": "geotag-json-dep-sha256-1, geotag-rehash-before-use-1, geotag-no-mtime-reliance-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -47437,7 +47437,7 @@
       "RAT-bytes_are_the_safe_check"
      ],
      "layout": null,
-     "lineno": 1324,
+     "lineno": 1247,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -47485,7 +47485,7 @@
      "verify": "required"
     },
     "RUL-history_retained": {
-     "aliases": "log-retention-across-runs-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -47522,7 +47522,7 @@
       "RAT-retention_serves_the_log"
      ],
      "layout": null,
-     "lineno": 1929,
+     "lineno": 1816,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -47571,7 +47571,7 @@
      "verify": "required"
     },
     "RUL-image_capture_atomic": {
-     "aliases": "db-snapshot-atomic-replace-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -47608,7 +47608,7 @@
       "RAT-image_replaced_not_kept"
      ],
      "layout": null,
-     "lineno": 2081,
+     "lineno": 1960,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -47692,7 +47692,7 @@
       "RAT-image_replaced_not_kept"
      ],
      "layout": null,
-     "lineno": 2046,
+     "lineno": 1927,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -47736,7 +47736,7 @@
      "verify": "none"
     },
     "RUL-images_archived": {
-     "aliases": "geotag-finalize-db-snapshot-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -47774,7 +47774,7 @@
       "RAT-image_replaced_not_kept"
      ],
      "layout": null,
-     "lineno": 2058,
+     "lineno": 1939,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -47821,7 +47821,7 @@
      "verify": "required"
     },
     "RUL-inbox_kept_as_dumped": {
-     "aliases": "prep-no-flatten-sources-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -47858,7 +47858,7 @@
       "RAT-dump_folders_kept"
      ],
      "layout": null,
-     "lineno": 170,
+     "lineno": 158,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -47942,7 +47942,7 @@
       "RAT-stray_as_it_came"
      ],
      "layout": null,
-     "lineno": 231,
+     "lineno": 214,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -48027,7 +48027,7 @@
       "RAT-trips_revisit"
      ],
      "layout": null,
-     "lineno": 327,
+     "lineno": 308,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -48075,7 +48075,7 @@
      "verify": "required"
     },
     "RUL-init_moves_dump_to_inbox": {
-     "aliases": "prep-init-moves-base-into-sources-1, prep-init-excludes-managed-from-move-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -48112,7 +48112,7 @@
       "RAT-bootstrap_once"
      ],
      "layout": null,
-     "lineno": 49,
+     "lineno": 46,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -48161,7 +48161,7 @@
      "verify": "required"
     },
     "RUL-init_taken_up_again": {
-     "aliases": "prep-crash-init-reenters-harmlessly-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -48196,7 +48196,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 85,
+     "lineno": 79,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -48240,7 +48240,7 @@
      "verify": "required"
     },
     "RUL-initialized_marked_last": {
-     "aliases": "prep-sentinel-written-last-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -48277,7 +48277,7 @@
       "RAT-mark_means_whole"
      ],
      "layout": null,
-     "lineno": 73,
+     "lineno": 68,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -48325,7 +48325,7 @@
      "verify": "required"
     },
     "RUL-invalid_decision_kept": {
-     "aliases": "validate-preserve-invalid-1, geotag-invalid-preserved-1, geotag-stale-decision-preserved-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -48362,7 +48362,7 @@
       "RAT-invalid_decision_shown"
      ],
      "layout": null,
-     "lineno": 2702,
+     "lineno": 2541,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -48412,7 +48412,7 @@
      "verify": "required"
     },
     "RUL-invalid_value_located": {
-     "aliases": "validate-locate-no-repair-1, geotag-validation-hard-blocker-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -48449,7 +48449,7 @@
       "RAT-hand_written_fallible"
      ],
      "layout": null,
-     "lineno": 2665,
+     "lineno": 2506,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -48540,7 +48540,7 @@
       "RAT-hand_written_fallible"
      ],
      "layout": null,
-     "lineno": 2679,
+     "lineno": 2519,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -48586,7 +48586,7 @@
      "verify": "required"
     },
     "RUL-invalid_value_stops": {
-     "aliases": "validate-fail-closed-1, merge-config-validated-1, prep-config-validation-failure-blocks-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -48623,7 +48623,7 @@
       "RAT-hand_written_fallible"
      ],
      "layout": null,
-     "lineno": 2652,
+     "lineno": 2494,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -48674,7 +48674,7 @@
      "verify": "required"
     },
     "RUL-jobs_change_nothing": {
-     "aliases": "prep-concurrency-no-semantic-change-1, prep-two-job-counts-same-plan-1, prep-candidates-sorted-deterministic-1, prep-traversal-single-threaded-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -48711,7 +48711,7 @@
       "RAT-speed_is_the_machines"
      ],
      "layout": null,
-     "lineno": 799,
+     "lineno": 747,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -48757,7 +48757,7 @@
      "verify": "required"
     },
     "RUL-jobs_recorded_nowhere": {
-     "aliases": "prep-job-count-run-metadata-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -48794,7 +48794,7 @@
       "RAT-speed_is_the_machines"
      ],
      "layout": null,
-     "lineno": 812,
+     "lineno": 759,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -48873,7 +48873,7 @@
       "RAT-journal_is_evidence"
      ],
      "layout": null,
-     "lineno": 630,
+     "lineno": 590,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -48919,7 +48919,7 @@
      "verify": "required"
     },
     "RUL-known_when_classified": {
-     "aliases": "camera-known-when-classified-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -48956,7 +48956,7 @@
       "RAT-class_from_the_user"
      ],
      "layout": null,
-     "lineno": 959,
+     "lineno": 900,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -49005,7 +49005,7 @@
      "verify": "required"
     },
     "RUL-library_confirmed_before_lock": {
-     "aliases": "merge-lock-after-marker-1, merge-marker-check-before-liblock-1, merge-lock-acquisition-order-1, merge-fail-lock-or-marker-mutates-nothing-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -49042,7 +49042,7 @@
       "RAT-library_mark"
      ],
      "layout": null,
-     "lineno": 2312,
+     "lineno": 2177,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -49090,7 +49090,7 @@
      "verify": "required"
     },
     "RUL-library_creates_only_placements": {
-     "aliases": "merge-create-library-dest-subdir-1, merge-no-library-side-state-persist-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -49127,7 +49127,7 @@
       "RAT-library_mark"
      ],
      "layout": null,
-     "lineno": 2254,
+     "lineno": 2122,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -49174,7 +49174,7 @@
      "verify": "required"
     },
     "RUL-library_file_read_once": {
-     "aliases": "merge-fingerprint-cached-onfly-1, merge-cache-library-fingerprint-in-workspace-db-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -49211,7 +49211,7 @@
       "RAT-library_reads_cost"
      ],
      "layout": null,
-     "lineno": 2179,
+     "lineno": 2052,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -49300,7 +49300,7 @@
       "RAT-library_reads_cost"
      ],
      "layout": null,
-     "lineno": 2192,
+     "lineno": 2064,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -49347,7 +49347,7 @@
      "verify": "required"
     },
     "RUL-library_known_by_mark": {
-     "aliases": "lib-marker-only-identity-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -49384,7 +49384,7 @@
       "RAT-library_mark"
      ],
      "layout": null,
-     "lineno": 2218,
+     "lineno": 2089,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -49435,7 +49435,7 @@
      "verify": "required"
     },
     "RUL-library_lock": {
-     "aliases": "merge-library-lock-1, merge-hold-two-locks-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -49472,7 +49472,7 @@
       "RAT-library_shared"
      ],
      "layout": null,
-     "lineno": 2267,
+     "lineno": 2134,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -49523,7 +49523,7 @@
      "verify": "required"
     },
     "RUL-library_lock_fail_fast": {
-     "aliases": "merge-library-lock-failfast-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -49560,7 +49560,7 @@
       "RAT-library_shared"
      ],
      "layout": null,
-     "lineno": 2290,
+     "lineno": 2156,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -49645,7 +49645,7 @@
       "RAT-library_shared"
      ],
      "layout": null,
-     "lineno": 2280,
+     "lineno": 2146,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -49728,7 +49728,7 @@
       "RAT-library_shared"
      ],
      "layout": null,
-     "lineno": 2302,
+     "lineno": 2167,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -49772,7 +49772,7 @@
      "verify": "incidental"
     },
     "RUL-library_mark_made_by_setup": {
-     "aliases": "merge-init-library-creates-marker-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -49809,7 +49809,7 @@
       "RAT-library_mark"
      ],
      "layout": null,
-     "lineno": 2231,
+     "lineno": 2101,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -49856,7 +49856,7 @@
      "verify": "required"
     },
     "RUL-library_mark_required": {
-     "aliases": "merge-require-blessed-library-marker-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -49893,7 +49893,7 @@
       "RAT-library_mark"
      ],
      "layout": null,
-     "lineno": 2242,
+     "lineno": 2111,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -49940,7 +49940,7 @@
      "verify": "required"
     },
     "RUL-library_mirrors_destinations": {
-     "aliases": "merge-map-preserve-destination-structure-1, merge-mapping-deterministic-1, merge-preserve-geotag-final-name-1, merge-no-mutate-by-dest-content-or-name-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -49977,7 +49977,7 @@
       "RAT-destination_tree_is_the_library"
      ],
      "layout": null,
-     "lineno": 57,
+     "lineno": 54,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -50027,7 +50027,7 @@
      "verify": "required"
     },
     "RUL-library_never_altered": {
-     "aliases": "merge-library-protected-1, merge-library-file-never-deleted-written-renamed-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -50064,7 +50064,7 @@
       "RAT-library_is_ground_truth"
      ],
      "layout": null,
-     "lineno": 2103,
+     "lineno": 1981,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -50114,7 +50114,7 @@
      "verify": "required"
     },
     "RUL-library_not_scanned": {
-     "aliases": "merge-collision-detected-by-existence-check-1, merge-free-target-places-without-library-read-1, merge-no-library-wide-index-1, lib-never-rescanned-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -50151,7 +50151,7 @@
       "RAT-library_is_ground_truth"
      ],
      "layout": null,
-     "lineno": 2116,
+     "lineno": 1993,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -50199,7 +50199,7 @@
      "verify": "required"
     },
     "RUL-library_place_checked": {
-     "aliases": "lib-root-validated-outside-1, merge-validate-library-root-path-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -50237,7 +50237,7 @@
       "RAT-library_mark"
      ],
      "layout": null,
-     "lineno": 2204,
+     "lineno": 2076,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -50290,7 +50290,7 @@
      "verify": "required"
     },
     "RUL-library_setup_writes_one_setting": {
-     "aliases": "config-initlib-writes-libroot-only-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -50327,7 +50327,7 @@
       "RAT-config_changes_chosen"
      ],
      "layout": null,
-     "lineno": 349,
+     "lineno": 331,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -50411,7 +50411,7 @@
       "RAT-workspace_not_recycled"
      ],
      "layout": null,
-     "lineno": 1553,
+     "lineno": 1464,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -50492,7 +50492,7 @@
       "RAT-a_link_escapes_the_tree"
      ],
      "layout": null,
-     "lineno": 830,
+     "lineno": 780,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -50538,7 +50538,7 @@
      "verify": "required"
     },
     "RUL-lock_before_reading": {
-     "aliases": "lock-covers-planning-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -50575,7 +50575,7 @@
       "RAT-planning_inside_lock"
      ],
      "layout": null,
-     "lineno": 90,
+     "lineno": 88,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -50622,7 +50622,7 @@
      "verify": "required"
     },
     "RUL-lock_fail_fast": {
-     "aliases": "lock-failfast-1, geotag-lock-failfast-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -50657,7 +50657,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 116,
+     "lineno": 112,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -50701,7 +50701,7 @@
      "verify": "required"
     },
     "RUL-lock_released_on_any_end": {
-     "aliases": "lock-release-on-exit-error-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -50736,7 +50736,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 130,
+     "lineno": 125,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -50780,7 +50780,7 @@
      "verify": "required"
     },
     "RUL-lock_through_the_run": {
-     "aliases": "lock-covers-whole-run-1, prep-run-under-single-lock-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -50815,7 +50815,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 103,
+     "lineno": 100,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -50863,7 +50863,7 @@
      "verify": "required"
     },
     "RUL-log_cites_decisions": {
-     "aliases": "log-decision-provenance-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -50900,7 +50900,7 @@
       "RAT-why_beside_what"
      ],
      "layout": null,
-     "lineno": 1894,
+     "lineno": 1784,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -50949,7 +50949,7 @@
      "verify": "required"
     },
     "RUL-log_entry_grows": {
-     "aliases": "log-entry-append-only-1, prep-log-incremental-1, prep-log-carried-forward-1, log-carried-unchanged-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -50986,7 +50986,7 @@
       "RAT-each_phase_owns_its_steps"
      ],
      "layout": null,
-     "lineno": 1859,
+     "lineno": 1751,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -51073,7 +51073,7 @@
       "RAT-new_fingerprint_same_photo"
      ],
      "layout": null,
-     "lineno": 785,
+     "lineno": 733,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -51121,7 +51121,7 @@
      "verify": "required"
     },
     "RUL-log_human_readable": {
-     "aliases": "log-human-readable-json-1, log-offset-in-words-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -51158,7 +51158,7 @@
       "RAT-log_read_by_people"
      ],
      "layout": null,
-     "lineno": 1917,
+     "lineno": 1805,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -51205,7 +51205,7 @@
      "verify": "required"
     },
     "RUL-log_keyed_by_fingerprint": {
-     "aliases": "log-keyed-by-fingerprint-1, prep-log-per-photo-fingerprint-keyed-1, prep-log-records-journey-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -51242,7 +51242,7 @@
       "RAT-names_cannot_key_the_log"
      ],
      "layout": null,
-     "lineno": 1873,
+     "lineno": 1764,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -51293,7 +51293,7 @@
      "verify": "required"
     },
     "RUL-log_records_gps_reverts": {
-     "aliases": "log-records-gps-revert-1, geotag-prestate-absent-1, geotag-three-gps-origins-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -51330,7 +51330,7 @@
       "RAT-reverts_are_steps_too"
      ],
      "layout": null,
-     "lineno": 1905,
+     "lineno": 1794,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -51377,7 +51377,7 @@
      "verify": "required"
     },
     "RUL-media_extension_lowercase": {
-     "aliases": "prep-normalize-extension-case-1, prep-no-renormalize-extensions-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -51414,7 +51414,7 @@
       "RAT-one_extension_spelling"
      ],
      "layout": null,
-     "lineno": 255,
+     "lineno": 237,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -51462,7 +51462,7 @@
      "verify": "required"
     },
     "RUL-memo_entry_same_tests": {
-     "aliases": "prep-plan-memo-freshness-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -51499,7 +51499,7 @@
       "RAT-memo_is_observation"
      ],
      "layout": null,
-     "lineno": 451,
+     "lineno": 423,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -51546,7 +51546,7 @@
      "verify": "required"
     },
     "RUL-memo_never_changes_plan": {
-     "aliases": "prep-plan-memo-disposable-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -51583,7 +51583,7 @@
       "RAT-memo_is_observation"
      ],
      "layout": null,
-     "lineno": 472,
+     "lineno": 443,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -51667,7 +51667,7 @@
       "RAT-memo_is_observation"
      ],
      "layout": null,
-     "lineno": 462,
+     "lineno": 433,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -51714,7 +51714,7 @@
      "verify": "required"
     },
     "RUL-memo_tracks_workspace": {
-     "aliases": "prep-plan-memo-pruned-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -51751,7 +51751,7 @@
       "RAT-plan_keeps_its_reading"
      ],
      "layout": null,
-     "lineno": 484,
+     "lineno": 454,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -51797,7 +51797,7 @@
      "verify": "required"
     },
     "RUL-merge_blocked_changes_nothing": {
-     "aliases": "merge-precond-fail-no-output-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -51834,7 +51834,7 @@
       "RAT-refused_merge_clean"
      ],
      "layout": null,
-     "lineno": 43,
+     "lineno": 41,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -51918,7 +51918,7 @@
       "RAT-workspace_not_recycled"
      ],
      "layout": null,
-     "lineno": 1542,
+     "lineno": 1453,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -51966,7 +51966,7 @@
      "verify": "required"
     },
     "RUL-merge_moves": {
-     "aliases": "merge-move-leaves-bydest-empty-1, merge-move-atomic-source-last-1, merge-move-placed-out-of-by-dest-1, merge-source-removed-only-after-verified-copy-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -52003,7 +52003,7 @@
       "RAT-move_not_copy"
      ],
      "layout": null,
-     "lineno": 2326,
+     "lineno": 2190,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -52057,7 +52057,7 @@
      "verify": "required"
     },
     "RUL-merge_outcome_recorded": {
-     "aliases": "merge-summary-final-status-values-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -52094,7 +52094,7 @@
       "RAT-merge_outcome_decides_next"
      ],
      "layout": null,
-     "lineno": 116,
+     "lineno": 109,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -52142,7 +52142,7 @@
      "verify": "required"
     },
     "RUL-merge_rechecks_gates": {
-     "aliases": "merge-require-0-sources-empty-1, merge-require-by-dest-photo-only-1, merge-prep-consistency-1, merge-residual-folders-do-not-block-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -52179,7 +52179,7 @@
       "RAT-touched_since_geotag"
      ],
      "layout": null,
-     "lineno": 28,
+     "lineno": 27,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -52231,7 +52231,7 @@
      "verify": "required"
     },
     "RUL-merge_rechecks_under_new_engine": {
-     "aliases": "merge-only-no-reorganize-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -52318,7 +52318,7 @@
      "verify": "required"
     },
     "RUL-merge_records_landing": {
-     "aliases": "merge-records-summary-1, merge-summary-per-file-placement-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -52353,7 +52353,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 2364,
+     "lineno": 2225,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -52406,7 +52406,7 @@
      "verify": "required"
     },
     "RUL-merge_refuses_changed_since_finalize": {
-     "aliases": "merge-revalidates-current-1, merge-post-finalize-currency-check-1, merge-noop-reprep-does-not-trip-currency-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -52443,7 +52443,7 @@
       "RAT-merge_never_half_done"
      ],
      "layout": null,
-     "lineno": 1529,
+     "lineno": 1441,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -52493,7 +52493,7 @@
      "verify": "required"
     },
     "RUL-merge_replan_any_time": {
-     "aliases": "merge-replan-allowed-after-failed-or-rejected-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -52530,7 +52530,7 @@
       "RAT-partial_merge_no_dead_end"
      ],
      "layout": null,
-     "lineno": 73,
+     "lineno": 69,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -52577,7 +52577,7 @@
      "verify": "required"
     },
     "RUL-merge_reseals": {
-     "aliases": "merge-reseals-automatically-1, merge-reseal-archive-automatic-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -52614,7 +52614,7 @@
       "RAT-reseal_automatic"
      ],
      "layout": null,
-     "lineno": 2389,
+     "lineno": 2248,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -52663,7 +52663,7 @@
      "verify": "required"
     },
     "RUL-merge_resumable": {
-     "aliases": "merge-idempotent-resumable-1, merge-resume-completes-crash-window-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -52700,7 +52700,7 @@
       "RAT-move_not_copy"
      ],
      "layout": null,
-     "lineno": 2351,
+     "lineno": 2213,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -52753,7 +52753,7 @@
      "verify": "required"
     },
     "RUL-merge_run_reported": {
-     "aliases": "merge-textual-output-separation-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -52790,7 +52790,7 @@
       "RAT-merge_report_at_the_end"
      ],
      "layout": null,
-     "lineno": 128,
+     "lineno": 120,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -52874,7 +52874,7 @@
       "RAT-library_snapshot_alone_loses"
      ],
      "layout": null,
-     "lineno": 250,
+     "lineno": 236,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -52920,7 +52920,7 @@
      "verify": "required"
     },
     "RUL-merge_suffix_above_highest": {
-     "aliases": "merge-suffix-append-at-max-plus-1-1, merge-allocation-treats-existing-and-batch-occupied-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -52957,7 +52957,7 @@
       "RAT-merge_appends"
      ],
      "layout": null,
-     "lineno": 1040,
+     "lineno": 976,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -53006,7 +53006,7 @@
      "verify": "required"
     },
     "RUL-merge_takes_finalized_current": {
-     "aliases": "merge-preconditions-finalized-1, loop-finalize-before-merge-1, merge-require-geotag-success-1, merge-require-finalized-else-run-finalize-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -53043,7 +53043,7 @@
       "RAT-merge_never_half_done"
      ],
      "layout": null,
-     "lineno": 1516,
+     "lineno": 1429,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -53096,7 +53096,7 @@
      "verify": "required"
     },
     "RUL-metadata_freshness": {
-     "aliases": "prep-metadata-freshness-inputs-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -53133,7 +53133,7 @@
       "RAT-reading_change_detectable"
      ],
      "layout": null,
-     "lineno": 567,
+     "lineno": 532,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -53218,7 +53218,7 @@
       "RAT-camera_record_first"
      ],
      "layout": null,
-     "lineno": 557,
+     "lineno": 522,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -53263,7 +53263,7 @@
      "verify": "required"
     },
     "RUL-metadata_kept_for_geotag": {
-     "aliases": "prep-cache-metadata-fields-1, prep-passive-metadata-cache-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -53300,7 +53300,7 @@
       "RAT-one_read_serves_both"
      ],
      "layout": null,
-     "lineno": 545,
+     "lineno": 511,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -53381,7 +53381,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1117,
+     "lineno": 1048,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -53427,7 +53427,7 @@
      "verify": "required"
     },
     "RUL-misnamed_file_stops_prep": {
-     "aliases": "fname-nonconforming-redumped-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -53464,7 +53464,7 @@
       "RAT-misnamed_not_ignored"
      ],
      "layout": null,
-     "lineno": 1105,
+     "lineno": 1037,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -53515,7 +53515,7 @@
      "verify": "required"
     },
     "RUL-missing_folder_blocks": {
-     "aliases": "struct-no-silent-rebuild-1, merge-require-managed-structure-intact-1, geotag-incomplete-structure-hardstop-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -53552,7 +53552,7 @@
       "RAT-rebuild_masks_loss"
      ],
      "layout": null,
-     "lineno": 863,
+     "lineno": 811,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -53601,7 +53601,7 @@
      "verify": "required"
     },
     "RUL-missing_folder_named": {
-     "aliases": "prep-missing-folder-blocks-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -53638,7 +53638,7 @@
       "RAT-rebuild_masks_loss"
      ],
      "layout": null,
-     "lineno": 876,
+     "lineno": 823,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -53684,7 +53684,7 @@
      "verify": "required"
     },
     "RUL-missing_metadata_stays": {
-     "aliases": "prep-missing-metadata-no-special-path-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -53721,7 +53721,7 @@
       "RAT-fix_through_inbox"
      ],
      "layout": null,
-     "lineno": 242,
+     "lineno": 225,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -53803,7 +53803,7 @@
       "RAT-loop_is_steady_state"
      ],
      "layout": null,
-     "lineno": 1493,
+     "lineno": 1407,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -53848,7 +53848,7 @@
      "verify": "required"
     },
     "RUL-move_recognized": {
-     "aliases": "prep-recognize-bydest-resort-1, prep-ambiguous-move-rescan-1, prep-content-change-overrides-carry-1, prep-cache-distinguish-cases-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -53885,7 +53885,7 @@
       "RAT-sort_costs_no_reading"
      ],
      "layout": null,
-     "lineno": 379,
+     "lineno": 355,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -53934,7 +53934,7 @@
      "verify": "required"
     },
     "RUL-moved_file_carried": {
-     "aliases": "prep-recognize-bydate-to-bydest-move-1, prep-move-carry-forward-drop-old-1, prep-handoff-updated-on-move-only-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -53971,7 +53971,7 @@
       "RAT-move_launders_nothing"
      ],
      "layout": null,
-     "lineno": 392,
+     "lineno": 367,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -54022,7 +54022,7 @@
      "verify": "required"
     },
     "RUL-moved_photo_decided_anew": {
-     "aliases": "move-reevaluate-dest-1, prep-resort-restales-decisions-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -54059,7 +54059,7 @@
       "RAT-destination_is_an_input"
      ],
      "layout": null,
-     "lineno": 272,
+     "lineno": 256,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -54104,7 +54104,7 @@
      "verify": "required"
     },
     "RUL-mutate_on_difference": {
-     "aliases": "idem-mutate-on-real-diff-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -54139,7 +54139,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1627,
+     "lineno": 1534,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -54189,7 +54189,7 @@
      "verify": "required"
     },
     "RUL-new_file_restales_plan": {
-     "aliases": "prep-execute-rejects-new-file-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -54226,7 +54226,7 @@
       "RAT-plan_saw_the_workspace"
      ],
      "layout": null,
-     "lineno": 595,
+     "lineno": 558,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -54311,7 +54311,7 @@
       "RAT-library_snapshot_alone_loses"
      ],
      "layout": null,
-     "lineno": 259,
+     "lineno": 245,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -54357,7 +54357,7 @@
      "verify": "required"
     },
     "RUL-no_links": {
-     "aliases": "struct-symlinks-barred-1, gate-no-symlinks-by-dest-1, prep-root-symlink-barred-1, prep-symlink-managed-blocks-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -54394,7 +54394,7 @@
       "RAT-a_link_escapes_the_tree"
      ],
      "layout": null,
-     "lineno": 816,
+     "lineno": 767,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -54481,7 +54481,7 @@
       "RAT-names_cannot_key_the_log"
      ],
      "layout": null,
-     "lineno": 1884,
+     "lineno": 1774,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -54527,7 +54527,7 @@
      "verify": "required"
     },
     "RUL-no_meaning_from_names": {
-     "aliases": "prep-no-parse-nonconforming-name-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -54562,7 +54562,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1127,
+     "lineno": 1058,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -54606,7 +54606,7 @@
      "verify": "required"
     },
     "RUL-no_op_run": {
-     "aliases": "idem-no-op-run-1, prep-unchanged-no-op-1, prep-second-run-zero-mutations-1, prep-same-names-same-input-1, merge-deterministic-rerun-same-targets-names-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -54641,7 +54641,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1640,
+     "lineno": 1546,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -54694,7 +54694,7 @@
      "verify": "required"
     },
     "RUL-no_op_run_reports_reuse": {
-     "aliases": "prep-report-no-op-facts-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -54729,7 +54729,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1652,
+     "lineno": 1557,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -54776,7 +54776,7 @@
      "verify": "required"
     },
     "RUL-no_plan_location_option": {
-     "aliases": "plan-no-path-flag-1, plan-prints-path-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -54813,7 +54813,7 @@
       "RAT-one_place_per_plan"
      ],
      "layout": null,
-     "lineno": 669,
+     "lineno": 631,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -54859,7 +54859,7 @@
      "verify": "required"
     },
     "RUL-no_plan_no_run": {
-     "aliases": "plan-missing-stops-1, prep-dryrun-no-plan-stops-1, prep-execute-no-plan-stops-1, merge-dryrun-requires-saved-plan-1, geotag-execute-requires-valid-plan-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -54896,7 +54896,7 @@
       "RAT-plan_before_run"
      ],
      "layout": null,
-     "lineno": 681,
+     "lineno": 642,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -54941,7 +54941,7 @@
      "verify": "required"
     },
     "RUL-no_record_before_decisions": {
-     "aliases": "geotag-no-json-before-decision-stage-1, geotag-first-artifact-21-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -54978,7 +54978,7 @@
       "RAT-record_means_stage_reached"
      ],
      "layout": null,
-     "lineno": 80,
+     "lineno": 76,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -55025,7 +55025,7 @@
      "verify": "required"
     },
     "RUL-not_inventoried": {
-     "aliases": "ctrl-skip-set-1, prep-scan-skips-control-subtrees-1, prep-no-requarantine-1, prep-quarantine-excluded-scan-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -55060,7 +55060,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 623,
+     "lineno": 589,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -55111,7 +55111,7 @@
      "verify": "incidental"
     },
     "RUL-nothing_built_from_merge_records": {
-     "aliases": "merge-summary-artifact-not-dependency-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -55146,7 +55146,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 2377,
+     "lineno": 2237,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -55190,7 +55190,7 @@
      "verify": "none"
     },
     "RUL-offset_from_own_evidence": {
-     "aliases": "geotag-offset-anchored-locally-1, geotag-offset-no-inherit-1, geotag-offset-no-rollup-1, geotag-bucket-no-inherit-1, geotag-bucket-proposal-priority-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -55227,7 +55227,7 @@
       "RAT-no_borrowed_offsets"
      ],
      "layout": null,
-     "lineno": 167,
+     "lineno": 156,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -55279,7 +55279,7 @@
      "verify": "required"
     },
     "RUL-offset_per_camera_destination_day": {
-     "aliases": "geotag-offset-per-date-bucket-1, geotag-offset-per-group-dest-1, geotag-container-no-offset-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -55316,7 +55316,7 @@
       "RAT-offset_per_day_and_place"
      ],
      "layout": null,
-     "lineno": 155,
+     "lineno": 145,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -55370,7 +55370,7 @@
      "verify": "required"
     },
     "RUL-one_configuration": {
-     "aliases": "config-single-shared-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -55407,7 +55407,7 @@
       "RAT-one_place_for_settings"
      ],
      "layout": null,
-     "lineno": 281,
+     "lineno": 267,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -55455,7 +55455,7 @@
      "verify": "incidental"
     },
     "RUL-one_database": {
-     "aliases": "db-single-workspace-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -55492,7 +55492,7 @@
       "RAT-database_is_record"
      ],
      "layout": null,
-     "lineno": 1975,
+     "lineno": 1860,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -55541,7 +55541,7 @@
      "verify": "required"
     },
     "RUL-one_filename_format": {
-     "aliases": "fname-single-shared-key-1, geotag-filename-config-driven-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -55578,7 +55578,7 @@
       "RAT-one_format_no_drift"
      ],
      "layout": null,
-     "lineno": 1003,
+     "lineno": 942,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -55662,7 +55662,7 @@
       "RAT-workspace_one_filesystem"
      ],
      "layout": null,
-     "lineno": 2770,
+     "lineno": 2606,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -55746,7 +55746,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 80,
+     "lineno": 78,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -55788,7 +55788,7 @@
      "verify": "incidental"
     },
     "RUL-only_prep_builds_structure": {
-     "aliases": "merge-require-initialized-else-run-prep-1, geotag-uninitialized-hardstop-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -55825,7 +55825,7 @@
       "RAT-rebuild_masks_loss"
      ],
      "layout": null,
-     "lineno": 776,
+     "lineno": 730,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -55875,7 +55875,7 @@
      "verify": "required"
     },
     "RUL-operations_atomic": {
-     "aliases": "atomic-operations-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -55912,7 +55912,7 @@
       "RAT-safe_at_each_change"
      ],
      "layout": null,
-     "lineno": 2732,
+     "lineno": 2569,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -55959,7 +55959,7 @@
      "verify": "incidental"
     },
     "RUL-organization_settings_restale": {
-     "aliases": "config-folderset-ext-restale-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -55996,7 +55996,7 @@
       "RAT-organization_decides_where_files_are"
      ],
      "layout": null,
-     "lineno": 452,
+     "lineno": 428,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -56079,7 +56079,7 @@
       "RAT-database_is_record"
      ],
      "layout": null,
-     "lineno": 1987,
+     "lineno": 1871,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -56164,7 +56164,7 @@
       "RAT-other_outside_inbox_is_the_users"
      ],
      "layout": null,
-     "lineno": 135,
+     "lineno": 125,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -56208,7 +56208,7 @@
      "verify": "required"
     },
     "RUL-other_proposals_need_acceptance": {
-     "aliases": "geotag-no-autonomous-mutation-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -56245,7 +56245,7 @@
       "RAT-assumptions_need_acceptance"
      ],
      "layout": null,
-     "lineno": 120,
+     "lineno": 113,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -56332,7 +56332,7 @@
       "RAT-own_position_best"
      ],
      "layout": null,
-     "lineno": 409,
+     "lineno": 389,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -56415,7 +56415,7 @@
       "RAT-same_photo_new_fingerprint"
      ],
      "layout": null,
-     "lineno": 394,
+     "lineno": 374,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -56462,7 +56462,7 @@
      "verify": "required"
     },
     "RUL-package_contents": {
-     "aliases": "archive-package-contents-1, archive-whole-control-dir-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -56499,7 +56499,7 @@
       "RAT-package_answers_later"
      ],
      "layout": null,
-     "lineno": 1833,
+     "lineno": 1727,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -56549,7 +56549,7 @@
      "verify": "required"
     },
     "RUL-package_self_describing": {
-     "aliases": "archive-self-describing-manifest-1, geotag-finalize-manifest-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -56586,7 +56586,7 @@
       "RAT-package_checks_itself"
      ],
      "layout": null,
-     "lineno": 1847,
+     "lineno": 1740,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -56633,7 +56633,7 @@
      "verify": "required"
     },
     "RUL-partial_history_shown": {
-     "aliases": "log-fail-if-insufficient-1, prep-log-fail-if-history-insufficient-1, log-partial-geotag-history-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -56670,7 +56670,7 @@
       "RAT-retention_serves_the_log"
      ],
      "layout": null,
-     "lineno": 1943,
+     "lineno": 1829,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -56720,7 +56720,7 @@
      "verify": "required"
     },
     "RUL-phase_writes_own_records": {
-     "aliases": "archive-artifact-ownership-1, merge-writes-only-own-3x-copies-26-forward-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -56757,7 +56757,7 @@
       "RAT-records_attributable"
      ],
      "layout": null,
-     "lineno": 1794,
+     "lineno": 1691,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -56844,7 +56844,7 @@
       "RAT-phone_records_its_offset"
      ],
      "layout": null,
-     "lineno": 352,
+     "lineno": 333,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -56890,7 +56890,7 @@
      "verify": "required"
     },
     "RUL-photos_by_date": {
-     "aliases": "prep-route-by-class-timestamp-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -56927,7 +56927,7 @@
       "RAT-photos_wait_by_date"
      ],
      "layout": null,
-     "lineno": 208,
+     "lineno": 193,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -57012,7 +57012,7 @@
       "RAT-placement_most_specific_first"
      ],
      "layout": null,
-     "lineno": 419,
+     "lineno": 399,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -57062,7 +57062,7 @@
      "verify": "required"
     },
     "RUL-plan_at_fixed_place": {
-     "aliases": "plan-canonical-path-1, prep-plan-canonical-path-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -57099,7 +57099,7 @@
       "RAT-one_place_per_plan"
      ],
      "layout": null,
-     "lineno": 658,
+     "lineno": 621,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -57145,7 +57145,7 @@
      "verify": "required"
     },
     "RUL-plan_carried_out_by_its_code": {
-     "aliases": "prep-execute-revalidates-rejects-stale-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -57182,7 +57182,7 @@
       "RAT-plan_is_its_codes"
      ],
      "layout": null,
-     "lineno": 2938,
+     "lineno": 2767,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -57232,7 +57232,7 @@
      "verify": "required"
     },
     "RUL-plan_memo_kept": {
-     "aliases": "prep-plan-memo-reuse-1, prep-plan-memo-not-the-cache-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -57269,7 +57269,7 @@
       "RAT-plan_keeps_its_reading"
      ],
      "layout": null,
-     "lineno": 426,
+     "lineno": 400,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -57319,7 +57319,7 @@
      "verify": "required"
     },
     "RUL-planning_changes_no_media": {
-     "aliases": "prep-plan-nonmutating-1, merge-planning-nonmutating-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -57356,7 +57356,7 @@
       "RAT-plan_read_before_anything_moves"
      ],
      "layout": null,
-     "lineno": 2901,
+     "lineno": 2733,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -57398,7 +57398,7 @@
      "verify": "required"
     },
     "RUL-position_written_whole": {
-     "aliases": "geotag-gps-write-complete-fix-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -57435,7 +57435,7 @@
       "RAT-position_whole"
      ],
      "layout": null,
-     "lineno": 458,
+     "lineno": 436,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -57481,7 +57481,7 @@
      "verify": "required"
     },
     "RUL-prep_derives_camera_group": {
-     "aliases": "camera-prep-computes-key-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -57518,7 +57518,7 @@
       "RAT-grouping_computed_once"
      ],
      "layout": null,
-     "lineno": 922,
+     "lineno": 866,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -57567,7 +57567,7 @@
      "verify": "required"
     },
     "RUL-prep_dry_run_changes_nothing": {
-     "aliases": "prep-dryrun-mutates-nothing-1, prep-dryrun-not-simulation-1, prep-dryrun-summary-not-dump-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -57604,7 +57604,7 @@
       "RAT-dry_run_for_looking"
      ],
      "layout": null,
-     "lineno": 607,
+     "lineno": 569,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -57649,7 +57649,7 @@
      "verify": "required"
     },
     "RUL-prep_empties_inbox": {
-     "aliases": "prep-sources-empty-after-stage5-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -57686,7 +57686,7 @@
       "RAT-empty_inbox_means_nothing_waits"
      ],
      "layout": null,
-     "lineno": 1377,
+     "lineno": 1299,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -57731,7 +57731,7 @@
      "verify": "required"
     },
     "RUL-prep_leaves_by_dest_as_found": {
-     "aliases": "prep-by-dest-readonly-1, prep-no-perform-bydest-move-1, prep-bydest-never-quarantined-1, prep-scan-split-inventory-1, prep-move-recognition-no-mutate-bydest-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -57768,7 +57768,7 @@
       "RAT-by_dest_is_the_users"
      ],
      "layout": null,
-     "lineno": 23,
+     "lineno": 22,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -57817,7 +57817,7 @@
      "verify": "required"
     },
     "RUL-prep_log_derived": {
-     "aliases": "prep-log-derived-no-new-authority-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -57854,7 +57854,7 @@
       "RAT-log_adds_no_authority"
      ],
      "layout": null,
-     "lineno": 762,
+     "lineno": 712,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -57898,7 +57898,7 @@
      "verify": "required"
     },
     "RUL-prep_log_records_set_aside": {
-     "aliases": "prep-log-records-quarantine-dups-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -57935,7 +57935,7 @@
       "RAT-log_adds_no_authority"
      ],
      "layout": null,
-     "lineno": 773,
+     "lineno": 722,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -57981,7 +57981,7 @@
      "verify": "required"
     },
     "RUL-prep_name_provisional": {
-     "aliases": "fname-prep-provisional-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -58019,7 +58019,7 @@
       "RAT-same_shape_different_value"
      ],
      "layout": null,
-     "lineno": 1051,
+     "lineno": 986,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -58061,7 +58061,7 @@
      "verify": "incidental"
     },
     "RUL-prep_no_time_or_gps": {
-     "aliases": "prep-no-time-gps-correction-1, prep-no-timestamp-correction-1, prep-no-geotag-command-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -58144,7 +58144,7 @@
      "verify": "required"
     },
     "RUL-prep_records_on_success": {
-     "aliases": "prep-handoff-non-editable-1, prep-handoff-only-on-success-1, prep-prep-log-on-success-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -58181,7 +58181,7 @@
       "RAT-record_of_a_finished_run"
      ],
      "layout": null,
-     "lineno": 727,
+     "lineno": 680,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -58225,7 +58225,7 @@
      "verify": "required"
     },
     "RUL-prep_records_sort": {
-     "aliases": "loop-no-behind-preps-back-1, geotag-prep-after-move-required-1, prep-reprep-mandatory-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -58262,7 +58262,7 @@
       "RAT-never_behind_prep"
      ],
      "layout": null,
-     "lineno": 1401,
+     "lineno": 1321,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -58315,7 +58315,7 @@
      "verify": "required"
     },
     "RUL-prep_replans": {
-     "aliases": "prep-replan-not-resume-1, prep-crash-safe-rerun-1, prep-no-journal-replay-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -58352,7 +58352,7 @@
       "RAT-files_say_what_is_done"
      ],
      "layout": null,
-     "lineno": 653,
+     "lineno": 612,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -58394,7 +58394,7 @@
      "verify": "required"
     },
     "RUL-prep_run_summarised": {
-     "aliases": "prep-summary-separates-categories-1, prep-summary-confirm-artifacts-after-validation-1, prep-execution-visible-logs-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -58431,7 +58431,7 @@
       "RAT-reviewer_sees_what_was_touched"
      ],
      "layout": null,
-     "lineno": 846,
+     "lineno": 790,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -58476,7 +58476,7 @@
      "verify": "required"
     },
     "RUL-prep_takes_no_decision": {
-     "aliases": "prep-no-geotag-json-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -58513,7 +58513,7 @@
       "RAT-prep_needs_no_answers"
      ],
      "layout": null,
-     "lineno": 1712,
+     "lineno": 1613,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -58557,7 +58557,7 @@
      "verify": "required"
     },
     "RUL-prepped_nothing_to_do": {
-     "aliases": "prep-dryrun-empty-sources-nothing-to-do-1, prep-execute-empty-sources-nothing-to-do-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -58594,7 +58594,7 @@
       "RAT-empty_inbox_end_state"
      ],
      "layout": null,
-     "lineno": 619,
+     "lineno": 580,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -58638,7 +58638,7 @@
      "verify": "required"
     },
     "RUL-prune_explicit": {
-     "aliases": "prep-prune-no-managed-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -58675,7 +58675,7 @@
       "RAT-safety_net_stays"
      ],
      "layout": null,
-     "lineno": 690,
+     "lineno": 646,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -58722,7 +58722,7 @@
      "verify": "required"
     },
     "RUL-quarantine_footprint_reported": {
-     "aliases": "prep-quarantine-footprint-reported-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -58759,7 +58759,7 @@
       "RAT-growth_shown"
      ],
      "layout": null,
-     "lineno": 713,
+     "lineno": 667,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -58803,7 +58803,7 @@
      "verify": "required"
     },
     "RUL-quarantine_never_auto_deleted": {
-     "aliases": "prep-quarantine-no-auto-delete-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -58840,7 +58840,7 @@
       "RAT-safety_net_stays"
      ],
      "layout": null,
-     "lineno": 679,
+     "lineno": 636,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -58919,7 +58919,7 @@
       "RAT-quarantine_outside_record"
      ],
      "layout": null,
-     "lineno": 406,
+     "lineno": 380,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -58967,7 +58967,7 @@
      "verify": "required"
     },
     "RUL-record_whole_each_phase": {
-     "aliases": "archive-complete-each-phase-1, prep-log-self-sufficient-1, merge-never-merged-no-35-log-1, prep-end-self-sufficient-record-1, log-copy-forward-extend-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -59004,7 +59004,7 @@
       "RAT-record_outlives_workspace"
      ],
      "layout": null,
-     "lineno": 1781,
+     "lineno": 1679,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -59054,7 +59054,7 @@
      "verify": "required"
     },
     "RUL-recorded_time_order": {
-     "aliases": "prep-timestamp-priority-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -59091,7 +59091,7 @@
       "RAT-shutter_time_first"
      ],
      "layout": null,
-     "lineno": 982,
+     "lineno": 922,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -59136,7 +59136,7 @@
      "verify": "required"
     },
     "RUL-redundant_jpeg_set_aside": {
-     "aliases": "prep-separate-redundant-jpeg-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -59173,7 +59173,7 @@
       "RAT-raw_is_master"
      ],
      "layout": null,
-     "lineno": 278,
+     "lineno": 259,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -59257,7 +59257,7 @@
       "RAT-redundant_named_like_its_raw"
      ],
      "layout": null,
-     "lineno": 1139,
+     "lineno": 1069,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -59303,7 +59303,7 @@
      "verify": "required"
     },
     "RUL-rehash_explained": {
-     "aliases": "prep-rehash-diagnostics-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -59340,7 +59340,7 @@
       "RAT-costly_step_shown"
      ],
      "layout": null,
-     "lineno": 833,
+     "lineno": 778,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -59384,7 +59384,7 @@
      "verify": "required"
     },
     "RUL-remake_only_what_depends": {
-     "aliases": "idem-recompute-staleness-only-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -59419,7 +59419,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1615,
+     "lineno": 1523,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -59468,7 +59468,7 @@
      "verify": "required"
     },
     "RUL-replan_carries_placed": {
-     "aliases": "merge-resume-via-execute-not-plan-1, merge-finalized-entry-absent-not-blocker-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -59505,7 +59505,7 @@
       "RAT-library_is_evidence_of_move"
      ],
      "layout": null,
-     "lineno": 85,
+     "lineno": 80,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -59559,7 +59559,7 @@
      "verify": "required"
     },
     "RUL-replanning_keeps_the_prior": {
-     "aliases": "plan-replan-no-clobber-1, prep-replan-never-clobbers-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -59596,7 +59596,7 @@
       "RAT-superseded_plans_recoverable"
      ],
      "layout": null,
-     "lineno": 704,
+     "lineno": 663,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -59642,7 +59642,7 @@
      "verify": "required"
     },
     "RUL-required_snapshot_or_nothing": {
-     "aliases": "snapshot-required-fatal-1, merge-snapshot-required-aborts-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -59679,7 +59679,7 @@
       "RAT-required_means_condition"
      ],
      "layout": null,
-     "lineno": 226,
+     "lineno": 214,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -59763,7 +59763,7 @@
       "RAT-reread_on_purpose"
      ],
      "layout": null,
-     "lineno": 355,
+     "lineno": 331,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -59807,7 +59807,7 @@
      "verify": "required"
     },
     "RUL-rerun_does_what_changed": {
-     "aliases": "loop-rerun-may-need-decisions-1, geotag-recalc-only-affected-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -59844,7 +59844,7 @@
       "RAT-rerun_not_frictionless"
      ],
      "layout": null,
-     "lineno": 1479,
+     "lineno": 1394,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -59890,7 +59890,7 @@
      "verify": "required"
     },
     "RUL-reseal_rederives_nothing": {
-     "aliases": "merge-reseal-no-rederive-1, merge-reseal-reads-not-rederive-geotag-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -59927,7 +59927,7 @@
       "RAT-reseal_automatic"
      ],
      "layout": null,
-     "lineno": 2401,
+     "lineno": 2259,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -59973,7 +59973,7 @@
      "verify": "required"
     },
     "RUL-restored_file_is_new": {
-     "aliases": "prep-quarantine-restore-normal-1, prep-restored-requarantine-if-dup-1, prep-no-reconcile-old-quarantine-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -60010,7 +60010,7 @@
       "RAT-restore_like_any_file"
      ],
      "layout": null,
-     "lineno": 702,
+     "lineno": 657,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -60052,7 +60052,7 @@
      "verify": "required"
     },
     "RUL-resume_rechecks_library": {
-     "aliases": "merge-resume-state-derivation-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -60089,7 +60089,7 @@
       "RAT-library_is_evidence_of_move"
      ],
      "layout": null,
-     "lineno": 100,
+     "lineno": 94,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -60141,7 +60141,7 @@
      "verify": "required"
     },
     "RUL-reuse_valid_work": {
-     "aliases": "idem-reuse-not-recompute-1, prep-fingerprint-reuse-unchanged-1, prep-reuse-cache-unchanged-1, prep-new-files-act-only-on-changed-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -60176,7 +60176,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 1590,
+     "lineno": 1500,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -60271,7 +60271,7 @@
       "RAT-trips_revisit"
      ],
      "layout": null,
-     "lineno": 314,
+     "lineno": 295,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -60320,7 +60320,7 @@
      "verify": "required"
     },
     "RUL-rewrite_in_place_atomic": {
-     "aliases": "atomic-inplace-metadata-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -60357,7 +60357,7 @@
       "RAT-safe_at_each_change"
      ],
      "layout": null,
-     "lineno": 2816,
+     "lineno": 2652,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -60401,7 +60401,7 @@
      "verify": "none"
     },
     "RUL-run_only_refresh_restales_nothing": {
-     "aliases": "handoff-runonly-refresh-no-restale-1, dep-handoff-dual-key-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -60438,7 +60438,7 @@
       "RAT-handoff_by_content"
      ],
      "layout": null,
-     "lineno": 739,
+     "lineno": 695,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -60486,7 +60486,7 @@
      "verify": "required"
     },
     "RUL-seal_is_authority": {
-     "aliases": "seal-marker-is-authority-1, seal-marker-separate-file-1, merge-seal-marker-is-authority-not-emptiness-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -60523,7 +60523,7 @@
       "RAT-seal_not_folder_state"
      ],
      "layout": null,
-     "lineno": 2426,
+     "lineno": 2282,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -60571,7 +60571,7 @@
      "verify": "required"
     },
     "RUL-seal_on_success_only": {
-     "aliases": "seal-success-then-sealed-1, seal-partial-writes-no-marker-1, merge-interrupted-not-sealed-resumes-1, merge-seal-only-on-full-success-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -60608,7 +60608,7 @@
       "RAT-seal_not_folder_state"
      ],
      "layout": null,
-     "lineno": 2413,
+     "lineno": 2270,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -60657,7 +60657,7 @@
      "verify": "required"
     },
     "RUL-sealed_new_dump_left": {
-     "aliases": "seal-new-dump-warn-1, merge-sealed-newdump-warn-1, prep-sealed-new-dump-warning-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -60694,7 +60694,7 @@
       "RAT-sealed_is_final"
      ],
      "layout": null,
-     "lineno": 2502,
+     "lineno": 2353,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -60745,7 +60745,7 @@
      "verify": "required"
     },
     "RUL-sealed_new_dump_warned": {
-     "aliases": "geotag-sealed-newdump-warn-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -60782,7 +60782,7 @@
       "RAT-sealed_is_final"
      ],
      "layout": null,
-     "lineno": 2487,
+     "lineno": 2339,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -60873,7 +60873,7 @@
       "RAT-sealed_is_final"
      ],
      "layout": null,
-     "lineno": 2464,
+     "lineno": 2317,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -60919,7 +60919,7 @@
      "verify": "required"
     },
     "RUL-sealed_prune_allowed": {
-     "aliases": "seal-prune-exception-1, prep-prune-quarantine-exempt-seal-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -60956,7 +60956,7 @@
       "RAT-prune_harms_nothing"
      ],
      "layout": null,
-     "lineno": 2475,
+     "lineno": 2328,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -61004,7 +61004,7 @@
      "verify": "required"
     },
     "RUL-sealed_refuses": {
-     "aliases": "seal-scripts-hardstop-1, merge-sealed-hardstop-touch-nothing-1, merge-sealed-all-scripts-refuse-prune-excepted-1, geotag-sealed-hardstop-1, prep-sealed-workspace-blocks-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -61041,7 +61041,7 @@
       "RAT-sealed_is_final"
      ],
      "layout": null,
-     "lineno": 2438,
+     "lineno": 2293,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -61096,7 +61096,7 @@
      "verify": "required"
     },
     "RUL-shape_checked_first": {
-     "aliases": "struct-guards-at-startup-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -61133,7 +61133,7 @@
       "RAT-phases_rely_on_the_shape"
      ],
      "layout": null,
-     "lineno": 900,
+     "lineno": 845,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -61177,7 +61177,7 @@
      "verify": "incidental"
     },
     "RUL-sidecar_blocks": {
-     "aliases": "prep-forbidden-sidecar-blocks-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -61214,7 +61214,7 @@
       "RAT-sidecar_orphaned"
      ],
      "layout": null,
-     "lineno": 123,
+     "lineno": 114,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -61259,7 +61259,7 @@
      "verify": "required"
     },
     "RUL-snapshot_off_by_default": {
-     "aliases": "snapshot-disabled-default-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -61294,7 +61294,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 183,
+     "lineno": 174,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -61340,7 +61340,7 @@
      "verify": "required"
     },
     "RUL-snapshot_optional": {
-     "aliases": "snapshot-optional-1, prep-snapshot-rollback-option-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -61377,7 +61377,7 @@
       "RAT-snapshot_is_extra"
      ],
      "layout": null,
-     "lineno": 171,
+     "lineno": 163,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -61425,7 +61425,7 @@
      "verify": "incidental"
     },
     "RUL-snapshot_per_plan": {
-     "aliases": "snapshot-keyed-by-plan-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -61462,7 +61462,7 @@
       "RAT-rollback_chosen_by_hand"
      ],
      "layout": null,
-     "lineno": 205,
+     "lineno": 195,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -61506,7 +61506,7 @@
      "verify": "required"
     },
     "RUL-snapshot_timing": {
-     "aliases": "snapshot-timing-1, prep-execute-snapshot-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -61543,7 +61543,7 @@
       "RAT-snapshot_just_before"
      ],
      "layout": null,
-     "lineno": 215,
+     "lineno": 204,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -61588,7 +61588,7 @@
      "verify": "required"
     },
     "RUL-sort_photos_only": {
-     "aliases": "loop-sort-photo-only-1, geotag-bydest-photo-only-1, geotag-bydest-no-video-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -61625,7 +61625,7 @@
       "RAT-only_what_geotag_treats"
      ],
      "layout": null,
-     "lineno": 1388,
+     "lineno": 1309,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -61673,7 +61673,7 @@
      "verify": "required"
     },
     "RUL-sort_recorded_by_stat": {
-     "aliases": "loop-reprep-mandatory-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -61710,7 +61710,7 @@
       "RAT-never_behind_prep"
      ],
      "layout": null,
-     "lineno": 1413,
+     "lineno": 1332,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -61791,7 +61791,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 2793,
+     "lineno": 2629,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -61874,7 +61874,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 2782,
+     "lineno": 2618,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -61964,7 +61964,7 @@
       "RAT-safe_at_each_change"
      ],
      "layout": null,
-     "lineno": 2744,
+     "lineno": 2580,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -62008,7 +62008,7 @@
      "verify": "incidental"
     },
     "RUL-stale_lock_recovered": {
-     "aliases": "lock-stale-detectable-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -62045,7 +62045,7 @@
       "RAT-crash_never_locks_for_good"
      ],
      "layout": null,
-     "lineno": 141,
+     "lineno": 135,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -62091,7 +62091,7 @@
      "verify": "required"
     },
     "RUL-stale_takeover_conservative": {
-     "aliases": "lock-stale-takeover-conservative-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -62128,7 +62128,7 @@
       "RAT-live_lock_never_taken"
      ],
      "layout": null,
-     "lineno": 152,
+     "lineno": 145,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -62170,7 +62170,7 @@
      "verify": "none"
     },
     "RUL-staleness_by_area": {
-     "aliases": "config-surgical-staleness-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -62207,7 +62207,7 @@
       "RAT-surgical_staleness"
      ],
      "layout": null,
-     "lineno": 405,
+     "lineno": 384,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -62255,7 +62255,7 @@
      "verify": "required"
     },
     "RUL-stray_media_hinted": {
-     "aliases": "prep-stray-media-warning-1, prep-stray-media-warning-advisory-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -62292,7 +62292,7 @@
       "RAT-unlisted_media_noticed"
      ],
      "layout": null,
-     "lineno": 156,
+     "lineno": 145,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -62337,7 +62337,7 @@
      "verify": "required"
     },
     "RUL-strays_leave_no_trace": {
-     "aliases": "prep-strays-inert-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -62374,7 +62374,7 @@
       "RAT-strays_not_the_pipelines"
      ],
      "layout": null,
-     "lineno": 97,
+     "lineno": 90,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -62418,7 +62418,7 @@
      "verify": "required"
     },
     "RUL-strays_never_processed": {
-     "aliases": "prep-strays-excluded-from-scan-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -62453,7 +62453,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 636,
+     "lineno": 601,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -62497,7 +62497,7 @@
      "verify": "incidental"
     },
     "RUL-structure_built_once": {
-     "aliases": "prep-init-creates-structure-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -62534,7 +62534,7 @@
       "RAT-rebuild_masks_loss"
      ],
      "layout": null,
-     "lineno": 763,
+     "lineno": 718,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -62585,7 +62585,7 @@
      "verify": "required"
     },
     "RUL-suffix_choice_by_phase": {
-     "aliases": "fname-allocation-per-phase-1, prep-suffix-bare-first-lowest-free-1, geotag-suffix-sequential-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -62622,7 +62622,7 @@
       "RAT-bare_first"
      ],
      "layout": null,
-     "lineno": 1028,
+     "lineno": 965,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -62672,7 +62672,7 @@
      "verify": "required"
     },
     "RUL-suffix_no_clobber": {
-     "aliases": "fname-suffix-noclobber-1, prep-organized-output-unique-path-1, prep-path-conflict-bydest-no-clobber-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -62709,7 +62709,7 @@
       "RAT-names_never_collide"
      ],
      "layout": null,
-     "lineno": 1015,
+     "lineno": 953,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -62760,7 +62760,7 @@
      "verify": "required"
     },
     "RUL-target_free_at_execute": {
-     "aliases": "exec-noclobber-recheck-1, exec-noclobber-all-content-ops-1, prep-no-clobber-1, prep-execute-time-no-clobber-recheck-1, merge-execute-no-clobber-at-execute-time-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -62797,7 +62797,7 @@
       "RAT-plan_can_be_overtaken"
      ],
      "layout": null,
-     "lineno": 2718,
+     "lineno": 2556,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -62884,7 +62884,7 @@
       "RAT-temps_are_debris"
      ],
      "layout": null,
-     "lineno": 2857,
+     "lineno": 2690,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -62930,7 +62930,7 @@
      "verify": "incidental"
     },
     "RUL-time_before_gps": {
-     "aliases": "geotag-gps-after-utc-1, geotag-order-time-gps-rename-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -63017,7 +63017,7 @@
      "verify": "required"
     },
     "RUL-times_survive_unrelated_config_edits": {
-     "aliases": "config-edit-outside-timepolicy-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -63054,7 +63054,7 @@
       "RAT-coarse_trigger_for_the_cheap_plan"
      ],
      "layout": null,
-     "lineno": 429,
+     "lineno": 407,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -63100,7 +63100,7 @@
      "verify": "required"
     },
     "RUL-timezone_auto_resolves": {
-     "aliases": "geotag-timezone-autoresolve-1, geotag-no-proposal-requires-input-1, geotag-timezone-unresolved-requires-input-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -63137,7 +63137,7 @@
       "RAT-nested_place_same_timezone"
      ],
      "layout": null,
-     "lineno": 107,
+     "lineno": 101,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -63187,7 +63187,7 @@
      "verify": "required"
     },
     "RUL-timezone_from_nearest": {
-     "aliases": "geotag-timezone-inherit-parentfirst-1, geotag-timezone-inherit-priority-1, geotag-timezone-manual-reroot-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -63224,7 +63224,7 @@
       "RAT-nearest_timezone"
      ],
      "layout": null,
-     "lineno": 260,
+     "lineno": 245,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -63271,7 +63271,7 @@
      "verify": "required"
     },
     "RUL-tool_failure_retried": {
-     "aliases": "prep-worker-crash-safe-retry-1, prep-partial-output-never-cached-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -63308,7 +63308,7 @@
       "RAT-crash_not_a_verdict"
      ],
      "layout": null,
-     "lineno": 822,
+     "lineno": 768,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -63353,7 +63353,7 @@
      "verify": "required"
     },
     "RUL-top_level_only_managed": {
-     "aliases": "struct-base-folders-only-1, prep-post-init-base-folders-only-1, merge-block-misplaced-root-entry-1, geotag-misplaced-root-hardstop-1, prep-block-msg-points-to-sources-1, prep-root-dotfile-left-1, prep-root-entry-blocks-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -63388,7 +63388,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 789,
+     "lineno": 742,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -63481,7 +63481,7 @@
       "RAT-tracks_never_strays"
      ],
      "layout": null,
-     "lineno": 1212,
+     "lineno": 1139,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -63564,7 +63564,7 @@
       "RAT-tracks_never_strays"
      ],
      "layout": null,
-     "lineno": 1200,
+     "lineno": 1127,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -63651,7 +63651,7 @@
       "RAT-track_points_read_exactly"
      ],
      "layout": null,
-     "lineno": 195,
+     "lineno": 182,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -63698,7 +63698,7 @@
      "verify": "required"
     },
     "RUL-tracks_geotag_only": {
-     "aliases": "gpx-prep-unaware-1, prep-gpx-unaware-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -63736,7 +63736,7 @@
       "RAT-tracks_kept_outside"
      ],
      "layout": null,
-     "lineno": 1172,
+     "lineno": 1101,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -63781,7 +63781,7 @@
      "verify": "required"
     },
     "RUL-tracks_in_dependencies": {
-     "aliases": "gpx-geotag-fingerprint-cascade-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -63818,7 +63818,7 @@
       "RAT-tracks_change_the_answers"
      ],
      "layout": null,
-     "lineno": 1224,
+     "lineno": 1151,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -63868,7 +63868,7 @@
      "verify": "required"
     },
     "RUL-tracks_outside_managed_folders": {
-     "aliases": "gpx-root-outside-tree-1, gpx-prep-defensive-skip-1, prep-gpx-inside-tree-skip-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -63905,7 +63905,7 @@
       "RAT-tracks_kept_outside"
      ],
      "layout": null,
-     "lineno": 1185,
+     "lineno": 1113,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -63955,7 +63955,7 @@
      "verify": "required"
     },
     "RUL-unanchored_offset_confirmed": {
-     "aliases": "geotag-drift-gate-blocks-1, geotag-drift-untouched-blocks-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -63992,7 +63992,7 @@
       "RAT-drift_invisible"
      ],
      "layout": null,
-     "lineno": 367,
+     "lineno": 348,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -64040,7 +64040,7 @@
      "verify": "required"
     },
     "RUL-unchanged_replan_writes_nothing": {
-     "aliases": "plan-unchanged-no-backup-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -64077,7 +64077,7 @@
       "RAT-superseded_plans_recoverable"
      ],
      "layout": null,
-     "lineno": 716,
+     "lineno": 674,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -64161,7 +64161,7 @@
       "RAT-unknown_is_not_unchanged"
      ],
      "layout": null,
-     "lineno": 1279,
+     "lineno": 1204,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -64211,7 +64211,7 @@
      "verify": "required"
     },
     "RUL-uncorrected_keeps_its_name": {
-     "aliases": "fname-uncorrected-no-rename-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -64249,7 +64249,7 @@
       "RAT-same_shape_different_value"
      ],
      "layout": null,
-     "lineno": 1073,
+     "lineno": 1006,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -64334,7 +64334,7 @@
       "RAT-no_identity_no_group"
      ],
      "layout": null,
-     "lineno": 245,
+     "lineno": 230,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -64380,7 +64380,7 @@
      "verify": "required"
     },
     "RUL-unknown_group_classification_offered": {
-     "aliases": "geotag-unknown-group-snippets-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -64417,7 +64417,7 @@
       "RAT-class_decides_time_model"
      ],
      "layout": null,
-     "lineno": 233,
+     "lineno": 219,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -64463,7 +64463,7 @@
      "verify": "required"
     },
     "RUL-unknown_group_stops_geotag": {
-     "aliases": "geotag-incomplete-classification-block-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -64500,7 +64500,7 @@
       "RAT-class_decides_time_model"
      ],
      "layout": null,
-     "lineno": 221,
+     "lineno": 208,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -64548,7 +64548,7 @@
      "verify": "required"
     },
     "RUL-unlisted_extension_other": {
-     "aliases": "prep-other-not-fingerprinted-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -64585,7 +64585,7 @@
       "RAT-class_decides_handling"
      ],
      "layout": null,
-     "lineno": 542,
+     "lineno": 513,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -64632,7 +64632,7 @@
      "verify": "required"
     },
     "RUL-unplaced_photo_stays": {
-     "aliases": "merge-blocker-left-in-bydest-1, merge-nongoal-no-by-dest-teardown-1, merge-blocker-left-in-by-dest-partial-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -64669,7 +64669,7 @@
       "RAT-move_not_copy"
      ],
      "layout": null,
-     "lineno": 2339,
+     "lineno": 2202,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -64752,7 +64752,7 @@
       "RAT-track_points_read_exactly"
      ],
      "layout": null,
-     "lineno": 207,
+     "lineno": 194,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -64800,7 +64800,7 @@
      "verify": "required"
     },
     "RUL-unrequired_snapshot_proceeds": {
-     "aliases": "snapshot-not-required-proceeds-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -64837,7 +64837,7 @@
       "RAT-snapshot_is_extra"
      ],
      "layout": null,
-     "lineno": 238,
+     "lineno": 225,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -64881,7 +64881,7 @@
      "verify": "required"
     },
     "RUL-unsettled_collision_blocks": {
-     "aliases": "merge-unfingerprintable-library-file-blocker-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -64918,7 +64918,7 @@
       "RAT-library_is_ground_truth"
      ],
      "layout": null,
-     "lineno": 2165,
+     "lineno": 2039,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -65001,7 +65001,7 @@
       "RAT-mark_once"
      ],
      "layout": null,
-     "lineno": 1094,
+     "lineno": 1026,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -65083,7 +65083,7 @@
       "RAT-no_phase_invents_time"
      ],
      "layout": null,
-     "lineno": 23,
+     "lineno": 22,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -65133,7 +65133,7 @@
      "verify": "required"
     },
     "RUL-untimed_to_missing_metadata": {
-     "aliases": "prep-missing-metadata-flat-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -65170,7 +65170,7 @@
       "RAT-untimed_set_apart"
      ],
      "layout": null,
-     "lineno": 219,
+     "lineno": 203,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -65216,7 +65216,7 @@
      "verify": "required"
     },
     "RUL-user_writes_decisions": {
-     "aliases": "authored-fields-not-overwritten-1, geotag-recalc-proposals-1",
+     "aliases": null,
      "anti": "yes",
      "arch": {},
      "assumes": [],
@@ -65253,7 +65253,7 @@
       "RAT-decisions_are_the_users"
      ],
      "layout": null,
-     "lineno": 1689,
+     "lineno": 1592,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -65305,7 +65305,7 @@
      "verify": "required"
     },
     "RUL-videos_by_date": {
-     "aliases": "prep-videos-date-organized-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -65342,7 +65342,7 @@
       "RAT-videos_kept_not_corrected"
      ],
      "layout": null,
-     "lineno": 36,
+     "lineno": 34,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -65388,7 +65388,7 @@
      "verify": "required"
     },
     "RUL-who_checks_for_links": {
-     "aliases": "geotag-bydest-no-symlink-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -65425,7 +65425,7 @@
       "RAT-prep_gatekeeps_links"
      ],
      "layout": null,
-     "lineno": 840,
+     "lineno": 790,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -65473,7 +65473,7 @@
      "verify": "required"
     },
     "RUL-withdrawal_undoes": {
-     "aliases": "authored-withdraw-undoes-1, geotag-manual-gps-reversible-1, geotag-withdraw-revert-1, geotag-recompute-inplace-1, time-name-never-reverted-1",
+     "aliases": null,
      "anti": null,
      "arch": {},
      "assumes": [],
@@ -65510,7 +65510,7 @@
       "RAT-time_name_recomputed"
      ],
      "layout": null,
-     "lineno": 1748,
+     "lineno": 1647,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -65595,7 +65595,7 @@
       "RAT-workspace_one_filesystem"
      ],
      "layout": null,
-     "lineno": 2804,
+     "lineno": 2640,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -65681,7 +65681,7 @@
       "RAT-workspace_one_filesystem"
      ],
      "layout": null,
-     "lineno": 2757,
+     "lineno": 2593,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -73717,7 +73717,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "`tests/test_geotag_gps_decisions.py:281`",
+     "content": "`tests/test_geotag_gps_decisions.py:279`",
      "criticality": null,
      "docname": "_generated/tests",
      "doctype": ".md",
@@ -73794,7 +73794,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "`tests/test_geotag_gps_decisions.py:265`",
+     "content": "`tests/test_geotag_gps_decisions.py:263`",
      "criticality": null,
      "docname": "_generated/tests",
      "doctype": ".md",
@@ -73871,7 +73871,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "`tests/test_geotag_gps_decisions.py:173`",
+     "content": "`tests/test_geotag_gps_decisions.py:172`",
      "criticality": null,
      "docname": "_generated/tests",
      "doctype": ".md",
@@ -74028,7 +74028,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "`tests/test_geotag_gps_decisions.py:199`",
+     "content": "`tests/test_geotag_gps_decisions.py:197`",
      "criticality": null,
      "docname": "_generated/tests",
      "doctype": ".md",
@@ -74104,7 +74104,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "`tests/test_geotag_gps_decisions.py:95`",
+     "content": "`tests/test_geotag_gps_decisions.py:94`",
      "criticality": null,
      "docname": "_generated/tests",
      "doctype": ".md",
@@ -74181,7 +74181,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "`tests/test_geotag_gps_decisions.py:86`",
+     "content": "`tests/test_geotag_gps_decisions.py:85`",
      "criticality": null,
      "docname": "_generated/tests",
      "doctype": ".md",
@@ -75254,7 +75254,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "`tests/test_geotag_offset_inference.py:482`",
+     "content": "`tests/test_geotag_offset_inference.py:481`",
      "criticality": null,
      "docname": "_generated/tests",
      "doctype": ".md",
@@ -75716,7 +75716,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "`tests/test_geotag_offset_inference.py:501`",
+     "content": "`tests/test_geotag_offset_inference.py:500`",
      "criticality": null,
      "docname": "_generated/tests",
      "doctype": ".md",
@@ -78777,7 +78777,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "`tests/test_geotag_rename_planning.py:146`",
+     "content": "`tests/test_geotag_rename_planning.py:145`",
      "criticality": null,
      "docname": "_generated/tests",
      "doctype": ".md",
@@ -79006,7 +79006,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "`tests/test_geotag_rename_planning.py:112`",
+     "content": "`tests/test_geotag_rename_planning.py:111`",
      "criticality": null,
      "docname": "_generated/tests",
      "doctype": ".md",
@@ -79082,7 +79082,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "`tests/test_geotag_rename_planning.py:135`",
+     "content": "`tests/test_geotag_rename_planning.py:134`",
      "criticality": null,
      "docname": "_generated/tests",
      "doctype": ".md",
@@ -79158,7 +79158,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "`tests/test_geotag_rename_planning.py:104`",
+     "content": "`tests/test_geotag_rename_planning.py:103`",
      "criticality": null,
      "docname": "_generated/tests",
      "doctype": ".md",
@@ -79234,7 +79234,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "`tests/test_geotag_rename_planning.py:91`",
+     "content": "`tests/test_geotag_rename_planning.py:90`",
      "criticality": null,
      "docname": "_generated/tests",
      "doctype": ".md",
