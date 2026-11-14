@@ -55,7 +55,7 @@ def test_get_imagemagick_version_unknown_when_absent(monkeypatch):
     assert utils.get_imagemagick_version() == "unknown"
 
 
-# --- cross-filesystem move fallback (shared contract §15.3) -------------------
+# --- cross-filesystem move fallback (BLD-cross_fs_temp) -------------------
 
 def test_cross_fs_move_copies_then_removes_source(tmp_path):
     sub = tmp_path / "sub"; sub.mkdir()

@@ -192,8 +192,8 @@ def test_prune_quarantine_is_the_sole_op_allowed_on_a_sealed_workspace(tmp_path,
 
 @pytest.mark.spec("RUL-sealed_refuses")
 def test_seal_refuses_all_three_phases_except_prune_quarantine(tmp_path, monkeypatch, capsys):
-    """§9.4 / shared §13.7: once a workspace is SEALED, every media-mutating phase refuses on it —
-    prep plan, geotag plan, AND merge plan all hard-stop with exit 2 — with the SOLE exception of prep
+    """RUL-sealed_refuses / RUL-sealed_prune_allowed: once a workspace is SEALED, every media-mutating phase refuses
+    on it — prep plan, geotag plan, AND merge plan all hard-stop with exit 2 — with the SOLE exception of prep
     `prune-quarantine`, which still runs so quarantine cleanup survives the seal."""
     lib = tmp_path / "lib"; lib.mkdir()
     cfg = {k: v for k, v in utils.CONFIG.items() if k != "jobs"}

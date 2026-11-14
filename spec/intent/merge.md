@@ -3,10 +3,8 @@
 What the last phase, {need}`DEF-merge`, guarantees, beyond what [the shared contract](shared.md) binds every phase
 to — most of merge's rules are there, in its section on the library and the seal. *Why* each holds is in
 [the rationale](../rationale/merge.md); *how this build meets it*, in [the build](../build/merge.md).
-Sections are numbered as in the phase's original spec; a section whose content lives in the shared contract, or
-that only restated others, has no heading here.
 
-## 2. Scope and boundary
+## 1. Scope and boundary
 
 :::{rul} Merge checks prep's fingerprints under another ImageMagick
 :id: RUL-merge_rechecks_under_new_engine
@@ -32,7 +30,7 @@ fingerprint again before comparing it with the library's.
 A photo whose fingerprint, taken again by merge, has changed SHALL be left in photos by destination, unmerged.
 :::
 
-## 3. Preconditions
+## 2. Preconditions
 
 :::{rul} Merge checks geotag's gates again
 :id: RUL-merge_rechecks_gates
@@ -70,7 +68,7 @@ block merge no more than geotag.
 A merge a precondition stops SHALL change nothing in the library, the workspace's photos or merge's records.
 :::
 
-## 6. Destination-to-library mapping
+## 4. Destination-to-library mapping
 
 :::{rul} The library mirrors the destination tree
 :id: RUL-library_mirrors_destinations
@@ -85,7 +83,7 @@ as the user built them, its name the one geotag gave it — the name an incoming
 change.
 :::
 
-## 8. Idempotency, resume, and non-destructiveness
+## 5. Idempotency, resume, and non-destructiveness
 
 :::{rul} A fresh plan is allowed at any time before the seal
 :id: RUL-merge_replan_any_time
@@ -170,7 +168,7 @@ A photo gone from photos by destination whose library place does not hold it SHA
 A run in which a photo gone from photos by destination blocks SHALL be partial.
 :::
 
-## 9. User-visible outputs and the merge summary
+## 6. User-visible outputs and the merge summary
 
 :::{rul} Merge records how its run ended
 :id: RUL-merge_outcome_recorded

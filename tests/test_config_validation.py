@@ -109,7 +109,7 @@ def test_valid_edits_pass():
                                gpx_direct_match_max_seconds=0))
 
 
-# --- destination_distribution_subfolders (geotag §7.1 dev-subfolder gate) ----------------
+# --- destination_distribution_subfolders (RUL-development_after_merge dev-subfolder gate) ----------------
 
 def test_distribution_subfolders_default_valid():
     assert utils.CONFIG["destination_distribution_subfolders"] == ["jpg", "tif"]
@@ -128,7 +128,7 @@ def test_distribution_subfolders_rejects_bad(bad, needle):
     assert needle in str(ei.value), str(ei.value)
 
 
-# --- library-merge config (G5.4; deep validation is the merge phase's, shared §4.3/§14.1) ----
+# --- library-merge config (G5.4; deep validation is the merge phase's, BLD-authored_checks_by_phase) ----
 
 def test_merge_block_seeded_and_default_valid():
     # library_root is seeded with a deployment default (a non-empty path); the merge phase deep-validates
@@ -184,7 +184,8 @@ def test_load_or_seed_config_rejects_bad_value(tmp_path):
         utils.load_or_seed_config(str(ws))
 
 
-# --- media_extensions: classification lists are config (prep §6.1), fingerprinted (shared §4.2) ----
+# --- media_extensions: classification lists are config (RUL-config_lists_extensions),
+# fingerprinted (RUL-organization_settings_restale) ----
 
 def _mx(image=None, raw=None, video=None):
     """A config whose media_extensions block can be selectively overridden (missing class if None)."""

@@ -14,7 +14,7 @@
 
 """Phase 6c-0 — the content-fingerprint engine (the cross-phase identity spine prep pins and
 geotag recomputes after EXIF writes). The default path is a persistent `magick -script -` worker
-(§17.5), reused across files; a magick-less system falls back to per-file `identify`. Tools are
+(BLD-tool_workers), reused across files; a magick-less system falls back to per-file `identify`. Tools are
 mocked, as the rest of the suite mocks external tools. From conftest.py.
 """
 import photos_utils as utils

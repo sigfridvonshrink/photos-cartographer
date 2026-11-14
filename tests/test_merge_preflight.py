@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Increment 2 — the library-merge skeleton: preflight (merge spec §3), the `init-library` setup
-command (§4), and the two-lock acquisition flow (§12).
+"""Increment 2 — the library-merge skeleton: preflight (BLD-merge_preflight), the `init-library` setup
+command (BLD-init_library_cases), and the two-lock acquisition flow (BLD-library_lock).
 
 photos-3-merge writes no artifacts and moves nothing yet (`plan`/`dry-run`/`execute` are stubbed);
 these tests exercise the preconditions, init-library's context×path matrix, and lock order.
@@ -203,7 +203,7 @@ def test_nonmanaged_root_folder_blocks(tmp_path):
 @pytest.mark.spec("RUL-top_level_only_managed", test="TST-merge_preflight-root_hidden_file_allowed")
 def test_root_hidden_file_allowed(tmp_path):
     """A hidden file at the top level (a file manager's `.directory`) is a hidden entry, not a
-    misplaced dump: it blocks nothing (shared contract §4)."""
+    misplaced dump: it blocks nothing (RUL-top_level_only_managed)."""
     ws, _ = _make(tmp_path)
     (ws / ".directory").write_text("[Dolphin]")
     blockers, _, _ = _pf(ws)
@@ -422,7 +422,7 @@ def test_gathers_multiple_blockers_at_once(tmp_path):
     assert any("0-sources/ is not empty" in b for b in blockers), blockers
 
 
-# --- init-library: context × path matrix (merge spec §4) ---------------------
+# --- init-library: context × path matrix (BLD-init_library_cases) -------------
 
 def _fresh_ws_and_lib(tmp_path):
     """A workspace (guard + config naming a NOT-yet-blessed library) plus the library dir."""
@@ -584,7 +584,7 @@ def test_init_library_resolves_relative_path(tmp_path):
     assert utils.is_library(str(lib))
 
 
-# --- locking flow (merge spec §12) -------------------------------------------
+# --- locking flow (BLD-library_lock) -----------------------------------------
 
 @pytest.mark.spec("RUL-library_lock", test="TST-merge_preflight-locked_workflow_acquires_both_and_releases")
 def test_locked_workflow_acquires_both_and_releases(tmp_path):
@@ -643,8 +643,8 @@ def test_locked_workflow_exits_2_on_blocker(tmp_path):
 @pytest.mark.spec("RUL-library_confirmed_before_lock", "RUL-library_mark_required",
                   test="TST-merge_preflight-marker_check_precedes_library_lock_no_lockfile_dropped")
 def test_marker_check_precedes_library_lock_no_lockfile_dropped(tmp_path):
-    """§12 lock order: the .photos-library marker is validated BEFORE the library-side lock is taken.
-    Against a marker-less library_root, the run blocks (rc 2) and must NEVER have created the
+    """RUL-library_confirmed_before_lock lock order: the .photos-library marker is validated BEFORE the library-side
+    lock is taken. Against a marker-less library_root, the run blocks (rc 2) and must NEVER have created the
     .photos-merge.lock dotfile in the library — the lock is reached only after the marker passes."""
     ws, lib = _make(tmp_path, bless_lib=False)                  # library_root exists but is unblessed
     assert merge._run_locked_workflow("plan", str(ws)) == 2

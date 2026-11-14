@@ -21,10 +21,12 @@ places GPS for the un-tagged majority, and renames files to destination-local ci
 the same plan/validate/execute, fingerprinted-dependency, authored-decisions discipline as prep.
 
 It implements the full geotag workflow (Stages 1–11): the preflight lifecycle/by-dest gates
-(§7/§13), the in-memory by-dest model (Stage 2), the GPX index (§15), camera-group recognition
-(§16), the time/drift/GPS-decision artifacts `photos-21`/`photos-22`/`photos-23` (§20/§22a/§25),
-resolved-UTC computation (§22), the executable plan `photos-24` (§28), `execute` of that plan into
-`photos-25` (§29), and `finalize` of the archival package `photos-26` + DB snapshot + manifest (§31).
+(RUL-geotag_gates, BLD-loop_gates), the in-memory by-dest model (Stage 2), the GPX index (BLD-track_points),
+camera-group recognition (BLD-known_camera_group), the time/drift/GPS-decision artifacts
+`photos-21`/`photos-22`/`photos-23` (BLD-decision_record_envelope), resolved-UTC computation (BLD-resolved_utc),
+the executable plan `photos-24` (BLD-executable_plan), `execute` of that plan into `photos-25`
+(BLD-geotag_execution), and `finalize` of the archival package `photos-26` + DB snapshot + manifest
+(BLD-archive_manifest).
 Subcommands: `plan`, `execute`, `finalize`.
 
 The script sits beside `photos_utils.py` and imports the shared infrastructure from it.
@@ -113,12 +115,12 @@ def archive_manifest_path(ws):
 
 
 # ============================================================================
-# Stage 3 — GPX index (geotag spec §15). GPX is geotag-only — prep is GPX-unaware
-# (shared contract §8.2). Stdlib xml.etree only; no new dependency.
+# Stage 3 — GPX index (BLD-track_points). GPX is geotag-only — prep is GPX-unaware
+# (RUL-tracks_geotag_only). Stdlib xml.etree only; no new dependency.
 # ============================================================================
 
 class GeotagCache:
-    """Geotag's own region of the shared photos-00-ingest.db (shared contract §13.4) — the
+    """Geotag's own region of the shared photos-00-ingest.db (BLD-workspace_database) — the
     resolved-UTC cache and the original-values ledger. Disjoint from prep's tables."""
 
     COLUMNS = ["relative_path", "destination_path", "destination_timezone", "camera_group",
@@ -152,7 +154,7 @@ class GeotagCache:
             f"SELECT {','.join(self.COLUMNS)} FROM resolved_utc_cache ORDER BY relative_path")
         return [dict(zip(self.COLUMNS, row)) for row in cur.fetchall()]
 
-    # --- original-values ledger (§24.2): a file's own values, pinned before geotag's first write ---
+    # --- original-values ledger (BLD-original_values_pinned): a file's own values, pinned before geotag's first write
     def originals_pin(self, fp, rel, original, captured_at):
         """Pin a file's own values ONCE — never overwritten, so every later run decides from them."""
         with self.conn:
@@ -178,12 +180,12 @@ class GeotagCache:
 # ============================================================================
 # GeotagWorkflow — the geotag orchestrator (Stages 1–11), the I/O + decision-
 # artifact layer. The pure GPS-placement helpers it calls (place_gps,
-# _interp/_extrapolate, classify_gps) now live in _geotag_calc.py (geotag §23/§25).
+# _interp/_extrapolate, classify_gps) now live in _geotag_calc.py (BLD-track_placement, BLD-placement_order).
 # ============================================================================
 
 def _decision_shape_blockers(prior, kind):
-    """Where a prior decision artifact's structure is broken, as located blockers (shared contract §14;
-    geotag §9.2 item 6). The user fills values, never structure: every container the builders walk to
+    """Where a prior decision artifact's structure is broken, as located blockers (RUL-checked_decision_structure,
+    RUL-invalid_value_located). The user fills values, never structure: every container the builders walk to
     reach a user_decision — the destinations, each destination, its decision blocks and cells, and each
     user_decision — must be an object (review_items a list of objects), or the run stops on it, never
     passing over it. `kind` is "time" (photos-21), "drift" (photos-22) or "gps" (photos-23)."""
@@ -237,7 +239,7 @@ def _decision_shape_blockers(prior, kind):
 
 def _decision_flag(ud, field, where, blockers):
     """A yes-or-no the user writes: absent (or null) means no; true or false as written; anything else
-    — "false", 1, "yes" — is a located blocker, never coerced (shared contract §14)."""
+    — "false", 1, "yes" — is a located blocker, never coerced (RUL-checked_shapes)."""
     v = ud.get(field)
     if v is None or isinstance(v, bool):
         return bool(v)
@@ -253,7 +255,7 @@ def _half_position(lat, lon):
 def _prior_day_cell(prior_cells, group, bucket, day):
     """The earlier answer for a camera's day in a destination: the cell under this key, else the one the
     same day was recorded under while the key had its other form — a camera's only day there is keyed by
-    the group alone, and by `<group>@<day>` once a second day arrives (§10.2). The day, not the key, is
+    the group alone, and by `<group>@<day>` once a second day arrives (BLD-offset_buckets). The day, not the key, is
     what an answer was given for, so it follows the day."""
     cell = prior_cells.get(bucket)
     if day is None:
@@ -315,7 +317,8 @@ def _holds_writes(held, writes):
 class GeotagWorkflow:
     """Stages 1–11: validate the workspace, build the model, produce photos-21/22/23 decision artifacts,
     compute resolved UTC, assemble photos-24-executable-plan.json (when decisions are complete),
-    execute it into photos-25 (§29), and finalize the archival package photos-26 (§31)."""
+    execute it into photos-25 (BLD-geotag_execution), and finalize the archival package photos-26
+    (BLD-archive_manifest)."""
 
     def __init__(self, workspace_root: str):
         self.workspace_root = workspace_root
@@ -324,22 +327,22 @@ class GeotagWorkflow:
         # Live progress for the long phases (TTY: in-place bar; piped: a line every ~10 s; tests: quiet).
         self.coordinator = ProgressCoordinator()
 
-    # --- preflight (geotag spec §7 / §13) -------------------------------
+    # --- preflight (RUL-geotag_gates, BLD-loop_gates) ------------------
 
     def preflight(self, for_execute=False):
         """Return (blockers, warnings, info). A non-empty `blockers` means geotag cannot
         proceed. Textual only — writes no JSON. The lifecycle guards (sealed / uninitialized /
-        loose-root-file) and the §7.1 development-started gate hard-stop early; the remaining by-dest
-        scope and re-prep gates are collected so the rest are reported at once. `for_execute` keeps the
-        lifecycle guards, the §7.1 development gate, and the config/handoff load, but SKIPS the
+        loose-root-file) and the development-started gate (RUL-development_after_merge) hard-stop early; the remaining
+        by-dest scope and re-prep gates are collected so the rest are reported at once. `for_execute` keeps the
+        lifecycle guards, the development gate, and the config/handoff load, but SKIPS the
         planning-phase scope and re-prep gates: execution validates against the plan's own dependency
         fingerprints + per-op preconditions, and the by-dest filenames it renames would otherwise trip
-        the re-prep gate (§13.1 is a planning concern). The §7.1 gate is the exception — it is
+        the re-prep gate (BLD-loop_gates: it is a planning concern). The development gate is the exception — it is
         re-checked at execute/finalize too (a breakout begun after planning moves no planned file)."""
         blockers, warnings, info = [], [], {}
         ws = self.workspace_root
 
-        # 1. Lifecycle guards (shared contract §13.7), evaluated under the run lock by main().
+        # 1. Lifecycle guards (RUL-sealed_refuses, BLD-phases_check_seal), evaluated under the run lock by main().
         if is_sealed(ws):
             blockers.append("Workspace is SEALED (already merged): geotag will not run. "
                             "Nothing was touched — move new media into a fresh workspace.")
@@ -352,7 +355,7 @@ class GeotagWorkflow:
             blockers.append("Not an initialized workspace (no photos-00-workspace-guard) — "
                             "run prep first: `photos-cartographer prep plan` then `photos-cartographer prep execute`.")
             return blockers, warnings, info
-        # A symlink at the workspace root is barred outright (§13) and never followed — including a
+        # A symlink at the workspace root is barred outright (RUL-no_links) and never followed — including a
         # dangling link (neither file nor dir) or one named like a managed folder (which os.path.isdir
         # would otherwise resolve through). Checked before the structural/loose-entry guards below.
         root_syms = top_level_links(ws)
@@ -404,7 +407,7 @@ class GeotagWorkflow:
         info["handoff_sha256"] = sha256_file(ho_p)
         self.handoff = handoff          # stashed for the model/group stages (Phase 2)
 
-        # The filename format is fixed once prep has named the files in it (shared §6).
+        # The filename format is fixed once prep has named the files in it (RUL-format_fixed_once_named).
         fmt_blocker = handoff_filename_format_blocker(handoff)
         if fmt_blocker:
             blockers.append(fmt_blocker)
@@ -420,10 +423,10 @@ class GeotagWorkflow:
             return blockers, warnings, info
 
         by_dest = folder_name('photos_by_dest')
-        # §7.1 development-started guard — PRESENCE-STRICT and re-checked at execute/finalize too, not
-        # just planning: the mere existence of a jpg/tif distribution subfolder under by-dest (even an
+        # Development-started guard (RUL-development_after_merge) — PRESENCE-STRICT and re-checked at execute/finalize
+        # too, not just planning: the mere existence of a jpg/tif distribution subfolder under by-dest (even an
         # empty one) hard-stops. A breakout begun between `plan` and `execute` moves no planned file, so
-        # the per-op media preconditions (§29) would not catch it; this existence check is what does.
+        # the per-op media preconditions (BLD-geotag_execution) would not catch it; this existence check is what does.
         dev_found, nonphoto = self._scan_by_dest(by_dest)
         if dev_found:
             names = ", ".join(sorted(set(CONFIG.get("destination_distribution_subfolders") or [])))
@@ -460,7 +463,7 @@ class GeotagWorkflow:
             blockers.append(f"{by_dest}/ must contain only photos. Found " + " and ".join(parts) +
                             ". Remove or relocate them before geotagging.")
 
-        # 4. Re-prep-after-move gate (§13.1): a prep run must follow the latest by-date→by-dest move.
+        # 4. Re-prep-after-move gate (RUL-prep_records_sort): a prep run must follow the latest by-date→by-dest move.
         self._check_reprep_gate(handoff, by_dest, by_date, blockers)
 
         # 5. The handoff's camera-group keys and extracted fields must come from this version of
@@ -468,7 +471,8 @@ class GeotagWorkflow:
         self._check_derivation_versions(handoff, blockers)
 
         # 5b. A photo whose fingerprint was taken again keeps its pinned values only through a mapping that is
-        # one to one; one that is not leaves geotag unable to say whose values are whose (§24.2).
+        # one to one; one that is not leaves geotag unable to say whose values are whose
+        # (BLD-original_values_follow_fingerprint).
         if not prep_log_blocker(ws, handoff):
             try:
                 with open(prep_log_path(ws)) as f:
@@ -554,11 +558,12 @@ class GeotagWorkflow:
                     f"({len(other)} file(s), e.g. {other[0]}; this version is {current}). Re-run prep "
                     "to derive them again: `photos-cartographer prep plan` then `photos-cartographer prep execute`.")
 
-    # --- Stage 2: in-memory by-dest file model (geotag spec §14) --------
+    # --- Stage 2: in-memory by-dest file model (BLD-geotag_file_model) ---
 
     def _retaken(self):
         """{new: old} fingerprint values from prep's log — only one the handoff vouches for, and only one to
-        one — so a photo whose fingerprint a new ImageMagick changed keeps its pinned values (§24.2)."""
+        one — so a photo whose fingerprint a new ImageMagick changed keeps its pinned values
+        (BLD-original_values_follow_fingerprint)."""
         if not self.handoff or prep_log_blocker(self.workspace_root, self.handoff):
             return {}
         try:
@@ -571,7 +576,7 @@ class GeotagWorkflow:
     def build_file_model(self):
         """One object per by-dest photo, built from the handoff's records (+ the EXIF prep already
         extracted into metadata_status.parsed_json). Geotag never re-reads the file — a stale
-        handoff was already blocked (§13.1)."""
+        handoff was already blocked (BLD-reprep_pending)."""
         by_dest = folder_name('photos_by_dest')
         files = []
         cache = GeotagCache(self.workspace_root)
@@ -598,7 +603,7 @@ class GeotagWorkflow:
             rel = rec.get("relative_path")
             files.append({
                 "relative_path": rel,
-                "destination": os.path.dirname(rel),         # immediate containing folder (§10.1)
+                "destination": os.path.dirname(rel),         # immediate containing folder (BLD-geotag_destinations)
                 "size": rec.get("size"),
                 "mtime_ns": rec.get("mtime_ns"),
                 "content_fingerprint": fp,
@@ -634,19 +639,19 @@ class GeotagWorkflow:
                 key = earlier.get(key)
             if key in walked:
                 key = None
-            if key is not None:                              # decide from the file's own values (§24.2)
+            if key is not None:                        # decide from the file's own values (BLD-decided_from_own_values)
                 files[-1] = dict(from_originals(files[-1], originals[key]), original_key=key)
         files.sort(key=lambda f: f["relative_path"])
         return files
 
-    # --- Stage 3: GPX index (geotag spec §15) ---------------------------
+    # --- Stage 3: GPX index (BLD-track_points) ---------------------------
 
     def load_gpx(self):
         idx = GPXIndex(selected_gpx_root(), track_memo_db_path(self.workspace_root)).build(self.coordinator)
         self._gpx_fingerprint = idx.fingerprint
         return idx
 
-    # --- Stage 4: camera-group recognition + classification (§16) ------------
+    # --- Stage 4: camera-group recognition + classification (BLD-known_camera_group) ---
 
     def recognize_camera_groups(self, files):
         """Group the file objects by camera_group_key and classify each via config device_groups.
@@ -660,7 +665,8 @@ class GeotagWorkflow:
         fixed = set(dg.get("fixed_clock_cameras") or [])
         groups = {}
         for key in sorted({f["camera_group_key"] for f in files}):
-            # A file naming no camera is no group to class: solved on its own, never asked about (§16).
+            # A file naming no camera is no group to class: solved on its own, never asked about
+            # (BLD-unidentified_files).
             # One listed as both is classed as neither: the two are solved in opposite ways, and picking one
             # here would be geotag's guess (the offered classification lists a new group under both).
             cls = "unidentified" if key == NO_IDENTITY_KEY else \
@@ -670,14 +676,14 @@ class GeotagWorkflow:
         unknown = [k for k, g in groups.items() if g["camera_group_class"] == "unknown"]
         return groups, unknown
 
-    # --- Stages 5–6: time decisions (photos-21, §17–§21) ---------------------
+    # --- Stages 5–6: time decisions (photos-21, BLD-timezone_cell, BLD-offset_buckets) ---------------------
 
     def build_time_decisions(self, files, groups, prior, gpx):
-        """Build/regenerate the photos-21 content: per-destination civil timezone (§18) + per-
-        (camera group, destination) clock-offset cells (§10.2), through the decision-field /
-        auto-resolution / rerun-preservation engine (§9). The offset cell's proposal is the §19
-        GPX self-anchor when one can be inferred (else manual-required). Returns (artifact,
-        blockers); blockers come from sanity-validating preserved authored values (§9.2) and mean
+        """Build/regenerate the photos-21 content: per-destination civil timezone (BLD-timezone_cell) + per-
+        (camera group, destination) clock-offset cells (BLD-offset_buckets), through the decision-field /
+        auto-resolution / rerun-preservation engine (RUL-decision_kept). The offset cell's proposal is the
+        GPX self-anchor (BLD-anchor_matching) when one can be inferred (else manual-required). Returns (artifact,
+        blockers); blockers come from sanity-validating preserved authored values (RUL-invalid_decision_kept) and mean
         "do not overwrite — fix first"."""
         blockers = _decision_shape_blockers(prior, "time")
         if blockers:
@@ -689,12 +695,14 @@ class GeotagWorkflow:
 
         destinations = {}
         # Process destinations PARENT-FIRST so an ancestor's effective TIMEZONE is known before a child
-        # inherits it (§18). `eff_tz` maps (destination, "tz") -> resolved effective timezone. Clock
-        # offsets do NOT inherit across destinations (§10.2): each (group, date) bucket proposes its own.
+        # inherits it (RUL-timezone_from_nearest). `eff_tz` maps (destination, "tz") -> resolved effective timezone.
+        # Clock offsets do NOT inherit from the destination above (RUL-offset_from_own_evidence): each (group, date)
+        # bucket proposes its own, or takes the one the camera's own positions gave that day in another destination
+        # (RUL-offset_shared_within_day).
         eff_tz = {}
         recall = {}                                  # (destination, bucket) -> what its cell was built from
-        # A country is chosen once, at the top of its tree (§18): `eff_country` maps a destination to
-        # (code, the destination it was chosen at) for itself and everything inside it.
+        # A country is chosen once, at the top of its tree (RUL-country_chosen_once): `eff_country` maps a destination
+        # to (code, the destination it was chosen at) for itself and everything inside it.
         eff_country, table = {}, country_table()
         self.country_removals = []
         ordered, containers = _expand_destinations(by_dest)
@@ -728,8 +736,9 @@ class GeotagWorkflow:
                 inherited_tz = (country[1], zones[0])       # a country of one timezone: that is the zone
             elif zones and inherited_tz is not None and (own_country or inherited_tz[1] not in zones):
                 inherited_tz = None                         # a zone from above the country is none of its own
-            # A destination holding photos has one timezone for all of them (§18): the zone it would take —
-            # the one written for it, else the one it inherits — is set against what its own photos record.
+            # A destination holding photos has one timezone for all of them (RUL-inherited_timezone_yields_to_photos):
+            # the zone it would take — the one written for it, else the one it inherits — is set against what its own
+            # photos record.
             written = prior_ud.get("manual_iana_timezone")
             candidate = written if written and _valid_iana(written) else (inherited_tz[1] if inherited_tz else None)
             against = _offsets_against_zone(by_dest[dest], groups, candidate) if candidate and not is_container else None
@@ -751,7 +760,7 @@ class GeotagWorkflow:
             prior_cells = prior_d.get("camera_group_time_decisions") or {}
             cells, present = {}, []
             # Containers hold no media → no offset cells. A real destination gets one offset cell per
-            # camera group, SPLIT per naive calendar date when the group spans >1 day there (§10.2): the
+            # camera group, SPLIT per naive calendar date when the group spans >1 day there (BLD-offset_buckets): the
             # camera is set to local time each morning, so the offset is constant only within a day. The
             # bucket key is the bare group for a single day, else `<group>@<YYYY-MM-DD>`.
             for group in (sorted({f["camera_group_key"] for f in by_dest[dest]}) if not is_container else []):
@@ -823,8 +832,8 @@ class GeotagWorkflow:
     _OWN_GPS_SOURCES = ("gpx_anchor_auto", "gpx_anchor_accepted", "gpx_anchor_chosen")
 
     def _share_offsets_within_a_day(self, destinations, recall, gpx, blockers):
-        """A clock offset is the camera's for the day, wherever its photos were sorted (§10.2). So, over the
-        cells of one camera on one day in different destinations: (1) two offsets its own GPS gave that lie
+        """A clock offset is the camera's for the day, wherever its photos were sorted (RUL-offset_shared_within_day).
+        So, over the cells of one camera on one day in different destinations: (1) two offsets its own GPS gave that lie
         farther apart than `clock_offset_same_day_max_difference_seconds` are one clock read two ways —
         neither takes effect, both ask; a hand-written offset is the user's word, and is neither withheld nor
         counted. (2) A cell with no GPS evidence of its own is proposed the offset the camera's GPS gave
@@ -887,7 +896,7 @@ class GeotagWorkflow:
 
     def _timezone_decision(self, dest, prior_tz, blockers, inherited=None, file_less=False, against=None,
                            country=None, zones=(), own_country="", removed=None):
-        # Proposal precedence (§18): the nearest RESOLVED ancestor destination's timezone (a more
+        # Proposal precedence (BLD-timezone_cell): the nearest RESOLVED ancestor destination's timezone (a more
         # specific signal than the generic global default — e.g. a Japan/Kyoto leaf inheriting Japan's
         # Asia/Tokyo over a Europe/Brussels home default) wins; else the config default; else none.
         # Destinations are geographically NESTED — a child sits inside its parent, so it can scarcely
@@ -936,7 +945,7 @@ class GeotagWorkflow:
         # configured default is only proposed: it is the user's usual zone, true of no trip in particular, and
         # applied to a trip abroad it would name and time its photos in the wrong zone; each top-level trip
         # answers once, everything beneath inheriting. A manual entry overrides either, and is the one decision
-        # the user makes here (§18).
+        # the user makes here (BLD-timezone_cell).
         # ...unless this destination's own photos say otherwise: a phone's photo here that records an offset
         # the inherited zone does not have at that time was taken in another zone, and the one zone change
         # of a trip is not adopted unasked. The user writes the zone — the inherited one, if it is right.
@@ -971,9 +980,9 @@ class GeotagWorkflow:
 
     def _offset_cell(self, dest, key, g, prior_cell, frames, gpx, blockers, tz=None, rep_naive=None, date=None,
                      day=None, photos=(), shared=None):
-        # One (camera group, destination[, date]) clock-offset bucket. Proposal precedence (§10.2 rule 4):
-        # GPX self-anchor → timezone-derived (camera assumed on local time; DST-aware, §19.4) → manual.
-        # Clock offsets do not inherit across destinations. `date` (YYYY-MM-DD) is set when the group
+        # One (camera group, destination[, date]) clock-offset bucket. Proposal precedence (BLD-offset_buckets):
+        # GPX self-anchor → timezone-derived (camera assumed on local time; DST-aware, BLD-timezone_naive_offset) →
+        # manual. Clock offsets do not inherit from the destination above. `date` (YYYY-MM-DD) is set when the group
         # spans >1 naive day here; the bucket key is `<key>@<date>` and is the blocker location.
         loc = key if date is None else f"{key}@{date}"
         proposal = infer_anchor_proposal(frames, gpx, CONFIG)
@@ -1009,7 +1018,7 @@ class GeotagWorkflow:
             if _valid_offset(manual_off):
                 # An offset the camera's own GPS supports — one of the proposal's groups, picked instead
                 # of the recommended one — is anchored like an accepted proposal, so no drift check asks
-                # again what its photos already show (§19.2).
+                # again what its photos already show (RUL-chosen_group_is_anchored).
                 chosen = is_gpx and not imprecise and any(abs(int(manual_off) - gg["offset_seconds"]) <= spread
                                         for gg in proposal.get("groups") or [])
                 effective = {"offset_seconds": int(manual_off), "source": "gpx_anchor_chosen" if chosen else "manual"}
@@ -1018,8 +1027,8 @@ class GeotagWorkflow:
                                 "manual_offset_seconds must be a whole number of seconds.")
         elif accept:
             # An acceptance names the offset it accepted, and holds only while that is what is proposed
-            # (§9.1): a proposal that has become another one — the timezone changed, the tracks changed,
-            # photos arrived whose GPS says otherwise — was never accepted, and asks.
+            # (RUL-acceptance_holds_for_its_proposal): a proposal that has become another one — the timezone changed,
+            # the tracks changed, photos arrived whose GPS says otherwise — was never accepted, and asks.
             where = f"{dest}: camera_group_time_decisions[{loc}].user_decision.accepted_offset_seconds"
             if accepted_off in ("", None):
                 blockers.append(f"{where} must be the offset accepted"
@@ -1031,15 +1040,15 @@ class GeotagWorkflow:
                 stale = True                       # accepted a proposal that is no longer the one made
             else:
                 # An offset no photo pins within the tracks' stay is supported by the camera's GPS, not
-                # anchored by it: the drift check still asks (§22a).
+                # anchored by it: the drift check still asks (BLD-drift_validation).
                 # What takes effect is the offset the user accepted: a proposal a few seconds from it is
                 # the same finding, and no reason to move photos already corrected by the first.
                 effective = {"offset_seconds": int(accepted_off),
                              "source": ("gpx_anchor_imprecise" if imprecise else "gpx_anchor_accepted") if is_gpx
                              else "same_day_accepted" if is_shared else "timezone_accepted"}
         elif is_gpx and not conflicting and not imprecise:
-            # auto-resolution under the config flags (§9.1) — GPX-self-anchor only; a timezone-derived
-            # proposal is confirmable, never auto-applied (the local-clock assumption can be wrong).
+            # auto-resolution under the config flags (RUL-anchor_offset_auto_as_configured) — GPX-self-anchor only; a
+            # timezone-derived proposal is confirmable, never auto-applied (the local-clock assumption can be wrong).
             n = proposal["anchor_count"]
             if (n >= 2 and policy.get("multi_anchor_auto_apply", True)) or \
                (n == 1 and policy.get("single_anchor_auto_apply", False)):
@@ -1073,8 +1082,9 @@ class GeotagWorkflow:
             decision_mode = "auto_resolved"
         elif proposal.get("proposal_source") == "timezone_naive" and photos:
             # A timezone's guess is asked about once, where it can be checked: with tracks by the photos it
-            # goes to the drift check as it stands, and the confirmation there is its acceptance (§22a) —
-            # nothing is planned until then. With no track to check it against, it is accepted here.
+            # goes to the drift check as it stands, and the confirmation there is its acceptance
+            # (BLD-timezone_naive_offset) — nothing is planned until then. With no track to check it against, it is
+            # accepted here.
             times = [t.replace(tzinfo=timezone.utc) + timedelta(seconds=proposal["proposed_offset_seconds"])
                      for f in photos if (t := _parse_camera_naive(f.get("source_naive_time")))]
             if self._tracks_by(gpx, times, photos):
@@ -1103,8 +1113,8 @@ class GeotagWorkflow:
         return cell
 
     def _handoff_dependency(self, ws):
-        """The handoff dependency is its deterministic CONTENT fingerprint (prep §16.2), recomputed from
-        the handoff, never the volatile file bytes — so a no-op prep re-run (which only refreshes
+        """The handoff dependency is its deterministic CONTENT fingerprint (RUL-handoff_verified_by_content), recomputed
+        from the handoff, never the volatile file bytes — so a no-op prep re-run (which only refreshes
         run_metadata) does not restale this plan."""
         with open(handoff_path(ws)) as f:
             ho = json.load(f)
@@ -1130,13 +1140,13 @@ class GeotagWorkflow:
             "camera_group_key_version": CAMERA_GROUP_KEY_VERSION,
         }
 
-    # --- Stage 7a: GPS-drift validation (photos-22, §22a) -------------------
+    # --- Stage 7a: GPS-drift validation (photos-22, BLD-drift_validation) ---
     # The highest-danger gap: a (group, dest, date) bucket whose clock offset is manual/timezone-
     # derived (NOT a GPX self-anchor) and that has NO native-GPS anchor is placed in phase 23 purely
     # from its resolved UTC — a wrong offset silently lands the whole batch at the wrong track point.
     # 22 flags every such bucket that GPX *could* validate, blocks until the operator explicitly
     # confirms each (a zero-scrub "offset was right" must be actively confirmed, never implied), and
-    # carries the corrected/validated offset that compute_resolved_utc then re-consumes (§22a).
+    # carries the corrected/validated offset that compute_resolved_utc then re-consumes (BLD-resolved_utc).
 
     _DRIFT_TRIGGER_SOURCES = ("timezone_accepted", "timezone_unconfirmed", "manual", "gpx_anchor_imprecise")
 
@@ -1210,7 +1220,7 @@ class GeotagWorkflow:
         frames (evidence the editor scrubs a photo along), the operator's explicit confirmation, and
         the validated/corrected offset compute_resolved_utc consumes. requires_user_input until
         `confirmed` is actively set (a zero-scrub counts only when the operator confirms it — inaction
-        never satisfies the gate, §22a)."""
+        never satisfies the gate, RUL-untouched_check_confirms_nothing)."""
         eff = time_cell.get("effective_time_anchor") or {}
         current = eff.get("offset_seconds")
         loc = bucket
@@ -1219,9 +1229,9 @@ class GeotagWorkflow:
         corrected = prior_ud.get("corrected_offset_seconds", "")
         against = prior_ud.get("confirmed_offset_seconds", "")
         effective, stale = "", False
-        # A confirmation names the offset it was made against (§22a.2), and holds only while that is the
-        # offset: changed in photos-21 since, it is stale — kept as written, applied to nothing, the bucket
-        # asking again until confirmed anew. One naming none confirms nothing: a zero scrub is never implied.
+        # A confirmation names the offset it was made against (RUL-confirmation_holds_for_its_offset), and holds only
+        # while that is the offset: changed in photos-21 since, it is stale — kept as written, applied to nothing, the
+        # bucket asking again until confirmed anew. One naming none confirms nothing: a zero scrub is never implied.
         if confirmed and (against == "" or against is None):
             blockers.append(f"{dest}: drift_decisions[{loc}].user_decision.confirmed_offset_seconds must be the "
                             f"offset confirmed — the current one is {current}.")
@@ -1279,17 +1289,17 @@ class GeotagWorkflow:
             "camera_group_key_version": CAMERA_GROUP_KEY_VERSION,
         }
 
-    # --- Stage 8: GPS decisions (photos-23, §23/§25) -------------------------
+    # --- Stage 8: GPS decisions (photos-23, BLD-gps_decisions_record) --------
 
     _SUMMARY_KEYS = ("files_total", "preserve_native_gps", "automatic_gpx_interpolation",
                      "automatic_gpx_extrapolation", "automatic_folder_fallback", "manual_locked",
                      "manual_review_required", "blocked", "no_gps_change_needed")
 
     def build_gps_decisions(self, files, resolved_rows, gpx, prior, resolved_fp):
-        """Build/regenerate photos-23 (§25): the §23 decision per by-dest file, grouped by
-        destination as automatic-category SUMMARIES with file paths only for review/blocker items.
+        """Build/regenerate photos-23 (BLD-gps_decisions_record): the BLD-placement_order decision per by-dest file,
+        grouped by destination as automatic-category SUMMARIES with file paths only for review/blocker items.
         Destinations are processed parent-first so a folder_fallback inherits its nearest resolved
-        ancestor's effective fallback (§25, mirroring §10.2). Returns (artifact, blockers)."""
+        ancestor's effective fallback (BLD-folder_fallback_cell). Returns (artifact, blockers)."""
         blockers = _decision_shape_blockers(prior, "gps")
         if blockers:
             return None, blockers
@@ -1381,7 +1391,8 @@ class GeotagWorkflow:
         if not requires:
             artifact["decision_mode"] = "no_op_or_auto_resolved"
         # Tracks that put the same instant in different places placed none of these photos — each fell to
-        # its folder's fallback or asks. Said out loud, since a fallback would otherwise hide it (§25).
+        # its folder's fallback or asks. Said out loud, since a fallback would otherwise hide it
+        # (RUL-disagreeing_tracks_named).
         self.track_disagreements = [{"gpx_files": list(k), "photos": n} for k, n in sorted(disagreeing.items())]
         if self.track_disagreements:
             artifact["track_disagreements"] = self.track_disagreements
@@ -1448,19 +1459,19 @@ class GeotagWorkflow:
             "gpx_extrapolation_max_distance_meters", "gpx_extrapolation_max_speed_kmh",
             "gpx_tracks_agree_max_distance_meters")}, sort_keys=True)
         return {
-            # 22 is covered transitively: resolved_fp folds in photos_22_sha256 (§22.1), so a changed
-            # drift confirmation already restales this. No separate 22 dep needed here.
+            # 22 is covered transitively: resolved_fp folds in photos_22_sha256 (BLD-resolved_utc_fingerprint), so a
+            # changed drift confirmation already restales this. No separate 22 dep needed here.
             "resolved_utc_cache_fingerprint": resolved_fp,
             "gpx_fingerprint": self._gpx_fingerprint,
             "gps_policy_fingerprint": sha256_text(gps_policy),
             "handoff": self._handoff_dependency(self.workspace_root),
         }
 
-    # --- Stage 9: executable plan (photos-24, §28) ---------------------------
+    # --- Stage 9: executable plan (photos-24, BLD-executable_plan) -----------
 
     def build_executable_plan(self, files, resolved_rows, time_artifact, gps_artifact, gpx,
                               resolved_fp):
-        """Assemble photos-24 (§28): per-destination operations (corrected-time / GPS / marker /
+        """Assemble photos-24 (BLD-executable_plan): per-destination operations (corrected-time / GPS / marker /
         rename) for execution to apply, the
         readiness gate, and the flattened dependency cascade. Automatic GPS is re-derived from
         inputs, never read from the photos-23 summary. Deterministic. Returns (plan, blockers)."""
@@ -1476,7 +1487,7 @@ class GeotagWorkflow:
         if gps_artifact.get("status") != "complete":
             blockers.append("photos-23-gps-decisions.json is not complete.")
         # Defensive: main() never reaches here unless 22 is complete, but assert it so a plan can
-        # never assemble while a GPS-drift bucket is unconfirmed (§22a gate).
+        # never assemble while a GPS-drift bucket is unconfirmed (the RUL-unanchored_offset_confirmed gate).
         dvp = drift_validation_path(self.workspace_root)
         if os.path.exists(dvp):
             try:
@@ -1522,7 +1533,7 @@ class GeotagWorkflow:
                 placement[how] = placement.get(how, 0) + 1
                 if cat == "no_change":
                     # left without a position by the user's own answer: recorded with the plan, so the
-                    # log can say so and cite the decision (§13.3)
+                    # log can say so and cite the decision (RUL-log_cites_decisions)
                     unlocated.append({"relative_path": rel, "content_fingerprint": f.get("content_fingerprint"),
                                       "because": manual_gps_pointer("manual_locked", dest, rel, None)})
                 fops = plan_file_ops(f, ru, tz, cat, coord, renames.get(rel))
@@ -1530,7 +1541,8 @@ class GeotagWorkflow:
                 cells = (t_dests.get(dest) or {}).get("camera_group_time_decisions") or {}
                 for o in fops:
                     # what this pass established and which decision it followed, kept with the write so a
-                    # later finalize can log it once a later pass has replaced the resolved-UTC cache (§13.3)
+                    # later finalize can log it once a later pass has replaced the resolved-UTC cache
+                    # (BLD-geotag_log_steps)
                     if o["type"] == "metadata_time_write":
                         o["provenance"] = {
                             "resolved_utc": row.get("resolved_utc"), "time_rule_used": row.get("time_rule_used"),
@@ -1607,7 +1619,7 @@ class GeotagWorkflow:
             "planned_operation_fingerprint": planned_op_fp,
         }
 
-    # --- Stage 10: execution (photos-25, §29) --------------------------------
+    # --- Stage 10: execution (photos-25, BLD-geotag_execution) ---------------
 
     _META_OP_TYPES = ("metadata_time_write", "metadata_gps_write", "gps_marker_write")
     _OP_TOTAL_KEY = {"metadata_time_write": "metadata_time_writes", "metadata_gps_write": "metadata_gps_writes",
@@ -1645,7 +1657,7 @@ class GeotagWorkflow:
             return {}
 
     def revalidate_plan(self, plan, gpx, *, with_handoff=True):
-        """§29 steps 2-4: recompute every dependency fingerprint and return the stale reasons. A
+        """BLD-geotag_execution's revalidation: recompute every dependency fingerprint and return the stale reasons. A
         non-empty list means reject the plan before ANY mutation (the user re-runs to replan)."""
         ws = self.workspace_root
         dep = plan.get("depends_on") or {}
@@ -1673,7 +1685,8 @@ class GeotagWorkflow:
         if dep.get("planned_operation_fingerprint") != sha256_text(json.dumps(all_ops, sort_keys=True)):
             stale.append("planned operations changed (plan tampered)")
         # Every write is checked by taking the photo's fingerprint again: with another image engine than
-        # the one prep took them with, every photo would be written and then held as changed (§29.1a).
+        # the one prep took them with, every photo would be written and then held as changed
+        # (RUL-engine_checked_before_writes).
         if with_handoff and all_ops:
             try:
                 with open(handoff_path(ws)) as hf:
@@ -1687,7 +1700,7 @@ class GeotagWorkflow:
 
     @staticmethod
     def _target_occupied(directory, target_name, source_name):
-        """Execute-time no-clobber recheck (§29.1a): is `target_name` already present
+        """Execute-time no-clobber recheck (RUL-target_free_at_execute): is `target_name` already present
         (case-insensitively) in `directory`, ignoring the source file being renamed away?"""
         low = target_name.lower()
         try:
@@ -1700,7 +1713,7 @@ class GeotagWorkflow:
         its rename — with execute-time precondition + no-clobber rechecks and a post-write content-
         fingerprint verify. Returns a per-file result the caller merges (no shared-state mutation).
 
-        Crash-resumable (§29.1.3): a file already applied by a crashed prior run is detected by its
+        Crash-resumable (BLD-geotag_execution): a file already applied by a crashed prior run is detected by its
         target state — its planned rename target in place (source gone), or its decoded-content
         fingerprint still matching the plan despite a changed size/mtime (a metadata write only) — and
         is skipped or re-applied idempotently rather than tripping the size/mtime precondition."""
@@ -1748,7 +1761,8 @@ class GeotagWorkflow:
             # changed: block (unless the operator already accepted this file's new identity). Otherwise its
             # metadata changed — geotag's own write from an interrupted run, which left it holding the planned
             # values, or an edit made since the plan, which would be overwritten: read the tags back and tell
-            # them apart (§29.1a). A file with no write planned was not written by geotag at all.
+            # them apart (RUL-applied_unrecorded_is_recorded). A file with no write planned was not written by
+            # geotag at all.
             cur_fp = (ContentHasher.fingerprint_image(abs_path) or {}).get("value")
             if cur_fp is None or (cur_fp != pre.get("content_fingerprint") and accepted_mismatches.get(rel) != cur_fp):
                 res["blocker"] = f"{rel}: size/mtime changed and content fingerprint differs since planning"
@@ -1792,7 +1806,8 @@ class GeotagWorkflow:
     def _apply_file_contained(self, rel, ops, journal, accepted_mismatches):
         """`_apply_file`, with anything it raises turned into that photo's failure: one photo's trouble
         never takes the run down around the others still being applied, whose results would then go
-        unrecorded (§29.1a). What was written before the failure is found again by the next run."""
+        unrecorded (RUL-one_photo_failure_contained). What was written before the failure is found again by the
+        next run."""
         try:
             return self._apply_file(rel, ops, journal, accepted_mismatches)
         except Exception as e:
@@ -1801,7 +1816,7 @@ class GeotagWorkflow:
                     "blocker": f"{rel}: could not be applied ({type(e).__name__}: {e})"}
 
     def execute_plan(self, jobs, now_iso, execution_id):
-        """Stage 10 (§29): apply photos-24 after re-validating every dependency, journaling for
+        """Stage 10 (BLD-geotag_execution): apply photos-24 after re-validating every dependency, journaling for
         idempotent resume, verifying content fingerprints, and writing photos-25. now_iso /
         execution_id are injected so the fingerprint-bearing body stays reproducible. Returns the
         summary dict (status 'rejected' with stale reasons if the plan no longer applies)."""
@@ -1814,13 +1829,13 @@ class GeotagWorkflow:
             return {"status": "rejected", "plan_id": plan.get("plan_id"), "stale": stale}
         self._keep_executed_decisions(plan)
 
-        # Optional pre-mutation ZFS snapshot (§29 step 6), labelled "geotag" so it never collides
+        # Optional pre-mutation ZFS snapshot (BLD-geotag_execution), labelled "geotag" so it never collides
         # with prep's "prep-" snapshot. A REQUIRED snapshot that cannot be taken aborts before any
         # mutation; the record is carried into photos-25 either way.
         snapshot = take_zfs_snapshot(ws, plan["plan_id"], "geotag")
         if snapshot is not None and snapshot["required"] and not snapshot["ok"]:
             reason = f"required ZFS pre-mutation snapshot failed: {snapshot['stderr']}"
-            # Nothing was mutated, but §29 step 6 requires the snapshot record be carried into photos-25
+            # Nothing was mutated, but BLD-execution_summary requires the snapshot record be carried into photos-25
             # either way, so the abort is auditable like any other run.
             write_json_artifact(execution_summary_path(ws), {
                 "artifact_type": "execution_summary", "artifact_name": EXECUTION_SUMMARY_ARTIFACT,
@@ -1849,14 +1864,15 @@ class GeotagWorkflow:
 
         cache = GeotagCache(ws)
         try:
-            # Capture-before-write (§29.1a.3): pin each file's own values — prep's record, NOT a re-read —
-            # before geotag's first write to it (§24.2), keyed by content fingerprint. A file already carrying
+            # Capture-before-write (BLD-original_values_pinned): pin each file's own values — prep's record, NOT a
+            # re-read — before geotag's first write to it, keyed by content fingerprint. A file already carrying
             # geotag's mark holds no original values any more, so it is not pinned.
             model = self.build_file_model()
             for f in model:
                 fp = f.get("content_fingerprint")
                 if fp and f.get("original_key") not in (None, fp):
-                    cache.originals_rekey(f["original_key"], fp)   # the pin follows the new value (§24.2)
+                    # the pin follows the new value (BLD-original_values_follow_fingerprint)
+                    cache.originals_rekey(f["original_key"], fp)
                 if (fp and f["relative_path"] in by_file and not f.get("from_originals")
                         and geotag_marker(held_values(f).get("method")) is None):
                     cache.originals_pin(fp, f["relative_path"], f["own_values"], now_iso)
@@ -1871,7 +1887,7 @@ class GeotagWorkflow:
                         r = fut.result()
                         results.append(r)
                         self.coordinator.increment_completed(1)
-                        # Incremental confirmation journal (§29.1a): persist each file's confirmed ops AS
+                        # Incremental confirmation journal (BLD-geotag_execution): persist each file's confirmed ops AS
                         # IT COMPLETES (in this main thread — workers never touch the journal), so a crash
                         # mid-run leaves a journal that lets the next run skip the already-applied files.
                         if r["applied"] or r.get("found"):
@@ -1886,7 +1902,8 @@ class GeotagWorkflow:
                 except KeyboardInterrupt:
                     # Ctrl-C: drop pending file writes and stop waiting instead of letting the `with`
                     # exit drain them (shutdown(wait=True)). Files already applied are confirmed in the
-                    # journal above, so the next run resumes from the diff (§29.1a). Re-raise to main().
+                    # journal above, so the next run resumes from the diff (RUL-geotag_execution_resumable). Re-raise
+                    # to main().
                     ex.shutdown(wait=False, cancel_futures=True)
                     raise
             self.coordinator.finish_phase()
@@ -1933,7 +1950,8 @@ class GeotagWorkflow:
                 op_type[o["operation_id"]] = o["type"]
                 op_dest[o["operation_id"]] = dest
         totals = {v: 0 for v in self._OP_TOTAL_KEY.values()}
-        # Per-destination operation counts (§29.2 item 4 — applied/no-op/skipped per destination + global total).
+        # Per-destination operation counts (BLD-execution_summary — applied/no-op/skipped per destination + global
+        # total).
         per_dest = {dest: {**{v: 0 for v in self._OP_TOTAL_KEY.values()}, "skipped": 0}
                     for dest in plan["destinations"]}
         newly, skipped_n = 0, 0
@@ -1986,10 +2004,10 @@ class GeotagWorkflow:
             "run_metadata": {"execution_id": execution_id, "started_at": now_iso, "finished_at": now_iso, "jobs": jobs},
         }
 
-    # --- Stage 11: finalize + archive (§31 / shared §13) ---------------------
+    # --- Stage 11: finalize + archive (RUL-finalize_explicit, BLD-archive_manifest) ---
 
     def finalize_package(self, now_iso):
-        """Stage 11 (§31): assemble the durable archival package — the photos-26 transformation log,
+        """Stage 11 (BLD-archive_manifest): assemble the durable archival package — the photos-26 transformation log,
         an end-of-geotag DB snapshot, and a manifest. Non-destructive (only NEW files; never
         mutates an artifact, photo, or the live DB). Returns blockers (empty = package written)."""
         ws = self.workspace_root
@@ -2010,8 +2028,9 @@ class GeotagWorkflow:
                        f"{EXECUTABLE_PLAN_ARTIFACT} (plan_id mismatch) — re-execute.")
         if blk:
             return blk
-        # The executed plan must still hold (§31): a decision, the configuration or the tracks changed since
-        # would leave the package recording decisions the photos never received. The handoff is left out: a
+        # The executed plan must still hold (RUL-finalize_requires_plan_still_holds): a decision, the configuration or
+        # the tracks changed since would leave the package recording decisions the photos never received. The
+        # handoff is left out: a
         # prep run after execute records geotag's own writes and renames in it, and that is the loop, not a
         # change of decision.
         gpx = GPXIndex(selected_gpx_root(), track_memo_db_path(ws)).build(self.coordinator)
@@ -2038,7 +2057,7 @@ class GeotagWorkflow:
                                     earlier_passes=self._earlier_passes(plan.get("plan_id")))
         not_carried = entries_not_carried(prep_photos, photos)
         if not_carried:
-            # a defect, not a state of the workspace: the copy would misstate prep's record (§13.0a)
+            # a defect, not a state of the workspace: the copy would misstate prep's record (BLD-log_copy_checked)
             return [f"{COMPLETE_LOG_ARTIFACT} would not carry prep's record unchanged for {len(not_carried)} "
                     "photo(s); nothing was written."]
         self.finalize_warnings = []
@@ -2055,11 +2074,11 @@ class GeotagWorkflow:
 
         conn = sqlite3.connect(db_path(ws))
         try:
-            write_db_snapshot(conn, geotag_db_snapshot_path(ws))   # §13.4a: consistent, atomic
+            write_db_snapshot(conn, geotag_db_snapshot_path(ws))   # BLD-database_images: consistent, atomic
         finally:
             conn.close()
 
-        # The package (§13.2): the whole control directory but its transient files, listed with their
+        # The package (BLD-archive_manifest): the whole control directory but its transient files, listed with their
         # hashes in the manifest, then archived together with it into the control directory itself.
         members = control_archive_members(ws, exclude=(ARCHIVE_MANIFEST_ARTIFACT,))
         write_json_artifact(archive_manifest_path(ws), self._archive_manifest(plan, summary, now_iso, members))
@@ -2067,10 +2086,10 @@ class GeotagWorkflow:
         return []
 
     def _changed_since_execution(self, plan):
-        """The photos in photos by destination that are not as the plan's execution left them (§31): one
-        gone, one whose size or modification time is no longer what the run recorded as it confirmed it
-        (or, for a photo the plan had nothing to do to, what the plan was made from), and one the plan
-        never knew. What finalize packages is what merge trusts as geotag's work, so it is checked, not
+        """The photos in photos by destination that are not as the plan's execution left them
+        (RUL-finalize_checks_photos): one gone, one whose size or modification time is no longer what the run
+        recorded as it confirmed it (or, for a photo the plan had nothing to do to, what the plan was made from),
+        and one the plan never knew. What finalize packages is what merge trusts as geotag's work, so it is checked, not
         taken from whatever is on disk."""
         ws = self.workspace_root
         try:
@@ -2110,7 +2129,7 @@ class GeotagWorkflow:
 
     def _keep_executed_decisions(self, plan):
         """Keep, once per plan, the exact decision records the plan was made from and is now executed
-        against (§13.3a) — `executed/<plan id>/` in the control directory — so a later finalize's log
+        against (BLD-history_kept) — `executed/<plan id>/` in the control directory — so a later finalize's log
         can name the precise version a pass followed after the live records have been edited in place.
         Revalidation has just proven the live records are the ones the plan depends on."""
         ws = self.workspace_root
@@ -2130,7 +2149,7 @@ class GeotagWorkflow:
     def _earlier_passes(self, current_plan_id):
         """[(plan, confirmed operation ids)] of every geotag pass executed before the current plan,
         oldest first: each superseded plan (kept as photos-24-...-NNN.json, numbered in the order they
-        were set aside) whose journal shows it ran (§13.3a)."""
+        were set aside) whose journal shows it ran (BLD-geotag_log_steps)."""
         ws = self.workspace_root
         stem = os.path.splitext(EXECUTABLE_PLAN_ARTIFACT)[0]
         backups = sorted(glob.glob(os.path.join(ws, CONTROL_DIR, f"{stem}-[0-9][0-9][0-9]*.json")),
@@ -2155,7 +2174,7 @@ class GeotagWorkflow:
 
     def _passes_without_a_plan(self, current_plan_id):
         """Ids of geotag passes whose journal shows they ran but whose plan is neither current nor kept
-        — their steps cannot be rebuilt (§13.3a). A geotag journal maps operation ids to their status;
+        — their steps cannot be rebuilt (BLD-partial_log_marked). A geotag journal maps operation ids to their status;
         prep's lists its operations."""
         ws = self.workspace_root
         stem = os.path.splitext(EXECUTABLE_PLAN_ARTIFACT)[0]
@@ -2178,7 +2197,8 @@ class GeotagWorkflow:
 
     def _finalized_media(self, files, plan):
         """Each by-dest photo as geotag left it — its final path, size and modification time — for merge
-        to refuse one changed since (shared §9). The final path is the plan's rename target, if any."""
+        to refuse one changed since (RUL-merge_refuses_changed_since_finalize). The final path is the plan's
+        rename target, if any."""
         renamed = {op["relative_path"]: op["to"] for d in (plan.get("destinations") or {}).values()
                    for op in d.get("operations") or [] if op.get("type") == "rename_no_clobber"}
         media = {}
@@ -2201,7 +2221,7 @@ class GeotagWorkflow:
             "artifact_type": "archive_manifest", "artifact_name": ARCHIVE_MANIFEST_ARTIFACT,
             "schema_version": 1,
             "workspace": os.path.basename(os.path.abspath(ws)),       # for a person to read
-            "workspace_id": workspace_id(ws),                          # the identity (§13.2)
+            "workspace_id": workspace_id(ws),                          # the identity (RUL-package_self_describing)
             "plan_id": plan.get("plan_id"),
             "execution_id": (summary.get("run_metadata") or {}).get("execution_id"),
             "placement": plan.get("placement") or {},                  # how every photo came by its position
@@ -2225,7 +2245,7 @@ GEOTAG_BLURB = (
 def _load_prior_decisions(path):
     """The user's prior decision artifact at `path`, as (artifact, problem). (None, None) when there is
     none yet. A file that cannot be read or parsed, or that is not a JSON object, is never ignored or
-    regenerated over (shared contract §14; geotag §9.2 item 6): it comes back as (None, problem), the
+    regenerated over (RUL-checked_decision_structure, RUL-invalid_decision_kept): it comes back as (None, problem), the
     problem located to where parsing failed, for the caller to stop on with the file left as it is."""
     if not os.path.exists(path):
         return None, None
@@ -2263,7 +2283,7 @@ def add_arguments(parser):
 
 
 def _auto_reprep_for_clean_move(args, workspace_root, reporter):
-    """Geotag §13.1.1 — auto re-prep for a clean by-dest move, run inside geotag's whole-run lock.
+    """BLD-geotag_auto_reprep — auto re-prep for a clean by-dest move, run inside geotag's whole-run lock.
 
     The common operator flow is: move photos from by-date into the by-dest tree, then go straight to
     geotag. That move leaves the handoff stale (geotag derives each file's calibration `destination`
@@ -2321,15 +2341,15 @@ def run(args):
     workspace_root = os.getcwd()
     reporter = get_reporter()
 
-    # Only prep creates the control directory (shared contract §1, §5.3): a folder without one is not a
+    # Only prep creates the control directory (BLD-no_control_dir_stops): a folder without one is not a
     # workspace, and geotag stops there having created nothing — not even its lock file.
     if not os.path.isdir(control_dir(workspace_root)):
         reporter.error(f"Not an initialized workspace (no {CONTROL_DIR}/) — run prep first: "
                        "`photos-cartographer prep plan` then `photos-cartographer prep execute`. Nothing was created.")
         sys.exit(2)
 
-    # Whole-run workspace lock (shared contract §1): one lock across every phase, taken before anything in
-    # the workspace is read; fail-fast.
+    # Whole-run workspace lock (RUL-one_workspace_lock, RUL-lock_before_reading): one lock across every phase, taken
+    # before anything in the workspace is read; fail-fast.
     run_lock = WorkspaceLock(workspace_root, create=False)
     if not run_lock.acquire():
         owner = run_lock.read_owner() or {}
@@ -2338,11 +2358,11 @@ def run(args):
         sys.exit(1)
     reporter.log(f"Lock acquired: {run_lock.lock_path}")
     try:
-        vol_err = workspace_volume_error(workspace_root)   # shared §15: a workspace lies on one filesystem
+        vol_err = workspace_volume_error(workspace_root)   # RUL-workspace_one_filesystem
         if vol_err:
             reporter.error(vol_err)
             sys.exit(2)
-        # §13.1.1: auto re-prep a clean by-dest move so the operator can go straight to geotag — prep's
+        # BLD-geotag_auto_reprep: auto re-prep a clean by-dest move so the operator can go straight to geotag — prep's
         # plan and execute run inside this run's lock; the _check_reprep_gate below re-validates after.
         _auto_reprep_for_clean_move(args, workspace_root, reporter)
         if args.command == "plan":
@@ -2401,7 +2421,7 @@ def run(args):
             if gpx.status == "missing":
                 # Tracks that are configured but not there — a volume not mounted — are not "no tracks":
                 # planning on would place by folder fallback what the tracks place, and drop every
-                # answer given about them (§15).
+                # answer given about them (RUL-missing_tracks_stop_geotag).
                 reporter.error(f"\nGeotag cannot proceed: {gpx.warnings[0]}")
                 reporter.log("\nNo geotag JSON was written.")
                 emit_next_step(reporter, "make the tracks available (or set gpx_root to \"\" in "
@@ -2426,8 +2446,8 @@ def run(args):
                     reporter.warn(f"  ... and {len(gpx.warnings) - GPX_WARNINGS_SHOWN} more.")
 
             # Stages 5–6: time decisions (photos-21). Regenerate from current inputs while
-            # preserving authored decisions (§9); a sanity-validation failure on a preserved value
-            # is a hard blocker that leaves the user's artifact untouched to be fixed (§9.2).
+            # preserving authored decisions (RUL-decision_kept); a sanity-validation failure on a preserved value
+            # is a hard blocker that leaves the user's artifact untouched to be fixed (RUL-invalid_decision_kept).
             tdp = time_decisions_path(workspace_root)
             prior, problem = _load_prior_decisions(tdp)
             if problem:
@@ -2461,12 +2481,12 @@ def run(args):
                 reporter.log(f"Wrote {TIME_DECISIONS_ARTIFACT}: status=complete — all time decisions resolved.", stream="stdout")
 
                 # Stage 7: time decisions are complete -> resolve UTC under the CURRENT offsets
-                # (rows0). This drives drift detection (§22a) and, once 22 is clean, is recomputed
+                # (rows0). This drives drift detection (BLD-drift_validation) and, once 22 is clean, is recomputed
                 # with the operator-validated offsets before anything downstream consumes it.
                 rows0 = compute_resolved_utc(files, groups, artifact)
 
-                # Stage 7a: GPS-drift validation (photos-22, §22a) — the gate before phase 23. A
-                # manual/timezone-derived offset with no native-GPS anchor is placed purely from its
+                # Stage 7a: GPS-drift validation (photos-22, RUL-unanchored_offset_confirmed) — the gate before phase
+                # 23. A manual/timezone-derived offset with no native-GPS anchor is placed purely from its
                 # resolved UTC, so a wrong offset silently mis-places the whole batch; 22 makes the
                 # operator confirm each such bucket (a zero-scrub must be explicit) before GPS is built.
                 dvp = drift_validation_path(workspace_root)
@@ -2494,7 +2514,8 @@ def run(args):
 
                 if not drift_artifact["requires_user_input"]:
                     # Stage 7b: re-resolve UTC consuming 22's validated offsets, persist the cache,
-                    # and report the deterministic fingerprint downstream stages depend on (§22).
+                    # and report the deterministic fingerprint downstream stages depend on
+                    # (BLD-resolved_utc_fingerprint).
                     rows = compute_resolved_utc(files, groups, artifact, drift_offset_overrides(drift_artifact))
                     input_fps = {
                         "camera_time_policy_fingerprint": artifact["depends_on"]["camera_time_policy_fingerprint"],
@@ -2543,7 +2564,8 @@ def run(args):
                                       f"different places, so neither placed {td['photos']} photo(s). If one is "
                                       "not this trip's, take it out of gpx_root and re-run `geotag plan`.")
 
-                    # Stage 9: assemble photos-24 only when ALL decision artifacts are complete (§28).
+                    # Stage 9: assemble photos-24 only when ALL decision artifacts are complete
+                    # (BLD-geotag_stage_order).
                     if (artifact["status"] == "complete" and drift_artifact["status"] == "complete"
                             and gps_artifact["status"] == "complete"):
                         plan, _ = wf.build_executable_plan(files, rows, artifact, gps_artifact, gpx, fp)
@@ -2652,7 +2674,7 @@ def run(args):
                                      "`merge plan` → `merge dry-run` → `merge execute`.")
     except KeyboardInterrupt:
         # Clean Ctrl-C: planning never mutates and execute is journalled/idempotent, so applied
-        # files are confirmed and the next run resumes from the diff (§29.1a). Exit quietly with
+        # files are confirmed and the next run resumes from the diff (RUL-geotag_execution_resumable). Exit quietly with
         # the conventional 130 instead of a traceback; the `finally` still releases the lock.
         reporter.log("\nInterrupted; aborting. Applied files are journalled — safe to rerun.")
         sys.exit(130)

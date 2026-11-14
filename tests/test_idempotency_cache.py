@@ -142,7 +142,7 @@ def test_prep_idempotency_and_by_dest_accounting(mock_meta, tmp_path, monkeypatc
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
 @pytest.mark.spec("BLD-move_row_effects")
 def test_cache_rows_written_during_execution_not_planning(mock_meta, tmp_path, monkeypatch):
-    """§10: cache updates derive from the validated plan and apply during EXECUTION, never
+    """BLD-move_row_effects: cache updates derive from the validated plan and apply during EXECUTION, never
     speculatively during planning. With a fresh (empty) cache, planning derives db_upsert operations
     but writes NO file_cache rows; only execute applies them. Assert the identity cache is empty right
     after plan() and populated only after execute()."""
@@ -171,7 +171,7 @@ def test_cache_rows_written_during_execution_not_planning(mock_meta, tmp_path, m
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
 @pytest.mark.spec("RUL-not_inventoried", test="TST-idempotency_cache-quarantine_subtree_is_excluded_from_the_scan")
 def test_quarantine_subtree_is_excluded_from_the_scan(mock_meta, tmp_path, monkeypatch):
-    """§15: the quarantine directory is excluded from the scan, so a rerun neither re-organizes nor
+    """RUL-not_inventoried: the quarantine directory is excluded from the scan, so a rerun neither re-organizes nor
     re-quarantines its contents. A media file sitting under .photos-ingest-quarantine/<id>/ is never
     inventoried: no operation references it and it never enters the cache, while a real 0-sources
     photo is organized normally."""
@@ -207,7 +207,7 @@ def test_quarantine_subtree_is_excluded_from_the_scan(mock_meta, tmp_path, monke
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
 @pytest.mark.spec("RUL-execution_only_the_plan", test="TST-idempotency_cache-execute_applies_only_recorded_operations_no_rederive")
 def test_execute_applies_only_recorded_operations_no_rederive(mock_meta, tmp_path, monkeypatch):
-    """§4 (anti): execute applies ONLY the recorded plan operations; it never re-derives the
+    """RUL-execution_only_the_plan (anti): execute applies ONLY the recorded plan operations; it never re-derives the
     organization from the filesystem. Drop the new_img move op from the saved plan before executing:
     if execute re-derived it would still move new_img to 2-missing-metadata. Instead new_img stays
     EXACTLY where it is (0-sources, untouched), while the operations that REMAIN in the plan (the
@@ -247,7 +247,7 @@ def test_execute_applies_only_recorded_operations_no_rederive(mock_meta, tmp_pat
 @pytest.mark.spec("RUL-suffix_no_clobber", "RUL-suffix_zero_padded",
                   test="TST-idempotency_cache-chronological_destination_collision_allocates_safe_name_no_clobber")
 def test_chronological_destination_collision_allocates_safe_name_no_clobber(mock_meta, tmp_path, monkeypatch):
-    """§11.2 (anti): a 0-sources file whose computed chronological destination in 5-photos-by-date
+    """RUL-suffix_no_clobber (anti): a 0-sources file whose computed chronological destination in 5-photos-by-date
     collides with an EXISTING path must not clobber. setup_workspace seeds
     5-photos-by-date/2023-01-01/2023-01-01--12-00-00.jpg = "already_date" and a 0-sources file
     (new_img, "new_source") that resolves to the same date/name. Prep must (a) plan a
@@ -332,8 +332,8 @@ def test_prep_replans_from_filesystem_when_journal_corrupt_or_deleted(mock_meta,
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
 @pytest.mark.spec("RUL-evidence_before_quarantine", test="TST-idempotency_cache-quarantine_manifest_written_before_the_file_is_moved")
 def test_quarantine_manifest_written_before_the_file_is_moved(mock_meta, tmp_path, monkeypatch):
-    """§14.3: the manifest evidence entry for a quarantined file is written BEFORE the file is moved
-    into quarantine, so a crash never strands a file in quarantine with no record of why. Probe by
+    """RUL-evidence_before_quarantine: the manifest evidence entry for a quarantined file is written BEFORE the file is
+    moved into quarantine, so a crash never strands a file in quarantine with no record of why. Probe by
     wrapping both _append_quarantine_manifest and the move primitive _move_no_clobber to log a label
     in call order; setup_workspace's dup_img is the quarantined file. Assert the manifest append for
     the run precedes the quarantine move."""

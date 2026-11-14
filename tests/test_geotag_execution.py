@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Phase 6c-1 (geotag) — the `execute` subcommand (§29): apply photos-23, verify content
-fingerprints, journal/resume, write photos-24. exiftool + fingerprint are mocked (the suite mocks
+"""Phase 6c-1 (geotag) — the `execute` subcommand (BLD-geotag_execution): apply photos-23, verify content
+fingerprints, journal/resume, write photos-25. exiftool + fingerprint are mocked (the suite mocks
 all external tools), so the executor logic is driven deterministically. From conftest.py.
 """
 import json
@@ -56,7 +56,7 @@ def _ready_ws(tmp_path, monkeypatch, *, zfs=None):
     if zfs is not None:
         cfg["zfs"] = zfs
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
-    answer_root_zone(ctl)                        # the zone answered once at the root (§18)
+    answer_root_zone(ctl)                        # the zone answered once at the root (RUL-timezone_auto_resolves)
 
     def rec(rel, dto, lat, lon):
         parsed = {"DateTimeOriginal": dto, "selected_source_naive_timestamp": dto,
@@ -157,7 +157,7 @@ def test_exiftool_failure_records_failure(tmp_path, monkeypatch):
     _mock_tools(monkeypatch, ws, write_ok=False)
     assert _execute(monkeypatch, ws) == 3
     s = _summary(ctl)
-    # every write fails and nothing is applied/already-satisfied -> total failure (§29.2 item 7);
+    # every write fails and nothing is applied/already-satisfied -> total failure (BLD-execution_summary);
     # two files, each a time write and its time-fixed mark
     assert s["status"] == "failed" and len(s["failures"]) == 4 and s["totals"]["metadata_time_writes"] == 0
 
@@ -173,7 +173,7 @@ def test_resume_skips_confirmed_ops(tmp_path, monkeypatch):
     assert _execute(monkeypatch, ws) == 0
     s = _summary(ctl)
     assert s["resume"]["newly_applied"] == 0 and s["resume"]["already_satisfied_skipped"] == 6
-    # skips are also broken down per destination (§29.2 item 4) and sum to the global skip count
+    # skips are also broken down per destination (BLD-execution_summary) and sum to the global skip count
     assert s["destinations"]["6-photos-by-dest/T"]["skipped"] == 6
     assert sum(d["skipped"] for d in s["destinations"].values()) == s["resume"]["already_satisfied_skipped"]
 
@@ -233,7 +233,7 @@ def test_execute_j1_and_jN_produce_identical_summary_and_tree(tmp_path, monkeypa
 
 @pytest.mark.spec("BLD-merge_execute", "BLD-geotag_execution")
 def test_journal_writes_only_from_the_main_thread(tmp_path, monkeypatch):
-    """Single-writer journal (§8.3): the confirmation journal is persisted ONLY by the main thread —
+    """Single-writer journal (BLD-geotag_execution): the confirmation journal is persisted ONLY by the main thread —
     worker threads apply per-file ops but never touch the journal. Probe every journal write under -j4
     and assert each originated on MainThread."""
     import threading
@@ -255,7 +255,7 @@ def test_journal_writes_only_from_the_main_thread(tmp_path, monkeypatch):
 
 @pytest.mark.spec("RUL-control_records_never_media")
 def test_geotag_writes_no_artifacts_into_by_dest(tmp_path, monkeypatch):
-    """§8.1 (anti): geotag's artifacts (photos-2*.json, plan/summary/journal) live ONLY under
+    """RUL-control_records_never_media (anti): geotag's artifacts (photos-2*.json, plan/summary/journal) live ONLY under
     .photos-ingest/ — NEVER inside the scanned media tree 6-photos-by-dest. Drive a full plan +
     execute, then walk 6-photos-by-dest and assert no geotag artifact file landed there."""
     ws, ctl = _ready_ws(tmp_path, monkeypatch)                   # _ready_ws ran `plan` twice
@@ -518,7 +518,7 @@ def test_rename_target_occupied_at_execute_blocks(tmp_path, monkeypatch):
 def test_apply_file_already_renamed_resumes_without_journal(tmp_path, monkeypatch):
     """A crashed prior run that already renamed the file (source gone, planned target present) is
     detected by state on resume — even with an empty/lost journal — rather than blocking on the missing
-    source (§29.1.3): once the target is seen to be that photo holding the planned values, its operations
+    source (BLD-geotag_execution): once the target is seen to be that photo holding the planned values, its operations
     are recorded as done (never redone), so the run that applied them is in the journal after all. A file
     merely of the target's name is not taken for the photo."""
     wf = cal.GeotagWorkflow(str(tmp_path))
@@ -566,7 +566,7 @@ def test_summary_keeps_run_metadata_separate(tmp_path, monkeypatch):
     wf = cal.GeotagWorkflow(str(ws)); wf.preflight(for_execute=True)
     s = wf.execute_plan(1, "2024-07-03T00:00:00Z", "exec-1")
     # the volatile bits (timestamps, execution id, jobs) live ONLY in run_metadata, off the
-    # fingerprint-bearing body (summarizes / totals / plan_id), per §29.2.
+    # fingerprint-bearing body (summarizes / totals / plan_id), per BLD-execution_summary.
     assert s["run_metadata"] == {"execution_id": "exec-1", "started_at": "2024-07-03T00:00:00Z",
                                  "finished_at": "2024-07-03T00:00:00Z", "jobs": 1}
     body = json.dumps({k: v for k, v in s.items() if k != "run_metadata"})
@@ -574,7 +574,7 @@ def test_summary_keeps_run_metadata_separate(tmp_path, monkeypatch):
     assert s["summarizes"][cal.EXECUTABLE_PLAN_ARTIFACT]["sha256"]
 
 
-# --- pre-mutation ZFS snapshot (§29 step 6, shared helper) -------------------
+# --- pre-mutation ZFS snapshot (BLD-one_snapshot_mechanism, shared helper) ---
 
 def _mock_zfs(monkeypatch, *, fail=False):
     import subprocess as _sp
@@ -607,7 +607,7 @@ def test_execute_aborts_when_required_snapshot_fails(tmp_path, monkeypatch):
     before = sorted(os.listdir(ws / "6-photos-by-dest" / "T"))
     assert _execute(monkeypatch, ws) == 2                            # required snapshot failed -> rejected
     assert sorted(os.listdir(ws / "6-photos-by-dest" / "T")) == before   # nothing mutated
-    # §29 step 6: the snapshot record is carried into photos-24 even on the abort path
+    # BLD-execution_summary: the snapshot record is carried into photos-25 even on the abort path
     s = _summary(ctl)
     assert s["status"] == "rejected" and s["snapshot"]["ok"] is False and s["snapshot"]["required"] is True
     assert s["blockers"] and "snapshot failed" in s["blockers"][0]
@@ -615,7 +615,7 @@ def test_execute_aborts_when_required_snapshot_fails(tmp_path, monkeypatch):
 
 @pytest.mark.spec("RUL-execution_only_the_plan")
 def test_execute_applies_recorded_plan_verbatim_no_recalc(tmp_path, monkeypatch):
-    """§2 (anti): execute applies the recorded photos-24 plan VERBATIM and never recalculates a
+    """RUL-execution_only_the_plan (anti): execute applies the recorded photos-24 plan VERBATIM and never recalculates a
     decision. Doctor a saved rename target to a value the planner would never derive (re-stamping
     ONLY the plan's own planned-operation fingerprint so the staleness gate still passes — every
     actual decision is untouched), then assert execute renames the file to the DOCTORED target, not
@@ -646,8 +646,8 @@ def test_execute_applies_recorded_plan_verbatim_no_recalc(tmp_path, monkeypatch)
 
 @pytest.mark.spec("BLD-drift_validation")
 def test_execute_rejects_when_drift_validation_changed_after_planning(tmp_path, monkeypatch):
-    """§22a.4 (anti): photos-22 (the GPS-drift confirmation) is a recorded plan dependency, so an
-    execute whose drift artifact changed after planning is rejected before ANY mutation — the drift
+    """RUL-geotag_plan_carries_every_dependency (anti): photos-22 (the GPS-drift confirmation) is a recorded plan
+    dependency, so an execute whose drift artifact changed after planning is rejected before ANY mutation — the drift
     confirmation can't be withdrawn out from under a saved plan."""
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)
@@ -665,7 +665,7 @@ def test_execute_rejects_when_drift_validation_changed_after_planning(tmp_path, 
 @pytest.mark.spec("RUL-geotag_execution_resumable",
                   test="TST-geotag_execution-resume_after_journal_lost_skips_applied_files")
 def test_resume_after_journal_lost_skips_applied_files(tmp_path, monkeypatch):
-    """Crash-resume (§29.1.3): a full execute renames + writes the files; deleting the journal
+    """Crash-resume (RUL-geotag_execution_resumable): a full execute renames + writes the files; deleting the journal
     (simulating a crash before its flush) and re-executing must detect the already-applied files at
     their targets and SKIP them — not block on the changed/missing source."""
     import os as _os
@@ -704,7 +704,7 @@ def test_journal_persisted_incrementally_during_run(tmp_path, monkeypatch):
 
 @pytest.mark.spec("BLD-geotag_records_by_destination")
 def test_summary_grouped_by_destination(tmp_path, monkeypatch):
-    """photos-24 carries a per-destination operation breakdown (§29.2 item 4) that sums to the global
+    """photos-25 carries a per-destination operation breakdown (BLD-execution_summary) that sums to the global
     totals."""
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)
@@ -721,7 +721,7 @@ def test_summary_grouped_by_destination(tmp_path, monkeypatch):
 def test_noop_reprep_does_not_restale_plan(tmp_path, monkeypatch):
     """A no-op prep re-run refreshes only the handoff's run_metadata (and its byte layout); geotag
     depends on the handoff CONTENT fingerprint, so the plan must NOT restale — but a real content change
-    (the inventory) does (§16)."""
+    (the inventory) does (RUL-handoff_verified_by_content)."""
     import photos_utils as u
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)
@@ -760,7 +760,7 @@ def test_every_write_traces_back_to_its_decision(tmp_path, monkeypatch):
         assert tz["effective_iana_timezone"]
 
 
-# --- what an interrupted or troubled run leaves on the record (§29.1a) -------------------------------
+# --- what an interrupted or troubled run leaves on the record (BLD-geotag_execution) -----------------------
 
 @pytest.mark.spec("RUL-one_photo_failure_contained", "RUL-every_change_journaled", "BLD-geotag_execution",
                   "RUL-failed_photo_named",

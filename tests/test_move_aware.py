@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Phase 3a — move-aware cache identity (prep Section 10.1 / 10.2).
+"""Phase 3a — move-aware cache identity (RUL-move_recognized).
 
 When the user moves a file from by-date into 6-photos-by-dest (or re-sorts one
 between destinations inside by-dest), prep must recognize the move cache-only and
@@ -135,7 +135,7 @@ def test_re_sort_between_destinations_is_recognized(tmp_path, monkeypatch):
     os.rename(organized, ws / "6-photos-by-dest" / "Brussels" / name)
     prep.PlanExecutor(str(ws)).execute(_plan(ws))
 
-    # Now re-sort Brussels -> Bruges (§10.2).
+    # Now re-sort Brussels -> Bruges (RUL-move_recognized).
     (ws / "6-photos-by-dest" / "Bruges").mkdir(parents=True)
     os.rename(ws / "6-photos-by-dest" / "Brussels" / name,
               ws / "6-photos-by-dest" / "Bruges" / name)
@@ -198,7 +198,7 @@ def test_content_change_is_rescanned_not_carried(tmp_path, monkeypatch):
     assert len(hash_calls) >= 1              # rescanned, not carried
 
 
-# --- §17.4 re-hash diagnostics ------------------------------------------------
+# --- RUL-rehash_explained re-hash diagnostics ------------------------------------
 
 def _rehash(plan):
     return plan.summary["performance_and_cache"]["rehash_summary"]
@@ -281,7 +281,7 @@ def test_rehash_summary_flags_engine_changed(tmp_path, monkeypatch):
 
 def test_rehash_summary_flags_replan_over_an_unexecuted_plan(tmp_path, monkeypatch):
     """Cache rows are written by execute only, so re-planning a workspace whose earlier plan was never
-    executed re-hashes as `new` unless the decode memo (§10.3) covers it. When the memo cannot — it was
+    executed re-hashes as `new` unless the decode memo (DEF-plan_memo) covers it. When the memo cannot — it was
     cleared, or predates this workspace — that reads like a first ingest, so the summary records the real
     cause (`unpersisted_prior_plan`) rather than leaving the operator to infer it."""
     hash_calls = []

@@ -59,7 +59,7 @@ def test_exif_write_preserves_content_fingerprint(tmp_path):
 @pytest.mark.spec("RUL-position_written_whole", "BLD-position_tags",
                   test="TST-geotag_execution_real-planned_gps_write_lands_a_readable_fix")
 def test_planned_gps_write_lands_a_readable_fix(tmp_path, lat, lon, refs):
-    """§28.1 against the real binary: the tags `plan_file_ops` plans must land a fix a conforming
+    """RUL-position_written_whole against the real binary: the tags `plan_file_ops` plans must land a fix a conforming
     reader can use. Coordinate-only writes were readable to exiftool's lenient composite but carried
     no GPSLatitudeRef/GPSLongitudeRef, so exiv2/digiKam saw NO location — and `-n` stored a negative
     coordinate as its magnitude, flipping the hemisphere. Assert the raw ref tags AND the signed
@@ -108,7 +108,7 @@ def test_full_execute_with_real_tools(tmp_path, monkeypatch):
         cfg["camera_time_and_timezone_policy"], device_groups={"fixed_clock_cameras": [CAM], "phones": []},
         default_folder_timezone="Europe/Brussels", multi_anchor_auto_apply=True)
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
-    answer_root_zone(ctl)                        # the zone answered once at the root (§18)
+    answer_root_zone(ctl)                        # the zone answered once at the root (RUL-timezone_auto_resolves)
     real_fp = utils.ContentHasher.fingerprint_image(FIXTURE)["value"]
 
     def rec(rel, dto, lat, lon):

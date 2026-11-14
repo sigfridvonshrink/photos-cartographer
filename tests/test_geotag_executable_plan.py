@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Phase 6b (geotag) — photos-24-executable-plan.json (§28): the per-file operation builder,
+"""Phase 6b (geotag) — photos-24-executable-plan.json (BLD-executable_plan): the per-file operation builder,
 the readiness gate, and the deterministic plan + dependency cascade. Op logic at full coverage.
 From conftest.py.
 """
@@ -91,7 +91,7 @@ def test_a_track_position_says_how_it_was_derived(method, marker):
 @pytest.mark.spec("RUL-position_written_whole", "BLD-position_tags",
                   test="TST-geotag_executable_plan-gps_write_carries_hemisphere_refs")
 def test_gps_write_carries_hemisphere_refs(lat, lon, refs):
-    """§28.1: EXIF coordinates are unsigned magnitudes — a write without GPSLatitudeRef/
+    """RUL-position_written_whole: EXIF coordinates are unsigned magnitudes — a write without GPSLatitudeRef/
     GPSLongitudeRef reads as NO location to a conforming reader, and flips the hemisphere of a
     southern/western position for a lenient one. The refs ship in the same operation."""
     ops = cal.plan_file_ops(_file(), UTC, "Europe/Brussels", "gpx_interpolation", {"lat": lat, "lon": lon}, None)
@@ -210,7 +210,7 @@ def test_incomplete_decisions_block(tmp_path):
 
 @pytest.mark.spec("RUL-time_before_gps")
 def test_time_first_gps_and_rename_gated_on_resolved_time(tmp_path):
-    """§2: order is time first, GPS/rename last. With a valid resolved UTC a native frame gets a time
+    """RUL-time_before_gps: order is time first, GPS/rename last. With a valid resolved UTC a native frame gets a time
     write AND a rename whose target is the destination-LOCAL civil time (derived from the resolved
     UTC + tz) — proving the rename consumes resolved time. With the SAME file but UNRESOLVED time the
     plan is blocked and produces NO ops at all (no time, no GPS, no rename): everything downstream is
@@ -233,8 +233,8 @@ def test_time_first_gps_and_rename_gated_on_resolved_time(tmp_path):
 
 @pytest.mark.spec("BLD-gps_decisions_record")
 def test_automatic_gps_rederived_from_inputs_not_photos23_text(tmp_path):
-    """§25 (anti): photos-24 re-derives every AUTOMATIC GPS decision from its own validated inputs —
-    never by trusting what photos-23 records. A native frame's automatic decision is preserve_native
+    """BLD-gps_decisions_record (anti): photos-24 re-derives every AUTOMATIC GPS decision from its own validated
+    inputs — never by trusting what photos-23 records. A native frame's automatic decision is preserve_native
     (no GPS write). Inject a CONTRARY manual lock into photos-23 for that frame: if photos-24 parroted
     photos-23 it would emit a GPS write — instead it re-derives preserve_native from the file's own
     native-GPS input, so the ops are byte-identical and still carry zero GPS writes."""

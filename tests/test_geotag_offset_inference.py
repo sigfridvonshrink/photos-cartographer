@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Phase 3b (geotag) — GPX/native-GPS ranking clock-offset inference (spec §19).
+"""Phase 3b (geotag) — GPX/native-GPS ranking clock-offset inference (BLD-anchor_matching).
 
 GPS is correctness-critical, so the geometry/matching/ranking engine is tested at full branch
 coverage: the pure helpers directly (point/segment matching, projection clamping, ranking,
@@ -167,7 +167,7 @@ def test_proposal_skips_unmatched_frames():
     assert p["anchor_count"] == 1
 
 
-# --- plausible-clock-error window + consensus + groups/skipped (§19.1/§19.3) -
+# --- plausible-clock-error window + consensus + groups/skipped (BLD-anchor_matching) -
 
 WCFG = dict(CFG, gpx_anchor_max_clock_error_seconds=172800.0)   # 2-day window
 
@@ -184,8 +184,8 @@ def test_window_rejects_same_place_other_year():
 
 @pytest.mark.spec("RUL-anchor_within_clock_error", test="TST-geotag_offset_inference-clock_error_window_is_timezone_independent")
 def test_clock_error_window_is_timezone_independent():
-    """§19.1: the clock-error matching window reads the frame's naive time AS UTC; the destination
-    timezone is never used to bound matching. The matcher takes no timezone, and decorating the frame
+    """RUL-anchor_within_clock_error: the clock-error matching window reads the frame's naive time AS UTC; the
+    destination timezone is never used to bound matching. The matcher takes no timezone, and decorating the frame
     + cfg with a destination timezone leaves the match identical. Discriminating: the window is tight
     (3h) so if the naive time were re-read through a destination tz (Tokyo +9 / Honolulu -10, hours
     off) the GPX point would fall outside the window and the match would vanish — it does not."""
@@ -374,7 +374,7 @@ def test_run_auto_resolves_offset_from_gpx(tmp_path, monkeypatch):
     assert cell["effective_time_anchor"]["offset_seconds"] == -7187
 
 
-# --- timezone-derived offset proposal (no anchor, no inherited) — §19.4 -------
+# --- timezone-derived offset proposal (no anchor, no inherited) — BLD-timezone_naive_offset -------
 
 def _tzcell(prior_ud, *, tz, rep_naive, frames=None, date=None):
     wf = cal.GeotagWorkflow("/tmp")
@@ -519,7 +519,7 @@ def test_conflicting_photos_are_named():
     assert p["conflicting_files"] == ["6-photos-by-dest/Bruges/p8.jpg"] and p["confidence"] == "review_required"
 
 
-# --- what a place can and cannot say about the time (§19.1) -------------------------------------------
+# --- what a place can and cannot say about the time (BLD-anchor_matching) -----------------------------------
 
 M = 1 / 111320.0            # one metre of latitude, in degrees
 BASE = datetime(2024, 7, 3, 10, 0, 0, tzinfo=timezone.utc)

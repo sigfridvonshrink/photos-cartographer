@@ -146,11 +146,11 @@ class GPXIndex:
 
     Availability is recorded in `status` (disabled / missing / empty / usable). The `fingerprint`
     is a SHA-256 over the root, each file's bytes, and each parsed point — it becomes an upstream
-    dependency of the time/GPS artifacts in later phases (§4–§6).
+    dependency of the time/GPS artifacts in later phases (RUL-tracks_in_dependencies).
 
     Every file is read whole on every build — its bytes are what the fingerprint checks — but with a
     `memo_path` a file whose bytes were parsed before is not parsed again: its points come from the
-    track memo (shared §10), which yields exactly what parsing would."""
+    track memo (RUL-other_databases_scratch), which yields exactly what parsing would."""
 
     def __init__(self, gpx_root, memo_path=None):
         self.gpx_root = gpx_root
@@ -319,7 +319,7 @@ class GPXIndex:
                 continue
             if time_elem is None or not (time_elem.text or "").strip():
                 # Reported like every unusable point, so a track whose points all lack a time never
-                # reads as merely an empty track (geotag §15).
+                # reads as merely an empty track (RUL-unreadable_point_reported).
                 warnings.append(f"GPX point without a time in {_REL} at trkpt {idx}")
                 idx += 1
                 continue
@@ -347,20 +347,20 @@ class GPXIndex:
 
 
 def _valid_iana(tz):
-    """True iff `tz` names a real IANA timezone (geotag §9.2): a place's zone, never one of the names a
+    """True iff `tz` names a real IANA timezone (RUL-checked_timezones): a place's zone, never one of the names a
     zone database keeps for the machine it is on — `localtime` resolves to wherever the run happens."""
     return valid_iana_timezone(tz)
 
 
 def _valid_offset(v):
-    """True iff `v` is a whole number of seconds (geotag §9.2) — of any size: a clock reset to its factory
+    """True iff `v` is a whole number of seconds (RUL-checked_clock_offsets) — of any size: a clock reset to its factory
     date is years out, and a typo shows in the corrected time the editor previews and in the drift check
     every manual offset goes through."""
     return (isinstance(v, int) and not isinstance(v, bool)) or (isinstance(v, float) and v.is_integer())
 
 
 # ============================================================================
-# Stage 5 — GPX/native-GPS time-anchor inference (geotag §19). Pure helpers
+# Stage 5 — GPX/native-GPS time-anchor inference (BLD-anchor_matching). Pure helpers
 # (plain inputs, no I/O) so the geometry/ranking is exhaustively unit-testable.
 # ============================================================================
 
@@ -372,7 +372,8 @@ def _parse_camera_naive(s):
 
 def _naive_date(s):
     """The camera naive timestamp's calendar date as 'YYYY-MM-DD', or None — the per-day offset bucket
-    key within a destination (§10.2: a clock set to local time each morning is constant only per day)."""
+    key within a destination (RUL-offset_per_camera_destination_day: a clock set to local time each morning
+    is constant only per day)."""
     dt = _parse_camera_naive(s)
     return dt.strftime("%Y-%m-%d") if dt else None
 
@@ -424,7 +425,7 @@ def _candidate(match_type, gpx_time, distance, src, naive, dur, span=0.0):
 
 
 def frame_candidates(frame, gpx, cfg):
-    """Every GPX time-anchor candidate for one native-GPS frame (§19.1): one per PASS of a track by the
+    """Every GPX time-anchor candidate for one native-GPS frame (BLD-anchor_matching): one per PASS of a track by the
     place it was taken — the best match of each pass, a close point before a close short segment, then the
     closest. A pass is an unbroken run of ONE track within the anchor distance of the place: a track that
     leaves and comes back passed twice, so an out-and-back walk, the same walk on two days, or a place
@@ -448,7 +449,7 @@ def frame_candidates(frame, gpx, cfg):
     # Plausible-clock-error window: a GPX time may anchor this frame only if it is within `window` of the
     # frame's naive time (read as UTC). Applied DURING the search so a same-place/other-trip point is
     # skipped even when it is the spatially closest — fixing the years-off false match. None = no bound
-    # (unit tests that omit the knob); real configs always set it (§19.1).
+    # (unit tests that omit the knob); real configs always set it (BLD-anchor_matching).
     window = cfg.get("gpx_anchor_max_clock_error_seconds")
     naive_utc = naive.replace(tzinfo=timezone.utc)
     out = []
@@ -496,8 +497,8 @@ def frame_candidates(frame, gpx, cfg):
 
 
 def match_frame_to_gpx(frame, gpx, cfg):
-    """The best GPX time-anchor candidate for one native-GPS frame (§19.1), or None: over every pass, a close
-    point before a close short segment, then the closest. Whether the frame anchors at all; which pass is
+    """The best GPX time-anchor candidate for one native-GPS frame (BLD-anchor_matching), or None: over every pass, a
+    close point before a close short segment, then the closest. Whether the frame anchors at all; which pass is
     the photo's is the consensus's to say (infer_anchor_proposal)."""
     cands = frame_candidates(frame, gpx, cfg)
     return min(cands, key=lambda c: (0 if c["match_type"] == "gpx_point_match" else 1, c["distance_m"])) \
@@ -507,7 +508,7 @@ def match_frame_to_gpx(frame, gpx, cfg):
 def _frame_skip_reason(frame, gpx, cfg):
     """Why `match_frame_to_gpx` returned no anchor for `frame`: 'outside_time_window' if a GPX point is
     spatially close but only at an implausible time (a different trip/year), else 'no_nearby_track'.
-    Drives the editor's skipped-frames note (§19.3) so a windowed-out match is explained, not hidden."""
+    Drives the editor's skipped-frames note so a windowed-out match is explained, not hidden."""
     ng = frame.get("native_gps") or {}
     naive = _parse_camera_naive(frame.get("source_naive_time"))
     if ng.get("lat") is None or ng.get("lon") is None or naive is None or not gpx.points:
@@ -519,8 +520,8 @@ def _frame_skip_reason(frame, gpx, cfg):
 
 
 def _timezone_naive_offset(naive_str, tz):
-    """Timezone-derived clock-offset (§19.4): when a (camera group, destination) has no GPX anchor and no
-    ancestor to inherit from, assume the camera clock was set to the destination's civil timezone, so the
+    """Timezone-derived clock-offset (BLD-timezone_naive_offset): when a (camera group, destination) has no GPX anchor,
+    assume the camera clock was set to the destination's civil timezone, so the
     offset is -(that timezone's UTC offset at this naive instant) — DST-aware via zoneinfo. Returns
     (offset_seconds, real_utc_iso), or None if `tz`/`naive_str` is missing or unresolvable. A confirmable
     proposal only (the local-clock assumption can be wrong, e.g. a camera left on home time)."""
@@ -538,7 +539,7 @@ def _timezone_naive_offset(naive_str, tz):
 
 def infer_anchor_proposal(frames, gpx, cfg):
     """Turn all native-GPS frames' GPX matches for one (camera group, destination) into a single
-    recommended clock-offset proposal (§19.2/§19.3), or None if nothing anchors. Each frame offers one
+    recommended clock-offset proposal (RUL-anchor_consensus), or None if nothing anchors. Each frame offers one
     candidate per pass of the tracks by its place (frame_candidates); the candidates' offsets are clustered
     (a camera's clock error is ~constant across a destination's day) and the CONSENSUS wins — the cluster
     the most FRAMES support, each frame counted once however many of its passes fall in it — so a lone
@@ -637,8 +638,8 @@ def infer_anchor_proposal(frames, gpx, cfg):
 
 
 # ============================================================================
-# Stage 7 — resolved UTC per file (geotag §22). Pure computation + the
-# geotag-owned SQLite cache and its deterministic fingerprint (§22.1).
+# Stage 7 — resolved UTC per file (BLD-resolved_utc). Pure computation + the
+# geotag-owned SQLite cache and its deterministic fingerprint (BLD-resolved_utc_fingerprint).
 # ============================================================================
 
 _OFFSET_RE = re.compile(r"^([+-])(\d\d):?([0-5]\d)$")
@@ -699,7 +700,7 @@ def _local_to_utc(naive, tz):
 def drift_offset_overrides(drift_artifact):
     """Map a COMPLETE photos-22 to `{(destination, bucket_key): validated_offset_seconds}` for every
     confirmed bucket, so compute_resolved_utc can re-resolve those photos under the operator-validated
-    offset (§22a). The bucket_key matches the photos-21 cell key it was built from."""
+    offset (BLD-resolved_utc). The bucket_key matches the photos-21 cell key it was built from."""
     out = {}
     for dest, d in ((drift_artifact or {}).get("destinations") or {}).items():
         for bucket, cell in (d.get("drift_decisions") or {}).items():
@@ -709,7 +710,7 @@ def drift_offset_overrides(drift_artifact):
     return out
 
 
-# EXIF pairs each time field with the offset field recorded with it (geotag §22): a time read from one is
+# EXIF pairs each time field with the offset field recorded with it (BLD-resolved_utc): a time read from one is
 # turned to UTC by its own offset, never by another field's.
 OFFSET_TAG_FOR = {"DateTimeOriginal": "OffsetTimeOriginal", "CreateDate": "OffsetTimeDigitized",
                   "ModifyDate": "OffsetTime"}
@@ -717,7 +718,8 @@ OFFSET_TAG_FOR = {"DateTimeOriginal": "OffsetTimeOriginal", "CreateDate": "Offse
 
 def _own_offset(f):
     """The offset, in seconds, recorded with the field `f`'s time was read from, or None. Prep names the field
-    with its group (`EXIF:DateTimeOriginal`, prep §12); the offset is the paired field's, from its own group."""
+    with its group (`EXIF:DateTimeOriginal`, BLD-metadata_extraction); the offset is the paired field's, from its own
+    group."""
     value = f.get("source_naive_time")
     if isinstance(value, str) and len(value) > 19:
         # an offset written in the time's own value (XMP: `…10:00:00+02:00`, `…10:00:00.5Z`) is the one
@@ -730,12 +732,12 @@ def _own_offset(f):
 
 
 def compute_resolved_utc(files, groups, artifact, offset_overrides=None):
-    """Resolve every by-dest photo to real UTC from the completed time decisions (§22). Camera
+    """Resolve every by-dest photo to real UTC from the completed time decisions (BLD-resolved_utc). Camera
     groups use their (group, destination) effective offset (absolute camera->UTC correction);
     smartphones the offset recorded with the field their time was read from, else the destination
     timezone. `offset_overrides`
-    (from photos-22, §22a) replaces a bucket's offset with the operator-validated one. Returns
-    per-file rows (the §22 fields), path-sorted and deterministic."""
+    (from photos-22) replaces a bucket's offset with the operator-validated one. Returns
+    per-file rows (the BLD-resolved_utc fields), path-sorted and deterministic."""
     dests = artifact.get("destinations") or {}
     overrides = offset_overrides or {}
     rows = []
@@ -789,7 +791,7 @@ def _resolve_one(f, d, cls, naive, tz, key, dest, overrides):
             scope = bucket_key                         # the cell this photo's offset comes from
             cell = cells.get(bucket_key) or {}
             eff = cell.get("effective_time_anchor")
-            if (dest, bucket_key) in overrides:        # §22a: operator-validated offset wins
+            if (dest, bucket_key) in overrides:        # BLD-resolved_utc: operator-validated offset wins
                 offset_used = overrides[(dest, bucket_key)]
                 resolved = naive + timedelta(seconds=offset_used)
                 status, rule, prov = "valid", "camera_group_offset", "gps_drift_validated"
@@ -814,7 +816,7 @@ def _resolve_one(f, d, cls, naive, tz, key, dest, overrides):
 
 
 def resolved_utc_fingerprint(rows, input_fingerprints):
-    """§22.1: a SHA-256 over the path-sorted per-file resolved facts plus the input fingerprints
+    """BLD-resolved_utc_fingerprint: a SHA-256 over the path-sorted per-file resolved facts plus the input fingerprints
     that produced them — stable across unchanged-input reruns, re-verifiable downstream like a JSON
     artifact's SHA-256."""
     parts = []
@@ -862,8 +864,8 @@ def _extrapolate(pts, end, step, target, cfg):
 
 
 def _place_on_track(pts, times, target, cfg):
-    """One track's placement of an instant (§25): a point within the direct-match window, else between the
-    two points around it within the interpolation caps, else past an end of the track within the
+    """One track's placement of an instant (BLD-track_placement): a point within the direct-match window, else between
+    the two points around it within the interpolation caps, else past an end of the track within the
     extrapolation window. A track's end is its first or last point, or either side of a gap longer than
     points are joined across. Returns (placement | None, why not)."""
     i = bisect.bisect_right(times, target)            # pts[i-1].time <= target < pts[i].time
@@ -897,8 +899,8 @@ _METHOD_RANK = {"direct_match": 0, "interpolated": 1, "extrapolated": 2}
 
 
 def place_gps(target_utc, gpx, cfg, why=None):
-    """Place a photo at its resolved UTC against the GPX tracks (§25), or None when no reliable placement
-    exists. Each track places it on its own (_place_on_track) and the closest evidence wins: a point at its
+    """Place a photo at its resolved UTC against the GPX tracks (BLD-track_placement), or None when no reliable
+    placement exists. Each track places it on its own (_place_on_track) and the closest evidence wins: a point at its
     time before the place between two, before a projection past an end; then the track nearest in time.
     Tracks that cover the instant and put the photo in different places — farther apart than
     `gpx_tracks_agree_max_distance_meters` — are two devices in two places, and nothing here says which carried the camera: the
@@ -928,21 +930,21 @@ def place_gps(target_utc, gpx, cfg, why=None):
 
 
 def _valid_coord(lat, lon):
-    """True iff (lat, lon) is a numeric coordinate in range (geotag §9.2 / §25)."""
+    """True iff (lat, lon) is a numeric coordinate in range (RUL-checked_positions_and_times)."""
     return (isinstance(lat, (int, float)) and not isinstance(lat, bool) and -90 <= lat <= 90
             and isinstance(lon, (int, float)) and not isinstance(lon, bool) and -180 <= lon <= 180)
 
 
-# place_gps method -> §25 automatic GPS category.
+# place_gps method -> BLD-placement_order automatic GPS category.
 _GPS_PLACE_CATEGORY = {"direct_match": "gpx_interpolation", "interpolated": "gpx_interpolation",
                        "extrapolated": "gpx_extrapolation"}
 
 
 def classify_gps(file, resolved_utc, gpx, cfg, effective_fallback, file_decision, why=None):
-    """The §23 seven-option GPS decision for one file, as (category, coord|None). Resolves in
+    """The seven-option GPS decision for one file (BLD-placement_order), as (category, coord|None). Resolves in
     priority order: preserve native -> per-file manual lock -> GPX interpolation/extrapolation at the
     resolved UTC -> the destination's effective folder fallback -> accept-unlocated -> blocked.
-    Authored coordinates are assumed already range-validated by the caller (§9.2)."""
+    Authored coordinates are assumed already range-validated by the caller (RUL-checked_positions_and_times)."""
     fd = file_decision or {}
     if file.get("has_native_gps"):
         return "preserve_native", None
@@ -962,7 +964,7 @@ def classify_gps(file, resolved_utc, gpx, cfg, effective_fallback, file_decision
 
 def held_pre_state(file):
     """The position `file` holds now, in the pre-state shape the log records beside a write that replaces
-    or clears it (shared contract §13.3): the coordinates with their GPSProcessingMethod, or 'absent'."""
+    or clears it (BLD-geotag_log_steps): the coordinates with their GPSProcessingMethod, or 'absent'."""
     h = held_values(file)
     if h.get("lat") is not None and h.get("lon") is not None:
         return {"present": True, "GPSLatitude": h["lat"], "GPSLongitude": h["lon"],
@@ -971,7 +973,7 @@ def held_pre_state(file):
 
 
 def _coordinate_tags(lat, lon):
-    """The complete EXIF coordinate tag set for a signed decimal position (§28.1).
+    """The complete EXIF coordinate tag set for a signed decimal position (BLD-position_tags).
 
     EXIF stores latitude/longitude as UNSIGNED magnitudes; the hemisphere lives in the separate
     GPSLatitudeRef/GPSLongitudeRef tags. Writing the coordinate alone leaves the fix half-written:
@@ -1001,9 +1003,10 @@ def _walk_ancestors(dest):
 
 def _nearest_ancestor(dest, eff, key):
     """The deepest ancestor of `dest` with a RESOLVED value in `eff` for `key`, as (path, value), or
-    None. Shared by the two facts that cascade downward — the destination timezone (§18) and the folder
-    GPS fallback (§25.3); a clock offset never does (§10.2). `eff` maps (destination, key) -> resolved
-    value; only already-processed, resolved ancestors qualify, so an unconfirmed one is reached past."""
+    None. Shared by the two facts that cascade downward — the destination timezone (RUL-timezone_from_nearest) and the
+    folder GPS fallback (RUL-fallback_from_nearest); a clock offset never does (RUL-offset_from_own_evidence). `eff`
+    maps (destination, key) -> resolved value; only already-processed, resolved ancestors qualify, so an unconfirmed
+    one is reached past."""
     for d in _walk_ancestors(dest):
         v = eff.get((d, key))
         if v is not None:
@@ -1039,13 +1042,13 @@ def _dest_label(dest):
 
 
 # ============================================================================
-# Stage 9 — no-clobber timestamp rename planning (geotag §26/§27). Pure,
+# Stage 9 — no-clobber timestamp rename planning (BLD-rename_planning). Pure,
 # exhaustively unit-tested. Filenames are destination-LOCAL civil time, never
 # raw camera time or UTC; every on-disk + planned name is permanently occupied.
 # ============================================================================
 
 def destination_local_basename(resolved_utc, tz, fmt, ext):
-    """The destination-local timestamp filename '<stamp><ext>' for a file (§26), or None when it can
+    """The destination-local timestamp filename '<stamp><ext>' for a file (BLD-geotag_final_name), or None when it can
     not be positioned (no valid resolved UTC, or no destination timezone). The stamp is resolved UTC
     converted to the destination civil timezone and formatted with `fmt` (the shared
     filename_timestamp_format). `ext` is the file's current extension, including the leading dot."""
@@ -1056,7 +1059,7 @@ def destination_local_basename(resolved_utc, tz, fmt, ext):
 
 
 def plan_renames(files, fmt):
-    """Plan no-clobber timestamp renames for the files of ONE destination (§27). Returns
+    """Plan no-clobber timestamp renames for the files of ONE destination (BLD-rename_planning). Returns
     {relative_path, current_name, planned_name, rename} per file, in relative_path order. EVERY
     file's current name is seeded as permanently occupied and never freed — a name a file will
     vacate is still treated as taken, so two files that would trade timestamps both land on distinct
@@ -1074,17 +1077,18 @@ def plan_renames(files, fmt):
         if base is None or carries_stem(name, os.path.splitext(base)[0]):
             out.append({"relative_path": rel, "current_name": name, "planned_name": name, "rename": False})
             continue
-        # The first free name, by the one rule prep also uses (shared §6).
+        # The first free name, by the one rule prep also uses (RUL-suffix_choice_by_phase).
         planned = allocate_suffix(os.path.splitext(base)[0], ext.lstrip("."), occupied, bare_first=True)
         out.append({"relative_path": rel, "current_name": name, "planned_name": planned, "rename": True})
     return out
 
 
 # ============================================================================
-# Stage 9 — executable plan operations (geotag §28). Pure op builders so
+# Stage 9 — executable plan operations (BLD-executable_plan). Pure op builders so
 # the op list is deterministic and exhaustively unit-testable. Automatic GPS is
 # RE-DERIVED here from inputs (classify_gps/place_gps), never read from the
-# photos-23 summary (§25). Execution (§29, Phase 6c) only applies these ops.
+# photos-23 summary (BLD-gps_decisions_record). Execution (RUL-execution_only_the_plan, Phase 6c) only applies
+# these ops.
 # ============================================================================
 
 _GPS_OP_ORIGIN = {"gpx_interpolation": "recompute_automated", "gpx_extrapolation": "recompute_automated",
@@ -1126,7 +1130,7 @@ def device_method(processing_method):
     return v[:-len(TIME_FIXED_SUFFIX)] if v.endswith(TIME_FIXED_SUFFIX) else v
 
 
-# What the original-values ledger pins of a file before geotag first writes to it (geotag §24.2).
+# What the original-values ledger pins of a file before geotag first writes to it (BLD-original_values_pinned).
 ORIGINAL_KEYS = ("selected_source_naive_timestamp", "selected_source_timestamp_tag", "DateTimeOriginal",
                  "OffsetTimeOriginal", "GPSLatitude", "GPSLongitude", "GPSProcessingMethod", "has_native_gps")
 
@@ -1170,7 +1174,7 @@ def held_values(file):
 def _local_time_and_offset(resolved_utc, tz):
     """(DateTimeOriginal 'YYYY:MM:DD HH:MM:SS', OffsetTimeOriginal '+HH:MM') for a resolved UTC in the
     destination timezone, or (None, None) if unpositionable. The corrected time is destination-local
-    civil time (§26)."""
+    civil time (RUL-corrected_time_written_local)."""
     dt = _parse_utc(resolved_utc)
     if dt is None or not tz:
         return None, None
@@ -1203,7 +1207,7 @@ def time_fixed_marker_op(file, method, clear_position=False):
 
 
 def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename):
-    """The ordered executable operations for one file (§28): corrected-time metadata write, GPS
+    """The ordered executable operations for one file (BLD-executable_plan): corrected-time metadata write, GPS
     write + provenance marker, and no-clobber rename — each only where the file does not already
     hold it. Returns [] for a file that needs nothing (a no-op)."""
     rel = file["relative_path"]
@@ -1249,13 +1253,13 @@ def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename):
 
 
 # ============================================================================
-# Stage 11 — finalize: the photos-26 transformation log (shared contract §13.3).
+# Stage 11 — finalize: the photos-26 transformation log (BLD-phase_logs).
 # Prep's per-photo log carried forward + geotag steps appended. A derived
 # consolidation of artifacts already written — no new authority.
 # ============================================================================
 
 def describe_offset(seconds):
-    """A clock offset as a person reads it (§13.3 item 5). The offset is what is added to the camera's
+    """A clock offset as a person reads it (BLD-geotag_log_steps). The offset is what is added to the camera's
     time to reach UTC, so a negative one means the camera's clock ran ahead of UTC."""
     if not seconds:
         return "camera clock on UTC"
@@ -1267,7 +1271,7 @@ def describe_offset(seconds):
 def offset_decision_pointer(row, dest, cells):
     """Where the clock offset applied to a photo was decided: its exact (camera group, destination[,
     day]) cell in photos-21, or — when the drift check's validated offset replaced it — the matching
-    confirmation in photos-22 (§13.3 item 3)."""
+    confirmation in photos-22 (BLD-log_format)."""
     group = row.get("camera_group")
     date = _naive_date(row.get("source_naive_time"))
     bucket = f"{group}@{date}" if f"{group}@{date}" in (cells or {}) else group
@@ -1295,7 +1299,7 @@ DECISION_RECORD_DEPS = tuple(_DECISION_RECORD_DEP.values())
 def _with_record_hashes(steps, plan):
     """Each step naming a decision also names the exact version of the decision record its pass
     followed: the copy execution kept of it (`executed/<plan id>/`) and its hash, the one the pass's
-    plan depended on — so the why stays findable after the live record is edited (§13.3a)."""
+    plan depended on — so the why stays findable after the live record is edited (BLD-history_kept)."""
     deps = plan.get("depends_on") or {}
     for s in steps:
         dep = deps.get(_DECISION_RECORD_DEP.get((s.get("because") or "")[:9]) or "") or {}
@@ -1308,7 +1312,7 @@ def _with_record_hashes(steps, plan):
 
 def held_time_pre_state(file):
     """The time `file` holds now and the offset beside it, in the shape the log records beside the write
-    that replaces them (shared contract §13.3)."""
+    that replaces them (BLD-geotag_log_steps)."""
     h = held_values(file)
     return {"DateTimeOriginal": h.get("DateTimeOriginal"), "OffsetTimeOriginal": h.get("OffsetTimeOriginal")}
 
@@ -1388,7 +1392,7 @@ def _gps_and_rename_steps(ops, native):
 
 
 def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, earlier_passes=()):
-    """photos-26-complete-log.json's `photos` (§13.3): a deep copy of prep's per-photo, content-
+    """photos-26-complete-log.json's `photos` (BLD-phase_logs): a deep copy of prep's per-photo, content-
     fingerprint-keyed journeys with each calibrated photo's `phase:"geotag"` steps APPENDED — a
     strict superset of the prep log, derived from photos-21 / the resolved-UTC cache / photos-24.
     `earlier_passes` — [(plan, confirmed operation ids)], oldest first — are the geotag
@@ -1452,7 +1456,7 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, e
         steps.extend(_gps_and_rename_steps(ops, native=f.get("has_native_gps")))
         if not f.get("from_originals") and geotag_marker(held_values(f).get("method")):
             # geotag's mark is on the photo, but this workspace never held its own values: its time was
-            # fixed elsewhere, or that history is lost — say so rather than look whole (§13.3a). The
+            # fixed elsewhere, or that history is lost — say so rather than look whole (BLD-partial_log_marked). The
             # note is a step of geotag's own: prep's fields, a note among them, are carried unchanged.
             entry["partial"] = True
             steps.append({"phase": "geotag", "action": "history_incomplete",
@@ -1470,11 +1474,11 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, e
 
 
 def geotag_execution_status(newly, skipped_n, failures, mismatches, blockers):
-    """Terminal status of a geotag execution (§29.2 item 7): `success` (no failures, mismatches, or
+    """Terminal status of a geotag execution (BLD-execution_summary): `success` (no failures, mismatches, or
     blockers); `failed` (degraded by failures/blockers with nothing applied this run, nothing
     already-satisfied, and no held-back mismatch — i.e. nothing was achieved); otherwise `partial`.
-    A non-empty mismatch list always forces `partial` (a write occurred but is held back, §29.1a),
-    never `failed`. Pre-mutation aborts are `rejected`, decided elsewhere."""
+    A non-empty mismatch list always forces `partial` (a write occurred but is held back,
+    RUL-content_changed_write_held), never `failed`. Pre-mutation aborts are `rejected`, decided elsewhere."""
     if not (failures or mismatches or blockers):
         return "success"
     if mismatches or newly > 0 or skipped_n > 0:

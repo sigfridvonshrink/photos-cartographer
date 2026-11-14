@@ -310,7 +310,7 @@ class TtySink(Sink):
         print("---------------------------", file=sys.stderr)
 
     def _print_report(self, r, plan_summary=None) -> None:
-        """Render the prep run report (prep Section 19) as labelled categories."""
+        """Render the prep run report (RUL-prep_run_summarised) as labelled categories."""
         pc = (plan_summary or {}).get("performance_and_cache", {}) or {}
         qf = r.get("quarantine_footprint", {}) or {}
         out = sys.stderr

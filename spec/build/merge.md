@@ -3,10 +3,8 @@
 How this build meets [merge's intent](../intent/merge.md) and the shared contract's merge rules: the files, names,
 tools and steps. Each item `realises` the intent it implements. *Why* a choice was made is in
 [the rationale](../rationale/merge.md).
-Sections are numbered as in the phase's original spec; a section whose content lives in the shared contract, or
-that only restated others, has no heading here.
 
-## 2. Scope and boundary
+## 1. Scope and boundary
 
 :::{bld} Merge checks prep's fingerprints against the handoff's ImageMagick
 :id: BLD-merge_engine_recheck
@@ -19,7 +17,7 @@ by-dest photo it plans to place, blocking one whose value is not the handoff's; 
 `depends_on.image_engine_version`, and a plan made under another is stale, at dry run and execute alike.
 :::
 
-## 3. Preconditions
+## 2. Preconditions
 
 :::{bld} Merge's preflight
 :id: BLD-merge_preflight
@@ -39,7 +37,7 @@ photo of that set still there with the size and modification time `photos-26-fin
 blocker ends the run with exit status 2 before the library lock, the plan or the summary.
 :::
 
-## 4. Configuration and validation
+## 3. Configuration and validation
 
 :::{bld} `init-library`'s four cases
 :id: BLD-init_library_cases
@@ -55,7 +53,7 @@ write nothing else; outside any workspace without one, stop with exit status 2. 
 fails its checks stops it with exit status 2, nothing marked and nothing written.
 :::
 
-## 6. Destination-to-library mapping
+## 4. Destination-to-library mapping
 
 :::{bld} A photo's target in the library
 :id: BLD-merge_target
@@ -68,7 +66,7 @@ final name: the target of `photos-24`'s `rename_no_clobber` whose `content_finge
 its own name where geotag renamed nothing; the entries sorted by their path in the workspace.
 :::
 
-## 8. Idempotency, resume, and non-destructiveness
+## 5. Idempotency, resume, and non-destructiveness
 
 :::{bld} A fresh plan carries forward from the earlier plans
 :id: BLD-merge_carry_forward
@@ -82,7 +80,7 @@ not blocked whose `library_target` fingerprints, through `_fingerprint_library_f
 no earlier plan placed it.
 :::
 
-## 10. Plan / dry-run / execute lifecycle
+## 7. Plan / dry-run / execute lifecycle
 
 :::{bld} Merge's plan
 :id: BLD-merge_plan

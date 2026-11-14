@@ -3,10 +3,8 @@
 How this build meets [geotag's intent](../intent/geotag.md) and the shared contract's geotag rules: the files, names,
 tools and steps. Each item `realises` the intent it implements. *Why* a choice was made is in
 [the rationale](../rationale/geotag.md).
-Sections are numbered as in the phase's original spec; a section whose content lives in the shared contract, or
-that only restated others, has no heading here.
 
-## 2. Core workflow rule
+## 1. Core workflow rule
 
 :::{bld} Geotag's planning stages, in order
 :id: BLD-geotag_stage_order
@@ -30,7 +28,7 @@ Geotag's preflight for `plan` SHALL block on every handoff record of a photo und
 photos and `2-missing-metadata`.
 :::
 
-## 3. Artifact dependencies
+## 2. Artifact dependencies
 
 :::{bld} Geotag's dependencies, recorded and checked
 :id: BLD-geotag_dependencies
@@ -47,7 +45,7 @@ are made — before any change, and each photo's preconditions as it applies it.
 never checked as a dependency.
 :::
 
-## 7. Geotag scope
+## 4. Geotag scope
 
 :::{bld} Geotag's file model
 :id: BLD-geotag_file_model
@@ -58,7 +56,7 @@ Geotag's `build_file_model` SHALL take, from the handoff, only the records whose
 and whose `media_class` is `image` or `raw`; every operation of `photos-24-executable-plan.json` names one of them.
 :::
 
-## 9. Human decision field rule
+## 6. Human decision field rule
 
 :::{bld} The auto-apply settings
 :id: BLD-auto_apply_settings
@@ -81,7 +79,7 @@ An offset cell's `user_decision` SHALL hold `accept_proposal`, `accepted_offset_
 :::
 
 
-## 10. Per-destination structure
+## 7. Per-destination structure
 
 :::{bld} Geotag's destinations
 :id: BLD-geotag_destinations
@@ -99,7 +97,7 @@ destinations are processed parents first.
 :status: ruled
 :realises: RUL-offset_per_camera_destination_day, RUL-offset_from_own_evidence, RUL-answer_follows_its_day
 
-Each destination's `camera_group_time_decisions` SHALL hold one cell per camera group present, keyed by its `camera_group_key`, or — when the group's photos there span more than one naive date — one per date, keyed `<camera_group_key>@<YYYY-MM-DD>` with a `date` field, the date taken from `source_naive_time`; every cell names the day its photos are of in `day`, whatever its key. A cell's earlier answer is the cell under its key when that names the same `day`, else the one under the key's other form whose `day` is the same; a drift cell's likewise. A cell's proposal is the GPX self-anchor of that group's native-GPS frames of that date there; else, with the destination's timezone resolved, `timezone_naive` at the cell's earliest naive time, DST-aware; else `manual_required`. No cell reads another destination's.
+Each destination's `camera_group_time_decisions` SHALL hold one cell per camera group present, keyed by its `camera_group_key`, or — when the group's photos there span more than one naive date — one per date, keyed `<camera_group_key>@<YYYY-MM-DD>` with a `date` field, the date taken from `source_naive_time`; every cell names the day its photos are of in `day`, whatever its key. A cell's earlier answer is the cell under its key when that names the same `day`, else the one under the key's other form whose `day` is the same; a drift cell's likewise. A cell's proposal is the GPX self-anchor of that group's native-GPS frames of that date there; else, with the destination's timezone resolved, `timezone_naive` at the cell's earliest naive time, DST-aware; else `manual_required`. No cell reads the destination above it for an offset; the one case of a cell taking another destination's is {need}`BLD-offset_shared_within_day`.
 :::
 
 :::{bld} Geotag's records are grouped by destination
@@ -112,7 +110,7 @@ destination's path under `6-photos-by-dest`, every decision of a destination ins
 :::
 
 
-## 15. Reading the tracks
+## 8. Reading the tracks
 
 :::{bld} How track points are read
 :id: BLD-track_points
@@ -135,7 +133,7 @@ the first `GPX_WARNINGS_SHOWN`, with the number of the rest.
 :::
 
 
-## 16. Camera groups
+## 9. Camera groups
 
 :::{bld} The classification snippet
 :id: BLD-unknown_group_snippet
@@ -167,7 +165,7 @@ A `camera_group_key` listed in both `phones` and `fixed_clock_cameras` SHALL be 
 :::
 
 
-## 18. Destination civil timezone
+## 10. Destination civil timezone
 
 :::{bld} The timezone cell
 :id: BLD-timezone_cell
@@ -183,7 +181,7 @@ each takes the `effective_iana_timezone` of its nearest ancestor that has one; o
 :::
 
 
-## 19. Clock offsets from the camera's own GPS
+## 11. Clock offsets from the camera's own GPS
 
 :::{bld} How anchors are matched and agreed
 :id: BLD-anchor_matching
@@ -223,7 +221,7 @@ only once accepted, as `timezone_accepted`.
 Over the cells of one camera group naming the same `day` in different destinations, `build_time_decisions` SHALL take as donors those whose effective source is `gpx_anchor_auto`, `gpx_anchor_accepted` or `gpx_anchor_chosen` and whose `manual_offset_seconds` is empty. Donors whose offsets differ by more than `clock_offset_same_day_max_difference_seconds` each lose their effective offset, ask, and list the others in `conflicts_with` (`destination`, `bucket`, `offset_seconds`); nothing is shared. Otherwise a cell whose own proposal would be `timezone_naive` or `manual_required` is proposed the donor's offset — a `gpx_anchor_auto` donor first, then by path — as `proposal_source: "same_day_elsewhere"` with `shared_from` (`destination`, `bucket`): taking effect as `same_day_auto` where the donor's source is `gpx_anchor_auto`, else once accepted, naming the offset, as `same_day_accepted`. An offset the cell keeps from its own earlier GPS comes first. Neither source is followed by a drift check.
 :::
 
-## 20. The decision records
+## 12. The decision records
 
 :::{bld} What every decision record carries
 :id: BLD-decision_record_envelope
@@ -240,7 +238,7 @@ holds the handoff's content fingerprint, `camera_time_policy_fingerprint` — ov
 :::
 
 
-## 22. Resolved UTC
+## 13. Resolved UTC
 
 :::{bld} How each photo's true time is resolved
 :id: BLD-resolved_utc
@@ -275,7 +273,7 @@ track decided anything.
 :::
 
 
-## 22a. The GPS-drift check
+## 14. The GPS-drift check
 
 :::{bld} The drift check
 :id: BLD-drift_validation
@@ -286,7 +284,7 @@ Once photos-21 is complete, `geotag plan` SHALL write `photos-22-gps-drift-valid
 :::
 
 
-## 24. Every photo's own values
+## 15. Every photo's own values
 
 :::{bld} The pinned values follow a retaken fingerprint
 :id: BLD-original_values_follow_fingerprint
@@ -301,7 +299,7 @@ preflight.
 :::
 
 
-## 25. Placing each photo
+## 16. Placing each photo
 
 :::{bld} The placement order
 :id: BLD-placement_order
@@ -357,7 +355,7 @@ Each of photos-23's `review_items` SHALL carry its photo's `content_fingerprint`
 :::
 
 
-## 27. Renames
+## 18. Renames
 
 :::{bld} How renames are planned
 :id: BLD-rename_planning
@@ -372,7 +370,7 @@ no-clobber move.
 :::
 
 
-## 28. The executable plan
+## 19. The executable plan
 
 :::{bld} The executable plan
 :id: BLD-executable_plan
@@ -400,7 +398,7 @@ A cell's dates SHALL be counted over all its group's photos in the destination, 
 :::
 
 
-## 29. Execution
+## 20. Execution
 
 :::{bld} How execution applies the plan
 :id: BLD-geotag_execution
@@ -419,7 +417,7 @@ A cell's dates SHALL be counted over all its group's photos in the destination, 
 :::
 
 
-## 31. Finalize
+## 21. Finalize
 
 :::{bld} What finalize checks first
 :id: BLD-finalize_preconditions

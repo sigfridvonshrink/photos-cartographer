@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Phase 7 (geotag) — Stage 11 finalize + archive (§31 / shared §13): the photos-25
-transformation log (prep carried forward + geotag steps), the DB snapshot, and the manifest.
+"""Phase 7 (geotag) — Stage 11 finalize + archive (BLD-archive_manifest): the photos-26
+complete log (prep carried forward + geotag steps), the DB snapshot, and the manifest.
 Non-destructive. exiftool-write + fingerprint mocked. From conftest.py.
 """
 import json
@@ -217,7 +217,7 @@ def _ready_ws(tmp_path, monkeypatch):
         cfg["camera_time_and_timezone_policy"], device_groups={"fixed_clock_cameras": [CAM], "phones": []},
         default_folder_timezone="Europe/Brussels", multi_anchor_auto_apply=True)
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
-    answer_root_zone(ctl)                        # the zone answered once at the root (§18)
+    answer_root_zone(ctl)                        # the zone answered once at the root (RUL-timezone_auto_resolves)
     # a prep log to carry forward
     (ctl / "photos-15-prep-log.json").write_text(json.dumps({"schema_version": 1, "tool": "photos-1-prep",
         "photos": {"fp-" + f"{BYDEST}/T/a.arw": {"content_fingerprint": "fp-" + f"{BYDEST}/T/a.arw",
@@ -371,8 +371,8 @@ def test_finalize_archives_the_whole_control_directory(tmp_path, monkeypatch):
 
 @pytest.mark.spec("RUL-finalize_explicit")
 def test_finalize_bundles_archive_but_performs_no_merge(tmp_path, monkeypatch):
-    """§31 (anti): finalize assembles the archival package (photos-26 complete-log + DB + manifest)
-    but NEVER merges into a library — it produces no merge artifacts and moves no media. Snapshot the
+    """RUL-finalize_non_destructive (anti): finalize assembles the archival package (photos-26 complete-log + DB +
+    manifest) but NEVER merges into a library — it produces no merge artifacts and moves no media. Snapshot the
     by-dest frames, run finalize, assert the package appears, NO merge artifact (photos-31/photos-35)
     is written, and every by-dest media file is byte-unchanged (finalize moved nothing)."""
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
@@ -490,7 +490,7 @@ def test_a_decision_changed_since_execution_stops_finalize(tmp_path, monkeypatch
 
 
 
-# --- what finalize packages is what execution left (§31) ---------------------------------------------
+# --- what finalize packages is what execution left (RUL-finalize_checks_photos) -----------------------------
 
 @pytest.mark.spec("RUL-finalize_checks_photos", "BLD-finalize_preconditions",
                   test="TST-geotag_finalize-a_photo_not_as_execution_left_it_stops_finalize")

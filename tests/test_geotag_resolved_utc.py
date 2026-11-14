@@ -13,8 +13,8 @@
 # limitations under the License.
 
 """Phase 4 (geotag) — Stage 7 resolved UTC per file + the resolved-UTC cache fingerprint
-(spec §22/§22.1). Time-correctness code, so the computation gets full branch coverage: camera
-offset, smartphone native offset, destination-timezone fallback (DST-correct), and the unresolved
+(BLD-resolved_utc/BLD-resolved_utc_fingerprint). Time-correctness code, so the computation gets full branch coverage:
+camera offset, smartphone native offset, destination-timezone fallback (DST-correct), and the unresolved
 branches; plus the SQLite cache round-trip and the deterministic fingerprint. From conftest.py.
 """
 import json
@@ -83,7 +83,7 @@ def test_smartphone_native_offset():
                                              ("DateTimeOriginal", "OffsetTimeOriginal")])
 def test_a_phone_time_takes_the_offset_recorded_with_it(tag, offset_tag):
     # Each time field has its own offset field; another field's offset never turns it to UTC. Prep names the
-    # field with its group (prep §12), as `EXIF:DateTimeOriginal`.
+    # field with its group (BLD-metadata_extraction), as `EXIF:DateTimeOriginal`.
     others = {t: "+05:00" for t in ("OffsetTimeOriginal", "OffsetTimeDigitized", "OffsetTime") if t != offset_tag}
     f = dict(_file("6-photos-by-dest/B/p.jpg", PHONE, "2024:07:03 14:00:00"), source_time_tag=tag,
              raw_times={offset_tag: "+02:00", **others})
@@ -184,7 +184,7 @@ def test_fingerprint_stable_and_sensitive():
 
 @pytest.mark.spec("BLD-resolved_utc")
 def test_resolved_utc_cache_created_only_after_photos21_complete(tmp_path, monkeypatch, capsys):
-    """§22: the resolved-UTC cache is written ONLY after upstream validation — specifically once
+    """BLD-geotag_stage_order: the resolved-UTC cache is written ONLY after upstream validation — specifically once
     photos-21 is complete. Here the GPX anchor auto-resolves the camera offset, but with no default
     folder timezone the destination timezone REQUIRES user input, so photos-21 is incomplete on the
     first run and NO resolved-UTC cache is produced (even though the camera UTC is computable from the
@@ -283,7 +283,7 @@ def test_run_populates_cache_when_complete(tmp_path, monkeypatch, capsys):
         cfg["camera_time_and_timezone_policy"], device_groups={"fixed_clock_cameras": [CAM], "phones": []},
         default_folder_timezone="Europe/Brussels", multi_anchor_auto_apply=True)
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
-    answer_root_zone(ctl)                        # the zone answered once at the root (§18)
+    answer_root_zone(ctl)                        # the zone answered once at the root (RUL-timezone_auto_resolves)
 
     def rec(rel, lat, lon, dto):
         parsed = {"DateTimeOriginal": dto, "selected_source_naive_timestamp": dto,
@@ -337,8 +337,8 @@ def test_run_populates_cache_when_complete(tmp_path, monkeypatch, capsys):
 
 @pytest.mark.spec("BLD-resolved_utc_fingerprint", "RUL-times_survive_unrelated_config_edits", "RUL-remake_only_what_depends", "RUL-costly_results_survive_unrelated_edits", test="TST-geotag_resolved_utc-unrelated_config_edit_replans_but_does_not_restale_resolved_utc")
 def test_unrelated_config_edit_replans_but_does_not_restale_resolved_utc(tmp_path, monkeypatch, capsys):
-    """§22.1 / shared §4.2: a config edit OUTSIDE the time-policy subset re-plans but must NOT restale
-    already-resolved UTC. The resolved-UTC cache fingerprint is built from time-relevant inputs only
+    """RUL-times_survive_unrelated_config_edits: a config edit OUTSIDE the time-policy subset re-plans but must NOT
+    restale already-resolved UTC. The resolved-UTC cache fingerprint is built from time-relevant inputs only
     (photos-21 sha, the camera-time-policy fingerprint, GPX, prep cache, field-set/key versions) — not
     a whole-config hash. Here we edit `merge.library_root` (a merge-phase key, untouched by geotag) and
     re-run: photos-21 stays byte-identical and the resolved_utc_cache_fingerprint is unchanged."""
@@ -362,7 +362,7 @@ def test_unrelated_config_edit_replans_but_does_not_restale_resolved_utc(tmp_pat
         default_folder_timezone="Europe/Brussels", multi_anchor_auto_apply=True)
     config_path = ctl / "photos-00-config.json"
     config_path.write_text(json.dumps(cfg))
-    answer_root_zone(ctl)                        # the zone answered once at the root (§18)
+    answer_root_zone(ctl)                        # the zone answered once at the root (RUL-timezone_auto_resolves)
 
     def rec(rel, lat, lon, dto):
         parsed = {"DateTimeOriginal": dto, "selected_source_naive_timestamp": dto,

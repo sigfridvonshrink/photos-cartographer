@@ -189,7 +189,7 @@ def _completable_ws(tmp_path):
         cfg["camera_time_and_timezone_policy"], device_groups={"fixed_clock_cameras": [CAM], "phones": []},
         default_folder_timezone="Europe/Brussels", multi_anchor_auto_apply=True)
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
-    answer_root_zone(ctl)                        # the zone answered once at the root (§18)
+    answer_root_zone(ctl)                        # the zone answered once at the root (RUL-timezone_auto_resolves)
 
     def rec(rel, dto, *, gps=None):
         parsed = {"DateTimeOriginal": dto, "selected_source_naive_timestamp": dto,
@@ -354,7 +354,7 @@ def test_unknown_group_template_is_valid_full_json(tmp_path, monkeypatch, capsys
     assert CAM in tmpl["fixed_clock_cameras"]                # known group preserved (full list)
 
 
-# --- broken decisions are located blockers, never coerced or passed over (shared contract §14) -----
+# --- broken decisions are located blockers, never coerced or passed over (RUL-invalid_value_located) -----
 
 def _set(path, value):
     """Return an edit that sets the dotted `path` (list indices as ints) of a decision artifact."""

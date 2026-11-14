@@ -112,7 +112,7 @@ test("peerKeys: cluster ref fans out to its peers, plain ref to itself", () => {
   assert.deepEqual(app.peerKeys({ key: "A" }), ["A"]);
 });
 
-// --- picking a correction group (a place visited on several days, §19.2) ----------------------------
+// --- picking a correction group (a place visited on several days, RUL-revisit_matched_to_its_day) ---
 test("groupChoice: the recommended group accepts the proposal, another sets its offset", () => {
   const p = { proposed_offset_seconds: -7200, groups: [{ offset_seconds: -7200, count: 3 }, { offset_seconds: -93600, count: 3 }] };
   assert.deepEqual(app.groupChoice(p, p.groups[0]), { accept_proposal: true, accepted_offset_seconds: -7200, manual_offset_seconds: "" });

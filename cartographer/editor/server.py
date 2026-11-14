@@ -306,7 +306,7 @@ def _save(workspace, payload):
     """Write the posted user_decision edits back into the workspace's decision artifacts."""
     if photos_utils.is_sealed(workspace):       # the console reaches here without serve()'s check
         return {"ok": False, "error": "workspace is sealed (already merged): decisions can no longer change"}
-    # A save changes the workspace, so it holds the workspace's lock (shared contract §1): a geotag plan
+    # A save changes the workspace, so it holds the workspace's lock (BLD-editor_save_locks): a geotag plan
     # running now reads these records and rewrites them, and would overwrite a save landing in between.
     # Fail-fast like every run; the editor's display reads stay unlocked (each file is replaced whole).
     lock = photos_utils.WorkspaceLock(workspace, create=False)
@@ -459,7 +459,7 @@ def serve(workspace, port=8765, host="0.0.0.0"):
               f"(no {CONTROL}/{GUARD_NAME}). Run `photos-cartographer prep plan` here first, "
               f"or use `photos-cartographer edit --demo` for a read-only fixtures tour.", file=sys.stderr)
         sys.exit(2)
-    # A sealed (merged) workspace is final (shared contract §13.7): its decisions may no longer change.
+    # A sealed (merged) workspace is final (RUL-editor_refuses_sealed): its decisions may no longer change.
     if workspace and photos_utils.is_sealed(workspace):
         print(f"{os.path.abspath(workspace)} is SEALED (already merged): the decision editor will not "
               f"open it. A sealed workspace is final.", file=sys.stderr)

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Plan-time decode memo (prep Section 10.3).
+"""Plan-time decode memo (RUL-plan_memo_kept).
 
 Cache rows are written by execute only, so before the memo a plan that was never executed
 threw away every fingerprint it computed and the next plan re-decoded the whole workspace.

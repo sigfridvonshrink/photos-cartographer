@@ -385,7 +385,7 @@ def _runnable_actions(workspace, phases, sealed, busy, initialized=True):
       "finalized already" if geotag_done else "geotag execute must succeed first")
     g("merge/init-library", True)        # one-time setup, runnable anytime (unless sealed/busy)
     # merge plan needs BOTH geotag finalized AND a blessed library (the phase hard-blocks without the
-    # library — §3 precond 5), so gate on both and name whichever is missing. This makes init-library a
+    # library — RUL-library_mark_required), so gate on both and name whichever is missing. This makes init-library a
     # visible enabler of merge/plan instead of letting it be clicked into a runtime "not a blessed
     # library" failure.
     library_ok = _library_blessed(workspace)

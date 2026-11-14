@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Phase 5a (geotag) — GPS placement from the GPX track at a photo's resolved UTC (spec §23
-options 4/5). GPS math, so the engine gets full branch coverage: direct match, time-fraction
+"""Phase 5a (geotag) — GPS placement from the GPX track at a photo's resolved UTC (BLD-track_placement).
+GPS math, so the engine gets full branch coverage: direct match, time-fraction
 interpolation (gap/distance/speed gates), and velocity extrapolation past either end. From
 conftest.py.
 """

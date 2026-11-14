@@ -13,7 +13,7 @@ import json
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Closing 'Next: …' operator guidance (shared contract Section 10).
+"""Closing 'Next: …' operator guidance (DEF-operator_loop).
 
 Every phase command ends its output with a single `Next: …` line stating the next action for the
 state it produced. These tests drive prep's `run()` and assert the line for the success, blocked, and

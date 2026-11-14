@@ -80,7 +80,7 @@ def test_execution_id_present_and_distinct(tmp_path, monkeypatch):
     (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
     plan = _run(ws)
     h = _handoff(ws)
-    # the per-run ids now live in run_metadata, off the deterministic content (§16)
+    # the per-run ids now live in run_metadata, off the deterministic content (RUL-handoff_deterministic)
     rm = h["run_metadata"]
     assert rm["execution_id"]
     assert rm["execution_id"] != rm["plan_id"] == plan.plan_id
@@ -204,7 +204,7 @@ def test_unknown_device_class_when_not_configured(tmp_path, monkeypatch):
 
 @pytest.mark.spec("RUL-handoff_deterministic")
 def test_handoff_written_sorted_and_deterministic(tmp_path, monkeypatch):
-    """The handoff must be byte-deterministic for a given workspace state (shared contract §4):
+    """The handoff must be byte-deterministic for a given workspace state (RUL-handoff_deterministic):
     routed through write_json_artifact (sort_keys), so its SHA-256 — which geotag records as a
     json_dependency over the exact bytes — does not flip spuriously. The on-disk bytes must equal the
     canonical sorted form."""
@@ -247,8 +247,8 @@ def test_handoff_content_fingerprint_ignores_run_metadata_and_audit():
 
 @pytest.mark.spec("RUL-run_only_refresh_restales_nothing", "RUL-handoff_deterministic", test="TST-handoff-handoff_content_fingerprint_stable_across_real_noop_rerun")
 def test_handoff_content_fingerprint_stable_across_real_noop_rerun(tmp_path, monkeypatch):
-    """End-to-end (§16.2): a second prep run that changes nothing organized produces the SAME handoff
-    content_fingerprint, even though run_metadata + cache-freshness counts differ run to run."""
+    """End-to-end (RUL-run_only_refresh_restales_nothing): a second prep run that changes nothing organized produces the
+    SAME handoff content_fingerprint, even though run_metadata + cache-freshness counts differ run to run."""
     _mock(monkeypatch)
     ws = _ws(tmp_path)
     (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
@@ -264,8 +264,8 @@ def test_handoff_content_fingerprint_stable_across_real_noop_rerun(tmp_path, mon
 @pytest.mark.spec("RUL-prep_records_written_whole",
                   test="TST-handoff-handoff_is_rewritten_fresh_each_run_never_edited_in_place")
 def test_handoff_is_rewritten_fresh_each_run_never_edited_in_place(tmp_path, monkeypatch):
-    """§16: the handoff is written deterministically and NEVER edited in place — each successful run
-    rewrites it wholesale. Inject a sentinel key into the on-disk handoff, then re-run prep: a
+    """RUL-prep_records_written_whole: the handoff is written deterministically and NEVER edited in place — each
+    successful run rewrites it wholesale. Inject a sentinel key into the on-disk handoff, then re-run prep: a
     non-editable rewrite drops the sentinel entirely (it is regenerated, not merged/appended), and the
     fresh write is reflected by a new run_metadata.execution_id."""
     _mock(monkeypatch)
@@ -291,7 +291,7 @@ def test_handoff_is_rewritten_fresh_each_run_never_edited_in_place(tmp_path, mon
 
 def test_handoff_roundtrip_assertion_catches_unstable_fingerprint(tmp_path, monkeypatch):
     """If the just-written handoff would NOT re-read to the same content_fingerprint (a non-round-trip-
-    stable field crept in), prep fails loudly rather than shipping a forever-stale handoff (§16)."""
+    stable field crept in), prep fails loudly rather than shipping a forever-stale handoff."""
     import pytest
     _mock(monkeypatch)
     ws = _ws(tmp_path)

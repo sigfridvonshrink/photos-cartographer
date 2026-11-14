@@ -94,7 +94,7 @@ def test_deterministic_plan_with_jobs(mock_read, mock_popen, workspace):
     workflow4 = prep.WorkspacePrepWorkflow(workspace, cache4)
     plan4 = workflow4.plan()
     # The job count is a transient, machine-dependent runtime knob and is NOT recorded in the plan
-    # (spec §17 item 6) — neither summary carries a jobs field.
+    # (RUL-jobs_recorded_nowhere) — neither summary carries a jobs field.
     assert "jobs_requested" not in json.dumps(plan4.summary)
     assert "jobs_requested" not in plan4.summary["performance_and_cache"]
 
@@ -306,7 +306,7 @@ def test_cli_jobs_argparse(workspace):
 
     with open(canonical, "r") as f:
         plan_data_1 = json.load(f)
-    # -j is accepted but not persisted to the plan (machine-independent plan, spec §17 item 6).
+    # -j is accepted but not persisted to the plan (machine-independent plan, RUL-jobs_recorded_nowhere).
     assert "jobs_requested" not in json.dumps(plan_data_1)
 
     res = subprocess.run(
@@ -503,7 +503,7 @@ def test_progress_summary_fields(mock_read_metadata_concurrently, mock_hash_imag
 
     pc = plan.summary.get("performance_and_cache", {})
     assert pc
-    assert "jobs_requested" not in pc          # job count is not recorded in the plan (spec §17 item 6)
+    assert "jobs_requested" not in pc          # job count is not recorded in the plan (RUL-jobs_recorded_nowhere)
     assert pc["progress_mode"] == "quiet"
     assert pc["dependency_validation_status"] == "pending"
     assert pc["handoff_written_after_successful_validation"] is False

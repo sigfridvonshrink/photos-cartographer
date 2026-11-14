@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Phase C1 — end-of-prep DB backup snapshot (photos-15-prep-ingest.db, shared §13.4a).
+"""Phase C1 — end-of-prep DB backup snapshot (photos-15-prep-ingest.db, BLD-database_images).
 
 A transactionally-consistent image of the live cache, captured at the handoff gate, written
 atomically. Mocked hashing/metadata, fast. From conftest.py.

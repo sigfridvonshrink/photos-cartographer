@@ -103,7 +103,7 @@ def test_journals_are_per_run_and_retained(tmp_path, monkeypatch):
 
 @pytest.mark.spec("RUL-config_writers")
 def test_prep_seeds_config_once_then_never_rewrites_it(tmp_path, monkeypatch):
-    """§3.2: prep is the SOLE writer of photos-00-config.json and only SEEDS it once — it never edits
+    """RUL-config_writers: prep is the SOLE writer of photos-00-config.json and only SEEDS it once — it never edits
     it thereafter. After the first run seeds the config, a second prep run leaves the on-disk
     photos-00-config.json byte-for-byte identical (no rewrite, no reformat, no fingerprint churn)."""
     _mock(monkeypatch)

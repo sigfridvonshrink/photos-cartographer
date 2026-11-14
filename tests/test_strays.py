@@ -14,8 +14,8 @@
 
 """Phase B2 — strays routing (non-media out of 0-sources into 1-strays).
 
-Non-media (other-class) is never fingerprinted/deduped (§9); it is moved inert into
-1-strays/<plan-id>/<rel> with its structure preserved (§3.2/§7.6), untracked and scan-skipped,
+Non-media (other-class) is never fingerprinted/deduped (RUL-strays_leave_no_trace); it is moved inert into
+1-strays/<plan-id>/<rel> with its structure preserved (RUL-inbox_non_media_to_strays), untracked and scan-skipped,
 so 0-sources is left empty. Mocked hashing/metadata, fast. From conftest.py.
 """
 import glob
@@ -141,7 +141,7 @@ def test_strays_scan_skipped_on_next_run(tmp_path, monkeypatch):
 
 @pytest.mark.spec("RUL-tracks_geotag_only", "RUL-track_files_block_prep", "RUL-track_file_left_in_place", test="TST-strays-track_file_blocks_prep_and_stays_put")
 def test_track_file_blocks_prep_and_stays_put(tmp_path, monkeypatch):
-    """Shared contract §8: a track is never media. A `.gpx` anywhere prep inventories — the 0-sources
+    """RUL-track_files_block_prep: a track is never media. A `.gpx` anywhere prep inventories — the 0-sources
     dump or a managed folder — blocks the plan and is left where it is: no operation moves it (above
     all not into 1-strays, where clearing the strays would delete it), it is never fingerprinted, and
     the blocked plan cannot be executed."""
@@ -212,7 +212,7 @@ def test_prep_never_reads_the_tracks(tmp_path, monkeypatch):
 @pytest.mark.spec("RUL-track_files_block_prep", test="TST-strays-every_track_format_blocks_prep")
 @pytest.mark.parametrize("name", ["route.kml", "route.KMZ", "ride.FIT", "run.tcx", "log.nmea", "flight.igc"])
 def test_every_track_format_blocks_prep(tmp_path, monkeypatch, name):
-    """Shared contract §8: a track in any format, not only the GPX geotag reads, is never media — it
+    """RUL-track_files_block_prep: a track in any format, not only the GPX geotag reads, is never media — it
     blocks the plan and stays in the dump, never parked in 1-strays."""
     _install(monkeypatch)
     ws = _ws(tmp_path)

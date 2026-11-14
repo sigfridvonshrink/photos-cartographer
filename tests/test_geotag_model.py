@@ -13,7 +13,7 @@
 # limitations under the License.
 
 """Phase 2 (geotag) — the in-memory model: by-dest file objects, GPX index, camera groups
-(photos-2-geotag, spec §14–§16). Still pre-decision: no JSON artifacts. From conftest.py.
+(photos-2-geotag, BLD-geotag_file_model). Still pre-decision: no JSON artifacts. From conftest.py.
 """
 import json
 from _handoff import match_disk
@@ -210,8 +210,8 @@ def test_camera_group_classification(tmp_path, monkeypatch):
 
 @pytest.mark.spec("RUL-geotag_reuses_camera_group", test="TST-geotag_model-geotag_reuses_handoff_camera_group_key_never_recomputes")
 def test_geotag_reuses_handoff_camera_group_key_never_recomputes(tmp_path):
-    """Shared §6: geotag reuses prep's camera_group_key from the handoff and never recomputes camera
-    identity. The handoff carries a SENTINEL group key that the identity fields (Make/Model/serial)
+    """RUL-geotag_reuses_camera_group: geotag reuses prep's camera_group_key from the handoff and never recomputes
+    camera identity. The handoff carries a SENTINEL group key that the identity fields (Make/Model/serial)
     could never compose — if geotag recomputed from CAMERA_IDENTITY_FIELDS it would land on a
     different key. build_file_model and recognize_camera_groups must use the handoff's key verbatim."""
     sentinel = "PREP-ASSIGNED|opaque-token"

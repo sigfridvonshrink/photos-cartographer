@@ -14,7 +14,7 @@
 
 """Audit backfill — spec paths that lacked direct coverage.
 
-Covers: other-class routing to 1-strays (§3.2/§9), missing-timestamp
+Covers: other-class routing to 1-strays (RUL-inbox_non_media_to_strays), missing-timestamp
 UNKN_ naming + video routing, CreateDate fallback, suffix monotonicity, ghost-prune,
 by-dest hash-failure skip vs mutable blocker, redundant-JPEG 0-sources restriction,
 camera-group-key version staleness, by-dest precondition rejection, fingerprint stability
@@ -99,18 +99,18 @@ def test_other_class_moves_to_strays(tmp_path, monkeypatch):
     ws = _ws(tmp_path)
     (ws / "0-sources" / "notes.txt").write_bytes(b"hello")
     plan = _plan(ws)
-    assert not plan.blockers, plan.blockers                       # never blocks (§3.2/§9)
+    assert not plan.blockers, plan.blockers                       # never blocks
     stray = [op for op in plan.operations if op.source == "0-sources/notes.txt"]
     assert stray and stray[0].destination.startswith("1-strays/") \
         and stray[0].destination.endswith("/notes.txt"), stray    # moved to 1-strays/<id>/notes.txt
     _run(ws)
-    assert not os.path.exists(ws / "0-sources" / "notes.txt")      # out of the inbox (§7.6)
+    assert not os.path.exists(ws / "0-sources" / "notes.txt")      # out of the inbox (RUL-prep_empties_inbox)
     assert glob.glob(str(ws / "1-strays" / "*" / "notes.txt"))     # landed in strays
 
 
 def test_strays_are_abandoned_not_in_handoff(tmp_path, monkeypatch):
-    # Strays are abandoned once moved (§3.2): the act is logged, but the stray file is NOT tracked in
-    # the handoff and 1-strays is NOT listed in folders_scanned — so nothing downstream depends on
+    # Strays are abandoned once moved (RUL-strays_leave_no_trace): the act is logged, but the stray file is NOT tracked
+    # in the handoff and 1-strays is NOT listed in folders_scanned — so nothing downstream depends on
     # strays remaining constant (its content never enters the handoff content fingerprint).
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -151,9 +151,9 @@ def test_create_date_used_when_no_datetimeoriginal(tmp_path, monkeypatch):
 
 
 def test_bare_timestamp_name_used_when_free(tmp_path, monkeypatch):
-    # §7.2 bare-first: the un-suffixed timestamp name is taken when free, even though a -001 sibling
-    # already exists. This MATCHES geotag's final naming (also bare-first), so an uncorrected file
-    # gets the same provisional and final name and geotag plans no needless rename (§7.3). The
+    # RUL-suffix_choice_by_phase bare-first: the un-suffixed timestamp name is taken when free, even though a -001
+    # sibling already exists. This MATCHES geotag's final naming (also bare-first), so an uncorrected file
+    # gets the same provisional and final name and geotag plans no needless rename (RUL-uncorrected_keeps_its_name). The
     # existing -001 is untouched (no clobber).
     _install(monkeypatch, meta_for=lambda f: {"DateTimeOriginal": "2023:01:02 03:04:05"})
     ws = _ws(tmp_path)
@@ -185,7 +185,7 @@ def test_first_free_suffix_fills_a_gap(tmp_path, monkeypatch):
 
 def test_same_timestamp_collision_suffixes_after_bare(tmp_path, monkeypatch):
     # Two fresh files at the SAME timestamp: the first takes the bare name, the second collides and
-    # gets -001 (bare-first then the differentiating suffix, §7.2).
+    # gets -001 (bare-first then the differentiating suffix, RUL-suffix_choice_by_phase).
     _install(monkeypatch, meta_for=lambda f: {"DateTimeOriginal": "2023:01:02 03:04:05"})
     ws = _ws(tmp_path)
     (ws / "0-sources" / "a.jpg").write_bytes(b"AAA")
@@ -213,8 +213,8 @@ def test_ghost_prune_removes_missing_cache_row(tmp_path, monkeypatch):
 
 
 def test_quarantine_writes_evidence_before_moving(tmp_path, monkeypatch):
-    # Evidence-before-quarantine (§15): the manifest entry must be written BEFORE the move, so a
-    # crash/failure mid-move never strands a file in quarantine with no record. We simulate the move
+    # Evidence-before-quarantine (RUL-evidence_before_quarantine): the manifest entry must be written BEFORE the move,
+    # so a crash/failure mid-move never strands a file in quarantine with no record. We simulate the move
     # failing; with the correct ordering the manifest entry exists anyway (with the old move-then-
     # manifest order, the failed move would abort before the manifest write and leave none).
     _install(monkeypatch)                                      # content-based hash -> dupes collide
@@ -296,7 +296,7 @@ def test_by_dest_change_rejects_plan_at_execute(tmp_path, monkeypatch):
 
 
 def test_fingerprint_stable_across_jobs(tmp_path, monkeypatch):
-    # §17.3: two safe job counts produce the same semantic plan and the same dependency
+    # RUL-jobs_change_nothing: two safe job counts produce the same semantic plan and the same dependency
     # fingerprints for the SAME workspace. Planning is non-mutating, so plan twice.
     _install(monkeypatch)
     ws = _ws(tmp_path)

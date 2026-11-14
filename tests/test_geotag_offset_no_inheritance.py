@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Phase 3c (geotag) — §10.2: clock offsets do NOT inherit across destinations.
+"""Phase 3c (geotag) — RUL-offset_from_own_evidence: clock offsets do NOT inherit across destinations.
 
 Each (camera group, destination[, date]) bucket proposes its own offset from GPX self-anchor →
 timezone-derived → manual. A child with no self-anchor does NOT adopt an ancestor's resolved offset
@@ -72,7 +72,7 @@ PARENT_FRAMES = [_file(f"{BYDEST}/Trip/a.arw", f"{BYDEST}/Trip", gps=(50.0, 4.0)
 
 
 def test_no_method_named_nearest_ancestor_offset():
-    # The offset-inheritance helper was removed with §10.2; only the timezone still inherits.
+    # The offset-inheritance helper was removed with RUL-offset_from_own_evidence; only the timezone still inherits.
     assert not hasattr(cal.GeotagWorkflow, "_nearest_ancestor_offset")
 
 
@@ -193,7 +193,7 @@ def test_determinism_rerun_byte_identical(tmp_path):
     assert json.dumps(a1, sort_keys=True) == json.dumps(a2, sort_keys=True)
 
 
-# --- an inherited timezone and the destination's own photos (§18) ---------------------------------------------
+# --- an inherited timezone and the destination's own photos (RUL-inherited_timezone_yields_to_photos) -----------------
 
 PHONE = "APPLE|iPhone|p1"
 BOTH = {CAM: {"camera_group_class": "camera"}, PHONE: {"camera_group_class": "smartphone"}}
@@ -290,7 +290,7 @@ def test_what_does_not_speak_against_an_inherited_zone(tmp_path):
     assert "contradicted_by" not in kyoto
 
 
-# --- a timezone's guess is asked about once (§19.4, §22a) -----------------------------------------------------
+# --- a timezone's guess is asked about once (RUL-timezone_offset_asked_once) ------------------------------------------
 
 @pytest.mark.spec("RUL-timezone_offset_asked_once", "BLD-timezone_naive_offset",
                   test="TST-geotag_offset_no_inheritance-a_timezone_s_guess_is_asked_about_once")
@@ -354,7 +354,7 @@ def test_a_confirmation_against_the_tracks_is_the_acceptance(tmp_path):
     assert row["resolved_utc_status"] == "valid" and row["resolved_utc"] == "2024-07-03T12:00:00Z"
 
 
-# --- a country, chosen once at the top of its tree (§18) ------------------------------------------------------
+# --- a country, chosen once at the top of its tree (RUL-country_chosen_once) ---------------------------------------
 
 def _country(code):
     return {"destination_timezone": {"user_decision": {"country": code}}}

@@ -2,10 +2,8 @@
 
 **Not normative.** Each item here is the reasoning behind the [intent](../intent/merge.md) or [build](../build/merge.md)
 items it `justifies`, under the same section numbers. Where the two differ, the intent wins and this is stale.
-Sections are numbered as in the phase's original spec; a section whose content lives in the shared contract, or
-that only restated others, has no heading here.
 
-## 2. Scope and boundary
+## 1. Scope and boundary
 
 :::{rat} One version on both sides of a comparison
 :id: RAT-one_version_per_comparison
@@ -22,7 +20,7 @@ destination: what geotag recorded of it is keyed by the old value, and merging i
 photo into the library's history.
 :::
 
-## 3. Preconditions
+## 2. Preconditions
 
 :::{rat} The workspace may have been touched since geotag
 :id: RAT-touched_since_geotag
@@ -51,7 +49,7 @@ the first change makes a refusal free — fix the cause, run merge again — and
 merges that ran.
 :::
 
-## 6. Destination-to-library mapping
+## 4. Destination-to-library mapping
 
 :::{rat} The destination tree is the library's organisation
 :id: RAT-destination_tree_is_the_library
@@ -67,7 +65,7 @@ make differently. Kept the same, a photo's place in the library is the place the
 every run, which is what lets an interrupted merge find its own work.
 :::
 
-## 8. Idempotency, resume, and non-destructiveness
+## 5. Idempotency, resume, and non-destructiveness
 
 :::{rat} A partial merge is never a dead end
 :id: RAT-partial_merge_no_dead_end
@@ -97,7 +95,7 @@ photo — a record the user would rely on to find it. Fingerprinting the place a
 a resume.
 :::
 
-## 9. User-visible outputs and the merge summary
+## 6. User-visible outputs and the merge summary
 
 :::{rat} The run's end decides what to do next
 :id: RAT-merge_outcome_decides_next

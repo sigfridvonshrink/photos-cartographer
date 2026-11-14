@@ -13,7 +13,7 @@
 # limitations under the License.
 
 """Geotag reads every track whole on every run — the fingerprint checks its bytes — but parses only
-a track whose bytes it has not parsed before; the memo it keeps for that is scratch (shared §10)."""
+a track whose bytes it has not parsed before; the memo it keeps for that is scratch (RUL-other_databases_scratch)."""
 import os
 import sqlite3
 

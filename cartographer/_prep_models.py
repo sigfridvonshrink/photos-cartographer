@@ -89,7 +89,7 @@ PREP_ALLOWED_OPERATION_TYPES = {
 }
 
 # Plan serialization/schema version. A plan whose version differs from this is rejected at execute
-# time (prep Section 14.3.2). 3: the plan records the code that made it, and plans its folder removals.
+# time (BLD-prep_dependencies). 3: the plan records the code that made it, and plans its folder removals.
 PLAN_SCHEMA_VERSION = 3
 
 
@@ -131,7 +131,7 @@ class Plan:
     warnings: List[str]
     operations: List[Operation]
     workspace_file_preconditions: List[Dict[str, Any]] = field(default_factory=list)
-    inventory: List[str] = field(default_factory=list)   # every path the plan's scan found (prep §14.3)
+    inventory: List[str] = field(default_factory=list)   # every path the plan's scan found (BLD-prep_plan_contents)
     metadata_dependencies: Dict[str, Any] = field(default_factory=dict)
     code_fingerprint: str = ""   # SHA-256 of the code that made the plan (photos_utils.code_fingerprint)
 
@@ -165,7 +165,7 @@ class Journal:
     snapshots: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     operations: List[JournalOperationResult] = field(default_factory=list)
     details: Dict[str, Any] = field(default_factory=dict)
-    depends_on: Dict[str, Any] = field(default_factory=dict)  # version/fingerprint stamp (§5)
+    depends_on: Dict[str, Any] = field(default_factory=dict)  # version/fingerprint stamp (BLD-prep_dependencies)
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=2)

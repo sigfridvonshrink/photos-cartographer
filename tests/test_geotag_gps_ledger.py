@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Geotag (§24.1) — reversible manual GPS overrides. Every plan decides about a pinned photo from its own
-values (the original-values ledger, §24.2), so a withdrawn pin is planned like any changed decision:
-the photo is placed again from the tracks, or geotag's position is cleared. There is no revert operation
+"""Geotag (RUL-withdrawal_undoes) — reversible manual GPS overrides. Every plan decides about a pinned photo from its
+own values (the original-values ledger, BLD-decided_from_own_values), so a withdrawn pin is planned like any changed
+decision: the photo is placed again from the tracks, or geotag's position is cleared. There is no revert operation
 and no store of its own. exiftool-write + fingerprint are mocked. From conftest.py.
 """
 import json
@@ -94,7 +94,7 @@ _FORWARD = {"metadata_time_write", "metadata_gps_write", "gps_marker_write", "re
 @pytest.mark.spec("RUL-position_written_whole", "BLD-position_tags", "RUL-position_cleared_whole",
                   test="TST-geotag_gps_ledger-a_cleared_position_takes_its_hemisphere_refs_with_it")
 def test_a_cleared_position_takes_its_hemisphere_refs_with_it():
-    """§28.1: a clear drops the refs with the coordinates — a ref left behind without its coordinate is a
+    """BLD-position_tags: a clear drops the refs with the coordinates — a ref left behind without its coordinate is a
     torn fix."""
     op = cal.time_fixed_marker_op(_model(f"{BYDEST}/T/a.jpg", f"{BYDEST}/T"), "+carto-time", clear_position=True)
     assert op["writes"] == {"GPSLatitude": "", "GPSLatitudeRef": "", "GPSLongitude": "", "GPSLongitudeRef": "",
@@ -204,7 +204,7 @@ def _exec_ws(tmp_path, monkeypatch):
         cfg["camera_time_and_timezone_policy"], device_groups={"fixed_clock_cameras": [CAM], "phones": []},
         default_folder_timezone="Europe/Brussels", multi_anchor_auto_apply=True)
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
-    answer_root_zone(ctl)                        # the zone answered once at the root (§18)
+    answer_root_zone(ctl)                        # the zone answered once at the root (RUL-timezone_auto_resolves)
 
     def rec(rel, dto, gps=None):
         parsed = {"DateTimeOriginal": dto, "selected_source_naive_timestamp": dto,
@@ -259,7 +259,7 @@ def _drive_ready(monkeypatch, ws, ctl):
 
 @pytest.mark.spec("BLD-geotag_execution", test="TST-geotag_gps_ledger-own_values_pinned_before_the_first_write")
 def test_own_values_pinned_before_the_first_write(tmp_path, monkeypatch):
-    """§29.1a: a photo's own values are committed to the ledger BEFORE geotag's first write to it.
+    """BLD-original_values_pinned: a photo's own values are committed to the ledger BEFORE geotag's first write to it.
     Order-probe both seams during execute and assert the pin precedes the write."""
     ws, ctl = _exec_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)                                # sets _exiftool_write to a passthrough mock

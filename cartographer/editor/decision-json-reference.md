@@ -334,7 +334,7 @@ folder's fallback or are in `review_items`; the cure is to take the track that i
 
 ## 5a. `photos-22-gps-drift-validation.json` (GPS-drift validation)
 
-A gate the pipeline writes **between** photos-21 and photos-23 (geotag workflow §22a). It flags
+A gate the pipeline writes **between** photos-21 and photos-23 (`BLD-drift_validation`). It flags
 every `(camera group, destination[, date])` offset bucket whose clock offset is **manual or
 timezone-derived** and that has **no native-GPS anchor** but **does** have GPX coverage — exactly the
 case where a wrong offset would silently mis-place the whole bucket along the track. Each flagged
@@ -392,7 +392,7 @@ photos-21 offset cell it refines — bare `<camera_group_key>` or `<camera_group
 
 ### 5a.3 `date`
 
-Present only when the bucket is per-date (the group spans >1 naive day in this destination, geotag §10.2);
+Present only when the bucket is per-date (the group spans >1 naive day in this destination, `BLD-offset_buckets`);
 omitted for a single-date bucket.
 
 ---

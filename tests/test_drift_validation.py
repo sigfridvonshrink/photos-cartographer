@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Geotag §22a — GPS-drift validation gate (photos-22).
+"""Geotag RUL-unanchored_offset_confirmed — GPS-drift validation gate (photos-22).
 
 The highest-danger gap: a (camera group, destination[, date]) bucket whose clock offset is
 manual/timezone-derived (NOT a GPX self-anchor) and that has NO native-GPS anchor is placed in
@@ -302,7 +302,7 @@ def _e2e_ws(tmp_path):
         cfg["camera_time_and_timezone_policy"], device_groups={"fixed_clock_cameras": [CAM], "phones": []},
         default_folder_timezone="Europe/Brussels")
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
-    answer_root_zone(ctl)                        # the zone answered once at the root (§18)
+    answer_root_zone(ctl)                        # the zone answered once at the root (RUL-timezone_auto_resolves)
 
     def rec(rel, dto):
         parsed = {"DateTimeOriginal": dto, "selected_source_naive_timestamp": dto,

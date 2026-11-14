@@ -13,7 +13,7 @@
 # limitations under the License.
 
 """Each plan has one fixed place: no command is told where a plan is, and an unchanged re-plan
-writes nothing (shared contract §4)."""
+writes nothing (RUL-plan_at_fixed_place, RUL-unchanged_replan_writes_nothing)."""
 import argparse
 import json
 import os

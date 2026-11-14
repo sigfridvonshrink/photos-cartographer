@@ -280,7 +280,7 @@ function offsetImpact(camMs, offsetSec, tz) {
   const right = cor.date === cam.date ? cor.time : `${cor.date} ${cor.time}`;
   return `${cam.date} · ${cam.time} → ${right} (${tz}, UTC ${utcStr})`;
 }
-// --- GPS-drift scrub math (§22a) ---------------------------------------------
+// --- GPS-drift scrub math (BLD-drift_validation) -----------------------------
 // Placing a photo at a GPX track point fixes the camera→UTC offset: offset = (that point's UTC time)
 // − (the photo's camera-naive time), in seconds. Both are naive wall-times read as UTC epoch ms, the
 // same convention as the pipeline's `resolved_utc_naive − camera_naive`. Pure — unit-tested.
@@ -349,7 +349,7 @@ function previewEffective(ref) {
 // after Re-run. A zone written by hand is the one decision a timezone takes; an inherited one applies itself,
 // the configured default is only proposed — so a destination's own value is its manual zone or nothing.
 const leaf = (p) => (p || "").split("/").pop();
-// --- a country, chosen once at the top of its tree (geotag §18) ---
+// --- a country, chosen once at the top of its tree (RUL-country_chosen_once) ---
 const tzCell = (dest) => state.work.time?.destinations?.[dest]?.destination_timezone;
 const countryInfo = (code) => (state.work.time?.countries || {})[code] || null;
 // The country in effect at `dest` in the WORKING decisions: the one chosen highest above it, or at it.
@@ -438,7 +438,7 @@ function tags(ref) {
   } else if (ref.kind === "fallback") {
     const pv = previewFallback(ref.dest);                 // live preview, updates as ancestors change
     if (pv && pv.source === "inherited") out.push(chip("inherited", `inherited ⟵ ${leaf(pv.from)}`));
-  }                                                       // offsets never inherit (per-date buckets, §10.2)
+  }                                                       // offsets never inherit (RUL-offset_from_own_evidence)
   if (isDirty(ref)) out.push(chip("edited", "edited"));
   if (refInvalid(ref)) out.push(chip("invalid", "✗ invalid"));
   return out;
@@ -742,8 +742,8 @@ function offsetEditor(ref) {
 function controls(ref) {
   const c = workCell(ref), u = c.user_decision, p = c.proposal || {}, wrap = el("div", { class: "ctl-block" });
   if (ref.kind === "timezone") {
-    // An inherited zone applies itself; the configured default is only proposed (§18) — one click takes it as the
-    // user's own. The one decision here is a zone written by hand, which overrides either.
+    // An inherited zone applies itself; the configured default is only proposed (RUL-default_zone_proposed_only) —
+    // one click takes it as the user's own. The one decision here is a zone written by hand, which overrides either.
     if (zoneContradiction(c)) {
       wrap.append(el("div", { class: "hint warn" }, zoneContradiction(c)));
       const said = (u.confirmed_despite_recorded_offsets || []).length > 0 && zoneSpokenFor({ ...c, user_decision: { ...u, manual_iana_timezone: "" } });
@@ -821,7 +821,8 @@ function tracksNote(t) {
 // scrubbed correction. The scrub itself happens on the track map below (it sets `confirmed` +
 // `corrected_offset_seconds`); this pinned control is the affirmation + readout + a clear-back.
 // A drift confirmation names the offset it was made against and holds only while that is the bucket's
-// offset (§22a.2): confirming writes the offset shown; one made against another offset is stale.
+// offset (RUL-confirmation_holds_for_its_offset): confirming writes the offset shown; one made against another
+// offset is stale.
 function driftConfirmHolds(c) {
   const u = c.user_decision || {}, p = c.proposal || {};
   return !!u.confirmed && u.confirmed_offset_seconds !== "" && u.confirmed_offset_seconds != null
@@ -1042,16 +1043,16 @@ function hideHoverPreview() { if (_hoverImg) { _hoverImg.hidden = true; _hoverPa
 // --- side panel --------------------------------------------------------------
 function jsonBlock(title, obj) { return obj === undefined ? null : el("div", { class: "pblock" }, el("h3", {}, title), el("pre", { class: "json" }, JSON.stringify(obj, null, 2))); }
 
-// Picking a correction group of a GPX self-anchor proposal (§19.2): the recommended one is accepting the proposal;
-// any other sets its offset — which geotag counts as anchored by the GPS (gpx_anchor_chosen), so no drift check
-// follows. One click, for every day bundled with this proposal.
+// Picking a correction group of a GPX self-anchor proposal (BLD-anchor_matching): the recommended one is
+// accepting the proposal; any other sets its offset — which geotag counts as anchored by the GPS
+// (gpx_anchor_chosen), so no drift check follows. One click, for every day bundled with this proposal.
 function groupChoice(p, g) {
   return g.offset_seconds === p.proposed_offset_seconds
     ? { ...acceptFields(p, true), manual_offset_seconds: "" }
     : { ...acceptFields(p, false), manual_offset_seconds: g.offset_seconds };
 }
 // An acceptance names the offset it accepts (accepted_offset_seconds) and holds only while that is what is
-// proposed — within the proposal's own agreement spread for one found from GPS. Mirrors geotag §9.1: a
+// proposed — within the proposal's own agreement spread for one found from GPS. Mirrors BLD-offset_acceptance: a
 // proposal that became another one was never accepted.
 function acceptFields(p, on) {
   return on ? { accept_proposal: true, accepted_offset_seconds: p.proposed_offset_seconds }
@@ -1131,7 +1132,7 @@ function proposalNotes(p) {
 function offsetProposalBlock(ref, p) {
   if (p.proposal_source === "timezone_naive") {
     // No GPX anchor: the offset is derived from the destination's local time for this day, assuming the
-    // camera clock tracked it (DST-aware, so summer/winter days get different offsets — §19.4).
+    // camera clock tracked it (DST-aware, so summer/winter days get different offsets — BLD-timezone_naive_offset).
     return el("div", { class: "pblock" }, el("h3", {}, "Proposal — derived from the local time"),
       el("div", { class: "prop-head" }, fmtOffset(p.proposed_offset_seconds),
         el("span", { class: "muted" }, ` (assuming the camera was on ${p.proposed_from_timezone} time)`)),

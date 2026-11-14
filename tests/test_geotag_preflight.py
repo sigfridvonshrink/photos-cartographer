@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Phase 1 (geotag) — Stage-1 preflight (photos-2-geotag, spec §7/§13).
+"""Phase 1 (geotag) — Stage-1 preflight (photos-2-geotag, RUL-geotag_gates).
 
 The lifecycle guards + by-dest scope/re-prep gates that must pass before geotag runs. No
 JSON artifacts are produced. photos_2_geotag / photos_utils come from conftest.py.
@@ -107,7 +107,7 @@ def test_nonmanaged_root_folder_blocks(tmp_path):
 @pytest.mark.spec("RUL-top_level_only_managed", test="TST-geotag_preflight-root_hidden_file_allowed")
 def test_root_hidden_file_allowed(tmp_path):
     """A hidden file at the top level (a file manager's `.directory`) is a hidden entry, not a
-    misplaced dump: it blocks nothing (shared contract §4)."""
+    misplaced dump: it blocks nothing (RUL-top_level_only_managed)."""
     ws = _ws(tmp_path)
     (ws / ".directory").write_text("[Dolphin]")
     blockers, _, _ = _pf(ws)
@@ -130,7 +130,7 @@ def test_every_misplaced_root_entry_named(tmp_path):
 @pytest.mark.spec("RUL-geotag_merge_check_top_level_links",
                   test="TST-geotag_preflight-directory_symlink_at_root_blocks")
 def test_directory_symlink_at_root_blocks(tmp_path):
-    """A symlink at the root is barred outright as a forbidden symlink (§13), never followed —
+    """A symlink at the root is barred outright as a forbidden symlink (RUL-no_links), never followed —
     checked before the structural/misplaced-folder guards."""
     ws = _ws(tmp_path)
     import os
@@ -262,8 +262,8 @@ def test_dev_subfolder_blocks(tmp_path):
 
 @pytest.mark.spec("BLD-loop_gates", "RUL-development_after_merge", test="TST-geotag_preflight-dev_subfolder_blocks_at_execute")
 def test_dev_subfolder_blocks_at_execute(tmp_path):
-    # §7.1 is presence-strict AND re-checked at execute/finalize: an empty jpg/tif subfolder created
-    # between `run` and `execute` must hard-stop execution (the per-op preconditions cannot catch it,
+    # RUL-development_after_merge is presence-strict AND re-checked at execute/finalize: an empty jpg/tif subfolder
+    # created between `run` and `execute` must hard-stop execution (the per-op preconditions cannot catch it,
     # because the breakout moved no planned file).
     ws = _ws(tmp_path)
     (ws / "6-photos-by-dest" / "Trip" / "jpg").mkdir()
@@ -343,7 +343,7 @@ def test_every_offending_file_is_named_up_to_five(tmp_path):
     assert all(n in only for n in ("notes.txt", "list.csv", "clip.mp4")), only
 
 
-# --- §13.1 re-prep-after-move gate -------------------------------------------
+# --- RUL-prep_records_sort re-prep-after-move gate ----------------------------
 
 @pytest.mark.spec("BLD-reprep_pending", "RUL-prep_records_sort", test="TST-geotag_preflight-unrecorded_by_dest_photo_demands_reprep")
 def test_unrecorded_by_dest_photo_demands_reprep(tmp_path):
@@ -363,7 +363,7 @@ def test_missing_by_date_photo_demands_reprep(tmp_path):
     assert any("is out of date" in b for b in blockers), blockers
 
 
-# --- §13.1 auto re-prep for a clean by-dest move -----------------------------
+# --- BLD-geotag_auto_reprep auto re-prep for a clean by-dest move -------------
 
 import types as _types
 
@@ -515,7 +515,7 @@ def test_missing_managed_folder_block_tells_to_restore_and_run_again(tmp_path):
 
 def test_dangling_and_managed_named_root_symlinks_blocked(tmp_path):
     """A dangling root symlink (neither file nor dir) and a symlink NAMED like a managed folder (which
-    os.path.isdir would resolve through) are both barred by the lstat-based symlink guard (§13)."""
+    os.path.isdir would resolve through) are both barred by the lstat-based symlink guard (RUL-no_links)."""
     import os
     ws = _ws(tmp_path)
     os.symlink(str(tmp_path / "nonexistent"), str(ws / "dangling"))
@@ -530,7 +530,7 @@ def test_dangling_and_managed_named_root_symlinks_blocked(tmp_path):
 
 def test_dot_named_root_symlink_blocked(tmp_path):
     """A DOT-named root symlink is barred too: the only legitimate dot entries (.photos-ingest*) are
-    real directories, so a dot-named symlink at the root is forbidden, not skipped (§13)."""
+    real directories, so a dot-named symlink at the root is forbidden, not skipped (RUL-no_links)."""
     import os
     ws = _ws(tmp_path)
     os.symlink(str(tmp_path), str(ws / ".evil"))

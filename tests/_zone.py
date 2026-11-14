@@ -1,7 +1,7 @@
 """Test helper: the destination zone answered once at the root of photos by destination, as the user answers it.
 
-The configured default timezone is only proposed (geotag §18): a workspace fixture that wants its destinations' zone
-known answers it at `6-photos-by-dest`, and every destination beneath inherits it."""
+The configured default timezone is only proposed (RUL-default_zone_proposed_only): a workspace fixture that wants its
+destinations' zone known answers it at `6-photos-by-dest`, and every destination beneath inherits it."""
 import json
 import os
 

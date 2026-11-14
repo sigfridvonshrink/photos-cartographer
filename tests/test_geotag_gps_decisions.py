@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Phase 5b (geotag) — the §23 GPS decision tree + photos-23-gps-decisions.json (§25).
+"""Phase 5b (geotag) — the BLD-placement_order GPS decision tree +
+photos-23-gps-decisions.json (BLD-gps_decisions_record).
 
 Per-file classifier (preserve/manual-locked/interpolation/extrapolation/folder-fallback/
 accept-unlocated/blocked), the per-destination summary artifact (paths only for review/blocker

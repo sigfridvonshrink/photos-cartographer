@@ -139,9 +139,10 @@ def test_prep_workflow_plan_and_execute(mock_meta, mock_hash_img, tmp_path, monk
     # PR ACCEPTANCE TEST: RAW/JPG not treated as disposable duplicates
     # PHOTO_555.CR2 and PHOTO_555.jpg have the same fake hash, but shouldn't quarantine.
     # The JPG should be in 3-redundant-jpgs. The RAW should be in 5-photos-by-date.
-    # A redundant JPG is named from its timestamp like the RAW it came with (shared §6).
+    # A redundant JPG is named from its timestamp like the RAW it came with (RUL-redundant_jpg_timestamp_named).
     assert (ws / "3-redundant-jpgs" / "2023-02-02--14-00-00.jpg").exists()
-    assert (ws / "5-photos-by-date" / "2023-02-02" / "2023-02-02--14-00-00.cr2").exists()   # lone file -> bare (§7.2)
+    # lone file -> bare (RUL-suffix_choice_by_phase)
+    assert (ws / "5-photos-by-date" / "2023-02-02" / "2023-02-02--14-00-00.cr2").exists()
 
     # PR ACCEPTANCE TEST: RAW/JPG pair (same content) is NOT quarantined — the jpg is the
     # redundant sibling (-> 3-redundant-jpgs), the raw is the master (-> 2-missing-metadata).
@@ -415,8 +416,8 @@ def test_nested_directory_symlink_in_managed_folder_blocked(tmp_path, monkeypatc
 
 @pytest.mark.spec("RUL-dump_folder_named_as_managed", test="TST-workspace_prep-init_does_not_move_a_dump_folder_named_like_a_managed_folder")
 def test_init_does_not_move_a_dump_folder_named_like_a_managed_folder(tmp_path, monkeypatch):
-    """Reserved-name guard (prep §6.2): on an INIT run a base entry whose name collides with a managed
-    folder (e.g. an as-arrived dump dir named `5-photos-by-date`) is treated AS that managed folder —
+    """Reserved-name guard (RUL-dump_folder_named_as_managed): on an INIT run a base entry whose name collides with a
+    managed folder (e.g. an as-arrived dump dir named `5-photos-by-date`) is treated AS that managed folder —
     NEVER inventoried as a dump and moved beneath itself into 0-sources/5-photos-by-date (a silent
     data-shuffling hazard). Assert no init-move op relocates it under 0-sources."""
     import photos_utils as utils
@@ -442,8 +443,8 @@ def test_init_does_not_move_a_dump_folder_named_like_a_managed_folder(tmp_path, 
 
 @pytest.mark.spec("RUL-top_level_only_managed", test="TST-workspace_prep-initialized_root_dotfile_is_left_alone")
 def test_initialized_root_dotfile_is_left_alone(tmp_path, monkeypatch):
-    """The top level of an INITIALIZED workspace holds the managed folders and hidden entries (shared
-    contract §4): a root dotfile (a file manager's `.directory` or `.DS_Store`) is not a misplaced
+    """The top level of an INITIALIZED workspace holds the managed folders and hidden entries
+    (RUL-top_level_only_managed): a root dotfile (a file manager's `.directory` or `.DS_Store`) is not a misplaced
     dump — no block — and, the root being no dump area once initialized, no operation touches it."""
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
@@ -517,7 +518,7 @@ def test_every_executed_operation_is_journaled(tmp_path, monkeypatch):
 
 @pytest.mark.spec("RUL-tracks_outside_managed_folders", test="TST-workspace_prep-gpx_root_inside_managed_tree_is_refused")
 def test_gpx_root_inside_managed_tree_is_refused(tmp_path, monkeypatch):
-    """Shared contract §8: a gpx_root configured inside the managed tree is an invalid configuration —
+    """RUL-tracks_outside_managed_folders: a gpx_root configured inside the managed tree is an invalid configuration —
     prep refuses to plan, naming the field, and nothing in the workspace moves."""
     ws = _empty_initialized_ws(tmp_path)
     gpx_dir = ws / "0-sources" / "gpx_tracks"; gpx_dir.mkdir()
@@ -660,7 +661,7 @@ def test_missing_managed_folder_block_tells_to_restore_and_run_again(tmp_path, m
 
 @pytest.mark.spec("RUL-empty_inbox_normal", test="TST-workspace_prep-empty_sources_is_steady_end_state_not_a_missing_folder_block")
 def test_empty_sources_is_steady_end_state_not_a_missing_folder_block(tmp_path, monkeypatch):
-    """§6.2 (item 7, final clause): an EMPTY 0-sources is the normal steady end-state (Section 18),
+    """RUL-empty_inbox_normal: an EMPTY 0-sources is the normal steady end-state,
     NOT a missing-folder condition. On an initialized workspace whose 0-sources is present but empty
     (every managed folder intact), prep plans cleanly — zero operations, and crucially NO
     'non-conforming'/'missing folder' blocker naming 0-sources. (Distinct from
@@ -680,7 +681,7 @@ def test_empty_sources_is_steady_end_state_not_a_missing_folder_block(tmp_path, 
 @pytest.mark.spec("RUL-blockers_all_reported", "BLD-blocked_plan_refused", "RUL-blocker_names_what_blocks",
                   test="TST-workspace_prep-a_blocker_is_reported_textually_and_never_silently_skipped")
 def test_a_blocker_is_reported_textually_and_never_silently_skipped(tmp_path, monkeypatch):
-    """§6.2 final line ('Blockers are reported textually; the workflow does not silently skip them').
+    """RUL-blockers_all_reported ('Blockers are reported textually; the workflow does not silently skip them').
     With a forbidden sidecar present alongside a perfectly organizable photo, prep must (a) SURFACE the
     blocker as descriptive text in plan.blockers and (b) refuse the whole run at execute — it never
     silently drops the blocker and proceeds to organize the valid photo. Asserts the never-skip
@@ -707,8 +708,8 @@ def test_a_blocker_is_reported_textually_and_never_silently_skipped(tmp_path, mo
 
 @pytest.mark.spec("RUL-init_moves_dump_to_inbox", test="TST-workspace_prep-init_move_excludes_managed_folders_and_control_dirs")
 def test_init_move_excludes_managed_folders_and_control_dirs(tmp_path, monkeypatch):
-    """§3.1: init's base-dump consolidation moves genuine root dumps into 0-sources but EXCLUDES the
-    managed 0-6 folders and the control/dot directories (.photos-ingest, .git). A real root dump file
+    """RUL-init_moves_dump_to_inbox: init's base-dump consolidation moves genuine root dumps into 0-sources but EXCLUDES
+    the managed 0-6 folders and the control/dot directories (.photos-ingest, .git). A real root dump file
     IS moved (proving the init move ran), while a pre-existing managed folder (with media already in
     it) and a .git dir are NEVER relocated beneath 0-sources. (The reserved-names test covers a dump
     dir NAMED like a managed folder; this covers actually-present managed + control dirs.)"""
@@ -737,7 +738,7 @@ def test_init_move_excludes_managed_folders_and_control_dirs(tmp_path, monkeypat
 
 @pytest.mark.spec("RUL-media_extension_lowercase", test="TST-workspace_prep-already_lowercase_extension_gets_no_rename_op")
 def test_already_lowercase_extension_gets_no_rename_op(tmp_path, monkeypatch):
-    """§13 item 3: prep does not re-normalize an already-normalized extension. A file already named
+    """RUL-media_extension_lowercase: prep does not re-normalize an already-normalized extension. A file already named
     with a lowercase `.jpg` must produce NO extension-normalization rename op (no two-step temp
     rename, no rename_no_clobber on it) — distinct from the idempotency rerun, which asserts the whole
     plan is empty rather than isolating the extension non-renaming."""

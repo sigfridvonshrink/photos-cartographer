@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Geotag's own GPSProcessingMethod markers on a re-run (geotag §30, shared contract §10.1).
+"""Geotag's own GPSProcessingMethod markers on a re-run (BLD-rerun_recognition).
 
 A geotag marker means the file's time is already corrected; a position marker also means its
 position is geotag's, ignored until placed again. A device's own GPSProcessingMethod value is native.
@@ -75,7 +75,7 @@ def _ws(tmp_path, recs):
         cfg["camera_time_and_timezone_policy"], device_groups={"fixed_clock_cameras": [CAM], "phones": [PHONE]},
         default_folder_timezone="Europe/Brussels", multi_anchor_auto_apply=True)
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
-    answer_root_zone(ctl)                        # the zone answered once at the root (§18)
+    answer_root_zone(ctl)                        # the zone answered once at the root (RUL-timezone_auto_resolves)
     _write_handoff(ws, [r(ws) for r in recs])
     return ws
 
@@ -104,7 +104,7 @@ def _set_offset(ws, offset, bucket=CAM):
 
 
 def _confirm_drift(ws, offset, bucket=CAM):
-    """Confirm the GPS-drift check a manual offset with track coverage triggers (§22a)."""
+    """Confirm the GPS-drift check a manual offset with track coverage triggers (BLD-drift_validation)."""
     p = ws / ".photos-ingest" / "photos-22-gps-drift-validation.json"
     a = json.loads(p.read_text())
     cell = a["destinations"][T]["drift_decisions"][bucket]

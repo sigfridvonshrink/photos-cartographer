@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Phase 6 — §5 fingerprint/version coverage + §14.3.7 single-transaction cache.
-Phase D — fingerprint/hash terminology (§9.1): media carries a content fingerprint and no
-byte hash; the handoff/cache use fingerprint terms.
+"""Phase 6 — BLD-prep_dependencies fingerprint/version coverage + BLD-workspace_database single-transaction cache.
+Phase D — fingerprint/hash terminology (RAT-fingerprint_and_hash_opposite_jobs): media carries a content fingerprint and
+no byte hash; the handoff/cache use fingerprint terms.
 
 Mocked hashing/metadata, fast. photos_1_prep / photos_utils come from conftest.py.
 """
@@ -256,7 +256,7 @@ def test_a_dependency_missing_or_unrecorded_stops_execution(tmp_path, monkeypatc
     assert (ws / "0-sources" / "a.jpg").exists()
 
 
-# --- Phase D: fingerprint/hash terminology (§9.1) ---------------------------
+# --- Phase D: fingerprint/hash terminology (RAT-fingerprint_and_hash_opposite_jobs) ---------------------------
 
 @pytest.mark.spec("RUL-fingerprint_survives_mutation", "BLD-hash", test="TST-fingerprints-media_carries_fingerprint_and_no_byte_hash")
 def test_media_carries_fingerprint_and_no_byte_hash(tmp_path, monkeypatch):

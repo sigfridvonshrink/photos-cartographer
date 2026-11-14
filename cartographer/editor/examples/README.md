@@ -35,7 +35,7 @@ by the real edit→re-run round-trip, so they also illustrate the loop the edito
 
 - **Timezone proposal source:** `config_default`, `inherited`, `none`.
 - **Offset proposal source:** `gpx_self_anchor` (confidence high/medium/review_required),
-  `timezone_naive`, `manual_required`. (Offsets do **not** inherit across destinations — §10.2.)
+  `timezone_naive`, `manual_required`. (Offsets do **not** inherit from the destination above — `RUL-offset_from_own_evidence`.)
 - **Effective offset source:** `gpx_anchor_auto`, `gpx_anchor_accepted`, `timezone_accepted`,
   `manual`.
 - **GPS categories:** preserve-native, GPX interpolation, GPX extrapolation, folder fallback

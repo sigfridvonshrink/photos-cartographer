@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""The prep pipeline's stages (prep §7): duplicates set aside first and as found, the JPEG beside a RAW
+"""The prep pipeline's stages (BLD-prep_stage_order): duplicates set aside first and as found, the JPEG beside a RAW
 and nothing else set aside, extension case taken in the move that files a file, strays as they came.
 
 Mocked hashing (content bytes) and metadata (one fixed time), fast."""

@@ -201,8 +201,9 @@ def test_plan_placed_new(tmp_path, monkeypatch):
 @pytest.mark.spec("RUL-merge_rechecks_under_new_engine",
                   test="TST-merge_plan-plan_reuses_handoff_fingerprint_never_refingerprints_by_dest")
 def test_plan_reuses_handoff_fingerprint_never_refingerprints_by_dest(tmp_path, monkeypatch):
-    """§2.1 (anti): under the ImageMagick prep used, merge reuses prep's recorded content_fingerprint for
-    each by-dest file and never re-fingerprints / re-organizes / re-dedups by-dest content. The handoff records fp "HANDOFF_ONLY"
+    """RUL-merge_rechecks_under_new_engine (anti): under the ImageMagick prep used, merge reuses prep's recorded
+    content_fingerprint for each by-dest file and never re-fingerprints / re-organizes / re-dedups by-dest content.
+    The handoff records fp "HANDOFF_ONLY"
     while the on-disk by-dest bytes are unrelated — if merge recomputed the by-dest fingerprint the
     plan's precondition would differ. Assert (a) the plan's per-file content_fingerprint is the
     handoff's recorded value verbatim, and (b) the by-dest file is NEVER passed to the (only)
@@ -279,8 +280,8 @@ def test_plan_renamed_incoming_append_at_max_plus_one(tmp_path, monkeypatch):
 
 @pytest.mark.spec("RUL-merge_suffix_above_highest", test="TST-merge_plan-plan_two_incoming_case_variants_resolve_at_plan_time")
 def test_plan_two_incoming_case_variants_resolve_at_plan_time(tmp_path, monkeypatch):
-    """Case-insensitive no-clobber (§7.2): two incoming photos whose final names differ ONLY in case
-    target the same (empty) library dir. On a case-insensitive library they would collide; the plan
+    """Case-insensitive no-clobber (RUL-suffix_case_insensitive): two incoming photos whose final names differ ONLY
+    in case target the same (empty) library dir. On a case-insensitive library they would collide; the plan
     resolves it now — one placed_new, the other suffix-renamed — instead of letting the second surface
     as an EEXIST blocker at execute."""
     ws, lib, fp = _build_ws(tmp_path, [

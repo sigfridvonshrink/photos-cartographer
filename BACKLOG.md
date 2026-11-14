@@ -24,6 +24,21 @@ written into the spec first, then coded** — the code is never taken as the ans
 direction "specified, not built / built wrong" has had one full pass, its findings fixed. Left: the other direction —
 walking the code for behaviour no item states.
 
+**Found so far in that direction (2026-11-14, while citations were rewritten to item ids)** — code does it, a comment
+says it, no item states it; each to be ruled into the corpus or the code dropped:
+- prep quarantines exiftool's leftover temporary and backup files (`_plan_quarantine_artifacts`); only hidden files
+  are specified (`RUL-dump_hidden_files_quarantined`);
+- the database effects of a run are applied as one transaction (`begin_batch`/`commit_batch`); the items say one
+  writer, none says one transaction;
+- every step of prep's log carries the run that caused it (`run_id`); only geotag's steps are said to name their run;
+- the numbered records are written byte-for-byte the same for the same content (`write_json_artifact`); stated for
+  the handoff and the logs only;
+- prep re-reads the handoff it wrote and fails if its content fingerprint does not come back the same;
+- a file in the inbox that is not media never blocks a run (`RUL-inbox_non_media_to_strays` says only that it is
+  moved);
+- prep's report is built while planning; `RUL-prep_run_summarised` speaks of the end of an execution;
+- the editor's note of frames skipped as outside the time window has no item.
+
 ---
 
 ### 3. The 11 rules no test is asked to verify
@@ -124,41 +139,25 @@ Parents and new items were ruled 2026-11-14, three reworded and twenty given the
 the script that applied them are kept outside the repository. The rationale questions below are untouched.
 
 **When:** the conversion is done (2026-11-14); this is the once-over-the-whole-corpus pass the owner asked for — *"maybe
-we can do this at the very end after the full conversion to sphinx-needs?"* — after item 12's renumbering.
+we can do this at the very end after the full conversion to sphinx-needs?"* (the sections were renumbered after it, 2026-11-14).
 
 ### 11. Records keyed by a fingerprint that changed with ImageMagick
 
 **Why:** a new ImageMagick may decode a photo to a new fingerprint value (`RUL-engine_change_is_checked`). Prep
 follows the value in its own records — the database and prep's log move to it, across a user's move too — and geotag's
-pinned own values follow it through prep's log (`RUL-own_values_follow_new_fingerprint`, geotag §24.2). Geotag's other
+pinned own values follow it through prep's log (`RUL-own_values_follow_new_fingerprint`, `BLD-original_values_pinned`). Geotag's other
 records keyed by the old value do not: its complete log and the finalized-media record. So merge, finding a photo whose
 fingerprint changed, can only leave it unmerged (`RUL-merge_rechecks_under_new_engine`), and the only remedy today is
-the ImageMagick version that prepped the workspace. Found while converting merge §2.
+the ImageMagick version that prepped the workspace. Found while converting merge's scope section.
 
 **What to do:** list every record keyed by a fingerprint's value, and decide how it follows a value that changed — a step
 that re-keys them, planned and journaled like any change, its records rewritten whole and what depends on them restaled
 — or leave the block as the answer. Stop where the old-to-new mapping is not one to one, which would change prep's
 duplicate decisions.
 
-**When:** any time — the conversion is done; geotag's pinned values were done with geotag §24.2.
+**When:** any time — the conversion is done; geotag's pinned values are done (`BLD-original_values_pinned`).
 
 ---
-
-### 12. Number the phase documents' sections 1…n, and cite items, not sections
-
-**Why:** the phase documents of the corpus (`spec/intent|rationale|build/{prep,geotag,merge}.md`) number their headings
-as in the phase's original spec, so a section with no items of its own has no heading and the numbers skip — `intent/
-geotag.md` holds §2 and §5 only. The numbers were the way back to the original documents while they were converted;
-those are retired now (kept at the tag `specs-before-corpus`), and the numbers only puzzle a reader. Some 640 comments
-in the code and tests, and 74 places in the corpus's own items, cite those original sections — "geotag §24.2" — whose
-sub-sections the corpus does not have. The owner: *"1 now, and add a step (or backlog) after the conversion to renumber."*
-
-**What to do:** renumber each phase document's sections 1…n, the same number for the same section across intent,
-rationale and build; rewrite every citation of a section — in the build items, the code and the tests — to the id of
-the item it means (`BLD-resolved_utc`), which no renumbering moves; drop the explanatory sentence from each
-document's introduction.
-
-**When:** now — the conversion, its philosophy pass included, is done (2026-11-14).
 
 ### 13. Keep the track points geotag used in the workspace, sealed with it
 
@@ -183,7 +182,7 @@ during the process, in the form used during the decisioning, which would make th
   corrected time too, since placement uses it and a manual real time can lie far from the camera's. Sorting photos in,
   or new tracks under `gpx_root`, grows it.
 - The GPX fingerprint becomes the hash of the points in the window, so tracks added for another time restale nothing.
-- Rule it: this reverses the ruled "every track file is read whole on every run" (geotag §15, `BLD-idempotency`).
+- Rule it: this reverses the ruled "every track file is read whole on every run" (`BLD-idempotency`).
 
 **When:** any time — the conversion is done.
 
@@ -191,7 +190,7 @@ during the process, in the form used during the decisioning, which would make th
 
 **Why:** a destination's timezone is proposed only from the destination it lies in, or from the configured default
 (`RUL-timezone_from_nearest`). The photos' own positions — native GPS, or placed from the tracks — say where they were
-taken, and so which timezone; geotag §18 described this as the first of the proposals, never built. A trip's root
+taken, and so which timezone; the original geotag spec described this as the first of the proposals, never built. A trip's root
 would then need no zone set by hand, and a destination that crosses into another zone than its parent's would be
 caught.
 

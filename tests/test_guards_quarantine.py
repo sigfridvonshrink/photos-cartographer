@@ -172,7 +172,7 @@ def test_footprint_reports_quarantine(tmp_path, monkeypatch):
     assert qf["oldest_plan_id"] and qf["newest_plan_id"]
 
 
-# --- quarantine manifest: never silently truncate recoverable history (prep §15) -------------
+# --- quarantine manifest: never silently truncate recoverable history (BLD-quarantine_layout) ---
 
 def test_quarantine_manifest_corruption_is_preserved_not_truncated(tmp_path):
     """A corrupt manifest.json must be preserved under a .corrupt backup (so the prior records stay

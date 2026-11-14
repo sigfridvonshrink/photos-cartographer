@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Phase 3c (geotag) — §10.2 per-date offset buckets.
+"""Phase 3c (geotag) — RUL-offset_per_camera_destination_day per-date offset buckets.
 
 A camera is set to local time each morning, so its clock offset is constant only WITHIN a naive
 calendar day. When one (camera group, destination) spans >1 naive date, the offset cell SPLITS into

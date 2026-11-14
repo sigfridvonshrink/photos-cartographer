@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Phase 9 — atomic no-clobber at execution time (prep §4 / §14.3.4).
+"""Phase 9 — atomic no-clobber at execution time (RUL-target_free_at_execute).
 
 The executor's move must fail rather than overwrite an existing destination, atomically,
 even if planning missed the clobber or the filesystem mutated just before the op.

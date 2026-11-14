@@ -13,7 +13,7 @@
 # limitations under the License.
 
 """Outside the inbox every media file carries the name the pipeline gave it, and the filename format
-is fixed once prep has named files in it (shared contract §6)."""
+is fixed once prep has named files in it (RUL-format_fixed_once_named)."""
 import hashlib
 import json
 import os

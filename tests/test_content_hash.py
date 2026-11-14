@@ -150,7 +150,7 @@ def test_raw_signature_survives_geotag_s_writes(tmp_path):
 
 def test_hash_image_failure_is_recorded_when_magick_absent(monkeypatch):
     # Simulate ImageMagick missing: fingerprint_image must return a clean failure record
-    # (which the §6.2/§11.3 blocker path keys on), still version-stamped.
+    # (which the RUL-failed_fingerprint_blocks blocker path keys on), still version-stamped.
     monkeypatch.setattr(utils, "get_magick_command", lambda: [])      # no persistent worker
     monkeypatch.setattr(utils, "get_identify_command", lambda: [])    # no legacy fallback either
     r = prep.ContentHasher.fingerprint_image(CAM_SMALL)
@@ -183,7 +183,7 @@ def test_real_jpeg_organizes_with_spec_filename_and_no_blocker(tmp_path):
 @requires_exiftool
 @pytest.mark.spec("RUL-failed_fingerprint_blocks", test="TST-content_hash-unreadable_image_blocks_with_hash_failure")
 def test_unreadable_image_blocks_with_hash_failure(tmp_path):
-    # Negative path: a file that magick cannot decode must surface a §6.2/§11.3
+    # Negative path: a file that magick cannot decode must surface a RUL-failed_fingerprint_blocks
     # hash-failure blocker, not silently pass.
     ws = _make_ws(tmp_path)
     (ws / "0-sources" / "broken.jpg").write_bytes(b"this is not a real jpeg")

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""A workspace lies on one filesystem (shared contract §15): every phase checks it on every
+"""A workspace lies on one filesystem (RUL-workspace_one_filesystem): every phase checks it on every
 invocation and stops, nothing touched, when a folder in the workspace lies on another volume.
 
 A second volume is faked by patching photos_utils._dev_of — the one seam the check reads devices

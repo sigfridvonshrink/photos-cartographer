@@ -255,7 +255,7 @@ def test_dry_run_on_prepped_workspace_with_empty_sources_is_nothing_to_do(tmp_pa
 
 @pytest.mark.spec("RUL-prepped_nothing_to_do", test="TST-lifecycle-execute_on_prepped_workspace_with_empty_sources_is_nothing_to_do")
 def test_execute_on_prepped_workspace_with_empty_sources_is_nothing_to_do(tmp_path, monkeypatch):
-    # After a successful prep, 0-sources is the empty steady end-state (shared contract §6). With a
+    # After a successful prep, 0-sources is the empty steady end-state (RUL-empty_inbox_normal). With a
     # (now-stale) saved plan present, re-running execute must stop fast with "nothing to do" rather
     # than replaying it into a case-insensitive clobber error — and NOT reach the executor.
     prep.CONFIG["zfs"] = {"enabled": False}

@@ -1,7 +1,8 @@
 """Test helper: hand-built handoff records made to match the files on disk, as prep's would.
 
 Geotag stops on a by-dest photo whose record no longer holds — gone, or differing in size or modification time from
-the handoff (geotag §13) — so a fixture that writes a handoff by hand records what its files really are."""
+the handoff (RUL-geotag_plans_on_current_record) — so a fixture that writes a handoff by hand
+records what its files really are."""
 import os
 
 

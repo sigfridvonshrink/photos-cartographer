@@ -20,8 +20,8 @@ children. Such a container:
   * never blocks and stays off the to-do list (it has no media to act on);
   * auto-resolves its timezone by inheritance, while remaining overridable, and propagates a manual
     GPS fallback downward.
-Clock OFFSETS, by contrast, do NOT inherit or aggregate (§10.2): a container exposes NO offset cells
-(it has no media to time-correct and offsets never cross destinations). From conftest.py.
+Clock OFFSETS, by contrast, do NOT inherit or aggregate (RUL-offset_from_own_evidence): a container exposes NO offset
+cells (it has no media to time-correct and offsets never cross destinations). From conftest.py.
 """
 import photos_2_geotag as cal
 import photos_utils as utils
@@ -72,7 +72,8 @@ def test_container_materialized_with_no_offset_cells(tmp_path):
     # every ancestor folder is materialized and flagged file-less
     for c in (BYDEST, f"{BYDEST}/Trip", f"{BYDEST}/Trip/Day2"):
         assert d[c]["file_less"] is True
-        assert d[c]["camera_group_time_decisions"] == {}     # containers hold NO offset cells (§10.2)
+        # containers hold NO offset cells (RUL-offset_per_camera_destination_day)
+        assert d[c]["camera_group_time_decisions"] == {}
     # real leaves are not file-less and carry their own group's cell
     assert "file_less" not in d[f"{BYDEST}/Trip/Day1"]
     assert set(d[f"{BYDEST}/Trip/Day1"]["camera_group_time_decisions"]) == {CAM}
@@ -168,7 +169,7 @@ def test_child_offset_decision_is_not_pooled_upward(tmp_path):
     # the child resolved from its own decision
     leaf = art["destinations"][f"{BYDEST}/Trip/Day1"]["camera_group_time_decisions"][CAM]
     assert leaf["effective_time_anchor"]["offset_seconds"] == -3600
-    # the parent container exposes NO offset cell at all — offsets never aggregate upward (§10.2)
+    # the parent container exposes NO offset cell at all — offsets never aggregate upward (RUL-offset_from_own_evidence)
     assert art["destinations"][f"{BYDEST}/Trip"]["camera_group_time_decisions"] == {}
 
 

@@ -171,7 +171,7 @@ entry (`python -m cartographer.photos_1_prep …`) sharing the same `add_argumen
   `photos-30-merge-plan.json`).
   The planning command writes it there and prints the location; the validate/apply commands read it from
   there — there are **no** `--output`/`--plan` path flags. Re-planning backs up the prior artifact under
-  the shared incremental `-NNN` suffix (never clobbered). See shared contract Section 5 ("Canonical plan
+  the shared incremental `-NNN` suffix (never clobbered). See `BLD-canonical_plan_paths` ("Canonical plan
   persistence") and `photos_utils.write_versioned_json`.
 
 ### Seeded config defaults
@@ -224,7 +224,7 @@ Defined in the shared contract (`spec/intent/shared.md`, `spec/build/shared.md`)
   sentinel `photos-00-workspace-guard`, handoff manifest, decision JSONs, journals, the SQLite cache
   `photos-00-ingest.db`, and `gpx/` when `gpx_root` is configured to live there). Prep skips this
   subtree wholesale, so artifacts can never be mistaken for media. Two files there are **scratch, not record**: `photos-00-plan-memo.db`, the
-  plan-time decode memo (prep §10.3) — re-derivable fingerprints of files at the paths they were read
+  plan-time decode memo (`BLD-plan_memo`) — re-derivable fingerprints of files at the paths they were read
   from — and `photos-00-track-memo.db`, the tracks geotag has parsed; both written outside the
   plan/execute op model, never journalled or archived, safe to delete. Finalize adds
   `photos-26-finalized-media.json` and the archival package (`photos-26-archive-manifest.json` +

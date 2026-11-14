@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Phase 6a (geotag) — no-clobber timestamp rename planning (spec §26/§27).
+"""Phase 6a (geotag) — no-clobber timestamp rename planning (BLD-rename_planning).
 
 Destination-local filename computation + the deterministic suffix allocator that treats every
 on-disk and already-planned name as permanently occupied. Safety-critical naming, so full branch

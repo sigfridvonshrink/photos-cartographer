@@ -14,7 +14,7 @@
 
 """Phase 3a (geotag) — photos-21-time-decisions.json: per-destination timezone + per-(camera
 group, destination) offset cells, with the decision-field / rerun-preservation engine and the
-SHA-256 dependency block (spec §17–§21). The GPX offset inference is Phase 3b. From conftest.py.
+SHA-256 dependency block (BLD-decision_record_envelope). The GPX offset inference is Phase 3b. From conftest.py.
 """
 import json
 from _zone import answer_root_zone
@@ -192,7 +192,7 @@ def test_determinism_unchanged_rerun_is_byte_identical(tmp_path, monkeypatch):
     assert (ws / ".photos-ingest" / cal.TIME_DECISIONS_ARTIFACT).read_bytes() == first
 
 
-# --- validation (§9.2) -------------------------------------------------------
+# --- validation (INV-authored_values_checked) ---------------------------------------
 
 @pytest.mark.spec("RUL-invalid_decision_kept", "RUL-invalid_value_located", "INV-authored_values_checked",
                   "RUL-checked_timezones", "RUL-invalid_value_never_repaired", "RUL-invalid_decision_reported",
@@ -274,7 +274,7 @@ def test_timezone_proposal_inherits_nearest_resolved_ancestor():
     assert blank["effective_iana_timezone"] == "" and blank["requires_user_input"] is True
 
 
-# --- §22a.3: the drift offset lives in photos-22, never edits photos-21 ------
+# --- BLD-drift_validation: the drift offset lives in photos-22, never edits photos-21 ------
 
 DRIFT_DEST = "6-photos-by-dest/D"
 
@@ -296,7 +296,7 @@ def _drift_gpx(points):
 
 @pytest.mark.spec("BLD-drift_validation")
 def test_build_drift_validation_leaves_photos21_byte_unmutated(tmp_path):
-    """§22a.3: building photos-22 (GPS-drift validation) refines a manual/tz-derived offset, but the
+    """BLD-drift_validation: building photos-22 (GPS-drift validation) refines a manual/tz-derived offset, but the
     validated drift offset is recorded in photos-22 — building it must NOT touch the photos-21
     time-decisions artifact it reads. Set up a manual-offset bucket with no native-GPS anchor and GPX
     coverage (the drift trigger), write photos-21 to disk as the real run does, then build photos-22

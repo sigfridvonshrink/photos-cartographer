@@ -3,10 +3,8 @@
 What the first phase, {need}`DEF-prep`, guarantees, beyond what [the shared contract](shared.md) binds every phase
 to. *Why* each holds is in [the rationale](../rationale/prep.md); *how this build meets it*, in
 [the build](../build/prep.md).
-Sections are numbered as in the phase's original spec; a section whose content lives in the shared contract, or
-that only restated others, has no heading here.
 
-## 2. What prep does, and what it leaves alone
+## 1. What prep does, and what it leaves alone
 
 :::{rul} Prep corrects no time and no position
 :id: RUL-prep_no_time_or_gps
@@ -41,7 +39,7 @@ renaming, quarantining, deleting or writing one there.
 Prep SHALL put each video it takes in that has a recorded time into videos by date, under its timestamp name.
 :::
 
-## 3. The workspace's first run, and the strays
+## 2. The workspace's first run, and the strays
 
 :::{rul} Initializing, prep moves the dump into the inbox
 :id: RUL-init_moves_dump_to_inbox
@@ -99,7 +97,7 @@ A file prep moves to the strays folder SHALL be recorded nowhere but in the jour
 in the workspace database, no entry in any log, no place in the archival package.
 :::
 
-## 6. What prep refuses to work on
+## 5. What prep refuses to work on
 
 :::{rul} A file in the other kind's folder blocks prep
 :id: RUL-band_misplacement_blocks
@@ -172,7 +170,7 @@ The warning that strays are images or videos SHALL name their extension.
 :::
 
 
-## 7. The prep pipeline
+## 6. The prep pipeline
 
 :::{rul} A dump keeps its folders in the inbox
 :id: RUL-inbox_kept_as_dumped
@@ -366,7 +364,7 @@ A prep execution SHALL leave in the workspace database no row for a file that is
 :::
 
 
-## 9. Content fingerprinting and cache reuse
+## 8. Content fingerprinting and cache reuse
 
 :::{rul} A new or changed file is fingerprinted afresh
 :id: RUL-fingerprint_taken_afresh
@@ -423,7 +421,7 @@ Prep SHALL stop on a workspace database whose recorded schema is not the one it 
 :::
 
 
-## 10. Files the user moves, and the plan memo
+## 9. Files the user moves, and the plan memo
 
 :::{rul} A file the user moved is recognized
 :id: RUL-move_recognized
@@ -557,7 +555,7 @@ The plan memo SHALL hold entries only for paths the latest plan read.
 :::
 
 
-## 11. Duplicates and failures beside photos by destination
+## 10. Duplicates and failures beside photos by destination
 
 :::{rul} A failed fingerprint matches nothing
 :id: RUL-failed_fingerprint_no_duplicate
@@ -611,7 +609,7 @@ Prep SHALL record each duplicate it quarantines with the copy it kept, in the qu
 :::
 
 
-## 12. The metadata prep keeps for geotag
+## 11. The metadata prep keeps for geotag
 
 :::{rul} Prep keeps the metadata geotag needs
 :id: RUL-metadata_kept_for_geotag
@@ -668,7 +666,7 @@ their count, their time range, how many carry a GPS position — inferring nothi
 :::
 
 
-## 14. Plan, dry run, execution
+## 12. Plan, dry run, execution
 
 :::{rul} A file that appeared since planning restales the plan
 :id: RUL-new_file_restales_plan
@@ -745,7 +743,7 @@ interrupted plan.
 :::
 
 
-## 15. The quarantine
+## 13. The quarantine
 
 :::{rul} A duplicate's evidence is recorded before it is moved
 :id: RUL-evidence_before_quarantine
@@ -828,7 +826,7 @@ newest.
 :::
 
 
-## 16. The handoff and prep's log
+## 14. The handoff and prep's log
 
 :::{rul} Prep's records are written only by an execution that succeeded
 :id: RUL-prep_records_on_success
@@ -913,7 +911,7 @@ The log SHALL record a step for the change when a photo's fingerprint is taken a
 :::
 
 
-## 17. Concurrency, determinism, and what a run shows
+## 15. Concurrency, determinism, and what a run shows
 
 :::{rul} The job count changes nothing planned
 :id: RUL-jobs_change_nothing
@@ -975,7 +973,7 @@ Each prep plan SHALL report how many media files it fingerprinted again, and why
 Each prep plan SHALL report how many fingerprints it took from the plan memo.
 :::
 
-## 19. What prep reports
+## 16. What prep reports
 
 :::{rul} Prep's run is summarised
 :id: RUL-prep_run_summarised

@@ -3,10 +3,8 @@
 What the second phase, {need}`DEF-geotag`, guarantees, beyond what [the shared contract](shared.md) binds every phase
 to. *Why* each holds is in [the rationale](../rationale/geotag.md); *how this build meets it*, in
 [the build](../build/geotag.md).
-Sections are numbered as in the phase's original spec; a section whose content lives in the shared contract, or
-that only restated others, has no heading here.
 
-## 2. Core workflow rule
+## 1. Core workflow rule
 
 :::{rul} Time first, then position
 :id: RUL-time_before_gps
@@ -43,7 +41,7 @@ A photo in photos by destination carrying no recorded time SHALL stop geotag bef
 A photo that stops geotag for carrying no recorded time SHALL be named to the user as belonging in missing metadata.
 :::
 
-## 5. Linear dependency inclusion
+## 3. Linear dependency inclusion
 
 :::{rul} The executable plan carries every dependency itself
 :id: RUL-geotag_plan_carries_every_dependency
@@ -59,7 +57,7 @@ tracks, the configuration, the code and each photo's precondition — never rely
 dependencies to vouch for what came before it.
 :::
 
-## 7. Geotag scope
+## 4. Geotag scope
 
 :::{rul} Geotag changes only the photos sorted into destinations
 :id: RUL-geotag_changes_only_by_dest
@@ -84,7 +82,7 @@ Geotag SHALL change only files in photos by destination — never a file in any 
 Geotag SHALL never change a video.
 :::
 
-## 8. JSON artifact rule
+## 5. JSON artifact rule
 
 :::{rul} A decision stage reached writes its record
 :id: RUL-decision_stage_writes_record
@@ -118,7 +116,7 @@ A geotag plan stopped before its first decision stage SHALL write no record of i
 A geotag plan stopped before its first decision stage SHALL say what stopped it in its output.
 :::
 
-## 9. Human decision field rule
+## 6. Human decision field rule
 
 :::{rul} A camera's offset from its own GPS applies itself only as configured
 :id: RUL-anchor_offset_auto_as_configured
@@ -370,7 +368,7 @@ A value the user writes for a decision SHALL take effect over a proposal accepte
 :::
 
 
-## 10. Per-destination structure
+## 7. Per-destination structure
 
 :::{def} A destination
 :id: DEF-destination
@@ -470,7 +468,7 @@ An answer given for a camera's day in a destination SHALL stay that day's answer
 :::
 
 
-## 15. Reading the tracks
+## 8. Reading the tracks
 
 :::{rul} A track point's time is the instant it states
 :id: RUL-track_time_never_guessed
@@ -552,7 +550,7 @@ Geotag SHALL never join a point of one track file to a point of another to ancho
 :::
 
 
-## 16. Camera groups
+## 9. Camera groups
 
 :::{rul} An unknown camera group stops geotag
 :id: RUL-unknown_group_stops_geotag
@@ -633,7 +631,7 @@ Geotag SHALL NOT plan while the configuration classes a camera group as both a p
 :::
 
 
-## 18. Destination civil timezone
+## 10. Destination civil timezone
 
 :::{rul} A destination takes the nearest timezone it lies in
 :id: RUL-timezone_from_nearest
@@ -659,7 +657,7 @@ its old destination carried with it.
 :::
 
 
-## 19. Clock offsets from the camera's own GPS
+## 11. Clock offsets from the camera's own GPS
 
 :::{rul} A track anchors a clock only within the plausible error
 :id: RUL-anchor_within_clock_error
@@ -754,7 +752,7 @@ A clock offset proposed from a camera's own GPS SHALL be recorded with the photo
 :::
 
 
-## 22. Resolved UTC
+## 13. Resolved UTC
 
 :::{rul} A phone's time is read by the offset recorded with it
 :id: RUL-phone_time_from_own_offset
@@ -799,7 +797,7 @@ clock was set to and the clock's own error, together. A camera keeping exact Bru
 :::
 
 
-## 22a. The GPS-drift check
+## 14. The GPS-drift check
 
 :::{rul} An offset the camera's GPS does not support is confirmed before photos are placed by it
 :id: RUL-unanchored_offset_confirmed
@@ -847,7 +845,7 @@ An offset changed since it was confirmed SHALL be asked about again.
 :::
 
 
-## 24. Every photo's own values
+## 15. Every photo's own values
 
 :::{rul} A photo's own values follow its fingerprint's new value
 :id: RUL-own_values_follow_new_fingerprint
@@ -862,7 +860,7 @@ one, so long as the change maps one value to one.
 :::
 
 
-## 25. Placing each photo
+## 16. Placing each photo
 
 :::{rul} A photo's own position is kept
 :id: RUL-own_position_kept
@@ -1044,7 +1042,7 @@ A destination whose inherited fallback the user accepted SHALL take the fallback
 :::
 
 
-## 26. The corrected time
+## 17. The corrected time
 
 :::{rul} The corrected time is written as the destination's local time
 :id: RUL-corrected_time_written_local
@@ -1068,7 +1066,7 @@ Geotag SHALL write beside each time it writes that time's offset from UTC.
 :::
 
 
-## 28. The executable plan
+## 19. The executable plan
 
 :::{rul} A position is written whole
 :id: RUL-position_written_whole
@@ -1148,7 +1146,7 @@ The executable plan SHALL count its photos by how each comes by its position —
 :::
 
 
-## 29. Execution
+## 20. Execution
 
 :::{rul} An interrupted execution is finished by running it again
 :id: RUL-geotag_execution_resumable
@@ -1278,7 +1276,7 @@ Geotag SHALL NOT write to a photo while the image engine is not the one the phot
 :::
 
 
-## 31. Finalize
+## 21. Finalize
 
 :::{rul} Finalize packages only an execution that succeeded and still holds
 :id: RUL-finalize_requires_success

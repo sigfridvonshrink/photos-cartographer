@@ -71,8 +71,8 @@ then the proposal evidence last; non-coord cells just show the proposal.
   changed, a **stale** banner on both views reminds you a Re-run is needed before GPS reflects it (tracked
   by `timeChangedSinceRerun`, cleared on Re-run). Both notices are skipped in demo mode (its curated
   fixtures intentionally pair an incomplete time artifact with a GPS one).
-- **Drift view + GPS-depends-on-drift gate.** A third view (`photos-22-gps-drift-validation.json`, geotag
-  workflow §22a) sits between Time and GPS. It lists the **at-risk buckets** — a manual/timezone-derived
+- **Drift view + GPS-depends-on-drift gate.** A third view (`photos-22-gps-drift-validation.json`,
+  `BLD-drift_validation`) sits between Time and GPS. It lists the **at-risk buckets** — a manual/timezone-derived
   clock offset with no native-GPS anchor — that GPX *can* validate, and must be confirmed before GPS is
   placed (an unconfirmed bucket could silently mis-place a whole batch along the track). It is gated behind
   time (`time.requires_user_input`) and in turn gates GPS (`drift.requires_user_input` locks the GPS view).

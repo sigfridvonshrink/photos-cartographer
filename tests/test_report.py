@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Phase 5a — the §19 user-visible run report + media-class helper.
+"""Phase 5a — the RUL-prep_run_summarised user-visible run report + media-class helper.
 
 Mocked hashing/metadata (content-based hash so identical files dedup), fast.
 photos_1_prep / photos_utils come from conftest.py.

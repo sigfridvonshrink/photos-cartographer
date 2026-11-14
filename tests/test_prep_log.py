@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Phase C2 — end-of-prep transformation log (photos-15-prep-log.json, prep §16.1 / shared §13.3).
+"""Phase C2 — end-of-prep transformation log (photos-15-prep-log.json, BLD-phase_logs).
 
 A per-photo, content-fingerprint-keyed, human-readable record of everything prep did: derived
 from the validated plan + quarantine evidence, carried forward incrementally. Mocked hashing/
@@ -112,7 +112,7 @@ def test_quarantined_duplicate_recorded(tmp_path, monkeypatch):
 
 @pytest.mark.spec("RUL-prep_no_time_or_gps")
 def test_prep_organizes_by_raw_naive_timestamp_no_tz_or_utc_shift(tmp_path, monkeypatch):
-    """§7.6 (anti): prep organizes by the RAW camera-naive timestamp and never timezone/UTC-corrects
+    """RUL-prep_no_time_or_gps (anti): prep organizes by the RAW camera-naive timestamp and never timezone/UTC-corrects
     it (that is geotag's job). Use a late-evening naive time that ANY tz/UTC conversion would push to
     a different date+hour; assert the file lands under that EXACT raw date and time."""
     _install(monkeypatch)
@@ -134,8 +134,8 @@ def test_prep_organizes_by_raw_naive_timestamp_no_tz_or_utc_shift(tmp_path, monk
 
 @pytest.mark.spec("RUL-record_whole_each_phase")
 def test_prep_log_is_complete_and_standalone_without_geotag_or_merge(tmp_path, monkeypatch):
-    """§16.1: the prep log (photos-15) is complete and self-sufficient even if geotag/merge never run.
-    After a prep-only run, NO geotag (photos-2x) / merge (photos-3x) artifact exists, yet photos-15
+    """RUL-record_whole_each_phase: the prep log (photos-15) is complete and self-sufficient even if geotag/merge never
+    run. After a prep-only run, NO geotag (photos-2x) / merge (photos-3x) artifact exists, yet photos-15
     already records the file's full, non-partial journey ending at its organized destination."""
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -160,8 +160,8 @@ def test_prep_log_is_complete_and_standalone_without_geotag_or_merge(tmp_path, m
 
 @pytest.mark.spec("RUL-no_meaning_from_names")
 def test_nonconforming_name_is_ignored_timestamp_comes_from_metadata(tmp_path, monkeypatch):
-    """§8: prep never parses meaning from a non-conforming filename — it re-ingests the file and takes
-    the timestamp from metadata. A file whose name MISLEADINGLY encodes 2099 but whose EXIF
+    """RUL-no_meaning_from_names: prep never parses meaning from a non-conforming filename — it re-ingests the file and
+    takes the timestamp from metadata. A file whose name MISLEADINGLY encodes 2099 but whose EXIF
     DateTimeOriginal is 2023:01:02 must be organized under the EXIF date (2023-01-02), with a
     provisional name derived from metadata — the bogus '2099' in the name is never honoured."""
     _install(monkeypatch)                                            # meta -> DateTimeOriginal 2023:01:02 03:04:05
@@ -176,7 +176,7 @@ def test_nonconforming_name_is_ignored_timestamp_comes_from_metadata(tmp_path, m
 
 @pytest.mark.spec("RUL-prep_log_derived", test="TST-prep_log-prep_log_entries_are_derived_from_the_validated_plan")
 def test_prep_log_entries_are_derived_from_the_validated_plan(tmp_path, monkeypatch):
-    """§16.1 item 4: the prep log is DERIVED from the validated plan + journals and introduces no new
+    """RUL-prep_log_derived: the prep log is DERIVED from the validated plan + journals and introduces no new
     authority — its facts trace back to plan operations. Assert the logged final destination equals a
     destination the plan actually planned, and the extension-normalization step's 'from' name matches
     the plan's rename source — the log records nothing the plan/journal did not establish."""

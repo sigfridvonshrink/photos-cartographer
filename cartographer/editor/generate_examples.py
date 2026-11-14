@@ -108,7 +108,7 @@ def _copy(art):
 
 def _root_zone(a, tz="Europe/Brussels"):
     """The zone answered once at the root of photos by destination, as the user answers it: the configured
-    default is only proposed (geotag §18), and every destination beneath inherits the answer."""
+    default is only proposed (RUL-default_zone_proposed_only), and every destination beneath inherits the answer."""
     a["destinations"][BD]["destination_timezone"]["user_decision"]["manual_iana_timezone"] = tz
     return a
 
@@ -141,7 +141,7 @@ CAM_B = "NIKON|D750|B"              # no GPX -> timezone-derived offset (manual 
 PHONE = "APPLE|iPhone15|P"          # smartphone -> no offset cell
 JP, KY = f"{BD}/Japan", f"{BD}/Japan/Kyoto"
 BE, BR = f"{BD}/Belgium", f"{BD}/Belgium/Bruges"
-BRU = f"{BD}/Belgium/Brussels"      # CAM_A across 3 naive dates -> per-date offset buckets (§10.2)
+BRU = f"{BD}/Belgium/Brussels"      # CAM_A across 3 naive dates -> per-date offset buckets (BLD-offset_buckets)
 PHO = f"{BD}/PhoneOnly"
 
 
@@ -163,7 +163,7 @@ def scenario_trip():
         _file(f"{BE}/bel-phone.jpg", PHONE, "2024:07:03 13:30:00",
               gps={"lat": 51.0, "lon": 4.3}, raw_times={"OffsetTimeOriginal": "+02:00"}),
         _file(f"{BR}/bruges.arw", CAM_B, "2024:07:03 13:15:00", gps={"lat": 51.2, "lon": 3.2}),  # tz-derived offset
-        # Per-date offset buckets (§10.2): CAM_A in one dest across 3 naive dates, no GPX anchor here
+        # Per-date offset buckets (BLD-offset_buckets): CAM_A in one dest across 3 naive dates, no GPX anchor here
         # (far from the lat50/lon4 track) -> timezone-derived per day. Summer days share -7200 (CEST),
         # the winter day is -3600 (CET) -> DST-aware split; the two equal days collapse in the editor.
         # native-GPS so the GPS phase preserves-native and the bucket stays clean.
@@ -186,7 +186,7 @@ def scenario_trip():
 
     def pre_time(a):
         # Mid-workflow state for the requires-input fixture: the zone answered at the root (so Brussels'
-        # per-date offset buckets surface DST-aware timezone_naive proposals to demo §10.2), but every
+        # per-date offset buckets surface DST-aware timezone_naive proposals to demo BLD-offset_buckets), but every
         # offset is still pending.
         return _root_zone(a)
 
