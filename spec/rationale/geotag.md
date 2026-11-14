@@ -9,7 +9,9 @@ that only restated others, has no heading here.
 
 :::{rat} A position is looked up by time
 :id: RAT-position_follows_time
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-track_squeezed, RAT-offset_per_camera_destination_day
 :justifies: RUL-time_before_gps
 
 A photo with no position of its own is placed where the track was at the moment it was taken — its true time, after
@@ -20,7 +22,9 @@ is settled for every photo first, and only then is any position planned.
 
 :::{rat} No phase invents a time
 :id: RAT-no_phase_invents_time
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-untimed_set_apart, CHC-ask_only_what_data_cannot_settle
 :justifies: RUL-untimed_photo_stops_geotag
 
 A photo with no recorded time has nothing to correct and nothing to look up: its true time is unknown, and no
@@ -34,7 +38,9 @@ naming it and where it belongs, makes the one possible fix plain.
 
 :::{rat} A chain is only as fresh as its weakest link
 :id: RAT-no_chain_of_vouching
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-no_mutation_outside_plan
 :justifies: RUL-geotag_plan_carries_every_dependency
 
 The decision records are files the user edits between runs, in the editor or by hand. If the plan named only the last
@@ -47,7 +53,9 @@ itself, every input is checked against what it is now, at the one moment that ma
 
 :::{rat} Only what the user sorted is ready
 :id: RAT-only_sorted_is_ready
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-piggyback_on_the_destination_sort
 :justifies: RUL-geotag_changes_only_by_dest
 
 A photo's destination is what geotag corrects it by: the timezone of the place, the offset of that camera on that
@@ -61,7 +69,9 @@ the user's statement that it is ready.
 
 :::{rat} A missing record should mean one thing
 :id: RAT-record_means_stage_reached
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-plain_json_record
 :justifies: RUL-decision_stage_writes_record, RUL-no_record_before_decisions
 
 The decision records are what the user, the editor and the next stage read. Written at every stage reached — even
@@ -75,7 +85,9 @@ decision to act on when there was none.
 
 :::{rat} The camera's own GPS is evidence; the user decides how much
 :id: RAT-anchor_evidence_trusted_as_configured
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-minimal_cascading_asks, RAT-clustering_details
 :justifies: RUL-anchor_offset_auto_as_configured
 
 An offset measured from the camera's own positions against the tracks is evidence, not a guess: several frames agreeing
@@ -86,7 +98,9 @@ disagree mean something is off — a clock reset in the day, a wrong track — a
 
 :::{rat} A nested place is in its parent's timezone
 :id: RAT-nested_place_same_timezone
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: RAT-decisions_cascade, RAT-destination_tree_is_a_hierarchy
 :justifies: RUL-timezone_auto_resolves
 
 Destinations nest geographically — a city in a country, a museum in a city — so one inside a destination of known
@@ -97,7 +111,9 @@ answer.
 
 :::{rat} An assumption is the user's to accept
 :id: RAT-assumptions_need_acceptance
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: CHC-ask_only_what_data_cannot_settle, CHC-photos_matter
 :justifies: RUL-other_proposals_need_acceptance
 
 An offset derived from the timezone assumes the camera was set to local time that day; a fallback inherited from a
@@ -110,7 +126,9 @@ place or the wrong hour, written into the originals; offered for acceptance, it 
 
 :::{rat} A clock is wrong by its own amount, day by day
 :id: RAT-offset_per_day_and_place
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-offset_per_camera_destination_day
 :justifies: RUL-offset_per_camera_destination_day
 
 A camera's clock drifts, and is set again — to local time, on a trip, often each morning. Its error is one amount for
@@ -121,7 +139,9 @@ the error stays put, so it is the unit decided.
 
 :::{rat} One place's clock evidence says nothing of another's
 :id: RAT-no_borrowed_offsets
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-offset_per_camera_destination_day, RAT-decisions_cascade
 :justifies: RUL-offset_from_own_evidence
 
 Folders nest by geography, which is why a timezone or a fallback position can pass down them; a clock's error does not
@@ -133,7 +153,9 @@ such.
 
 :::{rat} A container is a place to put defaults
 :id: RAT-container_holds_defaults
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-decisions_cascade, RAT-destination_tree_is_a_hierarchy
 :justifies: RUL-container_never_waits
 
 A folder holding only other destinations has no photo to correct: it exists so a timezone or a fallback position can be
@@ -145,7 +167,9 @@ set once and reach every destination beneath it. If it asked for anything, it wo
 
 :::{rat} A track is evidence only where it can be read
 :id: RAT-track_points_read_exactly
-:status: ruled
+:status: seed
+:forced: no
+:follows_from: CHC-photos_matter, RAT-remainder_worklist
 :justifies: RUL-track_time_never_guessed, RUL-unreadable_point_reported
 
 A track's points become positions and clock offsets; a time read an hour wrong, or in a zone guessed, would place
@@ -160,7 +184,9 @@ why the photos it should have placed were not.
 
 :::{rat} The class decides how a photo's time is found
 :id: RAT-class_decides_time_model
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-camera_groups_generated, RAT-offset_per_camera_destination_day
 :justifies: RUL-unknown_group_stops_geotag, RUL-unknown_group_classification_offered
 
 A phone's clock is set by its network and its zone recorded or found per photo, so each photo is solved alone; a
@@ -172,7 +198,9 @@ out, so only the judgement is the user's.
 
 :::{rat} No camera, no clock to correct
 :id: RAT-no_identity_no_group
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-offset_per_camera_destination_day, RAT-minimal_cascading_asks
 :justifies: RUL-unidentified_files_solved_alone
 
 Screenshots, scans and photos a messaging app stripped name no camera, and share nothing but that. Taken for one camera,
@@ -186,7 +214,9 @@ the place's zone, it asks nothing and borrows nothing.
 
 :::{rat} The nearest place says the most
 :id: RAT-nearest_timezone
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-decisions_cascade, RAT-destination_tree_is_a_hierarchy
 :justifies: RUL-timezone_from_nearest
 
 The destination a place lies in is the most specific word on its timezone: Kyoto inside Japan is in Japan's zone. The
@@ -197,7 +227,9 @@ not one per folder.
 
 :::{rat} The destination is an input to the time
 :id: RAT-destination_is_an_input
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-offset_per_camera_destination_day, RAT-decisions_cascade
 :justifies: RUL-moved_photo_decided_anew
 
 A photo's true time and its name come from its destination's timezone and from the clock offset found for its camera
@@ -210,7 +242,9 @@ its time and its name, now hidden under the right folder.
 
 :::{rat} The same place on another trip is not evidence
 :id: RAT-clock_error_window
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-offset_per_camera_destination_day
 :justifies: RUL-anchor_within_clock_error
 
 A track is matched to a photo by place, and places are revisited: the spot a photo was taken may lie on a track from
@@ -221,7 +255,9 @@ be the destination's zone: the camera may have been left on home time, and that 
 
 :::{rat} Agreement is the evidence
 :id: RAT-anchor_agreement
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-offset_per_camera_destination_day, RAT-minimal_cascading_asks
 :justifies: RUL-anchor_consensus
 
 A camera's clock is wrong by the same amount all day, so every photo it took with a position agrees on the offset —
@@ -233,7 +269,9 @@ nothing tells two offsets apart, the photos do not say which is right, and the u
 
 :::{rat} A trip comes back to its places
 :id: RAT-trips_revisit
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-anchor_agreement, RAT-minimal_cascading_asks
 :justifies: RUL-revisit_matched_to_its_day, RUL-indistinct_visits_wait
 
 A trip often comes back to its places: a town visited from the same hotel day after day, a square crossed morning and
@@ -245,7 +283,9 @@ say which visit is theirs, only the user, who remembers the day, can.
 
 :::{rat} The evidence is the same whichever offset the user takes
 :id: RAT-chosen_offset_has_evidence
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-anchor_agreement, RAT-minimal_cascading_asks
 :justifies: RUL-chosen_group_is_anchored
 
 Where the photos support several offsets, the user picks the one for the day they were there. That offset is backed
@@ -259,7 +299,9 @@ needed them.
 
 :::{rat} A phone says its own offset
 :id: RAT-phone_records_its_offset
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-class_decides_time_model
 :justifies: RUL-phone_time_from_own_offset
 
 A phone's clock is set by its network and it records the offset it was at, beside each time it writes: better
@@ -273,7 +315,9 @@ chance. Where the photo records none for its time, the destination's zone is the
 
 :::{rat} A wrong offset moves a whole day along the track
 :id: RAT-drift_invisible
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-position_follows_time, CHC-photos_matter
 :justifies: RUL-unanchored_offset_confirmed
 
 A photo with no position of its own is placed where the track was at its resolved time. With an offset the camera's
@@ -285,7 +329,9 @@ check; leaving it unseen must never pass for having seen it.
 
 :::{rat} What was seen was one offset
 :id: RAT-confirmed_one_offset
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-drift_invisible
 :justifies: RUL-confirmation_holds_for_its_offset
 
 Confirming is looking at the photos on the track at the times one offset gives. Another offset puts them elsewhere,
@@ -298,7 +344,9 @@ correction found for the old one override the user's new decision.
 
 :::{rat} A new decoder does not make a new photo
 :id: RAT-same_photo_new_fingerprint
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-decision_withdrawable, RAT-decoded_pixel_identity
 :justifies: RUL-own_values_follow_new_fingerprint
 
 A new ImageMagick may decode a photo to a new fingerprint; the photo is the same, and so are its own time and
@@ -312,7 +360,9 @@ it does not say so one for one, no photo's values can be told apart, and geotag 
 
 :::{rat} The camera measured where it was
 :id: RAT-own_position_best
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-total_coverage_cascade, CHC-photos_matter
 :justifies: RUL-own_position_kept
 
 A position the camera wrote was measured where the photo was taken. Everything geotag can offer instead is derived —
@@ -322,7 +372,9 @@ the photo less right, not more.
 
 :::{rat} Most specific first
 :id: RAT-placement_most_specific_first
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-track_squeezed, RAT-folder_gps_fallback, RAT-remainder_worklist
 :justifies: RUL-placement_order
 
 Each source speaks for fewer photos than the one after it: a position the user set speaks for that photo alone, a track
@@ -333,7 +385,9 @@ unlocated.
 
 :::{rat} A place inside a place is near it
 :id: RAT-fallback_nested
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-folder_gps_fallback, RAT-assumptions_need_acceptance
 :justifies: RUL-fallback_from_nearest
 
 A destination inside another lies within it, so the place set for the outer one is a fair guess for the inner one —
@@ -343,7 +397,9 @@ user has chosen to inherit, and a fallback changed above flows down to it, as a 
 
 :::{rat} A fallback is a convenience, not a gate
 :id: RAT-fallback_optional
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-folder_gps_fallback, RAT-minimal_cascading_asks
 :justifies: RUL-fallback_optional
 
 The fallback saves answering, photo by photo, for a folder the tracks miss. A destination whose photos the tracks all
@@ -356,7 +412,9 @@ add the work it exists to save.
 
 :::{rat} Half a position is a wrong one
 :id: RAT-position_whole
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: CHC-photos_matter
 :justifies: RUL-position_written_whole
 
 EXIF stores a latitude and a longitude without their signs: the hemisphere is in a field of its own. A coordinate
@@ -367,7 +425,9 @@ reader will complete. Whole or not at all is the only safe write.
 
 :::{rat} The offset is the camera's that day, not the photos'
 :id: RAT-day_offset_is_the_cameras
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-offset_per_camera_destination_day, RAT-decisions_reread_cache_only
 :justifies: RUL-day_offset_kept_for_later_photos
 
 A clock offset belongs to the camera on that day; every photo it took that day shares it, however many arrive later.
@@ -380,7 +440,9 @@ question already settled, or leave the later photos an offset nobody checked.
 
 :::{rat} A crash leaves work, not damage
 :id: RAT-execution_resumable
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-discrete_stages, RAT-idempotent_reruns
 :justifies: RUL-geotag_execution_resumable
 
 Execution writes into hundreds of originals one after another, and anything can stop it partway. Run again, it must
@@ -391,7 +453,9 @@ the user's edit: only the first is its to finish.
 
 :::{rat} Metadata never moves a pixel
 :id: RAT-content_changed_held
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-decoded_pixel_identity, CHC-photos_matter
 :justifies: RUL-content_changed_write_held
 
 Writing a time or a position changes a photo's metadata and nothing it shows; its fingerprint, taken over the decoded
@@ -405,7 +469,9 @@ photo's identity is at stake, so only the user can take the new content for it.
 
 :::{rat} The package records what was done
 :id: RAT-package_records_what_was_done
-:status: ruled
+:status: seed
+:forced: yes
+:follows_from: RAT-consolidated_log, RAT-record_outlives_workspace
 :justifies: RUL-finalize_requires_success
 
 The archival package is what outlives the workspace: the account of what geotag did to each photo and why. Made
