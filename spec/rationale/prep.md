@@ -9,7 +9,7 @@ that only restated others, has no heading here.
 
 :::{rat} Prep has no evidence for a time or a place
 :id: RAT-prep_has_no_evidence
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-offset_per_camera_destination_day, RAT-non_destructive_core
 :justifies: RUL-prep_no_time_or_gps
@@ -21,7 +21,7 @@ before them would be a guess written into an original; prep leaves time and plac
 
 :::{rat} Photos by destination is the user's sorting
 :id: RAT-by_dest_is_the_users
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-piggyback_on_the_destination_sort, RAT-decisions_are_the_users
 :justifies: RUL-prep_leaves_by_dest_as_found
@@ -33,7 +33,7 @@ never undone by a run that cannot know why it was made.
 
 :::{rat} Videos are kept, not corrected
 :id: RAT-videos_kept_not_corrected
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: CHC-total_placement, RAT-non_destructive_core
 :justifies: RUL-videos_by_date
@@ -47,7 +47,7 @@ own, out of the sort.
 
 :::{rat} The first gesture bootstraps the workspace
 :id: RAT-bootstrap_once
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-discrete_stages, CHC-ask_only_what_data_cannot_settle
 :justifies: RUL-init_moves_dump_to_inbox
@@ -59,7 +59,7 @@ meaning — a trip, a day, a card. Afterwards the workspace has an inbox, and th
 
 :::{rat} The structure's names are reserved
 :id: RAT-structure_names_reserved
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-discrete_stages, RAT-phases_rely_on_the_shape
 :justifies: RUL-dump_folder_named_as_managed
@@ -70,7 +70,7 @@ folder inside another, where nothing would look for it, and leave its place to b
 
 :::{rat} The mark means the workspace is whole
 :id: RAT-mark_means_whole
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-discrete_stages, RAT-rebuild_masks_loss
 :justifies: RUL-initialized_marked_last
@@ -82,7 +82,7 @@ and the next simply initializes again.
 
 :::{rat} A stray is not the pipeline's to answer for
 :id: RAT-strays_not_the_pipelines
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-class_decides_handling, RAT-consolidated_log
 :justifies: RUL-strays_leave_no_trace
@@ -96,7 +96,7 @@ it, and clearing it costs the record nothing.
 
 :::{rat} Photos and videos go separate ways
 :id: RAT-bands_never_mix
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-class_decides_handling, CHC-ask_only_what_data_cannot_settle
 :justifies: RUL-band_misplacement_blocks
@@ -108,7 +108,7 @@ corrected. Prep never puts one there, so one found there was moved by hand, and 
 
 :::{rat} A sidecar would be orphaned
 :id: RAT-sidecar_orphaned
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-development_after_corrections, RAT-non_destructive_core
 :justifies: RUL-sidecar_blocks
@@ -121,7 +121,7 @@ goes on.
 
 :::{rat} A non-media file outside the inbox got there another way
 :id: RAT-other_outside_inbox_is_the_users
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-misnamed_not_ignored, CHC-ask_only_what_data_cannot_settle
 :justifies: RUL-other_outside_inbox_blocks
@@ -134,7 +134,7 @@ file nothing accounts for. Stopping names it, and the user decides — as for a 
 
 :::{rat} All the problems at once
 :id: RAT-every_blocker_at_once
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: CHC-ask_only_what_data_cannot_settle, RAT-non_destructive_core
 :justifies: RUL-blockers_all_reported
@@ -145,7 +145,7 @@ user a run for each problem: a dump with three is fixed in one pass.
 
 :::{rat} A format the lists missed is noticed
 :id: RAT-unlisted_media_noticed
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-class_decides_handling, RAT-extension_entries_must_match
 :justifies: RUL-stray_media_hinted
@@ -160,7 +160,7 @@ choice — to list the extension and plan again — with the user; the warning b
 
 :::{rat} A dump's folders say where it came from
 :id: RAT-dump_folders_kept
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-non_destructive_core, RAT-names_never_collide
 :justifies: RUL-inbox_kept_as_dumped
@@ -173,7 +173,7 @@ in the plan.
 
 :::{rat} What is filed is settled
 :id: RAT-filed_is_settled
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-idempotent_reruns
 :justifies: RUL-filed_file_stays
@@ -185,7 +185,7 @@ found to be better filed, and its own recorded time no longer matching its day.
 
 :::{rat} A day of photos is one folder
 :id: RAT-day_folder
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-piggyback_on_the_destination_sort, CHC-local_folder_library
 :justifies: RUL-by_date_in_day_folder
@@ -197,7 +197,7 @@ the user — belongs to another day, and one whose time is gone belongs to no da
 
 :::{rat} Photos wait by date for the user's sort
 :id: RAT-photos_wait_by_date
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-piggyback_on_the_destination_sort, RAT-day_folder
 :justifies: RUL-photos_by_date
@@ -208,7 +208,7 @@ one day sit together, ready to be moved as a block. The timestamp name keeps tha
 
 :::{rat} A file with no time cannot be dated
 :id: RAT-untimed_set_apart
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-day_folder, RAT-prep_has_no_evidence
 :justifies: RUL-untimed_to_missing_metadata
@@ -219,7 +219,7 @@ gives it one. Its untimed name keeps the name it came with, the user's only way 
 
 :::{rat} A stray is the user's, untouched
 :id: RAT-stray_as_it_came
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-strays_not_the_pipelines, RAT-empty_inbox_means_nothing_waits
 :justifies: RUL-inbox_non_media_to_strays
@@ -231,7 +231,7 @@ name it came with, in the run's own folder so no two runs' strays meet.
 
 :::{rat} The user's fix goes through the inbox
 :id: RAT-fix_through_inbox
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-untimed_set_apart, RAT-discrete_stages
 :justifies: RUL-missing_metadata_stays
@@ -243,7 +243,7 @@ pipeline needs keeping in step with the first.
 
 :::{rat} One spelling of each extension
 :id: RAT-one_extension_spelling
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-case_says_nothing, RAT-names_never_collide
 :justifies: RUL-media_extension_lowercase
@@ -255,7 +255,7 @@ extension's case are seen as the one name they are.
 
 :::{rat} A duplicate's record names where it was
 :id: RAT-duplicate_found_as_it_was
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-no_automatic_deletion, RAT-discrete_stages
 :justifies: RUL-duplicate_set_aside_as_found
@@ -268,7 +268,7 @@ lets the copy kept be chosen from where the copies really are.
 
 :::{rat} The RAW is the master
 :id: RAT-raw_is_master
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-no_automatic_deletion, RAT-piggyback_on_the_destination_sort
 :justifies: RUL-redundant_jpeg_set_aside
@@ -281,7 +281,7 @@ the camera's JPEG, and a JPEG and a RAW in different folders, or matched only by
 
 :::{rat} Identical media is kept once
 :id: RAT-identical_kept_once
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-decoded_pixel_identity, RAT-no_automatic_deletion
 :justifies: RUL-duplicates_quarantined
@@ -294,7 +294,7 @@ first go to quarantine, recoverable, and photos by destination is never touched.
 
 :::{rat} The copy kept is the one further along
 :id: RAT-keep_further_along
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-identical_kept_once, RAT-idempotent_reruns
 :justifies: RUL-copy_kept_by_folder
@@ -307,7 +307,7 @@ same on every run.
 
 :::{rat} The database is what the next run trusts
 :id: RAT-database_trusted_next
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-idempotent_reruns
 :justifies: RUL-database_matches_files
@@ -323,7 +323,7 @@ each execution keeps reuse safe.
 
 :::{rat} Size and time are the cheap sign of change
 :id: RAT-size_time_sign_change
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-idempotent_reruns, RAT-decoded_pixel_identity
 :justifies: RUL-fingerprint_taken_afresh
@@ -335,7 +335,7 @@ fingerprint kept still describes the file, a changed one that it may not.
 
 :::{rat} A fingerprint compares only with one taken the same way
 :id: RAT-fingerprint_same_method
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-decoded_pixel_identity, RAT-new_version_may_change_nothing
 :justifies: RUL-fingerprint_method_matches
@@ -348,7 +348,7 @@ photo apart or lose a photo's trail; taking it again costs a decode.
 
 :::{rat} A change in how metadata is read is made on purpose
 :id: RAT-reread_on_purpose
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-idempotent_reruns, RAT-durable_record
 :justifies: RUL-reread_whole
@@ -360,7 +360,7 @@ of it from before the change.
 
 :::{rat} No old workspace to migrate
 :id: RAT-no_migration
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-workspace_not_recycled, RAT-decisions_reread_cache_only
 :justifies: RUL-cache_schema_not_migrated
@@ -376,7 +376,7 @@ workspace is the remedy.
 
 :::{rat} Sorting costs no reading
 :id: RAT-sort_costs_no_reading
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-piggyback_on_the_destination_sort, RAT-idempotent_reruns
 :justifies: RUL-move_recognized
@@ -389,7 +389,7 @@ does not guess, and reads the file as new.
 
 :::{rat} A move launders no stale row
 :id: RAT-move_launders_nothing
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-sort_costs_no_reading, RAT-new_version_may_change_nothing
 :justifies: RUL-moved_file_carried
@@ -403,7 +403,7 @@ a new file, and a fingerprint that changed with it would part the photo from its
 
 :::{rat} Quarantine is outside the record
 :id: RAT-quarantine_outside_record
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-no_automatic_deletion, RAT-surgical_staleness
 :justifies: RUL-quarantined_leaves_database
@@ -415,7 +415,7 @@ was set aside. Kept in the database, it would be listed in the handoff among the
 
 :::{rat} A plan never executed loses nothing it read
 :id: RAT-plan_keeps_its_reading
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-idempotent_reruns, RAT-no_mutation_outside_plan
 :justifies: RUL-plan_memo_kept, RUL-memo_tracks_workspace
@@ -428,7 +428,7 @@ workspace.
 
 :::{rat} The memo is an observation, not a record
 :id: RAT-memo_is_observation
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-plan_keeps_its_reading, RAT-no_mutation_outside_plan
 :justifies: RUL-database_over_memo, RUL-memo_entry_same_tests, RUL-memo_proves_no_move, RUL-memo_never_changes_plan
@@ -444,7 +444,7 @@ broken, prep plans the same.
 
 :::{rat} A failure says nothing of the content
 :id: RAT-failure_says_nothing
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-decoded_pixel_identity, RAT-non_destructive_core
 :justifies: RUL-failed_fingerprint_no_duplicate, RUL-failed_fingerprint_blocks
@@ -457,7 +457,7 @@ aside; its failure decides nothing there.
 
 :::{rat} A failure may be the machine's
 :id: RAT-failure_may_be_the_machines
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-failure_says_nothing, RAT-unknown_is_not_unchanged
 :justifies: RUL-failed_fingerprint_retried
@@ -469,7 +469,7 @@ gone. Taking it again costs one attempt per run for a file that still fails.
 
 :::{rat} A duplicate's record points at its twin
 :id: RAT-duplicate_points_at_twin
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-no_automatic_deletion, RAT-consolidated_log
 :justifies: RUL-duplicate_recorded_with_kept
@@ -483,7 +483,7 @@ user can check the pair, and a photo already sorted into a destination is seen t
 
 :::{rat} One read serves both phases
 :id: RAT-one_read_serves_both
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-discrete_stages, RAT-idempotent_reruns
 :justifies: RUL-metadata_kept_for_geotag
@@ -495,7 +495,7 @@ Kept by prep, they are read once, and geotag reads no photo. Prep keeps them as 
 
 :::{rat} The camera's record first, by the pipeline's choice
 :id: RAT-camera_record_first
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-shutter_time_first, RAT-idempotent_reruns
 :justifies: RUL-metadata_group_order
@@ -509,7 +509,7 @@ the same field elsewhere before another field is tried.
 
 :::{rat} A change in reading is told apart from a change in the file
 :id: RAT-reading_change_detectable
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-database_trusted_next, RAT-reread_on_purpose
 :justifies: RUL-metadata_freshness
@@ -521,7 +521,7 @@ being taken for a change in the file — and the record is read again whole ({ne
 
 :::{rat} Facts before decisions
 :id: RAT-facts_before_decisions
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-camera_groups_generated, RAT-prep_has_no_evidence
 :justifies: RUL-grouping_facts_reported
@@ -536,7 +536,7 @@ and infers nothing: inference is geotag's, made with evidence prep lacks.
 
 :::{rat} The plan is of the workspace it saw
 :id: RAT-plan_saw_the_workspace
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-no_mutation_outside_plan, RAT-plan_can_be_overtaken
 :justifies: RUL-new_file_restales_plan
@@ -548,7 +548,7 @@ that is already known.
 
 :::{rat} A dry run is for looking
 :id: RAT-dry_run_for_looking
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-no_mutation_outside_plan, RAT-dry_run_reads_the_saved_plan
 :justifies: RUL-prep_dry_run_changes_nothing
@@ -559,7 +559,7 @@ execution, and the user could no longer look without acting.
 
 :::{rat} An empty inbox is the end state
 :id: RAT-empty_inbox_end_state
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-empty_inbox_means_nothing_waits, RAT-idempotent_reruns
 :justifies: RUL-prepped_nothing_to_do
@@ -572,7 +572,7 @@ counting it empty would leave neither phase able to go on; its removal is planne
 
 :::{rat} The journal is the evidence of an interrupted run
 :id: RAT-journal_is_evidence
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-journal_is_the_account, RAT-discrete_stages
 :justifies: RUL-journal_never_torn
@@ -583,7 +583,7 @@ leave it truncated — the evidence lost at the one moment it is needed, and the
 
 :::{rat} A folder is changed like a file
 :id: RAT-folder_changed_like_a_file
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-no_mutation_outside_plan, RAT-safety_not_on_the_plan
 :justifies: RUL-emptied_folders_removed
@@ -595,7 +595,7 @@ only an empty one goes, so nothing a folder holds — even what arrived unplanne
 
 :::{rat} The files say what is done
 :id: RAT-files_say_what_is_done
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-discrete_stages
 :justifies: RUL-prep_replans
@@ -610,7 +610,7 @@ plan made for a workspace that no longer stands. The journal records what happen
 
 :::{rat} The reason is written down first
 :id: RAT-reason_first
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-no_automatic_deletion, RAT-discrete_stages
 :justifies: RUL-evidence_before_quarantine
@@ -622,7 +622,7 @@ run sets it aside again under a new record — the old one at worst a record of 
 
 :::{rat} The safety net stays until the user lifts it
 :id: RAT-safety_net_stays
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-no_automatic_deletion
 :justifies: RUL-quarantine_never_auto_deleted, RUL-prune_explicit
@@ -634,7 +634,7 @@ visibly, until the user prunes it: by a command of its own, which shows what it 
 
 :::{rat} A restored file goes the way of any file
 :id: RAT-restore_like_any_file
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-fix_through_inbox, RAT-no_automatic_deletion
 :justifies: RUL-restored_file_is_new
@@ -646,7 +646,7 @@ keeping in step with the first ({need}`RAT-fix_through_inbox`). The old record s
 
 :::{rat} A growing cost is shown
 :id: RAT-growth_shown
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-safety_net_stays
 :justifies: RUL-quarantine_footprint_reported
@@ -660,7 +660,7 @@ prune, knowing what it holds.
 
 :::{rat} A record speaks for a finished run
 :id: RAT-record_of_a_finished_run
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-discrete_stages, RAT-durable_record
 :justifies: RUL-prep_records_on_success
@@ -672,7 +672,7 @@ true of the workspace they stand beside, or absent.
 
 :::{rat} Geotag reads the handoff, not the photos
 :id: RAT-geotag_reads_the_handoff
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-one_read_serves_both, RAT-strays_not_the_pipelines
 :justifies: RUL-handoff_describes_workspace
@@ -684,7 +684,7 @@ left out on purpose.
 
 :::{rat} The handoff changes when the workspace does
 :id: RAT-handoff_changes_with_workspace
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-idempotent_reruns, RAT-handoff_by_content
 :justifies: RUL-handoff_deterministic
@@ -696,7 +696,7 @@ real change — a file filed, sorted or changed — restales geotag.
 
 :::{rat} The log adds no authority
 :id: RAT-log_adds_no_authority
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-consolidated_log, RAT-one_source_per_fact
 :justifies: RUL-prep_log_derived, RUL-prep_log_records_set_aside
@@ -708,7 +708,7 @@ photo it copies, so the account of that photo is whole.
 
 :::{rat} A new fingerprint is not a new photo
 :id: RAT-new_fingerprint_same_photo
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-names_cannot_key_the_log, RAT-new_version_may_change_nothing
 :justifies: RUL-log_follows_retaken_fingerprint
@@ -724,7 +724,7 @@ value while the old one is nowhere, says it is the same photo.
 
 :::{rat} Speed is the machine's, the plan is the workspace's
 :id: RAT-speed_is_the_machines
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-jobs_buy_time, RAT-idempotent_reruns
 :justifies: RUL-jobs_change_nothing, RUL-jobs_recorded_nowhere
@@ -737,7 +737,7 @@ nowhere.
 
 :::{rat} A crash is not a verdict
 :id: RAT-crash_not_a_verdict
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-failure_may_be_the_machines, RAT-unknown_is_not_unchanged
 :justifies: RUL-tool_failure_retried
@@ -749,7 +749,7 @@ read.
 
 :::{rat} The costly step is shown
 :id: RAT-costly_step_shown
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-size_time_sign_change, RAT-idempotent_reruns
 :justifies: RUL-rehash_explained
@@ -763,7 +763,7 @@ and that an unexpected cause is one.
 
 :::{rat} The reviewer sees what was touched
 :id: RAT-reviewer_sees_what_was_touched
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-non_destructive_core, RAT-why_did_this_change
 :justifies: RUL-prep_run_summarised
