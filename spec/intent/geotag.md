@@ -484,7 +484,8 @@ accepted proposal does — never asked to be checked against the tracks again.
 :verify: required
 :refines: RUL-anchor_consensus
 
-An offset the camera's photos fix only to within a stay of the tracks at their place — longer than offsets are told apart by — SHALL NOT take effect without the user's answer, nor count as anchored once accepted.
+An offset the camera's photos fix only to within a stay of the tracks at their place — longer than the configuration
+counts as a moment — SHALL NOT take effect without the user's answer, nor count as anchored once accepted.
 :::
 
 :::{rul} A proposal from GPS is recorded with its evidence

@@ -15692,7 +15692,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 527,
+     "lineno": 528,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -41459,7 +41459,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 697,
+     "lineno": 698,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -41718,7 +41718,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 490,
+     "lineno": 491,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -42053,7 +42053,7 @@
       "RAT-record_covers_broken_runs"
      ],
      "layout": null,
-     "lineno": 815,
+     "lineno": 816,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -44919,7 +44919,7 @@
       "RAT-confirmed_one_offset"
      ],
      "layout": null,
-     "lineno": 551,
+     "lineno": 552,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -45086,7 +45086,7 @@
       "RAT-acceptance_is_of_what_was_shown"
      ],
      "layout": null,
-     "lineno": 825,
+     "lineno": 826,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -45169,7 +45169,7 @@
       "RAT-content_changed_held"
      ],
      "layout": null,
-     "lineno": 792,
+     "lineno": 793,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -45596,7 +45596,7 @@
       "RAT-time_written_as_lived"
      ],
      "layout": null,
-     "lineno": 710,
+     "lineno": 711,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -46457,7 +46457,7 @@
       "RAT-day_offset_is_the_cameras"
      ],
      "layout": null,
-     "lineno": 734,
+     "lineno": 735,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -47136,7 +47136,7 @@
       "RAT-track_is_one_device"
      ],
      "layout": null,
-     "lineno": 646,
+     "lineno": 647,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -48141,7 +48141,7 @@
       "RAT-record_covers_broken_runs"
      ],
      "layout": null,
-     "lineno": 836,
+     "lineno": 837,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -49329,7 +49329,7 @@
       "RAT-fallback_nested"
      ],
      "layout": null,
-     "lineno": 602,
+     "lineno": 603,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -49416,7 +49416,7 @@
       "RAT-fallback_optional"
      ],
      "layout": null,
-     "lineno": 613,
+     "lineno": 614,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -49658,7 +49658,7 @@
       "RAT-finalize_signs_for_the_photos"
      ],
      "layout": null,
-     "lineno": 861,
+     "lineno": 862,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -49988,7 +49988,7 @@
       "RAT-finalize_signs_for_the_photos"
      ],
      "layout": null,
-     "lineno": 873,
+     "lineno": 874,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -50073,7 +50073,7 @@
       "RAT-package_records_what_was_done"
      ],
      "layout": null,
-     "lineno": 850,
+     "lineno": 851,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -50838,7 +50838,7 @@
       "RAT-execution_resumable"
      ],
      "layout": null,
-     "lineno": 781,
+     "lineno": 782,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -53721,7 +53721,7 @@
       "RAT-kept_offset_needs_its_evidence"
      ],
      "layout": null,
-     "lineno": 745,
+     "lineno": 746,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -59994,7 +59994,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 756,
+     "lineno": 757,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -60676,7 +60676,7 @@
      "justifies": [],
      "justifies_back": [],
      "layout": null,
-     "lineno": 515,
+     "lineno": 516,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -61100,7 +61100,7 @@
       "RAT-record_covers_broken_runs"
      ],
      "layout": null,
-     "lineno": 804,
+     "lineno": 805,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -61771,7 +61771,7 @@
       "RAT-own_position_best"
      ],
      "layout": null,
-     "lineno": 580,
+     "lineno": 581,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -61854,7 +61854,7 @@
       "RAT-same_photo_new_fingerprint"
      ],
      "layout": null,
-     "lineno": 565,
+     "lineno": 566,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -62283,7 +62283,7 @@
       "RAT-phone_records_its_offset"
      ],
      "layout": null,
-     "lineno": 503,
+     "lineno": 504,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -62369,7 +62369,7 @@
       "RAT-decision_keyed_by_identity"
      ],
      "layout": null,
-     "lineno": 686,
+     "lineno": 687,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -62537,7 +62537,7 @@
       "RAT-placement_most_specific_first"
      ],
      "layout": null,
-     "lineno": 590,
+     "lineno": 591,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -62626,7 +62626,7 @@
       "RAT-method_in_the_photo"
      ],
      "layout": null,
-     "lineno": 666,
+     "lineno": 667,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -62880,7 +62880,7 @@
       "RAT-remainder_says_why"
      ],
      "layout": null,
-     "lineno": 768,
+     "lineno": 769,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -63131,7 +63131,7 @@
       "RAT-method_in_the_photo"
      ],
      "layout": null,
-     "lineno": 657,
+     "lineno": 658,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -63212,7 +63212,7 @@
       "RAT-position_whole"
      ],
      "layout": null,
-     "lineno": 723,
+     "lineno": 724,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -68299,7 +68299,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "An offset the camera's photos fix only to within a stay of the tracks at their place — longer than offsets are told apart by — SHALL NOT take effect without the user's answer, nor count as anchored once accepted.",
+     "content": "An offset the camera's photos fix only to within a stay of the tracks at their place — longer than the configuration\ncounts as a moment — SHALL NOT take effect without the user's answer, nor count as anchored once accepted.",
      "criticality": "high",
      "docname": "intent/geotag",
      "doctype": ".md",
@@ -69686,7 +69686,7 @@
       "RAT-projection_bounded"
      ],
      "layout": null,
-     "lineno": 636,
+     "lineno": 637,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -69939,7 +69939,7 @@
       "RAT-projection_bounded"
      ],
      "layout": null,
-     "lineno": 624,
+     "lineno": 625,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -70455,7 +70455,7 @@
       "RAT-drift_invisible"
      ],
      "layout": null,
-     "lineno": 539,
+     "lineno": 540,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -71136,7 +71136,7 @@
       "RAT-finalize_signs_for_the_photos"
      ],
      "layout": null,
-     "lineno": 884,
+     "lineno": 885,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -71219,7 +71219,7 @@
       "RAT-remainder_says_why"
      ],
      "layout": null,
-     "lineno": 676,
+     "lineno": 677,
      "links": [],
      "links_back": [],
      "modifications": 0,
