@@ -41,20 +41,6 @@ says it, no item states it; each to be ruled into the corpus or the code dropped
 
 ---
 
-### 3. Two rules asserted as far as a test here can
-
-**Why:** every rule has a test, and each is asserted for every phase it binds (2026-11-14). Two are asserted only as
-far as one machine allows:
-- `RUL-stale_takeover_conservative` — on one host. Takeover rests on the kernel's file lock alone; a second host
-  holding the lock over a network filesystem is not simulated.
-- `RUL-filesystem_agnostic` — that no run calls `zfs`. That nothing else leans on a filesystem's features is not
-  asserted: file locks, atomic rename, syncing a folder and device ids are all used.
-
-**To be ruled:** accept each as the limit of what is tested, or narrow the rule to what is (the second could name the
-features cartographer does require of a filesystem).
-
----
-
 ### 4. The 17 rules and invariants only incidentally tested
 
 **Why:** seventeen are marked `verify: incidental` — exercised by tests written for something else, a happy path passing

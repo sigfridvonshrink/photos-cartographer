@@ -152,7 +152,7 @@ A lock left behind by a run that died SHALL be recognisable as stale, and recove
 workspace locked for good.
 :::
 
-:::{rul} Only a dead owner's lock is taken over
+:::{rul} A lock is taken over only once no running process holds it
 :id: RUL-stale_takeover_conservative
 :status: ruled
 :criticality: high
@@ -160,8 +160,9 @@ workspace locked for good.
 :verify: required
 :refines: RUL-stale_lock_recovered
 
-A stale lock SHALL be taken over only when its owner is provably gone; a lock whose owner may still be running is left
-alone.
+A lock SHALL be taken over only once the machine's own system reports that no running process holds it — never on what
+the lock's record says of its owner. This guards the runs of one machine; where two machines reach one workspace or
+library over a network, whether the lock holds between them is that filesystem's doing.
 :::
 
 Merge also takes a lock on the library it writes into, so that two merges into one library — even from two workspaces
@@ -190,14 +191,16 @@ taken.
 Snapshots SHALL be off unless the workspace's configuration turns them on.
 :::
 
-:::{rul} Only the snapshot depends on the filesystem
+:::{rul} Only the snapshot uses a feature of one particular filesystem
 :id: RUL-filesystem_agnostic
 :status: ruled
 :criticality: med
 :verify: required
 
-Nothing in cartographer but the snapshot SHALL depend on a particular filesystem's features, so that cartographer runs
-fully on a filesystem that has none.
+Nothing in cartographer but the snapshot SHALL use a feature particular to one filesystem. Of the filesystem a
+workspace or a library lies on, cartographer requires what POSIX filesystems share: file locks, a rename that is
+atomic, a move that fails where its target exists (by a rename that refuses, or by hard links), and syncing a file
+and a folder to disk.
 :::
 
 :::{rul} A snapshot names its plan

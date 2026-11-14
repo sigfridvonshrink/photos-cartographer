@@ -48,7 +48,8 @@ never asks of them; recognised as stale, it lets the next run go on.
 
 Taking over a lock whose owner is still running would let two runs change the same originals at once — the very thing
 the lock exists to stop. Leaving a stale lock alone costs a retry; taking a live one could cost photos. So a doubtful
-owner counts as alive.
+owner counts as alive — and the lock's record of its owner, which a crash can leave saying anything, is never what
+decides it: only the system's own account of who holds the lock is.
 :::
 
 ## 2. A snapshot before changing, optionally
@@ -74,7 +75,9 @@ filesystem supports it; they are not the basis of the safety model.
 :justifies: RUL-filesystem_agnostic, BLD-snapshot_is_zfs
 
 The mechanism is named for ZFS because that is the reference implementation, but it is deliberately the *only* part
-of the pipeline that touches a specific filesystem feature, and it is optional; everything else is filesystem-agnostic.
+of the pipeline that touches a feature of one particular filesystem, and it is optional; everything else asks only
+what POSIX filesystems share, which is not nothing — locks, atomic renames, refusing moves and syncing are what the
+safety of every change rests on.
 :::
 
 :::{rat} A rollback point is the state just before the change
