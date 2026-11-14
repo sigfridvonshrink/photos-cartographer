@@ -39,8 +39,8 @@ tools/coverage          # bootstraps a local .venv, runs the suite, writes htmlc
 
 The specification is one corpus of typed items (`spec/`; see `spec/README.md`): 369 rules and invariants, 268
 rationales, 187 build items, 32 definitions, the philosophy's 3 facts and 4 choices — and the 499 tests that name the
-items they verify, made items of the corpus from their `@pytest.mark.spec(…, test="TST-…")` marks. 805 items are
-ruled; 58 — the items the geotag and time reviews of 2026-11-14 and the one-purpose settings added or changed — are at seed, awaiting a ruling.
+items they verify, made items of the corpus from their `@pytest.mark.spec(…, test="TST-…")` marks. 806 items are
+ruled; 57 — the items the geotag and time reviews of 2026-11-14 and the one-purpose settings added or changed — are at seed, awaiting a ruling.
 
 | Rules and invariants | Count |
 |---|---:|

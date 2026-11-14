@@ -398,6 +398,12 @@ record the provenance and that a higher-ranked track was absent.
   believe), or whether disagreement stops a photo only between tracks of equal rank — keeping the guard for a
   second person's trip.
 - Whether a disagreement between the two own devices is reported, as a measure of the lower one's error.
+- What the user does when tracks disagree, until then and after. Today (`RUL-disagreeing_tracks_place_nothing`, held
+  at seed for this item) the photo waits as a review item naming the two files, and the ways out are to take a track
+  out of `gpx_root`, to place the photo by hand or to leave it unplaced. Taking out one's own track is what the owner
+  does only for someone else's trip, the other two are per photo, and a track removed leaves no record of why. Ruled
+  2026-11-14: settled here, by precedence — with it, two own devices that disagree are no question; whether a
+  recorded "trust this track" answer is still wanted for tracks of equal rank is part of this item.
 - Whether a preference is a decision of the workspace (recorded with the plan, restaling photos-21 to 23 when
   changed) — it should be, like every other setting that changes what is written.
 
