@@ -115,7 +115,8 @@ def test_smartphone_group_gets_no_offset_cell(tmp_path, monkeypatch):
 
 # --- rerun preservation + completion -----------------------------------------
 
-@pytest.mark.spec("RUL-user_writes_decisions", "RUL-decision_fields_laid_out", "RUL-decision_kept", "RUL-geotag_rerun_keeps_settled", test="TST-geotag_time_decisions-rerun_preserves_decisions_and_completes")
+@pytest.mark.spec("RUL-user_writes_decisions", "RUL-decision_fields_laid_out", "RUL-decision_kept",
+                  test="TST-geotag_time_decisions-rerun_preserves_decisions_and_completes")
 def test_rerun_preserves_decisions_and_completes(tmp_path, monkeypatch):
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []}, default_tz="Europe/Brussels")
@@ -151,7 +152,8 @@ def test_rerun_after_success_admitted_until_sealed(tmp_path, monkeypatch):
     assert not (ctl / cal.TIME_DECISIONS_ARTIFACT).exists()
 
 
-@pytest.mark.spec("RUL-rerun_does_what_changed", "RUL-decision_kept", test="TST-geotag_time_decisions-new_destination_asks_only_its_own_decisions")
+@pytest.mark.spec("RUL-decision_kept", "RUL-rerun_asks_only_affected",
+                  test="TST-geotag_time_decisions-new_destination_asks_only_its_own_decisions")
 def test_new_destination_asks_only_its_own_decisions(tmp_path, monkeypatch):
     """Media added to a new destination asks for that destination's decisions alone; every settled
     decision elsewhere stays as the user left it."""
@@ -179,7 +181,8 @@ def test_new_destination_asks_only_its_own_decisions(tmp_path, monkeypatch):
     assert art["status"] == "requires_user_input"
 
 
-@pytest.mark.spec("RUL-rerun_does_what_changed")
+@pytest.mark.spec("RUL-rerun_does_what_changed",
+                  test="TST-geotag_time_decisions-determinism_unchanged_rerun_is_byte_identical")
 def test_determinism_unchanged_rerun_is_byte_identical(tmp_path, monkeypatch):
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []})
@@ -191,7 +194,9 @@ def test_determinism_unchanged_rerun_is_byte_identical(tmp_path, monkeypatch):
 
 # --- validation (§9.2) -------------------------------------------------------
 
-@pytest.mark.spec("RUL-invalid_decision_kept", "RUL-invalid_value_located", "INV-authored_values_checked", "RUL-checked_timezones", "RUL-invalid_value_never_repaired", test="TST-geotag_time_decisions-bad_timezone_blocks_and_leaves_artifact")
+@pytest.mark.spec("RUL-invalid_decision_kept", "RUL-invalid_value_located", "INV-authored_values_checked",
+                  "RUL-checked_timezones", "RUL-invalid_value_never_repaired", "RUL-invalid_decision_reported",
+                  test="TST-geotag_time_decisions-bad_timezone_blocks_and_leaves_artifact")
 def test_bad_timezone_blocks_and_leaves_artifact(tmp_path, monkeypatch, capsys):
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []})
@@ -228,7 +233,9 @@ def test_depends_on_reverifies(tmp_path, monkeypatch):
     assert not cal.GeotagWorkflow._verify_handoff_dependency(dep, str(ws))   # change detected
 
 
-@pytest.mark.spec("RUL-timezone_auto_resolves", "RUL-timezone_from_nearest", test="TST-geotag_time_decisions-timezone_proposal_inherits_nearest_resolved_ancestor")
+@pytest.mark.spec("RUL-timezone_auto_resolves", "RUL-timezone_from_nearest", "RUL-written_timezone_over_inherited",
+                  "RUL-no_timezone_to_inherit_waits",
+                  test="TST-geotag_time_decisions-timezone_proposal_inherits_nearest_resolved_ancestor")
 def test_timezone_proposal_inherits_nearest_resolved_ancestor():
     """A destination's timezone proposal prefers the nearest RESOLVED ancestor's timezone over the
     generic global default; an inherited proposal auto-resolves without per-destination confirmation
@@ -345,7 +352,8 @@ def test_classifying_a_camera_again_restales_the_time_decisions(tmp_path, monkey
     assert after["status"] == "complete" and after["decision_mode"] == "no_op_or_auto_resolved"
 
 
-@pytest.mark.spec("RUL-unidentified_files_solved_alone", "BLD-unidentified_files",
+@pytest.mark.spec("RUL-unidentified_files_solved_alone", "BLD-unidentified_files", "RUL-unidentified_never_classed",
+                  "RUL-unidentified_no_camera_offset",
                   test="TST-geotag_time_decisions-a_file_naming_no_camera_is_solved_alone_never_asked")
 def test_a_file_naming_no_camera_is_solved_alone_never_asked(tmp_path, monkeypatch):
     # A screenshot or a stripped photo names no camera: geotag never asks to class it, gives it no clock offset,

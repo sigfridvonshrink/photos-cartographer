@@ -39,7 +39,8 @@ def _types(ops):
 
 # --- plan_file_ops: branch by branch ----------------------------------------
 
-@pytest.mark.spec("RUL-corrected_time_written_local", test="TST-geotag_executable_plan-time_write_carries_its_offset")
+@pytest.mark.spec("RUL-corrected_time_written_local", "RUL-time_offset_written_beside",
+                  test="TST-geotag_executable_plan-time_write_carries_its_offset")
 def test_time_write_carries_its_offset():
     f = _file()
     full = cal.plan_file_ops(f, UTC, "Europe/Brussels", "preserve_native", None, None)

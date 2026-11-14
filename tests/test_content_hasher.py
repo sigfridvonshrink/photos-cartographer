@@ -53,7 +53,8 @@ def test_fingerprint_image_uses_persistent_worker(monkeypatch):
                    "value": "sig-abc123", "engine_version": "magick-test"}
 
 
-@pytest.mark.spec("RUL-tool_failure_retried", test="TST-content_hasher-fingerprint_image_worker_crash_fails_after_retry")
+@pytest.mark.spec("RUL-tool_failure_retried", "RUL-tool_failure_never_valid",
+                  test="TST-content_hasher-fingerprint_image_worker_crash_fails_after_retry")
 def test_fingerprint_image_worker_crash_fails_after_retry(monkeypatch):
     """A worker that keeps crashing is restarted, retried once, then reported failed (never confirmed)."""
     monkeypatch.setattr(utils, "get_magick_command", lambda: ["magick"])

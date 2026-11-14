@@ -162,7 +162,7 @@ def test_two_tracks_are_never_joined():
     assert r["gpx_file"] in ("a.gpx", "b.gpx") and "gpx_after_file" not in r
 
 
-@pytest.mark.spec("RUL-disagreeing_tracks_place_nothing", "BLD-track_placement",
+@pytest.mark.spec("RUL-disagreeing_tracks_place_nothing", "BLD-track_placement", "RUL-disagreeing_tracks_named",
                   test="TST-geotag_gps_placement-tracks_in_two_places_place_nothing")
 def test_tracks_in_two_places_place_nothing():
     """Two tracks cover the photo's time five kilometres apart — two people, and nothing says which carried
@@ -217,7 +217,8 @@ def test_interpolation_across_the_antimeridian_goes_the_short_way():
     assert cal.haversine(0, 0, 0, 0) == 0.0 and cal.haversine(10, 20, -10, -160) > 2e7   # antipodes: no domain error
 
 
-@pytest.mark.spec("RUL-unplaced_photo_listed", test="TST-geotag_gps_placement-why_the_tracks_placed_nothing")
+@pytest.mark.spec("RUL-unplaced_photo_listed", "RUL-unplaced_photo_says_why",
+                  test="TST-geotag_gps_placement-why_the_tracks_placed_nothing")
 def test_why_the_tracks_placed_nothing_is_said():
     g = _gpx([_pt(50.0, 4.0, 12, 0, 0), _pt(50.2, 4.0, 12, 1, 40)])            # 22 km in 100 s
     why = {}

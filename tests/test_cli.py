@@ -110,7 +110,8 @@ def test_dry_run_summarizes_not_dumps(tmp_path, monkeypatch, capsys):
         json.loads(out)
 
 
-@pytest.mark.spec("RUL-replanning_keeps_the_prior")
+@pytest.mark.spec("RUL-replanning_keeps_the_prior", "RUL-set_aside_plan_reported",
+                  test="TST-cli-replan_backs_up_previous_plan")
 def test_replan_backs_up_previous_plan(tmp_path, monkeypatch, capsys):
     ws = _ws(tmp_path)
     assert _main(monkeypatch, ws, "plan") == 0
@@ -291,7 +292,8 @@ def test_dry_run_mutates_nothing_on_disk(tmp_path, monkeypatch, capsys):
     assert after == before                                      # dry-run wrote nothing to disk
 
 
-@pytest.mark.spec("RUL-lock_before_reading", "RUL-lock_fail_fast", test="TST-cli-locked_workspace_failfast_produces_no_artifact")
+@pytest.mark.spec("RUL-lock_before_reading", "RUL-lock_fail_fast", "RUL-locked_run_produces_nothing",
+                  test="TST-cli-locked_workspace_failfast_produces_no_artifact")
 def test_locked_workspace_failfast_produces_no_artifact(tmp_path, monkeypatch, capsys):
     """Lock contention is fail-fast and pre-mutation: a `plan` that can't take the workspace lock
     produces NO plan artifact and NO journal — the run never got past lock acquisition."""
@@ -307,7 +309,8 @@ def test_locked_workspace_failfast_produces_no_artifact(tmp_path, monkeypatch, c
     assert not (ws / ".photos-ingest" / "journal.json").exists()  # no journal written
 
 
-@pytest.mark.spec("RUL-no_plan_no_run")
+@pytest.mark.spec("RUL-no_plan_no_run", "RUL-no_plan_says_plan_first",
+                  test="TST-cli-execute_without_saved_plan_exits_nonzero")
 def test_execute_without_saved_plan_exits_nonzero(tmp_path, monkeypatch, capsys):
     code = _main(monkeypatch, _ws(tmp_path), "execute")       # no plan generated yet
     assert code != 0

@@ -112,7 +112,8 @@ def _fp(value="abc123"):
             "engine_version": "im-7.1"}
 
 
-@pytest.mark.spec("RUL-library_file_read_once", test="TST-merge_primitives-library_fingerprint_cache_roundtrip_and_staleness")
+@pytest.mark.spec("RUL-library_fingerprint_kept",
+                  test="TST-merge_primitives-library_fingerprint_cache_roundtrip_and_staleness")
 def test_library_fingerprint_cache_roundtrip_and_staleness(tmp_path):
     cache = utils.WorkspaceCache(str(tmp_path), in_memory=True)
     try:
@@ -133,7 +134,7 @@ def test_library_fingerprint_cache_roundtrip_and_staleness(tmp_path):
         cache.close()
 
 
-@pytest.mark.spec("RUL-library_file_read_once", "BLD-library_file_fingerprinted",
+@pytest.mark.spec("BLD-library_file_fingerprinted", "RUL-library_fingerprint_kept",
                   test="TST-merge_primitives-a_library_row_is_reused_only_from_the_method_in_use")
 @pytest.mark.parametrize("row,current", [
     ({"engine_version": "im-7.2"}, "im-7.1"),           # another ImageMagick

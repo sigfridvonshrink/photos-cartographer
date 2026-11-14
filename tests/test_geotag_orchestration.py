@@ -54,7 +54,8 @@ def _run(monkeypatch, ws):
 
 # --- main(): lock + config/handoff error paths ------------------------------
 
-@pytest.mark.spec("RUL-lock_fail_fast")
+@pytest.mark.spec("RUL-lock_fail_fast", "RUL-lock_refusal_says_locked",
+                  test="TST-geotag_orchestration-lock_contention_exits_1")
 def test_lock_contention_exits_1(tmp_path, monkeypatch, capsys):
     ws, ctl = _init_ws(tmp_path)
     (ctl / "photos-00-config.json").write_text(json.dumps({k: v for k, v in utils.CONFIG.items() if k != "jobs"}))
@@ -266,7 +267,7 @@ def test_plan_reports_gpx_load_warnings_capped(tmp_path, monkeypatch, capsys):
     assert "... and 3 more." in err
 
 
-@pytest.mark.spec("RUL-invalid_decision_kept", "RUL-invalid_value_located",
+@pytest.mark.spec("RUL-invalid_decision_kept", "RUL-invalid_value_located", "RUL-invalid_decision_reported",
                   test="TST-geotag_orchestration-unparseable_decision_artifact_blocks_and_is_kept")
 @pytest.mark.parametrize("artifact", ["photos-21-time-decisions.json", "photos-22-gps-drift-validation.json",
                                       "photos-23-gps-decisions.json"], ids=["21", "22", "23"])
@@ -322,6 +323,7 @@ def test_unknown_group_aborts_before_gpx_ingest(tmp_path, monkeypatch):
 
 
 @pytest.mark.spec("RUL-unknown_group_classification_offered", "BLD-unknown_group_snippet",
+                  "RUL-classed_groups_kept_in_offer",
                   test="TST-geotag_orchestration-unknown_group_template_is_valid_full_json")
 def test_unknown_group_template_is_valid_full_json(tmp_path, monkeypatch, capsys):
     # The cut/paste template must be VALID JSON (no trailing comma -> the ",]" reader-rejection bug)
@@ -367,6 +369,7 @@ def _set(path, value):
 _T = ["destinations", "6-photos-by-dest/T"]
 
 @pytest.mark.spec("RUL-checked_shapes", "RUL-checked_positions_and_times", "RUL-invalid_value_located",
+                  "RUL-invalid_decision_reported", "RUL-invalid_decision_kept",
                   test="TST-geotag_orchestration-broken_decision_is_a_located_blocker")
 @pytest.mark.parametrize("artifact, edit, message", [
     ("photos-21-time-decisions.json",

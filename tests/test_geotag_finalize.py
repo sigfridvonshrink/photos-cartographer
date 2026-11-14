@@ -289,7 +289,10 @@ def test_finalize_refuses_plan_id_mismatch(tmp_path, monkeypatch):
     assert _run(monkeypatch, ws, "finalize") == 2
 
 
-@pytest.mark.spec("RUL-finalize_explicit", "RUL-finalize_non_destructive", "RUL-carry_forward_by_copy", "RUL-package_contents", "RUL-package_self_describing", "RUL-database_is_record", test="TST-geotag_finalize-finalize_assembles_package_and_is_nondestructive")
+@pytest.mark.spec("RUL-finalize_explicit", "RUL-finalize_non_destructive", "RUL-carry_forward_by_copy",
+                  "RUL-package_contents", "RUL-package_self_describing", "RUL-package_lists_contents",
+                  "RUL-database_archived",
+                  test="TST-geotag_finalize-finalize_assembles_package_and_is_nondestructive")
 def test_finalize_assembles_package_and_is_nondestructive(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _to_executed(monkeypatch, ws, ctl)
@@ -333,7 +336,10 @@ def test_finalize_records_each_photo_as_left(tmp_path, monkeypatch):
         assert rec == {"size": st.st_size, "mtime_ns": st.st_mtime_ns}, rel
 
 
-@pytest.mark.spec("RUL-package_contents", "RUL-package_self_describing", "RUL-other_databases_scratch", "RUL-images_archived", "RUL-config_archived", test="TST-geotag_finalize-finalize_archives_the_whole_control_directory")
+@pytest.mark.spec("RUL-package_contents", "RUL-package_self_describing", "RUL-images_archived",
+                  "RUL-config_archived", "RUL-package_lists_contents", "RUL-scratch_database_not_archived",
+                  "RUL-database_archived",
+                  test="TST-geotag_finalize-finalize_archives_the_whole_control_directory")
 def test_finalize_archives_the_whole_control_directory(tmp_path, monkeypatch):
     """The package is the whole control directory but its transient files — the drift record and every
     journal among it — listed with their hashes in the manifest and archived, manifest included, into
@@ -494,6 +500,7 @@ def test_a_photo_not_as_execution_left_it_stops_finalize(tmp_path, monkeypatch, 
 
 
 @pytest.mark.spec("RUL-finalize_reports_placement", "RUL-plan_counts_placement", "BLD-executable_plan",
+                  "RUL-finalize_keeps_placement_count",
                   test="TST-geotag_finalize-finalize_reports_how_every_photo_was_placed")
 def test_finalize_reports_how_every_photo_was_placed(tmp_path, monkeypatch, capsys):
     """The measure of a run: every photo counted by how it came by its position, those left without one among

@@ -198,7 +198,8 @@ def test_plan_placed_new(tmp_path, monkeypatch):
     assert f["preconditions"]["content_fingerprint"] == "A"
 
 
-@pytest.mark.spec("RUL-merge_rechecks_under_new_engine")
+@pytest.mark.spec("RUL-merge_rechecks_under_new_engine",
+                  test="TST-merge_plan-plan_reuses_handoff_fingerprint_never_refingerprints_by_dest")
 def test_plan_reuses_handoff_fingerprint_never_refingerprints_by_dest(tmp_path, monkeypatch):
     """§2.1 (anti): under the ImageMagick prep used, merge reuses prep's recorded content_fingerprint for
     each by-dest file and never re-fingerprints / re-organizes / re-dedups by-dest content. The handoff records fp "HANDOFF_ONLY"
@@ -239,7 +240,9 @@ def test_plan_already_present(tmp_path, monkeypatch):
     assert f["renamed_for_library"] is False
 
 
-@pytest.mark.spec("RUL-no_op_run_reports_reuse", "RUL-unchanged_replan_writes_nothing", test="TST-merge_plan-replan_reports_library_fingerprints_reused")
+@pytest.mark.spec("RUL-no_op_run_reports_reuse", "RUL-unchanged_replan_writes_nothing",
+                  "RUL-library_fingerprint_kept",
+                  test="TST-merge_plan-replan_reports_library_fingerprints_reused")
 def test_replan_reports_library_fingerprints_reused(tmp_path, monkeypatch, capsys):
     """A re-plan says how many library fingerprints it took from the cache — and the plan it writes is
     the same file, the count kept out of it."""
@@ -327,7 +330,7 @@ def test_plan_rename_accounts_for_incoming_suffix(tmp_path, monkeypatch):
     assert f["resolved_name"] == "ts-005.jpg"
 
 
-@pytest.mark.spec("RUL-unsettled_collision_blocks",
+@pytest.mark.spec("RUL-unsettled_collision_blocks", "RUL-unsettled_collision_rest_proceeds",
                   test="TST-merge_plan-plan_unfingerprintable_library_file_blocks_item")
 def test_plan_unfingerprintable_library_file_blocks_item(tmp_path, monkeypatch):
     # Collision but the library file can't be fingerprinted -> per-item blocker, left in by-dest; the rest go on.
@@ -343,7 +346,8 @@ def test_plan_unfingerprintable_library_file_blocks_item(tmp_path, monkeypatch):
     assert disp == {"6-photos-by-dest/Trip/a.jpg": "blocked", "6-photos-by-dest/Trip/b.jpg": "placed_new"}
 
 
-@pytest.mark.spec("RUL-no_op_run", "RUL-library_mirrors_destinations", test="TST-merge_plan-plan_is_deterministic")
+@pytest.mark.spec("RUL-library_mirrors_destinations", "RUL-no_op_run_same_result",
+                  test="TST-merge_plan-plan_is_deterministic")
 def test_plan_is_deterministic(tmp_path, monkeypatch):
     ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
                                        {"fp": "B", "dest": "Spain", "final_name": "b.jpg"}])
@@ -459,7 +463,8 @@ def test_a_plan_made_by_other_code_is_refused(tmp_path, monkeypatch, recorded):
     assert not os.path.exists(merge.merge_summary_path(str(ws)))   # no summary from a stale plan
 
 
-@pytest.mark.spec("BLD-phase_logs", "RUL-log_entry_grows", test="TST-merge_plan-a_log_edited_after_finalize_blocks_merge")
+@pytest.mark.spec("BLD-phase_logs", "RUL-log_entry_append_only",
+                  test="TST-merge_plan-a_log_edited_after_finalize_blocks_merge")
 def test_a_log_edited_after_finalize_blocks_merge(tmp_path, monkeypatch, capsys):
     """Each log carries the one before it unchanged and only adds: an entry of prep's that photos-26 no
     longer carries whole — either edited after finalize — blocks merge; one carried whole does not."""
@@ -503,6 +508,7 @@ def test_entries_not_carried():
 
 @pytest.mark.parametrize("value_changed", [False, True])
 @pytest.mark.spec("RUL-merge_rechecks_under_new_engine", "RUL-engine_change_is_checked", "BLD-merge_engine_recheck",
+                  "RUL-merge_changed_fingerprint_unmerged",
                   test="TST-merge_plan-another_imagemagick_has_prep_fingerprints_checked")
 def test_another_imagemagick_has_prep_fingerprints_checked(tmp_path, monkeypatch, capsys, value_changed):
     """Under an ImageMagick other than prep's, merge takes each photo's fingerprint again: one that still
@@ -527,8 +533,7 @@ def test_another_imagemagick_has_prep_fingerprints_checked(tmp_path, monkeypatch
     assert plan["depends_on"]["image_engine_version"] == "newer"
 
 
-@pytest.mark.spec("RUL-merge_rechecks_under_new_engine", "BLD-merge_engine_recheck",
-                  test="TST-merge_plan-a_plan_made_under_another_imagemagick_is_stale")
+@pytest.mark.spec("BLD-merge_engine_recheck", test="TST-merge_plan-a_plan_made_under_another_imagemagick_is_stale")
 def test_a_plan_made_under_another_imagemagick_is_stale(tmp_path, monkeypatch):
     """A merge plan records the ImageMagick it was made under; under another, its fingerprint comparisons
     no longer hold, and it is stale."""

@@ -127,7 +127,8 @@ def test_every_misplaced_root_entry_named(tmp_path):
     assert hit and all(n in hit[0] for n in ("pipe", "randomdump", "stray.txt")), blockers
 
 
-@pytest.mark.spec("RUL-geotag_merge_check_top_level_links", test="TST-geotag_preflight-directory_symlink_at_root_blocks")
+@pytest.mark.spec("RUL-geotag_merge_check_top_level_links",
+                  test="TST-geotag_preflight-directory_symlink_at_root_blocks")
 def test_directory_symlink_at_root_blocks(tmp_path):
     """A symlink at the root is barred outright as a forbidden symlink (§13), never followed —
     checked before the structural/misplaced-folder guards."""
@@ -138,7 +139,8 @@ def test_directory_symlink_at_root_blocks(tmp_path):
     assert any("Forbidden symlink at the workspace root" in b for b in blockers), blockers
 
 
-@pytest.mark.spec("RUL-time_before_gps", "RUL-untimed_photo_stops_geotag", test="TST-geotag_preflight-a_photo_with_no_recorded_time_stops_geotag")
+@pytest.mark.spec("RUL-time_before_gps", "RUL-untimed_photo_stops_geotag", "RUL-untimed_photo_named",
+                  test="TST-geotag_preflight-a_photo_with_no_recorded_time_stops_geotag")
 def test_a_photo_with_no_recorded_time_stops_geotag(tmp_path):
     """A photo sorted into a destination by hand with no recorded time can never be resolved to its
     true time: geotag stops before planning anything, naming it as belonging in missing metadata —
@@ -449,7 +451,8 @@ def test_main_blocker_exits_2(tmp_path, monkeypatch, capsys):
     assert "Geotag cannot proceed" in capsys.readouterr().err
 
 
-@pytest.mark.spec("RUL-no_record_before_decisions", "INV-no_stale_use", test="TST-geotag_preflight-preflight_writes_no_json")
+@pytest.mark.spec("RUL-no_record_before_decisions", "INV-no_stale_use",
+                  test="TST-geotag_preflight-preflight_writes_no_json")
 def test_preflight_writes_no_json(tmp_path):
     ws = _ws(tmp_path)
     _pf(ws)
@@ -457,7 +460,7 @@ def test_preflight_writes_no_json(tmp_path):
     assert arts == []                                        # no geotag JSON in preflight
 
 
-@pytest.mark.spec("RUL-missing_folder_blocks")
+@pytest.mark.spec("RUL-missing_folder_blocks", test="TST-geotag_preflight-missing_managed_folder_blocks")
 def test_missing_managed_folder_blocks(tmp_path):
     """An activated workspace missing a managed 0-6 folder is non-conforming — hard stop."""
     import shutil
@@ -553,7 +556,8 @@ def test_geotag_classifies_by_the_workspaces_extension_lists(tmp_path, monkeypat
     assert utils.media_class_for_ext(".webp") == "image"
 
 
-@pytest.mark.spec("RUL-config_complete", test="TST-geotag_preflight-a_missing_setting_stops_every_phase")
+@pytest.mark.spec("RUL-config_complete", "RUL-missing_setting_named",
+                  test="TST-geotag_preflight-a_missing_setting_stops_every_phase")
 def test_a_missing_setting_stops_every_phase(tmp_path, monkeypatch):
     """A setting missing from the workspace's configuration is never filled from the program's defaults:
     prep's load, geotag and merge each stop, naming the setting and the value to add."""
@@ -572,7 +576,8 @@ def test_a_missing_setting_stops_every_phase(tmp_path, monkeypatch):
         assert any("missing setting" in b and "gpx_extrapolation_max_seconds" in b for b in blockers), blockers
 
 
-@pytest.mark.spec("RUL-config_no_unknown_settings", test="TST-geotag_preflight-an_unknown_setting_stops_every_phase")
+@pytest.mark.spec("RUL-config_no_unknown_settings", "RUL-unknown_setting_named",
+                  test="TST-geotag_preflight-an_unknown_setting_stops_every_phase")
 @pytest.mark.parametrize("edit, named", [
     (lambda c: c["media_extensions"].__setitem__("audio", ["mp3"]), "media_extensions.audio"),   # a class of one's own
     (lambda c: c["folders"].__setitem__("extra", "9-extra"), "folders.extra"),                     # a role of one's own

@@ -90,6 +90,7 @@ def test_child_does_not_inherit_resolved_parent_offset(tmp_path):
 
 
 @pytest.mark.spec("RUL-offset_shared_within_day", "BLD-offset_shared_within_day",
+                  "RUL-anchor_offset_auto_as_configured", "RUL-shared_offset_auto_only_as_there",
                   test="TST-geotag_offset_no_inheritance-the_day_s_offset_is_the_camera_s_wherever_sorted")
 def test_the_day_s_offset_is_the_camera_s_wherever_its_photos_were_sorted(tmp_path):
     """Museum in the morning, castle in the afternoon, one camera, one day. The museum's photos have GPS and
@@ -210,7 +211,7 @@ def _zones(wf, files, prior=None):
     return {d: v["destination_timezone"] for d, v in art["destinations"].items()}, art
 
 
-@pytest.mark.spec("RUL-inherited_timezone_yields_to_photos", "BLD-timezone_cell",
+@pytest.mark.spec("RUL-inherited_timezone_yields_to_photos", "BLD-timezone_cell", "RUL-inherited_zone_stops_within",
                   test="TST-geotag_offset_no_inheritance-an_inherited_zone_yields_to_the_destination_s_photos")
 def test_an_inherited_timezone_yields_to_the_destination_s_own_photos(tmp_path):
     """Lisbon, Porto, Madrid under one folder answered Europe/Lisbon. A phone's photo in Madrid records
@@ -332,7 +333,8 @@ def _tz(zone):
     return {"destination_timezone": {"user_decision": {"manual_iana_timezone": zone}}}
 
 
-@pytest.mark.spec("RUL-country_gives_its_timezone", "BLD-country_choice",
+@pytest.mark.spec("RUL-country_gives_its_timezone", "BLD-country_choice", "RUL-country_of_several_gives_none",
+                  "RUL-zone_among_countrys_only",
                   test="TST-geotag_offset_no_inheritance-a_country_gives_its_timezone_or_none")
 def test_a_country_of_one_timezone_gives_it_and_one_of_several_gives_none(tmp_path):
     """The user says which country a folder is, whatever it is called. A country of one timezone gives that
@@ -378,7 +380,7 @@ def test_a_country_of_one_timezone_gives_it_and_one_of_several_gives_none(tmp_pa
     assert len(blk) == 1 and "country 'Japan'" in blk[0]
 
 
-@pytest.mark.spec("RUL-country_chosen_once", "BLD-country_choice",
+@pytest.mark.spec("RUL-country_chosen_once", "BLD-country_choice", "RUL-country_removal_told",
                   test="TST-geotag_offset_no_inheritance-nothing_inside_a_country_chooses_a_country")
 def test_nothing_inside_a_country_chooses_a_country(tmp_path, monkeypatch, capsys):
     """A country is chosen once, at the top of its tree. One chosen inside another is taken out of the

@@ -119,7 +119,8 @@ def test_conflict_attributed_to_by_dest_folder(tmp_path, monkeypatch):
     assert trip["conflicts_or_duplicates"][0]["original_path"] == "0-sources/dup.jpg"
 
 
-@pytest.mark.spec("RUL-prep_derives_camera_group", test="TST-handoff-grouping_facts_identity_and_device_class")
+@pytest.mark.spec("RUL-prep_derives_camera_group", "RUL-camera_group_in_handoff",
+                  test="TST-handoff-grouping_facts_identity_and_device_class")
 def test_grouping_facts_identity_and_device_class(tmp_path, monkeypatch, seed_from_live_config):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -203,7 +204,8 @@ def test_handoff_content_fingerprint_stable_across_real_noop_rerun(tmp_path, mon
     assert h2["run_metadata"]["execution_id"] != h1["run_metadata"]["execution_id"]   # the run DID change
 
 
-@pytest.mark.spec("RUL-prep_records_on_success")
+@pytest.mark.spec("RUL-prep_records_written_whole",
+                  test="TST-handoff-handoff_is_rewritten_fresh_each_run_never_edited_in_place")
 def test_handoff_is_rewritten_fresh_each_run_never_edited_in_place(tmp_path, monkeypatch):
     """§16: the handoff is written deterministically and NEVER edited in place — each successful run
     rewrites it wholesale. Inject a sentinel key into the on-disk handoff, then re-run prep: a

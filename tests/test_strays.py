@@ -239,7 +239,8 @@ def test_mixed_media_and_stray(tmp_path, monkeypatch):
     assert list((ws / "0-sources").iterdir()) == []
 
 
-@pytest.mark.spec("RUL-stray_media_hinted", "BLD-stray_media_probe", test="TST-strays-stray_media_detection_warns_only_for_media_mime")
+@pytest.mark.spec("RUL-stray_media_hinted", "BLD-stray_media_probe", "RUL-stray_media_hint_names_extension",
+                  test="TST-strays-stray_media_detection_warns_only_for_media_mime")
 def test_stray_media_detection_warns_only_for_media_mime(tmp_path, monkeypatch):
     # An unlisted RAW (.raf) and a real non-media (.txt) both land in strays. exiftool sees the .raf as
     # image/*, the .txt as text/plain -> only the .raf gets the "add to media_extensions" hint, once,

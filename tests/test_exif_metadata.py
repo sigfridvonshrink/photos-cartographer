@@ -97,7 +97,8 @@ def create_mock_metadata_reader(monkeypatch):
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read)
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", lambda *a, **k: {"status": "valid", "strategy": "image-content-hash-v1", "value": "dummycontenthash"})
 
-@pytest.mark.spec("RUL-metadata_kept_for_geotag", "RUL-database_matches_files", "BLD-database_ops", test="TST-exif_metadata-metadata_cache_creation_and_staleness")
+@pytest.mark.spec("RUL-metadata_kept_for_geotag", "RUL-database_matches_files", "BLD-database_ops",
+                  test="TST-exif_metadata-metadata_cache_creation_and_staleness")
 def test_metadata_cache_creation_and_staleness(workspace, monkeypatch):
     create_mock_metadata_reader(monkeypatch)
 
@@ -152,7 +153,8 @@ def test_metadata_cache_creation_and_staleness(workspace, monkeypatch):
     assert upsert_fx2["data"]["metadata"]["has_native_gps"] is False
     assert upsert_fx2["data"]["metadata"]["field_set_version"] == utils.FIELD_SET_VERSION
 
-@pytest.mark.spec("RUL-grouping_facts_reported", "BLD-handoff_grouping_facts", test="TST-exif_metadata-handoff_manifest_enrichment")
+@pytest.mark.spec("RUL-grouping_facts_reported", "BLD-handoff_grouping_facts", "RUL-quarantined_leaves_handoff",
+                  test="TST-exif_metadata-handoff_manifest_enrichment")
 def test_handoff_manifest_enrichment(workspace, monkeypatch):
     create_mock_metadata_reader(monkeypatch)
 
@@ -323,7 +325,7 @@ def test_a_placeholder_time_does_not_hide_a_valid_one():
     assert r["selected_source_naive_timestamp"] is None and r["has_timestamp"] is False
 
 
-@pytest.mark.spec("RUL-metadata_group_order", "BLD-metadata_extraction",
+@pytest.mark.spec("RUL-metadata_group_order", "BLD-metadata_extraction", "RUL-time_field_first_valid",
                   test="TST-exif_metadata-a_field_is_taken_from_exif_then_xmp")
 def test_a_field_is_taken_from_exif_then_xmp():
     """Each field is taken from EXIF when EXIF holds it, else from XMP; a time field missing or holding no

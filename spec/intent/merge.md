@@ -10,7 +10,7 @@ that only restated others, has no heading here.
 
 :::{rul} Merge checks prep's fingerprints under another ImageMagick
 :id: RUL-merge_rechecks_under_new_engine
-:status: ruled
+:status: seed
 :criticality: high
 :anti: yes
 :verify: required
@@ -18,8 +18,18 @@ that only restated others, has no heading here.
 :uses: DEF-fingerprint, DEF-library
 
 Under an ImageMagick version other than the one prep's fingerprints were taken by, merge SHALL take each photo's
-fingerprint again before comparing it with the library's, a photo whose fingerprint changed left in photos by
-destination, unmerged.
+fingerprint again before comparing it with the library's.
+:::
+
+:::{rul} A photo whose fingerprint changed is left unmerged
+:id: RUL-merge_changed_fingerprint_unmerged
+:status: seed
+:criticality: high
+:verify: required
+:refines: RUL-merge_rechecks_under_new_engine
+:uses: DEF-fingerprint, DEF-library
+
+A photo whose fingerprint, taken again by merge, has changed SHALL be left in photos by destination, unmerged.
 :::
 
 ## 3. Preconditions

@@ -71,7 +71,8 @@ def test_changed_track_is_parsed_again(tracks, tmp_path):
     assert _seen(again) == _seen(cal.GPXIndex(str(tracks)).build())
 
 
-@pytest.mark.spec("RUL-other_databases_scratch", test="TST-track_memo-memo_is_scratch")
+@pytest.mark.spec("RUL-other_databases_scratch", "RUL-scratch_database_not_archived",
+                  test="TST-track_memo-memo_is_scratch")
 def test_memo_is_scratch(tracks, tmp_path):
     memo = tmp_path / "memo.db"
     first = _build(tracks, memo)

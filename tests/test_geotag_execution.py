@@ -138,7 +138,7 @@ def test_clean_execute_applies_and_renames(tmp_path, monkeypatch):
     assert names == ["2024-07-03--14-00-00.arw", "2024-07-03--15-00-00.arw"]
 
 
-@pytest.mark.spec("RUL-content_changed_write_held", "BLD-execution_summary",
+@pytest.mark.spec("RUL-content_changed_write_held", "BLD-execution_summary", "RUL-rename_held_with_write",
                   test="TST-geotag_execution-content_changed_write_flags_mismatch")
 def test_content_changed_write_flags_mismatch(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
@@ -164,7 +164,7 @@ def test_exiftool_failure_records_failure(tmp_path, monkeypatch):
 
 # --- resume / idempotency ----------------------------------------------------
 
-@pytest.mark.spec("RUL-geotag_execution_resumable")
+@pytest.mark.spec("RUL-geotag_execution_resumable", test="TST-geotag_execution-resume_skips_confirmed_ops")
 def test_resume_skips_confirmed_ops(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)
@@ -302,7 +302,7 @@ def test_stale_plan_is_rejected_without_mutation(tmp_path, monkeypatch):
     assert not (ctl / "photos-25-execution-summary.json").exists()
 
 
-@pytest.mark.spec("RUL-no_plan_no_run")
+@pytest.mark.spec("RUL-no_plan_no_run", test="TST-geotag_execution-missing_plan_errors")
 def test_missing_plan_errors(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     os.remove(ctl / "photos-24-executable-plan.json")
@@ -381,7 +381,9 @@ def _op(oid, typ, rel, **extra):
             "preconditions": extra.pop("pre", {}), **extra}
 
 
-@pytest.mark.spec("RUL-hash_is_the_dependency_check", "RUL-geotag_execution_resumable")
+@pytest.mark.spec("RUL-hash_is_the_dependency_check", "RUL-geotag_execution_resumable",
+                  "RUL-found_applied_never_remade",
+                  test="TST-geotag_execution-apply_file_precondition_and_resume_branches")
 def test_apply_file_precondition_and_resume_branches(tmp_path, monkeypatch):
     wf = cal.GeotagWorkflow(str(tmp_path))
     p = tmp_path / "f.arw"; p.write_bytes(b"data")
@@ -409,7 +411,7 @@ def test_apply_file_precondition_and_resume_branches(tmp_path, monkeypatch):
     assert r["blocker"] is None and r["applied"] == ["o"] and written == []
 
 
-@pytest.mark.spec("RUL-geotag_execution_resumable", "BLD-geotag_execution",
+@pytest.mark.spec("RUL-geotag_execution_resumable", "BLD-geotag_execution", "RUL-edit_since_plan_never_overwritten",
                   test="TST-geotag_execution-an_edit_made_since_the_plan_is_never_overwritten")
 def test_an_edit_made_since_the_plan_is_never_overwritten(tmp_path, monkeypatch):
     # The photo's metadata changed between plan and execute — its time edited in another program — and its image
@@ -506,7 +508,9 @@ def test_rename_target_occupied_at_execute_blocks(tmp_path, monkeypatch):
     assert (ws / "6-photos-by-dest" / "T" / "a.arw").exists()      # not clobbered/renamed
 
 
-@pytest.mark.spec("RUL-geotag_execution_resumable")
+@pytest.mark.spec("RUL-geotag_execution_resumable", "RUL-found_applied_never_remade",
+                  "RUL-applied_unrecorded_is_recorded",
+                  test="TST-geotag_execution-apply_file_already_renamed_resumes_without_journal")
 def test_apply_file_already_renamed_resumes_without_journal(tmp_path, monkeypatch):
     """A crashed prior run that already renamed the file (source gone, planned target present) is
     detected by state on resume — even with an empty/lost journal — rather than blocking on the missing
@@ -654,7 +658,8 @@ def test_execute_rejects_when_drift_validation_changed_after_planning(tmp_path, 
     assert not (ctl / "photos-25-execution-summary.json").exists()       # pre-mutation abort, no summary
 
 
-@pytest.mark.spec("RUL-geotag_execution_resumable")
+@pytest.mark.spec("RUL-geotag_execution_resumable",
+                  test="TST-geotag_execution-resume_after_journal_lost_skips_applied_files")
 def test_resume_after_journal_lost_skips_applied_files(tmp_path, monkeypatch):
     """Crash-resume (§29.1.3): a full execute renames + writes the files; deleting the journal
     (simulating a crash before its flush) and re-executing must detect the already-applied files at
@@ -754,6 +759,7 @@ def test_every_write_traces_back_to_its_decision(tmp_path, monkeypatch):
 # --- what an interrupted or troubled run leaves on the record (§29.1a) -------------------------------
 
 @pytest.mark.spec("RUL-one_photo_failure_contained", "RUL-every_change_journaled", "BLD-geotag_execution",
+                  "RUL-failed_photo_named",
                   test="TST-geotag_execution-one_photo_s_failure_is_its_own")
 def test_one_photo_s_failure_is_its_own(tmp_path, monkeypatch):
     """Applying one photo raises (the image engine cannot be started, a disk error): that photo fails, by name —
@@ -781,8 +787,9 @@ def test_one_photo_s_failure_is_its_own(tmp_path, monkeypatch):
     assert _execute(monkeypatch, ws) == 0 and _summary(ctl)["status"] == "success"       # and the rest follows
 
 
-@pytest.mark.spec("RUL-applied_unrecorded_is_recorded", "RUL-every_change_journaled", "RUL-geotag_execution_resumable",
-                  "BLD-geotag_execution", test="TST-geotag_execution-what_a_killed_run_applied_is_recorded_by_the_next")
+@pytest.mark.spec("RUL-applied_unrecorded_is_recorded", "RUL-every_change_journaled",
+                  "RUL-geotag_execution_resumable", "BLD-geotag_execution", "RUL-found_applied_never_remade",
+                  test="TST-geotag_execution-what_a_killed_run_applied_is_recorded_by_the_next")
 def test_what_a_killed_run_applied_is_recorded_by_the_next(tmp_path, monkeypatch):
     """A run killed after applying photos and before recording them: the next run finds each at its planned name
     holding the planned values, redoes nothing, and records its operations — so the journal names every change
@@ -803,7 +810,9 @@ def test_what_a_killed_run_applied_is_recorded_by_the_next(tmp_path, monkeypatch
     assert not any(rel.endswith(("a.arw", "b.arw")) for rel in after)                    # under their new names
 
 
-@pytest.mark.spec("RUL-content_acceptance_is_of_that_content", "RUL-content_changed_write_held", "BLD-execution_summary",
+@pytest.mark.spec("RUL-content_acceptance_is_of_that_content", "RUL-content_changed_write_held",
+                  "BLD-execution_summary", "RUL-content_acceptance_under_its_plan",
+                  "RUL-content_acceptance_stays_open",
                   test="TST-geotag_execution-an_acceptance_is_of_the_content_shown")
 def test_an_acceptance_of_changed_content_is_of_the_content_shown(tmp_path, monkeypatch):
     """A changed picture is accepted as the fingerprint that was reported, under the plan that reported it: it

@@ -122,7 +122,7 @@ def test_a_redumped_pair_settles_in_one_run(tmp_path):
     assert _media_ops(_plan(ws)) == []
 
 
-@pytest.mark.spec("RUL-copy_kept_by_folder", test="TST-prep_pipeline-copies_in_one_folder_keep_the_first_by_path")
+@pytest.mark.spec("RUL-copy_kept_first_by_path", test="TST-prep_pipeline-copies_in_one_folder_keep_the_first_by_path")
 def test_copies_in_one_folder_keep_the_first_by_path(tmp_path):
     ws = _ws(tmp_path)
     (ws / "0-sources" / "b").mkdir()
@@ -212,7 +212,7 @@ def test_an_untimed_redundant_jpeg_takes_its_untimed_name(tmp_path, monkeypatch)
     assert sorted(os.listdir(ws / "3-redundant-jpgs")) == ["UNKN_old.jpg", "UNKN_shot.jpg"]
 
 
-@pytest.mark.spec("RUL-database_matches_files", "BLD-database_ops",
+@pytest.mark.spec("RUL-database_matches_files", "BLD-database_ops", "RUL-no_row_for_gone_file",
                   test="TST-prep_pipeline-a_file_sent_back_is_refiled_where_it_was")
 def test_a_file_sent_back_is_refiled_where_it_was(tmp_path):
     """A filed file the user moves back into the inbox is filed again under the name it had; the row of
@@ -230,7 +230,7 @@ def test_a_file_sent_back_is_refiled_where_it_was(tmp_path):
     cache.close()
 
 
-@pytest.mark.spec("RUL-quarantined_leaves_database", "BLD-move_row_effects",
+@pytest.mark.spec("RUL-quarantined_leaves_database", "BLD-move_row_effects", "RUL-quarantined_leaves_handoff",
                   test="TST-prep_pipeline-a_quarantined_file_leaves_the_database")
 def test_a_quarantined_file_leaves_the_database(tmp_path):
     """A duplicate set aside has no row in the database and no entry in the handoff; reclaiming the

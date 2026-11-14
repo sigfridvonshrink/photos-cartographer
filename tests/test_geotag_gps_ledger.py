@@ -91,7 +91,7 @@ def _ops(plan, rel=None):
 _FORWARD = {"metadata_time_write", "metadata_gps_write", "gps_marker_write", "rename_no_clobber"}
 
 
-@pytest.mark.spec("RUL-position_written_whole", "BLD-position_tags",
+@pytest.mark.spec("RUL-position_written_whole", "BLD-position_tags", "RUL-position_cleared_whole",
                   test="TST-geotag_gps_ledger-a_cleared_position_takes_its_hemisphere_refs_with_it")
 def test_a_cleared_position_takes_its_hemisphere_refs_with_it():
     """§28.1: a clear drops the refs with the coordinates — a ref left behind without its coordinate is a
@@ -118,7 +118,8 @@ def test_a_withdrawn_pin_is_cleared(tmp_path):
     assert not any(o["type"] == "metadata_gps_write" for o in _ops(plan, rel))
 
 
-@pytest.mark.spec("BLD-decided_from_own_values", test="TST-geotag_gps_ledger-a_withdrawn_pin_is_placed_again_from_the_tracks")
+@pytest.mark.spec("BLD-decided_from_own_values", "RUL-withdrawal_undoes",
+                  test="TST-geotag_gps_ledger-a_withdrawn_pin_is_placed_again_from_the_tracks")
 def test_a_withdrawn_pin_is_placed_again_from_the_tracks(tmp_path):
     """Withdrawn, the pin gives way to the position the tracks give the photo's own time: recomputed, not
     rolled back to anything stored."""
@@ -135,7 +136,8 @@ def test_a_withdrawn_pin_is_placed_again_from_the_tracks(tmp_path):
     assert {o["type"] for o in _ops(plan)} <= _FORWARD
 
 
-@pytest.mark.spec("RUL-withdrawal_undoes", test="TST-geotag_gps_ledger-a_withdrawal_never_reverts_time_name_or_destination")
+@pytest.mark.spec("RUL-withdrawal_keeps_destination",
+                  test="TST-geotag_gps_ledger-a_withdrawal_never_reverts_time_name_or_destination")
 def test_a_withdrawal_never_reverts_time_name_or_destination(tmp_path):
     """Withdrawing a decision changes GPS only as any plan would: geotag has no revert operation at all
     (time writes and renames are forward-idempotent), and it never moves a photo across destinations."""

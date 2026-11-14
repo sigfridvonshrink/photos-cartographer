@@ -179,7 +179,8 @@ def test_prep_workflow_plan_and_execute(mock_meta, mock_hash_img, tmp_path, monk
     assert not any("__photos_ingest_tmp_extnorm__" in p for p in db_paths)
     cache_conn.close()
 
-@pytest.mark.spec("BLD-prep_stage_order", "RUL-no_op_run", test="TST-workspace_prep-deterministic_temp_names")
+@pytest.mark.spec("BLD-prep_stage_order", "RUL-no_op_run_same_result",
+                  test="TST-workspace_prep-deterministic_temp_names")
 def test_deterministic_temp_names(tmp_path, monkeypatch):
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
@@ -287,7 +288,7 @@ def test_hash_failure_preservation(tmp_path, monkeypatch):
         op_types = [op.type for op in plan.operations]
         assert "quarantine_move" not in op_types
 
-@pytest.mark.spec("RUL-no_links", "RUL-link_named", test="TST-workspace_prep-symlink_blocking")
+@pytest.mark.spec("RUL-no_links", test="TST-workspace_prep-symlink_blocking")
 def test_symlink_blocking(tmp_path, monkeypatch):
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
@@ -310,7 +311,8 @@ def test_symlink_blocking(tmp_path, monkeypatch):
     assert any("Forbidden symlink detected" in b for b in plan.blockers)
 
 
-@pytest.mark.spec("RUL-no_links", "RUL-first_dump_at_top_level", test="TST-workspace_prep-directory_symlink_at_root_blocked_during_init")
+@pytest.mark.spec("RUL-no_links", "RUL-first_dump_at_top_level", "RUL-link_never_followed", "RUL-link_named",
+                  test="TST-workspace_prep-directory_symlink_at_root_blocked_during_init")
 def test_directory_symlink_at_root_blocked_during_init(tmp_path, monkeypatch):
     """A directory symlink at the root of an UNINITIALIZED workspace must be flagged as a forbidden
     symlink at PLAN time, never followed. os.path.isdir() follows a directory symlink, so the old
@@ -390,7 +392,8 @@ def test_symlinked_managed_folder_blocked(tmp_path, monkeypatch):
     assert not any(op.source and "e.jpg" in (op.source or "") for op in plan.operations)
 
 
-@pytest.mark.spec("RUL-no_links")
+@pytest.mark.spec("RUL-no_links", "RUL-link_named",
+                  test="TST-workspace_prep-nested_directory_symlink_in_managed_folder_blocked")
 def test_nested_directory_symlink_in_managed_folder_blocked(tmp_path, monkeypatch):
     """os.walk does not descend into a subdirectory symlink (so it never escapes), but it must still
     be FLAGGED as forbidden rather than silently ignored."""
@@ -621,7 +624,8 @@ def _mock_for_plan(monkeypatch):
     photos_ingest.CONFIG["jobs"] = 1
 
 
-@pytest.mark.spec("RUL-missing_folder_named", "RUL-missing_folder_blocks", test="TST-workspace_prep-missing_managed_folder_on_activated_workspace_hard_stops")
+@pytest.mark.spec("RUL-missing_folder_named", "RUL-missing_folder_blocks",
+                  test="TST-workspace_prep-missing_managed_folder_on_activated_workspace_hard_stops")
 def test_missing_managed_folder_on_activated_workspace_hard_stops(tmp_path, monkeypatch):
     """An activated workspace (guard present) missing managed 0-6 folder(s) is non-conforming — prep
     hard-stops with a blocker rather than silently recreating them (which could mask lost media)."""
@@ -656,7 +660,8 @@ def test_empty_sources_is_steady_end_state_not_a_missing_folder_block(tmp_path, 
     assert len(plan.operations) == 0                                 # nothing to do — a clean no-op
 
 
-@pytest.mark.spec("RUL-blockers_all_reported", "BLD-blocked_plan_refused", test="TST-workspace_prep-a_blocker_is_reported_textually_and_never_silently_skipped")
+@pytest.mark.spec("RUL-blockers_all_reported", "BLD-blocked_plan_refused", "RUL-blocker_names_what_blocks",
+                  test="TST-workspace_prep-a_blocker_is_reported_textually_and_never_silently_skipped")
 def test_a_blocker_is_reported_textually_and_never_silently_skipped(tmp_path, monkeypatch):
     """§6.2 final line ('Blockers are reported textually; the workflow does not silently skip them').
     With a forbidden sidecar present alongside a perfectly organizable photo, prep must (a) SURFACE the

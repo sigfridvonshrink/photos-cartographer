@@ -219,7 +219,8 @@ def _first_round(tmp_path, monkeypatch):
     return ws
 
 
-@pytest.mark.spec("RUL-geotag_rerun_keeps_settled", "BLD-marked_file_rerun", "BLD-executable_plan", "RUL-no_op_run", test="TST-geotag_rerun_markers-manual_offset_is_not_applied_twice")
+@pytest.mark.spec("RUL-geotag_rerun_keeps_settled", "BLD-marked_file_rerun", "BLD-executable_plan", "RUL-no_op_run",
+                  test="TST-geotag_rerun_markers-manual_offset_is_not_applied_twice")
 def test_manual_offset_is_not_applied_twice(tmp_path, monkeypatch):
     ws = _first_round(tmp_path, monkeypatch)
     _plan(monkeypatch, ws)
@@ -229,7 +230,8 @@ def test_manual_offset_is_not_applied_twice(tmp_path, monkeypatch):
     assert cell["effective_time_anchor"]["offset_seconds"] == SLOW and not cell["requires_user_input"]
 
 
-@pytest.mark.spec("BLD-marked_file_rerun", "RUL-day_offset_kept_for_later_photos", "RUL-geotag_rerun_keeps_settled", test="TST-geotag_rerun_markers-new_photo_joins_corrected_ones")
+@pytest.mark.spec("BLD-marked_file_rerun", "RUL-day_offset_kept_for_later_photos", "RUL-geotag_rerun_keeps_settled",
+                  test="TST-geotag_rerun_markers-new_photo_joins_corrected_ones")
 def test_new_photo_joins_corrected_ones(tmp_path, monkeypatch):
     """Same camera, same day: the earlier answer — offset and drift confirmation — is kept through a
     run where every photo was already corrected, and applied to the new photo alone."""
@@ -243,7 +245,8 @@ def test_new_photo_joins_corrected_ones(tmp_path, monkeypatch):
     assert ops[f"{T}/c.arw"]["writes"]["DateTimeOriginal"] == "2024:07:03 15:00:00"
 
 
-@pytest.mark.spec("BLD-marked_file_rerun", "RUL-geotag_rerun_keeps_settled", test="TST-geotag_rerun_markers-geotag_position_is_placed_again")
+@pytest.mark.spec("BLD-marked_file_rerun", "RUL-rerun_rederives_written_position",
+                  test="TST-geotag_rerun_markers-geotag_position_is_placed_again")
 def test_geotag_position_is_placed_again(tmp_path, monkeypatch):
     """A position geotag wrote is not the file's own: the re-run places the file from the track again
     and overwrites a fix that no longer agrees, and it is never a clock anchor."""
@@ -261,7 +264,8 @@ def test_geotag_position_is_placed_again(tmp_path, monkeypatch):
     assert e["writes"]["GPSLatitude"] == pytest.approx(50.003)
 
 
-@pytest.mark.spec("BLD-rerun_recognition", "RUL-geotag_rerun_keeps_settled", test="TST-geotag_rerun_markers-own_gps_camera_is_marked_time_fixed")
+@pytest.mark.spec("BLD-rerun_recognition", "RUL-geotag_rerun_keeps_settled",
+                  test="TST-geotag_rerun_markers-own_gps_camera_is_marked_time_fixed")
 def test_own_gps_camera_is_marked_time_fixed(tmp_path, monkeypatch):
     """A camera with its own GPS has its time corrected from that GPS, keeps the position, and is
     marked time-fixed; the re-run then neither corrects it again nor uses it as an anchor."""
@@ -449,7 +453,9 @@ def _finalize(monkeypatch, ws, vouch=True):
     return json.loads((ws / ".photos-ingest" / "photos-26-complete-log.json").read_text())["photos"]
 
 
-@pytest.mark.spec("RUL-log_entry_grows", "RUL-partial_history_shown", "RUL-history_retained", "BLD-log_format", "BLD-history_kept", test="TST-geotag_rerun_markers-the_log_keeps_every_geotag_pass")
+@pytest.mark.spec("RUL-log_entry_grows", "RUL-partial_history_shown", "RUL-history_retained", "BLD-log_format",
+                  "BLD-history_kept",
+                  test="TST-geotag_rerun_markers-the_log_keeps_every_geotag_pass")
 def test_the_log_keeps_every_geotag_pass(tmp_path, monkeypatch):
     """Finalize logs what every executed pass did, in order and matched by fingerprint — not only the
     latest plan's operations: a photo corrected, then corrected again, then left alone shows all three."""
@@ -512,7 +518,8 @@ def test_a_history_too_thin_is_marked_partial(tmp_path, monkeypatch):
     assert "partial" not in log["photos"]["fp-a.arw"]                    # its own values were pinned here
 
 
-@pytest.mark.spec("BLD-phase_logs", "RUL-partial_history_shown", "RUL-log_entry_grows", test="TST-geotag_rerun_markers-finalize_carries_prep_s_record_unchanged")
+@pytest.mark.spec("BLD-phase_logs", "RUL-partial_history_shown", "RUL-log_entry_append_only",
+                  test="TST-geotag_rerun_markers-finalize_carries_prep_s_record_unchanged")
 def test_finalize_carries_prep_s_record_unchanged(tmp_path, monkeypatch):
     """Finalize's log carries prep's every field and step unchanged, a note of prep's among them, and adds
     only its own: geotag's note goes in a step of its own."""

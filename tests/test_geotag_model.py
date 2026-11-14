@@ -276,7 +276,9 @@ def test_run_known_group_builds_model(tmp_path, monkeypatch, capsys):
     assert os.path.exists(ws / ".photos-ingest" / "photos-21-time-decisions.json")
 
 
-@pytest.mark.spec("RUL-unknown_group_stops_geotag", "RUL-no_record_before_decisions", "BLD-unknown_group_snippet", test="TST-geotag_model-run_unknown_group_prints_snippet_and_exits")
+@pytest.mark.spec("RUL-unknown_group_stops_geotag", "RUL-no_record_before_decisions", "BLD-unknown_group_snippet",
+                  "RUL-early_stop_said_in_output", "RUL-unknown_group_classification_offered",
+                  test="TST-geotag_model-run_unknown_group_prints_snippet_and_exits")
 def test_run_unknown_group_prints_snippet_and_exits(tmp_path, monkeypatch, capsys):
     ws = _full_ws(tmp_path, device_groups={"fixed_clock_cameras": [], "phones": []})
     code = _main(monkeypatch, ws)
@@ -303,7 +305,8 @@ def test_a_group_classed_as_both_is_unknown(tmp_path, monkeypatch, capsys):
     assert not [n for n in os.listdir(ws / ".photos-ingest") if n.startswith("photos-2")]
 
 
-@pytest.mark.spec("RUL-missing_tracks_stop_geotag", "RUL-no_tracks_no_stop", "RUL-no_record_before_decisions", "BLD-gpx_root_missing",
+@pytest.mark.spec("RUL-missing_tracks_stop_geotag", "RUL-no_tracks_no_stop", "RUL-no_record_before_decisions",
+                  "BLD-gpx_root_missing", "RUL-early_stop_said_in_output",
                   test="TST-geotag_model-a_tracks_folder_that_is_not_there_stops_geotag")
 def test_a_tracks_folder_that_is_not_there_stops_geotag(tmp_path, monkeypatch, capsys):
     """Tracks configured but not there — a volume not mounted — are not "no tracks": geotag stops before any

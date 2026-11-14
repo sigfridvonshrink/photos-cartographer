@@ -423,7 +423,7 @@ def test_an_offset_written_within_the_time_s_value_is_the_one_recorded_with_it(v
                                    else "destination_timezone")
 
 
-@pytest.mark.spec("RUL-corrected_time_written_local", "BLD-executable_plan",
+@pytest.mark.spec("RUL-corrected_time_written_local", "BLD-executable_plan", "RUL-time_offset_written_beside",
                   test="TST-geotag_resolved_utc-the_offset_written_is_hours_and_minutes")
 def test_the_offset_written_is_always_hours_and_minutes():
     """A zone's offset before it kept standard time has seconds (Amsterdam, 1935: +01:19:32). The offset

@@ -294,7 +294,8 @@ def test_folders_left_empty_are_planned_removals(tmp_path, monkeypatch):
     assert {o["operation_id"] for o in journal["operations"] if o["status"] == "success"} >= ids
 
 
-@pytest.mark.spec("RUL-emptied_folders_removed", test="TST-guards_quarantine-a_folder_not_empty_at_execute_is_left")
+@pytest.mark.spec("RUL-emptied_folder_removed_only_empty",
+                  test="TST-guards_quarantine-a_folder_not_empty_at_execute_is_left")
 def test_a_folder_not_empty_at_execute_is_left(tmp_path, monkeypatch, capsys):
     """A planned removal finding its folder not empty leaves it, skipped in the journal and reported; the
     run still succeeds."""

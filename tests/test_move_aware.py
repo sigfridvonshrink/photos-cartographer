@@ -87,7 +87,9 @@ def _media_ops(plan):
             if op.type in ("move_no_clobber", "rename_no_clobber", "quarantine_move")]
 
 
-@pytest.mark.spec("RUL-reuse_valid_work", "RUL-sort_recorded_by_stat", "BLD-move_row_effects", "RUL-moved_file_carried", "BLD-carried_row", "RUL-prep_leaves_by_dest_as_found", test="TST-move_aware-by_date_to_by_dest_move_is_recognized")
+@pytest.mark.spec("RUL-reuse_valid_work", "RUL-sort_recorded_by_stat", "BLD-move_row_effects",
+                  "RUL-moved_file_carried", "BLD-carried_row", "RUL-prep_leaves_by_dest_as_found",
+                  test="TST-move_aware-by_date_to_by_dest_move_is_recognized")
 def test_by_date_to_by_dest_move_is_recognized(tmp_path, monkeypatch):
     hash_calls = []
     _install_mocks(monkeypatch, hash_calls)
@@ -313,7 +315,7 @@ def test_rehash_summary_flags_replan_over_an_unexecuted_plan(tmp_path, monkeypat
 
 
 @pytest.mark.parametrize("stale", ["method", "metadata"])
-@pytest.mark.spec("RUL-moved_file_carried", "BLD-carried_row",
+@pytest.mark.spec("BLD-carried_row", "RUL-moved_file_stale_read_again",
                   test="TST-move_aware-a_stale_row_follows_the_move_and_is_read_again")
 def test_a_stale_row_follows_the_move_and_is_read_again(tmp_path, monkeypatch, stale):
     """A moved file whose row would have been read again at its old path — its fingerprint taken by

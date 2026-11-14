@@ -265,7 +265,8 @@ def test_cell_multi_anchor_auto_resolves(monkeypatch):
     assert cell["effective_time_anchor"]["source"] == "gpx_anchor_auto"
 
 
-@pytest.mark.spec("RUL-anchor_offset_auto_as_configured", test="TST-geotag_offset_inference-cell_single_anchor_conservative_then_flag")
+@pytest.mark.spec("RUL-anchor_offset_auto_as_configured",
+                  test="TST-geotag_offset_inference-cell_single_anchor_conservative_then_flag")
 def test_cell_single_anchor_conservative_then_flag(monkeypatch):
     gpx = _gpx([_pt(50.0, 4.0, _utc(12, 0, 0))])
     frames = [_frame(50.0, 4.0, "2024:07:03 14:00:00")]
@@ -275,7 +276,9 @@ def test_cell_single_anchor_conservative_then_flag(monkeypatch):
     assert cell2["requires_user_input"] is False and cell2["decision_mode"] == "auto_resolved"
 
 
-@pytest.mark.spec("BLD-anchor_matching", "RUL-anchor_offset_auto_as_configured", test="TST-geotag_offset_inference-cell_conflict_requires_input_even_with_autoapply")
+@pytest.mark.spec("BLD-anchor_matching", "RUL-anchor_offset_auto_as_configured",
+                  "RUL-disagreeing_anchors_never_auto",
+                  test="TST-geotag_offset_inference-cell_conflict_requires_input_even_with_autoapply")
 def test_cell_conflict_requires_input_even_with_autoapply(monkeypatch):
     gpx = _gpx([_pt(50.0, 4.0, _utc(12, 0, 0)), _pt(51.0, 5.0, _utc(9, 0, 0))])
     frames = [_frame(50.0, 4.0, "2024:07:03 14:00:00"), _frame(51.0, 5.0, "2024:07:03 14:00:00")]
@@ -394,7 +397,8 @@ def test_timezone_naive_offset_is_dst_aware():
         assert cal._timezone_naive_offset(*bad) is None
 
 
-@pytest.mark.spec("RUL-offset_from_own_evidence", "BLD-timezone_naive_offset", "RUL-other_proposals_need_acceptance", test="TST-geotag_offset_inference-cell_timezone_derived_when_no_anchor")
+@pytest.mark.spec("RUL-offset_from_own_evidence", "BLD-timezone_naive_offset", "RUL-other_proposals_need_acceptance",
+                  test="TST-geotag_offset_inference-cell_timezone_derived_when_no_anchor")
 def test_cell_timezone_derived_when_no_anchor():
     cell, _ = _tzcell({}, tz="Europe/Brussels", rep_naive="2024:07:03 14:00:00")
     p = cell["proposal"]
@@ -470,7 +474,9 @@ def test_a_place_walked_on_two_days_takes_the_photos_day():
     assert [g["count"] for g in p["groups"]] == [4, 3]                      # 4 July: all four; 3 July: three
 
 
-@pytest.mark.spec("RUL-anchor_consensus", "RUL-indistinct_visits_wait", "RUL-anchor_offset_auto_as_configured", "BLD-anchor_matching", test="TST-geotag_offset_inference-two_days_nothing_tells_apart_wait_for_review")
+@pytest.mark.spec("RUL-anchor_consensus", "RUL-indistinct_visits_wait", "RUL-anchor_offset_auto_as_configured",
+                  "BLD-anchor_matching", "RUL-disagreeing_anchors_never_auto",
+                  test="TST-geotag_offset_inference-two_days_nothing_tells_apart_wait_for_review")
 def test_two_days_nothing_tells_apart_wait_for_review(monkeypatch):
     # The same route on two days and no photo only one day explains: the smaller clock error is proposed,
     # but as a disagreement — it never applies itself.
@@ -528,7 +534,7 @@ def _naive(seconds):
     return _at(seconds).strftime("%Y:%m:%d %H:%M:%S")
 
 
-@pytest.mark.spec("RUL-stay_fixes_no_clock", "BLD-anchor_matching",
+@pytest.mark.spec("RUL-stay_fixes_no_clock", "BLD-anchor_matching", "RUL-stay_offset_never_anchored",
                   test="TST-geotag_offset_inference-a_stay_of_the_tracks_fixes_no_clock")
 def test_a_stay_of_the_tracks_fixes_no_clock(monkeypatch):
     """The tracks stood an hour at the place two photos were taken (a museum, a lunch): the place says the
@@ -580,6 +586,7 @@ def test_an_anchor_never_spans_two_tracks():
 
 
 @pytest.mark.spec("RUL-acceptance_holds_for_its_proposal", "BLD-offset_acceptance",
+                  "RUL-changed_proposal_asked_again", "RUL-stale_acceptance_kept",
                   test="TST-geotag_offset_inference-an_acceptance_holds_for_the_proposal_it_accepted")
 def test_an_acceptance_holds_only_for_the_proposal_it_accepted():
     """The user accepted "the camera was on local time" (−2 h). Then the zone above changed, or photos with
@@ -610,7 +617,7 @@ def test_a_written_offset_outranks_an_acceptance():
     assert cell["effective_time_anchor"] == {"offset_seconds": -60, "source": "manual"}
 
 
-@pytest.mark.spec("RUL-kept_offset_rests_on_its_tracks", "RUL-anchor_offset_auto_as_configured", "BLD-day_offset_kept",
+@pytest.mark.spec("RUL-kept_offset_rests_on_its_tracks", "BLD-day_offset_kept",
                   test="TST-geotag_offset_inference-a_kept_offset_rests_on_its_tracks")
 def test_a_kept_offset_rests_on_what_it_was_found_from():
     """An offset found from the camera's GPS is kept for later photos of the day only while the tracks it was

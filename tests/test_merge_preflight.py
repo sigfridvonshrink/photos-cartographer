@@ -99,7 +99,8 @@ def _pf(ws):
     return merge.MergeWorkflow(str(ws)).preflight()
 
 
-@pytest.mark.spec("RUL-merge_refuses_changed_since_finalize", test="TST-merge_preflight-photo_changed_since_finalize_blocks")
+@pytest.mark.spec("RUL-merge_refuses_changed_since_finalize",
+                  test="TST-merge_preflight-photo_changed_since_finalize_blocks")
 def test_photo_changed_since_finalize_blocks(tmp_path):
     ws, _ = _make(tmp_path)
     p = ws / "6-photos-by-dest/Trip/a.jpg"
@@ -110,7 +111,8 @@ def test_photo_changed_since_finalize_blocks(tmp_path):
         and "6-photos-by-dest/Trip/a.jpg" in blockers[0], blockers
 
 
-@pytest.mark.spec("RUL-merge_refuses_changed_since_finalize", test="TST-merge_preflight-no_finalized_media_record_blocks")
+@pytest.mark.spec("RUL-merge_refuses_changed_since_finalize",
+                  test="TST-merge_preflight-no_finalized_media_record_blocks")
 def test_no_finalized_media_record_blocks(tmp_path):
     ws, _ = _make(tmp_path, finalized_media=False)
     blockers, _, _ = _pf(ws)
@@ -163,7 +165,7 @@ def test_root_symlink_blocks(tmp_path):
     assert any("Forbidden symlink at the workspace root" in b for b in blockers), blockers
 
 
-@pytest.mark.spec("RUL-missing_folder_blocks")
+@pytest.mark.spec("RUL-missing_folder_blocks", test="TST-merge_preflight-missing_managed_folder_blocks")
 def test_missing_managed_folder_blocks(tmp_path):
     ws, _ = _make(tmp_path)
     os.rmdir(str(ws / "4-videos-by-date"))
@@ -223,11 +225,14 @@ def test_empty_library_root_blocks(tmp_path):
     assert any("library_root must be a non-empty" in b for b in blockers), blockers
 
 
-@pytest.mark.spec("RUL-library_mark_required", test="TST-merge_preflight-unblessed_library_blocks")
+@pytest.mark.spec("RUL-library_mark_required", "RUL-library_mark_made_by_setup",
+                  test="TST-merge_preflight-unblessed_library_blocks")
 def test_unblessed_library_blocks(tmp_path):
-    ws, _ = _make(tmp_path, bless_lib=False)
+    ws, lib = _make(tmp_path, bless_lib=False)
     blockers, _, _ = _pf(ws)
     assert any("init-library" in b for b in blockers), blockers
+    # setup alone makes the mark: a merge that finds none only reads, and leaves the library unmarked
+    assert not os.path.exists(utils.library_marker_path(str(lib)))
 
 
 # --- handoff -----------------------------------------------------------------
@@ -267,7 +272,8 @@ def test_geotag_failed_status_blocks(tmp_path):
     assert any("did not end successfully" in b for b in blockers), blockers
 
 
-@pytest.mark.spec("RUL-merge_refuses_changed_since_finalize")
+@pytest.mark.spec("RUL-merge_refuses_changed_since_finalize",
+                  test="TST-merge_preflight-stale_finalized_record_blocks")
 def test_stale_finalized_record_blocks(tmp_path):
     ws, _ = _make(tmp_path, handoff_current=False)
     blockers, _, _ = _pf(ws)
@@ -485,7 +491,7 @@ def test_init_library_outside_workspace_no_path_errors(tmp_path):
     assert rc == 2
 
 
-@pytest.mark.spec("RUL-library_mark_made_by_setup", test="TST-merge_preflight-init_library_idempotent")
+@pytest.mark.spec("RUL-library_mark_idempotent", test="TST-merge_preflight-init_library_idempotent")
 def test_init_library_idempotent(tmp_path):
     lib = tmp_path / "lib"
     lib.mkdir()
@@ -596,7 +602,8 @@ def test_marker_check_precedes_library_lock_no_lockfile_dropped(tmp_path):
     assert not os.path.exists(merge.merge_plan_path(str(ws)))     # and nothing planned
 
 
-@pytest.mark.spec("RUL-no_links", "RUL-geotag_merge_check_top_level_links")
+@pytest.mark.spec("RUL-no_links", "RUL-link_never_followed", "RUL-link_block_produces_nothing",
+                  test="TST-merge_preflight-bydest_symlink_blocks_run_and_is_never_followed")
 def test_bydest_symlink_blocks_run_and_is_never_followed(tmp_path):
     """A symlink anywhere under 6-photos-by-dest blocks the whole run (rc 2) and is NEVER followed:
     its external target is not inventoried/planned and stays untouched. (Preflight only detects the
@@ -639,7 +646,8 @@ def test_sealed_new_dump_left_in_place_and_library_untouched(tmp_path):
     assert list(lib.iterdir()) == [lib / ".photos-library"]    # library untouched
 
 
-@pytest.mark.spec("RUL-lock_through_the_run", test="TST-merge_preflight-lock_contention_covers_execute_not_just_plan")
+@pytest.mark.spec("RUL-lock_through_the_run", "RUL-locked_run_produces_nothing",
+                  test="TST-merge_preflight-lock_contention_covers_execute_not_just_plan")
 def test_lock_contention_covers_execute_not_just_plan(tmp_path):
     """The whole-run lock covers EXECUTE, not only plan: with the workspace lock held by another run,
     `execute` fails fast (rc 1) and writes no summary / places nothing."""

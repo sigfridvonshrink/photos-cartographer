@@ -79,7 +79,8 @@ def _guard(ws):
 
 # --- initialization ----------------------------------------------------------
 
-@pytest.mark.spec("RUL-structure_built_once", "RUL-init_moves_dump_to_inbox", "RUL-top_level_only_managed", test="TST-lifecycle-init_creates_structure_and_moves_dump_structure_preserved")
+@pytest.mark.spec("RUL-structure_built_once", "RUL-init_moves_dump_to_inbox", "RUL-top_level_only_managed",
+                  test="TST-lifecycle-init_creates_structure_and_moves_dump_structure_preserved")
 def test_init_creates_structure_and_moves_dump_structure_preserved(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _bare(tmp_path)
@@ -446,7 +447,9 @@ def test_no_flatten_same_name_distinct_subtrees_both_survive(tmp_path, monkeypat
     assert len(organized) == 2, organized                     # both survive with distinct names
 
 
-@pytest.mark.spec("RUL-structure_built_once", test="TST-lifecycle-prep_builds_the_structure_once_and_never_removes_a_folder")
+@pytest.mark.spec("RUL-structure_built_once", "RUL-managed_folder_never_removed",
+                  "RUL-missing_folder_never_recreated",
+                  test="TST-lifecycle-prep_builds_the_structure_once_and_never_removes_a_folder")
 def test_prep_builds_the_structure_once_and_never_removes_a_folder(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _bare(tmp_path)

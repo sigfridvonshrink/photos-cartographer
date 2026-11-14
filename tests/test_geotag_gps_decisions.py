@@ -66,7 +66,8 @@ def _dd(art, dest):
 
 # --- classifier branch by branch --------------------------------------------
 
-@pytest.mark.spec("BLD-placement_order", "RUL-geotag_rerun_keeps_settled", "RUL-own_position_kept", "RUL-placement_order", test="TST-geotag_gps_decisions-classify_all_branches")
+@pytest.mark.spec("BLD-placement_order", "RUL-own_position_kept", "RUL-placement_order", "RUL-unplaced_photo_waits",
+                  test="TST-geotag_gps_decisions-classify_all_branches")
 def test_classify_all_branches():
     g = _gpx()
     cfg = utils.CONFIG
@@ -169,7 +170,8 @@ def _with_fallback(parent, lat, lon):
             {"fallback_lat": lat, "fallback_lon": lon}}}}}
 
 
-@pytest.mark.spec("RUL-fallback_from_nearest", "RUL-other_proposals_need_acceptance", "BLD-folder_fallback_cell", test="TST-geotag_gps_decisions-child_inherits_parent_fallback_as_proposal")
+@pytest.mark.spec("RUL-fallback_from_nearest", "RUL-other_proposals_need_acceptance", "BLD-folder_fallback_cell",
+                  test="TST-geotag_gps_decisions-child_inherits_parent_fallback_as_proposal")
 def test_child_inherits_parent_fallback_as_proposal(tmp_path):
     wf = _wf(tmp_path)
     p, c = f"{BYDEST}/Trip", f"{BYDEST}/Trip/Sub"
@@ -226,7 +228,7 @@ def test_sibling_fallback_does_not_leak(tmp_path):
     assert _dd(art, b)["folder_fallback"]["proposal"] == {"proposal_source": "manual_required"}
 
 
-@pytest.mark.spec("RUL-invalid_decision_kept")
+@pytest.mark.spec("RUL-invalid_decision_reported", test="TST-geotag_gps_decisions-accept_with_no_proposal_is_stale")
 def test_accept_with_no_proposal_is_stale(tmp_path):
     wf = _wf(tmp_path)
     d = f"{BYDEST}/Trip"
@@ -276,7 +278,7 @@ def test_an_accepted_inheritance_follows_the_parent(tmp_path):
     assert cfb["effective_fallback"] == {"lat": 11.0, "lon": 21.0} and cfb["stale_user_decision"] is False
 
 
-@pytest.mark.spec("RUL-fallback_optional", "BLD-folder_fallback_cell",
+@pytest.mark.spec("RUL-fallback_optional", "BLD-folder_fallback_cell", "RUL-unplaced_photo_waits",
                   test="TST-geotag_gps_decisions-a_destination_never_waits_on_its_fallback")
 def test_a_destination_never_waits_on_its_fallback(tmp_path):
     # No fallback anywhere: no fallback cell asks for anything — a container's included; only the photo nothing
@@ -298,6 +300,7 @@ def _fp_file(rel, dest, fp):
 
 
 @pytest.mark.spec("RUL-photo_decision_follows_the_photo", "BLD-review_item_identity",
+                  "RUL-photo_decision_never_passes_by_name",
                   test="TST-geotag_gps_decisions-a_photo_s_decision_follows_it_through_its_rename")
 def test_a_photo_s_decision_follows_it_through_its_rename(tmp_path):
     """A position the user set for one photo, or their answer to leave it unlocated, is that photo's — found
@@ -329,6 +332,7 @@ def test_a_photo_s_decision_follows_it_through_its_rename(tmp_path):
 
 
 @pytest.mark.spec("RUL-unplaced_photo_listed", "RUL-disagreeing_tracks_place_nothing", "BLD-gps_decisions_record",
+                  "RUL-disagreeing_tracks_named", "RUL-unplaced_photo_says_why",
                   test="TST-geotag_gps_decisions-an_unplaced_photo_is_listed_with_why")
 def test_an_unplaced_photo_is_listed_with_why_the_tracks_did_not_place_it(tmp_path):
     """Every photo no source places is listed by itself with why the tracks placed nothing — how far the nearest

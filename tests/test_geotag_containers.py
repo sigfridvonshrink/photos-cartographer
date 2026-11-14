@@ -92,6 +92,7 @@ def test_containers_never_block(tmp_path):
 # --- auto-resolve + propagation ----------------------------------------------
 
 @pytest.mark.spec("RUL-timezone_from_nearest", "RUL-default_zone_proposed_only", "BLD-timezone_cell",
+                  "RUL-no_timezone_to_inherit_waits", "RUL-timezone_auto_resolves",
                   test="TST-geotag_containers-the_default_zone_is_proposed_and_an_answer_cascades")
 def test_the_default_zone_is_proposed_and_an_answer_cascades(tmp_path):
     # The configured default is the user's usual zone, true of no trip in particular: it is proposed, never applied —
@@ -114,7 +115,7 @@ def test_the_default_zone_is_proposed_and_an_answer_cascades(tmp_path):
     assert leaf["requires_user_input"] is False
 
 
-@pytest.mark.spec("RUL-timezone_from_nearest", "BLD-timezone_cell",
+@pytest.mark.spec("RUL-timezone_from_nearest", "BLD-timezone_cell", "RUL-no_timezone_to_inherit_waits",
                   test="TST-geotag_containers-manual_timezone_reroots_the_chain")
 def test_manual_timezone_reroots_the_chain(tmp_path):
     # A zone set by hand on a trip's folder becomes what every destination beneath it inherits — over the

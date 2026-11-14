@@ -66,7 +66,8 @@ def _plan(ws):
     return prep.WorkspacePrepWorkflow(str(ws), prep.WorkspaceCache(str(ws), in_memory=True)).plan()
 
 
-@pytest.mark.spec("BLD-day_folder_name", "RUL-by_date_in_day_folder", "RUL-photos_by_date", test="TST-by_date_subfolders-photo_lands_in_day_subfolder")
+@pytest.mark.spec("BLD-day_folder_name", "RUL-by_date_in_day_folder", "RUL-photos_by_date",
+                  test="TST-by_date_subfolders-photo_lands_in_day_subfolder")
 def test_photo_lands_in_day_subfolder(tmp_path, monkeypatch):
     _mock(monkeypatch, lambda f: "2023:07:04 14:30:05")
     ws = _ws(tmp_path)
@@ -113,7 +114,8 @@ def test_same_day_collides_other_day_does_not(tmp_path, monkeypatch):
     }, dests
 
 
-@pytest.mark.spec("RUL-by_date_in_day_folder", test="TST-by_date_subfolders-existing_flat_file_is_migrated_into_day_folder")
+@pytest.mark.spec("RUL-by_date_in_day_folder",
+                  test="TST-by_date_subfolders-existing_flat_file_is_migrated_into_day_folder")
 def test_existing_flat_file_is_migrated_into_day_folder(tmp_path, monkeypatch):
     _mock(monkeypatch, lambda f: "2023:07:04 14:30:05")
     ws = _ws(tmp_path)

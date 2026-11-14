@@ -134,22 +134,41 @@ A file of no media class found in a managed folder other than the inbox SHALL bl
 
 :::{rul} Every blocker is reported
 :id: RUL-blockers_all_reported
-:status: ruled
+:status: seed
 :criticality: med
 :anti: yes
 :verify: required
 
-Prep SHALL report every blocker it finds, each naming what blocks, never skipping one silently.
+Prep SHALL report every blocker it finds, never skipping one silently.
+:::
+
+:::{rul} A blocker names what blocks
+:id: RUL-blocker_names_what_blocks
+:status: seed
+:criticality: med
+:verify: required
+:refines: RUL-blockers_all_reported
+
+Each blocker prep reports SHALL name what blocks.
 :::
 
 :::{rul} Media set aside as strays is pointed out
 :id: RUL-stray_media_hinted
-:status: ruled
+:status: seed
 :criticality: low
 :verify: required
 
-When files prep is about to set aside as strays are images or videos by their content, prep SHALL warn, naming their
-extension.
+When files prep is about to set aside as strays are images or videos by their content, prep SHALL warn.
+:::
+
+:::{rul} The warning names the strays' extension
+:id: RUL-stray_media_hint_names_extension
+:status: seed
+:criticality: low
+:verify: required
+:refines: RUL-stray_media_hinted
+
+The warning that strays are images or videos SHALL name their extension.
 :::
 
 
@@ -181,13 +200,24 @@ dated file outside its day folder.
 
 :::{rul} A dated file lies in its day folder
 :id: RUL-by_date_in_day_folder
-:status: ruled
+:status: seed
 :criticality: med
 :verify: required
 :uses: DEF-managed_folders, DEF-recorded_time
 
 Each file in photos by date or videos by date SHALL lie in the folder of its recorded time's day, directly under its
-band; prep moves one that does not into it — or, with no recorded time, into missing metadata.
+band; prep moves one that does not into it.
+:::
+
+:::{rul} A dated folder's file with no recorded time goes to missing metadata
+:id: RUL-by_date_untimed_to_missing_metadata
+:status: seed
+:criticality: med
+:verify: none
+:refines: RUL-by_date_in_day_folder
+:uses: DEF-managed_folders, DEF-recorded_time
+
+Prep SHALL move a file in photos by date or videos by date that has no recorded time into missing metadata.
 :::
 
 :::{rul} Prep puts photos by date
@@ -280,26 +310,47 @@ every other copy outside photos by destination.
 
 :::{rul} The copy kept is the best filed
 :id: RUL-copy_kept_by_folder
-:status: ruled
+:status: seed
 :criticality: med
 :verify: required
 :refines: RUL-duplicates_quarantined
 :uses: DEF-managed_folders
 
 The copy prep keeps SHALL be the one first in this order of the folders the copies lie in when planned — photos by
-destination, photos by date, videos by date, redundant JPEGs, missing metadata, the inbox — and, among copies in one
-folder, the first by path.
+destination, photos by date, videos by date, redundant JPEGs, missing metadata, the inbox.
+:::
+
+:::{rul} Of copies in one folder, the first by path is kept
+:id: RUL-copy_kept_first_by_path
+:status: seed
+:criticality: med
+:verify: required
+:refines: RUL-copy_kept_by_folder
+:uses: DEF-managed_folders
+
+Among copies in one folder, the copy prep keeps SHALL be the first by path.
 :::
 
 :::{rul} The workspace database matches the files
 :id: RUL-database_matches_files
-:status: ruled
+:status: seed
 :criticality: med
 :verify: required
 :uses: DEF-workspace_database
 
-A prep execution SHALL leave the workspace database current: a row for each media file prep inventoried, describing the
-file as it now is and where it now is, and no row for a file that is gone.
+A prep execution SHALL leave in the workspace database a row for each media file prep inventoried, describing the file
+as it now is and where it now is.
+:::
+
+:::{rul} The database holds no row for a file that is gone
+:id: RUL-no_row_for_gone_file
+:status: seed
+:criticality: med
+:verify: required
+:refines: RUL-database_matches_files
+:uses: DEF-workspace_database
+
+A prep execution SHALL leave in the workspace database no row for a file that is gone.
 :::
 
 
@@ -366,26 +417,48 @@ other new file in photos by destination.
 
 :::{rul} A moved file's identity is carried, not read again
 :id: RUL-moved_file_carried
-:status: ruled
+:status: seed
 :criticality: high
 :verify: required
 :refines: RUL-reuse_valid_work
 :uses: DEF-fingerprint, DEF-workspace_database
 
-Prep SHALL carry a moved file's row to its new path — reading nothing of the file but its size and time when the row
-would have been reused at the old path, and otherwise reading the file again there as it would have been read at the
-old.
+Prep SHALL carry a moved file's row to its new path, reading nothing of the file but its size and time when the row
+would have been reused at the old path.
+:::
+
+:::{rul} A moved file whose row is stale is read again where it now is
+:id: RUL-moved_file_stale_read_again
+:status: seed
+:criticality: high
+:verify: required
+:refines: RUL-moved_file_carried
+:uses: DEF-fingerprint, DEF-workspace_database
+
+Prep SHALL read a moved file again at its new path, as it would have been read at the old, when its row would not have
+been reused there.
 :::
 
 :::{rul} A quarantined file leaves the database
 :id: RUL-quarantined_leaves_database
-:status: ruled
+:status: seed
 :criticality: med
 :verify: required
 :refines: RUL-database_matches_files
 :uses: DEF-workspace_database
 
-A file prep has quarantined SHALL be in neither the workspace database nor the handoff.
+A file prep has quarantined SHALL NOT be in the workspace database.
+:::
+
+:::{rul} A quarantined file leaves the handoff
+:id: RUL-quarantined_leaves_handoff
+:status: seed
+:criticality: med
+:verify: required
+:refines: RUL-quarantined_leaves_database
+:uses: DEF-workspace_database
+
+A file prep has quarantined SHALL NOT be in the handoff.
 :::
 
 :::{def} The plan memo
@@ -521,12 +594,22 @@ identity, the times and the native GPS position as recorded, and the file's dime
 
 :::{rul} A field is taken from the camera's own record first
 :id: RUL-metadata_group_order
-:status: ruled
+:status: seed
 :criticality: high
 :verify: required
 
-Prep SHALL take each metadata field from the file's EXIF where EXIF holds it, else from its XMP, before any other place
-the file records it — a time field from the first of them holding a valid time in it.
+Prep SHALL take each metadata field from the file's EXIF where EXIF holds it, else from its XMP, before any other
+place the file records it.
+:::
+
+:::{rul} A time field is taken from the first place holding a valid time
+:id: RUL-time_field_first_valid
+:status: seed
+:criticality: high
+:verify: required
+:refines: RUL-metadata_group_order
+
+Prep SHALL take a time field from the first of those places holding a valid time in it.
 :::
 
 :::{rul} Cached metadata is reused only while read the same way
@@ -600,13 +683,23 @@ An interruption SHALL leave prep's journal as its last save left it, never part-
 
 :::{rul} A folder left empty is removed as planned
 :id: RUL-emptied_folders_removed
-:status: ruled
+:status: seed
 :criticality: med
 :verify: required
 :refines: RUL-execution_only_the_plan
 
-Prep SHALL remove a folder its plan leaves empty — in the inbox or a by-date folder, or a dump's folder on the first run
-— only as a planned operation, and only while the folder is empty.
+Prep SHALL remove a folder its plan leaves empty — in the inbox or a by-date folder, or a dump's folder on the first
+run — only as a planned operation.
+:::
+
+:::{rul} A folder is removed only while it is empty
+:id: RUL-emptied_folder_removed_only_empty
+:status: seed
+:criticality: med
+:verify: required
+:refines: RUL-emptied_folders_removed
+
+Prep SHALL remove a folder its plan leaves empty only while the folder is empty.
 :::
 
 :::{rul} An interrupted execution is planned again, not resumed
@@ -656,12 +749,21 @@ and touches nothing outside the quarantine.
 
 :::{rul} A file restored from the quarantine is a new file
 :id: RUL-restored_file_is_new
-:status: ruled
+:status: seed
 :criticality: med
 :verify: required
 
-A file the user moves from the quarantine back into the inbox SHALL be handled as a new file of the dump, its earlier
-quarantine record left as it is.
+A file the user moves from the quarantine back into the inbox SHALL be handled as a new file of the dump.
+:::
+
+:::{rul} A restored file's quarantine record is left as it is
+:id: RUL-restored_file_record_kept
+:status: seed
+:criticality: med
+:verify: none
+:refines: RUL-restored_file_is_new
+
+The earlier quarantine record of a file the user moves back into the inbox SHALL be left as it is.
 :::
 
 :::{rul} The quarantine's size is reported
@@ -679,12 +781,21 @@ newest.
 
 :::{rul} Prep's records are written only by an execution that succeeded
 :id: RUL-prep_records_on_success
-:status: ruled
+:status: seed
 :criticality: high
 :verify: required
 
-Prep SHALL write its log and its handoff only at the end of an execution all of whose operations succeeded, each
-written whole, never edited in place.
+Prep SHALL write its log and its handoff only at the end of an execution all of whose operations succeeded.
+:::
+
+:::{rul} Prep's records are written whole
+:id: RUL-prep_records_written_whole
+:status: seed
+:criticality: high
+:verify: required
+:refines: RUL-prep_records_on_success
+
+Prep's log and its handoff SHALL each be written whole, never edited in place.
 :::
 
 :::{rul} The handoff describes the workspace geotag works on
@@ -732,13 +843,22 @@ copy's entry.
 
 :::{rul} A photo keeps its history when its fingerprint is taken again
 :id: RUL-log_follows_retaken_fingerprint
-:status: ruled
+:status: seed
 :criticality: high
 :verify: required
 :refines: RUL-log_keyed_by_fingerprint
 
-A photo whose fingerprint is taken again with a new value SHALL keep its history in the log, under the new value, with a
-step recording the change.
+A photo whose fingerprint is taken again with a new value SHALL keep its history in the log, under the new value.
+:::
+
+:::{rul} A fingerprint taken again is a step in the log
+:id: RUL-retaken_fingerprint_step_logged
+:status: seed
+:criticality: high
+:verify: required
+:refines: RUL-log_follows_retaken_fingerprint
+
+The log SHALL record a step for the change when a photo's fingerprint is taken again with a new value.
 :::
 
 
@@ -767,12 +887,22 @@ The number of jobs SHALL be recorded in no plan, configuration or handoff.
 
 :::{rul} A tool's failure is retried before it counts
 :id: RUL-tool_failure_retried
-:status: ruled
+:status: seed
 :criticality: med
 :verify: required
 
 A tool that fails or crashes on a file SHALL be restarted and tried again a bounded number of times before the file's
-fingerprint or metadata is recorded as failed — never as valid.
+fingerprint or metadata is recorded as failed.
+:::
+
+:::{rul} A tool's failure is never recorded as valid
+:id: RUL-tool_failure_never_valid
+:status: seed
+:criticality: med
+:verify: required
+:refines: RUL-tool_failure_retried
+
+A file's fingerprint or metadata SHALL never be recorded as valid when the tool failed or crashed on it.
 :::
 
 :::{rul} A fingerprint taken again is explained

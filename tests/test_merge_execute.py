@@ -155,7 +155,8 @@ def test_execute_placed_new_moves_into_library(tmp_path):
     assert s["resume"] == {"newly_moved": 1, "already_done_skipped": 0}
 
 
-@pytest.mark.spec("RUL-collision_same_content", test="TST-merge_execute-execute_already_present_removes_source_no_write")
+@pytest.mark.spec("RUL-collision_same_content", "RUL-collision_same_content_copy_removed",
+                  test="TST-merge_execute-execute_already_present_removes_source_no_write")
 def test_execute_already_present_removes_source_no_write(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
                   library_files=[{"fp": "A", "dest": "Trip", "name": "a.jpg"}])
@@ -216,7 +217,9 @@ def test_the_run_reports_what_it_placed_and_what_stayed(tmp_path, capsys):
     assert "sealed the workspace" in capsys.readouterr().out
 
 
-@pytest.mark.spec("RUL-library_file_read_once", "RUL-collision_by_content", "RUL-library_file_rechecked_before_removal", test="TST-merge_execute-the_library_file_is_read_again_before_a_photo_already_there_is_removed")
+@pytest.mark.spec("RUL-collision_by_content", "RUL-library_file_rechecked_before_removal",
+                  "RUL-library_fingerprint_kept", "RUL-unplaced_photo_stays",
+                  test="TST-merge_execute-the_library_file_is_read_again_before_a_photo_already_there_is_removed")
 def test_the_library_file_is_read_again_before_a_photo_already_there_is_removed(tmp_path):
     """The cache trusts size and modification time; removing the workspace's copy cannot be undone. A
     library file changed since the plan without either moving is still caught: the photo stays."""
@@ -256,7 +259,9 @@ def test_execute_unfingerprintable_library_blocks_and_keeps_source(tmp_path):
     assert s["totals"]["blocked"] == 1 and s["failures"]
 
 
-@pytest.mark.spec("RUL-target_free_at_execute", "BLD-merge_move", "RUL-library_never_altered", test="TST-merge_execute-execute_occupied_by_different_content_at_execute_blocks_no_clobber")
+@pytest.mark.spec("RUL-target_free_at_execute", "BLD-merge_move", "RUL-library_never_altered",
+                  "RUL-unplaced_photo_stays",
+                  test="TST-merge_execute-execute_occupied_by_different_content_at_execute_blocks_no_clobber")
 def test_execute_occupied_by_different_content_at_execute_blocks_no_clobber(tmp_path):
     """TOCTOU clobber guard: target FREE at plan (placed_new), then a *different-content* file appears
     at the planned target before execute. The execute-time recheck must refuse — rc 3, source left in
@@ -321,7 +326,8 @@ def test_merge_never_mutates_by_dest_name_or_content_only_library_renames(tmp_pa
     assert journal == {"6-photos-by-dest/Trip/ts.jpg": "confirmed"}
 
 
-@pytest.mark.spec("RUL-library_not_scanned", test="TST-merge_execute-merge_only_inspects_specific_collision_target_never_rescans_library")
+@pytest.mark.spec("RUL-library_not_scanned", "RUL-library_file_read_once",
+                  test="TST-merge_execute-merge_only_inspects_specific_collision_target_never_rescans_library")
 def test_merge_only_inspects_specific_collision_target_never_rescans_library(tmp_path, monkeypatch):
     """§15.1 (anti): merge never rescans the library wholesale — it fingerprints only each incoming
     file's specific collision target, never a library-wide index. Seed the library with the collision
@@ -406,7 +412,8 @@ def test_a_snapshot_refusal_is_not_reported_as_a_stale_plan(tmp_path, monkeypatc
     assert "merge execute" in text
 
 
-@pytest.mark.spec("RUL-merge_rechecks_gates", "RUL-merge_refuses_changed_since_finalize", test="TST-merge_execute-plan_blocks_when_bydest_photo_absent_from_finalized_set")
+@pytest.mark.spec("RUL-merge_rechecks_gates", "RUL-merge_refuses_changed_since_finalize",
+                  test="TST-merge_execute-plan_blocks_when_bydest_photo_absent_from_finalized_set")
 def test_plan_blocks_when_bydest_photo_absent_from_finalized_set(tmp_path):
     """Prep-consistency (precondition 4): a photo physically under 6-photos-by-dest but NOT in the
     finalized record (handoff predates the latest move into by-dest) -> 're-run prep' blocker at plan,
@@ -435,7 +442,9 @@ def test_config_is_byte_identical_across_plan_dryrun_execute(tmp_path):
 
 # --- resume (state-derivation, §8.3) -----------------------------------------
 
-@pytest.mark.spec("RUL-seal_on_success_only", "RUL-merge_moves", "RUL-resume_rechecks_library", test="TST-merge_execute-execute_resume_after_crash_before_seal")
+@pytest.mark.spec("RUL-seal_on_success_only", "RUL-merge_moves", "RUL-resume_rechecks_library",
+                  "RUL-merge_resumable",
+                  test="TST-merge_execute-execute_resume_after_crash_before_seal")
 def test_execute_resume_after_crash_before_seal(tmp_path, monkeypatch):
     # Full success seals the workspace, so the genuine resume case is a crash AFTER the moves/journal
     # but BEFORE the seal: the re-run must recognize the already-moved files (state-derivation) and
@@ -462,7 +471,8 @@ def test_execute_resume_after_crash_before_seal(tmp_path, monkeypatch):
     assert open(os.path.join(str(lib), "Trip", "a.jpg"), "rb").read() == _fp_bytes("A")
 
 
-@pytest.mark.spec("BLD-merge_move", "RUL-merge_resumable", test="TST-merge_execute-execute_resume_finishes_crash_window")
+@pytest.mark.spec("BLD-merge_move", "RUL-merge_resumable",
+                  test="TST-merge_execute-execute_resume_finishes_crash_window")
 def test_execute_resume_finishes_crash_window(tmp_path):
     # Simulate a crash AFTER the library copy is in place but BEFORE the source was removed: both
     # present + fingerprints match -> resume finishes the source removal (no duplicate kept).
@@ -559,7 +569,8 @@ def test_execute_jobs_determinism(tmp_path):
     assert _comparable(_summary(ws1)) == _comparable(_summary(ws2))
 
 
-@pytest.mark.spec("RUL-crash_temps_cleared", "BLD-temp_sweep", test="TST-merge_execute-execute_sweeps_crash_orphaned_cross_fs_temps")
+@pytest.mark.spec("RUL-crash_temps_cleared", "BLD-temp_sweep", "RUL-crash_temps_counted",
+                  test="TST-merge_execute-execute_sweeps_crash_orphaned_cross_fs_temps")
 def test_execute_sweeps_crash_orphaned_cross_fs_temps(tmp_path):
     """A prior interrupted run can leave a cross-fs copy temp (.tmp-xdev-*.part) in a library dir.
     Because merge holds the library lock (no concurrent merge), execute safely sweeps such orphans
@@ -837,7 +848,8 @@ def test_merge_log_copies_photos25_forward_and_appends(tmp_path):
     assert p25["photos"]["A"]["journey"] == [{"phase": "geotag", "action": "renamed"}]
 
 
-@pytest.mark.spec("RUL-unplaced_photo_stays", "RUL-seal_on_success_only", test="TST-merge_execute-partial_run_does_not_seal_or_finalize")
+@pytest.mark.spec("RUL-seal_on_success_only", "RUL-unplaced_photo_run_partial",
+                  test="TST-merge_execute-partial_run_does_not_seal_or_finalize")
 def test_partial_run_does_not_seal_or_finalize(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
                   library_files=[{"fp": "FAIL", "dest": "Trip", "name": "a.jpg"}])
@@ -850,7 +862,8 @@ def test_partial_run_does_not_seal_or_finalize(tmp_path):
     assert os.path.exists(_ctl(ws, "photos-31-merge-summary.json"))     # summary still written
 
 
-@pytest.mark.spec("RUL-replan_carries_placed", "RUL-merge_resumable", test="TST-merge_execute-a_re_plan_after_a_partial_merge_carries_what_was_moved")
+@pytest.mark.spec("RUL-replan_carries_placed", "RUL-merge_resumable",
+                  test="TST-merge_execute-a_re_plan_after_a_partial_merge_carries_what_was_moved")
 def test_a_re_plan_after_a_partial_merge_carries_what_was_moved(tmp_path):
     """A partial merge — a.jpg moved, b.jpg blocked — is re-planned once the blocker is cleared. The new
     plan carries a.jpg forward from the plan that moved it, and the merge that finishes logs both."""
@@ -1077,7 +1090,8 @@ def test_merge_writes_only_its_own_part_of_the_database(tmp_path):
     assert _rows(db)["library_fingerprint_cache"]                      # its own part: written
 
 
-@pytest.mark.spec("RUL-one_database", "RUL-other_databases_scratch", test="TST-merge_execute-one_database_in_the_workspace_none_in_the_library")
+@pytest.mark.spec("RUL-one_database", "RUL-library_no_database", "RUL-database_is_record",
+                  test="TST-merge_execute-one_database_in_the_workspace_none_in_the_library")
 def test_one_database_in_the_workspace_none_in_the_library(tmp_path):
     """After a whole merge the workspace holds one database of record, besides the phase images and
     prep's scratch memo, and the library holds no database at all."""

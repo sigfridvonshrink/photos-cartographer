@@ -79,7 +79,9 @@ def mock_read_metadata_concurrently(folders, max_workers=4, progress_coordinator
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("RUL-no_op_run", "RUL-prep_leaves_by_dest_as_found", "RUL-not_inventoried", "RUL-no_op_run_reports_reuse", "RUL-reuse_valid_work", "RUL-filed_file_stays", test="TST-idempotency_cache-prep_idempotency_and_by_dest_accounting")
+@pytest.mark.spec("RUL-no_op_run", "RUL-prep_leaves_by_dest_as_found", "RUL-not_inventoried",
+                  "RUL-no_op_run_reports_reuse", "RUL-reuse_valid_work", "RUL-filed_file_stays",
+                  test="TST-idempotency_cache-prep_idempotency_and_by_dest_accounting")
 def test_prep_idempotency_and_by_dest_accounting(mock_meta, tmp_path, monkeypatch):
     ws = setup_workspace(tmp_path)
 
@@ -283,7 +285,8 @@ def test_chronological_destination_collision_allocates_safe_name_no_clobber(mock
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("RUL-database_matches_files", "RUL-prep_replans")
+@pytest.mark.spec("RUL-database_matches_files", "RUL-prep_replans",
+                  test="TST-idempotency_cache-prep_replans_from_filesystem_when_journal_corrupt_or_deleted")
 def test_prep_replans_from_filesystem_when_journal_corrupt_or_deleted(mock_meta, tmp_path, monkeypatch):
     """The prep journal is EVIDENCE, not a resume script: prep re-plans from the filesystem (+ cache)
     as truth. After a successful run, corrupting then deleting the journal must NOT change the re-plan
@@ -381,7 +384,8 @@ def test_quarantine_manifest_written_before_the_file_is_moved(mock_meta, tmp_pat
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("RUL-restored_file_is_new", test="TST-idempotency_cache-restored_quarantine_file_reflows_as_a_normal_dump")
+@pytest.mark.spec("RUL-restored_file_is_new",
+                  test="TST-idempotency_cache-restored_quarantine_file_reflows_as_a_normal_dump")
 def test_restored_quarantine_file_reflows_as_a_normal_dump(mock_meta, tmp_path, monkeypatch):
     """No un-quarantine path: a file dragged back out of quarantine into 0-sources is re-evaluated as
     an ordinary fresh dump under a NEW plan_id — there is no special 'restore' handling that skips
@@ -546,7 +550,9 @@ def test_handoff_manifest_generated(mock_meta, tmp_path, monkeypatch):
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("INV-no_stale_use", "BLD-prep_dependencies", "RUL-plan_carried_out_by_its_code", "RUL-prep_records_on_success")
+@pytest.mark.spec("INV-no_stale_use", "BLD-prep_dependencies", "RUL-plan_carried_out_by_its_code",
+                  "RUL-prep_records_on_success",
+                  test="TST-idempotency_cache-stale_cache_upsert_fails")
 def test_stale_cache_upsert_fails(mock_meta, tmp_path, monkeypatch):
     ws = setup_workspace(tmp_path)
 
@@ -714,7 +720,8 @@ def test_stale_already_cached_file_aborts(mock_meta, tmp_path, monkeypatch):
     assert (ws / "5-photos-by-date" / "2023-01-01" / "2023-01-01--12-00-00-001.jpg").exists()
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("RUL-database_matches_files", "BLD-database_ops", test="TST-idempotency_cache-stale_ghost_prune_reappeared_file_aborts_before_cache_remove")
+@pytest.mark.spec("BLD-database_ops", "RUL-no_row_for_gone_file",
+                  test="TST-idempotency_cache-stale_ghost_prune_reappeared_file_aborts_before_cache_remove")
 def test_stale_ghost_prune_reappeared_file_aborts_before_cache_remove(mock_meta, tmp_path):
     ws = tmp_path / "workspace"
     ws.mkdir()

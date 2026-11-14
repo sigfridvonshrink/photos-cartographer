@@ -70,7 +70,7 @@ def _snap(ws):
     return utils.prep_db_snapshot_path(str(ws))
 
 
-@pytest.mark.spec("RUL-database_image_each_phase")
+@pytest.mark.spec("RUL-database_image_each_phase", test="TST-snapshot-snapshot_written_and_matches_live_cache")
 def test_snapshot_written_and_matches_live_cache(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -85,7 +85,8 @@ def test_snapshot_written_and_matches_live_cache(tmp_path, monkeypatch):
     assert snap_rows == live_rows and len(snap_rows) >= 1
 
 
-@pytest.mark.spec("RUL-image_capture_atomic", "RUL-database_image_each_phase", test="TST-snapshot-snapshot_leaves_no_temp_and_refreshes_on_rerun")
+@pytest.mark.spec("RUL-image_capture_atomic", "RUL-database_image_each_phase",
+                  test="TST-snapshot-snapshot_leaves_no_temp_and_refreshes_on_rerun")
 def test_snapshot_leaves_no_temp_and_refreshes_on_rerun(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -101,7 +102,7 @@ def test_snapshot_leaves_no_temp_and_refreshes_on_rerun(tmp_path, monkeypatch):
     assert not glob.glob(str(ws / ".photos-ingest" / ".tmp-snapshot*"))
 
 
-@pytest.mark.spec("RUL-database_image_each_phase", test="TST-snapshot-failed_run_leaves_prior_snapshot_intact")
+@pytest.mark.spec("RUL-image_untouched_by_failed_run", test="TST-snapshot-failed_run_leaves_prior_snapshot_intact")
 def test_failed_run_leaves_prior_snapshot_intact(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)

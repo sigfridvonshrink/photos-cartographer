@@ -325,7 +325,7 @@ def test_cli_jobs_argparse(workspace):
 
 @patch("subprocess.Popen")
 @patch("photos_utils.PersistentExifToolWorker.read_metadata")
-@pytest.mark.spec("RUL-tool_failure_retried", test="TST-concurrency-exiftool_pool_failure_blocks_plan")
+@pytest.mark.spec("RUL-tool_failure_never_valid", test="TST-concurrency-exiftool_pool_failure_blocks_plan")
 def test_exiftool_pool_failure_blocks_plan(mock_read_metadata, mock_popen, workspace):
     mock_popen.return_value = MagicMock()
     # If the process errors out constantly

@@ -78,7 +78,8 @@ def _misnamed(plan):
     return [b for b in plan.blockers if b.startswith("Misnamed file")]
 
 
-@pytest.mark.spec("RUL-misnamed_file_stops_prep", "RUL-misnamed_file_named", test="TST-filename_format-misnamed_file_outside_inbox_stops_prep")
+@pytest.mark.spec("RUL-misnamed_file_stops_prep", "RUL-misnamed_file_named",
+                  test="TST-filename_format-misnamed_file_outside_inbox_stops_prep")
 def test_misnamed_file_outside_inbox_stops_prep(tmp_path, mocks):
     ws = _ws(tmp_path)
     fine = [f"5-photos-by-date/2023-01-02/{NAME}.jpg", f"5-photos-by-date/2023-01-02/{NAME}-001.jpg",

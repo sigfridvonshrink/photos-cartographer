@@ -72,7 +72,8 @@ def _log(ws):
         return json.load(f)
 
 
-@pytest.mark.spec("RUL-log_keyed_by_fingerprint", test="TST-prep_log-media_journey_keyed_by_fingerprint")
+@pytest.mark.spec("RUL-log_keyed_by_fingerprint", "RUL-log_carries_name_chain",
+                  test="TST-prep_log-media_journey_keyed_by_fingerprint")
 def test_media_journey_keyed_by_fingerprint(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -213,7 +214,7 @@ def test_strays_and_other_not_logged(tmp_path, monkeypatch):
     assert not any("notes" in json.dumps(e) for e in photos.values())
 
 
-@pytest.mark.spec("RUL-log_entry_grows")
+@pytest.mark.spec("RUL-log_entry_append_only", test="TST-prep_log-noop_rerun_leaves_log_byte_identical")
 def test_noop_rerun_leaves_log_byte_identical(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -224,7 +225,8 @@ def test_noop_rerun_leaves_log_byte_identical(tmp_path, monkeypatch):
     assert open(utils.prep_log_path(str(ws)), "rb").read() == first
 
 
-@pytest.mark.spec("RUL-log_entry_grows", test="TST-prep_log-recognized_move_appends_moved_to_by_dest")
+@pytest.mark.spec("RUL-log_entry_grows", "RUL-log_entry_append_only",
+                  test="TST-prep_log-recognized_move_appends_moved_to_by_dest")
 def test_recognized_move_appends_moved_to_by_dest(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -271,7 +273,8 @@ def test_missing_history_warns_and_marks_partial(tmp_path, monkeypatch):
     assert "incomplete" in entry.get("note", "")
 
 
-@pytest.mark.spec("RUL-log_keyed_by_fingerprint", "BLD-log_format", test="TST-prep_log-every_move_names_where_it_came_from")
+@pytest.mark.spec("BLD-log_format", "RUL-log_carries_name_chain",
+                  test="TST-prep_log-every_move_names_where_it_came_from")
 def test_every_move_names_where_it_came_from(tmp_path, monkeypatch):
     """The journey keeps the chain of names and places: each move and rename records where the photo
     came from as well as where it went, so the first step holds its original path in the dump."""
@@ -292,7 +295,7 @@ def test_every_move_names_where_it_came_from(tmp_path, monkeypatch):
     assert by["moved_to_by_dest"]["to"].startswith("6-photos-by-dest/Trip/")
 
 
-@pytest.mark.spec("RUL-log_follows_retaken_fingerprint", "BLD-prep_log_build",
+@pytest.mark.spec("RUL-log_follows_retaken_fingerprint", "BLD-prep_log_build", "RUL-retaken_fingerprint_step_logged",
                   test="TST-prep_log-a_retaken_fingerprint_keeps_the_photos_history")
 def test_a_retaken_fingerprint_keeps_the_photos_history(tmp_path, monkeypatch):
     """A photo fingerprinted again by another method, its value changed, keeps its history: the entry
@@ -316,7 +319,8 @@ def test_a_retaken_fingerprint_keeps_the_photos_history(tmp_path, monkeypatch):
     assert entry["journey"][-1]["from"] == old
 
 
-@pytest.mark.spec("RUL-log_follows_retaken_fingerprint", "RUL-moved_file_carried", "RUL-engine_change_is_checked", "BLD-prep_log_build",
+@pytest.mark.spec("RUL-log_follows_retaken_fingerprint", "RUL-engine_change_is_checked", "BLD-prep_log_build",
+                  "RUL-moved_file_stale_read_again", "RUL-retaken_fingerprint_step_logged",
                   test="TST-prep_log-a_photo_moved_under_a_new_imagemagick_keeps_its_history")
 def test_a_photo_moved_under_a_new_imagemagick_keeps_its_history(tmp_path, monkeypatch):
     """A photo the user sorts into photos by destination while ImageMagick changes, its fingerprint's value
