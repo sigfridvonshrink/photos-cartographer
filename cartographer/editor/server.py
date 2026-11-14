@@ -304,8 +304,6 @@ def _apply_edits(art, edits):
 
 def _save(workspace, payload):
     """Write the posted user_decision edits back into the workspace's decision artifacts."""
-    if photos_utils.is_sealed(workspace):       # the console reaches here without serve()'s check
-        return {"ok": False, "error": "workspace is sealed (already merged): decisions can no longer change"}
     # A save changes the workspace, so it holds the workspace's lock (BLD-editor_save_locks): a geotag plan
     # running now reads these records and rewrites them, and would overwrite a save landing in between.
     # Fail-fast like every run; the editor's display reads stay unlocked (each file is replaced whole).
@@ -313,6 +311,8 @@ def _save(workspace, payload):
     if not lock.acquire():
         return {"ok": False, "error": "a run is in progress on this workspace — save again when it finishes"}
     try:
+        if photos_utils.is_sealed(workspace):   # read under the lock; the console reaches here without serve()'s check
+            return {"ok": False, "error": "workspace is sealed (already merged): decisions can no longer change"}
         cd = os.path.join(workspace, CONTROL)
         written = []
         for key, name in (("time", TIME_NAME), ("drift", DRIFT_NAME), ("gps", GPS_NAME)):

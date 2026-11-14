@@ -400,6 +400,23 @@ def test_auto_reprep_runs_prep_plan_then_execute_for_clean_move(tmp_path, monkey
     assert any("running prep plan + execute" in m for m in rep.logs), rep.logs
 
 
+@pytest.mark.parametrize("defect", ["misplaced", "link", "missing"])
+@pytest.mark.spec("RUL-shape_checked_first", "BLD-geotag_auto_reprep",
+                  test="TST-geotag_preflight-no_auto_reprep_on_a_disturbed_shape")
+def test_no_auto_reprep_on_a_disturbed_shape(tmp_path, monkeypatch, defect):
+    """A move that would be re-prepped, in a workspace whose shape is disturbed: geotag runs no prep — nothing is
+    scanned or planned before the shape is checked."""
+    ws = _ws(tmp_path, bydest=("6-photos-by-dest/Trip/a.jpg",), handoff_files=[])   # a.jpg unrecorded: a clean move
+    assert _autoreprep(ws, monkeypatch)[0] == ["plan", "execute"]
+    if defect == "misplaced":
+        (ws / "loose.txt").write_text("dropped at the top level")
+    elif defect == "link":
+        os.symlink(str(tmp_path), str(ws / "elsewhere"))
+    else:
+        os.rmdir(ws / "4-videos-by-date")
+    assert _autoreprep(ws, monkeypatch)[0] == []
+
+
 @pytest.mark.spec("BLD-geotag_auto_reprep", "BLD-reprep_pending",
                   test="TST-geotag_preflight-auto_reprep_runs_prep_for_a_photo_changed_since_prep")
 def test_auto_reprep_runs_prep_for_a_photo_changed_since_prep(tmp_path, monkeypatch):

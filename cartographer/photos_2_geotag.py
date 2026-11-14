@@ -2321,6 +2321,10 @@ def _auto_reprep_for_clean_move(args, workspace_root, reporter):
         load_config(workspace_root)     # the folders are named by the workspace's configuration
     except Exception:
         return                          # missing or invalid — the preflight says so
+    if (top_level_links(workspace_root) or missing_managed_folders(workspace_root)
+            or misplaced_top_level_entries(workspace_root)):
+        return                          # a disturbed shape stops geotag before anything is scanned or planned
+                                        # (RUL-shape_checked_first) — the preflight says which
     sources = folder_name('sources')
     src = os.path.join(workspace_root, sources)
     if os.path.isdir(src) and os.listdir(src):

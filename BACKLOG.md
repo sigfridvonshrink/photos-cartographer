@@ -41,14 +41,36 @@ says it, no item states it; each to be ruled into the corpus or the code dropped
 
 ---
 
-### 4. The 17 rules and invariants only incidentally tested
+### 4. The four items still only incidentally tested, and what asserting the rest turned up
 
-**Why:** seventeen are marked `verify: incidental` — exercised by tests written for something else, a happy path passing
-through them, nothing asserting them, so a regression there passes CI. Five are **high**: `INV-change_only_what_needs`,
-`INV-every_change_from_the_record`, `INV-undisturbed_shape`, `RUL-operations_atomic`, `RUL-split_move_never_lost`;
-`tools/spec-build`'s `needs.json` lists the rest by their `verify` field.
+**Where it stands (2026-11-14):** thirteen of the seventeen have a test that asserts them. Left at
+`verify: incidental`:
 
-**Do:** a test that asserts each, or a ruled reason it needs none.
+- **`RUL-shape_checked_first`** — asserted where the code keeps it; the code does not keep it everywhere. To be
+  ruled, then built:
+  - prep's plan, on a missing managed folder or an entry at the top level that does not belong, records the blocker
+    and still fingerprints every file and writes its plan and memo before stopping. Prep must walk the tree to find a
+    link (`RUL-who_checks_for_links`), so only the top-level defects can stop it before the scan;
+  - prep's dry run and execute take the "nothing to do" shortcut before any shape check, and can end "Nothing to do"
+    on a disturbed workspace;
+  - `merge init-library` checks no shape, and without a path no seal either.
+- **`INV-change_only_what_needs`, `INV-every_change_from_the_record`, `INV-undisturbed_shape`** — no one test can
+  assert an invariant; each is carried out by rules that are tested. To be ruled: an invariant counts as verified
+  when every rule upholding or refining it is `verify: required`, checked by `tools/spec-build`. Four tested rules
+  carry out `INV-every_change_from_the_record` without being linked to it: `RUL-user_writes_decisions`,
+  `RUL-prep_takes_no_decision`, `RUL-cause_locatable`, `RUL-decision_revisable`.
+
+**Found while asserting them, to be ruled:**
+- **A link among the photos is not seen by geotag.** Geotag checks for links at the top level only and trusts the
+  handoff for the rest (`RUL-geotag_merge_check_top_level_links`). A photo in photos by destination replaced, after
+  prep, by a link to the same file elsewhere keeps its size and time: geotag plans and executes through the link.
+  Merge does check photos by destination for links. Against `RUL-no_links` and `INV-undisturbed_shape`.
+- **`RUL-one_configuration` says no setting governing a run comes from outside the workspace.** Two do, by design:
+  the seed of a new workspace's configuration (a defaults file beside the executable, or
+  `$PHOTOS_CARTOGRAPHER_CONFIG`), and the `-j` jobs flag. The rule's wording should except them or speak of a run's
+  outcome.
+- **Filesystems that lack what `RUL-filesystem_agnostic` requires** are not checked for up front; a run fails at its
+  first lock or move.
 
 ---
 
