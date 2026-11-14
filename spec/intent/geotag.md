@@ -249,7 +249,7 @@ zone — SHALL be skipped and reported to the user, naming its file and point.
 
 :::{rul} Tracks that are configured and not there stop geotag
 :id: RUL-missing_tracks_stop_geotag
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -260,7 +260,7 @@ Geotag SHALL NOT plan while the tracks folder the configuration names is not the
 
 :::{rul} Geotag runs without tracks
 :id: RUL-no_tracks_no_stop
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :uses: DEF-tracks
@@ -270,7 +270,7 @@ Geotag SHALL proceed where no tracks folder is configured or the folder holds no
 
 :::{rul} A track is one device's record
 :id: RUL-tracks_never_joined
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -562,7 +562,7 @@ their own.
 
 :::{rul} The tracks place a photo only within the configured limits
 :id: RUL-track_placement_bounded
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -574,7 +574,7 @@ A track SHALL place a photo only within the limits the configuration sets — ne
 
 :::{rul} A track's closest evidence is used first
 :id: RUL-track_evidence_order
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-track_placement_bounded

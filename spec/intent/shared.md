@@ -2509,6 +2509,18 @@ A number the configuration sets — a threshold, a distance, a duration — SHAL
 a sane range: a duration or a distance is never negative.
 :::
 
+:::{rul} The drift check's window is more than nothing
+:id: RUL-drift_window_positive
+:status: ruled
+:criticality: med
+:verify: required
+:uses: DEF-configuration
+:refines: RUL-checked_numbers
+
+The span of track the drift check looks at SHALL be set greater than zero, a setting of zero being one that switches
+the check off without saying so.
+:::
+
 :::{rul} A choice is one of its choices, and a decision has its shape
 :id: RUL-checked_shapes
 :status: ruled

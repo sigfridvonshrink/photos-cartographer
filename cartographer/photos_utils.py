@@ -1275,6 +1275,10 @@ def validate_config(cfg: dict, workspace_root: str = None):
     for k in _GPX_NUMERIC_KEYS:
         if k in cfg:
             _check_number(k, cfg[k], minimum=0)
+    # At zero the drift check would find track only at the very second of a photo: switched off in effect,
+    # with nothing saying so.
+    if "drift_check_track_window_seconds" in cfg and cfg["drift_check_track_window_seconds"] <= 0:
+        raise ValueError("config: drift_check_track_window_seconds must be greater than 0.")
 
     pol = cfg.get("camera_time_and_timezone_policy")
     if pol is not None:

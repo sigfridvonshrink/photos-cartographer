@@ -245,3 +245,11 @@ def test_field_fingerprints_change_with_their_area():
     c2 = copy.deepcopy(utils.CONFIG); c2["folders"]["sources"] = "0-inbox"
     assert utils.folders_fingerprint(c2) != base_fol
     assert utils.media_extensions_fingerprint(c2) == base_ext  # folder edit doesn't move the ext fp
+
+
+@pytest.mark.spec("RUL-drift_window_positive", test="TST-config_validation-the_drift_window_is_more_than_nothing")
+def test_the_drift_check_s_track_window_is_more_than_nothing():
+    """A window of zero would switch the drift check off without saying so."""
+    with pytest.raises(ValueError, match="drift_check_track_window_seconds must be greater than 0"):
+        utils.validate_config({"drift_check_track_window_seconds": 0})
+    utils.validate_config({"drift_check_track_window_seconds": 1})
