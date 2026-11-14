@@ -578,6 +578,40 @@ def test_auto_reprep_runs_inside_geotags_lock(tmp_path, monkeypatch):
     assert held == [("plan", True), ("execute", True)], held
 
 
+@pytest.mark.parametrize("defect", ["misplaced", "link", "missing"])
+@pytest.mark.parametrize("command", ["plan", "execute", "finalize"])
+@pytest.mark.spec("RUL-shape_checked_first", test="TST-geotag_preflight-the_shape_is_checked_before_anything_else")
+def test_the_shape_is_checked_before_anything_else(tmp_path, monkeypatch, capsys, command, defect):
+    """Geotag checks the workspace's shape before anything else it checks or does: with its shape disturbed and the
+    handoff it would read next missing too, every geotag command stops on the shape alone (exit 2), naming it and not
+    the handoff, having written nothing. (That the lock and the seal come first is
+    TST-cli-the_lock_and_the_seal_come_before_the_shape.)"""
+    import types as _t
+    ws = _ws(tmp_path, handoff=False)
+    if defect == "misplaced":
+        (ws / "loose.jpg").write_bytes(b"dropped at the top level")
+    elif defect == "link":
+        os.symlink(str(tmp_path), str(ws / "elsewhere"))
+    else:
+        os.rmdir(ws / "4-videos-by-date")
+    (ws / ".photos-ingest" / "photos-00-workspace.lock").touch()     # the lock's record is all a run may change
+
+    def state():
+        return sorted((str(p.relative_to(ws)), p.read_bytes() if p.is_file() and not p.is_symlink() else None)
+                      for p in ws.rglob("*") if not p.name.endswith(".lock"))
+    before = state()
+    monkeypatch.chdir(ws)
+    with pytest.raises(SystemExit) as ei:
+        cal.run(_t.SimpleNamespace(command=command, jobs=1))
+    out = capsys.readouterr()
+    said = out.out + out.err
+    named = {"misplaced": "Misplaced entry at workspace root", "link": "Forbidden symlink at the workspace root",
+             "missing": "missing managed folder(s): 4-videos-by-date"}[defect]
+    assert ei.value.code == 2 and named in said, said
+    assert "handoff" not in said.lower(), said                          # nothing checked after the shape
+    assert state() == before
+
+
 @pytest.mark.spec("RUL-only_prep_builds_structure", test="TST-geotag_preflight-geotag_and_merge_create_nothing_outside_a_workspace")
 def test_geotag_and_merge_create_nothing_outside_a_workspace(tmp_path, monkeypatch, capsys):
     """Run in a folder that is not a workspace, geotag and merge stop without creating the control

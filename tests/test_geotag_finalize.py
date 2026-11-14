@@ -579,7 +579,36 @@ def test_geotag_never_reads_a_database_image_back(tmp_path, monkeypatch):
     assert "photos-00-ingest.db" in opened and not set(images) & set(opened), opened
 
 
-@pytest.mark.spec("RUL-filesystem_agnostic", test="TST-geotag_finalize-geotag_runs_whole_with_no_zfs")
+@pytest.mark.spec("RUL-finalize_reads_database", test="TST-geotag_finalize-finalize_only_reads_the_workspace_database")
+def test_finalize_only_reads_the_workspace_database(tmp_path, monkeypatch):
+    """Finalize reads the workspace's database — it images it — and writes nothing to it: once geotag has executed,
+    the database is, byte for byte and row for row, what it was before finalize, and finalize leaves no journal of
+    a write beside it; it has been read all the same, into finalize's own image of it."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    live = ctl / "photos-00-ingest.db"
+
+    def rows():
+        conn = sqlite3.connect(f"file:{live}?mode=ro", uri=True)
+        try:
+            return list(conn.iterdump())
+        finally:
+            conn.close()
+    before, st, dumped = live.read_bytes(), live.stat(), rows()
+    assert any(line.startswith('INSERT INTO "resolved_utc_cache"') for line in dumped)   # geotag's rows, to keep
+    assert _run(monkeypatch, ws, "finalize") == 0
+    assert live.read_bytes() == before
+    assert (live.stat().st_mtime_ns, live.stat().st_ino) == (st.st_mtime_ns, st.st_ino)
+    assert rows() == dumped
+    assert not [n for n in os.listdir(ctl) if n.startswith("photos-00-ingest.db-")]   # no -journal / -wal left
+    image = sqlite3.connect(str(ctl / "photos-26-geotag-ingest.db"))
+    try:
+        assert list(image.iterdump()) == dumped                         # read whole into its image
+    finally:
+        image.close()
+
+
+@pytest.mark.spec("RUL-snapshot_optional", "RUL-filesystem_agnostic", test="TST-geotag_finalize-geotag_runs_whole_with_no_zfs")
 def test_geotag_runs_whole_with_no_zfs(tmp_path, monkeypatch):
     """With snapshots off, as they are by default, geotag never reaches for a ZFS feature: on a machine with no
     `zfs` at all it plans, executes and finalizes."""

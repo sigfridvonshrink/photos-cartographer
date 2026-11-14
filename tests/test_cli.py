@@ -412,6 +412,121 @@ def test_locked_workspace_failfast_produces_no_artifact(tmp_path, monkeypatch, c
     assert not (ws / ".photos-ingest" / "journal.json").exists()  # no journal written
 
 
+_EVERY_COMMAND = [("prep", "plan"), ("prep", "dry-run"), ("prep", "execute"),
+                  ("prep", "prune-quarantine", "--plan-id", "20260101T000000Z-abc123", "--yes"),
+                  ("geotag", "plan"), ("geotag", "execute"), ("geotag", "finalize"),
+                  ("merge", "init-library"), ("merge", "init-library", "<library>"),
+                  ("merge", "plan"), ("merge", "dry-run"), ("merge", "execute"),
+                  ("edit", "save")]
+
+
+@pytest.mark.parametrize("command", _EVERY_COMMAND, ids=[" ".join(c[:2]) + (" <path>" if "<library>" in c else "")
+                                                         for c in _EVERY_COMMAND])
+@pytest.mark.spec("RUL-every_command_locks", "RUL-one_workspace_lock",
+                  test="TST-cli-every_command_waits_for_the_one_workspace_lock")
+def test_every_command_waits_for_the_one_workspace_lock(tmp_path, monkeypatch, capsys, command):
+    """Every command of every phase, and the editor's save, takes the workspace's lock — the one lock, the same for
+    all: while another run holds it, each command, run as the command line runs it, refuses with exit 1 and leaves
+    the workspace and the library exactly as they were (the quarantine a prune would delete, the library
+    init-library would bless, the decisions a save would rewrite)."""
+    import cartographer.cli as cli
+    from cartographer.editor import server as serve
+    lib = tmp_path / "lib"; lib.mkdir()
+    cfg = {k: v for k, v in utils.CONFIG.items() if k != "jobs"}
+    cfg["zfs"] = {"enabled": False}
+    cfg["merge"] = dict(cfg.get("merge") or {}); cfg["merge"]["library_root"] = str(lib)
+    ws = _ws(tmp_path, config=cfg)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"a dump to plan")
+    qd = ws / ".photos-ingest-quarantine" / "20260101T000000Z-abc123"
+    qd.mkdir(parents=True); (qd / "dup.jpg").write_bytes(b"recoverable")
+    (ws / ".photos-ingest" / "photos-21-time-decisions.json").write_text('{"destinations": {}}')
+
+    def state():
+        return sorted((str(p.relative_to(tmp_path)), p.read_bytes() if p.is_file() else None, p.stat().st_mtime_ns)
+                      for p in tmp_path.rglob("*"))
+
+    held = utils.WorkspaceLock(str(ws), create=False)              # another run, holding the workspace's lock
+    assert held.acquire() is True
+    before = state()
+    monkeypatch.chdir(str(ws))
+    try:
+        if command[0] == "edit":
+            res = serve._save(str(ws), {"time": [{"dest": "6-photos-by-dest/T", "kind": "timezone",
+                                                  "user_decision": {"manual_iana_timezone": "Asia/Tokyo"}}]})
+            assert res["ok"] is False and "run is in progress" in res["error"], res
+        else:
+            argv = [str(lib) if a == "<library>" else a for a in command]
+            with pytest.raises(SystemExit) as ei:
+                cli.main(argv)
+            assert ei.value.code == 1, (command, capsys.readouterr())
+            assert "locked" in capsys.readouterr().err.lower()
+        assert state() == before, command                          # nothing read into a record, nothing changed
+        assert not utils.is_library(str(lib))
+    finally:
+        held.release()
+
+
+_SHAPE_DEFECTS = {"misplaced": "Misplaced entry", "link": "symlink", "missing": "missing managed folder"}
+
+
+def _disturb(ws, tmp_path, defect):
+    if defect == "misplaced":
+        (ws / "loose.jpg").write_bytes(b"dropped at the top level")
+    elif defect == "link":
+        os.symlink(str(tmp_path), str(ws / "elsewhere"))
+    else:
+        os.rmdir(ws / "4-videos-by-date")
+
+
+@pytest.mark.parametrize("defect", sorted(_SHAPE_DEFECTS))
+@pytest.mark.parametrize("command", [("prep", "plan"), ("prep", "dry-run"), ("prep", "execute"),
+                                     ("geotag", "plan"), ("geotag", "execute"), ("geotag", "finalize"),
+                                     ("merge", "plan"), ("merge", "dry-run"), ("merge", "execute")],
+                         ids=lambda c: " ".join(c))
+@pytest.mark.spec("RUL-shape_checked_first", test="TST-cli-the_lock_and_the_seal_come_before_the_shape")
+def test_the_lock_and_the_seal_come_before_the_shape(tmp_path, monkeypatch, capsys, command, defect):
+    """Each phase takes the lock, then checks the seal, and only then the workspace's shape: on a sealed workspace
+    whose shape is disturbed, a run that cannot take the lock stops on the lock (exit 1) and one that can stops on
+    the seal (exit 2), saying the workspace is sealed and nothing of its shape — and neither changes anything but the
+    lock's owner record. The shape check's own place, before everything else, is asserted per phase
+    (TST-geotag_preflight-the_shape_is_checked_before_anything_else, TST-merge_preflight-the_shape_is_checked_before_anything_else)."""
+    import cartographer.cli as cli
+    lib = tmp_path / "lib"; lib.mkdir()
+    utils.write_library_marker(str(lib))
+    cfg = {k: v for k, v in utils.CONFIG.items() if k != "jobs"}
+    cfg["zfs"] = {"enabled": False}
+    cfg["merge"] = dict(cfg.get("merge") or {}); cfg["merge"]["library_root"] = str(lib)
+    ws = _ws(tmp_path, config=cfg)
+    (ws / ".photos-ingest" / "photos-00-sealed.json").write_text('{"sealed": true}')
+    _disturb(ws, tmp_path, defect)
+    monkeypatch.chdir(str(ws))
+
+    def state():
+        return sorted((str(p.relative_to(tmp_path)), p.read_bytes() if p.is_file() and not p.is_symlink() else None,
+                       p.lstat().st_mtime_ns)
+                      for p in tmp_path.rglob("*") if not p.name.endswith(".lock"))
+
+    def run():
+        with pytest.raises(SystemExit) as ei:
+            cli.main(list(command))
+        out = capsys.readouterr()
+        return ei.value.code, out.out + out.err
+
+    held = utils.WorkspaceLock(str(ws), create=False)
+    assert held.acquire() is True
+    before = state()
+    try:
+        code, said = run()
+    finally:
+        held.release()
+    assert code == 1 and "locked" in said.lower() and "SEALED" not in said, said           # the lock first
+    assert state() == before
+    code, said = run()
+    assert code == 2 and "SEALED" in said, said                                            # then the seal
+    assert _SHAPE_DEFECTS[defect].lower() not in said.lower(), said                       # ...before the shape
+    assert state() == before
+
+
 @pytest.mark.spec("RUL-no_plan_no_run", "RUL-no_plan_says_plan_first",
                   test="TST-cli-execute_without_saved_plan_exits_nonzero")
 def test_execute_without_saved_plan_exits_nonzero(tmp_path, monkeypatch, capsys):

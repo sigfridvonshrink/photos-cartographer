@@ -638,6 +638,74 @@ def test_locked_workflow_exits_1_if_library_locked(tmp_path):
         held.release()
 
 
+@pytest.mark.parametrize("defect", ["misplaced", "link", "missing"])
+@pytest.mark.parametrize("command", ["plan", "dry-run", "execute"])
+@pytest.mark.spec("RUL-shape_checked_first", test="TST-merge_preflight-the_shape_is_checked_before_anything_else")
+def test_the_shape_is_checked_before_anything_else(tmp_path, capsys, command, defect):
+    """Merge checks the workspace's shape before anything else it checks or does: with its shape disturbed and the
+    handoff it would read next missing too, plan, dry-run and execute stop on the shape alone (exit 2), naming it and
+    not the handoff, before the library is locked — the workspace and the library left as they were. (That the lock
+    and the seal come first is TST-cli-the_lock_and_the_seal_come_before_the_shape.)"""
+    ws, lib = _make(tmp_path, handoff=False)
+    if defect == "misplaced":
+        (ws / "loose.jpg").write_bytes(b"dropped at the top level")
+    elif defect == "link":
+        os.symlink(str(tmp_path / "library"), str(ws / "elsewhere"))
+    else:
+        os.rmdir(ws / "4-videos-by-date")
+    (_ctl(ws) / "photos-00-workspace.lock").touch()                # the lock's record is all a run may change
+
+    def state():
+        return sorted((str(p.relative_to(tmp_path)), p.read_bytes() if p.is_file() and not p.is_symlink() else None)
+                      for p in tmp_path.rglob("*") if p.name != "photos-00-workspace.lock")
+    before = state()
+    assert merge._run_locked_workflow(command, str(ws)) == 2
+    out = capsys.readouterr()
+    said = out.out + out.err
+    named = {"misplaced": "Misplaced entry at workspace root", "link": "Forbidden symlink at the workspace root",
+             "missing": "missing managed folder(s): 4-videos-by-date"}[defect]
+    assert named in said and "handoff" not in said.lower(), said      # nothing checked after the shape
+    assert state() == before
+    assert not os.path.exists(utils.library_lock_path(str(lib)))     # the library never locked
+
+
+@pytest.mark.spec("RUL-library_lock_stale_recovered", test="TST-merge_preflight-a_dead_merges_library_lock_is_stale_and_recovered")
+def test_a_dead_merges_library_lock_is_stale_and_recovered(tmp_path):
+    """A merge that dies holding the library's lock leaves it recognisable as stale — its record still names the
+    dead merge, but no running process holds the lock — and the next merge takes it over and runs, with nothing
+    to clear by hand; while that merge was alive, the same run was refused."""
+    import subprocess
+    import sys
+    import time
+    ws, lib = _make(tmp_path)
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(utils.__file__)))
+    ready = tmp_path / "ready"
+    code = ("import sys, time\n"
+            f"sys.path.insert(0, {repo!r})\n"
+            "from cartographer import photos_utils\n"
+            f"held = photos_utils.LibraryLock({str(lib)!r})\n"
+            "assert held.acquire()\n"
+            f"open({str(ready)!r}, 'w').close()\n"
+            "while True: time.sleep(0.05)\n")
+    dying = subprocess.Popen([sys.executable, "-c", code])
+    try:
+        for _ in range(500):
+            if ready.exists():
+                break
+            time.sleep(0.02)
+        assert ready.exists(), "the merge holding the library did not start"
+        assert merge._run_locked_workflow("plan", str(ws)) == 1        # alive: the library is locked
+    finally:
+        dying.kill()                                                   # dies holding it, never releasing
+        dying.wait(timeout=10)
+    lock = utils.LibraryLock(str(lib))
+    assert lock.read_owner()["pid"] == dying.pid                       # the record still names the dead merge...
+    assert lock.held_owner() is None                                   # ...but no running process holds it: stale
+    assert merge._run_locked_workflow("plan", str(ws)) == 0            # recovered: the next merge runs
+    assert os.path.exists(merge.merge_plan_path(str(ws)))
+    assert lock.read_owner()["pid"] == os.getpid()                     # and it was this run that held it
+
+
 @pytest.mark.spec("RUL-library_confirmed_before_lock", test="TST-merge_preflight-locked_workflow_exits_2_on_blocker")
 def test_locked_workflow_exits_2_on_blocker(tmp_path):
     ws, lib = _make(tmp_path, complete_log=False)     # a precondition fails

@@ -139,6 +139,97 @@ def test_strays_scan_skipped_on_next_run(tmp_path, monkeypatch):
     assert os.path.exists(landed)                                # the stray is left untouched
 
 
+def _spy_reads(monkeypatch):
+    """Record every file prep fingerprints and every folder whose metadata it reads."""
+    fingerprinted, metadata_folders = [], []
+    hsh, meta = prep.ContentHasher.fingerprint_image, utils.MetadataReader.read_metadata_concurrently
+
+    def fp(p):
+        fingerprinted.append(p)
+        return hsh(p)
+
+    def md(folders, max_workers=4, progress_coordinator=None):
+        metadata_folders.extend(folders)
+        return meta(folders, max_workers, progress_coordinator)
+    monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", fp)
+    monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", md)
+    return fingerprinted, metadata_folders
+
+
+@pytest.mark.spec("RUL-not_inventoried", test="TST-strays-what_prep_leaves_out_of_its_inventory")
+def test_what_prep_leaves_out_of_its_inventory(tmp_path, monkeypatch):
+    """Prep leaves out of its inventory of media, each as a whole, the control directory, the quarantine, a `.git`
+    directory and the strays folder with everything in it, and every hidden file: photos placed in each are never
+    fingerprinted, never read for metadata, in no part of the plan, and never cached — while a photo in the inbox
+    beside them is. A hidden file in the inbox is set aside to the quarantine (RUL-dump_hidden_files_quarantined),
+    never taken as media."""
+    _install(monkeypatch)
+    fingerprinted, metadata_folders = _spy_reads(monkeypatch)
+    ws = _ws(tmp_path)
+    left_out = [".photos-ingest/inside.jpg",
+                ".photos-ingest-quarantine/20250101T000000Z-aaaaaa/0-sources/parked.jpg",
+                ".git/objects/blob.jpg",
+                "1-strays/loose.jpg", "1-strays/20250101T000000Z-aaaaaa/sub/kept.jpg",
+                "5-photos-by-date/2023-01-02/.hidden.jpg", "5-photos-by-date/.thumbnails/thumb.jpg",
+                "6-photos-by-dest/Trip/.edit.jpg"]
+    for rel in left_out + ["0-sources/.preview.jpg", "0-sources/real.jpg"]:
+        (ws / rel).parent.mkdir(parents=True, exist_ok=True)
+        (ws / rel).write_bytes(b"img " + rel.encode())
+    plan = _plan(ws)
+    assert not plan.blockers, plan.blockers
+    assert [os.path.relpath(p, ws) for p in fingerprinted] == ["0-sources/real.jpg"]   # only the inbox's photo
+    read = {os.path.relpath(f, ws) for f in metadata_folders}
+    assert "0-sources" in read
+    assert not [f for f in read if f.split("/")[0] in (".photos-ingest", ".photos-ingest-quarantine", ".git",
+                                                       "1-strays") or "/." in "/" + f], read
+    in_plan = set(plan.inventory) | {p["relative_path"] for p in plan.workspace_file_preconditions}
+    named = {op.source for op in plan.operations} | {op.destination for op in plan.operations}
+    for rel in left_out:
+        assert rel not in in_plan and rel not in named, rel
+    assert [(op.type, op.source) for op in plan.operations if op.source == "0-sources/.preview.jpg"] \
+        == [("quarantine_move", "0-sources/.preview.jpg")]
+    prep.PlanExecutor(str(ws)).execute(plan)
+    cached = _cached_paths(ws)
+    jpgs = [p for p in cached if p.endswith(".jpg")]
+    assert len(jpgs) == 1 and jpgs[0].startswith("5-photos-by-date/") and "/." not in jpgs[0], cached   # the photo
+    for rel in left_out:
+        assert (ws / rel).read_bytes() == b"img " + rel.encode(), rel                            # all left as they were
+
+
+@pytest.mark.spec("RUL-strays_never_processed", test="TST-strays-strays_are_never_processed_again")
+def test_strays_are_never_processed_again(tmp_path, monkeypatch):
+    """Prep writes into the strays folder but never scans it: a stray set aside by one run — even once the
+    configuration counts its extension as an image, and beside a photo dropped in the strays folder by hand — is
+    never fingerprinted or read again by the runs after, enters no plan, no cache and no handoff (so geotag and
+    merge, which read the handoff, never meet it), and stays where it was, byte for byte."""
+    import json
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "notes.txt").write_bytes(b"hello")
+    (ws / "0-sources" / "real.jpg").write_bytes(b"img")
+    _run(ws)
+    stray = glob.glob(str(ws / "1-strays" / "*" / "notes.txt"))[0]
+    rel_stray = os.path.relpath(stray, ws)
+    (ws / "1-strays" / "by-hand.jpg").write_bytes(b"a photo")
+    cfg_p = ws / ".photos-ingest" / "photos-00-config.json"
+    cfg = json.loads(cfg_p.read_text())
+    cfg["media_extensions"]["image"] = list(cfg["media_extensions"]["image"]) + ["txt"]
+    cfg_p.write_text(json.dumps(cfg))                               # a stray's extension now names an image
+    fingerprinted, metadata_folders = _spy_reads(monkeypatch)
+    (ws / "0-sources" / "next.jpg").write_bytes(b"next img")       # the next run has a dump of its own
+    plan = _run(ws)
+    assert "0-sources/next.jpg" in [os.path.relpath(p, ws) for p in fingerprinted]     # the run did read its dump
+    assert not [p for p in fingerprinted if os.path.relpath(p, ws).startswith("1-strays")], fingerprinted
+    assert not [f for f in metadata_folders if os.path.relpath(f, ws).startswith("1-strays")], metadata_folders
+    for rel in (rel_stray, "1-strays/by-hand.jpg"):
+        assert rel not in plan.inventory
+        assert not [op for op in plan.operations if rel in (op.source, op.destination)], rel
+        assert rel not in _cached_paths(ws)
+    handoff = json.loads((ws / ".photos-ingest" / "photos-11-handoff.json").read_text())
+    assert not [f for f in handoff["files"] if f["relative_path"].startswith("1-strays/")]
+    assert open(stray, "rb").read() == b"hello" and (ws / "1-strays" / "by-hand.jpg").read_bytes() == b"a photo"
+
+
 @pytest.mark.spec("RUL-tracks_geotag_only", "RUL-track_files_block_prep", "RUL-track_file_left_in_place", test="TST-strays-track_file_blocks_prep_and_stays_put")
 def test_track_file_blocks_prep_and_stays_put(tmp_path, monkeypatch):
     """RUL-track_files_block_prep: a track is never media. A `.gpx` anywhere prep inventories — the 0-sources

@@ -179,7 +179,7 @@ def _zfs_unreachable(monkeypatch):
     return calls
 
 
-@pytest.mark.spec("RUL-filesystem_agnostic", test="TST-zfs-prep_runs_whole_with_no_zfs")
+@pytest.mark.spec("RUL-snapshot_optional", "RUL-filesystem_agnostic", test="TST-zfs-prep_runs_whole_with_no_zfs")
 def test_prep_runs_whole_with_no_zfs(tmp_path, monkeypatch):
     """With snapshots off, as they are by default, prep never reaches for a ZFS feature: on a machine with no
     `zfs` at all it organizes a dump, and the next, whole."""

@@ -119,6 +119,53 @@ def test_execute_time_no_clobber_preserves_existing(tmp_path, monkeypatch):
     assert (ws / "0-sources" / "a.jpg").read_bytes() == b"ORIGINAL"   # source not moved
 
 
+def _split_moves(monkeypatch, tmp_path, ws):
+    """Record each hard link or copy made of a file outside the control directory — a move made otherwise than by
+    one rename. Skips where the filesystem has no rename refusing a taken name."""
+    probe = tmp_path / "probe"; probe.write_bytes(b"p")
+    fn = utils._get_renameat2()
+    if not fn or fn(utils._AT_FDCWD, os.fsencode(str(probe)), utils._AT_FDCWD,
+                    os.fsencode(str(tmp_path / "probed")), utils._RENAME_NOREPLACE) != 0:
+        pytest.skip("this filesystem has no rename that refuses a taken name")
+    ctl = os.path.join(str(ws), ".photos-ingest") + os.sep
+    split, real_link, real_copy = [], os.link, utils.shutil.copyfile
+
+    def link(src, dst, *a, **k):
+        if not str(src).startswith(ctl):
+            split.append(("link", str(src)))
+        return real_link(src, dst, *a, **k)
+
+    def copyfile(src, dst, *a, **k):
+        if not str(src).startswith(ctl):
+            split.append(("copy", str(src)))
+        return real_copy(src, dst, *a, **k)
+    monkeypatch.setattr(os, "link", link)
+    monkeypatch.setattr(utils.shutil, "copyfile", copyfile)
+    return split
+
+
+@pytest.mark.spec("RUL-operations_atomic", test="TST-no_clobber-every_prep_move_is_one_rename")
+def test_every_prep_move_is_one_rename(tmp_path, monkeypatch):
+    """Where the filesystem allows, each move prep makes is one rename: the dump into the inbox, a photo to its day
+    folder, a duplicate into the quarantine — none a link and an unlink, or a copy and a removal."""
+    _install(monkeypatch)
+    ws = tmp_path / "ws"; ws.mkdir()                            # a dump, before prep has made the workspace
+    (ws / "trip").mkdir()
+    (ws / "trip" / "a.jpg").write_bytes(b"A")
+    (ws / "trip" / "b.jpg").write_bytes(b"B")
+    (ws / "trip" / "again").mkdir()
+    (ws / "trip" / "again" / "a.jpg").write_bytes(b"A")          # the same photo again: set aside
+    split = _split_moves(monkeypatch, tmp_path, ws)
+    monkeypatch.chdir(ws)
+    for command in ("plan", "execute"):
+        assert prep.main(["-j", "1", command]) in (0, None), command
+    day = ws / "5-photos-by-date" / "2023-01-02"
+    assert sorted(os.listdir(day)) == ["2023-01-02--03-04-05-001.jpg", "2023-01-02--03-04-05.jpg"]
+    assert [f for _r, _d, fs in os.walk(ws / ".photos-ingest-quarantine") for f in fs if f.endswith(".jpg")] == ["a.jpg"]
+    assert not (ws / "trip").exists() and os.listdir(ws / "0-sources") == []
+    assert split == [], split
+
+
 # --- RootGuard.resolve_and_check_path (the path-safety primitive) -------------
 
 def test_resolve_rejects_parent_traversal(tmp_path):

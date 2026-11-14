@@ -490,6 +490,57 @@ def test_execute_resume_finishes_crash_window(tmp_path):
     assert open(os.path.join(str(lib), "Trip", "a.jpg"), "rb").read() == _fp_bytes("A")
 
 
+@pytest.mark.spec("RUL-operations_atomic", test="TST-merge_execute-a_placement_on_one_filesystem_is_one_rename")
+def test_a_placement_on_one_filesystem_is_one_rename(tmp_path, monkeypatch):
+    """Where the library lies on the workspace's filesystem, each placement is one rename — never a hard link and
+    an unlink, or a copy and a removal, of the photo."""
+    probe = tmp_path / "probe"; probe.write_bytes(b"p")
+    fn = utils._get_renameat2()
+    if not fn or fn(utils._AT_FDCWD, os.fsencode(str(probe)), utils._AT_FDCWD,
+                    os.fsencode(str(tmp_path / "probed")), utils._RENAME_NOREPLACE) != 0:
+        pytest.skip("this filesystem has no rename that refuses a taken name")
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
+                             {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
+                  library_files=[{"fp": "C", "dest": "Trip", "name": "a.jpg"}])
+    split = []
+    real_link, real_copy = os.link, shutil.copyfile
+    def link(src, dst, *a, **k):
+        split.append(("link", str(src)))
+        return real_link(src, dst, *a, **k)
+    def copyfile(src, dst, *a, **k):
+        split.append(("copy", str(src)))
+        return real_copy(src, dst, *a, **k)
+    monkeypatch.setattr(os, "link", link)
+    monkeypatch.setattr(shutil, "copyfile", copyfile)
+    for command in ("plan", "execute"):
+        utils.CONFIG.clear(); utils.CONFIG.update(json.loads(json.dumps(utils.DEFAULT_CONFIG)))   # each a run of its own
+        assert merge._run_locked_workflow(command, str(ws)) == 0, command
+    assert sorted(os.listdir(lib / "Trip")) == ["a-001.jpg", "a.jpg", "b.jpg"]
+    assert _summary(ws)["status"] == "success"
+    assert [s for s in split if ".photos-ingest" not in s[1]] == [], split
+
+
+@pytest.mark.spec("RUL-one_configuration", test="TST-merge_execute-merge_reads_its_settings_from_the_workspace_alone")
+def test_merge_reads_its_settings_from_the_workspace_alone(tmp_path, monkeypatch):
+    """Merge takes its settings from the workspace's configuration alone: another configuration in every other
+    place — the seed defaults, beside the executable, above the workspace, in the home folder, an environment
+    variable per setting — naming another library, also set up as one, never draws a photo into it."""
+    from _elsewhere import settings_elsewhere
+    other_lib = tmp_path / "other-lib"; other_lib.mkdir()
+    utils.write_library_marker(str(other_lib))
+    other = json.loads(json.dumps(utils.DEFAULT_CONFIG))
+    other["merge"]["library_root"] = str(other_lib)
+    other["filename_timestamp_format"] = "%Y%m%d_ELSEWHERE_%H%M%S"
+    settings_elsewhere(monkeypatch, tmp_path, other)
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    marker = sorted(os.listdir(other_lib))
+    for command in ("plan", "dry-run", "execute"):
+        utils.CONFIG.clear(); utils.CONFIG.update(json.loads(json.dumps(utils.DEFAULT_CONFIG)))   # a run of its own
+        assert merge._run_locked_workflow(command, str(ws)) == 0, command
+    assert open(os.path.join(str(lib), "Trip", "a.jpg"), "rb").read() == _fp_bytes("A")
+    assert sorted(os.listdir(other_lib)) == marker
+
+
 # --- cross-filesystem path + torn-copy verify (BLD-cross_fs_temp) -------------
 
 def _force_cross_fs(monkeypatch):
@@ -1227,7 +1278,7 @@ def test_merge_never_reads_a_database_image_back(tmp_path, monkeypatch):
     assert "photos-00-ingest.db" in opened and not set(images) & set(opened), opened
 
 
-@pytest.mark.spec("RUL-filesystem_agnostic", test="TST-merge_execute-merge_runs_whole_with_no_zfs")
+@pytest.mark.spec("RUL-snapshot_optional", "RUL-filesystem_agnostic", test="TST-merge_execute-merge_runs_whole_with_no_zfs")
 def test_merge_runs_whole_with_no_zfs(tmp_path, monkeypatch):
     """With snapshots off, as they are by default, merge never reaches for a ZFS feature: on a machine with no
     `zfs` at all it plans, dry-runs and merges whole, and seals the workspace."""

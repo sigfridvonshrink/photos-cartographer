@@ -256,6 +256,40 @@ def test_append_at_max_plus_one_integration():
     assert utils.allocate_suffix(root, "arw", occupied, start_idx=start) == "ts-005.arw"
 
 
+# --- The cross-filesystem copy's temporary name (BLD-cross_fs_temp) -------------
+
+@pytest.mark.spec("RUL-temp_name_own", test="TST-merge_primitives-a_temporary_copy_bears_a_name_no_photo_bears")
+def test_a_temporary_copy_bears_a_name_no_photo_bears(tmp_path, monkeypatch):
+    """A move into the library across filesystems copies the photo to a temporary name beside its place: a name of its
+    own — a fresh one for every copy, neither the photo's nor any other file's there — and one no photo bears: a
+    hidden name, which prep never takes for media (RUL-not_inventoried), with an extension of no media class. The
+    sweep of a crash's leftover copies goes by that name, and no photo answers to it."""
+    place = tmp_path / "library" / "Trip"
+    place.mkdir(parents=True)
+    resident = "2024-07-03--14-00-00.jpg"
+    (place / resident).write_bytes(b"already in the library")
+    temps, real_copy = [], utils.shutil.copyfile
+
+    def copy(src, dst, *a, **k):
+        temps.append(os.path.basename(dst))
+        return real_copy(src, dst, *a, **k)
+    monkeypatch.setattr(utils.shutil, "copyfile", copy)
+    photos = ["2024-07-03--15-00-00.jpg", "2024-07-03--15-00-00-001.arw", "2024-07-03--16-00-00.mp4"]
+    for name in photos:
+        src = tmp_path / name
+        src.write_bytes(b"photo " + name.encode())
+        utils._move_cross_fs_no_clobber(str(src), str(place / name))
+    assert len(temps) == len(photos) and len(set(temps)) == len(photos), temps     # a fresh name for every copy
+    for temp in temps:
+        assert temp not in photos + [resident], temp
+        assert temp.startswith("."), temp                                         # hidden: never media to prep
+        assert utils.media_class_for_ext(os.path.splitext(temp)[1]) == "other", temp
+        assert temp.startswith(utils.XDEV_TMP_PREFIX) and temp.endswith(utils.XDEV_TMP_SUFFIX)  # what the sweep takes
+    assert not [n for n in photos + [resident]
+                if n.startswith(utils.XDEV_TMP_PREFIX) and n.endswith(utils.XDEV_TMP_SUFFIX)]   # no photo answers to it
+    assert sorted(os.listdir(place)) == sorted(photos + [resident])               # and no copy is left behind
+
+
 # --- Archive re-seal (RUL-merge_reseals) ---------------------------------------
 
 @pytest.mark.spec("RUL-phase_writes_own_records", "RUL-reseal_rederives_nothing", test="TST-merge_primitives-reseal_writes_own_manifest_and_never_touches_the_25")

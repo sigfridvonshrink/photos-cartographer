@@ -69,7 +69,7 @@ of two phases, a merge, a finalize, or a quarantine prune.
 :id: RUL-every_command_locks
 :status: ruled
 :criticality: med
-:verify: incidental
+:verify: required
 :upholds: INV-one_run_at_a_time
 
 Every run, and every change to the workspace, SHALL hold the workspace's lock.
@@ -79,7 +79,7 @@ Every run, and every change to the workspace, SHALL hold the workspace's lock.
 :id: RUL-one_workspace_lock
 :status: ruled
 :criticality: med
-:verify: incidental
+:verify: required
 :refines: RUL-every_command_locks
 
 A workspace SHALL have exactly one lock, shared by every command.
@@ -174,7 +174,7 @@ Merge also takes a lock on the library it writes into, so that two merges into o
 :id: RUL-snapshot_optional
 :status: ruled
 :criticality: med
-:verify: incidental
+:verify: required
 
 A phase that changes files MAY first take a snapshot of what it is about to change, from which the whole change can be
 rolled back. Cartographer SHALL be complete and safe without one, no guarantee depending on a snapshot having been
@@ -298,7 +298,7 @@ what is processed under it, and it is an input the user authors.
 :id: RUL-one_configuration
 :status: ruled
 :criticality: med
-:verify: incidental
+:verify: required
 
 All three phases SHALL read their settings from the workspace's one configuration alone, each the settings it needs — no
 phase keeping settings of its own, and no setting that governs a run coming from outside the workspace.
@@ -646,7 +646,7 @@ phase's output.
 :id: RUL-not_inventoried
 :status: ruled
 :criticality: med
-:verify: incidental
+:verify: required
 :refines: RUL-control_records_never_media
 :uses: DEF-strays_folder
 
@@ -658,7 +658,7 @@ version-control directory, and the strays folder with everything in it; and ever
 :id: RUL-strays_never_processed
 :status: ruled
 :criticality: med
-:verify: incidental
+:verify: required
 :refines: RUL-not_inventoried
 
 Nothing SHALL process the strays folder's contents again: prep writes into it, but never scans it.
@@ -1130,7 +1130,7 @@ sets, followed by a differentiating suffix when that name is taken.
 :id: RUL-one_filename_format
 :status: ruled
 :criticality: med
-:verify: incidental
+:verify: required
 :uses: DEF-timestamp_name
 
 Prep and geotag SHALL name files from a timestamp in one format for the whole pipeline, not one for each phase.
@@ -1213,7 +1213,7 @@ Merge SHALL take the suffix above the highest already used for a name, never a l
 :id: RUL-prep_name_provisional
 :status: ruled
 :criticality: med
-:verify: incidental
+:verify: required
 
 Prep SHALL derive a file's name from its raw timestamp, as the camera recorded it, for organizing and ordering only — a
 provisional name, which prep never corrects, resolves to a timezone or converts to UTC.
@@ -2343,7 +2343,7 @@ Each phase SHALL write only its own part of the workspace database, no two phase
 :status: ruled
 :criticality: med
 :anti: yes
-:verify: incidental
+:verify: required
 :refines: RUL-database_regions_disjoint
 
 Finalize SHALL only read the workspace database.
@@ -2665,7 +2665,7 @@ A merge that finds the library locked SHALL stop at once, having changed nothing
 :id: RUL-library_lock_stale_recovered
 :status: ruled
 :criticality: med
-:verify: incidental
+:verify: required
 :refines: RUL-library_lock_fail_fast
 
 A library lock left by a merge that died SHALL be recognisable as stale, and recoverable, as the workspace's lock is.
@@ -3165,7 +3165,7 @@ Execution's check that a name is free SHALL ignore case where the filesystem doe
 :status: ruled
 :criticality: high
 :anti: yes
-:verify: incidental
+:verify: required
 
 A move, a rename or a placement SHALL be one indivisible operation where the filesystem allows, so that an interruption
 leaves the state before it or the state after, never part of either.
@@ -3176,7 +3176,7 @@ leaves the state before it or the state after, never part of either.
 :status: ruled
 :criticality: high
 :anti: yes
-:verify: incidental
+:verify: required
 :refines: RUL-operations_atomic
 :excepts: RUL-failed_operation_clean
 
@@ -3295,7 +3295,7 @@ Merge SHALL record how many temporary copies it cleared.
 :id: RUL-temp_name_own
 :status: ruled
 :criticality: low
-:verify: incidental
+:verify: required
 :refines: RUL-cross_fs_all_or_nothing
 
 A temporary copy SHALL bear a name of its own, which no photo bears.

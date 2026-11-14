@@ -139,6 +139,34 @@ def test_clean_execute_applies_and_renames(tmp_path, monkeypatch):
     assert names == ["2024-07-03--14-00-00.arw", "2024-07-03--15-00-00.arw"]
 
 
+@pytest.mark.spec("RUL-operations_atomic", test="TST-geotag_execution-every_geotag_rename_is_one_rename")
+def test_every_geotag_rename_is_one_rename(tmp_path, monkeypatch):
+    """Where the filesystem allows, each rename geotag makes is one rename — never a hard link and an unlink, or a
+    copy and a removal, of the photo."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _mock_tools(monkeypatch, ws)
+    probe = tmp_path / "probe"; probe.write_bytes(b"p")
+    fn = utils._get_renameat2()
+    if not fn or fn(utils._AT_FDCWD, os.fsencode(str(probe)), utils._AT_FDCWD,
+                    os.fsencode(str(tmp_path / "probed")), utils._RENAME_NOREPLACE) != 0:
+        pytest.skip("this filesystem has no rename that refuses a taken name")
+    split = []
+    real_link, real_copy = os.link, shutil.copyfile
+    def link(src, dst, *a, **k):
+        split.append(("link", str(src)))
+        return real_link(src, dst, *a, **k)
+    def copyfile(src, dst, *a, **k):
+        split.append(("copy", str(src)))
+        return real_copy(src, dst, *a, **k)
+    monkeypatch.setattr(os, "link", link)
+    monkeypatch.setattr(shutil, "copyfile", copyfile)
+    utils.CONFIG.clear(); utils.CONFIG.update(json.loads(json.dumps(utils.DEFAULT_CONFIG)))   # a run of its own: nothing read yet
+    assert _execute(monkeypatch, ws) == 0
+    assert _summary(ctl)["totals"]["renames"] == 2
+    assert sorted(os.listdir(ws / "6-photos-by-dest" / "T")) == ["2024-07-03--14-00-00.arw", "2024-07-03--15-00-00.arw"]
+    assert [s for s in split if ".photos-ingest" not in s[1]] == [], split
+
+
 @pytest.mark.spec("RUL-content_changed_write_held", "BLD-execution_summary", "RUL-rename_held_with_write",
                   test="TST-geotag_execution-content_changed_write_flags_mismatch")
 def test_content_changed_write_flags_mismatch(tmp_path, monkeypatch):
@@ -275,6 +303,38 @@ def test_geotag_writes_no_artifacts_into_by_dest(tmp_path, monkeypatch):
     # the only files under by-dest are the renamed media frames
     names = sorted(os.listdir(ws / "6-photos-by-dest" / "T"))
     assert names == ["2024-07-03--14-00-00.arw", "2024-07-03--15-00-00.arw"]
+
+
+@pytest.mark.spec("RUL-one_configuration", test="TST-geotag_execution-geotag_reads_its_settings_from_the_workspace_alone")
+def test_geotag_reads_its_settings_from_the_workspace_alone(tmp_path, monkeypatch):
+    """Geotag takes its settings from the workspace's configuration alone: another configuration in every other
+    place — the seed defaults, beside the executable, above the workspace, in the home folder, an environment
+    variable per setting — naming other tracks, another format and another zone, changes neither the time it
+    resolves nor the name it gives."""
+    from _elsewhere import settings_elsewhere
+    other = json.loads(json.dumps(utils.DEFAULT_CONFIG))
+    gpx = tmp_path / "gpx-elsewhere"; gpx.mkdir()
+    (gpx / "t.gpx").write_text(                                     # the same places, an hour later
+        '<gpx xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>'
+        '<trkpt lat="50.0" lon="4.0"><time>2024-07-03T13:00:00Z</time></trkpt>'
+        '<trkpt lat="51.0" lon="5.0"><time>2024-07-03T14:00:00Z</time></trkpt>'
+        '</trkseg></trk></gpx>')
+    other["gpx_root"] = str(gpx)
+    other["filename_timestamp_format"] = "%Y%m%d_ELSEWHERE_%H%M%S"
+    other["camera_time_and_timezone_policy"]["default_folder_timezone"] = "Asia/Tokyo"
+    other["camera_time_and_timezone_policy"]["device_groups"] = {"fixed_clock_cameras": [CAM], "phones": []}
+    exe = settings_elsewhere(monkeypatch, tmp_path, other)
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _mock_tools(monkeypatch, ws)
+    for command in ("plan", "execute"):                             # as the executable beside the defaults runs
+        utils.CONFIG.clear(); utils.CONFIG.update(json.loads(json.dumps(utils.DEFAULT_CONFIG)))   # a run of its own
+        monkeypatch.setattr(sys, "argv", [str(exe), command])
+        try:
+            rc = cal.main()
+        except SystemExit as e:
+            rc = e.code
+        assert rc in (0, None), (command, rc)
+    assert sorted(os.listdir(ws / "6-photos-by-dest" / "T")) == ["2024-07-03--14-00-00.arw", "2024-07-03--15-00-00.arw"]
 
 
 @pytest.mark.spec("RUL-config_writers", test="TST-geotag_execution-geotag_leaves_config_byte_identical")
