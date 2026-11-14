@@ -62,7 +62,7 @@ and whose `media_class` is `image` or `raw`; every operation of `photos-24-execu
 
 :::{bld} The auto-apply settings
 :id: BLD-auto_apply_settings
-:status: seed
+:status: ruled
 :realises: RUL-anchor_offset_auto_as_configured, RUL-timezone_auto_resolves, RUL-other_proposals_need_acceptance
 
 A GPX self-anchor offset SHALL be set as `effective_time_anchor` with `decision_mode: "auto_resolved"` when its
@@ -151,7 +151,7 @@ unknown groups, given no offset cell, and resolved as a phone's photo is, its ow
 
 :::{bld} The timezone cell
 :id: BLD-timezone_cell
-:status: seed
+:status: ruled
 :realises: RUL-timezone_from_nearest, RUL-timezone_auto_resolves, RUL-default_zone_proposed_only
 
 Each destination's `destination_timezone` in `photos-21-time-decisions.json` SHALL hold `proposed_iana_timezone` with
