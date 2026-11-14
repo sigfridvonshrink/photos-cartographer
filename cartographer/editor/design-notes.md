@@ -87,11 +87,10 @@ then the proposal evidence last; non-coord cells just show the proposal.
     A frame picker lets the operator cross-check other photos in the bucket (each must yield the same offset;
     the last scrub wins). **Confirming without moving** (the pinned checkbox / "clear correction") is a
     **zero scrub** — `confirmed:true` with an empty correction — and must be explicit; inaction never resolves.
-  - **No-merry-go-round invariant.** The script extracts the track segment ±2 days
-    (`drift_check_track_window_seconds`) around the bucket. Since valid offsets are capped at ±1 day, any
-    two valid offsets differ by ≤2 days, so **every reachable scrub correction is already inside the loaded
-    segment** — a scrub never needs a Re-run to fetch more track. The editor validates the computed offset
-    against the ±1-day bound (`validOffset`) and flags a point that falls outside it. Re-extraction happens
+  - **The track shown.** The script extracts the track segment within `drift_check_track_window_seconds`
+    (two days by default) of the bucket's photos. A scrub reaches no farther than that segment: an offset
+    is of any size, so a correction larger than the window is typed as a manual offset in the time
+    decision, not scrubbed. Re-extraction happens
     only when a *time* decision changes (edit → Save → Re-run → reload), which legitimately shifts the window;
     the editor never touches GPX itself.
 - **Side-panel editor** for the selected cell: the proposal + evidence, the decision control, a **photo

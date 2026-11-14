@@ -4,7 +4,7 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **25** — 2, 3, 4, 5, 6, 7 and 11 to 29.* 🛑 Numbers are never reused; the next is **30**.
+*Open items: **28** — 2, 3, 4, 5, 6, 7 and 11 to 32.* 🛑 Numbers are never reused; the next is **33**.
 
 ---
 
@@ -389,3 +389,67 @@ record the provenance and that a higher-ranked track was absent.
 - Whether a disagreement between the two own devices is reported, as a measure of the lower one's error.
 - Whether a preference is a decision of the workspace (recorded with the plan, restaling photos-21 to 23 when
   changed) — it should be, like every other setting that changes what is written.
+
+### 30. Measuring the human input a trip costs
+
+**Why:** the tool promises every photo on the map with the least manual work, and nothing counts the work. Each
+safety fix turns a silent guess into a question or a refusal — rightly, each time — so the promise can wear away one
+question at a time with nobody seeing it. The plan counts photos by how they were placed (completeness); it does not
+count what the user had to answer to get there.
+
+**What to do:** have geotag count, per plan and carried into the summary and the archive manifest: the decisions it
+asked for, by kind (timezone, clock offset, drift confirmation, photo review, folder fallback, content mismatch);
+how many took effect without the user (applied themselves, kept from earlier); how many the user answered; how many
+answers went stale and were asked again; and the photos each answer covered. Then photos per answer is the measure,
+and a change that adds questions shows as a number.
+
+**Open:**
+- What counts as one input: a cell, a save, or a distinct value (one offset accepted for five days shown as one row).
+- Whether re-runs count: a plan run three times while the user answers is one trip's work, not three.
+- Whether a refusal that sends the user to fix something outside the decision files (a track removed, a folder
+  moved) is counted, and how it is known to have happened.
+- Whether the count belongs to the record (photos-25, manifest) or is a report only. With the ground-truth set of
+  item 32 it becomes a regression figure: questions asked for a fixed set of trips.
+
+### 31. Real trips as fixtures, with the person taken out
+
+**Why:** the tests' tracks and photos are synthetic, built by the same reasoning as the code, so both agree where
+both are wrong — which is how the defects of the 2026-11-14 review survived. Real trips are the cure, and the
+repository is public: a raw track shows where Vasile slept and walked and when, photos carry faces, device serial
+numbers and owner names, and a filename or a folder name carries a place and a date.
+
+**What to do:** a tool that turns a real workspace into a fixture that keeps what the pipeline's judgements depend
+on and nothing else: metadata without pixels (a stub image carrying the tags); tracks moved as a whole by a fixed
+shift in place and in time, kept exact in shape, speed, gaps and their relation to the photos; the stretches round
+lodging and home cut; serials, owner, make-specific identifiers and software tags replaced, one for one, so camera
+groups still form as they did; folder and file names replaced. The real set stays outside the repository.
+
+**Open:**
+- Whether a shift is enough: a track's shape names its city to anyone who looks. Rotation or mirroring would hide
+  it and keeps distances; it breaks nothing the code reads except the timezone a place implies, which is given by
+  hand anyway.
+- Which tags a stub must carry for prep and geotag to treat it as they treat the original, and whether the content
+  fingerprint can be honest on a stub (it is of the pixels).
+- Whether shifting time keeps DST and day boundaries where they were: a shift of whole weeks does, of hours does not.
+- Who checks a fixture before it is committed, and against what list.
+
+### 32. A ground-truth set, and a harness that scores against it
+
+**Why:** 1195 tests show the code does what the corpus says. None shows the corpus yields the right time and place:
+whether a value written is the true one has no oracle. Thresholds are tuned by argument, and a regression in
+inference shows nowhere. The corpus guards the how; this is the missing guard on the what.
+
+**What to do:** keep a set of real days with the answer known — the camera's true clock offset (a photo of a clock
+showing seconds, morning and evening), photos carrying a trusted position that is hidden from the run and then
+compared with where the tracks put them, and a second logger held out the same way. A harness runs plan on each
+day and scores: offset error, position error by method (point, between two, past an end), photos placed and left
+unplaced, wrong auto-applied offsets (the figure that must be zero), and the questions asked (item 30). The scores
+are kept, so a change to a threshold or to the inference is read as a difference, not argued.
+
+**Open:**
+- Where the set lives: the real one cannot be in the repository (item 31); the harness can, run against a path.
+  Whether a depersonalised copy runs in CI.
+- The first days: the London trip of late 2026 — museums, a castle, a train out and back, two loggers — recorded
+  for this on purpose. One trip is one sample: thresholds tuned on it alone fit London.
+- What is scored as wrong: a position within the track's own error is right; the bound needs a figure.
+- Whether a threshold change must show its score before it is ruled.
