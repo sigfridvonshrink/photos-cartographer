@@ -562,7 +562,7 @@ one in a field beside it.
 
 :::{def} A clock offset
 :id: DEF-clock_offset
-:status: seed
+:status: ruled
 :uses: DEF-recorded_time, DEF-camera_group
 
 A camera's **clock offset** is the whole number of seconds added to its recorded time to give UTC: the timezone its
@@ -899,7 +899,7 @@ Finalize SHALL refuse unless geotag's current plan was executed successfully and
 
 :::{rul} Finalize packages the photos as execution left them
 :id: RUL-finalize_checks_photos
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -911,7 +911,7 @@ Finalize SHALL refuse while a photo in photos by destination is not as the execu
 
 :::{rul} Finalize reports how every photo was placed
 :id: RUL-finalize_reports_placement
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-plan_counts_placement
@@ -922,7 +922,7 @@ Finalize SHALL report the plan's count of how every photo came by its position, 
 
 :::{rul} A photo left unlocated is logged as such
 :id: RUL-unlocated_logged
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-log_cites_decisions

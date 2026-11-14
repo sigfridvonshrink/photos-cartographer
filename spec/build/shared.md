@@ -191,7 +191,7 @@ it.
 
 :::{bld} The configuration's keys
 :id: BLD-config_keys
-:status: seed
+:status: ruled
 :realises: DEF-config_areas, RUL-folder_names_not_roles, RUL-camera_classes_not_derivation, RUL-extension_one_class, RUL-folder_found_by_role, RUL-config_lists_extensions, RUL-unlisted_extension_other, RUL-setting_bounds_one_thing
 
 The areas SHALL be, at least: the `zfs` block and `snapshots_required` (§2 above);
@@ -316,7 +316,7 @@ The plan and decision artifacts SHALL be prep's `photos-10-prep-plan.json`, geot
 
 :::{bld} A superseded plan goes aside under `-NNN`
 :id: BLD-plan_backups
-:status: seed
+:status: ruled
 :realises: RUL-replanning_keeps_the_prior, RUL-record_in_place_while_replaced
 
 A differing re-plan SHALL first copy the existing artifact to the shared incremental `-NNN` suffix ({need}`BLD-name_suffix`) —
@@ -593,7 +593,7 @@ destination holds only photos (merge §3). A development subfolder is one named 
 
 :::{bld} Geotag marks what it wrote
 :id: BLD-rerun_recognition
-:status: seed
+:status: ruled
 :realises: RUL-geotag_rerun_keeps_settled, RUL-position_carries_its_method
 
 Geotag SHALL record what it wrote in the file's `GPSProcessingMethod`: the bare value beside each position it writes —
@@ -822,7 +822,7 @@ the destination's folder fallback, with the destination it was accepted from.
 
 :::{bld} Geotag's steps in the log
 :id: BLD-geotag_log_steps
-:status: seed
+:status: ruled
 :realises: RUL-log_entry_grows, RUL-log_records_gps_reverts, RUL-log_records_time_replaced
 
 Geotag's steps SHALL be `clock_offset_applied` (its `offset_seconds` with an `offset_description` in words, such as

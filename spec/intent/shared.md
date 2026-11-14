@@ -1824,7 +1824,7 @@ that there was none.
 
 :::{rul} A time written is logged with what it replaced and how it was found
 :id: RUL-log_records_time_replaced
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :uses: DEF-transformation_log, DEF-recorded_time

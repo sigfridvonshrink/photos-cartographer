@@ -140,7 +140,7 @@ destination abroad.
 
 :::{rat} One timezone, because that is what can be checked
 :id: RAT-one_zone_can_be_checked
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-nested_place_same_timezone, RAT-photos_outrank_inheritance
 :justifies: RUL-destination_has_one_timezone, RUL-zone_against_photos_needs_word
@@ -205,7 +205,7 @@ act and names the offset itself. Where no track covers the photos there is no ch
 
 :::{rat} An acceptance is of what was shown
 :id: RAT-acceptance_is_of_what_was_shown
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-editor_writes_only_decisions, RAT-decision_withdrawable
 :justifies: RUL-acceptance_holds_for_its_proposal, RUL-content_acceptance_is_of_that_content
@@ -436,7 +436,7 @@ needed them.
 
 :::{rat} A place only tells the time while the track is moving
 :id: RAT-stay_tells_no_time
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: FCT-clocks_drift, RAT-clustering_details
 :justifies: RUL-stay_fixes_no_clock
@@ -446,7 +446,7 @@ An anchor reads the time off the track where the photo's own position lies on it
 
 :::{rat} A kept offset is only as good as what it stood on
 :id: RAT-kept_offset_needs_its_evidence
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-day_offset_is_the_cameras, RAT-decision_withdrawable
 :justifies: RUL-kept_offset_rests_on_its_tracks
@@ -705,7 +705,7 @@ library.
 
 :::{rat} Finalize is where geotag signs for the photos
 :id: RAT-finalize_signs_for_the_photos
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-safety_not_on_the_plan, CHC-photos_matter
 :justifies: RUL-finalize_checks_photos, RUL-finalize_reports_placement, RUL-unlocated_logged

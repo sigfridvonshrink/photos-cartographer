@@ -190,7 +190,7 @@ archived, it lets a future reader know not only what was decided but **under wha
 
 :::{rat} A setting read twice cannot be tuned once
 :id: RAT-setting_read_once
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-one_place_for_settings
 :justifies: RUL-setting_bounds_one_thing
@@ -1107,7 +1107,7 @@ may be long gone with the workspace.
 
 :::{rat} The time replaced is the one thing the photo no longer holds
 :id: RAT-time_replaced_is_gone_from_the_photo
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-why_beside_what, RAT-consolidated_log
 :justifies: RUL-log_records_time_replaced
