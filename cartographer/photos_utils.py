@@ -131,6 +131,9 @@ CONFIG = {
     "gpx_extrapolation_heading_seconds": 60.0,
     "gpx_extrapolation_max_distance_meters": 1000.0,
     "gpx_extrapolation_max_speed_kmh": 150.0,
+    # One camera's clock offsets found from its own GPS on one day in two destinations, farther apart than
+    # this, are one clock read two ways: neither takes effect until the user says which.
+    "clock_offset_same_day_max_difference_seconds": 120.0,
     # The drift check shows, and is offered only where there is, track within this long of the photos it
     # checks: a correction is scrubbed along that track, so it reaches no farther than this.
     "drift_check_track_window_seconds": 172800.0,
@@ -1169,6 +1172,7 @@ _GPX_NUMERIC_KEYS = (
     "gpx_tracks_agree_max_distance_meters", "gpx_anchor_max_segment_gap_seconds",
     "gpx_anchor_same_pass_max_seconds", "gpx_anchor_stay_max_seconds", "gpx_anchor_stay_distance_meters",
     "gpx_anchor_decision_tolerance_seconds", "drift_check_track_window_seconds",
+    "clock_offset_same_day_max_difference_seconds",
 )
 
 def validate_config(cfg: dict, workspace_root: str = None):

@@ -105,8 +105,33 @@ configuration's settings for one anchor and for several allow, and never while i
 :verify: required
 :uses: DEF-geotag, DEF-decision
 
-A timezone a destination inherits from the destination it lies in SHALL take effect without the user's answer, a
-timezone the user writes overriding it; a destination with none to inherit waits for the user.
+A timezone a destination inherits from the destination it lies in SHALL take effect without the user's answer — save
+where the destination's own photos speak against it ({need}`RUL-inherited_timezone_yields_to_photos`) — a timezone the
+user writes overriding it; a destination with none to inherit waits for the user.
+:::
+
+:::{rul} An inherited timezone yields to the destination's own photos
+:id: RUL-inherited_timezone_yields_to_photos
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-geotag, DEF-decision
+
+An inherited timezone SHALL NOT take effect without the user's answer in a destination holding a photo, read by the
+offset recorded with its time, whose offset is not that timezone's at the photo's time — one such photo being enough —
+nor in a destination lying within it.
+:::
+
+:::{rul} The destinations are a tree of places
+:id: RUL-destinations_are_places
+:status: seed
+:criticality: med
+:verify: none
+:uses: DEF-geotag
+
+The destinations SHALL be a tree of places, each lying within the place the destination above it names, never folders
+that group photos by trip, date or subject.
 :::
 
 :::{rul} The configured default zone is offered, never applied
@@ -130,7 +155,19 @@ user's answer.
 :uses: DEF-geotag, DEF-decision
 
 Every other proposal — a clock offset derived from the destination's timezone, a folder fallback position inherited
-from the destination it lies in — SHALL take effect only once the user accepts it.
+from the destination it lies in — SHALL take effect only once the user accepts it, a timezone's offset the user
+confirms against the tracks being accepted by that ({need}`RUL-timezone_offset_asked_once`).
+:::
+
+:::{rul} A timezone's offset is asked about once
+:id: RUL-timezone_offset_asked_once
+:status: ruled
+:criticality: med
+:verify: required
+:uses: DEF-geotag, DEF-decision
+
+A clock offset derived from the destination's timezone SHALL be asked about once: at the check against the tracks
+where tracks lie by its photos, and by acceptance where none do.
 :::
 
 :::{rul} An acceptance holds for the proposal it accepted
@@ -194,9 +231,33 @@ camera's own clock — a container destination, holding no photo, having none.
 :verify: required
 :refines: RUL-offset_per_camera_destination_day
 
-Each offset SHALL be proposed only from that camera's own positions in that destination on that day, or from the
-destination's timezone — never from the offset of another destination, whether one it lies in, one in it, or one beside
-it.
+Each offset SHALL be proposed only from that camera's own positions on that day — in that destination, else in
+another ({need}`RUL-offset_shared_within_day`) — or from the destination's timezone; never from another day's offset,
+nor from one the user wrote or accepted on a guess in another destination.
+:::
+
+:::{rul} A day's offset is the camera's wherever its photos were sorted
+:id: RUL-offset_shared_within_day
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-offset_per_camera_destination_day
+
+A camera's photos of a day in a destination where none has its own position SHALL be proposed the offset the camera's
+own positions gave that day in another destination, in place of the timezone's — taking effect by itself only where it
+did there.
+:::
+
+:::{rul} One clock is not read two ways in one day
+:id: RUL-same_day_offsets_agree
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-offset_per_camera_destination_day
+
+Two offsets a camera's own positions gave on one day in different destinations, farther apart than the configuration
+allows, SHALL NOT take effect until the user writes which is right.
 :::
 
 :::{rul} A container destination never waits for the user

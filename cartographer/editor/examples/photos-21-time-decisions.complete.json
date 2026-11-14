@@ -157,15 +157,17 @@
           "day": "2024-07-03",
           "effective_time_anchor": {
             "offset_seconds": -7200,
-            "source": "timezone_accepted"
+            "source": "same_day_accepted"
           },
           "proposal": {
-            "confidence": "review_required",
-            "proposal_source": "timezone_naive",
-            "proposed_from_timezone": "Europe/Brussels",
+            "confidence": "high",
+            "proposal_source": "same_day_elsewhere",
             "proposed_offset_seconds": -7200,
-            "proposed_real_utc": "2024-07-03T12:00:00Z",
-            "rank": "timezone_derived"
+            "rank": "same_day",
+            "shared_from": {
+              "bucket": "SONY|ILCE-6400|A",
+              "destination": "6-photos-by-dest/Japan"
+            }
           },
           "requires_user_input": false,
           "stale_user_decision": false,

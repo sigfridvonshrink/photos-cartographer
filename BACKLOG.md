@@ -4,7 +4,7 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **42** — 2, 3, 4, 5, 6, 7 and 11 to 46.* 🛑 Numbers are never reused; the next is **47**.
+*Open items: **40** — 2 to 7, 11 to 32, 35 to 40 and 42 to 47 (33, 34 and 41 ruled and built 2026-11-14).* 🛑 Numbers are never reused; the next is **48**.
 
 ---
 
@@ -473,34 +473,8 @@ are kept, so a change to a threshold or to the inference is read as a difference
 
 ---
 
-*Items 33 to 46 come from the adversarial review of time handling, 2026-11-14. Each is a choice between behaviours:
+*Items 35 to 46 come from the adversarial review of time handling, 2026-11-14 (33, 34 and 41, from the same review, are ruled and built). Each is a choice between behaviours:
 none is coded until ruled. What the review found that was plainly wrong was fixed with it.*
-
-### 33. An inherited timezone applies itself against the destination's own photos
-
-**Why:** a zone set on a trip's folder is inherited by every destination under it with no question
-(`RUL-timezone_auto_resolves`). `Trip/{Lisbon, Porto, Madrid}`: Madrid inherits Lisbon's zone though every phone
-photo there records +02:00. The phone's instants stay right; their written local time and name are an hour off the
-wall clock, and a camera's timezone-derived proposal there is built on the wrong zone. The one zone change of a trip
-is the one thing never asked.
-
-**Proposed rule:** an inherited timezone SHALL NOT take effect without the user's answer in a destination holding a
-photo whose own recorded offset differs from that timezone's offset at the photo's time.
-
-**Open:** ask, or propose the zone the photos' offsets imply; how many photos must disagree; relation to item 14.
-
-### 34. One camera's day sorted into several destinations is decided several times
-
-**Why:** an offset is per camera, destination and day, drawn only from that destination's evidence
-(`RUL-offset_from_own_evidence`). The philosophy says the opposite — *"a clock offset is the camera's for that day,
-wherever its photos were sorted"* (`RAT-decisions_cascade`). Museum in the morning, castle in the afternoon: the
-museum's cell is anchored at −3 h 02 min, the castle's has no anchor and proposes −2 h from the zone; both accepted,
-one clock on one day is written two ways an hour apart, and nothing flags it. The same holds for day two proposing a
-value day one's drift check disproved.
-
-**Open:** check only (two offsets of one camera-day farther apart than offsets are told apart may not both take
-effect unasked), or also offer the sibling's offset as the proposal — which reverses a ruled rule and removes most of
-a trip's questions.
 
 ### 35. The time a camera's own GPS recorded is not used as evidence of its clock
 
@@ -561,15 +535,6 @@ nothing — against *"one answer per trip, at the trip's folder"* (`RAT-home_zon
 **Open:** one zone per destination whatever a photo records, or a photo with its own offset keeps its own local
 time; ask a missing zone once, at the topmost destination that neither has nor inherits one.
 
-### 41. The same offset is asked twice
-
-**Why:** a camera with no GPS and tracks nearby needs its timezone-derived offset accepted (photos-21) and then
-confirmed against the tracks (photos-22): two stages, two runs, one number. The confirmation is the stronger act and
-names the offset itself. The review counted a typical trip — one camera, one phone, three days, a zone change — at
-eight prompts against a floor of about four; three of the eight are these acceptances.
-
-**Open:** ask once, at the check against the tracks, where tracks cover the photos; keep the acceptance where none do.
-
 ### 42. A clock reset to its factory date is proposed like any other
 
 **Why:** battery out, camera at 2000-01-01. No anchor is possible; the cell proposes the timezone-derived offset,
@@ -616,3 +581,37 @@ touched; "corrected" is defined nowhere.
 
 **Open:** define it as resolved (state it), or mark only a photo whose time geotag changed and recognise the others
 on a re-run by their unchanged values.
+
+### 47. Destinations as places: countries of several timezones, and the tree checked
+
+**Why:** the owner, 2026-11-14: *"destinations should be geographical trees, not grouped by trips"*, and *"a list of
+countries spanning multiple timezones that stops timezone inheritance from country to sub-destinations"*. A
+timezone passes down the tree because a place inside another is nearly always in its zone. Two things break that
+silently: a country of several zones (`USA/{New York, Denver}` answered once at `USA`), and a folder that is a trip,
+not a place. Since 2026-11-14 an inherited zone yields to a phone photo that records another offset
+(`RUL-inherited_timezone_yields_to_photos`) — which catches both only where such a photo exists; a destination of
+camera photos alone still inherits.
+
+**What exists:** `RUL-destinations_are_places` (seed, unverifiable as written: the tool cannot tell a place from a
+trip by a folder's name). The docs recommend `year/country/city/location` — whose first level is a date, not a place.
+
+**What to do:**
+- A list of countries (and other regions) of more than one timezone; a destination named as one — by name, by a
+  code, or declared by the user — does not pass a timezone to the destinations inside it: each asks, or inherits
+  from one of its own below the country.
+- Decide what "geographically structured" lets the tool check and refuse, and what stays a convention.
+
+**Open:**
+- How a folder is known to be a country: its name matched against a list in several languages (the owner's folders are
+  not in English only), an ISO code in the name, a marker in the decision file, or the position of a level in the
+  tree (`year/country/...` — the second level is always a country).
+- Where the list lives and who keeps it: derived from the zone database (`zone.tab` lists every zone's country, so
+  a country with more than one row is on it), which needs no hand-kept list and follows tzdata.
+- Whether the user's own one-zone answer at such a country (`manual_iana_timezone` written there) is refused,
+  warned about, or simply never inherited.
+- A year level above the places: is it a place for this rule (it inherits nothing downward), and does a zone
+  answered at a year mean anything.
+- The wording of ruled items that speak of a trip's folder — `RAT-home_zone_offered` ("one answer per trip, at the
+  trip's folder"), `RAT-decisions_cascade` ("set once at a trip's root") — to be put in terms of places.
+- Whether item 14 (a zone proposed from positions) makes most of this unnecessary: a destination whose photos or
+  tracks say where it is needs no inheritance at all.

@@ -122,6 +122,64 @@ and nothing in the photos can tell which. Applied silently, a wrong one would pl
 place or the wrong hour, written into the originals; offered for acceptance, it costs one confirmation.
 :::
 
+:::{rat} What the photos record outranks what the folder assumes
+:id: RAT-photos_outrank_inheritance
+:status: ruled
+:forced: yes
+:follows_from: RAT-nested_place_same_timezone, RAT-phone_records_its_offset
+:justifies: RUL-inherited_timezone_yields_to_photos
+
+A place inside another is nearly always in its timezone; that is an assumption about folders. A phone's photo that
+records +02:00 where the inherited zone was at +01:00 is evidence, in the photo, that the assumption fails here — a
+country spanning zones, a border crossed, a folder that groups a trip instead of a place. Adopted unasked, the wrong
+zone names and times every photo there an hour out, and proposes a camera's clock from the wrong hour. One photo is
+enough to ask: a phone does not record another zone's offset by accident, and the answer costs one choice. A camera's
+offset tag is not such evidence — it says what the clock was set to, and a camera left on home time would stop every
+destination abroad.
+:::
+
+:::{rat} Places, because what is inherited is true of places
+:id: RAT-places_not_trips
+:status: seed
+:forced: yes
+:follows_from: RAT-nested_place_same_timezone
+:justifies: RUL-destinations_are_places
+
+A timezone and a fallback position pass down the tree because a museum is in its city and a city in its country. A
+folder that groups a trip is in no place: its destinations share a fortnight, not a zone, and everything inherited
+through it is inherited from nothing. The tool cannot tell a place from a trip by its name; the tree being one of
+places is what the user owes it.
+:::
+
+:::{rat} The clock is the camera's for the day, not the folder's
+:id: RAT-clock_is_the_cameras_for_the_day
+:status: ruled
+:forced: yes
+:follows_from: RAT-offset_per_day_and_place
+:justifies: RUL-offset_shared_within_day, RUL-same_day_offsets_agree
+
+A camera has one clock. Sorting a day's photos into a museum and a castle does not give it two: what its own positions
+show of its clock in the morning is the best evidence there is for the afternoon, far better than assuming it kept the
+local hour. So a destination with no position of its own that day is offered the offset found elsewhere that day —
+applied by itself only where it was sure enough to apply itself there. And where the camera's positions give two
+offsets for one day that cannot both be right, one of them rests on a wrong match; neither is written until the user
+says which. An offset the user wrote, or accepted on a guess, is not passed on: it is their word about one place, not
+evidence. Another day's offset is never passed on either — clocks are set again overnight.
+:::
+
+:::{rat} One number, one question
+:id: RAT-one_number_one_question
+:status: ruled
+:forced: no
+:follows_from: RAT-assumptions_need_acceptance
+:justifies: RUL-timezone_offset_asked_once
+
+A timezone's offset is a guess that needs the user's word before it is written. Where tracks lie by the photos the
+user gives that word at the check against the tracks, looking at where the offset puts a photo; asking them to accept
+the same number first, in another file and another run, adds a question and no safety — the check is the stronger
+act and names the offset itself. Where no track covers the photos there is no check, and acceptance is the word.
+:::
+
 :::{rat} An acceptance is of what was shown
 :id: RAT-acceptance_is_of_what_was_shown
 :status: seed

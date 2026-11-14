@@ -19,7 +19,11 @@
           "camera_group": "NIKON|D750|B",
           "camera_group_class": "camera",
           "day": "2024-07-03",
-          "effective_time_anchor": "",
+          "decision_mode": "to_be_confirmed_against_tracks",
+          "effective_time_anchor": {
+            "offset_seconds": -7200,
+            "source": "timezone_unconfirmed"
+          },
           "proposal": {
             "confidence": "review_required",
             "proposal_source": "timezone_naive",
@@ -28,7 +32,7 @@
             "proposed_real_utc": "2024-07-03T11:00:00Z",
             "rank": "timezone_derived"
           },
-          "requires_user_input": true,
+          "requires_user_input": false,
           "stale_user_decision": false,
           "user_decision": {
             "accept_proposal": false,
@@ -59,7 +63,11 @@
           "camera_group": "NIKON|D750|B",
           "camera_group_class": "camera",
           "day": "2024-07-03",
-          "effective_time_anchor": "",
+          "decision_mode": "to_be_confirmed_against_tracks",
+          "effective_time_anchor": {
+            "offset_seconds": -7200,
+            "source": "timezone_unconfirmed"
+          },
           "proposal": {
             "confidence": "review_required",
             "proposal_source": "timezone_naive",
@@ -68,7 +76,7 @@
             "proposed_real_utc": "2024-07-03T11:00:00Z",
             "rank": "timezone_derived"
           },
-          "requires_user_input": true,
+          "requires_user_input": false,
           "stale_user_decision": false,
           "user_decision": {
             "accept_proposal": false,
@@ -102,7 +110,11 @@
           "camera_group": "NIKON|D750|B",
           "camera_group_class": "camera",
           "day": "2024-07-03",
-          "effective_time_anchor": "",
+          "decision_mode": "to_be_confirmed_against_tracks",
+          "effective_time_anchor": {
+            "offset_seconds": -7200,
+            "source": "timezone_unconfirmed"
+          },
           "proposal": {
             "confidence": "review_required",
             "proposal_source": "timezone_naive",
@@ -111,7 +123,7 @@
             "proposed_real_utc": "2024-07-03T11:15:00Z",
             "rank": "timezone_derived"
           },
-          "requires_user_input": true,
+          "requires_user_input": false,
           "stale_user_decision": false,
           "user_decision": {
             "accept_proposal": false,
@@ -145,16 +157,22 @@
           "camera_group_class": "camera",
           "date": "2024-07-03",
           "day": "2024-07-03",
-          "effective_time_anchor": "",
-          "proposal": {
-            "confidence": "review_required",
-            "proposal_source": "timezone_naive",
-            "proposed_from_timezone": "Europe/Brussels",
-            "proposed_offset_seconds": -7200,
-            "proposed_real_utc": "2024-07-03T12:00:00Z",
-            "rank": "timezone_derived"
+          "decision_mode": "auto_resolved",
+          "effective_time_anchor": {
+            "offset_seconds": -7200,
+            "source": "same_day_auto"
           },
-          "requires_user_input": true,
+          "proposal": {
+            "confidence": "high",
+            "proposal_source": "same_day_elsewhere",
+            "proposed_offset_seconds": -7200,
+            "rank": "same_day",
+            "shared_from": {
+              "bucket": "SONY|ILCE-6400|A",
+              "destination": "6-photos-by-dest/Japan"
+            }
+          },
+          "requires_user_input": false,
           "stale_user_decision": false,
           "user_decision": {
             "accept_proposal": false,
@@ -167,7 +185,11 @@
           "camera_group_class": "camera",
           "date": "2024-07-04",
           "day": "2024-07-04",
-          "effective_time_anchor": "",
+          "decision_mode": "to_be_confirmed_against_tracks",
+          "effective_time_anchor": {
+            "offset_seconds": -7200,
+            "source": "timezone_unconfirmed"
+          },
           "proposal": {
             "confidence": "review_required",
             "proposal_source": "timezone_naive",
@@ -176,7 +198,7 @@
             "proposed_real_utc": "2024-07-04T12:00:00Z",
             "rank": "timezone_derived"
           },
-          "requires_user_input": true,
+          "requires_user_input": false,
           "stale_user_decision": false,
           "user_decision": {
             "accept_proposal": false,

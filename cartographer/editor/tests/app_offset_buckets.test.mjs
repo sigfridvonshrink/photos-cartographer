@@ -150,3 +150,23 @@ test("tracksNote: why the tracks placed nothing, in one line", () => {
   assert.match(app.tracksNote({ reason: "track_gap", gap_seconds: 2400, seconds_from_track: 900 }), /40 min gap.*15 min away/);
   assert.match(app.tracksNote({ reason: "tracks_disagree", gpx_files: ["a.gpx", "b.gpx"], apart_meters: 5560 }), /a\.gpx and b\.gpx.*5560 m apart/);
 });
+
+
+test("zoneContradiction: why an inherited zone is not taken", () => {
+  assert.equal(app.zoneContradiction({}), "");
+  const note = app.zoneContradiction({ contradicted_by: { photos: 2, example: "6-photos-by-dest/Iberia/Madrid/c.jpg",
+    recorded_offset_seconds: 7200, timezone: "Europe/Lisbon", timezone_offset_seconds: 3600 } });
+  assert.match(note, /2 photos here record \+2h 00m from UTC/);
+  assert.match(note, /Europe\/Lisbon was at \+1h 00m then/);
+});
+
+test("offsetCellNotes: a shared offset, a guess checked on the tracks, one clock read two ways", () => {
+  assert.deepEqual(app.offsetCellNotes({ proposal: { proposal_source: "gpx_self_anchor" } }), []);
+  const shared = app.offsetCellNotes({ proposal: { proposal_source: "same_day_elsewhere", proposed_offset_seconds: -7200,
+    confidence: "review_required", shared_from: { destination: "6-photos-by-dest/Museum", bucket: "K" } } });
+  assert.match(shared[0], /fixed its clock that day in 6-photos-by-dest\/Museum.*accept it here/);
+  assert.match(app.offsetCellNotes({ proposal: { proposal_source: "timezone_naive" },
+    effective_time_anchor: { offset_seconds: -7200, source: "timezone_unconfirmed" } })[0], /Drift view/);
+  assert.match(app.offsetCellNotes({ conflicts_with: [{ destination: "6-photos-by-dest/Other", bucket: "K", offset_seconds: -6600 }] })[0],
+    /6-photos-by-dest\/Other — one clock, two readings/);
+});

@@ -362,7 +362,13 @@ def test_withdrawn_offset_after_execute_asks_again(tmp_path, monkeypatch):
     ws = _executed_round(tmp_path, monkeypatch)
     _set_offset(ws, "")
     _plan(monkeypatch, ws)
-    assert _cell(ws)["requires_user_input"] and _cell(ws)["effective_time_anchor"] == ""
+    # With tracks by the photo the timezone's guess is asked about where it can be checked: at the drift
+    # check, whose earlier confirmation was of the withdrawn offset and confirms nothing now.
+    assert _cell(ws)["effective_time_anchor"]["source"] == "timezone_unconfirmed"
+    drift = json.loads((ws / ".photos-ingest" / "photos-22-gps-drift-validation.json").read_text())
+    asked = drift["destinations"][T]["drift_decisions"][CAM]
+    assert drift["requires_user_input"] and asked["requires_user_input"] and asked["stale_user_decision"]
+    assert asked["effective_drift_offset"] == ""
 
 
 @pytest.mark.spec("BLD-original_values_pinned", test="TST-geotag_rerun_markers-originals_are_pinned_once_and_complete")

@@ -68,6 +68,8 @@ __all__ = [
     'GPXPoint',
     'GPXIndex',
     '_valid_iana',
+    '_offsets_against_zone',
+    '_ZONE_WAITS',
     '_valid_offset',
     '_parse_camera_naive',
     '_naive_date',
@@ -655,6 +657,37 @@ def _parse_iso_offset(s):
         return None
     secs = int(m.group(2)) * 3600 + int(m.group(3)) * 60
     return -secs if m.group(1) == "-" else secs
+
+
+# In the map of zones in effect: a destination that waits on its own photos, which nothing inside inherits past.
+_ZONE_WAITS = "\x00waits"
+
+
+def _offsets_against_zone(files, groups, tz):
+    """What a destination's own photos say against the timezone `tz` it would inherit: the photos read by
+    the offset recorded with their time (a phone's, a file's naming no camera — never a camera's, whose
+    offset tag says what its clock was set to, not where it was) whose offset is not `tz`'s at that time.
+    None when none speaks against it; else how many, and one of them."""
+    if not _valid_iana(tz):
+        return None
+    zone, out = zoneinfo.ZoneInfo(tz), []
+    for f in sorted(files, key=lambda x: x["relative_path"]):
+        if (groups.get(f["camera_group_key"]) or {}).get("camera_group_class") == "camera" or f.get("geotag_marker"):
+            continue
+        naive, own = _parse_camera_naive(f.get("source_naive_time")), _own_offset(f)
+        if naive is None or own is None:
+            continue
+        try:
+            there = (naive - timedelta(seconds=own)).replace(tzinfo=timezone.utc).astimezone(zone).utcoffset()
+        except OverflowError:
+            continue
+        if round(there.total_seconds() / 60) * 60 != own:
+            out.append((f["relative_path"], own, int(there.total_seconds())))
+    if not out:
+        return None
+    rel, own, there = out[0]
+    return {"photos": len(out), "example": rel, "recorded_offset_seconds": own,
+            "timezone": tz, "timezone_offset_seconds": there}
 
 
 def _local_to_utc(naive, tz):

@@ -208,7 +208,7 @@ function wouldResolve(ref) {
   const u = c.user_decision || {}, p = c.proposal || {};
   if (ref.kind === "timezone")
     return (!!u.manual_iana_timezone && validTz(u.manual_iana_timezone))
-      || (!!c.proposed_iana_timezone && c.proposal_source === "inherited");   // an inherited zone applies itself
+      || (!!c.proposed_iana_timezone && c.proposal_source === "inherited" && !c.contradicted_by);   // an inherited zone applies itself, unless the photos here say otherwise
   if (ref.kind === "offset")
     return (u.manual_offset_seconds !== "" && u.manual_offset_seconds != null && validOffset(u.manual_offset_seconds))
       || acceptHolds(c);
@@ -711,13 +711,15 @@ function controls(ref) {
   if (ref.kind === "timezone") {
     // An inherited zone applies itself; the configured default is only proposed (§18) — one click takes it as the
     // user's own. The one decision here is a zone written by hand, which overrides either.
-    if (c.proposal_source === "config_default" && c.proposed_iana_timezone && !u.manual_iana_timezone)
+    if (zoneContradiction(c)) wrap.append(el("div", { class: "hint warn" }, zoneContradiction(c)));
+    if ((c.proposal_source === "config_default" || c.contradicted_by) && c.proposed_iana_timezone && !u.manual_iana_timezone)
       wrap.append(el("button", { class: "mini", onclick: () => edit(ref, "manual_iana_timezone", c.proposed_iana_timezone) },
         `use ${c.proposed_iana_timezone}`));
     const sel = tzSelect(u.manual_iana_timezone, (v) => edit(ref, "manual_iana_timezone", v), false);
     wrap.append(el("label", { class: "ctl-field" }, el("span", {}, "Manual timezone"), sel));
     if (!validTz(u.manual_iana_timezone)) wrap.append(el("div", { class: "err" }, "not a valid IANA timezone"));
   } else if (ref.kind === "offset") {
+    for (const note of offsetCellNotes(c)) wrap.append(el("div", { class: "hint warn" }, note));
     wrap.append(offsetEditor(ref));
   } else if (ref.kind === "drift") {
     wrap.append(driftControls(ref));
@@ -1008,6 +1010,28 @@ function chosenOffset(p, u) {
   return acceptHolds({ user_decision: u, proposal: p }) ? p.proposed_offset_seconds : null;
 }
 // What the user must settle, said in one line each: a tie between visits, and photos agreeing with no group.
+// Why a destination does not take the zone it would inherit: its own photos record another offset.
+function zoneContradiction(c) {
+  const k = c && c.contradicted_by; if (!k) return "";
+  const off = (s) => fmtOffset(s).replace(/ 00s$/, "");
+  return `${k.photos} photo${k.photos === 1 ? "" : "s"} here record${k.photos === 1 ? "s" : ""} ${off(k.recorded_offset_seconds)} from UTC ` +
+    `(${k.example}); ${k.timezone} was at ${off(k.timezone_offset_seconds)} then. Pick the zone these photos were taken in — ` +
+    `or ${k.timezone} itself, if the phone was on another zone.`;
+}
+// What an offset cell has to say beyond its proposal: where a shared offset came from, that a timezone's
+// guess is checked on the tracks, that the camera's GPS gave another offset elsewhere that day.
+function offsetCellNotes(c) {
+  const out = [], p = (c && c.proposal) || {}, eff = (c && c.effective_time_anchor) || {};
+  if (p.proposal_source === "same_day_elsewhere" && p.shared_from)
+    out.push(`No photo here has its own position. The camera's GPS fixed its clock that day in ${p.shared_from.destination}: ` +
+      `${fmtOffset(p.proposed_offset_seconds)}` + (p.confidence === "high" ? ", applied here too." : " — accept it here, or set another."));
+  if (eff.source === "timezone_unconfirmed")
+    out.push("Tracks lie by these photos, so this is checked against them — confirm it in the Drift view; nothing to accept here.");
+  for (const k of (c && c.conflicts_with) || [])
+    out.push(`The camera's GPS gives ${fmtOffset(k.offset_seconds)} the same day in ${k.destination} — one clock, two readings. ` +
+      "Set the right offset by hand in the one that is wrong.");
+  return out;
+}
 function proposalNotes(p) {
   const out = [], groups = p.groups || [];
   if (p.tied && groups.length) {
@@ -1203,5 +1227,6 @@ export {
   cellAt, cellStatus, wouldResolve, previewTz, previewFallback, refInvalid, isDirty, state,
   offsetGroups, dateRange, fmtDate, peerKeys, parseLatLon, coordText, contiguousRange,
   groupChoice, chosenOffset, proposalNotes, driftConfirmHolds, driftConfirmFields, acceptFields, acceptHolds, tracksNote,
+  zoneContradiction, offsetCellNotes,
   scrubOffset, scrubSeedIndex, mapKeyFor,
 };

@@ -691,6 +691,7 @@ class GeotagWorkflow:
         # inherits it (§18). `eff_tz` maps (destination, "tz") -> resolved effective timezone. Clock
         # offsets do NOT inherit across destinations (§10.2): each (group, date) bucket proposes its own.
         eff_tz = {}
+        recall = {}                                  # (destination, bucket) -> what its cell was built from
         ordered, containers = _expand_destinations(by_dest)
         self.coordinator.start_phase("calibrating clock offsets", len(ordered))
         for dest in ordered:
@@ -698,9 +699,16 @@ class GeotagWorkflow:
             is_container = dest in containers       # a file-less folder: holds a timezone/fallback, no offsets
             prior_d = prior_dests.get(dest, {})
             inherited_tz = _nearest_ancestor(dest, eff_tz, "tz")        # confirmable basis if no default
+            if inherited_tz is not None and inherited_tz[1] is _ZONE_WAITS:
+                inherited_tz = None                 # the destination above waits on its own photos: so does this
+            against = (_offsets_against_zone(by_dest[dest], groups, inherited_tz[1])
+                       if inherited_tz is not None and not is_container else None)
             tz_block = self._timezone_decision(dest, prior_d.get("destination_timezone") or {},
-                                               blockers, inherited_tz, file_less=is_container)
-            eff_tz[(dest, "tz")] = tz_block["effective_iana_timezone"] or None   # what children inherit
+                                               blockers, inherited_tz, file_less=is_container, against=against)
+            # what children inherit: the zone in effect; or, where this destination's own photos speak
+            # against the zone it would inherit and the user has not answered, that it waits — a
+            # destination inside it does not reach past it to the zone its photos contradict
+            eff_tz[(dest, "tz")] = tz_block["effective_iana_timezone"] or (_ZONE_WAITS if against else None)
             tz = tz_block["effective_iana_timezone"] or None
             prior_cells = prior_d.get("camera_group_time_decisions") or {}
             cells, present = {}, []
@@ -740,7 +748,8 @@ class GeotagWorkflow:
                                      if _parse_camera_naive(f.get("source_naive_time"))), default=None)
                     cells[bucket] = self._offset_cell(dest, group, g, prior_cell,
                                                       anchor_frames, gpx, blockers, tz=tz, rep_naive=rep_naive,
-                                                      date=date, day=day)
+                                                      date=date, day=day, photos=sel)
+                    recall[(dest, bucket)] = (group, g, prior_cell, anchor_frames, rep_naive, date, day, sel, tz)
             destinations[dest] = {
                 "destination_path": dest,
                 "destination_timezone": tz_block,
@@ -750,6 +759,7 @@ class GeotagWorkflow:
             if is_container:
                 destinations[dest]["file_less"] = True
             self.coordinator.increment_completed(1)
+        self._share_offsets_within_a_day(destinations, recall, gpx, blockers)
         self.coordinator.finish_phase()
 
         requires = (any(d["destination_timezone"]["requires_user_input"] for d in destinations.values())
@@ -768,7 +778,73 @@ class GeotagWorkflow:
             artifact["decision_mode"] = "no_op_or_auto_resolved"
         return artifact, blockers
 
-    def _timezone_decision(self, dest, prior_tz, blockers, inherited=None, file_less=False):
+    # Offsets a camera's own GPS gave: the only ones another destination's cell of the same day may take.
+    _OWN_GPS_SOURCES = ("gpx_anchor_auto", "gpx_anchor_accepted", "gpx_anchor_chosen")
+
+    def _share_offsets_within_a_day(self, destinations, recall, gpx, blockers):
+        """A clock offset is the camera's for the day, wherever its photos were sorted (§10.2). So, over the
+        cells of one camera on one day in different destinations: (1) two offsets its own GPS gave that lie
+        farther apart than `clock_offset_same_day_max_difference_seconds` are one clock read two ways —
+        neither takes effect, both ask; a hand-written offset is the user's word, and is neither withheld nor
+        counted. (2) A cell with no GPS evidence of its own is proposed the offset the camera's GPS gave
+        that day elsewhere, in place of the timezone's guess: applied by itself where it applied itself
+        there, else for the user to accept."""
+        limit = CONFIG["clock_offset_same_day_max_difference_seconds"]
+        by_day = {}
+        for dest, d in destinations.items():
+            for bucket, cell in d["camera_group_time_decisions"].items():
+                if cell.get("day"):
+                    by_day.setdefault((cell["camera_group"], cell["day"]), []).append((dest, bucket, cell))
+        for (_group, _day), members in sorted(by_day.items()):
+            if len(members) < 2:
+                continue
+            hand = lambda c: (c.get("user_decision") or {}).get("manual_offset_seconds") not in ("", None)
+            donors = [(dest, bucket, c) for dest, bucket, c in sorted(members, key=lambda m: (m[0], m[1]))
+                      if isinstance(c.get("effective_time_anchor"), dict) and not hand(c)
+                      and c["effective_time_anchor"].get("source") in self._OWN_GPS_SOURCES]
+            offs = [c["effective_time_anchor"]["offset_seconds"] for _d, _b, c in donors]
+            if offs and max(offs) - min(offs) > limit:
+                for dest, bucket, c in donors:
+                    c["conflicts_with"] = [{"destination": d2, "bucket": b2,
+                                            "offset_seconds": c2["effective_time_anchor"]["offset_seconds"]}
+                                           for d2, b2, c2 in donors if c2 is not c]
+                for _dest, _bucket, c in donors:
+                    c["effective_time_anchor"], c["requires_user_input"] = "", True
+                    c.pop("decision_mode", None)
+                continue                              # one clock read two ways: nothing to pass on
+            if not donors:
+                continue
+            # the donor: one that applied itself before one the user accepted, then by path
+            dest0, bucket0, donor = min(donors, key=lambda m: (m[2]["effective_time_anchor"]["source"] != "gpx_anchor_auto",
+                                                               m[0], m[1]))
+            shared = {"offset_seconds": donor["effective_time_anchor"]["offset_seconds"],
+                      "destination": dest0, "bucket": bucket0,
+                      "applied_itself": donor["effective_time_anchor"]["source"] == "gpx_anchor_auto"}
+            for dest, bucket, c in members:
+                if (c.get("proposal") or {}).get("proposal_source") not in ("timezone_naive", "manual_required") \
+                        or (dest, bucket) not in recall:
+                    continue
+                group, g, prior_cell, anchor_frames, rep_naive, date, day, sel, tz = recall[(dest, bucket)]
+                destinations[dest]["camera_group_time_decisions"][bucket] = self._offset_cell(
+                    dest, group, g, prior_cell, anchor_frames, gpx, blockers, tz=tz, rep_naive=rep_naive,
+                    date=date, day=day, photos=sel, shared=shared)
+
+    def _tracks_by(self, gpx, times, frames):
+        """The track points the drift check sets a bucket's photos against: those within
+        `drift_check_track_window_seconds` of the photos' resolved `times`; or, none lying there, of the
+        times the camera recorded — an offset days out carries the photos away from their own tracks, and
+        is checked against those, not waved through."""
+        window = CONFIG["drift_check_track_window_seconds"]
+        near = lambda a, z: [p for p in gpx.points if (a - timedelta(seconds=window)) <= p.time_utc
+                             <= (z + timedelta(seconds=window))]
+        seg = near(min(times), max(times)) if times else []
+        if not seg:
+            clock = [t.replace(tzinfo=timezone.utc) for f in frames
+                     if (t := _parse_camera_naive(f.get("source_naive_time")))]
+            seg = near(min(clock), max(clock)) if clock else []
+        return seg
+
+    def _timezone_decision(self, dest, prior_tz, blockers, inherited=None, file_less=False, against=None):
         # Proposal precedence (§18): the nearest RESOLVED ancestor destination's timezone (a more
         # specific signal than the generic global default — e.g. a Japan/Kyoto leaf inheriting Japan's
         # Asia/Tokyo over a Europe/Brussels home default) wins; else the config default; else none.
@@ -799,7 +875,10 @@ class GeotagWorkflow:
         # applied to a trip abroad it would name and time its photos in the wrong zone; each top-level trip
         # answers once, everything beneath inheriting. A manual entry overrides either, and is the one decision
         # the user makes here (§18).
-        auto = not manual and bool(proposed) and source == "inherited"
+        # ...unless this destination's own photos say otherwise: a phone's photo here that records an offset
+        # the inherited zone does not have at that time was taken in another zone, and the one zone change
+        # of a trip is not adopted unasked. The user writes the zone — the inherited one, if it is right.
+        auto = not manual and bool(proposed) and source == "inherited" and not against
         if auto:
             effective = proposed
         block = {
@@ -815,16 +894,24 @@ class GeotagWorkflow:
             block["decision_mode"] = "auto_resolved"
         if inherited_from:
             block["inherited_from"] = inherited_from
+        if against and not manual:
+            block["contradicted_by"] = against
         return block
 
     def _offset_cell(self, dest, key, g, prior_cell, frames, gpx, blockers, tz=None, rep_naive=None, date=None,
-                     day=None):
+                     day=None, photos=(), shared=None):
         # One (camera group, destination[, date]) clock-offset bucket. Proposal precedence (§10.2 rule 4):
         # GPX self-anchor → timezone-derived (camera assumed on local time; DST-aware, §19.4) → manual.
         # Clock offsets do not inherit across destinations. `date` (YYYY-MM-DD) is set when the group
         # spans >1 naive day here; the bucket key is `<key>@<date>` and is the blocker location.
         loc = key if date is None else f"{key}@{date}"
         proposal = infer_anchor_proposal(frames, gpx, CONFIG)
+        if proposal is None and shared is not None:
+            # no GPS evidence here, and the camera's own GPS fixed its clock that day in another destination
+            proposal = {"proposal_source": "same_day_elsewhere", "proposed_offset_seconds": shared["offset_seconds"],
+                        "shared_from": {"destination": shared["destination"], "bucket": shared["bucket"]},
+                        "confidence": "high" if shared["applied_itself"] else "review_required",
+                        "rank": "same_day"}
         if proposal is None and (tzr := _timezone_naive_offset(rep_naive, tz)) is not None:
             off_s, real_iso = tzr
             proposal = {"proposal_source": "timezone_naive", "proposed_offset_seconds": off_s,
@@ -833,6 +920,7 @@ class GeotagWorkflow:
         elif proposal is None:
             proposal = {"proposal_source": "manual_required"}
         is_gpx = proposal.get("proposal_source") == "gpx_self_anchor"
+        is_shared = proposal.get("proposal_source") == "same_day_elsewhere"
         has_offset = "proposed_offset_seconds" in proposal
         conflicting = proposal.get("conflicting_count", 0) > 0 or bool(proposal.get("tied"))   # anchors disagree
         imprecise = bool(proposal.get("imprecise_seconds"))    # the tracks stood still: no photo says when
@@ -877,7 +965,7 @@ class GeotagWorkflow:
                 # the same finding, and no reason to move photos already corrected by the first.
                 effective = {"offset_seconds": int(accepted_off),
                              "source": ("gpx_anchor_imprecise" if imprecise else "gpx_anchor_accepted") if is_gpx
-                             else "timezone_accepted"}
+                             else "same_day_accepted" if is_shared else "timezone_accepted"}
         elif is_gpx and not conflicting and not imprecise:
             # auto-resolution under the config flags (§9.1) — GPX-self-anchor only; a timezone-derived
             # proposal is confirmable, never auto-applied (the local-clock assumption can be wrong).
@@ -907,6 +995,20 @@ class GeotagWorkflow:
                     and not (is_gpx and (conflicting or imprecise
                                          or abs(proposal["proposed_offset_seconds"] - earlier.get("offset_seconds", 0)) > tolerance)):
                 effective, decision_mode, anchored_by = earlier, "kept_from_earlier", rests_on
+        if effective != "" or stale or manual_off not in ("", None) or accept:
+            pass                                   # decided above, or the user's to decide
+        elif is_shared and shared["applied_itself"]:
+            effective = {"offset_seconds": proposal["proposed_offset_seconds"], "source": "same_day_auto"}
+            decision_mode = "auto_resolved"
+        elif proposal.get("proposal_source") == "timezone_naive" and photos:
+            # A timezone's guess is asked about once, where it can be checked: with tracks by the photos it
+            # goes to the drift check as it stands, and the confirmation there is its acceptance (§22a) —
+            # nothing is planned until then. With no track to check it against, it is accepted here.
+            times = [t.replace(tzinfo=timezone.utc) + timedelta(seconds=proposal["proposed_offset_seconds"])
+                     for f in photos if (t := _parse_camera_naive(f.get("source_naive_time")))]
+            if self._tracks_by(gpx, times, photos):
+                effective = {"offset_seconds": proposal["proposed_offset_seconds"], "source": "timezone_unconfirmed"}
+                decision_mode = "to_be_confirmed_against_tracks"
 
         cell = {
             "camera_group": key,
@@ -965,7 +1067,7 @@ class GeotagWorkflow:
     # confirms each (a zero-scrub "offset was right" must be actively confirmed, never implied), and
     # carries the corrected/validated offset that compute_resolved_utc then re-consumes (§22a).
 
-    _DRIFT_TRIGGER_SOURCES = ("timezone_accepted", "manual", "gpx_anchor_imprecise")
+    _DRIFT_TRIGGER_SOURCES = ("timezone_accepted", "timezone_unconfirmed", "manual", "gpx_anchor_imprecise")
 
     def build_drift_validation(self, files, time_artifact, rows0, gpx, prior):
         """Build/regenerate photos-22 from the COMPLETE photos-21 + the resolved UTC under the
@@ -977,8 +1079,6 @@ class GeotagWorkflow:
         blockers = _decision_shape_blockers(prior, "drift")
         if blockers:
             return None, blockers
-        cfg = CONFIG
-        window = cfg["drift_check_track_window_seconds"]
         by_dest_group = {}
         for f in files:
             if not f.get("geotag_marker"):                # a corrected time has no drift left to check
@@ -1008,20 +1108,12 @@ class GeotagWorkflow:
                             cells[bucket] = kept
                     continue
                 times = [t for f in frames if (t := _parse_utc(resolved_by_path.get(f["relative_path"])))]
-                if not times:
+                if not times and eff.get("source") != "timezone_unconfirmed":
                     continue                                  # nothing resolves -> not a drift case
-                lo, hi = min(times), max(times)
-                near = lambda a, z: [p for p in gpx.points if (a - timedelta(seconds=window)) <= p.time_utc
-                                     <= (z + timedelta(seconds=window))]
-                seg = near(lo, hi)
-                if not seg:
-                    # No track by the times this offset gives — but is there one by the times the camera
-                    # recorded? Then the offset itself may be what carried the photos away from their
-                    # tracks (a slip of a digit, days out): it is checked against those, not waved through.
-                    clock = [t.replace(tzinfo=timezone.utc) for f in frames
-                             if (t := _parse_camera_naive(f.get("source_naive_time")))]
-                    seg = near(min(clock), max(clock)) if clock else []
-                if not seg:
+                seg = self._tracks_by(gpx, times, frames)
+                # An offset nobody has accepted is never passed over: it is here to be confirmed, tracks
+                # or none.
+                if not seg and eff.get("source") != "timezone_unconfirmed":
                     continue                                  # no GPX coverage -> phase 23 fallback/lost
                 cells[bucket] = self._drift_cell(dest, bucket, cell, seg, frames,
                                                  prior_drift, blockers, date=date)

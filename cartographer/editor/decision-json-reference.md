@@ -149,6 +149,7 @@ The editor badges these destinations as `container` and keeps them off the to-do
 | `proposal_source` | `"inherited"` \| `"config_default"` \| `"none"` | no | Where the proposal came from. |
 | `proposal_confidence` | `"review_required"` \| `"high"` \| `"none"` | no | `inherited` is always `review_required`. |
 | `inherited_from` | string | no | Present only when `proposal_source == "inherited"`: the ancestor destination. |
+| `contradicted_by` | object | no | Present when the destination's own photos speak against the zone it would inherit: `{ "photos": int, "example": "<path>", "recorded_offset_seconds": int, "timezone": "<inherited zone>", "timezone_offset_seconds": int }`. The inherited zone then does **not** apply itself: the cell asks until `manual_iana_timezone` is written (the inherited zone itself, if it is right), and destinations inside inherit nothing through it. |
 | **`user_decision.manual_iana_timezone`** | string (`""`) | **yes** | A human-entered IANA zone (e.g. `"Asia/Tokyo"`). |
 | `effective_iana_timezone` | string (`""` if unresolved) | no | The resolved zone. |
 | `requires_user_input` | bool | no | `true` ⇔ `effective_iana_timezone == ""` on a destination that is not a container — no zone written by hand and no ancestor zone to inherit; a configured `default_folder_timezone` is only offered (`proposal_source: "config_default"`), and takes effect once written as `manual_iana_timezone`. |
@@ -179,7 +180,8 @@ destinations or buckets.
 | **`user_decision.accept_proposal`** | bool | **yes** | Accept the proposal's offset. |
 | **`user_decision.accepted_offset_seconds`** | number \| `""` | **yes** | The `proposed_offset_seconds` being accepted — written together with `accept_proposal: true`, cleared with it. The acceptance holds only while this is what is proposed (within `acceptance_tolerance_seconds` for a GPX proposal): a proposal that became another one was never accepted, and the cell goes `stale_user_decision` and asks. `accept_proposal: true` with this empty is a blocker. |
 | **`user_decision.manual_offset_seconds`** | number \| `""` | **yes** | A manual clock offset, seconds (camera_time + offset = real UTC). |
-| `effective_time_anchor` | `""` \| object | no | `""` if unresolved; else `{ "offset_seconds": int, "source": … }` where source ∈ `manual` \| `gpx_anchor_accepted` \| `gpx_anchor_chosen` \| `gpx_anchor_imprecise` \| `timezone_accepted` \| `gpx_anchor_auto`. |
+| `effective_time_anchor` | `""` \| object | no | `""` if unresolved; else `{ "offset_seconds": int, "source": … }` where source ∈ `manual` \| `gpx_anchor_accepted` \| `gpx_anchor_chosen` \| `gpx_anchor_imprecise` \| `timezone_accepted` \| `timezone_unconfirmed` \| `gpx_anchor_auto` \| `same_day_auto` \| `same_day_accepted`. |
+| `conflicts_with` | array | no | Present when the camera's own GPS gave another offset the same day in another destination, farther off than `clock_offset_same_day_max_difference_seconds`: `[{ "destination", "bucket", "offset_seconds" }]`. Neither offset takes effect; write `manual_offset_seconds` in the cell that is wrong. |
 | `anchored_by` | list | no | On a cell whose offset applied itself from GPS: the track files it was found from, each `{ "gpx_file", "sha256" }`. The offset is kept for later photos of the day (`decision_mode: "kept_from_earlier"`) only while each is under `gpx_root` unchanged and no newer GPS proposal says otherwise. |
 | `requires_user_input` | bool | no | `true` ⇔ `effective_time_anchor == ""`. (Containers carry no offset cells, so this is never softened here.) |
 | `stale_user_decision` | bool | no | Accepted a proposal that is no longer the one made (another offset, or none). |
@@ -225,8 +227,17 @@ destinations or buckets.
   tracked it (DST-aware, per day):
   `{ "proposal_source": "timezone_naive", "proposed_offset_seconds": int, "proposed_real_utc": "…Z",
      "proposed_from_timezone": "Europe/Brussels", "confidence": "review_required", "rank": "timezone_derived" }`.
-  Confirmable only — the assumption can be wrong (camera on home time). This is the no-anchor default;
-  offsets are never inherited from an ancestor destination.
+  Confirmable only — the assumption can be wrong (camera on home time). Where tracks lie by the bucket's
+  photos it is asked about once, in photos-22: the cell's effective source is `timezone_unconfirmed`
+  (`decision_mode: "to_be_confirmed_against_tracks"`), nothing is asked here, and the drift confirmation
+  is its acceptance. With no track by the photos it is accepted here (`accept_proposal` +
+  `accepted_offset_seconds`).
+- **The same day elsewhere** (`proposal_source: "same_day_elsewhere"`) — no photo of the bucket has its
+  own position, and the camera's GPS fixed its clock that day in another destination:
+  `{ "proposal_source": "same_day_elsewhere", "proposed_offset_seconds": int,
+     "shared_from": { "destination": "…", "bucket": "…" }, "confidence": "high" | "review_required" }`.
+  `high`: it applied itself there and applies itself here (`same_day_auto`). `review_required`: accept it
+  here (`same_day_accepted`). Never another day's offset, never one written by hand.
 - **Manual required** (`proposal_source: "manual_required"`) — no signal (and no resolved timezone); the
   human must enter a manual offset (or real UTC): `{ "proposal_source": "manual_required" }`.
 
