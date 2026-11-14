@@ -9,7 +9,7 @@ that only restated others, has no heading here.
 
 :::{rat} A position is looked up by time
 :id: RAT-position_follows_time
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-track_squeezed, RAT-offset_per_camera_destination_day
 :justifies: RUL-time_before_gps
@@ -22,7 +22,7 @@ is settled for every photo first, and only then is any position planned.
 
 :::{rat} No phase invents a time
 :id: RAT-no_phase_invents_time
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-untimed_set_apart, CHC-ask_only_what_data_cannot_settle
 :justifies: RUL-untimed_photo_stops_geotag
@@ -38,7 +38,7 @@ naming it and where it belongs, makes the one possible fix plain.
 
 :::{rat} A chain is only as fresh as its weakest link
 :id: RAT-no_chain_of_vouching
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-no_mutation_outside_plan
 :justifies: RUL-geotag_plan_carries_every_dependency
@@ -53,7 +53,7 @@ itself, every input is checked against what it is now, at the one moment that ma
 
 :::{rat} Only what the user sorted is ready
 :id: RAT-only_sorted_is_ready
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-piggyback_on_the_destination_sort
 :justifies: RUL-geotag_changes_only_by_dest
@@ -69,7 +69,7 @@ the user's statement that it is ready.
 
 :::{rat} A missing record should mean one thing
 :id: RAT-record_means_stage_reached
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-plain_json_record
 :justifies: RUL-decision_stage_writes_record, RUL-no_record_before_decisions
@@ -85,7 +85,7 @@ decision to act on when there was none.
 
 :::{rat} The camera's own GPS is evidence; the user decides how much
 :id: RAT-anchor_evidence_trusted_as_configured
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-minimal_cascading_asks, RAT-clustering_details
 :justifies: RUL-anchor_offset_auto_as_configured
@@ -98,7 +98,7 @@ disagree mean something is off — a clock reset in the day, a wrong track — a
 
 :::{rat} A nested place is in its parent's timezone
 :id: RAT-nested_place_same_timezone
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-decisions_cascade, RAT-destination_tree_is_a_hierarchy
 :justifies: RUL-timezone_auto_resolves
@@ -111,7 +111,7 @@ answer.
 
 :::{rat} An assumption is the user's to accept
 :id: RAT-assumptions_need_acceptance
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: CHC-ask_only_what_data_cannot_settle, CHC-photos_matter
 :justifies: RUL-other_proposals_need_acceptance
@@ -126,7 +126,7 @@ place or the wrong hour, written into the originals; offered for acceptance, it 
 
 :::{rat} A clock is wrong by its own amount, day by day
 :id: RAT-offset_per_day_and_place
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-offset_per_camera_destination_day
 :justifies: RUL-offset_per_camera_destination_day
@@ -139,7 +139,7 @@ the error stays put, so it is the unit decided.
 
 :::{rat} One place's clock evidence says nothing of another's
 :id: RAT-no_borrowed_offsets
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-offset_per_camera_destination_day, RAT-decisions_cascade
 :justifies: RUL-offset_from_own_evidence
@@ -153,7 +153,7 @@ such.
 
 :::{rat} A container is a place to put defaults
 :id: RAT-container_holds_defaults
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-decisions_cascade, RAT-destination_tree_is_a_hierarchy
 :justifies: RUL-container_never_waits
@@ -167,7 +167,7 @@ set once and reach every destination beneath it. If it asked for anything, it wo
 
 :::{rat} A track is evidence only where it can be read
 :id: RAT-track_points_read_exactly
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: CHC-photos_matter, RAT-remainder_worklist
 :justifies: RUL-track_time_never_guessed, RUL-unreadable_point_reported
@@ -184,7 +184,7 @@ why the photos it should have placed were not.
 
 :::{rat} The class decides how a photo's time is found
 :id: RAT-class_decides_time_model
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-camera_groups_generated, RAT-offset_per_camera_destination_day
 :justifies: RUL-unknown_group_stops_geotag, RUL-unknown_group_classification_offered
@@ -198,7 +198,7 @@ out, so only the judgement is the user's.
 
 :::{rat} No camera, no clock to correct
 :id: RAT-no_identity_no_group
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-offset_per_camera_destination_day, RAT-minimal_cascading_asks
 :justifies: RUL-unidentified_files_solved_alone
@@ -214,7 +214,7 @@ the place's zone, it asks nothing and borrows nothing.
 
 :::{rat} The nearest place says the most
 :id: RAT-nearest_timezone
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-decisions_cascade, RAT-destination_tree_is_a_hierarchy
 :justifies: RUL-timezone_from_nearest
@@ -227,7 +227,7 @@ not one per folder.
 
 :::{rat} The destination is an input to the time
 :id: RAT-destination_is_an_input
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-offset_per_camera_destination_day, RAT-decisions_cascade
 :justifies: RUL-moved_photo_decided_anew
@@ -242,7 +242,7 @@ its time and its name, now hidden under the right folder.
 
 :::{rat} The same place on another trip is not evidence
 :id: RAT-clock_error_window
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-offset_per_camera_destination_day
 :justifies: RUL-anchor_within_clock_error
@@ -255,7 +255,7 @@ be the destination's zone: the camera may have been left on home time, and that 
 
 :::{rat} Agreement is the evidence
 :id: RAT-anchor_agreement
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-offset_per_camera_destination_day, RAT-minimal_cascading_asks
 :justifies: RUL-anchor_consensus
@@ -269,7 +269,7 @@ nothing tells two offsets apart, the photos do not say which is right, and the u
 
 :::{rat} A trip comes back to its places
 :id: RAT-trips_revisit
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-anchor_agreement, RAT-minimal_cascading_asks
 :justifies: RUL-revisit_matched_to_its_day, RUL-indistinct_visits_wait
@@ -283,7 +283,7 @@ say which visit is theirs, only the user, who remembers the day, can.
 
 :::{rat} The evidence is the same whichever offset the user takes
 :id: RAT-chosen_offset_has_evidence
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-anchor_agreement, RAT-minimal_cascading_asks
 :justifies: RUL-chosen_group_is_anchored
@@ -299,7 +299,7 @@ needed them.
 
 :::{rat} A phone says its own offset
 :id: RAT-phone_records_its_offset
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-class_decides_time_model
 :justifies: RUL-phone_time_from_own_offset
@@ -315,7 +315,7 @@ chance. Where the photo records none for its time, the destination's zone is the
 
 :::{rat} A wrong offset moves a whole day along the track
 :id: RAT-drift_invisible
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-position_follows_time, CHC-photos_matter
 :justifies: RUL-unanchored_offset_confirmed
@@ -329,7 +329,7 @@ check; leaving it unseen must never pass for having seen it.
 
 :::{rat} What was seen was one offset
 :id: RAT-confirmed_one_offset
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-drift_invisible
 :justifies: RUL-confirmation_holds_for_its_offset
@@ -344,7 +344,7 @@ correction found for the old one override the user's new decision.
 
 :::{rat} A new decoder does not make a new photo
 :id: RAT-same_photo_new_fingerprint
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-decision_withdrawable, RAT-decoded_pixel_identity
 :justifies: RUL-own_values_follow_new_fingerprint
@@ -360,7 +360,7 @@ it does not say so one for one, no photo's values can be told apart, and geotag 
 
 :::{rat} The camera measured where it was
 :id: RAT-own_position_best
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-total_coverage_cascade, CHC-photos_matter
 :justifies: RUL-own_position_kept
@@ -372,7 +372,7 @@ the photo less right, not more.
 
 :::{rat} Most specific first
 :id: RAT-placement_most_specific_first
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-track_squeezed, RAT-folder_gps_fallback, RAT-remainder_worklist
 :justifies: RUL-placement_order
@@ -385,7 +385,7 @@ unlocated.
 
 :::{rat} A place inside a place is near it
 :id: RAT-fallback_nested
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-folder_gps_fallback, RAT-assumptions_need_acceptance
 :justifies: RUL-fallback_from_nearest
@@ -397,7 +397,7 @@ user has chosen to inherit, and a fallback changed above flows down to it, as a 
 
 :::{rat} A fallback is a convenience, not a gate
 :id: RAT-fallback_optional
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-folder_gps_fallback, RAT-minimal_cascading_asks
 :justifies: RUL-fallback_optional
@@ -412,7 +412,7 @@ add the work it exists to save.
 
 :::{rat} Half a position is a wrong one
 :id: RAT-position_whole
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: CHC-photos_matter
 :justifies: RUL-position_written_whole
@@ -425,7 +425,7 @@ reader will complete. Whole or not at all is the only safe write.
 
 :::{rat} The offset is the camera's that day, not the photos'
 :id: RAT-day_offset_is_the_cameras
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-offset_per_camera_destination_day, RAT-decisions_reread_cache_only
 :justifies: RUL-day_offset_kept_for_later_photos
@@ -440,7 +440,7 @@ question already settled, or leave the later photos an offset nobody checked.
 
 :::{rat} A crash leaves work, not damage
 :id: RAT-execution_resumable
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-discrete_stages, RAT-idempotent_reruns
 :justifies: RUL-geotag_execution_resumable
@@ -453,7 +453,7 @@ the user's edit: only the first is its to finish.
 
 :::{rat} Metadata never moves a pixel
 :id: RAT-content_changed_held
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-decoded_pixel_identity, CHC-photos_matter
 :justifies: RUL-content_changed_write_held
@@ -469,7 +469,7 @@ photo's identity is at stake, so only the user can take the new content for it.
 
 :::{rat} The package records what was done
 :id: RAT-package_records_what_was_done
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-consolidated_log, RAT-record_outlives_workspace
 :justifies: RUL-finalize_requires_success
