@@ -53,7 +53,7 @@ def _ws(tmp_path, *, guard=True, sealed=False, config=True, handoff=True,
     if handoff:
         files = handoff_files if handoff_files is not None else \
             [{"relative_path": rel, "media_class": "image"} for rel in bydest]
-        (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files)}))
+        (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files), "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
     return ws
 
 
@@ -375,16 +375,32 @@ class _CollectRep:
     def error(self, msg, **k): self.errors.append(msg)
 
 
-def _autoreprep(ws, monkeypatch, *, command="plan", jobs=4, fail=None):
-    """Drive the auto-reprep helper with prep's locked body stubbed; return (prep commands it ran, reporter)."""
+# What prep's plan holds when it only records a sort: database records, and the removal of the folder it emptied.
+_RECORDS_ONLY = [{"type": "db_upsert", "source": None, "destination": None, "reason": "Cache unchanged state"},
+                 {"type": "db_remove", "source": None, "destination": None, "reason": "Prune ghosts"},
+                 {"type": "rmdir", "source": "5-photos-by-date/2023-01-01", "destination": None,
+                  "reason": "Remove a folder the plan leaves empty"}]
+
+
+def _write_prep_plan(workspace_root, ops):
+    with open(utils.prep_plan_path(workspace_root), "w") as f:
+        json.dump({"plan_id": "p", "operations": ops}, f)
+
+
+def _autoreprep(ws, monkeypatch, *, command="plan", jobs=4, fail=None, plan_ops=_RECORDS_ONLY):
+    """Drive the auto-reprep helper with prep's locked body stubbed — its plan saving `plan_ops` — and return (prep
+    commands it ran, reporter)."""
     import photos_1_prep as prep
     calls = []
     def fake_prep_run_locked(a, workspace_root, reporter):
         calls.append(a.command)
         if fail is not None and a.command == fail:
             raise SystemExit(2)
+        if a.command == "plan":
+            _write_prep_plan(workspace_root, plan_ops)
     monkeypatch.setattr(prep, "_run_locked", fake_prep_run_locked)
     rep = _CollectRep()
+    _autoreprep.last = (calls, rep)                     # read by a test whose run ends in SystemExit
     cal._auto_reprep_for_clean_move(_types.SimpleNamespace(command=command, jobs=jobs), str(ws), rep)
     return calls, rep
 
@@ -467,6 +483,200 @@ def test_auto_reprep_propagates_prep_failure(tmp_path, monkeypatch):
     with pytest.raises(SystemExit) as ei:
         _autoreprep(ws, monkeypatch, fail="plan")
     assert ei.value.code == 2
+
+
+@pytest.mark.parametrize("op", [
+    {"type": "rename_no_clobber", "source": "5-photos-by-date/2023-01-01/2023-01-01--00-00-00.JPG",
+     "destination": "5-photos-by-date/2023-01-01/2023-01-01--00-00-00.jpg.tmp", "reason": "Normalize extension case (temp)"},
+    {"type": "quarantine_move", "source": "5-photos-by-date/2023-01-01/2023-01-01--00-00-00-001.jpg",
+     "destination": ".photos-ingest-quarantine/p/x.jpg", "reason": "Duplicate of 5-photos-by-date/2023-01-01/x.jpg"},
+    {"type": "move_no_clobber", "source": "5-photos-by-date/2023-01-02/2023-01-01--00-00-00.arw",
+     "destination": "5-photos-by-date/2023-01-01/2023-01-01--00-00-00.arw", "reason": "Chronological Organization"}],
+    ids=["rename", "quarantine", "move"])
+@pytest.mark.spec("RUL-auto_reprep_moves_no_media", "BLD-geotag_auto_reprep",
+                  test="TST-geotag_preflight-auto_reprep_never_executes_a_plan_that_touches_media")
+def test_auto_reprep_never_executes_a_plan_that_touches_media(tmp_path, monkeypatch, op):
+    """Prep's plan for a clean sort that would also rename, quarantine or move a media file — work in the by-date
+    folders the user was never shown — is not executed: geotag stops, naming what the plan would do and telling the
+    user to review and execute it themselves; the saved plan is left as it is."""
+    ws = _ws(tmp_path, bydest=("6-photos-by-dest/Trip/a.jpg",), handoff_files=[])   # a.jpg unrecorded: a clean move
+    with pytest.raises(SystemExit) as ei:
+        _autoreprep(ws, monkeypatch, plan_ops=_RECORDS_ONLY + [op])
+    assert ei.value.code == 2
+    calls, rep = _autoreprep.last
+    assert calls == ["plan"], calls                                   # prep's execute never ran
+    said = "\n".join(rep.errors + rep.logs)
+    assert op["type"] in said and op["source"] in said, said
+    assert "prep dry-run" in said and "prep execute" in said, said
+    assert json.loads(open(utils.prep_plan_path(str(ws))).read())["operations"][-1] == op   # left for the user
+
+
+@pytest.mark.spec("RUL-auto_reprep_moves_no_media", "BLD-geotag_auto_reprep",
+                  test="TST-geotag_preflight-auto_reprep_executes_a_plan_touching_no_media")
+def test_auto_reprep_executes_a_plan_touching_no_media(tmp_path, monkeypatch):
+    """The nearest safe case: a plan that records the sort and otherwise quarantines only a file that is no media (an
+    orphaned exiftool intermediate) is executed as before; one prep saved no readable plan for is not."""
+    ws = _ws(tmp_path, bydest=("6-photos-by-dest/Trip/a.jpg",), handoff_files=[])
+    leftover = {"type": "quarantine_move", "source": "6-photos-by-dest/Trip/a.jpg_exiftool_tmp",
+                "destination": ".photos-ingest-quarantine/p/6-photos-by-dest/Trip/a.jpg_exiftool_tmp",
+                "reason": "Orphaned exiftool intermediate/backup from an interrupted metadata write"}
+    calls, _ = _autoreprep(ws, monkeypatch, plan_ops=_RECORDS_ONLY + [leftover])
+    assert calls == ["plan", "execute"], calls
+    with pytest.raises(SystemExit) as ei:
+        _autoreprep(ws, monkeypatch, plan_ops="not a list")
+    assert ei.value.code == 2 and _autoreprep.last[0] == ["plan"]
+
+
+@pytest.mark.spec("RUL-auto_reprep_moves_no_media", "BLD-geotag_auto_reprep",
+                  test="TST-geotag_preflight-auto_reprep_with_real_prep_executes_only_a_recorded_sort")
+def test_auto_reprep_with_real_prep_executes_only_a_recorded_sort(tmp_path, monkeypatch):
+    """With prep itself planning (its fingerprint and metadata reading stood in for): the user sorts a photo into a
+    destination and goes straight to geotag — prep's plan only records it, and geotag executes it. The user sorts
+    another and, by mistake, leaves a copy of a third in the by-date folder — prep's plan would quarantine it, and
+    geotag executes nothing: the copy stays where it is, and prep's record is as it was."""
+    import hashlib
+    import photos_1_prep as prep
+    from datetime import datetime as _dt, timedelta as _td
+    monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", staticmethod(lambda p: {
+        "status": "valid", "strategy": "image-content-hash-v2",
+        "value": "sig-" + hashlib.sha256(open(p, "rb").read()).hexdigest(), "engine_version": "t"}))
+    def meta(folders, max_workers=4, progress_coordinator=None):
+        out = {}
+        for folder in folders:
+            for r, _d, fs in os.walk(folder):
+                for n in fs:
+                    p = os.path.join(r, n)
+                    k = int(open(p, "rb").read().decode().split("-")[1])          # content "photo-<k>"
+                    out[p] = {"extraction_status": "extracted_ok",
+                              "DateTimeOriginal": (_dt(2023, 1, 2, 3, 4, 5) + _td(minutes=k)).strftime("%Y:%m:%d %H:%M:%S")}
+        return out, set()
+    monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", meta)
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    for d in MANAGED:
+        (ws / d).mkdir()
+    for k in range(3):
+        (ws / "0-sources" / f"IMG_{k}.jpg").write_bytes(f"photo-{k}".encode())
+    rep = _CollectRep()
+    for cmd in ("plan", "execute"):                                   # the first ingest, by prep itself
+        try:
+            prep._run_locked(_types.SimpleNamespace(command=cmd, jobs=1), str(ws), rep)
+        except SystemExit as e:
+            assert e.code in (0, None), (cmd, rep.errors)
+    day = ws / "5-photos-by-date" / "2023-01-02"
+    names = sorted(os.listdir(day))
+    assert len(names) == 3, names
+    (ws / "6-photos-by-dest" / "Trip").mkdir()
+    os.rename(day / names[0], ws / "6-photos-by-dest" / "Trip" / names[0])        # a clean sort
+    ho_p = ws / ".photos-ingest" / "photos-11-handoff.json"
+    rep = _CollectRep()
+    cal._auto_reprep_for_clean_move(_types.SimpleNamespace(command="plan", jobs=1), str(ws), rep)
+    assert any("Re-prep complete" in m for m in rep.logs), (rep.logs, rep.errors)
+    assert not utils.by_dest_reprep_pending(str(ws), json.loads(ho_p.read_text()))   # executed: the sort is recorded
+
+    os.rename(day / names[1], ws / "6-photos-by-dest" / "Trip" / names[1])        # another sort ...
+    copy = day / (os.path.splitext(names[2])[0] + "-001.jpg")
+    copy.write_bytes((day / names[2]).read_bytes())                             # ... and a copy left by mistake
+    before = ho_p.read_bytes()
+    rep = _CollectRep()
+    with pytest.raises(SystemExit) as ei:
+        cal._auto_reprep_for_clean_move(_types.SimpleNamespace(command="plan", jobs=1), str(ws), rep)
+    assert ei.value.code == 2
+    assert copy.exists() and (day / names[2]).exists()                          # nothing quarantined
+    assert ho_p.read_bytes() == before                                            # prep's execute never ran
+    assert any("quarantine_move" in m for m in rep.errors + rep.logs), (rep.errors, rep.logs)
+    plan = json.loads(open(utils.prep_plan_path(str(ws))).read())
+    assert any(o["type"] == "quarantine_move" for o in plan["operations"])        # saved, for the user to review
+
+
+# --- RUL-unfingerprinted_photo_stops_geotag ----------------------------------
+
+def _fingerprinted(value):
+    md = {"has_timestamp": 1, "camera_group_key_version": cal.CAMERA_GROUP_KEY_VERSION,
+          "field_set_version": cal.FIELD_SET_VERSION}
+    ch = json.dumps({"status": "valid" if value else "failed", "strategy": "image-content-hash-v2",
+                     "value": value, "engine_version": "t"})
+    return lambda rel: {"relative_path": rel, "folder_class": "6-photos-by-dest", "media_class": "image",
+                        "metadata_status": md, "content_hash": ch}
+
+
+@pytest.mark.parametrize("for_execute", [False, True], ids=["plan", "execute_finalize"])
+@pytest.mark.spec("RUL-unfingerprinted_photo_stops_geotag",
+                  test="TST-geotag_preflight-a_photo_with_no_fingerprint_stops_geotag")
+def test_a_photo_with_no_fingerprint_stops_geotag(tmp_path, for_execute):
+    """A photo in photos by destination prep could not fingerprint — its record's fingerprint holds no value, or it
+    has none — stops geotag at plan, execute and finalize alike, the photo named, with what to do; the photos that
+    have one pass unnamed."""
+    rels = ("6-photos-by-dest/Trip/good.jpg", "6-photos-by-dest/Trip/broken.jpg", "6-photos-by-dest/Trip/bare.jpg")
+    files = [_fingerprinted("sig-good")(rels[0]), _fingerprinted(None)(rels[1]),
+             {k: v for k, v in _fingerprinted("x")(rels[2]).items() if k != "content_hash"}]
+    blockers, _, _ = cal.GeotagWorkflow(str(_ws(tmp_path, bydest=rels, handoff_files=files))).preflight(
+        for_execute=for_execute)
+    hit = [b for b in blockers if "no content fingerprint" in b]
+    assert len(hit) == 1, blockers
+    assert "broken.jpg" in hit[0] and "bare.jpg" in hit[0] and "good.jpg" not in hit[0]
+    assert "Move them out of 6-photos-by-dest/" in hit[0] and "prep plan" in hit[0]
+
+
+@pytest.mark.spec("RUL-unfingerprinted_photo_stops_geotag",
+                  test="TST-geotag_preflight-fingerprinted_photos_pass")
+def test_fingerprinted_photos_pass(tmp_path):
+    """The nearest safe case: every photo in photos by destination fingerprinted — geotag proceeds."""
+    rels = ("6-photos-by-dest/Trip/a.jpg", "6-photos-by-dest/Trip/b.jpg")
+    files = [_fingerprinted("sig-a")(rels[0]), _fingerprinted("sig-b")(rels[1])]
+    ws = _ws(tmp_path, bydest=rels, handoff_files=files)
+    for for_execute in (False, True):
+        blockers, _, _ = cal.GeotagWorkflow(str(ws)).preflight(for_execute=for_execute)
+        assert blockers == [], blockers
+
+
+@pytest.mark.parametrize("command", ["plan", "execute", "finalize"])
+@pytest.mark.spec("RUL-unfingerprinted_photo_stops_geotag",
+                  test="TST-geotag_preflight-unfingerprinted_photo_stops_every_geotag_command")
+def test_unfingerprinted_photo_stops_every_geotag_command(tmp_path, monkeypatch, capsys, command):
+    """Through the command itself: plan, execute and finalize each refuse, naming the photo, and write nothing."""
+    rels = ("6-photos-by-dest/Trip/broken.jpg",)
+    ws = _ws(tmp_path, bydest=rels, handoff_files=[_fingerprinted(None)(rels[0])])
+    ctl = ws / ".photos-ingest"
+    before = sorted(os.listdir(ctl))
+    monkeypatch.chdir(ws)
+    with pytest.raises(SystemExit) as ei:
+        cal.run(_types.SimpleNamespace(command=command, jobs=1))
+    assert ei.value.code == 2
+    out = capsys.readouterr()
+    assert "no content fingerprint" in out.out + out.err and "broken.jpg" in out.out + out.err
+    assert sorted(n for n in os.listdir(ctl) if not n.startswith("photos-00-")) == \
+        sorted(n for n in before if not n.startswith("photos-00-"))
+
+
+@pytest.mark.parametrize("recorded", ["1", None], ids=["another_method", "no_method_recorded"])
+@pytest.mark.parametrize("command", ["plan", "execute", "finalize"])
+@pytest.mark.spec("RUL-fingerprint_method_is_the_builds",
+                  test="TST-geotag_preflight-a_handoff_of_another_fingerprint_method_stops_geotag")
+def test_a_handoff_of_another_fingerprint_method_stops_geotag(tmp_path, monkeypatch, capsys, command, recorded):
+    """A handoff whose fingerprints were taken by another method than this build's — or that records no method —
+    cannot be compared with the fingerprints geotag takes: plan, execute and finalize each refuse, naming the
+    mismatch and telling the user to run prep again, and write nothing."""
+    rels = ("6-photos-by-dest/Trip/a.jpg",)
+    ws = _ws(tmp_path, bydest=rels, handoff_files=[_fingerprinted("sig-a")(rels[0])])
+    ctl = ws / ".photos-ingest"
+    ho = json.loads((ctl / "photos-11-handoff.json").read_text())
+    if recorded is None:
+        del ho["depends_on"]["cache"]["fingerprint_algorithm_version"]
+    else:
+        ho["depends_on"]["cache"]["fingerprint_algorithm_version"] = recorded
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(ho))
+    before = sorted(os.listdir(ctl))
+    monkeypatch.chdir(ws)
+    with pytest.raises(SystemExit) as ei:
+        cal.run(_types.SimpleNamespace(command=command, jobs=1))
+    assert ei.value.code == 2
+    out = capsys.readouterr()
+    text = out.out + out.err
+    assert "taken by another method" in text and repr(recorded) in text, text
+    assert "Run prep again" in text and "prep plan" in text and "prep execute" in text, text
+    assert sorted(n for n in os.listdir(ctl) if not n.startswith("photos-00-")) == \
+        sorted(n for n in before if not n.startswith("photos-00-"))
 
 
 # --- main() / lock / exit codes ----------------------------------------------
@@ -585,6 +795,8 @@ def test_auto_reprep_runs_inside_geotags_lock(tmp_path, monkeypatch):
     held = []
     def fake_prep_run_locked(a, workspace_root, reporter):
         held.append((a.command, utils.WorkspaceLock(workspace_root, create=False).held_owner() is not None))
+        if a.command == "plan":
+            _write_prep_plan(workspace_root, _RECORDS_ONLY)
     monkeypatch.setattr(prep, "_run_locked", fake_prep_run_locked)
     def stop(self):
         raise SystemExit(9)                                          # geotag's own planning is not under test

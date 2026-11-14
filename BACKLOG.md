@@ -39,27 +39,15 @@ by the workspace's own configuration and its editor tab holds to the editor's ru
 a plan's existing snapshot counts as taken; the seal is checked before the workspace is walked), and the dead code
 is removed.
 
-**Awaiting ruling — safety:**
-1. A photo in photos by destination that prep could not fingerprint is written by geotag unpinned, and merged with
-   no identity. *Proposed: geotag and merge refuse it.*
-2. A multi-frame image is fingerprinted by its first frame only (and the two fingerprint paths differ); a video by
-   its default streams only. *Proposed: every frame, every stream.*
-3. Merge takes the same pixels for the same photo: where the library holds them without the corrected time and
-   position, the geotagged copy is removed and the library's kept. *Proposed: stop, naming both.*
-4. `<photo>_original` — exiftool's backup of the user's own edit, the camera original — is quarantined as a write's
-   leftover, and the quarantine can be pruned. *Proposed: a stray.*
-5. A hidden folder inside a managed folder is never read by prep, never merged, and left in the sealed workspace,
-   while geotag's re-prep gate does read it. *Proposed: stop, naming it.* Hidden files under photos by destination
-   are likewise skipped by merge.
-6. A track file holding several `<trk>` is read as one track, and a `<trkseg>` break is bridged. *Proposed: a track
-   per `<trk>`, no bridge across a break.*
-7. A local time a daylight-saving change skips or repeats is resolved silently (item 20).
-8. Geotag's automatic re-prep runs whatever prep plans. *Proposed: only where prep's plan moves no media.*
-9. `prune-quarantine --older-than-days` takes 0 and negatives, selecting everything. *Proposed: refuse below 1.*
-10. A library may be blessed inside another workspace. *Proposed: refuse.*
-11. A photo placed in an earlier `library_root` counts as merged after the setting is changed. *Proposed: stop.*
-12. The editor saves over decisions changed on disk since it loaded them. *Proposed: refuse the save.*
-13. A tracks folder whose every file is unreadable plans as "no tracks". *Proposed: stop.*
+**Ruled and built (2026-11-15) — safety:** the thirteen matters of safety the walk found are rules now, each
+built and tested: a photo with no fingerprint stops geotag and merge; a fingerprint covers every frame and every
+stream, and one of another method is never compared; the same picture in a library file of other bytes blocks,
+neither removed (*"if library copy is same pixels, stop and let user sort"*); the user's own `_original` backup is
+a stray; a hidden folder holding files stops prep, and any hidden entry among the photos stops merge; each `<trk>`
+is a track and a `<trkseg>` break is never bridged; a time a daylight-saving change skips or repeats is never
+guessed; geotag runs prep itself only where prep's plan touches no media; pruning by age takes a day or more; a
+library lies outside every workspace; an earlier place counts only inside the library now configured; the editor
+saves only over what it loaded; tracks none of which can be read stop geotag.
 
 **Awaiting ruling — the rest**, each a behaviour to state as it is, change, or drop:
 - *decisions:* a photo moved to another destination loses its own position decision; exiftool's absence stops
@@ -301,23 +289,21 @@ nothing reads now).
 
 ### 20. Zone-resolved times of phones and camera-less files are assumed, never asked
 
-**Why:** a camera's "clock was on local time" is a proposal the user must accept, and is then checked against the
-tracks. The same assumption is applied silently to a phone photo with no offset tag, to a file naming no camera, and to
-a corrected photo whose offset tag is gone — and those photos are then placed on the tracks by it. Two cases make it
-wrong by an hour with nothing shown: a local time that occurred twice (the hour daylight saving repeats — the first is
-taken) and one that never occurred (the hour it skips). Found in the review of 2026-11-14, confirmed for Europe/Berlin.
-Close to item 6, which checks a phone's time against the tracks where it has its own position.
+**Settled in part (2026-11-15):** a local time the zone skips or repeats at a daylight-saving change is never
+resolved by the zone (`RUL-ambiguous_local_time_never_guessed`): the photo stops geotag, named with both readings,
+and a camera's timezone-derived proposal at such a time is not made — the cell asks for the offset.
 
-**Open:** whether such photos get a decision of their own (per destination and group: "these N photos carry no offset —
-read them as local time?"), ride the drift check, or stay as they are with a warning; and what an ambiguous or
-impossible local time does — ask, or block naming the photo. To be ruled before it is specified.
+**Why, for what remains:** a camera's "clock was on local time" is a proposal the user must accept, and is then
+checked against the tracks. The same assumption is applied silently to a phone photo with no offset tag, to a file
+naming no camera, and to a corrected photo whose offset tag is gone — and those photos are then placed on the tracks
+by it. Close to item 6, which checks a phone's time against the tracks where it has its own position.
 
-**Added by the time review of 2026-11-14:** the first-occurrence choice in a repeated hour is also made in a
-camera's timezone-derived proposal, with nothing in the proposal marking it ambiguous. A phone time in the hour a
-zone skips (02:30 on a spring-forward night) is moved an hour, silently. An offset tag that is present and is not an
-offset is now read as none — strictly — and the photo then falls to the zone like one with no tag, indistinguishable
-in the plan; the log's `time_written` step now names the rule (`destination_timezone`), which is where the
-assumption can be seen after the fact.
+**Open:** whether such photos get a decision of their own (per destination and group: "these N photos carry no
+offset — read them as local time?"), ride the drift check, or stay as they are with a warning; and whether a photo
+at a skipped or repeated time can be answered in the decision files rather than fixed outside them. An offset tag
+that is present and is not an offset is read as none, and the photo then falls to the zone like one with no tag,
+indistinguishable in the plan; the log's `time_written` step names the rule (`destination_timezone`), which is where
+the assumption can be seen after the fact. The camera's proposal is checked at its cell's earliest time only.
 
 ### 21. Let the user leave one photo unlocated in a folder that has a fallback
 

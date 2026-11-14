@@ -108,7 +108,7 @@ def test_write_sealed_marker(tmp_path):
 # --- Library-file fingerprint cache (BLD-library_file_fingerprinted) -----------
 
 def _fp(value="abc123"):
-    return {"status": "valid", "value": value, "strategy": "image-content-hash-v1",
+    return {"status": "valid", "value": value, "strategy": "image-content-hash-v2",
             "engine_version": "im-7.1"}
 
 
@@ -122,7 +122,7 @@ def test_library_fingerprint_cache_roundtrip_and_staleness(tmp_path):
         cache.cache_library_fingerprint(p, 100, 111, _fp("deadbeef"))
         hit = cache.get_cached_library_fingerprint(p, 100, 111, "im-7.1")
         assert hit["value"] == "deadbeef"
-        assert hit["strategy"] == "image-content-hash-v1"
+        assert hit["strategy"] == "image-content-hash-v2"
         assert hit["engine_version"] == "im-7.1"
         # Changed file (different size or mtime) -> miss, must be re-fingerprinted.
         assert cache.get_cached_library_fingerprint(p, 101, 111, "im-7.1") is None

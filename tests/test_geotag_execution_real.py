@@ -126,7 +126,7 @@ def test_full_execute_with_real_tools(tmp_path, monkeypatch):
     files = [rec("6-photos-by-dest/T/a.jpg", "2024:07:03 14:00:00", 50.0, 4.0),
              rec("6-photos-by-dest/T/b.jpg", "2024:07:03 15:00:00", 51.0, 5.0)]
     (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files, "cache_fingerprint": "pcf",
-        "depends_on": {"cache": {"image_engine_version": utils.get_imagemagick_version()}}}))
+        "depends_on": {"cache": {"image_engine_version": utils.get_imagemagick_version(), "fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
 
     _run(monkeypatch, ws, "plan")
     p = ctl / "photos-21-time-decisions.json"; a = json.load(open(p))

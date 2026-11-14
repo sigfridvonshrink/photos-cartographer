@@ -794,7 +794,7 @@ def test_a_failed_execute_leaves_the_database_as_it_was(mock_meta, tmp_path, mon
     the database is as the earlier run left it."""
     ws = setup_workspace(tmp_path)
     monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image", lambda p: {
-        "status": "valid", "strategy": "image-content-hash-v1", "value": "sig-" + open(p, "rb").read().hex()})
+        "status": "valid", "strategy": "image-content-hash-v2", "value": "sig-" + open(p, "rb").read().hex()})
     photos_ingest.CONFIG["jobs"] = 1
 
     def _run():

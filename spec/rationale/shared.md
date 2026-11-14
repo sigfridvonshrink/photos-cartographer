@@ -468,6 +468,26 @@ the user's own files as if they had put it there. It is debris of the pipeline's
 only whole copy of something, so it goes where nothing is lost and nothing is mistaken: the quarantine.
 :::
 
+:::{rat} The user's backup is the user's
+:id: RAT-users_backup_is_theirs
+:status: ruled
+:forced: no
+:follows_from: RAT-recoverable_core
+:justifies: RUL-user_backup_is_a_stray
+
+A file named for a photo with `_original` after it is what the user's own tool left when they edited that photo: the photo as the camera made it. No write of cartographer's leaves one. Taken for debris it would go to the quarantine, which is the one place files are ever deleted from.
+:::
+
+:::{rat} What is not read is left behind
+:id: RAT-unread_is_left_behind
+:status: ruled
+:forced: no
+:follows_from: RAT-recoverable_core
+:justifies: RUL-hidden_folder_among_photos_blocks, RUL-hidden_among_photos_stops_merge
+
+Prep reads no hidden folder, so photos in one are never fingerprinted, never handed on, never merged — and the workspace is sealed around them as if it were empty. A hidden entry among the photos is something outside cartographer put there; saying so costs the user a moment, silence can cost the photos.
+:::
+
 
 ## 5. Camera groups, derived once
 
@@ -790,6 +810,16 @@ or another spacing, every record depending on it would be taken for stale and re
 they had already answered.
 :::
 
+:::{rat} A fingerprint stands for the whole file
+:id: RAT-fingerprint_is_the_whole_file
+:status: ruled
+:forced: no
+:follows_from: RAT-safe_at_each_change
+:justifies: RUL-fingerprint_covers_every_frame, RUL-fingerprint_covers_every_stream, RUL-fingerprint_method_is_the_builds
+
+Two files with one fingerprint are one photo to everything that follows: one is set aside as the other's duplicate, and merge removes a workspace's copy because the library holds "it". A fingerprint of the first frame, or of the streams a tool picks by default, makes different files one. And a fingerprint means something only beside others taken the same way: compared across methods, the same file differs and — worse — different files can agree.
+:::
+
 
 ## 9. One loop across the phases
 
@@ -1019,6 +1049,17 @@ Prep's work — sorting by type and date, setting duplicates aside, recording wh
 the configuration with nothing left to judge. The questions only the user can answer are about time and place, which are
 geotag's; a prep that asked would hold up the inbox on questions it does not need answered.
 :::
+
+:::{rat} A save answers what the user saw
+:id: RAT-save_what_was_seen
+:status: ruled
+:forced: no
+:follows_from: RAT-recoverable_core
+:justifies: RUL-save_only_what_was_shown
+
+A decision is the user's answer to a proposal they were shown. A plan run since the editor loaded may have changed the proposal; a save laid over it would record an acceptance of something the user never saw, or drop an answer whose question is gone and report success.
+:::
+
 
 ## 12. The record of what was done, kept beyond the workspace
 
@@ -1334,6 +1375,27 @@ manifests that list them, touches no photo, library file, control record or row 
 said is kept in the transformation log and the package. It neither reprocesses the workspace nor adds a batch to it,
 so the seal's reasons do not reach it, and the space can be reclaimed.
 :::
+
+:::{rat} The same picture is not the same file
+:id: RAT-same_picture_not_same_file
+:status: ruled
+:forced: no
+:follows_from: RAT-non_destructive_core
+:justifies: RUL-same_pixels_other_file_blocks
+
+The fingerprint is of the pixels, and geotag's whole work is in the metadata beside them. A library file with the photo's pixels and other metadata may be the photo before its time and place were corrected — or one the user has since tagged and rated. Removing either copy loses something, and nothing in the files says which matters: the library is never overwritten, so the user settles it.
+:::
+
+:::{rat} A library inside a workspace would be prepped
+:id: RAT-library_outside_workspaces
+:status: ruled
+:forced: no
+:follows_from: RAT-non_destructive_core
+:justifies: RUL-library_outside_every_workspace
+
+A workspace's folders are scanned, moved from and sealed by the phases that run in it. A library that is one, or lies in one, would have its permanent photos taken for a dump by the next prep there.
+:::
+
 
 ## 14. Every value the user writes is checked
 

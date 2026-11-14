@@ -46,7 +46,7 @@ def _install(monkeypatch):
 
     def hsh(p):
         with open(p, "rb") as f:
-            return {"status": "valid", "strategy": "image-content-hash-v1",
+            return {"status": "valid", "strategy": "image-content-hash-v2",
                     "value": "sig-" + f.read().hex()[:16], "engine_version": "t"}
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", hsh)
 
@@ -378,7 +378,7 @@ def test_a_retaken_fingerprint_keeps_the_photos_history(tmp_path, monkeypatch):
     _run(ws)
     (old,) = _log(ws)["photos"]
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", lambda p: {
-        "status": "valid", "strategy": "image-content-hash-v1",
+        "status": "valid", "strategy": "image-content-hash-v2",
         "value": "sig2-" + open(p, "rb").read().hex()[:16], "engine_version": "u"})
     monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "u")
     _run(ws)
@@ -408,7 +408,7 @@ def test_a_photo_moved_under_a_new_imagemagick_keeps_its_history(tmp_path, monke
     moved = "6-photos-by-dest/Rome/" + os.path.basename(organized)
     os.rename(ws / organized, ws / moved)
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", lambda p: {
-        "status": "valid", "strategy": "image-content-hash-v1",
+        "status": "valid", "strategy": "image-content-hash-v2",
         "value": "sig2-" + open(p, "rb").read().hex()[:16], "engine_version": "u"})
     monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "u")
     _run(ws)

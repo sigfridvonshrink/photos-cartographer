@@ -48,7 +48,7 @@ def _install_mocks(monkeypatch, hash_calls):
     def spy(p):
         hash_calls.append(p)
         with open(p, "rb") as f:
-            return {"status": "valid", "strategy": "image-content-hash-v1",
+            return {"status": "valid", "strategy": "image-content-hash-v2",
                     "value": "sig-" + f.read().hex()[:16], "engine_version": "t"}
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", spy)
     monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "t")   # match the spy's engine_version

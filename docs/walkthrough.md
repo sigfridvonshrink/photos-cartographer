@@ -1,9 +1,9 @@
 # See it work — a full run, end to end
 
-> **This walkthrough shows version 2.0.0.** The pipeline has changed since — what geotag asks and when, what the
-> editor shows, and some of what stops a run — and these screenshots have not been retaken yet. The shape of a run
-> (prep → sort → geotag → merge) and its safety guarantees are as shown; for exactly what the current version does,
-> the [specification](../spec/README.md) is the reference. The walkthrough will be retaken against the new version.
+> **Obsolete — to be redone.** This walkthrough and its screenshots are of version 2.0.0. The pipeline has changed
+> since: what geotag asks and when, what the editor shows, and what stops a run. The shape of a run (prep → sort →
+> geotag → merge) and its safety guarantees are as shown; for what the current version does, read the
+> [quick start](quickstart.md), [concepts](concepts.md) and the [specification](../spec/README.md).
 
 This is **a real run** on a real trip dump, start to finish, in pictures — a dump turned into a
 map-complete library. Every step is a screenshot from the browser console (the same phases run from

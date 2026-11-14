@@ -47,7 +47,7 @@ import xml.etree.ElementTree as ET
 import zoneinfo
 from datetime import datetime, timedelta, timezone
 
-from .photos_utils import (links_under, replace_durably,
+from .photos_utils import (fingerprint_method_blocker, links_under, replace_durably,
     country_table,
     code_fingerprint,
     CONFIG, CONTROL_DIR, control_dir, FINALIZED_MEDIA_ARTIFACT, track_memo_db_path, finalized_media_path, workspace_volume_error, config_path, handoff_path, guard_path, is_sealed, likely_new_dump,
@@ -296,6 +296,17 @@ def _has_recorded_time(rec):
     return bool(parsed.get("has_timestamp"))
 
 
+def _recorded_fingerprint(rec):
+    """The content fingerprint value a handoff record holds, or None — no `content_hash`, one that does not
+    parse, or one holding no value (prep could not take it)."""
+    ch = rec.get("content_hash")
+    try:
+        fp = json.loads(ch).get("value") if ch else None
+    except Exception:
+        fp = None
+    return fp or None
+
+
 def _holds_writes(held, writes):
     """Whether a file's read-back tags (`held`) already are the planned `writes`: an empty write means the tag is
     gone; a coordinate is compared by magnitude — EXIF keeps its sign in the reference tag — to a millionth."""
@@ -444,6 +455,27 @@ class GeotagWorkflow:
                             f"exists under {by_dest}: {dev_found[0]}. Time/GPS calibration must run "
                             "BEFORE development; roll the breakout back first.")
             return blockers, warnings, info
+
+        # Fingerprints taken by another method than this build's (RUL-fingerprint_method_is_the_builds): geotag
+        # compares the fingerprint it takes of a photo with the handoff's, so the two must be of one method.
+        blockers.extend(fingerprint_method_blocker(handoff))
+        if blockers:
+            return blockers, warnings, info
+
+        # A photo prep could not fingerprint (RUL-unfingerprinted_photo_stops_geotag): geotag keeps a photo's
+        # original values under its fingerprint before it first writes to it, and checks the fingerprint again
+        # before every write — with none, its own values could not be pinned and the check could never pass.
+        # Checked at plan, execute and finalize alike: the handoff, not the plan, is what says it.
+        unfingerprinted = sorted(rec.get("relative_path") or "" for rec in (handoff.get("files") or [])
+                                 if rec.get("folder_class") == by_dest
+                                 and rec.get("media_class") in ("image", "raw")
+                                 and not _recorded_fingerprint(rec))
+        if unfingerprinted:
+            blockers.append(f"{len(unfingerprinted)} photo(s) in {by_dest}/ have no content fingerprint — prep "
+                            f"could not take one: {_named(unfingerprinted)}. Geotag keeps a photo's own values "
+                            "by its fingerprint, so it will not write to one without it. Move them out of "
+                            f"{by_dest}/ (or repair them so ImageMagick can read them), then re-run prep — "
+                            "`photos-cartographer prep plan` then `photos-cartographer prep execute`.")
 
         if for_execute:                 # execution skips the planning-phase scope/re-prep gates
             return blockers, warnings, info
@@ -605,11 +637,7 @@ class GeotagWorkflow:
                     parsed = json.loads(md["parsed_json"])
                 except Exception:
                     parsed = {}
-            ch = rec.get("content_hash")
-            try:
-                fp = json.loads(ch).get("value") if ch else None
-            except Exception:
-                fp = None
+            fp = _recorded_fingerprint(rec)   # the preflight stops on a photo without one
             rel = rec.get("relative_path")
             files.append({
                 "relative_path": rel,
@@ -1009,6 +1037,11 @@ class GeotagWorkflow:
                         "confidence": "review_required", "rank": "timezone_derived"}
         elif proposal is None:
             proposal = {"proposal_source": "manual_required"}
+            # The bucket's earliest camera time is one its timezone repeats or skips: the zone gives two offsets
+            # there, and none is proposed (RUL-ambiguous_local_time_never_guessed) — the cell says why it asks.
+            amb = _zone_ambiguity(_parse_camera_naive(rep_naive), tz) if _valid_iana(tz) else None
+            if amb is not None:
+                proposal["timezone_ambiguous"] = {"camera_time": rep_naive, "timezone": tz, **amb}
         is_gpx = proposal.get("proposal_source") == "gpx_self_anchor"
         is_shared = proposal.get("proposal_source") == "same_day_elsewhere"
         has_offset = "proposed_offset_seconds" in proposal
@@ -2343,7 +2376,7 @@ def _auto_reprep_for_clean_move(args, workspace_root, reporter):
     by_dest = folder_name('photos_by_dest')
     reporter.log(f"Prep's record of {by_dest}/ is out of date (e.g. {example}), and {sources}/ is "
                  f"empty — bringing it up to date before geotag: running prep plan + execute "
-                 f"(no media moved)…")
+                 f"(executed only if the plan moves, renames or quarantines no media file)…")
     import types
     from . import photos_1_prep
     for cmd in ("plan", "execute"):
@@ -2358,7 +2391,53 @@ def _auto_reprep_for_clean_move(args, workspace_root, reporter):
         except Exception as e:
             reporter.error(f"Auto prep {cmd} failed: {e}. Resolve it and re-run geotag — nothing was geotagged.")
             sys.exit(2)
+        if cmd == "plan":
+            _stop_unless_prep_plan_records_only(workspace_root, reporter)
     reporter.log("Re-prep complete; continuing with geotag.")
+
+
+# The operations of prep's plan that touch no media file: its database records, and the removal of a folder
+# the plan leaves empty — the whole of a plan that records a move the user made (RUL-auto_reprep_moves_no_media).
+_PREP_FILE_OPS = ("move_no_clobber", "rename_no_clobber", "quarantine_move")
+
+
+def _stop_unless_prep_plan_records_only(workspace_root, reporter):
+    """Between the automatic re-prep's plan and its execute (RUL-auto_reprep_moves_no_media): prep's execute runs
+    only when the plan it saved moves, renames or quarantines no media file. Recording the user's own move takes
+    only database records (and the removal of the folders the move emptied); anything more — a rename or a
+    quarantine in the by-date folders, say — is prep's work the user was never shown, so geotag stops, leaving
+    the saved plan for the user to review and execute. A plan that cannot be read is not executed either."""
+    from .photos_utils import prep_plan_path
+    pp = prep_plan_path(workspace_root)
+    try:
+        with open(pp) as f:
+            ops = json.load(f).get("operations")
+        if not isinstance(ops, list):
+            raise ValueError("no list of operations")
+        media_ops = [op for op in ops if op.get("type") in _PREP_FILE_OPS
+                     and media_class_for_ext(os.path.splitext(op.get("source") or "")[1]) in ("image", "raw", "video")]
+    except (OSError, ValueError, AttributeError) as e:
+        reporter.error(f"\nGeotag cannot proceed: prep's plan {pp} could not be read ({e}), so prep's execute "
+                       "was not run. No media file was touched; nothing was geotagged.")
+        emit_next_step(reporter, "`photos-cartographer prep plan` then `photos-cartographer prep execute`, "
+                                 "then re-run `geotag plan`.")
+        sys.exit(2)
+    if not media_ops:
+        return
+    counts = {}
+    for op in media_ops:
+        counts[op["type"]] = counts.get(op["type"], 0) + 1
+    reporter.error("\nGeotag cannot proceed: prep's plan does more than record the move — it would "
+                   + ", ".join(f"{n} {t}" for t, n in sorted(counts.items())) + " of media file(s), e.g.:")
+    for op in media_ops[:5]:
+        reporter.log(f"  - {op['type']}: {op.get('source')} -> {op.get('destination')} ({op.get('reason')})")
+    if len(media_ops) > 5:
+        reporter.log(f"  ... and {len(media_ops) - 5} more.")
+    reporter.log(f"\nGeotag runs prep's execute itself only when it moves, renames or quarantines no media file; "
+                 f"this one it did not run. No media file was touched; the plan is saved at {pp}.")
+    emit_next_step(reporter, "review it with `photos-cartographer prep dry-run`, apply it with "
+                             "`photos-cartographer prep execute`, then re-run `geotag plan`.")
+    sys.exit(2)
 
 
 def run(args):
@@ -2451,6 +2530,20 @@ def run(args):
                 emit_next_step(reporter, "make the tracks available (or set gpx_root to \"\" in "
                                          "photos-00-config.json to plan without tracks), then re-run `geotag plan`.")
                 sys.exit(2)
+            if gpx.status == "unreadable":
+                # Track files there and not one read: planning on would place by folder fallback what the
+                # tracks place, as if there were none (RUL-unreadable_tracks_stop_geotag).
+                reporter.error(f"\nGeotag cannot proceed: not one of the {len(gpx.unreadable)} track file(s) under "
+                               f"gpx_root {gpx.gpx_root} can be read:")
+                for rel, why in gpx.unreadable:              # every one, each with why: the user's to repair
+                    reporter.log(f"  - {rel}: {why}")
+                for w in gpx.warnings:
+                    if w.startswith("Linked folder under gpx_root"):
+                        reporter.warn(f"  Warning: {w}")
+                reporter.log("\nNo geotag JSON was written.")
+                emit_next_step(reporter, "repair or replace the track files (or set gpx_root to \"\" in "
+                                         "photos-00-config.json to plan without tracks), then re-run `geotag plan`.")
+                sys.exit(2)
             n_dest = len({f["destination"] for f in files})
             by_class = {}
             for g in groups.values():
@@ -2508,6 +2601,18 @@ def run(args):
                 # (rows0). This drives drift detection (BLD-drift_validation) and, once 22 is clean, is recomputed
                 # with the operator-validated offsets before anything downstream consumes it.
                 rows0 = compute_resolved_utc(files, groups, artifact)
+                # A photo whose local time its zone repeats or skips is never given one of its two readings
+                # (RUL-ambiguous_local_time_never_guessed): geotag stops, naming each, before anything is built on it.
+                amb = ambiguous_time_blockers(rows0)
+                if amb:
+                    reporter.error("\nGeotag cannot proceed: a photo's time falls at a daylight-saving change, "
+                                   "where its destination's timezone gives it two readings:")
+                    for b in amb:
+                        reporter.log(f"  - {b}")
+                    reporter.log(f"\nNo geotag JSON was written past {TIME_DECISIONS_ARTIFACT}.")
+                    emit_next_step(reporter, "give each photo's time its offset (or move it out), then re-run "
+                                             "`prep plan` + `prep execute` and `geotag plan`.")
+                    sys.exit(2)
 
                 # Stage 7a: GPS-drift validation (photos-22, RUL-unanchored_offset_confirmed) — the gate before phase
                 # 23. A manual/timezone-derived offset with no native-GPS anchor is placed purely from its
@@ -2584,9 +2689,11 @@ def run(args):
                           f"({tot['preserve_native_gps']} native, {tot['automatic_gpx_interpolation']} interp, "
                           f"{tot['automatic_gpx_extrapolation']} extrap, {tot['blocked']} blocked).", stream="stdout")
                     for td in wf.track_disagreements:
+                        # two tracks of one file (RUL-track_is_one_trk) are taken out of the file, not gpx_root
+                        where = ("its file" if all(" (track " in n for n in td["gpx_files"]) else "gpx_root")
                         reporter.warn(f"  Warning: tracks {' and '.join(td['gpx_files'])} cover the same time in "
                                       f"different places, so neither placed {td['photos']} photo(s). If one is "
-                                      "not this trip's, take it out of gpx_root and re-run `geotag plan`.")
+                                      f"not this trip's, take it out of {where} and re-run `geotag plan`.")
 
                     # Stage 9: assemble photos-24 only when ALL decision artifacts are complete
                     # (BLD-geotag_stage_order).

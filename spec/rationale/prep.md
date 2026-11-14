@@ -653,6 +653,16 @@ A quarantine that only grows costs space without a word. Reporting its size ever
 prune, knowing what it holds.
 :::
 
+:::{rat} The one command that deletes asks for a real age
+:id: RAT-prune_age_is_real
+:status: ruled
+:forced: no
+:follows_from: RAT-recoverable_core
+:justifies: RUL-prune_age_at_least_one_day
+
+Pruning is the only place cartographer deletes for good. An age of zero or less selects every run's quarantine, which is what `--all` exists to say out loud.
+:::
+
 
 ## 14. The handoff and prep's log
 

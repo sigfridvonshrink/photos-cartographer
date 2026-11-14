@@ -115,13 +115,13 @@ destination's path under `6-photos-by-dest`, every decision of a destination ins
 :::{bld} How track points are read
 :id: BLD-track_points
 :status: ruled
-:realises: RUL-track_time_never_guessed, RUL-unreadable_point_reported
+:realises: RUL-track_time_never_guessed, RUL-unreadable_point_reported, RUL-track_is_one_trk, RUL-unreadable_tracks_stop_geotag
 
 Geotag SHALL read every `<trkpt>` of each `*.gpx` file under `gpx_root`, its `<time>` as an `xsd:dateTime` — fractional
 seconds optional, the zone `Z` or a numeric offset — normalised to UTC; a point lacking `lat` or `lon`, with one out of
 range or not a number, lacking a `<time>`, or with a time unparseable or naive is skipped with a warning naming the
 file and the point's index, as is a file that cannot be read or parsed. `geotag plan` prints the count of warnings and
-the first `GPX_WARNINGS_SHOWN`, with the number of the rest.
+the first `GPX_WARNINGS_SHOWN`, with the number of the rest. A point keeps the index of its `<trk>` and of its `<trkseg>`: the points of one `<trk>` of one file are one track. A file that cannot be opened, or is not well-formed, is unreadable; a folder holding track files all of them unreadable stops the plan, each named with why, and a linked folder under `gpx_root` is named in a warning and not followed.
 :::
 
 :::{bld} Tracks kept apart, and a root that is not there
@@ -202,7 +202,7 @@ A destination's `destination_timezone.user_decision.country` — the country it 
 :::{bld} The offset derived from the timezone
 :id: BLD-timezone_naive_offset
 :status: ruled
-:realises: RUL-offset_from_own_evidence, RUL-proposals_need_acceptance, RUL-timezone_offset_asked_once
+:realises: RUL-offset_from_own_evidence, RUL-proposals_need_acceptance, RUL-timezone_offset_asked_once, RUL-ambiguous_local_time_never_guessed
 
 A bucket with no anchor and a destination timezone SHALL be proposed the offset −(the timezone's UTC offset at the
 bucket's earliest camera time), daylight saving included, as `proposal_source: "timezone_naive"` with
@@ -210,7 +210,7 @@ bucket's earliest camera time), daylight saving included, as `proposal_source: "
 `drift_check_track_window_seconds` of the bucket's photos — by the times the offset gives, else by the times the camera
 recorded — and no decision is given, it takes effect as `timezone_unconfirmed`, `decision_mode:
 "to_be_confirmed_against_tracks"`, asking nothing in photos-21 and always asked in photos-22; elsewhere it takes effect
-only once accepted, as `timezone_accepted`.
+only once accepted, as `timezone_accepted`. A camera time the zone skips or repeats gives no offset: the cell asks for one, its proposal carrying `timezone_ambiguous` — the time, the zone, which case, and the two offsets.
 :::
 
 :::{bld} A day's offset shared between destinations
@@ -243,7 +243,7 @@ holds the handoff's content fingerprint, `camera_time_policy_fingerprint` — ov
 :::{bld} How each photo's true time is resolved
 :id: BLD-resolved_utc
 :status: ruled
-:realises: RUL-phone_time_from_own_offset, RUL-offset_within_time_value, RUL-offset_per_camera_destination_day, RUL-time_before_gps
+:realises: RUL-phone_time_from_own_offset, RUL-offset_within_time_value, RUL-offset_per_camera_destination_day, RUL-time_before_gps, RUL-ambiguous_local_time_never_guessed
 
 `compute_resolved_utc` SHALL resolve each photo of photos by destination to UTC: a camera's photo by the offset of its
 cell — `<group>@<date>` where the destination has one for its date, else `<group>` — a corrected offset from
@@ -257,7 +257,7 @@ sign, two digits of hours up to 14 and two of minutes up to 59, with or without 
 `geotag plan` writes the rows — `relative_path`, `destination_path`, `destination_timezone`, `camera_group`,
 `time_decision_scope` (the cell, `<group>[@<date>]|<destination>`), `source_naive_time`, `source_time_provenance`,
 `time_rule_used`, `utc_offset_used`, `resolved_utc`, `resolved_utc_status`, `resolved_utc_provenance` — into the
-`resolved_utc_cache` table once photos-22 is complete, replacing the table whole.
+`resolved_utc_cache` table once photos-22 is complete, replacing the table whole. A time that must be read by the zone and which the zone skips or repeats is left unresolved — rule `local_time_skipped` or `local_time_repeated` — and `geotag plan` stops on it, naming the photo, the time, the zone and both readings.
 :::
 
 :::{bld} The resolved-UTC fingerprint
@@ -341,9 +341,9 @@ accepted proposal that does not exist is `stale_user_decision`. Its `requires_us
 :::{bld} How a track places a photo
 :id: BLD-track_placement
 :status: ruled
-:realises: RUL-track_placement_bounded, RUL-track_evidence_order, RUL-tracks_never_joined, RUL-disagreeing_tracks_place_nothing
+:realises: RUL-track_placement_bounded, RUL-track_evidence_order, RUL-tracks_never_joined, RUL-disagreeing_tracks_place_nothing, RUL-track_break_never_bridged
 
-`place_gps` SHALL place a photo on each track by itself, taking the first of: the nearer in time of the two points around its resolved time, within `gpx_direct_match_max_seconds` (`direct_match`); the place between those two, linear in time and the short way round in longitude, when they are at most `gpx_interpolation_max_gap_seconds`, `gpx_interpolation_max_distance_meters` and `gpx_interpolation_max_speed_kmh` apart (`interpolated`); past the nearer point when it is within `gpx_extrapolation_max_seconds` and is an end — the track's first or last point, or a side of a gap longer than `gpx_interpolation_max_gap_seconds` (`extrapolated`). The projection follows the heading from the farthest point of the track within `gpx_extrapolation_heading_seconds` of the end, and falls back to the end itself when it lands farther than `gpx_extrapolation_max_distance_meters` from it or the heading is faster than `gpx_extrapolation_max_speed_kmh`. Of the tracks that place the photo the best wins — by method in that order, then the nearest in time, then the file name; but when another of the same kind (a projection against projections, any other against the others) lies more than `gpx_tracks_agree_max_distance_meters` from it, none places the photo, the reason `tracks_disagree` naming both files.
+`place_gps` SHALL place a photo on each track by itself, taking the first of: the nearer in time of the two points around its resolved time, within `gpx_direct_match_max_seconds` (`direct_match`); the place between those two, linear in time and the short way round in longitude, when they are at most `gpx_interpolation_max_gap_seconds`, `gpx_interpolation_max_distance_meters` and `gpx_interpolation_max_speed_kmh` apart (`interpolated`); past the nearer point when it is within `gpx_extrapolation_max_seconds` and is an end — the track's first or last point, or a side of a gap longer than `gpx_interpolation_max_gap_seconds` (`extrapolated`). The projection follows the heading from the farthest point of the track within `gpx_extrapolation_heading_seconds` of the end, and falls back to the end itself when it lands farther than `gpx_extrapolation_max_distance_meters` from it or the heading is faster than `gpx_extrapolation_max_speed_kmh`. Of the tracks that place the photo the best wins — by method in that order, then the nearest in time, then the file name; but when another of the same kind (a projection against projections, any other against the others) lies more than `gpx_tracks_agree_max_distance_meters` from it, none places the photo, the reason `tracks_disagree` naming both files. Two points either side of a `<trkseg>` break are never interpolated between — each is an end of its segment, the reason `track_gap` carrying `segment_break` — and a heading is taken from the end's own segment; two disagreeing tracks of one file are named by the file and the track's number.
 :::
 
 :::{bld} A review item is its photo's

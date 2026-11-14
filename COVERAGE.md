@@ -7,7 +7,7 @@ This pipeline mutates irreplaceable originals, so coverage is tracked on **two a
    build by `tools/spec-build`. Line/branch can't tell you whether a *must-refuse / no-clobber /
    leaves-untouched* obligation is actually asserted; this can.
 
-Figures below are a snapshot; regenerate with the commands shown. The suite has **1436 tests**.
+Figures below are a snapshot; regenerate with the commands shown. The suite has **1531 tests**.
 
 ## Line / branch coverage
 
@@ -37,14 +37,14 @@ tools/coverage          # bootstraps a local .venv, runs the suite, writes htmlc
 
 ## Spec coverage
 
-The specification is one corpus of typed items (`spec/`; see `spec/README.md`): 503 rules and invariants, 278
-rationales, 191 build items, 32 definitions, the philosophy's 3 facts and 4 choices — and the 650 tests that name the
-items they verify, made items of the corpus from their `@pytest.mark.spec(…, test="TST-…")` marks. 1010 items are
+The specification is one corpus of typed items (`spec/`; see `spec/README.md`): 521 rules and invariants, 290
+rationales, 191 build items, 32 definitions, the philosophy's 3 facts and 4 choices — and the 707 tests that name the
+items they verify, made items of the corpus from their `@pytest.mark.spec(…, test="TST-…")` marks. 1040 items are
 ruled; one is at seed: `RUL-disagreeing_tracks_place_nothing`, held for BACKLOG 29.
 
 | Rules and invariants | Count |
 |---|---:|
-| **`verify: required` — a test must name it (gated)** | **500** |
+| **`verify: required` — a test must name it (gated)** | **518** |
 | **`verify: by_rules` — an invariant, verified through the rules that uphold it, each gated** | **3** |
 | `verify: incidental` — exercised, not asserted | 0 |
 | `verify: none` — nothing checks them | 0 |

@@ -45,10 +45,10 @@ with exit status 2, having created nothing.
 :::{bld} The editor's save takes the lock
 :id: BLD-editor_save_locks
 :status: ruled
-:realises: RUL-every_command_locks
+:realises: RUL-every_command_locks, RUL-save_only_what_was_shown
 
 The decision editor's save SHALL take the workspace lock for the time it writes, refusing at once while a run holds it;
-the editor's display reads take none, each record being replaced whole.
+the editor's display reads take none, each record being replaced whole. The editor is given, with each record it loads, the SHA-256 of its bytes, and sends them back with a save; under the lock the save compares them with the records on disk and checks that every edit names a decision its record holds, writing none of the three otherwise, and returns the hashes of what it leaves.
 :::
 
 :::{bld} The lock records its owner
@@ -289,11 +289,11 @@ bands are unrelated to the numbered media folders `0-sources`…`6-photos-by-des
 :::{bld} What prep skips
 :id: BLD-prep_skip_set
 :status: ruled
-:realises: RUL-not_inventoried, RUL-control_records_never_media, RUL-config_never_media, DEF-strays_folder, RUL-strays_never_processed
+:realises: RUL-not_inventoried, RUL-control_records_never_media, RUL-config_never_media, DEF-strays_folder, RUL-strays_never_processed, RUL-hidden_folder_among_photos_blocks, RUL-user_backup_is_a_stray
 
 Prep SHALL skip `.photos-ingest/`, `.photos-ingest-quarantine/` and `.git` as whole subtrees, every dot-prefixed file,
 and the strays folder `1-strays/` with all its `<plan-id>` subfolders ({need}`BLD-strays_per_run`), the strays of a run
-going to `1-strays/<plan-id>/`.
+going to `1-strays/<plan-id>/`. A hidden folder in a managed folder other than `0-sources` is not read, and one holding any file — a link counted — is a blocker naming it; a file named `<media name>_exiftool_tmp` is the one leftover of a write prep recognises, `<media name>_original` being a file of no media class like any other.
 :::
 
 :::{bld} Hidden files in a dump go to the quarantine
@@ -534,10 +534,9 @@ hashes, and the field-scoped configuration fingerprints ({need}`DEF-config_areas
 :::{bld} How a fingerprint is computed
 :id: BLD-fingerprint
 :status: ruled
-:realises: DEF-fingerprint, RUL-fingerprint_survives_mutation
+:realises: DEF-fingerprint, RUL-fingerprint_survives_mutation, RUL-fingerprint_covers_every_frame, RUL-fingerprint_covers_every_stream
 
-A photo's fingerprint SHALL be ImageMagick `identify`'s signature — a SHA-256 of the normalized pixel stream; a video's,
-the `ffmpeg` MD5 of its streams as stored, copied out without decoding (`-c copy`).
+A photo's fingerprint SHALL be ImageMagick's signature — a SHA-256 of the normalized pixel stream — of its one frame, or, of a file of several frames, the SHA-256 of every frame's signature, one to a line, in order, the same whichever of the two ways of running ImageMagick took it; a video's, the `ffmpeg` MD5 of all its streams as stored, copied out without decoding (`-map 0 -c copy -copy_unknown`).
 :::
 
 :::{bld} How a hash is computed
@@ -564,10 +563,10 @@ decision editor (`edit`) for what it asks, and `geotag plan` again until `photos
 :::{bld} Geotag runs prep itself when the inbox is empty
 :id: BLD-geotag_auto_reprep
 :status: ruled
-:realises: RUL-prep_records_sort, RUL-sort_recorded_by_stat, RUL-geotag_plans_on_current_record
+:realises: RUL-prep_records_sort, RUL-sort_recorded_by_stat, RUL-geotag_plans_on_current_record, RUL-auto_reprep_moves_no_media
 
 When the only change prep has not recorded is one {need}`BLD-reprep_pending` names and the inbox is empty, `geotag
-plan` SHALL run prep's `plan` and `execute` itself, inside its own lock, saying so, before it plans.
+plan` SHALL run prep's `plan` and `execute` itself, inside its own lock, saying so, before it plans. Between the two it reads the plan prep saved and, where that holds a move, a rename or a quarantine of a media file, runs no execute: it stops, the plan left for the user to inspect and carry out.
 :::
 
 :::{bld} What prep has yet to record
@@ -579,19 +578,19 @@ plan` SHALL run prep's `plan` and `execute` itself, inside its own lock, saying 
 handoff does not record at its path, one the handoff records in photos by date or by destination that is gone, or one
 it records in photos by destination whose size or `mtime_ns` differs from its record: `geotag plan` stops on it with
 the one re-prep blocker, and runs prep itself when {need}`BLD-geotag_auto_reprep` allows; prep's nothing-to-do guard
-does not stop while it names one.
+does not stop while it names one. It reads no hidden folder, as prep reads none; one holding a file it names itself, so that prep is run and stops on it ({need}`RUL-hidden_folder_among_photos_blocks`).
 :::
 
 :::{bld} Where the loop's gates are checked
 :id: BLD-loop_gates
 :status: ruled
-:realises: RUL-geotag_gates, RUL-sort_photos_only, RUL-development_after_merge
+:realises: RUL-geotag_gates, RUL-sort_photos_only, RUL-development_after_merge, RUL-unfingerprinted_photo_stops_geotag
 
 The gates SHALL be checked as follows: `geotag plan` checks every gate; `geotag execute` and `finalize` check the
 development gate and the workspace's shape, and validate against the plan's own dependencies instead of the scope and
 re-prep gates ({need}`RUL-geotag_gates`, {need}`BLD-reprep_pending`); merge's preflight checks the inbox, the
 development gate and that photos by destination holds only photos ({need}`BLD-merge_preflight`). A development subfolder
-is one named in `destination_distribution_subfolders`.
+is one named in `destination_distribution_subfolders`. Geotag's preflight stops as well on a photo in `6-photos-by-dest` whose handoff record holds no fingerprint, named.
 :::
 
 :::{bld} Geotag marks what it wrote
@@ -941,10 +940,9 @@ A library SHALL be marked by an empty `.photos-library` file in `library_root`, 
 :::{bld} `validate_merge_config` checks the library's place
 :id: BLD-library_root_validated
 :status: ruled
-:realises: RUL-library_place_checked
+:realises: RUL-library_place_checked, RUL-library_outside_every_workspace
 
-`validate_merge_config` SHALL require `merge.library_root` to be non-empty and to resolve to an existing directory that
-is neither the workspace nor inside it.
+`validate_merge_config` SHALL require `merge.library_root` to be non-empty and to resolve to an existing directory that is neither the workspace nor inside it; `library_workspace_error`, called by merge's preflight and by every `init-library` that blesses, refuses one that is a workspace, lies inside one — any folder above it holding a `.photos-ingest` directory, initialized or not — or holds one among its immediate folders.
 :::
 
 :::{bld} Merge makes a destination's folder as it places a photo
@@ -994,10 +992,10 @@ is the run's record, never what decides it.
 :::{bld} A photo already present is removed once the library's copy is checked
 :id: BLD-already_present_removed
 :status: ruled
-:realises: RUL-merge_moves, RUL-library_file_rechecked_before_removal
+:realises: RUL-merge_moves, RUL-library_file_rechecked_before_removal, RUL-same_pixels_other_file_blocks
 
 A photo already present SHALL be removed from photos by destination after the library's copy is fingerprinted again and
-found to hold its content.
+found to hold its content. Its bytes are compared with the workspace copy's first, on every path that removes one: a library file of the same fingerprint and other bytes blocks the photo, the plan's record carrying `library_match` (`bytes` or `pixels`) and, for a block, `same_picture` — the two paths and their sizes.
 :::
 
 :::{bld} The merge summary

@@ -266,7 +266,7 @@ def test_hash_failure_preservation(tmp_path, monkeypatch):
     # We mock it to fail for certain files
     def mock_hash_fail(filepath):
         if "dup_image" in str(filepath) or "2023-01-01--12-00-00" in str(filepath):
-            return {"status": "failed", "strategy": "image-content-hash-v1", "value": None, "error": "Mocked failure"}
+            return {"status": "failed", "strategy": "image-content-hash-v2", "value": None, "error": "Mocked failure"}
         import hashlib
         try:
             with open(filepath, 'rb') as f:
@@ -322,7 +322,7 @@ def test_directory_symlink_at_root_blocked_during_init(tmp_path, monkeypatch):
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
     monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image",
-                        lambda p: {"status": "valid", "value": "sig", "strategy": "image-content-hash-v1",
+                        lambda p: {"status": "valid", "value": "sig", "strategy": "image-content-hash-v2",
                                    "engine_version": "t"})
     photos_ingest.CONFIG["jobs"] = 1
 
@@ -348,7 +348,7 @@ def test_dot_named_directory_symlink_at_root_blocked(tmp_path, monkeypatch):
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
     monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image",
-                        lambda p: {"status": "valid", "value": "sig", "strategy": "image-content-hash-v1",
+                        lambda p: {"status": "valid", "value": "sig", "strategy": "image-content-hash-v2",
                                    "engine_version": "t"})
     photos_ingest.CONFIG["jobs"] = 1
     external = tmp_path / "external"; external.mkdir()
@@ -379,7 +379,7 @@ def test_symlinked_managed_folder_blocked(tmp_path, monkeypatch):
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
     monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image",
-                        lambda p: {"status": "valid", "value": "sig", "strategy": "image-content-hash-v1",
+                        lambda p: {"status": "valid", "value": "sig", "strategy": "image-content-hash-v2",
                                    "engine_version": "t"})
     photos_ingest.CONFIG["jobs"] = 1
     external = tmp_path / "external"; external.mkdir(); (external / "e.jpg").write_bytes(b"E")
@@ -401,7 +401,7 @@ def test_nested_directory_symlink_in_managed_folder_blocked(tmp_path, monkeypatc
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
     monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image",
-                        lambda p: {"status": "valid", "value": "sig", "strategy": "image-content-hash-v1",
+                        lambda p: {"status": "valid", "value": "sig", "strategy": "image-content-hash-v2",
                                    "engine_version": "t"})
     photos_ingest.CONFIG["jobs"] = 1
     external = tmp_path / "external"; external.mkdir(); (external / "deep.jpg").write_bytes(b"D")
@@ -423,7 +423,7 @@ def test_init_does_not_move_a_dump_folder_named_like_a_managed_folder(tmp_path, 
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
     monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image",
-                        lambda p: {"status": "valid", "value": "sig", "strategy": "image-content-hash-v1",
+                        lambda p: {"status": "valid", "value": "sig", "strategy": "image-content-hash-v2",
                                    "engine_version": "t"})
     photos_ingest.CONFIG["jobs"] = 1
     ws = tmp_path / "ws"; ws.mkdir(); (ws / ".photos-ingest").mkdir()   # uninitialized: init run
@@ -449,7 +449,7 @@ def test_initialized_root_dotfile_is_left_alone(tmp_path, monkeypatch):
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
     monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image",
-                        lambda p: {"status": "valid", "value": "sig", "strategy": "image-content-hash-v1",
+                        lambda p: {"status": "valid", "value": "sig", "strategy": "image-content-hash-v2",
                                    "engine_version": "t"})
     photos_ingest.CONFIG["jobs"] = 1
     ws = _empty_initialized_ws(tmp_path)
@@ -618,7 +618,7 @@ def _mock_for_plan(monkeypatch):
     import photos_utils as utils
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", mock_read_metadata_concurrently)
     monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image",
-                        lambda p: {"status": "valid", "value": "s", "strategy": "image-content-hash-v1",
+                        lambda p: {"status": "valid", "value": "s", "strategy": "image-content-hash-v2",
                                    "engine_version": "t"})
     photos_ingest.CONFIG["jobs"] = 1
 

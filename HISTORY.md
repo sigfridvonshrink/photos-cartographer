@@ -5,7 +5,7 @@
 ## 2026-11-14 — v3.0.0
 
 **The conversion is finished: geotag is in the corpus, the original specs are retired, and every rule has a test.**
-The specification is now only the corpus (`spec/`): 503 rules and invariants, each stating one obligation, each with
+The specification is now only the corpus (`spec/`): 521 rules and invariants, each stating one obligation, each with
 its reason, and each named by a test that fails when it is broken — or, for the three invariants, verified through
 the rules that uphold them, which `tools/spec-build` checks. The four original documents, the conversion ledgers and
 the clause index are kept at the tag `specs-before-corpus` and nowhere else. The phase documents' sections are
@@ -61,8 +61,37 @@ one photo blocks that photo alone where it used to end the run with no summary; 
 the workspace's own configuration, not the built-in one, and its editor tab refuses a sealed workspace and takes
 the editor's lock; exiftool gets the two attempts the rule gives it; re-executing a plan no longer fails on the
 snapshot its first execution took; the seal is checked before the workspace is walked. Code nothing reached is
-removed. What the walk found that is not yet ruled — thirteen matters of safety first among them — is listed in
-BACKLOG 2.
+removed.
+
+The walk also found thirteen matters of safety that no rule covered. Each was ruled and built:
+
+- **A fingerprint covers the whole file.** A multi-page image was fingerprinted by its first page, a video by the
+  streams ffmpeg picks by default: two different files could be one to prep, which set one aside as the other's
+  duplicate, and to merge, which removed a workspace's copy because the library held "it". Every frame and every
+  stream are covered now, the method's version is recorded, and geotag and merge refuse a handoff of another method.
+  Single-frame photos keep their fingerprints; every file is fingerprinted again once.
+- **The same picture is not the same file.** Merge took a library file with the photo's pixels for the photo, and
+  removed the workspace's copy — the one carrying the time and position geotag had written. Only a library file that
+  is the photo byte for byte is the photo; the same pixels in other bytes block, both files named, neither removed.
+  Asked whether to replace the library's copy where it only lacks geotag's work: *"I changed my mind - if library
+  copy is same pixels, stop and let user sort."*
+- **A photo prep could not fingerprint stops geotag and merge.** Geotag wrote to it without keeping its own values,
+  and merge placed it with no identity.
+- **A track is one `<trk>`, and a break is never bridged.** A file holding two devices' tracks was read as one line
+  zig-zagging between them, and a recording break was interpolated across.
+- **A time a daylight-saving change skips or repeats is never guessed.** 02:30 on a spring-forward night was
+  silently written back an hour later.
+- **Tracks none of which can be read stop geotag**, where they used to count as no tracks at all.
+- **Geotag runs prep itself only where prep's plan touches no media file**; otherwise it stops and leaves the plan.
+- **The user's own `_original` backup is a stray**, never quarantined as a write's debris; **a hidden folder holding
+  files stops prep**, and any hidden entry among the photos stops merge, where both used to be passed over and left
+  in the sealed workspace.
+- **A library lies outside every workspace**, not only the one merge runs in; **an earlier merge's place counts only
+  inside the library now configured**; **pruning the quarantine by age takes a day or more**; **the editor saves
+  only over the records it loaded.**
+
+What the walk found beyond these — records, limits and smaller decisions the corpus does not yet state — is listed
+in BACKLOG 2.
 
 Two rules were narrowed to what is true rather than built out: a lock is taken over once the system reports no
 running process holds it, never on its owner record, and guards the runs of one machine; and only the snapshot uses

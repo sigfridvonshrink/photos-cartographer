@@ -1224,17 +1224,24 @@ function renderPanel() {
 }
 
 // --- header / save -----------------------------------------------------------
+// The save's body: the edits, by record, and the hashes of the records as the editor loaded them. The server
+// refuses the save when a record on disk is not the one loaded (RUL-save_only_what_was_shown), and its refusal
+// shows through the save-error message below.
+function savePayload(refs, cellOf, hashes) {
+  const payload = { time: [], drift: [], gps: [], hashes: { ...(hashes || {}) } };
+  for (const ref of refs)
+    payload[ref.file].push({ dest: ref.dest, kind: ref.kind, key: ref.key, path: ref.path, user_decision: cellOf(ref).user_decision });
+  return payload;
+}
+
 async function save() {
   if (state.base.demo || state.saving) return;
-  const payload = { time: [], drift: [], gps: [] };
-  for (const ref of dirtyRefs()) {
-    const ud = workCell(ref).user_decision;
-    payload[ref.file].push({ dest: ref.dest, kind: ref.kind, key: ref.key, path: ref.path, user_decision: ud });
-  }
+  const payload = savePayload(dirtyRefs(), workCell, state.base.hashes);
   state.saving = true; state.message = "saving…"; render();
   try {
     const r = await (await fetch("/api/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })).json();
-    if (r.ok) { state.base = clone(state.work); state.message = `saved ${r.written.join(", ")} — run \`photos-cartographer geotag plan\` then reload to apply`; }
+    // The records now hold what was saved: their new hashes are what the next save is made from.
+    if (r.ok) { state.work.hashes = r.hashes; state.base = clone(state.work); state.message = `saved ${r.written.join(", ")} — run \`photos-cartographer geotag plan\` then reload to apply`; }
     else state.message = "save failed: " + (r.error || "unknown");
   } catch (e) { state.message = "save failed: " + e; }
   state.saving = false; render();
@@ -1303,5 +1310,5 @@ export {
   offsetGroups, dateRange, fmtDate, peerKeys, parseLatLon, coordText, contiguousRange,
   groupChoice, chosenOffset, proposalNotes, driftConfirmHolds, driftConfirmFields, acceptFields, acceptHolds, tracksNote,
   zoneContradiction, offsetCellNotes, zoneSpokenFor, zoneDespiteFields, effectiveCountry, clearCountriesInside,
-  scrubOffset, scrubSeedIndex, mapKeyFor,
+  scrubOffset, scrubSeedIndex, mapKeyFor, savePayload,
 };

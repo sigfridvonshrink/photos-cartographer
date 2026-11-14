@@ -68,6 +68,27 @@ block merge no more than geotag.
 A merge a precondition stops SHALL change nothing in the library, the workspace's photos or merge's records.
 :::
 
+:::{rul} A photo with no fingerprint stops merge
+:id: RUL-unfingerprinted_photo_stops_merge
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+
+Merge SHALL NOT plan or execute while a photo in photos by destination has no fingerprint.
+:::
+
+:::{rul} A hidden entry among the photos stops merge
+:id: RUL-hidden_among_photos_stops_merge
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+
+Merge SHALL NOT proceed while photos by destination holds a hidden file or folder.
+:::
+
+
 ## 4. Destination-to-library mapping
 
 :::{rul} The library mirrors the destination tree
@@ -108,6 +129,17 @@ Merge SHALL allow a fresh plan at any time on a workspace not sealed, whatever a
 A fresh plan SHALL carry forward every finalized photo no longer in photos by destination with the library place the
 latest earlier plan of the workspace gave it whose place, fingerprinted again, holds it — whether or not the journal
 recorded the move.
+:::
+
+:::{rul} An earlier place counts only inside this library
+:id: RUL-earlier_place_in_this_library
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-replan_carries_placed
+
+Merge SHALL count a photo an earlier plan placed as merged only while it lies inside the library now configured.
 :::
 
 :::{rul} A photo a fresh plan cannot carry blocks

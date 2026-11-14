@@ -22,7 +22,7 @@ by-dest photo it plans to place, blocking one whose value is not the handoff's; 
 :::{bld} Merge's preflight
 :id: BLD-merge_preflight
 :status: ruled
-:realises: RUL-merge_rechecks_gates, RUL-merge_blocked_changes_nothing, RUL-merge_takes_finalized_current, RUL-merge_refuses_changed_since_finalize
+:realises: RUL-merge_rechecks_gates, RUL-merge_blocked_changes_nothing, RUL-merge_takes_finalized_current, RUL-merge_refuses_changed_since_finalize, RUL-unfingerprinted_photo_stops_merge, RUL-hidden_among_photos_stops_merge
 
 Merge's `preflight` SHALL run, under the workspace lock and before the library's, stopping at the first that fails:
 the seal; the initialization mark; a link at the top level; a missing managed folder; a misplaced top-level entry; the
@@ -34,7 +34,7 @@ manifest present, the complete log carrying prep's; photos by date holding no ph
 only `image` and `raw` files, no development subfolder and no link; every photo there one of the finalized set — the
 handoff's photos by destination joined by fingerprint to `photos-24`'s renames, each under its final name; and each
 photo of that set still there with the size and modification time `photos-26-finalized-media.json` recorded. Any
-blocker ends the run with exit status 2 before the library lock, the plan or the summary.
+blocker ends the run with exit status 2 before the library lock, the plan or the summary. It stops, too, on a photo in `6-photos-by-dest` whose handoff record holds no fingerprint and on any hidden file or folder there, each named.
 :::
 
 ## 3. Configuration and validation
@@ -71,13 +71,13 @@ its own name where geotag renamed nothing; the entries sorted by their path in t
 :::{bld} A fresh plan carries forward from the earlier plans
 :id: BLD-merge_carry_forward
 :status: ruled
-:realises: RUL-replan_carries_placed
+:realises: RUL-replan_carries_placed, RUL-earlier_place_in_this_library
 
 Merge's `build_merge_plan` SHALL give a finalized photo no longer under `6-photos-by-dest` the record of the latest
 plan — `photos-30-merge-plan.json`, then its `-NNN` backups newest first — holding a record for its content fingerprint
 not blocked whose `library_target` fingerprints, through `_fingerprint_library_file`, to it, adding `carried_from_plan`
 (the plan that first placed it); no such record makes it a blocked record whose reason names the places tried, or that
-no earlier plan placed it.
+no earlier plan placed it. A record's place counts only inside the configured `library_root`; a photo found at an earlier place outside it blocks, unless it is found, by its fingerprint, at the same place under the configured library, where the user moved it.
 :::
 
 ## 7. Plan / dry-run / execute lifecycle

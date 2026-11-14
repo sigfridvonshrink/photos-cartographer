@@ -46,7 +46,7 @@ def _install(monkeypatch):
 
     def hsh(p):
         with open(p, "rb") as f:
-            return {"status": "valid", "strategy": "image-content-hash-v1",
+            return {"status": "valid", "strategy": "image-content-hash-v2",
                     "value": "sig-" + f.read().hex()[:16], "engine_version": "t"}
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", hsh)
 
@@ -170,8 +170,9 @@ def test_what_prep_leaves_out_of_its_inventory(tmp_path, monkeypatch):
                 ".photos-ingest-quarantine/20250101T000000Z-aaaaaa/0-sources/parked.jpg",
                 ".git/objects/blob.jpg",
                 "1-strays/loose.jpg", "1-strays/20250101T000000Z-aaaaaa/sub/kept.jpg",
-                "5-photos-by-date/2023-01-02/.hidden.jpg", "5-photos-by-date/.thumbnails/thumb.jpg",
-                "6-photos-by-dest/Trip/.edit.jpg"]
+                "5-photos-by-date/2023-01-02/.hidden.jpg",
+                "6-photos-by-dest/Trip/.edit.jpg"]   # a hidden FOLDER holding files stops prep instead
+                                                     # (RUL-hidden_folder_among_photos_blocks, test_hidden_folders)
     for rel in left_out + ["0-sources/.preview.jpg", "0-sources/real.jpg"]:
         (ws / rel).parent.mkdir(parents=True, exist_ok=True)
         (ws / rel).write_bytes(b"img " + rel.encode())

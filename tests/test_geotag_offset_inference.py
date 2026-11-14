@@ -358,7 +358,7 @@ def test_run_auto_resolves_offset_from_gpx(tmp_path, monkeypatch):
              rec("6-photos-by-dest/B/b.arw", 50.8480, 4.3540, "2024:07:03 14:13:08")]
     for f in files:
         p = ws / f["relative_path"]; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"x")
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files)}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files), "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
 
     CAM_CFG = CAM
     monkeypatch.chdir(str(ws))
@@ -407,6 +407,28 @@ def test_cell_timezone_derived_when_no_anchor():
     assert p["proposed_real_utc"] == "2024-07-03T12:00:00Z" and p["proposed_from_timezone"] == "Europe/Brussels"
     assert p["confidence"] == "review_required"
     assert cell["requires_user_input"] is True and "decision_mode" not in cell   # confirmable, never auto
+
+
+@pytest.mark.parametrize("rep_naive, case, offsets", [("2026:03:29 02:30:00", "skipped", [3600, 7200]),
+                                                       ("2026:10:25 02:30:00", "repeated", [7200, 3600])],
+                         ids=["skipped", "repeated"])
+@pytest.mark.spec("RUL-ambiguous_local_time_never_guessed", "BLD-timezone_naive_offset",
+                  test="TST-geotag_offset_inference-no_offset_proposed_from_a_time_the_zone_skips_or_repeats")
+def test_no_offset_proposed_from_a_time_the_zone_skips_or_repeats(rep_naive, case, offsets):
+    """A camera's bucket whose earliest time is one its destination's zone skips or repeats gets no offset from the
+    zone — the zone gives two there: the cell asks for the offset, saying why. An hour later, the zone proposes as
+    before."""
+    assert cal._timezone_naive_offset(rep_naive, "Europe/Berlin") is None
+    cell, blockers = _tzcell({}, tz="Europe/Berlin", rep_naive=rep_naive)
+    assert blockers == [] and cell["requires_user_input"] is True and cell["effective_time_anchor"] == ""
+    p = cell["proposal"]
+    assert p["proposal_source"] == "manual_required" and "proposed_offset_seconds" not in p
+    assert p["timezone_ambiguous"] == {"camera_time": rep_naive, "timezone": "Europe/Berlin", "case": case,
+                                       "offsets_seconds": offsets}
+    later = rep_naive.replace(" 02:30", " 03:30")
+    cell, _ = _tzcell({}, tz="Europe/Berlin", rep_naive=later)
+    assert cell["proposal"]["proposal_source"] == "timezone_naive" and "timezone_ambiguous" not in cell["proposal"]
+    assert cell["proposal"]["proposed_offset_seconds"] == (-7200 if "03:29" in rep_naive else -3600)
 
 
 def test_cell_records_its_date_bucket():
@@ -584,6 +606,24 @@ def test_an_anchor_never_spans_two_tracks():
     a = [_pt(50.0, 4.0 - 0.003, _at(t), "a.gpx", t) for t in range(0, 100, 10)]
     b = [_pt(50.0, 4.0 + 0.003, _at(t + 5), "b.gpx", t) for t in range(0, 100, 10)]
     assert cal.frame_candidates(_frame(50.0, 4.0, _naive(50)), _gpx(a + b), DCFG) == []
+
+
+@pytest.mark.spec("BLD-anchor_matching", "RUL-track_is_one_trk", "RUL-track_break_never_bridged",
+                  test="TST-geotag_offset_inference-an_anchor_never_spans_two_trk_or_a_break")
+def test_an_anchor_never_spans_two_trk_or_a_break():
+    """Two <trk> of one export, 220 m either side of a photo's place: the photo anchors on neither — as for two
+    files. One track whose recording broke there — its last point before the break 220 m one side, its first after
+    220 m the other: no segment joins them, and the photo anchors on nothing. Unbroken, it anchors there."""
+    a = [cal.GPXPoint(50.0, 4.0 - 0.003, _at(t), "x.gpx", t, 0, 0) for t in range(0, 100, 10)]
+    b = [cal.GPXPoint(50.0, 4.0 + 0.003, _at(t + 5), "x.gpx", 100 + t, 1, 0) for t in range(0, 100, 10)]
+    assert cal.frame_candidates(_frame(50.0, 4.0, _naive(50)), _gpx(a + b), DCFG) == []
+    before = [cal.GPXPoint(50.0, 4.0 - 0.003 - i * 0.0001, _at(50 - i * 10), "t.gpx", 5 - i, 0, 0) for i in range(5)]
+    after = [cal.GPXPoint(50.0, 4.0 + 0.003 + i * 0.0001, _at(60 + i * 10), "t.gpx", 6 + i, 0, 1) for i in range(5)]
+    photo = _frame(50.0, 4.0, _naive(55))
+    assert cal.frame_candidates(photo, _gpx(before + after), DCFG) == []
+    whole = [cal.GPXPoint(p.lat, p.lon, p.time_utc, p.source_file, p.point_index, 0, 0) for p in before + after]
+    cands = cal.frame_candidates(photo, _gpx(whole), DCFG)
+    assert [c["match_type"] for c in cands] == ["gpx_segment_interpolation"] and cands[0]["gpx_file"] == "t.gpx"
 
 
 @pytest.mark.spec("RUL-acceptance_holds_for_its_proposal", "BLD-offset_acceptance",

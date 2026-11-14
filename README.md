@@ -92,7 +92,7 @@ the diff and are resumable after a crash.
   facts about photos, four design choices) and the architecture they force. Read it **forward** to decide
   fit, or **down** to see the design rationale. Start here if you're weighing whether the tool matches your
   situation.
-- **[See it work (walkthrough)](docs/walkthrough.md)** *(shows v2.0.0; to be retaken)* — the **full run end to end, in screenshots**: prep →
+- **[See it work (walkthrough)](docs/walkthrough.md)** *(obsolete: shows v2.0.0, to be redone)* — the **full run end to end, in screenshots**: prep →
   sort → geotag's time → drift → GPS edit loop → merge, with a flow diagram. Start here to see what it
   actually does.
 - **[Quick start](docs/quickstart.md)** — download → prerequisites → the full end-to-end run (prep, sort into

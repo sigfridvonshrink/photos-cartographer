@@ -75,7 +75,7 @@ def _ready_ws(tmp_path, monkeypatch, *, zfs=None):
              rec("6-photos-by-dest/T/b.arw", "2024:07:03 15:00:00", 51.0, 5.0)]
     ho = {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "run_metadata": {"plan_id": "prep-1", "execution_id": "exec-1"},
           "files": files, "cache_fingerprint": "pcf",
-          "depends_on": {"cache": {"image_engine_version": utils.get_imagemagick_version()}}}
+          "depends_on": {"cache": {"image_engine_version": utils.get_imagemagick_version(), "fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}
     ho["content_fingerprint"] = utils.handoff_content_fingerprint(ho)
     (ctl / "photos-11-handoff.json").write_text(json.dumps(ho))
 

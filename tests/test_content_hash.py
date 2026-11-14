@@ -80,7 +80,7 @@ def test_hash_image_valid_on_real_fullsize_jpeg_and_raw():
     if raw["status"] != "valid":
         pytest.skip(f"ImageMagick lacks RAW decode support here: {raw.get('error')}")
     assert raw["value"]
-    assert raw["strategy"] == "image-content-hash-v1"
+    assert raw["strategy"] == "image-content-hash-v2"
     assert raw.get("engine_version")
 
 
@@ -89,7 +89,7 @@ def test_hash_image_valid_on_real_fullsize_jpeg_and_raw():
 def test_hash_image_valid_and_version_bound():
     r = prep.ContentHasher.fingerprint_image(CAM_SMALL)
     assert r["status"] == "valid" and r["value"]
-    assert r["strategy"] == "image-content-hash-v1"
+    assert r["strategy"] == "image-content-hash-v2"
     assert r.get("engine_version")
 
 
@@ -239,7 +239,7 @@ def test_filename_format_is_config_driven(tmp_path, monkeypatch, seed_from_live_
     ws = _make_ws(tmp_path)
     monkeypatch.setattr(
         prep.ContentHasher, "fingerprint_image",
-        lambda p: {"status": "valid", "strategy": "image-content-hash-v1",
+        lambda p: {"status": "valid", "strategy": "image-content-hash-v2",
                    "value": "sig-" + os.path.basename(p), "engine_version": "test"},
     )
 

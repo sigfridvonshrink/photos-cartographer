@@ -63,6 +63,27 @@ the pipeline does not place them, and a tag written into one would be a guess. S
 the user's statement that it is ready.
 :::
 
+:::{rat} No identity, no change
+:id: RAT-no_identity_no_change
+:status: ruled
+:forced: no
+:follows_from: RAT-recoverable_core
+:justifies: RUL-unfingerprinted_photo_stops_geotag, RUL-unfingerprinted_photo_stops_merge
+
+A photo's own values are kept under its fingerprint before geotag first writes to it, and every later step finds the photo by it. One prep could not fingerprint cannot have its values kept, cannot be recognised after a write, and cannot be looked for in the library: writing to it or merging it is a change nothing can check or undo.
+:::
+
+:::{rat} Running prep for the user is a convenience, not a decision
+:id: RAT-auto_reprep_only_records
+:status: ruled
+:forced: no
+:follows_from: RAT-recoverable_core
+:justifies: RUL-auto_reprep_moves_no_media
+
+Geotag runs prep itself so that sorting photos and going straight to geotag works. That is safe while prep only records the sort. Where prep's plan would rename or set aside a file, the user has not seen that plan, and geotag running it would be a change nobody asked for.
+:::
+
+
 ## 5. JSON artifact rule
 
 :::{rat} A missing record should mean one thing
@@ -304,6 +325,16 @@ Each track file is one device's record, and the tracks folder may hold several f
 A library with no tracks at all is a supported case: every decision falls to its other sources. A tracks folder that is named and not there is something else — a volume not mounted — and planning on as if there were none would place by folder fallback every photo the tracks place precisely, and drop the confirmations given against them. Nothing in the result would show it. Stopping costs one mount command.
 :::
 
+:::{rat} A break is where nothing is known
+:id: RAT-break_is_unknown
+:status: ruled
+:forced: no
+:follows_from: RAT-safe_at_each_change
+:justifies: RUL-track_is_one_trk, RUL-track_break_never_bridged, RUL-unreadable_tracks_stop_geotag
+
+A file can hold several devices' tracks, and joined they zig-zag between two people as surely as two files would. A break between segments is where the recorder was off: where the device was in between is not in the file, and a line drawn across it is invented. And a folder of tracks that cannot be read is not a trip without tracks — it is one whose tracks are about to be ignored.
+:::
+
 
 ## 9. Camera groups
 
@@ -466,6 +497,16 @@ A phone's clock is set by its network and it records the offset it was at, besid
 evidence than any zone geotag could assume. But a photo holds several times, each with its offset — when it was
 taken, digitized, modified — and an offset describes only the time it was written with; another would be right only by
 chance. Where the photo records none for its time, the destination's zone is the best guess left.
+:::
+
+:::{rat} Two readings, and nothing to choose by
+:id: RAT-two_readings_no_guess
+:status: ruled
+:forced: no
+:follows_from: RAT-safe_at_each_change
+:justifies: RUL-ambiguous_local_time_never_guessed
+
+A local time that happened twice, or never, has two readings an hour apart, and the photo says nothing of which. Either is written into the original as its time and decides where on the track it falls. A guess here is wrong half the time and looks exactly like a right answer.
 :::
 
 

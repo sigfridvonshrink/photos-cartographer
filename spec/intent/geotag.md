@@ -70,6 +70,26 @@ dependencies to vouch for what came before it.
 Geotag SHALL change only files in photos by destination — never a file in any other folder.
 :::
 
+:::{rul} A photo with no fingerprint stops geotag
+:id: RUL-unfingerprinted_photo_stops_geotag
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+
+Geotag SHALL NOT plan, execute or finalize while a photo in photos by destination has no fingerprint.
+:::
+
+:::{rul} Geotag runs prep itself only to record a sort
+:id: RUL-auto_reprep_moves_no_media
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+
+Geotag SHALL run prep's execution itself only where prep's plan moves, renames or sets aside no media file.
+:::
+
 :::{rul} Geotag changes no video
 :id: RUL-video_never_changed
 :status: ruled
@@ -515,6 +535,17 @@ A track point geotag skips SHALL be reported to the user, naming its file and po
 Geotag SHALL NOT plan while the tracks folder the configuration names is not there.
 :::
 
+:::{rul} Tracks none of which can be read stop geotag
+:id: RUL-unreadable_tracks_stop_geotag
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-tracks
+
+Geotag SHALL NOT plan while its tracks folder holds track files of which not one can be read.
+:::
+
 :::{rul} Geotag runs without tracks
 :id: RUL-no_tracks_no_stop
 :status: ruled
@@ -547,6 +578,29 @@ two points or beyond them.
 :uses: DEF-tracks
 
 Geotag SHALL never join a point of one track file to a point of another to anchor a clock on the line between them.
+:::
+
+:::{rul} Each track of a file is a track of its own
+:id: RUL-track_is_one_trk
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-tracks_never_joined
+:uses: DEF-tracks
+
+Geotag SHALL treat each track a track file holds as a track of its own, never joined to another of the same file.
+:::
+
+:::{rul} A break in a recording is never bridged
+:id: RUL-track_break_never_bridged
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-tracks
+
+Geotag SHALL NOT place a photo or anchor a clock across a break between two segments of one track.
 :::
 
 
@@ -785,6 +839,16 @@ An offset written within the value of a time field itself SHALL count as the off
 :refines: RUL-offset_within_time_value
 
 An offset written within a time's value SHALL be taken before one in a field beside it.
+:::
+
+:::{rul} A time a daylight-saving change skips or repeats is never guessed
+:id: RUL-ambiguous_local_time_never_guessed
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+
+Geotag SHALL NOT resolve by a timezone a local time which that timezone skips or repeats at a daylight-saving change.
 :::
 
 :::{def} A clock offset

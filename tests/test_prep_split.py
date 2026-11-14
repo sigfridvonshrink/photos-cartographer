@@ -158,7 +158,7 @@ def test_by_dest_duplicate_does_not_mutate_behavior_with_hashes(mock_hash_image,
 
     duplicate_hash = {
         "status": "valid",
-        "strategy": "image-content-hash-v1",
+        "strategy": "image-content-hash-v2",
         "value": "same-hash"
     }
 

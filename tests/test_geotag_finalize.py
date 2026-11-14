@@ -248,7 +248,7 @@ def _ready_ws(tmp_path, monkeypatch, *, folders=None):
              rec(f"{bydest}/T/b.arw", "2024:07:03 15:00:00", (51.0, 5.0))]
     (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files, "cache_fingerprint": "pcf",
         "depends_on": {"prep_log": {"sha256": utils.sha256_file(str(ctl / "photos-15-prep-log.json"))},
-                       "cache": {"image_engine_version": utils.get_imagemagick_version()}}}))
+                       "cache": {"image_engine_version": utils.get_imagemagick_version(), "fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
 
     monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", lambda self, p, t: True)
     monkeypatch.setattr(cal.ContentHasher, "fingerprint_image",
@@ -524,7 +524,7 @@ def test_prep_after_finalize_leaves_geotags_database_image_as_it_was(tmp_path, m
                 for folder in folders for r, _d, fs in os.walk(folder) for n in fs if n.endswith(".arw")}, set()
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", meta)
     monkeypatch.setattr(utils.ContentHasher, "fingerprint_image", staticmethod(
-        lambda p: {"status": "valid", "strategy": "image-content-hash-v1", "value": "fp-" + os.path.basename(p),
+        lambda p: {"status": "valid", "strategy": "image-content-hash-v2", "value": "fp-" + os.path.basename(p),
                    "engine_version": "t"}))
     (ws / "0-sources" / "note.txt").write_text("a stray, so prep has a sort to do")
     prep.WorkspaceCache(str(ws)).close()          # the cache prep keeps (this workspace was made without prep)

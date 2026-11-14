@@ -103,7 +103,7 @@ def test_enumerate_root_level_destination():
 
 def _build_ws(tmp_path, photos, library_files=()):
     """A fully merge-ready workspace + blessed library. `photos`: dicts {fp, dest, final_name,
-    pre_name?}. `library_files`: dicts {fp, dest, name}. By-dest files are placed on disk under their
+    pre_name?, bytes?}. `library_files`: dicts {fp, dest, name, bytes?}. By-dest files are placed on disk under their
     FINAL names; the handoff carries pre-rename names + a rename op when pre_name != final_name.
     Returns (ws, lib, fp_by_path) where fp_by_path maps each library file's abs path to its fp."""
     ws = tmp_path / "ws"
@@ -137,11 +137,12 @@ def _build_ws(tmp_path, photos, library_files=()):
         ldir = (lib / dest) if dest else lib
         ldir.mkdir(parents=True, exist_ok=True)
         fpath = ldir / lf["name"]
-        fpath.write_bytes(b"library")
+        fpath.write_bytes(lf.get("bytes", b"library"))   # a photo's own bytes (b"img-<i>") make it that photo
         fp_by_path[str(fpath)] = lf["fp"]
 
     handoff = {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": ho_files, "content_fingerprint": "whole", "run_metadata": {"started_at": "t"},
-               "depends_on": {"cache": {"image_engine": "imagemagick", "image_engine_version": "test"}}}
+               "depends_on": {"cache": {"image_engine": "imagemagick", "image_engine_version": "test",
+                                        "fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}
     (ctl / "photos-15-prep-log.json").write_text(json.dumps({"photos": {}}))
     handoff.setdefault("depends_on", {})["prep_log"] = {"sha256": utils.sha256_file(str(ctl / "photos-15-prep-log.json"))}
     (ctl / "photos-11-handoff.json").write_text(json.dumps(handoff))
@@ -169,7 +170,7 @@ def _patch_fp(monkeypatch, fp_by_path):
     def fake(self, abs_path):
         v = fp_by_path.get(abs_path) or fp_by_path.get(os.path.realpath(abs_path))
         if v:
-            return {"status": "valid", "value": v, "strategy": "image-content-hash-v1",
+            return {"status": "valid", "value": v, "strategy": "image-content-hash-v2",
                     "engine_version": "test"}
         return {"status": "failed", "value": None, "error": "unreadable", "engine_version": "test"}
     monkeypatch.setattr(merge.MergeWorkflow, "_fingerprint_library_file", fake)
@@ -231,7 +232,7 @@ def test_plan_reuses_handoff_fingerprint_never_refingerprints_by_dest(tmp_path, 
 def test_plan_already_present(tmp_path, monkeypatch):
     # Library already holds identical content at the target -> already_present (remove source, no write).
     ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
-                            library_files=[{"fp": "A", "dest": "Trip", "name": "a.jpg"}])
+                            library_files=[{"fp": "A", "dest": "Trip", "name": "a.jpg", "bytes": b"img-0"}])
     _patch_fp(monkeypatch, fp)
     assert merge._run_locked_workflow("plan", str(ws)) == 0
     plan = _plan_of(ws)
@@ -248,7 +249,7 @@ def test_replan_reports_library_fingerprints_reused(tmp_path, monkeypatch, capsy
     """A re-plan says how many library fingerprints it took from the cache — and the plan it writes is
     the same file, the count kept out of it."""
     ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
-                            library_files=[{"fp": "A", "dest": "Trip", "name": "a.jpg"}])
+                            library_files=[{"fp": "A", "dest": "Trip", "name": "a.jpg", "bytes": b"img-0"}])
     _patch_fp(monkeypatch, fp)
     capsys.readouterr()
     assert merge._run_locked_workflow("plan", str(ws)) == 0
@@ -304,7 +305,7 @@ def test_a_case_variant_in_the_library_is_settled_by_content(tmp_path, monkeypat
     library and may be the same photo on any: it is fingerprinted like a file at the target itself — the same
     content already present there, different content renamed around."""
     ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "photo.jpg"}],
-                            library_files=[{"fp": variant_fp, "dest": "Trip", "name": "PHOTO.JPG"}])
+                            library_files=[{"fp": variant_fp, "dest": "Trip", "name": "PHOTO.JPG", "bytes": b"img-0"}])
     _patch_fp(monkeypatch, fp)
     assert merge._run_locked_workflow("plan", str(ws)) == 0
     [f] = _files(_plan_of(ws))
@@ -546,7 +547,8 @@ def test_another_imagemagick_has_prep_fingerprints_checked(tmp_path, monkeypatch
     matches prep's is merged as ever — here found already in the library — and one that does not is
     blocked, left in by-dest, rather than called a different photo and placed again beside itself."""
     ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
-                            library_files=[{"fp": "A2" if value_changed else "A", "dest": "Trip", "name": "a.jpg"}])
+                            library_files=[{"fp": "A2" if value_changed else "A", "dest": "Trip", "name": "a.jpg",
+                                            "bytes": b"img-0"}])
     src = str(ws / "6-photos-by-dest" / "Trip" / "a.jpg")
     fp[src] = "A2" if value_changed else "A"                     # the photo's fingerprint under the new version
     _patch_fp(monkeypatch, fp)

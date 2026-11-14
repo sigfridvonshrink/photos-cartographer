@@ -31,6 +31,7 @@ back to geotag is an explicit `photos-cartographer geotag plan` re-run + reload.
 """
 import argparse
 import errno
+import hashlib
 import fcntl  # POSIX advisory locking for the editor's lock (the pipeline relies on it throughout)
 import json
 import os
@@ -201,15 +202,49 @@ def _example_json(name):
         return {"_error": f"could not parse {name}: {e}"}
 
 
+_RECORDS = (("time", TIME_NAME), ("drift", DRIFT_NAME), ("gps", GPS_NAME))
+
+
+def _read_record(path):
+    """(raw bytes, or None when the record is absent) of a decision record — read once, so what is shown and
+    what is hashed are the same bytes."""
+    try:
+        with open(path, "rb") as f:
+            return f.read()
+    except FileNotFoundError:
+        return None
+
+
+def _record_hash(raw):
+    """The SHA-256 of a decision record's bytes, or None for a record that is absent."""
+    return None if raw is None else hashlib.sha256(raw).hexdigest()
+
+
+def _parse_record(raw, name):
+    if raw is None:
+        return None
+    try:
+        return json.loads(raw)
+    except ValueError as e:
+        return {"_error": f"could not read {name}: {e}"}
+
+
 def _load_artifacts(workspace):
-    """Return {workspace, demo, time, drift, gps}. Demo mode loads requires-input fixtures."""
+    """Return {workspace, demo, time, drift, gps, hashes}. `hashes` holds the SHA-256 of each record's bytes
+    as loaded (None for one absent); a save carries them back, so it is refused when a record has changed
+    since (RUL-save_only_what_was_shown). Demo mode loads requires-input fixtures."""
     if workspace:
         cd = os.path.join(workspace, CONTROL)
-        return {"workspace": os.path.abspath(workspace), "demo": False,
-                "time": _read_json(os.path.join(cd, TIME_NAME)),
-                "drift": _read_json(os.path.join(cd, DRIFT_NAME)),
-                "gps": _read_json(os.path.join(cd, GPS_NAME))}
-    return {"workspace": None, "demo": True,
+        out = {"workspace": os.path.abspath(workspace), "demo": False, "hashes": {}}
+        for key, name in _RECORDS:
+            try:
+                raw = _read_record(os.path.join(cd, name))
+            except OSError as e:
+                out[key], out["hashes"][key] = {"_error": f"could not read {name}: {e}"}, None
+                continue
+            out[key], out["hashes"][key] = _parse_record(raw, name), _record_hash(raw)
+        return out
+    return {"workspace": None, "demo": True, "hashes": {},
             "time": _example_json("photos-21-time-decisions.requires-input.json"),
             "drift": _example_json("photos-22-gps-drift-validation.requires-input.json"),
             "gps": _example_json("photos-23-gps-decisions.requires-input.json")}
@@ -223,31 +258,48 @@ def _write_json(path, obj):
     photos_utils.replace_durably(tmp, path)
 
 
+def _edit_cell(art, e):
+    """The cell of `art` the edit `e` is for, or None when the record holds no such cell."""
+    d = ((art or {}).get("destinations") or {}).get(e.get("dest"))
+    if not isinstance(d, dict):
+        return None
+    kind = e.get("kind")
+    if kind == "timezone":
+        cell = d.get("destination_timezone")
+    elif kind == "offset":
+        cell = (d.get("camera_group_time_decisions") or {}).get(e.get("key"))
+    elif kind == "drift":
+        cell = (d.get("drift_decisions") or {}).get(e.get("key"))
+    elif kind == "fallback":
+        cell = d.get("folder_fallback")
+    elif kind == "review":
+        cell = next((r for r in (d.get("gps_decisions") or {}).get("review_items") or []
+                     if r.get("relative_path") == e.get("path")), None)
+    else:
+        cell = None
+    return cell if isinstance(cell, dict) else None
+
+
+def _unapplicable_edits(art, edits):
+    """The edits that name no cell `art` holds, or carry no decision to write — each a reason to refuse the
+    save rather than drop the edit (RUL-save_only_what_was_shown)."""
+    return [e for e in edits if _edit_cell(art, e) is None or not isinstance(e.get("user_decision"), dict)]
+
+
+def _edit_label(e):
+    what = e.get("path") or e.get("key")
+    return f"the {e.get('kind')} decision of {e.get('dest')}" + (f" ({what})" if what else "")
+
+
 def _apply_edits(art, edits):
     """Apply each edit's `user_decision` to the matching cell in `art`, in place. ONLY `user_decision`
     is ever written — every other field is left exactly as geotag produced it, so the round-trip
-    conforms regardless of what the client sent. Returns the count applied."""
+    conforms regardless of what the client sent. Returns the count applied. `_save` refuses an edit this
+    would pass over (`_unapplicable_edits`) before calling it."""
     applied = 0
-    dests = (art or {}).get("destinations") or {}
     for e in edits:
-        d = dests.get(e.get("dest"))
-        if not isinstance(d, dict):
-            continue
-        kind = e.get("kind")
-        if kind == "timezone":
-            cell = d.get("destination_timezone")
-        elif kind == "offset":
-            cell = (d.get("camera_group_time_decisions") or {}).get(e.get("key"))
-        elif kind == "drift":
-            cell = (d.get("drift_decisions") or {}).get(e.get("key"))
-        elif kind == "fallback":
-            cell = d.get("folder_fallback")
-        elif kind == "review":
-            cell = next((r for r in (d.get("gps_decisions") or {}).get("review_items") or []
-                         if r.get("relative_path") == e.get("path")), None)
-        else:
-            cell = None
-        if isinstance(cell, dict) and isinstance(e.get("user_decision"), dict):
+        cell = _edit_cell(art, e)
+        if cell is not None and isinstance(e.get("user_decision"), dict):
             cell["user_decision"] = e["user_decision"]
             applied += 1
     return applied
@@ -265,18 +317,47 @@ def _save(workspace, payload):
         if photos_utils.is_sealed(workspace):   # read under the lock; the console reaches here without serve()'s check
             return {"ok": False, "error": "workspace is sealed (already merged): decisions can no longer change"}
         cd = os.path.join(workspace, CONTROL)
-        written = []
-        for key, name in (("time", TIME_NAME), ("drift", DRIFT_NAME), ("gps", GPS_NAME)):
-            edits = (payload or {}).get(key) or []
-            if not edits:
+        try:
+            raws = {key: _read_record(os.path.join(cd, name)) for key, name in _RECORDS}
+        except OSError as e:
+            return {"ok": False, "error": f"cannot read the decision records ({e}); nothing was saved"}
+        current = {key: _record_hash(raw) for key, raw in raws.items()}
+        edits = {key: (payload or {}).get(key) or [] for key, _name in _RECORDS}
+        if not any(edits.values()):
+            return {"ok": True, "written": [], "hashes": current}
+        # Save only what was shown (RUL-save_only_what_was_shown): the edits were made against the records as
+        # the editor loaded them. Each of the three is compared, under the lock, with the hash the page was
+        # given for it before any is written — a geotag plan may have rewritten one since, and an edit made
+        # against the old one would then land on decisions the user never saw.
+        loaded = (payload or {}).get("hashes")
+        if not isinstance(loaded, dict):
+            return {"ok": False, "error": "this save does not say which decision records it was made from — "
+                                          "reload the editor and make your edits again; nothing was saved"}
+        changed = [name for key, name in _RECORDS if key not in loaded or loaded[key] != current[key]]
+        if changed:
+            return {"ok": False, "error": f"{', '.join(changed)} changed since the editor loaded it (a geotag "
+                                          "plan may have rewritten it) — reload the editor to see the decisions "
+                                          "as they are now, then make your edits again; nothing was saved"}
+        arts = {}
+        for key, name in _RECORDS:
+            if not edits[key]:
                 continue
-            art = _read_json(os.path.join(cd, name))
+            art = _parse_record(raws[key], name)
             if not isinstance(art, dict) or "_error" in art:
-                return {"ok": False, "error": f"cannot read {name} to update"}
-            _apply_edits(art, edits)
-            _write_json(os.path.join(cd, name), art)
-            written.append(name)
-        return {"ok": True, "written": written}
+                return {"ok": False, "error": f"cannot read {name} to update; nothing was saved"}
+            missing = _unapplicable_edits(art, edits[key])
+            if missing:
+                return {"ok": False, "error": f"{name} holds no {_edit_label(missing[0])} to save — reload the "
+                                              "editor and make your edits again; nothing was saved"}
+            arts[key] = art
+        written = []
+        for key, name in _RECORDS:
+            if key in arts:
+                _apply_edits(arts[key], edits[key])
+                _write_json(os.path.join(cd, name), arts[key])
+                written.append(name)
+                current[key] = _record_hash(_read_record(os.path.join(cd, name)))
+        return {"ok": True, "written": written, "hashes": current}
     finally:
         lock.release()
 

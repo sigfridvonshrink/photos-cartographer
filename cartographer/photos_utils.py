@@ -325,19 +325,19 @@ def exiftool_mime_type(path: str):
     return (r.stdout or "").strip() or None
 
 
-# Exiftool intermediates/backups of a media file: `<media>_exiftool_tmp` (the temp `-overwrite_original`
-# writes then atomically renames over the original) and `<media>_original` (the backup exiftool keeps
-# when `-overwrite_original` is NOT used). A clean Ctrl-C is self-cleaned by exiftool, but a hard kill
-# (SIGKILL/OOM/power loss) can orphan one in a managed folder; prep recognizes and quarantines these
-# (the live original is always intact — the rename is atomic). Geotag's writer also unlinks a
-# stale `_exiftool_tmp` for a file right before it rewrites it.
-_EXIFTOOL_ARTIFACT_SUFFIXES = ("_exiftool_tmp", "_original")
+# The intermediate of a write to a media file: `<media>_exiftool_tmp`, the new file geotag has exiftool write
+# beside the photo and then renames over it (BLD-metadata_safe_write). A hard kill (SIGKILL/OOM/power loss) can
+# orphan one in a managed folder; prep recognizes and quarantines these (the live original is always intact —
+# the rename is atomic). Geotag's writer also unlinks a stale `_exiftool_tmp` for a file right before it
+# rewrites it. `<media>_original` is NOT one: no write of the pipeline leaves it, so that name is the backup
+# exiftool keeps of a USER's own edit — the camera's original — and is treated as any file of no media class
+# (RUL-user_backup_is_a_stray).
+_EXIFTOOL_ARTIFACT_SUFFIXES = ("_exiftool_tmp",)
 
 def exiftool_artifact_base(name: str) -> str:
-    """If `name` is an exiftool intermediate/backup OF A MEDIA FILE, return the underlying media
+    """If `name` is an exiftool write's intermediate OF A MEDIA FILE, return the underlying media
     filename; otherwise None. The media-extension check on the stripped name keeps unrelated files
-    (e.g. a user's `notes_original.txt`) from matching — only `<media-ext>_original` /
-    `<media-ext>_exiftool_tmp` qualify."""
+    from matching — only `<media-ext>_exiftool_tmp` qualifies."""
     for suffix in _EXIFTOOL_ARTIFACT_SUFFIXES:
         if name.endswith(suffix):
             base = name[: -len(suffix)]
@@ -495,11 +495,22 @@ def handoff_path(ws: str) -> str:
     return os.path.join(ws, CONTROL_DIR, "photos-11-handoff.json")
 
 
+def hidden_folder_holds_files(path: str) -> bool:
+    """Whether the folder at `path` holds a file anywhere beneath it — any entry but a folder, hidden or not; a
+    link counts. Prep does not read into a hidden folder, so one holding files inside a managed folder other than
+    the inbox stops it (RUL-hidden_folder_among_photos_blocks); one holding only empty folders does not."""
+    for root, dirs, files in os.walk(path):
+        if files or any(os.path.islink(os.path.join(root, d)) for d in dirs):
+            return True
+    return False
+
+
 def by_dest_reprep_pending(ws: str, handoff: dict):
     """An example photo whose record in the handoff no longer holds, else None: a by-dest photo/raw the
     handoff has NOT recorded, a by-date photo the handoff still lists but that is gone from disk, or a
     by-dest photo the handoff records that is gone or differs in size or modification time from its
-    record (BLD-reprep_pending). Non-None means the user moved, removed or changed files since the last prep, so
+    record (BLD-reprep_pending) — or a hidden folder in by-dest holding files, which prep blocks on. Non-None
+    means the user moved, removed or changed files since the last prep, so
     the handoff is stale and a re-prep (`prep plan` then `prep execute`) is needed before geotag.
     `stat`-level only, no file read. The cheap, exact signal shared by geotag's re-prep gate and prep's
     nothing-to-do guard, so the two never disagree about whether prep still has work to do."""
@@ -508,6 +519,15 @@ def by_dest_reprep_pending(ws: str, handoff: dict):
     base = os.path.join(ws, by_dest)
     if os.path.isdir(base):
         for root, _dirs, files in os.walk(base):
+            # A hidden folder is walked no further than prep walks it (RUL-hidden_folder_among_photos_blocks): a
+            # photo inside one is never asked to be recorded, for no re-prep could. A hidden folder holding files
+            # is itself the example — prep blocks on it, naming it, so re-running prep is still the way on.
+            hidden = sorted(d for d in _dirs if d.startswith('.'))
+            _dirs[:] = [d for d in _dirs if not d.startswith('.')]
+            for d in hidden:
+                p = os.path.join(root, d)
+                if not os.path.islink(p) and hidden_folder_holds_files(p):
+                    return os.path.relpath(p, ws)
             for f in sorted(files):
                 if f.startswith('.'):
                     continue
@@ -1431,6 +1451,34 @@ def library_place_error(lib: str, ws: str):
     return None
 
 
+def library_workspace_error(lib: str):
+    """Why `lib` cannot be a library because of ANY workspace it is, lies inside, or holds, or None — a library
+    lies outside every workspace, not only the one at hand (RUL-library_outside_every_workspace, DEF-library). A
+    folder holding a `.photos-ingest` control directory is a workspace here, initialized or not. Upwards the whole
+    way to the filesystem root is checked; downwards ONLY `lib` itself and its immediate children — a full walk of a
+    library is too costly, so a workspace nested two or more levels down inside it is not found here."""
+    lib_real = os.path.realpath(os.path.abspath(lib))
+    d = lib_real
+    while True:
+        if os.path.isdir(os.path.join(d, CONTROL_DIR)):
+            where = "is the workspace" if d == lib_real else "lies inside the workspace"
+            return (f"{lib!r} {where} {d} — a library lies outside every workspace; choose a folder that is "
+                    "not, does not lie in, and does not hold a workspace.")
+        parent = os.path.dirname(d)
+        if parent == d:
+            break
+        d = parent
+    try:
+        children = sorted(os.path.join(lib_real, n) for n in os.listdir(lib_real))   # the top folder alone
+    except OSError:
+        children = []
+    for child in children:
+        if os.path.isdir(os.path.join(child, CONTROL_DIR)):
+            return (f"{lib!r} holds the workspace {child} — a library lies outside every workspace; choose a "
+                    "folder that is not, does not lie in, and does not hold a workspace.")
+    return None
+
+
 def detect_zfs_dataset(path: str):
     """Return the name of the ZFS dataset backing `path`, or None. Resolves to a real
     absolute path first, so a bare '.' (which `zfs list` rejects) becomes a valid argument."""
@@ -1662,6 +1710,23 @@ class ProcessCrashedError(Exception):
     pass
 
 
+_HEX_SIGNATURE = re.compile(r"[0-9a-fA-F]+")   # ImageMagick's `%#`: a hex digest
+
+
+def frames_fingerprint(signatures):
+    """An image's fingerprint from its frames' signatures, in order (RUL-fingerprint_covers_every_frame): a
+    single frame's is its signature, as ImageMagick gives it; a file of several frames takes the SHA-256 of
+    their signatures joined one per line, so every frame and their order count. None when there are none.
+    Both image paths — the persistent worker and the per-file `identify` — fold their output through this,
+    so they give one value for one file."""
+    sigs = [s for s in (signatures or []) if s]
+    if not sigs:
+        return None
+    if len(sigs) == 1:
+        return sigs[0]
+    return hashlib.sha256("\n".join(sigs).encode("ascii")).hexdigest()
+
+
 class PersistentMagickWorker:
     """A persistent `magick -script -` process — the ImageMagick analog of exiftool's `-stay_open` —
     reused across files for the content signature instead of spawning `identify` once per file
@@ -1688,14 +1753,15 @@ class PersistentMagickWorker:
         self.closed = False
 
     def signature(self, filepath: str):
-        """The decoded-content signature (`%#`) of `filepath` over sRGB/8-bit-normalized pixels.
-        Returns the hex string, or None on empty output. Raises ProcessCrashedError if the worker
-        process dies (e.g. on an unreadable image — `magick -script` aborts) so the caller can
-        restart + retry."""
+        """The decoded-content fingerprint of `filepath` over sRGB/8-bit-normalized pixels: every frame's
+        signature (`%#`), one line each, folded by `frames_fingerprint` (RUL-fingerprint_covers_every_frame).
+        `-print` would evaluate `%#` once, for the first frame only; `-write info:-` writes it per frame.
+        Returns the value, or None on empty output. Raises ProcessCrashedError if the worker process dies
+        (e.g. on an unreadable image — `magick -script` aborts) so the caller can restart + retry."""
         if self.closed:
             raise ProcessCrashedError("Magick worker closed")
         esc = str(filepath).replace("\\", "\\\\").replace('"', '\\"')
-        cmd = (f'-read "{esc}" -colorspace sRGB -depth 8 -print "%#\\n" '
+        cmd = (f'-read "{esc}" -colorspace sRGB -depth 8 -format "%#\\n" -write info:- '
                f'-delete 0--1 -print "{{ready}}\\n"\n')
         try:
             self.process.stdin.write(cmd)
@@ -1703,18 +1769,26 @@ class PersistentMagickWorker:
         except OSError as e:
             raise ProcessCrashedError(f"Failed to write to magick: {e}")
         out = []
-        for _ in range(64):          # a real reply is 1-2 lines then {ready}; cap to never hang on a broken process
+        # One signature line per frame, then {ready}: no cap on the count, so a file of many frames never fails.
+        # A process that dies ends the read at EOF; one that answers anything but a signature is taken as
+        # broken, so the read can never run on without end.
+        while True:
             try:
                 line = self.process.stdout.readline()
             except OSError as e:
                 raise ProcessCrashedError(f"Failed to read from magick: {e}")
             if not line:
                 raise ProcessCrashedError("Unexpected EOF from magick process.")
-            if line.strip() == "{ready}":
-                return out[0] if out else None
-            if line.strip():
-                out.append(line.strip())
-        raise ProcessCrashedError("magick produced no {ready} sentinel")
+            if not isinstance(line, str):
+                raise ProcessCrashedError("magick answered something other than text")
+            line = line.strip()
+            if line == "{ready}":
+                return frames_fingerprint(out)
+            if not line:
+                continue
+            if not _HEX_SIGNATURE.fullmatch(line):
+                raise ProcessCrashedError(f"magick answered something other than a signature: {line[:80]!r}")
+            out.append(line)
 
     def close(self, remove=True):
         if not self.closed:
@@ -1797,7 +1871,8 @@ class ContentHasher:
         if not identify_cmd:
             return {"status": "failed", "strategy": IMAGE_FINGERPRINT_STRATEGY, "value": None,
                     "error": "ImageMagick not found", "engine_version": engine_version}
-        cmd = identify_cmd + ["-format", "%#", "-colorspace", "sRGB", "-depth", "8", filepath]
+        # One signature per frame, one per line, folded as the worker folds its own (RUL-fingerprint_covers_every_frame).
+        cmd = identify_cmd + ["-format", "%#\\n", "-colorspace", "sRGB", "-depth", "8", filepath]
         last_error = "ImageMagick failed"
         for _attempt in range(2):
             try:
@@ -1814,9 +1889,10 @@ class ContentHasher:
                         break
                     stdout_data += chunk
                 proc.wait()
-                if proc.returncode == 0 and stdout_data.strip():
+                value = frames_fingerprint([ln.strip() for ln in stdout_data.splitlines()])
+                if proc.returncode == 0 and value:
                     return {"status": "valid", "strategy": IMAGE_FINGERPRINT_STRATEGY,
-                            "value": stdout_data.strip(), "engine_version": engine_version}
+                            "value": value, "engine_version": engine_version}
                 last_error = f"ImageMagick exited {proc.returncode}"
             except subprocess.TimeoutExpired:
                 last_error = "ImageMagick timed out"
@@ -1831,7 +1907,12 @@ class ContentHasher:
         # keypresses (e.g. 'q'), switching it to no-echo and often leaving it that way — the terminal
         # is then left where typed characters are invisible. We also detach stdin entirely
         # (stdin=DEVNULL) so no subprocess can ever touch the terminal via stdin.
-        cmd = ["ffmpeg", "-nostdin", "-i", filepath, "-c", "copy", "-f", "md5", "-"]
+        # `-map 0` takes every stream of the file — without it ffmpeg picks one video and one audio stream,
+        # and two clips differing only in another stream would share a fingerprint
+        # (RUL-fingerprint_covers_every_stream). `-copy_unknown` copies a stream of a type ffmpeg does not know
+        # rather than failing the file on it.
+        cmd = ["ffmpeg", "-nostdin", "-i", filepath, "-map", "0", "-c", "copy", "-copy_unknown",
+               "-f", "md5", "-"]
         last_error = None
         for attempt in range(2):                       # safe restart on a transient ffmpeg failure
             try:
@@ -2139,8 +2220,12 @@ def recorded_time(parsed):
     return None, None
 
 
-IMAGE_FINGERPRINT_STRATEGY = "image-content-hash-v1"   # ImageMagick signature of the decoded pixels
-VIDEO_FINGERPRINT_STRATEGY = "video-md5-v1"            # ffmpeg MD5 of the streams as stored (-c copy)
+# The method a fingerprint was taken by, recorded with it, so a value of one method is never reused or compared
+# as another's. v2 (RUL-fingerprint_covers_every_frame, RUL-fingerprint_covers_every_stream): an image's covers
+# every frame, a video's every stream; v1 took an image's first frame and a video's default streams only, so a v1
+# value is taken again rather than reused (fingerprint_reusable, get_cached_library_fingerprint).
+IMAGE_FINGERPRINT_STRATEGY = "image-content-hash-v2"   # ImageMagick signatures of the decoded pixels, every frame
+VIDEO_FINGERPRINT_STRATEGY = "video-md5-v2"            # ffmpeg MD5 of every stream as stored (-map 0 -c copy)
 
 
 # The camera-group key of a file whose metadata names no camera — no serial, make, model or owner: a screenshot,
@@ -2351,7 +2436,7 @@ class ProgressCoordinator:
 # detectable downstream (BLD-cache_versions). The per-hash engine binding (e.g. ImageMagick
 # version) is carried separately in each content hash's engine_version.
 CACHE_SCHEMA_VERSION = 3   # 2: file_cache without the byte-hash column; 3: metadata_cache without the raw payload
-FINGERPRINT_ALGORITHM_VERSION = "1"
+FINGERPRINT_ALGORITHM_VERSION = "2"   # 2: every frame of an image, every stream of a video
 
 
 def cache_schema_mismatch(cache) -> Optional[str]:
@@ -2451,6 +2536,20 @@ def _same_bytes(a: str, b: str, chunk: int = 1 << 20) -> bool:
                 return False
             if not x:
                 return True
+
+
+def fingerprint_method_blocker(handoff: dict) -> list:
+    """[] when the handoff's fingerprints were taken by this build's method, else one blocker
+    (RUL-fingerprint_method_is_the_builds). Geotag and merge compare the handoff's fingerprints with ones they take
+    themselves; a value of another method differs for the same file — or, worse, agrees for different ones — so a
+    handoff of another method is never compared against: prep takes them again."""
+    recorded = (((handoff or {}).get("depends_on") or {}).get("cache") or {}).get("fingerprint_algorithm_version")
+    if str(recorded) == str(FINGERPRINT_ALGORITHM_VERSION):
+        return []
+    return [f"The prep handoff's fingerprints were taken by another method (version {recorded!r}) than this "
+            f"build's ({FINGERPRINT_ALGORITHM_VERSION!r}), and the two cannot be compared. Run prep again — "
+            "`photos-cartographer prep plan` then `photos-cartographer prep execute` — so every fingerprint is "
+            "taken afresh, then geotag again."]
 
 
 def links_under(ws: str, folder: str) -> list:

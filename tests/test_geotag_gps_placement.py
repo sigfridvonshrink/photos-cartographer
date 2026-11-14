@@ -312,3 +312,89 @@ def test_how_far_apart_tracks_disagree_is_its_own_setting():
     # what bounds joining two points of one track says nothing about two tracks
     assert cal.place_gps(at, _gpx(alice + bob), _cfg(gpx_interpolation_max_distance_meters=10000.0)) is None
     assert cal.place_gps(at, _gpx(alice + near), _cfg(gpx_interpolation_max_distance_meters=50.0)) is not None
+
+
+# --- a track is one <trk>, and a break between two <trkseg> is never bridged --------
+
+def _gpx_file(tmp_path, name, body):
+    """A GPX file under a tracks folder of its own, read as geotag reads it; `body` is the <trk> elements."""
+    root = tmp_path / "gpx"
+    root.mkdir(exist_ok=True)
+    (root / name).write_text(f'<gpx xmlns="http://www.topografix.com/GPX/1/1">{body}</gpx>')
+    return cal.GPXIndex(str(root)).build()
+
+
+def _trk(*segments):
+    """A <trk> of the given segments, each a list of (lat, lon, seconds after 12:00:00 UTC)."""
+    def pt(lat, lon, s):
+        return (f'<trkpt lat="{lat}" lon="{lon}"><time>'
+                f'{(_utc(12, 0, 0) + timedelta(seconds=s)).strftime("%Y-%m-%dT%H:%M:%SZ")}</time></trkpt>')
+    return "<trk>" + "".join("<trkseg>" + "".join(pt(*p) for p in seg) + "</trkseg>" for seg in segments) + "</trk>"
+
+
+@pytest.mark.spec("RUL-track_is_one_trk", "RUL-tracks_never_joined", "BLD-track_placement",
+                  test="TST-geotag_gps_placement-two_trk_of_one_file_are_never_joined")
+def test_two_trk_of_one_file_are_never_joined(tmp_path):
+    """An export holding two devices' tracks for the same hours, as two <trk> of one file: the photo is placed on
+    one of them, between two of ITS points, never zig-zagging between them; and two that put the instant 5 km
+    apart place nothing, both named, each by its place in the file. The placement names the file."""
+    a = [(50.0, 4.0, s) for s in range(0, 400, 100)]
+    b = [(50.0002, 4.0, s) for s in range(50, 450, 100)]
+    g = _gpx_file(tmp_path, "both.gpx", _trk(a) + _trk(b))
+    assert len(g.tracks()) == 2
+    r = cal.place_gps(_utc(12, 1, 15), g, _cfg(gpx_direct_match_max_seconds=5.0))
+    assert r["method"] == "interpolated" and r["lat"] in (50.0, 50.0002), r
+    assert r["gpx_file"] == "both.gpx" and set(r) == {"lat", "lon", "method", "gpx_file"}
+    (tmp_path / "far").mkdir()
+    far = _gpx_file(tmp_path / "far", "both.gpx", _trk([(48.0, 11.0, s) for s in range(0, 300, 10)])
+                    + _trk([(48.05, 11.0, s) for s in range(5, 305, 10)]))
+    why = {}
+    assert cal.place_gps(_utc(12, 1, 43), far, CFG, why) is None
+    assert why["reason"] == "tracks_disagree" and why["apart_meters"] > 5000
+    assert why["gpx_files"] == ["both.gpx (track 1)", "both.gpx (track 2)"]
+
+
+@pytest.mark.spec("RUL-track_is_one_trk", test="TST-geotag_gps_placement-one_trk_of_many_segments_is_one_track")
+def test_one_trk_of_many_segments_is_one_track(tmp_path):
+    """The nearest safe case: one <trk> is one track however many <trkseg> it holds, and a photo within a segment
+    is interpolated as before; two files are two tracks as before."""
+    g = _gpx_file(tmp_path, "t.gpx", _trk([(50.0, 4.0, 0), (50.0, 4.002, 100)], [(50.0, 4.01, 600), (50.0, 4.012, 700)]))
+    assert len(g.tracks()) == 1
+    r = cal.place_gps(_utc(12, 0, 50), g, _cfg(gpx_direct_match_max_seconds=5.0))
+    assert r["method"] == "interpolated" and r["lon"] == pytest.approx(4.001, abs=1e-6)
+    r = cal.place_gps(_utc(12, 10, 50), g, _cfg(gpx_direct_match_max_seconds=5.0))
+    assert r["method"] == "interpolated" and r["lon"] == pytest.approx(4.011, abs=1e-6)
+
+
+@pytest.mark.spec("RUL-track_break_never_bridged", "BLD-track_placement",
+                  test="TST-geotag_gps_placement-a_break_between_segments_is_never_bridged")
+def test_a_break_between_segments_is_never_bridged(tmp_path):
+    """The recording broke for a minute — two <trkseg> of one track, 70 m apart, well within what points are
+    joined across. A photo in the break is never placed between them: it is placed past the end nearer it, along
+    that segment's own heading, while within the extrapolation window; beyond, nothing places it, the break the
+    reason. The same points in one segment are interpolated, as before."""
+    cfg = _cfg(gpx_direct_match_max_seconds=5.0)
+    first = [(50.0, 3.999, 0), (50.0, 3.9995, 30), (50.0, 4.0, 60)]               # heading east to 12:01:00
+    second = [(50.0005, 4.001, 120), (50.001, 4.001, 150)]                       # then north from 12:02:00
+    broken = _gpx_file(tmp_path, "t.gpx", _trk(first, second))
+    (tmp_path / "whole").mkdir()
+    whole = _gpx_file(tmp_path / "whole", "t.gpx", _trk(first + second))
+    assert cal.place_gps(_utc(12, 1, 20), whole, cfg)["method"] == "interpolated"
+    r = cal.place_gps(_utc(12, 1, 20), broken, cfg)
+    assert r["method"] == "extrapolated" and r["lat"] == 50.0 and r["lon"] > 4.0, r
+    assert r == cal.place_gps(_utc(12, 1, 20), _gpx([p for p in broken.points if p.segment == 0]), cfg)
+    why = {}
+    assert cal.place_gps(_utc(12, 1, 30), broken, _cfg(gpx_direct_match_max_seconds=5.0,
+                                                       gpx_extrapolation_max_seconds=10.0), why) is None
+    assert why == {"reason": "track_gap", "seconds_from_track": 30, "gap_seconds": 60, "segment_break": True}
+
+
+@pytest.mark.spec("RUL-track_break_never_bridged", "BLD-track_placement",
+                  test="TST-geotag_gps_placement-a_heading_is_never_taken_across_a_break")
+def test_a_heading_is_never_taken_across_a_break(tmp_path):
+    """A photo before a segment of one point is placed at that point: the next segment's points, half a minute
+    later, give it no heading."""
+    g = _gpx_file(tmp_path, "t.gpx", _trk([(50.0, 4.0, 60)],
+                                          [(50.0, 4.001, 90), (50.0, 4.002, 100), (50.0, 4.003, 110)]))
+    r = cal.place_gps(_utc(11, 59, 30), g, _cfg(gpx_direct_match_max_seconds=5.0))
+    assert r == {"lat": 50.0, "lon": 4.0, "method": "extrapolated", "gpx_file": "t.gpx"}, r

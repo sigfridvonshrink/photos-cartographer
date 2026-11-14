@@ -95,6 +95,17 @@ photo — a record the user would rely on to find it. Fingerprinting the place a
 a resume.
 :::
 
+:::{rat} Another library's photos are not in this one
+:id: RAT-merged_means_in_this_library
+:status: ruled
+:forced: no
+:follows_from: RAT-non_destructive_core
+:justifies: RUL-earlier_place_in_this_library
+
+The seal says the workspace's photos are in the library it names. A photo placed where the setting used to point is somewhere else, and counting it would seal the workspace over a library that does not hold it.
+:::
+
+
 ## 6. User-visible outputs and the merge summary
 
 :::{rat} The run's end decides what to do next

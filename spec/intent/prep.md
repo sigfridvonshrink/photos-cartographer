@@ -797,6 +797,16 @@ Prep SHALL delete quarantined files only by its prune command.
 Prep's prune command SHALL list what it would delete, deleting nothing, unless told to delete.
 :::
 
+:::{rul} An age to prune by is at least a day
+:id: RUL-prune_age_at_least_one_day
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+
+Pruning the quarantine by age SHALL refuse an age of less than one day.
+:::
+
 :::{rul} The prune touches nothing outside the quarantine
 :id: RUL-prune_only_quarantine
 :status: ruled

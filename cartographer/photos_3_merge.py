@@ -38,9 +38,9 @@ import os
 import sys
 from datetime import datetime, timezone
 
-from .photos_utils import (links_under, 
+from .photos_utils import (links_under, fingerprint_method_blocker, 
     CONFIG, CONTROL_DIR, FINALIZED_MEDIA_ARTIFACT, finalized_media_path, config_path, handoff_path, guard_path, is_sealed,
-    validate_config, load_config, validate_merge_config, library_place_error, code_fingerprint, sha256_file, sha256_text, media_class_for_ext,
+    validate_config, load_config, validate_merge_config, library_place_error, library_workspace_error, code_fingerprint, sha256_file, sha256_text, media_class_for_ext,
     folder_name, FOLDER_ROLES, missing_managed_folders, top_level_links, misplaced_top_level_entries, handoff_content_fingerprint, handoff_filename_format_blocker,
     folders_fingerprint, media_extensions_fingerprint,
     verify_json_dependency, json_dependency, write_json_artifact, write_versioned_json, is_library, write_library_marker,
@@ -199,6 +199,12 @@ class MergeWorkflow:
             blockers.append(str(e))
             return blockers, warnings, info
         library_root = cfg["merge"]["library_root"]
+        # Outside EVERY workspace, not only this one (RUL-library_outside_every_workspace): a library blessed by
+        # an earlier build inside, or around, another workspace is refused before it is locked.
+        ws_err = library_workspace_error(library_root)
+        if ws_err:
+            blockers.append(f"config: merge.library_root {ws_err}")
+            return blockers, warnings, info
         if not is_library(library_root):
             blockers.append(f"{library_root} is not a blessed library (the {os.path.basename(library_marker_path(library_root))} "
                             "marker is absent). Run `photos-cartographer merge init-library` to bless it first.")
@@ -261,6 +267,7 @@ class MergeWorkflow:
 
         # 3. By-dest is the clean photo-only set (RUL-merge_rechecks_gates).
         self._check_by_dest_clean(blockers, info)
+        self._check_fingerprinted(handoff, blockers)
 
         # 4. Prep-consistency against the finalized-name set (BLD-merge_preflight) — needs photos-24. Built on
         # the handoff⨝photos-24 enumeration because geotag renamed by-dest without re-keying it.
@@ -354,7 +361,15 @@ class MergeWorkflow:
         if stray:
             blockers.append(f"{by_date}/ still contains {len(stray)} photo(s) — by-dest must be the "
                             f"complete set before merging (e.g. {stray[0]}).")
-        dev_found, nonphoto = self._scan_by_dest(by_dest)
+        dev_found, nonphoto, hidden = self._scan_by_dest(by_dest)
+        if hidden:
+            # A hidden file or folder among the photos is neither merged nor reported by the scans, which skip
+            # it, and the workspace would be sealed around it: merge's is the last check before the seal, so it
+            # stops on ANY hidden entry there (RUL-hidden_among_photos_stops_merge).
+            blockers.append(f"{by_dest}/ holds {len(hidden)} hidden file(s) or folder(s): {', '.join(hidden)}. "
+                            "Merge never merges a hidden entry and would seal the workspace around it — remove "
+                            "each, or give a photo among them a name without its leading dot and run prep, then "
+                            "geotag plan, execute and finalize again; then re-run merge.")
         if dev_found:
             names = ", ".join(sorted(set(CONFIG.get("destination_distribution_subfolders") or [])))
             blockers.append(f"A development subfolder ({names}) exists under {by_dest}: {dev_found[0]}. "
@@ -376,6 +391,25 @@ class MergeWorkflow:
             blockers.append(f"Forbidden symlink under {by_dest}: {syms[0]}. Symlinks are never followed "
                             "into or out of the managed tree; remove it before merging.")
         info["by_dest_photos"] = sum(1 for _, mc in self._scan_media(by_dest) if mc in ("image", "raw"))
+
+    def _check_fingerprinted(self, handoff, blockers):
+        """Every photo in by-dest has a content fingerprint in the handoff (RUL-unfingerprinted_photo_stops_merge).
+        One without has no identity: geotag's rename cannot be joined to it, the library cannot be searched for
+        it — it would be placed new or renamed beside a library file it may equal — and once moved no re-plan
+        could find it again, so merge refuses to plan or execute."""
+        by_dest = folder_name('photos_by_dest')
+        # ...and fingerprints of this build's method (RUL-fingerprint_method_is_the_builds): merge compares the
+        # handoff's with those it takes of the library's files.
+        blockers.extend(fingerprint_method_blocker(handoff))
+        missing = sorted(rec.get("relative_path") or "?" for rec in (handoff.get("files") or [])
+                         if rec.get("folder_class") == by_dest and rec.get("media_class") in ("image", "raw")
+                         and not _record_fingerprint(rec))
+        if missing:
+            blockers.append(f"{len(missing)} photo(s) in {by_dest} have no content fingerprint in the handoff: "
+                            f"{', '.join(missing)}. Merge cannot tell whether the library already holds them. "
+                            "Run prep again so it fingerprints them (`photos-cartographer prep plan` then "
+                            "`photos-cartographer prep execute`), or take them out of "
+                            f"{by_dest}; then geotag plan, execute and finalize again before merging.")
 
     # --- finalized-name enumeration + prep-consistency (BLD-merge_preflight / BLD-merge_target) ---
 
@@ -497,7 +531,7 @@ class MergeWorkflow:
             if not os.path.exists(src_abs):
                 # Moved by an earlier run: carried forward from the plan that moved it, so the merge log
                 # still says where it landed (BLD-merge_carry_forward). Never left out quietly.
-                rec = self._carried_forward(e, earlier.get(e["content_fingerprint"]), blockers)
+                rec = self._carried_forward(e, earlier.get(e["content_fingerprint"]), blockers, library_root)
                 totals[rec["disposition"] if rec["disposition"] != "renamed_incoming"
                        else "renamed_for_library"] += 1
                 dests.setdefault(e["lib_dest"], {"files": []})["files"].append(rec)
@@ -550,10 +584,32 @@ class MergeWorkflow:
                     totals["blocked"] += 1
                     blockers.append(reason + " — left in by-dest.")
                 elif lib_fp == e["content_fingerprint"]:
-                    rec.update({"disposition": "already_present", "library_target": in_way,
-                                "resolved_name": os.path.basename(in_way), "renamed_for_library": False})
-                    totals["already_present"] += 1
-                    cl.add(e["final_name"].lower())
+                    # The same pixels make the photo already present only where the library's file is it byte for
+                    # byte; the same picture in other bytes — other metadata, e.g. the library's copy without the
+                    # time and position geotag wrote — is blocked, both files kept, for removing either would
+                    # lose what only it holds (RUL-same_pixels_other_file_blocks).
+                    try:
+                        identical, reason = _same_bytes(src_abs, in_way), None
+                    except OSError as err:
+                        identical = None
+                        reason = (f"{e['by_dest_relpath']} could not be compared byte for byte with the library "
+                                  f"file at {in_way}: {err} — left in by-dest.")
+                    if identical:
+                        rec.update({"disposition": "already_present", "library_target": in_way,
+                                    "resolved_name": os.path.basename(in_way), "renamed_for_library": False,
+                                    "library_match": "bytes"})
+                        totals["already_present"] += 1
+                        cl.add(e["final_name"].lower())
+                    else:
+                        if identical is False:      # the record carries both paths and sizes
+                            same = _same_picture(e["by_dest_relpath"], st.st_size, in_way)
+                            reason = _same_picture_reason(same)
+                            rec.update({"library_match": "pixels", "same_picture": same})
+                        rec.update({"disposition": "blocked", "library_target": target,
+                                    "resolved_name": e["final_name"], "renamed_for_library": False,
+                                    "blocked_reason": reason})
+                        totals["blocked"] += 1
+                        blockers.append(reason)
                 else:
                     rec.update(_alloc_renamed(e, {"path": in_way, "fingerprint": lib_fp}))
                     totals["renamed_for_library"] += 1
@@ -606,20 +662,43 @@ class MergeWorkflow:
                             (rec.get("carried_from_plan") or pid, rec))
         return found
 
-    def _carried_forward(self, e, earlier, blockers):
+    def _carried_forward(self, e, earlier, blockers, library_root):
         """The plan record of a finalized photo no longer in by-dest: the latest earlier plan's record
-        whose library place, fingerprinted again — never from the cache — holds it; otherwise a
-        blocker naming why."""
+        whose library place, fingerprinted again — never from the cache — holds it and lies inside the
+        library this plan names; otherwise a blocker naming why. A place in a library the setting has since
+        been pointed away from does not count (RUL-earlier_place_in_this_library): the workspace would seal
+        naming the new library while the photo sits in the old. Moved by hand to its place in the new
+        library — the same path under it — it is carried forward from there."""
+        fp = e["content_fingerprint"]
         if not earlier:
             reason = (f"{e['by_dest_relpath']} is no longer in the workspace and no earlier merge plan "
                       "placed it in the library")
         else:
+            outside = []          # (plan id, earlier record outside this library, its place in this library)
             for pid, rec in earlier:
-                if self._verify_fp(rec["library_target"], e["content_fingerprint"]):
-                    return dict(rec, carried_from_plan=pid)
-            places = ", ".join(sorted({rec["library_target"] for _pid, rec in earlier}))
-            reason = (f"{e['by_dest_relpath']} is no longer in the workspace, and the library place an "
-                      f"earlier merge plan gave it ({places}) no longer holds it")
+                if _lies_inside(rec["library_target"], library_root):
+                    if self._verify_fp(rec["library_target"], fp):
+                        return dict(rec, carried_from_plan=pid)
+                else:
+                    name = rec.get("resolved_name") or e["final_name"]
+                    here = (os.path.join(library_root, e["lib_dest"], name) if e["lib_dest"]
+                            else os.path.join(library_root, name))
+                    outside.append((pid, rec, here))
+            for pid, rec, here in outside:                # moved by hand into this library's place
+                if self._verify_fp(here, fp):
+                    return dict(rec, library_target=here, carried_from_plan=pid)
+            held = next(((rec, here) for _pid, rec, here in outside
+                         if self._verify_fp(rec["library_target"], fp)), None)
+            if held:
+                rec, here = held
+                reason = (f"{e['by_dest_relpath']} was moved by an earlier merge plan to {rec['library_target']}, "
+                          f"outside the library now configured ({library_root}), so it is not counted as merged. "
+                          "Either point merge.library_root back at the library holding it, or move it by hand to "
+                          f"{here}; then re-run `merge plan`")
+            else:
+                places = ", ".join(sorted({rec["library_target"] for _pid, rec in earlier}))
+                reason = (f"{e['by_dest_relpath']} is no longer in the workspace, and the library place an "
+                          f"earlier merge plan gave it ({places}) no longer holds it")
         blockers.append(reason + ".")
         return {"by_dest_source": e["by_dest_relpath"], "content_fingerprint": e["content_fingerprint"],
                 "disposition": "blocked", "library_target": e["library_target"],
@@ -769,6 +848,22 @@ class MergeWorkflow:
         r = self._fingerprint_library_file(path)
         return r.get("status") == "valid" and r.get("value") == expected_fp
 
+    def _library_match(self, src_abs, lib_path, fp):
+        """How the library file at `lib_path` stands to the workspace's photo at `src_abs`, checked just before the
+        photo's workspace copy would be removed because the library holds it: "bytes" — it fingerprints to the
+        photo's fingerprint and is the photo byte for byte, so removing the copy loses nothing; "pixels" — the same
+        picture in other bytes, which blocks (RUL-same_pixels_other_file_blocks); None — other content."""
+        if not self._verify_fp(lib_path, fp):
+            return None
+        return "bytes" if _same_bytes(src_abs, lib_path) else "pixels"
+
+    @staticmethod
+    def _same_picture_block(out, src_rel, src_abs, lib_path):
+        """Block a photo whose pixels the library's file holds in other bytes; both files stay where they are."""
+        same = _same_picture(src_rel, os.path.getsize(src_abs), lib_path)
+        out.update({"final_kind": "blocked", "same_picture": same, "blocker": _same_picture_reason(same)})
+        return out
+
     @staticmethod
     def _plan_kind(disp):
         return {"placed_new": "placed_new", "renamed_incoming": "renamed_for_library",
@@ -805,6 +900,8 @@ class MergeWorkflow:
         if disp == "blocked":                             # plan-time per-item blocker (un-fingerprintable)
             out["final_kind"] = "blocked"
             out["blocker"] = rec.get("blocked_reason") or f"{src_rel}: blocked at plan time"
+            if rec.get("same_picture"):                   # carried into the summary (RUL-same_pixels_other_file_blocks)
+                out["same_picture"] = rec["same_picture"]
             return out
         if not os.path.exists(src_abs):
             # Done by an earlier run, or by hand: counted done only while the library still holds it,
@@ -831,14 +928,20 @@ class MergeWorkflow:
                               "time is not the plan's); left in by-dest")
             return out
 
+        # Each of the three removals below happens because the library holds the photo; each first checks
+        # again that the library's file is it byte for byte, not merely the same picture, so nothing changed
+        # since the plan slips through (RUL-same_pixels_other_file_blocks).
         if disp == "already_present":
             # Library already holds identical content (verified at plan). Re-confirm it still matches,
             # then remove the source — never delete the only copy if the library file changed.
-            if not self._verify_fp(target, fp):
+            match = self._library_match(src_abs, target, fp)
+            if match is None:
                 out["final_kind"] = "blocked"
                 out["blocker"] = (f"{src_rel}: library file {target} no longer matches the planned "
                                   "content (changed since plan); left in by-dest")
                 return out
+            if match == "pixels":
+                return self._same_picture_block(out, src_rel, src_abs, target)
             os.unlink(src_abs)
             out.update({"final_kind": "already_present", "removed": True, "newly": True})
             return out
@@ -846,11 +949,15 @@ class MergeWorkflow:
         # placed_new / renamed_incoming -> move source into the library target.
         if os.path.exists(target):
             # A place found taken at execute holding the planned content makes the photo already
-            # present (BLD-merge_move) — a crash between rename and unlink among the ways to get here.
-            if self._verify_fp(target, fp):
+            # present (BLD-merge_move) — a crash between rename and unlink among the ways to get here, which
+            # leaves the workspace's very bytes there.
+            match = self._library_match(src_abs, target, fp)
+            if match == "bytes":
                 os.unlink(src_abs)
                 out.update({"final_kind": "already_present", "removed": True, "newly": True})
                 return out
+            if match == "pixels":
+                return self._same_picture_block(out, src_rel, src_abs, target)
             out["final_kind"] = "blocked"
             out["blocker"] = f"{src_rel}: target {target} occupied by different content at execute (re-plan)"
             return out
@@ -860,9 +967,12 @@ class MergeWorkflow:
             _move_no_clobber(src_abs, target, cross_fs=True)   # byte-checked copy across filesystems
             out.update({"final_kind": self._plan_kind(disp), "removed": True, "newly": True})
         except FileExistsError:                             # target appeared since planning
-            if os.path.exists(target) and self._verify_fp(target, fp):
+            match = self._library_match(src_abs, target, fp) if os.path.exists(target) else None
+            if match == "bytes":
                 os.unlink(src_abs)                          # identical content -> already in library
                 out.update({"final_kind": "already_present", "removed": True, "newly": True})
+            elif match == "pixels":
+                return self._same_picture_block(out, src_rel, src_abs, target)
             else:
                 out["final_kind"] = "blocked"
                 out["blocker"] = f"{src_rel}: target occupied by different content at execute (re-plan)"
@@ -1044,7 +1154,9 @@ class MergeWorkflow:
                 "blocked_reason": r["blocker"] if blocked else None,
                 "renamed_for_library": r["final_kind"] == "renamed_for_library",
                 "already_present": r["final_kind"] == "already_present",
-                "removed_from_by_dest": r["removed"]})
+                "removed_from_by_dest": r["removed"],
+                # The two files and their sizes, for a photo whose pixels the library holds in other bytes.
+                **({"same_picture": r["same_picture"]} if r.get("same_picture") else {})})
         for d in dests.values():
             d["files"].sort(key=lambda f: f["by_dest_path"])
         removed_total = kinds["placed_new"] + kinds["already_present"] + kinds["renamed_for_library"]
@@ -1192,23 +1304,27 @@ class MergeWorkflow:
                 yield rel, media_class_for_ext(os.path.splitext(f)[1])
 
     def _scan_by_dest(self, by_dest):
-        """Return (dev_subfolders_found, non_photo_files) under 6-photos-by-dest."""
+        """Return (dev_subfolders_found, non_photo_files, hidden_entries) under 6-photos-by-dest. A hidden
+        entry is any file or folder named with a leading dot, at any depth; hidden folders are still walked."""
         dev_names = set(CONFIG.get("destination_distribution_subfolders") or [])
         base = os.path.join(self.workspace_root, by_dest)
-        dev_found, nonphoto = [], []
+        dev_found, nonphoto, hidden = [], [], []
         if not os.path.isdir(base):
-            return dev_found, nonphoto
+            return dev_found, nonphoto, hidden
         for root, dirs, files in os.walk(base):
             for d in dirs:
                 if d in dev_names:
                     dev_found.append(os.path.relpath(os.path.join(root, d), self.workspace_root))
+                if d.startswith('.'):
+                    hidden.append(os.path.relpath(os.path.join(root, d), self.workspace_root))
             for f in files:
                 if f.startswith('.'):
+                    hidden.append(os.path.relpath(os.path.join(root, f), self.workspace_root))
                     continue
                 mc = media_class_for_ext(os.path.splitext(f)[1])
                 if mc not in ("image", "raw"):
                     nonphoto.append((os.path.relpath(os.path.join(root, f), self.workspace_root), mc))
-        return sorted(dev_found), nonphoto
+        return sorted(dev_found), nonphoto, sorted(hidden)
 
 
 
@@ -1234,6 +1350,42 @@ def _record_fingerprint(rec):
         return json.loads(rec.get("content_hash")).get("value")
     except Exception:
         return None
+
+
+def _lies_inside(path, root):
+    """True iff `path`, resolved, is `root` or lies under it."""
+    p, r = os.path.realpath(os.path.abspath(path)), os.path.realpath(os.path.abspath(root))
+    return os.path.commonpath([p, r]) == r
+
+
+def _same_bytes(a, b, chunk=1 << 20):
+    """True iff the files at `a` and `b` hold the same bytes: their sizes first, then a streamed compare that stops
+    at the first difference. An unreadable file raises OSError — never taken for a difference."""
+    if os.path.getsize(a) != os.path.getsize(b):
+        return False
+    with open(a, "rb") as fa, open(b, "rb") as fb:
+        while True:
+            x, y = fa.read(chunk), fb.read(chunk)
+            if x != y:
+                return False
+            if not x:
+                return True
+
+
+def _same_picture(by_dest_rel, by_dest_size, library_path):
+    """The record of a photo whose pixels the library holds in other bytes: the two files and their sizes — what
+    a later way to replace the library's copy would need (RUL-same_pixels_other_file_blocks)."""
+    return {"by_dest_path": by_dest_rel, "by_dest_size": by_dest_size,
+            "library_path": library_path, "library_size": os.path.getsize(library_path)}
+
+
+def _same_picture_reason(same):
+    """The block for the same picture in other bytes: both files, what is wrong, and the two ways on."""
+    return (f"{same['by_dest_path']} ({same['by_dest_size']} bytes) and the library's {same['library_path']} "
+            f"({same['library_size']} bytes) hold the same picture with different metadata; merge removes neither, "
+            "and the photo is left in by-dest. To merge it, replace the library's copy with it by hand (it may "
+            "carry the time and position geotag wrote) and re-run `merge plan`; to keep the library's copy, take "
+            "the photo out of by-dest and run prep, then geotag plan, execute and finalize again.")
 
 
 def _in_workspace(ws):
@@ -1293,6 +1445,10 @@ def _init_library_from_config(ws, reporter):
     except ValueError as e:
         reporter.log(str(e))
         return 2
+    ws_err = library_workspace_error(library_root)   # outside every workspace (RUL-library_outside_every_workspace)
+    if ws_err:
+        reporter.log(f"init-library: {ws_err} Nothing was blessed.")
+        return 2
     pre = is_library(library_root)
     marker = write_library_marker(library_root)
     reporter.log(f"Library {'already blessed' if pre else 'blessed'}: {library_root} "
@@ -1340,6 +1496,12 @@ def do_init_library(path_arg, ws):
     resolved = os.path.abspath(os.path.expanduser(path_arg))
     if not os.path.isdir(resolved):
         reporter.log(f"init-library: {resolved} is not an existing directory.")
+        return 2
+    # A library lies outside EVERY workspace (RUL-library_outside_every_workspace): checked on both paths that
+    # bless a given directory, from outside any workspace too — where "a workspace" is not only an initialized one.
+    ws_err = library_workspace_error(resolved)
+    if ws_err:
+        reporter.log(f"init-library: {ws_err} Nothing was blessed.")
         return 2
 
     if not in_ws:

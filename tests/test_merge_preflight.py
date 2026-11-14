@@ -38,7 +38,8 @@ def _ctl(ws):
 def _make(tmp_path, *, guard=True, config=True, library_in_config=True, bless_lib=True,
           handoff=True, handoff_current=True, cal_plan=True, cal_summary=True,
           summary_status="success", prep_log=True, complete_log=True, archive_manifest=True, finalized_media=True,
-          bydest=("6-photos-by-dest/Trip/a.jpg",), sources_files=()):
+          bydest=("6-photos-by-dest/Trip/a.jpg",), sources_files=(),
+          fingerprint_method=utils.FINGERPRINT_ALGORITHM_VERSION):
     """Build a workspace that PASSES preflight by default, plus a sibling blessed library. Each
     keyword turns off / corrupts one precondition's input so a single check can be isolated."""
     ws = tmp_path / "ws"
@@ -63,10 +64,13 @@ def _make(tmp_path, *, guard=True, config=True, library_in_config=True, bless_li
     ho = {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [{"relative_path": rel, "folder_class": "6-photos-by-dest", "media_class": "image",
                      "content_hash": json.dumps({"status": "valid", "value": f"fp-{i}"})}
                     for i, rel in enumerate(bydest)],
-          "content_fingerprint": "whole-file-hash", "run_metadata": {"started_at": "t0"}}
+          "content_fingerprint": "whole-file-hash", "run_metadata": {"started_at": "t0"},
+          "depends_on": {"cache": {"fingerprint_algorithm_version": fingerprint_method}}}
+    if fingerprint_method is None:
+        del ho["depends_on"]["cache"]["fingerprint_algorithm_version"]
     if prep_log:
         (ctl / "photos-15-prep-log.json").write_text(json.dumps({"photos": {}}))
-        ho["depends_on"] = {"prep_log": {"sha256": utils.sha256_file(str(ctl / "photos-15-prep-log.json"))}}
+        ho["depends_on"]["prep_log"] = {"sha256": utils.sha256_file(str(ctl / "photos-15-prep-log.json"))}
     fp = utils.handoff_content_fingerprint(ho)
     if handoff:
         (ctl / "photos-11-handoff.json").write_text(json.dumps(ho))
@@ -317,6 +321,30 @@ def test_a_stale_finalized_record_is_refused_before_any_plan_is_made(tmp_path):
     merge._run_locked_workflow("plan", str(ws2))
     assert os.path.exists(merge.merge_plan_path(str(ws2)))   # (its photo unreadable here; planned all the same)
 
+
+def _tree(root):
+    return sorted((os.path.relpath(os.path.join(d, n), root), os.path.getsize(os.path.join(d, n)))
+                  for d, _, names in os.walk(root) for n in names)
+
+
+@pytest.mark.parametrize("recorded", ["1", None], ids=["another_method", "no_method_recorded"])
+@pytest.mark.parametrize("command", ["plan", "execute"])
+@pytest.mark.spec("RUL-fingerprint_method_is_the_builds",
+                  test="TST-merge_preflight-a_handoff_of_another_fingerprint_method_stops_merge")
+def test_a_handoff_of_another_fingerprint_method_stops_merge(tmp_path, capsys, command, recorded):
+    """A handoff whose fingerprints were taken by another method than this build's — or that records no method —
+    cannot be compared with the fingerprints merge takes of the library's files: plan and execute each refuse,
+    naming the mismatch and telling the user to run prep again, and nothing in the workspace or the library is
+    changed."""
+    ws, lib = _make(tmp_path, fingerprint_method=recorded)
+    by_dest, library = _tree(str(ws / "6-photos-by-dest")), _tree(str(lib))
+    capsys.readouterr()
+    assert merge._run_locked_workflow(command, str(ws)) == 2
+    text = "".join(capsys.readouterr())
+    assert "taken by another method" in text and repr(recorded) in text, text
+    assert "Run prep again" in text and "prep plan" in text and "prep execute" in text, text
+    assert not [n for n in os.listdir(_ctl(ws)) if n.startswith("photos-3")]   # no merge record of any kind
+    assert _tree(str(ws / "6-photos-by-dest")) == by_dest and _tree(str(lib)) == library
 
 @pytest.mark.spec("RUL-prep_refresh_not_a_change",
                   test="TST-merge_preflight-a_refresh_describing_only_a_prep_run_does_not_block_merge")
@@ -819,3 +847,96 @@ def test_merge_never_repairs_a_missing_folder(tmp_path):
     os.rmdir(str(ws / "4-videos-by-date"))
     assert merge._run_locked_workflow("plan", str(ws)) == 2
     assert not (ws / "4-videos-by-date").exists()             # blocked, never recreated
+
+
+# --- a library outside every workspace (RUL-library_outside_every_workspace) ---------
+
+def _another_workspace(tmp_path):
+    """Another workspace beside the one at hand: a folder holding a control directory — uninitialized (no
+    guard), which still makes it a workspace — and its photos-by-destination folder."""
+    other = tmp_path / "other-ws"
+    (other / ".photos-ingest").mkdir(parents=True)
+    (other / "6-photos-by-dest").mkdir()
+    return other
+
+
+def _places(tmp_path, other):
+    holder = tmp_path / "holder"
+    (holder / "inner-ws" / ".photos-ingest").mkdir(parents=True)
+    return {"is_a_workspace": (other, other), "inside_a_workspace": (other / "6-photos-by-dest", other),
+            "holds_a_workspace": (holder, holder / "inner-ws")}
+
+
+@pytest.mark.parametrize("where", ["is_a_workspace", "inside_a_workspace", "holds_a_workspace"])
+@pytest.mark.parametrize("run_from", ["outside_any_workspace", "a_workspace"])
+@pytest.mark.spec("RUL-library_outside_every_workspace", "BLD-init_library_cases",
+                  test="TST-merge_preflight-init_library_refuses_a_place_in_any_workspace")
+def test_init_library_refuses_a_place_in_any_workspace(tmp_path, capsys, where, run_from):
+    """A library lies outside every workspace, not only the one merge runs in: init-library refuses a folder that
+    is another workspace — initialized or not — lies inside one, or holds one among its folders, naming the
+    workspace found, and blesses and writes nothing."""
+    target, found = _places(tmp_path, _another_workspace(tmp_path))[where]
+    if run_from == "a_workspace":
+        ws, _lib = _fresh_ws_and_lib(tmp_path)
+    else:
+        ws = tmp_path / "plain"
+        ws.mkdir()
+    cfg_p = ws / ".photos-ingest" / "photos-00-config.json"
+    before = cfg_p.read_bytes() if cfg_p.exists() else None
+    capsys.readouterr()
+    assert merge.do_init_library(str(target), str(ws)) == 2
+    text = "".join(capsys.readouterr())
+    assert str(found) in text and "workspace" in text, text
+    assert not utils.is_library(str(target))
+    assert (cfg_p.read_bytes() if cfg_p.exists() else None) == before
+
+
+@pytest.mark.spec("RUL-library_outside_every_workspace", "BLD-init_library_cases",
+                  test="TST-merge_preflight-init_library_refuses_a_configured_library_in_another_workspace")
+def test_init_library_refuses_a_configured_library_in_another_workspace(tmp_path, capsys):
+    """Without a path, init-library blesses the library the configuration names — not when it lies in another
+    workspace."""
+    other = _another_workspace(tmp_path)
+    ws, _lib = _fresh_ws_and_lib(tmp_path)
+    cfg_p = ws / ".photos-ingest" / "photos-00-config.json"
+    cfg = json.loads(cfg_p.read_text())
+    cfg["merge"]["library_root"] = str(other / "6-photos-by-dest")
+    cfg_p.write_text(json.dumps(cfg))
+    capsys.readouterr()
+    assert merge.do_init_library(None, str(ws)) == 2
+    assert str(other) in "".join(capsys.readouterr())
+    assert not utils.is_library(str(other / "6-photos-by-dest"))
+
+
+@pytest.mark.parametrize("where", ["is_a_workspace", "inside_a_workspace", "holds_a_workspace"])
+@pytest.mark.spec("RUL-library_outside_every_workspace", "BLD-merge_preflight",
+                  test="TST-merge_preflight-a_configured_library_in_any_workspace_blocks_merge")
+def test_a_configured_library_in_any_workspace_blocks_merge(tmp_path, where):
+    """Merge checks the library it is configured with lies outside every workspace, even one blessed before
+    the rule: one that is, lies in or holds another workspace stops it before the library is locked."""
+    target, found = _places(tmp_path, _another_workspace(tmp_path))[where]
+    ws, _lib = _make(tmp_path)
+    utils.write_library_marker(str(target))                         # blessed by an earlier build
+    cfg_p = ws / ".photos-ingest" / "photos-00-config.json"
+    cfg = json.loads(cfg_p.read_text())
+    cfg["merge"]["library_root"] = str(target)
+    cfg_p.write_text(json.dumps(cfg))
+    blockers, _, info = _pf(ws)
+    assert any(str(found) in b and "workspace" in b for b in blockers), blockers
+    assert "library_root" not in info
+    assert merge._run_locked_workflow("plan", str(ws)) == 2
+    assert not os.path.exists(os.path.join(str(target), ".photos-merge.lock"))
+
+
+@pytest.mark.spec("RUL-library_outside_every_workspace", "BLD-init_library_cases",
+                  test="TST-merge_preflight-a_library_beside_workspaces_is_blessed")
+def test_a_library_beside_workspaces_is_blessed(tmp_path):
+    """A library beside workspaces — siblings under one folder, as a library and its workspaces often are — is
+    outside every one: blessed, from a workspace or from outside any."""
+    _another_workspace(tmp_path)
+    ws, lib = _fresh_ws_and_lib(tmp_path)
+    assert merge.do_init_library(str(lib), str(ws)) == 0 and utils.is_library(str(lib))
+    lib2 = tmp_path / "lib2"
+    lib2.mkdir()
+    assert merge.do_init_library(str(lib2), str(tmp_path / "other-ws" / "6-photos-by-dest")) == 0
+    assert utils.is_library(str(lib2))

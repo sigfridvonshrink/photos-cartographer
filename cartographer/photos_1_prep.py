@@ -39,7 +39,7 @@ import errno
 # ==============================================================================
 # CONFIGURATION BLOCK
 # ==============================================================================
-from .photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, is_track_file, missing_managed_folders, misplaced_top_level_entries, FOLDER_ROLES, UNTIMED_PREFIX, untimed_stem, carries_stem, filename_format_changed, code_fingerprint
+from .photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, is_track_file, missing_managed_folders, misplaced_top_level_entries, FOLDER_ROLES, UNTIMED_PREFIX, untimed_stem, carries_stem, filename_format_changed, code_fingerprint, hidden_folder_holds_files
 from .reporting import get_reporter, emit_next_step
 from .photos_utils import (replace_durably, _move_no_clobber, _move_link_unlink, _get_renameat2,
                           WorkspaceCache, WorkspaceLock, ContentHasher, PlanFingerprintMemo,
@@ -1450,9 +1450,10 @@ class WorkspacePrepWorkflow:
         return report
 
     def _recognize_exiftool_leftovers(self, files, warnings):
-        """Recognize orphaned exiftool intermediates/backups (`<media>_exiftool_tmp` / `<media>_original`)
-        left by a hard-killed geotag write — pull them out of the media inventory (quarantined below,
-        recoverable) rather than mis-inventorying them as `other`. A leftover under read-only by-dest is
+        """Recognize orphaned exiftool intermediates (`<media>_exiftool_tmp`) left by a hard-killed geotag
+        write — pull them out of the media inventory (quarantined below, recoverable) rather than
+        mis-inventorying them as `other`. A `<media>_original` is a user's own backup, not a leftover, and
+        stays in the inventory as a file of no media class (RUL-user_backup_is_a_stray). A leftover under read-only by-dest is
         left untouched (only warned). Returns (kept_files, exiftool_leftovers). Verbatim lift from plan()."""
         from .photos_utils import exiftool_artifact_base
         _bydest_prefix = folder_name('photos_by_dest') + '/'
@@ -1532,8 +1533,21 @@ class WorkspacePrepWorkflow:
                     self._flag_dir_symlinks(root, _dirs, blockers)   # nested dir symlinks are forbidden too
                     # Do not descend into hidden subdirs: their files are not managed media (a non-dot
                     # file inside a `.thumbnails/` is still dump junk). In 0-sources those files are
-                    # picked up by _collect_dump_dotfiles for quarantine; elsewhere they are skipped.
+                    # picked up by _collect_dump_dotfiles for quarantine. Elsewhere a hidden folder holding
+                    # files stops the plan, naming it: its files would never be inventoried, fingerprinted,
+                    # link-checked or handed on, and would stay behind in the workspace
+                    # (RUL-hidden_folder_among_photos_blocks); an empty one is left to the walk as today.
                     # (Matches the init dump-folder walk, which also prunes dot-subdirs.)
+                    if d != _sources:
+                        for dd in sorted(_dirs):
+                            hp = os.path.join(root, dd)
+                            if dd.startswith('.') and not os.path.islink(hp) and hidden_folder_holds_files(hp):
+                                blockers.append(
+                                    f"Hidden folder holding files: {os.path.relpath(hp, self.workspace_root)}. "
+                                    "Prep does not read a hidden folder, so the files in it would be neither "
+                                    "checked nor handed on, and would stay behind in the workspace. Move them "
+                                    "into a folder whose name does not start with a dot (or remove the folder "
+                                    "if they are not wanted), then re-plan.")
                     _dirs[:] = [dd for dd in _dirs if not dd.startswith('.')]
                     for fname in filenames:
                         if not fname.startswith('.'):
@@ -2782,6 +2796,12 @@ def prune_quarantine(workspace_root, plan_ids=None, older_than_days=None, do_del
         reporter.log("No quarantine directory; nothing to prune.", stream="stdout")
         return
 
+    # An age below one day would select every dated run — the whole quarantine — while looking like a
+    # selector (RUL-prune_age_at_least_one_day). The command line refuses it when parsing; the console reaches
+    # here without that parsing, so it is refused here too, before anything is listed or removed.
+    if older_than_days is not None and older_than_days < 1:
+        raise RuntimeError(f"--older-than-days must be at least 1 (got {older_than_days}); nothing was removed.")
+
     all_dirs = [e.name for e in os.scandir(base) if e.is_dir()]
     has_selector = bool(plan_ids) or older_than_days is not None
     selected = set()
@@ -2793,9 +2813,13 @@ def prune_quarantine(workspace_root, plan_ids=None, older_than_days=None, do_del
                 reporter.warn(f"Warning: plan-id not found in quarantine: {pid}")
     if older_than_days is not None:
         cutoff = datetime.now(timezone.utc) - timedelta(days=older_than_days)
-        for d in all_dirs:
+        for d in sorted(all_dirs):
             t = _parse_plan_id_time(d)
-            if t is not None and t < cutoff:
+            if t is None:
+                # Its name gives no age, so age never selects it (RUL-prune_age_at_least_one_day); listed so
+                # the user sees it was passed over, and why.
+                reporter.log(f"Not selected by age: {d} — its name gives no age", stream="stdout")
+            elif t < cutoff:
                 selected.add(d)
     if not has_selector:
         selected = set(all_dirs)
@@ -2846,6 +2870,19 @@ def positive_int(value):
     return parsed
 
 
+def _days_at_least_one(value):
+    """`--older-than-days`: a whole number of days, at least 1 (RUL-prune_age_at_least_one_day). Argparse names
+    the option in its refusal."""
+    try:
+        parsed = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"must be a whole number of days, at least 1 (got {value!r})")
+    if parsed < 1:
+        raise argparse.ArgumentTypeError(f"must be at least 1 day (got {parsed}); a smaller age would select "
+                                         "the whole quarantine")
+    return parsed
+
+
 def add_arguments(parser):
     """Register prep's `-j` + subcommands on `parser` — the top parser when run standalone
     (`python -m cartographer.photos_1_prep`), or the `prep` subparser in the combined
@@ -2864,7 +2901,8 @@ def add_arguments(parser):
 
     prune_parser = subparsers.add_parser("prune-quarantine", help="Delete recoverable quarantine (dry-run by default).")
     prune_parser.add_argument("--plan-id", action="append", dest="plan_ids", help="Quarantine <plan_id> directory to prune (repeatable).")
-    prune_parser.add_argument("--older-than-days", type=int, help="Prune quarantine directories older than N days.")
+    prune_parser.add_argument("--older-than-days", type=_days_at_least_one,
+                              help="Prune quarantine directories older than N days (N at least 1).")
     prune_parser.add_argument("--all", action="store_true", dest="prune_all", help="Confirm deleting ALL quarantine when no selector is given.")
     prune_parser.add_argument("--yes", action="store_true", help="Actually delete (default is a dry-run that only lists).")
     parser.set_defaults(_run=run, _parser=parser)

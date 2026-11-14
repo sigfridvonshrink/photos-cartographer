@@ -656,6 +656,16 @@ Prep SHALL leave out of its inventory of media, each as a whole: the control rec
 version-control directory, and the strays folder with everything in it; and every hidden file.
 :::
 
+:::{rul} A hidden folder holding files stops prep
+:id: RUL-hidden_folder_among_photos_blocks
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+
+Prep SHALL NOT plan while a hidden folder inside a managed folder other than the inbox holds a file.
+:::
+
 :::{rul} The strays folder's contents are never processed again
 :id: RUL-strays_never_processed
 :status: ruled
@@ -682,7 +692,7 @@ be moved to the recoverable quarantine, not merely left out.
 :criticality: med
 :verify: required
 
-A temporary or backup file that an interrupted metadata write left beside a photo, in a folder prep may change, SHALL
+A temporary file that an interrupted metadata write left beside a photo, in a folder prep may change, SHALL
 be moved to the recoverable quarantine — never taken for media, never put among the strays.
 :::
 
@@ -693,8 +703,18 @@ be moved to the recoverable quarantine — never taken for media, never put amon
 :verify: required
 :refines: RUL-write_leftovers_quarantined
 
-A temporary or backup file that an interrupted metadata write left in photos by destination, which prep never changes,
+A temporary file that an interrupted metadata write left in photos by destination, which prep never changes,
 SHALL be left where it is and the user warned of it.
+:::
+
+:::{rul} A backup the user's own edit left is the user's file
+:id: RUL-user_backup_is_a_stray
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+
+A backup that the user's own edit of a photo left beside it — the photo as it was before that edit — SHALL be treated as any file of no media class, never as what a write of cartographer's left.
 :::
 
 :::{rul} Each plan has one fixed place
@@ -1511,6 +1531,34 @@ A media file's fingerprint SHALL stay the same when the pipeline rewrites its me
 :uses: DEF-fingerprint
 
 A photo's fingerprint taken under another ImageMagick version SHALL be taken again before a phase relies on it.
+:::
+
+:::{rul} A photo's fingerprint covers every frame
+:id: RUL-fingerprint_covers_every_frame
+:status: ruled
+:criticality: high
+:verify: required
+
+A photo's fingerprint SHALL be taken over every frame of the file, in their order.
+:::
+
+:::{rul} A video's fingerprint covers every stream
+:id: RUL-fingerprint_covers_every_stream
+:status: ruled
+:criticality: med
+:verify: required
+
+A video's fingerprint SHALL be taken over every stream of the file.
+:::
+
+:::{rul} Fingerprints are compared only within one method
+:id: RUL-fingerprint_method_is_the_builds
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+
+Geotag and merge SHALL NOT proceed on a handoff whose fingerprints were taken by a method other than the build's own.
 :::
 
 :::{rul} A fingerprint taken again is the same photo's
@@ -2523,7 +2571,7 @@ Where an incoming photo's place in the library is taken, merge SHALL compare the
 :verify: required
 :refines: RUL-collision_by_content
 
-A taken place holding the same content SHALL mean the photo is already in the library: nothing is written there.
+A taken place holding the photo itself, byte for byte, SHALL mean the photo is already in the library: nothing is written there.
 :::
 
 :::{rul} The workspace's copy of a photo already in the library is removed
@@ -2533,7 +2581,17 @@ A taken place holding the same content SHALL mean the photo is already in the li
 :verify: required
 :refines: RUL-collision_same_content
 
-Where a taken place holds the same content, the workspace's copy SHALL be removed.
+Where a taken place holds the photo itself, byte for byte, the workspace's copy SHALL be removed.
+:::
+
+:::{rul} The same picture in another file blocks
+:id: RUL-same_pixels_other_file_blocks
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+
+A photo whose picture the library already holds in a file of other bytes — the same pixels, other metadata — SHALL be blocked, both files named and neither removed, for the user to settle.
 :::
 
 :::{rul} Different content is placed under a differentiating name
@@ -2618,6 +2676,17 @@ fingerprinted again, whatever is kept.
 
 Merge SHALL check the library's configured place like every path the user writes, refusing it unless it is an existing
 folder that neither lies inside the workspace nor holds it.
+:::
+
+:::{rul} The library lies outside every workspace
+:id: RUL-library_outside_every_workspace
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-library
+
+A folder SHALL NOT be taken as the library while it is a workspace, lies inside one, or holds one among its own folders.
 :::
 
 :::{rul} A library is known by its mark alone
@@ -2876,6 +2945,16 @@ workspace lock. Its records MAY still be read.
 :refines: RUL-sealed_refuses
 
 The decision editor SHALL NOT open a sealed workspace.
+:::
+
+:::{rul} The editor saves only over what it showed
+:id: RUL-save_only_what_was_shown
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+
+The decision editor SHALL NOT save while a decision record is not the one it loaded, or while an edit names a decision the record does not hold.
 :::
 
 :::{rul} The decision editor saves nothing into a sealed workspace

@@ -31,7 +31,7 @@ def test_fingerprint_image_missing_imagemagick(monkeypatch):
     monkeypatch.setattr(utils, "get_magick_command", lambda: [])
     monkeypatch.setattr(utils, "get_identify_command", lambda: [])
     r = utils.ContentHasher.fingerprint_image("/nope.jpg")
-    assert r["status"] == "failed" and r["value"] is None and r["strategy"] == "image-content-hash-v1"
+    assert r["status"] == "failed" and r["value"] is None and r["strategy"] == "image-content-hash-v2"
     assert "ImageMagick not found" in r["error"]
 
 
@@ -49,7 +49,7 @@ def test_fingerprint_image_uses_persistent_worker(monkeypatch):
             pass
     monkeypatch.setattr(utils, "_thread_magick_worker", lambda: _W())
     res = utils.ContentHasher.fingerprint_image("/img.jpg")
-    assert res == {"status": "valid", "strategy": "image-content-hash-v1",
+    assert res == {"status": "valid", "strategy": "image-content-hash-v2",
                    "value": "sig-abc123", "engine_version": "magick-test"}
 
 
@@ -91,7 +91,7 @@ def test_fingerprint_image_falls_back_to_per_file_identify(monkeypatch):
     monkeypatch.setattr(utils.subprocess, "Popen", lambda *a, **k: _Proc())
     monkeypatch.setattr(utils.select, "select", lambda r, w, x, t: (r, [], []))
     res = utils.ContentHasher.fingerprint_image("/img.jpg")
-    assert res == {"status": "valid", "strategy": "image-content-hash-v1",
+    assert res == {"status": "valid", "strategy": "image-content-hash-v2",
                    "value": "sig-abc123", "engine_version": "magick-test"}
 
 

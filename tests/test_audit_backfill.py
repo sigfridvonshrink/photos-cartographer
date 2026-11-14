@@ -53,11 +53,11 @@ def _install(monkeypatch, meta_for=None, hash_for=None):
             if r is not None:
                 return r
         with open(p, "rb") as f:
-            return {"status": "valid", "strategy": "image-content-hash-v1",
+            return {"status": "valid", "strategy": "image-content-hash-v2",
                     "value": "sig-" + f.read().hex()[:16], "engine_version": "t"}
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", hsh)
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_video",
-                        lambda p: {"status": "valid", "strategy": "video-md5-v1",
+                        lambda p: {"status": "valid", "strategy": "video-md5-v2",
                                    "value": "v-" + os.path.basename(p)})
 
     def meta(folders, max_workers=4, progress_coordinator=None):
@@ -241,7 +241,7 @@ def test_quarantine_writes_evidence_before_moving(tmp_path, monkeypatch):
 def test_by_dest_hash_failure_skipped_mutable_blocks(tmp_path, monkeypatch):
     def hash_for(p):
         if "fail" in os.path.basename(p) or "/6-photos-by-dest/" in p:
-            return {"status": "failed", "strategy": "image-content-hash-v1", "error": "boom"}
+            return {"status": "failed", "strategy": "image-content-hash-v2", "error": "boom"}
         return None
     _install(monkeypatch, hash_for=hash_for)
     ws = _ws(tmp_path)

@@ -42,10 +42,10 @@ def _ws(tmp_path):
 def _mock(monkeypatch, date_for):
     """date_for(basename) -> "YYYY:MM:DD HH:MM:SS" or None (untimestamped)."""
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image",
-                        lambda p: {"status": "valid", "strategy": "image-content-hash-v1",
+                        lambda p: {"status": "valid", "strategy": "image-content-hash-v2",
                                    "value": "sig-" + os.path.basename(p), "engine_version": "t"})
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_video",
-                        lambda p: {"status": "valid", "strategy": "video-md5-v1",
+                        lambda p: {"status": "valid", "strategy": "video-md5-v2",
                                    "value": "vsig-" + os.path.basename(p)})
 
     def meta(folders, max_workers=4, progress_coordinator=None):

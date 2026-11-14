@@ -224,7 +224,7 @@ def _exec_ws(tmp_path, monkeypatch):
              rec(f"{BYDEST}/T/2024-07-03--15-00-00.arw", "2024:07:03 15:00:00", (51.0, 5.0)),
              rec(f"{BYDEST}/T/2024-07-03--14-30-00.arw", "2024:07:03 14:30:00")]            # no GPS -> blocked -> fallback
     (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files, "cache_fingerprint": "pcf",
-        "depends_on": {"cache": {"image_engine_version": utils.get_imagemagick_version()}}}))
+        "depends_on": {"cache": {"image_engine_version": utils.get_imagemagick_version(), "fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
     return ws, ctl
 
 

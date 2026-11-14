@@ -227,11 +227,11 @@ build's.
 :::{bld} A fingerprint records its method
 :id: BLD-fingerprint_method
 :status: ruled
-:realises: RUL-fingerprint_method_matches
+:realises: RUL-fingerprint_method_matches, RUL-fingerprint_method_is_the_builds
 
-Each fingerprint SHALL record its strategy — `image-content-hash-v1` for a photo, `video-md5-v1` for a video — and a
+Each fingerprint SHALL record its strategy — `image-content-hash-v2` for a photo, `video-md5-v2` for a video — and a
 photo's the ImageMagick version that took it; a cached photo fingerprint is reused when both match the build's, a video's
-when its strategy does.
+when its strategy does. The handoff carries the method's version (`depends_on.cache.fingerprint_algorithm_version`); geotag's and merge's preflight stop on one that is not the build's.
 :::
 
 
@@ -382,12 +382,12 @@ move; the manifest is replaced whole at each append, and one found unreadable is
 :::{bld} `prune-quarantine` and its selectors
 :id: BLD-prune_command
 :status: ruled
-:realises: RUL-prune_explicit, RUL-quarantine_footprint_reported
+:realises: RUL-prune_explicit, RUL-quarantine_footprint_reported, RUL-prune_age_at_least_one_day
 
 `prep prune-quarantine` SHALL remove whole `<plan-id>` folders of the quarantine, selected by `--plan-id` (repeatable)
 or `--older-than-days` — a run's age taken from the time in its plan id, the two selecting the runs either names —
 listing them with their files and bytes and deleting only with `--yes`, and with no selector only with `--all` too; the
-plan's summary carries the quarantine's footprint.
+plan's summary carries the quarantine's footprint. An age below one day is refused; a folder whose name gives no time is never selected by age, and is listed as such.
 :::
 
 

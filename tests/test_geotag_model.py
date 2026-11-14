@@ -112,7 +112,10 @@ def test_gpx_malformed_warns_not_crashes(tmp_path):
     root = tmp_path / "gpx"; root.mkdir()
     (root / "bad.gpx").write_text("<gpx><trkpt lat='1'")
     idx = cal.GPXIndex(str(root)).build()
-    assert idx.status == "empty" and any("Malformed" in w for w in idx.warnings)
+    # warned, not a crash — and, the folder's only track file, the folder's tracks are unreadable, not absent
+    # (RUL-unreadable_tracks_stop_geotag)
+    assert idx.status == "unreadable" and any("Malformed" in w for w in idx.warnings)
+    assert [rel for rel, _why in idx.unreadable] == ["bad.gpx"]
 
 
 @pytest.mark.spec("RUL-unreadable_point_reported", "RUL-unreadable_point_skipped", "RUL-track_time_never_guessed",
@@ -254,7 +257,7 @@ def _full_ws(tmp_path, *, device_groups, bydest_key="SONY|ILCE-6400|123"):
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
     rel = "6-photos-by-dest/Trip/a.jpg"
     p = ws / rel; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"img")
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, [_hfile(rel, key=bydest_key)])}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, [_hfile(rel, key=bydest_key)]), "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
     return ws
 
 
@@ -323,3 +326,51 @@ def test_a_tracks_folder_that_is_not_there_stops_geotag(tmp_path, monkeypatch, c
     assert not [n for n in os.listdir(ws / ".photos-ingest") if n.startswith("photos-2")]
     cfg_path.write_text(json.dumps(dict(cfg, gpx_root="")))
     assert _main(monkeypatch, ws) == 0
+
+
+@pytest.mark.spec("RUL-unreadable_tracks_stop_geotag", "RUL-no_tracks_no_stop", "BLD-track_points",
+                  test="TST-geotag_model-a_tracks_folder_none_of_whose_files_is_read_stops_geotag")
+def test_a_tracks_folder_none_of_whose_files_is_read_stops_geotag(tmp_path, monkeypatch, capsys):
+    """A tracks folder that is there, holding track files not one of which can be read — one malformed, one that
+    cannot be opened — is not "no tracks": `geotag plan` stops before any record, naming the folder and each file
+    with why. One file read among them, it plans, the others warned of as before; a folder holding no track file
+    at all plans as having none."""
+    ws = _full_ws(tmp_path, device_groups={"fixed_clock_cameras": ["SONY|ILCE-6400|123"], "phones": []})
+    cfg_path = ws / ".photos-ingest" / "photos-00-config.json"
+    cfg = json.loads(cfg_path.read_text())
+    tracks = tmp_path / "tracks"
+    (tracks / "2024").mkdir(parents=True)
+    (tracks / "2024" / "cut.gpx").write_text("<gpx><trk><trkseg><trkpt lat='1'")
+    (tracks / "locked.gpx").symlink_to(tracks / "gone.gpx")                     # there, and cannot be opened
+    cfg_path.write_text(json.dumps(dict(cfg, gpx_root=str(tracks))))
+    assert _main(monkeypatch, ws) == 2
+    err = capsys.readouterr()
+    said = err.out + err.err
+    assert "can be read" in said and str(tracks) in said, said
+    assert "2024/cut.gpx: malformed GPX XML" in said and "locked.gpx: " in said, said
+    assert not [n for n in os.listdir(ws / ".photos-ingest") if n.startswith("photos-2")]
+    (tracks / "trip.gpx").write_text(GPX)                                        # one read among them
+    assert _main(monkeypatch, ws) == 0
+    said = "".join(capsys.readouterr())
+    assert "Malformed GPX XML in 2024/cut.gpx" in said and "locked.gpx" in said
+    (tmp_path / "none").mkdir()
+    (tmp_path / "none" / "notes.txt").write_text("no track here")
+    cfg_path.write_text(json.dumps(dict(cfg, gpx_root=str(tmp_path / "none"))))
+    idx = cal.GPXIndex(str(tmp_path / "none")).build()
+    assert idx.status == "empty" and idx.unreadable == []
+    assert _main(monkeypatch, ws) == 0
+
+
+@pytest.mark.spec("RUL-unreadable_tracks_stop_geotag", "BLD-track_points",
+                  test="TST-geotag_model-a_linked_folder_of_tracks_is_named_not_followed")
+def test_a_linked_folder_of_tracks_is_named_not_followed(tmp_path):
+    """A folder under gpx_root that is a link to tracks elsewhere is not followed — its tracks are not read — and
+    it is said, by name; the tracks beside it are read as before."""
+    elsewhere = tmp_path / "elsewhere"; elsewhere.mkdir()
+    (elsewhere / "far.gpx").write_text(GPX)
+    root = tmp_path / "gpx"; root.mkdir()
+    (root / "trip.gpx").write_text(GPX)
+    (root / "2023").symlink_to(elsewhere, target_is_directory=True)
+    idx = cal.GPXIndex(str(root)).build()
+    assert idx.status == "usable" and {p.source_file for p in idx.points} == {"trip.gpx"}
+    assert [w for w in idx.warnings if "Linked folder" in w and w.endswith(": 2023")], idx.warnings

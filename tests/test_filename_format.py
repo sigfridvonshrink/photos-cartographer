@@ -43,7 +43,7 @@ def mocks(monkeypatch):
     """Every file is recorded at TIME, but for a name holding "notime", which has no recorded time."""
     def fp(p):
         with open(p, "rb") as f:
-            return {"status": "valid", "strategy": "image-content-hash-v1",
+            return {"status": "valid", "strategy": "image-content-hash-v2",
                     "value": "sig-" + hashlib.sha256(f.read()).hexdigest(), "engine_version": "t"}
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", fp)
 
@@ -231,7 +231,7 @@ def test_prep_names_from_the_time_as_recorded(tmp_path, monkeypatch):
     import time
     def fp(p):
         with open(p, "rb") as f:
-            return {"status": "valid", "strategy": "image-content-hash-v1",
+            return {"status": "valid", "strategy": "image-content-hash-v2",
                     "value": "sig-" + hashlib.sha256(f.read()).hexdigest(), "engine_version": "t"}
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", fp)
     recorded = {"a.jpg": {"DateTimeOriginal": "2023:01:02 03:04:05", "OffsetTimeOriginal": "+09:00",
@@ -301,7 +301,7 @@ def test_prep_and_geotag_name_in_the_one_format(tmp_path, monkeypatch):
         return out, set()
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", meta)
     monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", staticmethod(
-        lambda p: {"status": "valid", "strategy": "image-content-hash-v1",
+        lambda p: {"status": "valid", "strategy": "image-content-hash-v2",
                    "value": "fp-" + first.get(os.stat(p).st_ino, os.path.basename(p)), "engine_version": "t"}))
     monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", lambda self, p, t: True)
     ws = _ws(tmp_path)

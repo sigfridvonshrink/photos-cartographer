@@ -59,7 +59,7 @@ def _run(monkeypatch, ws):
 def test_lock_contention_exits_1(tmp_path, monkeypatch, capsys):
     ws, ctl = _init_ws(tmp_path)
     (ctl / "photos-00-config.json").write_text(json.dumps({k: v for k, v in utils.CONFIG.items() if k != "jobs"}))
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": []}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [], "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
     held = utils.WorkspaceLock(str(ws))
     assert held.acquire()
     try:
@@ -74,7 +74,7 @@ def test_invalid_config_blocks(tmp_path, monkeypatch, capsys):
     bad = {k: v for k, v in utils.CONFIG.items() if k != "jobs"}
     bad["gpx_interpolation_max_distance_meters"] = -5            # fails validate_config
     (ctl / "photos-00-config.json").write_text(json.dumps(bad))
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": []}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [], "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
     assert _run(monkeypatch, ws) == 2
     assert "Invalid workspace config" in capsys.readouterr().err
 
@@ -82,7 +82,7 @@ def test_invalid_config_blocks(tmp_path, monkeypatch, capsys):
 def test_corrupt_json_config_blocks(tmp_path, monkeypatch, capsys):
     ws, ctl = _init_ws(tmp_path)
     (ctl / "photos-00-config.json").write_text("{not valid json")      # JSONDecodeError is a ValueError
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": []}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [], "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
     assert _run(monkeypatch, ws) == 2
     assert "Invalid workspace config" in capsys.readouterr().err
 
@@ -90,7 +90,7 @@ def test_corrupt_json_config_blocks(tmp_path, monkeypatch, capsys):
 def test_unreadable_config_blocks(tmp_path, monkeypatch, capsys):
     ws, ctl = _init_ws(tmp_path)
     (ctl / "photos-00-config.json").mkdir()                            # a dir -> open() raises (not ValueError)
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": []}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [], "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
     assert _run(monkeypatch, ws) == 2
     assert "could not be read" in capsys.readouterr().err
 
@@ -207,7 +207,7 @@ def _completable_ws(tmp_path):
     files = [rec("6-photos-by-dest/T/a.arw", "2024:07:03 14:00:00", gps=(50.0, 4.0)),
              rec("6-photos-by-dest/T/b.arw", "2024:07:03 15:00:00", gps=(51.0, 5.0)),
              rec("6-photos-by-dest/T/c.arw", "2024:07:03 14:30:00")]          # no GPS -> blocked
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files), "cache_fingerprint": "pcf"}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files), "cache_fingerprint": "pcf", "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
     return ws, ctl
 
 
@@ -316,7 +316,7 @@ def test_unparseable_decision_artifact_blocks_and_is_kept(tmp_path, monkeypatch,
 def test_sealed_workspace_with_dump_warns_and_blocks(tmp_path, monkeypatch, capsys):
     ws, ctl = _init_ws(tmp_path)
     (ctl / "photos-00-config.json").write_text(json.dumps({k: v for k, v in utils.CONFIG.items() if k != "jobs"}))
-    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": []}))
+    (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": [], "depends_on": {"cache": {"fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}))
     open(utils.sealed_marker_path(str(ws)), "w").close()           # seal it
     (ws / "loose.jpg").write_bytes(b"x")                           # a new dump at the root
     assert _run(monkeypatch, ws) == 2                              # sealed -> hard stop
