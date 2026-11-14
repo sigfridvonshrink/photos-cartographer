@@ -54,7 +54,7 @@ def _one(file, art=None):
 
 # --- the computation, branch by branch --------------------------------------
 
-@pytest.mark.spec("geotag-offset-per-group-dest-1")
+@pytest.mark.spec("RUL-offset_per_camera_destination_day")
 def test_camera_offset():
     r = _one(_file("6-photos-by-dest/B/a.arw", CAM, "2024:07:03 14:12:08"))
     assert r["resolved_utc"] == "2024-07-03T12:12:21Z" and r["resolved_utc_status"] == "valid"
@@ -62,7 +62,7 @@ def test_camera_offset():
     assert r["time_decision_scope"] == f"{CAM}|6-photos-by-dest/B"
 
 
-@pytest.mark.spec("geotag-no-utc-incomplete-tz-1")
+@pytest.mark.spec("BLD-geotag_stage_order")
 def test_camera_offset_missing_is_unresolved():
     r = _one(_file("6-photos-by-dest/B/a.arw", CAM, "2024:07:03 14:12:08"), _art(offset=None))
     assert r["resolved_utc"] is None and r["resolved_utc_status"] == "unresolved"
@@ -113,7 +113,7 @@ def test_smartphone_destination_timezone_dst():
     assert winter["resolved_utc"] == "2024-01-03T13:00:00Z"
 
 
-@pytest.mark.spec("geotag-resolved-utc-needs-both-1")
+@pytest.mark.spec("BLD-resolved_utc")
 def test_smartphone_no_offset_no_timezone_is_unresolved():
     r = _one(_file("6-photos-by-dest/B/n.jpg", PHONE, "2024:07:03 14:00:00"), _art(tz=""))
     assert r["resolved_utc"] is None and r["time_rule_used"] == "timezone_missing"
@@ -165,7 +165,7 @@ def test_cache_round_trips_and_replaces(tmp_path):
     c.close()
 
 
-@pytest.mark.spec("geotag-utc-fingerprint-1")
+@pytest.mark.spec("BLD-resolved_utc_fingerprint")
 def test_fingerprint_stable_and_sensitive():
     rows = _rows()
     inp = {"photos_21_sha256": "abc", "gpx_fingerprint": "g"}
@@ -178,7 +178,7 @@ def test_fingerprint_stable_and_sensitive():
 
 # --- end-to-end through run -------------------------------------------------
 
-@pytest.mark.spec("geotag-utc-after-validation-1")
+@pytest.mark.spec("BLD-resolved_utc")
 def test_resolved_utc_cache_created_only_after_photos21_complete(tmp_path, monkeypatch, capsys):
     """§22: the resolved-UTC cache is written ONLY after upstream validation — specifically once
     photos-21 is complete. Here the GPX anchor auto-resolves the camera offset, but with no default
@@ -258,7 +258,7 @@ def test_resolved_utc_cache_created_only_after_photos21_complete(tmp_path, monke
                             ("6-photos-by-dest/B/b.arw", "2024-07-03T12:13:21Z")]
 
 
-@pytest.mark.spec("geotag-compute-resolved-utc-1")
+@pytest.mark.spec("BLD-resolved_utc")
 def test_run_populates_cache_when_complete(tmp_path, monkeypatch, capsys):
     MANAGED = ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
                "4-videos-by-date", "5-photos-by-date", "6-photos-by-dest"]
@@ -330,7 +330,7 @@ def test_run_populates_cache_when_complete(tmp_path, monkeypatch, capsys):
                     ("6-photos-by-dest/B/b.arw", "2024-07-03T12:13:21Z", "camera_group_offset")]
 
 
-@pytest.mark.spec("geotag-utc-not-restaled-by-unrelated-config-1", "config-edit-outside-timepolicy-1", "RUL-remake_only_what_depends", "RUL-costly_results_survive_unrelated_edits", test="TST-geotag_resolved_utc-unrelated_config_edit_replans_but_does_not_restale_resolved_utc")
+@pytest.mark.spec("BLD-resolved_utc_fingerprint", "RUL-times_survive_unrelated_config_edits", "RUL-remake_only_what_depends", "RUL-costly_results_survive_unrelated_edits", test="TST-geotag_resolved_utc-unrelated_config_edit_replans_but_does_not_restale_resolved_utc")
 def test_unrelated_config_edit_replans_but_does_not_restale_resolved_utc(tmp_path, monkeypatch, capsys):
     """§22.1 / shared §4.2: a config edit OUTSIDE the time-policy subset re-plans but must NOT restale
     already-resolved UTC. The resolved-UTC cache fingerprint is built from time-relevant inputs only

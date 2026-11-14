@@ -28,7 +28,7 @@ def test_empty_depends_on_is_fresh(tmp_path):
     assert U.plan_dependencies_fresh(str(tmp_path), None) == []
 
 
-@pytest.mark.spec("dep-cascade-reject-stale-1", "dep-hash-sensitive-1", "RUL-hash_is_the_dependency_check", test="TST-plan_freshness-json_artifact_dep_fresh_changed_missing")
+@pytest.mark.spec("INV-no_stale_use", "RUL-hash_detects_any_change", "RUL-hash_is_the_dependency_check", test="TST-plan_freshness-json_artifact_dep_fresh_changed_missing")
 def test_json_artifact_dep_fresh_changed_missing(tmp_path):
     ws = str(tmp_path)
     dep = {"photos-24-executable-plan.json": _art(ws, "photos-24-executable-plan.json", {"v": 1})}

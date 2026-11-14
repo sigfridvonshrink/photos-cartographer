@@ -6,7 +6,8 @@ The corpus is three levels in one project, each in four documents as the phases 
 `intent/` (what cartographer guarantees, naming no tool, file or database), `rationale/` (why: the justifications,
 tagged, never normative) and `build/` (how this build meets the intent). The tests are items too, generated at every
 build from pytest's own collection of `@pytest.mark.spec(..., test="TST-...")` (spec/_ext/corpus.py).
-The specs not yet converted (spec/photos-*.md) stay outside the build until each is.
+The specs the corpus was converted from, its conversion ledgers and the clause index are at the tag
+`specs-before-corpus`.
 """
 import os
 import sys
@@ -63,8 +64,7 @@ needs_fields = {
     # required: a test must verify it (the gate) · incidental: exercised, not asserted · none: no test; `omit_reason` says why
     "verify": {"nullable": True, "schema": {"type": "string", "enum": ["required", "incidental", "none"]}},
     "omit_reason": {"nullable": True},
-    # the older names this item replaces -- clause-index ids, or a user guide's numbers (F1, P1); a test mark naming a
-    # clause-index id verifies this item until the marks are renamed
+    # the names a user guide gives this item (F1, P1)
     "aliases": {"nullable": True},
     # a choice's kind, as the user guide names it
     "choice_kind": {"nullable": True, "schema": {"type": "string", "enum": ["value", "choice", "design-value", "goal"]}},
@@ -81,7 +81,7 @@ myst_enable_extensions = ["colon_fence", "deflist"]
 myst_heading_anchors = 4
 
 include_patterns = ["index.md", "intent/*.md", "rationale/*.md", "build/*.md", "_generated/*.md"]
-exclude_patterns = ["_build", ".venv", "photos-*.md", "README.md", "conversion"]
+exclude_patterns = ["_build", ".venv", "README.md"]
 
 html_theme = "alabaster"
 html_last_updated_fmt = None  # no build time in the output: the same corpus renders the same bytes

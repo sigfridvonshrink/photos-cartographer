@@ -81,7 +81,7 @@ def _cached_paths(ws):
         conn.close()
 
 
-@pytest.mark.spec("prep-sources-empty-after-stage5-1", "prep-strays-per-run-subfolder-1", "RUL-inbox_non_media_to_strays", test="TST-strays-stray_moved_structure_preserved")
+@pytest.mark.spec("RUL-prep_empties_inbox", "BLD-strays_per_run", "RUL-inbox_non_media_to_strays", test="TST-strays-stray_moved_structure_preserved")
 def test_stray_moved_structure_preserved(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -100,7 +100,7 @@ def test_stray_moved_structure_preserved(tmp_path, monkeypatch):
     assert list((ws / "0-sources").iterdir()) == []               # inbox left empty
 
 
-@pytest.mark.spec("prep-other-not-fingerprinted-1", "prep-strays-inert-1", test="TST-strays-stray_not_fingerprinted_and_not_cached")
+@pytest.mark.spec("RUL-unlisted_extension_other", "RUL-strays_leave_no_trace", test="TST-strays-stray_not_fingerprinted_and_not_cached")
 def test_stray_not_fingerprinted_and_not_cached(tmp_path, monkeypatch):
     # If fingerprint_image were called on the stray it would raise (so we'd notice).
     _install(monkeypatch)
@@ -125,7 +125,7 @@ def test_stray_not_fingerprinted_and_not_cached(tmp_path, monkeypatch):
     assert "notes.txt" not in log                                # in no log
 
 
-@pytest.mark.spec("prep-scan-skips-control-subtrees-1", "prep-strays-excluded-from-scan-1")
+@pytest.mark.spec("RUL-not_inventoried", "RUL-strays_never_processed")
 def test_strays_scan_skipped_on_next_run(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -139,7 +139,7 @@ def test_strays_scan_skipped_on_next_run(tmp_path, monkeypatch):
     assert os.path.exists(landed)                                # the stray is left untouched
 
 
-@pytest.mark.spec("gpx-prep-unaware-1", "RUL-tracks_geotag_only", "RUL-track_files_block_prep", "RUL-track_file_left_in_place", test="TST-strays-track_file_blocks_prep_and_stays_put")
+@pytest.mark.spec("RUL-tracks_geotag_only", "RUL-track_files_block_prep", "RUL-track_file_left_in_place", test="TST-strays-track_file_blocks_prep_and_stays_put")
 def test_track_file_blocks_prep_and_stays_put(tmp_path, monkeypatch):
     """Shared contract §8: a track is never media. A `.gpx` anywhere prep inventories — the 0-sources
     dump or a managed folder — blocks the plan and is left where it is: no operation moves it (above
@@ -239,7 +239,7 @@ def test_mixed_media_and_stray(tmp_path, monkeypatch):
     assert list((ws / "0-sources").iterdir()) == []
 
 
-@pytest.mark.spec("prep-stray-media-warning-1", "RUL-stray_media_hinted", "BLD-stray_media_probe", test="TST-strays-stray_media_detection_warns_only_for_media_mime")
+@pytest.mark.spec("RUL-stray_media_hinted", "BLD-stray_media_probe", test="TST-strays-stray_media_detection_warns_only_for_media_mime")
 def test_stray_media_detection_warns_only_for_media_mime(tmp_path, monkeypatch):
     # An unlisted RAW (.raf) and a real non-media (.txt) both land in strays. exiftool sees the .raf as
     # image/*, the .txt as text/plain -> only the .raf gets the "add to media_extensions" hint, once,
@@ -264,7 +264,7 @@ def test_stray_media_detection_warns_only_for_media_mime(tmp_path, monkeypatch):
     assert not plan.blockers                                     # a hint, never a block
 
 
-@pytest.mark.spec("prep-stray-media-warning-advisory-1", "RUL-stray_media_hinted", test="TST-strays-stray_media_detection_silent_when_exiftool_absent")
+@pytest.mark.spec("RUL-stray_media_hinted", test="TST-strays-stray_media_detection_silent_when_exiftool_absent")
 def test_stray_media_detection_silent_when_exiftool_absent(tmp_path, monkeypatch):
     # exiftool unavailable (probe returns None) -> no stray-media warning, never blocks.
     _install(monkeypatch)

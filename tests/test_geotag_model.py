@@ -61,7 +61,7 @@ def _wf(tmp_path, handoff_files):
 
 # --- Stage 2: by-dest file model --------------------------------------------
 
-@pytest.mark.spec("geotag-destination-definition-1")
+@pytest.mark.spec("DEF-destination")
 def test_file_model_builds_by_dest_photos(tmp_path):
     wf = _wf(tmp_path, [_hfile("6-photos-by-dest/Belgium/Brussels/a.arw", gps=(50.84, 4.35))])
     files = wf.build_file_model()
@@ -75,7 +75,7 @@ def test_file_model_builds_by_dest_photos(tmp_path):
     assert f["planned_filename"] is None
 
 
-@pytest.mark.spec("geotag-inmemory-bydest-only-1", "geotag-never-touch-video-1", "geotag-scope-bydest-only-1", "RUL-geotag_changes_only_by_dest", test="TST-geotag_model-file_model_excludes_non_bydest_and_videos")
+@pytest.mark.spec("BLD-geotag_file_model", "RUL-geotag_changes_only_by_dest", test="TST-geotag_model-file_model_excludes_non_bydest_and_videos")
 def test_file_model_excludes_non_bydest_and_videos(tmp_path):
     wf = _wf(tmp_path, [
         _hfile("6-photos-by-dest/T/a.jpg"),
@@ -137,7 +137,7 @@ def test_gpx_parser_skips_bad_trkpts(tmp_path):
     assert all("edge.gpx" in w and "trkpt" in w for w in idx.warnings)              # named: file and point
 
 
-@pytest.mark.spec("geotag-gpx-time-xsd-datetime-1", "RUL-track_time_never_guessed", "BLD-track_points",
+@pytest.mark.spec("BLD-track_points", "RUL-track_time_never_guessed",
                   test="TST-geotag_model-gpx_parser_accepts_fractional_and_whole_seconds")
 def test_gpx_parser_accepts_fractional_and_whole_seconds(tmp_path):
     # xsd:dateTime allows optional fractional seconds: Garmin writes `...:SS.000Z`, others `...:SSZ`.
@@ -206,7 +206,7 @@ def test_camera_group_classification(tmp_path, monkeypatch):
     assert unknown == ["CANON|R5|999"]
 
 
-@pytest.mark.spec("camera-geotag-reuses-1", test="TST-geotag_model-geotag_reuses_handoff_camera_group_key_never_recomputes")
+@pytest.mark.spec("RUL-geotag_reuses_camera_group", test="TST-geotag_model-geotag_reuses_handoff_camera_group_key_never_recomputes")
 def test_geotag_reuses_handoff_camera_group_key_never_recomputes(tmp_path):
     """Shared §6: geotag reuses prep's camera_group_key from the handoff and never recomputes camera
     identity. The handoff carries a SENTINEL group key that the identity fields (Make/Model/serial)
@@ -265,7 +265,7 @@ def _main(monkeypatch, ws):
         return e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
 
 
-@pytest.mark.spec("geotag-first-artifact-21-1")
+@pytest.mark.spec("RUL-no_record_before_decisions")
 def test_run_known_group_builds_model(tmp_path, monkeypatch, capsys):
     ws = _full_ws(tmp_path, device_groups={"fixed_clock_cameras": ["SONY|ILCE-6400|123"], "phones": []})
     code = _main(monkeypatch, ws)
@@ -276,7 +276,7 @@ def test_run_known_group_builds_model(tmp_path, monkeypatch, capsys):
     assert os.path.exists(ws / ".photos-ingest" / "photos-21-time-decisions.json")
 
 
-@pytest.mark.spec("geotag-incomplete-classification-block-1", "RUL-no_record_before_decisions", "BLD-unknown_group_snippet", test="TST-geotag_model-run_unknown_group_prints_snippet_and_exits")
+@pytest.mark.spec("RUL-unknown_group_stops_geotag", "RUL-no_record_before_decisions", "BLD-unknown_group_snippet", test="TST-geotag_model-run_unknown_group_prints_snippet_and_exits")
 def test_run_unknown_group_prints_snippet_and_exits(tmp_path, monkeypatch, capsys):
     ws = _full_ws(tmp_path, device_groups={"fixed_clock_cameras": [], "phones": []})
     code = _main(monkeypatch, ws)

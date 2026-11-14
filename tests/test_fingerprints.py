@@ -154,7 +154,7 @@ def test_a_fingerprint_is_reused_only_from_this_method(tmp_path, monkeypatch):
     assert _plan_counting(ws, monkeypatch) == 1                     # a new ImageMagick restales the photo only
 
 
-@pytest.mark.spec("prep-fingerprint-algo-recorded-1", "BLD-prep_dependencies", "BLD-cache_versions",
+@pytest.mark.spec("BLD-prep_dependencies", "BLD-cache_versions",
                   test="TST-fingerprints-execute_writes_the_database_versions")
 def test_execute_writes_the_database_versions(tmp_path, monkeypatch):
     """Each execute writes the current versions into the database's version row, over what it held."""
@@ -170,7 +170,7 @@ def test_execute_writes_the_database_versions(tmp_path, monkeypatch):
     assert prep.WorkspaceCache(str(ws)).get_meta("fingerprint_algorithm_version") == prep.FINGERPRINT_ALGORITHM_VERSION
 
 
-@pytest.mark.spec("prep-fingerprint-algo-recorded-1")
+@pytest.mark.spec("BLD-prep_dependencies")
 def test_cache_meta_records_versions(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -195,7 +195,7 @@ def test_journal_is_version_stamped(tmp_path, monkeypatch):
     assert dep["fingerprint_algorithm_version"] == prep.FINGERPRINT_ALGORITHM_VERSION
 
 
-@pytest.mark.spec("prep-artifacts-carry-depends-on-1", "prep-record-min-fingerprints-1", "BLD-prep_dependencies", test="TST-fingerprints-handoff_depends_on_coverage")
+@pytest.mark.spec("BLD-prep_dependencies", test="TST-fingerprints-handoff_depends_on_coverage")
 def test_handoff_depends_on_coverage(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -257,7 +257,7 @@ def test_a_dependency_missing_or_unrecorded_stops_execution(tmp_path, monkeypatc
 
 # --- Phase D: fingerprint/hash terminology (§9.1) ---------------------------
 
-@pytest.mark.spec("dep-fingerprint-invariant-1", "prep-byte-sha-artifacts-only-1", test="TST-fingerprints-media_carries_fingerprint_and_no_byte_hash")
+@pytest.mark.spec("RUL-fingerprint_survives_mutation", "BLD-hash", test="TST-fingerprints-media_carries_fingerprint_and_no_byte_hash")
 def test_media_carries_fingerprint_and_no_byte_hash(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)

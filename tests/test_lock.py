@@ -30,7 +30,7 @@ import photos_utils as utils
 import pytest
 
 
-@pytest.mark.spec("lock-stale-detectable-1", test="TST-lock-acquire_records_owner_identity")
+@pytest.mark.spec("RUL-stale_lock_recovered", test="TST-lock-acquire_records_owner_identity")
 def test_acquire_records_owner_identity(tmp_path):
     lock = prep.WorkspaceLock(str(tmp_path))
     assert lock.acquire() is True
@@ -44,7 +44,7 @@ def test_acquire_records_owner_identity(tmp_path):
         lock.release()
 
 
-@pytest.mark.spec("lock-release-on-exit-error-1", test="TST-lock-release_frees_the_lock")
+@pytest.mark.spec("RUL-lock_released_on_any_end", test="TST-lock-release_frees_the_lock")
 def test_release_frees_the_lock(tmp_path):
     l1 = prep.WorkspaceLock(str(tmp_path))
     assert l1.acquire() is True
@@ -54,7 +54,7 @@ def test_release_frees_the_lock(tmp_path):
     l2.release()
 
 
-@pytest.mark.spec("lock-mutual-exclusion-1", test="TST-lock-cross_process_exclusion_and_owner_report")
+@pytest.mark.spec("INV-one_run_at_a_time", test="TST-lock-cross_process_exclusion_and_owner_report")
 def test_cross_process_exclusion_and_owner_report(tmp_path):
     utils.ensure_control_dir(str(tmp_path))
     lock_path = utils.lock_path(str(tmp_path))

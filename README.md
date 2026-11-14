@@ -172,17 +172,10 @@ The pipeline is **specification-driven** — behavior is defined by the specific
 [`spec/`](spec/), and the code follows it. The specification is a corpus of linked items — what the tool
 guarantees (`spec/intent/`), why (`spec/rationale/`) and how this build does it (`spec/build/`) — rendered and
 checked by `tools/spec-build` and published at
-**[sigfridvonshrink.github.io/photos-cartographer](https://sigfridvonshrink.github.io/photos-cartographer/)**. The shared contract, prep and merge are converted into it; geotag is being converted
-section by section, its document staying authoritative for the sections not yet converted. Start with
-**[`spec/README.md`](spec/README.md)** for how the specification is organized and its discipline. The original
-documents, each phase's starting point:
-
-| Document | Scope |
-|---|---|
-| [`photos-1-prep-workflow.md`](spec/photos-1-prep-workflow.md) | **Phase 1 — prep:** consolidation, extension normalization, dedup/quarantine, date-organization, cache/handoff. |
-| [`photos-2-geotag-workflow.md`](spec/photos-2-geotag-workflow.md) | **Phase 2 — geotag:** timezone resolution, automatic camera-clock-offset inference, and track-based GPS placement. |
-| [`photos-3-merge-workflow.md`](spec/photos-3-merge-workflow.md) | **Phase 3 — merge:** safe merge of the finalized working set into the permanent folder-based library. |
-| [`photos-shared-contract.md`](spec/photos-shared-contract.md) | Facts all phases share: the run lock, the `.photos-ingest/` control directory, `photos-00-config.json`, formats, `gpx_root`, and the end-to-end operator loop. |
+**[sigfridvonshrink.github.io/photos-cartographer](https://sigfridvonshrink.github.io/photos-cartographer/)**, in four
+documents at each level: the shared contract — the facts all phases share: the run lock, the `.photos-ingest/` control
+directory, the configuration, formats, the tracks and the operator loop — then prep, geotag and merge. Start with
+**[`spec/README.md`](spec/README.md)** for how the specification is organized and its discipline.
 
 ## Requirements
 

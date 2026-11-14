@@ -60,7 +60,7 @@ def _mock(monkeypatch):
     monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", meta)
 
 
-@pytest.mark.spec("config-in-control-dir-skipped-1", "ctrl-all-in-photos-ingest-1", "plan-canonical-path-1", test="TST-control_dir-control_files_land_under_control_dir")
+@pytest.mark.spec("RUL-config_never_media", "RUL-control_records_together", "RUL-plan_at_fixed_place", test="TST-control_dir-control_files_land_under_control_dir")
 def test_control_files_land_under_control_dir(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -83,7 +83,7 @@ def test_control_files_land_under_control_dir(tmp_path, monkeypatch):
     assert not any(e.endswith(".photos-ingest/journal.json") or e.startswith("journal") for e in root_entries)
 
 
-@pytest.mark.spec("log-retention-across-runs-1", test="TST-control_dir-journals_are_per_run_and_retained")
+@pytest.mark.spec("RUL-history_retained", test="TST-control_dir-journals_are_per_run_and_retained")
 def test_journals_are_per_run_and_retained(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -101,7 +101,7 @@ def test_journals_are_per_run_and_retained(tmp_path, monkeypatch):
     assert os.path.exists(utils.journal_path(str(ws), p2.plan_id))
 
 
-@pytest.mark.spec("prep-sole-config-writer-1")
+@pytest.mark.spec("RUL-config_writers")
 def test_prep_seeds_config_once_then_never_rewrites_it(tmp_path, monkeypatch):
     """§3.2: prep is the SOLE writer of photos-00-config.json and only SEEDS it once — it never edits
     it thereafter. After the first run seeds the config, a second prep run leaves the on-disk
@@ -139,7 +139,7 @@ def test_backup_existing_artifact_uses_incremental_suffix(tmp_path):
     assert _json.load(open(b1))["v"] == 1 and _json.load(open(b2))["v"] == 2
 
 
-@pytest.mark.spec("plan-replan-no-clobber-1", test="TST-control_dir-write_versioned_json_backs_up_then_writes")
+@pytest.mark.spec("RUL-replanning_keeps_the_prior", test="TST-control_dir-write_versioned_json_backs_up_then_writes")
 def test_write_versioned_json_backs_up_then_writes(tmp_path):
     p = tmp_path / "photos-30-merge-plan.json"
     sha1, bak1 = utils.write_versioned_json(str(p), {"plan": "a"})
@@ -151,7 +151,7 @@ def test_write_versioned_json_backs_up_then_writes(tmp_path):
     assert _json.load(open(bak2))["plan"] == "a"              # prior content preserved in the backup
 
 
-@pytest.mark.spec("ctrl-prep-skips-wholesale-1", test="TST-control_dir-media_inside_control_dir_is_not_inventoried")
+@pytest.mark.spec("RUL-control_records_never_media", test="TST-control_dir-media_inside_control_dir_is_not_inventoried")
 def test_media_inside_control_dir_is_not_inventoried(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)

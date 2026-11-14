@@ -140,7 +140,7 @@ def _tree(root):
 
 # --- the four dispositions ---------------------------------------------------
 
-@pytest.mark.spec("merge-create-library-dest-subdir-1", "merge-move-leaves-bydest-empty-1", "merge-move-placed-out-of-by-dest-1", "merge-summary-counts-partition-1", test="TST-merge_execute-execute_placed_new_moves_into_library")
+@pytest.mark.spec("RUL-library_creates_only_placements", "RUL-merge_moves", "BLD-merge_records", test="TST-merge_execute-execute_placed_new_moves_into_library")
 def test_execute_placed_new_moves_into_library(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     assert merge._run_locked_workflow("plan", str(ws)) == 0
@@ -155,7 +155,7 @@ def test_execute_placed_new_moves_into_library(tmp_path):
     assert s["resume"] == {"newly_moved": 1, "already_done_skipped": 0}
 
 
-@pytest.mark.spec("merge-collision-same-content-1", "merge-no-duplicate-of-library-file-1", test="TST-merge_execute-execute_already_present_removes_source_no_write")
+@pytest.mark.spec("RUL-collision_same_content", test="TST-merge_execute-execute_already_present_removes_source_no_write")
 def test_execute_already_present_removes_source_no_write(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
                   library_files=[{"fp": "A", "dest": "Trip", "name": "a.jpg"}])
@@ -166,7 +166,7 @@ def test_execute_already_present_removes_source_no_write(tmp_path):
     assert _summary(ws)["totals"]["already_present"] == 1
 
 
-@pytest.mark.spec("RUL-merge_records_landing", "merge-summary-per-file-placement-1", test="TST-merge_execute-the_summary_says_where_each_photo_landed_or_why_it_did_not")
+@pytest.mark.spec("RUL-merge_records_landing", test="TST-merge_execute-the_summary_says_where_each_photo_landed_or_why_it_did_not")
 def test_the_summary_says_where_each_photo_landed_or_why_it_did_not(tmp_path):
     """Each entry of the summary: where the photo landed, renamed or already present, removed from the
     workspace — or, blocked, no place in the library and the reason."""
@@ -233,7 +233,7 @@ def test_the_library_file_is_read_again_before_a_photo_already_there_is_removed(
     assert open(target, "rb").read() == _fp_bytes("B")                  # the library file untouched
 
 
-@pytest.mark.spec("merge-collision-diff-content-1", "merge-different-content-rename-incoming-1", "merge-library-file-never-deleted-written-renamed-1", test="TST-merge_execute-execute_renamed_incoming_places_under_safe_name")
+@pytest.mark.spec("RUL-collision_different_content", "RUL-library_never_altered", test="TST-merge_execute-execute_renamed_incoming_places_under_safe_name")
 def test_execute_renamed_incoming_places_under_safe_name(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "NEW", "dest": "Trip", "final_name": "ts.jpg"}],
                   library_files=[{"fp": "OLD", "dest": "Trip", "name": "ts.jpg"}])
@@ -256,7 +256,7 @@ def test_execute_unfingerprintable_library_blocks_and_keeps_source(tmp_path):
     assert s["totals"]["blocked"] == 1 and s["failures"]
 
 
-@pytest.mark.spec("exec-noclobber-recheck-1", "merge-execute-no-clobber-at-execute-time-1", "merge-execute-occupied-different-blocker-1", "merge-execute-safe-alt-only-if-planned-1", "merge-library-protected-1", test="TST-merge_execute-execute_occupied_by_different_content_at_execute_blocks_no_clobber")
+@pytest.mark.spec("RUL-target_free_at_execute", "BLD-merge_move", "RUL-library_never_altered", test="TST-merge_execute-execute_occupied_by_different_content_at_execute_blocks_no_clobber")
 def test_execute_occupied_by_different_content_at_execute_blocks_no_clobber(tmp_path):
     """TOCTOU clobber guard: target FREE at plan (placed_new), then a *different-content* file appears
     at the planned target before execute. The execute-time recheck must refuse — rc 3, source left in
@@ -276,7 +276,7 @@ def test_execute_occupied_by_different_content_at_execute_blocks_no_clobber(tmp_
     assert s["failures"]
 
 
-@pytest.mark.spec("merge-nongoal-no-jpg-tif-breakout-1")
+@pytest.mark.spec("RUL-development_after_merge")
 def test_merge_never_performs_jpg_tif_development_breakout(tmp_path):
     """§14 item 7 (anti): the jpg/tif development breakout is a later library-side processing phase,
     NOT merge's job. test_dev_subfolder_blocks proves a PRE-EXISTING dev subfolder blocks the run;
@@ -295,7 +295,7 @@ def test_merge_never_performs_jpg_tif_development_breakout(tmp_path):
         assert "jpg" not in dns and "tif" not in dns, (dp, dns)
 
 
-@pytest.mark.spec("merge-no-mutate-by-dest-content-or-name-1")
+@pytest.mark.spec("RUL-library_mirrors_destinations")
 def test_merge_never_mutates_by_dest_name_or_content_only_library_renames(tmp_path):
     """§2.4 (anti): merge never mutates by-dest content or a file's name; ONLY a library collision
     forces an incoming rename — and that rename happens at the LIBRARY target, never in by-dest. The
@@ -321,7 +321,7 @@ def test_merge_never_mutates_by_dest_name_or_content_only_library_renames(tmp_pa
     assert journal == {"6-photos-by-dest/Trip/ts.jpg": "confirmed"}
 
 
-@pytest.mark.spec("lib-never-rescanned-1", test="TST-merge_execute-merge_only_inspects_specific_collision_target_never_rescans_library")
+@pytest.mark.spec("RUL-library_not_scanned", test="TST-merge_execute-merge_only_inspects_specific_collision_target_never_rescans_library")
 def test_merge_only_inspects_specific_collision_target_never_rescans_library(tmp_path, monkeypatch):
     """§15.1 (anti): merge never rescans the library wholesale — it fingerprints only each incoming
     file's specific collision target, never a library-wide index. Seed the library with the collision
@@ -375,7 +375,7 @@ def _zfs(monkeypatch, ws, *, required=False, datasets=("ws", "lib"), fail=()):
     return taken
 
 
-@pytest.mark.spec("merge-snapshot-required-aborts-1", "merge-summary-final-status-values-1", test="TST-merge_execute-execute_required_snapshot_failure_aborts_before_any_placement")
+@pytest.mark.spec("RUL-required_snapshot_or_nothing", "RUL-merge_outcome_recorded", test="TST-merge_execute-execute_required_snapshot_failure_aborts_before_any_placement")
 def test_execute_required_snapshot_failure_aborts_before_any_placement(tmp_path, monkeypatch):
     """snapshots_required + the library pre-mutation snapshot fails -> abort BEFORE any move:
     status rejected (rc 2), nothing placed, source untouched in by-dest, library empty, workspace
@@ -406,7 +406,7 @@ def test_a_snapshot_refusal_is_not_reported_as_a_stale_plan(tmp_path, monkeypatc
     assert "merge execute" in text
 
 
-@pytest.mark.spec("merge-prep-consistency-1", "merge-revalidates-current-1", test="TST-merge_execute-plan_blocks_when_bydest_photo_absent_from_finalized_set")
+@pytest.mark.spec("RUL-merge_rechecks_gates", "RUL-merge_refuses_changed_since_finalize", test="TST-merge_execute-plan_blocks_when_bydest_photo_absent_from_finalized_set")
 def test_plan_blocks_when_bydest_photo_absent_from_finalized_set(tmp_path):
     """Prep-consistency (precondition 4): a photo physically under 6-photos-by-dest but NOT in the
     finalized record (handoff predates the latest move into by-dest) -> 're-run prep' blocker at plan,
@@ -420,7 +420,7 @@ def test_plan_blocks_when_bydest_photo_absent_from_finalized_set(tmp_path):
     assert not (lib / "Trip").exists()                                 # nothing placed
 
 
-@pytest.mark.spec("config-prep-sole-writer-1", "merge-config-readonly-1", test="TST-merge_execute-config_is_byte_identical_across_plan_dryrun_execute")
+@pytest.mark.spec("RUL-config_writers", test="TST-merge_execute-config_is_byte_identical_across_plan_dryrun_execute")
 def test_config_is_byte_identical_across_plan_dryrun_execute(tmp_path):
     """Merge never writes the workspace config (photos-00-config.json is hand-edited, authoritative).
     Snapshot its bytes, run the full plan -> dry-run -> execute cycle, assert byte-for-byte identical."""
@@ -435,7 +435,7 @@ def test_config_is_byte_identical_across_plan_dryrun_execute(tmp_path):
 
 # --- resume (state-derivation, §8.3) -----------------------------------------
 
-@pytest.mark.spec("merge-interrupted-not-sealed-resumes-1", "merge-move-atomic-source-last-1", "merge-resume-state-derivation-1", test="TST-merge_execute-execute_resume_after_crash_before_seal")
+@pytest.mark.spec("RUL-seal_on_success_only", "RUL-merge_moves", "RUL-resume_rechecks_library", test="TST-merge_execute-execute_resume_after_crash_before_seal")
 def test_execute_resume_after_crash_before_seal(tmp_path, monkeypatch):
     # Full success seals the workspace, so the genuine resume case is a crash AFTER the moves/journal
     # but BEFORE the seal: the re-run must recognize the already-moved files (state-derivation) and
@@ -462,7 +462,7 @@ def test_execute_resume_after_crash_before_seal(tmp_path, monkeypatch):
     assert open(os.path.join(str(lib), "Trip", "a.jpg"), "rb").read() == _fp_bytes("A")
 
 
-@pytest.mark.spec("merge-execute-occupied-identical-treat-present-1", "merge-idempotent-resumable-1", "merge-resume-completes-crash-window-1", test="TST-merge_execute-execute_resume_finishes_crash_window")
+@pytest.mark.spec("BLD-merge_move", "RUL-merge_resumable", test="TST-merge_execute-execute_resume_finishes_crash_window")
 def test_execute_resume_finishes_crash_window(tmp_path):
     # Simulate a crash AFTER the library copy is in place but BEFORE the source was removed: both
     # present + fingerprints match -> resume finishes the source removal (no duplicate kept).
@@ -490,7 +490,7 @@ def _force_cross_fs(monkeypatch):
     monkeypatch.setattr(utils, "_rename_no_clobber_same_fs", patched)
 
 
-@pytest.mark.spec("atomic-crossfs-equivalent-1", "merge-move-place-then-remove-no-loss-1", test="TST-merge_execute-execute_cross_fs_move_verifies_and_completes")
+@pytest.mark.spec("RUL-cross_fs_all_or_nothing", "BLD-merge_move", test="TST-merge_execute-execute_cross_fs_move_verifies_and_completes")
 def test_execute_cross_fs_move_verifies_and_completes(tmp_path, monkeypatch):
     _force_cross_fs(monkeypatch)
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
@@ -500,7 +500,7 @@ def test_execute_cross_fs_move_verifies_and_completes(tmp_path, monkeypatch):
     assert not os.path.exists(_src(ws, "Trip", "a.jpg"))
 
 
-@pytest.mark.spec("exec-failed-op-clean-1", "merge-source-removed-only-after-verified-copy-1", "merge-verify-copy-detect-torn-1", "RUL-failure_recorded", test="TST-merge_execute-execute_torn_copy_blocks_and_keeps_source")
+@pytest.mark.spec("RUL-failed_operation_clean", "RUL-merge_moves", "BLD-cross_fs_temp", "RUL-failure_recorded", test="TST-merge_execute-execute_torn_copy_blocks_and_keeps_source")
 def test_execute_torn_copy_blocks_and_keeps_source(tmp_path, monkeypatch):
     _force_cross_fs(monkeypatch)
     monkeypatch.setattr(utils.shutil, "copyfile",
@@ -545,7 +545,7 @@ def _comparable(s):
     return {"totals": s["totals"], "resume": s["resume"], "status": s["status"], "dests": dests}
 
 
-@pytest.mark.spec("merge-concurrency-deterministic-aggregation-1", "RUL-execution_jobs_change_nothing", test="TST-merge_execute-execute_jobs_determinism")
+@pytest.mark.spec("BLD-merge_execute", "RUL-execution_jobs_change_nothing", test="TST-merge_execute-execute_jobs_determinism")
 def test_execute_jobs_determinism(tmp_path):
     photos = [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
               {"fp": "B", "dest": "Trip", "final_name": "b.jpg"},
@@ -559,7 +559,7 @@ def test_execute_jobs_determinism(tmp_path):
     assert _comparable(_summary(ws1)) == _comparable(_summary(ws2))
 
 
-@pytest.mark.spec("atomic-crossfs-temp-sweep-1", "merge-sweep-stale-temps-1", test="TST-merge_execute-execute_sweeps_crash_orphaned_cross_fs_temps")
+@pytest.mark.spec("RUL-crash_temps_cleared", "BLD-temp_sweep", test="TST-merge_execute-execute_sweeps_crash_orphaned_cross_fs_temps")
 def test_execute_sweeps_crash_orphaned_cross_fs_temps(tmp_path):
     """A prior interrupted run can leave a cross-fs copy temp (.tmp-xdev-*.part) in a library dir.
     Because merge holds the library lock (no concurrent merge), execute safely sweeps such orphans
@@ -576,7 +576,7 @@ def test_execute_sweeps_crash_orphaned_cross_fs_temps(tmp_path):
     assert _summary(ws)["run_metadata"]["orphan_temps_swept"] >= 1
 
 
-@pytest.mark.spec("exec-concurrency-no-semantic-change-1", "RUL-execution_jobs_change_nothing", test="TST-merge_execute-execute_jobs_identical_library_file_tree")
+@pytest.mark.spec("RUL-execution_jobs_change_nothing", test="TST-merge_execute-execute_jobs_identical_library_file_tree")
 def test_execute_jobs_identical_library_file_tree(tmp_path):
     """Beyond the summary, the placed LIBRARY file tree is byte-identical under -j1 vs -j4 — the
     move pass has no concurrency-dependent semantics (relative paths + bytes match exactly)."""
@@ -592,7 +592,7 @@ def test_execute_jobs_identical_library_file_tree(tmp_path):
     assert _tree(str(lib1)) == _tree(str(lib2))                    # identical placed tree (ignores *.lock)
 
 
-@pytest.mark.spec("merge-moveset-fixed-before-concurrency-1", "snapshot-timing-1", test="TST-merge_execute-snapshot_and_revalidation_precede_the_parallel_move_pass")
+@pytest.mark.spec("BLD-merge_execute", "RUL-snapshot_timing", test="TST-merge_execute-snapshot_and_revalidation_precede_the_parallel_move_pass")
 def test_snapshot_and_revalidation_precede_the_parallel_move_pass(tmp_path, monkeypatch):
     """Sequencing (§10.3): the move-set is fixed BEFORE any concurrent placement — dependency
     revalidation and the pre-mutation snapshot both complete before the FIRST per-file move runs,
@@ -630,7 +630,7 @@ def test_snapshot_and_revalidation_precede_the_parallel_move_pass(tmp_path, monk
     assert events.count("move") == 3                              # all three files still placed
 
 
-@pytest.mark.spec("merge-concurrency-library-lock-throughout-1", test="TST-merge_execute-library_lock_held_throughout_concurrent_move_pass")
+@pytest.mark.spec("BLD-library_lock", test="TST-merge_execute-library_lock_held_throughout_concurrent_move_pass")
 def test_library_lock_held_throughout_concurrent_move_pass(tmp_path, monkeypatch):
     """§10.4: the library lock is held for the WHOLE concurrent move pass — concurrency never relaxes
     cross-run exclusion. Probe by wrapping _move_file (the per-file placement that runs during the
@@ -661,7 +661,7 @@ def test_library_lock_held_throughout_concurrent_move_pass(tmp_path, monkeypatch
     assert _summary(ws)["status"] == "success"
 
 
-@pytest.mark.spec("exec-single-writer-journal-1", test="TST-merge_execute-merge_journal_writes_only_from_the_main_thread")
+@pytest.mark.spec("BLD-merge_execute", test="TST-merge_execute-merge_journal_writes_only_from_the_main_thread")
 def test_merge_journal_writes_only_from_the_main_thread(tmp_path, monkeypatch):
     """Single-writer journal (§8.3): under -j4 the merge confirmation journal is persisted ONLY by the
     main thread; worker threads move files but never touch the journal. Probe every journal write."""
@@ -685,13 +685,13 @@ def test_merge_journal_writes_only_from_the_main_thread(tmp_path, monkeypatch):
     assert all(t == "MainThread" for t in journal_threads), journal_threads
 
 
-@pytest.mark.spec("plan-missing-stops-1", test="TST-merge_execute-execute_without_plan_errors")
+@pytest.mark.spec("RUL-no_plan_no_run", test="TST-merge_execute-execute_without_plan_errors")
 def test_execute_without_plan_errors(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     assert merge._run_locked_workflow("execute", str(ws)) == 2     # no photos-30
 
 
-@pytest.mark.spec("merge-execute-revalidate-reject-stale-1")
+@pytest.mark.spec("INV-no_stale_use")
 def test_execute_rejects_stale_plan(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     assert merge._run_locked_workflow("plan", str(ws)) == 0
@@ -703,7 +703,7 @@ def test_execute_rejects_stale_plan(tmp_path):
 
 # --- no-mutation consequences of non-executing paths (Tier 3) ----------------
 
-@pytest.mark.spec("merge-planning-nonmutating-1")
+@pytest.mark.spec("RUL-planning_changes_no_media")
 def test_plan_mutates_nothing_no_terminal_artifacts(tmp_path):
     """Planning never mutates: after `plan`, by-dest + library are byte-identical and NONE of the
     execute-only artifacts (photos-31 summary, photos-35 log/db/manifest, journal, seal) exist."""
@@ -719,7 +719,7 @@ def test_plan_mutates_nothing_no_terminal_artifacts(tmp_path):
         assert not os.path.exists(ctl / n), n
 
 
-@pytest.mark.spec("merge-no-stale-summary-1")
+@pytest.mark.spec("BLD-merge_records")
 def test_stale_plan_rejection_writes_no_summary(tmp_path):
     """A stale-plan rejection is a pre-mutation abort: it must write NO photos-31 summary at all
     (distinct from a required-snapshot abort, which records a `rejected` summary) and move nothing."""
@@ -735,7 +735,7 @@ def test_stale_plan_rejection_writes_no_summary(tmp_path):
     assert open(_src(ws, "Trip", "a.jpg"), "rb").read() == _fp_bytes("A")
 
 
-@pytest.mark.spec("merge-precond-fail-no-output-1", test="TST-merge_execute-precondition_failure_writes_no_summary_and_no_placement")
+@pytest.mark.spec("RUL-merge_blocked_changes_nothing", test="TST-merge_execute-precondition_failure_writes_no_summary_and_no_placement")
 def test_precondition_failure_writes_no_summary_and_no_placement(tmp_path):
     """A preflight blocker stops merge before execute: no photos-31 summary, library byte-unchanged.
     Here the prep handoff is missing — a precondition the preflight gathers and refuses on."""
@@ -748,7 +748,7 @@ def test_precondition_failure_writes_no_summary_and_no_placement(tmp_path):
     assert open(_src(ws, "Trip", "a.jpg"), "rb").read() == _fp_bytes("A")   # the photo left where it was
 
 
-@pytest.mark.spec("merge-execute-no-rederive-1")
+@pytest.mark.spec("RUL-execution_only_the_plan")
 def test_execute_applies_saved_plan_verbatim_no_rederive(tmp_path):
     """Execute consumes the saved photos-30 disposition/target VERBATIM — it never re-derives the
     placement from the handoff/scan. Doctor the saved target name; execute must place the file under
@@ -767,7 +767,7 @@ def test_execute_applies_saved_plan_verbatim_no_rederive(tmp_path):
     assert not os.path.exists(os.path.join(str(lib), "Trip", "a.jpg"))       # NOT re-derived
 
 
-@pytest.mark.spec("merge-journal-confirmed-only-1")
+@pytest.mark.spec("BLD-merge_journal_resume")
 def test_partial_run_journal_holds_only_confirmed_moves(tmp_path):
     """After a partial run (one placed, one blocked), the merge journal records ONLY the confirmed
     move — the blocked file is absent, so the next run resumes from the true diff (§8.3)."""
@@ -791,7 +791,7 @@ def _ctl(ws, name):
     return os.path.join(str(ws), ".photos-ingest", name)
 
 
-@pytest.mark.spec("merge-execute-db-snapshot-on-success-1", "merge-records-summary-1", "merge-reseal-archive-automatic-1", "merge-reseals-automatically-1", "seal-success-then-sealed-1", test="TST-merge_execute-full_success_writes_terminal_artifacts_and_seals")
+@pytest.mark.spec("BLD-merge_success_sequence", "RUL-merge_records_landing", "RUL-merge_reseals", "RUL-seal_on_success_only", test="TST-merge_execute-full_success_writes_terminal_artifacts_and_seals")
 def test_full_success_writes_terminal_artifacts_and_seals(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     assert merge._run_locked_workflow("plan", str(ws)) == 0
@@ -814,7 +814,7 @@ def test_full_success_writes_terminal_artifacts_and_seals(tmp_path):
     assert "photos-35-merge-log.json" in manifest["contents"]
 
 
-@pytest.mark.spec("BLD-log_format", "log-copy-forward-extend-1", "merge-log-copy-26-forward-append-1", "merge-writes-only-own-3x-copies-26-forward-1")
+@pytest.mark.spec("BLD-log_format", "RUL-record_whole_each_phase", "BLD-phase_logs", "RUL-phase_writes_own_records")
 def test_merge_log_copies_photos25_forward_and_appends(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     # Seed photos-25 with a prior geotag journey for fingerprint A.
@@ -837,7 +837,7 @@ def test_merge_log_copies_photos25_forward_and_appends(tmp_path):
     assert p25["photos"]["A"]["journey"] == [{"phase": "geotag", "action": "renamed"}]
 
 
-@pytest.mark.spec("merge-blocker-left-in-by-dest-partial-1", "merge-blocker-left-in-bydest-1", "merge-seal-only-on-full-success-1", "seal-partial-writes-no-marker-1", test="TST-merge_execute-partial_run_does_not_seal_or_finalize")
+@pytest.mark.spec("RUL-unplaced_photo_stays", "RUL-seal_on_success_only", test="TST-merge_execute-partial_run_does_not_seal_or_finalize")
 def test_partial_run_does_not_seal_or_finalize(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
                   library_files=[{"fp": "FAIL", "dest": "Trip", "name": "a.jpg"}])
@@ -850,7 +850,7 @@ def test_partial_run_does_not_seal_or_finalize(tmp_path):
     assert os.path.exists(_ctl(ws, "photos-31-merge-summary.json"))     # summary still written
 
 
-@pytest.mark.spec("merge-resume-via-execute-not-plan-1", "RUL-merge_resumable", test="TST-merge_execute-a_re_plan_after_a_partial_merge_carries_what_was_moved")
+@pytest.mark.spec("RUL-replan_carries_placed", "RUL-merge_resumable", test="TST-merge_execute-a_re_plan_after_a_partial_merge_carries_what_was_moved")
 def test_a_re_plan_after_a_partial_merge_carries_what_was_moved(tmp_path):
     """A partial merge — a.jpg moved, b.jpg blocked — is re-planned once the blocker is cleared. The new
     plan carries a.jpg forward from the plan that moved it, and the merge that finishes logs both."""
@@ -956,7 +956,7 @@ def test_a_photo_gone_from_the_workspace_that_no_merge_moved_blocks_the_plan(tmp
     assert a["disposition"] == "blocked" and "no earlier merge" in a["blocked_reason"]
 
 
-@pytest.mark.spec("merge-replan-allowed-after-failed-or-rejected-1", test="TST-merge_execute-re_plan_after_failed_is_allowed")
+@pytest.mark.spec("RUL-merge_replan_any_time", test="TST-merge_execute-re_plan_after_failed_is_allowed")
 def test_re_plan_after_failed_is_allowed(tmp_path):
     # An all-blocked run is `failed` — nothing was placed, every source is still in by-dest. Like a
     # `rejected` run, it moved nothing, so re-planning is allowed (no moved file to drop from the log);
@@ -995,7 +995,7 @@ def test_a_re_plan_after_a_crash_before_the_seal_finishes_and_seals(tmp_path, mo
     assert log["photos"]["A"]["library_path"] == os.path.join(str(lib), "Trip", "a.jpg")
 
 
-@pytest.mark.spec("merge-sealed-hardstop-touch-nothing-1", "seal-scripts-hardstop-1", test="TST-merge_execute-sealed_workspace_rerun_hardstops")
+@pytest.mark.spec("RUL-sealed_refuses", test="TST-merge_execute-sealed_workspace_rerun_hardstops")
 def test_sealed_workspace_rerun_hardstops(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     assert merge._run_locked_workflow("plan", str(ws)) == 0
@@ -1027,7 +1027,7 @@ def test_library_takes_a_second_workspace_after_the_first_is_sealed(tmp_path):
     assert sorted(os.listdir(os.path.join(str(lib), "Trip"))) == ["a.jpg", "b.jpg"]
 
 
-@pytest.mark.spec("archive-whole-control-dir-1", test="TST-merge_execute-reseal_archives_the_control_directory_with_merges_records")
+@pytest.mark.spec("RUL-package_contents", test="TST-merge_execute-reseal_archives_the_control_directory_with_merges_records")
 def test_reseal_archives_the_control_directory_with_merges_records(tmp_path):
     """Merge's re-seal makes the package again: the whole control directory, merge's own records among
     it, listed in photos-35's manifest and archived with it."""

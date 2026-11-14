@@ -57,6 +57,11 @@ converted document's rationale its `follows_from` links into the philosophy.
 **Done looks like:** the four specs converted and ruled; `spec/spec-clauses.json` and its registry test retired; the
 gate green in CI; the corpus on Pages; `AGENTS.md`, `spec/README.md` and `COVERAGE.md` describing the corpus.
 
+**Where it stands (2026-11-14):** all done but the last step — the four specs are converted and ruled, every clause of
+the index aliased onto its item and the test marks renamed to the items; the original specs, the conversion ledgers,
+`tools/spec-ledger`, the clause index and `tools/spec-coverage` are retired, kept at the tag `specs-before-corpus`.
+Left: the philosophy pass — ruling `rationale/philosophy.md`'s 40 seeds and giving every rationale its `follows_from`.
+
 ---
 
 ### 2. The gap audit — the build against its spec
@@ -73,25 +78,25 @@ written into the spec first, then coded** — the code is never taken as the ans
 
 ---
 
-### 3. The 37 clauses no test asserts
+### 3. The 7 rules no test is asked to verify
 
-**Why:** the clause index marks 37 clauses `coverage: none` — specified, and nothing checks them. Four are **high**:
-- `geotag-bydest-no-symlink-1` — symlinks under by-dest are barred, never followed;
-- `atomic-inplace-metadata-1` — an in-place metadata write is atomic, so a crash leaves the intact original;
-- `authored-no-autonomous-mutation-1` — every mutation traces to a recorded human decision or a deterministic rule;
-- `lock-stale-takeover-conservative-1` — only a lock whose owner is provably gone may be reclaimed.
+**Why:** seven rules are marked `verify: none` — specified, and nothing checks them. Two are **high**:
+`RUL-rewrite_in_place_atomic` (an interrupted in-place write leaves the intact original or the whole new file) and
+`RUL-stale_takeover_conservative` (only a lock whose owner is provably gone is reclaimed). The rest:
+`RUL-camera_classes_not_derivation`, `RUL-control_directory_fixed`, `RUL-filesystem_agnostic`,
+`RUL-image_never_working_data` (med) and `RUL-nothing_built_from_merge_records` (low). (Carried over from the clause
+index's 37 clauses with no test, most of which a test has asserted since.)
 
-The rest: merge 11, prep 11, shared 9, geotag 6 (21 med, 12 low) — `tools/spec-coverage --verbose` lists them.
-
-**Do:** a dedicated test for each, or a ruled reason it needs none. With item 1 they carry over as the must-verify
-items still missing a test, which the gate then names.
+**Do:** a dedicated test for each, marking it `verify: required`, or a ruled reason it needs none.
 
 ---
 
-### 4. The 53 clauses only incidentally tested
+### 4. The 17 rules and invariants only incidentally tested
 
-**Why:** 53 clauses (prep 19, geotag 16, shared 11, merge 7; 4 high) are exercised by tests written for something
-else — a happy path passes through them, nothing asserts them, so a regression there passes CI.
+**Why:** seventeen are marked `verify: incidental` — exercised by tests written for something else, a happy path passing
+through them, nothing asserting them, so a regression there passes CI. Five are **high**: `INV-change_only_what_needs`,
+`INV-every_change_from_the_record`, `INV-undisturbed_shape`, `RUL-operations_atomic`, `RUL-split_move_never_lost`;
+`tools/spec-build`'s `needs.json` lists the rest by their `verify` field.
 
 **Do:** as item 3 — a test that asserts each, or a ruled reason.
 
@@ -171,19 +176,21 @@ duplicate decisions.
 
 ---
 
-### 12. Number the phase documents' sections 1…n
+### 12. Number the phase documents' sections 1…n, and cite items, not sections
 
 **Why:** the phase documents of the corpus (`spec/intent|rationale|build/{prep,geotag,merge}.md`) number their headings
 as in the phase's original spec, so a section with no items of its own has no heading and the numbers skip — `intent/
-geotag.md` holds §2 and §5 only. While the original documents are being converted the numbers are the way back to them:
-the ledger maps each sentence by section and build items cite "geotag §13.3". Once every document is converted and
-retired, they only puzzle a reader. Vasile: *"1 now, and add a step (or backlog) after the conversion to renumber."*
+geotag.md` holds §2 and §5 only. The numbers were the way back to the original documents while they were converted;
+those are retired now (kept at the tag `specs-before-corpus`), and the numbers only puzzle a reader. Some 640 comments
+in the code and tests, and 74 places in the corpus's own items, cite those original sections — "geotag §24.2" — whose
+sub-sections the corpus does not have. Vasile: *"1 now, and add a step (or backlog) after the conversion to renumber."*
 
 **What to do:** renumber each phase document's sections 1…n, the same number for the same section across intent,
-rationale and build; rewrite the section citations in the build items to links or the new numbers; drop the
-explanatory sentence from each document's introduction. The ledgers keep the old numbers — they record the old specs.
+rationale and build; rewrite every citation of a section — in the build items, the code and the tests — to the id of
+the item it means (`BLD-resolved_utc`), which no renumbering moves; drop the explanatory sentence from each
+document's introduction.
 
-**When:** after the conversion (item 1) is complete.
+**When:** after the philosophy pass (item 1's last step).
 
 ### 13. Keep the track points geotag used in the workspace, sealed with it
 

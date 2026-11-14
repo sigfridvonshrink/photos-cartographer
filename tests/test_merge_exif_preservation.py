@@ -59,7 +59,7 @@ def _read_tags(path):
     return {t: d.get(t) for t in GPS_TIME_TAGS}
 
 
-@pytest.mark.spec("merge-no-time-gps-changes-1")
+@pytest.mark.spec("BLD-merge_move")
 def test_same_fs_placement_preserves_exif_time_and_gps(tmp_path):
     src = tmp_path / "a.jpg"
     _make_tagged_jpeg(src)
@@ -70,7 +70,7 @@ def test_same_fs_placement_preserves_exif_time_and_gps(tmp_path):
     assert _read_tags(dst) == before                           # EXIF time + GPS byte-identical
 
 
-@pytest.mark.spec("merge-no-time-gps-changes-1")
+@pytest.mark.spec("BLD-merge_move")
 def test_cross_fs_copy_placement_preserves_exif_time_and_gps(tmp_path):
     src = tmp_path / "a.jpg"
     _make_tagged_jpeg(src)

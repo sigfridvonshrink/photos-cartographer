@@ -34,7 +34,7 @@ MANAGED = ["0-sources", "1-strays", "2-missing-metadata", "3-redundant-jpgs",
 
 # --- shared write_db_snapshot helper ----------------------------------------
 
-@pytest.mark.spec("db-snapshot-consistent-1", "geotag-finalize-db-snapshot-1", test="TST-geotag_finalize-write_db_snapshot_is_a_valid_copy")
+@pytest.mark.spec("RUL-database_image_whole", "RUL-images_archived", test="TST-geotag_finalize-write_db_snapshot_is_a_valid_copy")
 def test_write_db_snapshot_is_a_valid_copy(tmp_path):
     src = tmp_path / "live.db"
     conn = sqlite3.connect(str(src))
@@ -55,7 +55,7 @@ def _file(rel, fp, *, native=False, group=CAM):
             "camera_group_key": group, "has_native_gps": native}
 
 
-@pytest.mark.spec("archive-complete-each-phase-1", "geotag-finalize-complete-log-1", "log-decision-provenance-1", test="TST-geotag_finalize-complete_log_superset_and_geotag_steps")
+@pytest.mark.spec("RUL-record_whole_each_phase", "BLD-history_kept", "RUL-log_cites_decisions", test="TST-geotag_finalize-complete_log_superset_and_geotag_steps")
 def test_complete_log_superset_and_geotag_steps():
     prep = {"fpA": {"content_fingerprint": "fpA", "journey": [{"phase": "prep", "action": "organized"}]}}
     files = [_file(f"{BYDEST}/T/a.arw", "fpA", native=True)]
@@ -84,7 +84,7 @@ def test_complete_log_skips_unfingerprinted_and_offsetless():
     assert [s["action"] for s in photos["fpB"]["journey"]] == ["resolved_utc"]   # offset skipped
 
 
-@pytest.mark.spec("geotag-three-gps-origins-1", "log-records-gps-revert-1", test="TST-geotag_finalize-complete_log_gps_written")
+@pytest.mark.spec("RUL-log_records_gps_reverts", test="TST-geotag_finalize-complete_log_gps_written")
 def test_complete_log_gps_written():
     files = [_file(f"{BYDEST}/T/m.jpg", "fpM")]
     rows = [{"relative_path": f"{BYDEST}/T/m.jpg", "resolved_utc": "2024-07-03T12:00:00Z"}]
@@ -129,7 +129,7 @@ def test_a_cleared_position_is_logged_with_what_it_held():
     assert cal.held_pre_state(_file(f"{BYDEST}/T/y.jpg", "fpY")) == {"present": False}
 
 
-@pytest.mark.spec("RUL-log_cites_decisions", "log-decision-provenance-1", "log-names-exact-decision-1", test="TST-geotag_finalize-each_step_names_its_exact_decision")
+@pytest.mark.spec("RUL-log_cites_decisions", "BLD-log_format", test="TST-geotag_finalize-each_step_names_its_exact_decision")
 def test_each_step_names_its_exact_decision():
     """The offset names its exact cell — with its day when the camera's photos there span days — or
     the drift confirmation that replaced it; a manual position names the pin or the folder fallback."""
@@ -154,7 +154,7 @@ def test_each_step_names_its_exact_decision():
     assert step["because"] == f"photos-23 destinations.{BYDEST}/T.folder_fallback"
 
 
-@pytest.mark.spec("RUL-log_human_readable", "log-human-readable-json-1", "log-offset-in-words-1", test="TST-geotag_finalize-an_offset_is_described_in_words")
+@pytest.mark.spec("RUL-log_human_readable", test="TST-geotag_finalize-an_offset_is_described_in_words")
 def test_an_offset_is_described_in_words():
     assert cal.describe_offset(-6900) == "camera clock 1 h 55 min ahead of UTC"
     assert cal.describe_offset(3612) == "camera clock 1 h 12 s behind UTC"
@@ -237,7 +237,7 @@ def test_finalize_refuses_before_execute(tmp_path, monkeypatch):
     assert not (ctl / "photos-26-complete-log.json").exists()
 
 
-@pytest.mark.spec("geotag-finalize-requires-success-1")
+@pytest.mark.spec("RUL-finalize_requires_success")
 def test_finalize_refuses_partial_execution(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _to_executed(monkeypatch, ws, ctl)
@@ -255,7 +255,7 @@ def test_finalize_refuses_plan_id_mismatch(tmp_path, monkeypatch):
     assert _run(monkeypatch, ws, "finalize") == 2
 
 
-@pytest.mark.spec("archive-finalize-explicit-1", "archive-finalize-nondestructive-1", "archive-no-cross-phase-write-1", "archive-package-contents-1", "archive-self-describing-manifest-1", "db-durable-artifact-1", "geotag-finalize-manifest-1", "geotag-finalize-nondestructive-1", test="TST-geotag_finalize-finalize_assembles_package_and_is_nondestructive")
+@pytest.mark.spec("RUL-finalize_explicit", "RUL-finalize_non_destructive", "RUL-carry_forward_by_copy", "RUL-package_contents", "RUL-package_self_describing", "RUL-database_is_record", test="TST-geotag_finalize-finalize_assembles_package_and_is_nondestructive")
 def test_finalize_assembles_package_and_is_nondestructive(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _to_executed(monkeypatch, ws, ctl)
@@ -299,7 +299,7 @@ def test_finalize_records_each_photo_as_left(tmp_path, monkeypatch):
         assert rec == {"size": st.st_size, "mtime_ns": st.st_mtime_ns}, rel
 
 
-@pytest.mark.spec("RUL-package_contents", "RUL-package_self_describing", "archive-whole-control-dir-1", "archive-self-describing-manifest-1", "RUL-other_databases_scratch", "RUL-images_archived", "RUL-config_archived", test="TST-geotag_finalize-finalize_archives_the_whole_control_directory")
+@pytest.mark.spec("RUL-package_contents", "RUL-package_self_describing", "RUL-other_databases_scratch", "RUL-images_archived", "RUL-config_archived", test="TST-geotag_finalize-finalize_archives_the_whole_control_directory")
 def test_finalize_archives_the_whole_control_directory(tmp_path, monkeypatch):
     """The package is the whole control directory but its transient files — the drift record and every
     journal among it — listed with their hashes in the manifest and archived, manifest included, into
@@ -329,7 +329,7 @@ def test_finalize_archives_the_whole_control_directory(tmp_path, monkeypatch):
         assert hashlib.sha256(archived[rec["path"]]).hexdigest() == rec["sha256"], rec["path"]
 
 
-@pytest.mark.spec("geotag-finalize-no-merge-1")
+@pytest.mark.spec("RUL-finalize_explicit")
 def test_finalize_bundles_archive_but_performs_no_merge(tmp_path, monkeypatch):
     """§31 (anti): finalize assembles the archival package (photos-26 complete-log + DB + manifest)
     but NEVER merges into a library — it produces no merge artifacts and moves no media. Snapshot the

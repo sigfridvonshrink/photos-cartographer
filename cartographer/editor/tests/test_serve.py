@@ -524,7 +524,7 @@ def _seal(ws):
      .write('{"sealed": true, "merged_run_id": "r1"}'))
 
 
-@pytest.mark.spec("edit-sealed-refuses-1", test="TST-serve-serve_refuses_a_sealed_workspace")
+@pytest.mark.spec("RUL-editor_refuses_sealed", test="TST-serve-serve_refuses_a_sealed_workspace")
 def test_serve_refuses_a_sealed_workspace(tmp_path):
     # A merged workspace is final: the editor will not open it, so its decisions cannot change.
     ws = _workspace_with_fixtures(tmp_path)
@@ -552,7 +552,7 @@ def test_serve_points_out_a_dump_in_a_sealed_workspace(tmp_path, capsys):
     assert os.listdir(inbox) == ["new.jpg"]
 
 
-@pytest.mark.spec("edit-sealed-refuses-1", test="TST-serve-save_refuses_a_sealed_workspace")
+@pytest.mark.spec("RUL-editor_refuses_sealed", test="TST-serve-save_refuses_a_sealed_workspace")
 def test_save_refuses_a_sealed_workspace(tmp_path):
     # The console calls _save directly, without serve()'s startup check: the save refuses on its own.
     ws = _workspace_with_fixtures(tmp_path)
