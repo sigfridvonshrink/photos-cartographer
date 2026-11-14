@@ -125,6 +125,50 @@ def test_guard_written_last_then_reentry_is_clean(tmp_path, monkeypatch):
     assert len(glob.glob(str(ws / "5-photos-by-date" / "**" / "*.jpg"), recursive=True)) == 1  # still organized, no dup
 
 
+@pytest.mark.spec("RUL-rewrite_in_place_atomic", test="TST-lifecycle-an_interrupted_guard_write_leaves_no_damaged_guard")
+def test_an_interrupted_guard_write_leaves_no_damaged_guard(tmp_path, monkeypatch):
+    """The workspace guard, written last by an init run and interrupted — while half written, or written but not yet
+    in its place — is left as it was before, absent, never a damaged guard: the workspace is still uninitialized, and
+    the next run puts the guard down whole."""
+    import tempfile
+    _install(monkeypatch)
+    ws = _bare(tmp_path)
+    (ws / "photo.jpg").write_bytes(b"img")
+    guard_fds, real_mkstemp, real_fdopen, real_replace = set(), tempfile.mkstemp, os.fdopen, prep.replace_durably
+
+    def mkstemp(*a, **k):                                      # the guard's temp file, told from the others
+        fd, path = real_mkstemp(*a, **k)
+        if k.get("prefix") == ".tmp-guard-":
+            guard_fds.add(fd)
+        return fd, path
+
+    def fdopen(fd, *a, **k):
+        f = real_fdopen(fd, *a, **k)
+        if fd in guard_fds:
+            put = f.write
+            def write(s):
+                put(s[:len(s) // 2]); f.flush()
+                raise KeyboardInterrupt
+            f.write = write
+        return f
+
+    def rename_not_reached(tmp, path):
+        if path == _guard(ws):
+            raise KeyboardInterrupt
+        return real_replace(tmp, path)
+    for cut in (lambda m: (m.setattr(tempfile, "mkstemp", mkstemp), m.setattr(os, "fdopen", fdopen)),
+                lambda m: m.setattr(prep, "replace_durably", rename_not_reached)):
+        plan = _plan(ws)
+        assert not plan.blockers, plan.blockers
+        with monkeypatch.context() as m:
+            cut(m)
+            with pytest.raises(KeyboardInterrupt):
+                prep.PlanExecutor(str(ws)).execute(plan)
+        assert not os.path.lexists(_guard(ws))                 # as it was: no guard, not a damaged one
+    prep.PlanExecutor(str(ws)).execute(_plan(ws))
+    assert json.load(open(_guard(ws)))["initialized"] is True  # the guard, whole
+
+
 # --- root-file block (initialized) -------------------------------------------
 
 @pytest.mark.spec("RUL-top_level_only_managed", test="TST-lifecycle-loose_root_file_blocks_initialized")

@@ -58,15 +58,17 @@ def _content_fingerprint(monkeypatch):
     monkeypatch.setattr(merge.MergeWorkflow, "_fingerprint_library_file", fake)
 
 
-def _ws(tmp_path, photos, library_files=(), name="ws"):
+def _ws(tmp_path, photos, library_files=(), name="ws", folders=None):
     """A merge-ready workspace + blessed library. photos: {fp, dest, final_name, pre_name?}.
     By-dest files hold their FP blob under FINAL names; the handoff carries pre-rename names + a
-    rename op when pre_name != final_name. library_files: {fp, dest, name} ('FAIL' fp -> unreadable)."""
+    rename op when pre_name != final_name. library_files: {fp, dest, name} ('FAIL' fp -> unreadable). `folders`
+    (role -> name), if given, names the workspace's folders."""
+    bd = folders["photos_by_dest"] if folders else "6-photos-by-dest"
     ws = tmp_path / name
     ws.mkdir()
     lib = tmp_path / (name + "-lib")
     lib.mkdir()
-    for d in MANAGED:
+    for d in (folders.values() if folders else MANAGED):
         (ws / d).mkdir()
     ctl = ws / ".photos-ingest"
     ctl.mkdir()
@@ -77,11 +79,11 @@ def _ws(tmp_path, photos, library_files=(), name="ws"):
     for p in photos:
         dest, final = p.get("dest", ""), p["final_name"]
         pre = p.get("pre_name", final)
-        ddir = (ws / "6-photos-by-dest" / dest) if dest else (ws / "6-photos-by-dest")
+        ddir = (ws / bd / dest) if dest else (ws / bd)
         ddir.mkdir(parents=True, exist_ok=True)
         (ddir / final).write_bytes(_fp_bytes(p["fp"]))
-        rel_pre = os.path.join("6-photos-by-dest", dest, pre) if dest else os.path.join("6-photos-by-dest", pre)
-        ho_files.append({"relative_path": rel_pre, "folder_class": "6-photos-by-dest",
+        rel_pre = os.path.join(bd, dest, pre) if dest else os.path.join(bd, pre)
+        ho_files.append({"relative_path": rel_pre, "folder_class": bd,
                          "media_class": "image", "content_fingerprint": p["fp"]})
         if pre != final:
             ops.append({"type": "rename_no_clobber", "to": final,
@@ -99,6 +101,8 @@ def _ws(tmp_path, photos, library_files=(), name="ws"):
     cfg = {k: v for k, v in utils.CONFIG.items() if k != "jobs"}
     cfg["merge"] = dict(cfg.get("merge") or {})
     cfg["merge"]["library_root"] = str(lib)
+    if folders:
+        cfg["folders"] = dict(folders)
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
     (ctl / "photos-24-executable-plan.json").write_text(json.dumps(
         {"status": "ready", "plan_id": "cal-plan-1", "destinations": {"d": {"operations": ops}},
@@ -109,7 +113,7 @@ def _ws(tmp_path, photos, library_files=(), name="ws"):
         {"status": "success", "run_metadata": {"execution_id": "cal-exec-1"}}))
     (ctl / "photos-26-complete-log.json").write_text(json.dumps({"photos": {}}))
     (ctl / "photos-26-archive-manifest.json").write_text(json.dumps({"artifact_name": "m"}))
-    _bd = ws / "6-photos-by-dest"          # finalize's record of each by-dest photo as geotag left it
+    _bd = ws / bd                          # finalize's record of each by-dest photo as geotag left it
     (ctl / "photos-26-finalized-media.json").write_text(json.dumps({"media": {
         os.path.relpath(os.path.join(r, n), ws): {"size": os.stat(os.path.join(r, n)).st_size,
                                                   "mtime_ns": os.stat(os.path.join(r, n)).st_mtime_ns}
@@ -1169,6 +1173,33 @@ def test_merge_leaves_the_other_phases_database_images_as_they_were(tmp_path):
     for name, data in images.items():
         assert open(_ctl(ws, name), "rb").read() == data, name
         assert (os.stat(_ctl(ws, name)).st_mtime_ns, os.stat(_ctl(ws, name)).st_ino) == stats[name], name
+
+
+@pytest.mark.spec("RUL-control_directory_fixed",
+                  test="TST-merge_execute-merge_keeps_its_records_in_the_one_control_directory")
+def test_merge_keeps_its_records_in_the_one_control_directory(tmp_path):
+    """Where merge reads and writes its records does not follow the configuration: with the default folders, or
+    with every folder renamed, merge plans and merges from the records geotag left in `.photos-ingest/` and writes
+    its own there — the seal among them — and nowhere else, in the workspace or in the library."""
+    import copy
+    renamed = {role: f"x-{name}" for role, name in copy.deepcopy(utils.DEFAULT_FOLDERS).items()}
+    records = ("photos-30-merge-plan.json", "photos-31-merge-summary.json", "photos-35-merge-log.json",
+               "photos-35-merge-ingest.db", "photos-35-archive-manifest.json", "photos-35-archive.tar.gz",
+               "photos-00-sealed.json")
+    for name, folders in (("default", None), ("renamed", renamed)):
+        ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}], name=name, folders=folders)
+        utils.CONFIG.clear(); utils.CONFIG.update(utils.default_config())   # a run of its own: nothing read yet
+        assert merge._run_locked_workflow("plan", str(ws)) == 0, name
+        assert merge._run_locked_workflow("execute", str(ws)) == 0, name
+        for rec in records:
+            assert (ws / ".photos-ingest" / rec).is_file(), (name, rec)
+        plan_id = json.load(open(_ctl(ws, "photos-30-merge-plan.json")))["plan_id"]
+        assert (ws / ".photos-ingest" / f"journal-{plan_id}.json").is_file(), name
+        assert sorted(os.listdir(ws)) == sorted([".photos-ingest", *(folders.values() if folders else MANAGED)]), name
+        outside = [os.path.join(r, n) for r, _d, fs in os.walk(ws) if ".photos-ingest" not in r for n in fs]
+        assert outside == [], (name, outside)                      # the photo merged, no record among the folders
+        assert sorted(os.listdir(lib)) == [".photos-library", ".photos-merge.lock", "Trip"], name
+        assert os.listdir(lib / "Trip") == ["a.jpg"], name
 
 
 @pytest.mark.spec("RUL-image_never_working_data", test="TST-merge_execute-merge_never_reads_a_database_image_back")

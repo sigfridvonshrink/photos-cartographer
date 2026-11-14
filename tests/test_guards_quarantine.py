@@ -170,6 +170,13 @@ def test_footprint_reports_quarantine(tmp_path, monkeypatch):
     assert qf["total_files"] >= 1
     assert qf["total_bytes"] > 0
     assert qf["oldest_plan_id"] and qf["newest_plan_id"]
+    # what an interrupted rewrite of a manifest left beside it is not a quarantined file
+    qbase = os.path.join(str(ws), ".photos-ingest-quarantine")
+    pid = sorted(os.listdir(qbase))[0]
+    with open(os.path.join(qbase, pid, ".tmp-manifest-abc.json"), "w") as f:
+        f.write("[")
+    again = _plan(ws).summary["quarantine_footprint"]
+    assert (again["total_files"], again["total_bytes"]) == (qf["total_files"], qf["total_bytes"])
 
 
 # --- quarantine manifest: never silently truncate recoverable history (BLD-quarantine_layout) ---
@@ -207,6 +214,38 @@ def test_quarantine_manifest_non_array_is_treated_as_corrupt(tmp_path):
     prep._append_quarantine_manifest(str(mdir), {"operation_id": "op-1"})
     assert len(list(mdir.glob("manifest.json.corrupt-*"))) == 1
     assert json.loads((mdir / "manifest.json").read_text()) == [{"operation_id": "op-1"}]
+
+
+@pytest.mark.spec("RUL-rewrite_in_place_atomic",
+                  test="TST-guards_quarantine-an_interrupted_manifest_rewrite_leaves_the_manifest_whole")
+def test_an_interrupted_manifest_rewrite_leaves_the_manifest_whole(tmp_path, monkeypatch):
+    """The quarantine's manifest, rewritten whole for each entry and interrupted — while the new text is half
+    written, or with it written but not yet in the manifest's place — holds its earlier entries whole, and the next
+    entry goes down with them, whole."""
+    mdir = tmp_path / "qd"; mdir.mkdir()
+    manifest = mdir / "manifest.json"
+    prep._append_quarantine_manifest(str(mdir), {"operation_id": "op-1"})
+    before = manifest.read_bytes()
+    entry = {"operation_id": "op-2", "original_path": "b" * 100_000}
+    real_dump = json.dump
+
+    def dump_half(obj, fp, **kw):
+        text = json.dumps(obj, **kw)
+        fp.write(text[:len(text) // 2]); fp.flush()
+        raise KeyboardInterrupt
+
+    def interrupted_rename(*a, **k):
+        raise KeyboardInterrupt
+    for cut in (lambda m: m.setattr(json, "dump", dump_half),
+                lambda m: (m.setattr(os, "replace", interrupted_rename), m.setattr(os, "rename", interrupted_rename))):
+        with monkeypatch.context() as m:
+            cut(m)
+            with pytest.raises(KeyboardInterrupt):
+                prep._append_quarantine_manifest(str(mdir), entry)
+        assert manifest.read_bytes() == before
+    assert json.dump is real_dump
+    prep._append_quarantine_manifest(str(mdir), entry)
+    assert json.loads(manifest.read_text()) == [{"operation_id": "op-1"}, entry]
 
 
 # --- dump dotfile quarantine + managed-folder prune protection -----------------

@@ -200,9 +200,11 @@ def test_an_offset_is_described_in_words():
 
 # --- finalize: readiness + end-to-end ---------------------------------------
 
-def _ready_ws(tmp_path, monkeypatch):
+def _ready_ws(tmp_path, monkeypatch, *, folders=None):
+    """A workspace as prep leaves it for geotag; `folders` (role -> name), if given, names its folders."""
+    bydest = folders["photos_by_dest"] if folders else BYDEST
     ws = tmp_path / "ws"; ws.mkdir()
-    for d in MANAGED:
+    for d in (folders.values() if folders else MANAGED):
         (ws / d).mkdir()
     ctl = ws / ".photos-ingest"; ctl.mkdir(); (ctl / "photos-00-workspace-guard").touch()
     gpx = tmp_path / "gpx"; gpx.mkdir()
@@ -216,11 +218,17 @@ def _ready_ws(tmp_path, monkeypatch):
     cfg["camera_time_and_timezone_policy"] = dict(
         cfg["camera_time_and_timezone_policy"], device_groups={"fixed_clock_cameras": [CAM], "phones": []},
         default_folder_timezone="Europe/Brussels", multi_anchor_auto_apply=True)
+    if folders:
+        cfg["folders"] = dict(folders)
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
     answer_root_zone(ctl)                        # the zone answered once at the root (RUL-timezone_auto_resolves)
+    if folders:                                  # ... at the root as these folders name it
+        td = json.load(open(ctl / "photos-21-time-decisions.json"))
+        td["destinations"] = {bydest: td["destinations"].pop(BYDEST)}
+        (ctl / "photos-21-time-decisions.json").write_text(json.dumps(td))
     # a prep log to carry forward
     (ctl / "photos-15-prep-log.json").write_text(json.dumps({"schema_version": 1, "tool": "photos-1-prep",
-        "photos": {"fp-" + f"{BYDEST}/T/a.arw": {"content_fingerprint": "fp-" + f"{BYDEST}/T/a.arw",
+        "photos": {"fp-" + f"{bydest}/T/a.arw": {"content_fingerprint": "fp-" + f"{bydest}/T/a.arw",
                                                  "journey": [{"phase": "prep", "action": "organized"}]}}}))
     (ctl / "photos-15-prep-ingest.db").write_bytes(b"")   # presence; bundled if present
 
@@ -230,14 +238,14 @@ def _ready_ws(tmp_path, monkeypatch):
                   "has_timestamp": True, "has_native_gps": True, "GPSLatitude": gps[0], "GPSLongitude": gps[1]}
         p = ws / rel; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"img-" + rel.encode())
         st = p.stat()
-        return {"relative_path": rel, "media_class": "image", "folder_class": "6-photos-by-dest",
+        return {"relative_path": rel, "media_class": "image", "folder_class": bydest,
                 "size": st.st_size, "mtime_ns": st.st_mtime_ns,
                 "content_hash": json.dumps({"value": "fp-" + rel, "status": "valid"}),
                 "metadata_status": {"camera_group_key_version": utils.CAMERA_GROUP_KEY_VERSION,
                                     "camera_group_key": CAM, "has_timestamp": True, "has_native_gps": True,
                                     "field_set_version": utils.FIELD_SET_VERSION, "parsed_json": json.dumps(parsed)}}
-    files = [rec(f"{BYDEST}/T/a.arw", "2024:07:03 14:00:00", (50.0, 4.0)),
-             rec(f"{BYDEST}/T/b.arw", "2024:07:03 15:00:00", (51.0, 5.0))]
+    files = [rec(f"{bydest}/T/a.arw", "2024:07:03 14:00:00", (50.0, 4.0)),
+             rec(f"{bydest}/T/b.arw", "2024:07:03 15:00:00", (51.0, 5.0))]
     (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files, "cache_fingerprint": "pcf",
         "depends_on": {"prep_log": {"sha256": utils.sha256_file(str(ctl / "photos-15-prep-log.json"))}}}))
 
@@ -462,6 +470,78 @@ def test_geotag_leaves_preps_database_image_as_it_was(tmp_path, monkeypatch):
     assert (ctl / "photos-26-geotag-ingest.db").read_bytes().startswith(b"SQLite format 3")   # its own: written
     assert image.read_bytes() == b"prep's image of the database"
     assert (image.stat().st_mtime_ns, image.stat().st_ino) == (st.st_mtime_ns, st.st_ino)     # never rewritten
+
+
+@pytest.mark.spec("RUL-control_directory_fixed",
+                  test="TST-geotag_finalize-geotag_keeps_its_records_in_the_one_control_directory")
+def test_geotag_keeps_its_records_in_the_one_control_directory(tmp_path, monkeypatch):
+    """Where geotag reads and writes its records does not follow the configuration: with the default folders, or
+    with every folder renamed, geotag plans, executes and finalizes from the records prep left in `.photos-ingest/`
+    and writes its own there, and nowhere else."""
+    import copy
+    renamed = {role: f"x-{name}" for role, name in copy.deepcopy(utils.DEFAULT_FOLDERS).items()}
+    records = ("photos-21-time-decisions.json", "photos-22-gps-drift-validation.json", "photos-23-gps-decisions.json",
+               "photos-24-executable-plan.json", "photos-25-execution-summary.json", "photos-26-complete-log.json",
+               "photos-26-finalized-media.json", "photos-26-geotag-ingest.db", "photos-26-archive-manifest.json",
+               "photos-26-archive.tar.gz", "photos-00-track-memo.db")
+    for name, folders in (("default", None), ("renamed", renamed)):
+        (tmp_path / name).mkdir()
+        ws, ctl = _ready_ws(tmp_path / name, monkeypatch, folders=folders)
+        utils.CONFIG.clear(); utils.CONFIG.update(utils.default_config())   # a run of its own: nothing read yet
+        _to_executed(monkeypatch, ws, ctl)
+        assert json.load(open(ctl / "photos-25-execution-summary.json"))["status"] == "success", name
+        assert _run(monkeypatch, ws, "finalize") == 0, name
+        for rec in records:
+            assert (ws / ".photos-ingest" / rec).is_file(), (name, rec)
+        plan_id = json.load(open(ctl / "photos-24-executable-plan.json"))["plan_id"]
+        assert (ws / ".photos-ingest" / f"journal-{plan_id}.json").is_file(), name
+        assert sorted(os.listdir(ws)) == sorted([".photos-ingest", *(folders.values() if folders else MANAGED)]), name
+        outside = [os.path.join(r, n) for r, _d, fs in os.walk(ws) if ".photos-ingest" not in r
+                   for n in fs if not n.endswith(".arw")]
+        assert outside == [], (name, outside)                       # no record anywhere among the media
+        bydest = (folders or {}).get("photos_by_dest", BYDEST)
+        assert sorted(os.listdir(ws / bydest / "T")) == ["2024-07-03--14-00-00.arw", "2024-07-03--15-00-00.arw"]
+
+
+@pytest.mark.spec("RUL-image_untouched_by_other_phase",
+                  test="TST-geotag_finalize-prep_after_finalize_leaves_geotags_database_image_as_it_was")
+def test_prep_after_finalize_leaves_geotags_database_image_as_it_was(tmp_path, monkeypatch):
+    """Prep may still run once geotag has finalized, the workspace not yet merged: every command of it — plan, dry
+    run, execute, the quarantine's prune — leaves geotag's image of the database, byte for byte, as geotag left it,
+    while prep's own image is written anew."""
+    import photos_1_prep as prep
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    assert _run(monkeypatch, ws, "finalize") == 0
+    image = ctl / "photos-26-geotag-ingest.db"
+    made, st = image.read_bytes(), image.stat()
+    assert made.startswith(b"SQLite format 3")
+
+    def meta(folders, max_workers=4, progress_coordinator=None):    # the time geotag wrote, which names each photo
+        stamp = lambda n: "{}:{}:{} {}:{}:{}".format(*n[:20].replace("--", "-").split("-"))
+        return {os.path.join(r, n): {"DateTimeOriginal": stamp(n), "extraction_status": "extracted_ok"}
+                for folder in folders for r, _d, fs in os.walk(folder) for n in fs if n.endswith(".arw")}, set()
+    monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", meta)
+    monkeypatch.setattr(utils.ContentHasher, "fingerprint_image", staticmethod(
+        lambda p: {"status": "valid", "strategy": "image-content-hash-v1", "value": "fp-" + os.path.basename(p),
+                   "engine_version": "t"}))
+    (ws / "0-sources" / "note.txt").write_text("a stray, so prep has a sort to do")
+    prep.WorkspaceCache(str(ws)).close()          # the cache prep keeps (this workspace was made without prep)
+
+    def prep_run(*argv):
+        monkeypatch.setattr(sys, "argv", ["photos-1-prep", *argv])
+        try:
+            prep.main(); return 0
+        except SystemExit as e:
+            return e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
+    prep_image = ctl / "photos-15-prep-ingest.db"
+    prep_before = prep_image.read_bytes()
+    for argv in (("plan",), ("dry-run",), ("execute",), ("prune-quarantine",), ("plan",)):
+        assert prep_run(*argv) == 0, argv
+        assert image.read_bytes() == made, argv
+        assert (image.stat().st_mtime_ns, image.stat().st_ino) == (st.st_mtime_ns, st.st_ino), argv
+    assert not (ws / "0-sources" / "note.txt").exists()                     # prep did run its sort
+    assert prep_image.read_bytes() != prep_before and prep_image.read_bytes().startswith(b"SQLite format 3")
 
 
 def test_finalize_is_idempotent(tmp_path, monkeypatch):

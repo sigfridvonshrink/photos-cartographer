@@ -174,3 +174,25 @@ def test_deterministic_order():
     # processed by relative_path: a.jpg first -> base name, z.jpg -> suffix
     planned = {r["current_name"]: r["planned_name"] for r in a}
     assert planned["a.jpg"] == "2024-07-03--14-00-00.jpg" and planned["z.jpg"] == "2024-07-03--14-00-00-001.jpg"
+
+
+@pytest.mark.spec("RUL-suffix_deterministic",
+                  test="TST-geotag_rename_planning-suffixes_do_not_depend_on_the_order_photos_are_met")
+def test_suffixes_do_not_depend_on_the_order_photos_are_met():
+    """Which photo of a destination gets which differentiating suffix does not depend on the order the photos are met
+    in: the same photos, presented in every order, are given the same names."""
+    import itertools
+    files = [_f("6-photos-by-dest/T/c.jpg", "2024-07-03T12:00:00Z"),
+             _f("6-photos-by-dest/T/2024-07-03--14-00-00.jpg", "2024-07-03T13:00:00Z"),   # holds the bare name
+             _f("6-photos-by-dest/T/a.jpg", "2024-07-03T12:00:00Z"),
+             _f("6-photos-by-dest/T/B.JPG", "2024-07-03T12:00:00Z")]
+
+    def names(order):
+        return {r["relative_path"]: r["planned_name"] for r in cal.plan_renames(list(order), FMT)}
+    first = names(files)
+    assert first == {"6-photos-by-dest/T/2024-07-03--14-00-00.jpg": "2024-07-03--15-00-00.jpg",
+                     "6-photos-by-dest/T/B.JPG": "2024-07-03--14-00-00-001.JPG",
+                     "6-photos-by-dest/T/a.jpg": "2024-07-03--14-00-00-002.jpg",
+                     "6-photos-by-dest/T/c.jpg": "2024-07-03--14-00-00-003.jpg"}
+    for order in itertools.permutations(files):
+        assert names(order) == first, [f["relative_path"] for f in order]

@@ -41,18 +41,17 @@ says it, no item states it; each to be ruled into the corpus or the code dropped
 
 ---
 
-### 3. Rules asserted for part of what they cover
+### 3. Two rules asserted as far as a test here can
 
-**Why:** every rule now has a test naming it (the last eleven at `verify: none` got one on 2026-11-14), but a mark
-says a test exists, not how much of the rule it asserts. Known to be asserted in part:
-- `RUL-snapshot_after_validation`, `RUL-snapshot_under_lock`, `RUL-dry_run_validates_saved_plan` — merge only;
-- `RUL-suffix_deterministic` — prep only; `RUL-image_untouched_by_other_phase` — merge and geotag, not prep;
-- `RUL-stale_takeover_conservative` — one host; a second host over a network filesystem is not simulated;
-- `RUL-control_directory_fixed`, `RUL-camera_classes_not_derivation` — prep only;
-- `RUL-filesystem_agnostic` — that no run calls `zfs`; not that nothing else leans on a filesystem feature (file
-  locks, atomic rename, directory sync, device ids are used);
+**Why:** every rule has a test, and each is asserted for every phase it binds (2026-11-14). Two are asserted only as
+far as one machine allows:
+- `RUL-stale_takeover_conservative` — on one host. Takeover rests on the kernel's file lock alone; a second host
+  holding the lock over a network filesystem is not simulated.
+- `RUL-filesystem_agnostic` — that no run calls `zfs`. That nothing else leans on a filesystem's features is not
+  asserted: file locks, atomic rename, syncing a folder and device ids are all used.
 
-**Do:** assert the rest, or rule it out of the rule.
+**To be ruled:** accept each as the limit of what is tested, or narrow the rule to what is (the second could name the
+features cartographer does require of a filesystem).
 
 ---
 

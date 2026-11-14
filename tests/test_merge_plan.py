@@ -359,6 +359,35 @@ def test_plan_is_deterministic(tmp_path, monkeypatch):
     assert _plan_of(ws)["plan_id"] == first
 
 
+@pytest.mark.spec("RUL-suffix_deterministic",
+                  test="TST-merge_plan-collision_suffixes_do_not_depend_on_the_order_photos_are_met")
+def test_collision_suffixes_do_not_depend_on_the_order_photos_are_met(tmp_path, monkeypatch):
+    """Which incoming photo gets which differentiating suffix around the library's photo does not depend on the
+    order the photos are met in: the same photos, recorded in the opposite order and listed by the filesystem in
+    the opposite order, are given the same names."""
+    photos = [{"fp": "N1", "dest": "Trip", "final_name": "ts.jpg"},
+              {"fp": "N2", "dest": "Trip", "final_name": "TS.JPG"},
+              {"fp": "N3", "dest": "Trip", "final_name": "Ts.jpg"}]
+    library = [{"fp": "OLD", "dest": "Trip", "name": "ts.jpg"}, {"fp": "OLD2", "dest": "Trip", "name": "TS-001.jpg"}]
+
+    def names(name, photos, library):
+        (tmp_path / name).mkdir()
+        ws, lib, fp = _build_ws(tmp_path / name, photos, library)
+        _patch_fp(monkeypatch, fp)
+        assert merge._run_locked_workflow("plan", str(ws)) == 0
+        return {f["preconditions"]["content_fingerprint"]: (f["disposition"], f["resolved_name"])
+                for f in _files(_plan_of(ws))}
+
+    first = names("one", photos, library)
+    assert first == {"N2": ("renamed_incoming", "TS-002.JPG"), "N3": ("renamed_incoming", "Ts-003.jpg"),
+                     "N1": ("renamed_incoming", "ts-004.jpg")}
+    real_listdir = os.listdir
+    monkeypatch.setattr(os, "listdir", lambda *a: sorted(real_listdir(*a), reverse=True))
+    assert names("two", photos[::-1], library[::-1]) == first
+    monkeypatch.setattr(os, "listdir", lambda *a: sorted(real_listdir(*a)))
+    assert names("three", photos[1:] + photos[:1], library) == first
+
+
 @pytest.mark.spec("RUL-dry_run_summarises_the_real_plan", test="TST-merge_plan-dry_run_summarizes_validated_plan")
 def test_dry_run_summarizes_validated_plan(tmp_path, monkeypatch, capsys):
     ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])

@@ -111,6 +111,108 @@ def test_dry_run_summarizes_not_dumps(tmp_path, monkeypatch, capsys):
         json.loads(out)
 
 
+def _validations(monkeypatch, events):
+    """Record in `events` each validation of a plan against its dependencies, by the plan's id."""
+    real = prep.PlanValidator.validate_plan_preflight
+
+    def validate(plan, current_workspace):
+        events.append(("validate", plan.plan_id))
+        return real(plan, current_workspace)
+    monkeypatch.setattr(prep.PlanValidator, "validate_plan_preflight", staticmethod(validate))
+
+
+@pytest.mark.spec("RUL-dry_run_validates_saved_plan", test="TST-cli-prep_dry_run_validates_the_saved_plan")
+def test_prep_dry_run_validates_the_saved_plan(tmp_path, monkeypatch, capsys):
+    """Prep's dry run validates the plan saved for execute, as saved: it passes the saved plan and names it, refuses it
+    once a dependency of it has changed since planning, and refuses it once the saved plan itself would be refused —
+    as execute refuses it."""
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "note.txt").write_text("stray")       # a real plan (not nothing-to-do)
+    assert _main(monkeypatch, ws, "plan") == 0
+    pp = utils.prep_plan_path(str(ws))
+    saved = open(pp).read()
+    pid = json.loads(saved)["plan_id"]
+    events = []
+    _validations(monkeypatch, events)
+    capsys.readouterr()
+    assert _main(monkeypatch, ws, "dry-run") == 0
+    assert events == [("validate", pid)] and pid in capsys.readouterr().out
+
+    cfg_p = ws / ".photos-ingest" / "photos-00-config.json"
+    cfg = cfg_p.read_text()
+    cfg_p.write_text(cfg + "\n")                               # a dependency changed after planning
+    assert _main(monkeypatch, ws, "dry-run") == 1
+    assert "workspace config changed" in capsys.readouterr().err
+    cfg_p.write_text(cfg)
+
+    doctored = json.loads(saved)
+    doctored["blockers"] = ["a blocker written into the saved plan"]
+    open(pp, "w").write(json.dumps(doctored))                  # the saved plan itself no longer passes
+    assert _main(monkeypatch, ws, "dry-run") == 1
+    assert "a blocker written into the saved plan" in capsys.readouterr().err
+    assert _main(monkeypatch, ws, "execute") == 1              # the plan execute would refuse too
+    assert (ws / "0-sources" / "note.txt").exists()
+    open(pp, "w").write(saved)
+    assert _main(monkeypatch, ws, "dry-run") == 0
+
+
+def _fake_snapshots(monkeypatch, ws, probe):
+    """Snapshots on in the workspace's configuration (before `plan`, which depends on it) and `zfs snapshot` faked:
+    each snapshot asked for records `probe()` in the returned list."""
+    cfg_p = ws / ".photos-ingest" / "photos-00-config.json"
+    cfg = json.loads(cfg_p.read_text())
+    cfg["zfs"] = dict(cfg["zfs"], enabled=True)
+    cfg_p.write_text(json.dumps(cfg))
+    taken = []
+
+    def take(ws_root, plan_id, label, **_k):
+        taken.append(probe())
+        return {"required": False, "ok": True, "snapshot_name": f"pool/ws@{label}-{plan_id}",
+                "command": "zfs snapshot", "exit_code": 0, "stdout": "", "stderr": ""}
+    monkeypatch.setattr(utils, "take_zfs_snapshot", take)
+    return taken
+
+
+@pytest.mark.spec("RUL-snapshot_after_validation", test="TST-cli-prep_takes_no_snapshot_before_the_plan_is_validated")
+def test_prep_takes_no_snapshot_before_the_plan_is_validated(tmp_path, monkeypatch, capsys):
+    """Prep's snapshot follows the plan's validation against its dependencies: a plan whose configuration changed
+    after planning is refused with no snapshot taken at all, and a plan that passes is validated first."""
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "note.txt").write_text("stray")
+    events = []
+    _fake_snapshots(monkeypatch, ws, lambda: events.append("snapshot"))
+    assert _main(monkeypatch, ws, "plan") == 0
+    pid = json.load(open(utils.prep_plan_path(str(ws))))["plan_id"]
+    _validations(monkeypatch, events)
+
+    cfg_p = ws / ".photos-ingest" / "photos-00-config.json"
+    cfg = cfg_p.read_text()
+    cfg_p.write_text(cfg + "\n")                               # a dependency changed after planning
+    assert _main(monkeypatch, ws, "execute") == 1
+    assert events == [("validate", pid)]                       # refused, and no snapshot taken
+    assert (ws / "0-sources" / "note.txt").exists()
+
+    cfg_p.write_text(cfg)
+    events.clear()
+    assert _main(monkeypatch, ws, "execute") == 0
+    assert events == [("validate", pid), "snapshot"], events
+    assert not (ws / "0-sources" / "note.txt").exists()        # and the plan was carried out
+
+
+@pytest.mark.spec("RUL-snapshot_under_lock", test="TST-cli-prep_snapshot_is_taken_while_the_lock_is_held")
+def test_prep_snapshot_is_taken_while_the_lock_is_held(tmp_path, monkeypatch, capsys):
+    """Prep's snapshot is taken while the workspace lock is held: probed, from a file descriptor of its own, at the
+    moment the snapshot is asked for."""
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "note.txt").write_text("stray")
+    held = _fake_snapshots(monkeypatch, ws,
+                           lambda: utils.WorkspaceLock(str(ws), create=False).held_owner() is not None)
+    assert _main(monkeypatch, ws, "plan") == 0
+    assert _main(monkeypatch, ws, "execute") == 0
+    assert held == [True], held
+    assert utils.WorkspaceLock(str(ws), create=False).held_owner() is None   # the probe tells held from free
+
+
 @pytest.mark.spec("RUL-replanning_keeps_the_prior", "RUL-set_aside_plan_reported",
                   test="TST-cli-replan_backs_up_previous_plan")
 def test_replan_backs_up_previous_plan(tmp_path, monkeypatch, capsys):

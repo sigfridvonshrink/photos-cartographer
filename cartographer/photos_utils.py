@@ -1013,8 +1013,8 @@ def quarantine_footprint(ws: str) -> dict:
             plan_ids.append(entry.name)
             for root, _dirs, fnames in os.walk(entry.path):
                 for fn in fnames:
-                    if fn == "manifest.json":
-                        continue
+                    if fn == "manifest.json" or (root == entry.path and fn.startswith(".tmp-manifest-")):
+                        continue        # the manifest, or what an interrupted rewrite of it left: not a quarantined file
                     try:
                         total_bytes += os.path.getsize(os.path.join(root, fn))
                         total_files += 1

@@ -737,6 +737,91 @@ def test_execute_aborts_when_required_snapshot_fails(tmp_path, monkeypatch):
     assert s["blockers"] and "snapshot failed" in s["blockers"][0]
 
 
+@pytest.mark.spec("RUL-camera_classes_not_derivation",
+                  test="TST-geotag_execution-reclassing_a_camera_group_changes_its_treatment_not_its_key")
+def test_reclassing_a_camera_group_changes_its_treatment_not_its_key(tmp_path, monkeypatch):
+    """Of a camera group the configuration sets only its class: the same group classed as a fixed-clock camera, then
+    as a phone, then as a camera again, is treated as each — a clock offset decided for it as a camera, none as a
+    phone — and is the same group in geotag's records every time, under the key prep derived."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    cfg_p = ctl / "photos-00-config.json"
+    seen = []
+    for groups in ({"fixed_clock_cameras": [CAM], "phones": []}, {"fixed_clock_cameras": [], "phones": [CAM]},
+                   {"fixed_clock_cameras": [CAM], "phones": []}):
+        cfg = json.loads(cfg_p.read_text())
+        cfg["camera_time_and_timezone_policy"]["device_groups"] = groups
+        cfg_p.write_text(json.dumps(cfg))
+        monkeypatch.chdir(str(ws))
+        monkeypatch.setattr(sys, "argv", ["photos-2-geotag", "plan"])
+        try:
+            cal.main()
+        except SystemExit as e:
+            assert not e.code, groups
+        dest = json.load(open(ctl / "photos-21-time-decisions.json"))["destinations"]["6-photos-by-dest/T"]
+        cells = dest.get("camera_group_time_decisions") or {}
+        seen.append((dest["camera_groups_present"], {k: c["camera_group_class"] for k, c in cells.items()}))
+        assert json.load(open(ctl / "photos-24-executable-plan.json"))["status"] == "ready", groups
+    assert seen == [([CAM], {CAM: "camera"}), ([CAM], {}), ([CAM], {CAM: "camera"})], seen
+
+
+_SNAPSHOTS_ON = {"enabled": True, "snapshots_required": False, "snapshot_prefix": "px-",
+                 "datasets": {"workspace": "auto", "library": "auto"}}
+
+
+def _fake_snapshot(monkeypatch, probe):
+    """Fake geotag's snapshot: each one asked for records `probe()` in the returned list."""
+    taken = []
+
+    def take(ws, plan_id, label, **_k):
+        taken.append(probe())
+        return {"required": False, "ok": True, "snapshot_name": f"pool/ws@px-{label}-{plan_id}",
+                "command": "zfs snapshot", "exit_code": 0, "stdout": "", "stderr": ""}
+    monkeypatch.setattr(cal, "take_zfs_snapshot", take)
+    return taken
+
+
+@pytest.mark.spec("RUL-snapshot_after_validation",
+                  test="TST-geotag_execution-no_snapshot_before_the_plan_is_validated")
+def test_no_snapshot_before_the_plan_is_validated(tmp_path, monkeypatch):
+    """Geotag's snapshot follows the plan's validation against its dependencies: a plan whose time decisions were
+    edited after planning is refused with no snapshot taken at all, and a plan that passes is validated first."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch, zfs=_SNAPSHOTS_ON)
+    _mock_tools(monkeypatch, ws)
+    events = []
+    _fake_snapshot(monkeypatch, lambda: events.append("snapshot"))
+    real = cal.GeotagWorkflow.revalidate_plan
+
+    def revalidate(self, *a, **k):
+        events.append("revalidate"); return real(self, *a, **k)
+    monkeypatch.setattr(cal.GeotagWorkflow, "revalidate_plan", revalidate)
+
+    td = ctl / "photos-21-time-decisions.json"
+    decided = td.read_bytes()
+    td.write_text(json.dumps(json.loads(decided), indent=1))    # a dependency changed after planning
+    before = sorted(os.listdir(ws / "6-photos-by-dest" / "T"))
+    assert _execute(monkeypatch, ws) == 2
+    assert events == ["revalidate"], events                     # refused, and no snapshot taken
+    assert sorted(os.listdir(ws / "6-photos-by-dest" / "T")) == before
+
+    td.write_bytes(decided)
+    events.clear()
+    assert _execute(monkeypatch, ws) == 0
+    assert events[:2] == ["revalidate", "snapshot"], events
+    assert _summary(ctl)["snapshot"]["ok"]
+
+
+@pytest.mark.spec("RUL-snapshot_under_lock", test="TST-geotag_execution-snapshot_is_taken_while_the_lock_is_held")
+def test_snapshot_is_taken_while_the_lock_is_held(tmp_path, monkeypatch):
+    """Geotag's snapshot is taken while the workspace lock is held: probed, from a file descriptor of its own, at the
+    moment the snapshot is asked for."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch, zfs=_SNAPSHOTS_ON)
+    _mock_tools(monkeypatch, ws)
+    held = _fake_snapshot(monkeypatch, lambda: utils.WorkspaceLock(str(ws), create=False).held_owner() is not None)
+    assert _execute(monkeypatch, ws) == 0
+    assert held == [True], held
+    assert utils.WorkspaceLock(str(ws), create=False).held_owner() is None   # the probe tells held from free
+
+
 @pytest.mark.spec("RUL-execution_only_the_plan")
 def test_execute_applies_recorded_plan_verbatim_no_recalc(tmp_path, monkeypatch):
     """RUL-execution_only_the_plan (anti): execute applies the recorded photos-24 plan VERBATIM and never recalculates a

@@ -364,6 +364,20 @@ class GeotagWorkflow:
             blockers.append(f"Forbidden symlink at the workspace root: {', '.join(root_syms)}. Symlinks are "
                             "never followed; remove it before geotagging.")
             return blockers, warnings, info
+        # The configuration is read first: it names the managed folders the checks below look for
+        # (RUL-control_directory_fixed — it is found without knowing any of them).
+        cfg_p = config_path(ws)
+        if not os.path.exists(cfg_p):
+            blockers.append("Workspace config photos-00-config.json is missing — run prep first: `photos-cartographer prep plan` then `photos-cartographer prep execute`.")
+            return blockers, warnings, info
+        try:
+            load_config(ws)                 # the workspace's file, whole and checked, replaces CONFIG
+        except ValueError as e:
+            blockers.append(f"Invalid workspace config: {e}")
+            return blockers, warnings, info
+        except Exception as e:
+            blockers.append(f"Workspace config could not be read: {e}")
+            return blockers, warnings, info
         # The activated workspace must have its full 0-6 structure. A managed folder that is missing or
         # no longer a directory means the root is non-conforming — almost always an inadvertent user
         # deletion (possibly of irreplaceable media) — so HARD STOP; geotag never creates folders.
@@ -380,19 +394,6 @@ class GeotagWorkflow:
                             "the managed folders and hidden entries.")
             return blockers, warnings, info
 
-        # 2. Config (read-only) + handoff — both must exist; geotag never seeds/writes config.
-        cfg_p = config_path(ws)
-        if not os.path.exists(cfg_p):
-            blockers.append("Workspace config photos-00-config.json is missing — run prep first: `photos-cartographer prep plan` then `photos-cartographer prep execute`.")
-            return blockers, warnings, info
-        try:
-            load_config(ws)                 # the workspace's file, whole and checked, replaces CONFIG
-        except ValueError as e:
-            blockers.append(f"Invalid workspace config: {e}")
-            return blockers, warnings, info
-        except Exception as e:
-            blockers.append(f"Workspace config could not be read: {e}")
-            return blockers, warnings, info
         cfg = CONFIG
 
         ho_p = handoff_path(ws)
@@ -2316,6 +2317,10 @@ def _auto_reprep_for_clean_move(args, workspace_root, reporter):
         return
     if is_sealed(workspace_root) or not os.path.exists(guard_path(workspace_root)):
         return
+    try:
+        load_config(workspace_root)     # the folders are named by the workspace's configuration
+    except Exception:
+        return                          # missing or invalid — the preflight says so
     sources = folder_name('sources')
     src = os.path.join(workspace_root, sources)
     if os.path.isdir(src) and os.listdir(src):

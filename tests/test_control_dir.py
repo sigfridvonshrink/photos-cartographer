@@ -232,6 +232,43 @@ def test_an_interrupted_record_rewrite_leaves_the_record_whole(tmp_path, monkeyp
     assert _json.loads(p.read_text()) == new
 
 
+@pytest.mark.spec("RUL-rewrite_in_place_atomic",
+                  test="TST-control_dir-an_interrupted_editor_save_leaves_the_decision_file_whole")
+def test_an_interrupted_editor_save_leaves_the_decision_file_whole(tmp_path, monkeypatch):
+    """A decision file the editor rewrites, interrupted — while the new text is half written, or with it written but
+    not yet in the file's place — holds its earlier content whole. The temp file such an interruption leaves is no
+    record: the archival package does not carry it, and the next save writes over it and puts the new content down
+    whole."""
+    import builtins
+    import json as _json
+    from cartographer.editor import server as editor
+    cd = tmp_path / ".photos-ingest"; cd.mkdir()
+    p = cd / "photos-21-time-decisions.json"
+    left = cd / "photos-21-time-decisions.json.tmp"
+    editor._write_json(str(p), {"v": 1})
+    before = p.read_bytes()
+    new = {"v": "x" * 100_000}
+    real_open = builtins.open
+
+    def open_cut(file, mode="r", *a, **k):
+        f = real_open(file, mode, *a, **k)
+        return _CutOffMidWrite(f) if (str(file) == str(left) and "w" in mode) else f
+
+    def interrupted_rename(*a, **k):
+        raise KeyboardInterrupt
+    for cut in (lambda m: m.setattr(builtins, "open", open_cut),
+                lambda m: (m.setattr(os, "replace", interrupted_rename), m.setattr(os, "rename", interrupted_rename))):
+        with monkeypatch.context() as m:
+            cut(m)
+            with pytest.raises(KeyboardInterrupt):
+                editor._write_json(str(p), new)
+        assert p.read_bytes() == before
+        assert left.exists()                                   # what the interruption leaves behind ...
+        assert utils.control_archive_members(str(tmp_path)) == [".photos-ingest/photos-21-time-decisions.json"]
+    editor._write_json(str(p), new)                            # ... the next save writes over
+    assert _json.loads(p.read_text()) == new and not left.exists()
+
+
 @pytest.mark.spec("RUL-control_records_never_media", test="TST-control_dir-media_inside_control_dir_is_not_inventoried")
 def test_media_inside_control_dir_is_not_inventoried(tmp_path, monkeypatch):
     _mock(monkeypatch)

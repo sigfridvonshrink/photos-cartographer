@@ -160,6 +160,20 @@ class MergeWorkflow:
             blockers.append(f"Forbidden symlink at the workspace root: {', '.join(root_syms)}. Symlinks are "
                             "never followed; remove it before merging.")
             return blockers, warnings, info
+        # The configuration is read first: it names the managed folders the checks below look for
+        # (RUL-control_directory_fixed — it is found without knowing any of them).
+        cfg_p = config_path(ws)
+        if not os.path.exists(cfg_p):
+            blockers.append("Workspace config photos-00-config.json is missing — run prep first: `photos-cartographer prep plan` then `photos-cartographer prep execute`.")
+            return blockers, warnings, info
+        try:
+            load_config(ws)                 # the workspace's file, whole and checked, replaces CONFIG
+        except ValueError as e:
+            blockers.append(f"Invalid workspace config: {e}")
+            return blockers, warnings, info
+        except Exception as e:
+            blockers.append(f"Workspace config could not be read: {e}")
+            return blockers, warnings, info
         # 0c. The managed 0-6 structure must be intact (RUL-missing_folder_blocks) — merge never creates/repairs it.
         struct_missing = missing_managed_folders(ws)
         if struct_missing:
@@ -174,19 +188,6 @@ class MergeWorkflow:
                             "the managed folders and hidden entries.")
             return blockers, warnings, info
 
-        # Config (read-only) — must exist and be valid; merge's data path never writes it.
-        cfg_p = config_path(ws)
-        if not os.path.exists(cfg_p):
-            blockers.append("Workspace config photos-00-config.json is missing — run prep first: `photos-cartographer prep plan` then `photos-cartographer prep execute`.")
-            return blockers, warnings, info
-        try:
-            load_config(ws)                 # the workspace's file, whole and checked, replaces CONFIG
-        except ValueError as e:
-            blockers.append(f"Invalid workspace config: {e}")
-            return blockers, warnings, info
-        except Exception as e:
-            blockers.append(f"Workspace config could not be read: {e}")
-            return blockers, warnings, info
         cfg = CONFIG
 
         # 5. Config valid + library_root is a blessed library (RUL-library_place_checked; RUL-library_mark_required).

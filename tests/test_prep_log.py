@@ -225,6 +225,50 @@ def test_noop_rerun_leaves_log_byte_identical(tmp_path, monkeypatch):
     assert open(utils.prep_log_path(str(ws)), "rb").read() == first
 
 
+@pytest.mark.spec("RUL-rewrite_in_place_atomic", test="TST-prep_log-an_interrupted_log_rewrite_leaves_the_log_whole")
+def test_an_interrupted_log_rewrite_leaves_the_log_whole(tmp_path, monkeypatch):
+    """Prep's log, rewritten in place by a run and interrupted — while the new log is half written, or with it
+    written but not yet in the earlier one's place — is the earlier log, whole; the next run puts the new one down
+    whole."""
+    import tempfile
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    _run(ws)
+    plp = utils.prep_log_path(str(ws))
+    before = open(plp, "rb").read()
+    log_fds, real_mkstemp, real_dump, real_replace = set(), tempfile.mkstemp, json.dump, prep.replace_durably
+
+    def mkstemp(*a, **k):                                    # the new log's temp file, told from the others
+        fd, path = real_mkstemp(*a, **k)
+        if k.get("prefix") == ".tmp-prep-log-":
+            log_fds.add(fd)
+        return fd, path
+
+    def dump_half(obj, fp, **kw):
+        if fp.fileno() not in log_fds:
+            return real_dump(obj, fp, **kw)
+        text = json.dumps(obj, **kw)
+        fp.write(text[:len(text) // 2]); fp.flush()
+        raise KeyboardInterrupt
+
+    def rename_not_reached(tmp, path):
+        if path == plp:
+            raise KeyboardInterrupt
+        return real_replace(tmp, path)
+    for name, cut in (("b.jpg", lambda m: (m.setattr(tempfile, "mkstemp", mkstemp), m.setattr(json, "dump", dump_half))),
+                      ("c.jpg", lambda m: m.setattr(prep, "replace_durably", rename_not_reached))):
+        (ws / "0-sources" / name).write_bytes(name.encode() * 4)   # new work, so a new log is written
+        with monkeypatch.context() as m:
+            cut(m)
+            with pytest.raises(KeyboardInterrupt):
+                _run(ws)
+        assert open(plp, "rb").read() == before, name
+    (ws / "0-sources" / "d.jpg").write_bytes(b"DDDD")
+    _run(ws)
+    assert open(plp, "rb").read() != before and _log(ws)["photos"]   # the new log, whole
+
+
 @pytest.mark.spec("RUL-log_entry_grows", "RUL-log_entry_append_only",
                   test="TST-prep_log-recognized_move_appends_moved_to_by_dest")
 def test_recognized_move_appends_moved_to_by_dest(tmp_path, monkeypatch):
