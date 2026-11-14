@@ -710,7 +710,7 @@ class GeotagWorkflow:
             own_country, removed = prior_ud.get("country", "") or "", None
             above = next((eff_country[a] for a in _walk_ancestors(dest) if a in eff_country), None)
             if own_country and above:
-                # Nothing inside a country chooses a country: the choice above stands, this one is taken out
+                # What lies inside a destination is in that destination's country: the one said above stands, this one is taken out
                 # of the decision — said aloud, and left in the record of this run.
                 removed = {"country": own_country, "because": above[1], "country_there": above[0]}
                 self.country_removals.append(dict(removed, destination=dest))
@@ -2445,9 +2445,9 @@ def run(args):
             if _td_bak:
                 reporter.log(f"  Previous {TIME_DECISIONS_ARTIFACT} backed up to {_td_bak}")
             for cr in wf.country_removals:
-                reporter.warn(f"  Warning: {cr['destination']}: the country chosen there ({cr['country']}) was removed — "
-                              f"{cr['because']}, which it lies in, is {cr['country_there']}. A country is chosen "
-                              "once, at the top of its tree, and nothing inside it chooses another: that is how "
+                reporter.warn(f"  Warning: {cr['destination']}: the country said there ({cr['country']}) was removed — "
+                              f"{cr['because']}, which it lies in, is in {cr['country_there']}, and so is everything "
+                              "inside it. A country is said once, at the top of its tree: that is how "
                               f"{folder_name('photos_by_dest')} must be laid out.")
             need_tz = sum(1 for d in artifact["destinations"].values()
                           if d["destination_timezone"]["requires_user_input"])

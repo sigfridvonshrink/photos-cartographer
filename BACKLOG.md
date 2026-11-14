@@ -587,7 +587,7 @@ on a re-run by their unchanged values.
 ### 47. What the country choice leaves open
 
 **Built 2026-11-14:** a destination holding photos has one timezone (`RUL-destination_has_one_timezone`); a folder
-is said to be a country by the user, by code, from the zone database's own list (`RUL-country_gives_its_timezone`):
+is said to be in a country by the user, by code, from the zone database's own list (`RUL-country_gives_its_timezone`):
 one timezone — given to everything inside; several — none given, none let through from above, every zone written
 inside held to the country's. A country is chosen once, at the top of its tree; one chosen inside another is taken
 out with a warning (`RUL-country_chosen_once`). Recognising a country by its folder's name was rejected: names are

@@ -140,20 +140,20 @@ A destination holding photos SHALL have one timezone for all of them.
 :verify: required
 :uses: DEF-geotag, DEF-decision
 
-A destination the user says is a country SHALL give its timezone to every destination within it where the country has
-one, and none where it has several — each destination within then answering for itself, among that country's
-timezones only.
+A destination the user says is in a country SHALL take that country's timezone, with every destination within it,
+where the country has one; where it has several none is given, and it and each destination within answer for
+themselves, among that country's timezones only.
 :::
 
-:::{rul} A country is chosen once, at the top of its tree
+:::{rul} A country is said once, at the top of its tree
 :id: RUL-country_chosen_once
 :status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-country_gives_its_timezone
 
-A country chosen within a destination that is a country SHALL be taken out of the decision, the user told that it was
-and why.
+A country said of a destination within one already said to be in a country SHALL be taken out of the decision, the
+user told that it was and why.
 :::
 
 :::{rul} A timezone stands against the photos only on the user's word

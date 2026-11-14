@@ -753,7 +753,7 @@ function controls(ref) {
     if ((c.proposal_source === "config_default" || c.contradicted_by) && c.proposed_iana_timezone && !u.manual_iana_timezone)
       wrap.append(el("button", { class: "mini", onclick: () => edit(ref, "manual_iana_timezone", c.proposed_iana_timezone) },
         `use ${c.proposed_iana_timezone}`));
-    // The country this folder is — whatever it is called. Chosen once, at the top of its tree: inside a country
+    // The country this folder is in — whatever it is called. Said once, at the top of its tree: inside a country
     // none is chosen, and choosing one here takes out any chosen inside.
     const k = effectiveCountry(ref.dest), above = k && k.from !== ref.dest, table = state.work.time?.countries || {};
     if (Object.keys(table).length) {
@@ -765,14 +765,14 @@ function controls(ref) {
       csel.addEventListener("change", () => {
         const removed = csel.value ? clearCountriesInside(ref.dest) : [];
         if (removed.length) state.message = `Country removed from ${removed.length} folder${removed.length === 1 ? "" : "s"} inside ` +
-          `(${removed.map(leaf).join(", ")}): a country is chosen once, at the top of its tree — that is how photos by destination must be laid out.`;
+          `(${removed.map(leaf).join(", ")}): what lies inside a folder is in that folder's country, said once at the top — that is how photos by destination must be laid out.`;
         edit(ref, "country", csel.value);
       });
-      wrap.append(el("label", { class: "ctl-field" }, el("span", {}, "Country"), csel));
-      if (above) wrap.append(el("div", { class: "hint" }, `${countryInfo(k.code)?.name || k.code}, chosen at ${leaf(k.from)}: a country is chosen once, at the top of its tree.`));
+      wrap.append(el("label", { class: "ctl-field" }, el("span", {}, "In country"), csel));
+      if (above) wrap.append(el("div", { class: "hint" }, `In ${countryInfo(k.code)?.name || k.code}, as said at ${leaf(k.from)}: a country is said once, at the top of its tree.`));
       else if (k && k.zones.length > 1) wrap.append(el("div", { class: "hint" }, `${k.zones.length} timezones: each folder inside answers for itself; none is passed down from here.`));
       if (c.country_removed) wrap.append(el("div", { class: "hint warn" },
-        `The country chosen here (${c.country_removed.country}) was removed by the last run: ${leaf(c.country_removed.because)} above is ${c.country_removed.country_there}, and nothing inside a country chooses another.`));
+        `The country said here (${c.country_removed.country}) was removed by the last run: ${leaf(c.country_removed.because)} above is in ${c.country_removed.country_there}, and so is everything inside it.`));
     }
     const sel = tzSelect(u.manual_iana_timezone, (v) => edit(ref, "manual_iana_timezone", v), false, k ? k.zones : null);
     wrap.append(el("label", { class: "ctl-field" }, el("span", {}, "Manual timezone"), sel));
