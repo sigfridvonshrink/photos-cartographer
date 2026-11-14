@@ -76,16 +76,21 @@ CONFIG = {
         }
     },
     "gpx_root": "/srv/pictures/gpslogs/gpx",
+    # Every setting below bounds ONE thing: none is read for a second purpose, so each can be retuned
+    # without moving another.
+    # A track point this close in time to a photo is the photo's place.
     "gpx_direct_match_max_seconds": 60.0,
     # The interpolation gap is intentionally generous: at a narrow destination (museum/castle/park)
     # the photographer is stationary or slow and GPS goes sparse/absent (indoors, tree cover,
     # battery-save), so bracketing track points can be far apart in TIME yet close in SPACE. The
     # distance + speed caps below are the real safety net (a long gap only interpolates if you moved
-    # <1 km net), so the time gap can be large without placing a photo somewhere it wasn't. (Mirrors
-    # photo_anchor_interpolation_max_gap_seconds, which is already 1800 for the same kind of bracket.)
+    # <1 km net), so the time gap can be large without placing a photo somewhere it wasn't.
     "gpx_interpolation_max_gap_seconds": 1800.0,
     "gpx_interpolation_max_distance_meters": 1000.0,
     "gpx_interpolation_max_speed_kmh": 150.0,
+    # Two tracks that cover a photo's time and put it farther apart than this are two devices in two
+    # places: nothing says which carried the camera, so the photo is not placed.
+    "gpx_tracks_agree_max_distance_meters": 1000.0,
     # Position-based thresholds for the calibration time-anchor inference (geotag §19):
     # how close a native-GPS frame must be to a GPX point/segment to anchor its real time, and how
     # far supporting anchors' offsets may spread before they conflict. Consumed by geotag.
@@ -94,6 +99,18 @@ CONFIG = {
     "gpx_anchor_max_point_distance_meters": 50.0,
     "gpx_anchor_max_segment_distance_meters": 50.0,
     "gpx_anchor_offset_spread_max_seconds": 120.0,
+    # The longest gap between two track points whose segment may anchor a frame lying beside it.
+    "gpx_anchor_max_segment_gap_seconds": 1800.0,
+    # A track that leaves a frame's place and is back within this long passed it once, not twice.
+    "gpx_anchor_same_pass_max_seconds": 120.0,
+    # A track that stayed by a frame's place longer than this cannot say when in the stay the frame was
+    # taken: the offset it gives is imprecise, never applied without being accepted, and drift-checked.
+    # "By the place" is within this distance of the track's closest approach to the frame.
+    "gpx_anchor_stay_max_seconds": 120.0,
+    "gpx_anchor_stay_distance_meters": 10.0,
+    # An accepted or kept offset still stands while the offset now proposed from the camera's own GPS is
+    # within this of it; farther, the proposal is another one and asks again.
+    "gpx_anchor_decision_tolerance_seconds": 120.0,
     # The largest camera-clock error the time-anchor inference will entertain: a GPX point/segment can
     # only anchor a frame if its timestamp is within this window of the frame's naive time (treated as
     # UTC). Bounds the offset by construction, so a track that merely passes through the SAME PLACE on a
@@ -107,6 +124,17 @@ CONFIG = {
     # edge-of-visit frames (before the first fix / after the last); kept modest because extrapolation
     # has no second bracket and projects the endpoint velocity (risky if the track ended on a drive-away).
     "gpx_extrapolation_max_seconds": 300.0,
+    # Extrapolation follows the track's heading over its last stretch of this length (not its last two
+    # points, whose jitter a long projection magnifies), and only while the projection stays within the
+    # distance below and the track was moving no faster than the speed below; otherwise the photo is
+    # placed at the track's end itself.
+    "gpx_extrapolation_heading_seconds": 60.0,
+    "gpx_extrapolation_max_distance_meters": 1000.0,
+    "gpx_extrapolation_max_speed_kmh": 150.0,
+    # The drift check shows, and is offered only where there is, track within this long of the photos it
+    # checks. Two valid offsets differ by at most two days, so at two days or more every correction the
+    # editor can scrub to lies on the track already shown.
+    "drift_check_track_window_seconds": 172800.0,
     "photo_anchor_interpolation_max_gap_seconds": 1800.0,
     "photo_anchor_extrapolation_max_seconds": 300.0,
     "camera_time_and_timezone_policy": {
@@ -1122,7 +1150,11 @@ _GPX_NUMERIC_KEYS = (
     "gpx_interpolation_max_distance_meters", "gpx_interpolation_max_speed_kmh",
     "gpx_anchor_max_point_distance_meters", "gpx_anchor_max_segment_distance_meters",
     "gpx_anchor_offset_spread_max_seconds", "gpx_anchor_max_clock_error_seconds",
-    "gpx_extrapolation_max_seconds",
+    "gpx_extrapolation_max_seconds", "gpx_extrapolation_heading_seconds",
+    "gpx_extrapolation_max_distance_meters", "gpx_extrapolation_max_speed_kmh",
+    "gpx_tracks_agree_max_distance_meters", "gpx_anchor_max_segment_gap_seconds",
+    "gpx_anchor_same_pass_max_seconds", "gpx_anchor_stay_max_seconds", "gpx_anchor_stay_distance_meters",
+    "gpx_anchor_decision_tolerance_seconds", "drift_check_track_window_seconds",
     "photo_anchor_interpolation_max_gap_seconds", "photo_anchor_extrapolation_max_seconds",
 )
 

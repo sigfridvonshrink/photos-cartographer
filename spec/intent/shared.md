@@ -541,6 +541,15 @@ Every value of the configuration that comes from the user SHALL be validated bef
 configuration — never as a separate, optional pass.
 :::
 
+:::{rul} A setting bounds one thing
+:id: RUL-setting_bounds_one_thing
+:status: seed
+:criticality: med
+:verify: required
+
+A setting of the configuration SHALL bound one judgement only, so that changing it changes no other.
+:::
+
 ## 4. The control records, apart from the media
 
 :::{def} The control records

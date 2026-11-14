@@ -191,13 +191,13 @@ it.
 
 :::{bld} The configuration's keys
 :id: BLD-config_keys
-:status: ruled
-:realises: DEF-config_areas, RUL-folder_names_not_roles, RUL-camera_classes_not_derivation, RUL-extension_one_class, RUL-folder_found_by_role, RUL-config_lists_extensions, RUL-unlisted_extension_other
+:status: seed
+:realises: DEF-config_areas, RUL-folder_names_not_roles, RUL-camera_classes_not_derivation, RUL-extension_one_class, RUL-folder_found_by_role, RUL-config_lists_extensions, RUL-unlisted_extension_other, RUL-setting_bounds_one_thing
 
 The areas SHALL be, at least: the `zfs` block and `snapshots_required` (§2 above);
 `camera_time_and_timezone_policy.device_groups`, with `phones` and `fixed_clock_cameras` ({need}`DEF-camera_group`);
 `filename_timestamp_format` ({need}`BLD-filename_timestamp_format`); `gpx_root` and the GPX thresholds, such as `gpx_direct_match_max_seconds`,
-`gpx_interpolation_max_gap_seconds` and `gpx_interpolation_max_distance_meters` ({need}`DEF-tracks`); the camera-time policy
+`gpx_interpolation_max_gap_seconds` and `gpx_anchor_max_point_distance_meters` ({need}`DEF-tracks`), each read for one judgement only; the camera-time policy
 flags, such as `single_anchor_auto_apply` and `multi_anchor_auto_apply` (geotag); `library_root`
 (merge; {need}`DEF-library`); `folders`, a role→name map of the numbered managed folders
 `0-sources`…`6-photos-by-dest` ({need}`DEF-managed_folders`, prep §3), whose code finds each folder by its role; and `media_extensions`,
