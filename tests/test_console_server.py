@@ -380,6 +380,20 @@ def test_editor_is_folded_in():
         assert callable(getattr(server._editor, fn))
 
 
+def test_edit_tab_reload_after_a_plan_keeps_unsaved_edits():
+    # A console geotag plan reloads the Edit tab only when the editor holds no unsaved edits; otherwise the
+    # console says the decisions were regenerated and leaves the reload to the user. The editor page answers
+    # the question for its same-origin parent, and guards a browser-level reload/close itself.
+    js = server._asset("app.js").decode()
+    reload_fn = js[js.index("function reloadEditFrame"):js.index("function forceReloadEditFrame")]
+    assert "editorHasUnsavedEdits" in reload_fn and "edit-stale-banner" in reload_fn
+    html = server._asset("/").decode()
+    assert 'id="edit-stale-banner"' in html and 'id="edit-reload"' in html
+    editor = server._read_pkg("cartographer.editor", "web", ["app.js"]).decode()
+    assert "window.editorHasUnsavedEdits = hasUnsavedEdits" in editor
+    assert 'addEventListener("beforeunload"' in editor
+
+
 def _editor_ws(tmp_path):
     ws = _init_ws(str(tmp_path))
     with open(os.path.join(U.control_dir(ws), "photos-21-time-decisions.json"), "w") as f:

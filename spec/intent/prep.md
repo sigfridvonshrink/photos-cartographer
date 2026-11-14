@@ -707,8 +707,9 @@ Prep's dry run SHALL change nothing in the workspace.
 :criticality: med
 :verify: required
 
-On an initialized workspace whose inbox holds nothing — no file, and no folder — prep's dry run and execution SHALL
-stop, changing nothing, and not carry out the saved plan.
+On an initialized workspace whose inbox holds nothing — no file, and no folder — and where nothing the user moved,
+removed or changed since the last run waits to be recorded, prep's dry run and execution SHALL stop, changing nothing,
+and not carry out the saved plan.
 :::
 
 :::{rul} The journal is never left torn

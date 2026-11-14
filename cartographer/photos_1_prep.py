@@ -1394,8 +1394,8 @@ class WorkspacePrepWorkflow:
             mime = exiftool_mime_type(sample)
             if mime and (mime.startswith('image/') or mime.startswith('video/')):
                 msg = (f"Dump contains .{e} files that exiftool sees as media ({mime}) but media_extensions "
-                       f"config does not list — they will be set aside in {folder_name('strays')}. Add '.{e}' to the "
-                       f"right media_extensions class in photos-00-config.json and re-run prep to organize them.")
+                       f"config does not list — they will be set aside in {folder_name('strays')}. Add '{e}' (lowercase, no "
+                       f"dot) to the right media_extensions class in photos-00-config.json and re-run prep to organize them.")
                 warnings.append(msg)
                 get_reporter().log(f"  Notice: {msg}")
 
@@ -2853,7 +2853,7 @@ import argparse
 PREP_BLURB = (
     "prep — get a raw photo dump workspace-ready (phase 1 of 3).\n\n"
     "Consolidates a dump into the managed 0-6 folders: normalizes extensions, de-duplicates and "
-    "quarantines (recoverably, never deletes), organizes media by date and into by-dest, and builds "
+    "quarantines (recoverably, never deletes), organizes media by date, records the photos you sort into by-dest, and builds "
     "the hash cache + handoff that the next phase consumes. Planning never mutates; execution applies "
     "only a validated plan. Run inside the workspace directory.\n\n"
     "Next: `photos-cartographer geotag` to place photos in time + on the map."

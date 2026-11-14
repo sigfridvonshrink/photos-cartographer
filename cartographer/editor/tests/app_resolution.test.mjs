@@ -122,3 +122,26 @@ test("a country is chosen once, at the top of its tree; one of several timezones
   // a country of one timezone resolves the cell by itself
   assert.equal(app.wouldResolve({ file: "time", dest: `${y}/Japonia/Kyoto`, kind: "timezone" }), true);
 });
+
+test("previewTz: a zone its photos contradict, not kept, is neither in effect nor passed down", () => {
+  const i = "6-photos-by-dest/Iberia", m = `${i}/Madrid`, pr = `${m}/Prado`;
+  const k = { timezone: "Europe/Lisbon", recorded_offsets: [7200] };
+  const work = { time: { destinations: {
+    [i]: { destination_timezone: { user_decision: { manual_iana_timezone: "Europe/Lisbon" } } },
+    [m]: { destination_timezone: { proposed_iana_timezone: "Europe/Lisbon", proposal_source: "inherited", contradicted_by: k, user_decision: {} } },
+    [pr]: { destination_timezone: { user_decision: {} } },
+  } } };
+  setWork(work);
+  assert.equal(app.previewTz(m), null);
+  assert.equal(app.previewTz(pr), null);                     // and nothing inside reaches past it to Iberia's zone
+  // kept for those photos: in effect, and inherited below
+  work.time.destinations[m].destination_timezone.user_decision.confirmed_despite_recorded_offsets = [7200];
+  assert.deepEqual(app.previewTz(pr), { tz: "Europe/Lisbon", source: "inherited", from: m });
+  // another zone written here: the next run checks that one, and it passes down
+  work.time.destinations[m].destination_timezone.user_decision = { manual_iana_timezone: "Europe/Madrid" };
+  assert.deepEqual(app.previewTz(pr), { tz: "Europe/Madrid", source: "inherited", from: m });
+  // the zone above changed since the run that checked: the one it now inherits is not the one contradicted
+  work.time.destinations[m].destination_timezone.user_decision = {};
+  work.time.destinations[i].destination_timezone.user_decision.manual_iana_timezone = "Europe/Madrid";
+  assert.equal(app.previewTz(pr).tz, "Europe/Madrid");
+});

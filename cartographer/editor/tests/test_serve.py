@@ -457,6 +457,29 @@ def test_edit_has_no_workspace_arg_and_demo_is_the_only_no_workspace_mode():
     assert p.parse_args(["--demo"]).demo is True
 
 
+def test_edit_help_names_both_refusals_and_the_whole_loop():
+    # `edit -h` refuses an uninitialized workspace AND a sealed one, and the loop runs through finalize.
+    assert "sealed" in serve.EDIT_BLURB
+    assert "geotag execute -> geotag finalize" in serve.EDIT_BLURB
+
+
+def test_serve_refuses_a_second_editor_without_naming_a_workspace_argument(tmp_path, capsys):
+    # The editor works on the cwd: the refusal says to close the other editor (or console Edit tab), or to
+    # run this one from another workspace's folder — never to "point it at" a workspace it takes no argument for.
+    ws = _workspace_with_fixtures(tmp_path)
+    open(os.path.join(ws, serve.CONTROL, serve.GUARD_NAME), "w").close()
+    held, _ = serve._acquire_editor_lock(ws)
+    try:
+        with pytest.raises(SystemExit) as e:
+            serve.serve(ws, port=0)
+        assert e.value.code == 1
+    finally:
+        held.close()
+    err = capsys.readouterr().err
+    assert "console" in err and "run this one from another workspace's folder" in err
+    assert "point this one" not in err
+
+
 def _seal(ws):
     (open(os.path.join(ws, serve.CONTROL, "photos-00-sealed.json"), "w")
      .write('{"sealed": true, "merged_run_id": "r1"}'))

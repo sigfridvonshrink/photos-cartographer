@@ -1,43 +1,100 @@
 # Concepts
 
-The ideas behind photos-cartographer — *why* the pipeline is shaped the way it is. Read this once and
-the [quick start](quickstart.md) and the [editor guide](editor.md) will make sense. For the safety
-model see the [main README](../README.md) and the authoritative specs in [`spec/`](../spec/); for the
-tool comparison, [How this compares](comparison.md).
+The ideas behind photos-cartographer — *why* the pipeline is shaped the way it is, and what it does
+when something is not as it should be. Read this once and the [quick start](quickstart.md) and the
+[editor guide](editor.md) will make sense. For the safety model see the [main README](../README.md); the
+behaviour described here is defined by [the specification](../spec/README.md). For the tool comparison,
+see [How this compares](comparison.md).
 
 ---
 
 ## The workspace and its numbered folders
 
 All work happens inside a **workspace**: a transient working area, separate from your permanent photo
-library. A workspace is *initialized* the first time you run `prep` in a folder — that creates the
-managed structure and a hidden control directory `.photos-ingest/` (config, decision files, journals,
-the SQLite cache, and disposable memos of the fingerprints planning computed and the tracks it parsed; `prep` skips this subtree
-wholesale, so it can never be mistaken for a photo).
+library, on one filesystem. A workspace begins the first time you run `prep` in a folder: `prep plan`
+creates a hidden control folder `.photos-ingest/` (configuration, plans, decision files, journals, the
+workspace database, and disposable memos of the fingerprints planning computed and the tracks geotag
+parsed; no phase ever takes anything in it for a photo), and the first `prep execute` creates the
+managed folders and moves the dump into the inbox.
 
 The managed folders, by number:
 
 ```
-0-sources/           a raw dump lands here; prep empties it after every run
+0-sources/           the inbox: a dump lands here; prep empties it after every run
 1-strays/<plan-id>/  non-media set aside per run (structure preserved, inert)
-2-missing-metadata/  media with no usable timestamp
-3-redundant-jpgs/    JPEGs that have a RAW sibling
-4-videos-by-date/    timestamped videos, in YYYY-MM-DD/ day folders
-5-photos-by-date/    timestamped photos, in YYYY-MM-DD/ day folders
+2-missing-metadata/  media with no recorded time
+3-redundant-jpgs/    JPEGs that sit beside a RAW of the same name
+4-videos-by-date/    timed videos, in YYYY-MM-DD/ day folders
+5-photos-by-date/    timed photos, in YYYY-MM-DD/ day folders
 6-photos-by-dest/    YOU curate this: photos sorted into destination folders
 ```
 
-`prep` does the mechanical work — consolidate, normalize, deduplicate (to a recoverable quarantine,
-never deleted), and date-organize — landing photos in `5-photos-by-date/`. **You** then move photos
-into `6-photos-by-dest/`; that curation is the one creative step the tool can't do for you, and it's
-what every later phase reasons about. It is **load-bearing, not cosmetic**: a photo's destination is
-the only signal that fixes its timezone, its clock-offset correction, its GPS fallback, and its final
-library location — so a wrong folder silently produces a wrong time or place, not just a misfiled photo.
-(A `prep` re-run after sorting is mandatory so the move is recognized before geotag — see the lifecycle
-below.)
+The top level holds only these folders, `.photos-ingest/`, the quarantine `.photos-ingest-quarantine/`
+and other hidden entries. Anything else there is a misplaced dump and stops every phase.
 
-After a workspace is **merged** into your library it is **sealed**: every phase refuses to touch it,
-and new photos require a fresh workspace.
+`prep` does the mechanical work — consolidate, normalize extensions, set duplicates aside (to a
+recoverable quarantine, never deleted), name each file by its recorded time and organize by date —
+landing photos in `5-photos-by-date/`. **You** then move photos into `6-photos-by-dest/`; that curation
+is the one creative step the tool can't do for you, and it's what every later phase reasons about. It is
+**load-bearing, not cosmetic**: a photo's destination fixes its timezone, which camera-clock correction
+applies to it, its GPS fallback, and its final library location — so a wrong folder produces a wrong
+time or place, not just a misfiled photo. (A `prep` run after sorting records the move before geotag —
+see the [quick start](quickstart.md#then-re-run-prep).)
+
+---
+
+## Plan, dry run, execute
+
+Every change to your files is made the same way, in every phase:
+
+- **Plan** works out every operation and saves it, at a fixed place in `.photos-ingest/` (prep's
+  `photos-10-prep-plan.json`, geotag's `photos-24-executable-plan.json`, merge's
+  `photos-30-merge-plan.json`). Planning moves and changes no photo; it keeps only fingerprints, so the
+  next run need not compute them again. Planning again sets the earlier plan aside as `-001`, `-002`, …
+  rather than overwriting it.
+- **Dry run** (prep and merge) checks the saved plan and summarizes it. It is the plan execute would run,
+  not a simulation. Geotag has no dry run: its plan, and the decision files beside it, are the review.
+- **Execute** carries out the saved plan and nothing else, recording each change in a journal. It first
+  checks that everything the plan was made from still holds — the configuration, the decision files, the
+  tracks, prep's record, each photo, even the version of cartographer that made it. If anything moved,
+  it refuses before changing anything: plan again.
+
+So a plan goes stale when you edit the configuration (any setting), change a decision, add or change a
+track, a file appears in the workspace, or a photo is edited after planning. Geotag never writes over a
+photo edited since its plan. An interrupted run is recoverable: for prep, plan again — it plans from
+what is on disk; for geotag and merge, execute again — it finishes what was outstanding and skips what
+was done.
+
+Only one run acts on a workspace at a time. A second one — in another terminal, the console, or the
+editor's Save — stops at once and says the workspace is locked. A lock left by a run that died is taken
+over once no running process holds it.
+
+---
+
+## The quarantine
+
+When prep finds identical media files (the same fingerprint), it keeps one and moves every other copy to
+`.photos-ingest-quarantine/<plan-id>/`, at the same relative path, with a `manifest.json` saying which
+copy was kept. Prep keeps the copy in the best-filed folder, in this order: photos by destination, photos
+by date, videos by date, redundant JPEGs, missing metadata, the inbox. Hidden files that arrive in a dump
+(`.DS_Store` and the like) go to the quarantine too.
+
+No run ever deletes from the quarantine. To get a file back, move it from the quarantine into
+`0-sources/`; prep treats it as a new file. To free the space, use `prep prune-quarantine`: without
+`--yes` it only lists what it would delete. Choose what to delete with `--plan-id <id>` (repeatable),
+`--older-than-days N` (at least 1), or `--all`. Each prep plan reports how big the quarantine is.
+
+---
+
+## The seal
+
+When merge has moved **every** photo of `6-photos-by-dest/` into the library (or found it already
+there), it marks the workspace **sealed** (`.photos-ingest/photos-00-sealed.json`). A sealed workspace is
+finished: prep, geotag and merge stop as they start, changing nothing, and the editor won't open it.
+Pruning the quarantine is the one change still allowed. If you drop a new dump into a sealed workspace,
+the refusing command points it out and leaves it where it is: new photos go to a fresh workspace.
+
+A merge that leaves any photo behind does not seal. Fix what held the photo back and merge again.
 
 ---
 
@@ -47,7 +104,7 @@ A **destination** is simply *the folder that directly contains a set of photos* 
 `6-photos-by-dest/`. That's the whole rule — a destination is not necessarily a leaf, and a
 destination may contain nested destinations.
 
-The recommended shape is a geographic hierarchy, e.g.:
+The recommended shape is a tree of places, e.g.:
 
 ```
 6-photos-by-dest/
@@ -63,27 +120,30 @@ The recommended shape is a geographic hierarchy, e.g.:
 
 Any folder that **directly holds photos** is a destination — including an intermediate one. Above,
 `Brussels` holds both sub-destinations *and* a loose photo, so it's a normal destination for that photo
-**and** a parent its children inherit from; the pipeline handles that fine. A folder that holds **no
-photos of its own** (purely sub-folders, like `2026` or `Belgium` here) isn't a media destination — the
-pipeline tracks it as a **container**: a propagation point that carries a timezone / GPS-fallback
-decision so you can set defaults once and have them flow down to children (see *What cascades*, below).
-The distinction is only "does this folder directly contain photos" — nothing requires intermediate
-folders to be empty of media.
+**and** a parent its children inherit from. A folder that holds **no photos of its own** (purely
+sub-folders, like `2026` or `Belgium` here) is a **container**: it carries a country, a timezone or a
+GPS-fallback decision that flows down to everything inside (see *What cascades*, below), and never waits
+for an answer itself.
 
-**Why a hierarchy helps:** two facts — the timezone and the folder GPS fallback — inherit *downward*
-through this tree. Set the timezone on `Belgium` once and every place beneath it adopts it; drop a GPS
-fallback on `Brussels` and every leaf under it can fall back to it. A coherent, unitary structure
-means you author each decision at the highest level where it's true and let it propagate, overriding
-only where a leaf differs. It also keeps each "unitary group" of photos — one place, one visit —
-together, which is exactly the unit the next two concepts operate on.
+**Why a hierarchy helps:** the timezone and the folder GPS fallback inherit *downward* through this
+tree. Say once that `Belgium` is in Belgium and every place beneath it has Brussels time; drop a GPS
+fallback on `Brussels` and every place under it can fall back to it. A coherent structure means you
+answer each decision at the highest level where it's true and let it propagate, overriding only where a
+place differs. It also keeps each place's photos together — the unit the clock offset is decided for.
 
-> Moving a photo between destinations is a real input change: it's re-evaluated under the new
-> destination's timezone *and* clock offset on the next run.
+A destination has **one** timezone. Photos taken in another (a stopover on the way, a drive across a
+zone line) belong in a folder of their own.
+
+> Moving a photo between destinations is a real input change: it's decided anew under the new
+> destination's timezone *and* clock offset on the next run, nothing of the old one carried along.
 
 The editor surfaces this tree directly — each destination a row, container folders badged, decisions
 inheriting downward:
 
 ![The destination tree in the editor](screenshots/carto-14-geotag-edit-time-01.png)
+
+*Screenshot from v2.0.0: the timezone panel now has an "In country" choice and, where a default zone is
+configured, a "use …" button; the "accept proposed" box is gone.*
 
 ---
 
@@ -94,7 +154,7 @@ from device-identity metadata (serial / make / model / owner) into a single `cam
 computed once and reused everywhere. It is **not** a folder, a date, or a destination.
 
 Why it matters: the headline trick — inferring a wrong camera clock automatically — works *per
-camera*. The pipeline matches a camera's already-located frames against your GPX track to discover
+camera*. The pipeline matches a camera's own GPS-tagged frames against your GPX tracks to discover
 that camera's clock error, then applies that one correction to the rest of *that camera's* photos.
 That only makes sense within a single clock domain.
 
@@ -106,10 +166,12 @@ So the grouping has to be right:
   evidence its other half has, forcing needless manual work and risking two inconsistent corrections
   for what was one clock.
 
-A camera group also carries a **classification** (a normal camera vs. a smartphone) from config. A
-phone usually records a correct timezone and is solved straight from its own metadata; a camera with a
-wrong, timezone-less clock needs the clock-offset inference. An unrecognized camera stops geotag with a
-ready-to-paste config snippet rather than guessing.
+Each group is **classed** in the configuration, under `camera_time_and_timezone_policy.device_groups`:
+`phones` or `fixed_clock_cameras`. A phone records the offset from UTC with its time, and its photos take
+their true time from that offset (else from their destination's timezone). A camera with a hand-set,
+timezone-less clock needs a clock offset (next sections). A group not yet classed stops geotag, which
+prints both lists ready to paste. A file whose metadata names no camera is never asked about: it is
+solved on its own, by the offset recorded with its time, else its destination's timezone.
 
 ---
 
@@ -119,23 +181,32 @@ A camera's clock error is **constant within one destination on one day**, but **
 reason is human habit: travelling, you tend to set the camera to local time each morning — so the
 offset is a per-day fact. A camera's clock also drifts and is sometimes reset between trips.
 
-So the clock-offset decision is bucketed per **(camera group, destination, day)**. A place you visit on
-two different days gets two independent offset buckets (keyed by the camera's own uncorrected calendar
-date); a single visit that crosses local midnight splits into two by design. The common single-day
-case stays a single bucket.
+So the clock offset is decided per **(camera group, destination, day)**. A place you visit on two
+different days gets two independent offsets (the day taken from the camera's own uncorrected clock); a
+single visit that crosses the camera's midnight splits into two by design. The common single-day case
+stays a single decision. An answer stays with its day when photos of another day arrive or leave.
 
-Each day's bucket gets its offset independently, in priority order:
+Each day's offset is proposed, in this order:
 
-1. **Self-anchored** — that camera's GPS-tagged frames *that day, that place* match the GPX track and
-   reveal the offset directly. (This is the strong case — measured straight off the track.)
-2. **Timezone-derived** — if the destination's timezone is known, the offset is computed from it
-   (DST-aware). Must be confirmed, never auto-applied.
-3. **Manual** — you enter it.
+1. **From the camera's own GPS, there** — that camera's GPS-tagged frames, that day, that place, matched
+   against the tracks. The offset most photos agree on is proposed. When they agree it applies itself —
+   by default for two or more photos (`multi_anchor_auto_apply`); a single photo's offset waits for you
+   (`single_anchor_auto_apply` is off). A place the tracks passed on several visits is matched to the
+   visit the photos agree on; if two visits fit equally, you choose.
+2. **From the camera's own GPS, elsewhere that day** — where none of the day's photos in this
+   destination has a position, the offset the camera's GPS fixed that day in another destination. It
+   applies itself here only where it did there. Two such offsets of one day that disagree by more than
+   `clock_offset_same_day_max_difference_seconds` take effect nowhere until you say which is right.
+3. **From the destination's timezone** — computed from the zone, daylight saving included, assuming the
+   camera kept local time. Never applied on its own: it is confirmed against the tracks in the drift
+   check, or, with no track by the photos, accepted in the Time view.
+4. **By hand** — you type it.
 
-There is deliberately **no inheritance** between buckets: a correction you enter for one day applies
-only to that day, never to a sibling day or a neighbouring place. This is the day-level refinement of
-the rule "clock corrections vary between days and between destinations, never within a single day's
-shoot."
+An accepted proposal records the offset you accepted. If a later run proposes a different one (new
+tracks, more photos), it is asked again, your earlier answer left as you wrote it.
+
+There is deliberately **no inheritance** between days or places: an offset you type or accept on a
+guess for one day applies only to that day, never to a sibling day or a neighbouring place.
 
 ---
 
@@ -143,83 +214,192 @@ shoot."
 
 Two distinct ideas the pipeline keeps carefully separated:
 
-- **Clock offset** — the *constant* correction between a camera's wall-clock and true UTC for one
-  (group, destination, day) bucket. Ideally *measured* from GPX self-anchors. Physical drift between
-  days/trips is handled structurally by re-deriving the offset per bucket, so it never contaminates
-  another bucket.
+- **Clock offset** — the whole number of seconds added to a camera's recorded time to give UTC: the
+  zone the clock was set to and its own error, together. A camera keeping exact Brussels summer time has
+  an offset of −7200, not 0. One per (camera group, destination, day).
 
-- **GPS drift** — the *residual danger* that a clock offset which was **not** measured against the
-  track (i.e. a manual or timezone-derived offset, on a bucket with no GPS-anchored frame) is silently
-  wrong. Because GPS placement positions a photo purely from its corrected UTC, a wrong offset slides
-  the **whole bucket** to the wrong point on the track — drift you'd never see.
+- **GPS drift** — the *residual danger* that an offset the camera's own GPS did **not** fix (derived
+  from the timezone, typed by hand, or found where the track stood still at the photo's place, so the
+  place says nothing of the moment) is silently wrong. Because GPS placement positions a photo purely
+  from its corrected UTC, a wrong offset slides the **whole day's photos** to the wrong point on the
+  track — drift you'd never see.
 
-photos-cartographer forces you to close that gap: a dedicated **drift-validation** step (between time
-and GPS) makes you confirm each at-risk bucket against the track before any GPS is placed. Crucially,
-**inaction is not consent** — an untouched at-risk bucket *blocks* the run; you must actively affirm
-even "the offset is fine, no change." This is the load-bearing safety rule of the time→GPS ordering.
+photos-cartographer forces you to close that gap: a dedicated **drift check** (between time and GPS)
+makes you confirm each such offset against the track before any photo is placed by it. It is offered
+where there is track within `drift_check_track_window_seconds` (two days by default) of the photos.
+Crucially, **inaction is not consent** — an untouched check *blocks* the run; you must actively affirm
+even "the offset is fine, no change." A confirmation holds only for the offset you confirmed: change the
+offset and it is asked again.
 
-Drift validation in the editor: slide a photo along its GPX track until it lines up, and the corrected
+Drift check in the editor: slide a photo along its GPX track until it lines up, and the corrected
 offset is read straight off the track.
 
-![Drift validation — scrubbing a photo along the track](screenshots/carto-22-geotag-edit-drift-track.png)
+![Drift check — scrubbing a photo along the track](screenshots/carto-22-geotag-edit-drift-track.png)
+
+*Screenshot from v2.0.0: a timezone-derived offset now comes to this view without being accepted first,
+and is labelled `timezone_unconfirmed`.*
+
+---
+
+## The timezone
+
+Each destination's **timezone** is what turns a local time into UTC and back: geotag writes every
+photo's corrected time as its destination's local time, with its offset beside it, and names the file by
+it. A destination gets its zone from:
+
+- **a zone you write** — on it, or on a folder above it, the nearest one applying automatically;
+- **its country**: you say which country a folder is in — once, at the top of its tree, whatever the
+  folder is called. A country of one timezone gives it to everything inside. A country of several gives
+  none, and lets none through from above: each destination inside answers for itself, among that
+  country's zones only. A country said again inside another is taken out by the next run, which tells
+  you.
+
+Your configured `default_folder_timezone` is only **offered** to a destination with nothing to inherit —
+one click in the editor — and never applied without you.
+
+A destination has one timezone, so its photos are checked against it: a phone records its offset from
+UTC with each photo, and where a photo's recorded offset is not the zone's at that moment (a phone left
+on home time, a photo from the stopover), the zone does not take effect there, nor pass to folders
+inside, until you move the photo out, choose another zone, or keep this one for those photos.
+
+A local time that a daylight-saving change skips or repeats (02:30 on the night clocks change) reads as
+two instants. Geotag never guesses: it stops, naming the photo and both readings. Write the photo's
+offset into it (the message gives the `exiftool` command) or move it out, then run prep and geotag again.
+For a camera's clock offset, no timezone-derived offset is proposed at such a time: type it.
+
+---
+
+## Placing each photo
+
+GPS is placed only once every photo's true time is resolved. A photo keeps its own GPS position, always.
+One without is placed by the first of:
+
+1. **a position you set** for that photo in the editor;
+2. **the tracks**, at its corrected time — on a track point within `gpx_direct_match_max_seconds`
+   (*matched*), between the two points around it (*interpolated*), or just past the track's end
+   (*extrapolated*, at most `gpx_extrapolation_max_seconds`), each within the limits the `gpx_*`
+   settings set — interpolation never across a time gap, a distance or a speed beyond them;
+3. **its destination's folder fallback**, the "if nothing else placed it, put it here" coordinate.
+
+A photo none of these places waits in the editor's GPS worklist, with why the tracks didn't place it,
+until you give it a position or leave it unlocated. Every position geotag writes says in the photo
+(`GPSProcessingMethod`) how it was found — `matched`, `interpolated`, `extrapolated`, or set by you
+(`manual_locked`, `manual_fallback`) — and `geotag finalize` prints the count of each.
+
+The tracks are read from `gpx_root`: every `*.gpx` file beneath it. Each file is one device's record,
+and each track in a file a track of its own: no photo is placed, and no clock found, from points of two
+different tracks, and a break in a recording is never bridged. Where two tracks cover a photo's time but
+put it farther apart than `gpx_tracks_agree_max_distance_meters`, neither places it, and geotag names the
+two files: take the one that isn't this trip's out of `gpx_root`. With `gpx_root` set to `""`, or no
+track in it, geotag runs without tracks.
 
 ---
 
 ## What cascades down the tree (and what doesn't)
 
-Exactly **two** facts inherit downward through the destination tree, via nearest-resolved-ancestor,
-parent-first, parent→child only (never sibling→sibling):
+Two facts inherit downward through the destination tree, from the nearest folder above that has one,
+parent→child only (never sibling→sibling):
 
-| Fact | Inherits? | Auto-applied? | Reset on a manual edit? |
+| Fact | Inherits? | Applied automatically? | A value written on a folder… |
 |---|---|---|---|
-| **Civil timezone** | yes, downward | yes, by inheritance (the configured default is only offered) | a manual zone **re-roots the chain** at that node for its descendants |
-| **Folder GPS fallback** | yes, downward | no — an inherited fallback must be **confirmed** | a manual fallback **re-roots the chain** at that node for its descendants |
-| **Clock offset** | **no** | only a GPX self-anchor auto-applies | n/a — each day's bucket is re-derived from its own evidence |
+| **Timezone** (from a zone written above, or a country of one zone) | yes, downward | yes — unless the destination's own photos speak against it; the configured default is only offered | **re-roots the chain** at that folder for everything inside |
+| **Folder GPS fallback** | yes, downward | no — an inherited fallback must be **accepted** | **re-roots the chain** at that folder for everything inside |
+| **Clock offset** | **no** | only one the camera's own GPS fixed, when its photos agree | n/a — each day's offset is proposed from its own evidence |
 
-**Re-rooting** is the behavior to internalize: when you author a manual timezone (or fallback) on a
-folder, that value becomes the folder's effective value and the new basis its descendants inherit —
-replacing whatever would have flowed from further up. On the next run, descendants that merely
-inherited the old value re-point to the new one; a descendant that set its *own* value keeps it (it
-overrides, and itself re-roots the chain for *its* descendants).
+**Re-rooting** is the behavior to internalize: when you write a timezone (or fallback) on a folder,
+that value becomes the folder's own and the new basis its descendants inherit — replacing whatever would
+have flowed from further up. On the next run, descendants that merely inherited the old value follow the
+new one; a descendant with its *own* value keeps it (and itself re-roots the chain for *its*
+descendants). A destination that accepted its inherited fallback follows the fallback above it, a later
+change there included.
 
-The **folder GPS fallback** is the per-destination "if nothing else placed this photo, put it here"
-coordinate. It ranks last in GPS resolution — after native GPS, a per-file manual lock, and GPX
-interpolation/extrapolation, and before "leave it unlocated" or "block." It is **optional and never
-blocks**: an inherited fallback is offered as a proposal you *may* confirm, not a gate. A fallback
-placement is recorded as a manual GPS write (reversible) so it's always clear it wasn't measured.
+The folder fallback is **optional and never blocks**: a destination without one simply leaves its
+unplaced photos in the worklist. A fallback placement is written as a manual position
+(`manual_fallback`), so it's always clear it wasn't measured, and it is undone like any decision.
 
 ---
 
 ## Configuration
 
 The pipeline reads one config file per workspace: `.photos-ingest/photos-00-config.json`. It's
-**seeded** from built-in defaults on the first `prep` run, then **authoritative** — the on-disk file
-governs all processing thereafter, and you change behavior by hand-editing it. The built-in values are
-defaults, not law; review them at the start of a workspace and tune to your setup (see the
-[quick start](quickstart.md#review-your-config-do-this-once-at-the-start)).
+**seeded** on the first `prep plan` — from `photos-config-defaults.json` beside the executable, else the
+built-in defaults — then **authoritative**: the file governs all processing thereafter, and you change
+behavior by hand-editing it. The defaults are defaults, not law; review them at the start of a workspace
+and tune them to your setup (see the [quick start](quickstart.md#review-your-configuration-once-at-the-first-plan)).
 
-Two areas matter for the concepts above:
+Areas that matter for the concepts above:
 
-- **`media_extensions`** — the `image` / `raw` / `video` extension lists. These decide what counts as
-  media at all: an extension not listed falls to `other` and is set aside as a stray, never organized
-  or geotagged. The class vocabulary is fixed; the lists are yours. Prep flags likely-media strays
-  (via exiftool) so you can spot a format you forgot to list.
+- **`media_extensions`** — the `image` / `raw` / `video` extension lists (lowercase, no dot). These
+  decide what counts as media at all: an extension not listed is `other` and set aside as a stray, never
+  organized or geotagged. The classes are fixed; the lists are yours. Prep flags likely-media strays (via
+  exiftool) so you can spot a format you forgot to list.
 - **`folders`** — the names of the numbered managed folders. You can rename them; their *roles* (inbox,
-  read-only staging, etc.) are fixed.
+  by-dest staging, etc.) are fixed.
+- **`camera_time_and_timezone_policy`** — the camera classification (`device_groups`), when a GPS-found
+  offset applies itself (`single_anchor_auto_apply`, `multi_anchor_auto_apply`), and the
+  `default_folder_timezone` offered.
+- **`gpx_root`** and the **`gpx_*` thresholds** — each setting bounds one thing and is read for nothing
+  else, so you can retune one without moving another.
+- **`filename_timestamp_format`** — fixed once the workspace's files carry it: changing it afterwards
+  stops every phase.
 
 Config is **fingerprinted**: any edit makes every saved plan stale, so you re-plan before executing; but
-each area also has a field-scoped fingerprint, so the costly results — fingerprints, parsed tracks, your
-time decisions — are redone only where the area they read changed: a GPX-threshold change doesn't touch your
-renames. A setting cartographer does not know, or one missing from the file, stops the run. Every
-authored value is validated before use — a bad timezone, out-of-range coordinate, or extension collision
-is rejected with a specific error, not silently coerced.
+the costly results — fingerprints, parsed tracks, resolved times — are redone only where the area they
+read changed: a track-threshold change doesn't touch your renames. The file must name every setting: a
+missing one stops the run, named, with its default; so does one cartographer does not know. Every value
+you write — in the configuration or in a decision — is checked before use: a bad timezone, an
+out-of-range coordinate, an extension in two classes is refused with the file and field named, never
+silently repaired.
+
+---
+
+## What stops a run
+
+Cartographer would rather stop than guess. Each stop names what it found and changes nothing; fix it and
+run the command again.
+
+**Every phase**
+
+- *Another run holds the workspace* — wait for it, or stop it.
+- *The workspace is sealed* — it's finished; start a fresh one.
+- *The workspace was disturbed*: an entry at the top level that doesn't belong there (move it into
+  `0-sources/`, or out), a symbolic link among the files (put the file itself there), a managed folder
+  missing (put an empty folder back under its name). Prep checks this before it scans anything.
+- *A folder of the workspace lies on another filesystem* — keep the whole workspace on one.
+- *The configuration* lacks a setting, holds one cartographer does not know, or holds an invalid value.
+
+**Prep** — a track file anywhere among the media (keep tracks under `gpx_root`); an editing sidecar
+(`.xmp`, `.dop`, `.pp3`); a video among the photos or a photo among the videos; a non-media file in a
+managed folder other than the inbox; a hidden folder holding files inside a managed folder; a media file
+outside the inbox not named as prep named it (prep gives the name it should carry); a file outside
+`6-photos-by-dest/` it could not fingerprint.
+
+**Geotag plan** — `0-sources/` not empty, photos still in `5-photos-by-date/`, or a sort prep hasn't
+recorded (run prep, or let geotag run it); anything but photos in `6-photos-by-dest/`, or a `jpg` / `tif`
+development subfolder; a camera group not yet classed; a photo there with no recorded time (it belongs
+in `2-missing-metadata/`) or with no fingerprint (move it out, or repair it so ImageMagick can read it,
+then run prep); a `gpx_root` that is not there, or tracks of which not one can be read; a local time at a
+daylight-saving change; a decision file that doesn't parse or holds an invalid value (it is kept as
+written for you to fix); prep's record made by another fingerprint method (run prep again).
+
+**Geotag execute and finalize** — a plan no longer current (plan again). Execute leaves a photo edited
+since the plan untouched; finalize refuses while a photo has changed since execute.
+
+**Merge** — geotag not finalized, or `6-photos-by-dest/` changed since; a hidden file or folder among
+the photos; a photo with no fingerprint; a library folder without its mark (run `merge init-library`), or
+inside a workspace. One photo whose picture the library already holds with other metadata is held back
+alone, both files named: replace the library's copy with it and plan again, or take it out of
+`6-photos-by-dest/` and redo prep and geotag.
+
+---
 
 ## Putting it together
 
 The pipeline's order falls straight out of these concepts:
 
-1. **Timezone first** — it's what lets a no-anchor offset bucket get a proposal at all, and it cascades.
-2. **Clock offset (drift) next** — corrected UTC needs the offset; the drift gate validates the risky ones.
+1. **Timezone first** — it gives a day with no GPS evidence an offset proposal at all, and it cascades.
+2. **Clock offset and drift check next** — corrected UTC needs the offset; the drift check confirms the
+   ones the camera's own GPS did not fix.
 3. **GPS last** — placement is purely a function of corrected UTC, so it can't run until time is solved.
 
 Each step unlocks the next, which is why the [quick start](quickstart.md) walks them in exactly that

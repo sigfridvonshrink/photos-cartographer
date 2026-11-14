@@ -37,7 +37,8 @@ The detail behind the table:
   pipeline feeding a folder-based library.
 - **exiftool `-geotag`** — the actual metadata engine (and `Geosync` even supports multi-point drift
   correction). It's a primitive, not a workflow: no organization, dedup, decision-tracking, or safety
-  envelope. This project can sit *on top* of exiftool rather than competing with it.
+  envelope. This project sits *on top* of exiftool — every metadata read and write goes through it — rather
+  than competing with it.
 - **Lightroom Map module** — fine if you're already in Lightroom, but proprietary/subscription, manual
   offset, and oriented around the catalog rather than a local owned folder tree.
 - **Cloud (Google / Apple Photos)** — effortless for phone shooters and solves the *loss* fear, but does
@@ -46,4 +47,6 @@ The detail behind the table:
 What's distinct here, then, isn't a new technique — the matching and offset ideas exist above. It's the
 *treatment*: a Linux, open-source, reproducible pipeline (plan/validate/execute, idempotent,
 recoverable, crash-resumable, decisions captured as editable artifacts) for people who keep a local owned
-library and run a logger. That combination is the niche the tools above leave open.
+library and want every photo on the map — placed along a logger's tracks where there are some, and by
+folder fallbacks and a short manual worklist where there are none. That combination is the niche the tools
+above leave open.

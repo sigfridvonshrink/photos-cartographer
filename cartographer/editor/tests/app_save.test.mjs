@@ -37,3 +37,25 @@ test("savePayload groups the edits by record and carries the loaded hashes", () 
 test("savePayload with no hashes loaded sends none, which the server refuses", () => {
   assert.deepEqual(app.savePayload([], () => ({}), undefined).hashes, {});
 });
+
+test("loadRefusal: a refused load says why; a loaded one says nothing", () => {
+  assert.equal(app.loadRefusal(200, { workspace: "/w", demo: false, time: {} }), "");
+  // the console's Edit tab refuses a sealed / uninitialized / already-open workspace with 409 {ok:false,error}
+  assert.equal(app.loadRefusal(409, { ok: false, error: "workspace is sealed (already merged): the decision editor will not open it" }),
+    "workspace is sealed (already merged): the decision editor will not open it");
+  assert.match(app.loadRefusal(409, { ok: false }), /HTTP 409/);
+  assert.match(app.loadRefusal(500, {}), /could not be loaded \(HTTP 500\)/);
+});
+
+test("hasUnsavedEdits: an edit not yet saved, never in demo mode or before anything loaded", () => {
+  const dest = "6-photos-by-dest/Japan";
+  const arts = (tz, demo = false) => ({ demo, time: { destinations: { [dest]: { destination_timezone: { user_decision: { manual_iana_timezone: tz } } } } } });
+  app.state.base = null; app.state.work = null;
+  assert.equal(app.hasUnsavedEdits(), false);              // refused or still loading
+  app.state.base = arts(""); app.state.work = arts("");
+  assert.equal(app.hasUnsavedEdits(), false);
+  app.state.work = arts("Asia/Tokyo");
+  assert.equal(app.hasUnsavedEdits(), true);
+  app.state.base = arts("", true); app.state.work = arts("Asia/Tokyo", true);
+  assert.equal(app.hasUnsavedEdits(), false);              // demo edits cannot be saved
+});

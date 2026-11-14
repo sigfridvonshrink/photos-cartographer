@@ -381,21 +381,35 @@ function tzOwnDecision(dest) {
   if (k && k.zones.length === 1) return { tz: k.zones[0], source: "country", from: k.from };
   return null;
 }
-function previewTz(dest) {
-  const own = tzOwnDecision(dest);
-  if (own) return own;
-  const parts = dest.split("/");
-  const k = effectiveCountry(dest);
-  for (let i = parts.length - 1; i > 0; i--) {
-    const anc = parts.slice(0, i).join("/");
-    // a country of several timezones gives none to what lies inside it, and lets none through from above
-    if (k && k.zones.length > 1 && (anc === k.from || !anc.startsWith(k.from + "/"))) break;
-    if (state.work.time?.destinations?.[anc]) {
-      const a = previewTz(anc);
-      if (a && a.tz) return { tz: a.tz, source: "inherited", from: anc };
+// A destination whose own photos record another offset than the zone it would take — the one the last run checked —
+// and where the user has not kept that zone for them, takes no zone, and passes none down: what lies inside it does
+// not reach past it to the zone its photos contradict (geotag's _ZONE_WAITS in build_time_decisions).
+const TZ_WAITS = { waits: true };
+function zoneWaits(dest, tz) {
+  const c = tzCell(dest), k = c && c.contradicted_by;
+  return !!k && tz === k.timezone && !zoneSpokenFor(c);
+}
+function tzWalk(dest) {
+  let got = tzOwnDecision(dest);
+  if (!got) {
+    const parts = dest.split("/");
+    const k = effectiveCountry(dest);
+    for (let i = parts.length - 1; i > 0; i--) {
+      const anc = parts.slice(0, i).join("/");
+      // a country of several timezones gives none to what lies inside it, and lets none through from above
+      if (k && k.zones.length > 1 && (anc === k.from || !anc.startsWith(k.from + "/"))) break;
+      if (state.work.time?.destinations?.[anc]) {
+        const a = tzWalk(anc);
+        if (a === TZ_WAITS) break;                   // the destination above waits on its own photos: so does this
+        if (a && a.tz) { got = { tz: a.tz, source: "inherited", from: anc }; break; }
+      }
     }
   }
-  return null;                                       // the configured default is proposed, never in effect
+  return got && zoneWaits(dest, got.tz) ? TZ_WAITS : got;   // the configured default is proposed, never in effect
+}
+function previewTz(dest) {
+  const r = tzWalk(dest);
+  return r === TZ_WAITS ? null : r;
 }
 // Same advisory walk for the GPS folder-fallback: a destination with no own fallback shows the one it
 // would inherit from its nearest resolved ancestor (e.g. a parent/container you just set), updating live.
@@ -722,8 +736,10 @@ function offsetEditor(ref) {
   } else {
     wrap.append(el("div", { class: "off-impact" }, `offset ${fmtOffset(cur)} — a photo's camera time + this = UTC${tz ? `, shown in ${tz}` : ""}`));
   }
-  // no proposal at all → tell the user how to get one: a resolved timezone yields a timezone-derived offset
-  if (!hasProp) wrap.append(el("div", { class: "hint" }, tz
+  // no proposal at all → tell the user how to get one: a resolved timezone yields a timezone-derived offset —
+  // except at a daylight-saving change of that zone, where no run ever derives one (ambiguousTimeNote)
+  const amb = ambiguousTimeNote(p.timezone_ambiguous);
+  if (!hasProp) wrap.append(amb ? el("div", { class: "hint warn" }, amb) : el("div", { class: "hint" }, tz
     ? "no offset proposal yet — re-run `photos-cartographer geotag plan` to derive one from the resolved timezone"
     : "no offset proposal — set this destination's timezone (Time view), then re-run `photos-cartographer geotag plan`, to derive one from the local time"));
 
@@ -750,9 +766,8 @@ function controls(ref) {
       wrap.append(checkbox(`keep ${c.contradicted_by.timezone} for these photos — their device was set to another zone`, said,
         (v) => edit(ref, "confirmed_despite_recorded_offsets", zoneDespiteFields(c, v).confirmed_despite_recorded_offsets)));
     }
-    if ((c.proposal_source === "config_default" || c.contradicted_by) && c.proposed_iana_timezone && !u.manual_iana_timezone)
-      wrap.append(el("button", { class: "mini", onclick: () => edit(ref, "manual_iana_timezone", c.proposed_iana_timezone) },
-        `use ${c.proposed_iana_timezone}`));
+    const offer = zoneOffer(c);
+    if (offer) wrap.append(el("button", { class: "mini", onclick: () => edit(ref, "manual_iana_timezone", offer) }, `use ${offer}`));
     // The country this folder is in — whatever it is called. Said once, at the top of its tree: inside a country
     // none is chosen, and choosing one here takes out any chosen inside.
     const k = effectiveCountry(ref.dest), above = k && k.from !== ref.dest, table = state.work.time?.countries || {};
@@ -1085,6 +1100,15 @@ function zoneSpokenFor(c) {
 function zoneDespiteFields(c, on) {
   return { confirmed_despite_recorded_offsets: on ? [...((c.contradicted_by || {}).recorded_offsets || [])] : [] };
 }
+// The zone a timezone cell offers to take in one click ("use <zone>"), or "": the configured default (only proposed),
+// or the proposal standing where the photos contradicted the zone written here. Never the zone the photos contradict:
+// writing it resolves nothing — keeping it is the confirmation's to say, and another zone or country the other way.
+function zoneOffer(c) {
+  const u = (c && c.user_decision) || {}, k = c && c.contradicted_by;
+  if (!c || !c.proposed_iana_timezone || u.manual_iana_timezone) return "";
+  if (k && c.proposed_iana_timezone === k.timezone) return "";
+  return c.proposal_source === "config_default" || k ? c.proposed_iana_timezone : "";
+}
 // Why a destination does not take its zone: its own photos record another offset.
 function zoneContradiction(c) {
   const k = c && c.contradicted_by; if (!k) return "";
@@ -1106,6 +1130,19 @@ function offsetCellNotes(c) {
     out.push(`The camera's GPS gives ${fmtOffset(k.offset_seconds)} the same day in ${k.destination} — one clock, two readings. ` +
       "Set the right offset by hand in the one that is wrong.");
   return out;
+}
+// Why an offset cell has no proposal and never will (proposal.timezone_ambiguous): the camera's time is one its
+// zone skipped or repeated at a daylight-saving change, so the zone gives it two offsets and no run picks one
+// (RUL-ambiguous_local_time_never_guessed). The two are said as clock offsets (camera time + offset = UTC), the
+// value the user sets. "" when the cell carries no such fact.
+function ambiguousTimeNote(a) {
+  const offs = (a && a.offsets_seconds) || [];
+  if (offs.length < 2) return "";
+  const t = String(a.camera_time || "").replace(/^(\d{4}):(\d\d):(\d\d)/, "$1-$2-$3");
+  const how = a.case === "skipped" ? "the clocks went forward over it, so no clock there showed that time"
+    : "the clocks went back over it, so that time happened twice";
+  return `This camera's time ${t} falls at a daylight-saving change in ${a.timezone}: ${how}. Its offset is either ` +
+    `${fmtOffset(-offs[0])} or ${fmtOffset(-offs[1])}, and no re-run of geotag plan will choose — set the offset yourself.`;
 }
 function proposalNotes(p) {
   const out = [], groups = p.groups || [];
@@ -1259,7 +1296,7 @@ function render() {
   const dirty = dirtyRefs().length, invalid = anyInvalid(), busy = state.saving;
   $("#todo").textContent = dirty ? `${dirty} unsaved${invalid ? " · ✗ invalid" : ""}` : (state.message || "no changes");
   const save = $("#save"); save.disabled = a.demo || busy || dirty === 0 || invalid;
-  save.title = a.demo ? "demo mode is read-only — run `serve <workspace>` to save" : invalid ? "fix invalid fields first" : "";
+  save.title = a.demo ? "demo mode is read-only — run `photos-cartographer edit` from inside a workspace to save" : invalid ? "fix invalid fields first" : "";
   $("#reset").disabled = dirty === 0 || busy;
   const list = $("#list"); list.replaceChildren();
   (state.view === "time" ? renderTime : state.view === "drift" ? renderDrift : renderGps)(list);
@@ -1290,13 +1327,40 @@ function setupDivider() {
   });
 }
 
+// Why loading the decisions was refused, or "" when they loaded. The console's Edit tab answers 409
+// {ok:false, error} for a workspace that is sealed, not initialized, or open in another editor; any other
+// failed answer is said by its status.
+function loadRefusal(status, body) {
+  if (body && body.ok === false) return body.error || `the decisions could not be loaded (HTTP ${status})`;
+  if (!(status >= 200 && status < 300)) return (body && body.error) || `the decisions could not be loaded (HTTP ${status})`;
+  return "";
+}
+// Edits made here and not saved (demo edits cannot be saved, so they are none). Read by the console before it
+// reloads its Edit tab (window.editorHasUnsavedEdits) and by the browser-level reload/close guard.
+function hasUnsavedEdits() {
+  return !!(state.base && state.work) && !state.base.demo && dirtyRefs().length > 0;
+}
+// A refused load shows the refusal in place of the views, and leaves nothing to edit.
+function showRefusal(msg) {
+  for (const b of document.querySelectorAll("#view-toggle button")) b.disabled = true;
+  $("#workspace").textContent = ""; $("#todo").textContent = "";
+  $("#list").replaceChildren(el("div", { class: "gate" }, el("div", { class: "gate-title" }, "The decision editor cannot open this workspace"), msg));
+  $("#panel").replaceChildren();
+}
+
 async function main() {
+  window.editorHasUnsavedEdits = hasUnsavedEdits;
+  window.addEventListener("beforeunload", (e) => { if (hasUnsavedEdits()) { e.preventDefault(); e.returnValue = ""; } });
   for (const b of document.querySelectorAll("#view-toggle button")) b.addEventListener("click", () => { state.view = b.dataset.view; state.selected = null; render(); });
   $("#save").addEventListener("click", save);
   $("#reset").addEventListener("click", () => { state.work = clone(state.base); state.message = null; render(); });
   setupDivider();
-  try { state.base = await (await fetch("/api/artifacts")).json(); state.work = clone(state.base); }
-  catch (e) { $("#list").replaceChildren(el("div", { class: "empty" }, "Could not load /api/artifacts: " + e)); return; }
+  let res = null, body = null;
+  try { res = await fetch("/api/artifacts"); body = await res.json(); }
+  catch (e) { return showRefusal(res ? `the decisions could not be loaded (HTTP ${res.status})` : `the decisions could not be loaded: ${e}`); }
+  const refusal = loadRefusal(res.status, body);
+  if (refusal) return showRefusal(refusal);
+  state.base = body; state.work = clone(state.base);
   render();
 }
 // Auto-start in the browser only; importing this module in Node (for the unit tests) must not run it
@@ -1311,4 +1375,5 @@ export {
   groupChoice, chosenOffset, proposalNotes, driftConfirmHolds, driftConfirmFields, acceptFields, acceptHolds, tracksNote,
   zoneContradiction, offsetCellNotes, zoneSpokenFor, zoneDespiteFields, effectiveCountry, clearCountriesInside,
   scrubOffset, scrubSeedIndex, mapKeyFor, savePayload,
+  ambiguousTimeNote, zoneOffer, loadRefusal, hasUnsavedEdits,
 };

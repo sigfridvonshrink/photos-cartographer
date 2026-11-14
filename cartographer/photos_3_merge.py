@@ -1643,7 +1643,7 @@ def add_arguments(parser):
     """Register merge's `-j` + subcommands (init-library / plan / dry-run / execute) on `parser`.
     Shared by the standalone `python -m cartographer.photos_3_merge` and `photos-cartographer merge`."""
     parser.add_argument("-j", "--jobs", type=int, default=None,
-                        help="Worker threads for execution (default: config jobs, else 4).")
+                        help="Worker threads for execution (default: 4). A setting of the run, recorded nowhere.")
     sub = parser.add_subparsers(dest="command")
     p_init = sub.add_parser("init-library",
                             help="Bless a directory as the permanent library (writes .photos-library).")

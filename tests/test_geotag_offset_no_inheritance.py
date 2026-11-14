@@ -364,6 +364,20 @@ def _tz(zone):
     return {"destination_timezone": {"user_decision": {"manual_iana_timezone": zone}}}
 
 
+@pytest.mark.parametrize("written", ["ZZ", ["JP"], {"code": "JP"}, 81])
+@pytest.mark.spec("BLD-country_choice", test="TST-geotag_offset_no_inheritance-a_country_that_is_none_is_named")
+def test_a_country_that_is_none_is_named_not_crashed_on(tmp_path, written):
+    """Whatever the user wrote for a destination's country — a code no country has, or a value that is no code at
+    all — is named as a blocker at that destination; nothing is taken from it."""
+    wf = _wf(tmp_path)
+    d = f"{BYDEST}/Japonia"
+    art, blk = wf.build_time_decisions([_file(f"{d}/a.arw", d)], BOTH, {"destinations": {d: _country(written)}},
+                                       _gpx([]))
+    assert len(blk) == 1 and d in blk[0] and "user_decision.country" in blk[0], blk
+    cell = art["destinations"][d]["destination_timezone"]
+    assert cell.get("country", "") == "" and cell["effective_iana_timezone"] == ""
+
+
 @pytest.mark.spec("RUL-country_gives_its_timezone", "BLD-country_choice", "RUL-country_of_several_gives_none",
                   "RUL-zone_among_countrys_only",
                   test="TST-geotag_offset_no_inheritance-a_country_gives_its_timezone_or_none")

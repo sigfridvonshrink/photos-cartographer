@@ -31,13 +31,26 @@ let prevRunning = false;   // last poll's running flag — to detect a job just 
 
 // Reload the folded-in decision editor (Edit tab) so it re-reads the latest decision JSONs. Called
 // when a geotag plan finishes — the plan it just wrote is what the editor edits. No-op until the
-// iframe has been opened at least once (it loads fresh on first switch anyway).
+// iframe has been opened at least once (it loads fresh on first switch anyway). Never over unsaved
+// edits: reloading would discard them silently, and they cannot be saved over the regenerated records
+// anyway (the save is refused as changed since loaded) — so the console says so (#edit-stale-banner)
+// and leaves the reload to the user. The editor page (same origin) answers window.editorHasUnsavedEdits().
 function reloadEditFrame() {
   const frame = $("#edit-frame");
   if (!frame.getAttribute("src")) return;
+  let unsaved = false;
+  try { unsaved = !!(frame.contentWindow.editorHasUnsavedEdits && frame.contentWindow.editorHasUnsavedEdits()); }
+  catch { /* not readable (not loaded yet): nothing to keep */ }
+  if (unsaved) { $("#edit-stale-banner").hidden = false; return; }
+  forceReloadEditFrame();
+}
+function forceReloadEditFrame() {
+  const frame = $("#edit-frame");
+  $("#edit-stale-banner").hidden = true;
   try { frame.contentWindow.location.reload(); }
   catch { frame.setAttribute("src", "/edit/"); }   // cross-origin guard / fallback
 }
+$("#edit-reload").onclick = forceReloadEditFrame;   // the user's own reload, unsaved edits and all
 let jobsSeeded = false;    // seed the Jobs (-j) box from the server default exactly once
 let cpuCount = 256;        // server machine's CPU count = the Jobs box upper bound (set from state)
 

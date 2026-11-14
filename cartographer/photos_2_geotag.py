@@ -761,6 +761,12 @@ class GeotagWorkflow:
                 removed = {"country": own_country, "because": above[1], "country_there": above[0]}
                 self.country_removals.append(dict(removed, destination=dest))
                 own_country = ""
+            if own_country and not isinstance(own_country, str):
+                # A value that is not a country's code at all — a list, a number — is named like any other
+                # the user wrote that cannot be taken (RUL-checked_timezones' neighbours: every value is checked).
+                blockers.append(f"{dest}: destination_timezone.user_decision.country must be a country's code "
+                                f"written as text, not {type(own_country).__name__}")
+                own_country = ""
             if own_country and own_country not in table:
                 blockers.append(f"{dest}: destination_timezone.user_decision.country {own_country!r} is not a "
                                 + ("country code of the zone database (two letters, such as \"US\")." if table else
@@ -2322,7 +2328,7 @@ def add_arguments(parser):
     """Register geotag's `-j` + subcommands (plan / execute / finalize) on `parser`. Shared by the
     standalone `python -m cartographer.photos_2_geotag` and the combined `photos-cartographer geotag`."""
     parser.add_argument("-j", "--jobs", type=int, default=None,
-                        help="Worker threads for execution (default: config jobs, else 4).")
+                        help="Worker threads for execution (default: 4). A setting of the run, recorded nowhere.")
     sub = parser.add_subparsers(dest="command")
     sub.add_parser("plan", help="Plan the geotag pass: produce photos-21/22/23/24 (no mutation).")
     sub.add_parser("execute", help="Apply photos-24 to the originals (metadata writes + renames).")

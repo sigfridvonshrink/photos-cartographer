@@ -185,3 +185,30 @@ test("zoneSpokenFor: a zone stands against the photos only on the user's word fo
   assert.equal(app.zoneSpokenFor({ contradicted_by: k, user_decision: { manual_iana_timezone: "Europe/Madrid" } }), true);
   assert.equal(app.zoneSpokenFor({ contradicted_by: k, user_decision: { manual_iana_timezone: "Europe/Lisbon" } }), false);
 });
+
+test("ambiguousTimeNote: a camera time at a daylight-saving change is the user's to set", () => {
+  assert.equal(app.ambiguousTimeNote(undefined), "");
+  const skipped = app.ambiguousTimeNote({ camera_time: "2024:03:31 02:30:00", timezone: "Europe/Berlin", case: "skipped",
+    offsets_seconds: [3600, 7200] });
+  assert.match(skipped, /2024-03-31 02:30:00 falls at a daylight-saving change in Europe\/Berlin/);
+  assert.match(skipped, /clocks went forward over it/);
+  assert.match(skipped, /either −1h 00m 00s or −2h 00m 00s/);      // as clock offsets: camera + offset = UTC
+  assert.match(skipped, /set the offset yourself/);
+  assert.doesNotMatch(skipped, /derive/);
+  const repeated = app.ambiguousTimeNote({ camera_time: "2024:10:27 02:30:00", timezone: "Europe/Berlin", case: "repeated",
+    offsets_seconds: [7200, 3600] });
+  assert.match(repeated, /clocks went back over it, so that time happened twice/);
+  assert.match(repeated, /either −2h 00m 00s or −1h 00m 00s/);
+});
+
+test("zoneOffer: one click takes the proposed zone, never the zone the photos contradict", () => {
+  const k = { timezone: "Europe/Lisbon", recorded_offsets: [7200] };
+  assert.equal(app.zoneOffer({ proposed_iana_timezone: "Europe/Brussels", proposal_source: "config_default", user_decision: {} }), "Europe/Brussels");
+  assert.equal(app.zoneOffer({ proposed_iana_timezone: "Asia/Tokyo", proposal_source: "inherited", user_decision: {} }), "");   // applies itself
+  // inherited and contradicted: writing it resolves nothing — the keep-confirmation is the way to keep it
+  assert.equal(app.zoneOffer({ proposed_iana_timezone: "Europe/Lisbon", proposal_source: "inherited", contradicted_by: k, user_decision: {} }), "");
+  // the zone written here was contradicted; the proposal standing beside it is another zone, and may be taken
+  assert.equal(app.zoneOffer({ proposed_iana_timezone: "Europe/Madrid", proposal_source: "inherited", contradicted_by: k, user_decision: {} }), "Europe/Madrid");
+  assert.equal(app.zoneOffer({ proposed_iana_timezone: "Europe/Brussels", proposal_source: "config_default",
+    user_decision: { manual_iana_timezone: "Asia/Tokyo" } }), "");
+});

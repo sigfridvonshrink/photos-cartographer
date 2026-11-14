@@ -428,12 +428,12 @@ EDIT_BLURB = (
     "edit — resolve the open decisions in a browser (between geotag plans).\n\n"
     "Launches a local web server for the decision editor over the CURRENT DIRECTORY (the workspace; "
     "like every other phase, edit operates on the cwd and refuses to run anywhere that is not an "
-    "initialized workspace). You confirm/correct the time, GPS and drift decisions geotag surfaced; "
+    "initialized workspace, and on a sealed (already merged) one). You confirm/correct the time, GPS and drift decisions geotag surfaced; "
     "Save writes them back; then re-run `photos-cartographer geotag plan` in a terminal to regenerate from "
     "your edits and reload. Open the printed URL (reachable over the network so you can use it "
     "from another machine's browser); Ctrl-C to stop.\n\n"
     "  --demo   read-only tour on bundled fixtures (no workspace; nothing is written).\n\n"
-    "Loop: geotag plan -> edit -> geotag plan -> ... -> geotag execute."
+    "Loop: geotag plan -> edit -> geotag plan -> ... -> geotag execute -> geotag finalize."
 )
 
 
@@ -462,7 +462,7 @@ def serve(workspace, port=8765, host="0.0.0.0"):
     # the root guard sentinel must exist. Refuse anything else rather than serving an empty editor.
     if workspace and not os.path.exists(os.path.join(workspace, CONTROL, GUARD_NAME)):
         print(f"{os.path.abspath(workspace)} is not an initialized workspace "
-              f"(no {CONTROL}/{GUARD_NAME}). Run `photos-cartographer prep plan` here first, "
+              f"(no {CONTROL}/{GUARD_NAME}). Run `photos-cartographer prep plan` then `photos-cartographer prep execute` here first, "
               f"or use `photos-cartographer edit --demo` for a read-only fixtures tour.", file=sys.stderr)
         sys.exit(2)
     # A sealed (merged) workspace is final (RUL-editor_refuses_sealed): its decisions may no longer change.
@@ -484,9 +484,11 @@ def serve(workspace, port=8765, host="0.0.0.0"):
         lock, owner = _acquire_editor_lock(workspace)
         if lock is None:
             d = owner or {}
-            print(f"another decision editor is already editing this workspace "
+            # The editor works on the cwd (no workspace argument): the way out is to close the other one, or
+            # to run this one from another workspace's folder.
+            print(f"another decision editor (or a console whose Edit tab was opened) has this workspace open "
                   f"(pid {d.get('pid', '?')} on {d.get('host', '?')}, since {d.get('started_at', '?')}). "
-                  f"Close it first, or point this one at a different workspace.", file=sys.stderr)
+                  f"Close it, or run this one from another workspace's folder.", file=sys.stderr)
             sys.exit(1)
 
     srv = _bind(host, port, Handler)
