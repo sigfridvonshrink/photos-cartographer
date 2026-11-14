@@ -42,6 +42,11 @@ affordance.
   day, the camera's clock changed. Code site `offsetProposalBlock` / `groupChoice` / `proposalNotes` in
   `web/app.js`, tested in `app_offset_buckets.test.mjs`.
 - **Per-date offset buckets**: grouped, collapsible, fan-out edit (#115).
+- **A GPS proposal says which frames it left out**: beside the proposal, a note counts the camera's own-position
+  frames that took no part in it — those whose only track lies outside the plausible time window (most likely
+  another trip or year), and those with no track at all — so a proposal resting on few frames is not read as
+  resting on all. Shown, never decided on: the plan's record carries the counts (`skipped`), the editor words
+  them. Code site `offsetProposalBlock` in `web/app.js`.
 - **GPS panel**: a single lat/lon field, Google-Maps paste that commits + jumps the map, multi-select,
   seed-the-next-photo-from-the-last-pick, map placed above the photo (#117–#122, #132).
 - **Drift validation = a scrub-on-track view**, Photo / Track sub-tabs (#124, #129, #131).

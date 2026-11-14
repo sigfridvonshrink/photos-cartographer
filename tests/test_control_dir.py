@@ -168,6 +168,22 @@ class _CutOffMidWrite:
         return getattr(self.f, name)
 
 
+@pytest.mark.parametrize("write", [utils.write_versioned_json, utils.write_json_artifact],
+                         ids=["versioned", "artifact"])
+@pytest.mark.spec("RUL-records_written_alike", test="TST-control_dir-the_same_content_is_written_as_the_same_bytes")
+def test_the_same_content_is_written_as_the_same_bytes(tmp_path, write):
+    """A record's bytes follow from its content alone: built in another order, on another run, the same content is
+    the same file — and so the same hash to whatever depends on it; another content is another file."""
+    one = {"b": {"z": 1, "a": [3, 1, 2]}, "a": "é", "c": None}
+    same = {"c": None, "a": "é", "b": {"a": [3, 1, 2], "z": 1}}
+    (tmp_path / "x").mkdir(); (tmp_path / "y").mkdir()
+    write(str(tmp_path / "x" / "r.json"), one)
+    write(str(tmp_path / "y" / "r.json"), same)
+    assert (tmp_path / "x" / "r.json").read_bytes() == (tmp_path / "y" / "r.json").read_bytes()
+    write(str(tmp_path / "y" / "r.json"), {**same, "c": 0})
+    assert (tmp_path / "x" / "r.json").read_bytes() != (tmp_path / "y" / "r.json").read_bytes()
+
+
 @pytest.mark.spec("RUL-rewrite_in_place_atomic", "BLD-rewrite_synced_before_rename",
                   test="TST-control_dir-a_rewritten_record_is_on_disk_before_it_replaces_the_earlier")
 def test_a_rewritten_record_is_on_disk_before_it_replaces_the_earlier(tmp_path, monkeypatch):

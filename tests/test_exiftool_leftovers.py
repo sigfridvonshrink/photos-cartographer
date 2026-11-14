@@ -80,6 +80,7 @@ def _plan(ws):
     return prep.WorkspacePrepWorkflow(str(ws), prep.WorkspaceCache(str(ws), in_memory=True)).plan()
 
 
+@pytest.mark.spec("RUL-write_leftovers_quarantined", test="TST-exiftool_leftovers-managed_folder_leftover_is_quarantined")
 def test_managed_folder_leftover_is_quarantined(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -106,6 +107,8 @@ def test_managed_folder_leftover_is_quarantined(tmp_path, monkeypatch):
     assert not any(s.endswith("_exiftool_tmp") for s in strays)
 
 
+@pytest.mark.spec("RUL-write_leftovers_by_dest_warned",
+                  test="TST-exiftool_leftovers-bydest_leftover_left_untouched_with_warning")
 def test_bydest_leftover_left_untouched_with_warning(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)

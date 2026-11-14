@@ -676,6 +676,27 @@ Hidden files that arrive in a dump area — the workspace's top level on the run
 be moved to the recoverable quarantine, not merely left out.
 :::
 
+:::{rul} What an interrupted metadata write left is quarantined
+:id: RUL-write_leftovers_quarantined
+:status: ruled
+:criticality: med
+:verify: required
+
+A temporary or backup file that an interrupted metadata write left beside a photo, in a folder prep may change, SHALL
+be moved to the recoverable quarantine — never taken for media, never put among the strays.
+:::
+
+:::{rul} Such a leftover in photos by destination is warned of
+:id: RUL-write_leftovers_by_dest_warned
+:status: ruled
+:criticality: low
+:verify: required
+:refines: RUL-write_leftovers_quarantined
+
+A temporary or backup file that an interrupted metadata write left in photos by destination, which prep never changes,
+SHALL be left where it is and the user warned of it.
+:::
+
 :::{rul} Each plan has one fixed place
 :id: RUL-plan_at_fixed_place
 :status: ruled
@@ -1524,6 +1545,16 @@ A record's hash SHALL change on any change to its bytes.
 A record SHALL be checked as a dependency by its hash — prep's handoff excepted, which is checked by its content.
 :::
 
+:::{rul} The same content is written as the same bytes
+:id: RUL-records_written_alike
+:status: ruled
+:criticality: med
+:verify: required
+
+A record that another record or a later run depends on SHALL be written as the same bytes whenever its content is the
+same, so that its hash changes only when what it says does.
+:::
+
 ## 9. One loop across the phases
 
 :::{def} The managed folders
@@ -2168,6 +2199,15 @@ A file of no media class SHALL have no entry in the log.
 :uses: DEF-transformation_log, DEF-decision
 
 A step that followed from a decision SHALL name that decision, so the why stands beside the what.
+:::
+
+:::{rul} Each step of a log names the run that made it
+:id: RUL-log_step_names_run
+:status: ruled
+:criticality: med
+:verify: required
+
+Each step a phase adds to a photo's log SHALL name the run that made it.
 :::
 
 :::{rul} A manual position's reversal is logged like its application

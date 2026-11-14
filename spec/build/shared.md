@@ -822,7 +822,7 @@ into `photos-35-archive-manifest.json` and `photos-35-archive.tar.gz` ({need}`BL
 :status: ruled
 :realises: RUL-log_entry_grows, RUL-log_keyed_by_fingerprint, RUL-log_cites_decisions, RUL-log_human_readable, RUL-no_log_entry_for_other
 
-Each log SHALL be pretty-printed JSON with sorted keys, its `photos` keyed by the content fingerprint
+Each log SHALL be pretty-printed JSON with sorted keys, every step naming its `run`, its `photos` keyed by the content fingerprint
 (`content_fingerprint`), each entry carrying where each phase left the photo — `prep_path`, written by prep and updated
 by every prep run; `geotag_path`, by finalize, its by-dest folder under the name its last final rename gave it;
 `library_path`, by merge — and a `journey` of steps, each step naming its `phase` and `action`, a move or rename its

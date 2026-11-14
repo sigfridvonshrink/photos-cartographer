@@ -24,20 +24,13 @@ written into the spec first, then coded** — the code is never taken as the ans
 direction "specified, not built / built wrong" has had one full pass, its findings fixed. Left: the other direction —
 walking the code for behaviour no item states.
 
-**Found so far in that direction (2026-11-14, while citations were rewritten to item ids)** — code does it, a comment
-says it, no item states it; each to be ruled into the corpus or the code dropped:
-- prep quarantines exiftool's leftover temporary and backup files (`_plan_quarantine_artifacts`); only hidden files
-  are specified (`RUL-dump_hidden_files_quarantined`);
-- the database effects of a run are applied as one transaction (`begin_batch`/`commit_batch`); the items say one
-  writer, none says one transaction;
-- every step of prep's log carries the run that caused it (`run_id`); only geotag's steps are said to name their run;
-- the numbered records are written byte-for-byte the same for the same content (`write_json_artifact`); stated for
-  the handoff and the logs only;
-- prep re-reads the handoff it wrote and fails if its content fingerprint does not come back the same;
-- a file in the inbox that is not media never blocks a run (`RUL-inbox_non_media_to_strays` says only that it is
-  moved);
-- prep's report is built while planning; `RUL-prep_run_summarised` speaks of the end of an execution;
-- the editor's note of frames skipped as outside the time window has no item.
+**Found and ruled (2026-11-14):** eight behaviours the code had and no item stated, met while citations were
+rewritten to item ids. Six are items now, each with its test — `RUL-write_leftovers_quarantined`,
+`RUL-write_leftovers_by_dest_warned`, `BLD-database_effects_one_transaction`, `RUL-log_step_names_run` (merge's
+steps did not name their run; they do), `RUL-records_written_alike`, `RUL-handoff_read_back`,
+`RUL-inbox_non_media_never_blocks`; `RUL-prep_run_summarised` speaks of the plan as well as the execution; the
+editor's note of frames left out of a proposal is in `docs/design/decisions.md`. The walk itself — every function
+against the corpus — is still to do.
 
 ---
 

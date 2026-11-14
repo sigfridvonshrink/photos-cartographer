@@ -250,6 +250,17 @@ Prep SHALL move each file of no media class in the inbox into the strays folder'
 under the inbox and with its name unchanged.
 :::
 
+:::{rul} Non-media in the inbox never blocks
+:id: RUL-inbox_non_media_never_blocks
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-inbox_non_media_to_strays
+
+A file of no media class in the inbox SHALL NOT block a run.
+:::
+
 :::{rul} A file in missing metadata stays there
 :id: RUL-missing_metadata_stays
 :status: ruled
@@ -869,6 +880,17 @@ Prep's handoff SHALL hold the same content for the same workspace state, whateve
 kept apart from it.
 :::
 
+:::{rul} Prep checks the handoff it wrote
+:id: RUL-handoff_read_back
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-handoff_deterministic
+
+Prep SHALL read back the handoff it has written and fail the run where what it reads does not give the content
+fingerprint the handoff records.
+:::
+
 :::{rul} Prep's log is made from prep's own records
 :id: RUL-prep_log_derived
 :status: ruled
@@ -981,7 +1003,8 @@ Each prep plan SHALL report how many fingerprints it took from the plan memo.
 :criticality: low
 :verify: required
 
-At the end of an execution prep SHALL report a summary telling what it changed apart from what it only read: its media
+With each plan, and again at the end of its execution, prep SHALL report a summary telling what it changes apart from
+what it only reads: its media
 operations, the files already in place, the moves it recognized, the files of photos by destination it read, the
 duplicates of files it may change apart from those of photos by destination, the metadata reused, extracted, carried
 and failed, the blockers and warnings, and which records it wrote.

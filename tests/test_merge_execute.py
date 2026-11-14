@@ -934,7 +934,8 @@ def test_full_success_writes_terminal_artifacts_and_seals(tmp_path):
     assert "photos-35-merge-log.json" in manifest["contents"]
 
 
-@pytest.mark.spec("BLD-log_format", "RUL-record_whole_each_phase", "BLD-phase_logs", "RUL-phase_writes_own_records")
+@pytest.mark.spec("BLD-log_format", "RUL-record_whole_each_phase", "BLD-phase_logs", "RUL-phase_writes_own_records",
+                  "RUL-log_step_names_run", test="TST-merge_execute-merge_log_copies_the_complete_log_forward_and_appends")
 def test_merge_log_copies_photos25_forward_and_appends(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     # Seed photos-25 with a prior geotag journey for fingerprint A.
@@ -949,7 +950,9 @@ def test_merge_log_copies_photos25_forward_and_appends(tmp_path):
     journey = log["photos"]["A"]["journey"]
     assert journey[0]["phase"] == "geotag"                      # carried forward
     assert log["photos"]["A"]["library_path"] == os.path.join(str(lib), "Trip", "a.jpg")   # where it now is
-    assert journey[-1] == {"phase": "merge", "action": "placed", "from": "6-photos-by-dest/Trip/a.jpg",
+    plan_id = json.loads(open(_ctl(ws, "photos-30-merge-plan.json")).read())["plan_id"]
+    assert plan_id and journey[-1] == {"phase": "merge", "run": plan_id, "action": "placed",
+                           "from": "6-photos-by-dest/Trip/a.jpg",
                            "library_path": os.path.join(str(lib), "Trip", "a.jpg"),
                            "renamed_for_library": False}
     # photos-25 itself must be byte-unchanged (never edited).

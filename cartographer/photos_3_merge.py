@@ -960,7 +960,7 @@ class MergeWorkflow:
                             "was edited after finalize. Re-run finalize (`photos-cartographer geotag finalize`), "
                             "then merge.")
 
-    def _build_merge_log(self, ws, results):
+    def _build_merge_log(self, ws, results, run):
         """photos-35-merge-log.json (BLD-phase_logs): photos-26-complete-log.json copied FORWARD with a per-file
         `merge` step appended to each merged photo's journey (final library path + renamed flag). Built
         fresh from photos-26 every run (never from a prior photos-35), so it is deterministic and
@@ -974,7 +974,7 @@ class MergeWorkflow:
             entry = photos.setdefault(fp, {"content_fingerprint": fp, "journey": []})
             entry["library_path"] = r["library_path"]           # where the photo now is
             entry.setdefault("journey", []).append({
-                "phase": "merge",
+                "phase": "merge", "run": run,                   # the plan that placed it (RUL-log_step_names_run)
                 "action": "already_present" if r["final_kind"] == "already_present" else "placed",
                 "from": r["by_dest_source"],
                 "library_path": r["library_path"],
@@ -991,7 +991,7 @@ class MergeWorkflow:
         is rebuilt from pristine inputs (never from a prior merge artifact), so a crash before the seal
         re-runs cleanly. Runs only when status == success (no blockers, by-dest empty of photos)."""
         # 1. Merge log (copy photos-26 forward + per-file merge step).
-        write_json_artifact(merge_log_path(ws), self._build_merge_log(ws, results))
+        write_json_artifact(merge_log_path(ws), self._build_merge_log(ws, results, plan.get("plan_id")))
         # 2. End-of-merge DB snapshot of the live workspace DB (captures the library-fingerprint cache).
         cache = WorkspaceCache(ws)
         try:

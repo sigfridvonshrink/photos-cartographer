@@ -94,6 +94,7 @@ def _moves(plan):
 
 # --- organization / routing --------------------------------------------------
 
+@pytest.mark.spec("RUL-inbox_non_media_never_blocks", test="TST-audit_backfill-other_class_moves_to_strays")
 def test_other_class_moves_to_strays(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)

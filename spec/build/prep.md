@@ -270,6 +270,16 @@ quarantine move, the file's row with its fingerprint and metadata written at its
 the operation succeeds.
 :::
 
+:::{bld} A run's database effects are one transaction
+:id: BLD-database_effects_one_transaction
+:status: ruled
+:realises: RUL-database_matches_files
+
+Execute SHALL apply the database effects of all its operations in one transaction, committed once every operation
+has been carried out and checked, and rolled back where the run fails before that — the files being what the next
+plan reads, the database is then as the earlier run left it.
+:::
+
 :::{bld} The plan memo is `photos-00-plan-memo.db`
 :id: BLD-plan_memo
 :status: ruled

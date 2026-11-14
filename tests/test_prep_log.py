@@ -214,6 +214,32 @@ def test_strays_and_other_not_logged(tmp_path, monkeypatch):
     assert not any("notes" in json.dumps(e) for e in photos.values())
 
 
+@pytest.mark.spec("RUL-log_step_names_run", test="TST-prep_log-every_step_names_the_run_that_made_it")
+def test_every_step_names_the_run_that_made_it(tmp_path, monkeypatch):
+    """Each step prep adds names its run, the plan that made it — the user's own move, the run that found it; a later
+    run's steps name that later run, the earlier ones keeping theirs."""
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    plans = []
+    real_plan = prep.WorkspacePrepWorkflow.plan
+    def _plan(self):
+        made = real_plan(self)
+        plans.append(made.plan_id)
+        return made
+    monkeypatch.setattr(prep.WorkspacePrepWorkflow, "plan", _plan)
+    _run(ws)
+    first = next(iter(_log(ws)["photos"].values()))["journey"]
+    assert first and all(s.get("run") == plans[0] for s in first), first
+    organized = glob.glob(str(ws / "5-photos-by-date" / "**" / "*.jpg"), recursive=True)[0]
+    (ws / "6-photos-by-dest" / "Trip").mkdir(parents=True)
+    os.rename(organized, ws / "6-photos-by-dest" / "Trip" / os.path.basename(organized))
+    _run(ws)
+    journey = next(iter(_log(ws)["photos"].values()))["journey"]
+    assert journey[:len(first)] == first and len(journey) > len(first)
+    assert plans[1] != plans[0] and all(s.get("run") == plans[1] for s in journey[len(first):]), journey
+
+
 @pytest.mark.spec("RUL-log_entry_append_only", test="TST-prep_log-noop_rerun_leaves_log_byte_identical")
 def test_noop_rerun_leaves_log_byte_identical(tmp_path, monkeypatch):
     _install(monkeypatch)

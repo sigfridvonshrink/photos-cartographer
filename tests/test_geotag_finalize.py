@@ -579,6 +579,18 @@ def test_geotag_never_reads_a_database_image_back(tmp_path, monkeypatch):
     assert "photos-00-ingest.db" in opened and not set(images) & set(opened), opened
 
 
+@pytest.mark.spec("RUL-log_step_names_run", test="TST-geotag_finalize-every_geotag_step_names_its_run")
+def test_every_geotag_step_names_its_run(tmp_path, monkeypatch):
+    """Every step geotag adds to a photo's log names the run that made it: the plan that was executed."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    assert _run(monkeypatch, ws, "finalize") == 0
+    plan_id = json.loads((ctl / "photos-24-executable-plan.json").read_text())["plan_id"]
+    steps = [s for e in json.loads((ctl / "photos-26-complete-log.json").read_text())["photos"].values()
+             for s in e["journey"] if s.get("phase") == "geotag"]
+    assert plan_id and steps and all(s.get("run") == plan_id for s in steps), steps
+
+
 @pytest.mark.spec("RUL-finalize_reads_database", test="TST-geotag_finalize-finalize_only_reads_the_workspace_database")
 def test_finalize_only_reads_the_workspace_database(tmp_path, monkeypatch):
     """Finalize reads the workspace's database — it images it — and writes nothing to it: once geotag has executed,

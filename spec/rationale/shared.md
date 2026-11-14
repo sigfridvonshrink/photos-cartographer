@@ -455,6 +455,20 @@ may have taken organized media with it. Recovering lost media — from an option
 operator's task.
 :::
 
+:::{rat} A write's leftover is neither a photo nor a stray
+:id: RAT-write_leftover_is_debris
+:status: ruled
+:forced: no
+:follows_from: RAT-recoverable_core
+:justifies: RUL-write_leftovers_quarantined, RUL-write_leftovers_by_dest_warned
+
+A metadata write that was killed leaves a partial copy or a backup beside the photo, named after it. Taken for media
+it would be fingerprinted, filed and perhaps kept over the photo it shadows; sent to the strays it would sit among
+the user's own files as if they had put it there. It is debris of the pipeline's own making, and may still be the
+only whole copy of something, so it goes where nothing is lost and nothing is mistaken: the quarantine.
+:::
+
+
 ## 5. Camera groups, derived once
 
 :::{rat} Grouping computed once is never reinvented
@@ -763,6 +777,19 @@ A dependency that cannot be checked gives no assurance either way. Counting it u
 stand for proof that nothing moved: a file deleted since the plan, a record a crash left behind, a plan recording
 nothing would all pass. Refusing costs a re-plan; trusting could cost a photo its place or its record.
 :::
+
+:::{rat} A hash can stand for a record only if writing is repeatable
+:id: RAT-same_content_same_bytes
+:status: ruled
+:forced: no
+:follows_from: RAT-safe_at_each_change
+:justifies: RUL-records_written_alike
+
+A record is recognised as unchanged by the hash of its bytes. Were the same content written in another order of keys
+or another spacing, every record depending on it would be taken for stale and remade, and the user asked again what
+they had already answered.
+:::
+
 
 ## 9. One loop across the phases
 
@@ -1180,6 +1207,18 @@ A package moved to long-term storage is parted from the workspace that made it a
 its workspace, plan and execution ties it to what it records; listing every item with its hash lets anyone confirm,
 without the tool, that nothing in it has decayed or been altered.
 :::
+
+:::{rat} A step is traced to the run that made it
+:id: RAT-step_traced_to_run
+:status: ruled
+:forced: no
+:follows_from: RAT-recoverable_core
+:justifies: RUL-log_step_names_run
+
+A photo's log outlives the workspace by decades. A step that names its run can be matched to that run's plan and
+journal in the archival package; one that does not says what happened and not when, or under which decisions.
+:::
+
 
 ## 13. Merge: the library kept, the workspace sealed
 

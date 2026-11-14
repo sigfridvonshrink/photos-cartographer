@@ -338,6 +338,7 @@ def test_handoff_is_rewritten_fresh_each_run_never_edited_in_place(tmp_path, mon
     assert h2["content_fingerprint"] == h1["content_fingerprint"]
 
 
+@pytest.mark.spec("RUL-handoff_read_back", test="TST-handoff-roundtrip_assertion_catches_unstable_fingerprint")
 def test_handoff_roundtrip_assertion_catches_unstable_fingerprint(tmp_path, monkeypatch):
     """If the just-written handoff would NOT re-read to the same content_fingerprint (a non-round-trip-
     stable field crept in), prep fails loudly rather than shipping a forever-stale handoff."""
