@@ -26,13 +26,12 @@ It reads `./.photos-ingest/photos-21*/photos-22*/photos-23*` decision JSON from 
 (refusing to run if the cwd is not an initialized workspace); `--demo` runs read-only on the bundled
 example fixtures instead. The app edits `user_decision` and saves it back
 (POST /api/save writes only `user_decision`, round-tripping the rest; disabled in demo). GET
-/api/photo returns a downscaled JPEG preview for the map picker (path-safe; 404 in demo). POST
-/api/rerun self-invokes `photos-cartographer geotag plan` against the workspace and returns its exit code +
-output tail; the standalone editor's own UI does not drive it (the loop is an explicit terminal re-run +
-reload — the endpoint exists for the console fold-in). See design-notes.md.
+/api/photo returns a downscaled JPEG preview for the map picker (path-safe; 404 in demo). The loop
+back to geotag is an explicit `photos-cartographer geotag plan` re-run + reload. See design-notes.md.
 """
 import argparse
 import errno
+import fcntl  # POSIX advisory locking for the editor's lock (the pipeline relies on it throughout)
 import json
 import os
 import shutil
@@ -44,11 +43,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 from .. import photos_utils
-
-try:
-    import fcntl  # POSIX advisory locking (Linux — the pipeline already relies on it)
-except ImportError:
-    fcntl = None
 
 
 def _bind(host, port, handler):
@@ -79,16 +73,10 @@ def _machine_ip():
     finally:
         s.close()
 
-# The editor lives inside the cartographer package; geotag re-run self-invokes the combined
-# CLI (`python -m cartographer geotag plan`) — works from a checkout and from inside the shipped
-# zipapp. PKG_ROOT is the sys.path entry that holds the package: a checkout's , or the .pyz file
-# itself (so a subprocess `python -m cartographer …` imports it).
-PKG_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CONTROL = ".photos-ingest"
 TIME_NAME = "photos-21-time-decisions.json"
 DRIFT_NAME = "photos-22-gps-drift-validation.json"
 GPS_NAME = "photos-23-gps-decisions.json"
-CONFIG_NAME = "photos-00-config.json"
 GUARD_NAME = "photos-00-workspace-guard"        # root sentinel written once a workspace is initialized
 EDITOR_LOCK = "photos-00-decision-editor.lock"  # dotfile lives in CONTROL; flock, fail-fast
 
@@ -97,7 +85,6 @@ _CONTENT_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; 
                   ".svg": "image/svg+xml", ".png": "image/png"}
 
 PREVIEW_MAX_PX = 1600     # longest edge of a generated photo preview
-RERUN_TIMEOUT_S = 3600    # cap on a `photos-cartographer geotag plan` invoked from the editor
 
 
 # Front-end + demo fixtures are PACKAGE DATA (cartographer/editor/{web,examples}), read via
@@ -131,13 +118,10 @@ def _acquire_editor_lock(workspace):
 
     Returns (lock_file, None) on success — keep the file open for the session; the OS releases the
     flock when it closes (including on a crash/kill). Returns (None, owner_dict) if another editor
-    already holds it. If flock is unavailable (non-POSIX), returns (open_file, None) without locking —
-    best effort, never blocks the editor from running."""
+    already holds it."""
     path = os.path.join(workspace, CONTROL, EDITOR_LOCK)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     f = open(path, "a+")
-    if fcntl is None:
-        return f, None
     try:
         fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
@@ -217,48 +201,15 @@ def _example_json(name):
         return {"_error": f"could not parse {name}: {e}"}
 
 
-def _geotag_cmd_env():
-    """The argv + env to re-run geotag: self-invoke the combined CLI `python -m cartographer
-    geotag plan` with PKG_ROOT on PYTHONPATH, so it imports the package whether that root is a
-    checkout's  or the shipped .pyz — and regardless of the editor's cwd."""
-    env = os.environ.copy()
-    env["PYTHONPATH"] = PKG_ROOT + os.pathsep + env.get("PYTHONPATH", "")
-    return [sys.executable, "-m", "cartographer", "geotag", "plan"], env
-
-
-def _environment(workspace):
-    """Folder dependencies geotag needs that may live on a different machine than this editor.
-
-    The geotag pipeline ships in the same package as this editor, so it is always runnable. The
-    one external dependency is the configured `gpx_root`, which GPX time-anchoring reads and which can
-    be a mount visible only on the workspace's own host: re-running without it would regenerate the
-    time/GPS decisions as if there were no GPX, silently discarding good offsets/placements. It is
-    resolved from the workspace config (`photos-00-config.json`) the way geotag resolves it
-    (`photos_utils.selected_gpx_root`); an EMPTY gpx_root means 'no GPX configured' and does not block.
-    The Re-run button (and `_rerun`) gate on `deps_ok`; `missing` names each absent dependency."""
-    missing = []
-    geotag_present = True               # geotag is a sibling module in this package
-    cfg = _read_json(os.path.join(workspace, CONTROL, CONFIG_NAME))
-    root = (cfg or {}).get("gpx_root") or "" if isinstance(cfg, dict) else ""
-    resolved = os.path.realpath(os.path.abspath(root)) if root else ""
-    gpx_available = (not resolved) or os.path.isdir(resolved)
-    if not gpx_available:
-        missing.append(f"gpx_root ({resolved})")
-    return {"geotag_present": geotag_present,
-            "gpx_root": resolved, "gpx_configured": bool(resolved),
-            "gpx_available": gpx_available, "deps_ok": not missing, "missing": missing}
-
-
 def _load_artifacts(workspace):
-    """Return {workspace, demo, time, drift, gps, environment}. Demo mode loads requires-input fixtures."""
+    """Return {workspace, demo, time, drift, gps}. Demo mode loads requires-input fixtures."""
     if workspace:
         cd = os.path.join(workspace, CONTROL)
         return {"workspace": os.path.abspath(workspace), "demo": False,
                 "time": _read_json(os.path.join(cd, TIME_NAME)),
                 "drift": _read_json(os.path.join(cd, DRIFT_NAME)),
-                "gps": _read_json(os.path.join(cd, GPS_NAME)),
-                "environment": _environment(workspace)}
-    return {"workspace": None, "demo": True, "environment": None,
+                "gps": _read_json(os.path.join(cd, GPS_NAME))}
+    return {"workspace": None, "demo": True,
             "time": _example_json("photos-21-time-decisions.requires-input.json"),
             "drift": _example_json("photos-22-gps-drift-validation.requires-input.json"),
             "gps": _example_json("photos-23-gps-decisions.requires-input.json")}
@@ -330,30 +281,6 @@ def _save(workspace, payload):
         lock.release()
 
 
-def _rerun(workspace):
-    """Re-run `photos-cartographer geotag plan` against the workspace, regenerating the authoritative artifacts
-    from the saved decisions. Geotag takes the workspace as its CWD and owns its own WorkspaceLock
-    (separate from the editor lock), so a concurrent geotag is reported, not forced. Returns the
-    process outcome; the client reloads /api/artifacts on success. Mutates nothing here — `run` only
-    plans (no writes to originals)."""
-    env = _environment(workspace)        # gate: never recalc without the pipeline + its data on this host
-    if not env["deps_ok"]:
-        return {"ok": False, "error": "geotag cannot run on this machine — missing: "
-                + ", ".join(env["missing"]) + ". Run the editor on the host that has the pipeline and its data."}
-    cmd, run_env = _geotag_cmd_env()
-    try:
-        proc = subprocess.run(cmd, cwd=workspace, env=run_env,
-                              capture_output=True, text=True, timeout=RERUN_TIMEOUT_S)
-    except subprocess.TimeoutExpired:
-        return {"ok": False, "error": f"geotag timed out after {RERUN_TIMEOUT_S}s"}
-    except OSError as e:
-        return {"ok": False, "error": f"could not start geotag: {e}"}
-    # Tail the output so a huge log can't bloat the response; the exit code is the source of truth
-    # (0 = planned, 2 = blockers/unknown groups, 1 = workspace locked — see photos-2-geotag main()).
-    return {"ok": proc.returncode == 0, "returncode": proc.returncode,
-            "stdout": proc.stdout[-8000:], "stderr": proc.stderr[-8000:]}
-
-
 class Handler(BaseHTTPRequestHandler):
     workspace = None
 
@@ -403,13 +330,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path.split("?", 1)[0]
-        if path not in ("/api/save", "/api/rerun"):
+        if path != "/api/save":
             return self._send(404, {"error": "not found"})
         if self.workspace is None:
             return self._send(403, {"ok": False, "error": "demo mode is read-only — "
-                                    "run `photos-cartographer edit` inside a workspace to edit and re-run"})
-        if path == "/api/rerun":
-            return self._send(200, _rerun(self.workspace))
+                                    "run `photos-cartographer edit` inside a workspace to edit"})
         try:
             n = int(self.headers.get("Content-Length") or 0)
             payload = json.loads(self.rfile.read(n) or b"{}")
@@ -465,7 +390,7 @@ def serve(workspace, port=8765, host="0.0.0.0"):
               f"open it. A sealed workspace is final.", file=sys.stderr)
         if photos_utils.likely_new_dump(workspace):
             print(f"A likely new dump is present (at the workspace root or in "
-                  f"{photos_utils.folder_name('sources')}/). Move it into a fresh workspace by hand — "
+                  f"{photos_utils.workspace_folders(workspace)['sources']}/). Move it into a fresh workspace by hand — "
                   f"the editor left it exactly where it is.", file=sys.stderr)
         sys.exit(2)
     Handler.workspace = workspace

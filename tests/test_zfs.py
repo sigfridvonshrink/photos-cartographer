@@ -265,3 +265,40 @@ def test_take_zfs_snapshot_failure_is_recorded_not_raised(monkeypatch):
     monkeypatch.setattr(subprocess, "run", boom)
     r = utils.take_zfs_snapshot("/ws", "PID", "geotag")        # never raises
     assert r["ok"] is False and r["required"] is True and "pool busy" in r["stderr"]
+
+
+@pytest.mark.spec("RUL-snapshot_per_plan", test="TST-zfs-a_plans_existing_snapshot_counts_as_taken")
+def test_a_plans_existing_snapshot_counts_as_taken(monkeypatch):
+    """A snapshot names its plan, so executing the same plan again (a geotag resume, a merge re-run)
+    asks for a name ZFS already holds: that snapshot precedes the plan's changes, so it counts as taken
+    and says so — never a failure, which `snapshots_required` would turn into a refused resume. A
+    failure with no such snapshot stays a failure."""
+    from cartographer.reporting import Reporter, CaptureSink, use_reporter
+    monkeypatch.setitem(utils.CONFIG, "zfs", {"enabled": True, "snapshots_required": True,
+                                              "snapshot_prefix": "px-", "datasets": {"workspace": "auto", "library": "auto"}})
+    monkeypatch.setattr(utils, "detect_zfs_dataset", lambda p: "pool/ws")
+    existing = set()
+
+    def fake_zfs(cmd, *a, **k):
+        if cmd[:2] == ["zfs", "snapshot"]:
+            if cmd[2] in existing:
+                raise subprocess.CalledProcessError(1, cmd, output="",
+                                                    stderr=f"cannot create snapshot '{cmd[2]}': dataset already exists")
+            existing.add(cmd[2])
+            return types.SimpleNamespace(returncode=0, stdout="", stderr="")
+        if cmd[:4] == ["zfs", "list", "-H", "-t"]:
+            if cmd[-1] in existing:
+                return types.SimpleNamespace(returncode=0, stdout=cmd[-1] + "\n", stderr="")
+            raise subprocess.CalledProcessError(1, cmd, output="", stderr="dataset does not exist")
+        raise AssertionError(cmd)
+    monkeypatch.setattr(subprocess, "run", fake_zfs)
+    first = utils.take_zfs_snapshot("/ws", "PID", "geotag")
+    assert first["ok"] and not first.get("already_existed")
+    cap = CaptureSink()
+    with use_reporter(Reporter([cap])):
+        again = utils.take_zfs_snapshot("/ws", "PID", "geotag")
+    assert again["ok"] is True and again["already_existed"] is True
+    assert again["snapshot_name"] == "pool/ws@px-geotag-PID"
+    assert any("already taken" in e.msg and "pool/ws@px-geotag-PID" in e.msg for e in cap.logs())
+    other = utils.take_zfs_snapshot("/ws", "OTHER", "geotag")      # a new plan gets its own snapshot
+    assert other["ok"] and not other.get("already_existed")

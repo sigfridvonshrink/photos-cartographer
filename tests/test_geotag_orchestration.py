@@ -232,6 +232,27 @@ def test_complete_run_writes_photos22_then_bad_coord_aborts(tmp_path, monkeypatc
     assert (ctl / "photos-23-gps-decisions.json").read_bytes() == before     # left unchanged
 
 
+@pytest.mark.spec("RUL-no_plan_while_a_decision_waits", "BLD-geotag_stage_order",
+                  test="TST-geotag_orchestration-no_plan_while_a_decision_waits")
+def test_no_executable_plan_while_a_decision_waits(tmp_path, monkeypatch, capsys):
+    """A photo neither placed nor left unlocated by the user waits in photos-23; a destination with no
+    timezone waits in photos-21. Either way the run makes no executable plan."""
+    ws, ctl = _completable_ws(tmp_path)
+    assert _run(monkeypatch, ws) == 0, capsys.readouterr().err
+    assert json.load(open(ctl / "photos-23-gps-decisions.json"))["status"] == "requires_user_input"
+    assert not (ctl / "photos-24-executable-plan.json").exists()
+    # the time decisions waiting: no zone said for the destination, none to inherit
+    for n in os.listdir(ctl):
+        if n.startswith("photos-2"):
+            os.remove(ctl / n)
+    cfg = json.load(open(ctl / "photos-00-config.json"))
+    cfg["camera_time_and_timezone_policy"]["default_folder_timezone"] = ""
+    (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
+    assert _run(monkeypatch, ws) == 0, capsys.readouterr().err
+    assert json.load(open(ctl / "photos-21-time-decisions.json"))["status"] == "requires_user_input"
+    assert not (ctl / "photos-24-executable-plan.json").exists()
+
+
 @pytest.mark.spec("RUL-decision_stage_writes_record", test="TST-geotag_orchestration-a_run_with_nothing_to_decide_writes_every_record")
 def test_a_run_with_nothing_to_decide_writes_every_record(tmp_path, monkeypatch, capsys):
     """Every photo has its own position and the camera's offset resolves from them: nothing needs the user.

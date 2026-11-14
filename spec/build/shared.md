@@ -986,9 +986,9 @@ blocks the photo — the plan's alternative name used only where the plan record
 :realises: RUL-merge_resumable, RUL-resume_rechecks_library
 
 The journal SHALL record each confirmed photo, a re-run taking a place already holding the planned content,
-fingerprinted again, as done, and removing the workspace copy if it remains; a photo whose workspace copy is gone, the
-journal confirming it or the plan finding it already present, counts as done only once its place is fingerprinted again
-and found to hold it, and is blocked otherwise.
+fingerprinted again, as done, and removing the workspace copy if it remains; a photo whose workspace copy is gone
+counts as done only once its place is fingerprinted again and found to hold it, and is blocked otherwise — the journal
+is the run's record, never what decides it.
 :::
 
 :::{bld} A photo already present is removed once the library's copy is checked
@@ -1117,8 +1117,9 @@ thus itself the check that its name is free ({need}`RUL-target_free_at_execute`)
 
 `workspace_volume_breaks` SHALL walk every folder of the workspace without following links, comparing each one's device
 with the workspace root's and not descending into a folder found on another; prep's and geotag's `run`, and merge's
-plan, dry run, execution and in-workspace `init-library`, call it through `workspace_volume_error` as soon as they hold
-the workspace lock and, on a folder found elsewhere, report it and exit 2.
+plan, dry run, execution and in-workspace `init-library`, call it through `workspace_volume_error` once they hold the
+workspace lock and have found the workspace not sealed against them ({need}`BLD-phases_check_seal`) and, on a folder
+found elsewhere, report it and exit 2.
 :::
 
 :::{bld} Only merge's moves fall back to a copy

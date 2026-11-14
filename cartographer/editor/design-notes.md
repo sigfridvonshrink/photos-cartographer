@@ -186,11 +186,7 @@ then the proposal evidence last; non-coord cells just show the proposal.
    **Reset** discards unsaved edits. The loop is **terminal**: after saving, re-run `photos-cartographer geotag
    plan` in a terminal and reload the regenerated artifacts. There is deliberately **no in-app Re-run
    button** — it proved error-prone and added little over the terminal command, so it was removed; every
-   gate/stale banner instead tells you to re-run in a terminal and reload. (The server still exposes a
-   `/api/rerun` endpoint and an `environment` check on the configured **`gpx_root`** — resolved from
-   `photos-00-config.json` and `os.path.isdir`-checked, an empty `gpx_root` meaning "no GPX configured"
-   and not gating — so the UI can warn when GPX isn't mounted on the editor's host; but no button drives
-   it.) Plus the **advisory live inheritance preview** for the time tree (§4): a timezone
+   gate/stale banner instead tells you to re-run in a terminal and reload. Plus the **advisory live inheritance preview** for the time tree (§4): a timezone
    with no own decision shows, badged `inherited ⟵ <ancestor>`, the value it would inherit from its
    nearest resolved ancestor, updating as you edit ancestors — display-only, authoritative on the next
    Re-run. (Offsets do **not** inherit — they are per-date buckets resolved from a GPX self-anchor or the

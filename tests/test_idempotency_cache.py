@@ -785,3 +785,45 @@ def test_stale_ghost_prune_reappeared_file_aborts_before_cache_remove(mock_meta,
 
     # Assert no handoff manifest generated
     assert not (ws / ".photos-ingest" / "photos-11-handoff.json").exists()
+
+@mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
+@pytest.mark.spec("BLD-database_effects_one_transaction",
+                  test="TST-idempotency_cache-a_failed_execute_leaves_the_database_as_it_was")
+def test_a_failed_execute_leaves_the_database_as_it_was(mock_meta, tmp_path, monkeypatch):
+    """An execute that fails on an operation after others were carried out commits none of its database effects:
+    the database is as the earlier run left it."""
+    ws = setup_workspace(tmp_path)
+    monkeypatch.setattr(photos_ingest.ContentHasher, "fingerprint_image", lambda p: {
+        "status": "valid", "strategy": "image-content-hash-v1", "value": "sig-" + open(p, "rb").read().hex()})
+    photos_ingest.CONFIG["jobs"] = 1
+
+    def _run():
+        cache = photos_ingest.WorkspaceCache(str(ws))
+        plan = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
+        cache.close()
+        photos_ingest.PlanExecutor(str(ws)).execute(plan)
+
+    def _db():
+        conn = sqlite3.connect(str(ws / ".photos-ingest" / "photos-00-ingest.db"))
+        try:
+            return [sorted(conn.execute(f"SELECT * FROM {t}").fetchall())
+                    for t in ("file_cache", "metadata_cache", "meta")]
+        finally:
+            conn.close()
+
+    _run()                                                    # the earlier run
+    before = _db()
+    (ws / "0-sources" / "b.jpg").write_text("bbbb")
+    (ws / "0-sources" / "c.jpg").write_text("cccc")
+    real_move, moves = photos_ingest._move_no_clobber, []
+
+    def second_move_fails(src, dst):
+        moves.append(src)
+        if len(moves) == 2:
+            raise OSError("the second move fails")
+        return real_move(src, dst)
+    monkeypatch.setattr(photos_ingest, "_move_no_clobber", second_move_fails)
+    with pytest.raises(RuntimeError):
+        _run()
+    assert len(moves) == 2                                    # one move carried out, then one failed
+    assert _db() == before

@@ -385,3 +385,35 @@ def test_a_file_of_no_media_class_outside_the_inbox_blocks(tmp_path, monkeypatch
     assert [b for b in plan.blockers if rel in b and "no media class" in b], plan.blockers
     assert not any(rel in (op.source or "") for op in plan.operations)
 
+
+
+@pytest.mark.spec("RUL-stray_media_hinted", "BLD-stray_media_probe",
+                  test="TST-strays-stray_media_hinted_on_the_run_that_initializes")
+def test_stray_media_hinted_on_the_run_that_initializes(tmp_path, monkeypatch):
+    """On the run that initializes a workspace the dump is still where it was put, beside the folders prep makes;
+    its files prep sets aside as strays are probed and hinted as the inbox's are."""
+    _install(monkeypatch)
+    ws = tmp_path / "ws"
+    (ws / "dump").mkdir(parents=True)
+    (ws / "dump" / "DSCF1.raf").write_bytes(b"raw")             # not in default media_extensions -> stray
+    monkeypatch.setattr(utils, "exiftool_mime_type",
+                        lambda p: "image/x-fujifilm-raf" if p.lower().endswith(".raf") else None)
+    plan = _plan(ws)
+    assert any((op.destination or "").startswith("1-strays/") and op.destination.endswith("DSCF1.raf")
+               for op in plan.operations)                         # set aside as a stray
+    assert [w for w in plan.warnings if ".raf" in w and "media_extensions" in w], plan.warnings
+
+
+@pytest.mark.spec("RUL-inbox_non_media_never_blocks",
+                  test="TST-strays-a_failed_metadata_read_never_blocks_a_file_of_no_media_class")
+def test_a_failed_metadata_read_never_blocks_a_file_of_no_media_class(tmp_path, monkeypatch):
+    """exiftool failing for a folder of the inbox blocks its media, never its files of no media class."""
+    _install(monkeypatch)
+    monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently",
+                        lambda folders, max_workers=4, progress_coordinator=None: ({}, set(folders)))
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "notes.txt").write_bytes(b"hello")
+    (ws / "0-sources" / "photo.jpg").write_bytes(b"img")
+    plan = _plan(ws)
+    assert not [b for b in plan.blockers if "notes.txt" in b], plan.blockers
+    assert [b for b in plan.blockers if "photo.jpg" in b], plan.blockers     # media still blocks

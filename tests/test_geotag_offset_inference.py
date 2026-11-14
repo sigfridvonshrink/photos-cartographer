@@ -30,7 +30,8 @@ import photos_utils as utils
 CFG = {"gpx_anchor_max_point_distance_meters": 30.0, "gpx_anchor_max_segment_distance_meters": 30.0,
        "gpx_anchor_max_segment_gap_seconds": 120.0, "gpx_anchor_offset_spread_max_seconds": 120.0,
        "gpx_anchor_same_pass_max_seconds": 120.0, "gpx_anchor_stay_max_seconds": 120.0,
-       "gpx_anchor_stay_distance_meters": 6.0, "gpx_anchor_decision_tolerance_seconds": 120.0}
+       "gpx_anchor_stay_distance_meters": 6.0, "gpx_anchor_decision_tolerance_seconds": 120.0,
+       "gpx_anchor_max_clock_error_seconds": 172800.0}
 CAM = "SONY|ILCE-6400|123"
 
 
@@ -80,14 +81,14 @@ def test_parse_helpers():
     assert cal._parse_utc("nope") is None and cal._parse_utc(None) is None
 
 
-# --- match_frame_to_gpx (every branch) --------------------------------------
+# --- frame_candidates (every branch) ----------------------------------------
 
 def test_point_match_offset_sign():
     gpx = _gpx([_pt(50.8467, 4.3525, _utc(12, 12, 21))])
-    c = cal.match_frame_to_gpx(_frame(50.8467, 4.3525, "2024:07:03 14:12:08"), gpx, CFG)
+    [c] = cal.frame_candidates(_frame(50.8467, 4.3525, "2024:07:03 14:12:08"), gpx, CFG)
     assert c["match_type"] == "gpx_point_match" and c["offset_seconds"] == -7187   # camera ahead
     # camera behind -> positive offset
-    c2 = cal.match_frame_to_gpx(_frame(50.8467, 4.3525, "2024:07:03 12:12:00"), gpx, CFG)
+    [c2] = cal.frame_candidates(_frame(50.8467, 4.3525, "2024:07:03 12:12:00"), gpx, CFG)
     assert c2["offset_seconds"] == 21
 
 
@@ -96,33 +97,33 @@ def test_point_just_past_threshold_then_segment_or_none():
     far = _gpx([_pt(50.0, 4.0, _utc(12, 0, 0)), _pt(50.0, 4.001, _utc(12, 0, 30))])
     # a frame ~111 m from both points (beyond 30 m) but the segment between them is far too ->
     frame = _frame(50.001, 4.0005, "2024:07:03 14:00:00")
-    assert cal.match_frame_to_gpx(frame, far, CFG) is None                        # nothing within 30 m
+    assert cal.frame_candidates(frame, far, CFG) == []                            # nothing within 30 m
 
 
 def test_segment_match_interpolates_time():
     # two points 30 s apart along a line; frame beside the midpoint (within 30 m) -> ~t=0.5
     gpx = _gpx([_pt(50.0, 4.0, _utc(12, 0, 0)), _pt(50.0, 4.001, _utc(12, 0, 30))])
-    c = cal.match_frame_to_gpx(_frame(50.0001, 4.0005, "2024:07:03 14:00:15"), gpx, CFG)
+    [c] = cal.frame_candidates(_frame(50.0001, 4.0005, "2024:07:03 14:00:15"), gpx, CFG)
     assert c["match_type"] == "gpx_segment_interpolation"
     assert c["offset_seconds"] == pytest.approx(-7200, abs=2)                     # ~14:00:15 -> 12:00:15
 
 
 def test_segment_rejected_when_gap_too_large():
     gpx = _gpx([_pt(50.0, 4.0, _utc(12, 0, 0)), _pt(50.0, 4.001, _utc(12, 5, 0))])  # 300 s > 120 s cap
-    assert cal.match_frame_to_gpx(_frame(50.0001, 4.0005, "2024:07:03 14:00:00"), gpx, CFG) is None
+    assert cal.frame_candidates(_frame(50.0001, 4.0005, "2024:07:03 14:00:00"), gpx, CFG) == []
 
 
 def test_match_none_branches():
     gpx = _gpx([_pt(50.0, 4.0, _utc(12, 0, 0))])
-    assert cal.match_frame_to_gpx({"native_gps": None, "source_naive_time": "x"}, gpx, CFG) is None
-    assert cal.match_frame_to_gpx(_frame(50.0, 4.0, "garbage"), gpx, CFG) is None          # unparseable time
-    assert cal.match_frame_to_gpx(_frame(50.0, 4.0, "2024:07:03 12:00:00"), _gpx([]), CFG) is None  # empty gpx
+    assert cal.frame_candidates({"native_gps": None, "source_naive_time": "x"}, gpx, CFG) == []
+    assert cal.frame_candidates(_frame(50.0, 4.0, "garbage"), gpx, CFG) == []              # unparseable time
+    assert cal.frame_candidates(_frame(50.0, 4.0, "2024:07:03 12:00:00"), _gpx([]), CFG) == []  # empty gpx
 
 
 def test_point_preferred_over_closer_segment():
     # an exact-position point (dist 0) plus a segment the frame is even "on" -> point wins
     gpx = _gpx([_pt(50.0, 4.0, _utc(12, 0, 0)), _pt(50.0, 4.001, _utc(12, 0, 30))])
-    c = cal.match_frame_to_gpx(_frame(50.0, 4.0, "2024:07:03 14:00:00"), gpx, CFG)
+    [c] = cal.frame_candidates(_frame(50.0, 4.0, "2024:07:03 14:00:00"), gpx, CFG)    # one pass, its best match
     assert c["match_type"] == "gpx_point_match"
 
 
@@ -178,8 +179,8 @@ def test_window_rejects_same_place_other_year():
     # (a tie at 0 m, listed first) but is out of the window, so the recent point anchors instead.
     gpx = _gpx([_pt(50.0, 4.0, datetime(2011, 7, 3, 12, 0, 0, tzinfo=timezone.utc)),
                 _pt(50.0, 4.0, _utc(12, 0, 0))])
-    c = cal.match_frame_to_gpx(_frame(50.0, 4.0, "2024:07:03 14:00:00"), gpx, WCFG)
-    assert c is not None and c["offset_seconds"] == -7200        # 2024 point, not a ~13-year "offset"
+    [c] = cal.frame_candidates(_frame(50.0, 4.0, "2024:07:03 14:00:00"), gpx, WCFG)
+    assert c["offset_seconds"] == -7200                          # 2024 point, not a ~13-year "offset"
 
 
 @pytest.mark.spec("RUL-anchor_within_clock_error", test="TST-geotag_offset_inference-clock_error_window_is_timezone_independent")
@@ -195,19 +196,19 @@ def test_clock_error_window_is_timezone_independent():
     # frame naive 14:00 read as UTC is 2h from the 12:00Z point -> inside the 3h window.
     tokyo = dict(_frame(50.0, 4.0, "2024:07:03 14:00:00"), destination_timezone="Asia/Tokyo")
     honolulu = dict(_frame(50.0, 4.0, "2024:07:03 14:00:00"), destination_timezone="Pacific/Honolulu")
-    c_tok = cal.match_frame_to_gpx(tokyo, _gpx(list(gpx_pts)), dict(tight, default_folder_timezone="Asia/Tokyo"))
-    c_hon = cal.match_frame_to_gpx(honolulu, _gpx(list(gpx_pts)), dict(tight, default_folder_timezone="Pacific/Honolulu"))
-    assert c_tok is not None and c_hon == c_tok                          # same match regardless of dest tz
-    assert c_tok["offset_seconds"] == -7200                              # 12:00Z - 14:00 naive, no tz shift
+    c_tok = cal.frame_candidates(tokyo, _gpx(list(gpx_pts)), dict(tight, default_folder_timezone="Asia/Tokyo"))
+    c_hon = cal.frame_candidates(honolulu, _gpx(list(gpx_pts)), dict(tight, default_folder_timezone="Pacific/Honolulu"))
+    assert len(c_tok) == 1 and c_hon == c_tok                            # same match regardless of dest tz
+    assert c_tok[0]["offset_seconds"] == -7200                           # 12:00Z - 14:00 naive, no tz shift
     # the matcher's signature carries no timezone parameter at all
-    params = inspect.signature(cal.match_frame_to_gpx).parameters
+    params = inspect.signature(cal.frame_candidates).parameters
     assert "tz" not in params and "timezone" not in params
 
 
 def test_window_out_of_window_is_skipped_with_reason():
     gpx = _gpx([_pt(50.0, 4.0, datetime(2011, 7, 3, 12, 0, 0, tzinfo=timezone.utc))])   # only the old point
     frame = _frame(50.0, 4.0, "2024:07:03 14:00:00")
-    assert cal.match_frame_to_gpx(frame, gpx, WCFG) is None
+    assert cal.frame_candidates(frame, gpx, WCFG) == []
     assert cal._frame_skip_reason(frame, gpx, WCFG) == "outside_time_window"   # spatially close, wrong time
     far = _frame(60.0, 10.0, "2024:07:03 14:00:00")
     assert cal._frame_skip_reason(far, gpx, WCFG) == "no_nearby_track"
@@ -456,7 +457,6 @@ def test_each_pass_by_a_place_is_a_candidate():
     cands = cal.frame_candidates(f, gpx, WCFG)
     assert [c["gpx_file"] for c in cands] == ["day3.gpx", "day4.gpx"]        # one per visit, in time order
     assert [c["offset_seconds"] for c in cands] == [-7200 - 86400, -7200]
-    assert cal.match_frame_to_gpx(f, gpx, WCFG)["gpx_file"] == "day3.gpx"   # the closest alone: the wrong day
 
 
 @pytest.mark.spec("RUL-anchor_consensus", "RUL-revisit_matched_to_its_day", "BLD-anchor_matching",

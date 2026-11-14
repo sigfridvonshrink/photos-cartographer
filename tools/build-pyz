@@ -88,8 +88,7 @@ def build_pyz_bytes(version=None):
 def build_sibling_bytes():
     sys.path.insert(0, ROOT)
     from cartographer import photos_utils          # noqa: E402
-    defaults = {k: v for k, v in photos_utils.DEFAULT_CONFIG.items() if k != "jobs"}
-    return (json.dumps(defaults, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    return (json.dumps(photos_utils.DEFAULT_CONFIG, indent=2, sort_keys=True) + "\n").encode("utf-8")
 
 
 def main():

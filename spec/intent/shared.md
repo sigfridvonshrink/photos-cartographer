@@ -3252,8 +3252,8 @@ among them — on the same one.
 :verify: required
 :refines: RUL-workspace_one_filesystem
 
-Every run of every phase on a workspace SHALL check, before it reads or changes anything, that the workspace lies on
-one filesystem — never taking it as whole because an earlier run found it so.
+Every run of every phase on a workspace SHALL check, before it reads or changes anything but the lock and the seal,
+that the workspace lies on one filesystem — never taking it as whole because an earlier run found it so.
 :::
 
 :::{rul} A workspace spanning filesystems stops the run

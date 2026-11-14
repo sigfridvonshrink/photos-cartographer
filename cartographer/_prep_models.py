@@ -67,6 +67,7 @@ def empty_cache_freshness_counts() -> dict:
         "metadata_extracted_empty": 0,
         "metadata_extraction_failed": 0,
         "metadata_not_applicable": 0,
+        "metadata_carried_forward": 0,
         "metadata_missing": 0,
     }
 
@@ -76,6 +77,9 @@ STATUS_TO_CACHE_FRESHNESS_KEY = {
     "extracted_empty": "metadata_extracted_empty",
     "extraction_failed": "metadata_extraction_failed",
     "not_applicable": "metadata_not_applicable",
+    # A recognized move's row is carried to its new path whole, metadata included: counted as carried, as the
+    # run's summary counts it (BLD-handoff_grouping_facts, RUL-prep_run_summarised).
+    "carried_forward": "metadata_carried_forward",
 }
 
 PREP_ALLOWED_OPERATION_TYPES = {
@@ -113,7 +117,6 @@ class Operation:
     preconditions: Dict[str, Any] = field(default_factory=dict)
     verification: Dict[str, Any] = field(default_factory=dict)
     database_effects_after_verification: List[Dict[str, Any]] = field(default_factory=list)
-    details: Dict[str, Any] = field(default_factory=dict)
 
 @dataclass
 class Plan:
@@ -122,10 +125,7 @@ class Plan:
     command: str
     created_at: str
     workspace_root: str
-    digikam_root: Optional[str]
     config_fingerprint: Fingerprint
-    instruction_fingerprints: Dict[str, Fingerprint] # key: file path (relative to workspace), value: fingerprint
-    locks_required: List[str]
     summary: Dict[str, Any]
     blockers: List[str]
     warnings: List[str]
@@ -141,16 +141,13 @@ class Plan:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Plan':
         data['config_fingerprint'] = Fingerprint(**data['config_fingerprint'])
-        data['instruction_fingerprints'] = {
-            k: Fingerprint(**v) for k, v in data.get('instruction_fingerprints', {}).items()
-        }
         data['operations'] = [Operation(**op) for op in data.get('operations', [])]
         return cls(**data)
 
 @dataclass
 class JournalOperationResult:
     operation_id: str
-    status: str # "success" | "skipped" | "failed" | "recovered"
+    status: str # "success" | "skipped" | "failed"
     started_at: str
     finished_at: str
     details: Dict[str, Any]
@@ -161,7 +158,7 @@ class Journal:
     plan_id: str
     started_at: str
     finished_at: Optional[str] = None
-    status: str = "started" # "started" | "success" | "failed_recovered" | "failed_intervention_required" | "aborted_before_mutation"
+    status: str = "started" # "started" | "success" | "failed_intervention_required" | "aborted_before_mutation"
     snapshots: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     operations: List[JournalOperationResult] = field(default_factory=list)
     details: Dict[str, Any] = field(default_factory=dict)

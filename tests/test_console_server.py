@@ -3,6 +3,8 @@
 import json
 import os
 
+import pytest
+
 from cartographer import photos_utils as U
 from cartographer.console import server
 
@@ -283,6 +285,39 @@ def test_stale_plan_flagged_and_execute_refused(tmp_path):
     assert "stale" in server._execute_guard(ws, "prep", {"confirm": True})   # gate refuses
 
 
+@pytest.mark.spec("RUL-one_configuration", test="TST-console_server-staleness_judged_by_the_workspaces_configuration")
+def test_staleness_judged_by_the_workspaces_configuration(tmp_path):
+    """A workspace whose configuration differs from the built-in defaults (folders renamed, extensions
+    edited, a phone listed), planned on the command line, is fresh to a console that has run no phase —
+    its CONFIG still the defaults — and its execute is offered, as the command line would run it.
+    Judging reads the workspace's file and leaves the process's CONFIG as it was."""
+    ws = _init_ws(str(tmp_path))
+    cfg = json.loads(json.dumps(U.DEFAULT_CONFIG))
+    cfg["folders"] = {r: f"x-{n}" for r, n in U.DEFAULT_FOLDERS.items()}
+    cfg["media_extensions"]["image"] = cfg["media_extensions"]["image"] + [".xyz"]
+    cfg["camera_time_and_timezone_policy"]["device_groups"]["phones"] = ["Apple|iPhone 15"]
+    with open(U.config_path(ws), "w") as f:
+        json.dump(cfg, f)
+    before = json.loads(json.dumps(U.CONFIG))
+    # what a phase records after load_config made this file its CONFIG
+    _write_plan(ws, operations=["move"], depends_on={
+        "config_fingerprint": U.sha256_file(U.config_path(ws)),
+        "folders_fingerprint": U.folders_fingerprint(cfg),
+        "media_extensions_fingerprint": U.media_extensions_fingerprint(cfg),
+        "filename_format_fingerprint": U.sha256_text(cfg["filename_timestamp_format"]),
+        "camera_group_fingerprint": U.sha256_text(
+            json.dumps(cfg["camera_time_and_timezone_policy"], sort_keys=True)),
+    })
+    assert server._plan_summary(ws, "prep", server._current_fingerprints(ws))["stale"] == []
+    assert server._state(ws)["phases"]["prep"]["executable"] is True
+    assert server._execute_guard(ws, "prep", {"confirm": True}) is None
+    assert U.CONFIG == before                                     # CONFIG left as it was
+    cfg["folders"]["sources"] = "y-inbox"                         # the workspace's own change restales
+    with open(U.config_path(ws), "w") as f:
+        json.dump(cfg, f)
+    assert "stale" in server._execute_guard(ws, "prep", {"confirm": True})
+
+
 # --- per-command affordance (actions): pipeline order, sealed, lock --------
 
 def test_merge_plan_needs_geotag_finalized_and_blessed_library(tmp_path):
@@ -341,5 +376,76 @@ def test_editor_is_folded_in():
     assert server._read_pkg("cartographer.editor", "web", ["index.html"])[:9] == b"<!doctype"
     assert server._read_pkg("cartographer.editor", "web", ["app.js"]) is not None
     # editor API functions are wired for delegation through the console origin
-    for fn in ("_load_artifacts", "_save", "_rerun", "_photo_preview"):
+    for fn in ("_load_artifacts", "_save", "_photo_preview"):
         assert callable(getattr(server._editor, fn))
+
+
+def _editor_ws(tmp_path):
+    ws = _init_ws(str(tmp_path))
+    with open(os.path.join(U.control_dir(ws), "photos-21-time-decisions.json"), "w") as f:
+        json.dump({"destinations": {}}, f)
+    return ws
+
+
+@pytest.mark.spec("RUL-editor_refuses_sealed", test="TST-console_server-edit_tab_refuses_a_sealed_workspace")
+def test_edit_tab_refuses_a_sealed_workspace(tmp_path):
+    # The console's Edit tab holds to the standalone editor's bar: it does not open a sealed workspace,
+    # and takes no editor lock there.
+    ws = _editor_ws(tmp_path)
+    with open(U.sealed_marker_path(ws), "w") as f:
+        json.dump({"sealed": True}, f)
+    import threading
+    import urllib.error
+    import urllib.request
+    old = server.Handler.workspace
+    server.Handler.workspace = ws
+    httpd = server._bind("127.0.0.1", 0, server.Handler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{httpd.server_address[1]}"
+    try:
+        assert "sealed" in server._editor_refusal(ws)
+        try:
+            urllib.request.urlopen(base + "/api/artifacts")
+            assert False, "the sealed workspace's decisions were served"
+        except urllib.error.HTTPError as e:
+            assert e.code == 409 and "sealed" in json.loads(e.read())["error"]
+        req = urllib.request.Request(base + "/api/save", data=b"{}", method="POST")
+        with urllib.request.urlopen(req) as r:
+            res = json.loads(r.read())
+        assert res["ok"] is False and "sealed" in res["error"]
+        assert not os.path.exists(os.path.join(U.control_dir(ws), server._editor.EDITOR_LOCK))
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        server.Handler.workspace = old
+        server._release_editor_locks()
+
+
+@pytest.mark.spec("BLD-control_directory_contents", test="TST-console_server-edit_tab_is_one_editor_at_a_time")
+def test_edit_tab_is_one_editor_at_a_time(tmp_path):
+    # One decision editor at a time: while a standalone editor holds the editor lock, the console's Edit
+    # tab is refused (it neither reads nor saves); once the tab has opened, it holds the lock itself and
+    # a standalone editor is refused, until the console stops.
+    ws = _editor_ws(tmp_path)
+    other, _ = server._editor._acquire_editor_lock(ws)
+    try:
+        assert "another decision editor" in server._editor_refusal(ws)
+    finally:
+        other.close()
+    try:
+        assert server._editor_refusal(ws) is None
+        assert server._editor_refusal(ws) is None                 # the lock is kept, not retaken
+        second, owner = server._editor._acquire_editor_lock(ws)
+        assert second is None and owner["pid"] == os.getpid()
+    finally:
+        server._release_editor_locks()
+    again, _ = server._editor._acquire_editor_lock(ws)
+    assert again is not None
+    again.close()
+
+
+def test_edit_tab_refuses_an_uninitialized_workspace(tmp_path):
+    # Like the standalone editor, the tab opens only an initialized workspace — and creates nothing there.
+    ws = str(tmp_path)
+    assert "initialized" in server._editor_refusal(ws)
+    assert not os.path.exists(U.control_dir(ws))

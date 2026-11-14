@@ -82,7 +82,7 @@ def _ws(tmp_path, recs):
 
 def _write_handoff(ws, files):
     ho = {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "run_metadata": {"plan_id": "prep-1", "execution_id": "exec-1"}, "files": files,
-          "cache_fingerprint": "pcf"}
+          "cache_fingerprint": "pcf", "depends_on": {"cache": {"image_engine_version": utils.get_imagemagick_version()}}}
     ho["content_fingerprint"] = utils.handoff_content_fingerprint(ho)
     (ws / ".photos-ingest" / "photos-11-handoff.json").write_text(json.dumps(ho))
 

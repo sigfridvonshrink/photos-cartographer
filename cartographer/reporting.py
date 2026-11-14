@@ -296,7 +296,7 @@ class TtySink(Sink):
                 "progress_mode", "worker_crashes", "worker_restarts",
                 "metadata_extracted", "metadata_reused", "metadata_failed",
                 "hashes_computed", "hashes_reused", "hashes_failed",
-                "db_effects_seen", "db_upserts_applied", "db_removes_applied", "db_renames_applied",
+                "db_effects_seen", "db_upserts_applied", "db_removes_applied",
                 "dependency_validation_status", "handoff_written_after_successful_validation",
             ]
             for f in fields:
@@ -327,9 +327,8 @@ class TtySink(Sink):
               f"{r.get('metadata_carried_forward', 0)}/{r.get('metadata_failed', 0)}  "
               f"(extractor {r.get('extractor', '?')} {r.get('extractor_version', '?')}, "
               f"field-set v{r.get('field_set_version', '?')})", file=out)
-        print(f"  Cache effects applied (upsert/remove/rename): "
-              f"{pc.get('db_upserts_applied', 0)}/{pc.get('db_removes_applied', 0)}/"
-              f"{pc.get('db_renames_applied', 0)}", file=out)
+        print(f"  Cache effects applied (upsert/remove): "
+              f"{pc.get('db_upserts_applied', 0)}/{pc.get('db_removes_applied', 0)}", file=out)
         print(f"  Camera groups / native-GPS / missing-timestamp : "
               f"{r.get('camera_groups_found', 0)} / {r.get('native_gps_files', 0)} / "
               f"{r.get('missing_timestamp_files', 0)}", file=out)

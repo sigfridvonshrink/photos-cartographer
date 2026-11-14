@@ -54,6 +54,16 @@ found the code short of five of them:
   for the built-in folder names and refused any workspace whose folders were renamed.
 - **The editor reads the seal under the workspace's lock**, not before taking it.
 
+A walk of every function against the corpus then found the code contradicting ruled rules in fourteen more places,
+fixed here: a failed prep execute rolls back its database effects instead of committing the half that succeeded;
+merge never moves, nor removes as already in the library, a photo written to after the plan, and an error placing
+one photo blocks that photo alone where it used to end the run with no summary; the console judges a plan stale by
+the workspace's own configuration, not the built-in one, and its editor tab refuses a sealed workspace and takes
+the editor's lock; exiftool gets the two attempts the rule gives it; re-executing a plan no longer fails on the
+snapshot its first execution took; the seal is checked before the workspace is walked. Code nothing reached is
+removed. What the walk found that is not yet ruled — thirteen matters of safety first among them — is listed in
+BACKLOG 2.
+
 Two rules were narrowed to what is true rather than built out: a lock is taken over once the system reports no
 running process holds it, never on its owner record, and guards the runs of one machine; and only the snapshot uses
 a feature of one particular filesystem, the rule now naming what cartographer does require of one — locks, an atomic

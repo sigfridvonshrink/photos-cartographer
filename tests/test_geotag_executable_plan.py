@@ -197,17 +197,6 @@ def test_unresolved_utc_blocks(tmp_path):
     assert any("no valid resolved UTC" in b for b in blk)
 
 
-@pytest.mark.spec("BLD-executable_plan", "RUL-no_plan_while_a_decision_waits", test="TST-geotag_executable_plan-incomplete_decisions_block")
-def test_incomplete_decisions_block(tmp_path):
-    files = [_model(f"{BYDEST}/T/a.arw", f"{BYDEST}/T", native=True)]
-    rows = [_row(f"{BYDEST}/T/a.arw")]
-    wf, t, g = _wf(tmp_path, files=files)                                     # both complete on disk
-    plan, blk = wf.build_executable_plan(files, rows, t, dict(g, status="requires_user_input"), _gpx(), "rfp")
-    assert plan["status"] == "blocked" and any("photos-23-gps-decisions" in b for b in blk)
-    _, blk2 = wf.build_executable_plan(files, rows, dict(t, status="requires_user_input"), g, _gpx(), "rfp")
-    assert any("photos-21-time-decisions" in b for b in blk2)
-
-
 @pytest.mark.spec("RUL-time_before_gps")
 def test_time_first_gps_and_rename_gated_on_resolved_time(tmp_path):
     """RUL-time_before_gps: order is time first, GPS/rename last. With a valid resolved UTC a native frame gets a time

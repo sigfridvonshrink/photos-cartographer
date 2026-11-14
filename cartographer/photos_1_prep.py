@@ -135,7 +135,7 @@ def _append_quarantine_manifest(manifest_dir, entry):
         raise
 
 
-def build_prep_log(prior_photos, operations, cache_files, quarantine_evidence, is_init, run_id):
+def build_prep_log(prior_photos, operations, cache_files, quarantine_evidence, run_id):
     """Build the per-photo, content-fingerprint-keyed prep transformation log (BLD-prep_log_build).
 
     Pure and derived — it introduces no new authority, only consolidating records prep already
@@ -261,7 +261,10 @@ def build_prep_log(prior_photos, operations, cache_files, quarantine_evidence, i
         else:
             entry = {"content_fingerprint": fp, "prep_path": current, "journey": run_steps}
         if quar:
-            entry["deduplicated"] = {"retained": entry.get("prep_path"), "quarantined": quar}
+            # This run's duplicates are added after an earlier run's, never in their place
+            # (RUL-log_entry_append_only).
+            earlier = (entry.get("deduplicated") or {}).get("quarantined", [])
+            entry["deduplicated"] = {"retained": entry.get("prep_path"), "quarantined": earlier + quar}
         photos[fp] = entry
     return photos, warnings
 
@@ -311,7 +314,7 @@ class PlanValidator:
     def validate_plan_preflight(plan: Plan, current_workspace: str):
         """
         Validates the plan just before execution.
-        Checks instruction fingerprints and destination clobbering.
+        Checks the plan's dependencies and destination clobbering.
         """
         if plan.plan_version != PLAN_SCHEMA_VERSION:
             raise ValueError(f"Stale plan: plan_version {plan.plan_version} is not the supported schema {PLAN_SCHEMA_VERSION}; regenerate the plan.")
@@ -396,22 +399,7 @@ class PlanValidator:
                             if stat.st_size != precond.get("size") or stat.st_mtime_ns != precond.get("mtime_ns"):
                                 raise ValueError(f"Stale plan: cache-upsert target changed after planning: {rel_path}")
 
-        # 1. Check instruction fingerprints
-        for rel_path, expected_fp in plan.instruction_fingerprints.items():
-            try:
-                abs_path = RootGuard.resolve_and_check_path(current_workspace, rel_path)
-            except ValueError as e:
-                raise ValueError(f"Invalid instruction file path {rel_path}: {e}")
-
-            if not os.path.exists(abs_path):
-                raise ValueError(f"Instruction file {rel_path} is missing. Plan is stale.")
-
-            current_fp = OperationPlanner._hash_file(abs_path)
-            if current_fp.value != expected_fp.value:
-                raise ValueError(f"Instruction file {rel_path} has changed since plan generation. Plan is stale.")
-
-
-        # 2. Reserve and check destinations
+        # 1. Reserve and check destinations
         # We simulate the plan sequentially to detect clobbers correctly without false positives from temporary renaming states.
         virtual_fs = set()
         for root, dirs, files in os.walk(current_workspace):
@@ -436,7 +424,7 @@ class PlanValidator:
                     raise ValueError(f"Destination case-insensitive clobber risk: {op.destination}")
                 virtual_fs.add(resolved_dest.lower())
 
-# 3. Check preconditions (e.g. source file hasn't changed)
+        # 2. Check preconditions (e.g. source file hasn't changed)
         # Only check original files on disk. Intermediate files created by the plan won't exist yet!
         created_in_plan = set()
         checked_sources = set()
@@ -460,7 +448,7 @@ class PlanValidator:
 
                 checked_sources.add(op.source)
 
-        # 4. Inventory (RUL-new_file_restales_plan): a file that appeared anywhere prep scans since planning is
+        # 3. Inventory (RUL-new_file_restales_plan): a file that appeared anywhere prep scans since planning is
         # unplanned — the plan neither moves nor records it — so the plan is stale and a new plan
         # incorporates it. (A planned file that vanished already fails its precondition above.)
         current, scan_blockers = _rescan_inventory(current_workspace)
@@ -555,10 +543,8 @@ class PlanExecutor:
                     get_reporter().warn(f"Warning: {snap['stderr'] or 'ZFS snapshot failed'}; skipping snapshot.",
                                         stream="stdout")
 
-            # 4. Execute Operations
-            if plan.command != 'prep':
-                raise ValueError(f"Plan command '{plan.command}' is not supported by photos-1-prep. Only 'prep' plans are allowed.")
-
+            # 4. Execute Operations. The preflight above has refused a plan of another command, an operation of a
+            #    kind prep does not carry out or one in photos by destination, and a plan holding a blocker.
             self.coordinator.start_phase("executing - applying operations", len(plan.operations))
 
             # Apply all post-verification cache effects as one transaction (BLD-workspace_database): create the
@@ -572,14 +558,6 @@ class PlanExecutor:
             cache.set_meta("fingerprint_algorithm_version", FINGERPRINT_ALGORITHM_VERSION)
 
             for op in plan.operations:
-                if op.type not in PREP_ALLOWED_OPERATION_TYPES:
-                    raise ValueError(f"Operation type '{op.type}' is not allowed in photos-1-prep.")
-                if op.type in ['move_no_clobber', 'rename_no_clobber', 'quarantine_move']:
-                    if op.source and op.source.startswith(folder_name('photos_by_dest') + '/'):
-                        raise ValueError(f"Operation {op.type} forbidden on source in {folder_name('photos_by_dest')}: {op.source}")
-                    if op.destination and op.destination.startswith(folder_name('photos_by_dest') + '/'):
-                        raise ValueError(f"Operation {op.type} forbidden on destination in {folder_name('photos_by_dest')}: {op.destination}")
-
                 op_started = datetime.now(timezone.utc).isoformat()
                 status = "success"
                 details = {}
@@ -631,7 +609,7 @@ class PlanExecutor:
                             # (fresh evidence under a new plan id); the pre-written entry of the
                             # interrupted run becomes a benign, prunable orphan rather than a lost record.
                             if op.type == "quarantine_move":
-                                plan_id = op.verification.get("plan_id", "unknown_plan")
+                                plan_id = op.verification["plan_id"]
                                 manifest_dir = os.path.join(self.workspace_root, ".photos-ingest-quarantine", plan_id)
                                 manifest_entry = op.verification.copy()
                                 manifest_entry["operation_id"] = op.operation_id
@@ -654,11 +632,6 @@ class PlanExecutor:
                                 elif fx.get("action") == "remove":
                                     cache.remove_file(fx["relative_path"])
                                     self.coordinator.increment("db_removes_applied")
-                                elif fx.get("action") == "rename":
-                                    old = fx["old_path"]
-                                    new = fx["new_path"]
-                                    cache.rename_file(old, new, os.path.join(self.workspace_root, new))
-                                    self.coordinator.increment("db_renames_applied")
 
                     # Cache-only operations: update SQLite state without mutating media files
                     elif op.type == "db_remove":
@@ -711,19 +684,21 @@ class PlanExecutor:
                 self.coordinator.increment_completed()
 
                 # Abort further execution on first failure to prevent cascading issues
-                if status in ["failed", "failed_recovered", "failed_intervention_required"]:
+                if status == "failed":
                     break
-            # All ops applied + verified -> commit the batched cache effects once.
-            cache.commit_batch()
+            # Commit the batched cache effects once, only when every op was carried out and checked; a
+            # failed run's are rolled back (the finally below), leaving the database as the earlier run
+            # left it (BLD-database_effects_one_transaction).
+            failed_ops = [r for r in journal.journal.operations if r.status == "failed"]
+            if not failed_ops:
+                cache.commit_batch()
             self.coordinator.finish_phase()
 
 # 5. Finish Journal
-            if any(r.status in ["failed", "failed_recovered", "failed_intervention_required"] for r in journal.journal.operations):
-                # If operations were skipped due to an abort, or failed mid-flight
+            if failed_ops:
                 journal.journal.details = getattr(journal.journal, 'details', {})
                 journal.save()
                 journal.finish_journal("failed_intervention_required")
-                failed_ops = [r for r in journal.journal.operations if r.status in ["failed", "failed_intervention_required", "failed_recovered"]]
                 raise RuntimeError(f"Execution failed; intervention required. See journal. Failed ops: {failed_ops}")
             else:
                 journal.finish_journal("success")
@@ -741,18 +716,12 @@ class PlanExecutor:
                 if plan.summary and "performance_and_cache" in plan.summary:
                     plan.summary["performance_and_cache"]["db_upserts_applied"] = self.coordinator.counters.get("db_upserts_applied", 0)
                     plan.summary["performance_and_cache"]["db_removes_applied"] = self.coordinator.counters.get("db_removes_applied", 0)
-                    plan.summary["performance_and_cache"]["db_renames_applied"] = self.coordinator.counters.get("db_renames_applied", 0)
 
                 # Generate handoff manifest ONLY if success
                 if plan.command == "prep":
                     self.coordinator.start_phase("executing - generating handoff manifest")
                     if cache is None:
                         cache = WorkspaceCache(self.workspace_root)
-
-                    # Abort handoff if blockers exist from plan validation or execution issues indicating invalid dependencies
-                    if plan.blockers:
-                        raise RuntimeError("Cannot generate handoff manifest: plan execution completed but metadata dependencies are invalid due to plan blockers.")
-
 
                     # 1. Gather files and metadata
                     all_files = cache.get_all_files()
@@ -766,16 +735,12 @@ class PlanExecutor:
                         # byte-hashed). Non-media has no fingerprint and is not applicable.
                         fp_status = "not_applicable"
                         if record.get('content_hash'):
-                            try:
-                                ch_dict = json.loads(record['content_hash'])
-                                fp_status = ch_dict.get('status', 'unknown_fingerprint')
-                            except Exception:
-                                fp_status = "unknown_fingerprint"
+                            fp_status = json.loads(record['content_hash'])['status']
 
                         if record['media_class'] not in ['image', 'video', 'raw']:
                             fp_status = "not_applicable"
 
-                        folder_class = rel_path.split('/')[0] if '/' in rel_path else "root"
+                        folder_class = rel_path.split('/')[0]
 
                         md_record = all_metadata.get(rel_path)
 
@@ -942,7 +907,7 @@ class PlanExecutor:
                             prior_photos = {}
                     log_photos, log_warnings = build_prep_log(
                         prior_photos, plan.operations, cache.get_all_files(),
-                        quarantine_evidence, self._was_uninitialized, plan.plan_id)
+                        quarantine_evidence, plan.plan_id)
                     # No per-run metadata at the top level: the log must be byte-identical on a
                     # no-op run (RUL-no_op_run). Run attribution lives per-step (the "run" field).
                     log_obj = {"schema_version": PREP_LOG_SCHEMA_VERSION, "tool": "photos-1-prep",
@@ -1413,11 +1378,15 @@ class WorkspacePrepWorkflow:
         # likely a media format the workspace's media_extensions config doesn't list. Probe each
         # DISTINCT stray extension once (not per file) and warn — non-blocking — so the operator can add
         # it to media_extensions and re-run to organize those files instead of parking them in 1-strays.
+        # On the run that initializes the workspace the dump is still outside the managed folders, bound for
+        # 0-sources, so its files are the inbox's too (RUL-stray_media_hinted).
         from .photos_utils import exiftool_mime_type
         _sources_top = folder_name('sources')
         _stray_ext_sample = {}
         for f in all_db_files:
-            if f.get('media_class') == 'other' and f['relative_path'].split('/')[0] == _sources_top:
+            _top = f['relative_path'].split('/')[0]
+            if f.get('media_class') == 'other' and (
+                    _top == _sources_top or (self._initializing and _top not in self.managed_folders)):
                 e = os.path.splitext(f['relative_path'])[1].lower().lstrip('.')
                 if e and e not in _stray_ext_sample:
                     _stray_ext_sample[e] = f['absolute_path']
@@ -1693,7 +1662,12 @@ class WorkspacePrepWorkflow:
 
         parent_folder = os.path.dirname(abs_path)
 
-        if parent_folder in failed_metadata_folders:
+        if media_class == "other" and parent_folder in failed_metadata_folders:
+            # A file of no media class has no metadata prep needs: exiftool failing for its folder leaves it not
+            # applicable, never a blocker (RUL-inbox_non_media_never_blocks).
+            meta = {"extraction_status": "not_applicable"}
+            result["metadata_plan_status"] = "not_applicable"
+        elif parent_folder in failed_metadata_folders:
             meta = {}
             meta["extraction_status"] = "extraction_failed"
             meta["extraction_error"] = "folder_metadata_extraction_failed"
@@ -2714,10 +2688,7 @@ class WorkspacePrepWorkflow:
             command="prep",
             created_at=datetime.now(timezone.utc).isoformat(),
             workspace_root=self.workspace_root,
-            digikam_root=None,
             config_fingerprint=Fingerprint(algorithm="sha256", value=self._config_fingerprint),
-            instruction_fingerprints={},
-            locks_required=["workspace"],
             summary={
             "message": "Prep Plan generated",
             "no_op_files": no_op_count,
@@ -2740,7 +2711,6 @@ class WorkspacePrepWorkflow:
                 "db_effects_seen": len([fx for op in operations for fx in (op.database_effects_after_verification or [])]),
                 "db_upserts_applied": 0,
                 "db_removes_applied": 0,
-                "db_renames_applied": 0,
                 "dependency_validation_status": "pending",
                 "handoff_written_after_successful_validation": False,
                 "rehash_summary": rehash_summary,
@@ -3028,9 +2998,11 @@ def _run_locked(args, workspace_root, reporter):
     (RUL-lock_before_reading)."""
     CONFIG["jobs"] = getattr(args, "jobs", 4)
     # A workspace lies on one filesystem (RUL-workspace_one_filesystem), so every move in it is one rename.
-    # Checked on every invocation, prune-quarantine included, before anything is read or changed.
-    from .photos_utils import workspace_volume_error
-    vol_err = workspace_volume_error(workspace_root)
+    # Checked on every invocation, prune-quarantine included, before anything else is read or changed — but for
+    # the seal, which a command it refuses checks first and reads nothing more (BLD-phases_check_seal).
+    from .photos_utils import workspace_volume_error, is_sealed as _is_sealed
+    _refused_sealed = args.command in ("plan", "dry-run", "execute") and _is_sealed(workspace_root)
+    vol_err = None if _refused_sealed else workspace_volume_error(workspace_root)
     if vol_err:
         reporter.error(vol_err)
         sys.exit(2)
@@ -3134,10 +3106,6 @@ def _run_locked(args, workspace_root, reporter):
         with open(pp, "r") as f:
             plan_data = json.load(f)
         plan = Plan.from_dict(plan_data)
-
-        # Use an in-memory database for dry-run
-        cache = WorkspaceCache(workspace_root, in_memory=True)
-        executor = PlanExecutor(workspace_root)
 
         try:
             PlanValidator.validate_plan_preflight(plan, workspace_root)

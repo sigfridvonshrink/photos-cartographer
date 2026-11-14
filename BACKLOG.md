@@ -29,8 +29,63 @@ rewritten to item ids. Six are items now, each with its test — `RUL-write_left
 `RUL-write_leftovers_by_dest_warned`, `BLD-database_effects_one_transaction`, `RUL-log_step_names_run` (merge's
 steps did not name their run; they do), `RUL-records_written_alike`, `RUL-handoff_read_back`,
 `RUL-inbox_non_media_never_blocks`; `RUL-prep_run_summarised` speaks of the plan as well as the execution; the
-editor's note of frames left out of a proposal is in `docs/design/decisions.md`. The walk itself — every function
-against the corpus — is still to do.
+editor's note of frames left out of a proposal is in `docs/design/decisions.md`.
+
+**The walk (2026-11-14):** every function of the three phases, the calculation layer and the shared library was read
+against the corpus, some ninety-five findings. Done since, needing no ruling: the fourteen places where the code
+contradicted a ruled rule are fixed, each with a test (a failed execute rolls its database effects back; merge never
+moves or removes a photo changed after the plan, and one photo's error blocks it alone; the console judges a plan
+by the workspace's own configuration and its editor tab holds to the editor's rules; exiftool gets its two attempts;
+a plan's existing snapshot counts as taken; the seal is checked before the workspace is walked), and the dead code
+is removed.
+
+**Awaiting ruling — safety:**
+1. A photo in photos by destination that prep could not fingerprint is written by geotag unpinned, and merged with
+   no identity. *Proposed: geotag and merge refuse it.*
+2. A multi-frame image is fingerprinted by its first frame only (and the two fingerprint paths differ); a video by
+   its default streams only. *Proposed: every frame, every stream.*
+3. Merge takes the same pixels for the same photo: where the library holds them without the corrected time and
+   position, the geotagged copy is removed and the library's kept. *Proposed: stop, naming both.*
+4. `<photo>_original` — exiftool's backup of the user's own edit, the camera original — is quarantined as a write's
+   leftover, and the quarantine can be pruned. *Proposed: a stray.*
+5. A hidden folder inside a managed folder is never read by prep, never merged, and left in the sealed workspace,
+   while geotag's re-prep gate does read it. *Proposed: stop, naming it.* Hidden files under photos by destination
+   are likewise skipped by merge.
+6. A track file holding several `<trk>` is read as one track, and a `<trkseg>` break is bridged. *Proposed: a track
+   per `<trk>`, no bridge across a break.*
+7. A local time a daylight-saving change skips or repeats is resolved silently (item 20).
+8. Geotag's automatic re-prep runs whatever prep plans. *Proposed: only where prep's plan moves no media.*
+9. `prune-quarantine --older-than-days` takes 0 and negatives, selecting everything. *Proposed: refuse below 1.*
+10. A library may be blessed inside another workspace. *Proposed: refuse.*
+11. A photo placed in an earlier `library_root` counts as merged after the setting is changed. *Proposed: stop.*
+12. The editor saves over decisions changed on disk since it loaded them. *Proposed: refuse the save.*
+13. A tracks folder whose every file is unreadable plans as "no tracks". *Proposed: stop.*
+
+**Awaiting ruling — the rest**, each a behaviour to state as it is, change, or drop:
+- *decisions:* a photo moved to another destination loses its own position decision; exiftool's absence stops
+  finalize, which never runs it; a handoff of another field-set version is refused; a development subfolder is
+  matched with case; an unvouched prep log is passed over at plan; the `+carto-time` mark is written to a photo
+  whose time was already right; a merge of no photos seals; ImageMagick's absence is a warning for merge;
+  `init-library <path>` rewrites the whole configuration file; a media file whose metadata read failed blocks, in
+  photos by destination too; the first run renames a dump file whose inbox path is taken; the console's editor tab
+  holds the editor lock until the console stops.
+- *records:* when geotag's summary and merge's are not written (a refusal, an interrupt); an unreadable journal or
+  earlier pass is taken as empty; photos-25 and the photos-26 package are replaced in place; prep takes an
+  unreadable log for none and writes over an unreadable quarantine manifest it could not set aside; a prune is
+  recorded nowhere; a log entry of a photo gone from the workspace is carried as it was; every quarantine move is
+  counted a duplicate; strays' paths are in the plan though `RUL-strays_leave_no_trace` says nowhere; merge's
+  journal is per plan, not per run; and fields no item names — the anchor proposal's `anchors` and `anchor_count`,
+  photos-23's `depends_on`, the merge log's step, the photos-35 manifest's, the handoff's `inode` (which enters its
+  fingerprint), fields nothing reads (`proposal_confidence`, `camera_groups_present`, `rank`,
+  `fingerprint_algorithm_version`).
+- *limits:* the tolerance in recognising geotag's own interrupted write; how anchor offsets are clustered and a tie
+  falls; a projection with no heading point lands on the track's end; coordinates rounded to six places; track
+  times parsed as the host's Python parses them; a decode killed after ten seconds; blank camera-identity values;
+  what counts as a photo's own position (item 24); one library file compared per photo; the suffix above the
+  highest of library and batch (`BLD-collision_suffix` says "next free"); case-only collisions refused on every
+  filesystem; a redundant JPEG paired with case; an uppercase extension left in photos by destination; and the
+  exit statuses (1 locked, 2 refused, 3 partial or failed, 130 interrupted; merge's plan and dry run exit 0 with
+  blockers).
 
 ---
 

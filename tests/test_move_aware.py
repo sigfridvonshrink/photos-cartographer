@@ -358,3 +358,23 @@ def test_a_name_changed_in_case_is_not_a_move(tmp_path, monkeypatch):
     plan = _plan(ws)
     assert plan.summary["recognized_moves"] == 0
     assert len(hash_calls) == 1
+
+
+@pytest.mark.spec("BLD-handoff_grouping_facts", "RUL-grouping_facts_reported",
+                  test="TST-move_aware-a_recognized_move_counts_as_carried_in_cache_freshness")
+def test_a_recognized_move_counts_as_carried_in_cache_freshness(tmp_path, monkeypatch):
+    """A file whose move prep recognized counts, in the handoff's cache freshness, as metadata carried — not as
+    metadata missing."""
+    _install_mocks(monkeypatch, [])
+    ws = _ws(tmp_path)
+    organized = _seed_one(ws)
+    (ws / "6-photos-by-dest" / "Belgium").mkdir(parents=True)
+    os.rename(organized, ws / "6-photos-by-dest" / "Belgium" / os.path.basename(organized))
+    plan = _plan(ws)
+    assert plan.summary["recognized_moves"] == 1
+    prep.PlanExecutor(str(ws)).execute(plan)
+    handoff = json.load(open(ws / ".photos-ingest" / "photos-11-handoff.json"))
+    for grouping in handoff["destination_folders"] + handoff["camera_groups"]:
+        cf = grouping["cache_freshness"]
+        assert cf["total_files"] == 1 and cf["metadata_carried_forward"] == 1, cf
+        assert cf["metadata_missing"] == 0, cf

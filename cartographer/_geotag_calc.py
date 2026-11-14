@@ -78,7 +78,6 @@ __all__ = [
     '_point_to_segment',
     '_candidate',
     'frame_candidates',
-    'match_frame_to_gpx',
     '_frame_skip_reason',
     '_timezone_naive_offset',
     'infer_anchor_proposal',
@@ -448,16 +447,14 @@ def frame_candidates(frame, gpx, cfg):
     stay_dist = cfg["gpx_anchor_stay_distance_meters"]
     # Plausible-clock-error window: a GPX time may anchor this frame only if it is within `window` of the
     # frame's naive time (read as UTC). Applied DURING the search so a same-place/other-trip point is
-    # skipped even when it is the spatially closest — fixing the years-off false match. None = no bound
-    # (unit tests that omit the knob); real configs always set it (BLD-anchor_matching).
-    window = cfg.get("gpx_anchor_max_clock_error_seconds")
+    # skipped even when it is the spatially closest — fixing the years-off false match (BLD-anchor_matching).
+    window = cfg["gpx_anchor_max_clock_error_seconds"]
     naive_utc = naive.replace(tzinfo=timezone.utc)
     out = []
     for src, pts, times in gpx.tracks():
-        lo, hi = 0, len(pts)
-        if window is not None:                        # only the stretch of the track inside the window
-            lo = bisect.bisect_left(times, naive_utc - timedelta(seconds=window))
-            hi = bisect.bisect_right(times, naive_utc + timedelta(seconds=window))
+        # only the stretch of the track inside the window
+        lo = bisect.bisect_left(times, naive_utc - timedelta(seconds=window))
+        hi = bisect.bisect_right(times, naive_utc + timedelta(seconds=window))
         passes, run = [], []                          # a pass: [(gpx time, rank, distance, segment duration)]
         for i in range(lo, hi):
             p = pts[i]
@@ -496,17 +493,8 @@ def frame_candidates(frame, gpx, cfg):
     return out
 
 
-def match_frame_to_gpx(frame, gpx, cfg):
-    """The best GPX time-anchor candidate for one native-GPS frame (BLD-anchor_matching), or None: over every pass, a
-    close point before a close short segment, then the closest. Whether the frame anchors at all; which pass is
-    the photo's is the consensus's to say (infer_anchor_proposal)."""
-    cands = frame_candidates(frame, gpx, cfg)
-    return min(cands, key=lambda c: (0 if c["match_type"] == "gpx_point_match" else 1, c["distance_m"])) \
-        if cands else None
-
-
 def _frame_skip_reason(frame, gpx, cfg):
-    """Why `match_frame_to_gpx` returned no anchor for `frame`: 'outside_time_window' if a GPX point is
+    """Why `frame_candidates` found no anchor for `frame`: 'outside_time_window' if a GPX point is
     spatially close but only at an implausible time (a different trip/year), else 'no_nearby_track'.
     Drives the editor's skipped-frames note so a windowed-out match is explained, not hidden."""
     ng = frame.get("native_gps") or {}
@@ -801,7 +789,7 @@ def _resolve_one(f, d, cls, naive, tz, key, dest, overrides):
                 status, rule, prov = "valid", "camera_group_offset", eff.get("source")
             else:
                 status, rule = "unresolved", "offset_missing"
-        else:   # a phone, or a file naming no camera, each solved on its own (unknown groups were hard-stopped)
+        elif cls in ("smartphone", "unidentified"):   # a phone, or a file naming no camera, each solved on its own
             native_off = _own_offset(f)
             if native_off is not None:
                 offset_used, resolved = native_off, naive - timedelta(seconds=native_off)
@@ -812,6 +800,10 @@ def _resolve_one(f, d, cls, naive, tz, key, dest, overrides):
                 status, rule, prov = "valid", "destination_timezone", tz
             else:
                 status, rule = "unresolved", "timezone_missing"
+        else:
+            # A group classed neither phone nor camera stops geotag before this (RUL-unknown_group_stops_geotag); were
+            # one ever to reach here it stays unresolved — never solved as a phone would be (BLD-resolved_utc).
+            status, rule = "unresolved", "camera_group_unclassified"
     return resolved, status, rule, offset_used, prov, scope
 
 
@@ -1150,7 +1142,8 @@ def from_originals(file, original):
         if original.get(k) is not None:
             rt[k] = original[k]
     method = original.get("GPSProcessingMethod")
-    has_gps = bool(original.get("has_native_gps")) and geotag_marker(method) not in POSITION_MARKERS
+    # A pin is taken only of a file carrying no geotag mark (BLD-original_values_pinned): its position is the device's.
+    has_gps = bool(original.get("has_native_gps"))
     f.update(raw_times=rt, source_naive_time=original.get("selected_source_naive_timestamp"),
              source_time_tag=original.get("selected_source_timestamp_tag"),
              has_timestamp=original.get("selected_source_naive_timestamp") is not None,
@@ -1220,9 +1213,7 @@ def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename):
     time_corrected = bool(marker)                 # geotag wrote this file's time on an earlier run
     dto, off = _local_time_and_offset(resolved_utc, tz)
     if dto is not None:
-        writes = {"DateTimeOriginal": dto}
-        if off:
-            writes["OffsetTimeOriginal"] = off
+        writes = {"DateTimeOriginal": dto, "OffsetTimeOriginal": off}   # a local time always comes with its offset
         time_corrected = True
         if any(held.get(k) != v for k, v in writes.items()):         # already held -> nothing to write
             ops.append(_make_op("metadata_time_write", rel, "corrected capture time", {"writes": writes}, pre))
@@ -1337,8 +1328,8 @@ def _earlier_pass_steps(plan, confirmed):
     ops_by_fp = {}
     for dd in (plan.get("destinations") or {}).values():
         for op in dd.get("operations") or []:
-            fp = (op.get("preconditions") or {}).get("content_fingerprint") or op.get("content_fingerprint")
-            if fp and (confirmed is None or op.get("operation_id") in confirmed):
+            fp = (op.get("preconditions") or {}).get("content_fingerprint")
+            if fp and op.get("operation_id") in confirmed:
                 ops_by_fp.setdefault(fp, []).append(op)
     out = {}
     for fp, ops in ops_by_fp.items():

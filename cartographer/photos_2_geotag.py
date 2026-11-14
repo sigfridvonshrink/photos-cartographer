@@ -1016,7 +1016,7 @@ class GeotagWorkflow:
         imprecise = bool(proposal.get("imprecise_seconds"))    # the tracks stood still: no photo says when
         spread = CONFIG["gpx_anchor_offset_spread_max_seconds"]          # anchors this close agree
         tolerance = CONFIG["gpx_anchor_decision_tolerance_seconds"]      # a proposal this close is the one decided
-        policy = CONFIG.get("camera_time_and_timezone_policy") or {}
+        policy = CONFIG["camera_time_and_timezone_policy"]      # whole: the loader refuses one lacking a setting
 
         ud = prior_cell.get("user_decision") or {}
         accept = _decision_flag(ud, "accept_proposal", f"{dest}: camera_group_time_decisions[{loc}].user_decision", blockers)
@@ -1060,8 +1060,8 @@ class GeotagWorkflow:
             # auto-resolution under the config flags (RUL-anchor_offset_auto_as_configured) — GPX-self-anchor only; a
             # timezone-derived proposal is confirmable, never auto-applied (the local-clock assumption can be wrong).
             n = proposal["anchor_count"]
-            if (n >= 2 and policy.get("multi_anchor_auto_apply", True)) or \
-               (n == 1 and policy.get("single_anchor_auto_apply", False)):
+            if (n >= 2 and policy["multi_anchor_auto_apply"]) or \
+               (n == 1 and policy["single_anchor_auto_apply"]):
                 effective = {"offset_seconds": proposal["proposed_offset_seconds"], "source": "gpx_anchor_auto"}
                 decision_mode = "auto_resolved"
         anchored_by = None
@@ -1491,21 +1491,8 @@ class GeotagWorkflow:
         t_dests = time_artifact.get("destinations") or {}
         g_dests = gps_artifact.get("destinations") or {}
 
+        # Called only once photos-21, -22 and -23 are all complete (BLD-geotag_stage_order): run() gates it.
         blockers = []
-        if time_artifact.get("status") != "complete":
-            blockers.append("photos-21-time-decisions.json is not complete.")
-        if gps_artifact.get("status") != "complete":
-            blockers.append("photos-23-gps-decisions.json is not complete.")
-        # Defensive: main() never reaches here unless 22 is complete, but assert it so a plan can
-        # never assemble while a GPS-drift bucket is unconfirmed (the RUL-unanchored_offset_confirmed gate).
-        dvp = drift_validation_path(self.workspace_root)
-        if os.path.exists(dvp):
-            try:
-                with open(dvp) as _df:
-                    if (json.load(_df) or {}).get("status") != "complete":
-                        blockers.append(f"{DRIFT_VALIDATION_ARTIFACT} is not complete.")
-            except Exception:
-                blockers.append(f"{DRIFT_VALIDATION_ARTIFACT} is unreadable.")
         for f in files:
             row = utc_by_path.get(f["relative_path"])
             if not row or row.get("resolved_utc_status") != "valid":
@@ -1710,14 +1697,18 @@ class GeotagWorkflow:
             stale.append("planned operations changed (plan tampered)")
         # Every write is checked by taking the photo's fingerprint again: with another image engine than
         # the one prep took them with, every photo would be written and then held as changed
-        # (RUL-engine_checked_before_writes).
+        # (RUL-engine_checked_before_writes). Prep always records its engine: a handoff that names none cannot
+        # vouch for the engine, so it stops execution like another engine would.
         if with_handoff and all_ops:
             try:
                 with open(handoff_path(ws)) as hf:
                     engine = (((json.load(hf) or {}).get("depends_on") or {}).get("cache") or {}).get("image_engine_version")
             except (OSError, ValueError):
                 engine = None
-            if engine is not None and engine != get_imagemagick_version():
+            if engine is None:
+                stale.append("the handoff records no image engine the photos were fingerprinted with "
+                             "— run `prep plan` and `prep execute` first")
+            elif engine != get_imagemagick_version():
                 stale.append(f"the image engine changed since prep fingerprinted the photos ({engine} -> "
                              f"{get_imagemagick_version()}) — run `prep plan` and `prep execute` first")
         return stale
@@ -2391,7 +2382,9 @@ def run(args):
         sys.exit(1)
     reporter.log(f"Lock acquired: {run_lock.lock_path}")
     try:
-        vol_err = workspace_volume_error(workspace_root)   # RUL-workspace_one_filesystem
+        # The seal is checked before anything else is read (BLD-phases_check_seal), the walk over every folder
+        # for its device included: a sealed workspace goes straight to the preflight, whose first check refuses it.
+        vol_err = None if is_sealed(workspace_root) else workspace_volume_error(workspace_root)   # RUL-workspace_one_filesystem
         if vol_err:
             reporter.error(vol_err)
             sys.exit(2)
@@ -2427,17 +2420,15 @@ def run(args):
                       "clock), then re-run. Each array is the complete final list (your known groups plus "
                       "the new one(s)); the new group(s) appear in BOTH — keep each in only ONE array and "
                       "delete it from the other:\n")
-                dg = (CONFIG.get("camera_time_and_timezone_policy") or {}).get("device_groups") or {}
+                dg = CONFIG["camera_time_and_timezone_policy"]["device_groups"]
                 # Emit the two arrays in the config file's OWN key order (the seed is written
                 # sort_keys=True, so fixed_clock_cameras precedes phones) — a whole-block paste-over then
                 # keeps the inter-array comma intact instead of pasting them in the reverse order and
-                # dropping it. Ensure both standard arrays appear even if the config omits one.
-                labels = [k for k in dg if k in ("fixed_clock_cameras", "phones")]
-                for _k in ("fixed_clock_cameras", "phones"):
-                    if _k not in labels:
-                        labels.append(_k)
+                # dropping it. The loader refuses a configuration lacking either array or holding another
+                # (RUL-config_complete), so the block holds exactly these two.
+                labels = list(dg)
                 for i, label in enumerate(labels):
-                    existing = list(dg.get(label) or [])
+                    existing = list(dg[label])
                     merged = existing + [k for k in unknown if k not in existing]
                     tail = "," if i < len(labels) - 1 else ""
                     if merged:

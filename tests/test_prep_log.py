@@ -419,3 +419,23 @@ def test_a_photo_moved_under_a_new_imagemagick_keeps_its_history(tmp_path, monke
     assert [s["action"] for s in entry["journey"]] == [
         "organized", "provisional_rename", "fingerprint_retaken", "moved_to_by_dest"]
     assert entry["journey"][-1]["from"] == organized and entry["journey"][-1]["to"] == moved
+
+
+@pytest.mark.spec("RUL-log_entry_append_only", test="TST-prep_log-an_earlier_runs_duplicates_are_kept")
+def test_an_earlier_runs_duplicates_are_kept(tmp_path, monkeypatch):
+    """A later run that sets aside another duplicate of a photo adds it to the photo's record of duplicates; the
+    earlier run's stay as they were."""
+    _install(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"SAME")
+    (ws / "0-sources" / "b.jpg").write_bytes(b"SAME")
+    _run(ws)
+    first = next(iter(_log(ws)["photos"].values()))["deduplicated"]["quarantined"]
+    assert len(first) == 1
+    (ws / "0-sources" / "c.jpg").write_bytes(b"SAME")          # another copy, in a later run
+    _run(ws)
+    photos = _log(ws)["photos"]
+    assert len(photos) == 1
+    dq = next(iter(photos.values()))["deduplicated"]["quarantined"]
+    assert dq[:1] == first and len(dq) == 2, dq
+    assert dq[1]["origin"] == "0-sources/c.jpg"

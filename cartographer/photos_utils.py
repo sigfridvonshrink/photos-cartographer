@@ -198,7 +198,7 @@ def default_config() -> dict:
             if missing:      # it would seed a configuration every phase then refuses
                 raise ValueError(f"Seed defaults {src} are missing setting(s): "
                                  + ", ".join(k for k, _ in missing))
-            unknown = [k for k in unknown_config_settings(data) if k != "jobs"]   # jobs is stripped on seeding
+            unknown = unknown_config_settings(data)
             if unknown:
                 raise ValueError(f"Seed defaults {src} hold setting(s) cartographer does not know: "
                                  + ", ".join(unknown))
@@ -430,16 +430,38 @@ def likely_new_dump(ws: str) -> bool:
     """Whether anything sits where a dump would land (RUL-sealed_new_dump_warned): an entry at the
     workspace's top level, file or folder, other than its managed folders and hidden entries, or
     anything at all in the inbox. Every command refusing a sealed workspace asks this, so each points
-    out a dump dropped there the same way, and none moves it."""
-    managed = {folder_name(r) for r in FOLDER_ROLES}
+    out a dump dropped there the same way, and none moves it. It asks before the workspace's
+    configuration is loaded (the editor never loads it), so the folders are named by that file, read
+    here (`workspace_folders`), not by CONFIG."""
+    folders = workspace_folders(ws)
+    managed = {folders[r] for r in FOLDER_ROLES}
     if any(not n.startswith('.') and n not in managed for n in os.listdir(ws)):
         return True
-    inbox = os.path.join(ws, folder_name('sources'))
+    inbox = os.path.join(ws, folders['sources'])
     return os.path.isdir(inbox) and bool(os.listdir(inbox))
 
 def config_path(ws: str) -> str:
     # Path only; load_or_seed_config (below) seeds it on first prep run, then reads it as authoritative.
     return os.path.join(ws, CONTROL_DIR, "photos-00-config.json")
+
+def read_workspace_config(ws: str):
+    """The workspace's configuration as its file holds it, or None where the file cannot be read or is
+    not a JSON object. Only reads: CONFIG is left as it is, so a caller that has not loaded the
+    workspace's configuration (a seal check, the console) can still go by it, as a fresh run would."""
+    try:
+        with open(config_path(ws), encoding="utf-8") as f:
+            cfg = json.load(f)
+    except (OSError, ValueError):
+        return None
+    return cfg if isinstance(cfg, dict) else None
+
+def workspace_folders(ws: str) -> dict:
+    """The folder names (role -> name) the workspace's configuration file gives, read without touching
+    CONFIG; the built-in names where that file cannot be read or does not name every folder."""
+    folders = (read_workspace_config(ws) or {}).get("folders")
+    if isinstance(folders, dict) and all(isinstance(folders.get(r), str) for r in FOLDER_ROLES):
+        return folders
+    return dict(DEFAULT_FOLDERS)
 
 def db_path(ws: str) -> str:
     return os.path.join(ws, CONTROL_DIR, "photos-00-ingest.db")
@@ -1080,8 +1102,6 @@ def missing_config_settings(cfg: dict, template: dict = None, prefix: str = "") 
     template = DEFAULT_CONFIG if template is None else template
     out = []
     for key, value in template.items():
-        if key == "jobs":
-            continue
         path = f"{prefix}{key}"
         if key not in cfg:
             out.append((path, value))
@@ -1095,12 +1115,12 @@ def unknown_config_settings(cfg: dict, template: dict = None, prefix: str = "") 
     configuration holds exactly the template's settings (RUL-config_no_unknown_settings): an unknown one — a
     misspelling, a class or folder role of the user's own, a setting a release removed — would
     otherwise be ignored while the user believes it took effect. `jobs` is a runtime override, never
-    a setting."""
+    a setting: the template does not hold it, so a file holding it is refused like any unknown one."""
     template = DEFAULT_CONFIG if template is None else template
     out = []
     for key, value in cfg.items():
         path = f"{prefix}{key}"
-        if key == "jobs" or key not in template:
+        if key not in template:
             out.append(path)
         elif isinstance(template[key], dict) and isinstance(value, dict):
             out.extend(unknown_config_settings(value, template[key], path + "."))
@@ -1148,12 +1168,12 @@ def load_or_seed_config(workspace_root: str) -> str:
     `photos-config-defaults.json` beside the executable if present, else the built-in
     DEFAULT_CONFIG), then read it through `load_config` as the authoritative config for this
     workspace. Prep alone calls this: it is the configuration's only seeder (RUL-config_writers).
-    `jobs` is a runtime override and is never persisted to the file."""
+    `jobs` is a runtime override and is never persisted to the file: no seed holds it, `default_config`
+    refusing one that does."""
     ensure_control_dir(workspace_root)
     path = config_path(workspace_root)
     if not os.path.exists(path):
-        seed = {k: v for k, v in default_config().items() if k != "jobs"}
-        _atomic_write_text(path, json.dumps(seed, indent=2, sort_keys=True))
+        _atomic_write_text(path, json.dumps(default_config(), indent=2, sort_keys=True))
     return load_config(workspace_root)
 
 
@@ -1446,9 +1466,14 @@ def take_zfs_snapshot(ws: str, snapshot_id: str, label: str, *, target_path=None
     land there, not in the workspace tree.
 
     Returns None when ZFS is disabled; otherwise a record
-    `{required, snapshot_name (None if no dataset was found), command, exit_code, stdout, stderr, ok}`.
+    `{required, snapshot_name (None if no dataset was found), command, exit_code, stdout, stderr, ok}`,
+    plus `already_existed: True` when the snapshot was there before this call.
     It NEVER raises — the caller records the result in its own journal/summary and, if `required` and
-    not `ok`, aborts before mutating (keeping the audit record + abort decision in the phase)."""
+    not `ok`, aborts before mutating (keeping the audit record + abort decision in the phase).
+
+    A snapshot names its plan (RUL-snapshot_per_plan), so executing the same plan again (a geotag
+    resume, a merge re-run) asks for a name that exists: that snapshot already precedes this plan's
+    changes, so it counts as taken, never as a failure."""
     import subprocess
     zfs = CONFIG.get("zfs") or {}
     if not zfs.get("enabled", False):
@@ -1470,16 +1495,32 @@ def take_zfs_snapshot(ws: str, snapshot_id: str, label: str, *, target_path=None
         rec = {"required": required, "snapshot_name": snap, "command": " ".join(cmd),
                "exit_code": getattr(e, "returncode", -1), "stdout": getattr(e, "stdout", "") or "",
                "stderr": getattr(e, "stderr", "") or str(e), "ok": False}
+        # The plan's snapshot is already there (RUL-snapshot_per_plan): this plan was executed before.
+        if _zfs_snapshot_exists(snap):
+            rec["ok"] = True
+            rec["already_existed"] = True
     # Surface a log line whenever a snapshot is actually taken, naming it — one place so EVERY phase
     # (prep/geotag/merge) that snapshots before mutating reports it. Failures are left to the caller
     # (it warns or aborts per `required`); the durable record still goes to the journal/summary.
     if rec["ok"]:
         try:
             from .reporting import get_reporter
-            get_reporter().log(f"ZFS snapshot taken: {snap}")
+            get_reporter().log(f"ZFS snapshot already taken: {snap}" if rec.get("already_existed")
+                               else f"ZFS snapshot taken: {snap}")
         except Exception:
             pass
     return rec
+
+
+def _zfs_snapshot_exists(snap: str) -> bool:
+    """Whether the ZFS snapshot named exactly `snap` exists. Never raises: no answer counts as no."""
+    import subprocess
+    try:
+        res = subprocess.run(["zfs", "list", "-H", "-t", "snapshot", "-o", "name", snap],
+                             capture_output=True, text=True, check=True, stdin=subprocess.DEVNULL)
+        return res.stdout.strip() == snap
+    except Exception:
+        return False
 
 # 2: every field taken from an explicit group order (METADATA_GROUP_ORDER), the group-qualified
 #    XMP:/QuickTime: date fields gone (they were never filled), no raw payload kept.
@@ -2020,16 +2061,18 @@ class ExifToolWorkerPool:
         except queue.Empty:
             return {"error": "extraction_failed"} # Worker queue blocked forever
 
+        # Two attempts at the folder, so every file in it gets two, a dead worker restarted between
+        # them (BLD-tool_workers, RUL-tool_failure_retried); only then are its files counted failed.
         try:
-            result = worker.read_metadata(folder_path)
-            return result
-        except ProcessCrashedError as e:
-            if progress_coordinator:
-                progress_coordinator.increment("worker_crashes")
-            worker = self.replace_or_restart(worker)
-            return {"error": "extraction_failed"}
-        except Exception as e:
-            worker = self.replace_or_restart(worker)
+            for _attempt in range(2):
+                try:
+                    return worker.read_metadata(folder_path)
+                except ProcessCrashedError:
+                    if progress_coordinator:
+                        progress_coordinator.increment("worker_crashes")
+                    worker = self.replace_or_restart(worker)
+                except Exception:
+                    worker = self.replace_or_restart(worker)
             return {"error": "extraction_failed"}
         finally:
             if worker:
@@ -2574,8 +2617,7 @@ class PlanFingerprintMemo:
                     relative_path TEXT PRIMARY KEY,
                     size INTEGER,
                     mtime_ns INTEGER,
-                    record_json TEXT,
-                    seen_ns INTEGER
+                    record_json TEXT
                 )
             """)
 
@@ -2617,13 +2659,12 @@ class PlanFingerprintMemo:
                 continue
             stored = {k: v for k, v in rec.items() if k != "absolute_path"}   # path is machine-specific
             rows.append({"relative_path": rec["relative_path"], "size": rec.get("size"),
-                         "mtime_ns": rec.get("mtime_ns"), "record_json": json.dumps(stored, sort_keys=True),
-                         "seen_ns": int(datetime.now(timezone.utc).timestamp() * 1e9)})
+                         "mtime_ns": rec.get("mtime_ns"), "record_json": json.dumps(stored, sort_keys=True)})
         with self._lock, self.conn:
             self.conn.execute("DELETE FROM plan_fingerprint_memo")
             self.conn.executemany("""
-                INSERT INTO plan_fingerprint_memo (relative_path, size, mtime_ns, record_json, seen_ns)
-                VALUES (:relative_path, :size, :mtime_ns, :record_json, :seen_ns)
+                INSERT INTO plan_fingerprint_memo (relative_path, size, mtime_ns, record_json)
+                VALUES (:relative_path, :size, :mtime_ns, :record_json)
             """, rows)
         return len(rows)
 
@@ -2793,12 +2834,6 @@ class WorkspaceCache:
         with self._write_ctx():
             self.conn.execute("DELETE FROM file_cache WHERE relative_path = ?", (relative_path,))
             self.conn.execute("DELETE FROM metadata_cache WHERE relative_path = ?", (relative_path,))
-
-    def rename_file(self, old_rel_path: str, new_rel_path: str, new_abs_path: str):
-        # Retained for executor rename support and shared index tests
-        with self._write_ctx():
-            self.conn.execute("UPDATE file_cache SET relative_path = ?, absolute_path = ? WHERE relative_path = ?", (new_rel_path, new_abs_path, old_rel_path))
-            self.conn.execute("UPDATE metadata_cache SET relative_path = ? WHERE relative_path = ?", (new_rel_path, old_rel_path))
 
     def upsert_file(self, data: Dict[str, Any]):
         with self._write_ctx():

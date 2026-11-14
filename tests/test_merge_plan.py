@@ -41,7 +41,7 @@ def _wf(handoff_files, rename_ops):
 
 def _ho(rel, fp):
     return {"relative_path": rel, "folder_class": "6-photos-by-dest", "media_class": "image",
-            "content_fingerprint": fp}
+            "content_hash": json.dumps({"status": "valid", "value": fp})}
 
 
 def _rename(fp, to):
@@ -126,7 +126,7 @@ def _build_ws(tmp_path, photos, library_files=()):
         (ddir / final).write_bytes(p.get("bytes", b"img-%d" % i))
         rel_pre = os.path.join("6-photos-by-dest", dest, pre) if dest else os.path.join("6-photos-by-dest", pre)
         ho_files.append({"relative_path": rel_pre, "folder_class": "6-photos-by-dest",
-                         "media_class": "image", "content_fingerprint": p["fp"]})
+                         "media_class": "image", "content_hash": json.dumps({"status": "valid", "value": p["fp"]})})
         if pre != final:
             ops.append({"type": "rename_no_clobber", "to": final,
                         "preconditions": {"content_fingerprint": p["fp"]}})

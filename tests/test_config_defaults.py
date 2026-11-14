@@ -72,3 +72,18 @@ def test_seed_uses_default_config(tmp_path, monkeypatch):
     u.load_or_seed_config(str(ws))
     seeded = json.load(open(ws / ".photos-ingest" / "photos-00-config.json"))
     assert seeded["gpx_root"] == "/seeded/from/external"      # new workspace seeded from the external file
+
+
+@pytest.mark.spec("BLD-config_loader", test="TST-config_defaults-seed_defaults_holding_jobs_are_refused")
+def test_seed_defaults_holding_jobs_are_refused(tmp_path, monkeypatch):
+    # The job count is a runtime override, never a setting: seed defaults holding it are refused like
+    # any setting the template lacks, the same way a workspace's configuration is — and seed nothing.
+    cfg = json.loads(json.dumps(u.DEFAULT_CONFIG)); cfg["jobs"] = 8
+    p = tmp_path / "ext.json"; p.write_text(json.dumps(cfg))
+    monkeypatch.setenv("PHOTOS_CARTOGRAPHER_CONFIG", str(p))
+    with pytest.raises(ValueError, match="jobs"):
+        u.default_config()
+    ws = tmp_path / "ws"; (ws / ".photos-ingest").mkdir(parents=True)
+    with pytest.raises(ValueError, match="jobs"):
+        u.load_or_seed_config(str(ws))
+    assert not (ws / ".photos-ingest" / "photos-00-config.json").exists()

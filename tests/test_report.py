@@ -133,7 +133,7 @@ def test_print_summary_renders_categories(capsys):
         },
         "performance_and_cache": {"dependency_validation_status": "success",
                                   "handoff_written_after_successful_validation": True,
-                                  "db_upserts_applied": 5, "db_removes_applied": 1, "db_renames_applied": 0},
+                                  "db_upserts_applied": 5, "db_removes_applied": 1},
     }
     coord.print_summary(plan_summary=summary)
     err = capsys.readouterr().err

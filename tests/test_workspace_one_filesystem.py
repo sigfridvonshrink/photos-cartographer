@@ -90,6 +90,24 @@ def test_geotag_refuses_a_workspace_on_two_volumes(tmp_path, monkeypatch, capsys
     assert sorted(os.listdir(ws)) == before
 
 
+@pytest.mark.spec("BLD-phases_check_seal", "RUL-sealed_refuses",
+                  test="TST-workspace_one_filesystem-geotag_seal_before_volume_walk")
+@pytest.mark.parametrize("command", ["plan", "execute", "finalize"])
+def test_geotag_checks_the_seal_before_walking_the_workspace(tmp_path, monkeypatch, capsys, command):
+    """Under the lock, the seal is checked before anything else is read (BLD-phases_check_seal) — the walk
+    over every folder for their devices included: a sealed workspace is refused as sealed, never walked."""
+    ws = _ws(tmp_path)
+    (ws / ".photos-ingest" / "photos-00-sealed.json").write_text('{"sealed": true, "merged_run_id": "r1"}')
+    walked = []
+    monkeypatch.setattr(geotag, "workspace_volume_error", lambda root: walked.append(root))
+    monkeypatch.chdir(ws)
+    with pytest.raises(SystemExit) as ei:
+        geotag.run(types.SimpleNamespace(command=command, jobs=1))
+    out = capsys.readouterr()
+    assert ei.value.code == 2 and "SEALED" in out.err + out.out
+    assert walked == []
+
+
 @pytest.mark.spec("RUL-one_filesystem_checked_every_run", "RUL-spanning_workspace_stops",
                   test="TST-workspace_one_filesystem-merge_refuses")
 @pytest.mark.parametrize("command", ["plan", "dry-run", "execute"])

@@ -207,10 +207,7 @@ def test_quiet_plan_executor_execution(mock_validate, mock_popen, workspace):
         command="prep",
         created_at="now",
         workspace_root=workspace,
-        digikam_root=None,
         config_fingerprint=prep.Fingerprint("sha256", "val"),
-        instruction_fingerprints={},
-        locks_required=[],
         summary={"metadata_plan_status": {}},
         blockers=[],
         warnings=[],
@@ -521,7 +518,6 @@ def test_progress_summary_fields(mock_read_metadata_concurrently, mock_hash_imag
     assert pc["handoff_written_after_successful_validation"] is True
     assert pc["db_upserts_applied"] > 0
     assert pc["db_removes_applied"] >= 0
-    assert pc["db_renames_applied"] >= 0
 
     # Ensure it didn't leak into handoff
     handoff_path = os.path.join(workspace, ".photos-ingest", "photos-11-handoff.json")
@@ -530,3 +526,25 @@ def test_progress_summary_fields(mock_read_metadata_concurrently, mock_hash_imag
         handoff_data = json.load(f)
         assert "performance_and_cache" not in handoff_data
         assert "jobs_requested" not in handoff_data
+
+
+@patch("subprocess.Popen")
+@pytest.mark.spec("BLD-tool_workers", "RUL-tool_failure_retried", test="TST-concurrency-exiftool_gets_two_attempts_a_dead_worker_restarted")
+def test_exiftool_gets_two_attempts_a_dead_worker_restarted(mock_popen):
+    """exiftool gets two attempts at a folder's files, the dead worker restarted between them: one
+    crash is retried and its result kept; only a second crash counts the folder's files failed."""
+    from photos_utils import ProcessCrashedError
+    mock_popen.return_value = MagicMock()
+    coordinator = utils.ProgressCoordinator(quiet=True)
+    with patch("photos_utils.PersistentExifToolWorker.read_metadata",
+               side_effect=[ProcessCrashedError("Crash"), {"f.jpg": {"Make": "Canon"}}]) as read, \
+         patch("photos_utils.PersistentExifToolWorker.restart") as restart:
+        with utils.ExifToolWorkerPool(size=1) as pool:
+            assert pool.execute("folder", coordinator) == {"f.jpg": {"Make": "Canon"}}
+        assert read.call_count == 2 and restart.call_count == 1
+    with patch("photos_utils.PersistentExifToolWorker.read_metadata",
+               side_effect=ProcessCrashedError("Crash")) as read, \
+         patch("photos_utils.PersistentExifToolWorker.restart"):
+        with utils.ExifToolWorkerPool(size=1) as pool:
+            assert pool.execute("folder", coordinator) == {"error": "extraction_failed"}
+        assert read.call_count == 2

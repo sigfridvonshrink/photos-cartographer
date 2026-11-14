@@ -774,7 +774,19 @@ class MergeWorkflow:
         return {"placed_new": "placed_new", "renamed_incoming": "renamed_for_library",
                 "already_present": "already_present"}.get(disp, "placed_new")
 
-    def _move_file(self, ws, library_root, rec, journal):
+    def _move_file(self, ws, library_root, rec):
+        """Apply one planned move (`_place_file`), an error in it blocking this photo alone: recorded like any
+        other failed placement, its photo left in by-dest, the run going on to its summary
+        (BLD-merge_failed_placement, RUL-merge_outcome_recorded)."""
+        try:
+            return self._place_file(ws, rec)
+        except Exception as e:
+            src_rel = rec.get("by_dest_source")
+            return {"by_dest_source": src_rel, "library_path": rec.get("library_target"),
+                    "content_fingerprint": rec.get("content_fingerprint"), "final_kind": "blocked",
+                    "removed": False, "newly": False, "blocker": f"{src_rel}: move failed ({e})"}
+
+    def _place_file(self, ws, rec):
         """Apply one planned move as the place-then-remove (BLD-merge_move), with state-derivation resume
         (BLD-merge_journal_resume) and execute-time no-clobber. Per-file isolated (touches only this file's source,
         temp, and target); returns a result the executor aggregates — workers never mutate shared state or the
@@ -784,14 +796,19 @@ class MergeWorkflow:
         target = rec["library_target"]
         fp = rec["content_fingerprint"]
         disp = rec["disposition"]
+        # The plan that placed the photo: an earlier one for a photo this plan only carried forward
+        # (BLD-merge_carry_forward), so its merge step names that run (RUL-log_step_names_run).
         out = {"by_dest_source": src_rel, "library_path": target, "content_fingerprint": fp,
-               "final_kind": None, "removed": False, "newly": False, "blocker": None}
+               "final_kind": None, "removed": False, "newly": False, "blocker": None,
+               "placed_by_plan": rec.get("carried_from_plan")}
 
-        src_present = os.path.exists(src_abs)
-        if disp != "blocked" and not src_present and (journal.get(src_rel) == "confirmed"
-                                                      or disp == "already_present"):
-            # Done by an earlier run, or by hand: counted done only while the library still holds it.
-            # The state is the filesystem's; the journal only says which run did it.
+        if disp == "blocked":                             # plan-time per-item blocker (un-fingerprintable)
+            out["final_kind"] = "blocked"
+            out["blocker"] = rec.get("blocked_reason") or f"{src_rel}: blocked at plan time"
+            return out
+        if not os.path.exists(src_abs):
+            # Done by an earlier run, or by hand: counted done only while the library still holds it,
+            # whatever the journal or the plan says (RUL-resume_rechecks_library).
             if self._verify_fp(target, fp):
                 out["final_kind"] = self._plan_kind(disp)
                 out["removed"] = True
@@ -800,9 +817,18 @@ class MergeWorkflow:
             out["blocker"] = (f"{src_rel}: no longer in the workspace, and its library place {target} no "
                               "longer holds it")
             return out
-        if disp == "blocked":                             # plan-time per-item blocker (un-fingerprintable)
+
+        # Any change of size or modification time since the plan — which found the photo as finalize
+        # recorded it — is a change since finalize, even one leaving the pixels, and so the fingerprint,
+        # alone (a metadata write): the photo is refused (RUL-merge_refuses_changed_since_finalize) — before it is
+        # moved and before it is removed as already in the library, so no edit made since is lost either way.
+        pre = rec.get("preconditions") or {}
+        st = os.stat(src_abs)
+        if (pre.get("size") is not None and st.st_size != pre["size"]) or \
+           (pre.get("mtime_ns") is not None and st.st_mtime_ns != pre["mtime_ns"]):
             out["final_kind"] = "blocked"
-            out["blocker"] = rec.get("blocked_reason") or f"{src_rel}: blocked at plan time"
+            out["blocker"] = (f"{src_rel}: changed since the workspace was finalized (its size or modification "
+                              "time is not the plan's); left in by-dest")
             return out
 
         if disp == "already_present":
@@ -818,32 +844,16 @@ class MergeWorkflow:
             return out
 
         # placed_new / renamed_incoming -> move source into the library target.
-        if not src_present:
-            if os.path.exists(target) and self._verify_fp(target, fp):
-                out["final_kind"] = self._plan_kind(disp)   # already moved by a prior run
-                out["removed"] = True
-                return out
-            out["final_kind"] = "blocked"
-            out["blocker"] = f"{src_rel}: source missing at execute and not present in the library"
-            return out
         if os.path.exists(target):
-            if self._verify_fp(target, fp):                 # crash between rename and unlink: finish it
+            # A place found taken at execute holding the planned content makes the photo already
+            # present (BLD-merge_move) — a crash between rename and unlink among the ways to get here.
+            if self._verify_fp(target, fp):
                 os.unlink(src_abs)
-                out.update({"final_kind": self._plan_kind(disp), "removed": True, "newly": True})
+                out.update({"final_kind": "already_present", "removed": True, "newly": True})
                 return out
             out["final_kind"] = "blocked"
             out["blocker"] = f"{src_rel}: target {target} occupied by different content at execute (re-plan)"
             return out
-
-        pre = rec.get("preconditions") or {}
-        st = os.stat(src_abs)
-        if (pre.get("size") is not None and st.st_size != pre["size"]) or \
-           (pre.get("mtime_ns") is not None and st.st_mtime_ns != pre["mtime_ns"]):
-            if not self._verify_fp(src_abs, fp):            # size/mtime AND content differ -> changed
-                out["final_kind"] = "blocked"
-                out["blocker"] = (f"{src_rel}: by-dest file changed since plan "
-                                  "(size/mtime + content differ); re-plan")
-                return out
 
         try:
             os.makedirs(os.path.dirname(target) or ".", exist_ok=True)   # additive: RUL-library_creates_only_placements
@@ -895,6 +905,9 @@ class MergeWorkflow:
         # merges impossible, so any such temp is debris from a crash, never another run's live copy.
         swept = self._sweep_orphan_temps(plan, library_root)
 
+        # The journal an earlier run of this plan wrote, carried into the one this run writes so it keeps
+        # every confirmation (BLD-merge_journal_resume). No outcome is read from it: a photo gone from by-dest
+        # is checked in the library whatever the journal says (RUL-resume_rechecks_library).
         jpath = journal_path(ws, plan["plan_id"])
         journal = {}
         if os.path.exists(jpath):
@@ -908,14 +921,14 @@ class MergeWorkflow:
         results = []
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, jobs)) as ex:
-                futs = [ex.submit(self._move_file, ws, library_root, rec, journal) for rec in recs]
+                futs = [ex.submit(self._move_file, ws, library_root, rec) for rec in recs]
                 try:
                     for fut in concurrent.futures.as_completed(futs):
                         r = fut.result()
                         results.append(r)
                         # Incremental confirmation journal (BLD-merge_journal_resume): persist each completion AS IT
-                        # FINISHES, in this main thread (workers never touch the journal), so a crash mid-run lets the
-                        # next run skip the already-moved files.
+                        # FINISHES, in this main thread (workers never touch the journal), so a crash mid-run leaves
+                        # the record of every move confirmed before it.
                         if r["removed"]:
                             journal[r["by_dest_source"]] = "confirmed"
                             write_json_artifact(jpath, {"journal_version": 1, "plan_id": plan["plan_id"],
@@ -974,7 +987,8 @@ class MergeWorkflow:
             entry = photos.setdefault(fp, {"content_fingerprint": fp, "journey": []})
             entry["library_path"] = r["library_path"]           # where the photo now is
             entry.setdefault("journey", []).append({
-                "phase": "merge", "run": run,                   # the plan that placed it (RUL-log_step_names_run)
+                # The plan that placed it — an earlier one for a photo carried forward (RUL-log_step_names_run).
+                "phase": "merge", "run": r.get("placed_by_plan") or run,
                 "action": "already_present" if r["final_kind"] == "already_present" else "placed",
                 "from": r["by_dest_source"],
                 "library_path": r["library_path"],
@@ -1215,15 +1229,11 @@ def _json_get(path, *keys):
 
 def _record_fingerprint(rec):
     """The content fingerprint of a handoff file record: the prep cache's content_hash JSON `.value`
-    (the cross-phase identity spine). Falls back to a pre-extracted `content_fingerprint` field if
-    present. None if absent/unparseable."""
-    ch = rec.get("content_hash")
-    if ch:
-        try:
-            return json.loads(ch).get("value")
-        except Exception:
-            return None
-    return rec.get("content_fingerprint")
+    (the cross-phase identity spine). None if absent/unparseable."""
+    try:
+        return json.loads(rec.get("content_hash")).get("value")
+    except Exception:
+        return None
 
 
 def _in_workspace(ws):
@@ -1352,7 +1362,7 @@ def do_init_library(path_arg, ws):
     if lock is None:
         return 1
     try:
-        vol_err = workspace_volume_error(ws)         # RUL-workspace_one_filesystem: a workspace lies on one filesystem
+        vol_err = None if is_sealed(ws) else workspace_volume_error(ws)         # RUL-workspace_one_filesystem: a workspace lies on one filesystem
         if vol_err:
             reporter.error(vol_err)
             return 2
@@ -1408,7 +1418,7 @@ def _run_locked_workflow(command, ws, jobs=None):
         return 1
     reporter.log(f"Lock acquired: {run_lock.lock_path}")
     try:
-        vol_err = workspace_volume_error(ws)         # RUL-workspace_one_filesystem: a workspace lies on one filesystem
+        vol_err = None if is_sealed(ws) else workspace_volume_error(ws)         # RUL-workspace_one_filesystem: a workspace lies on one filesystem
         if vol_err:
             reporter.error(vol_err)
             return 2

@@ -392,77 +392,6 @@ def test_http_serves_vendored_leaflet():
         assert _get(base + "/vendor/leaflet/images/marker-icon.png")[2] == "image/png"
 
 
-# --------------------------------------------------------------------------- re-run geotag
-# (geotag now ships in the same package as the editor, so it is always runnable — the old
-# "missing pipeline" cases no longer apply; the gpx_root gate below is the remaining dependency.)
-
-def test_rerun_surfaces_geotag_blockers(tmp_path):
-    # A bare dir is not an initialized workspace: geotag's preflight blocks (exit 2) and mutates
-    # nothing — which is exactly the failure the editor must surface, so this exercises the real plumbing.
-    r = serve._rerun(str(tmp_path))
-    assert r["ok"] is False and r["returncode"] == 2
-    assert "photos-cartographer prep" in (r.get("stderr") or "")
-
-
-# ------------------------------------------------------------ folder-dependency gate (_environment)
-
-def _ws_with_gpx_config(tmp_path, gpx_root):
-    cd = tmp_path / serve.CONTROL
-    cd.mkdir(parents=True, exist_ok=True)
-    (cd / serve.CONFIG_NAME).write_text(json.dumps({"gpx_root": gpx_root}))
-    return str(tmp_path)
-
-
-def test_environment_no_config_does_not_block(tmp_path):
-    (tmp_path / serve.CONTROL).mkdir()
-    env = serve._environment(str(tmp_path))
-    assert env["geotag_present"] is True       # geotag ships in this package — always present
-    assert env["gpx_configured"] is False and env["deps_ok"] is True and env["missing"] == []
-
-
-def test_environment_empty_gpx_root_does_not_block(tmp_path):
-    env = serve._environment(_ws_with_gpx_config(tmp_path, ""))
-    assert env["gpx_configured"] is False and env["deps_ok"] is True
-
-
-def test_environment_visible_gpx_root_is_ok(tmp_path):
-    gpx = tmp_path / "gpx"; gpx.mkdir()
-    env = serve._environment(_ws_with_gpx_config(tmp_path, str(gpx)))
-    assert env["gpx_available"] is True and env["deps_ok"] is True
-    assert env["gpx_root"] == os.path.realpath(str(gpx))
-
-
-def test_environment_missing_gpx_root_blocks(tmp_path):
-    env = serve._environment(_ws_with_gpx_config(tmp_path, str(tmp_path / "not-here")))
-    assert env["gpx_available"] is False and env["deps_ok"] is False
-    assert any("gpx_root" in m for m in env["missing"])
-
-
-def test_load_artifacts_carries_environment(tmp_path):
-    art = serve._load_artifacts(_ws_with_gpx_config(tmp_path, str(tmp_path / "not-here")))
-    assert art["environment"]["deps_ok"] is False
-
-
-def test_rerun_refuses_when_gpx_root_off_machine(tmp_path):
-    # Re-run must not silently regenerate decisions without the GPX the workspace depends on: the guard
-    # short-circuits BEFORE invoking geotag (no returncode), so good GPX-derived decisions survive.
-    r = serve._rerun(_ws_with_gpx_config(tmp_path, str(tmp_path / "not-here")))
-    assert r["ok"] is False and "gpx_root" in r["error"] and "returncode" not in r
-
-
-def test_http_rerun_403_in_demo():
-    with _running(None) as base:
-        status, data = _post_json(base + "/api/rerun", {})
-        assert status == 403 and data["ok"] is False
-
-
-def test_http_rerun_invokes_geotag(tmp_path):
-    ws = _workspace_with_fixtures(tmp_path)
-    with _running(ws) as base:
-        status, data = _post_json(base + "/api/rerun", {})
-    assert status == 200 and data["ok"] is False and data["returncode"] == 2
-
-
 def test_http_post_save_writes_to_workspace(tmp_path):
     ws = _workspace_with_fixtures(tmp_path)
     with _running(ws) as base:
@@ -550,6 +479,31 @@ def test_serve_points_out_a_dump_in_a_sealed_workspace(tmp_path, capsys):
     assert e.value.code == 2
     assert "new dump" in capsys.readouterr().err.lower()
     assert os.listdir(inbox) == ["new.jpg"]
+
+
+@pytest.mark.spec("RUL-sealed_new_dump_warned", test="TST-serve-sealed_dump_check_goes_by_the_workspaces_folder_names")
+def test_sealed_dump_check_goes_by_the_workspaces_folder_names(tmp_path, capsys):
+    # The editor never loads the workspace's configuration, so the check reads the folder names from its
+    # file: a workspace with renamed folders holding only them has no new dump, and one dropped into its
+    # renamed inbox is pointed out by that name.
+    ws = _workspace_with_fixtures(tmp_path)
+    folders = {r: f"x-{n}" for r, n in serve.photos_utils.DEFAULT_FOLDERS.items()}
+    with open(os.path.join(ws, serve.CONTROL, "photos-00-config.json"), "w") as f:
+        json.dump({"folders": folders}, f)
+    for n in folders.values():
+        os.makedirs(os.path.join(ws, n))
+    open(os.path.join(ws, serve.CONTROL, serve.GUARD_NAME), "w").close()
+    _seal(ws)
+    with pytest.raises(SystemExit):
+        serve.serve(ws, port=0)
+    assert "new dump" not in capsys.readouterr().err.lower()
+    inbox = os.path.join(ws, folders["sources"])
+    open(os.path.join(inbox, "new.jpg"), "wb").write(b"img")
+    with pytest.raises(SystemExit):
+        serve.serve(ws, port=0)
+    err = capsys.readouterr().err
+    assert "new dump" in err.lower() and folders["sources"] in err
+    assert serve.photos_utils.CONFIG["folders"] == serve.photos_utils.DEFAULT_FOLDERS   # CONFIG untouched
 
 
 @pytest.mark.spec("RUL-editor_refuses_sealed_save", test="TST-serve-save_refuses_a_sealed_workspace")

@@ -84,7 +84,7 @@ def _ws(tmp_path, photos, library_files=(), name="ws", folders=None):
         (ddir / final).write_bytes(_fp_bytes(p["fp"]))
         rel_pre = os.path.join(bd, dest, pre) if dest else os.path.join(bd, pre)
         ho_files.append({"relative_path": rel_pre, "folder_class": bd,
-                         "media_class": "image", "content_fingerprint": p["fp"]})
+                         "media_class": "image", "content_hash": json.dumps({"status": "valid", "value": p["fp"]})})
         if pre != final:
             ops.append({"type": "rename_no_clobber", "to": final,
                         "preconditions": {"content_fingerprint": p["fp"]}})
@@ -488,6 +488,102 @@ def test_execute_resume_finishes_crash_window(tmp_path):
     assert merge._run_locked_workflow("execute", str(ws)) == 0
     assert not os.path.exists(_src(ws, "Trip", "a.jpg"))        # removal completed
     assert open(os.path.join(str(lib), "Trip", "a.jpg"), "rb").read() == _fp_bytes("A")
+    t = _summary(ws)["totals"]                                  # a place found holding it: already present
+    assert (t["already_present"], t["placed_new"]) == (1, 0), t
+
+
+@pytest.mark.spec("BLD-merge_move",
+                  test="TST-merge_execute-a_place_taken_by_the_planned_content_during_the_move_is_already_present")
+def test_a_place_taken_by_the_planned_content_during_the_move_is_already_present(tmp_path, monkeypatch):
+    """The planned content appearing at the place while the photo moves makes it already present — as when
+    it is found there just before the move."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+
+    def raced(src, dst, **k):
+        with open(dst, "wb") as f:
+            f.write(_fp_bytes("A"))                             # someone else placed the same photo
+        raise FileExistsError(dst)
+    monkeypatch.setattr(merge, "_move_no_clobber", raced)
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    assert not os.path.exists(_src(ws, "Trip", "a.jpg"))
+    t = _summary(ws)["totals"]
+    assert (t["already_present"], t["placed_new"]) == (1, 0), t
+
+
+@pytest.mark.spec("RUL-merge_refuses_changed_since_finalize",
+                  test="TST-merge_execute-a_photo_touched_after_the_plan_is_refused_at_execute")
+def test_a_photo_touched_after_the_plan_is_refused_at_execute(tmp_path, monkeypatch):
+    """A photo whose modification time changes once execute's preconditions have passed — its pixels, and
+    so its fingerprint, the same, as after a metadata write — is refused and named, left where it is; the
+    others are merged."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
+                             {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    src = _src(ws, "Trip", "a.jpg")
+    real_sweep = merge.MergeWorkflow._sweep_orphan_temps
+
+    def sweep_then_touch(self, *a, **k):                         # after the preconditions, before the moves
+        st = os.stat(src)
+        os.utime(src, ns=(st.st_atime_ns, st.st_mtime_ns + 10**9))   # touched; same bytes
+        return real_sweep(self, *a, **k)
+    monkeypatch.setattr(merge.MergeWorkflow, "_sweep_orphan_temps", sweep_then_touch)
+    assert merge._run_locked_workflow("execute", str(ws)) == 3
+    assert open(src, "rb").read() == _fp_bytes("A")              # left in by-dest
+    assert not os.path.exists(os.path.join(str(lib), "Trip", "a.jpg"))
+    assert os.path.exists(os.path.join(str(lib), "Trip", "b.jpg"))
+    s = _summary(ws)
+    assert s["totals"]["blocked"] == 1 and s["totals"]["placed_new"] == 1
+    assert any("Trip/a.jpg" in f for f in s["failures"]), s["failures"]
+
+
+@pytest.mark.spec("RUL-merge_refuses_changed_since_finalize",
+                  test="TST-merge_execute-a_photo_touched_after_the_plan_is_not_removed_as_already_present")
+def test_a_photo_touched_after_the_plan_is_not_removed_as_already_present(tmp_path, monkeypatch):
+    """The library already holds the photo's pixels, so merge would remove the workspace's copy — but that copy
+    was written to since the plan (same pixels, as after a metadata write): it is refused and left where it is,
+    the edit not lost."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
+                  library_files=[{"fp": "A", "dest": "Trip", "name": "a.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    src = _src(ws, "Trip", "a.jpg")
+    real_sweep = merge.MergeWorkflow._sweep_orphan_temps
+
+    def sweep_then_touch(self, *a, **k):                         # after the preconditions, before the removals
+        st = os.stat(src)
+        os.utime(src, ns=(st.st_atime_ns, st.st_mtime_ns + 10**9))
+        return real_sweep(self, *a, **k)
+    monkeypatch.setattr(merge.MergeWorkflow, "_sweep_orphan_temps", sweep_then_touch)
+    assert merge._run_locked_workflow("execute", str(ws)) == 3
+    assert os.path.exists(src)                                   # still in by-dest
+    s = _summary(ws)
+    assert s["totals"]["blocked"] == 1 and any("Trip/a.jpg" in f for f in s["failures"]), s
+
+
+@pytest.mark.spec("RUL-merge_outcome_recorded", "BLD-merge_failed_placement",
+                  test="TST-merge_execute-an_error_placing_one_photo_blocks_it_alone")
+def test_an_error_placing_one_photo_blocks_it_alone(tmp_path, monkeypatch):
+    """An error anywhere in one photo's placement — here its removal from by-dest after the library's copy
+    is checked — blocks that photo alone: the others are placed and the run records how it ended."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
+                             {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
+                  library_files=[{"fp": "A", "dest": "Trip", "name": "a.jpg"}])   # a.jpg already present
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    real_unlink, src_a = os.unlink, _src(ws, "Trip", "a.jpg")
+
+    def unlink(path, *a, **k):
+        if os.fspath(path) == src_a:
+            raise PermissionError(errno.EACCES, "Permission denied", path)
+        return real_unlink(path, *a, **k)
+    monkeypatch.setattr(merge.os, "unlink", unlink)
+    assert merge._run_locked_workflow("execute", str(ws)) == 3
+    monkeypatch.undo()
+    assert os.path.exists(src_a)                                  # left in by-dest
+    assert os.path.exists(os.path.join(str(lib), "Trip", "b.jpg"))
+    s = _summary(ws)
+    assert s["status"] == "partial"
+    assert s["totals"]["blocked"] == 1 and s["totals"]["placed_new"] == 1
+    assert any("Trip/a.jpg" in f for f in s["failures"]), s["failures"]
 
 
 @pytest.mark.spec("RUL-operations_atomic", test="TST-merge_execute-a_placement_on_one_filesystem_is_one_rename")
@@ -997,6 +1093,28 @@ def test_a_re_plan_after_a_partial_merge_carries_what_was_moved(tmp_path):
     log = json.loads(open(_ctl(ws, "photos-35-merge-log.json")).read())
     assert log["photos"]["A"]["library_path"] == os.path.join(str(lib), "Trip", "a.jpg")
     assert log["photos"]["B"]["library_path"] == os.path.join(str(lib), "Trip", "b-001.jpg")
+
+
+@pytest.mark.spec("RUL-log_step_names_run",
+                  test="TST-merge_execute-a_carried_photos_merge_step_names_the_plan_that_placed_it")
+def test_a_carried_photos_merge_step_names_the_plan_that_placed_it(tmp_path):
+    """A photo placed under one plan and carried forward by the next: its merge step names the plan
+    that placed it, not the one that only carried it; a photo the later plan placed names that one."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
+                             {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
+                  library_files=[{"fp": "FAIL", "dest": "Trip", "name": "b.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    first = json.load(open(merge.merge_plan_path(str(ws))))["plan_id"]
+    assert merge._run_locked_workflow("execute", str(ws)) == 3          # a.jpg placed, b.jpg blocked
+    with open(os.path.join(str(lib), "Trip", "b.jpg"), "wb") as f:
+        f.write(_fp_bytes("OLD"))                                        # the blocker cleared
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    second = json.load(open(merge.merge_plan_path(str(ws))))["plan_id"]
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    log = json.loads(open(_ctl(ws, "photos-35-merge-log.json")).read())
+    assert first != second
+    assert log["photos"]["A"]["journey"][-1]["run"] == first
+    assert log["photos"]["B"]["journey"][-1]["run"] == second
 
 
 @pytest.mark.spec("RUL-replan_carries_placed",

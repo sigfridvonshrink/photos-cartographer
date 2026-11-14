@@ -125,6 +125,18 @@ def test_missing_timestamp_is_unresolved():
     assert r["resolved_utc"] is None and r["time_rule_used"] == "missing_timestamp"
 
 
+@pytest.mark.spec("BLD-resolved_utc", "RUL-unknown_group_stops_geotag",
+                  test="TST-geotag_resolved_utc-an_unclassified_group_is_never_read_as_a_phone")
+@pytest.mark.parametrize("groups", [{"X|Y|1": {"camera_group_class": "unknown"}}, {}])
+def test_an_unclassified_group_is_never_read_as_a_phone(groups):
+    """A group classed as neither phone nor camera — or not classed at all — is never solved as a phone would be,
+    by the offset recorded with its time or the destination's timezone: its photos stay unresolved."""
+    f = _file("6-photos-by-dest/B/u.jpg", "X|Y|1", "2024:07:03 14:00:00", offset_tag="+02:00")
+    r = cal.compute_resolved_utc([f], groups, _art())[0]
+    assert r["resolved_utc"] is None and r["resolved_utc_status"] == "unresolved"
+    assert r["time_rule_used"] == "camera_group_unclassified"
+
+
 def test_rows_are_path_sorted():
     files = [_file("6-photos-by-dest/B/z.arw", CAM, "2024:07:03 14:00:00"),
              _file("6-photos-by-dest/B/a.arw", CAM, "2024:07:03 14:00:00")]

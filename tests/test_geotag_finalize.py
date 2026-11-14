@@ -114,7 +114,7 @@ def test_a_time_written_is_logged_with_what_it_replaced_and_how_it_was_found():
     def op(rel, rule, held_off):
         f = {"relative_path": rel, "raw_times": {"DateTimeOriginal": "2024:07:03 19:00:00",
                                                  **({"OffsetTimeOriginal": held_off} if held_off else {})}}
-        return {"type": "metadata_time_write", "relative_path": rel,
+        return {"type": "metadata_time_write", "relative_path": rel, "operation_id": "t-" + rel,
                 "writes": {"DateTimeOriginal": "2024:07:03 12:00:00", "OffsetTimeOriginal": "+02:00"},
                 "pre_state": cal.held_time_pre_state(f),
                 "provenance": {"time_rule_used": rule, "source_time_provenance": "EXIF:DateTimeOriginal"}}
@@ -132,7 +132,7 @@ def test_a_time_written_is_logged_with_what_it_replaced_and_how_it_was_found():
     # a pass executed earlier logs its time write the same way
     plan["destinations"][f"{BYDEST}/T"]["operations"][0]["preconditions"] = {"content_fingerprint": "fpA"}
     later = cal.build_complete_log({}, [_file(a, "fpA")], [], {}, {"plan_id": "p2", "destinations": {}},
-                                   earlier_passes=[(plan, None)])
+                                   earlier_passes=[(plan, {"t-" + a})])
     step = next(s for s in later["fpA"]["journey"] if s["action"] == "time_written")
     assert (step["rule"], step["run"]) == ("smartphone_native_offset", "p1")
     assert step["pre_state"]["OffsetTimeOriginal"] == "+09:00"
@@ -247,7 +247,8 @@ def _ready_ws(tmp_path, monkeypatch, *, folders=None):
     files = [rec(f"{bydest}/T/a.arw", "2024:07:03 14:00:00", (50.0, 4.0)),
              rec(f"{bydest}/T/b.arw", "2024:07:03 15:00:00", (51.0, 5.0))]
     (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": files, "cache_fingerprint": "pcf",
-        "depends_on": {"prep_log": {"sha256": utils.sha256_file(str(ctl / "photos-15-prep-log.json"))}}}))
+        "depends_on": {"prep_log": {"sha256": utils.sha256_file(str(ctl / "photos-15-prep-log.json"))},
+                       "cache": {"image_engine_version": utils.get_imagemagick_version()}}}))
 
     monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", lambda self, p, t: True)
     monkeypatch.setattr(cal.ContentHasher, "fingerprint_image",

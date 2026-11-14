@@ -74,7 +74,8 @@ def _ready_ws(tmp_path, monkeypatch, *, zfs=None):
     files = [rec("6-photos-by-dest/T/a.arw", "2024:07:03 14:00:00", 50.0, 4.0),
              rec("6-photos-by-dest/T/b.arw", "2024:07:03 15:00:00", 51.0, 5.0)]
     ho = {"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "run_metadata": {"plan_id": "prep-1", "execution_id": "exec-1"},
-          "files": files, "cache_fingerprint": "pcf"}
+          "files": files, "cache_fingerprint": "pcf",
+          "depends_on": {"cache": {"image_engine_version": utils.get_imagemagick_version()}}}
     ho["content_fingerprint"] = utils.handoff_content_fingerprint(ho)
     (ctl / "photos-11-handoff.json").write_text(json.dumps(ho))
 
@@ -1135,3 +1136,8 @@ def test_another_image_engine_stops_execute_before_any_write(tmp_path, monkeypat
     assert not [s for s in wf.revalidate_plan(plan, gpx) if "image engine" in s]
     monkeypatch.setattr(cal, "get_imagemagick_version", lambda: "IM-7.1.3")
     assert [s for s in wf.revalidate_plan(plan, gpx) if "image engine changed" in s]
+    # a handoff that records no engine cannot vouch for it: refused, never passed
+    monkeypatch.setattr(cal, "get_imagemagick_version", lambda: "IM-7.1.2")
+    ho["depends_on"] = {"cache": {}}
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(ho))
+    assert [s for s in wf.revalidate_plan(plan, gpx) if "records no image engine" in s]
