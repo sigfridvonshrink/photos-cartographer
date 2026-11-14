@@ -4,77 +4,25 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **13** — 1, 2, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15 and 16.* 🛑 Numbers are never reused; the next is **17**.
+*Open items: **15** — 2, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 18 and 19.* 🛑 Numbers are never reused; the next is **20**.
 
 ---
 
 ## Open
-
-### 1. The spec as one sphinx-needs corpus — intent, build and rationale apart
-
-**Why:** the four specs in `spec/` mix four things — behaviour the tool guarantees, how this build delivers it
-(exiftool, ImageMagick `identify`, SQLite, the `photos-NN` artifact names), the justification for a choice, and
-operator guidance and history. The clause index over them, `spec/spec-clauses.json` (633 clauses, 542 CI-gated), is a
-hand-kept list of paraphrases pointing at whole sections. Vasile wants *"a real spec"*, *"a more disciplined spec like
-the heating one"*, with the justifications *"captured and tagged, even if they are not strictly specs."*
-
-**The shape agreed** (the house heating corpus, `~/projects/house/subsystems/heating/spec/conf.py`, as the model):
-- **One Sphinx project**, MyST Markdown with sphinx-needs items, **in four documents per level as today** — shared,
-  prep, geotag, merge — linked across documents by typed links that the build checks.
-- **Two levels:** `intent/` — what cartographer guarantees, naming no tool, file or database (definitions, invariants,
-  rules); `build/` — how this build meets each of them (construction requirements, each `realises` what it implements).
-- **The justifications as items** (a rationale kind that `justifies` the items it argues for), so nothing narrative
-  is lost and every piece is findable. Operator guidance goes to `docs/`, history to `HISTORY.md`.
-- **The roots of the rationale:** the user guide's three facts and four choices are items, `FCT` and `CHC`, in
-  `rationale/philosophy.md`; nothing follows from them. Every other rationale `follows_from` a root or another
-  rationale, and says whether it is `forced` or a judgement; the build fails on a root nothing follows from and on a
-  forced rationale whose chain reaches no root. The guide keeps the test of fit and names the roots by id.
-- **The other kinds and the levels' direction:** an assumption a user can break is an `ASM`, which rules `assumes`; a
-  worked example is an `EXM`, which `illustrates`; a non-goal is an `anti` rule; a summary gets no items, its ledger
-  rows naming the items it restates. Intent never links to the build, and no link but `follows_from` names a
-  rationale — the build fails on either.
-- **Kinds and ids** as heating's (`KIND-name`), extended wherever cartographer needs more; every item `seed` until
-  Vasile rules it.
-- **Nothing lost:** every sentence of today's specs lands in exactly one place — an item, the rationale, `docs/`,
-  `HISTORY.md` — or is dropped with a recorded reason; a word-for-word ledger proves it (`tools/spec-ledger`). The
-  old clause ids map onto the new items, so no test breaks mid-move, and the clause index retires when the last
-  document is converted.
-- **The gate:** the build fails on any warning — a dangling link, an item citing another without a link field, a must-
-  verify item with no test — in CI and the pre-push hook. `needs.json` is committed, so a diff shows exactly which items
-  changed. The corpus is published to GitHub Pages.
-- **AI-DISCLOSURE.md** keeps *the specs are mine* and says the sphinx-needs restructuring is AI-aided, `ruled`
-  recording Vasile's approval item by item.
-
-- **The tests as items:** each test declares what it verifies in its existing `@pytest.mark.spec(…)`, extended with an
-  explicit, stable test id — `@pytest.mark.spec("INV-no_clobber", test="TST-…")` — and the build makes `TST` items of
-  them from pytest's own collection. A mark is part of the function, so it cannot be left behind by an edit, and Python
-  parses it.
-
-**Order:** the corpus scaffold and its gate; then one document at a time — the shared contract first (the others lean
-on it), then prep, merge, geotag — each proposed section by section and ruled by Vasile; and last, one pass that gives every
-converted document's rationale its `follows_from` links into the philosophy.
-
-**Done looks like:** the four specs converted and ruled; `spec/spec-clauses.json` and its registry test retired; the
-gate green in CI; the corpus on Pages; `AGENTS.md`, `spec/README.md` and `COVERAGE.md` describing the corpus.
-
-**Where it stands (2026-11-14):** all done but the last step — the four specs are converted and ruled, every clause of
-the index aliased onto its item and the test marks renamed to the items; the original specs, the conversion ledgers,
-`tools/spec-ledger`, the clause index and `tools/spec-coverage` are retired, kept at the tag `specs-before-corpus`.
-Left: the philosophy pass — ruling `rationale/philosophy.md`'s 40 seeds and giving every rationale its `follows_from`.
-
----
 
 ### 2. The gap audit — the build against its spec
 
 **Why:** Vasile: *"I am sure the build has some stuff not specced, and there may be stuff specced not built or
 incorrectly built."*
 
-**What:** once item 1's build items exist, walk the code and the corpus against each other: code behaviour with no
+**What:** walk the code and the corpus against each other: code behaviour with no
 build item (**unspecified**), an intent or build item with no code or no test (**specified, not built**), code that
 contradicts its item (**built wrong**). Each finding becomes its own backlog item. 🛑 **A gap is raised, ruled and
 written into the spec first, then coded** — the code is never taken as the answer.
 
-**Blocks it:** item 1, document by document — the audit of a document can start once it is converted.
+**Where it stands:** the conversion (done 2026-11-14) checked every section against the code as it went, so the
+direction "specified, not built / built wrong" has had one full pass, its findings fixed. Left: the other direction —
+walking the code for behaviour no item states.
 
 ---
 
@@ -129,7 +77,7 @@ the track's time at that position.
 threshold block or ask, between them warn? — and what the daylight-saving setting guards. To be settled with Vasile
 before it is specified.
 
-### 7. One obligation per item, checked by reading — after the conversion
+### 7. One obligation per item, checked by reading
 
 **Why:** every corpus item states one obligation, and `tools/spec-build` refuses an item with more than one SHALL. But
 the count cannot see a second obligation folded into one sentence: in the pass that made every item one SHALL, about 90
@@ -151,12 +99,19 @@ affected), `RUL-merge_is_terminal` (merge comes last, new media goes to a fresh 
 the pattern in a proposed `RUL-failed_operation_clean` and wants the rest found.
 
 **What to do:** read every item against a stricter test — one property per item, which a single test could find broken
-in only one way — and split each real second obligation into an item refining the first, the ledger and the tests' marks
-following, as `RUL-failed_operation_clean` was split into it, `RUL-failure_recorded` and `RUL-failure_never_done`.
+in only one way — and split each real second obligation into an item refining the first, the tests' marks following, as
+`RUL-failed_operation_clean` was split into it, `RUL-failure_recorded` and `RUL-failure_never_done`.
 
-**Blocked by:** item 1. Vasile: *"maybe we can do this at the very end after the full conversion to sphinx-needs? I am
-worried that we are piling too much work in one strand and doing it now might break other links, too."* So it waits
-until every spec is converted, and is done once, over the whole corpus.
+The same reading should settle what the rationale-link pass (2026-11-14) noticed:
+- rationales that justify rules of different kinds, some forced and some a judgement, so one `forced` verdict fits them
+  badly — candidates for splitting: `RAT-library_is_ground_truth`, `RAT-library_reads_cost`, `RAT-move_not_copy`,
+  `RAT-sealed_is_final`, `RAT-superseded_plans_recoverable`;
+- `RAT-offset_per_day_and_place` largely repeats the philosophy's `RAT-offset_per_camera_destination_day`;
+- `RUL-merge_run_reported` (and `RAT-merge_report_at_the_end`) may be output — an affordance — rather than behaviour;
+- `RUL-jobs_change_nothing` refines `RUL-no_op_run`, a loose parent for "the job count changes nothing".
+
+**When:** the conversion is done (2026-11-14); this is the once-over-the-whole-corpus pass Vasile asked for — *"maybe
+we can do this at the very end after the full conversion to sphinx-needs?"* — after item 12's renumbering.
 
 ### 11. Records keyed by a fingerprint that changed with ImageMagick
 
@@ -172,7 +127,7 @@ that re-keys them, planned and journaled like any change, its records rewritten 
 — or leave the block as the answer. Stop where the old-to-new mapping is not one to one, which would change prep's
 duplicate decisions.
 
-**When:** after the conversion (item 1) is complete; geotag's pinned values were done with geotag §24.2.
+**When:** any time — the conversion is done; geotag's pinned values were done with geotag §24.2.
 
 ---
 
@@ -190,7 +145,7 @@ rationale and build; rewrite every citation of a section — in the build items,
 the item it means (`BLD-resolved_utc`), which no renumbering moves; drop the explanatory sentence from each
 document's introduction.
 
-**When:** after the philosophy pass (item 1's last step).
+**When:** now — the conversion, its philosophy pass included, is done (2026-11-14).
 
 ### 13. Keep the track points geotag used in the workspace, sealed with it
 
@@ -217,7 +172,7 @@ during the process, in the form used during the decisioning, which would make th
 - The GPX fingerprint becomes the hash of the points in the window, so tracks added for another time restale nothing.
 - Rule it: this reverses the ruled "every track file is read whole on every run" (geotag §15, `BLD-idempotency`).
 
-**When:** after the conversion (item 1) is complete.
+**When:** any time — the conversion is done.
 
 ### 14. Propose a destination's timezone from its photos' positions
 
@@ -232,7 +187,7 @@ new dependency — and propose it ahead of the inherited one, with a `proposal_s
 proposal applies itself like the inherited one, or waits for acceptance, since unlike the tree it can disagree with
 the parent's zone.
 
-**When:** after the conversion (item 1) is complete.
+**When:** any time — the conversion is done.
 
 ### 15. Split a day's clock offset where the camera's clock changed
 
@@ -248,7 +203,7 @@ day, propose splitting that day's cell at the change: two offsets, each anchored
 without GPS between the last of one run and the first of the other are the one ambiguity; the editor asks which was
 the first after the change. Rule the change to the per-day model first.
 
-**When:** after the conversion (item 1) is complete.
+**When:** any time — the conversion is done.
 
 ### 16. Photos whose own position the agreed clock offset contradicts
 
@@ -265,5 +220,50 @@ position proposed, the photo's own kept unless the user takes the proposal. Rule
 be replaced this way, on the user's answer only — today it never is (`RUL-own_position_kept`) — and drop the editor's
 interim advice once both items are built.
 
-**When:** after the conversion (item 1) is complete; with or after item 15.
+**When:** any time — the conversion is done; with or after item 15.
+
+### 17. Redo the user docs, the walkthrough and its screenshots
+
+**Why:** the conversion changed what the user sees and does, and the user docs (`docs/`) and the walkthrough's
+screenshots were left as they were until it finished — Vasile: *"I'd just leave it and redo everything that needs
+changes when I finish the conversion."* Among the changes: geotag stops on an untimed photo in photos by destination,
+and runs prep itself when the inbox is empty; a trip's timezone is answered once, the configured default only offered;
+`accept_proposed_timezone` and `manual_real_utc` are gone; a tie between visits, a picked GPS group and a drift
+confirmation that holds only for its offset show in the editor; track positions are marked `matched`, `interpolated`
+or `extrapolated`; execute stops on a photo edited since the plan, and finalize on a plan no longer current. The
+walkthrough's "Geotag won't proceed" step predates geotag running prep itself.
+
+**What to do:** walk `README.md`, `docs/quickstart.md`, `concepts.md`, `editor.md`, `walkthrough.md` and
+`who-is-this-for.md` against the corpus and the code; retake every screenshot that shows something changed, and the
+hero GIF if it does.
+
+**When:** now — the conversion is done.
+
+### 18. Merge: check the free space before moving into another filesystem
+
+**Why:** a merge into a library on another filesystem copies each photo before removing it from the workspace. Safety
+holds — a full disk fails the one photo, which stays in the workspace, and the run ends `partial` — but nothing warns
+before the run that the library cannot hold the batch, so the shortage shows late, one photo at a time. (Found in a
+risk review of 2026-06-21; the other half of that finding — temporary copies a hard crash leaves in the library — is
+done: merge clears them as its execution starts.)
+
+**What to do:** decide whether merge's plan, or its execute before any move, checks the library's free space against
+the batch's size and stops or warns; rule it into the spec, then code it.
+
+**When:** any time; low priority.
+
+### 19. Record the conversion's changes and cut the next release
+
+**Why:** since v2.0.0, the conversion finished geotag and retired the original specs, and changed behaviour on the way
+— offsets matched to the right day of a revisited place, a phone's time read by the offset of its own field, files
+naming no camera solved alone, a drift confirmation bound to its offset, edits since the plan never written over, the
+configured default zone only offered, a fingerprint's new value keeping its pinned values, among others — and removed
+two decision fields (`accept_proposed_timezone`, `manual_real_utc`). None of it is in `HISTORY.md`, and the work is on
+the branch `spec-corpus-sphinx-needs`, not on `main`; the tag `specs-before-corpus` is local.
+
+**What to do:** write the `HISTORY.md` entry, refresh `COVERAGE.md`, open the pull request to `main` and, once merged,
+tag and publish the release — its version decided then (a workspace decided under the removed fields carries values
+nothing reads now).
+
+**When:** once Vasile chooses to release.
 
