@@ -43,7 +43,8 @@ def test_local_basename_dst_and_standard():
     assert cal.destination_local_basename("2024-01-03T12:00:00Z", TZ, FMT, ".arw") == "2024-01-03--13-00-00.arw"  # +1
 
 
-@pytest.mark.spec("RUL-one_filename_format")
+@pytest.mark.spec("RUL-filename_format_configured",
+                  test="TST-geotag_rename_planning-local_basename_custom_format_and_ext_preserved")
 def test_local_basename_custom_format_and_ext_preserved():
     assert cal.destination_local_basename("2024-07-03T12:00:00Z", TZ, "%Y%m%d_%H%M%S", ".JPG") == "20240703_140000.JPG"
     assert cal.destination_local_basename("2024-07-03T12:00:00Z", TZ, FMT, "") == "2024-07-03--14-00-00"
@@ -143,7 +144,7 @@ def test_name_trade_neither_clobbers():
     assert len({v.lower() for v in planned.values()}) == 2                            # distinct, no clobber
 
 
-@pytest.mark.spec("RUL-suffix_no_clobber", "BLD-rename_planning",
+@pytest.mark.spec("BLD-rename_planning", "RUL-suffix_case_insensitive",
                   test="TST-geotag_rename_planning-case_insensitive_collision_suffixes")
 def test_case_insensitive_collision_suffixes():
     # a file currently named with different case than another's planned target must still not clobber

@@ -212,7 +212,8 @@ def test_byte_identical_images_dedup_with_real_hasher(tmp_path):
 @pytest.mark.slow
 @requires_magick
 @requires_exiftool
-@pytest.mark.spec("RUL-redundant_jpeg_set_aside", test="TST-content_hash-raw_jpeg_pair_separates_redundant_jpeg")
+@pytest.mark.spec("RUL-redundant_jpeg_set_aside", "RUL-redundant_jpeg_only",
+                  test="TST-content_hash-raw_jpeg_pair_separates_redundant_jpeg")
 def test_raw_jpeg_pair_separates_redundant_jpeg(tmp_path):
     # Uses the real RAW (slow). The JPEG sibling only needs the same basename.
     if prep.ContentHasher.fingerprint_image(CAM_RAW)["status"] != "valid":

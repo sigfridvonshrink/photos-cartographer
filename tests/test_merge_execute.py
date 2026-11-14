@@ -603,7 +603,8 @@ def test_execute_jobs_identical_library_file_tree(tmp_path):
     assert _tree(str(lib1)) == _tree(str(lib2))                    # identical placed tree (ignores *.lock)
 
 
-@pytest.mark.spec("BLD-merge_execute", "RUL-snapshot_timing", test="TST-merge_execute-snapshot_and_revalidation_precede_the_parallel_move_pass")
+@pytest.mark.spec("BLD-merge_execute", "RUL-snapshot_timing",
+                  test="TST-merge_execute-snapshot_and_revalidation_precede_the_parallel_move_pass")
 def test_snapshot_and_revalidation_precede_the_parallel_move_pass(tmp_path, monkeypatch):
     """Sequencing (§10.3): the move-set is fixed BEFORE any concurrent placement — dependency
     revalidation and the pre-mutation snapshot both complete before the FIRST per-file move runs,
@@ -702,7 +703,7 @@ def test_execute_without_plan_errors(tmp_path):
     assert merge._run_locked_workflow("execute", str(ws)) == 2     # no photos-30
 
 
-@pytest.mark.spec("INV-no_stale_use")
+@pytest.mark.spec("INV-no_stale_use", test="TST-merge_execute-execute_rejects_stale_plan")
 def test_execute_rejects_stale_plan(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     assert merge._run_locked_workflow("plan", str(ws)) == 0
@@ -714,7 +715,8 @@ def test_execute_rejects_stale_plan(tmp_path):
 
 # --- no-mutation consequences of non-executing paths (Tier 3) ----------------
 
-@pytest.mark.spec("RUL-planning_changes_no_media")
+@pytest.mark.spec("RUL-planning_changes_no_media", "RUL-planning_writes_only_its_records",
+                  test="TST-merge_execute-plan_mutates_nothing_no_terminal_artifacts")
 def test_plan_mutates_nothing_no_terminal_artifacts(tmp_path):
     """Planning never mutates: after `plan`, by-dest + library are byte-identical and NONE of the
     execute-only artifacts (photos-31 summary, photos-35 log/db/manifest, journal, seal) exist."""
@@ -887,7 +889,8 @@ def test_a_re_plan_after_a_partial_merge_carries_what_was_moved(tmp_path):
     assert log["photos"]["B"]["library_path"] == os.path.join(str(lib), "Trip", "b-001.jpg")
 
 
-@pytest.mark.spec("RUL-replan_carries_placed", test="TST-merge_execute-a_re_plan_carries_a_photo_moved_but_never_journalled")
+@pytest.mark.spec("RUL-replan_carries_placed",
+                  test="TST-merge_execute-a_re_plan_carries_a_photo_moved_but_never_journalled")
 def test_a_re_plan_carries_a_photo_moved_but_never_journalled(tmp_path):
     """A move that finished without its journal entry — a crash just after it, or a Ctrl-C while it
     ran — is carried by the re-plan on the evidence: its earlier plan's place, fingerprinted again,
@@ -911,7 +914,8 @@ def test_a_re_plan_carries_a_photo_moved_but_never_journalled(tmp_path):
     assert log["photos"]["A"]["library_path"] == os.path.join(str(lib), "Trip", "a.jpg")
 
 
-@pytest.mark.spec("RUL-resume_rechecks_library", test="TST-merge_execute-a_resumed_execute_checks_a_journalled_photo_is_still_in_the_library")
+@pytest.mark.spec("RUL-resume_rechecks_library", "RUL-resume_blocks_missing", "RUL-resume_block_makes_partial",
+                  test="TST-merge_execute-a_resumed_execute_checks_a_journalled_photo_is_still_in_the_library")
 def test_a_resumed_execute_checks_a_journalled_photo_is_still_in_the_library(tmp_path):
     """The journal says a.jpg was moved; its library place no longer holds it. Execute run again
     blocks it rather than counting it done, and the workspace is not sealed."""
@@ -929,7 +933,8 @@ def test_a_resumed_execute_checks_a_journalled_photo_is_still_in_the_library(tmp
     assert not utils.is_sealed(str(ws))
 
 
-@pytest.mark.spec("RUL-resume_rechecks_library", test="TST-merge_execute-a_photo_already_present_whose_copy_is_gone_is_checked_in_the_library")
+@pytest.mark.spec("RUL-resume_rechecks_library", "RUL-resume_blocks_missing", "RUL-resume_block_makes_partial",
+                  test="TST-merge_execute-a_photo_already_present_whose_copy_is_gone_is_checked_in_the_library")
 def test_a_photo_already_present_whose_copy_is_gone_is_checked_in_the_library(tmp_path):
     """A photo planned as already present whose workspace copy is gone counts as done only while the
     library still holds it."""
@@ -944,7 +949,8 @@ def test_a_photo_already_present_whose_copy_is_gone_is_checked_in_the_library(tm
     assert not utils.is_sealed(str(ws))
 
 
-@pytest.mark.spec("RUL-replan_carries_placed", test="TST-merge_execute-a_photo_moved_earlier_but_gone_from_its_place_blocks_the_re_plan")
+@pytest.mark.spec("RUL-replan_blocks_unaccounted", "RUL-replan_block_names_why",
+                  test="TST-merge_execute-a_photo_moved_earlier_but_gone_from_its_place_blocks_the_re_plan")
 def test_a_photo_moved_earlier_but_gone_from_its_place_blocks_the_re_plan(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
                              {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
@@ -959,7 +965,8 @@ def test_a_photo_moved_earlier_but_gone_from_its_place_blocks_the_re_plan(tmp_pa
     assert a["disposition"] == "blocked" and "no longer holds it" in a["blocked_reason"]
 
 
-@pytest.mark.spec("RUL-replan_carries_placed", test="TST-merge_execute-a_photo_gone_from_the_workspace_that_no_merge_moved_blocks_the_plan")
+@pytest.mark.spec("RUL-replan_blocks_unaccounted", "RUL-replan_block_names_why",
+                  test="TST-merge_execute-a_photo_gone_from_the_workspace_that_no_merge_moved_blocks_the_plan")
 def test_a_photo_gone_from_the_workspace_that_no_merge_moved_blocks_the_plan(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     os.remove(_src(ws, "Trip", "a.jpg"))                                # gone by other means

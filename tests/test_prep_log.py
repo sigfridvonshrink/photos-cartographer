@@ -247,7 +247,8 @@ def test_recognized_move_appends_moved_to_by_dest(tmp_path, monkeypatch):
     assert sum(1 for s in entry["journey"] if s["action"] == "organized") == 1
 
 
-@pytest.mark.spec("RUL-log_human_readable", "RUL-prep_records_on_success", test="TST-prep_log-log_is_deterministic_and_in_control_dir")
+@pytest.mark.spec("RUL-prep_records_on_success", "RUL-log_stably_ordered",
+                  test="TST-prep_log-log_is_deterministic_and_in_control_dir")
 def test_log_is_deterministic_and_in_control_dir(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _ws(tmp_path)
@@ -319,8 +320,8 @@ def test_a_retaken_fingerprint_keeps_the_photos_history(tmp_path, monkeypatch):
     assert entry["journey"][-1]["from"] == old
 
 
-@pytest.mark.spec("RUL-log_follows_retaken_fingerprint", "RUL-engine_change_is_checked", "BLD-prep_log_build",
-                  "RUL-moved_file_stale_read_again", "RUL-retaken_fingerprint_step_logged",
+@pytest.mark.spec("RUL-log_follows_retaken_fingerprint", "BLD-prep_log_build", "RUL-moved_file_stale_read_again",
+                  "RUL-retaken_fingerprint_step_logged",
                   test="TST-prep_log-a_photo_moved_under_a_new_imagemagick_keeps_its_history")
 def test_a_photo_moved_under_a_new_imagemagick_keeps_its_history(tmp_path, monkeypatch):
     """A photo the user sorts into photos by destination while ImageMagick changes, its fingerprint's value

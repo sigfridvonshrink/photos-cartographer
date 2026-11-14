@@ -618,6 +618,7 @@ def test_a_written_offset_outranks_an_acceptance():
 
 
 @pytest.mark.spec("RUL-kept_offset_rests_on_its_tracks", "BLD-day_offset_kept",
+                  "RUL-kept_offset_yields_to_new_photo",
                   test="TST-geotag_offset_inference-a_kept_offset_rests_on_its_tracks")
 def test_a_kept_offset_rests_on_what_it_was_found_from():
     """An offset found from the camera's GPS is kept for later photos of the day only while the tracks it was

@@ -467,7 +467,8 @@ def _snapshot_tree(root):
             for r, _dn, fns in os.walk(root) for f in fns}
 
 
-@pytest.mark.spec("RUL-planning_changes_no_media", test="TST-workspace_prep-plan_is_non_mutating")
+@pytest.mark.spec("RUL-planning_changes_no_media", "RUL-planning_writes_only_its_records",
+                  test="TST-workspace_prep-plan_is_non_mutating")
 def test_plan_is_non_mutating(tmp_path, monkeypatch):
     """Planning changes nothing: with work to do, every file of a workspace past its first run — media and
     records, the workspace database among them — is byte-identical afterwards; the only file it adds is the

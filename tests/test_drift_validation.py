@@ -135,7 +135,8 @@ def test_gpx_anchored_offset_does_not_trigger(tmp_path):
     assert drift["destinations"] == {} and drift["status"] == "complete"
 
 
-@pytest.mark.spec("RUL-unanchored_offset_confirmed", test="TST-drift_validation-an_offset_against_the_cameras_gps_is_checked")
+@pytest.mark.spec("RUL-unanchored_offset_confirmed",
+                  test="TST-drift_validation-an_offset_against_the_cameras_gps_is_checked")
 def test_an_offset_the_cameras_own_gps_contradicts_is_checked(tmp_path):
     """An offset set against what the camera's own GPS shows is one its GPS does not support: it is confirmed
     against the tracks like any other, the anchored photo beside it vouching for nothing."""
@@ -209,7 +210,8 @@ def test_unconfirmed_bucket_blocks(tmp_path):
     assert drift["requires_user_input"] is True                          # inaction blocks
 
 
-@pytest.mark.spec("RUL-unanchored_offset_confirmed")
+@pytest.mark.spec("RUL-unanchored_offset_confirmed", "RUL-untouched_check_confirms_nothing",
+                  test="TST-drift_validation-zero_scrub_must_be_explicit")
 def test_zero_scrub_must_be_explicit(tmp_path):
     _, files, _, _, drift, blk = _triggered(tmp_path, {"confirmed": True, "corrected_offset_seconds": "", "confirmed_offset_seconds": 0})
     assert not blk
@@ -246,7 +248,8 @@ def test_non_numeric_correction_blocks(tmp_path):
     assert blk and "corrected_offset_seconds" in blk[0]
 
 
-@pytest.mark.spec("BLD-drift_validation")
+@pytest.mark.spec("BLD-drift_validation", "RUL-checked_clock_offsets",
+                  test="TST-drift_validation-a_correction_not_whole_seconds_blocks")
 def test_a_correction_not_whole_seconds_blocks(tmp_path):
     *_, blk = _triggered(tmp_path, {"confirmed": True, "corrected_offset_seconds": 12.5, "confirmed_offset_seconds": 0})
     assert blk and "whole number of seconds" in blk[0]
@@ -332,7 +335,8 @@ def _edit(ctl, name, fn):
     p = ctl / name; a = json.load(open(p)); fn(a); p.write_text(json.dumps(a))
 
 
-@pytest.mark.spec("RUL-unanchored_offset_confirmed", "BLD-drift_validation")
+@pytest.mark.spec("RUL-unanchored_offset_confirmed", "BLD-drift_validation", "RUL-untouched_check_confirms_nothing",
+                  test="TST-drift_validation-e2e_drift_gate_blocks_then_resumes")
 def test_e2e_drift_gate_blocks_then_resumes(tmp_path, monkeypatch):
     ws, ctl = _e2e_ws(tmp_path)
     dvp = ctl / "photos-22-gps-drift-validation.json"
@@ -361,7 +365,7 @@ def test_e2e_drift_gate_blocks_then_resumes(tmp_path, monkeypatch):
     assert gdp.exists()                                                   # phase 22 now built
 
 
-@pytest.mark.spec("RUL-confirmation_holds_for_its_offset", "BLD-drift_validation",
+@pytest.mark.spec("RUL-confirmation_holds_for_its_offset", "BLD-drift_validation", "RUL-changed_offset_asked_again",
                   test="TST-drift_validation-a_confirmation_holds_only_for_the_offset_it_confirmed")
 @pytest.mark.parametrize("corrected", ["", -3600], ids=["zero_scrub", "correction"])
 def test_a_confirmation_holds_only_for_the_offset_it_confirmed(tmp_path, corrected):
@@ -391,7 +395,7 @@ def test_a_confirmation_holds_only_for_the_offset_it_confirmed(tmp_path, correct
     assert cal.drift_offset_overrides(after) == {}                                         # applied to nothing
 
 
-@pytest.mark.spec("RUL-unanchored_offset_confirmed", "BLD-drift_validation",
+@pytest.mark.spec("RUL-unanchored_offset_confirmed", "BLD-drift_validation", "RUL-untouched_check_confirms_nothing",
                   test="TST-drift_validation-a_confirmation_naming_no_offset_confirms_nothing")
 def test_a_confirmation_naming_no_offset_confirms_nothing(tmp_path):
     *_, drift, blk = _triggered(tmp_path, {"confirmed": True, "corrected_offset_seconds": ""})

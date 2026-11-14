@@ -276,7 +276,8 @@ def test_stray_media_detection_silent_when_exiftool_absent(tmp_path, monkeypatch
     assert not any(".raf" in w for w in plan.warnings)
 
 
-@pytest.mark.spec("RUL-other_outside_inbox_blocks", test="TST-strays-a_file_of_no_media_class_outside_the_inbox_blocks")
+@pytest.mark.spec("RUL-other_outside_inbox_blocks",
+                  test="TST-strays-a_file_of_no_media_class_outside_the_inbox_blocks")
 @pytest.mark.parametrize("where", ["5-photos-by-date/2023-01-02", "2-missing-metadata", "4-videos-by-date/2023-01-02",
                                    "6-photos-by-dest/Trip"])
 def test_a_file_of_no_media_class_outside_the_inbox_blocks(tmp_path, monkeypatch, where):

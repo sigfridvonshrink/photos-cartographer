@@ -291,7 +291,8 @@ def test_geotag_leaves_config_byte_identical(tmp_path, monkeypatch):
 
 # --- stale rejection ---------------------------------------------------------
 
-@pytest.mark.spec("INV-no_stale_use", "BLD-geotag_execution")
+@pytest.mark.spec("INV-no_stale_use", "BLD-geotag_execution",
+                  test="TST-geotag_execution-stale_plan_is_rejected_without_mutation")
 def test_stale_plan_is_rejected_without_mutation(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _mock_tools(monkeypatch, ws)
@@ -312,7 +313,8 @@ def test_missing_plan_errors(tmp_path, monkeypatch):
 
 # --- no-clobber recheck + determinism (unit) --------------------------------
 
-@pytest.mark.spec("RUL-target_free_at_execute", test="TST-geotag_execution-target_occupied_recheck")
+@pytest.mark.spec("RUL-target_free_at_execute", "RUL-target_free_ignores_case",
+                  test="TST-geotag_execution-target_occupied_recheck")
 def test_target_occupied_recheck(tmp_path):
     wf = cal.GeotagWorkflow(str(tmp_path))
     (tmp_path / "A.JPG").write_text("x")
@@ -452,7 +454,9 @@ def test_apply_file_rename_skip_and_failure(tmp_path, monkeypatch):
     assert r["failed"] == ["oR"] and "rename failed" in r["blocker"]
 
 
-@pytest.mark.spec("RUL-format_fixed_once_named", "INV-no_stale_use", "RUL-tracks_in_dependencies", "RUL-camera_group_derivation_versioned", test="TST-geotag_execution-revalidate_detects_each_stale_input")
+@pytest.mark.spec("RUL-format_fixed_once_named", "INV-no_stale_use", "RUL-tracks_in_dependencies",
+                  "RUL-camera_group_derivation_versioned",
+                  test="TST-geotag_execution-revalidate_detects_each_stale_input")
 def test_revalidate_detects_each_stale_input(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     wf = cal.GeotagWorkflow(str(ws)); wf.preflight(for_execute=True)

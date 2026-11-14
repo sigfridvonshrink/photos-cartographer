@@ -75,7 +75,8 @@ def test_file_model_builds_by_dest_photos(tmp_path):
     assert f["planned_filename"] is None
 
 
-@pytest.mark.spec("BLD-geotag_file_model", "RUL-geotag_changes_only_by_dest", test="TST-geotag_model-file_model_excludes_non_bydest_and_videos")
+@pytest.mark.spec("BLD-geotag_file_model", "RUL-geotag_changes_only_by_dest", "RUL-video_never_changed",
+                  test="TST-geotag_model-file_model_excludes_non_bydest_and_videos")
 def test_file_model_excludes_non_bydest_and_videos(tmp_path):
     wf = _wf(tmp_path, [
         _hfile("6-photos-by-dest/T/a.jpg"),
@@ -114,7 +115,8 @@ def test_gpx_malformed_warns_not_crashes(tmp_path):
     assert idx.status == "empty" and any("Malformed" in w for w in idx.warnings)
 
 
-@pytest.mark.spec("RUL-unreadable_point_reported", "RUL-track_time_never_guessed", "BLD-track_points",
+@pytest.mark.spec("RUL-unreadable_point_reported", "RUL-unreadable_point_skipped", "RUL-track_time_never_guessed",
+                  "BLD-track_points",
                   test="TST-geotag_model-gpx_parser_skips_bad_trkpts")
 def test_gpx_parser_skips_bad_trkpts(tmp_path):
     # exercise every reject branch in GPXIndex._parse_bytes (GPS code -> full coverage):
@@ -159,7 +161,7 @@ def test_gpx_parser_accepts_fractional_and_whole_seconds(tmp_path):
         datetime(2024, 7, 3, 12, 0, 3, 500000, tzinfo=timezone.utc)]
 
 
-@pytest.mark.spec("RUL-unreadable_point_reported", "BLD-track_points",
+@pytest.mark.spec("RUL-unreadable_point_reported", "RUL-unreadable_point_skipped", "BLD-track_points",
                   test="TST-geotag_model-a_track_of_untimed_points_is_reported_not_empty")
 def test_a_track_of_untimed_points_is_reported_not_empty(tmp_path):
     # A track whose every point lacks a time (or a position) yields no point, but never reads as merely

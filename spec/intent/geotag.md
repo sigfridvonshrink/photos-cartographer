@@ -63,13 +63,25 @@ dependencies to vouch for what came before it.
 
 :::{rul} Geotag changes only the photos sorted into destinations
 :id: RUL-geotag_changes_only_by_dest
-:status: ruled
+:status: seed
 :criticality: high
 :anti: yes
 :verify: required
 :uses: DEF-geotag, DEF-managed_folders
 
-Geotag SHALL change only the photos in photos by destination — never a video, and never a file in any other folder.
+Geotag SHALL change only files in photos by destination — never a file in any other folder.
+:::
+
+:::{rul} Geotag changes no video
+:id: RUL-video_never_changed
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-geotag_changes_only_by_dest
+:uses: DEF-geotag, DEF-managed_folders
+
+Geotag SHALL never change a video.
 :::
 
 ## 8. JSON artifact rule
@@ -460,25 +472,36 @@ An answer given for a camera's day in a destination SHALL stay that day's answer
 
 :::{rul} A track point's time is the instant it states
 :id: RUL-track_time_never_guessed
-:status: ruled
+:status: seed
 :criticality: high
 :anti: yes
 :verify: required
 :uses: DEF-tracks
 
-Geotag SHALL take a track point's time as the instant it states — whatever its precision or the offset it is written
-with — never guessing the zone of one that states none.
+Geotag SHALL take a track point's time as the instant it states, whatever its precision or the offset it is written
+with.
 :::
 
-:::{rul} A track point geotag cannot use is reported
-:id: RUL-unreadable_point_reported
-:status: ruled
+:::{rul} A track point geotag cannot use is skipped
+:id: RUL-unreadable_point_skipped
+:status: seed
 :criticality: med
 :verify: required
 :uses: DEF-tracks
 
 A track point geotag cannot use — no position or one out of range, no time, an unreadable time, or one stating no
-zone — SHALL be skipped and reported to the user, naming its file and point.
+zone — SHALL be skipped.
+:::
+
+:::{rul} A track point geotag skips is reported
+:id: RUL-unreadable_point_reported
+:status: seed
+:criticality: med
+:verify: required
+:refines: RUL-unreadable_point_skipped
+:uses: DEF-tracks
+
+A track point geotag skips SHALL be reported to the user, naming its file and point.
 :::
 
 :::{rul} Tracks that are configured and not there stop geotag
@@ -504,13 +527,25 @@ Geotag SHALL proceed where no tracks folder is configured or the folder holds no
 
 :::{rul} A track is one device's record
 :id: RUL-tracks_never_joined
-:status: ruled
+:status: seed
 :criticality: high
 :anti: yes
 :verify: required
 :uses: DEF-tracks
 
-Geotag SHALL never join a point of one track file to a point of another — to place a photo between them, or to anchor a clock on the line between them.
+Geotag SHALL never join a point of one track file to a point of another to place a photo between them.
+:::
+
+:::{rul} No clock is anchored between two tracks
+:id: RUL-tracks_never_joined_to_anchor
+:status: seed
+:criticality: high
+:anti: yes
+:verify: none
+:refines: RUL-tracks_never_joined
+:uses: DEF-tracks
+
+Geotag SHALL never join a point of one track file to a point of another to anchor a clock on the line between them.
 :::
 
 
@@ -599,13 +634,13 @@ Geotag SHALL NOT plan while the configuration classes a camera group as both a p
 
 :::{rul} A destination takes the nearest timezone it lies in
 :id: RUL-timezone_from_nearest
-:status: ruled
+:status: seed
 :criticality: med
 :verify: required
 :refines: RUL-timezone_auto_resolves
 
 A destination's proposed timezone SHALL be the one in effect at the nearest destination it lies in that has one —
-however it was reached there — and the configured default only where none has.
+however it was reached there.
 :::
 
 :::{rul} A moved photo is decided where it now is
@@ -732,14 +767,23 @@ destination's timezone.
 
 :::{rul} An offset inside the time's own value is recorded with it
 :id: RUL-offset_within_time_value
-:status: ruled
+:status: seed
 :criticality: high
 :anti: yes
 :verify: required
 :refines: RUL-phone_time_from_own_offset
 
-An offset written within the value of a time field itself SHALL count as the offset recorded with that time, before
-one in a field beside it.
+An offset written within the value of a time field itself SHALL count as the offset recorded with that time.
+:::
+
+:::{rul} An offset inside the value comes before one beside it
+:id: RUL-offset_within_value_before_beside
+:status: seed
+:criticality: high
+:verify: none
+:refines: RUL-offset_within_time_value
+
+An offset written within a time's value SHALL be taken before one in a field beside it.
 :::
 
 :::{def} A clock offset
@@ -756,25 +800,47 @@ clock was set to and the clock's own error, together. A camera keeping exact Bru
 
 :::{rul} An offset the camera's GPS does not support is confirmed before photos are placed by it
 :id: RUL-unanchored_offset_confirmed
-:status: ruled
+:status: seed
 :criticality: high
 :anti: yes
 :verify: required
 :uses: DEF-tracks
 
 Photos SHALL NOT be placed by the tracks on a clock offset the camera's own GPS does not support until the user has
-confirmed that offset against the tracks — an untouched check never counting as a confirmation.
+confirmed that offset against the tracks.
+:::
+
+:::{rul} An untouched check confirms nothing
+:id: RUL-untouched_check_confirms_nothing
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-unanchored_offset_confirmed
+:uses: DEF-tracks
+
+A check against the tracks left untouched SHALL never count as a confirmation.
 :::
 
 :::{rul} A confirmation holds for the offset it confirmed
 :id: RUL-confirmation_holds_for_its_offset
-:status: ruled
+:status: seed
 :criticality: high
 :anti: yes
 :verify: required
 :refines: RUL-unanchored_offset_confirmed
 
-A confirmation SHALL hold only for the offset it confirmed; a changed offset is asked about again.
+A confirmation SHALL hold only for the offset it confirmed.
+:::
+
+:::{rul} A changed offset is asked about again
+:id: RUL-changed_offset_asked_again
+:status: seed
+:criticality: high
+:verify: required
+:refines: RUL-confirmation_holds_for_its_offset
+
+An offset changed since it was confirmed SHALL be asked about again.
 :::
 
 
@@ -839,13 +905,12 @@ has one.
 
 :::{rul} No destination waits on its fallback
 :id: RUL-fallback_optional
-:status: ruled
+:status: seed
 :criticality: low
 :verify: required
 :refines: RUL-placement_order
 
-A destination SHALL never wait on its folder fallback: without one, its photos the tracks cannot place each ask on
-their own.
+A destination SHALL never wait on its folder fallback.
 :::
 
 :::{rul} The tracks place a photo only within the configured limits
@@ -903,13 +968,23 @@ Every position geotag writes SHALL say, in the photo itself, how it was found: o
 
 :::{rul} A position from the tracks is recorded with its track
 :id: RUL-placement_recorded_with_its_track
-:status: ruled
+:status: seed
 :criticality: med
 :verify: required
 :refines: RUL-cause_locatable
 
-A position the tracks give a photo SHALL be recorded in the workspace's record, not in the photo, with the track that
-gave it and the time it was placed at.
+A position the tracks give a photo SHALL be recorded in the workspace's record with the track that gave it and the
+time it was placed at.
+:::
+
+:::{rul} The track is not written in the photo
+:id: RUL-track_never_written_in_photo
+:status: seed
+:criticality: med
+:verify: none
+:refines: RUL-placement_recorded_with_its_track
+
+The track that gave a photo its position SHALL NOT be written in the photo.
 :::
 
 :::{rul} An unplaced photo is listed with why
@@ -1025,13 +1100,26 @@ later — one found from its own GPS included, though the later photos bring no 
 
 :::{rul} A kept offset rests on what it was found from
 :id: RUL-kept_offset_rests_on_its_tracks
-:status: ruled
+:status: seed
 :criticality: high
 :anti: yes
 :verify: required
 :refines: RUL-day_offset_kept_for_later_photos
 
-An offset found from a camera's own GPS SHALL be kept for later photos only while every track it was found from is there unchanged and no photo that has arrived since says otherwise.
+An offset found from a camera's own GPS SHALL be kept for later photos only while every track it was found from is
+there unchanged.
+:::
+
+:::{rul} A kept offset yields to a photo that says otherwise
+:id: RUL-kept_offset_yields_to_new_photo
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-kept_offset_rests_on_its_tracks
+
+An offset found from a camera's own GPS SHALL be kept for later photos only while no photo that has arrived since says
+otherwise.
 :::
 
 :::{rul} No plan while anything waits
@@ -1191,13 +1279,24 @@ Geotag SHALL NOT write to a photo while the image engine is not the one the phot
 
 :::{rul} Finalize packages only an execution that succeeded and still holds
 :id: RUL-finalize_requires_success
-:status: ruled
+:status: seed
 :criticality: high
 :anti: yes
 :verify: required
 :uses: DEF-finalize
 
-Finalize SHALL refuse unless geotag's current plan was executed successfully and still holds.
+Finalize SHALL refuse unless geotag's current plan was executed successfully.
+:::
+
+:::{rul} Finalize packages only a plan that still holds
+:id: RUL-finalize_requires_plan_still_holds
+:status: seed
+:criticality: high
+:verify: required
+:refines: RUL-finalize_requires_success
+:uses: DEF-finalize
+
+Finalize SHALL refuse unless the plan that was executed still holds.
 :::
 
 :::{rul} Finalize packages the photos as execution left them

@@ -103,7 +103,8 @@ def test_real_duplicate_evidence_against_mutable(tmp_path, monkeypatch):
     assert diag["blockers"] == []
 
 
-@pytest.mark.spec("RUL-duplicate_recorded_with_kept", "BLD-duplicate_evidence", test="TST-handoff-conflict_attributed_to_by_dest_folder")
+@pytest.mark.spec("BLD-duplicate_evidence", "RUL-duplicate_recorded_with_kept",
+                  test="TST-handoff-conflict_attributed_to_by_dest_folder")
 def test_conflict_attributed_to_by_dest_folder(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)

@@ -288,7 +288,7 @@ def test_video_in_by_dest_blocks(tmp_path):
     assert any("must contain only photos" in b and "video" in b for b in blockers), blockers
 
 
-@pytest.mark.spec("RUL-sort_photos_only", "RUL-geotag_gates", test="TST-geotag_preflight-other_file_in_by_dest_blocks")
+@pytest.mark.spec("RUL-geotag_gates", test="TST-geotag_preflight-other_file_in_by_dest_blocks")
 def test_other_file_in_by_dest_blocks(tmp_path):
     ws = _ws(tmp_path)
     (ws / "6-photos-by-dest" / "Trip" / "notes.txt").write_text("hi")
@@ -460,7 +460,8 @@ def test_preflight_writes_no_json(tmp_path):
     assert arts == []                                        # no geotag JSON in preflight
 
 
-@pytest.mark.spec("RUL-missing_folder_blocks", test="TST-geotag_preflight-missing_managed_folder_blocks")
+@pytest.mark.spec("RUL-missing_folder_blocks", "RUL-missing_folder_named",
+                  test="TST-geotag_preflight-missing_managed_folder_blocks")
 def test_missing_managed_folder_blocks(tmp_path):
     """An activated workspace missing a managed 0-6 folder is non-conforming — hard stop."""
     import shutil

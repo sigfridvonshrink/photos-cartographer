@@ -134,7 +134,7 @@ def _plan(ws):
     return plan
 
 
-@pytest.mark.spec("RUL-snapshot_timing", "RUL-snapshot_per_plan", test="TST-zfs-snapshot_taken_with_detected_dataset_and_prefix")
+@pytest.mark.spec("RUL-snapshot_per_plan", test="TST-zfs-snapshot_taken_with_detected_dataset_and_prefix")
 def test_snapshot_taken_with_detected_dataset_and_prefix(tmp_path, monkeypatch, seed_from_live_config):
     _mock_media(monkeypatch)
     monkeypatch.setattr(utils, "detect_zfs_dataset", lambda p: "pool/ws")

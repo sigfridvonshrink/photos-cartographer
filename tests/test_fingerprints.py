@@ -128,6 +128,7 @@ def test_a_file_whose_metadata_is_read_again_is_fingerprinted_again(tmp_path, mo
 
 
 @pytest.mark.spec("RUL-fingerprint_method_matches", "BLD-fingerprint", "BLD-fingerprint_method",
+                  "RUL-fingerprint_method_unrecorded_retaken",
                   test="TST-fingerprints-a_fingerprint_is_reused_only_from_this_method")
 def test_a_fingerprint_is_reused_only_from_this_method(tmp_path, monkeypatch):
     """A cached fingerprint is reused only when taken by the method this build uses: the same strategy and,

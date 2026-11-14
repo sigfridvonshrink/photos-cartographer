@@ -110,7 +110,8 @@ def test_band_guard_allows_correct_placement(tmp_path, monkeypatch):
 
 # --- prune-quarantine --------------------------------------------------------
 
-@pytest.mark.spec("BLD-prune_command", "RUL-prune_explicit", test="TST-guards_quarantine-prune_dry_run_deletes_nothing")
+@pytest.mark.spec("BLD-prune_command", "RUL-prune_lists_unless_told",
+                  test="TST-guards_quarantine-prune_dry_run_deletes_nothing")
 def test_prune_dry_run_deletes_nothing(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)
@@ -119,7 +120,8 @@ def test_prune_dry_run_deletes_nothing(tmp_path, monkeypatch):
     assert os.path.isdir(os.path.join(utils.quarantine_dir(str(ws)), pid))
 
 
-@pytest.mark.spec("BLD-prune_command", "RUL-prune_explicit", test="TST-guards_quarantine-prune_yes_with_plan_id_deletes_only_that")
+@pytest.mark.spec("BLD-prune_command", "RUL-prune_lists_unless_told",
+                  test="TST-guards_quarantine-prune_yes_with_plan_id_deletes_only_that")
 def test_prune_yes_with_plan_id_deletes_only_that(tmp_path, monkeypatch):
     _mock(monkeypatch)
     ws = _ws(tmp_path)

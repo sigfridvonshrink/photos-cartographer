@@ -99,14 +99,14 @@ inside the lock all the same.
 
 :::{rul} The lock lasts the whole run, and no longer
 :id: RUL-lock_through_the_run
-:status: ruled
+:status: seed
 :criticality: high
 :anti: yes
 :verify: required
 :upholds: INV-one_run_at_a_time
 
-A run SHALL hold the lock until it ends — through planning, dry run, execution, and every record and artifact it writes
-— and release it then, never letting it outlive the run: between runs, the workspace is unlocked.
+A run SHALL hold the lock until it ends — through planning, dry run, execution, and every record and artifact it
+writes.
 :::
 
 :::{rul} A locked workspace is refused at once
@@ -133,12 +133,13 @@ A run that stops on a locked workspace SHALL say the workspace is locked by a ru
 
 :::{rul} The lock is released however the run ends
 :id: RUL-lock_released_on_any_end
-:status: ruled
+:status: seed
 :criticality: med
 :verify: required
 :refines: RUL-lock_through_the_run
 
-A run SHALL release the lock when it ends, whether it succeeds or fails.
+A run SHALL release the lock when it ends, whether it succeeds or fails, never letting it outlive the run: between
+runs, the workspace is unlocked.
 :::
 
 :::{rul} A stale lock is recognised and recovered
@@ -212,12 +213,31 @@ Each snapshot SHALL be identifiable by the plan whose changes it precedes.
 
 :::{rul} When a snapshot is taken
 :id: RUL-snapshot_timing
-:status: ruled
+:status: seed
 :criticality: med
 :verify: required
 
-A snapshot SHALL be taken after the plan has been validated against its dependencies and the lock is held, and before
-the plan's first change.
+A snapshot SHALL be taken before the plan's first change.
+:::
+
+:::{rul} A snapshot follows the plan's validation
+:id: RUL-snapshot_after_validation
+:status: seed
+:criticality: med
+:verify: none
+:refines: RUL-snapshot_timing
+
+A snapshot SHALL be taken only after the plan has been validated against its dependencies.
+:::
+
+:::{rul} A snapshot is taken under the lock
+:id: RUL-snapshot_under_lock
+:status: seed
+:criticality: med
+:verify: none
+:refines: RUL-snapshot_timing
+
+A snapshot SHALL be taken only while the lock is held.
 :::
 
 :::{rul} A required snapshot that fails stops the run
@@ -327,12 +347,11 @@ A run stopped by a setting cartographer does not know SHALL name the setting.
 
 :::{rul} Prep seeds the configuration once
 :id: RUL-config_seeded_once
-:status: ruled
+:status: seed
 :criticality: med
 :verify: required
 
-A prep run SHALL create the configuration from the seed defaults when it finds none, and only then: a configuration it
-finds, it uses as it is.
+A prep run SHALL create the configuration from the seed defaults when it finds none.
 :::
 
 :::{rul} The workspace's configuration governs it, not the defaults
@@ -699,13 +718,22 @@ A dry run or an execution stopped for want of a plan SHALL tell the user to plan
 
 :::{rul} A dry run summarises the real plan
 :id: RUL-dry_run_summarises_the_real_plan
-:status: ruled
+:status: seed
 :criticality: med
 :anti: yes
 :verify: required
 
-A dry run SHALL validate the saved plan that execution would carry out, and report on that plan — never on a separate
-simulation.
+A dry run SHALL report on the saved plan that execution would carry out — never on a separate simulation.
+:::
+
+:::{rul} A dry run validates the saved plan
+:id: RUL-dry_run_validates_saved_plan
+:status: seed
+:criticality: med
+:verify: none
+:refines: RUL-dry_run_summarises_the_real_plan
+
+A dry run SHALL validate the saved plan that execution would carry out.
 :::
 
 :::{rul} Re-planning sets the prior plan aside
@@ -942,13 +970,32 @@ had to rebuild.
 
 :::{rul} The block names the missing folders
 :id: RUL-missing_folder_named
-:status: ruled
+:status: seed
 :criticality: med
 :verify: required
 :refines: RUL-missing_folder_blocks
 
-The block of a missing managed folder SHALL name the missing folders, say that something is wrong, and tell the user to
-restore them and run again; an empty folder restores one.
+The block of a missing managed folder SHALL name the missing folders and say that something is wrong.
+:::
+
+:::{rul} The block tells the user to restore the folders
+:id: RUL-missing_folder_remedy_told
+:status: seed
+:criticality: med
+:verify: none
+:refines: RUL-missing_folder_named
+
+The block of a missing managed folder SHALL tell the user to restore the folders and run again.
+:::
+
+:::{rul} An empty folder restores a missing one
+:id: RUL-empty_folder_restores
+:status: seed
+:criticality: med
+:verify: none
+:refines: RUL-missing_folder_blocks
+
+An empty folder put back in a missing managed folder's place SHALL restore it.
 :::
 
 :::{rul} An empty inbox is normal
@@ -1082,25 +1129,64 @@ sets, followed by a differentiating suffix when that name is taken.
 
 :::{rul} One format, set by the configuration
 :id: RUL-one_filename_format
-:status: ruled
+:status: seed
 :criticality: med
 :verify: incidental
 :uses: DEF-timestamp_name
 
-Prep and geotag SHALL name files from a timestamp in one format for the whole pipeline, not one for each phase, set by
-the configuration and hard-coded by neither.
+Prep and geotag SHALL name files from a timestamp in one format for the whole pipeline, not one for each phase.
+:::
+
+:::{rul} The format is set by the configuration
+:id: RUL-filename_format_configured
+:status: seed
+:criticality: med
+:verify: required
+:refines: RUL-one_filename_format
+:uses: DEF-timestamp_name
+
+The filename format SHALL be set by the configuration, hard-coded by neither prep nor geotag.
 :::
 
 :::{rul} A taken name gets a suffix, never clobbering
 :id: RUL-suffix_no_clobber
-:status: ruled
+:status: seed
 :criticality: high
 :anti: yes
 :verify: required
 
-A file whose timestamp name is already taken SHALL get a zero-padded differentiating suffix, allocated deterministically
-and without clobbering: against every name on disk and every name planned in the run, compared without regard to case,
-so that two files never collide.
+A file whose timestamp name is already taken SHALL get a differentiating suffix, allocated without clobbering: against
+every name on disk and every name planned in the run, so that two files never collide.
+:::
+
+:::{rul} The suffix is zero-padded
+:id: RUL-suffix_zero_padded
+:status: seed
+:criticality: high
+:verify: required
+:refines: RUL-suffix_no_clobber
+
+The differentiating suffix SHALL be zero-padded.
+:::
+
+:::{rul} The suffix is allocated deterministically
+:id: RUL-suffix_deterministic
+:status: seed
+:criticality: high
+:verify: none
+:refines: RUL-suffix_no_clobber
+
+The differentiating suffix SHALL be allocated deterministically.
+:::
+
+:::{rul} Names are compared without regard to case
+:id: RUL-suffix_case_insensitive
+:status: seed
+:criticality: high
+:verify: required
+:refines: RUL-suffix_no_clobber
+
+A name SHALL be taken when it matches a name on disk or planned in the run without regard to case.
 :::
 
 :::{rul} Prep and geotag take the first free name
@@ -1342,14 +1428,35 @@ of the configuration or of the areas the record reads — and each use checks th
 
 :::{inv} No record is used once what it came from has changed
 :id: INV-no_stale_use
-:status: ruled
+:status: seed
 :criticality: high
 :anti: yes
 :verify: required
 :uses: DEF-dependency_cascade
 
-No phase SHALL use a record once anything it was derived from has changed: each phase validates what it derives from,
-then creates the record, records those dependencies in it, and refuses its use downstream when any of them has changed.
+No phase SHALL use a record once anything it was derived from has changed.
+:::
+
+:::{rul} A phase validates what it derives from first
+:id: RUL-dependencies_validated_before_deriving
+:status: seed
+:criticality: high
+:verify: none
+:upholds: INV-no_stale_use
+:uses: DEF-dependency_cascade
+
+Each phase SHALL validate what it derives a record from before it creates the record.
+:::
+
+:::{rul} A record carries what it was derived from
+:id: RUL-dependencies_recorded_in_record
+:status: seed
+:criticality: high
+:verify: required
+:upholds: INV-no_stale_use
+:uses: DEF-dependency_cascade
+
+Each phase SHALL record in a record it creates the dependencies it was derived from.
 :::
 
 :::{rul} What cannot be checked counts as changed
@@ -1375,13 +1482,23 @@ A media file's fingerprint SHALL stay the same when the pipeline rewrites its me
 
 :::{rul} Another ImageMagick is a reason to check a fingerprint
 :id: RUL-engine_change_is_checked
-:status: ruled
+:status: seed
 :criticality: high
 :verify: required
 :uses: DEF-fingerprint
 
-A photo's fingerprint taken under another ImageMagick version SHALL be taken again before a phase relies on it, a new
-value read as the same photo's — its records following it there, or the phase stopping on the photo where they cannot —
+A photo's fingerprint taken under another ImageMagick version SHALL be taken again before a phase relies on it.
+:::
+
+:::{rul} A fingerprint taken again is the same photo's
+:id: RUL-retaken_fingerprint_same_photo
+:status: seed
+:criticality: high
+:verify: required
+:refines: RUL-engine_change_is_checked
+:uses: DEF-fingerprint
+
+A fingerprint taken again under another ImageMagick version whose value is new SHALL be read as the same photo's —
 never, for a changed version alone, as a different photo's.
 :::
 
@@ -1459,14 +1576,14 @@ A prep execution SHALL leave the inbox empty.
 
 :::{rul} Only photos are sorted into photos by destination
 :id: RUL-sort_photos_only
-:status: ruled
+:status: seed
 :criticality: med
 :anti: yes
 :verify: required
 :uses: DEF-operator_loop, DEF-managed_folders
 
 Photos by destination SHALL hold only photos — videos stay in videos by date, and no file of no media class belongs
-there — geotag refusing to run while it holds anything else.
+there.
 :::
 
 :::{rul} Geotag does not plan over an unrecorded sort
@@ -1540,7 +1657,7 @@ A geotag re-run SHALL derive again and replace a position geotag wrote, never ke
 
 :::{rul} Geotag's gates are the present state, not its history
 :id: RUL-geotag_gates
-:status: ruled
+:status: seed
 :criticality: high
 :anti: yes
 :verify: required
@@ -1548,8 +1665,20 @@ A geotag re-run SHALL derive again and replace a position geotag wrote, never ke
 
 Geotag SHALL proceed when, and only when, the workspace now satisfies its gates: photos by date holds no photo; photos
 by destination holds only photos and no development subfolder; prep has recorded every photo in it; and the inbox is
-empty — whether, or how often, prep, the sort or geotag ran before not bearing on it, so the user may run any number of
-prep and sort cycles before geotagging.
+empty.
+:::
+
+:::{rul} What ran before does not bear on geotag's gates
+:id: RUL-geotag_gates_ignore_history
+:status: seed
+:criticality: high
+:anti: yes
+:verify: none
+:refines: RUL-geotag_gates
+:uses: DEF-geotag, DEF-managed_folders
+
+Whether, or how often, prep, the sort or geotag ran before SHALL NOT bear on whether geotag proceeds, so the user may
+run any number of prep and sort cycles before geotagging.
 :::
 
 :::{rul} A re-run does as much as what changed requires
@@ -1771,14 +1900,14 @@ tool *proposes*; the user *decides*.
 
 :::{inv} Every change follows from the record
 :id: INV-every_change_from_the_record
-:status: ruled
+:status: seed
 :criticality: high
 :anti: yes
 :verify: incidental
 :uses: DEF-decision
 
 Every change a phase makes SHALL follow from a decision the user recorded, or from a fixed rule applied to recorded
-inputs — never from a choice the tool makes on its own; an execution acts only on a plan made from those.
+inputs — never from a choice the tool makes on its own.
 :::
 
 :::{rul} The user writes the decisions
@@ -2059,13 +2188,24 @@ from and the rule that turned it to UTC.
 
 :::{rul} The log reads as it stands
 :id: RUL-log_human_readable
-:status: ruled
+:status: seed
 :criticality: low
 :verify: required
 :uses: DEF-transformation_log
 
-The log SHALL be readable as it stands, with no separate report: stably ordered, with descriptive names, and values as a
-person reads them — times, timezones and offsets.
+The log SHALL be readable as it stands, with no separate report: with descriptive names, and values as a person reads
+them — times, timezones and offsets.
+:::
+
+:::{rul} The log is stably ordered
+:id: RUL-log_stably_ordered
+:status: seed
+:criticality: low
+:verify: required
+:refines: RUL-log_human_readable
+:uses: DEF-transformation_log
+
+The log SHALL be stably ordered.
 :::
 
 :::{rul} History is kept across runs, as much as the log needs
@@ -2469,13 +2609,13 @@ Making the library's mark again SHALL change nothing.
 
 :::{rul} Merge's plan, dry run and execution stop without the mark
 :id: RUL-library_mark_required
-:status: ruled
+:status: seed
 :criticality: high
 :anti: yes
 :verify: required
 :refines: RUL-library_known_by_mark
 
-Merge's plan, dry run and execution SHALL only read the library's mark, and stop at once if it is absent.
+Merge's plan, dry run and execution SHALL stop at once if the library's mark is absent.
 :::
 
 :::{rul} Merge creates in the library only what it places
@@ -2684,13 +2824,24 @@ workspace lock. Its records MAY still be read.
 
 :::{rul} The decision editor refuses a sealed workspace
 :id: RUL-editor_refuses_sealed
-:status: ruled
+:status: seed
 :criticality: high
 :anti: yes
 :verify: required
 :refines: RUL-sealed_refuses
 
-The decision editor SHALL neither open a sealed workspace nor save into it.
+The decision editor SHALL NOT open a sealed workspace.
+:::
+
+:::{rul} The decision editor saves nothing into a sealed workspace
+:id: RUL-editor_refuses_sealed_save
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-editor_refuses_sealed
+
+The decision editor SHALL NOT save into a sealed workspace.
 :::
 
 :::{rul} A sealed workspace's configuration records no library
@@ -2821,16 +2972,27 @@ separator or space.
 A timezone the user writes SHALL be a real zone that resolves, never an arbitrary string.
 :::
 
-:::{rul} A position and a clock offset are well formed
+:::{rul} A position is well formed
 :id: RUL-checked_positions_and_times
-:status: ruled
+:status: seed
 :criticality: high
 :verify: required
 :uses: DEF-decision
 :refines: INV-authored_values_checked
 
-A position or a clock offset the user writes SHALL be well formed: a position two numbers — latitude −90 to 90,
-longitude −180 to 180, both or neither; a clock offset a whole number of seconds, of any size.
+A position the user writes SHALL be well formed: two numbers — latitude −90 to 90, longitude −180 to 180, both or
+neither.
+:::
+
+:::{rul} A clock offset is a whole number of seconds
+:id: RUL-checked_clock_offsets
+:status: seed
+:criticality: high
+:verify: required
+:refines: INV-authored_values_checked
+:uses: DEF-decision
+
+A clock offset the user writes SHALL be well formed: a whole number of seconds, of any size.
 :::
 
 :::{rul} The filename format makes a safe name
@@ -2869,17 +3031,39 @@ The span of track the drift check looks at SHALL be set greater than zero, a set
 the check off without saying so.
 :::
 
-:::{rul} A choice is one of its choices, and a decision has its shape
+:::{rul} A yes-or-no is a yes or a no
 :id: RUL-checked_shapes
-:status: ruled
+:status: seed
 :criticality: high
 :anti: yes
 :verify: required
 :uses: DEF-decision, RUL-user_writes_decisions
 :refines: INV-authored_values_checked
 
-A yes-or-no SHALL be a yes or a no, a value from a fixed set — a device group's class among them — one of that set, and
-a decision's structure whole: a decision whose structure is broken is an error, never ignored.
+A yes-or-no SHALL be a yes or a no.
+:::
+
+:::{rul} A value from a fixed set is one of that set
+:id: RUL-checked_fixed_set
+:status: seed
+:criticality: high
+:verify: required
+:refines: INV-authored_values_checked
+:uses: DEF-decision, RUL-user_writes_decisions
+
+A value from a fixed set — a device group's class among them — SHALL be one of that set.
+:::
+
+:::{rul} A decision has its shape
+:id: RUL-checked_decision_structure
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: INV-authored_values_checked
+:uses: DEF-decision, RUL-user_writes_decisions
+
+A decision's structure SHALL be whole: a decision whose structure is broken is an error, never ignored.
 :::
 
 :::{rul} An invalid value stops the phase before it changes anything
@@ -2956,15 +3140,26 @@ A decision found invalid SHALL be reported as needing correction.
 
 :::{rul} Every name is checked free as it is written
 :id: RUL-target_free_at_execute
-:status: ruled
+:status: seed
 :criticality: high
 :anti: yes
 :verify: required
 :uses: RUL-suffix_no_clobber, DEF-library
 
 Immediately before each change that gives a file a name — prep's moves, renames and setting duplicates aside, geotag's
-renames, merge's placing in the library — execution SHALL check that the name is free, ignoring case where the
-filesystem does, never writing onto a taken name on the strength of the plan: a name found taken blocks that operation.
+renames, merge's placing in the library — execution SHALL check that the name is free, never writing onto a taken name
+on the strength of the plan: a name found taken blocks that operation.
+:::
+
+:::{rul} A name is checked free ignoring case
+:id: RUL-target_free_ignores_case
+:status: seed
+:criticality: high
+:verify: required
+:refines: RUL-target_free_at_execute
+:uses: RUL-suffix_no_clobber, DEF-library
+
+Execution's check that a name is free SHALL ignore case where the filesystem does.
 :::
 
 :::{rul} An interrupted move leaves the before or the after
@@ -3144,13 +3339,23 @@ An operation that cannot complete SHALL never be recorded as done, so that a re-
 
 :::{rul} Planning changes no media
 :id: RUL-planning_changes_no_media
-:status: ruled
+:status: seed
 :criticality: high
 :anti: yes
 :verify: required
 
-Planning SHALL change no media file, and write nothing but its plan, its decision records, what it keeps so that later
-runs need not compute it again, and — on a workspace's first run — the configuration it seeds.
+Planning SHALL change no media file.
+:::
+
+:::{rul} Planning writes only its own records
+:id: RUL-planning_writes_only_its_records
+:status: seed
+:criticality: high
+:verify: required
+:refines: RUL-planning_changes_no_media
+
+Planning SHALL write nothing but its plan, its decision records, what it keeps so that later runs need not compute it
+again, and — on a workspace's first run — the configuration it seeds.
 :::
 
 :::{rul} Execution carries out the plan, and only the plan

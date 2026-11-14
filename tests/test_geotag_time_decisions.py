@@ -209,7 +209,8 @@ def test_bad_timezone_blocks_and_leaves_artifact(tmp_path, monkeypatch, capsys):
     assert (ws / ".photos-ingest" / cal.TIME_DECISIONS_ARTIFACT).read_bytes() == before   # untouched
 
 
-@pytest.mark.spec("RUL-config_validated_before_use", "RUL-invalid_value_located", test="TST-geotag_time_decisions-bad_offset_blocks")
+@pytest.mark.spec("RUL-config_validated_before_use", "RUL-invalid_value_located", "RUL-checked_clock_offsets",
+                  test="TST-geotag_time_decisions-bad_offset_blocks")
 def test_bad_offset_blocks(tmp_path, monkeypatch, capsys):
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []})
@@ -222,7 +223,8 @@ def test_bad_offset_blocks(tmp_path, monkeypatch, capsys):
 
 # --- dependency block --------------------------------------------------------
 
-@pytest.mark.spec("INV-no_stale_use", "RUL-hash_is_the_dependency_check")
+@pytest.mark.spec("INV-no_stale_use", "RUL-hash_is_the_dependency_check", "RUL-dependencies_recorded_in_record",
+                  test="TST-geotag_time_decisions-depends_on_reverifies")
 def test_depends_on_reverifies(tmp_path, monkeypatch):
     ws = _ws(tmp_path, files=[_hfile("6-photos-by-dest/Brussels/a.jpg")],
              device_groups={"fixed_clock_cameras": [CAM], "phones": []})
@@ -329,7 +331,7 @@ def test_build_drift_validation_leaves_photos21_byte_unmutated(tmp_path):
         "effective_time_anchor"] == {"offset_seconds": 0, "source": "manual"}
 
 
-@pytest.mark.spec("BLD-decision_record_envelope", "INV-no_stale_use",
+@pytest.mark.spec("BLD-decision_record_envelope", "INV-no_stale_use", "RUL-dependencies_recorded_in_record",
                   test="TST-geotag_time_decisions-classifying_a_camera_again_restales_the_time_decisions")
 def test_classifying_a_camera_again_restales_the_time_decisions(tmp_path, monkeypatch):
     # The record says what it is and what it was made from; classing the camera a phone changes that, and the

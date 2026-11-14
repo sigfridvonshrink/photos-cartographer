@@ -369,7 +369,7 @@ def _set(path, value):
 _T = ["destinations", "6-photos-by-dest/T"]
 
 @pytest.mark.spec("RUL-checked_shapes", "RUL-checked_positions_and_times", "RUL-invalid_value_located",
-                  "RUL-invalid_decision_reported", "RUL-invalid_decision_kept",
+                  "RUL-invalid_decision_reported", "RUL-invalid_decision_kept", "RUL-checked_decision_structure",
                   test="TST-geotag_orchestration-broken_decision_is_a_located_blocker")
 @pytest.mark.parametrize("artifact, edit, message", [
     ("photos-21-time-decisions.json",
@@ -406,7 +406,8 @@ def test_broken_decision_is_a_located_blocker(tmp_path, monkeypatch, capsys, art
     assert p.read_bytes() == before                                           # kept exactly as written
 
 
-@pytest.mark.spec("RUL-checked_shapes", test="TST-geotag_orchestration-drift_confirmation_must_be_a_real_yes")
+@pytest.mark.spec("RUL-checked_shapes", "RUL-checked_decision_structure",
+                  test="TST-geotag_orchestration-drift_confirmation_must_be_a_real_yes")
 def test_drift_confirmation_must_be_a_real_yes(tmp_path):
     # The drift gate is passed only by a written true: "false" (a string) never confirms a bucket.
     ws, ctl = _init_ws(tmp_path)

@@ -244,7 +244,8 @@ def test_execute_applies_only_recorded_operations_no_rederive(mock_meta, tmp_pat
 
 
 @mock.patch('photos_utils.MetadataReader.read_metadata_concurrently', side_effect=mock_read_metadata_concurrently)
-@pytest.mark.spec("RUL-suffix_no_clobber", test="TST-idempotency_cache-chronological_destination_collision_allocates_safe_name_no_clobber")
+@pytest.mark.spec("RUL-suffix_no_clobber", "RUL-suffix_zero_padded",
+                  test="TST-idempotency_cache-chronological_destination_collision_allocates_safe_name_no_clobber")
 def test_chronological_destination_collision_allocates_safe_name_no_clobber(mock_meta, tmp_path, monkeypatch):
     """§11.2 (anti): a 0-sources file whose computed chronological destination in 5-photos-by-date
     collides with an EXISTING path must not clobber. setup_workspace seeds

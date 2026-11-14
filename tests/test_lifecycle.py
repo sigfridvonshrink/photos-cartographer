@@ -434,7 +434,7 @@ def test_no_flatten_organizes_subtree_without_consolidation(tmp_path, monkeypatc
     assert org and org[0].destination.startswith("5-photos-by-date/"), org
 
 
-@pytest.mark.spec("RUL-suffix_no_clobber")
+@pytest.mark.spec("RUL-suffix_no_clobber", test="TST-lifecycle-no_flatten_same_name_distinct_subtrees_both_survive")
 def test_no_flatten_same_name_distinct_subtrees_both_survive(tmp_path, monkeypatch):
     _install(monkeypatch)
     ws = _initialized(tmp_path)

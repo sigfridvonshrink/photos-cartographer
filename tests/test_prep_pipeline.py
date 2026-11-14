@@ -86,7 +86,7 @@ def _tree(ws):
                   if not os.path.relpath(p, ws).startswith(".photos-ingest"))
 
 
-@pytest.mark.spec("RUL-redundant_jpeg_set_aside", "BLD-jpeg_extensions",
+@pytest.mark.spec("RUL-redundant_jpeg_set_aside", "BLD-jpeg_extensions", "RUL-redundant_jpeg_only",
                   test="TST-prep_pipeline-only_the_jpeg_beside_a_raw_is_set_aside")
 def test_only_the_jpeg_beside_a_raw_is_set_aside(tmp_path):
     """A RAW sets aside the JPEG of its name in its folder — `.jpg` or `.jpeg` — and no other image."""

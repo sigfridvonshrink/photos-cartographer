@@ -59,7 +59,8 @@ def _main(monkeypatch, ws, *argv):
 
 # --- happy path --------------------------------------------------------------
 
-@pytest.mark.spec("RUL-plan_at_fixed_place", "RUL-lock_through_the_run")
+@pytest.mark.spec("RUL-plan_at_fixed_place", "RUL-lock_through_the_run",
+                  test="TST-cli-plan_saves_canonical_and_locks")
 def test_plan_saves_canonical_and_locks(tmp_path, monkeypatch, capsys):
     ws = _ws(tmp_path)
     code = _main(monkeypatch, ws, "plan")
@@ -238,7 +239,7 @@ def test_prep_plan_never_auto_deletes_quarantine(tmp_path, monkeypatch, capsys):
     assert qd.exists() and (qd / "dup.jpg").read_bytes() == b"recoverable"   # untouched by plan
 
 
-@pytest.mark.spec("RUL-prune_explicit", test="TST-cli-prune_quarantine_preserves_managed_folders")
+@pytest.mark.spec("RUL-prune_only_quarantine", test="TST-cli-prune_quarantine_preserves_managed_folders")
 def test_prune_quarantine_preserves_managed_folders(tmp_path, monkeypatch, capsys):
     """prune-quarantine removes only quarantine contents — the managed 0-6 tree (incl. 6-photos-by-dest)
     is never touched by a prune run."""

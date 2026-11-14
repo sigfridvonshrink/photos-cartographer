@@ -36,16 +36,27 @@ A photo whose fingerprint, taken again by merge, has changed SHALL be left in ph
 
 :::{rul} Merge checks geotag's gates again
 :id: RUL-merge_rechecks_gates
-:status: ruled
+:status: seed
 :criticality: high
 :anti: yes
 :verify: required
 :refines: RUL-geotag_gates
 :uses: DEF-merge, DEF-managed_folders
 
-Merge SHALL proceed only while the workspace, checked again at merge's own start, satisfies geotag's gates — what the
-gates leave out, the videos, the files missing metadata, the redundant JPEGs and the strays, blocking merge no more
-than geotag.
+Merge SHALL proceed only while the workspace, checked again at merge's own start, satisfies geotag's gates.
+:::
+
+:::{rul} What geotag's gates leave out does not block merge
+:id: RUL-merge_gates_leave_out_residue
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-merge_rechecks_gates
+:uses: DEF-merge, DEF-managed_folders
+
+What geotag's gates leave out — the videos, the files missing metadata, the redundant JPEGs and the strays — SHALL
+block merge no more than geotag.
 :::
 
 :::{rul} A merge a precondition stops changes nothing
@@ -89,21 +100,44 @@ Merge SHALL allow a fresh plan at any time on a workspace not sealed, whatever a
 
 :::{rul} A fresh plan carries the photos earlier plans placed
 :id: RUL-replan_carries_placed
-:status: ruled
+:status: seed
 :criticality: high
 :anti: yes
 :verify: required
 :refines: RUL-merge_resumable
 :uses: DEF-merge, DEF-library, DEF-fingerprint, DEF-managed_folders
 
-A fresh plan SHALL account for every finalized photo no longer in photos by destination: carried forward with the
-library place the latest earlier plan of the workspace gave it whose place, fingerprinted again, holds it — whether or
-not the journal recorded the move — and otherwise blocking, naming why.
+A fresh plan SHALL carry forward every finalized photo no longer in photos by destination with the library place the
+latest earlier plan of the workspace gave it whose place, fingerprinted again, holds it — whether or not the journal
+recorded the move.
+:::
+
+:::{rul} A photo a fresh plan cannot carry blocks
+:id: RUL-replan_blocks_unaccounted
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-replan_carries_placed
+:uses: DEF-merge, DEF-library, DEF-fingerprint, DEF-managed_folders
+
+A finalized photo no longer in photos by destination that a fresh plan cannot carry forward SHALL block.
+:::
+
+:::{rul} The blocker for a photo not carried names why
+:id: RUL-replan_block_names_why
+:status: seed
+:criticality: high
+:verify: required
+:refines: RUL-replan_blocks_unaccounted
+:uses: DEF-merge, DEF-library, DEF-fingerprint, DEF-managed_folders
+
+The blocker for a photo a fresh plan cannot carry forward SHALL name why.
 :::
 
 :::{rul} A resumed merge checks the library, not the journal
 :id: RUL-resume_rechecks_library
-:status: ruled
+:status: seed
 :criticality: high
 :anti: yes
 :verify: required
@@ -111,7 +145,29 @@ not the journal recorded the move — and otherwise blocking, naming why.
 :uses: DEF-merge, DEF-library, DEF-fingerprint
 
 A photo gone from photos by destination SHALL count as merged only while its library place, fingerprinted again, holds
-it — whatever the journal or the plan says — and otherwise block, the run then partial.
+it — whatever the journal or the plan says.
+:::
+
+:::{rul} A photo gone from both places blocks
+:id: RUL-resume_blocks_missing
+:status: seed
+:criticality: high
+:verify: required
+:refines: RUL-resume_rechecks_library
+:uses: DEF-merge, DEF-library, DEF-fingerprint
+
+A photo gone from photos by destination whose library place does not hold it SHALL block.
+:::
+
+:::{rul} A run with a photo gone from both places is partial
+:id: RUL-resume_block_makes_partial
+:status: seed
+:criticality: high
+:verify: required
+:refines: RUL-resume_blocks_missing
+:uses: DEF-merge, DEF-library, DEF-fingerprint
+
+A run in which a photo gone from photos by destination blocks SHALL be partial.
 :::
 
 ## 9. User-visible outputs and the merge summary

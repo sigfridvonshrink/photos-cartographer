@@ -277,7 +277,7 @@ set once and reach every destination beneath it. If it asked for anything, it wo
 :status: ruled
 :forced: no
 :follows_from: CHC-photos_matter, RAT-remainder_worklist
-:justifies: RUL-track_time_never_guessed, RUL-unreadable_point_reported
+:justifies: RUL-track_time_never_guessed, RUL-unreadable_point_reported, RUL-unreadable_point_skipped
 
 A track's points become positions and clock offsets; a time read an hour wrong, or in a zone guessed, would place
 photos and correct cameras by that hour, and look like evidence. Recorders write the same instant in several valid

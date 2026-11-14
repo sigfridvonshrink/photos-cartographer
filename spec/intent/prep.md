@@ -124,12 +124,12 @@ prep's plan.
 
 :::{rul} A file of no media class outside the inbox blocks prep
 :id: RUL-other_outside_inbox_blocks
-:status: ruled
+:status: seed
 :criticality: med
 :anti: yes
 :verify: required
 
-A file of no media class found in a managed folder other than the inbox SHALL block prep's plan, named.
+A file of no media class found in a managed folder other than the inbox SHALL block prep's plan.
 :::
 
 :::{rul} Every blocker is reported
@@ -288,13 +288,25 @@ moving or renaming it first.
 
 :::{rul} A JPEG beside its RAW is set aside
 :id: RUL-redundant_jpeg_set_aside
-:status: ruled
+:status: seed
 :criticality: med
 :verify: required
 :uses: DEF-managed_folders
 
-Prep SHALL move into redundant JPEGs each JPEG in the inbox that shares its folder and its name, extension aside, with a
-raw file — and no other file with it.
+Prep SHALL move into redundant JPEGs each JPEG in the inbox that shares its folder and its name, extension aside, with
+a raw file.
+:::
+
+:::{rul} Only a JPEG beside its RAW is set aside
+:id: RUL-redundant_jpeg_only
+:status: seed
+:criticality: med
+:verify: required
+:refines: RUL-redundant_jpeg_set_aside
+:uses: DEF-managed_folders
+
+Prep SHALL move into redundant JPEGs no file but a JPEG in the inbox that shares its folder and its name, extension
+aside, with a raw file.
 :::
 
 :::{rul} Of identical media, one copy is kept
@@ -369,14 +381,24 @@ one taken when the file had another size or modification time.
 
 :::{rul} A fingerprint is reused only from the method in use
 :id: RUL-fingerprint_method_matches
-:status: ruled
+:status: seed
 :criticality: high
 :verify: required
 :refines: RUL-reuse_valid_work
 :uses: DEF-fingerprint
 
-Prep SHALL reuse a cached fingerprint only when the method that took it is the one now in use for the file's class,
-taking again one that does not record its method in full.
+Prep SHALL reuse a cached fingerprint only when the method that took it is the one now in use for the file's class.
+:::
+
+:::{rul} A fingerprint that does not record its method is taken again
+:id: RUL-fingerprint_method_unrecorded_retaken
+:status: seed
+:criticality: high
+:verify: required
+:refines: RUL-fingerprint_method_matches
+:uses: DEF-fingerprint
+
+Prep SHALL take again a cached fingerprint that does not record its method in full.
 :::
 
 :::{rul} A file read again is read whole
@@ -570,12 +592,22 @@ Prep SHALL take a media file's fingerprint again at every run while it has faile
 
 :::{rul} A duplicate is recorded with the copy kept
 :id: RUL-duplicate_recorded_with_kept
-:status: ruled
+:status: seed
 :criticality: med
 :verify: required
 :refines: RUL-duplicates_quarantined
 
-Prep SHALL record each duplicate it quarantines with the copy it kept, in the quarantine manifest and the handoff.
+Prep SHALL record each duplicate it quarantines with the copy it kept, in the handoff.
+:::
+
+:::{rul} The quarantine manifest records a duplicate with the copy kept
+:id: RUL-duplicate_in_manifest_with_kept
+:status: seed
+:criticality: med
+:verify: none
+:refines: RUL-duplicate_recorded_with_kept
+
+Prep SHALL record each duplicate it quarantines with the copy it kept, in the quarantine manifest.
 :::
 
 
@@ -738,13 +770,32 @@ No prep run SHALL remove anything from the quarantine, however often it runs and
 
 :::{rul} Only the user's prune deletes, and only when told to
 :id: RUL-prune_explicit
-:status: ruled
+:status: seed
 :criticality: high
 :anti: yes
 :verify: required
 
-Prep SHALL delete quarantined files only by its prune command, which lists what it would delete unless told to delete,
-and touches nothing outside the quarantine.
+Prep SHALL delete quarantined files only by its prune command.
+:::
+
+:::{rul} The prune lists what it would delete unless told to delete
+:id: RUL-prune_lists_unless_told
+:status: seed
+:criticality: high
+:verify: required
+:refines: RUL-prune_explicit
+
+Prep's prune command SHALL list what it would delete, deleting nothing, unless told to delete.
+:::
+
+:::{rul} The prune touches nothing outside the quarantine
+:id: RUL-prune_only_quarantine
+:status: seed
+:criticality: high
+:verify: required
+:refines: RUL-prune_explicit
+
+Prep's prune command SHALL touch nothing outside the quarantine.
 :::
 
 :::{rul} A file restored from the quarantine is a new file
@@ -907,12 +958,21 @@ A file's fingerprint or metadata SHALL never be recorded as valid when the tool 
 
 :::{rul} A fingerprint taken again is explained
 :id: RUL-rehash_explained
-:status: ruled
+:status: seed
 :criticality: low
 :verify: required
 
-Each prep plan SHALL report how many media files it fingerprinted again, and why, and how many fingerprints it took
-from the plan memo — deciding nothing by it.
+Each prep plan SHALL report how many media files it fingerprinted again, and why — deciding nothing by it.
+:::
+
+:::{rul} A plan reports the fingerprints it took from the memo
+:id: RUL-rehash_memo_count_reported
+:status: seed
+:criticality: low
+:verify: none
+:refines: RUL-rehash_explained
+
+Each prep plan SHALL report how many fingerprints it took from the plan memo.
 :::
 
 ## 19. What prep reports

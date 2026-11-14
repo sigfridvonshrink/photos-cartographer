@@ -37,7 +37,7 @@ def test_move_no_clobber_moves_when_free(tmp_path):
     assert not src.exists()
 
 
-@pytest.mark.spec("RUL-target_free_at_execute")
+@pytest.mark.spec("RUL-target_free_at_execute", test="TST-no_clobber-move_no_clobber_refuses_and_preserves")
 def test_move_no_clobber_refuses_and_preserves(tmp_path):
     src = tmp_path / "a"; src.write_bytes(b"SRC")
     dest = tmp_path / "b"; dest.write_bytes(b"KEEP")

@@ -271,7 +271,7 @@ def test_finalize_refuses_before_execute(tmp_path, monkeypatch):
     assert not (ctl / "photos-26-complete-log.json").exists()
 
 
-@pytest.mark.spec("RUL-finalize_requires_success")
+@pytest.mark.spec("RUL-finalize_requires_success", test="TST-geotag_finalize-finalize_refuses_partial_execution")
 def test_finalize_refuses_partial_execution(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _to_executed(monkeypatch, ws, ctl)
@@ -460,6 +460,7 @@ def test_finalize_is_idempotent(tmp_path, monkeypatch):
 
 
 @pytest.mark.spec("RUL-finalize_requires_success", "BLD-finalize_preconditions",
+                  "RUL-finalize_requires_plan_still_holds",
                   test="TST-geotag_finalize-a_decision_changed_since_execution_stops_finalize")
 def test_a_decision_changed_since_execution_stops_finalize(tmp_path, monkeypatch):
     # Executed, then a decision edited without planning again: the package would record a decision the photos
@@ -475,7 +476,7 @@ def test_a_decision_changed_since_execution_stops_finalize(tmp_path, monkeypatch
 
 # --- what finalize packages is what execution left (§31) ---------------------------------------------
 
-@pytest.mark.spec("RUL-finalize_checks_photos", "RUL-finalize_requires_success", "BLD-finalize_preconditions",
+@pytest.mark.spec("RUL-finalize_checks_photos", "BLD-finalize_preconditions",
                   test="TST-geotag_finalize-a_photo_not_as_execution_left_it_stops_finalize")
 @pytest.mark.parametrize("change", ["edited", "gone", "added"])
 def test_a_photo_not_as_execution_left_it_stops_finalize(tmp_path, monkeypatch, capsys, change):

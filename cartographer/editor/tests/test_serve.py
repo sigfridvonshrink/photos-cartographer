@@ -552,7 +552,7 @@ def test_serve_points_out_a_dump_in_a_sealed_workspace(tmp_path, capsys):
     assert os.listdir(inbox) == ["new.jpg"]
 
 
-@pytest.mark.spec("RUL-editor_refuses_sealed", test="TST-serve-save_refuses_a_sealed_workspace")
+@pytest.mark.spec("RUL-editor_refuses_sealed_save", test="TST-serve-save_refuses_a_sealed_workspace")
 def test_save_refuses_a_sealed_workspace(tmp_path):
     # The console calls _save directly, without serve()'s startup check: the save refuses on its own.
     ws = _workspace_with_fixtures(tmp_path)

@@ -68,7 +68,9 @@ def _pol(**overrides):
     (_cfg(merge={"library_root": " \t"}), "must not be blank"),                # blank library path
     (_pol(device_groups={"phone": ["Pixel"]}), "device_groups.phone is not a device class"),  # misspelt class
 ])
-@pytest.mark.spec("RUL-config_validated_before_use", "BLD-gpx_root_checked", "RUL-checked_filename_format", "RUL-checked_shapes", "RUL-checked_numbers", "RUL-checked_paths", test="TST-config_validation-validate_config_rejects")
+@pytest.mark.spec("RUL-config_validated_before_use", "BLD-gpx_root_checked", "RUL-checked_filename_format",
+                  "RUL-checked_shapes", "RUL-checked_numbers", "RUL-checked_paths", "RUL-checked_fixed_set",
+                  test="TST-config_validation-validate_config_rejects")
 def test_validate_config_rejects(cfg, needle):
     with pytest.raises(ValueError) as ei:
         utils.validate_config(cfg)
@@ -218,7 +220,9 @@ def test_media_extensions_rejects_bad(cfg, needle):
     assert needle in str(ei.value), str(ei.value)
 
 
-@pytest.mark.spec("RUL-extension_one_class", "RUL-extension_matched_ignoring_case", "RUL-config_seeded_once", "RUL-config_lists_extensions", "RUL-unlisted_extension_other", test="TST-config_validation-classification_follows_config_after_load")
+@pytest.mark.spec("RUL-extension_one_class", "RUL-extension_matched_ignoring_case", "RUL-config_lists_extensions",
+                  "RUL-unlisted_extension_other",
+                  test="TST-config_validation-classification_follows_config_after_load")
 def test_classification_follows_config_after_load(tmp_path, monkeypatch):
     # A user adds .webp to the image list; after load_or_seed_config it classifies as image, not stray.
     ws = tmp_path / "ws"

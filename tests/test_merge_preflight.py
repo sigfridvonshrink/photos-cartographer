@@ -330,7 +330,7 @@ def test_nonmedia_in_bydest_blocks(tmp_path):
     assert any("must contain only photos" in b for b in blockers), blockers
 
 
-@pytest.mark.spec("RUL-merge_rechecks_gates", test="TST-merge_preflight-residual_folders_do_not_block")
+@pytest.mark.spec("RUL-merge_gates_leave_out_residue", test="TST-merge_preflight-residual_folders_do_not_block")
 def test_residual_folders_do_not_block(tmp_path):
     """Geotag's gates leave out the videos, the files missing metadata, the redundant JPEGs and the strays; what
     sits there blocks merge no more than it blocks geotag."""
@@ -591,7 +591,8 @@ def test_locked_workflow_exits_2_on_blocker(tmp_path):
 
 # --- Tier 3: no-mutation / never-follows consequences ------------------------
 
-@pytest.mark.spec("RUL-library_confirmed_before_lock", "RUL-library_mark_required", test="TST-merge_preflight-marker_check_precedes_library_lock_no_lockfile_dropped")
+@pytest.mark.spec("RUL-library_confirmed_before_lock", "RUL-library_mark_required",
+                  test="TST-merge_preflight-marker_check_precedes_library_lock_no_lockfile_dropped")
 def test_marker_check_precedes_library_lock_no_lockfile_dropped(tmp_path):
     """§12 lock order: the .photos-library marker is validated BEFORE the library-side lock is taken.
     Against a marker-less library_root, the run blocks (rc 2) and must NEVER have created the
