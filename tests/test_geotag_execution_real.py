@@ -20,6 +20,7 @@ EXIF but NOT the ImageMagick content fingerprint, so the post-write verify confi
 Skipped when the tools are absent (e.g. a bare local checkout). From conftest.py.
 """
 import json
+from _zone import answer_root_zone, with_root_zone
 import os
 import shutil
 import subprocess
@@ -107,6 +108,7 @@ def test_full_execute_with_real_tools(tmp_path, monkeypatch):
         cfg["camera_time_and_timezone_policy"], device_groups={"fixed_clock_cameras": [CAM], "phones": []},
         default_folder_timezone="Europe/Brussels", multi_anchor_auto_apply=True)
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
+    answer_root_zone(ctl)                        # the zone answered once at the root (§18)
     real_fp = utils.ContentHasher.fingerprint_image(FIXTURE)["value"]
 
     def rec(rel, dto, lat, lon):

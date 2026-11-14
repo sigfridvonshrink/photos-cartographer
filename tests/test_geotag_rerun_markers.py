@@ -20,6 +20,7 @@ Execution is simulated: each plan's writes are folded into the handoff the way a
 them back, so the re-run sees what the files hold. From conftest.py.
 """
 import json
+from _zone import answer_root_zone, with_root_zone
 import os
 import sys
 
@@ -74,6 +75,7 @@ def _ws(tmp_path, recs):
         cfg["camera_time_and_timezone_policy"], device_groups={"fixed_clock_cameras": [CAM], "phones": [PHONE]},
         default_folder_timezone="Europe/Brussels", multi_anchor_auto_apply=True)
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
+    answer_root_zone(ctl)                        # the zone answered once at the root (§18)
     _write_handoff(ws, [r(ws) for r in recs])
     return ws
 

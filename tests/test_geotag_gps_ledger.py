@@ -18,6 +18,7 @@ the photo is placed again from the tracks, or geotag's position is cleared. Ther
 and no store of its own. exiftool-write + fingerprint are mocked. From conftest.py.
 """
 import json
+from _zone import answer_root_zone, with_root_zone
 import os
 import sys
 from datetime import datetime, timezone
@@ -201,6 +202,7 @@ def _exec_ws(tmp_path, monkeypatch):
         cfg["camera_time_and_timezone_policy"], device_groups={"fixed_clock_cameras": [CAM], "phones": []},
         default_folder_timezone="Europe/Brussels", multi_anchor_auto_apply=True)
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
+    answer_root_zone(ctl)                        # the zone answered once at the root (§18)
 
     def rec(rel, dto, gps=None):
         parsed = {"DateTimeOriginal": dto, "selected_source_naive_timestamp": dto,

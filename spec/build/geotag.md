@@ -62,14 +62,14 @@ and whose `media_class` is `image` or `raw`; every operation of `photos-24-execu
 
 :::{bld} The auto-apply settings
 :id: BLD-auto_apply_settings
-:status: ruled
+:status: seed
 :realises: RUL-anchor_offset_auto_as_configured, RUL-timezone_auto_resolves, RUL-other_proposals_need_acceptance
 
 A GPX self-anchor offset SHALL be set as `effective_time_anchor` with `decision_mode: "auto_resolved"` when its
 anchors do not conflict and `camera_time_and_timezone_policy.multi_anchor_auto_apply` holds for two or more anchors,
-or `single_anchor_auto_apply` for one; a destination's inherited or `default_folder_timezone` proposal is set as its
-`effective_iana_timezone` likewise; a `timezone_naive` offset proposal and an `inherited` folder fallback become
-effective only with `accept_proposal: true`.
+or `single_anchor_auto_apply` for one; a destination's `inherited` timezone proposal is set as its
+`effective_iana_timezone` likewise, a `config_default` one never; a `timezone_naive` offset proposal and an `inherited`
+folder fallback become effective only with `accept_proposal: true`.
 :::
 
 ## 10. Per-destination structure
@@ -151,15 +151,15 @@ unknown groups, given no offset cell, and resolved as a phone's photo is, its ow
 
 :::{bld} The timezone cell
 :id: BLD-timezone_cell
-:status: ruled
-:realises: RUL-timezone_from_nearest, RUL-timezone_auto_resolves
+:status: seed
+:realises: RUL-timezone_from_nearest, RUL-timezone_auto_resolves, RUL-default_zone_proposed_only
 
 Each destination's `destination_timezone` in `photos-21-time-decisions.json` SHALL hold `proposed_iana_timezone` with
 its `proposal_source` — `inherited`, naming the ancestor in `inherited_from`, or `config_default`, or `none` —
 `user_decision.manual_iana_timezone`, `effective_iana_timezone`, `requires_user_input`, `stale_user_decision` and, when
 the proposal took effect without the user, `decision_mode: "auto_resolved"`. Destinations are built parent first, so
-each takes the `effective_iana_timezone` of its nearest ancestor that has one, `6-photos-by-dest` itself the first,
-from `default_folder_timezone`.
+each takes the `effective_iana_timezone` of its nearest ancestor that has one; one with none is offered
+`default_folder_timezone`, as `config_default`, which takes effect only once written as its `manual_iana_timezone`.
 :::
 
 

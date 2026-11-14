@@ -17,6 +17,7 @@ transformation log (prep carried forward + geotag steps), the DB snapshot, and t
 Non-destructive. exiftool-write + fingerprint mocked. From conftest.py.
 """
 import json
+from _zone import answer_root_zone, with_root_zone
 import os
 import sqlite3
 import sys
@@ -184,6 +185,7 @@ def _ready_ws(tmp_path, monkeypatch):
         cfg["camera_time_and_timezone_policy"], device_groups={"fixed_clock_cameras": [CAM], "phones": []},
         default_folder_timezone="Europe/Brussels", multi_anchor_auto_apply=True)
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
+    answer_root_zone(ctl)                        # the zone answered once at the root (§18)
     # a prep log to carry forward
     (ctl / "photos-15-prep-log.json").write_text(json.dumps({"schema_version": 1, "tool": "photos-1-prep",
         "photos": {"fp-" + f"{BYDEST}/T/a.arw": {"content_fingerprint": "fp-" + f"{BYDEST}/T/a.arw",

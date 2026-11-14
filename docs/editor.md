@@ -76,7 +76,8 @@ surfaced in the UI.
 
 A recursive tree of your destinations. For each one you settle two things:
 
-- **Timezone** — most destinations auto-resolve. A child with no timezone of its own shows a live
+- **Timezone** — answer each trip's zone once, on its folder: the configured default zone is offered with a
+  **use** button, never applied by itself, so a trip abroad is never named in home time. A child with no timezone of its own shows a live
   preview of the value it would **inherit** from its nearest resolved ancestor, badged
   `inherited ⟵ <ancestor>`; the badge updates as you edit ancestors. A proposal applies itself; to
   override it, pick an IANA zone from the dropdown. A manual zone you set **re-roots

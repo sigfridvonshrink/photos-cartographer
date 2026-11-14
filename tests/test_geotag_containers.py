@@ -91,19 +91,26 @@ def test_containers_never_block(tmp_path):
 
 # --- auto-resolve + propagation ----------------------------------------------
 
-@pytest.mark.spec("RUL-timezone_from_nearest")
-def test_container_timezone_autoresolves_from_default(tmp_path):
+@pytest.mark.spec("RUL-timezone_from_nearest", "RUL-default_zone_proposed_only", "BLD-timezone_cell",
+                  test="TST-geotag_containers-the_default_zone_is_proposed_and_an_answer_cascades")
+def test_the_default_zone_is_proposed_and_an_answer_cascades(tmp_path):
+    # The configured default is the user's usual zone, true of no trip in particular: it is proposed, never applied —
+    # a trip folder is no exception, a container asks nothing; once answered at the trip, everything beneath
+    # inherits it without asking.
     utils.CONFIG["camera_time_and_timezone_policy"]["default_folder_timezone"] = "Europe/Brussels"
     wf = _wf(tmp_path)
     files = [_tfile(f"{BYDEST}/Trip/Day1/a.arw", f"{BYDEST}/Trip/Day1")]
     art, _ = wf.build_time_decisions(files, GROUPS, None, _gpx())
     trip = art["destinations"][f"{BYDEST}/Trip"]["destination_timezone"]
-    assert trip["effective_iana_timezone"] == "Europe/Brussels"
-    assert trip["decision_mode"] == "auto_resolved" and trip["requires_user_input"] is False
-    # the real leaf auto-inherits too (nested geography): adopts Trip's zone, no confirmation demanded
+    assert trip["proposal_source"] == "config_default" and trip["effective_iana_timezone"] == ""
+    assert trip["requires_user_input"] is False                           # a container asks nothing
     leaf = art["destinations"][f"{BYDEST}/Trip/Day1"]["destination_timezone"]
-    assert leaf["effective_iana_timezone"] == "Europe/Brussels"
-    assert leaf["proposal_source"] == "inherited" and leaf["decision_mode"] == "auto_resolved"
+    assert leaf["proposal_source"] == "config_default" and leaf["requires_user_input"] is True
+    prior = {"destinations": {f"{BYDEST}/Trip": {"destination_timezone":
+             {"user_decision": {"manual_iana_timezone": "Asia/Tokyo"}}}}}
+    art, _ = wf.build_time_decisions(files, GROUPS, prior, _gpx())
+    leaf = art["destinations"][f"{BYDEST}/Trip/Day1"]["destination_timezone"]
+    assert leaf["effective_iana_timezone"] == "Asia/Tokyo" and leaf["decision_mode"] == "auto_resolved"
     assert leaf["requires_user_input"] is False
 
 
@@ -111,7 +118,7 @@ def test_container_timezone_autoresolves_from_default(tmp_path):
                   test="TST-geotag_containers-manual_timezone_reroots_the_chain")
 def test_manual_timezone_reroots_the_chain(tmp_path):
     # A zone set by hand on a trip's folder becomes what every destination beneath it inherits — over the
-    # configured default — while a destination outside that trip keeps the default.
+    # configured default — while a destination outside that trip is offered the default, and asks.
     utils.CONFIG["camera_time_and_timezone_policy"]["default_folder_timezone"] = "Europe/Brussels"
     wf = _wf(tmp_path)
     files = [_tfile(f"{BYDEST}/Japan/Kyoto/a.arw", f"{BYDEST}/Japan/Kyoto"),
@@ -126,8 +133,8 @@ def test_manual_timezone_reroots_the_chain(tmp_path):
     assert kyoto["effective_iana_timezone"] == "Asia/Tokyo"
     assert kyoto["proposal_source"] == "inherited" and kyoto["inherited_from"] == f"{BYDEST}/Japan"
     home = art["destinations"][f"{BYDEST}/Home"]["destination_timezone"]
-    assert home["effective_iana_timezone"] == "Europe/Brussels" and home["proposal_source"] == "inherited"
-    assert home["inherited_from"] == BYDEST                               # the root took the default
+    assert home["proposed_iana_timezone"] == "Europe/Brussels" and home["proposal_source"] == "config_default"
+    assert home["effective_iana_timezone"] == "" and home["requires_user_input"] is True
 
 
 @pytest.mark.spec("RUL-moved_photo_decided_anew", test="TST-geotag_containers-moved_photo_takes_its_new_destinations_offset")

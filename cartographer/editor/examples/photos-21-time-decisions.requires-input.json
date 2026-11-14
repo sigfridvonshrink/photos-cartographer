@@ -40,7 +40,6 @@
       ],
       "destination_path": "6-photos-by-dest",
       "destination_timezone": {
-        "decision_mode": "auto_resolved",
         "effective_iana_timezone": "Europe/Brussels",
         "proposal_confidence": "high",
         "proposal_source": "config_default",
@@ -48,7 +47,7 @@
         "requires_user_input": false,
         "stale_user_decision": false,
         "user_decision": {
-          "manual_iana_timezone": ""
+          "manual_iana_timezone": "Europe/Brussels"
         }
       }
     },

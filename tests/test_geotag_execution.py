@@ -17,6 +17,7 @@ fingerprints, journal/resume, write photos-24. exiftool + fingerprint are mocked
 all external tools), so the executor logic is driven deterministically. From conftest.py.
 """
 import json
+from _zone import answer_root_zone, with_root_zone
 import os
 import shutil
 import sys
@@ -55,6 +56,7 @@ def _ready_ws(tmp_path, monkeypatch, *, zfs=None):
     if zfs is not None:
         cfg["zfs"] = zfs
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
+    answer_root_zone(ctl)                        # the zone answered once at the root (§18)
 
     def rec(rel, dto, lat, lon):
         parsed = {"DateTimeOriginal": dto, "selected_source_naive_timestamp": dto,

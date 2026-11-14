@@ -18,6 +18,7 @@ offset, smartphone native offset, destination-timezone fallback (DST-correct), a
 branches; plus the SQLite cache round-trip and the deterministic fingerprint. From conftest.py.
 """
 import json
+from _zone import answer_root_zone, with_root_zone
 from _handoff import match_disk
 import re
 import sqlite3
@@ -279,6 +280,7 @@ def test_run_populates_cache_when_complete(tmp_path, monkeypatch, capsys):
         cfg["camera_time_and_timezone_policy"], device_groups={"fixed_clock_cameras": [CAM], "phones": []},
         default_folder_timezone="Europe/Brussels", multi_anchor_auto_apply=True)
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
+    answer_root_zone(ctl)                        # the zone answered once at the root (§18)
 
     def rec(rel, lat, lon, dto):
         parsed = {"DateTimeOriginal": dto, "selected_source_naive_timestamp": dto,
@@ -357,6 +359,7 @@ def test_unrelated_config_edit_replans_but_does_not_restale_resolved_utc(tmp_pat
         default_folder_timezone="Europe/Brussels", multi_anchor_auto_apply=True)
     config_path = ctl / "photos-00-config.json"
     config_path.write_text(json.dumps(cfg))
+    answer_root_zone(ctl)                        # the zone answered once at the root (§18)
 
     def rec(rel, lat, lon, dto):
         parsed = {"DateTimeOriginal": dto, "selected_source_naive_timestamp": dto,

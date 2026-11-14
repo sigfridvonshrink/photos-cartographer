@@ -98,16 +98,27 @@ A clock offset proposed from a camera's own GPS positions SHALL take effect with
 configuration's settings for one anchor and for several allow, and never while its anchors disagree.
 :::
 
-:::{rul} A destination's timezone applies itself
+:::{rul} An inherited timezone applies itself
 :id: RUL-timezone_auto_resolves
-:status: ruled
+:status: seed
 :criticality: med
 :verify: required
 :uses: DEF-geotag, DEF-decision
 
-A destination's proposed timezone — inherited from the destination it lies in, or the configured default — SHALL take
-effect without the user's answer, a timezone the user writes overriding it; a destination with no proposal waits for the
-user.
+A timezone a destination inherits from the destination it lies in SHALL take effect without the user's answer, a
+timezone the user writes overriding it; a destination with none to inherit waits for the user.
+:::
+
+:::{rul} The configured default zone is offered, never applied
+:id: RUL-default_zone_proposed_only
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-timezone_auto_resolves
+
+The configured default timezone SHALL be offered to a destination with no zone to inherit, never applied without the
+user's answer.
 :::
 
 :::{rul} Every other proposal waits for the user's acceptance

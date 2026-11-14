@@ -22,6 +22,7 @@ each (a zero-scrub "the offset was right" must be actively set — inaction neve
 The validated/corrected offset lives in 22; compute_resolved_utc re-consumes it. From conftest.py.
 """
 import json
+from _zone import answer_root_zone, with_root_zone
 import os
 import sys
 from datetime import datetime, timezone
@@ -62,8 +63,8 @@ def _file(rel, naive, *, gps=None):
 
 
 def _prior_time(cells):
-    """A photos-21 prior carrying per-bucket offset decisions (the destination's timezone applies itself)."""
-    return {"destinations": {DEST: {"camera_group_time_decisions": cells}}}
+    """A photos-21 prior carrying per-bucket offset decisions, the zone answered at the root."""
+    return with_root_zone({"destinations": {DEST: {"camera_group_time_decisions": cells}}})
 
 
 def _complete_time(wf, files, gpx, cells):
@@ -296,6 +297,7 @@ def _e2e_ws(tmp_path):
         cfg["camera_time_and_timezone_policy"], device_groups={"fixed_clock_cameras": [CAM], "phones": []},
         default_folder_timezone="Europe/Brussels")
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
+    answer_root_zone(ctl)                        # the zone answered once at the root (§18)
 
     def rec(rel, dto):
         parsed = {"DateTimeOriginal": dto, "selected_source_naive_timestamp": dto,
