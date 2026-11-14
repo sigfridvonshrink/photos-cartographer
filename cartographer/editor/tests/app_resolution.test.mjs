@@ -37,7 +37,11 @@ test("wouldResolve: each of the two offset modes is independently sufficient", (
     { time: { destinations: { [dest]: { camera_group_time_decisions: { [key]: { user_decision: ud, proposal } } } } } });
 
   mk({ manual_offset_seconds: -3600 });                                         assert.equal(app.wouldResolve(ref), true);
-  mk({ accept_proposal: true }, { proposed_offset_seconds: -3600 });            assert.equal(app.wouldResolve(ref), true);
+  mk({ accept_proposal: true, accepted_offset_seconds: -3600 }, { proposed_offset_seconds: -3600 }); assert.equal(app.wouldResolve(ref), true);
+  mk({ accept_proposal: true }, { proposed_offset_seconds: -3600 });            assert.equal(app.wouldResolve(ref), false);  // names no offset: accepts nothing
+  mk({ accept_proposal: true, accepted_offset_seconds: -3600 }, { proposed_offset_seconds: -7200 }); assert.equal(app.wouldResolve(ref), false);  // accepted another proposal
+  mk({ accept_proposal: true, accepted_offset_seconds: -3600 }, { proposed_offset_seconds: -3590, proposal_source: "gpx_self_anchor", agreement_spread_seconds: 120 });
+  assert.equal(app.wouldResolve(ref), true);                                     // a GPS proposal within its own spread is the one accepted
   mk({ accept_proposal: true }, {});                                            assert.equal(app.wouldResolve(ref), false);  // nothing to accept
   mk({ manual_offset_seconds: 999999 });                                        assert.equal(app.wouldResolve(ref), true);   // any size
   mk({ manual_offset_seconds: 1.5 });                                           assert.equal(app.wouldResolve(ref), false);  // not whole seconds

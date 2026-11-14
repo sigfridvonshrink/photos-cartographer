@@ -110,11 +110,40 @@ def test_resolved_utc_picks_the_files_own_date_bucket(tmp_path):
     files = [_file(f"{BYDEST}/D/a.arw", f"{BYDEST}/D", "2024:07:03 14:00:00"),
              _file(f"{BYDEST}/D/b.arw", f"{BYDEST}/D", "2024:01:03 14:00:00")]
     # accept both per-day proposals so each bucket resolves to its tz-derived offset
-    prior = _prior({f"{CAM}@2024-07-03": {"user_decision": {"accept_proposal": True}},
-                    f"{CAM}@2024-01-03": {"user_decision": {"accept_proposal": True}}})
+    prior = _prior({f"{CAM}@2024-07-03": {"user_decision": {"accept_proposal": True, "accepted_offset_seconds": -7200}},
+                    f"{CAM}@2024-01-03": {"user_decision": {"accept_proposal": True, "accepted_offset_seconds": -3600}}})
     art, _ = wf.build_time_decisions(files, GROUPS, prior, _gpx())
     rows = {r["relative_path"]: r for r in cal.compute_resolved_utc(files, GROUPS, art)}
     assert rows[f"{BYDEST}/D/a.arw"]["utc_offset_used"] == -7200  # summer file uses summer bucket
     assert rows[f"{BYDEST}/D/a.arw"]["resolved_utc"] == "2024-07-03T12:00:00Z"
     assert rows[f"{BYDEST}/D/b.arw"]["utc_offset_used"] == -3600  # winter file uses winter bucket
     assert rows[f"{BYDEST}/D/b.arw"]["resolved_utc"] == "2024-01-03T13:00:00Z"
+
+
+@pytest.mark.spec("RUL-answer_follows_its_day", "RUL-day_offset_kept_for_later_photos", "BLD-offset_buckets",
+                  test="TST-geotag_per_date-an_answer_follows_its_day_when_another_day_arrives")
+def test_an_answer_follows_its_day_when_another_day_arrives(tmp_path):
+    """A camera's only day in a destination is answered; then a photo of the next day arrives there, and the
+    cells become one per day. The first day's answer is still its answer — and the drift confirmation beside
+    it — and only the new day asks. Back to one day, the answer follows again."""
+    _tz()
+    wf = _wf(tmp_path)
+    one = [_file(f"{BYDEST}/D/a.arw", f"{BYDEST}/D", "2024:07:03 14:00:00")]
+    art, _ = wf.build_time_decisions(one, GROUPS, _prior({CAM: {"user_decision": {"manual_offset_seconds": -7000}}}), _gpx())
+    cell = art["destinations"][f"{BYDEST}/D"]["camera_group_time_decisions"][CAM]
+    assert cell["day"] == "2024-07-03" and "date" not in cell
+    two = one + [_file(f"{BYDEST}/D/b.arw", f"{BYDEST}/D", "2024:07:04 09:00:00")]
+    art2, _ = wf.build_time_decisions(two, GROUPS, art, _gpx())
+    cells = art2["destinations"][f"{BYDEST}/D"]["camera_group_time_decisions"]
+    assert cells[f"{CAM}@2024-07-03"]["effective_time_anchor"] == {"offset_seconds": -7000, "source": "manual"}
+    assert cells[f"{CAM}@2024-07-04"]["requires_user_input"] is True              # only the new day asks
+    art3, _ = wf.build_time_decisions(one, GROUPS, art2, _gpx())                   # the second day moved away
+    assert art3["destinations"][f"{BYDEST}/D"]["camera_group_time_decisions"][CAM]["effective_time_anchor"]["offset_seconds"] == -7000
+    # an answer for ANOTHER day under the bare key is not this day's
+    other = [_file(f"{BYDEST}/D/c.arw", f"{BYDEST}/D", "2024:08:01 14:00:00"),
+             _file(f"{BYDEST}/D/d.arw", f"{BYDEST}/D", "2024:08:02 14:00:00")]
+    art4, _ = wf.build_time_decisions(other, GROUPS, art, _gpx())
+    assert all(c["requires_user_input"] for c in art4["destinations"][f"{BYDEST}/D"]["camera_group_time_decisions"].values())
+    # the drift confirmation follows its day the same way
+    assert cal._prior_day_cell({CAM: {"day": "2024-07-03", "x": 1}}, CAM, f"{CAM}@2024-07-03", "2024-07-03") == {"day": "2024-07-03", "x": 1}
+    assert cal._prior_day_cell({CAM: {"day": "2024-07-03"}}, CAM, f"{CAM}@2024-07-04", "2024-07-04") == {}

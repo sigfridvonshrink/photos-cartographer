@@ -93,11 +93,20 @@ def _ready_ws(tmp_path, monkeypatch, *, zfs=None):
 
 
 def _mock_tools(monkeypatch, ws, *, write_ok=True, content_changed=False):
-    monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write",
-                        lambda self, p, tags: write_ok)
+    """Stand-ins for exiftool and the image fingerprint that behave as the real ones do across a rename: a
+    photo keeps its fingerprint and the tags written to it whatever its name becomes (kept by inode)."""
+    first_name, held = {}, {}
+
+    def write(self, p, tags):
+        if write_ok:
+            held.setdefault(os.stat(p).st_ino, {}).update(tags)
+        return write_ok
+    monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", write)
+    monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_read",
+                        lambda self, p, keys: {k: v for k, v in held.get(os.stat(p).st_ino, {}).items() if k in keys})
 
     def fp(path):
-        rel = os.path.relpath(path, str(ws))
+        rel = first_name.setdefault(os.stat(path).st_ino, os.path.relpath(path, str(ws)))
         return {"status": "valid", "value": ("CHANGED" if content_changed else "fp-" + rel)}
     monkeypatch.setattr(cal.ContentHasher, "fingerprint_image", staticmethod(fp))
 
@@ -378,15 +387,15 @@ def test_apply_file_precondition_and_resume_branches(tmp_path, monkeypatch):
     p = tmp_path / "f.arw"; p.write_bytes(b"data")
     monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", lambda self, path, t: True)
     # already confirmed -> skipped (no stat, no write)
-    r = wf._apply_file("f.arw", [_op("oC", "metadata_time_write", "f.arw")], {"oC": "confirmed"}, set())
+    r = wf._apply_file("f.arw", [_op("oC", "metadata_time_write", "f.arw")], {"oC": "confirmed"}, {})
     assert r["skipped"] == ["oC"]
     # missing file (no rename) -> blocker
-    r = wf._apply_file("gone.arw", [_op("o", "metadata_time_write", "gone.arw")], {}, set())
+    r = wf._apply_file("gone.arw", [_op("o", "metadata_time_write", "gone.arw")], {}, {})
     assert "missing at execute time" in r["blocker"]
     # size/mtime changed AND the content fingerprint differs -> external change -> blocker
     monkeypatch.setattr(cal.ContentHasher, "fingerprint_image", staticmethod(lambda path: {"value": "OTHER"}))
     r = wf._apply_file("f.arw", [_op("o", "metadata_time_write", "f.arw",
-                       pre={"size": 999, "content_fingerprint": "FP"})], {}, set())
+                       pre={"size": 999, "content_fingerprint": "FP"})], {}, {})
     assert "content fingerprint differs" in r["blocker"]
     # size/mtime changed BUT the content fingerprint still matches, and the file holds the planned values ->
     # geotag's own interrupted write: counted applied, written nothing again
@@ -396,7 +405,7 @@ def test_apply_file_precondition_and_resume_branches(tmp_path, monkeypatch):
     monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_read", lambda self, path, keys: {"DateTimeOriginal": "x"})
     r = wf._apply_file("f.arw", [_op("o", "metadata_time_write", "f.arw",
                        pre={"size": 999, "mtime_ns": 1, "content_fingerprint": "FP"},
-                       writes={"DateTimeOriginal": "x"})], {}, set())
+                       writes={"DateTimeOriginal": "x"})], {}, {})
     assert r["blocker"] is None and r["applied"] == ["o"] and written == []
 
 
@@ -416,10 +425,10 @@ def test_an_edit_made_since_the_plan_is_never_overwritten(tmp_path, monkeypatch)
                         lambda self, path, keys: {"DateTimeOriginal": "2024:07:03 09:00:00"})
     pre = {"size": 999, "mtime_ns": 1, "content_fingerprint": "FP"}
     r = wf._apply_file("f.arw", [_op("o", "metadata_time_write", "f.arw", pre=pre,
-                       writes={"DateTimeOriginal": "2024:07:03 14:25:00"})], {}, set())
+                       writes={"DateTimeOriginal": "2024:07:03 14:25:00"})], {}, {})
     assert "changed since the plan" in r["blocker"] and r["applied"] == [] and written == []
     ren = _op("oR", "rename_no_clobber", "f.arw", pre=pre, **{"from": "f.arw", "to": "g.arw"})
-    r = wf._apply_file("f.arw", [ren], {}, set())
+    r = wf._apply_file("f.arw", [ren], {}, {})
     assert "changed since the plan" in r["blocker"] and (tmp_path / "f.arw").exists()
     # the comparison: a coordinate by magnitude (its sign is in the reference tag), a cleared tag absent
     assert cal._holds_writes({"GPSLatitude": 33.865143, "GPSLatitudeRef": "S"},
@@ -433,11 +442,11 @@ def test_apply_file_rename_skip_and_failure(tmp_path, monkeypatch):
     p = tmp_path / "a.arw"; p.write_bytes(b"x")
     ren = _op("oR", "rename_no_clobber", "a.arw", **{"from": "a.arw", "to": "b.arw"})
     # rename already confirmed -> skipped (file not moved)
-    r = wf._apply_file("a.arw", [ren], {"oR": "confirmed"}, set())
+    r = wf._apply_file("a.arw", [ren], {"oR": "confirmed"}, {})
     assert r["applied"] == [] and (tmp_path / "a.arw").exists()
     # _move_no_clobber raises -> failure recorded
     monkeypatch.setattr(cal, "_move_no_clobber", lambda s, d: (_ for _ in ()).throw(OSError("xdev")))
-    r = wf._apply_file("a.arw", [ren], {}, set())
+    r = wf._apply_file("a.arw", [ren], {}, {})
     assert r["failed"] == ["oR"] and "rename failed" in r["blocker"]
 
 
@@ -498,17 +507,29 @@ def test_rename_target_occupied_at_execute_blocks(tmp_path, monkeypatch):
 
 
 @pytest.mark.spec("RUL-geotag_execution_resumable")
-def test_apply_file_already_renamed_resumes_without_journal(tmp_path):
+def test_apply_file_already_renamed_resumes_without_journal(tmp_path, monkeypatch):
     """A crashed prior run that already renamed the file (source gone, planned target present) is
-    detected by state and skipped on resume — even with an empty/lost journal — rather than blocking
-    on the missing source (§29.1.3)."""
+    detected by state on resume — even with an empty/lost journal — rather than blocking on the missing
+    source (§29.1.3): once the target is seen to be that photo holding the planned values, its operations
+    are recorded as done (never redone), so the run that applied them is in the journal after all. A file
+    merely of the target's name is not taken for the photo."""
     wf = cal.GeotagWorkflow(str(tmp_path))
     (tmp_path / "b.arw").write_bytes(b"x")                            # already at its planned target
     ops = [_op("oM", "metadata_time_write", "a.arw", pre={"content_fingerprint": "fp"},
                writes={"DateTimeOriginal": "x"}),
            _op("oR", "rename_no_clobber", "a.arw", **{"from": "a.arw", "to": "b.arw"})]
-    r = wf._apply_file("a.arw", ops, {}, set())                       # journal empty, source gone
-    assert r["skipped"] == ["oM", "oR"] and not r["applied"]
+    monkeypatch.setattr(cal.ContentHasher, "fingerprint_image", staticmethod(lambda path: {"value": "fp"}))
+    monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_read", lambda self, path, keys: {"DateTimeOriginal": "x"})
+    r = wf._apply_file("a.arw", ops, {}, {})                          # journal empty, source gone
+    assert r["skipped"] == ["oM", "oR"] == r["found"] and not r["applied"] and r["blocker"] is None
+    assert r["after"]["relative_path"] == "b.arw"
+    monkeypatch.setattr(cal.ContentHasher, "fingerprint_image", staticmethod(lambda path: {"value": "another"}))
+    r = wf._apply_file("a.arw", ops, {}, {})                          # another photo under that name
+    assert "is not this photo as planned" in r["blocker"] and not r.get("found")
+    monkeypatch.setattr(cal.ContentHasher, "fingerprint_image", staticmethod(lambda path: {"value": "fp"}))
+    monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_read", lambda self, path, keys: {"DateTimeOriginal": "other"})
+    r = wf._apply_file("a.arw", ops, {}, {})                          # the photo, not holding what was planned
+    assert "is not this photo as planned" in r["blocker"]
 
 
 def test_corrupt_prior_summary_ignored(tmp_path, monkeypatch):
@@ -728,3 +749,107 @@ def test_every_write_traces_back_to_its_decision(tmp_path, monkeypatch):
         dest = os.path.dirname(ops[oid]["relative_path"])
         tz = times["destinations"][dest]["destination_timezone"]
         assert tz["effective_iana_timezone"]
+
+
+# --- what an interrupted or troubled run leaves on the record (§29.1a) -------------------------------
+
+@pytest.mark.spec("RUL-one_photo_failure_contained", "RUL-every_change_journaled", "BLD-geotag_execution",
+                  test="TST-geotag_execution-one_photo_s_failure_is_its_own")
+def test_one_photo_s_failure_is_its_own(tmp_path, monkeypatch):
+    """Applying one photo raises (the image engine cannot be started, a disk error): that photo fails, by name —
+    and every other photo's result is still journalled and summarised, never applied behind a run that has
+    already fallen over."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _mock_tools(monkeypatch, ws)
+    real = cal.GeotagWorkflow._apply_file
+
+    def flaky(self, rel, ops, journal, accepted):
+        if rel.endswith("a.arw"):
+            raise OSError(24, "Too many open files")
+        return real(self, rel, ops, journal, accepted)
+    monkeypatch.setattr(cal.GeotagWorkflow, "_apply_file", flaky)
+    assert _execute(monkeypatch, ws) == 3
+    s = _summary(ctl)
+    assert s["status"] == "partial" and len(s["blockers"]) == 1
+    assert "a.arw: could not be applied (OSError" in s["blockers"][0]
+    plan = json.load(open(ctl / "photos-24-executable-plan.json"))
+    journal = json.load(open(utils.journal_path(str(ws), plan["plan_id"])))
+    b_ops = [o["operation_id"] for o in plan["destinations"]["6-photos-by-dest/T"]["operations"]
+             if o["relative_path"].endswith("b.arw")]
+    assert b_ops and all(journal["operations"].get(o) == "confirmed" for o in b_ops)     # the other photo: recorded
+    monkeypatch.setattr(cal.GeotagWorkflow, "_apply_file", real)
+    assert _execute(monkeypatch, ws) == 0 and _summary(ctl)["status"] == "success"       # and the rest follows
+
+
+@pytest.mark.spec("RUL-applied_unrecorded_is_recorded", "RUL-every_change_journaled", "RUL-geotag_execution_resumable",
+                  "BLD-geotag_execution", test="TST-geotag_execution-what_a_killed_run_applied_is_recorded_by_the_next")
+def test_what_a_killed_run_applied_is_recorded_by_the_next(tmp_path, monkeypatch):
+    """A run killed after applying photos and before recording them: the next run finds each at its planned name
+    holding the planned values, redoes nothing, and records its operations — so the journal names every change
+    made, and a later log has the pass. It also records each photo as the run left it."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _mock_tools(monkeypatch, ws)
+    assert _execute(monkeypatch, ws) == 0
+    plan = json.load(open(ctl / "photos-24-executable-plan.json"))
+    jpath = utils.journal_path(str(ws), plan["plan_id"])
+    os.remove(jpath)                                                  # killed before the journal reached the disk
+    assert _execute(monkeypatch, ws) == 0
+    s, journal = _summary(ctl), json.load(open(jpath))
+    assert s["status"] == "success" and s["resume"]["newly_applied"] == 0
+    all_ops = [o["operation_id"] for d in plan["destinations"].values() for o in d["operations"]]
+    assert all(journal["operations"].get(o) == "confirmed" for o in all_ops)
+    after = journal["media_after"]
+    assert len(after) == 2 and all(os.stat(ws / rel).st_size == v["size"] for rel, v in after.items())
+    assert not any(rel.endswith(("a.arw", "b.arw")) for rel in after)                    # under their new names
+
+
+@pytest.mark.spec("RUL-content_acceptance_is_of_that_content", "RUL-content_changed_write_held", "BLD-execution_summary",
+                  test="TST-geotag_execution-an_acceptance_is_of_the_content_shown")
+def test_an_acceptance_of_changed_content_is_of_the_content_shown(tmp_path, monkeypatch):
+    """A changed picture is accepted as the fingerprint that was reported, under the plan that reported it: it
+    stays there to be accepted through a run that finds the photo still held, and is no acceptance of another
+    content, nor under another plan."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    plan = json.load(open(ctl / "photos-24-executable-plan.json"))
+    wf = cal.GeotagWorkflow(str(ws))
+    mism = {"relative_path": "6-photos-by-dest/T/a.arw", "expected_fingerprint": "X", "actual_fingerprint": "CHANGED-1",
+            "user_decision": {"accept_fingerprint_change": True}}
+    (ctl / "photos-25-execution-summary.json").write_text(json.dumps(
+        {"plan_id": plan["plan_id"], "fingerprint_mismatches": [mism]}))
+    assert wf._accepted_mismatches(str(ws), plan["plan_id"]) == {"6-photos-by-dest/T/a.arw": "CHANGED-1"}
+    assert wf._accepted_mismatches(str(ws), "another-plan") == {}                        # not that plan's to act on
+    # the photo holds another content than the one accepted: still held
+    (ws / "6-photos-by-dest/T/a.arw").write_bytes(b"edited since")
+    monkeypatch.setattr(cal.ContentHasher, "fingerprint_image", staticmethod(lambda p: {"value": "CHANGED-2"}))
+    ops = [o for o in plan["destinations"]["6-photos-by-dest/T"]["operations"] if o["relative_path"].endswith("a.arw")]
+    r = wf._apply_file("6-photos-by-dest/T/a.arw", ops, {}, wf._accepted_mismatches(str(ws), plan["plan_id"]))
+    assert "content fingerprint differs" in r["blocker"]
+    # a run that only finds the photo still held keeps the mismatch, and the answer, on the record
+    pending = dict(mism, user_decision={"accept_fingerprint_change": False})
+    s = wf._build_summary(plan, [dict(r, relative_path="6-photos-by-dest/T/a.arw")], "now", "x", 1, [pending])
+    assert s["fingerprint_mismatches"] == [pending] and s["status"] == "partial"
+    # a fingerprint that cannot be taken confirms no write
+    monkeypatch.setattr(cal.ContentHasher, "fingerprint_image", staticmethod(lambda p: None))
+    monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", lambda self, p, t: True)
+    (ws / "6-photos-by-dest/T/b.arw").write_bytes(b"img-6-photos-by-dest/T/b.arw")
+    ops_b = [o for o in plan["destinations"]["6-photos-by-dest/T"]["operations"] if o["relative_path"].endswith("b.arw")]
+    r = wf._apply_file("6-photos-by-dest/T/b.arw", ops_b, {}, {})
+    assert not r["applied"] and (r["mismatch"] or r["blocker"])
+
+
+@pytest.mark.spec("RUL-engine_checked_before_writes", "BLD-geotag_dependencies",
+                  test="TST-geotag_execution-another_image_engine_stops_execute_before_any_write")
+def test_another_image_engine_stops_execute_before_any_write(tmp_path, monkeypatch):
+    """Every write is checked by taking the photo's fingerprint again. With another image engine than the one
+    prep took the fingerprints with, each would come out different: execute stops before writing anything."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    plan = json.load(open(ctl / "photos-24-executable-plan.json"))
+    wf = cal.GeotagWorkflow(str(ws))
+    gpx = cal.GPXIndex(cal.selected_gpx_root()).build()
+    monkeypatch.setattr(cal, "get_imagemagick_version", lambda: "IM-7.1.2")
+    ho = json.load(open(ctl / "photos-11-handoff.json"))
+    ho["depends_on"] = {"cache": {"image_engine_version": "IM-7.1.2"}}
+    (ctl / "photos-11-handoff.json").write_text(json.dumps(ho))
+    assert not [s for s in wf.revalidate_plan(plan, gpx) if "image engine" in s]
+    monkeypatch.setattr(cal, "get_imagemagick_version", lambda: "IM-7.1.3")
+    assert [s for s in wf.revalidate_plan(plan, gpx) if "image engine changed" in s]

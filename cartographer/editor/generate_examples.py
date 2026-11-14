@@ -46,6 +46,15 @@ BD = "6-photos-by-dest"
 written = []
 
 
+def _accept(cell, offset=None):
+    """Accept an offset cell's proposal as the editor does: the acceptance names the offset it accepts.
+    `offset` stands for a proposal made on a plan between two steps a scenario folds into one (the zone
+    set, then the offset it yields accepted)."""
+    cell["user_decision"].update(
+        accept_proposal=True,
+        accepted_offset_seconds=cell["proposal"]["proposed_offset_seconds"] if offset is None else offset)
+
+
 def _utc(h, m, s=0):
     return datetime(2024, 7, 3, h, m, s, tzinfo=timezone.utc)
 
@@ -170,9 +179,9 @@ def scenario_trip():
         d[JP]["destination_timezone"]["user_decision"]["manual_iana_timezone"] = "Asia/Tokyo"
         d[BD]["camera_group_time_decisions"][CAM_B]["user_decision"]["manual_offset_seconds"] = 0
         d[BE]["camera_group_time_decisions"][CAM_B]["user_decision"]["manual_offset_seconds"] = 3600  # manual override
-        d[BR]["camera_group_time_decisions"][CAM_B]["user_decision"]["accept_proposal"] = True  # accept tz-derived
+        _accept(d[BR]["camera_group_time_decisions"][CAM_B])  # accept tz-derived
         for dt in ("2024-07-03", "2024-07-04", "2024-12-22"):                      # accept each per-date bucket
-            d[BRU]["camera_group_time_decisions"][f"{CAM_A}@{dt}"]["user_decision"]["accept_proposal"] = True
+            _accept(d[BRU]["camera_group_time_decisions"][f"{CAM_A}@{dt}"])
         return a
 
     def pre_time(a):
@@ -232,9 +241,10 @@ def scenario_offset_variants():
     _set_policy(device_groups={"fixed_clock_cameras": [CAM_PT, CAM_SEG, CAM_CONF, CAM_REV], "phones": []},
                 default_folder_timezone="Europe/Brussels")
     gpx = _gpx([
-        _pt(52.0, 6.0, _utc(12, 0, 0)),                                  # SinglePoint anchor
-        _pt(53.0, 7.0, _utc(12, 0, 0)), _pt(53.0, 7.003, _utc(12, 0, 30)),  # Segment (~200 m, 30 s apart)
-        _pt(54.0, 8.0, _utc(12, 0, 0)), _pt(55.0, 9.0, _utc(9, 0, 0)),    # Conflict (offsets disagree)
+        # each camera's region is a track file of its own: one device is in one place at a time
+        _pt(52.0, 6.0, _utc(12, 0, 0), "single.gpx"),                    # SinglePoint anchor
+        _pt(53.0, 7.0, _utc(12, 0, 0), "segment.gpx"), _pt(53.0, 7.003, _utc(12, 0, 30), "segment.gpx"),  # ~200 m, 30 s apart
+        _pt(54.0, 8.0, _utc(12, 0, 0), "conflict-a.gpx"), _pt(55.0, 9.0, _utc(9, 0, 0), "conflict-b.gpx"),  # offsets disagree
         _pt(56.0, 10.0, _utc(12, 0, 0), "trip-2024-07-03.gpx"),          # Revisit: the spot on 3 July ...
         _pt(56.0, 10.0, datetime(2024, 7, 4, 12, 0, tzinfo=timezone.utc), "trip-2024-07-04.gpx"),  # ... and 4 July
     ])
@@ -250,8 +260,8 @@ def scenario_offset_variants():
 
     def fill(a):
         d = a["destinations"]
-        d[P]["camera_group_time_decisions"][CAM_PT]["user_decision"]["accept_proposal"] = True     # gpx_anchor_accepted (single)
-        d[S]["camera_group_time_decisions"][CAM_SEG]["user_decision"]["accept_proposal"] = True     # gpx_anchor_accepted (medium)
+        _accept(d[P]["camera_group_time_decisions"][CAM_PT])     # gpx_anchor_accepted (single)
+        _accept(d[S]["camera_group_time_decisions"][CAM_SEG])     # gpx_anchor_accepted (medium)
         _root_zone(a)
         d[C]["camera_group_time_decisions"][CAM_CONF]["user_decision"]["manual_offset_seconds"] = -7200  # resolve a conflict manually
         # Revisit: a tie between two days' tracks; the user picks the other day's group -> gpx_anchor_chosen
@@ -296,7 +306,8 @@ def scenario_stale_decision():
     prior = _copy(base)
     dest = f"{BD}/Stale"
     # The operator had previously accepted an offset proposal that is now gone.
-    prior["destinations"][dest]["camera_group_time_decisions"][CAM_B]["user_decision"]["accept_proposal"] = True
+    prior["destinations"][dest]["camera_group_time_decisions"][CAM_B]["user_decision"].update(
+        accept_proposal=True, accepted_offset_seconds=-7200)
     art, blk = wf.build_time_decisions(files, groups, prior, _gpx([]))
     assert not blk, blk
     cell = art["destinations"][dest]["camera_group_time_decisions"][CAM_B]
@@ -324,7 +335,7 @@ def scenario_drift_validation():
     def fill_time(a):
         d = a["destinations"]
         _root_zone(a)
-        d[DR]["camera_group_time_decisions"][CAM_DR]["user_decision"]["accept_proposal"] = True  # tz-derived
+        _accept(d[DR]["camera_group_time_decisions"][CAM_DR], -7200)  # tz-derived
         return a
 
     wf = _wf()

@@ -19,6 +19,7 @@
         "NIKON|D750|B": {
           "camera_group": "NIKON|D750|B",
           "camera_group_class": "camera",
+          "day": "2024-07-03",
           "effective_time_anchor": {
             "offset_seconds": 0,
             "source": "manual"
@@ -35,6 +36,7 @@
           "stale_user_decision": false,
           "user_decision": {
             "accept_proposal": false,
+            "accepted_offset_seconds": "",
             "manual_offset_seconds": 0
           }
         }
@@ -60,6 +62,7 @@
         "NIKON|D750|B": {
           "camera_group": "NIKON|D750|B",
           "camera_group_class": "camera",
+          "day": "2024-07-03",
           "effective_time_anchor": {
             "offset_seconds": 3600,
             "source": "manual"
@@ -76,6 +79,7 @@
           "stale_user_decision": false,
           "user_decision": {
             "accept_proposal": false,
+            "accepted_offset_seconds": "",
             "manual_offset_seconds": 3600
           }
         }
@@ -104,6 +108,7 @@
         "NIKON|D750|B": {
           "camera_group": "NIKON|D750|B",
           "camera_group_class": "camera",
+          "day": "2024-07-03",
           "effective_time_anchor": {
             "offset_seconds": -7200,
             "source": "timezone_accepted"
@@ -120,6 +125,7 @@
           "stale_user_decision": false,
           "user_decision": {
             "accept_proposal": true,
+            "accepted_offset_seconds": -7200,
             "manual_offset_seconds": ""
           }
         }
@@ -148,6 +154,7 @@
           "camera_group": "SONY|ILCE-6400|A",
           "camera_group_class": "camera",
           "date": "2024-07-03",
+          "day": "2024-07-03",
           "effective_time_anchor": {
             "offset_seconds": -7200,
             "source": "timezone_accepted"
@@ -164,6 +171,7 @@
           "stale_user_decision": false,
           "user_decision": {
             "accept_proposal": true,
+            "accepted_offset_seconds": -7200,
             "manual_offset_seconds": ""
           }
         },
@@ -171,6 +179,7 @@
           "camera_group": "SONY|ILCE-6400|A",
           "camera_group_class": "camera",
           "date": "2024-07-04",
+          "day": "2024-07-04",
           "effective_time_anchor": {
             "offset_seconds": -7200,
             "source": "timezone_accepted"
@@ -187,6 +196,7 @@
           "stale_user_decision": false,
           "user_decision": {
             "accept_proposal": true,
+            "accepted_offset_seconds": -7200,
             "manual_offset_seconds": ""
           }
         },
@@ -194,6 +204,7 @@
           "camera_group": "SONY|ILCE-6400|A",
           "camera_group_class": "camera",
           "date": "2024-12-22",
+          "day": "2024-12-22",
           "effective_time_anchor": {
             "offset_seconds": -3600,
             "source": "timezone_accepted"
@@ -210,6 +221,7 @@
           "stale_user_decision": false,
           "user_decision": {
             "accept_proposal": true,
+            "accepted_offset_seconds": -3600,
             "manual_offset_seconds": ""
           }
         }
@@ -235,14 +247,22 @@
     "6-photos-by-dest/Japan": {
       "camera_group_time_decisions": {
         "SONY|ILCE-6400|A": {
+          "anchored_by": [
+            {
+              "gpx_file": "trip-2024-07-03.gpx",
+              "sha256": null
+            }
+          ],
           "camera_group": "SONY|ILCE-6400|A",
           "camera_group_class": "camera",
+          "day": "2024-07-03",
           "decision_mode": "auto_resolved",
           "effective_time_anchor": {
             "offset_seconds": -7200,
             "source": "gpx_anchor_auto"
           },
           "proposal": {
+            "agreement_spread_seconds": 120.0,
             "anchor_count": 2,
             "anchors": [
               {
@@ -295,6 +315,7 @@
                 }
               }
             ],
+            "imprecise_seconds": 0,
             "proposal_source": "gpx_self_anchor",
             "proposed_offset_seconds": -7200,
             "proposed_real_utc": "2024-07-03T12:00:00Z",
@@ -317,6 +338,7 @@
           "stale_user_decision": false,
           "user_decision": {
             "accept_proposal": false,
+            "accepted_offset_seconds": "",
             "manual_offset_seconds": ""
           }
         }

@@ -115,9 +115,9 @@ test("peerKeys: cluster ref fans out to its peers, plain ref to itself", () => {
 // --- picking a correction group (a place visited on several days, §19.2) ----------------------------
 test("groupChoice: the recommended group accepts the proposal, another sets its offset", () => {
   const p = { proposed_offset_seconds: -7200, groups: [{ offset_seconds: -7200, count: 3 }, { offset_seconds: -93600, count: 3 }] };
-  assert.deepEqual(app.groupChoice(p, p.groups[0]), { accept_proposal: true, manual_offset_seconds: "" });
-  assert.deepEqual(app.groupChoice(p, p.groups[1]), { accept_proposal: false, manual_offset_seconds: -93600 });
-  assert.equal(app.chosenOffset(p, { accept_proposal: true, manual_offset_seconds: "" }), -7200);
+  assert.deepEqual(app.groupChoice(p, p.groups[0]), { accept_proposal: true, accepted_offset_seconds: -7200, manual_offset_seconds: "" });
+  assert.deepEqual(app.groupChoice(p, p.groups[1]), { accept_proposal: false, accepted_offset_seconds: "", manual_offset_seconds: -93600 });
+  assert.equal(app.chosenOffset(p, { accept_proposal: true, accepted_offset_seconds: -7200, manual_offset_seconds: "" }), -7200);
   assert.equal(app.chosenOffset(p, { accept_proposal: false, manual_offset_seconds: -93600 }), -93600);
   assert.equal(app.chosenOffset(p, { accept_proposal: false, manual_offset_seconds: "" }), null);
 });
@@ -130,4 +130,23 @@ test("proposalNotes: a tie asks for the day; disagreeing photos are named, five 
   assert.match(note, /^7 photos agree with none of these: 6-photos-by-dest\/B\/a\.jpg, .*e\.jpg and 2 more\./);
   assert.match(app.proposalNotes({ conflicting_files: [files[0]] })[0], /^1 photo agrees with none of these/);
   assert.deepEqual(app.proposalNotes({ tied: false, groups: [], conflicting_files: [] }), []);
+});
+
+// --- what the editor says about evidence that settles nothing -----------------------------------------
+test("proposalNotes: a stay of the tracks is said to fix no time", () => {
+  const notes = app.proposalNotes({ proposed_offset_seconds: -2740, imprecise_seconds: 3595, groups: [] });
+  assert.equal(notes.length, 1);
+  assert.match(notes[0], /where but not when/);
+});
+
+test("acceptFields: an acceptance names the offset it accepts; clearing it clears both", () => {
+  assert.deepEqual(app.acceptFields({ proposed_offset_seconds: -7200 }, true), { accept_proposal: true, accepted_offset_seconds: -7200 });
+  assert.deepEqual(app.acceptFields({ proposed_offset_seconds: -7200 }, false), { accept_proposal: false, accepted_offset_seconds: "" });
+});
+
+test("tracksNote: why the tracks placed nothing, in one line", () => {
+  assert.equal(app.tracksNote(undefined), "");
+  assert.match(app.tracksNote({ reason: "outside_track", seconds_from_track: 3600 }), /1 h from this photo/);
+  assert.match(app.tracksNote({ reason: "track_gap", gap_seconds: 2400, seconds_from_track: 900 }), /40 min gap.*15 min away/);
+  assert.match(app.tracksNote({ reason: "tracks_disagree", gpx_files: ["a.gpx", "b.gpx"], apart_meters: 5560 }), /a\.gpx and b\.gpx.*5560 m apart/);
 });

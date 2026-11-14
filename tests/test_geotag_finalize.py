@@ -433,3 +433,70 @@ def test_a_decision_changed_since_execution_stops_finalize(tmp_path, monkeypatch
     assert _run(monkeypatch, ws, "finalize") == 2
     assert not (ctl / "photos-26-complete-log.json").exists()
 
+
+
+# --- what finalize packages is what execution left (§31) ---------------------------------------------
+
+@pytest.mark.spec("RUL-finalize_checks_photos", "RUL-finalize_requires_success", "BLD-finalize_preconditions",
+                  test="TST-geotag_finalize-a_photo_not_as_execution_left_it_stops_finalize")
+@pytest.mark.parametrize("change", ["edited", "gone", "added"])
+def test_a_photo_not_as_execution_left_it_stops_finalize(tmp_path, monkeypatch, capsys, change):
+    """Between execute and finalize a photo is edited in another program, deleted, or a new one dropped in.
+    Finalize records the photos as geotag's finished work, which merge then trusts: it refuses, naming the
+    photo, rather than record the changed state as its own."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    assert json.load(open(ctl / "photos-25-execution-summary.json"))["status"] == "success"
+    photos = sorted((ws / BYDEST / "T").iterdir())
+    if change == "edited":
+        photos[0].write_bytes(b"retagged by hand, another size")
+    elif change == "gone":
+        photos[0].unlink()
+    else:
+        (ws / BYDEST / "T" / "dropped-in.jpg").write_bytes(b"new")
+    capsys.readouterr()
+    assert _run(monkeypatch, ws, "finalize") == 2
+    said = capsys.readouterr()
+    assert "not as the execution left" in said.out + said.err
+    assert not (ctl / "photos-26-finalized-media.json").exists()
+
+
+@pytest.mark.spec("RUL-finalize_reports_placement", "RUL-plan_counts_placement", "BLD-executable_plan",
+                  test="TST-geotag_finalize-finalize_reports_how_every_photo_was_placed")
+def test_finalize_reports_how_every_photo_was_placed(tmp_path, monkeypatch, capsys):
+    """The measure of a run: every photo counted by how it came by its position, those left without one among
+    them — in the plan, in finalize's output, and in the package's manifest."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    _to_executed(monkeypatch, ws, ctl)
+    plan = json.load(open(ctl / "photos-24-executable-plan.json"))
+    assert plan["placement"] == {"native": 2}
+    capsys.readouterr()
+    assert _run(monkeypatch, ws, "finalize") == 0
+    assert "Positions: 2 native — of 2 photo(s)." in capsys.readouterr().out
+    assert json.load(open(ctl / "photos-26-archive-manifest.json"))["placement"] == {"native": 2}
+
+
+@pytest.mark.spec("RUL-unlocated_logged", "RUL-log_cites_decisions", "RUL-placement_recorded_with_its_track",
+                  test="TST-geotag_finalize-the_log_says_what_placed_a_photo_or_that_nothing_did")
+def test_the_log_says_what_placed_a_photo_or_that_nothing_did():
+    """A photo the user left unlocated has that in its log, with the decision; one the tracks placed has the
+    track that placed it and the time it was placed at. And a photo recorded under its new name by a prep run
+    since the plan keeps the time steps of the row planned under its old one."""
+    d = f"{BYDEST}/T"
+    files = [_file(f"{d}/u.arw", "fpU"), _file(f"{d}/2024-07-03--14-00-00.arw", "fpT")]
+    rows = [{"relative_path": f"{d}/t.arw", "resolved_utc": "2024-07-03T12:00:00Z"}]
+    plan = {"destinations": {d: {
+        "left_unlocated": [{"relative_path": f"{d}/u.arw", "content_fingerprint": "fpU",
+                            "because": f"photos-23 destinations.{d}.gps_decisions.review_items[u.arw]"}],
+        "operations": [
+            {"type": "metadata_gps_write", "relative_path": f"{d}/t.arw", "gps_origin": "recompute_automated",
+             "preconditions": {"content_fingerprint": "fpT"}, "writes": {"GPSLatitude": 50.0, "GPSLongitude": 4.0},
+             "provenance": {"gpx_file": "trip.gpx", "resolved_utc": "2024-07-03T12:00:00Z"}},
+            {"type": "rename_no_clobber", "relative_path": f"{d}/t.arw", "preconditions": {"content_fingerprint": "fpT"},
+             "from": "t.arw", "to": "2024-07-03--14-00-00.arw"}]}}}
+    log = cal.build_complete_log({}, files, rows, {}, plan)
+    assert {"phase": "geotag", "action": "left_unlocated",
+            "because": f"photos-23 destinations.{d}.gps_decisions.review_items[u.arw]"} in log["fpU"]["journey"]
+    steps = {s["action"]: s for s in log["fpT"]["journey"]}
+    assert steps["gps_written"]["gpx_file"] == "trip.gpx" and steps["gps_written"]["at_utc"] == "2024-07-03T12:00:00Z"
+    assert steps["resolved_utc"]["value"] == "2024-07-03T12:00:00Z"            # found under the old name's row

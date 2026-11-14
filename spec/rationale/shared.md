@@ -367,6 +367,16 @@ Setting the prior artifact aside keeps a superseded plan and any authored decisi
 unchanged re-run means the iterative decision-editing loop does not accumulate redundant backups.
 :::
 
+:::{rat} Set aside by copy, so the record is never absent
+:id: RAT-record_never_absent
+:status: seed
+:forced: yes
+:follows_from: RAT-plain_json_record, RAT-recoverable_core
+:justifies: RUL-record_in_place_while_replaced
+
+The decision records are read back at the start of every run, and a record that is not there means nothing has been decided yet. Set aside by moving it, the record is gone from its path until the new one lands; a run killed in that instant leaves the next one starting every decision from nothing, silently, the answers surviving only under a numbered name nobody is told to look at.
+:::
+
 :::{rat} The handoff is invisible to the scan, yet verified
 :id: RAT-handoff_by_content
 :status: ruled

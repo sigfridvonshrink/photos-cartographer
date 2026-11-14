@@ -634,3 +634,18 @@ def test_a_fingerprint_mapping_not_one_to_one_stops_geotag(tmp_path, monkeypatch
     earlier, problem = utils.retaken_fingerprints({"photos": {"x": {"journey": [
         {"action": "fingerprint_retaken", "from": "a", "to": "b"}, {"action": "fingerprint_retaken", "from": "b", "to": "c"}]}}})
     assert earlier == {"b": "a", "c": "b"} and problem is None                # a chain is one to one
+
+
+@pytest.mark.spec("BLD-original_values_follow_fingerprint",
+                  test="TST-geotag_rerun_markers-a_fingerprint_taken_back_to_an_earlier_value_ends_the_walk")
+def test_a_fingerprint_taken_back_to_an_earlier_value_ends_the_walk(tmp_path, monkeypatch):
+    """The image engine upgraded and then put back: a photo's fingerprint goes A → B → A. For a photo with no
+    pin, the walk back through its earlier values comes round to where it started — and stops there, pinless,
+    rather than going round for ever."""
+    ws = _executed_round(tmp_path, monkeypatch)
+    wf = cal.GeotagWorkflow(str(ws))
+    wf.preflight()
+    monkeypatch.setattr(cal.GeotagCache, "originals_all", lambda self: {})
+    monkeypatch.setattr(cal.GeotagWorkflow, "_retaken", lambda self: {"fp-a.arw": "fp-old", "fp-old": "fp-a.arw"})
+    files = wf.build_file_model()
+    assert files and not any(f.get("original_key") for f in files)

@@ -52,7 +52,7 @@ from .photos_utils import (
     selected_gpx_root, NO_IDENTITY_KEY, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
     missing_managed_folders, top_level_links, misplaced_top_level_entries, by_dest_reprep_pending,
     json_dependency, verify_json_dependency, handoff_content_fingerprint, handoff_filename_format_blocker, write_json_artifact, write_versioned_json, db_path, ensure_control_dir,
-    journal_path, ContentHasher, _move_no_clobber,
+    journal_path, ContentHasher, _move_no_clobber, get_imagemagick_version,
     prep_log_path, prep_log_blocker, entries_not_carried, retaken_fingerprints, write_db_snapshot, take_zfs_snapshot,
     control_archive_members, write_control_archive, workspace_id,
     WorkspaceLock, ProgressCoordinator,
@@ -247,6 +247,28 @@ def _decision_flag(ud, field, where, blockers):
 def _half_position(lat, lon):
     """True iff exactly one of a position's two numbers is filled in."""
     return (lat in (None, "")) != (lon in (None, ""))
+
+
+def _prior_day_cell(prior_cells, group, bucket, day):
+    """The earlier answer for a camera's day in a destination: the cell under this key, else the one the
+    same day was recorded under while the key had its other form — a camera's only day there is keyed by
+    the group alone, and by `<group>@<day>` once a second day arrives (§10.2). The day, not the key, is
+    what an answer was given for, so it follows the day."""
+    cell = prior_cells.get(bucket)
+    if cell or day is None:
+        return cell or {}
+    other = prior_cells.get(group if bucket != group else f"{group}@{day}") or {}
+    return other if other.get("day") == day else {}
+
+
+def _prior_review(prior_items, file):
+    """The earlier decision made for one photo: found by its content fingerprint — which geotag's own
+    rename, and a fingerprint taken again, leave pointing at the same photo — else by its path."""
+    by_fp, by_path = prior_items
+    for key in (file.get("content_fingerprint"), file.get("original_key")):
+        if key is not None and key in by_fp:
+            return by_fp[key]
+    return by_path.get(file["relative_path"]) or {}
 
 
 def _named(paths, shown=5):
@@ -600,9 +622,14 @@ class GeotagWorkflow:
                 "folder_class": rec.get("folder_class"),
                 "planned_filename": None,                    # set during the rename lookahead (Phase 6)
             })
-            key = fp
-            while key is not None and key not in originals:  # a fingerprint taken again: the pin before it
+            key, walked = fp, set()
+            # a fingerprint taken again: the pin before it. One taken back to a value it had before ends
+            # the walk where it started.
+            while key is not None and key not in originals and key not in walked:
+                walked.add(key)
                 key = earlier.get(key)
+            if key in walked:
+                key = None
             if key is not None:                              # decide from the file's own values (§24.2)
                 files[-1] = dict(from_originals(files[-1], originals[key]), original_key=key)
         files.sort(key=lambda f: f["relative_path"])
@@ -630,7 +657,10 @@ class GeotagWorkflow:
         groups = {}
         for key in sorted({f["camera_group_key"] for f in files}):
             # A file naming no camera is no group to class: solved on its own, never asked about (§16).
+            # One listed as both is classed as neither: the two are solved in opposite ways, and picking one
+            # here would be geotag's guess (the offered classification lists a new group under both).
             cls = "unidentified" if key == NO_IDENTITY_KEY else \
+                "unknown" if key in phones and key in fixed else \
                 "smartphone" if key in phones else ("camera" if key in fixed else "unknown")
             groups[key] = {"camera_group_key": key, "camera_group_class": cls}
         unknown = [k for k, g in groups.items() if g["camera_group_class"] == "unknown"]
@@ -688,7 +718,8 @@ class GeotagWorkflow:
                     sel = [f for f in gframes if not f.get("geotag_marker")
                            and (date is None or _naive_date(f.get("source_naive_time")) == date)]
                     bucket = group if date is None else f"{group}@{date}"
-                    prior_cell = prior_cells.get(bucket) or {}
+                    day = date or (dates[0] if dates else None)
+                    prior_cell = _prior_day_cell(prior_cells, group, bucket, day)
                     if not sel:
                         # Every time here is corrected already and none has its own values pinned (a photo
                         # geotag marked elsewhere), so nothing asks. A resolved answer is kept for photos of
@@ -696,7 +727,7 @@ class GeotagWorkflow:
                         # copied, so the record always says what the decision now says.
                         if prior_cell:
                             cell = self._offset_cell(dest, group, g, prior_cell, [], gpx, blockers,
-                                                     tz=tz, rep_naive=None, date=date)
+                                                     tz=tz, rep_naive=None, date=date, day=day)
                             if cell["effective_time_anchor"]:
                                 cell["requires_user_input"] = False
                                 cells[bucket] = cell
@@ -705,7 +736,8 @@ class GeotagWorkflow:
                     rep_naive = min((f.get("source_naive_time") for f in sel
                                      if _parse_camera_naive(f.get("source_naive_time"))), default=None)
                     cells[bucket] = self._offset_cell(dest, group, g, prior_cell,
-                                                      anchor_frames, gpx, blockers, tz=tz, rep_naive=rep_naive, date=date)
+                                                      anchor_frames, gpx, blockers, tz=tz, rep_naive=rep_naive,
+                                                      date=date, day=day)
             destinations[dest] = {
                 "destination_path": dest,
                 "destination_timezone": tz_block,
@@ -782,7 +814,8 @@ class GeotagWorkflow:
             block["inherited_from"] = inherited_from
         return block
 
-    def _offset_cell(self, dest, key, g, prior_cell, frames, gpx, blockers, tz=None, rep_naive=None, date=None):
+    def _offset_cell(self, dest, key, g, prior_cell, frames, gpx, blockers, tz=None, rep_naive=None, date=None,
+                     day=None):
         # One (camera group, destination[, date]) clock-offset bucket. Proposal precedence (§10.2 rule 4):
         # GPX self-anchor → timezone-derived (camera assumed on local time; DST-aware, §19.4) → manual.
         # Clock offsets do not inherit across destinations. `date` (YYYY-MM-DD) is set when the group
@@ -799,11 +832,14 @@ class GeotagWorkflow:
         is_gpx = proposal.get("proposal_source") == "gpx_self_anchor"
         has_offset = "proposed_offset_seconds" in proposal
         conflicting = proposal.get("conflicting_count", 0) > 0 or bool(proposal.get("tied"))   # anchors disagree
+        imprecise = bool(proposal.get("imprecise_seconds"))    # the tracks stood still: no photo says when
+        spread = CONFIG.get("gpx_anchor_offset_spread_max_seconds") or 0
         policy = CONFIG.get("camera_time_and_timezone_policy") or {}
 
         ud = prior_cell.get("user_decision") or {}
         accept = _decision_flag(ud, "accept_proposal", f"{dest}: camera_group_time_decisions[{loc}].user_decision", blockers)
         manual_off = ud.get("manual_offset_seconds", "")
+        accepted_off = ud.get("accepted_offset_seconds", "")
         effective, stale, decision_mode = "", False, None
 
         if manual_off != "" and manual_off is not None:
@@ -811,20 +847,32 @@ class GeotagWorkflow:
                 # An offset the camera's own GPS supports — one of the proposal's groups, picked instead
                 # of the recommended one — is anchored like an accepted proposal, so no drift check asks
                 # again what its photos already show (§19.2).
-                spread = CONFIG.get("gpx_anchor_offset_spread_max_seconds") or 0
-                chosen = is_gpx and any(abs(int(manual_off) - gg["offset_seconds"]) <= spread
+                chosen = is_gpx and not imprecise and any(abs(int(manual_off) - gg["offset_seconds"]) <= spread
                                         for gg in proposal.get("groups") or [])
                 effective = {"offset_seconds": int(manual_off), "source": "gpx_anchor_chosen" if chosen else "manual"}
             else:
                 blockers.append(f"{dest}: camera_group_time_decisions[{loc}].user_decision."
                                 "manual_offset_seconds must be a whole number of seconds.")
         elif accept:
-            if has_offset:                         # accept a GPX self-anchor or a timezone-derived proposal
-                effective = {"offset_seconds": proposal["proposed_offset_seconds"],
-                             "source": "gpx_anchor_accepted" if is_gpx else "timezone_accepted"}
+            # An acceptance names the offset it accepted, and holds only while that is what is proposed
+            # (§9.1): a proposal that has become another one — the timezone changed, the tracks changed,
+            # photos arrived whose GPS says otherwise — was never accepted, and asks.
+            where = f"{dest}: camera_group_time_decisions[{loc}].user_decision.accepted_offset_seconds"
+            if accepted_off in ("", None):
+                blockers.append(f"{where} must be the offset accepted"
+                                + (f" — the one now proposed is {proposal['proposed_offset_seconds']}." if has_offset
+                                   else "; nothing is proposed now, so clear accept_proposal."))
+            elif not _valid_offset(accepted_off):
+                blockers.append(f"{where} must be a whole number of seconds.")
+            elif not has_offset or abs(int(accepted_off) - proposal["proposed_offset_seconds"]) > (spread if is_gpx else 0):
+                stale = True                       # accepted a proposal that is no longer the one made
             else:
-                stale = True                       # accepted a proposal that does not exist
-        elif is_gpx and not conflicting:
+                # An offset no photo pins within the tracks' stay is supported by the camera's GPS, not
+                # anchored by it: the drift check still asks (§22a).
+                effective = {"offset_seconds": proposal["proposed_offset_seconds"],
+                             "source": ("gpx_anchor_imprecise" if imprecise else "gpx_anchor_accepted") if is_gpx
+                             else "timezone_accepted"}
+        elif is_gpx and not conflicting and not imprecise:
             # auto-resolution under the config flags (§9.1) — GPX-self-anchor only; a timezone-derived
             # proposal is confirmable, never auto-applied (the local-clock assumption can be wrong).
             n = proposal["anchor_count"]
@@ -832,26 +880,45 @@ class GeotagWorkflow:
                (n == 1 and policy.get("single_anchor_auto_apply", False)):
                 effective = {"offset_seconds": proposal["proposed_offset_seconds"], "source": "gpx_anchor_auto"}
                 decision_mode = "auto_resolved"
+        anchored_by = None
+        if isinstance(effective, dict) and effective["source"] == "gpx_anchor_auto":
+            # the tracks the offset rests on, as they are now: what keeping it later is checked against
+            anchored_by = [{"gpx_file": f, "sha256": gpx.file_sha.get(f)} for f in
+                           sorted({a["gpx_match"]["gpx_file"] for a in proposal["anchors"]
+                                   if abs(a["proposed_offset_seconds"] - effective["offset_seconds"]) <= spread})]
         if effective == "" and not stale and manual_off in ("", None) and not accept:
             # An offset found from the camera's own GPS stays this camera's offset for the day when the
-            # photos that gave it are corrected and later ones bring no anchor. A user's answer needs
-            # no such keeping: it is preserved as their decision, and withdrawing it takes effect.
+            # photos that gave it are corrected and later ones bring no anchor — while what it rested on
+            # still stands: every track that anchored it is under gpx_root unchanged, and no photo that has
+            # arrived since says otherwise. A user's answer needs no such keeping: it is preserved as their
+            # decision, and withdrawing it takes effect.
             earlier = prior_cell.get("effective_time_anchor")
-            if isinstance(earlier, dict) and earlier.get("source") == "gpx_anchor_auto":
-                effective, decision_mode = earlier, "kept_from_earlier"
+            rests_on = prior_cell.get("anchored_by")
+            if isinstance(earlier, dict) and earlier.get("source") == "gpx_anchor_auto" \
+                    and isinstance(rests_on, list) and rests_on \
+                    and all(isinstance(t, dict) and t.get("gpx_file") in gpx.file_sha
+                            and gpx.file_sha[t["gpx_file"]] == t.get("sha256") for t in rests_on) \
+                    and not (is_gpx and (conflicting or imprecise
+                                         or abs(proposal["proposed_offset_seconds"] - earlier.get("offset_seconds", 0)) > spread)):
+                effective, decision_mode, anchored_by = earlier, "kept_from_earlier", rests_on
 
         cell = {
             "camera_group": key,
             "camera_group_class": g.get("camera_group_class", "camera"),
             "proposal": proposal,
             "user_decision": {"accept_proposal": accept,
+                              "accepted_offset_seconds": accepted_off if accepted_off is not None else "",
                               "manual_offset_seconds": manual_off if manual_off is not None else ""},
             "effective_time_anchor": effective,
             "requires_user_input": effective == "",
             "stale_user_decision": stale,
         }
+        if anchored_by:
+            cell["anchored_by"] = anchored_by
         if date is not None:
             cell["date"] = date                    # this bucket covers only that naive calendar date
+        if day is not None:
+            cell["day"] = day                      # the day its photos are of, whatever its key
         if decision_mode:
             cell["decision_mode"] = decision_mode
         return cell
@@ -892,7 +959,7 @@ class GeotagWorkflow:
     # confirms each (a zero-scrub "offset was right" must be actively confirmed, never implied), and
     # carries the corrected/validated offset that compute_resolved_utc then re-consumes (§22a).
 
-    _DRIFT_TRIGGER_SOURCES = ("timezone_accepted", "manual")
+    _DRIFT_TRIGGER_SOURCES = ("timezone_accepted", "manual", "gpx_anchor_imprecise")
 
     def build_drift_validation(self, files, time_artifact, rows0, gpx, prior):
         """Build/regenerate photos-22 from the COMPLETE photos-21 + the resolved UTC under the
@@ -924,17 +991,16 @@ class GeotagWorkflow:
                 group, date = cell.get("camera_group"), cell.get("date")
                 frames = [f for f in by_dest_group.get((dest, group), [])
                           if date is None or _naive_date(f.get("source_naive_time")) == date]
+                prior_drift = _prior_day_cell(prior_cells, group, bucket, cell.get("day"))
                 if not frames:
                     # every photo here is corrected already: keep the confirmation for later arrivals,
                     # derived again from the decision and the current offset, never copied
-                    if prior_cells.get(bucket):
-                        kept = self._drift_cell(dest, bucket, cell, [], [], prior_cells[bucket], blockers, date=date)
+                    if prior_drift:
+                        kept = self._drift_cell(dest, bucket, cell, [], [], prior_drift, blockers, date=date)
                         if kept["effective_drift_offset"]:
                             kept["requires_user_input"] = False
                             cells[bucket] = kept
                     continue
-                if any(f.get("has_native_gps") and match_frame_to_gpx(f, gpx, cfg) for f in frames):
-                    continue                                  # has a native-GPS anchor -> reliably placeable
                 times = [t for f in frames if (t := _parse_utc(resolved_by_path.get(f["relative_path"])))]
                 if not times:
                     continue                                  # nothing resolves -> not a drift case
@@ -945,7 +1011,7 @@ class GeotagWorkflow:
                 if not seg:
                     continue                                  # no GPX coverage -> phase 23 fallback/lost
                 cells[bucket] = self._drift_cell(dest, bucket, cell, seg, frames,
-                                                 prior_cells.get(bucket) or {}, blockers, date=date)
+                                                 prior_drift, blockers, date=date)
             if cells:
                 destinations[dest] = {"destination_path": dest, "drift_decisions": cells}
         requires = any(c["requires_user_input"] for d in destinations.values()
@@ -1024,6 +1090,8 @@ class GeotagWorkflow:
         }
         if date is not None:
             cell["date"] = date
+        if time_cell.get("day") is not None:
+            cell["day"] = time_cell["day"]
         return cell
 
     def _drift_depends_on(self):
@@ -1056,6 +1124,7 @@ class GeotagWorkflow:
             by_dest.setdefault(f["destination"], []).append(f)
 
         destinations = {}
+        disagreeing = {}                                      # (track, track) -> photos they place apart
         fallback_eff = {}                                     # (dest, None) -> effective fallback coord
         ordered, containers = _expand_destinations(by_dest)
         self.coordinator.start_phase("deciding GPS placement", len(files))
@@ -1068,16 +1137,20 @@ class GeotagWorkflow:
             eff_fb = fb_cell["effective_fallback"]
             fallback_eff[(dest, None)] = eff_fb
 
-            prior_reviews = {ri["relative_path"]: ri for ri in
-                             ((prior_d.get("gps_decisions") or {}).get("review_items") or [])}
+            items = (prior_d.get("gps_decisions") or {}).get("review_items") or []
+            prior_reviews = ({ri["content_fingerprint"]: ri for ri in items if ri.get("content_fingerprint")},
+                             {ri["relative_path"]: ri for ri in items if not ri.get("content_fingerprint")})
             counts = {k: 0 for k in self._SUMMARY_KEYS}
             review_items, gpx_files = [], set()
             for f in sorted(by_dest.get(dest, []), key=lambda x: x["relative_path"]):
                 rel = f["relative_path"]
                 ru = _parse_utc(utc_by_path.get(rel)) if utc_by_path.get(rel) else None
-                fd = (prior_reviews.get(rel) or {}).get("user_decision") or {}
+                fd = _prior_review(prior_reviews, f).get("user_decision") or {}
                 self._validate_review_decision(dest, rel, fd, blockers)
-                cat, coord = classify_gps(f, ru, gpx, CONFIG, eff_fb, fd)
+                why = {}
+                cat, coord = classify_gps(f, ru, gpx, CONFIG, eff_fb, fd, why)
+                if why.get("reason") == "tracks_disagree":
+                    disagreeing[tuple(why["gpx_files"])] = disagreeing.get(tuple(why["gpx_files"]), 0) + 1
                 counts["files_total"] += 1
                 if cat == "preserve_native":
                     counts["preserve_native_gps"] += 1
@@ -1089,13 +1162,13 @@ class GeotagWorkflow:
                     counts["automatic_folder_fallback"] += 1
                 elif cat == "manual_locked":
                     counts["manual_locked"] += 1
-                    review_items.append(self._review_item(rel, "manual_locked", fd, False))
+                    review_items.append(self._review_item(f, "manual_locked", fd, False))
                 elif cat == "no_change":
                     counts["no_gps_change_needed"] += 1
-                    review_items.append(self._review_item(rel, "accepted_unlocated", fd, False))
+                    review_items.append(self._review_item(f, "accepted_unlocated", fd, False, why))
                 else:                                          # blocked
                     counts["blocked"] += 1
-                    review_items.append(self._review_item(rel, "no_reliable_gps_source", fd, True))
+                    review_items.append(self._review_item(f, "no_reliable_gps_source", fd, True, why))
                 self.coordinator.increment_completed(1)
             counts["manual_review_required"] = sum(1 for ri in review_items if ri["requires_user_input"])
             destinations[dest] = {
@@ -1131,6 +1204,11 @@ class GeotagWorkflow:
         }
         if not requires:
             artifact["decision_mode"] = "no_op_or_auto_resolved"
+        # Tracks that put the same instant in different places placed none of these photos — each fell to
+        # its folder's fallback or asks. Said out loud, since a fallback would otherwise hide it (§25).
+        self.track_disagreements = [{"gpx_files": list(k), "photos": n} for k, n in sorted(disagreeing.items())]
+        if self.track_disagreements:
+            artifact["track_disagreements"] = self.track_disagreements
         return artifact, blockers
 
     def _folder_fallback_cell(self, dest, prior_fb, inherited, blockers):
@@ -1173,14 +1251,18 @@ class GeotagWorkflow:
             blockers.append(f"{where}: review manual_lat/lon out of range.")
         _decision_flag(ud, "accept_unlocated", f"{where}: user_decision", blockers)
 
-    def _review_item(self, rel, reason, ud, requires):
-        return {
-            "relative_path": rel, "reason": reason,
+    def _review_item(self, f, reason, ud, requires, why=None):
+        item = {
+            "relative_path": f["relative_path"], "content_fingerprint": f.get("content_fingerprint"),
+            "reason": reason,
             "user_decision": {"manual_lat": ud.get("manual_lat", ""), "manual_lon": ud.get("manual_lon", ""),
                               "accept_unlocated": bool(ud.get("accept_unlocated", False))},
             "requires_user_input": requires,
             "stale_user_decision": False,
         }
+        if why:
+            item["tracks"] = why                   # why the tracks placed nothing: the user's lead to a fix
+        return item
 
     def _gps_depends_on(self, resolved_fp):
         gps_policy = json.dumps({k: CONFIG[k] for k in (
@@ -1235,11 +1317,14 @@ class GeotagWorkflow:
             by_dest.setdefault(f["destination"], []).append(f)
 
         destinations, all_ops, media_pre = {}, [], []
+        placement = {}                                # how each photo comes by its position: the measure of the run
         for dest in sorted(by_dest):
             g_d = g_dests.get(dest, {})
             eff_fb = (g_d.get("folder_fallback") or {}).get("effective_fallback")
             reviews = {ri["relative_path"]: (ri.get("user_decision") or {})
                        for ri in ((g_d.get("gps_decisions") or {}).get("review_items") or [])}
+            track_of = {}
+            unlocated = []
             tz = ((t_dests.get(dest, {}).get("destination_timezone")) or {}).get("effective_iana_timezone") or ""
             rename_inputs = [{"relative_path": f["relative_path"],
                               "resolved_utc": (utc_by_path.get(f["relative_path"]) or {}).get("resolved_utc"),
@@ -1252,6 +1337,16 @@ class GeotagWorkflow:
                 ru = (utc_by_path.get(rel) or {}).get("resolved_utc")
                 cat, coord = classify_gps(f, _parse_utc(ru) if ru else None, gpx, cfg,
                                           eff_fb, reviews.get(rel))
+                if coord and coord.get("gpx_file"):
+                    track_of[rel] = coord["gpx_file"]
+                how = ("native" if cat == "preserve_native" else "unlocated" if coord is None
+                       else _TRACK_MARKER.get(coord.get("method")) or cat)
+                placement[how] = placement.get(how, 0) + 1
+                if cat == "no_change":
+                    # left without a position by the user's own answer: recorded with the plan, so the
+                    # log can say so and cite the decision (§13.3)
+                    unlocated.append({"relative_path": rel, "content_fingerprint": f.get("content_fingerprint"),
+                                      "because": manual_gps_pointer("manual_locked", dest, rel, None)})
                 fops = plan_file_ops(f, ru, tz, cat, coord, renames.get(rel))
                 row = utc_by_path.get(rel) or {}
                 cells = (t_dests.get(dest) or {}).get("camera_group_time_decisions") or {}
@@ -1265,6 +1360,9 @@ class GeotagWorkflow:
                             "timezone_because": f"photos-21 destinations.{dest}.destination_timezone",
                             "because": offset_decision_pointer(
                                 dict(row, camera_group=row.get("camera_group") or f.get("camera_group_key")), dest, cells)}
+                    elif o["type"] == "metadata_gps_write" and o.get("gps_origin") == "recompute_automated":
+                        # the track that placed it, and the instant it was placed at: what the position rests on
+                        o["provenance"] = {"gpx_file": track_of.get(rel), "resolved_utc": ru}
                     elif o["type"] == "metadata_gps_write" and o.get("gps_origin") == "apply_manual":
                         o["provenance"] = {"because": manual_gps_pointer(cat, dest, rel, g_d.get("folder_fallback"))}
                         o["pre_state"] = held_pre_state(f)        # the position it replaces, for the log
@@ -1277,6 +1375,8 @@ class GeotagWorkflow:
                 media_pre.append({"relative_path": rel, "content_fingerprint": f.get("content_fingerprint"),
                                   "size": f.get("size"), "mtime_ns": f.get("mtime_ns")})
             destinations[dest] = {"destination_path": dest, "operations": ops, "no_ops": no_ops}
+            if unlocated:
+                destinations[dest]["left_unlocated"] = unlocated
 
         for dest, dd in destinations.items():
             ops = dd["operations"]
@@ -1298,6 +1398,7 @@ class GeotagWorkflow:
             "status": "blocked" if blockers else "ready",
             "executable": not blockers,
             "blockers": blockers,
+            "placement": dict(sorted(placement.items())),
             "destinations": destinations,
             "depends_on": depends_on,
         }
@@ -1391,6 +1492,17 @@ class GeotagWorkflow:
         all_ops = [o for d in plan["destinations"].values() for o in d["operations"]]
         if dep.get("planned_operation_fingerprint") != sha256_text(json.dumps(all_ops, sort_keys=True)):
             stale.append("planned operations changed (plan tampered)")
+        # Every write is checked by taking the photo's fingerprint again: with another image engine than
+        # the one prep took them with, every photo would be written and then held as changed (§29.1a).
+        if with_handoff and all_ops:
+            try:
+                with open(handoff_path(ws)) as hf:
+                    engine = (((json.load(hf) or {}).get("depends_on") or {}).get("cache") or {}).get("image_engine_version")
+            except (OSError, ValueError):
+                engine = None
+            if engine is not None and engine != get_imagemagick_version():
+                stale.append(f"the image engine changed since prep fingerprinted the photos ({engine} -> "
+                             f"{get_imagemagick_version()}) — run `prep plan` and `prep execute` first")
         return stale
 
     @staticmethod
@@ -1420,20 +1532,34 @@ class GeotagWorkflow:
             return res
         pre = ops[0].get("preconditions") or {}
         rename_ops = [o for o in ops if o["type"] == "rename_no_clobber"]
-
-        if not os.path.exists(abs_path):
-            # Already-applied resume: the source is gone but the planned rename target is in place, so
-            # a crashed prior run fully applied this file — skip it (don't block on the missing source).
-            if rename_ops and os.path.exists(os.path.join(os.path.dirname(abs_path), rename_ops[-1]["to"])):
-                res["skipped"] = [o["operation_id"] for o in ops]
-                return res
-            res["blocker"] = f"{rel}: file is missing at execute time"
-            return res
-
         write_ops = [o for o in ops if o["type"] in self._META_OP_TYPES]
         tags = {}
         for o in write_ops:
             tags.update(o.get("writes") or {})
+        final_abs = os.path.join(os.path.dirname(abs_path), rename_ops[-1]["to"]) if rename_ops else abs_path
+
+        def done(path):
+            st = os.stat(path)
+            res["after"] = {"relative_path": os.path.relpath(path, self.workspace_root),
+                            "size": st.st_size, "mtime_ns": st.st_mtime_ns}
+            return res
+
+        if not os.path.exists(abs_path):
+            # Already-applied resume: the source is gone and the planned rename target is in place — an
+            # interrupted run applied this file and never got to record it. It is recorded now, once it
+            # is seen to be that photo holding what was planned: a file merely of that name is not it.
+            if rename_ops and os.path.exists(final_abs):
+                cur_fp = (ContentHasher.fingerprint_image(final_abs) or {}).get("value")
+                if (cur_fp is None or (cur_fp != pre.get("content_fingerprint") and accepted_mismatches.get(rel) != cur_fp)
+                        or (tags and not _holds_writes(self._exiftool_read(final_abs, sorted(tags)), tags))):
+                    res["blocker"] = (f"{rel}: gone, and {rename_ops[-1]['to']!r} in its place is not this photo "
+                                      "as planned — re-run `geotag plan`")
+                    return res
+                res["skipped"] = res["found"] = [o["operation_id"] for o in ops]   # done before: recorded, not redone
+                return done(final_abs)
+            res["blocker"] = f"{rel}: file is missing at execute time"
+            return res
+
         st = os.stat(abs_path)
         already_written = False
         if (pre.get("size") is not None and st.st_size != pre["size"]) or \
@@ -1444,7 +1570,7 @@ class GeotagWorkflow:
             # values, or an edit made since the plan, which would be overwritten: read the tags back and tell
             # them apart (§29.1a). A file with no write planned was not written by geotag at all.
             cur_fp = (ContentHasher.fingerprint_image(abs_path) or {}).get("value")
-            if cur_fp != pre.get("content_fingerprint") and rel not in accepted_mismatches:
+            if cur_fp is None or (cur_fp != pre.get("content_fingerprint") and accepted_mismatches.get(rel) != cur_fp):
                 res["blocker"] = f"{rel}: size/mtime changed and content fingerprint differs since planning"
                 return res
             if not tags or not _holds_writes(self._exiftool_read(abs_path, sorted(tags)), tags):
@@ -1461,7 +1587,8 @@ class GeotagWorkflow:
                 res["failed"] = [o["operation_id"] for o in write_ops]
                 return res                          # tool failure: leave file as-is, never confirm
             new_fp = (ContentHasher.fingerprint_image(abs_path) or {}).get("value")
-            if new_fp == pre.get("content_fingerprint") or rel in accepted_mismatches:
+            # a fingerprint that cannot be taken proves nothing: the write is not confirmed by it
+            if new_fp is not None and (new_fp == pre.get("content_fingerprint") or accepted_mismatches.get(rel) == new_fp):
                 res["applied"].extend(o["operation_id"] for o in write_ops)
             else:
                 res["mismatch"] = {"relative_path": rel, "expected_fingerprint": pre.get("content_fingerprint"),
@@ -1479,7 +1606,19 @@ class GeotagWorkflow:
             except Exception as e:
                 res["failed"].append(o["operation_id"])
                 res["blocker"] = f"{rel}: rename failed ({e})"
-        return res
+                return res
+        return done(final_abs)
+
+    def _apply_file_contained(self, rel, ops, journal, accepted_mismatches):
+        """`_apply_file`, with anything it raises turned into that photo's failure: one photo's trouble
+        never takes the run down around the others still being applied, whose results would then go
+        unrecorded (§29.1a). What was written before the failure is found again by the next run."""
+        try:
+            return self._apply_file(rel, ops, journal, accepted_mismatches)
+        except Exception as e:
+            return {"relative_path": rel, "applied": [], "skipped": [], "mismatch": None,
+                    "failed": [o["operation_id"] for o in ops if journal.get(o["operation_id"]) != "confirmed"],
+                    "blocker": f"{rel}: could not be applied ({type(e).__name__}: {e})"}
 
     def execute_plan(self, jobs, now_iso, execution_id):
         """Stage 10 (§29): apply photos-24 after re-validating every dependency, journaling for
@@ -1514,13 +1653,14 @@ class GeotagWorkflow:
                     "stale": [reason], "snapshot": snapshot}
 
         jpath = journal_path(ws, plan["plan_id"])
-        journal = {}
+        journal, media_after = {}, {}
         if os.path.exists(jpath):
             try:
-                journal = (json.load(open(jpath)) or {}).get("operations", {}) or {}
+                _j = json.load(open(jpath)) or {}
+                journal, media_after = _j.get("operations", {}) or {}, _j.get("media_after", {}) or {}
             except Exception:
-                journal = {}
-        accepted = self._accepted_mismatches(ws)
+                journal, media_after = {}, {}
+        accepted = self._accepted_mismatches(ws, plan["plan_id"])
 
         by_file = {}
         for dd in plan["destinations"].values():
@@ -1544,7 +1684,7 @@ class GeotagWorkflow:
             results = []
             self.coordinator.start_phase("applying calibration", len(by_file))
             with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, jobs)) as ex:
-                futs = [ex.submit(self._apply_file, rel, ops, journal, accepted)
+                futs = [ex.submit(self._apply_file_contained, rel, ops, journal, accepted)
                         for rel, ops in sorted(by_file.items())]
                 try:
                     for fut in concurrent.futures.as_completed(futs):
@@ -1554,11 +1694,15 @@ class GeotagWorkflow:
                         # Incremental confirmation journal (§29.1a): persist each file's confirmed ops AS
                         # IT COMPLETES (in this main thread — workers never touch the journal), so a crash
                         # mid-run leaves a journal that lets the next run skip the already-applied files.
-                        if r["applied"]:
-                            for oid in r["applied"]:
+                        if r["applied"] or r.get("found"):
+                            for oid in r["applied"] + (r.get("found") or []):
                                 journal[oid] = "confirmed"
+                            if r.get("after"):            # the photo as this run left it: finalize's baseline
+                                a = r["after"]
+                                media_after[a["relative_path"]] = {"size": a["size"], "mtime_ns": a["mtime_ns"]}
                             write_json_artifact(jpath, {"journal_version": 1, "plan_id": plan["plan_id"],
-                                                        "operations": journal, "updated_at": now_iso})
+                                                        "operations": journal, "media_after": media_after,
+                                                        "updated_at": now_iso})
                 except KeyboardInterrupt:
                     # Ctrl-C: drop pending file writes and stop waiting instead of letting the `with`
                     # exit drain them (shutdown(wait=True)). Files already applied are confirmed in the
@@ -1573,25 +1717,35 @@ class GeotagWorkflow:
             PersistentMagickWorker.cleanup_all()       # close the per-thread magick workers (verify pass)
 
         # The journal was persisted incrementally as each file completed (above); nothing more to flush.
-        summary = self._build_summary(plan, results, now_iso, execution_id, jobs)
+        summary = self._build_summary(plan, results, now_iso, execution_id, jobs,
+                                      self._prior_mismatches(ws, plan["plan_id"]))
         summary["snapshot"] = snapshot                                   # the pre-mutation ZFS record (or None)
         write_json_artifact(execution_summary_path(ws), summary)
         return summary
 
     @staticmethod
-    def _accepted_mismatches(ws):
-        """File paths whose prior photos-25 fingerprint mismatch the user marked accept=true."""
-        p = execution_summary_path(ws)
-        if not os.path.exists(p):
-            return set()
+    def _prior_mismatches(ws, plan_id):
+        """The fingerprint mismatches the last execution of THIS plan reported, as written — the user's
+        acceptances among them. Another plan's are not this plan's to act on."""
         try:
-            prior = json.load(open(p))
-        except Exception:
-            return set()
-        return {m["relative_path"] for m in (prior.get("fingerprint_mismatches") or [])
-                if (m.get("user_decision") or {}).get("accept_fingerprint_change")}
+            with open(execution_summary_path(ws)) as f:
+                prior = json.load(f)
+        except (OSError, ValueError):
+            return []
+        if not isinstance(prior, dict) or prior.get("plan_id") != plan_id:
+            return []
+        return [m for m in (prior.get("fingerprint_mismatches") or []) if isinstance(m, dict)]
 
-    def _build_summary(self, plan, results, now_iso, execution_id, jobs):
+    @classmethod
+    def _accepted_mismatches(cls, ws, plan_id):
+        """{path: accepted fingerprint} for the mismatches of this plan the user accepted: an acceptance
+        is of the content that was shown — the fingerprint the write left — never of whatever the photo
+        holds later."""
+        return {m.get("relative_path"): m.get("actual_fingerprint") for m in cls._prior_mismatches(ws, plan_id)
+                if (m.get("user_decision") or {}).get("accept_fingerprint_change") is True
+                and m.get("actual_fingerprint")}
+
+    def _build_summary(self, plan, results, now_iso, execution_id, jobs, prior_mismatches=()):
         ws = self.workspace_root
         op_type, op_dest = {}, {}
         for dest, dd in plan["destinations"].items():
@@ -1623,6 +1777,18 @@ class GeotagWorkflow:
                 mismatches.append({**r["mismatch"], "user_decision": {"accept_fingerprint_change": False}})
             if r["blocker"]:
                 blockers.append(r["blocker"])
+        # A mismatch stays on the record, the user's answer with it, until its photo is applied: a run that
+        # only finds the photo still held must not take away the one place the change can be accepted.
+        held = {r["relative_path"] for r in results if r["blocker"]}
+        reported = {m["relative_path"]: m for m in mismatches}
+        for m in prior_mismatches:
+            rel = m.get("relative_path")
+            if rel in reported:
+                if reported[rel]["actual_fingerprint"] == m.get("actual_fingerprint"):
+                    reported[rel]["user_decision"] = m.get("user_decision") or reported[rel]["user_decision"]
+            elif rel in held:
+                mismatches.append(m)
+        mismatches.sort(key=lambda m: m.get("relative_path") or "")
         for dest, dd in plan["destinations"].items():
             per_dest[dest]["no_ops"] = len(dd.get("no_ops") or [])
         totals["no_ops"] = sum(len(dd.get("no_ops") or []) for dd in plan["destinations"].values())
@@ -1674,6 +1840,12 @@ class GeotagWorkflow:
             return [f"The executed plan no longer holds ({'; '.join(stale)}) — re-run `geotag plan` and "
                     "`geotag execute` first."]
 
+        changed = self._changed_since_execution(plan)
+        if changed:
+            return [f"{len(changed)} photo(s) in {folder_name('photos_by_dest')} are not as the execution left "
+                    f"them ({_named(changed)}) — re-run `geotag plan` and `geotag execute` first (after "
+                    "`prep plan` and `prep execute`, if geotag asks)."]
+
         files = self.build_file_model()
         cache = GeotagCache(ws)
         try:
@@ -1713,6 +1885,48 @@ class GeotagWorkflow:
         write_json_artifact(archive_manifest_path(ws), self._archive_manifest(plan, summary, now_iso, members))
         write_control_archive(ws, archive_path(ws), members + [os.path.relpath(archive_manifest_path(ws), ws)])
         return []
+
+    def _changed_since_execution(self, plan):
+        """The photos in photos by destination that are not as the plan's execution left them (§31): one
+        gone, one whose size or modification time is no longer what the run recorded as it confirmed it
+        (or, for a photo the plan had nothing to do to, what the plan was made from), and one the plan
+        never knew. What finalize packages is what merge trusts as geotag's work, so it is checked, not
+        taken from whatever is on disk."""
+        ws = self.workspace_root
+        try:
+            with open(journal_path(ws, plan["plan_id"])) as f:
+                after = (json.load(f) or {}).get("media_after") or {}
+        except (OSError, ValueError):
+            after = {}
+        final = {}
+        for dd in (plan.get("destinations") or {}).values():
+            for op in dd.get("operations") or []:
+                if op["type"] == "rename_no_clobber":
+                    final[op["relative_path"]] = os.path.join(os.path.dirname(op["relative_path"]), op["to"])
+        with_ops = {op["relative_path"] for dd in (plan.get("destinations") or {}).values()
+                    for op in dd.get("operations") or []}
+        expected = {}
+        for m in (plan.get("depends_on") or {}).get("media_preconditions") or []:
+            rel = m["relative_path"]
+            now = final.get(rel, rel)
+            expected[now] = after.get(now) if rel in with_ops else {"size": m.get("size"), "mtime_ns": m.get("mtime_ns")}
+        changed = []
+        for rel, want in sorted(expected.items()):
+            try:
+                st = os.stat(os.path.join(ws, rel))
+            except OSError:
+                changed.append(rel)
+                continue
+            if not want or (want.get("size"), want.get("mtime_ns")) != (st.st_size, st.st_mtime_ns):
+                changed.append(rel)
+        base = os.path.join(ws, folder_name('photos_by_dest'))
+        for root, _dirs, names in os.walk(base):
+            for n in sorted(names):
+                rel = os.path.relpath(os.path.join(root, n), ws)
+                if not n.startswith('.') and rel not in expected \
+                        and media_class_for_ext(os.path.splitext(n)[1]) in ("image", "raw"):
+                    changed.append(rel)
+        return sorted(changed)
 
     def _keep_executed_decisions(self, plan):
         """Keep, once per plan, the exact decision records the plan was made from and is now executed
@@ -1810,6 +2024,7 @@ class GeotagWorkflow:
             "workspace_id": workspace_id(ws),                          # the identity (§13.2)
             "plan_id": plan.get("plan_id"),
             "execution_id": (summary.get("run_metadata") or {}).get("execution_id"),
+            "placement": plan.get("placement") or {},                  # how every photo came by its position
             "contents": contents,
             "run_metadata": {"generated_at": now_iso},
         }
@@ -2003,6 +2218,15 @@ def run(args):
                 sys.exit(2)
 
             gpx = wf.load_gpx()      # disk-heavy: only after the in-memory checks above have passed
+            if gpx.status == "missing":
+                # Tracks that are configured but not there — a volume not mounted — are not "no tracks":
+                # planning on would place by folder fallback what the tracks place, and drop every
+                # answer given about them (§15).
+                reporter.error(f"\nGeotag cannot proceed: {gpx.warnings[0]}")
+                reporter.log("\nNo geotag JSON was written.")
+                emit_next_step(reporter, "make the tracks available (or set gpx_root to \"\" in "
+                                         "photos-00-config.json to plan without tracks), then re-run `geotag plan`.")
+                sys.exit(2)
             n_dest = len({f["destination"] for f in files})
             by_class = {}
             for g in groups.values():
@@ -2129,6 +2353,10 @@ def run(args):
                     reporter.log(f"Wrote {GPS_DECISIONS_ARTIFACT}: status={gps_artifact['status']} "
                           f"({tot['preserve_native_gps']} native, {tot['automatic_gpx_interpolation']} interp, "
                           f"{tot['automatic_gpx_extrapolation']} extrap, {tot['blocked']} blocked).", stream="stdout")
+                    for td in wf.track_disagreements:
+                        reporter.warn(f"  Warning: tracks {' and '.join(td['gpx_files'])} cover the same time in "
+                                      f"different places, so neither placed {td['photos']} photo(s). If one is "
+                                      "not this trip's, take it out of gpx_root and re-run `geotag plan`.")
 
                     # Stage 9: assemble photos-24 only when ALL decision artifacts are complete (§28).
                     if (artifact["status"] == "complete" and drift_artifact["status"] == "complete"
@@ -2142,6 +2370,12 @@ def run(args):
                         reporter.log(f"  Plan saved to {epp}", stream="stdout")
                         if _ep_bak:
                             reporter.log(f"  Previous plan backed up to {_ep_bak}", stream="stdout")
+                        if plan["blockers"]:
+                            reporter.error("\nThe plan cannot be executed:")
+                            for b in plan["blockers"]:
+                                reporter.log(f"  - {b}")
+                            emit_next_step(reporter, "resolve the blocker(s) above, then re-run `geotag plan`.")
+                            sys.exit(2)
                         _plan_ready = True
                         emit_next_step(reporter, "`geotag execute` to apply the plan.")
 
@@ -2220,6 +2454,12 @@ def run(args):
                 sys.exit(2)
             for w in getattr(wf, "finalize_warnings", []):
                 reporter.warn(f"  partial record: {w}")
+            with open(executable_plan_path(workspace_root)) as pf:
+                placed = (json.load(pf) or {}).get("placement") or {}
+            if placed:
+                # the measure of the run: every photo, by how it came by its position — and those with none
+                reporter.log("Positions: " + ", ".join(f"{n} {how.replace('_', ' ')}" for how, n in placed.items())
+                             + f" — of {sum(placed.values())} photo(s).", stream="stdout")
             reporter.log(f"Finalized: wrote {COMPLETE_LOG_ARTIFACT}, {GEOTAG_DB_SNAPSHOT}, and "
                   f"{ARCHIVE_MANIFEST_ARTIFACT} to {CONTROL_DIR}/. The archival package is ready to "
                   "copy to permanent storage (geotag does not seal or merge).", stream="stdout")

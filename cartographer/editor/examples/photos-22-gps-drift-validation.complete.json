@@ -6,7 +6,7 @@
     "camera_group_key_version": 1,
     "camera_time_policy_fingerprint": "d73ae9e51b28fdb186e822031466c4969195f72a26b25032b3cfbaa7008c6d08",
     "gpx_fingerprint": "example-gpx-fingerprint",
-    "photos_21_sha256": "e9aaca4e116e197b3c1c4b8c5039d2bf36b8a865b74f83dafec2871ece48d940"
+    "photos_21_sha256": "ce2dc230ae0e95d057eed0c7497c85d7fd9d976193458de7e11cec24fc3f7633"
   },
   "destinations": {
     "6-photos-by-dest/DriftTown": {
@@ -14,6 +14,7 @@
       "drift_decisions": {
         "CAM|drift|D": {
           "camera_group": "CAM|drift|D",
+          "day": "2024-07-03",
           "effective_drift_offset": {
             "offset_seconds": -7200,
             "source": "gps_drift_validated"

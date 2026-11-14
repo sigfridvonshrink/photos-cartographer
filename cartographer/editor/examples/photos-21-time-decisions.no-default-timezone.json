@@ -35,6 +35,7 @@
         "SONY|ILCE-6400|A": {
           "camera_group": "SONY|ILCE-6400|A",
           "camera_group_class": "camera",
+          "day": "2024-07-03",
           "effective_time_anchor": "",
           "proposal": {
             "proposal_source": "manual_required"
@@ -43,6 +44,7 @@
           "stale_user_decision": false,
           "user_decision": {
             "accept_proposal": false,
+            "accepted_offset_seconds": "",
             "manual_offset_seconds": ""
           }
         }

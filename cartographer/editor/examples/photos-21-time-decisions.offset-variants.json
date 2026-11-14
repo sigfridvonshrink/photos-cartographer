@@ -36,18 +36,20 @@
         "CAM|conflict|C": {
           "camera_group": "CAM|conflict|C",
           "camera_group_class": "camera",
+          "day": "2024-07-03",
           "effective_time_anchor": {
             "offset_seconds": -7200,
             "source": "gpx_anchor_chosen"
           },
           "proposal": {
+            "agreement_spread_seconds": 120.0,
             "anchor_count": 2,
             "anchors": [
               {
                 "camera_source_naive_time": "2024:07:03 14:00:00",
                 "gpx_match": {
                   "distance_m": 0.0,
-                  "gpx_file": "trip-2024-07-03.gpx",
+                  "gpx_file": "conflict-a.gpx",
                   "match_type": "gpx_point_match",
                   "segment_duration_seconds": null
                 },
@@ -63,7 +65,7 @@
                 "camera_source_naive_time": "2024:07:03 14:00:00",
                 "gpx_match": {
                   "distance_m": 0.0,
-                  "gpx_file": "trip-2024-07-03.gpx",
+                  "gpx_file": "conflict-b.gpx",
                   "match_type": "gpx_point_match",
                   "segment_duration_seconds": null
                 },
@@ -88,7 +90,7 @@
                 "representative": {
                   "camera_source_naive_time": "2024:07:03 14:00:00",
                   "distance_m": 0.0,
-                  "gpx_file": "trip-2024-07-03.gpx",
+                  "gpx_file": "conflict-a.gpx",
                   "match_type": "gpx_point_match",
                   "real_utc": "2024-07-03T12:00:00Z",
                   "source_file": "6-photos-by-dest/Conflict/c1.arw"
@@ -100,20 +102,21 @@
                 "representative": {
                   "camera_source_naive_time": "2024:07:03 14:00:00",
                   "distance_m": 0.0,
-                  "gpx_file": "trip-2024-07-03.gpx",
+                  "gpx_file": "conflict-b.gpx",
                   "match_type": "gpx_point_match",
                   "real_utc": "2024-07-03T09:00:00Z",
                   "source_file": "6-photos-by-dest/Conflict/c2.arw"
                 }
               }
             ],
+            "imprecise_seconds": 0,
             "proposal_source": "gpx_self_anchor",
             "proposed_offset_seconds": -7200,
             "proposed_real_utc": "2024-07-03T12:00:00Z",
             "rank": "recommended",
             "recommended_gpx_match": {
               "distance_m": 0.0,
-              "gpx_file": "trip-2024-07-03.gpx",
+              "gpx_file": "conflict-a.gpx",
               "match_type": "gpx_point_match",
               "segment_duration_seconds": null
             },
@@ -129,6 +132,7 @@
           "stale_user_decision": false,
           "user_decision": {
             "accept_proposal": false,
+            "accepted_offset_seconds": "",
             "manual_offset_seconds": -7200
           }
         }
@@ -156,11 +160,13 @@
         "CAM|revisit|R": {
           "camera_group": "CAM|revisit|R",
           "camera_group_class": "camera",
+          "day": "2024-07-04",
           "effective_time_anchor": {
             "offset_seconds": -93600,
             "source": "gpx_anchor_chosen"
           },
           "proposal": {
+            "agreement_spread_seconds": 120.0,
             "anchor_count": 1,
             "anchors": [
               {
@@ -209,6 +215,7 @@
                 }
               }
             ],
+            "imprecise_seconds": 0,
             "proposal_source": "gpx_self_anchor",
             "proposed_offset_seconds": -7200,
             "proposed_real_utc": "2024-07-04T12:00:00Z",
@@ -231,6 +238,7 @@
           "stale_user_decision": false,
           "user_decision": {
             "accept_proposal": false,
+            "accepted_offset_seconds": "",
             "manual_offset_seconds": -93600
           }
         }
@@ -258,18 +266,20 @@
         "CAM|segment|G": {
           "camera_group": "CAM|segment|G",
           "camera_group_class": "camera",
+          "day": "2024-07-03",
           "effective_time_anchor": {
             "offset_seconds": -7200,
             "source": "gpx_anchor_accepted"
           },
           "proposal": {
+            "agreement_spread_seconds": 120.0,
             "anchor_count": 1,
             "anchors": [
               {
                 "camera_source_naive_time": "2024:07:03 14:00:15",
                 "gpx_match": {
                   "distance_m": 33.36,
-                  "gpx_file": "trip-2024-07-03.gpx",
+                  "gpx_file": "segment.gpx",
                   "match_type": "gpx_segment_interpolation",
                   "segment_duration_seconds": 30
                 },
@@ -292,20 +302,21 @@
                 "representative": {
                   "camera_source_naive_time": "2024:07:03 14:00:15",
                   "distance_m": 33.36,
-                  "gpx_file": "trip-2024-07-03.gpx",
+                  "gpx_file": "segment.gpx",
                   "match_type": "gpx_segment_interpolation",
                   "real_utc": "2024-07-03T12:00:15Z",
                   "source_file": "6-photos-by-dest/Segment/g.arw"
                 }
               }
             ],
+            "imprecise_seconds": 0,
             "proposal_source": "gpx_self_anchor",
             "proposed_offset_seconds": -7200,
             "proposed_real_utc": "2024-07-03T12:00:15Z",
             "rank": "recommended",
             "recommended_gpx_match": {
               "distance_m": 33.36,
-              "gpx_file": "trip-2024-07-03.gpx",
+              "gpx_file": "segment.gpx",
               "match_type": "gpx_segment_interpolation",
               "segment_duration_seconds": 30
             },
@@ -321,6 +332,7 @@
           "stale_user_decision": false,
           "user_decision": {
             "accept_proposal": true,
+            "accepted_offset_seconds": -7200,
             "manual_offset_seconds": ""
           }
         }
@@ -348,18 +360,20 @@
         "CAM|single-point|S": {
           "camera_group": "CAM|single-point|S",
           "camera_group_class": "camera",
+          "day": "2024-07-03",
           "effective_time_anchor": {
             "offset_seconds": -7200,
             "source": "gpx_anchor_accepted"
           },
           "proposal": {
+            "agreement_spread_seconds": 120.0,
             "anchor_count": 1,
             "anchors": [
               {
                 "camera_source_naive_time": "2024:07:03 14:00:00",
                 "gpx_match": {
                   "distance_m": 0.0,
-                  "gpx_file": "trip-2024-07-03.gpx",
+                  "gpx_file": "single.gpx",
                   "match_type": "gpx_point_match",
                   "segment_duration_seconds": null
                 },
@@ -382,20 +396,21 @@
                 "representative": {
                   "camera_source_naive_time": "2024:07:03 14:00:00",
                   "distance_m": 0.0,
-                  "gpx_file": "trip-2024-07-03.gpx",
+                  "gpx_file": "single.gpx",
                   "match_type": "gpx_point_match",
                   "real_utc": "2024-07-03T12:00:00Z",
                   "source_file": "6-photos-by-dest/SinglePoint/p.arw"
                 }
               }
             ],
+            "imprecise_seconds": 0,
             "proposal_source": "gpx_self_anchor",
             "proposed_offset_seconds": -7200,
             "proposed_real_utc": "2024-07-03T12:00:00Z",
             "rank": "recommended",
             "recommended_gpx_match": {
               "distance_m": 0.0,
-              "gpx_file": "trip-2024-07-03.gpx",
+              "gpx_file": "single.gpx",
               "match_type": "gpx_point_match",
               "segment_duration_seconds": null
             },
@@ -411,6 +426,7 @@
           "stale_user_decision": false,
           "user_decision": {
             "accept_proposal": true,
+            "accepted_offset_seconds": -7200,
             "manual_offset_seconds": ""
           }
         }

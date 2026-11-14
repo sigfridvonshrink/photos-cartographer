@@ -260,7 +260,7 @@ def test_determinism(tmp_path):
     assert json.dumps(a1, sort_keys=True) == json.dumps(a2, sort_keys=True)
 
 
-@pytest.mark.spec("RUL-fallback_from_nearest", "BLD-folder_fallback_cell",
+@pytest.mark.spec("RUL-fallback_from_nearest", "RUL-accepted_fallback_follows", "BLD-folder_fallback_cell",
                   test="TST-geotag_gps_decisions-an_accepted_inheritance_follows_the_parent")
 def test_an_accepted_inheritance_follows_the_parent(tmp_path):
     # Accepting the inherited fallback is choosing to inherit: the parent's fallback changed, the child follows it.
@@ -291,3 +291,59 @@ def test_a_destination_never_waits_on_its_fallback(tmp_path):
     assert [(i["relative_path"], i["reason"], i["requires_user_input"]) for i in items] == [
         (f"{c}/b.jpg", "no_reliable_gps_source", True)]
 
+
+
+def _fp_file(rel, dest, fp):
+    return dict(_file(rel, dest), content_fingerprint=fp)
+
+
+@pytest.mark.spec("RUL-photo_decision_follows_the_photo", "BLD-review_item_identity",
+                  test="TST-geotag_gps_decisions-a_photo_s_decision_follows_it_through_its_rename")
+def test_a_photo_s_decision_follows_it_through_its_rename(tmp_path):
+    """A position the user set for one photo, or their answer to leave it unlocated, is that photo's — found
+    again by its fingerprint once geotag has renamed it, never lost with the old name (nor given to another
+    photo that takes the name)."""
+    wf, d = _wf(tmp_path), f"{BYDEST}/T"
+    before = [_fp_file(f"{d}/a.arw", d, "fp-a"), _fp_file(f"{d}/b.arw", d, "fp-b")]
+    rows = [_row(f"{d}/a.arw", "2024-07-03T20:00:00Z"), _row(f"{d}/b.arw", "2024-07-03T21:00:00Z")]   # off the track
+    art, _ = _build(wf, before, rows, _gpx())
+    items = {ri["relative_path"]: ri for ri in _dd(art, d)["gps_decisions"]["review_items"]}
+    assert items[f"{d}/a.arw"]["content_fingerprint"] == "fp-a" and items[f"{d}/a.arw"]["requires_user_input"]
+    items[f"{d}/a.arw"]["user_decision"].update(manual_lat=51.5, manual_lon=4.5)
+    items[f"{d}/b.arw"]["user_decision"]["accept_unlocated"] = True
+    # execute renamed both; a new photo took a.arw's old name
+    after = [_fp_file(f"{d}/2024-07-03--22-00-00.arw", d, "fp-a"), _fp_file(f"{d}/2024-07-03--23-00-00.arw", d, "fp-b"),
+             _fp_file(f"{d}/a.arw", d, "fp-new")]
+    rows2 = [_row(after[0]["relative_path"], "2024-07-03T20:00:00Z"), _row(after[1]["relative_path"], "2024-07-03T21:00:00Z"),
+             _row(f"{d}/a.arw", "2024-07-03T19:00:00Z")]
+    art2, blk = _build(wf, after, rows2, _gpx(), art)
+    assert not blk
+    got = {ri["content_fingerprint"]: ri for ri in _dd(art2, d)["gps_decisions"]["review_items"]}
+    assert got["fp-a"]["reason"] == "manual_locked" and got["fp-a"]["user_decision"]["manual_lat"] == 51.5
+    assert got["fp-b"]["reason"] == "accepted_unlocated"
+    assert got["fp-new"]["requires_user_input"] and got["fp-new"]["user_decision"]["manual_lat"] == ""
+    # a fingerprint taken again with a new value: the decision follows through the pin's key
+    retaken = [dict(_fp_file(after[0]["relative_path"], d, "fp-a2"), original_key="fp-a")]
+    art3, _ = _build(wf, retaken, rows2[:1], _gpx(), art2)
+    assert _dd(art3, d)["gps_decisions"]["review_items"][0]["reason"] == "manual_locked"
+
+
+@pytest.mark.spec("RUL-unplaced_photo_listed", "RUL-disagreeing_tracks_place_nothing", "BLD-gps_decisions_record",
+                  test="TST-geotag_gps_decisions-an_unplaced_photo_is_listed_with_why")
+def test_an_unplaced_photo_is_listed_with_why_the_tracks_did_not_place_it(tmp_path):
+    """Every photo no source places is listed by itself with why the tracks placed nothing — how far the nearest
+    track point is in time — and tracks that cover its time in different places are named, even where a folder
+    fallback then places the photo and would hide it."""
+    wf, d = _wf(tmp_path), f"{BYDEST}/T"
+    files = [_fp_file(f"{d}/late.arw", d, "fp-l")]
+    art, _ = _build(wf, files, [_row(f"{d}/late.arw", "2024-07-03T13:01:00Z")], _gpx())    # an hour past the track
+    item = _dd(art, d)["gps_decisions"]["review_items"][0]
+    assert item["reason"] == "no_reliable_gps_source" and item["tracks"] == {"reason": "outside_track", "seconds_from_track": 3600}
+    assert "track_disagreements" not in art
+    two = cal.GPXIndex("")
+    two.points = [cal.GPXPoint(50.0, 4.0, datetime(2024, 7, 3, 12, 0, s, tzinfo=timezone.utc), "mine.gpx", s) for s in (0, 30)] + \
+                 [cal.GPXPoint(51.0, 5.0, datetime(2024, 7, 3, 12, 0, s, tzinfo=timezone.utc), "theirs.gpx", s) for s in (10, 40)]
+    prior = {"destinations": {d: {"folder_fallback": {"user_decision": {"fallback_lat": 50.5, "fallback_lon": 4.5}}}}}
+    art, _ = _build(wf, [_fp_file(f"{d}/x.arw", d, "fp-x")], [_row(f"{d}/x.arw", "2024-07-03T12:00:20Z")], two, prior)
+    assert _dd(art, d)["gps_decisions"]["summary"]["automatic_folder_fallback"] == 1       # the fallback placed it
+    assert art["track_disagreements"] == [{"gpx_files": ["mine.gpx", "theirs.gpx"], "photos": 1}]

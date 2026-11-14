@@ -671,6 +671,17 @@ Re-planning SHALL never overwrite a plan or a decision record: when what it make
 one is first set aside, recoverably, and the user told where.
 :::
 
+:::{rul} A record being replaced never leaves its path
+:id: RUL-record_in_place_while_replaced
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-replanning_keeps_the_prior
+
+A plan or decision record being replaced SHALL be at its path at every instant — the earlier version until the new one is whole — so that a run killed in between finds the decisions, never an empty place.
+:::
+
 :::{rul} An unchanged re-plan writes nothing
 :id: RUL-unchanged_replan_writes_nothing
 :status: ruled

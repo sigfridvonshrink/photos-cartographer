@@ -35,6 +35,7 @@
         "NIKON|D750|B": {
           "camera_group": "NIKON|D750|B",
           "camera_group_class": "camera",
+          "day": "2024-07-03",
           "effective_time_anchor": "",
           "proposal": {
             "proposal_source": "manual_required"
@@ -43,6 +44,7 @@
           "stale_user_decision": true,
           "user_decision": {
             "accept_proposal": true,
+            "accepted_offset_seconds": -7200,
             "manual_offset_seconds": ""
           }
         }

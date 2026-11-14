@@ -20,6 +20,7 @@ photos_2_geotag.py; the GeotagWorkflow orchestration + CLI stay there and re-exp
 module does."""
 
 import argparse
+import bisect
 import concurrent.futures
 import hashlib
 import json
@@ -101,6 +102,7 @@ __all__ = [
     'plan_renames',
     '_GPS_OP_ORIGIN',
     '_GPS_OP_MARKER',
+    '_TRACK_MARKER',
     '_local_time_and_offset',
     '_make_op',
     'plan_file_ops',
@@ -115,6 +117,7 @@ def haversine(lat1, lon1, lat2, lon2):
     dphi = math.radians(lat2 - lat1)
     dlmb = math.radians(lon2 - lon1)
     a = math.sin(dphi / 2.0) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlmb / 2.0) ** 2
+    a = min(1.0, a)                        # rounding can carry an antipodal pair a hair past 1
     return R * (2.0 * math.atan2(math.sqrt(a), math.sqrt(1 - a)))
 
 
@@ -152,6 +155,20 @@ class GPXIndex:
         self.status = "disabled"
         self.warnings = []
         self.parsed = self.reused = 0      # files parsed this build / taken from the memo
+        self._tracks = None
+        self.file_sha = {}                 # each track file's SHA-256, by its path under gpx_root
+
+    def tracks(self):
+        """The points as separate tracks — `[(file, points in time order, their times)]`, by file name. Each
+        file is one device's record of where it was: two files that overlap in time are two devices, perhaps
+        two people, so no placement and no anchor ever joins a point of one to a point of another."""
+        if self._tracks is None or self._tracks[0] != (id(self.points), len(self.points)):
+            by_file = {}
+            for p in sorted(self.points, key=lambda p: (p.time_utc, p.point_index)):
+                by_file.setdefault(p.source_file, []).append(p)
+            self._tracks = ((id(self.points), len(self.points)),
+                            [(f, pts, [p.time_utc for p in pts]) for f, pts in sorted(by_file.items())])
+        return self._tracks[1]
 
     def build(self, coordinator=None):
         if not self.gpx_root:
@@ -190,6 +207,7 @@ class GPXIndex:
                 digest = hashlib.sha256(data).digest()
                 h.update(digest)
                 seen.add(digest.hex())
+                self.file_sha[rel] = digest.hex()
                 parsed = self._memo_get(memo, digest.hex())
                 if parsed is None:
                     parsed = self._parse_bytes(data)
@@ -365,10 +383,20 @@ def _parse_utc(s):
         return None
 
 
+def _lon_delta(a, b):
+    """The signed degrees of longitude from `a` to `b` the short way round, so a track crossing the
+    antimeridian (179.99 → -179.99) is a step of 0.02°, never one of 359.98° back across the world."""
+    return (b - a + 180.0) % 360.0 - 180.0
+
+
+def _wrap_lon(lon):
+    return (lon + 180.0) % 360.0 - 180.0 if not -180.0 <= lon <= 180.0 else lon
+
+
 def _equirect_xy(lat, lon, lat0, lon0):
     """Local equirectangular projection of (lat,lon) to metres about (lat0,lon0)."""
     R = 6371000.0
-    x = math.radians(lon - lon0) * math.cos(math.radians(lat0)) * R
+    x = math.radians(_lon_delta(lon0, lon)) * math.cos(math.radians(lat0)) * R
     y = math.radians(lat - lat0) * R
     return x, y
 
@@ -385,21 +413,30 @@ def _point_to_segment(plat, plon, alat, alon, blat, blon):
     return math.hypot(px - t * bx, py - t * by), t
 
 
-def _candidate(match_type, gpx_time, distance, src, naive, dur):
+def _candidate(match_type, gpx_time, distance, src, naive, dur, span=0.0):
     offset = round((gpx_time.replace(tzinfo=None) - naive).total_seconds())
     return {"match_type": match_type, "gpx_time": gpx_time, "distance_m": round(distance, 2),
             "gpx_file": src, "offset_seconds": int(offset),
-            "segment_duration_seconds": (round(dur) if dur is not None else None)}
+            "segment_duration_seconds": (round(dur) if dur is not None else None),
+            "time_span_seconds": int(round(span))}
+
+
+# How much farther than a pass's closest match another match of the pass may lie and still be as good a
+# reading of where the photo was taken, as a share of the anchor distance: positions are only that sharp.
+_AS_CLOSE_SHARE = 0.2
 
 
 def frame_candidates(frame, gpx, cfg):
-    """Every GPX time-anchor candidate for one native-GPS frame (§19.1): one per PASS of the tracks by the
+    """Every GPX time-anchor candidate for one native-GPS frame (§19.1): one per PASS of a track by the
     place it was taken — the best match of each pass, a close point before a close short segment, then the
-    closest. A pass is a run of matches with no gap longer than `gpx_interpolation_max_gap_seconds`
-    between them, so the same walk on two days, or a place visited morning and evening, yields one
-    candidate per visit, and the consensus over the camera's frames (infer_anchor_proposal) says which
-    visit is the photo's. Only matches within the plausible-clock-error window of the frame's naive time
-    count. Candidates come in time order; [] if nothing anchors."""
+    closest. A pass is an unbroken run of ONE track within the anchor distance of the place: a track that
+    leaves and comes back passed twice, so an out-and-back walk, the same walk on two days, or a place
+    visited morning and evening each yield one candidate per visit, and the consensus over the camera's
+    frames (infer_anchor_proposal) says which visit is the photo's. Passes too close in time for their
+    offsets to be told apart (within the agreement spread) are one. A candidate's `time_span_seconds` is how
+    long the track stayed as close as its best match: where the track stood still the place says only that
+    the photo was taken some time during the stay, not when. Only matches within the plausible-clock-error
+    window of the frame's naive time count. Candidates come in time order; [] if nothing anchors."""
     ng = frame.get("native_gps") or {}
     naive = _parse_camera_naive(frame.get("source_naive_time"))
     if ng.get("lat") is None or ng.get("lon") is None or naive is None or not gpx.points:
@@ -408,40 +445,54 @@ def frame_candidates(frame, gpx, cfg):
     pt_max = cfg["gpx_anchor_max_point_distance_meters"]
     seg_max = cfg["gpx_anchor_max_segment_distance_meters"]
     gap_max = cfg["gpx_interpolation_max_gap_seconds"]
+    spread = cfg.get("gpx_anchor_offset_spread_max_seconds") or 0
     # Plausible-clock-error window: a GPX time may anchor this frame only if it is within `window` of the
     # frame's naive time (read as UTC). Applied DURING the search so a same-place/other-trip point is
     # skipped even when it is the spatially closest — fixing the years-off false match. None = no bound
     # (unit tests that omit the knob); real configs always set it (§19.1).
     window = cfg.get("gpx_anchor_max_clock_error_seconds")
-    in_window = lambda gt: window is None or abs((gt.replace(tzinfo=None) - naive).total_seconds()) <= window
-
-    matches = []                                      # (gpx time, rank, distance, candidate)
-    for p in gpx.points:
-        if in_window(p.time_utc):
-            d = haversine(flat, flon, p.lat, p.lon)
-            if d <= pt_max:
-                matches.append((p.time_utc, 0, d, ("gpx_point_match", p.time_utc, d, p.source_file, None)))
-    pts = gpx.points
-    for i in range(len(pts) - 1):
-        a, b = pts[i], pts[i + 1]
-        dur = (b.time_utc - a.time_utc).total_seconds()
-        if dur <= 0 or dur > gap_max:
-            continue
-        dist, t = _point_to_segment(flat, flon, a.lat, a.lon, b.lat, b.lon)
-        seg_time = a.time_utc + timedelta(seconds=t * dur)
-        if dist <= seg_max and in_window(seg_time):
-            matches.append((seg_time, 1, dist, ("gpx_segment_interpolation", seg_time, dist, a.source_file, dur)))
-    matches.sort(key=lambda m: (m[0], m[1], m[2]))
-    passes = []
-    for m in matches:
-        if passes and (m[0] - passes[-1][-1][0]).total_seconds() <= gap_max:
-            passes[-1].append(m)
-        else:
-            passes.append([m])
+    naive_utc = naive.replace(tzinfo=timezone.utc)
     out = []
-    for run in passes:
-        _t, _r, _d, (mt, gt, dist, src, dur) = min(run, key=lambda m: (m[1], m[2], m[0]))
-        out.append(_candidate(mt, gt, dist, src, naive, dur))
+    for src, pts, times in gpx.tracks():
+        lo, hi = 0, len(pts)
+        if window is not None:                        # only the stretch of the track inside the window
+            lo = bisect.bisect_left(times, naive_utc - timedelta(seconds=window))
+            hi = bisect.bisect_right(times, naive_utc + timedelta(seconds=window))
+        passes, run = [], []                          # a pass: [(gpx time, rank, distance, segment duration)]
+        for i in range(lo, hi):
+            p = pts[i]
+            d = haversine(flat, flon, p.lat, p.lon)
+            near = d <= pt_max
+            if near:
+                run.append((p.time_utc, 0, d, None))
+            seg_near = False
+            if i + 1 < hi:
+                b = pts[i + 1]
+                dur = (b.time_utc - p.time_utc).total_seconds()
+                if 0 < dur <= gap_max:
+                    dist, t = _point_to_segment(flat, flon, p.lat, p.lon, b.lat, b.lon)
+                    if dist <= seg_max:
+                        seg_near = True
+                        run.append((p.time_utc + timedelta(seconds=t * dur), 1, dist, dur))
+            if run and not seg_near and not (i + 1 < hi and haversine(flat, flon, pts[i + 1].lat,
+                                                                      pts[i + 1].lon) <= pt_max
+                                             and (pts[i + 1].time_utc - p.time_utc).total_seconds() <= gap_max):
+                passes.append(run)                    # the track has left the place (or stopped recording)
+                run = []
+        if run:
+            passes.append(run)
+        merged = []
+        for r in passes:
+            if merged and (min(m[0] for m in r) - max(m[0] for m in merged[-1])).total_seconds() <= spread:
+                merged[-1].extend(r)
+            else:
+                merged.append(r)
+        for r in merged:
+            gt, rank, dist, dur = min(r, key=lambda m: (m[1], m[2], m[0]))
+            as_close = [m[0] for m in r if m[2] <= dist + _AS_CLOSE_SHARE * pt_max]
+            out.append(_candidate("gpx_point_match" if rank == 0 else "gpx_segment_interpolation", gt, dist, src,
+                                  naive, dur, (max(as_close) - min(as_close)).total_seconds()))
+    out.sort(key=lambda c: (c["gpx_time"], c["gpx_file"] or ""))
     return out
 
 
@@ -511,13 +562,21 @@ def infer_anchor_proposal(frames, gpx, cfg):
                 skipped["examples"].append({"source_file": f.get("relative_path"), "reason": reason})
     if not by_frame:
         return None
-    rank = lambda c: (0 if c["match_type"] == "gpx_point_match" else 1, c["distance_m"], c["source_file"] or "",
-                      c["offset_seconds"])
-    cands = sorted((c for cs in by_frame for c in cs), key=rank)
     spread = cfg["gpx_anchor_offset_spread_max_seconds"]
+    # A candidate whose track stood still by the place for longer than offsets are told apart says only that
+    # the photo was taken some time during the stay: it supports any offset in that span, and names none.
+    vague = lambda c: c.get("time_span_seconds", 0) > spread
+    rank = lambda c: (vague(c), 0 if c["match_type"] == "gpx_point_match" else 1, c["distance_m"],
+                      c["source_file"] or "", c["offset_seconds"])
+
+    def agrees(c, offset):
+        if not vague(c):
+            return abs(c["offset_seconds"] - offset) <= spread
+        return abs(c["offset_seconds"] - offset) <= c["time_span_seconds"] + spread
+    cands = sorted((c for cs in by_frame for c in cs), key=rank)
     clusters = []                                   # each: {"offset", "rep", "members": [...], "frames": set}
     for c in cands:                                 # rank order → each cluster's rep is its best match
-        g = next((g for g in clusters if abs(c["offset_seconds"] - g["offset"]) <= spread), None)
+        g = next((g for g in clusters if agrees(c, g["offset"])), None)
         if g is None:
             clusters.append({"offset": c["offset_seconds"], "rep": c, "members": [c], "frames": {c["frame"]}})
         else:
@@ -532,7 +591,8 @@ def infer_anchor_proposal(frames, gpx, cfg):
     supporting_count = len(support) - 1
     conflicting = sorted({cs[0]["source_file"] or "" for n, cs in enumerate(by_frame) if n not in support})
     conflicting_count = len(by_frame) - len(support)        # frames no pass of which agrees
-    if conflicting_count or tied:
+    imprecise = best["time_span_seconds"] if vague(best) else 0     # no photo fixes the offset within the stay
+    if conflicting_count or tied or imprecise:
         confidence = "review_required"
     elif supporting_count or best["match_type"] == "gpx_point_match":
         confidence = "high"
@@ -568,7 +628,8 @@ def infer_anchor_proposal(frames, gpx, cfg):
                                   "distance_m": best["distance_m"],
                                   "segment_duration_seconds": best["segment_duration_seconds"]},
         "anchor_count": len(by_frame), "supporting_count": supporting_count,
-        "conflicting_count": conflicting_count, "conflicting_files": conflicting, "tied": tied, "anchors": anchors,
+        "conflicting_count": conflicting_count, "conflicting_files": conflicting, "tied": tied,
+        "imprecise_seconds": imprecise, "agreement_spread_seconds": spread, "anchors": anchors,
         "groups": groups, "skipped": skipped,
     }
 
@@ -706,73 +767,103 @@ def resolved_utc_fingerprint(rows, input_fingerprints):
 
 
 def _interp(a, b, target):
-    """Linear time-fraction interpolation of (lat, lon) between GPX points `a` and `b` at `target`.
-    `target` outside [a.time, b.time] extrapolates the a->b vector (ratio <0 or >1)."""
+    """Linear time-fraction interpolation of (lat, lon) between GPX points `a` and `b` at `target`, the short
+    way round in longitude. `target` outside [a.time, b.time] extrapolates the a->b vector (ratio <0 or >1)."""
     span = (b.time_utc - a.time_utc).total_seconds()
     if span == 0:
         return a.lat, a.lon
     r = (target - a.time_utc).total_seconds() / span
-    return a.lat + r * (b.lat - a.lat), a.lon + r * (b.lon - a.lon)
+    return a.lat + r * (b.lat - a.lat), _wrap_lon(a.lon + r * _lon_delta(a.lon, b.lon))
 
 
-def _extrapolate(other, anchor, target, gpx_file):
-    """Project the `other`->`anchor` velocity vector to `target` (past the track end). A missing or
-    zero-span partner falls back to the anchor's own coordinates."""
-    if other is None or other.time_utc == anchor.time_utc:
-        lat, lon = anchor.lat, anchor.lon
-    else:
-        lat, lon = _interp(other, anchor, target)
-    return {"lat": round(lat, 6), "lon": round(lon, 6), "method": "extrapolated", "gpx_file": gpx_file}
+def _extrapolate(pts, end, step, target, cfg):
+    """A photo past a track's end `pts[end]` (`step` -1: the track goes on backwards from it, i.e. the photo
+    is after its last point; +1: before its first), placed along the track's heading there. The heading is
+    taken over the track's last stretch — as far back as a point still counts as the photo's own place
+    (`gpx_direct_match_max_seconds`) — never over its last two points alone, whose jitter a five-minute
+    projection would turn into kilometres. A projection farther or faster than tracks are joined across
+    (the interpolation caps) is no reading of where the photo was: the photo is placed at the track's end."""
+    anchor = pts[end]
+    lat, lon = anchor.lat, anchor.lon
+    other, i = None, end + step
+    while 0 <= i < len(pts) and abs((pts[i].time_utc - anchor.time_utc).total_seconds()) \
+            <= cfg["gpx_direct_match_max_seconds"]:
+        other, i = pts[i], i + step
+    if other is not None and other.time_utc != anchor.time_utc:
+        plat, plon = _interp(other, anchor, target)
+        dist = haversine(anchor.lat, anchor.lon, plat, plon) if -90.0 <= plat <= 90.0 else float("inf")
+        base = abs((anchor.time_utc - other.time_utc).total_seconds())
+        speed_kmh = haversine(other.lat, other.lon, anchor.lat, anchor.lon) / base * 3.6
+        if dist <= cfg["gpx_interpolation_max_distance_meters"] and speed_kmh <= cfg["gpx_interpolation_max_speed_kmh"]:
+            lat, lon = plat, plon
+    return {"lat": round(lat, 6), "lon": round(lon, 6), "method": "extrapolated", "gpx_file": anchor.source_file,
+            "seconds_from_track": abs((target - anchor.time_utc).total_seconds())}
 
 
-def place_gps(target_utc, gpx, cfg):
-    """Place a photo at its resolved UTC against the GPX track (§23 options 4/5), or None when no
-    reliable placement exists (option 6, blocked). Direct match -> interpolation -> velocity
-    extrapolation past an end, each gated by the gpx_* config thresholds."""
-    pts = gpx.points
-    if not pts:
-        return None
-    before = after = None
-    for p in pts:
-        if p.time_utc <= target_utc:
-            before = p
-        elif after is None:
-            after = p
-
-    # 1. direct match: the nearer bracket within the direct-match window.
-    best = None
-    for p in (before, after):
-        if p is not None:
-            d = abs((p.time_utc - target_utc).total_seconds())
-            if best is None or d < best[0]:
-                best = (d, p)
-    if best is not None and best[0] <= cfg["gpx_direct_match_max_seconds"]:
-        p = best[1]
-        return {"lat": p.lat, "lon": p.lon, "method": "direct_match", "gpx_file": p.source_file}
-
-    # 2. interpolation between two brackets, gated by gap / distance / implied speed.
+def _place_on_track(pts, times, target, cfg):
+    """One track's placement of an instant (§25): a point within the direct-match window, else between the
+    two points around it within the interpolation caps, else past an end of the track within the
+    extrapolation window. A track's end is its first or last point, or either side of a gap longer than
+    points are joined across. Returns (placement | None, why not)."""
+    i = bisect.bisect_right(times, target)            # pts[i-1].time <= target < pts[i].time
+    before = pts[i - 1] if i else None
+    after = pts[i] if i < len(pts) else None
+    near = [(abs((p.time_utc - target).total_seconds()), n, p) for n, p in enumerate((before, after)) if p is not None]
+    d, _n, p = min(near, key=lambda x: (x[0], x[1]))
+    if d <= cfg["gpx_direct_match_max_seconds"]:
+        return {"lat": p.lat, "lon": p.lon, "method": "direct_match", "gpx_file": p.source_file,
+                "seconds_from_track": d}, None
+    why = {"reason": "outside_track", "seconds_from_track": d}
     if before is not None and after is not None:
         gap = (after.time_utc - before.time_utc).total_seconds()   # > 0: before <= target < after
-        dist = haversine(before.lat, before.lon, after.lat, after.lon)
-        speed_kmh = dist / gap * 3.6
-        if (gap <= cfg["gpx_interpolation_max_gap_seconds"]
-                and dist <= cfg["gpx_interpolation_max_distance_meters"]
-                and speed_kmh <= cfg["gpx_interpolation_max_speed_kmh"]):
-            lat, lon = _interp(before, after, target_utc)
-            return {"lat": round(lat, 6), "lon": round(lon, 6), "method": "interpolated",
-                    "gpx_file": before.source_file, "gpx_after_file": after.source_file}
-        return None                                  # low-confidence interpolation -> blocked
+        if gap <= cfg["gpx_interpolation_max_gap_seconds"]:
+            dist = haversine(before.lat, before.lon, after.lat, after.lon)
+            if dist <= cfg["gpx_interpolation_max_distance_meters"] \
+                    and dist / gap * 3.6 <= cfg["gpx_interpolation_max_speed_kmh"]:
+                lat, lon = _interp(before, after, target)
+                return {"lat": round(lat, 6), "lon": round(lon, 6), "method": "interpolated",
+                        "gpx_file": before.source_file, "seconds_from_track": d}, None
+            return None, {"reason": "track_jump", "seconds_from_track": d, "jump_meters": round(dist)}
+        why = {"reason": "track_gap", "seconds_from_track": d, "gap_seconds": round(gap)}
+    if d <= cfg["gpx_extrapolation_max_seconds"]:     # past an end of the track, or of its recording
+        if p is before:
+            return _extrapolate(pts, i - 1, -1, target, cfg), None
+        return _extrapolate(pts, i, +1, target, cfg), None
+    return None, why
 
-    # 3. extrapolation past an end, within the extrapolation window, via the endpoint velocity.
-    extrap_max = cfg["gpx_extrapolation_max_seconds"]
-    if before is not None:                           # target after the last point -> project forward
-        if (target_utc - before.time_utc).total_seconds() <= extrap_max:
-            return _extrapolate(pts[-2] if len(pts) >= 2 else None, before, target_utc, before.source_file)
+
+_METHOD_RANK = {"direct_match": 0, "interpolated": 1, "extrapolated": 2}
+
+
+def place_gps(target_utc, gpx, cfg, why=None):
+    """Place a photo at its resolved UTC against the GPX tracks (§25), or None when no reliable placement
+    exists. Each track places it on its own (_place_on_track) and the closest evidence wins: a point at its
+    time before the place between two, before a projection past an end; then the track nearest in time.
+    Tracks that cover the instant and put the photo in different places — farther apart than points are
+    joined across — are two devices in two places, and nothing here says which carried the camera: the
+    photo is not placed. `why`, a dict, is filled with the reason when nothing places it."""
+    placed, missed = [], []
+    for _src, pts, times in gpx.tracks():
+        p, w = _place_on_track(pts, times, target_utc, cfg)
+        (placed if p is not None else missed).append(p if p is not None else w)
+    if not placed:
+        if why is not None:
+            why.update(min(missed, key=lambda w: w["seconds_from_track"]) if missed else {"reason": "no_tracks"})
+            if "seconds_from_track" in why:
+                why["seconds_from_track"] = round(why["seconds_from_track"])
         return None
-    # after is not None: target before the first point -> project backward
-    if (after.time_utc - target_utc).total_seconds() <= extrap_max:
-        return _extrapolate(pts[1] if len(pts) >= 2 else None, after, target_utc, after.source_file)
-    return None
+    placed.sort(key=lambda p: (_METHOD_RANK[p["method"]], p["seconds_from_track"], p["gpx_file"]))
+    best = placed[0]
+    # a projection past one track's end is no witness against a track that covers the instant
+    rivals = [p for p in placed[1:] if (p["method"] == "extrapolated") == (best["method"] == "extrapolated")]
+    for p in rivals:
+        apart = haversine(best["lat"], best["lon"], p["lat"], p["lon"])
+        if apart > cfg["gpx_interpolation_max_distance_meters"]:
+            if why is not None:
+                why.update({"reason": "tracks_disagree", "gpx_files": sorted((best["gpx_file"], p["gpx_file"])),
+                            "apart_meters": round(apart)})
+            return None
+    return {k: v for k, v in best.items() if k != "seconds_from_track"}
 
 
 def _valid_coord(lat, lon):
@@ -786,7 +877,7 @@ _GPS_PLACE_CATEGORY = {"direct_match": "gpx_interpolation", "interpolated": "gpx
                        "extrapolated": "gpx_extrapolation"}
 
 
-def classify_gps(file, resolved_utc, gpx, cfg, effective_fallback, file_decision):
+def classify_gps(file, resolved_utc, gpx, cfg, effective_fallback, file_decision, why=None):
     """The §23 seven-option GPS decision for one file, as (category, coord|None). Resolves in
     priority order: preserve native -> per-file manual lock -> GPX interpolation/extrapolation at the
     resolved UTC -> the destination's effective folder fallback -> accept-unlocated -> blocked.
@@ -798,7 +889,7 @@ def classify_gps(file, resolved_utc, gpx, cfg, effective_fallback, file_decision
     if mlat not in (None, "") and mlon not in (None, ""):
         return "manual_locked", {"lat": mlat, "lon": mlon}
     if resolved_utc is not None:
-        p = place_gps(resolved_utc, gpx, cfg)
+        p = place_gps(resolved_utc, gpx, cfg, why)
         if p is not None:
             return _GPS_PLACE_CATEGORY[p["method"]], p
     if effective_fallback is not None:
@@ -1197,6 +1288,9 @@ def _gps_and_rename_steps(ops, native):
             step["pre_state"] = gps_op["pre_state"]
         if (gps_op.get("provenance") or {}).get("because"):
             step["because"] = gps_op["provenance"]["because"]
+        if (gps_op.get("provenance") or {}).get("gpx_file"):         # the track that placed it, and when
+            step["gpx_file"] = gps_op["provenance"]["gpx_file"]
+            step["at_utc"] = gps_op["provenance"].get("resolved_utc")
         steps.append(step)
     elif marker is not None and (marker.get("writes") or {}).get("GPSLatitude") == "":
         # geotag's old position cleared: the decision now places none
@@ -1220,6 +1314,16 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, e
     The prep file itself is never edited."""
     photos = json.loads(json.dumps(prep_photos or {}))            # deep copy; never touch the prep file
     row_by_rel = {r["relative_path"]: r for r in resolved_rows}
+    unlocated = {}
+    for dd in (plan.get("destinations") or {}).values():
+        for op in dd.get("operations") or []:
+            # The rows are keyed by each photo's path when the plan was made; a prep run since records the
+            # photo under the name the plan gave it. Either way it is the same photo's row.
+            if op.get("type") == "rename_no_clobber" and op["relative_path"] in row_by_rel:
+                row_by_rel.setdefault(os.path.join(os.path.dirname(op["relative_path"]), op["to"]),
+                                      row_by_rel[op["relative_path"]])
+        for u in dd.get("left_unlocated") or []:
+            unlocated[u.get("content_fingerprint")] = u
     t_dests = (time_artifact or {}).get("destinations") or {}
     ops_by_fp = {}
     fp_by_rel = {f["relative_path"]: f.get("content_fingerprint") for f in files}
@@ -1257,6 +1361,8 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, e
             steps.append({"phase": "geotag", "action": "timezone_resolved", "value": tz,
                           "because": f"photos-21 destinations.{dest}.destination_timezone"})
 
+        if fp in unlocated:                    # the user's own answer: no position, and where that was decided
+            steps.append({"phase": "geotag", "action": "left_unlocated", "because": unlocated[fp]["because"]})
         steps.extend(_gps_and_rename_steps(ops, native=f.get("has_native_gps")))
         if not f.get("from_originals") and geotag_marker(held_values(f).get("method")):
             # geotag's mark is on the photo, but this workspace never held its own values: its time was

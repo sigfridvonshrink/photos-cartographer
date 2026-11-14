@@ -165,7 +165,8 @@ destination) spans **more than one naive calendar date** the cell SPLITS into pe
 `<camera_group_key>@<YYYY-MM-DD>` (the camera is set to local time each morning, so its offset is constant
 only within a day). Each bucket carries a `date` field and proposes/resolves independently; a manual
 decision on one day's bucket does not touch the others. The single-day common case keeps the bare key with
-no `date`. Resolved-UTC picks each file's own naive-date bucket. Offsets do **not** inherit between
+no `date`. Every cell names the day its photos are of in `day`, whatever its key: when a second day arrives
+(or leaves) and the key changes form, a day's answer is found again by its `day`. Resolved-UTC picks each file's own naive-date bucket. Offsets do **not** inherit between
 destinations or buckets.
 
 | Field | Type | Editable | Meaning |
@@ -174,12 +175,15 @@ destinations or buckets.
 | `camera_group_class` | `"camera"` | no | Always `camera` here. |
 | `date` | string | no | Present only on a per-date bucket: the naive calendar date (`"YYYY-MM-DD"`) this bucket covers. |
 | `proposal` | object | no | One of three shapes — see below. |
+| `day` | string | no | The naive calendar date this cell's photos are of (`"YYYY-MM-DD"`), on every cell. |
 | **`user_decision.accept_proposal`** | bool | **yes** | Accept the proposal's offset. |
+| **`user_decision.accepted_offset_seconds`** | number \| `""` | **yes** | The `proposed_offset_seconds` being accepted — written together with `accept_proposal: true`, cleared with it. The acceptance holds only while this is what is proposed (within `agreement_spread_seconds` for a GPX proposal): a proposal that became another one was never accepted, and the cell goes `stale_user_decision` and asks. `accept_proposal: true` with this empty is a blocker. |
 | **`user_decision.manual_offset_seconds`** | number \| `""` | **yes** | A manual clock offset, seconds (camera_time + offset = real UTC). |
-| `effective_time_anchor` | `""` \| object | no | `""` if unresolved; else `{ "offset_seconds": int, "source": … }` where source ∈ `manual` \| `gpx_anchor_accepted` \| `timezone_accepted` \| `gpx_anchor_auto`. |
+| `effective_time_anchor` | `""` \| object | no | `""` if unresolved; else `{ "offset_seconds": int, "source": … }` where source ∈ `manual` \| `gpx_anchor_accepted` \| `gpx_anchor_chosen` \| `gpx_anchor_imprecise` \| `timezone_accepted` \| `gpx_anchor_auto`. |
+| `anchored_by` | list | no | On a cell whose offset applied itself from GPS: the track files it was found from, each `{ "gpx_file", "sha256" }`. The offset is kept for later photos of the day (`decision_mode: "kept_from_earlier"`) only while each is under `gpx_root` unchanged and no newer GPS proposal says otherwise. |
 | `requires_user_input` | bool | no | `true` ⇔ `effective_time_anchor == ""`. (Containers carry no offset cells, so this is never softened here.) |
-| `stale_user_decision` | bool | no | Accepted a proposal with no offset. |
-| `decision_mode` | `"auto_resolved"` | no | Present when a GPX self-anchor auto-resolved under the policy flags. (Timezone-derived and manual offsets are never auto-resolved.) |
+| `stale_user_decision` | bool | no | Accepted a proposal that is no longer the one made (another offset, or none). |
+| `decision_mode` | `"auto_resolved"` \| `"kept_from_earlier"` | no | Present when a GPX self-anchor auto-resolved under the policy flags. (Timezone-derived and manual offsets are never auto-resolved.) |
 
 **`proposal` shapes** (all read-only; this is the evidence the UI shows):
 
@@ -195,6 +199,11 @@ destinations or buckets.
     "recommended_gpx_match": { "match_type": "gpx_point_match", "gpx_file": "…", "distance_m": 4.2,
                                "segment_duration_seconds": 0 },
     "anchor_count": 3, "supporting_count": 2, "conflicting_count": 0,
+    "conflicting_files": [], "tied": false,
+    "imprecise_seconds": 0,               // > 0: the tracks STAYED at these photos' place this long — the GPS
+                                          // says where, not when; never auto-applied, and once accepted
+                                          // (source gpx_anchor_imprecise) still confirmed in photos-22
+    "agreement_spread_seconds": 120,      // offsets this close are the same finding (for accepted_offset_seconds)
     "anchors": [ { "proposal_id": "anchor-001", "source_file": "…", "camera_source_naive_time": "…",
                    "native_gps": { … }, "gpx_match": { … }, "proposed_offset_seconds": -3600 }, … ],
     // collapsed view: the offset clusters, largest first (the recommended offset = the largest cluster)
@@ -274,6 +283,8 @@ One entry per file that needs the human (or that the human already locked/accept
 | Field | Type | Editable | Meaning |
 |-------|------|----------|---------|
 | `relative_path` | string | no | Workspace-relative path of the photo. |
+| `content_fingerprint` | string | no | The photo's identity. A decision is found again by it — through geotag's own rename of the photo — not by the path. |
+| `tracks` | object | no | On a photo the tracks did not place: why. `reason` ∈ `no_tracks` \| `outside_track` \| `track_gap` \| `track_jump` \| `tracks_disagree`, with `seconds_from_track`, `gap_seconds`, `jump_meters`, or `gpx_files` + `apart_meters`. |
 | `reason` | `"no_reliable_gps_source"` \| `"manual_locked"` \| `"accepted_unlocated"` | no | Why it's here (see below). |
 | **`user_decision.manual_lat`** | number \| `""` | **yes** | Human-entered latitude (set both). |
 | **`user_decision.manual_lon`** | number \| `""` | **yes** | Human-entered longitude. |
@@ -291,6 +302,12 @@ One entry per file that needs the human (or that the human already locked/accept
 (So resolving a `no_reliable_gps_source` item → after re-run it becomes `manual_locked` or
 `accepted_unlocated` with `requires_user_input: false`. The editor's per-file to-do list is the
 `no_reliable_gps_source` items.)
+
+The record's top-level `track_disagreements` (read-only, present only when it happened) lists each pair of
+track files that cover the same time in places too far apart to be one party, and how many photos neither
+placed because of it — `[ { "gpx_files": ["a.gpx", "b.gpx"], "photos": 12 } ]`. Those photos fell to their
+folder's fallback or are in `review_items`; the cure is to take the track that is not this trip's out of
+`gpx_root`.
 
 ### 5.5 `summary` (read-only counts)
 
@@ -371,8 +388,8 @@ A cell can carry more than one decision field; geotag applies them in a fixed or
 UI should make the *effective* choice obvious and ideally offer them as mutually-exclusive.
 
 - **Timezone:** `manual_iana_timezone` (if valid) → else the proposal, which applies itself.
-- **Clock offset:** `manual_offset_seconds` (if set & valid) → `accept_proposal` → automatic GPX
-  resolution (no human input). Setting a manual offset overrides `accept_proposal`.
+- **Clock offset:** `manual_offset_seconds` (if set & valid) → `accept_proposal` (while
+  `accepted_offset_seconds` is the offset proposed) → automatic GPX resolution (no human input). Setting a manual offset overrides `accept_proposal`.
 - **Folder fallback:** `fallback_lat`+`fallback_lon` (if both set & valid) → `accept_proposal`.
 - **Per-file GPS:** `manual_lat`+`manual_lon` (if both set & valid) → `accept_unlocated`. (If neither and
   no automatic source exists, the file stays blocked = `no_reliable_gps_source`.)
