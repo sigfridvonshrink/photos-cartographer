@@ -123,15 +123,27 @@ offset recorded with its time, whose offset is not that timezone's at the photo'
 nor in a destination lying within it.
 :::
 
-:::{rul} The destinations are a tree of places
-:id: RUL-destinations_are_places
-:status: seed
-:criticality: med
-:verify: none
+:::{rul} A destination has one timezone
+:id: RUL-destination_has_one_timezone
+:status: ruled
+:criticality: high
+:verify: required
 :uses: DEF-geotag
 
-The destinations SHALL be a tree of places, each lying within the place the destination above it names, never folders
-that group photos by trip, date or subject.
+A destination holding photos SHALL have one timezone for all of them.
+:::
+
+:::{rul} A timezone stands against the photos only on the user's word
+:id: RUL-zone_against_photos_needs_word
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-destination_has_one_timezone
+
+A destination's timezone, written or inherited, SHALL NOT take effect while a photo there, read by the offset recorded
+with its time, records an offset that timezone does not have at the photo's time — until the user confirms the
+timezone for the offsets those photos record.
 :::
 
 :::{rul} The configured default zone is offered, never applied
@@ -172,7 +184,7 @@ where tracks lie by its photos, and by acceptance where none do.
 
 :::{rul} An acceptance holds for the proposal it accepted
 :id: RUL-acceptance_holds_for_its_proposal
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -183,7 +195,7 @@ An acceptance of a proposed clock offset SHALL hold only while the offset propos
 
 :::{rul} A written value outranks an accepted proposal
 :id: RUL-written_value_over_acceptance
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-other_proposals_need_acceptance
@@ -272,7 +284,7 @@ A container destination's decisions SHALL never wait for the user.
 
 :::{rul} An answer follows its day
 :id: RUL-answer_follows_its_day
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -379,13 +391,13 @@ destination's timezone — never asked to be classed, nor given a camera's clock
 
 :::{rul} A group classed both ways is unknown
 :id: RUL-group_classed_twice_is_unknown
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
 :refines: RUL-unknown_group_stops_geotag
 
-A camera group the configuration classes as both a phone and a camera SHALL count as unknown.
+Geotag SHALL NOT plan while the configuration classes a camera group as both a phone and a camera.
 :::
 
 
@@ -478,7 +490,7 @@ accepted proposal does — never asked to be checked against the tracks again.
 
 :::{rul} Where the tracks stood still, a place says no time
 :id: RUL-stay_fixes_no_clock
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -490,7 +502,7 @@ counts as a moment — SHALL NOT take effect without the user's answer, nor coun
 
 :::{rul} A proposal from GPS is recorded with its evidence
 :id: RUL-anchor_proposal_carries_evidence
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-anchor_consensus
@@ -515,7 +527,7 @@ destination's timezone.
 
 :::{rul} An offset inside the time's own value is recorded with it
 :id: RUL-offset_within_time_value
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -745,7 +757,7 @@ later — one found from its own GPS included, though the later photos bring no 
 
 :::{rul} A kept offset rests on what it was found from
 :id: RUL-kept_offset_rests_on_its_tracks
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required

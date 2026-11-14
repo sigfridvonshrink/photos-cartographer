@@ -687,6 +687,7 @@ def _offsets_against_zone(files, groups, tz):
         return None
     rel, own, there = out[0]
     return {"photos": len(out), "example": rel, "recorded_offset_seconds": own,
+            "recorded_offsets": sorted({o for _r, o, _t in out}),
             "timezone": tz, "timezone_offset_seconds": there}
 
 

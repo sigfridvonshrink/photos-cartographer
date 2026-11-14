@@ -138,17 +138,21 @@ offset tag is not such evidence — it says what the clock was set to, and a cam
 destination abroad.
 :::
 
-:::{rat} Places, because what is inherited is true of places
-:id: RAT-places_not_trips
+:::{rat} One timezone, because that is what can be checked
+:id: RAT-one_zone_can_be_checked
 :status: seed
 :forced: yes
-:follows_from: RAT-nested_place_same_timezone
-:justifies: RUL-destinations_are_places
+:follows_from: RAT-nested_place_same_timezone, RAT-photos_outrank_inheritance
+:justifies: RUL-destination_has_one_timezone, RUL-zone_against_photos_needs_word
 
-A timezone and a fallback position pass down the tree because a museum is in its city and a city in its country. A
-folder that groups a trip is in no place: its destinations share a fortnight, not a zone, and everything inherited
-through it is inherited from nothing. The tool cannot tell a place from a trip by its name; the tree being one of
-places is what the user owes it.
+A destination's photos are written and named in its timezone, so it can have only one. That is all the tree is asked
+to be: a folder holding no photo may lie above destinations of any zones — a year, a country of several — because it
+has no time of its own to get wrong; what it is given passes down only as far as the photos below agree. Whether a
+folder is a place or a trip the tool cannot read off its name, and need not: the harm of a tree that is not one of
+places is a zone applied where it is false, and that shows in the photos. So a zone, written or inherited, is set
+against what the destination's own photos record; where they record another offset the user moves them, picks their
+zone, or keeps it by a word that names the offsets it was given for — a phone left on another zone is real, and rare
+enough to be said.
 :::
 
 :::{rat} The clock is the camera's for the day, not the folder's

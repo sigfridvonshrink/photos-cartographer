@@ -207,8 +207,9 @@ function wouldResolve(ref) {
   const c = workCell(ref); if (!c) return false;
   const u = c.user_decision || {}, p = c.proposal || {};
   if (ref.kind === "timezone")
-    return (!!u.manual_iana_timezone && validTz(u.manual_iana_timezone))
-      || (!!c.proposed_iana_timezone && c.proposal_source === "inherited" && !c.contradicted_by);   // an inherited zone applies itself, unless the photos here say otherwise
+    return ((!!u.manual_iana_timezone && validTz(u.manual_iana_timezone))
+      || (!!c.proposed_iana_timezone && c.proposal_source === "inherited"))   // an inherited zone applies itself...
+      && zoneSpokenFor(c);                                                     // ...unless the photos here say otherwise
   if (ref.kind === "offset")
     return (u.manual_offset_seconds !== "" && u.manual_offset_seconds != null && validOffset(u.manual_offset_seconds))
       || acceptHolds(c);
@@ -711,7 +712,12 @@ function controls(ref) {
   if (ref.kind === "timezone") {
     // An inherited zone applies itself; the configured default is only proposed (§18) — one click takes it as the
     // user's own. The one decision here is a zone written by hand, which overrides either.
-    if (zoneContradiction(c)) wrap.append(el("div", { class: "hint warn" }, zoneContradiction(c)));
+    if (zoneContradiction(c)) {
+      wrap.append(el("div", { class: "hint warn" }, zoneContradiction(c)));
+      const said = (u.confirmed_despite_recorded_offsets || []).length > 0 && zoneSpokenFor({ ...c, user_decision: { ...u, manual_iana_timezone: "" } });
+      wrap.append(checkbox(`keep ${c.contradicted_by.timezone} for these photos — their device was set to another zone`, said,
+        (v) => edit(ref, "confirmed_despite_recorded_offsets", zoneDespiteFields(c, v).confirmed_despite_recorded_offsets)));
+    }
     if ((c.proposal_source === "config_default" || c.contradicted_by) && c.proposed_iana_timezone && !u.manual_iana_timezone)
       wrap.append(el("button", { class: "mini", onclick: () => edit(ref, "manual_iana_timezone", c.proposed_iana_timezone) },
         `use ${c.proposed_iana_timezone}`));
@@ -1010,13 +1016,27 @@ function chosenOffset(p, u) {
   return acceptHolds({ user_decision: u, proposal: p }) ? p.proposed_offset_seconds : null;
 }
 // What the user must settle, said in one line each: a tie between visits, and photos agreeing with no group.
-// Why a destination does not take the zone it would inherit: its own photos record another offset.
+// Does the zone stand against what the destination's own photos record? Yes where none speaks against it,
+// where the user has spoken for every offset they record, or where the zone picked is no longer the one the
+// last run checked (the next run checks the new one).
+function zoneSpokenFor(c) {
+  const k = c && c.contradicted_by; if (!k) return true;
+  const u = c.user_decision || {};
+  if (u.manual_iana_timezone && u.manual_iana_timezone !== k.timezone) return true;
+  const said = new Set(u.confirmed_despite_recorded_offsets || []);
+  return (k.recorded_offsets || []).every((o) => said.has(o));
+}
+// The decision fields that keep a zone against the photos' recorded offsets: the word names the offsets it is given for.
+function zoneDespiteFields(c, on) {
+  return { confirmed_despite_recorded_offsets: on ? [...((c.contradicted_by || {}).recorded_offsets || [])] : [] };
+}
+// Why a destination does not take its zone: its own photos record another offset.
 function zoneContradiction(c) {
   const k = c && c.contradicted_by; if (!k) return "";
   const off = (s) => fmtOffset(s).replace(/ 00s$/, "");
   return `${k.photos} photo${k.photos === 1 ? "" : "s"} here record${k.photos === 1 ? "s" : ""} ${off(k.recorded_offset_seconds)} from UTC ` +
-    `(${k.example}); ${k.timezone} was at ${off(k.timezone_offset_seconds)} then. Pick the zone these photos were taken in — ` +
-    `or ${k.timezone} itself, if the phone was on another zone.`;
+    `(${k.example}); ${k.timezone} was at ${off(k.timezone_offset_seconds)} then. A destination has one timezone: pick the one ` +
+    `these photos were taken in, move those taken elsewhere to a folder of their own, or keep ${k.timezone} for them below.`;
 }
 // What an offset cell has to say beyond its proposal: where a shared offset came from, that a timezone's
 // guess is checked on the tracks, that the camera's GPS gave another offset elsewhere that day.
@@ -1227,6 +1247,6 @@ export {
   cellAt, cellStatus, wouldResolve, previewTz, previewFallback, refInvalid, isDirty, state,
   offsetGroups, dateRange, fmtDate, peerKeys, parseLatLon, coordText, contiguousRange,
   groupChoice, chosenOffset, proposalNotes, driftConfirmHolds, driftConfirmFields, acceptFields, acceptHolds, tracksNote,
-  zoneContradiction, offsetCellNotes,
+  zoneContradiction, offsetCellNotes, zoneSpokenFor, zoneDespiteFields,
   scrubOffset, scrubSeedIndex, mapKeyFor,
 };

@@ -701,14 +701,19 @@ class GeotagWorkflow:
             inherited_tz = _nearest_ancestor(dest, eff_tz, "tz")        # confirmable basis if no default
             if inherited_tz is not None and inherited_tz[1] is _ZONE_WAITS:
                 inherited_tz = None                 # the destination above waits on its own photos: so does this
-            against = (_offsets_against_zone(by_dest[dest], groups, inherited_tz[1])
-                       if inherited_tz is not None and not is_container else None)
+            # A destination holding photos has one timezone for all of them (§18): the zone it would take —
+            # the one written for it, else the one it inherits — is set against what its own photos record.
+            written = ((prior_d.get("destination_timezone") or {}).get("user_decision") or {}).get("manual_iana_timezone")
+            candidate = written if written and _valid_iana(written) else (inherited_tz[1] if inherited_tz else None)
+            against = _offsets_against_zone(by_dest[dest], groups, candidate) if candidate and not is_container else None
             tz_block = self._timezone_decision(dest, prior_d.get("destination_timezone") or {},
                                                blockers, inherited_tz, file_less=is_container, against=against)
             # what children inherit: the zone in effect; or, where this destination's own photos speak
             # against the zone it would inherit and the user has not answered, that it waits — a
             # destination inside it does not reach past it to the zone its photos contradict
             eff_tz[(dest, "tz")] = tz_block["effective_iana_timezone"] or (_ZONE_WAITS if against else None)
+            if tz_block["effective_iana_timezone"] == "" and against:
+                tz_block["requires_user_input"] = True
             tz = tz_block["effective_iana_timezone"] or None
             prior_cells = prior_d.get("camera_group_time_decisions") or {}
             cells, present = {}, []
@@ -862,13 +867,25 @@ class GeotagWorkflow:
             proposed, source, confidence, inherited_from = None, "none", "none", None
         ud = prior_tz.get("user_decision") or {}
         manual = ud.get("manual_iana_timezone", "") or ""
+        # The photos here that record another offset than the zone has: the zone stands against them only
+        # on the user's explicit word, which names the offsets it was given for — a photo arriving with yet
+        # another offset was never spoken for, and asks again.
+        despite = ud.get("confirmed_despite_recorded_offsets", [])
+        if not (isinstance(despite, list) and all(_valid_offset(o) for o in despite)):
+            blockers.append(f"{dest}: destination_timezone.user_decision.confirmed_despite_recorded_offsets "
+                            "must be a list of whole numbers of seconds.")
+            despite = []
+        spoken_for = bool(against) and set(against["recorded_offsets"]) <= {int(o) for o in despite}
+        if spoken_for:
+            against = dict(against, confirmed=True)
+        unanswered = against if against and not spoken_for else None
         effective = ""
         if manual:
-            if _valid_iana(manual):
-                effective = manual
-            else:
+            if not _valid_iana(manual):
                 blockers.append(f"{dest}: destination_timezone.user_decision.manual_iana_timezone "
                                 f"{manual!r} is not a valid IANA timezone.")
+            elif not unanswered:
+                effective = manual
         # An inherited zone is adopted (and re-propagated downward) without the user's answer — container or
         # real — because the nested geography makes the parent's timezone the right one for the child. The
         # configured default is only proposed: it is the user's usual zone, true of no trip in particular, and
@@ -878,23 +895,25 @@ class GeotagWorkflow:
         # ...unless this destination's own photos say otherwise: a phone's photo here that records an offset
         # the inherited zone does not have at that time was taken in another zone, and the one zone change
         # of a trip is not adopted unasked. The user writes the zone — the inherited one, if it is right.
-        auto = not manual and bool(proposed) and source == "inherited" and not against
+        auto = not manual and bool(proposed) and source == "inherited" and not unanswered
         if auto:
             effective = proposed
         block = {
             "proposed_iana_timezone": proposed,
             "proposal_source": source,
             "proposal_confidence": confidence,
-            "user_decision": {"manual_iana_timezone": manual},
+            "user_decision": {"manual_iana_timezone": manual,
+                              "confirmed_despite_recorded_offsets": [int(o) for o in despite]},
             "effective_iana_timezone": effective,
             "requires_user_input": effective == "" and not file_less,   # a container never blocks
-            "stale_user_decision": False,      # a written zone is kept or refused, never left stale
+            # a word given for other offsets than the photos now record is kept as written, and speaks for none
+            "stale_user_decision": bool(despite) and bool(unanswered),
         }
         if auto:
             block["decision_mode"] = "auto_resolved"
         if inherited_from:
             block["inherited_from"] = inherited_from
-        if against and not manual:
+        if against:
             block["contradicted_by"] = against
         return block
 

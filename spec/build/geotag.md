@@ -172,14 +172,14 @@ A `camera_group_key` listed in both `phones` and `fixed_clock_cameras` SHALL be 
 :::{bld} The timezone cell
 :id: BLD-timezone_cell
 :status: seed
-:realises: RUL-timezone_from_nearest, RUL-timezone_auto_resolves, RUL-default_zone_proposed_only, RUL-inherited_timezone_yields_to_photos
+:realises: RUL-timezone_from_nearest, RUL-timezone_auto_resolves, RUL-default_zone_proposed_only, RUL-inherited_timezone_yields_to_photos, RUL-destination_has_one_timezone, RUL-zone_against_photos_needs_word
 
 Each destination's `destination_timezone` in `photos-21-time-decisions.json` SHALL hold `proposed_iana_timezone` with
 its `proposal_source` — `inherited`, naming the ancestor in `inherited_from`, or `config_default`, or `none` —
 `user_decision.manual_iana_timezone`, `effective_iana_timezone`, `requires_user_input`, `stale_user_decision` and, when
 the proposal took effect without the user, `decision_mode: "auto_resolved"`. Destinations are built parent first, so
 each takes the `effective_iana_timezone` of its nearest ancestor that has one; one with none is offered
-`default_folder_timezone`, as `config_default`, which takes effect only once written as its `manual_iana_timezone`. Where a photo of the destination that is no camera's, not yet corrected, records with its time an offset that is not the inherited zone's at that time, the inherited zone does not take effect: the cell asks, holding `contradicted_by` — `photos`, an `example`, `recorded_offset_seconds`, `timezone` and `timezone_offset_seconds` — until a zone is written, and a destination within it inherits nothing through it.
+`default_folder_timezone`, as `config_default`, which takes effect only once written as its `manual_iana_timezone`. Where a photo of the destination that is no camera's, not yet corrected, records with its time an offset that is not the zone's — the one written, else the one inherited — at that time, the zone does not take effect: the cell asks, holding `contradicted_by` — `photos`, an `example`, `recorded_offset_seconds`, `recorded_offsets` (each distinct one), `timezone` and `timezone_offset_seconds` — and a destination within it inherits nothing through it, until another zone is written that the photos agree with or `user_decision.confirmed_despite_recorded_offsets` lists every one of `recorded_offsets`; then the zone takes effect, `contradicted_by` kept with `confirmed: true`. A list that does not cover them is `stale_user_decision`, kept as written; one that is not a list of whole seconds, a blocker.
 :::
 
 

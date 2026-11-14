@@ -53,6 +53,7 @@
         "requires_user_input": false,
         "stale_user_decision": false,
         "user_decision": {
+          "confirmed_despite_recorded_offsets": [],
           "manual_iana_timezone": "Europe/Brussels"
         }
       }
@@ -100,6 +101,7 @@
         "requires_user_input": false,
         "stale_user_decision": false,
         "user_decision": {
+          "confirmed_despite_recorded_offsets": [],
           "manual_iana_timezone": ""
         }
       }
@@ -146,6 +148,7 @@
         "requires_user_input": false,
         "stale_user_decision": false,
         "user_decision": {
+          "confirmed_despite_recorded_offsets": [],
           "manual_iana_timezone": ""
         }
       }
@@ -243,6 +246,7 @@
         "requires_user_input": false,
         "stale_user_decision": false,
         "user_decision": {
+          "confirmed_despite_recorded_offsets": [],
           "manual_iana_timezone": ""
         }
       }
@@ -360,6 +364,7 @@
         "requires_user_input": false,
         "stale_user_decision": false,
         "user_decision": {
+          "confirmed_despite_recorded_offsets": [],
           "manual_iana_timezone": ""
         }
       }
@@ -380,6 +385,7 @@
         "requires_user_input": false,
         "stale_user_decision": false,
         "user_decision": {
+          "confirmed_despite_recorded_offsets": [],
           "manual_iana_timezone": ""
         }
       }

@@ -170,3 +170,18 @@ test("offsetCellNotes: a shared offset, a guess checked on the tracks, one clock
   assert.match(app.offsetCellNotes({ conflicts_with: [{ destination: "6-photos-by-dest/Other", bucket: "K", offset_seconds: -6600 }] })[0],
     /6-photos-by-dest\/Other — one clock, two readings/);
 });
+
+
+test("zoneSpokenFor: a zone stands against the photos only on the user's word for every offset they record", () => {
+  const k = { photos: 2, example: "x", recorded_offset_seconds: 7200, recorded_offsets: [7200, 32400],
+    timezone: "Europe/Lisbon", timezone_offset_seconds: 3600 };
+  assert.equal(app.zoneSpokenFor({}), true);
+  assert.equal(app.zoneSpokenFor({ contradicted_by: k, user_decision: {} }), false);
+  assert.equal(app.zoneSpokenFor({ contradicted_by: k, user_decision: { confirmed_despite_recorded_offsets: [7200] } }), false);
+  assert.deepEqual(app.zoneDespiteFields({ contradicted_by: k }, true), { confirmed_despite_recorded_offsets: [7200, 32400] });
+  assert.deepEqual(app.zoneDespiteFields({ contradicted_by: k }, false), { confirmed_despite_recorded_offsets: [] });
+  assert.equal(app.zoneSpokenFor({ contradicted_by: k, user_decision: app.zoneDespiteFields({ contradicted_by: k }, true) }), true);
+  // another zone picked since the run that checked: the next run checks that one
+  assert.equal(app.zoneSpokenFor({ contradicted_by: k, user_decision: { manual_iana_timezone: "Europe/Madrid" } }), true);
+  assert.equal(app.zoneSpokenFor({ contradicted_by: k, user_decision: { manual_iana_timezone: "Europe/Lisbon" } }), false);
+});

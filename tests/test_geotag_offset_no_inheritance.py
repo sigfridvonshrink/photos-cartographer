@@ -230,6 +230,7 @@ def test_an_inherited_timezone_yields_to_the_destination_s_own_photos(tmp_path):
     assert madrid["effective_iana_timezone"] == "" and madrid["requires_user_input"] and "decision_mode" not in madrid
     assert madrid["proposed_iana_timezone"] == "Europe/Lisbon"
     assert madrid["contradicted_by"] == {"photos": 2, "example": f"{root}/Madrid/c.jpg", "recorded_offset_seconds": 7200,
+                                         "recorded_offsets": [7200],
                                          "timezone": "Europe/Lisbon", "timezone_offset_seconds": 3600}
     prado = tz[f"{root}/Madrid/Prado"]                 # inside Madrid: it does not reach past Madrid to Lisbon
     assert prado["effective_iana_timezone"] == "" and prado["requires_user_input"] and prado["proposal_source"] == "none"
@@ -239,9 +240,36 @@ def test_an_inherited_timezone_yields_to_the_destination_s_own_photos(tmp_path):
     tz, _ = _zones(wf, files, answered)
     assert tz[f"{root}/Madrid"]["effective_iana_timezone"] == "Europe/Madrid" and "contradicted_by" not in tz[f"{root}/Madrid"]
     assert tz[f"{root}/Madrid/Prado"]["effective_iana_timezone"] == "Europe/Madrid"
-    # ...or says the inherited one is right after all (a phone left on another zone), by writing it
-    answered["destinations"][f"{root}/Madrid"]["destination_timezone"]["user_decision"]["manual_iana_timezone"] = "Europe/Lisbon"
-    assert _zones(wf, files, answered)[0][f"{root}/Madrid"]["effective_iana_timezone"] == "Europe/Lisbon"
+
+
+@pytest.mark.spec("RUL-destination_has_one_timezone", "RUL-zone_against_photos_needs_word", "BLD-timezone_cell",
+                  test="TST-geotag_offset_no_inheritance-a_destination_has_one_timezone")
+def test_a_destination_has_one_timezone_for_all_its_photos(tmp_path):
+    """A zone the user writes is set against the destination's photos like one inherited. Photos that record
+    another offset stop it: the user picks their zone, moves them to a folder of their own, or keeps the zone
+    by an explicit word that names the offsets it is given for — a photo with yet another offset asks again."""
+    wf = _wf(tmp_path)
+    dest = f"{BYDEST}/Roadtrip"
+    files = [_phone(f"{dest}/a.jpg", dest, "2024:07:03 10:00:00", "+01:00"),
+             _phone(f"{dest}/b.jpg", dest, "2024:07:05 10:00:00", "+02:00")]         # no one zone fits both
+    def zone(tz_name, despite=None):
+        ud = {"manual_iana_timezone": tz_name, **({"confirmed_despite_recorded_offsets": despite} if despite is not None else {})}
+        art, blk = wf.build_time_decisions(files, BOTH, {"destinations": {dest: {"destination_timezone": {"user_decision": ud}}}}, _gpx([]))
+        return (art["destinations"][dest]["destination_timezone"] if art else None), blk
+    for name, off in (("Europe/Lisbon", 7200), ("Europe/Madrid", 3600)):             # whichever is written, one photo speaks against it
+        cell, blk = zone(name)
+        assert cell["effective_iana_timezone"] == "" and cell["requires_user_input"] and not blk
+        assert cell["contradicted_by"]["recorded_offsets"] == [off] and cell["user_decision"]["manual_iana_timezone"] == name
+    cell, _ = zone("Europe/Lisbon", [7200])                                          # the user's word, for that offset
+    assert cell["effective_iana_timezone"] == "Europe/Lisbon" and not cell["requires_user_input"]
+    assert cell["contradicted_by"]["confirmed"] is True and not cell["stale_user_decision"]   # ...and the record says so
+    files.append(_phone(f"{dest}/c.jpg", dest, "2024:07:06 10:00:00", "+09:00"))     # a photo with yet another offset
+    cell, _ = zone("Europe/Lisbon", [7200])
+    assert cell["effective_iana_timezone"] == "" and cell["requires_user_input"] and cell["stale_user_decision"]
+    assert cell["contradicted_by"]["recorded_offsets"] == [7200, 32400] and "confirmed" not in cell["contradicted_by"]
+    assert cell["user_decision"]["confirmed_despite_recorded_offsets"] == [7200]     # kept as written
+    _cell_, blk = zone("Europe/Lisbon", "yes")                                       # not a list of offsets
+    assert blk and "confirmed_despite_recorded_offsets" in blk[0]
 
 
 @pytest.mark.spec("RUL-inherited_timezone_yields_to_photos",

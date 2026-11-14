@@ -532,8 +532,10 @@ destination has exactly one zone, or what a folder for a drive across a zone lin
 never waits, so `Japan/{Kyoto, Tokyo, Nara}` asks three times unless the user knows to answer on the folder that asks
 nothing — against *"one answer per trip, at the trip's folder"* (`RAT-home_zone_offered`).
 
-**Open:** one zone per destination whatever a photo records, or a photo with its own offset keeps its own local
-time; ask a missing zone once, at the topmost destination that neither has nor inherits one.
+**Ruled 2026-11-14:** one zone per destination, whatever a photo records (`RUL-destination_has_one_timezone`); a photo
+recording another offset stops the zone until the user moves it, picks its zone or confirms the destination's.
+
+**Open:** ask a missing zone once, at the topmost destination that neither has nor inherits one.
 
 ### 42. A clock reset to its factory date is proposed like any other
 
@@ -582,36 +584,31 @@ touched; "corrected" is defined nowhere.
 **Open:** define it as resolved (state it), or mark only a photo whose time geotag changed and recognise the others
 on a re-run by their unchanged values.
 
-### 47. Destinations as places: countries of several timezones, and the tree checked
+### 47. Countries of several timezones, and how a folder is known to be one
 
-**Why:** the owner, 2026-11-14: *"destinations should be geographical trees, not grouped by trips"*, and *"a list of
-countries spanning multiple timezones that stops timezone inheritance from country to sub-destinations"*. A
-timezone passes down the tree because a place inside another is nearly always in its zone. Two things break that
-silently: a country of several zones (`USA/{New York, Denver}` answered once at `USA`), and a folder that is a trip,
-not a place. Since 2026-11-14 an inherited zone yields to a phone photo that records another offset
-(`RUL-inherited_timezone_yields_to_photos`) — which catches both only where such a photo exists; a destination of
-camera photos alone still inherits.
+**Ruled 2026-11-14:** the rule is not "a tree of places" but **a destination holding photos has one timezone**
+(`RUL-destination_has_one_timezone`); a folder holding none may lie above destinations of any zones —
+`USA/{NY, Arizona, Oregon}`, `2024/…` — and may still be given a zone, which passes down. A zone, written or
+inherited, is set against the destination's own photos and stands against them only on the user's explicit word
+(`RUL-zone_against_photos_needs_word`, built). The list of countries of several timezones is to be derived from the
+zone database (`zone1970.tab` lists every zone's countries), not kept by hand — confirmed.
 
-**What exists:** `RUL-destinations_are_places` (seed, unverifiable as written: the tool cannot tell a place from a
-trip by a folder's name). The docs recommend `year/country/city/location` — whose first level is a date, not a place.
+**Why it is still open:** the checks built rest on photos that record their own offset (phones). A destination of
+camera photos alone under a container given one zone — `USA` answered `America/New_York`, `Arizona` beneath it —
+still inherits unasked. The list would stop that, if the tool knew which folder is the country.
 
-**What to do:**
-- A list of countries (and other regions) of more than one timezone; a destination named as one — by name, by a
-  code, or declared by the user — does not pass a timezone to the destinations inside it: each asks, or inherits
-  from one of its own below the country.
-- Decide what "geographically structured" lets the tool check and refuse, and what stays a convention.
+**Open — how a folder is known to be a country:** the owner: *"they may be spelt in many ways in different languages"*.
+- **By name:** needs every country's name in every language used (CLDR data bundled into the executable), and still
+  fails on spelling, abbreviations and names that are two things (Georgia, Jersey). Not recommended.
+- **By the zone written on it:** the zone database says which country a zone belongs to, so a container given
+  `America/New_York` is in a country of several zones. But so is a container `New York` whose museums rightly inherit
+  it: the zone says the country, not that this folder *is* the country.
+- **By the user saying so:** the container's cell carries a country (picked from the zone database's list, by code)
+  in place of a zone. A one-zone country gives its zone to everything below; a several-zone one gives none, and each
+  destination below asks — choosing among that country's zones only, which also catches a wrong zone written below.
+  One answer per country, language-free. Recommended.
+- **By evidence only:** no list; rely on the photos' offsets (built) and on positions once item 14 gives a zone from
+  a place. Costs nothing, protects camera-only destinations only after 14.
 
-**Open:**
-- How a folder is known to be a country: its name matched against a list in several languages (the owner's folders are
-  not in English only), an ISO code in the name, a marker in the decision file, or the position of a level in the
-  tree (`year/country/...` — the second level is always a country).
-- Where the list lives and who keeps it: derived from the zone database (`zone.tab` lists every zone's country, so
-  a country with more than one row is on it), which needs no hand-kept list and follows tzdata.
-- Whether the user's own one-zone answer at such a country (`manual_iana_timezone` written there) is refused,
-  warned about, or simply never inherited.
-- A year level above the places: is it a place for this rule (it inherits nothing downward), and does a zone
-  answered at a year mean anything.
-- The wording of ruled items that speak of a trip's folder — `RAT-home_zone_offered` ("one answer per trip, at the
-  trip's folder"), `RAT-decisions_cascade` ("set once at a trip's root") — to be put in terms of places.
-- Whether item 14 (a zone proposed from positions) makes most of this unnecessary: a destination whose photos or
-  tracks say where it is needs no inheritance at all.
+**Also open:** the wording of ruled items that speak of a trip's folder — `RAT-home_zone_offered` ("one answer per
+trip, at the trip's folder"), `RAT-decisions_cascade` ("set once at a trip's root") — and the docs' `year/country/city/location`.
