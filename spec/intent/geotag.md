@@ -692,7 +692,7 @@ Where tracks that cover a photo's time put it in places farther apart than the c
 
 :::{rul} A position says how it was found
 :id: RUL-position_carries_its_method
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 
@@ -701,17 +701,18 @@ Every position geotag writes SHALL say, in the photo itself, how it was found: o
 
 :::{rul} A position from the tracks is recorded with its track
 :id: RUL-placement_recorded_with_its_track
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-cause_locatable
 
-A position the tracks give a photo SHALL be recorded with the track that gave it and the time it was placed at.
+A position the tracks give a photo SHALL be recorded in the workspace's record, not in the photo, with the track that
+gave it and the time it was placed at.
 :::
 
 :::{rul} An unplaced photo is listed with why
 :id: RUL-unplaced_photo_listed
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-placement_order
@@ -721,7 +722,7 @@ Every photo no source places SHALL be listed for the user by itself, with why th
 
 :::{rul} A photo's decision follows the photo
 :id: RUL-photo_decision_follows_the_photo
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -732,7 +733,7 @@ A decision made for one photo SHALL stay that photo's when geotag renames it or 
 
 :::{rul} An accepted inherited fallback follows the one above
 :id: RUL-accepted_fallback_follows
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-fallback_from_nearest
@@ -745,7 +746,7 @@ A destination whose inherited fallback the user accepted SHALL take the fallback
 
 :::{rul} The corrected time is written as the destination's local time
 :id: RUL-corrected_time_written_local
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :uses: DEF-geotag, DEF-destination

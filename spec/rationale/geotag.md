@@ -213,6 +213,21 @@ act and names the offset itself. Where no track covers the photos there is no ch
 A user accepts a proposal by looking at it: this offset, for this camera, on this evidence. Kept as a bare yes, the acceptance would pass to whatever is proposed next — an offset from another timezone once the zone above changes, one from GPS that two photos tie on — and a value the user never saw would take effect over their name. So the acceptance names what it accepted, and holds for that. A changed picture is accepted the same way: as the content that was reported, under the plan that reported it.
 :::
 
+:::{rat} An accepted fallback follows, where an accepted offset does not
+:id: RAT-fallback_acceptance_follows
+:status: ruled
+:forced: no
+:follows_from: RAT-assumptions_need_acceptance, RAT-acceptance_is_of_what_was_shown
+:justifies: RUL-accepted_fallback_follows
+
+Accepting an offset accepts a number, and holds only for that number. Accepting an inherited fallback is another kind
+of answer: not "this coordinate" but "this folder is placed like the one above". A fallback is coarse by nature — one
+point for every photo nothing better places — so a correction to the point above is as right for the folder that
+follows it as for its own; and pinning the coordinate shown would make one edit high in the tree ask again at every
+folder beneath, for no gain in precision. So the two acceptances differ, on purpose: the offset's is of a value, the
+fallback's of a relation.
+:::
+
 
 ## 10. Per-destination structure
 
@@ -564,7 +579,7 @@ Squeezing the track means using it wherever it says something: at a point, betwe
 
 :::{rat} The remainder is a worklist only if it says why
 :id: RAT-remainder_says_why
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: RAT-remainder_worklist, CHC-ask_only_what_data_cannot_settle
 :justifies: RUL-unplaced_photo_listed, RUL-plan_counts_placement
@@ -574,7 +589,7 @@ A photo the tracks did not place is one of a few cases with different cures: tak
 
 :::{rat} A decision belongs to the photo, not to its name
 :id: RAT-decision_keyed_by_identity
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-decoded_pixel_identity, RAT-decisions_reread_cache_only
 :justifies: RUL-photo_decision_follows_the_photo, RUL-answer_follows_its_day
@@ -584,7 +599,7 @@ Geotag's last act on a photo is to rename it, and a destination's cells are name
 
 :::{rat} The method travels with the photo
 :id: RAT-method_in_the_photo
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-coordinate_carries_its_method
 :justifies: RUL-position_carries_its_method, RUL-placement_recorded_with_its_track
@@ -597,7 +612,7 @@ Completeness is bought with precision that varies: one photo sits on a track poi
 
 :::{rat} The time a person would have read on the wall
 :id: RAT-time_written_as_lived
-:status: seed
+:status: ruled
 :forced: no
 :follows_from: CHC-local_folder_library, RAT-offset_per_camera_destination_day
 :justifies: RUL-corrected_time_written_local
