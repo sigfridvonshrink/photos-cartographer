@@ -192,7 +192,7 @@ why the photos it should have placed were not.
 
 :::{rat} A track is where one device was
 :id: RAT-track_is_one_device
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: FCT-partial_track_coverage, CHC-photos_matter
 :justifies: RUL-tracks_never_joined, RUL-disagreeing_tracks_place_nothing
@@ -202,7 +202,7 @@ Each track file is one device's record, and the tracks folder may hold several f
 
 :::{rat} Missing is not the same as none
 :id: RAT-missing_tracks_are_not_no_tracks
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-folder_gps_fallback, RAT-decisions_reread_cache_only
 :justifies: RUL-missing_tracks_stop_geotag, RUL-no_tracks_no_stop
@@ -473,7 +473,7 @@ add the work it exists to save.
 
 :::{rat} A projection is the roughest reading, so it is the most bounded
 :id: RAT-projection_bounded
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-track_squeezed, RAT-coordinate_carries_its_method
 :justifies: RUL-track_placement_bounded, RUL-track_evidence_order
