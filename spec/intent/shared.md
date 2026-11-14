@@ -117,7 +117,8 @@ A run SHALL hold the lock until it ends — through planning, dry run, execution
 :verify: required
 :upholds: INV-one_run_at_a_time
 
-A run that finds the workspace locked SHALL stop at once, never waiting for it.
+A run that finds the workspace locked SHALL stop at once, never waiting for it, having scanned, planned and changed
+nothing — and having produced no plan, no dry-run report and no artifact.
 :::
 
 :::{rul} A refused run says the workspace is locked
@@ -128,18 +129,6 @@ A run that finds the workspace locked SHALL stop at once, never waiting for it.
 :refines: RUL-lock_fail_fast
 
 A run that stops on a locked workspace SHALL say the workspace is locked by a run in progress.
-:::
-
-:::{rul} A refused run produces nothing
-:id: RUL-locked_run_produces_nothing
-:status: seed
-:criticality: high
-:anti: yes
-:verify: required
-:refines: RUL-lock_fail_fast
-
-A run that finds the workspace locked SHALL have scanned, planned and changed nothing, and produced no plan, no
-dry-run report and no artifact.
 :::
 
 :::{rul} The lock is released however the run ends

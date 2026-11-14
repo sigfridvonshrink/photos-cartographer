@@ -118,13 +118,14 @@ The same reading should settle what the rationale-link pass (2026-11-14) noticed
 - `RUL-jobs_change_nothing` refines `RUL-no_op_run`, a loose parent for "the job count changes nothing".
 
 **Where it stands (2026-11-14):** every rule and invariant — 377 — was read against that test. 124 carried more
-than one obligation. The 71 that were clear and plain are split: 81 new items, each refining its parent, the tests'
+than one obligation. The 71 that were clear and plain are split: 80 new items, each refining its parent, the tests'
 marks moved to the part each asserts; parents and new items are at seed for ruling. Left: 28 the readers judged
 borderline (a second obligation, or only the scope of the first) and 25 whose split is not plain (a part already
 stated by another item, an id that should move, a choice between forms) — both lists, with the proposed texts, are
-kept as data for the ruling; and the open question whether "stops, having changed nothing" is one obligation
-(`RUL-invalid_value_stops`, `RUL-spanning_workspace_stops`) or two (`RUL-lock_fail_fast`). Build items were not read
-this way. The rationale questions below are untouched.
+kept as data for the ruling. Ruled 2026-11-14: "stops, having changed nothing" is ONE obligation (two would be
+overkill), saying why it stopped a second — so `RUL-lock_fail_fast` keeps "having changed and produced nothing" and
+only `RUL-lock_refusal_says_locked` is split off; and the reading covers rules and invariants only, never build
+items. The rationale questions below are untouched.
 
 **When:** the conversion is done (2026-11-14); this is the once-over-the-whole-corpus pass the owner asked for — *"maybe
 we can do this at the very end after the full conversion to sphinx-needs?"* — after item 12's renumbering.

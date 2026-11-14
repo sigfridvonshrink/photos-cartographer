@@ -646,7 +646,7 @@ def test_sealed_new_dump_left_in_place_and_library_untouched(tmp_path):
     assert list(lib.iterdir()) == [lib / ".photos-library"]    # library untouched
 
 
-@pytest.mark.spec("RUL-lock_through_the_run", "RUL-locked_run_produces_nothing",
+@pytest.mark.spec("RUL-lock_fail_fast", "RUL-lock_through_the_run",
                   test="TST-merge_preflight-lock_contention_covers_execute_not_just_plan")
 def test_lock_contention_covers_execute_not_just_plan(tmp_path):
     """The whole-run lock covers EXECUTE, not only plan: with the workspace lock held by another run,

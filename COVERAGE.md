@@ -37,15 +37,15 @@ tools/coverage          # bootstraps a local .venv, runs the suite, writes htmlc
 
 ## Spec coverage
 
-The specification is one corpus of typed items (`spec/`; see `spec/README.md`): 458 rules and invariants, 274
+The specification is one corpus of typed items (`spec/`; see `spec/README.md`): 457 rules and invariants, 274
 rationales, 189 build items, 32 definitions, the philosophy's 3 facts and 4 choices — and the 528 tests that name the
 items they verify, made items of the corpus from their `@pytest.mark.spec(…, test="TST-…")` marks. 808 items are
-ruled; 152 are at seed: the 71 rules that each carried more than one obligation and the 81 items split off them
+ruled; 151 are at seed: the 71 rules that each carried more than one obligation and the 80 items split off them
 (BACKLOG 7), awaiting a ruling, with `RUL-disagreeing_tracks_place_nothing`, held for BACKLOG 29.
 
 | Rules and invariants | Count |
 |---|---:|
-| **`verify: required` (gated)** | **423** |
+| **`verify: required` (gated)** | **422** |
 | `verify: incidental` — exercised, not asserted (BACKLOG 4) | 17 |
 | `verify: none` — nothing checks them (BACKLOG 3) | 18 |
 
