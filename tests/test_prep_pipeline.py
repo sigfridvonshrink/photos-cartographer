@@ -152,6 +152,57 @@ def test_a_duplicate_is_set_aside_as_found(tmp_path):
         assert json.load(f)[0]["original_path"] == "0-sources/b.JPG"
 
 
+@pytest.mark.spec("RUL-duplicate_in_manifest_with_kept",
+                  test="TST-prep_pipeline-the_quarantine_manifest_names_the_copy_kept")
+def test_the_quarantine_manifest_names_the_copy_kept(tmp_path):
+    """Each duplicate's record in the quarantine manifest names the copy prep kept instead of it."""
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "first.jpg").write_bytes(b"same")
+    (ws / "0-sources" / "other.jpg").write_bytes(b"else")
+    _run(ws)
+    kept = f"5-photos-by-date/2023-01-02/{NAME}.jpg"
+    with open(ws / kept, "rb") as f:
+        assert f.read() == b"same"
+    (ws / "0-sources" / "again.jpg").write_bytes(b"same")
+    (ws / "0-sources" / "more.jpg").write_bytes(b"else")
+    plan = _run(ws)
+    with open(ws / ".photos-ingest-quarantine" / plan.plan_id / "manifest.json") as f:
+        records = {r["original_path"]: r["retained_counterpart"] for r in json.load(f)}
+    assert records == {"0-sources/again.jpg": kept,
+                       "0-sources/more.jpg": f"5-photos-by-date/2023-01-02/{NAME}-001.jpg"}
+    for path in records.values():
+        assert (ws / path).exists()
+
+
+@pytest.mark.spec("RUL-restored_file_record_kept",
+                  test="TST-prep_pipeline-a_restored_files_quarantine_record_is_left_as_it_is")
+def test_a_restored_files_quarantine_record_is_left_as_it_is(tmp_path):
+    """Moving a quarantined file back into the inbox and running prep again — whether it is filed or
+    quarantined once more — leaves the manifest that recorded its first quarantine byte for byte."""
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"same")
+    (ws / "0-sources" / "b.jpg").write_bytes(b"same")
+    first = _run(ws)
+    qdir = ws / ".photos-ingest-quarantine" / first.plan_id
+    record = (qdir / "manifest.json").read_bytes()
+    assert json.loads(record)[0]["original_path"] == "0-sources/b.jpg"
+
+    os.rename(qdir / "0-sources" / "b.jpg", ws / "0-sources" / "b.jpg")     # still a duplicate
+    second = _run(ws)
+    assert second.plan_id != first.plan_id
+    assert (qdir / "manifest.json").read_bytes() == record
+    again = ws / ".photos-ingest-quarantine" / second.plan_id
+    with open(again / "manifest.json") as f:
+        assert [r["original_path"] for r in json.load(f)] == ["0-sources/b.jpg"]
+
+    os.remove(ws / "5-photos-by-date" / "2023-01-02" / f"{NAME}.jpg")       # no longer a duplicate
+    os.rename(again / "0-sources" / "b.jpg", ws / "0-sources" / "b.jpg")
+    _run(ws)
+    assert (ws / "5-photos-by-date" / "2023-01-02" / f"{NAME}.jpg").exists()
+    assert (qdir / "manifest.json").read_bytes() == record
+    assert json.loads((again / "manifest.json").read_bytes())[0]["original_path"] == "0-sources/b.jpg"
+
+
 @pytest.mark.spec("RUL-media_extension_lowercase", "BLD-two_step_case_rename", "RUL-inbox_kept_as_dumped",
                   test="TST-prep_pipeline-an_inbox_file_takes_its_lowercase_extension_as_it_is_filed")
 def test_an_inbox_file_takes_its_lowercase_extension_as_it_is_filed(tmp_path):

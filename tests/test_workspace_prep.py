@@ -642,6 +642,22 @@ def test_missing_managed_folder_on_activated_workspace_hard_stops(tmp_path, monk
                for b in plan.blockers), plan.blockers
 
 
+@pytest.mark.spec("RUL-missing_folder_remedy_told",
+                  test="TST-workspace_prep-missing_managed_folder_block_tells_to_restore_and_run_again")
+def test_missing_managed_folder_block_tells_to_restore_and_run_again(tmp_path, monkeypatch):
+    """The block of a missing managed folder gives the remedy, not only the fault: restore the
+    folders, then run."""
+    _mock_for_plan(monkeypatch)
+    ws = _empty_initialized_ws(tmp_path)
+    (ws / "1-strays").rmdir()
+    cache = photos_ingest.WorkspaceCache(str(ws), in_memory=True)
+    plan = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
+    cache.close()
+    block = [b for b in plan.blockers if "1-strays" in b]
+    assert len(block) == 1, plan.blockers
+    assert "restore them" in block[0] and "before running" in block[0], block[0]
+
+
 @pytest.mark.spec("RUL-empty_inbox_normal", test="TST-workspace_prep-empty_sources_is_steady_end_state_not_a_missing_folder_block")
 def test_empty_sources_is_steady_end_state_not_a_missing_folder_block(tmp_path, monkeypatch):
     """§6.2 (item 7, final clause): an EMPTY 0-sources is the normal steady end-state (Section 18),

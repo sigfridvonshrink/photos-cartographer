@@ -114,7 +114,7 @@ answer.
 :status: ruled
 :forced: yes
 :follows_from: CHC-ask_only_what_data_cannot_settle, CHC-photos_matter
-:justifies: RUL-other_proposals_need_acceptance
+:justifies: RUL-proposals_need_acceptance
 
 An offset derived from the timezone assumes the camera was set to local time that day; a fallback inherited from a
 parent folder assumes the photos were taken near the parent's point. Both are often right and sometimes badly wrong,

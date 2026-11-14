@@ -63,7 +63,7 @@ and whose `media_class` is `image` or `raw`; every operation of `photos-24-execu
 :::{bld} The auto-apply settings
 :id: BLD-auto_apply_settings
 :status: ruled
-:realises: RUL-anchor_offset_auto_as_configured, RUL-timezone_auto_resolves, RUL-other_proposals_need_acceptance
+:realises: RUL-anchor_offset_auto_as_configured, RUL-timezone_auto_resolves, RUL-proposals_need_acceptance
 
 A GPX self-anchor offset SHALL be set as `effective_time_anchor` with `decision_mode: "auto_resolved"` when its
 anchors do not conflict and `camera_time_and_timezone_policy.multi_anchor_auto_apply` holds for two or more anchors,
@@ -75,7 +75,7 @@ folder fallback become effective only with `accept_proposal: true`.
 :::{bld} How an offset is accepted
 :id: BLD-offset_acceptance
 :status: ruled
-:realises: RUL-acceptance_holds_for_its_proposal, RUL-written_value_over_acceptance, RUL-other_proposals_need_acceptance
+:realises: RUL-acceptance_holds_for_its_proposal, RUL-written_value_over_acceptance, RUL-proposals_need_acceptance
 
 An offset cell's `user_decision` SHALL hold `accept_proposal`, `accepted_offset_seconds` — the `proposed_offset_seconds` that was accepted — and `manual_offset_seconds`. A `manual_offset_seconds` takes effect first. Else an acceptance takes effect while `accepted_offset_seconds` equals the offset now proposed, or lies within `gpx_anchor_decision_tolerance_seconds` of one proposed from GPS (the proposal carries that tolerance as `acceptance_tolerance_seconds`); and what takes effect is the offset accepted, not the one now proposed; naming another offset, or with nothing proposed, the cell is `stale_user_decision` and asks; naming none, or not a whole number, a blocker.
 :::
@@ -204,7 +204,7 @@ A destination's `destination_timezone.user_decision.country` — the country it 
 :::{bld} The offset derived from the timezone
 :id: BLD-timezone_naive_offset
 :status: ruled
-:realises: RUL-offset_from_own_evidence, RUL-other_proposals_need_acceptance, RUL-timezone_offset_asked_once
+:realises: RUL-offset_from_own_evidence, RUL-proposals_need_acceptance, RUL-timezone_offset_asked_once
 
 A bucket with no anchor and a destination timezone SHALL be proposed the offset −(the timezone's UTC offset at the
 bucket's earliest camera time), daylight saving included, as `proposal_source: "timezone_naive"` with
@@ -332,7 +332,7 @@ automatic position again from its own inputs.
 :::{bld} The folder-fallback cell
 :id: BLD-folder_fallback_cell
 :status: ruled
-:realises: RUL-fallback_from_nearest, RUL-fallback_optional, RUL-other_proposals_need_acceptance, RUL-accepted_fallback_follows
+:realises: RUL-fallback_from_nearest, RUL-fallback_optional, RUL-proposals_need_acceptance, RUL-accepted_fallback_follows
 
 Destinations SHALL be built parent first; each one's `folder_fallback` proposes, as `inherited` with `inherited_from`,
 the `effective_fallback` of its nearest ancestor that has one, else `manual_required`. Its `effective_fallback` is the

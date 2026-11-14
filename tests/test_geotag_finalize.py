@@ -448,6 +448,22 @@ def test_finalize_refuses_a_prep_log_the_handoff_does_not_vouch_for(tmp_path, mo
     assert not (ctl / "photos-26-complete-log.json").exists()
 
 
+@pytest.mark.spec("RUL-image_untouched_by_other_phase",
+                  test="TST-geotag_finalize-geotag_leaves_preps_database_image_as_it_was")
+def test_geotag_leaves_preps_database_image_as_it_was(tmp_path, monkeypatch):
+    """Geotag — plan, execute and finalize — writes its own image of the database and leaves prep's, byte
+    for byte, as prep left it."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    image = ctl / "photos-15-prep-ingest.db"
+    image.write_bytes(b"prep's image of the database")
+    st = image.stat()
+    _to_executed(monkeypatch, ws, ctl)
+    assert _run(monkeypatch, ws, "finalize") == 0
+    assert (ctl / "photos-26-geotag-ingest.db").read_bytes().startswith(b"SQLite format 3")   # its own: written
+    assert image.read_bytes() == b"prep's image of the database"
+    assert (image.stat().st_mtime_ns, image.stat().st_ino) == (st.st_mtime_ns, st.st_ino)     # never rewritten
+
+
 def test_finalize_is_idempotent(tmp_path, monkeypatch):
     ws, ctl = _ready_ws(tmp_path, monkeypatch)
     _to_executed(monkeypatch, ws, ctl)
@@ -460,7 +476,7 @@ def test_finalize_is_idempotent(tmp_path, monkeypatch):
 
 
 @pytest.mark.spec("RUL-finalize_requires_success", "BLD-finalize_preconditions",
-                  "RUL-finalize_requires_plan_still_holds",
+                  "RUL-finalize_requires_plan_still_holds", "RUL-dependencies_validated_before_deriving",
                   test="TST-geotag_finalize-a_decision_changed_since_execution_stops_finalize")
 def test_a_decision_changed_since_execution_stops_finalize(tmp_path, monkeypatch):
     # Executed, then a decision edited without planning again: the package would record a decision the photos

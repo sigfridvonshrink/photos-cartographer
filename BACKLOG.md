@@ -26,27 +26,19 @@ walking the code for behaviour no item states.
 
 ---
 
-### 3. The 7 rules no test is asked to verify
+### 3. The 11 rules no test is asked to verify
 
-**Why:** seven rules are marked `verify: none` — specified, and nothing checks them. Two are **high**:
+**Why:** eleven rules are marked `verify: none` — specified, and nothing checks them. Two are **high**:
 `RUL-rewrite_in_place_atomic` (an interrupted in-place write leaves the intact original or the whole new file) and
 `RUL-stale_takeover_conservative` (only a lock whose owner is provably gone is reclaimed). The rest:
 `RUL-camera_classes_not_derivation`, `RUL-control_directory_fixed`, `RUL-filesystem_agnostic`,
-`RUL-image_never_working_data` (med) and `RUL-nothing_built_from_merge_records` (low). (Carried over from the clause
-index's 37 clauses with no test, most of which a test has asserted since.)
+`RUL-image_never_working_data`, `RUL-nothing_built_from_merge_records`, and four that item 7's splitting made items of
+their own: `RUL-empty_folder_restores`, `RUL-rehash_memo_count_reported`, `RUL-scratch_database_not_journalled`,
+`RUL-track_never_written_in_photo`. (Twenty more that the splitting brought out have had a test since 2026-11-14.)
 
-**Added 2026-11-14 by item 7's splitting:** 24 obligations that were folded into tested rules and that no test
-asserts, now items of their own at `verify: none`:
-`RUL-by_date_untimed_to_missing_metadata`, `RUL-camera_group_in_prep_records`, `RUL-
-dependencies_validated_before_deriving`, `RUL-dry_run_validates_saved_plan`, `RUL-duplicate_in_manifest_with_kept`,
-`RUL-empty_folder_restores`, `RUL-geotag_gates_ignore_history`, `RUL-handoff_built_without_links`, `RUL-
-image_untouched_by_other_phase`, `RUL-merged_batch_no_op`, `RUL-misnamed_file_expected_name`, `RUL-
-missing_folder_remedy_told`, `RUL-offset_within_value_before_beside`, `RUL-prep_refresh_not_a_change`, `RUL-
-rehash_memo_count_reported`, `RUL-restored_file_record_kept`, `RUL-scratch_database_not_journalled`, `RUL-
-snapshot_after_validation`, `RUL-snapshot_under_lock`, `RUL-suffix_deterministic`, `RUL-
-track_confirmation_is_acceptance`, `RUL-track_never_written_in_photo`, `RUL-tracks_never_joined_to_anchor`, `RUL-
-withdrawal_recomputes_time_and_name`.
-31 in all.
+**Partly asserted:** `RUL-snapshot_after_validation`, `RUL-snapshot_under_lock` and `RUL-dry_run_validates_saved_plan`
+are asserted for merge only; `RUL-suffix_deterministic` for prep only; `RUL-image_untouched_by_other_phase` for merge
+and geotag, not for prep.
 
 **Do:** a dedicated test for each, marking it `verify: required`, or a ruled reason it needs none.
 
@@ -128,7 +120,7 @@ more than one obligation. Split: 110 of them, into 115 new items, each refining 
 upholding) its parent, the tests' marks moved to the part each asserts. Where a second clause only repeated another
 item it was dropped and nothing made. Left whole, by ruling: "stops, having changed nothing" (one obligation; saying
 why is a second); a second clause that is the scope or manner of the first; an enumeration of one record's contents.
-Parents and new items are at seed for ruling. Build items are not read this way (ruled). The proposals, as data, and
+Parents and new items were ruled 2026-11-14, three reworded and twenty given the test they lacked. Build items are not read this way (ruled). The proposals, as data, and
 the script that applied them are kept outside the repository. The rationale questions below are untouched.
 
 **When:** the conversion is done (2026-11-14); this is the once-over-the-whole-corpus pass the owner asked for — *"maybe

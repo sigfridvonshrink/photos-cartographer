@@ -423,6 +423,22 @@ def test_an_offset_written_within_the_time_s_value_is_the_one_recorded_with_it(v
                                    else "destination_timezone")
 
 
+@pytest.mark.spec("RUL-offset_within_value_before_beside",
+                  test="TST-geotag_resolved_utc-an_offset_within_the_value_comes_before_one_beside_it")
+@pytest.mark.parametrize("value, beside, utc, offset", [
+    ("2024:05:01 19:00:00+09:00", "+02:00", "2024-05-01T10:00:00Z", 32400),
+    ("2024:05:01 19:00:00.73+09:00", "-05:00", "2024-05-01T10:00:00Z", 32400),
+    ("2024:05:01 10:00:00Z", "+02:00", "2024-05-01T10:00:00Z", 0),
+    ("2024:05:01 10:00:00", "+05:00", "2024-05-01T05:00:00Z", 18000)])     # none within: the one beside it
+def test_an_offset_within_the_time_s_value_comes_before_one_in_the_field_beside_it(value, beside, utc, offset):
+    """A time whose value states its own offset, with an offset field beside it that says something else: the
+    one within the value is the one the time is read by."""
+    f = _file("6-photos-by-dest/B/p.jpg", PHONE, value, offset_tag=beside)
+    assert cal._own_offset(f) == offset
+    r = _one(f)
+    assert r["resolved_utc"] == utc and r["time_rule_used"] == "smartphone_native_offset"
+
+
 @pytest.mark.spec("RUL-corrected_time_written_local", "BLD-executable_plan", "RUL-time_offset_written_beside",
                   test="TST-geotag_resolved_utc-the_offset_written_is_hours_and_minutes")
 def test_the_offset_written_is_always_hours_and_minutes():

@@ -99,7 +99,7 @@ inside the lock all the same.
 
 :::{rul} The lock lasts the whole run, and no longer
 :id: RUL-lock_through_the_run
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -111,7 +111,7 @@ writes.
 
 :::{rul} A locked workspace is refused at once
 :id: RUL-lock_fail_fast
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -123,7 +123,7 @@ nothing — and having produced no plan, no dry-run report and no artifact.
 
 :::{rul} A refused run says the workspace is locked
 :id: RUL-lock_refusal_says_locked
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-lock_fail_fast
@@ -133,7 +133,7 @@ A run that stops on a locked workspace SHALL say the workspace is locked by a ru
 
 :::{rul} The lock is released however the run ends
 :id: RUL-lock_released_on_any_end
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-lock_through_the_run
@@ -213,7 +213,7 @@ Each snapshot SHALL be identifiable by the plan whose changes it precedes.
 
 :::{rul} When a snapshot is taken
 :id: RUL-snapshot_timing
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 
@@ -222,9 +222,9 @@ A snapshot SHALL be taken before the plan's first change.
 
 :::{rul} A snapshot follows the plan's validation
 :id: RUL-snapshot_after_validation
-:status: seed
+:status: ruled
 :criticality: med
-:verify: none
+:verify: required
 :refines: RUL-snapshot_timing
 
 A snapshot SHALL be taken only after the plan has been validated against its dependencies.
@@ -232,9 +232,9 @@ A snapshot SHALL be taken only after the plan has been validated against its dep
 
 :::{rul} A snapshot is taken under the lock
 :id: RUL-snapshot_under_lock
-:status: seed
+:status: ruled
 :criticality: med
-:verify: none
+:verify: required
 :refines: RUL-snapshot_timing
 
 A snapshot SHALL be taken only while the lock is held.
@@ -305,7 +305,7 @@ phase keeping settings of its own, and no setting that governs a run coming from
 
 :::{rul} A configuration missing a setting stops the run
 :id: RUL-config_complete
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -316,7 +316,7 @@ A configuration that lacks a setting SHALL stop the run — never filled from th
 
 :::{rul} The missing setting is named
 :id: RUL-missing_setting_named
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-config_complete
@@ -326,7 +326,7 @@ A run stopped by a configuration that lacks a setting SHALL name the setting.
 
 :::{rul} A configuration holding an unknown setting stops the run
 :id: RUL-config_no_unknown_settings
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -337,7 +337,7 @@ A configuration holding a setting cartographer does not know SHALL stop the run.
 
 :::{rul} The unknown setting is named
 :id: RUL-unknown_setting_named
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-config_no_unknown_settings
@@ -347,7 +347,7 @@ A run stopped by a setting cartographer does not know SHALL name the setting.
 
 :::{rul} Prep seeds the configuration once
 :id: RUL-config_seeded_once
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 
@@ -698,7 +698,7 @@ No command SHALL take an option saying where to put a plan or where to find one;
 
 :::{rul} No plan, no dry run and no execution
 :id: RUL-no_plan_no_run
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -708,7 +708,7 @@ A dry run or an execution that finds no plan in its place SHALL stop.
 
 :::{rul} The user is told to plan first
 :id: RUL-no_plan_says_plan_first
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-no_plan_no_run
@@ -718,7 +718,7 @@ A dry run or an execution stopped for want of a plan SHALL tell the user to plan
 
 :::{rul} A dry run summarises the real plan
 :id: RUL-dry_run_summarises_the_real_plan
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -728,9 +728,9 @@ A dry run SHALL report on the saved plan that execution would carry out — neve
 
 :::{rul} A dry run validates the saved plan
 :id: RUL-dry_run_validates_saved_plan
-:status: seed
+:status: ruled
 :criticality: med
-:verify: none
+:verify: required
 :refines: RUL-dry_run_summarises_the_real_plan
 
 A dry run SHALL validate the saved plan that execution would carry out.
@@ -738,7 +738,7 @@ A dry run SHALL validate the saved plan that execution would carry out.
 
 :::{rul} Re-planning sets the prior plan aside
 :id: RUL-replanning_keeps_the_prior
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -749,7 +749,7 @@ saved one is first set aside, recoverably.
 
 :::{rul} The user is told where the prior plan went
 :id: RUL-set_aside_plan_reported
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-replanning_keeps_the_prior
@@ -814,7 +814,7 @@ top level that does not belong there, a symbolic link among its files, a managed
 
 :::{rul} Prep builds the structure once, and never removes a folder
 :id: RUL-structure_built_once
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -825,7 +825,7 @@ Prep SHALL create the full structure of managed folders exactly once, when it in
 
 :::{rul} Prep never removes a managed folder
 :id: RUL-managed_folder_never_removed
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -873,7 +873,7 @@ initialization — a symbolic link there still blocking, as everywhere.
 
 :::{rul} No symbolic link is followed, and any link blocks
 :id: RUL-no_links
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -885,7 +885,7 @@ link to a folder inside a dump or a managed folder; a managed folder that is its
 
 :::{rul} No symbolic link is followed
 :id: RUL-link_never_followed
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -897,7 +897,7 @@ a managed folder that is itself a link is never walked.
 
 :::{rul} A blocking link is named, and nothing is made after it
 :id: RUL-link_named
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-no_links
@@ -907,7 +907,7 @@ A phase a link blocks SHALL name the link.
 
 :::{rul} Nothing is made after a blocking link
 :id: RUL-link_block_produces_nothing
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-link_named
@@ -927,7 +927,7 @@ Prep SHALL check for links across the whole tree it walks, the destination tree 
 
 :::{rul} Geotag and merge check the top level for links
 :id: RUL-geotag_merge_check_top_level_links
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-who_checks_for_links
@@ -937,9 +937,9 @@ Geotag and merge SHALL check the top level for links themselves.
 
 :::{rul} Geotag and merge take only a handoff built with no link
 :id: RUL-handoff_built_without_links
-:status: seed
+:status: ruled
 :criticality: med
-:verify: none
+:verify: required
 :refines: RUL-geotag_merge_check_top_level_links
 
 Geotag and merge SHALL consume only a handoff prep built with no link present.
@@ -947,7 +947,7 @@ Geotag and merge SHALL consume only a handoff prep built with no link present.
 
 :::{rul} A missing managed folder blocks, and is never rebuilt
 :id: RUL-missing_folder_blocks
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -958,7 +958,7 @@ On an initialized workspace, a missing managed folder SHALL block every phase.
 
 :::{rul} A missing managed folder is never rebuilt
 :id: RUL-missing_folder_never_recreated
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -970,7 +970,7 @@ had to rebuild.
 
 :::{rul} The block names the missing folders
 :id: RUL-missing_folder_named
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-missing_folder_blocks
@@ -980,9 +980,9 @@ The block of a missing managed folder SHALL name the missing folders and say tha
 
 :::{rul} The block tells the user to restore the folders
 :id: RUL-missing_folder_remedy_told
-:status: seed
+:status: ruled
 :criticality: med
-:verify: none
+:verify: required
 :refines: RUL-missing_folder_named
 
 The block of a missing managed folder SHALL tell the user to restore the folders and run again.
@@ -990,7 +990,7 @@ The block of a missing managed folder SHALL tell the user to restore the folders
 
 :::{rul} An empty folder restores a missing one
 :id: RUL-empty_folder_restores
-:status: seed
+:status: ruled
 :criticality: med
 :verify: none
 :refines: RUL-missing_folder_blocks
@@ -1032,7 +1032,7 @@ metadata the files carry.
 
 :::{rul} Prep derives the camera group
 :id: RUL-prep_derives_camera_group
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :uses: DEF-camera_group
@@ -1042,7 +1042,7 @@ Prep SHALL derive each file's camera group from its device-identity metadata.
 
 :::{rul} The camera group is in what prep hands geotag
 :id: RUL-camera_group_in_handoff
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-prep_derives_camera_group
@@ -1053,9 +1053,9 @@ Prep SHALL record each file's camera group in what it hands geotag.
 
 :::{rul} The camera group is in prep's own records
 :id: RUL-camera_group_in_prep_records
-:status: seed
+:status: ruled
 :criticality: med
-:verify: none
+:verify: required
 :refines: RUL-prep_derives_camera_group
 :uses: DEF-camera_group
 
@@ -1129,7 +1129,7 @@ sets, followed by a differentiating suffix when that name is taken.
 
 :::{rul} One format, set by the configuration
 :id: RUL-one_filename_format
-:status: seed
+:status: ruled
 :criticality: med
 :verify: incidental
 :uses: DEF-timestamp_name
@@ -1139,7 +1139,7 @@ Prep and geotag SHALL name files from a timestamp in one format for the whole pi
 
 :::{rul} The format is set by the configuration
 :id: RUL-filename_format_configured
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-one_filename_format
@@ -1150,7 +1150,7 @@ The filename format SHALL be set by the configuration, hard-coded by neither pre
 
 :::{rul} A taken name gets a suffix, never clobbering
 :id: RUL-suffix_no_clobber
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -1161,7 +1161,7 @@ every name on disk and every name planned in the run, so that two files never co
 
 :::{rul} The suffix is zero-padded
 :id: RUL-suffix_zero_padded
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-suffix_no_clobber
@@ -1171,9 +1171,9 @@ The differentiating suffix SHALL be zero-padded.
 
 :::{rul} The suffix is allocated deterministically
 :id: RUL-suffix_deterministic
-:status: seed
+:status: ruled
 :criticality: high
-:verify: none
+:verify: required
 :refines: RUL-suffix_no_clobber
 
 The differentiating suffix SHALL be allocated deterministically.
@@ -1181,7 +1181,7 @@ The differentiating suffix SHALL be allocated deterministically.
 
 :::{rul} Names are compared without regard to case
 :id: RUL-suffix_case_insensitive
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-suffix_no_clobber
@@ -1274,7 +1274,7 @@ SHALL stop prep.
 
 :::{rul} Every misnamed file is named
 :id: RUL-misnamed_file_named
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-misnamed_file_stops_prep
@@ -1284,9 +1284,9 @@ Prep SHALL name every misnamed file it finds.
 
 :::{rul} A misnamed file is given the name it should carry
 :id: RUL-misnamed_file_expected_name
-:status: seed
+:status: ruled
 :criticality: med
-:verify: none
+:verify: required
 :refines: RUL-misnamed_file_named
 
 Prep SHALL give, with each misnamed file it names, the name the file should carry.
@@ -1428,7 +1428,7 @@ of the configuration or of the areas the record reads — and each use checks th
 
 :::{inv} No record is used once what it came from has changed
 :id: INV-no_stale_use
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -1439,9 +1439,9 @@ No phase SHALL use a record once anything it was derived from has changed.
 
 :::{rul} A phase validates what it derives from first
 :id: RUL-dependencies_validated_before_deriving
-:status: seed
+:status: ruled
 :criticality: high
-:verify: none
+:verify: required
 :upholds: INV-no_stale_use
 :uses: DEF-dependency_cascade
 
@@ -1450,7 +1450,7 @@ Each phase SHALL validate what it derives a record from before it creates the re
 
 :::{rul} A record carries what it was derived from
 :id: RUL-dependencies_recorded_in_record
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :upholds: INV-no_stale_use
@@ -1482,7 +1482,7 @@ A media file's fingerprint SHALL stay the same when the pipeline rewrites its me
 
 :::{rul} Another ImageMagick is a reason to check a fingerprint
 :id: RUL-engine_change_is_checked
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :uses: DEF-fingerprint
@@ -1492,7 +1492,7 @@ A photo's fingerprint taken under another ImageMagick version SHALL be taken aga
 
 :::{rul} A fingerprint taken again is the same photo's
 :id: RUL-retaken_fingerprint_same_photo
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-engine_change_is_checked
@@ -1576,7 +1576,7 @@ A prep execution SHALL leave the inbox empty.
 
 :::{rul} Only photos are sorted into photos by destination
 :id: RUL-sort_photos_only
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -1633,7 +1633,7 @@ not been merged.
 
 :::{rul} A re-run changes nothing already settled
 :id: RUL-geotag_rerun_keeps_settled
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -1645,7 +1645,7 @@ A geotag re-run SHALL recognise a time an earlier run corrected, never correctin
 
 :::{rul} A re-run derives again a position geotag wrote
 :id: RUL-rerun_rederives_written_position
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -1657,7 +1657,7 @@ A geotag re-run SHALL derive again and replace a position geotag wrote, never ke
 
 :::{rul} Geotag's gates are the present state, not its history
 :id: RUL-geotag_gates
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -1670,10 +1670,10 @@ empty.
 
 :::{rul} What ran before does not bear on geotag's gates
 :id: RUL-geotag_gates_ignore_history
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
-:verify: none
+:verify: required
 :refines: RUL-geotag_gates
 :uses: DEF-geotag, DEF-managed_folders
 
@@ -1683,7 +1683,7 @@ run any number of prep and sort cycles before geotagging.
 
 :::{rul} A re-run does as much as what changed requires
 :id: RUL-rerun_does_what_changed
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :uses: DEF-dependency_cascade
@@ -1695,7 +1695,7 @@ withdrawn or altered decision, a refreshed handoff — and no more.
 
 :::{rul} A re-run asks only about what the change affects
 :id: RUL-rerun_asks_only_affected
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :refines: RUL-rerun_does_what_changed
@@ -1740,7 +1740,7 @@ not.
 
 :::{rul} Merge refuses photos by destination changed since finalize
 :id: RUL-merge_refuses_changed_since_finalize
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -1752,10 +1752,10 @@ the corrected, named, fully recorded set.
 
 :::{rul} A refresh describing only a prep run is not a change
 :id: RUL-prep_refresh_not_a_change
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
-:verify: none
+:verify: required
 :refines: RUL-merge_refuses_changed_since_finalize
 
 A refresh that changes only what describes a prep run SHALL NOT count, for merge, as a change since finalize.
@@ -1856,7 +1856,7 @@ the run requires of it: a file already in its place, with its name and its metad
 
 :::{rul} A run over unchanged inputs changes nothing
 :id: RUL-no_op_run
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: INV-change_only_what_needs
@@ -1866,7 +1866,7 @@ A phase run over a workspace whose relevant state has not changed SHALL change n
 
 :::{rul} A run over unchanged inputs produces the same result
 :id: RUL-no_op_run_same_result
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-no_op_run
@@ -1900,7 +1900,7 @@ tool *proposes*; the user *decides*.
 
 :::{inv} Every change follows from the record
 :id: INV-every_change_from_the_record
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: incidental
@@ -1967,7 +1967,7 @@ mutated files repaired by hand.
 
 :::{rul} Withdrawing a decision undoes it
 :id: RUL-withdrawal_undoes
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-decision_revisable
@@ -1978,9 +1978,9 @@ the position it would have had without it — from the tracks, or none; a positi
 
 :::{rul} After a withdrawal the time and the name are recomputed in place
 :id: RUL-withdrawal_recomputes_time_and_name
-:status: seed
+:status: ruled
 :criticality: med
-:verify: none
+:verify: required
 :refines: RUL-withdrawal_undoes
 
 After a decision is withdrawn, a time and a name SHALL be recomputed where the file stands.
@@ -1988,7 +1988,7 @@ After a decision is withdrawn, a time and a name SHALL be recomputed where the f
 
 :::{rul} A withdrawal never moves a file out of its destination
 :id: RUL-withdrawal_keeps_destination
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-withdrawal_undoes
@@ -2079,7 +2079,7 @@ run's journal.
 
 :::{rul} The package describes itself
 :id: RUL-package_self_describing
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :uses: DEF-archival_package
@@ -2089,7 +2089,7 @@ The package SHALL say which workspace it came from and which plan and execution 
 
 :::{rul} The package lists its contents with their hashes
 :id: RUL-package_lists_contents
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :refines: RUL-package_self_describing
@@ -2100,7 +2100,7 @@ The package SHALL list its contents with each item's hash, so its integrity can 
 
 :::{rul} A photo's entry grows one phase at a time
 :id: RUL-log_entry_grows
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -2112,7 +2112,7 @@ them — so the latest phase's log is the full record.
 
 :::{rul} A phase only appends to a photo's entry
 :id: RUL-log_entry_append_only
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -2125,7 +2125,7 @@ stays its own phase's.
 
 :::{rul} The log is keyed by fingerprint
 :id: RUL-log_keyed_by_fingerprint
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :uses: DEF-transformation_log, DEF-fingerprint
@@ -2135,7 +2135,7 @@ The log SHALL key each photo's entry by its fingerprint.
 
 :::{rul} The log carries the chain of names and places
 :id: RUL-log_carries_name_chain
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-log_keyed_by_fingerprint
@@ -2188,7 +2188,7 @@ from and the rule that turned it to UTC.
 
 :::{rul} The log reads as it stands
 :id: RUL-log_human_readable
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :uses: DEF-transformation_log
@@ -2199,7 +2199,7 @@ them — times, timezones and offsets.
 
 :::{rul} The log is stably ordered
 :id: RUL-log_stably_ordered
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :refines: RUL-log_human_readable
@@ -2254,7 +2254,7 @@ successful run.
 
 :::{rul} One database, in the workspace
 :id: RUL-one_database
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -2265,7 +2265,7 @@ A workspace SHALL hold exactly one database of record.
 
 :::{rul} The library holds no database
 :id: RUL-library_no_database
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -2277,7 +2277,7 @@ The library SHALL hold no database of record.
 
 :::{rul} Any other database is scratch
 :id: RUL-other_databases_scratch
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-one_database
@@ -2288,7 +2288,7 @@ to delete at any time.
 
 :::{rul} A scratch database is not journalled
 :id: RUL-scratch_database_not_journalled
-:status: seed
+:status: ruled
 :criticality: med
 :verify: none
 :refines: RUL-other_databases_scratch
@@ -2298,7 +2298,7 @@ A scratch database SHALL NOT be journalled.
 
 :::{rul} A scratch database is not archived
 :id: RUL-scratch_database_not_archived
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-other_databases_scratch
@@ -2308,7 +2308,7 @@ A scratch database SHALL NOT be archived.
 
 :::{rul} The database is part of the record
 :id: RUL-database_is_record
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :uses: DEF-workspace_database, DEF-archival_package
@@ -2318,7 +2318,7 @@ The workspace database SHALL be kept with the control records, never discarded w
 
 :::{rul} The database is archived in the package
 :id: RUL-database_archived
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :refines: RUL-database_is_record
@@ -2352,7 +2352,7 @@ Finalize SHALL only read the workspace database.
 
 :::{rul} Each phase keeps an image of the database at its end
 :id: RUL-database_image_each_phase
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :uses: DEF-database_image, DEF-archival_package
@@ -2362,9 +2362,9 @@ Each phase SHALL keep its database image, refreshed by each of its successful ru
 
 :::{rul} No other phase touches a phase's image
 :id: RUL-image_untouched_by_other_phase
-:status: seed
+:status: ruled
 :criticality: med
-:verify: none
+:verify: required
 :refines: RUL-database_image_each_phase
 :uses: DEF-database_image, DEF-archival_package
 
@@ -2373,7 +2373,7 @@ A phase's database image SHALL be left untouched by every other phase.
 
 :::{rul} A run that does not succeed leaves the image as it was
 :id: RUL-image_untouched_by_failed_run
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-database_image_each_phase
@@ -2473,7 +2473,7 @@ Where an incoming photo's place in the library is taken, merge SHALL compare the
 
 :::{rul} The same content is already in the library
 :id: RUL-collision_same_content
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-collision_by_content
@@ -2483,7 +2483,7 @@ A taken place holding the same content SHALL mean the photo is already in the li
 
 :::{rul} The workspace's copy of a photo already in the library is removed
 :id: RUL-collision_same_content_copy_removed
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-collision_same_content
@@ -2505,7 +2505,7 @@ differentiating name.
 
 :::{rul} A collision that cannot be settled holds the photo back
 :id: RUL-unsettled_collision_blocks
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -2518,7 +2518,7 @@ destination — neither placing it there nor under another name.
 
 :::{rul} A photo held back does not stop the rest
 :id: RUL-unsettled_collision_rest_proceeds
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-unsettled_collision_blocks
@@ -2529,7 +2529,7 @@ Where a collision that cannot be settled holds one photo back, merge SHALL go on
 
 :::{rul} A library file is read at most once while unchanged
 :id: RUL-library_file_read_once
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :uses: DEF-library, DEF-fingerprint, DEF-workspace_database
@@ -2539,7 +2539,7 @@ A library file's fingerprint SHALL be computed only when a collision needs it.
 
 :::{rul} A library file's fingerprint is kept while the file is unchanged
 :id: RUL-library_fingerprint_kept
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :refines: RUL-library_file_read_once
@@ -2589,7 +2589,7 @@ library, which has none of a workspace's folders, guard or lifecycle.
 
 :::{rul} Only the library setup makes the mark, once
 :id: RUL-library_mark_made_by_setup
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-library_known_by_mark
@@ -2599,7 +2599,7 @@ Merge's library setup alone SHALL make the library's mark.
 
 :::{rul} Making the mark again changes nothing
 :id: RUL-library_mark_idempotent
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-library_mark_made_by_setup
@@ -2609,7 +2609,7 @@ Making the library's mark again SHALL change nothing.
 
 :::{rul} Merge's plan, dry run and execution stop without the mark
 :id: RUL-library_mark_required
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -2700,7 +2700,7 @@ a photo already in the library likewise.
 
 :::{rul} A photo merge cannot place stays where it is
 :id: RUL-unplaced_photo_stays
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -2711,7 +2711,7 @@ A photo merge cannot place SHALL stay where it is.
 
 :::{rul} A run that leaves a photo unplaced is partial
 :id: RUL-unplaced_photo_run_partial
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-unplaced_photo_stays
@@ -2721,7 +2721,7 @@ A merge run that leaves a photo unplaced SHALL be partial.
 
 :::{rul} Merge resumes, and a merged batch is a no-op
 :id: RUL-merge_resumable
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :uses: DEF-merge
@@ -2732,9 +2732,9 @@ A merge interrupted SHALL be finished by running it again, which applies only wh
 
 :::{rul} Merging a merged batch changes nothing
 :id: RUL-merged_batch_no_op
-:status: seed
+:status: ruled
 :criticality: med
-:verify: none
+:verify: required
 :refines: RUL-merge_resumable
 :uses: DEF-merge
 
@@ -2824,7 +2824,7 @@ workspace lock. Its records MAY still be read.
 
 :::{rul} The decision editor refuses a sealed workspace
 :id: RUL-editor_refuses_sealed
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -2835,7 +2835,7 @@ The decision editor SHALL NOT open a sealed workspace.
 
 :::{rul} The decision editor saves nothing into a sealed workspace
 :id: RUL-editor_refuses_sealed_save
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -2974,7 +2974,7 @@ A timezone the user writes SHALL be a real zone that resolves, never an arbitrar
 
 :::{rul} A position is well formed
 :id: RUL-checked_positions_and_times
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :uses: DEF-decision
@@ -2986,7 +2986,7 @@ neither.
 
 :::{rul} A clock offset is a whole number of seconds
 :id: RUL-checked_clock_offsets
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: INV-authored_values_checked
@@ -3033,7 +3033,7 @@ the check off without saying so.
 
 :::{rul} A yes-or-no is a yes or a no
 :id: RUL-checked_shapes
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -3045,7 +3045,7 @@ A yes-or-no SHALL be a yes or a no.
 
 :::{rul} A value from a fixed set is one of that set
 :id: RUL-checked_fixed_set
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: INV-authored_values_checked
@@ -3056,7 +3056,7 @@ A value from a fixed set — a device group's class among them — SHALL be one 
 
 :::{rul} A decision has its shape
 :id: RUL-checked_decision_structure
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -3115,7 +3115,7 @@ A value SHALL be checked every time a run uses it, never taken as valid because 
 
 :::{rul} An invalid decision is kept, and marked
 :id: RUL-invalid_decision_kept
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -3127,7 +3127,7 @@ A decision found invalid SHALL be kept exactly as the user wrote it — never er
 
 :::{rul} An invalid decision is reported as needing correction
 :id: RUL-invalid_decision_reported
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-invalid_decision_kept
@@ -3140,7 +3140,7 @@ A decision found invalid SHALL be reported as needing correction.
 
 :::{rul} Every name is checked free as it is written
 :id: RUL-target_free_at_execute
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -3153,7 +3153,7 @@ on the strength of the plan: a name found taken blocks that operation.
 
 :::{rul} A name is checked free ignoring case
 :id: RUL-target_free_ignores_case
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-target_free_at_execute
@@ -3273,7 +3273,7 @@ so that an interruption leaves no file under that name, or the complete one, nev
 
 :::{rul} A temporary copy a crash left is cleared
 :id: RUL-crash_temps_cleared
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :uses: DEF-merge, DEF-library, RUL-temp_name_own
@@ -3285,7 +3285,7 @@ into.
 
 :::{rul} The temporary copies cleared are counted
 :id: RUL-crash_temps_counted
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :refines: RUL-crash_temps_cleared
@@ -3339,7 +3339,7 @@ An operation that cannot complete SHALL never be recorded as done, so that a re-
 
 :::{rul} Planning changes no media
 :id: RUL-planning_changes_no_media
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -3349,7 +3349,7 @@ Planning SHALL change no media file.
 
 :::{rul} Planning writes only its own records
 :id: RUL-planning_writes_only_its_records
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-planning_changes_no_media

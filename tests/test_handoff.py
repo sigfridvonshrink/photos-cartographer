@@ -136,6 +136,62 @@ def test_grouping_facts_identity_and_device_class(tmp_path, monkeypatch, seed_fr
     assert g["device_class"] == "phone"
 
 
+@pytest.mark.spec("RUL-camera_group_in_prep_records",
+                  test="TST-handoff-camera_group_of_each_file_in_preps_own_records")
+def test_camera_group_of_each_file_in_preps_own_records(tmp_path, monkeypatch):
+    """Prep keeps each file's camera group in its own records — the workspace database, against the
+    path the file was organized to — not only in what it hands geotag."""
+    import sqlite3
+    _mock(monkeypatch)
+    inner = utils.MetadataReader.read_metadata_concurrently
+
+    def meta(folders, max_workers=4, progress_coordinator=None):
+        res, failed = inner(folders, max_workers, progress_coordinator)
+        for path, md in res.items():
+            md["camera_group_key"] = "cam-" + os.path.basename(path)[0]
+            md["DateTimeOriginal"] = "2023:01:02 03:04:0" + ("5" if md["camera_group_key"] == "cam-a" else "6")
+        return res, failed
+    monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", meta)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    (ws / "0-sources" / "b.jpg").write_bytes(b"BBBB")
+    _run(ws)
+    db = sqlite3.connect(utils.db_path(str(ws)))
+    try:
+        recorded = dict(db.execute("SELECT relative_path, camera_group_key FROM metadata_cache"))
+    finally:
+        db.close()
+    assert recorded == {"5-photos-by-date/2023-01-02/2023-01-02--03-04-05.jpg": "cam-a",
+                        "5-photos-by-date/2023-01-02/2023-01-02--03-04-06.jpg": "cam-b"}
+
+
+@pytest.mark.spec("RUL-handoff_built_without_links", test="TST-handoff-no_handoff_built_while_a_link_is_present")
+def test_no_handoff_built_while_a_link_is_present(tmp_path, monkeypatch):
+    """Prep builds no handoff while a link is present anywhere it walks — the destination tree it never
+    changes included — and leaves the earlier one as it was; with the link gone it builds one again. So
+    the handoff geotag and merge find is always one built with no link present."""
+    _mock(monkeypatch)
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    link = ws / "6-photos-by-dest" / "Trip" / "link.jpg"
+    link.parent.mkdir()
+    (tmp_path / "outside.jpg").write_bytes(b"OUT")
+    os.symlink(str(tmp_path / "outside.jpg"), str(link))
+    with pytest.raises(ValueError, match="Forbidden symlink detected"):
+        _run(ws)
+    assert not os.path.exists(utils.handoff_path(str(ws)))           # none built with the link present
+
+    link.unlink()
+    _run(ws)
+    before = open(utils.handoff_path(str(ws)), "rb").read()          # built with no link present
+    (ws / "0-sources" / "b.jpg").write_bytes(b"BBBB")
+    os.symlink(str(tmp_path / "outside.jpg"), str(link))
+    with pytest.raises(ValueError, match="Forbidden symlink detected"):
+        _run(ws)
+    assert open(utils.handoff_path(str(ws)), "rb").read() == before  # not rebuilt around the link
+    assert (ws / "0-sources" / "b.jpg").exists()                     # and nothing was organized
+
+
 @pytest.mark.spec("RUL-known_when_classified", test="TST-handoff-unknown_device_class_when_not_configured")
 def test_unknown_device_class_when_not_configured(tmp_path, monkeypatch):
     _mock(monkeypatch)

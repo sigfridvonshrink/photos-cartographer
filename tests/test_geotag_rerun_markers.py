@@ -375,6 +375,35 @@ def test_withdrawn_offset_after_execute_asks_again(tmp_path, monkeypatch):
     assert asked["effective_drift_offset"] == ""
 
 
+@pytest.mark.spec("RUL-withdrawal_recomputes_time_and_name",
+                  test="TST-geotag_rerun_markers-withdrawn_offset_after_execute_recomputes_time_and_name_in_place")
+def test_withdrawn_offset_after_execute_recomputes_time_and_name_in_place(tmp_path, monkeypatch):
+    """A manual offset, five minutes off what the camera's own GPS photos give, is executed: the photo is
+    corrected and named under it. Withdrawn, the offset gives way to the one the tool derives, and the photo's
+    time and name are computed again from its own camera time — for the file where it now stands, under the
+    name the withdrawn decision gave it, and within its destination."""
+    ws = _ws(tmp_path, [lambda ws: _rec(ws, f"{T}/a.arw", "2024:07:03 13:50:00", gps=(50.0, 4.0)),
+                        lambda ws: _rec(ws, f"{T}/b.arw", "2024:07:03 14:40:00", gps=(50.005, 4.0)),
+                        lambda ws: _rec(ws, f"{T}/c.arw", "2024:07:03 14:20:00")])
+    _plan(monkeypatch, ws)
+    _set_offset(ws, SLOW - 300)
+    _plan(monkeypatch, ws)
+    _confirm_drift(ws, SLOW - 300)
+    _plan(monkeypatch, ws)
+    assert _ops(ws)[f"{T}/c.arw"]["to"] == "2024-07-03--14-25-00.arw"    # 14:20 camera + 1:55 = 12:25Z
+    _execute(monkeypatch, ws)
+    assert (ws / T / "2024-07-03--14-25-00.arw").exists() and not (ws / T / "c.arw").exists()
+    _set_offset(ws, "")                                      # the decision withdrawn
+    _plan(monkeypatch, ws)
+    assert _cell(ws)["effective_time_anchor"] == {"offset_seconds": SLOW, "source": "gpx_anchor_auto"}
+    ops = _ops(ws)
+    e = ops[f"{T}/2024-07-03--14-25-00.arw"]                 # the file where it stands
+    assert e["writes"]["DateTimeOriginal"] == "2024:07:03 14:30:00"      # 14:20 camera + 1:50 = 12:30Z
+    assert e["to"] == "2024-07-03--14-30-00.arw"             # a name, not a path: within its destination
+    assert {"metadata_time_write", "rename_no_clobber"} <= set(e["types"])
+    assert all(os.path.exists(ws / rel) for rel in ops)      # every operation is on a file as it stands
+
+
 @pytest.mark.spec("BLD-original_values_pinned", test="TST-geotag_rerun_markers-originals_are_pinned_once_and_complete")
 def test_originals_are_pinned_once_and_complete(tmp_path, monkeypatch):
     ws = _executed_round(tmp_path, monkeypatch)

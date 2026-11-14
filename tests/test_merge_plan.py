@@ -380,6 +380,7 @@ def test_dry_run_without_plan_errors(tmp_path, monkeypatch):
     assert merge._run_locked_workflow("dry-run", str(ws)) == 2    # no photos-30 yet
 
 
+@pytest.mark.spec("RUL-dry_run_validates_saved_plan", test="TST-merge_plan-dry_run_rejects_stale_plan")
 def test_dry_run_rejects_stale_plan(tmp_path, monkeypatch):
     ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
     _patch_fp(monkeypatch, fp)

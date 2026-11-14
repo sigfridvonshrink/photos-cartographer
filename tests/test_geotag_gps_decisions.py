@@ -170,7 +170,7 @@ def _with_fallback(parent, lat, lon):
             {"fallback_lat": lat, "fallback_lon": lon}}}}}
 
 
-@pytest.mark.spec("RUL-fallback_from_nearest", "RUL-other_proposals_need_acceptance", "BLD-folder_fallback_cell",
+@pytest.mark.spec("RUL-fallback_from_nearest", "RUL-proposals_need_acceptance", "BLD-folder_fallback_cell",
                   test="TST-geotag_gps_decisions-child_inherits_parent_fallback_as_proposal")
 def test_child_inherits_parent_fallback_as_proposal(tmp_path):
     wf = _wf(tmp_path)

@@ -642,6 +642,58 @@ def test_snapshot_and_revalidation_precede_the_parallel_move_pass(tmp_path, monk
     assert events.count("move") == 3                              # all three files still placed
 
 
+@pytest.mark.spec("RUL-snapshot_after_validation",
+                  test="TST-merge_execute-no_snapshot_before_the_plan_is_validated")
+def test_no_snapshot_before_the_plan_is_validated(tmp_path, monkeypatch):
+    """A snapshot follows the plan's validation against its dependencies: a plan that fails it is
+    rejected with no snapshot taken at all, and a plan that passes is validated first."""
+    photos = [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}]
+    stale_ws, _ = _ws(tmp_path, photos, name="stale")
+    taken = _zfs(monkeypatch, stale_ws)
+    assert merge._run_locked_workflow("plan", str(stale_ws)) == 0
+    open(os.path.join(str(stale_ws), ".photos-ingest", "photos-25-execution-summary.json"), "w").write(
+        json.dumps({"status": "success", "touched": True}))      # a dependency changed after planning
+    assert merge._run_locked_workflow("execute", str(stale_ws)) == 2
+    assert taken == []                                            # rejected before any snapshot
+
+    ws, _ = _ws(tmp_path, photos)
+    taken = _zfs(monkeypatch, ws)
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    events = []
+    orig_reval, faked_snap = merge.MergeWorkflow.revalidate_plan_deps, merge.take_zfs_snapshot
+
+    def reval(self, *a, **k):
+        events.append("revalidate"); return orig_reval(self, *a, **k)
+
+    def snap(*a, **k):
+        events.append("snapshot"); return faked_snap(*a, **k)
+
+    monkeypatch.setattr(merge.MergeWorkflow, "revalidate_plan_deps", reval)
+    monkeypatch.setattr(merge, "take_zfs_snapshot", snap)
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    assert taken and events[0] == "revalidate" and "snapshot" in events, events
+
+
+@pytest.mark.spec("RUL-snapshot_under_lock", test="TST-merge_execute-snapshot_is_taken_while_the_lock_is_held")
+def test_snapshot_is_taken_while_the_lock_is_held(tmp_path, monkeypatch):
+    """Every snapshot of a merge is taken while the workspace lock is held: probed, from a file
+    descriptor of its own, at the moment each snapshot is asked for."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    _zfs(monkeypatch, ws)
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    faked_snap = merge.take_zfs_snapshot
+    held = []
+
+    def snap(*a, **k):
+        held.append(utils.WorkspaceLock(str(ws), create=False).held_owner() is not None)
+        return faked_snap(*a, **k)
+
+    monkeypatch.setattr(merge, "take_zfs_snapshot", snap)
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    assert held == [True, True], held                             # the workspace's and the library's
+    assert utils.WorkspaceLock(str(ws), create=False).held_owner() is None   # the probe tells held from free
+
+
 @pytest.mark.spec("BLD-library_lock", test="TST-merge_execute-library_lock_held_throughout_concurrent_move_pass")
 def test_library_lock_held_throughout_concurrent_move_pass(tmp_path, monkeypatch):
     """§10.4: the library lock is held for the WHOLE concurrent move pass — concurrency never relaxes
@@ -1095,6 +1147,45 @@ def test_merge_writes_only_its_own_part_of_the_database(tmp_path):
     assert merge._run_locked_workflow("execute", str(ws)) == 0
     assert _rows(db, skip=("library_fingerprint_cache",)) == before
     assert _rows(db)["library_fingerprint_cache"]                      # its own part: written
+
+
+@pytest.mark.spec("RUL-image_untouched_by_other_phase",
+                  test="TST-merge_execute-merge_leaves_the_other_phases_database_images_as_they_were")
+def test_merge_leaves_the_other_phases_database_images_as_they_were(tmp_path):
+    """A whole merge writes its own image of the database and leaves prep's and geotag's, byte for byte, as
+    those phases left them."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    images = {"photos-15-prep-ingest.db": b"prep's image", "photos-26-geotag-ingest.db": b"geotag's image"}
+    stats = {}
+    for name, data in images.items():
+        with open(_ctl(ws, name), "wb") as f:
+            f.write(data)
+        stats[name] = (os.stat(_ctl(ws, name)).st_mtime_ns, os.stat(_ctl(ws, name)).st_ino)
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("dry-run", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    with open(_ctl(ws, "photos-35-merge-ingest.db"), "rb") as f:
+        assert f.read(16) == b"SQLite format 3\x00"                    # its own image: written
+    for name, data in images.items():
+        assert open(_ctl(ws, name), "rb").read() == data, name
+        assert (os.stat(_ctl(ws, name)).st_mtime_ns, os.stat(_ctl(ws, name)).st_ino) == stats[name], name
+
+
+@pytest.mark.spec("RUL-merged_batch_no_op", test="TST-merge_execute-merging_a_merged_batch_changes_nothing")
+def test_merging_a_merged_batch_changes_nothing(tmp_path):
+    """A batch merged whole, then merged again — plan, dry-run and execute: every file of the workspace, its
+    records among them, and every file of the library stands byte for byte as the first merge left it."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
+                             {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
+                  library_files=[{"fp": "B", "dest": "Trip", "name": "b.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 0
+    assert sorted(os.listdir(os.path.join(str(lib), "Trip"))) == ["a.jpg", "b.jpg"]
+    ws_before, lib_before = _tree(str(ws)), _tree(str(lib))
+    for command in ("plan", "dry-run", "execute"):
+        merge._run_locked_workflow(command, str(ws))
+        assert _tree(str(ws)) == ws_before, command
+        assert _tree(str(lib)) == lib_before, command
 
 
 @pytest.mark.spec("RUL-one_database", "RUL-library_no_database", "RUL-database_is_record",

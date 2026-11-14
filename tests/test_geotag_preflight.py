@@ -296,6 +296,36 @@ def test_other_file_in_by_dest_blocks(tmp_path):
     assert any("must contain only photos" in b and "non-media" in b for b in blockers), blockers
 
 
+@pytest.mark.spec("RUL-geotag_gates_ignore_history",
+                  test="TST-geotag_preflight-what_ran_before_does_not_bear_on_the_gates")
+def test_what_ran_before_does_not_bear_on_the_gates(tmp_path):
+    """The gates read the workspace as it stands now. The records of any number of earlier prep and sort
+    cycles, and of a geotag run carried through execute and finalize, change neither answer: a workspace that
+    satisfies the gates passes with them, and one that does not is stopped with them, exactly as without."""
+    clean = _pf(_ws(tmp_path))
+    (tmp_path / "again").mkdir()
+    ws = _ws(tmp_path / "again")
+    ctl = ws / ".photos-ingest"
+    ho_p = ctl / "photos-11-handoff.json"
+    ho = json.loads(ho_p.read_text())
+    ho["run_metadata"] = {"plan_id": "prep-7", "execution_id": "exec-7", "started_at": "t7"}   # a seventh prep run
+    ho_p.write_text(json.dumps(ho))
+    for n in ("photos-10-prep-plan.json", "photos-10-prep-plan-001.json", "photos-10-prep-plan-006.json",
+              "journal-exec-1.json", "journal-exec-7.json",
+              "photos-21-time-decisions.json", "photos-21-time-decisions-001.json",
+              "photos-22-gps-drift-validation.json", "photos-23-gps-decisions.json",
+              "photos-24-executable-plan.json", "photos-24-executable-plan-001.json",
+              "photos-26-complete-log.json", "photos-26-archive-manifest.json", "photos-26-finalized-media.json"):
+        (ctl / n).write_text(json.dumps({"status": "complete", "plan_id": "earlier"}))
+    (ctl / "photos-25-execution-summary.json").write_text(json.dumps({"status": "success", "plan_id": "earlier"}))
+    blockers, warnings, info = _pf(ws)
+    assert blockers == [] and warnings == clean[1]
+    assert info["by_dest_photos"] == clean[2]["by_dest_photos"] == 1
+    (ws / "0-sources" / "leftover.jpg").write_bytes(b"x")            # a gate not satisfied now still stops it
+    blockers, _, _ = _pf(ws)
+    assert len(blockers) == 1 and "0-sources/ is not empty" in blockers[0], blockers
+
+
 def test_every_offending_file_is_named_up_to_five(tmp_path):
     """Output wording, not a rule (geotag preflight: _named): a gate names the files it found — every one up to
     five, then how many more — not one example, so the user can clear them in one pass."""
@@ -469,6 +499,18 @@ def test_missing_managed_folder_blocks(tmp_path):
     shutil.rmtree(ws / "4-videos-by-date")
     blockers, _, _ = _pf(ws)
     assert any("non-conforming" in b and "4-videos-by-date" in b for b in blockers), blockers
+
+
+@pytest.mark.spec("RUL-missing_folder_remedy_told",
+                  test="TST-geotag_preflight-missing_managed_folder_block_tells_to_restore_and_run_again")
+def test_missing_managed_folder_block_tells_to_restore_and_run_again(tmp_path):
+    """The block gives the remedy, not only the fault: restore the folders, then geotag."""
+    ws = _ws(tmp_path)
+    (ws / "4-videos-by-date").rmdir()
+    blockers, _, _ = _pf(ws)
+    block = [b for b in blockers if "4-videos-by-date" in b]
+    assert len(block) == 1, blockers
+    assert "Restore the 0-6 structure" in block[0] and "before geotagging" in block[0], block[0]
 
 
 def test_dangling_and_managed_named_root_symlinks_blocked(tmp_path):

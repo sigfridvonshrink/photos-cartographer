@@ -397,7 +397,7 @@ def test_timezone_naive_offset_is_dst_aware():
         assert cal._timezone_naive_offset(*bad) is None
 
 
-@pytest.mark.spec("RUL-offset_from_own_evidence", "BLD-timezone_naive_offset", "RUL-other_proposals_need_acceptance",
+@pytest.mark.spec("RUL-offset_from_own_evidence", "BLD-timezone_naive_offset", "RUL-proposals_need_acceptance",
                   test="TST-geotag_offset_inference-cell_timezone_derived_when_no_anchor")
 def test_cell_timezone_derived_when_no_anchor():
     cell, _ = _tzcell({}, tz="Europe/Brussels", rep_naive="2024:07:03 14:00:00")
@@ -576,7 +576,8 @@ def test_a_walk_out_and_back_is_two_passes():
     assert p["proposed_offset_seconds"] == 0 and not p["tied"]                  # the leg both photos agree on
 
 
-@pytest.mark.spec("BLD-anchor_matching", test="TST-geotag_offset_inference-an_anchor_is_on_one_track")
+@pytest.mark.spec("BLD-anchor_matching", "RUL-tracks_never_joined_to_anchor",
+                  test="TST-geotag_offset_inference-an_anchor_is_on_one_track")
 def test_an_anchor_never_spans_two_tracks():
     """Two people 220 m either side of a photo's place: no segment joins a point of one track to a point of the
     other, so the photo anchors on neither."""

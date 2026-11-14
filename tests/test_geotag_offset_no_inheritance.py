@@ -323,6 +323,37 @@ def test_a_timezone_s_guess_is_asked_about_once_where_it_can_be_checked(tmp_path
     assert cell["effective_time_anchor"] == "" and cell["requires_user_input"] and art["requires_user_input"]
 
 
+@pytest.mark.spec("RUL-track_confirmation_is_acceptance",
+                  test="TST-geotag_offset_no_inheritance-a_confirmation_against_the_tracks_is_the_acceptance")
+def test_a_confirmation_against_the_tracks_is_the_acceptance(tmp_path):
+    """The timezone's guess, never accepted in photos-21, is confirmed at the check against the tracks: that
+    confirmation is its acceptance. Nothing asks any more — neither file — and the photo resolves under it."""
+    wf = _wf(tmp_path)
+    dest = f"{BYDEST}/Brussels"
+    files = [_file(f"{dest}/a.arw", dest, naive="2024:07:03 14:00:00")]
+    groups = {CAM: {"camera_group_class": "camera"}}
+    zone = {"destinations": {dest: {"destination_timezone": {"user_decision": {"manual_iana_timezone": "Europe/Brussels"}}}}}
+    art, _ = _build(wf, files, _gpx(TRACK), zone)
+    assert _cell(art, dest)["effective_time_anchor"]["source"] == "timezone_unconfirmed"
+    assert "accept_proposal" not in {k for k, v in _cell(art, dest)["user_decision"].items() if v}
+    utils.write_json_artifact(cal.time_decisions_path(wf.workspace_root), art)
+    rows0 = cal.compute_resolved_utc(files, groups, art)
+    asked, _ = wf.build_drift_validation(files, art, rows0, _gpx(TRACK), None)
+    assert asked["requires_user_input"]
+    asked["destinations"][dest]["drift_decisions"][CAM]["user_decision"] = {
+        "confirmed": True, "corrected_offset_seconds": "", "confirmed_offset_seconds": -7200}
+    drift, blk = wf.build_drift_validation(files, art, rows0, _gpx(TRACK), asked)
+    cell = drift["destinations"][dest]["drift_decisions"][CAM]
+    assert not blk and not drift["requires_user_input"] and drift["status"] == "complete"
+    assert not cell["requires_user_input"] and not cell["stale_user_decision"]
+    assert cell["effective_drift_offset"] == {"offset_seconds": -7200, "source": "gps_drift_validated"}
+    # photos-21, built again with the confirmation in place, still asks for no acceptance of its own
+    again, blk = _build(wf, files, _gpx(TRACK), art)
+    assert not blk and not again["requires_user_input"] and not _cell(again, dest)["requires_user_input"]
+    (row,) = cal.compute_resolved_utc(files, groups, again, cal.drift_offset_overrides(drift))
+    assert row["resolved_utc_status"] == "valid" and row["resolved_utc"] == "2024-07-03T12:00:00Z"
+
+
 # --- a country, chosen once at the top of its tree (§18) ------------------------------------------------------
 
 def _country(code):

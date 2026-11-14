@@ -162,6 +162,34 @@ def test_two_tracks_are_never_joined():
     assert r["gpx_file"] in ("a.gpx", "b.gpx") and "gpx_after_file" not in r
 
 
+@pytest.mark.spec("RUL-tracks_never_joined",
+                  test="TST-geotag_gps_placement-a_heading_is_never_taken_across_two_tracks")
+def test_a_heading_past_a_track_s_end_is_never_taken_across_two_tracks():
+    """A photo past the end of a track is carried on along THAT track's heading: a point of another file
+    lying within the heading stretch — before the end, or as the last point of all — gives it none."""
+    cfg = _cfg(gpx_direct_match_max_seconds=5.0)
+    # a.gpx is one point; b.gpx stood 55 m north of it during the minute before. Joined, b's points would
+    # give a's end a heading south and carry the photo ~80 m on; alone, a's end has no heading at all.
+    a = [cal.GPXPoint(50.0, 4.0, _utc(12, 1, 0), "a.gpx", 0)]
+    b = _run_of(50.0005, 4.0, 0, 5, 10, "b.gpx")                               # 12:00:00..12:00:40
+    r = cal.place_gps(_utc(12, 2, 30), _gpx(a + b), cfg)
+    assert r == cal.place_gps(_utc(12, 2, 30), _gpx(a), cfg)
+    assert r == {"lat": 50.0, "lon": 4.0, "method": "extrapolated", "gpx_file": "a.gpx"}
+    # day.gpx heads east and ends 12:01:00; late.gpx is one point five seconds later, 30 m north of that
+    # end. The last two points of all span the two files: late's own end is still a point with no heading,
+    # and day's heading is still due east — neither is bent towards the other.
+    day = _run_of(50.0, 4.0, 0, 7, 10, "day.gpx", dlon=0.0001)
+    late = [cal.GPXPoint(50.00027, 4.0006, _utc(12, 1, 5), "late.gpx", 0)]
+    r = cal.place_gps(_utc(12, 2, 30), _gpx(day + late), cfg)
+    assert r == {"lat": 50.00027, "lon": 4.0006, "method": "extrapolated", "gpx_file": "late.gpx"}
+    # the same stray point five seconds BEFORE day's end: day's last two points of all are then late's and
+    # its own, and its heading is still the one its own points give
+    stray = [cal.GPXPoint(50.00027, 4.0006, _utc(12, 0, 55), "late.gpx", 0)]
+    r = cal.place_gps(_utc(12, 2, 30), _gpx(day + stray), cfg)
+    assert r == cal.place_gps(_utc(12, 2, 30), _gpx(day), cfg)
+    assert r["lat"] == 50.0 and r["lon"] > 4.0006 and r["gpx_file"] == "day.gpx"
+
+
 @pytest.mark.spec("RUL-disagreeing_tracks_place_nothing", "BLD-track_placement", "RUL-disagreeing_tracks_named",
                   test="TST-geotag_gps_placement-tracks_in_two_places_place_nothing")
 def test_tracks_in_two_places_place_nothing():

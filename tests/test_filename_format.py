@@ -98,6 +98,61 @@ def test_misnamed_file_outside_inbox_stops_prep(tmp_path, mocks):
         assert sum(rel in b for b in found) == 1, (rel, found)
 
 
+@pytest.mark.spec("RUL-misnamed_file_expected_name",
+                  test="TST-filename_format-misnamed_file_given_the_name_it_should_carry")
+def test_misnamed_file_given_the_name_it_should_carry(tmp_path, mocks):
+    """Each misnamed file is named together with the name it should carry: its recorded time in the
+    format with its own extension, or — with no recorded time — its name behind the untimed mark."""
+    ws = _ws(tmp_path)
+    should_carry = {"5-photos-by-date/2023-01-02/holiday.jpg": f"{NAME}.jpg",
+                    "6-photos-by-dest/Rome/IMG_0001.png": f"{NAME}.png",
+                    "2-missing-metadata/notime.jpg": "UNKN_notime.jpg",
+                    "6-photos-by-dest/Rome/notime-c.jpg": "UNKN_notime-c.jpg"}
+    for rel in should_carry:
+        _put(ws, rel)
+    found = _misnamed(_plan(ws))
+    assert len(found) == len(should_carry), found
+    for rel, name in should_carry.items():
+        mine = [b for b in found if rel in b]
+        assert len(mine) == 1 and f"expected {name})" in mine[0], (rel, name, found)
+
+
+@pytest.mark.spec("RUL-suffix_deterministic", test="TST-filename_format-suffix_allocation_is_deterministic")
+def test_suffix_allocation_is_deterministic(tmp_path, mocks, monkeypatch):
+    """Which file gets which differentiating suffix does not depend on the order the files are met in:
+    the same files, listed by the filesystem in the opposite order, are given the same names."""
+    def moves(ws):
+        return {op.source: op.destination for op in _plan(ws).operations if op.type == "move_no_clobber"}
+
+    def build(name):
+        (tmp_path / name).mkdir()
+        ws = _ws(tmp_path / name)
+        _put(ws, f"5-photos-by-date/2023-01-02/{NAME}.jpg", b"already there")   # the bare name is taken
+        for n in ("c.jpg", "a.jpg", "sub/b.jpg", "d.jpg"):
+            _put(ws, "0-sources/" + n)
+        return ws
+
+    first = moves(build("one"))
+    assert first == {"0-sources/a.jpg": f"5-photos-by-date/2023-01-02/{NAME}-001.jpg",
+                     "0-sources/c.jpg": f"5-photos-by-date/2023-01-02/{NAME}-002.jpg",
+                     "0-sources/d.jpg": f"5-photos-by-date/2023-01-02/{NAME}-003.jpg",
+                     "0-sources/sub/b.jpg": f"5-photos-by-date/2023-01-02/{NAME}-004.jpg"}
+
+    real_walk, real_listdir = os.walk, os.listdir
+
+    def walk(top, *a, **k):
+        for root, dirs, files in real_walk(top, *a, **k):
+            dirs.sort(reverse=True)
+            yield root, dirs, sorted(files, reverse=True)
+    monkeypatch.setattr(os, "walk", walk)
+    monkeypatch.setattr(os, "listdir", lambda *a: sorted(real_listdir(*a), reverse=True))
+    assert moves(build("two")) == first
+    monkeypatch.setattr(os, "walk", lambda top, *a, **k: (
+        (r, d, sorted(f)) for r, d, f in real_walk(top, *a, **k) if not d.sort()))
+    monkeypatch.setattr(os, "listdir", lambda *a: sorted(real_listdir(*a)))
+    assert moves(build("three")) == first
+
+
 @pytest.mark.spec("RUL-no_meaning_from_names", test="TST-filename_format-inbox_name_off_its_time_named_from_metadata")
 def test_inbox_name_off_its_time_named_from_metadata(tmp_path, mocks):
     ws = _ws(tmp_path)

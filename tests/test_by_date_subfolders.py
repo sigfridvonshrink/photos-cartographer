@@ -130,6 +130,35 @@ def test_existing_flat_file_is_migrated_into_day_folder(tmp_path, monkeypatch):
     assert (ws / "5-photos-by-date" / "2023-07-04" / "2023-07-04--14-30-05.jpg").exists()
 
 
+@pytest.mark.spec("RUL-by_date_untimed_to_missing_metadata",
+                  test="TST-by_date_subfolders-untimed_file_in_a_dated_folder_goes_to_missing_metadata")
+def test_untimed_file_in_a_dated_folder_goes_to_missing_metadata(tmp_path, monkeypatch):
+    """A file lying in photos by date or videos by date with no recorded time — in a day folder or
+    flat under the band — is moved to missing metadata; a timed neighbour stays where it is."""
+    _mock(monkeypatch, lambda f: "2023:07:04 14:30:05" if f.startswith("2023-07-04--14-30-05") else None)
+    ws = _ws(tmp_path)
+    for band, ext in (("5-photos-by-date", "jpg"), ("4-videos-by-date", "mp4")):
+        (ws / band / "2023-07-04").mkdir()
+        (ws / band / "2023-07-04" / f"2023-07-04--14-30-05.{ext}").write_bytes(b"timed" + ext.encode())
+        (ws / band / "2023-07-04" / f"inday.{ext}").write_bytes(b"inday" + ext.encode())
+        (ws / band / f"flat.{ext}").write_bytes(b"flat" + ext.encode())
+    plan = _plan(ws)
+    assert plan.blockers == []
+    moves = {op.source: op.destination for op in plan.operations if op.type == "move_no_clobber"}
+    assert moves == {
+        "5-photos-by-date/2023-07-04/inday.jpg": "2-missing-metadata/UNKN_inday.jpg",
+        "5-photos-by-date/flat.jpg": "2-missing-metadata/UNKN_flat.jpg",
+        "4-videos-by-date/2023-07-04/inday.mp4": "2-missing-metadata/UNKN_inday.mp4",
+        "4-videos-by-date/flat.mp4": "2-missing-metadata/UNKN_flat.mp4",
+    }, moves
+    prep.PlanExecutor(str(ws)).execute(plan)
+    for dest in moves.values():
+        assert (ws / dest).exists()
+    for band, ext in (("5-photos-by-date", "jpg"), ("4-videos-by-date", "mp4")):
+        assert os.listdir(ws / band) == ["2023-07-04"]
+        assert os.listdir(ws / band / "2023-07-04") == [f"2023-07-04--14-30-05.{ext}"]
+
+
 @pytest.mark.spec("RUL-filed_file_stays", test="TST-by_date_subfolders-conforming_file_is_a_noop")
 def test_conforming_file_is_a_noop(tmp_path, monkeypatch):
     _mock(monkeypatch, lambda f: "2023:07:04 14:30:05")

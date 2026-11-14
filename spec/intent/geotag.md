@@ -21,7 +21,7 @@ Geotag SHALL plan no photo's position until every photo's true time is resolved.
 
 :::{rul} A photo with no recorded time stops geotag
 :id: RUL-untimed_photo_stops_geotag
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -33,7 +33,7 @@ A photo in photos by destination carrying no recorded time SHALL stop geotag bef
 
 :::{rul} A photo with no recorded time is named
 :id: RUL-untimed_photo_named
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -63,7 +63,7 @@ dependencies to vouch for what came before it.
 
 :::{rul} Geotag changes only the photos sorted into destinations
 :id: RUL-geotag_changes_only_by_dest
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -74,7 +74,7 @@ Geotag SHALL change only files in photos by destination — never a file in any 
 
 :::{rul} Geotag changes no video
 :id: RUL-video_never_changed
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -98,7 +98,7 @@ Each decision stage geotag reaches SHALL write its record, even when nothing in 
 
 :::{rul} No record before the first decision stage
 :id: RUL-no_record_before_decisions
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -109,7 +109,7 @@ A geotag plan stopped before its first decision stage SHALL write no record of i
 
 :::{rul} An early stop says why in its output
 :id: RUL-early_stop_said_in_output
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-no_record_before_decisions
@@ -122,7 +122,7 @@ A geotag plan stopped before its first decision stage SHALL say what stopped it 
 
 :::{rul} A camera's offset from its own GPS applies itself only as configured
 :id: RUL-anchor_offset_auto_as_configured
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :uses: DEF-geotag, DEF-decision
@@ -133,7 +133,7 @@ configuration's settings for one anchor and for several allow.
 
 :::{rul} Anchors that disagree apply nothing by themselves
 :id: RUL-disagreeing_anchors_never_auto
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-anchor_offset_auto_as_configured
@@ -145,7 +145,7 @@ anchors disagree.
 
 :::{rul} An inherited timezone applies itself
 :id: RUL-timezone_auto_resolves
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :uses: DEF-geotag, DEF-decision
@@ -156,7 +156,7 @@ where the destination's own photos speak against it ({need}`RUL-inherited_timezo
 
 :::{rul} A written timezone outranks an inherited one
 :id: RUL-written_timezone_over_inherited
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-timezone_auto_resolves
@@ -167,7 +167,7 @@ A timezone the user writes for a destination SHALL take effect over the one it i
 
 :::{rul} A destination with no timezone to inherit waits
 :id: RUL-no_timezone_to_inherit_waits
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-timezone_auto_resolves
@@ -178,7 +178,7 @@ A destination with no timezone to inherit SHALL wait for the user.
 
 :::{rul} An inherited timezone yields to the destination's own photos
 :id: RUL-inherited_timezone_yields_to_photos
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -190,7 +190,7 @@ offset recorded with its time, whose offset is not that timezone's at the photo'
 
 :::{rul} A timezone the photos speak against is not passed down
 :id: RUL-inherited_zone_stops_within
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -213,7 +213,7 @@ A destination holding photos SHALL have one timezone for all of them.
 
 :::{rul} A country gives its timezone, or none
 :id: RUL-country_gives_its_timezone
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :uses: DEF-geotag, DEF-decision
@@ -224,7 +224,7 @@ where the country has one.
 
 :::{rul} A country of several timezones gives none
 :id: RUL-country_of_several_gives_none
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-country_gives_its_timezone
@@ -236,7 +236,7 @@ answering for themselves.
 
 :::{rul} A timezone answered in a country is one of its own
 :id: RUL-zone_among_countrys_only
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-country_gives_its_timezone
@@ -247,7 +247,7 @@ A timezone answered for a destination in a country of several timezones SHALL be
 
 :::{rul} A country is said once, at the top of its tree
 :id: RUL-country_chosen_once
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-country_gives_its_timezone
@@ -257,7 +257,7 @@ A country said of a destination within one already said to be in a country SHALL
 
 :::{rul} A country taken out is told, with why
 :id: RUL-country_removal_told
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-country_chosen_once
@@ -290,24 +290,25 @@ The configured default timezone SHALL be offered to a destination with no zone t
 user's answer.
 :::
 
-:::{rul} Every other proposal waits for the user's acceptance
-:id: RUL-other_proposals_need_acceptance
-:status: seed
+:::{rul} A proposal waits for the user's acceptance
+:id: RUL-proposals_need_acceptance
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
 :uses: DEF-geotag, DEF-decision
 
-Every other proposal — a clock offset derived from the destination's timezone, a folder fallback position inherited
-from the destination it lies in — SHALL take effect only once the user accepts it.
+A proposal geotag makes SHALL take effect only once the user accepts it, save one a rule says takes effect without the
+user's answer. A clock offset derived from the destination's timezone is such a proposal, and so is a folder fallback
+position inherited from the destination the folder lies in.
 :::
 
 :::{rul} A confirmation against the tracks is an acceptance
 :id: RUL-track_confirmation_is_acceptance
-:status: seed
+:status: ruled
 :criticality: high
-:verify: none
-:refines: RUL-other_proposals_need_acceptance
+:verify: required
+:refines: RUL-proposals_need_acceptance
 :uses: DEF-geotag, DEF-decision
 
 A timezone's offset the user confirms against the tracks SHALL count as accepted by that confirmation
@@ -327,18 +328,18 @@ where tracks lie by its photos, and by acceptance where none do.
 
 :::{rul} An acceptance holds for the proposal it accepted
 :id: RUL-acceptance_holds_for_its_proposal
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
-:refines: RUL-other_proposals_need_acceptance
+:refines: RUL-proposals_need_acceptance
 
 An acceptance of a proposed clock offset SHALL hold only while the offset proposed is the one that was accepted.
 :::
 
 :::{rul} A proposal that has become another is asked about again
 :id: RUL-changed_proposal_asked_again
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-acceptance_holds_for_its_proposal
@@ -346,15 +347,16 @@ An acceptance of a proposed clock offset SHALL hold only while the offset propos
 A proposal that has become another since it was accepted SHALL be asked about again.
 :::
 
-:::{rul} An acceptance that no longer holds is kept as written
+:::{rul} Geotag leaves an overtaken acceptance in the decision as the user wrote it
 :id: RUL-stale_acceptance_kept
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
 :refines: RUL-acceptance_holds_for_its_proposal
 
-An acceptance that no longer holds SHALL be kept as written.
+Geotag SHALL NOT alter or remove, in the decision the user wrote it in, an acceptance of a proposal that has since
+become another.
 :::
 
 :::{rul} A written value outranks an accepted proposal
@@ -362,7 +364,7 @@ An acceptance that no longer holds SHALL be kept as written.
 :status: ruled
 :criticality: med
 :verify: required
-:refines: RUL-other_proposals_need_acceptance
+:refines: RUL-proposals_need_acceptance
 
 A value the user writes for a decision SHALL take effect over a proposal accepted for the same decision.
 :::
@@ -414,7 +416,7 @@ nor from one the user wrote or accepted on a guess in another destination.
 
 :::{rul} A day's offset is the camera's wherever its photos were sorted
 :id: RUL-offset_shared_within_day
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-offset_per_camera_destination_day
@@ -425,7 +427,7 @@ own positions gave that day in another destination, in place of the timezone's.
 
 :::{rul} A shared offset applies itself only where it did there
 :id: RUL-shared_offset_auto_only_as_there
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-offset_shared_within_day
@@ -472,7 +474,7 @@ An answer given for a camera's day in a destination SHALL stay that day's answer
 
 :::{rul} A track point's time is the instant it states
 :id: RUL-track_time_never_guessed
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -484,7 +486,7 @@ with.
 
 :::{rul} A track point geotag cannot use is skipped
 :id: RUL-unreadable_point_skipped
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :uses: DEF-tracks
@@ -495,7 +497,7 @@ zone — SHALL be skipped.
 
 :::{rul} A track point geotag skips is reported
 :id: RUL-unreadable_point_reported
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-unreadable_point_skipped
@@ -525,23 +527,24 @@ Geotag SHALL NOT plan while the tracks folder the configuration names is not the
 Geotag SHALL proceed where no tracks folder is configured or the folder holds no track, each decision resting on its other sources.
 :::
 
-:::{rul} A track is one device's record
+:::{rul} A photo is placed from one track file only
 :id: RUL-tracks_never_joined
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
 :uses: DEF-tracks
 
-Geotag SHALL never join a point of one track file to a point of another to place a photo between them.
+Geotag SHALL never place a photo from a point of one track file taken with a point of another, whether between the
+two points or beyond them.
 :::
 
 :::{rul} No clock is anchored between two tracks
 :id: RUL-tracks_never_joined_to_anchor
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
-:verify: none
+:verify: required
 :refines: RUL-tracks_never_joined
 :uses: DEF-tracks
 
@@ -564,7 +567,7 @@ Geotag SHALL NOT decide anything while a camera group in photos by destination i
 
 :::{rul} The classification is offered ready to paste
 :id: RUL-unknown_group_classification_offered
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :refines: RUL-unknown_group_stops_geotag
@@ -574,7 +577,7 @@ Geotag SHALL offer the classification of every unknown camera group ready to pas
 
 :::{rul} The offer keeps every group already classed
 :id: RUL-classed_groups_kept_in_offer
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :refines: RUL-unknown_group_classification_offered
@@ -584,7 +587,7 @@ The classification geotag offers SHALL keep every group already classed as it is
 
 :::{rul} A file naming no camera is solved on its own
 :id: RUL-unidentified_files_solved_alone
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -596,7 +599,7 @@ destination's timezone.
 
 :::{rul} A file naming no camera is never asked to be classed
 :id: RUL-unidentified_never_classed
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -608,7 +611,7 @@ A file whose metadata names no camera SHALL never be asked to be classed.
 
 :::{rul} A file naming no camera takes no camera's offset
 :id: RUL-unidentified_no_camera_offset
-:status: seed
+:status: ruled
 :criticality: med
 :anti: yes
 :verify: required
@@ -634,7 +637,7 @@ Geotag SHALL NOT plan while the configuration classes a camera group as both a p
 
 :::{rul} A destination takes the nearest timezone it lies in
 :id: RUL-timezone_from_nearest
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-timezone_auto_resolves
@@ -719,7 +722,7 @@ accepted proposal does — never asked to be checked against the tracks again.
 
 :::{rul} Where the tracks stood still, a place says no time
 :id: RUL-stay_fixes_no_clock
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -731,7 +734,7 @@ counts as a moment — SHALL NOT take effect without the user's answer.
 
 :::{rul} An offset from a stay is never anchored
 :id: RUL-stay_offset_never_anchored
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -767,7 +770,7 @@ destination's timezone.
 
 :::{rul} An offset inside the time's own value is recorded with it
 :id: RUL-offset_within_time_value
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -778,9 +781,9 @@ An offset written within the value of a time field itself SHALL count as the off
 
 :::{rul} An offset inside the value comes before one beside it
 :id: RUL-offset_within_value_before_beside
-:status: seed
+:status: ruled
 :criticality: high
-:verify: none
+:verify: required
 :refines: RUL-offset_within_time_value
 
 An offset written within a time's value SHALL be taken before one in a field beside it.
@@ -800,7 +803,7 @@ clock was set to and the clock's own error, together. A camera keeping exact Bru
 
 :::{rul} An offset the camera's GPS does not support is confirmed before photos are placed by it
 :id: RUL-unanchored_offset_confirmed
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -812,7 +815,7 @@ confirmed that offset against the tracks.
 
 :::{rul} An untouched check confirms nothing
 :id: RUL-untouched_check_confirms_nothing
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -824,7 +827,7 @@ A check against the tracks left untouched SHALL never count as a confirmation.
 
 :::{rul} A confirmation holds for the offset it confirmed
 :id: RUL-confirmation_holds_for_its_offset
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -835,7 +838,7 @@ A confirmation SHALL hold only for the offset it confirmed.
 
 :::{rul} A changed offset is asked about again
 :id: RUL-changed_offset_asked_again
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-confirmation_holds_for_its_offset
@@ -873,7 +876,7 @@ Geotag SHALL never replace a photo's own GPS position.
 
 :::{rul} A photo is placed by the most specific source it has
 :id: RUL-placement_order
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-own_position_kept
@@ -884,7 +887,7 @@ tracks at its resolved time, its destination's folder fallback.
 
 :::{rul} A photo nothing places waits for the user
 :id: RUL-unplaced_photo_waits
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-placement_order
@@ -905,7 +908,7 @@ has one.
 
 :::{rul} No destination waits on its fallback
 :id: RUL-fallback_optional
-:status: seed
+:status: ruled
 :criticality: low
 :verify: required
 :refines: RUL-placement_order
@@ -949,7 +952,7 @@ tracks SHALL NOT place it.
 
 :::{rul} Tracks that disagree are named
 :id: RUL-disagreeing_tracks_named
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-disagreeing_tracks_place_nothing
@@ -968,7 +971,7 @@ Every position geotag writes SHALL say, in the photo itself, how it was found: o
 
 :::{rul} A position from the tracks is recorded with its track
 :id: RUL-placement_recorded_with_its_track
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-cause_locatable
@@ -979,7 +982,7 @@ time it was placed at.
 
 :::{rul} The track is not written in the photo
 :id: RUL-track_never_written_in_photo
-:status: seed
+:status: ruled
 :criticality: med
 :verify: none
 :refines: RUL-placement_recorded_with_its_track
@@ -989,7 +992,7 @@ The track that gave a photo its position SHALL NOT be written in the photo.
 
 :::{rul} An unplaced photo is listed with why
 :id: RUL-unplaced_photo_listed
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-placement_order
@@ -1000,7 +1003,7 @@ unlocated.
 
 :::{rul} An unplaced photo is listed with why
 :id: RUL-unplaced_photo_says_why
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-unplaced_photo_listed
@@ -1010,7 +1013,7 @@ A photo listed as unplaced SHALL be listed with why the tracks did not place it.
 
 :::{rul} A photo's decision follows the photo
 :id: RUL-photo_decision_follows_the_photo
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -1021,7 +1024,7 @@ A decision made for one photo SHALL stay that photo's when geotag renames it or 
 
 :::{rul} A photo's decision never passes with its name
 :id: RUL-photo_decision_never_passes_by_name
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -1045,7 +1048,7 @@ A destination whose inherited fallback the user accepted SHALL take the fallback
 
 :::{rul} The corrected time is written as the destination's local time
 :id: RUL-corrected_time_written_local
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :uses: DEF-geotag, DEF-destination
@@ -1055,7 +1058,7 @@ Geotag SHALL write each photo's true time into it as its destination's local tim
 
 :::{rul} The time's offset is written beside it
 :id: RUL-time_offset_written_beside
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-corrected_time_written_local
@@ -1069,7 +1072,7 @@ Geotag SHALL write beside each time it writes that time's offset from UTC.
 
 :::{rul} A position is written whole
 :id: RUL-position_written_whole
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -1079,7 +1082,7 @@ A position geotag writes SHALL be written whole — latitude, longitude and thei
 
 :::{rul} A position is cleared whole
 :id: RUL-position_cleared_whole
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-position_written_whole
@@ -1100,7 +1103,7 @@ later — one found from its own GPS included, though the later photos bring no 
 
 :::{rul} A kept offset rests on what it was found from
 :id: RUL-kept_offset_rests_on_its_tracks
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -1112,7 +1115,7 @@ there unchanged.
 
 :::{rul} A kept offset yields to a photo that says otherwise
 :id: RUL-kept_offset_yields_to_new_photo
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -1149,7 +1152,7 @@ The executable plan SHALL count its photos by how each comes by its position —
 
 :::{rul} An interrupted execution is finished by running it again
 :id: RUL-geotag_execution_resumable
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :uses: DEF-geotag
@@ -1160,7 +1163,7 @@ applied plan changing nothing.
 
 :::{rul} An edit made since the plan is never written over
 :id: RUL-edit_since_plan_never_overwritten
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-geotag_execution_resumable
@@ -1171,7 +1174,7 @@ An execution run again SHALL never write over an edit made to a photo since the 
 
 :::{rul} A write that changes the picture is held back
 :id: RUL-content_changed_write_held
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -1182,7 +1185,7 @@ A write after which a photo's decoded content differs SHALL NOT count as done un
 
 :::{rul} A held write holds the rename back
 :id: RUL-rename_held_with_write
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-content_changed_write_held
@@ -1192,7 +1195,7 @@ A photo's rename SHALL be held back while a write to it is not counted as done.
 
 :::{rul} One photo's failure is its own
 :id: RUL-one_photo_failure_contained
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -1203,7 +1206,7 @@ A photo whose planned changes cannot be made SHALL fail alone: every other photo
 
 :::{rul} A photo that fails is named
 :id: RUL-failed_photo_named
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-one_photo_failure_contained
@@ -1213,7 +1216,7 @@ A photo whose planned changes cannot be made SHALL be reported by name.
 
 :::{rul} What an interrupted run changed is recorded by the next
 :id: RUL-applied_unrecorded_is_recorded
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-every_change_journaled
@@ -1224,7 +1227,7 @@ photo is seen to be that photo, holding what was planned.
 
 :::{rul} What an interrupted run changed is never made again
 :id: RUL-found_applied_never_remade
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-applied_unrecorded_is_recorded
@@ -1234,7 +1237,7 @@ Changes an interrupted execution made to a photo and did not record SHALL never 
 
 :::{rul} An acceptance of changed content is of that content
 :id: RUL-content_acceptance_is_of_that_content
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -1245,7 +1248,7 @@ An acceptance of a photo's changed content SHALL hold only for the content it wa
 
 :::{rul} An acceptance of changed content is under its plan
 :id: RUL-content_acceptance_under_its_plan
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-content_acceptance_is_of_that_content
@@ -1255,7 +1258,7 @@ An acceptance of a photo's changed content SHALL hold only under the plan that r
 
 :::{rul} Changed content stays open to accept
 :id: RUL-content_acceptance_stays_open
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-content_acceptance_is_of_that_content
@@ -1279,7 +1282,7 @@ Geotag SHALL NOT write to a photo while the image engine is not the one the phot
 
 :::{rul} Finalize packages only an execution that succeeded and still holds
 :id: RUL-finalize_requires_success
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -1290,7 +1293,7 @@ Finalize SHALL refuse unless geotag's current plan was executed successfully.
 
 :::{rul} Finalize packages only a plan that still holds
 :id: RUL-finalize_requires_plan_still_holds
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-finalize_requires_success
@@ -1313,7 +1316,7 @@ Finalize SHALL refuse while a photo in photos by destination is not as the execu
 
 :::{rul} Finalize reports how every photo was placed
 :id: RUL-finalize_reports_placement
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-plan_counts_placement
@@ -1324,7 +1327,7 @@ Finalize SHALL report the plan's count of how every photo came by its position.
 
 :::{rul} Finalize keeps the placement count in the package
 :id: RUL-finalize_keeps_placement_count
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-finalize_reports_placement

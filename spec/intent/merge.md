@@ -10,7 +10,7 @@ that only restated others, has no heading here.
 
 :::{rul} Merge checks prep's fingerprints under another ImageMagick
 :id: RUL-merge_rechecks_under_new_engine
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -23,7 +23,7 @@ fingerprint again before comparing it with the library's.
 
 :::{rul} A photo whose fingerprint changed is left unmerged
 :id: RUL-merge_changed_fingerprint_unmerged
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-merge_rechecks_under_new_engine
@@ -36,7 +36,7 @@ A photo whose fingerprint, taken again by merge, has changed SHALL be left in ph
 
 :::{rul} Merge checks geotag's gates again
 :id: RUL-merge_rechecks_gates
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -48,7 +48,7 @@ Merge SHALL proceed only while the workspace, checked again at merge's own start
 
 :::{rul} What geotag's gates leave out does not block merge
 :id: RUL-merge_gates_leave_out_residue
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -100,7 +100,7 @@ Merge SHALL allow a fresh plan at any time on a workspace not sealed, whatever a
 
 :::{rul} A fresh plan carries the photos earlier plans placed
 :id: RUL-replan_carries_placed
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -114,7 +114,7 @@ recorded the move.
 
 :::{rul} A photo a fresh plan cannot carry blocks
 :id: RUL-replan_blocks_unaccounted
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -126,7 +126,7 @@ A finalized photo no longer in photos by destination that a fresh plan cannot ca
 
 :::{rul} The blocker for a photo not carried names why
 :id: RUL-replan_block_names_why
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-replan_blocks_unaccounted
@@ -137,7 +137,7 @@ The blocker for a photo a fresh plan cannot carry forward SHALL name why.
 
 :::{rul} A resumed merge checks the library, not the journal
 :id: RUL-resume_rechecks_library
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -150,7 +150,7 @@ it — whatever the journal or the plan says.
 
 :::{rul} A photo gone from both places blocks
 :id: RUL-resume_blocks_missing
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-resume_rechecks_library
@@ -161,7 +161,7 @@ A photo gone from photos by destination whose library place does not hold it SHA
 
 :::{rul} A run with a photo gone from both places is partial
 :id: RUL-resume_block_makes_partial
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-resume_blocks_missing

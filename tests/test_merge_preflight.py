@@ -173,6 +173,18 @@ def test_missing_managed_folder_blocks(tmp_path):
     assert any("missing managed folder" in b for b in blockers), blockers
 
 
+@pytest.mark.spec("RUL-missing_folder_remedy_told",
+                  test="TST-merge_preflight-missing_managed_folder_block_tells_to_restore_and_run_again")
+def test_missing_managed_folder_block_tells_to_restore_and_run_again(tmp_path):
+    """The block gives the remedy, not only the fault: restore the folders, then merge."""
+    ws, _ = _make(tmp_path)
+    os.rmdir(str(ws / "4-videos-by-date"))
+    blockers, _, _ = _pf(ws)
+    block = [b for b in blockers if "4-videos-by-date" in b]
+    assert len(block) == 1, blockers
+    assert "Restore the 0-6 structure" in block[0] and "before merging" in block[0], block[0]
+
+
 @pytest.mark.spec("RUL-top_level_only_managed")
 def test_loose_root_file_blocks(tmp_path):
     ws, _ = _make(tmp_path)
@@ -279,6 +291,43 @@ def test_stale_finalized_record_blocks(tmp_path):
     blockers, _, _ = _pf(ws)
     assert any("changed since geotag was finalized" in b for b in blockers), blockers
     assert any("re-run geotag and re-finalize" in b.lower() for b in blockers), blockers
+
+
+@pytest.mark.spec("RUL-dependencies_validated_before_deriving",
+                  test="TST-merge_preflight-a_stale_finalized_record_is_refused_before_any_plan_is_made")
+def test_a_stale_finalized_record_is_refused_before_any_plan_is_made(tmp_path):
+    """Merge derives its plan from geotag's executed plan, and checks that plan's dependency — the handoff
+    it was built against — before it writes anything: changed since, no merge plan is created at all."""
+    ws, _ = _make(tmp_path, handoff_current=False)
+    assert merge._run_locked_workflow("plan", str(ws)) == 2
+    assert not [n for n in os.listdir(_ctl(ws)) if n.startswith("photos-3")]   # no merge record of any kind
+    (tmp_path / "fresh").mkdir()
+    ws2, _ = _make(tmp_path / "fresh")                       # the same workspace, its dependency current
+    merge._run_locked_workflow("plan", str(ws2))
+    assert os.path.exists(merge.merge_plan_path(str(ws2)))   # (its photo unreadable here; planned all the same)
+
+
+@pytest.mark.spec("RUL-prep_refresh_not_a_change",
+                  test="TST-merge_preflight-a_refresh_describing_only_a_prep_run_does_not_block_merge")
+def test_a_refresh_describing_only_a_prep_run_does_not_block_merge(tmp_path):
+    """Prep run again after finalize with nothing to do rewrites the handoff, changing only what describes
+    the run itself — its ids and times, its diagnostics, its journal. The file's bytes differ; merge does not
+    take that for a change since finalize, while a change to what the handoff says of the photos still is."""
+    ws, _ = _make(tmp_path)
+    ho_p = _ctl(ws) / "photos-11-handoff.json"
+    before = ho_p.read_bytes()
+    ho = json.loads(before)
+    ho.update(run_metadata={"started_at": "t1", "plan_id": "prep-2", "execution_id": "exec-2"},
+              diagnostics={"reused": 1, "extracted": 0}, execution_journal="journal-exec-2.json",
+              content_fingerprint="another-whole-file-hash")
+    ho_p.write_text(json.dumps(ho))
+    assert ho_p.read_bytes() != before                       # the handoff was rewritten
+    blockers, _, _ = _pf(ws)
+    assert blockers == [], blockers
+    ho["cache_fingerprint"] = "another-inventory"            # a real change is still one
+    ho_p.write_text(json.dumps(ho))
+    blockers, _, _ = _pf(ws)
+    assert any("changed since geotag was finalized" in b for b in blockers), blockers
 
 
 @pytest.mark.parametrize("touch", ["edited", "removed", "unvouched"])
