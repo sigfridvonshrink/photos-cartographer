@@ -347,7 +347,7 @@ An acceptance of a proposed clock offset SHALL hold only while the offset propos
 A proposal that has become another since it was accepted SHALL be asked about again.
 :::
 
-:::{rul} Geotag leaves an overtaken acceptance in the decision as the user wrote it
+:::{rul} Geotag leaves the user's answer in place when its proposal changes
 :id: RUL-stale_acceptance_kept
 :status: ruled
 :criticality: high
@@ -355,8 +355,8 @@ A proposal that has become another since it was accepted SHALL be asked about ag
 :verify: required
 :refines: RUL-acceptance_holds_for_its_proposal
 
-Geotag SHALL NOT alter or remove, in the decision the user wrote it in, an acceptance of a proposal that has since
-become another.
+When a proposal has become another since the user accepted it, geotag SHALL leave the user's earlier acceptance in the
+decision exactly as the user wrote it, for the user to replace.
 :::
 
 :::{rul} A written value outranks an accepted proposal
