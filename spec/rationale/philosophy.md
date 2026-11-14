@@ -167,8 +167,8 @@ Start with the fact. Because each camera's clock is wrong by its own amount, and
 granularity is the entire source of the decisions' "complexity": it is a consequence of real, time-varying drift, not a
 premise.
 
-The offset is **inferred and applied per (camera group, destination, day)**; corrections fall *between* destinations,
-never within one — which is why **one destination = one coherent shoot**.
+The offset is **inferred and applied per (camera group, destination, day)**; corrections fall *between* destinations
+and between days, never within one destination's day — which is why **one destination = one coherent shoot**.
 :::
 
 :::{rat} Intricate, evidence-specific decisions are too error-prone to hand-edit
@@ -205,9 +205,10 @@ collected — and introduces the document's central trade.
 :forced: yes
 :follows_from: RAT-minimal_cascading_asks
 
-Decisions **cascade**: *one far-reaching choice high in the tree is traded for many short-reaching ones* — inherit
-unless overridden, remembered across re-runs. (This is where "far-reaching" comes from — a chosen trade, not an
-inherent property.)
+A place's decisions **cascade**: *one far-reaching choice high in the tree is traded for many short-reaching ones* — a
+timezone, a fallback position, set once at a trip's root and inherited unless overridden, remembered across re-runs.
+(This is where "far-reaching" comes from — a chosen trade, not an inherent property.) A clock offset does not: it is
+the camera's for that day, wherever its photos were sorted, and each day's is found from that day's own evidence.
 :::
 
 :::{rat} Inheritance needs an axis to travel along
@@ -332,8 +333,9 @@ manual.
 Completeness means precision now *varies* across the library — so each placement must declare how trustworthy it is
 (via the **traceability** the multi-session reality forces — see below).
 
-**Every coordinate carries its derivation method** — native / GPX direct-match / interpolated / extrapolated / manual
-— so a rough pin is never mistaken for a precise one.
+**Every coordinate carries its derivation method** — native, or one of the tool's: matched on a track point,
+interpolated between two, extrapolated past a track's end, set by hand for the photo or by a folder's fallback — in the
+photo itself, so a rough pin is never mistaken for a precise one, in the library as in the workspace.
 
 *Why it is kept:* "I still want to be able to know, at a later date, how that GPS position was assigned - maybe I want
 to refine it by image/place recognition for example." A new track needs no tag: it changes the GPX folder, which makes
@@ -394,8 +396,9 @@ are **zero-cost benefits** that fall out of building for resumability.
 :forced: yes
 :follows_from: RAT-durable_record
 
-Decisions are **idempotently re-read each run**; the fast store is **SQLite as a cache only** — derived, rebuildable,
-never the source of truth.
+Decisions are **idempotently re-read each run**, never kept in the fast store, **SQLite**: what it holds is derived
+and rebuildable — but for each photo's own values, pinned before the tool first wrote to it, which nothing else holds
+once it has, and which the archived image of the database keeps.
 :::
 
 :::{rat} A choice made weeks earlier must still explain itself on return

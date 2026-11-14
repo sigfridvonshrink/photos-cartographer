@@ -592,11 +592,12 @@ destination holds only photos (merge §3). A development subfolder is one named 
 
 :::{bld} Geotag marks what it wrote
 :id: BLD-rerun_recognition
-:status: ruled
+:status: seed
 :realises: RUL-geotag_rerun_keeps_settled
 
-Geotag SHALL record what it wrote in the file's `GPSProcessingMethod`: the bare value `interpolated`, `manual_locked` or
-`manual_fallback` beside each position it writes, and, when it fixes the time and writes no position, the suffix
+Geotag SHALL record what it wrote in the file's `GPSProcessingMethod`: the bare value beside each position it writes —
+`matched`, `interpolated` or `extrapolated` for one from the tracks, on a track point, between two or past a track's
+end, `manual_locked` or `manual_fallback` for one the user set — and, when it fixes the time and writes no position, the suffix
 `+carto-time` appended once to whatever the field held, keeping the device's own value. Any other value is the device's
 own, and the GPS beside it native.
 :::

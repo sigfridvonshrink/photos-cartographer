@@ -212,7 +212,7 @@ def _first_round(tmp_path, monkeypatch):
     _plan(monkeypatch, ws)
     a = _ops(ws)[f"{T}/a.arw"]
     assert a["writes"]["DateTimeOriginal"] == "2024:07:03 14:30:00"      # 12:30Z, Brussels summer
-    assert a["writes"]["GPSLatitude"] == pytest.approx(50.003) and a["writes"]["GPSProcessingMethod"] == "interpolated"
+    assert a["writes"]["GPSLatitude"] == pytest.approx(50.003) and a["writes"]["GPSProcessingMethod"] == "matched"  # on a point
     _executed_and_reprepped(ws)
     return ws
 
