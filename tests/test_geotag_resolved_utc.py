@@ -136,8 +136,11 @@ def test_rows_are_path_sorted():
 
 @pytest.mark.parametrize("s, secs", [
     ("+02:00", 7200), ("-05:30", -19800), ("+00:00", 0), ("-00:00", 0),
-    ("xx", None), ("+2:00", None), ("", None), (None, None), ("+0200", None), (1234, None),
-    ("+ab:cd", None), ("+123456", None)])   # passes the length/prefix guard but fails int/split parse
+    ("xx", None), ("+2:00", None), ("", None), (None, None), ("+0200", 7200), (1234, None),
+    ("Z", 0), ("+14:00", 50400), ("+05:45", 20700),
+    # what is not an offset is none, never one read loosely
+    ("+ab:cd", None), ("+123456", None), ("+99:99", None), ("+15:00", None), ("+02:60", None),
+    ("+-2:00", None), ("+02:-30", None), ("+01:1932", None)])
 def test_parse_iso_offset(s, secs):
     assert cal._parse_iso_offset(s) == secs
 
@@ -399,3 +402,44 @@ def test_unrelated_config_edit_replans_but_does_not_restale_resolved_utc(tmp_pat
     fp_after = run_fingerprint()
     assert fp_after == fp_before                          # resolved UTC NOT restaled
     assert sha256_file(str(tdp)) == sha_before            # photos-21 byte-identical (not restaled)
+
+
+@pytest.mark.spec("RUL-offset_within_time_value", "RUL-phone_time_from_own_offset", "BLD-resolved_utc",
+                  test="TST-geotag_resolved_utc-an_offset_within_the_time_s_value_is_its_own")
+@pytest.mark.parametrize("value, utc", [
+    ("2024:05:01 10:00:00Z", "2024-05-01T10:00:00Z"),
+    ("2024:05:01 19:00:00+09:00", "2024-05-01T10:00:00Z"),
+    ("2024:05:01 19:00:00.73+09:00", "2024-05-01T10:00:00Z"),
+    ("2024:05:01 10:00:00", "2024-05-01T08:00:00Z"),            # none stated: the destination's zone
+    ("2024:05:01 10:00:00.73", "2024-05-01T08:00:00Z")])
+def test_an_offset_written_within_the_time_s_value_is_the_one_recorded_with_it(value, utc):
+    """A time whose own value states its zone (XMP writes `…+09:00`, `…Z`) is turned to UTC by that — never
+    read as the destination's local time, which would move it by the difference."""
+    f = _file("6-photos-by-dest/B/p.png", PHONE, value)
+    f["source_time_tag"] = "XMP:DateTimeOriginal"
+    r = _one(f)
+    assert r["resolved_utc"] == utc
+    assert r["time_rule_used"] == ("smartphone_native_offset" if len(value) > 22 or value.endswith("Z")
+                                   else "destination_timezone")
+
+
+@pytest.mark.spec("RUL-corrected_time_written_local", "BLD-executable_plan",
+                  test="TST-geotag_resolved_utc-the_offset_written_is_hours_and_minutes")
+def test_the_offset_written_is_always_hours_and_minutes():
+    """A zone's offset before it kept standard time has seconds (Amsterdam, 1935: +01:19:32). The offset
+    field holds hours and minutes: it is written to the nearest minute, never as `+01:1932`, which reads
+    back a day out."""
+    dto, off = cal._local_time_and_offset("1935-06-01T10:40:28Z", "Europe/Amsterdam")
+    assert (dto, off) == ("1935:06:01 12:00:00", "+01:20") and cal._parse_iso_offset(off) == 4800
+    assert cal._local_time_and_offset("2024-07-03T12:00:00Z", "Asia/Kathmandu")[1] == "+05:45"
+    assert cal._local_time_and_offset("2024-01-03T12:00:00Z", "America/St_Johns")[1] == "-03:30"
+    assert cal._local_time_and_offset("2024-07-03T12:00:00Z", "UTC")[1] == "+00:00"
+
+
+@pytest.mark.spec("BLD-resolved_utc", test="TST-geotag_resolved_utc-a_time_at_the_calendar_s_edge_is_unresolved")
+@pytest.mark.parametrize("naive, key", [("0001:01:01 00:00:00", CAM), ("9999:12:31 23:59:59", PHONE),
+                                        ("0001:01:01 00:00:00", PHONE)])
+def test_a_time_at_the_calendar_s_edge_is_unresolved_not_a_crash(naive, key):
+    art = _art(tz="Asia/Tokyo" if naive.startswith("0001") else "America/Los_Angeles", offset=-7200)
+    r = _one(_file("6-photos-by-dest/B/a.jpg", key, naive), art)
+    assert (r["resolved_utc"], r["resolved_utc_status"], r["time_rule_used"]) == (None, "unresolved", "time_out_of_range")

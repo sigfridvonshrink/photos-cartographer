@@ -255,8 +255,11 @@ def _prior_day_cell(prior_cells, group, bucket, day):
     the group alone, and by `<group>@<day>` once a second day arrives (§10.2). The day, not the key, is
     what an answer was given for, so it follows the day."""
     cell = prior_cells.get(bucket)
-    if cell or day is None:
+    if day is None:
         return cell or {}
+    if cell and cell.get("day") in (None, day):
+        return cell
+    # the cell under this key was another day's (its photos gone, another day's put here): not this day's
     other = prior_cells.get(group if bucket != group else f"{group}@{day}") or {}
     return other if other.get("day") == day else {}
 
@@ -870,7 +873,9 @@ class GeotagWorkflow:
             else:
                 # An offset no photo pins within the tracks' stay is supported by the camera's GPS, not
                 # anchored by it: the drift check still asks (§22a).
-                effective = {"offset_seconds": proposal["proposed_offset_seconds"],
+                # What takes effect is the offset the user accepted: a proposal a few seconds from it is
+                # the same finding, and no reason to move photos already corrected by the first.
+                effective = {"offset_seconds": int(accepted_off),
                              "source": ("gpx_anchor_imprecise" if imprecise else "gpx_anchor_accepted") if is_gpx
                              else "timezone_accepted"}
         elif is_gpx and not conflicting and not imprecise:
@@ -1006,8 +1011,16 @@ class GeotagWorkflow:
                 if not times:
                     continue                                  # nothing resolves -> not a drift case
                 lo, hi = min(times), max(times)
-                seg = [p for p in gpx.points
-                       if (lo - timedelta(seconds=window)) <= p.time_utc <= (hi + timedelta(seconds=window))]
+                near = lambda a, z: [p for p in gpx.points if (a - timedelta(seconds=window)) <= p.time_utc
+                                     <= (z + timedelta(seconds=window))]
+                seg = near(lo, hi)
+                if not seg:
+                    # No track by the times this offset gives — but is there one by the times the camera
+                    # recorded? Then the offset itself may be what carried the photos away from their
+                    # tracks (a slip of a digit, days out): it is checked against those, not waved through.
+                    clock = [t.replace(tzinfo=timezone.utc) for f in frames
+                             if (t := _parse_camera_naive(f.get("source_naive_time")))]
+                    seg = near(min(clock), max(clock)) if clock else []
                 if not seg:
                     continue                                  # no GPX coverage -> phase 23 fallback/lost
                 cells[bucket] = self._drift_cell(dest, bucket, cell, seg, frames,
@@ -1359,9 +1372,11 @@ class GeotagWorkflow:
                         o["provenance"] = {
                             "resolved_utc": row.get("resolved_utc"), "time_rule_used": row.get("time_rule_used"),
                             "utc_offset_used": row.get("utc_offset_used"), "destination_timezone": tz,
+                            "source_time_provenance": row.get("source_time_provenance"),
                             "timezone_because": f"photos-21 destinations.{dest}.destination_timezone",
                             "because": offset_decision_pointer(
                                 dict(row, camera_group=row.get("camera_group") or f.get("camera_group_key")), dest, cells)}
+                        o["pre_state"] = held_time_pre_state(f)   # the time and offset it replaces, for the log
                     elif o["type"] == "metadata_gps_write" and o.get("gps_origin") == "recompute_automated":
                         # the track that placed it, and the instant it was placed at: what the position rests on
                         o["provenance"] = {"gpx_file": track_of.get(rel), "resolved_utc": ru}

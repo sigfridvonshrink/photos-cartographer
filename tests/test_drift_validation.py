@@ -414,3 +414,20 @@ def test_how_much_track_the_check_looks_at_is_its_own_setting(tmp_path, monkeypa
     assert _drift(wf, files, art, gpx)[0]["destinations"] == {}
     monkeypatch.setitem(utils.CONFIG, "drift_check_track_window_seconds", 30 * 86400.0)
     assert DEST in _drift(wf, files, art, gpx)[0]["destinations"]
+
+
+@pytest.mark.spec("RUL-unanchored_offset_confirmed", "BLD-drift_validation",
+                  test="TST-drift_validation-an_offset_that_carries_photos_off_their_tracks_is_checked")
+def test_an_offset_that_carries_the_photos_away_from_their_tracks_is_still_checked(tmp_path):
+    """A manual offset with a slipped digit puts the photos eight days from the tracks recorded the day they
+    were taken. No track lies by the times it gives — because of it: the check asks, against the tracks by
+    the times the camera recorded."""
+    wf = _wf(tmp_path)
+    files = [_file(f"{DEST}/a.arw", "2024:07:03 14:10:00")]
+    gpx = _gpx([(50.0, 4.0, _utc(12)), (50.001, 4.0, _utc(13))])
+    for typed in (-7200, -720000):
+        art = _complete_time(wf, files, gpx, {CAM: {"user_decision": {"manual_offset_seconds": typed}}})
+        drift, blk = _drift(wf, files, art, gpx)
+        cell = drift["destinations"][DEST]["drift_decisions"][CAM]
+        assert not blk and cell["requires_user_input"] and len(cell["proposal"]["track_segment"]) == 2
+        assert cell["proposal"]["current_offset_seconds"] == typed

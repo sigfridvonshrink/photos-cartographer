@@ -106,6 +106,38 @@ def test_complete_log_gps_written():
     assert next(s for s in photos2["fpN"]["journey"] if s["action"] == "gps_written")["gps_processing_method"] is None
 
 
+@pytest.mark.spec("RUL-log_records_time_replaced", "BLD-geotag_log_steps",
+                  test="TST-geotag_finalize-a_time_written_is_logged_with_what_it_replaced")
+def test_a_time_written_is_logged_with_what_it_replaced_and_how_it_was_found():
+    """Two phone photos written alike: one read by the offset its phone recorded, one by assuming the
+    destination's zone. The log tells them apart, and says what each held before."""
+    def op(rel, rule, held_off):
+        f = {"relative_path": rel, "raw_times": {"DateTimeOriginal": "2024:07:03 19:00:00",
+                                                 **({"OffsetTimeOriginal": held_off} if held_off else {})}}
+        return {"type": "metadata_time_write", "relative_path": rel,
+                "writes": {"DateTimeOriginal": "2024:07:03 12:00:00", "OffsetTimeOriginal": "+02:00"},
+                "pre_state": cal.held_time_pre_state(f),
+                "provenance": {"time_rule_used": rule, "source_time_provenance": "EXIF:DateTimeOriginal"}}
+    a, b = f"{BYDEST}/T/a.jpg", f"{BYDEST}/T/b.jpg"
+    plan = {"plan_id": "p1", "destinations": {f"{BYDEST}/T": {"operations": [
+        op(a, "smartphone_native_offset", "+09:00"), op(b, "destination_timezone", None)]}}}
+    photos = cal.build_complete_log({}, [_file(a, "fpA"), _file(b, "fpB")], [], {}, plan)
+    wa = next(s for s in photos["fpA"]["journey"] if s["action"] == "time_written")
+    wb = next(s for s in photos["fpB"]["journey"] if s["action"] == "time_written")
+    assert wa["pre_state"] == {"DateTimeOriginal": "2024:07:03 19:00:00", "OffsetTimeOriginal": "+09:00"}
+    assert wb["pre_state"] == {"DateTimeOriginal": "2024:07:03 19:00:00", "OffsetTimeOriginal": None}
+    assert (wa["rule"], wb["rule"]) == ("smartphone_native_offset", "destination_timezone")
+    assert wa["read_from"] == "EXIF:DateTimeOriginal" and wa["run"] == "p1"
+    assert wa["writes"] == {"DateTimeOriginal": "2024:07:03 12:00:00", "OffsetTimeOriginal": "+02:00"}
+    # a pass executed earlier logs its time write the same way
+    plan["destinations"][f"{BYDEST}/T"]["operations"][0]["preconditions"] = {"content_fingerprint": "fpA"}
+    later = cal.build_complete_log({}, [_file(a, "fpA")], [], {}, {"plan_id": "p2", "destinations": {}},
+                                   earlier_passes=[(plan, None)])
+    step = next(s for s in later["fpA"]["journey"] if s["action"] == "time_written")
+    assert (step["rule"], step["run"]) == ("smartphone_native_offset", "p1")
+    assert step["pre_state"]["OffsetTimeOriginal"] == "+09:00"
+
+
 @pytest.mark.spec("RUL-log_records_gps_reverts", "RUL-record_whole_each_phase", test="TST-geotag_finalize-a_cleared_position_is_logged_with_what_it_held")
 def test_a_cleared_position_is_logged_with_what_it_held():
     """A position geotag wrote and no longer places is cleared, and the log says so with the position

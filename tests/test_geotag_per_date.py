@@ -147,3 +147,8 @@ def test_an_answer_follows_its_day_when_another_day_arrives(tmp_path):
     # the drift confirmation follows its day the same way
     assert cal._prior_day_cell({CAM: {"day": "2024-07-03", "x": 1}}, CAM, f"{CAM}@2024-07-03", "2024-07-03") == {"day": "2024-07-03", "x": 1}
     assert cal._prior_day_cell({CAM: {"day": "2024-07-03"}}, CAM, f"{CAM}@2024-07-04", "2024-07-04") == {}
+    # the cell under this very key, but another day's: its photos went, another day's came — not this day's answer
+    assert cal._prior_day_cell({CAM: {"day": "2024-07-03", "x": 1}}, CAM, CAM, "2024-12-20") == {}
+    assert cal._prior_day_cell({CAM: {"day": "2024-07-03"}, f"{CAM}@2024-12-20": {"day": "2024-12-20", "x": 2}},
+                               CAM, CAM, "2024-12-20") == {"day": "2024-12-20", "x": 2}
+    assert cal._prior_day_cell({CAM: {"x": 3}}, CAM, CAM, "2024-12-20") == {"x": 3}     # a cell naming no day

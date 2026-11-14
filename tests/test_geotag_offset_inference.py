@@ -599,7 +599,8 @@ def test_an_acceptance_holds_only_for_the_proposal_it_accepted():
     assert cell["effective_time_anchor"] == "" and cell["stale_user_decision"]
     # a GPS proposal a few seconds from the one accepted is the same finding
     cell, _ = _cell({"accept_proposal": True, "accepted_offset_seconds": -3590}, frames, gpx, multi=False)
-    assert cell["effective_time_anchor"] == {"offset_seconds": -3600, "source": "gpx_anchor_accepted"}
+    assert cell["effective_time_anchor"] == {"offset_seconds": -3590, "source": "gpx_anchor_accepted"}
+    assert cell["proposal"]["proposed_offset_seconds"] == -3600      # ...and what takes effect is what was accepted
 
 
 @pytest.mark.spec("RUL-written_value_over_acceptance", test="TST-geotag_offset_inference-a_written_offset_outranks_an_acceptance")
@@ -707,7 +708,7 @@ def test_how_far_a_proposal_may_move_under_an_acceptance_is_its_own_setting(monk
         return cell["effective_time_anchor"], cell["stale_user_decision"], cell["proposal"]
 
     eff, stale, proposal = source()
-    assert eff == {"offset_seconds": -3600, "source": "gpx_anchor_accepted"} and not stale
+    assert eff == {"offset_seconds": -3590, "source": "gpx_anchor_accepted"} and not stale
     assert proposal["acceptance_tolerance_seconds"] == 120.0                    # what the editor judges by
     eff, stale, _ = source(gpx_anchor_offset_spread_max_seconds=5.0)            # anchors' agreement: another matter
     assert eff["source"] == "gpx_anchor_accepted" and not stale
