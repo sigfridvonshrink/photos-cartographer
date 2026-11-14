@@ -289,3 +289,32 @@ def test_run_unknown_group_prints_snippet_and_exits(tmp_path, monkeypatch, capsy
     assert blob.index('"fixed_clock_cameras"') < blob.index('"phones"')
     # Stopped before its first decision stage: the snippet is text only, no geotag record is written.
     assert not [n for n in os.listdir(ws / ".photos-ingest") if n.startswith("photos-2")]
+
+
+@pytest.mark.spec("RUL-group_classed_twice_is_unknown", "RUL-unknown_group_stops_geotag",
+                  test="TST-geotag_model-a_group_classed_twice_is_unknown")
+def test_a_group_classed_as_both_is_unknown(tmp_path, monkeypatch, capsys):
+    """The classification geotag offers lists a new group under both classes, for the user to keep one. Pasted
+    as it is, the group is classed as neither — geotag stops and offers it again — never taken for a phone."""
+    key = "SONY|ILCE-6400|123"
+    ws = _full_ws(tmp_path, device_groups={"fixed_clock_cameras": [key], "phones": [key]})
+    assert _main(monkeypatch, ws) == 2
+    assert "unknown camera group" in capsys.readouterr().err
+    assert not [n for n in os.listdir(ws / ".photos-ingest") if n.startswith("photos-2")]
+
+
+@pytest.mark.spec("RUL-missing_tracks_stop_geotag", "RUL-no_tracks_no_stop", "RUL-no_record_before_decisions", "BLD-gpx_root_missing",
+                  test="TST-geotag_model-a_tracks_folder_that_is_not_there_stops_geotag")
+def test_a_tracks_folder_that_is_not_there_stops_geotag(tmp_path, monkeypatch, capsys):
+    """Tracks configured but not there — a volume not mounted — are not "no tracks": geotag stops before any
+    record, rather than place by fallback what the tracks place and drop the answers given about them. With no
+    tracks configured, it plans."""
+    ws = _full_ws(tmp_path, device_groups={"fixed_clock_cameras": ["SONY|ILCE-6400|123"], "phones": []})
+    cfg_path = ws / ".photos-ingest" / "photos-00-config.json"
+    cfg = json.loads(cfg_path.read_text())
+    cfg_path.write_text(json.dumps(dict(cfg, gpx_root=str(tmp_path / "not-mounted"))))
+    assert _main(monkeypatch, ws) == 2
+    assert "gpx_root does not exist" in capsys.readouterr().err
+    assert not [n for n in os.listdir(ws / ".photos-ingest") if n.startswith("photos-2")]
+    cfg_path.write_text(json.dumps(dict(cfg, gpx_root="")))
+    assert _main(monkeypatch, ws) == 0

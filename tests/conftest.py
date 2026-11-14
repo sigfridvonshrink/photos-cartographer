@@ -34,6 +34,12 @@ for _short, _mod in (("photos_utils", photos_utils), ("photos_1_prep", photos_1_
                      ("photos_2_geotag", photos_2_geotag), ("photos_3_merge", photos_3_merge)):
     sys.modules.setdefault(_short, _mod)
 
+# The seeded default gpx_root is one deployment's tracks. No test reads it: with a root that is not there
+# geotag refuses to plan, and with one that is, a test would be planning against that machine's real tracks.
+# A test that wants tracks names its own root.
+photos_utils.DEFAULT_CONFIG["gpx_root"] = ""
+photos_utils.CONFIG["gpx_root"] = ""
+
 
 @pytest.fixture(autouse=True)
 def _restore_config():

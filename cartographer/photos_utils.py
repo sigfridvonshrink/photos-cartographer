@@ -494,7 +494,7 @@ def workspace_id(ws: str):
 def _not_archived(name: str) -> bool:
     """A control-directory file the archival package does not carry: transient (a lock, a temp file,
     SQLite's rollback journal), the plan and track memos (scratch), or an archive itself."""
-    return (name.endswith(".lock") or name.startswith(".tmp-") or name.endswith("-journal")
+    return (name.endswith(".lock") or name.startswith(".tmp-") or name.endswith(".tmp") or name.endswith("-journal")
             or name in (os.path.basename(plan_memo_db_path("")), os.path.basename(track_memo_db_path("")))
             or name.endswith("-archive.tar.gz"))
 
@@ -687,11 +687,13 @@ def write_json_artifact(path: str, obj: dict) -> str:
     return sha256_file(path)
 
 def backup_existing_artifact(path: str):
-    """If an artifact already exists at `path`, rename it aside to the next free `<stem>-NNN<ext>`
+    """If an artifact already exists at `path`, copy it aside to the next free `<stem>-NNN<ext>`
     sibling — the shared `-{idx:03d}` no-clobber suffix (see allocate_suffix) — and return the backup
     path; if nothing is there, return None. Used before re-writing a canonical plan/decision artifact
-    so the prior version is preserved rather than clobbered (shared contract §5). The rename is an
-    atomic same-directory os.replace, so the prior bytes are never lost mid-swap."""
+    so the prior version is preserved rather than clobbered (shared contract §5). Copied, never moved:
+    the artifact stays at its path at every instant, so a run killed between the backup and the write
+    leaves the decisions where the next run reads them — never an empty slot it would take for "nothing
+    decided yet". The copy lands under its final name only whole (temp + atomic rename)."""
     if not os.path.lexists(path):
         return None
     d = os.path.dirname(path) or "."
@@ -699,7 +701,9 @@ def backup_existing_artifact(path: str):
     existing = {n.lower() for n in os.listdir(d)}
     name = allocate_suffix(stem, ext.lstrip("."), existing, start_idx=1, bare_first=False)
     backup = os.path.join(d, name)
-    os.replace(path, backup)
+    tmp = os.path.join(d, ".tmp-" + name)
+    shutil.copy2(path, tmp)
+    os.replace(tmp, backup)
     return backup
 
 def write_versioned_json(path: str, obj: dict):

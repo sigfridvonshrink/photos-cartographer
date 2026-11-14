@@ -137,7 +137,7 @@ function offsetGroups(destCell) {
     const byProp = new Map();                              // cluster key → member buckets
     for (const b of buckets) {
       const u = b.cell.user_decision || {}, p = b.cell.proposal || {};
-      const udSig = `${u.accept_proposal === true ? 1 : 0}|${u.manual_offset_seconds ?? ""}`;
+      const udSig = `${u.accept_proposal === true ? 1 : 0}|${u.accepted_offset_seconds ?? ""}|${u.manual_offset_seconds ?? ""}`;
       const pk = `${udSig}@${"proposed_offset_seconds" in p ? p.proposed_offset_seconds : "none"}`;
       if (!byProp.has(pk)) byProp.set(pk, []);
       byProp.get(pk).push(b);
@@ -211,7 +211,7 @@ function wouldResolve(ref) {
       || (!!c.proposed_iana_timezone && c.proposal_source === "inherited");   // an inherited zone applies itself
   if (ref.kind === "offset")
     return (u.manual_offset_seconds !== "" && u.manual_offset_seconds != null && validOffset(u.manual_offset_seconds))
-      || (!!u.accept_proposal && "proposed_offset_seconds" in p);
+      || acceptHolds(c);
   if (ref.kind === "drift")                       // confirmed for this offset (zero-scrub or a valid correction)
     return driftConfirmHolds(c) && validOffset(u.corrected_offset_seconds);
   if (ref.kind === "fallback")
@@ -314,7 +314,8 @@ function previewEffective(ref) {
       const picked = (p.groups || []).some((g) => g.offset_seconds === Number(u.manual_offset_seconds));
       return `${fmtOffset(u.manual_offset_seconds)} (${picked ? "GPS group, picked" : "manual"})`;
     }
-    if (u.accept_proposal && "proposed_offset_seconds" in p) return `${fmtOffset(p.proposed_offset_seconds)} (accept proposal)`;
+    if (acceptHolds(c)) return `${fmtOffset(p.proposed_offset_seconds)} (accept proposal)`;
+    if (u.accept_proposal) return "— (accepted another proposal — accept again)";
     return "— (GPX auto-resolves on re-run, else needs input)";
   }
   if (ref.kind === "drift") {
@@ -612,7 +613,7 @@ function offsetEditor(ref) {
   const repCamMs = camMs != null ? camMs
     : (hasProp && p.proposed_real_utc != null && utcStrToMs(p.proposed_real_utc) != null
       ? utcStrToMs(p.proposed_real_utc) - p.proposed_offset_seconds * 1000 : null);
-  const accepted = !!u.accept_proposal && hasProp;
+  const accepted = acceptHolds(c);
   const manualOff = u.manual_offset_seconds;          // the one stored value of a self-set offset
   const manualSet = manualOff !== "" && manualOff != null;
   const selKey = `${ref.dest}|${ref.key}`;
@@ -625,9 +626,9 @@ function offsetEditor(ref) {
   const eff = accepted ? p.proposed_offset_seconds : manualSet ? Number(manualOff) : (hasProp ? p.proposed_offset_seconds : null);
   const cur = Number(eff) || 0, abs = Math.abs(cur);
 
-  const setManual = (off, v) => { state.offsetEdit = { key: selKey, view: v }; editMany(ref, { accept_proposal: false, manual_offset_seconds: off }); };
+  const setManual = (off, v) => { state.offsetEdit = { key: selKey, view: v }; editMany(ref, { ...acceptFields(p, false), manual_offset_seconds: off }); };
   const choose = (v) => { state._focusOffset = v; if (manualSet) { state.offsetEdit = { key: selKey, view: v }; render(); } else setManual(eff ?? 0, v); };
-  const accept = () => { state.offsetEdit = null; editMany(ref, { accept_proposal: true, manual_offset_seconds: "" }); };
+  const accept = () => { state.offsetEdit = null; editMany(ref, { ...acceptFields(p, true), manual_offset_seconds: "" }); };
   const opt = (on, body, onclick, cls = "") => el("div", { class: "off-opt" + (on ? " on" : "") + cls, onclick },
     el("span", { class: "off-dot" }, on ? "●" : "○"), body);
 
@@ -639,6 +640,9 @@ function offsetEditor(ref) {
   wrap.append(opt(active === "accept",
     el("span", {}, hasProp ? `accept proposal (${fmtOffset(p.proposed_offset_seconds)})${src}` : "accept proposal — none to accept"),
     hasProp ? accept : undefined, hasProp ? "" : " disabled"));
+
+  if (u.accept_proposal && !accepted && hasProp) wrap.append(el("div", { class: "hint warn" },
+    `Accepted when the proposal was ${u.accepted_offset_seconds === "" || u.accepted_offset_seconds == null ? "another one" : fmtOffset(u.accepted_offset_seconds)}; it is now ${fmtOffset(p.proposed_offset_seconds)} — accept it again, or set the offset.`));
 
   // choice 2 — manual offset (h/m/s spinner). Editable only when active; otherwise click to activate.
   const editO = active === "offset";
@@ -690,8 +694,8 @@ function offsetEditor(ref) {
     ? "no offset proposal yet — re-run `photos-cartographer geotag plan` to derive one from the resolved timezone"
     : "no offset proposal — set this destination's timezone (Time view), then re-run `photos-cartographer geotag plan`, to derive one from the local time"));
 
-  if (accepted || manualSet) wrap.append(el("button", { class: "mini",
-    onclick: () => { state.offsetEdit = null; editMany(ref, { accept_proposal: false, manual_offset_seconds: "" }); } },
+  if (u.accept_proposal || manualSet) wrap.append(el("button", { class: "mini",
+    onclick: () => { state.offsetEdit = null; editMany(ref, { ...acceptFields(p, false), manual_offset_seconds: "" }); } },
     "clear (let geotag auto-resolve / re-derive)"));
 
   // restore focus to the view just activated (click-to-activate), so it's ready to edit
@@ -732,10 +736,24 @@ function controls(ref) {
       onclick: () => editMany(ref, { fallback_lat: "", fallback_lon: "", accept_proposal: false }) }, "clear"));
     wrap.append(row, coordField(ref));
   } else {
+    const note = tracksNote(c.tracks);
+    if (note) wrap.append(el("div", { class: "hint" }, note));
     wrap.append(coordField(ref));
     wrap.append(checkbox("leave unlocated (accept no GPS)", u.accept_unlocated, (v) => edit(ref, "accept_unlocated", v)));
   }
   return wrap;
+}
+// Why the tracks placed nothing for a photo (photos-23 review item `tracks`), in one line: the user's lead to
+// the cure — a track to add, a threshold, a track that is not theirs — before they reach for the map.
+function tracksNote(t) {
+  if (!t || !t.reason) return "";
+  const span = (s) => s >= 3600 ? `${Math.round(s / 360) / 10} h` : s >= 60 ? `${Math.round(s / 60)} min` : `${s} s`;
+  if (t.reason === "no_tracks") return "No tracks to place it by.";
+  if (t.reason === "outside_track") return `The nearest track point is ${span(t.seconds_from_track)} from this photo's time.`;
+  if (t.reason === "track_gap") return `The track has a ${span(t.gap_seconds)} gap here; its nearest point is ${span(t.seconds_from_track)} away.`;
+  if (t.reason === "track_jump") return `The track jumps ${t.jump_meters} m between the two points around this photo — too far or too fast to place it between them.`;
+  if (t.reason === "tracks_disagree") return `Tracks ${(t.gpx_files || []).join(" and ")} cover this time ${t.apart_meters} m apart — take the one that is not this trip's out of the tracks folder.`;
+  return "";
 }
 // GPS-drift bucket: confirm the current offset as-is (zero scrub — must be explicit) or show the
 // scrubbed correction. The scrub itself happens on the track map below (it sets `confirmed` +
@@ -967,13 +985,27 @@ function jsonBlock(title, obj) { return obj === undefined ? null : el("div", { c
 // follows. One click, for every day bundled with this proposal.
 function groupChoice(p, g) {
   return g.offset_seconds === p.proposed_offset_seconds
-    ? { accept_proposal: true, manual_offset_seconds: "" }
-    : { accept_proposal: false, manual_offset_seconds: g.offset_seconds };
+    ? { ...acceptFields(p, true), manual_offset_seconds: "" }
+    : { ...acceptFields(p, false), manual_offset_seconds: g.offset_seconds };
+}
+// An acceptance names the offset it accepts (accepted_offset_seconds) and holds only while that is what is
+// proposed — within the proposal's own agreement spread for one found from GPS. Mirrors geotag §9.1: a
+// proposal that became another one was never accepted.
+function acceptFields(p, on) {
+  return on ? { accept_proposal: true, accepted_offset_seconds: p.proposed_offset_seconds }
+    : { accept_proposal: false, accepted_offset_seconds: "" };
+}
+function acceptHolds(c) {
+  const u = c.user_decision || {}, p = c.proposal || {};
+  if (!u.accept_proposal || !("proposed_offset_seconds" in p)) return false;
+  if (u.accepted_offset_seconds === "" || u.accepted_offset_seconds == null) return false;
+  const slack = p.proposal_source === "gpx_self_anchor" ? (p.agreement_spread_seconds || 0) : 0;
+  return Math.abs(Number(u.accepted_offset_seconds) - p.proposed_offset_seconds) <= slack;
 }
 // The working decision's offset, to mark the group it picks (null while nothing is chosen).
 function chosenOffset(p, u) {
   if (u.manual_offset_seconds !== "" && u.manual_offset_seconds != null) return Number(u.manual_offset_seconds);
-  return u.accept_proposal && "proposed_offset_seconds" in p ? p.proposed_offset_seconds : null;
+  return acceptHolds({ user_decision: u, proposal: p }) ? p.proposed_offset_seconds : null;
 }
 // What the user must settle, said in one line each: a tie between visits, and photos agreeing with no group.
 function proposalNotes(p) {
@@ -982,6 +1014,9 @@ function proposalNotes(p) {
     const n = groups.filter((g) => g.count === groups[0].count).length;
     out.push(`These photos lie on ${n} visits of the tracks equally — pick the day you were there.`);
   }
+  if (p.imprecise_seconds) out.push(`The tracks stayed at these photos' place for ${fmtOffset(p.imprecise_seconds).replace(/^[+−-]/, "")}, ` +
+    "so their GPS says where but not when — the offset shown is one that fits, not a reading. Accept it and " +
+    "check it on the track (Drift view), or set the offset you know.");
   const files = p.conflicting_files || [];
   if (files.length) {
     const shown = files.slice(0, 5).join(", ") + (files.length > 5 ? ` and ${files.length - 5} more` : "");
@@ -1167,6 +1202,6 @@ export {
   fmtOffset, camNaiveMs, dtLocalToMs, msToDtLocal, utcStrToMs, fmtLocal, fmtDT, offsetImpact,
   cellAt, cellStatus, wouldResolve, previewTz, previewFallback, refInvalid, isDirty, state,
   offsetGroups, dateRange, fmtDate, peerKeys, parseLatLon, coordText, contiguousRange,
-  groupChoice, chosenOffset, proposalNotes, driftConfirmHolds, driftConfirmFields,
+  groupChoice, chosenOffset, proposalNotes, driftConfirmHolds, driftConfirmFields, acceptFields, acceptHolds, tracksNote,
   scrubOffset, scrubSeedIndex, mapKeyFor,
 };

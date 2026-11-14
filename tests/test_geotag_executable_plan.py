@@ -39,6 +39,7 @@ def _types(ops):
 
 # --- plan_file_ops: branch by branch ----------------------------------------
 
+@pytest.mark.spec("RUL-corrected_time_written_local", test="TST-geotag_executable_plan-time_write_carries_its_offset")
 def test_time_write_carries_its_offset():
     f = _file()
     full = cal.plan_file_ops(f, UTC, "Europe/Brussels", "preserve_native", None, None)
@@ -71,7 +72,7 @@ def test_gps_write_and_marker(cat, origin, marker):
 
 @pytest.mark.parametrize("method, marker", [("direct_match", "matched"), ("interpolated", "interpolated"),
                                             ("extrapolated", "extrapolated")])
-@pytest.mark.spec("BLD-rerun_recognition", test="TST-geotag_executable_plan-a_track_position_says_how_it_was_derived")
+@pytest.mark.spec("BLD-rerun_recognition", "RUL-position_carries_its_method", test="TST-geotag_executable_plan-a_track_position_says_how_it_was_derived")
 def test_a_track_position_says_how_it_was_derived(method, marker):
     # A position from the tracks is marked as derived on a track point, between two, or past a track's end, so a
     # rough pin is never taken for a precise one — in the file, and so in the library; a re-run takes every one of
@@ -195,7 +196,7 @@ def test_unresolved_utc_blocks(tmp_path):
     assert any("no valid resolved UTC" in b for b in blk)
 
 
-@pytest.mark.spec("BLD-executable_plan", test="TST-geotag_executable_plan-incomplete_decisions_block")
+@pytest.mark.spec("BLD-executable_plan", "RUL-no_plan_while_a_decision_waits", test="TST-geotag_executable_plan-incomplete_decisions_block")
 def test_incomplete_decisions_block(tmp_path):
     files = [_model(f"{BYDEST}/T/a.arw", f"{BYDEST}/T", native=True)]
     rows = [_row(f"{BYDEST}/T/a.arw")]

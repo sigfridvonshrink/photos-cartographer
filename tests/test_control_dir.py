@@ -123,15 +123,17 @@ def test_prep_seeds_config_once_then_never_rewrites_it(tmp_path, monkeypatch):
     assert cfg_p.read_bytes() == after_seed                         # config never rewritten after seeding
 
 
+@pytest.mark.spec("RUL-record_in_place_while_replaced", test="TST-control_dir-a_record_being_replaced_never_leaves_its_path")
 def test_backup_existing_artifact_uses_incremental_suffix(tmp_path):
-    """The shared backup primitive (used by every phase's canonical plan/decision save) renames a
-    pre-existing artifact aside under the `-NNN` suffix and never clobbers it."""
+    """The shared backup primitive (used by every phase's canonical plan/decision save) copies a
+    pre-existing artifact aside under the `-NNN` suffix and never clobbers it — the artifact itself stays
+    in place, so a run killed before the new version is written still finds the decisions at their path."""
     p = tmp_path / "photos-10-prep-plan.json"
     assert utils.backup_existing_artifact(str(p)) is None      # nothing to back up yet
     p.write_text('{"v": 1}')
     b1 = utils.backup_existing_artifact(str(p))
     assert os.path.basename(b1) == "photos-10-prep-plan-001.json"
-    assert not p.exists() and os.path.exists(b1)               # moved aside, original byte-preserved
+    assert p.read_text() == '{"v": 1}' and os.path.exists(b1)  # copied aside; the artifact never leaves its path
     p.write_text('{"v": 2}')
     b2 = utils.backup_existing_artifact(str(p))
     assert os.path.basename(b2) == "photos-10-prep-plan-002.json"   # second backup advances the index

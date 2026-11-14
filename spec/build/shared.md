@@ -316,11 +316,12 @@ The plan and decision artifacts SHALL be prep's `photos-10-prep-plan.json`, geot
 
 :::{bld} A superseded plan goes aside under `-NNN`
 :id: BLD-plan_backups
-:status: ruled
-:realises: RUL-replanning_keeps_the_prior
+:status: seed
+:realises: RUL-replanning_keeps_the_prior, RUL-record_in_place_while_replaced
 
-A differing re-plan SHALL first rename the existing artifact under the shared incremental `-NNN` suffix ({need}`BLD-name_suffix`) —
-`photos-10-prep-plan-001.json`, say — and announce where. A plan carrying a fresh plan id differs every run, so
+A differing re-plan SHALL first copy the existing artifact to the shared incremental `-NNN` suffix ({need}`BLD-name_suffix`) —
+`photos-10-prep-plan-001.json`, say, the copy landing under that name only whole — then replace the artifact atomically,
+and announce where. A plan carrying a fresh plan id differs every run, so
 re-planning it always preserves the prior plan. The per-run journals keep their `journal-<run_id>.json` naming; this
 convention governs the plan and decision artifacts.
 :::
@@ -592,12 +593,12 @@ destination holds only photos (merge §3). A development subfolder is one named 
 
 :::{bld} Geotag marks what it wrote
 :id: BLD-rerun_recognition
-:status: ruled
-:realises: RUL-geotag_rerun_keeps_settled
+:status: seed
+:realises: RUL-geotag_rerun_keeps_settled, RUL-position_carries_its_method
 
 Geotag SHALL record what it wrote in the file's `GPSProcessingMethod`: the bare value beside each position it writes —
-`matched`, `interpolated` or `extrapolated` for one from the tracks, on a track point, between two or past a track's
-end, `manual_locked` or `manual_fallback` for one the user set — and, when it fixes the time and writes no position, the suffix
+`matched`, `interpolated` or `extrapolated` for one from the tracks, within the direct-match window of a track point,
+between two or past a track's end, `manual_locked` or `manual_fallback` for one the user set — and, when it fixes the time and writes no position, the suffix
 `+carto-time` appended once to whatever the field held, keeping the device's own value. Any other value is the device's
 own, and the GPS beside it native.
 :::

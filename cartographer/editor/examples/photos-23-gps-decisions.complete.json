@@ -215,6 +215,7 @@
         },
         "review_items": [
           {
+            "content_fingerprint": "fp-6-photos-by-dest/Japan/blocked-a.arw",
             "reason": "manual_locked",
             "relative_path": "6-photos-by-dest/Japan/blocked-a.arw",
             "requires_user_input": false,
@@ -226,10 +227,15 @@
             }
           },
           {
+            "content_fingerprint": "fp-6-photos-by-dest/Japan/blocked-b.arw",
             "reason": "accepted_unlocated",
             "relative_path": "6-photos-by-dest/Japan/blocked-b.arw",
             "requires_user_input": false,
             "stale_user_decision": false,
+            "tracks": {
+              "reason": "outside_track",
+              "seconds_from_track": 31800
+            },
             "user_decision": {
               "accept_unlocated": true,
               "manual_lat": "",

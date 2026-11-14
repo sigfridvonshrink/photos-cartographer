@@ -4,7 +4,7 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **15** — 2, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 18 and 19.* 🛑 Numbers are never reused; the next is **20**.
+*Open items: **24** — 2, 3, 4, 5, 6, 7 and 11 to 28.* 🛑 Numbers are never reused; the next is **29**.
 
 ---
 
@@ -231,7 +231,11 @@ and runs prep itself when the inbox is empty; a trip's timezone is answered once
 `accept_proposed_timezone` and `manual_real_utc` are gone; a tie between visits, a picked GPS group and a drift
 confirmation that holds only for its offset show in the editor; track positions are marked `matched`, `interpolated`
 or `extrapolated`; execute stops on a photo edited since the plan, and finalize on a plan no longer current. The
-walkthrough's "Geotag won't proceed" step predates geotag running prep itself.
+walkthrough's "Geotag won't proceed" step predates geotag running prep itself. From the review of 2026-11-14: an
+accepted offset names the offset it accepted and asks again when the proposal changes; a stay of the tracks is said
+to fix no time, and its offset goes through the drift check; a photo the tracks did not place says why; tracks that
+disagree are warned of; a tracks folder that is not there stops `geotag plan`; finalize prints how every photo was
+placed and refuses photos changed since execute.
 
 **What to do:** walk `README.md`, `docs/quickstart.md`, `concepts.md`, `editor.md`, `walkthrough.md` and
 `who-is-this-for.md` against the corpus and the code; retake every screenshot that shows something changed, and the
@@ -258,7 +262,10 @@ the batch's size and stops or warns; rule it into the spec, then code it.
 — offsets matched to the right day of a revisited place, a phone's time read by the offset of its own field, files
 naming no camera solved alone, a drift confirmation bound to its offset, edits since the plan never written over, the
 configured default zone only offered, a fingerprint's new value keeping its pinned values, among others — and removed
-two decision fields (`accept_proposed_timezone`, `manual_real_utc`). None of it is in `HISTORY.md`, and the work is on
+two decision fields (`accept_proposed_timezone`, `manual_real_utc`). The review of 2026-11-14 added one,
+`accepted_offset_seconds` (an `accept_proposal` without it is now a blocker), made a missing `gpx_root` stop the plan,
+reads each track file as a track of its own, and changed the journal (`media_after`) and the plan (`placement`,
+`left_unlocated`). None of it is in `HISTORY.md`, and the work is on
 the branch `spec-corpus-sphinx-needs`, not on `main`; the tag `specs-before-corpus` is local.
 
 **What to do:** write the `HISTORY.md` entry, refresh `COVERAGE.md`, open the pull request to `main` and, once merged,
@@ -266,4 +273,94 @@ tag and publish the release — its version decided then (a workspace decided un
 nothing reads now).
 
 **When:** once Vasile chooses to release.
+
+### 20. Zone-resolved times of phones and camera-less files are assumed, never asked
+
+**Why:** a camera's "clock was on local time" is a proposal the user must accept, and is then checked against the
+tracks. The same assumption is applied silently to a phone photo with no offset tag, to a file naming no camera, and to
+a corrected photo whose offset tag is gone — and those photos are then placed on the tracks by it. Two cases make it
+wrong by an hour with nothing shown: a local time that occurred twice (the hour daylight saving repeats — the first is
+taken) and one that never occurred (the hour it skips). Found in the review of 2026-11-14, confirmed for Europe/Berlin.
+Close to item 6, which checks a phone's time against the tracks where it has its own position.
+
+**Open:** whether such photos get a decision of their own (per destination and group: "these N photos carry no offset —
+read them as local time?"), ride the drift check, or stay as they are with a warning; and what an ambiguous or
+impossible local time does — ask, or block naming the photo. To be ruled before it is specified.
+
+### 21. Let the user leave one photo unlocated in a folder that has a fallback
+
+**Why:** the placement order puts a destination's fallback above a photo's own `accept_unlocated`, and a photo the
+fallback or a track places has no review item — so "leave this one without a position" cannot be said for it, and an
+answer given earlier is dropped once a fallback or track covers the photo. The rationale ranks sources by how specific
+they are, and the photo's own answer is the most specific there is.
+
+**Open:** whether a per-photo answer outranks the folder's fallback (and a track?), and how the editor offers it for a
+photo that is not on the worklist.
+
+### 22. A photo with no recorded time has no way through geotag
+
+**Why:** one untimed photo in photos by destination stops geotag for the whole workspace, and the only cure is to
+edit its metadata outside the tool. The promise is every photo on the map, "rough or manual" — a scan could be given
+a position by hand or by its folder's fallback and keep its name. The rationale says only that no phase invents a
+time, not why a position cannot be set without one.
+
+**Open:** let such a photo be placed by the user or the fallback and left unrenamed; or give it a time decision; or
+keep the stop. To be ruled.
+
+### 23. A day's shoot split by the camera's own midnight
+
+**Why:** a cell is a camera's day by its own clock. A camera left on home time abroad, or a night shoot, has its
+midnight mid-shoot: the outing becomes two cells, the half without an anchor asks for its offset and then for a
+drift confirmation, though the other half of the same outing settled both. Close to item 15 (a clock changed
+mid-day), from the other side.
+
+**Open:** whether adjacent days of one camera in one destination with a small gap between their photos are offered
+the neighbour's offset — a proposal, to accept — or decided as one. To be ruled.
+
+### 24. A device position that is not a fix
+
+**Why:** a photo counts as having its own position when it has a latitude and a longitude. One at (0, 0), or far
+from everything else the camera did that day, is kept as the photo's own, never offered for placement, counted as
+placed, and used as an anchor. Item 16 covers positions the agreed offset contradicts; this is the position that is
+wrong on its face.
+
+**Open:** what marks a position as no fix (null island; out of range is refused already), and what then — treat the
+photo as having none, or ask.
+
+### 25. A photo that cannot be written holds the whole workspace
+
+**Why:** a photo exiftool will not write (a damaged file, a format it reads and cannot write) fails every run; the
+execution stays `partial`, and finalize is refused for every other photo. Nothing names the way out — moving the
+photo out of photos by destination and running prep and the plan again.
+
+**What to do:** have execute's output and the summary say so for a photo that fails twice the same way; decide
+whether the user can instead accept it as it is, which would be a new decision to record.
+
+### 26. What geotag leaves in the other time fields
+
+**Why:** geotag writes `DateTimeOriginal` and `OffsetTimeOriginal`. `CreateDate`, `ModifyDate` and their offsets
+keep the camera's uncorrected time, so a corrected photo holds times that disagree, and a program that reads
+`CreateDate` shows the old one. No item decides it.
+
+**Open:** write them all to the corrected time, leave them (they are the camera's record), or clear the offsets that
+no longer hold. digiKam's reading order decides how much it matters.
+
+### 27. Durability of the control files across a power cut
+
+**Why:** records and journals are written to a temporary file and renamed into place, without being flushed to the
+disk first. After a power cut a journal can be empty — read as "nothing applied", which the next run now repairs by
+finding the photos done — and a torn `photos-24` is an unhandled error rather than a message. The editor's save of
+the three decision records is not all-or-nothing, and keeps no copy of what it replaces.
+
+**What to do:** flush before the rename where a record is the only copy of a decision; make a torn plan a plain
+"re-run `geotag plan`"; decide whether the editor's save sets the earlier records aside as a re-plan does.
+
+### 28. Finding anchors and placing photos against years of tracks
+
+**Why:** every anchor candidate search walks every track point inside the two-day clock-error window, and the
+skipped-photo reason walks them all. Measured in the review: about half a second per GPS photo at 500 000 points.
+Placement was made a bisection per track; anchoring was not. Not a correctness matter. Item 13 (the track points
+kept in the workspace, limited to the photos' dates) would cut it at the source.
+
+**What to do:** index points by a coarse grid or by time window per track, behind the same functions and tests.
 

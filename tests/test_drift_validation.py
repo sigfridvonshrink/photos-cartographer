@@ -116,7 +116,7 @@ def test_timezone_derived_offset_triggers(tmp_path):
     wf = _wf(tmp_path)
     files = [_file(f"{DEST}/a.arw", "2024:07:03 14:00:00")]
     gpx = _gpx([(50.0, 4.0, _utc(12))])
-    art = _complete_time(wf, files, gpx, {CAM: {"user_decision": {"accept_proposal": True}}})  # tz-derived
+    art = _complete_time(wf, files, gpx, {CAM: {"user_decision": {"accept_proposal": True, "accepted_offset_seconds": -7200}}})  # tz-derived
     cell0 = art["destinations"][DEST]["camera_group_time_decisions"][CAM]
     assert cell0["effective_time_anchor"]["source"] == "timezone_accepted"
     drift, _ = _drift(wf, files, art, gpx)
@@ -128,22 +128,24 @@ def test_gpx_anchored_offset_does_not_trigger(tmp_path):
     # native-GPS frame that matches the track -> gpx_self_anchor proposal, accepted -> gpx_anchor_*.
     files = [_file(f"{DEST}/a.arw", "2024:07:03 14:00:00", gps={"lat": 50.0, "lon": 4.0})]
     gpx = _gpx([(50.0, 4.0, _utc(12))])
-    art = _complete_time(wf, files, gpx, {CAM: {"user_decision": {"accept_proposal": True}}})
+    art = _complete_time(wf, files, gpx, {CAM: {"user_decision": {"accept_proposal": True, "accepted_offset_seconds": -7200}}})
     src = art["destinations"][DEST]["camera_group_time_decisions"][CAM]["effective_time_anchor"]["source"]
     assert src.startswith("gpx_anchor")
     drift, _ = _drift(wf, files, art, gpx)
     assert drift["destinations"] == {} and drift["status"] == "complete"
 
 
-def test_manual_offset_but_native_anchor_present_does_not_trigger(tmp_path):
+@pytest.mark.spec("RUL-unanchored_offset_confirmed", test="TST-drift_validation-an_offset_against_the_cameras_gps_is_checked")
+def test_an_offset_the_cameras_own_gps_contradicts_is_checked(tmp_path):
+    """An offset set against what the camera's own GPS shows is one its GPS does not support: it is confirmed
+    against the tracks like any other, the anchored photo beside it vouching for nothing."""
     wf = _wf(tmp_path)
-    # manual override even though a native-GPS anchor exists -> reliably placeable, so NOT a 22 case.
     files = [_file(f"{DEST}/a.arw", "2024:07:03 14:00:00", gps={"lat": 50.0, "lon": 4.0})]
     gpx = _gpx([(50.0, 4.0, _utc(12))])
     art = _complete_time(wf, files, gpx, {CAM: {"user_decision": {"manual_offset_seconds": 5}}})
     assert art["destinations"][DEST]["camera_group_time_decisions"][CAM]["effective_time_anchor"]["source"] == "manual"
     drift, _ = _drift(wf, files, art, gpx)
-    assert drift["destinations"] == {}
+    assert drift["destinations"][DEST]["drift_decisions"][CAM]["requires_user_input"] is True
 
 
 def test_no_gpx_coverage_does_not_trigger(tmp_path):
@@ -339,7 +341,7 @@ def test_e2e_drift_gate_blocks_then_resumes(tmp_path, monkeypatch):
     _run(monkeypatch, ws, "plan")                                          # photos-21 needs the offset
     _edit(ctl, "photos-21-time-decisions.json", lambda a:
           a["destinations"][f"{BYDEST}/T"]["camera_group_time_decisions"][CAM]["user_decision"]
-          .update({"accept_proposal": True}))                              # tz-derived offset accepted
+          .update({"accept_proposal": True, "accepted_offset_seconds": -7200}))                              # tz-derived offset accepted
 
     _run(monkeypatch, ws, "plan")                                          # photos-21 complete -> 22 GATE
     assert dvp.exists()

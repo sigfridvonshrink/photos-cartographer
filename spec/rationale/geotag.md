@@ -122,6 +122,17 @@ and nothing in the photos can tell which. Applied silently, a wrong one would pl
 place or the wrong hour, written into the originals; offered for acceptance, it costs one confirmation.
 :::
 
+:::{rat} An acceptance is of what was shown
+:id: RAT-acceptance_is_of_what_was_shown
+:status: seed
+:forced: yes
+:follows_from: RAT-editor_writes_only_decisions, RAT-decision_withdrawable
+:justifies: RUL-acceptance_holds_for_its_proposal, RUL-content_acceptance_is_of_that_content
+
+A user accepts a proposal by looking at it: this offset, for this camera, on this evidence. Kept as a bare yes, the acceptance would pass to whatever is proposed next — an offset from another timezone once the zone above changes, one from GPS that two photos tie on — and a value the user never saw would take effect over their name. So the acceptance names what it accepted, and holds for that. A changed picture is accepted the same way: as the content that was reported, under the plan that reported it.
+:::
+
+
 ## 10. Per-destination structure
 
 :::{rat} A clock is wrong by its own amount, day by day
@@ -177,6 +188,26 @@ photos and correct cameras by that hour, and look like evidence. Recorders write
 forms, so each is read as the instant it is; one stating no zone could be any of them and is not used. Skipping a
 point silently would let a track whose every point was rejected pass for an empty one, and the user would never learn
 why the photos it should have placed were not.
+:::
+
+:::{rat} A track is where one device was
+:id: RAT-track_is_one_device
+:status: seed
+:forced: yes
+:follows_from: FCT-partial_track_coverage, CHC-photos_matter
+:justifies: RUL-tracks_never_joined, RUL-disagreeing_tracks_place_nothing
+
+Each track file is one device's record, and the tracks folder may hold several for the same hours: a phone and a logger in the same pocket, or a companion who spent the afternoon elsewhere. Read as one line through all the points in time order, two devices five kilometres apart become a zigzag between them, and a photo is placed at whichever was logged a second nearer — or halfway. Kept apart, two tracks that agree are one party and either serves; two that do not are a question only the user can answer, by taking out the track that is not theirs.
+:::
+
+:::{rat} Missing is not the same as none
+:id: RAT-missing_tracks_are_not_no_tracks
+:status: seed
+:forced: yes
+:follows_from: RAT-folder_gps_fallback, RAT-decisions_reread_cache_only
+:justifies: RUL-missing_tracks_stop_geotag, RUL-no_tracks_no_stop
+
+A library with no tracks at all is a supported case: every decision falls to its other sources. A tracks folder that is named and not there is something else — a volume not mounted — and planning on as if there were none would place by folder fallback every photo the tracks place precisely, and drop the confirmations given against them. Nothing in the result would show it. Stopping costs one mount command.
 :::
 
 
@@ -307,6 +338,26 @@ would ask the user to confirm on a map what those photos already show — work a
 needed them.
 :::
 
+:::{rat} A place only tells the time while the track is moving
+:id: RAT-stay_tells_no_time
+:status: seed
+:forced: yes
+:follows_from: FCT-clocks_drift, RAT-clustering_details
+:justifies: RUL-stay_fixes_no_clock
+
+An anchor reads the time off the track where the photo's own position lies on it. That works while the track moves: it passes the place once, at one moment. Where it stood still — a museum, a lunch, a viewpoint — every minute of the stay is at that place, and the nearest point is whichever the receiver's jitter happened to put closest. Two photos taken there agree with each other perfectly and say nothing: the offset they yield can be wrong by the length of the stay, and would then slide every untagged photo of the day along the track by as much. Such evidence narrows the offset without fixing it, so it is offered, checked against the track, and never applied by itself.
+:::
+
+:::{rat} A kept offset is only as good as what it stood on
+:id: RAT-kept_offset_needs_its_evidence
+:status: seed
+:forced: yes
+:follows_from: RAT-day_offset_is_the_cameras, RAT-decision_withdrawable
+:justifies: RUL-kept_offset_rests_on_its_tracks
+
+The offset is kept because it was read from the camera's own GPS against the tracks, and the photos that gave it can no longer give it again. But the user takes a track out of the folder for one reason — it was someone else's — and an offset read against it goes with it; and a photo arriving later with its own position is new evidence about the same clock. Kept past either, the offset would be the one decision in the record nobody could withdraw and nothing still supported.
+:::
+
 
 ## 22. Resolved UTC
 
@@ -420,6 +471,59 @@ place needs none, and one that does can still be answered photo by photo; to mak
 add the work it exists to save.
 :::
 
+:::{rat} A projection is the roughest reading, so it is the most bounded
+:id: RAT-projection_bounded
+:status: seed
+:forced: yes
+:follows_from: RAT-track_squeezed, RAT-coordinate_carries_its_method
+:justifies: RUL-track_placement_bounded, RUL-track_evidence_order
+
+Squeezing the track means using it wherever it says something: at a point, between two, and a little past where a recording stops — each track's own stop, since a logger switched off at the car is an end whatever was recorded the month after. Past an end there is only a heading, and a heading read off the last two points is mostly receiver jitter: twenty metres in one second, carried five minutes, is six kilometres. So the heading is read over the track's last stretch, and a projection that still lands farther or faster than points are ever joined across is dropped for the end itself — rough, marked as such, and wrong by no more than the user allowed.
+:::
+
+:::{rat} The remainder is a worklist only if it says why
+:id: RAT-remainder_says_why
+:status: seed
+:forced: no
+:follows_from: RAT-remainder_worklist, CHC-ask_only_what_data_cannot_settle
+:justifies: RUL-unplaced_photo_listed, RUL-plan_counts_placement
+
+A photo the tracks did not place is one of a few cases with different cures: taken an hour after the logger stopped, taken across a gap the configuration will not bridge, or caught between two tracks that disagree. Listed bare, each sends the user to the map to work out which. Listed with the reason and the distance, most are settled at a glance — and the count of how every photo was placed is the one number that says whether the run did what the tool is for.
+:::
+
+:::{rat} A decision belongs to the photo, not to its name
+:id: RAT-decision_keyed_by_identity
+:status: seed
+:forced: yes
+:follows_from: RAT-decoded_pixel_identity, RAT-decisions_reread_cache_only
+:justifies: RUL-photo_decision_follows_the_photo, RUL-answer_follows_its_day
+
+Geotag's last act on a photo is to rename it, and a destination's cells are named by day once it holds two. A decision found again only by the name it was filed under is lost to geotag's own work: the position set by hand asks again after the rename, the first day's offset after the second day's photos arrive. What the user decided about is the photo, and the camera's day — so that is what the decision is found by.
+:::
+
+:::{rat} The method travels with the photo
+:id: RAT-method_in_the_photo
+:status: seed
+:forced: yes
+:follows_from: RAT-coordinate_carries_its_method
+:justifies: RUL-position_carries_its_method, RUL-placement_recorded_with_its_track
+
+Completeness is bought with precision that varies: one photo sits on a track point, the next was projected five minutes past a track's end, a third shares its folder's one coordinate. In the library, years on, only the photo is there to say which — so the method is written into it — and the workspace's record adds what the photo cannot hold: which track, at what instant.
+:::
+
+
+## 26. The corrected time
+
+:::{rat} The time a person would have read on the wall
+:id: RAT-time_written_as_lived
+:status: seed
+:forced: no
+:follows_from: CHC-local_folder_library, RAT-offset_per_camera_destination_day
+:justifies: RUL-corrected_time_written_local
+
+Once a photo's true instant is known it could be written as UTC, as the camera's home time, or as the time where it was taken. A library is browsed by people: the morning market should read as morning. Written as the destination's local time with its offset beside it, the photo both reads as it was lived and still states its exact instant.
+:::
+
 
 ## 28. The executable plan
 
@@ -477,6 +581,16 @@ differs is something wrong — a tool, a format — that the user must see, not 
 photo's identity is at stake, so only the user can take the new content for it.
 :::
 
+:::{rat} The record must cover what a broken run did
+:id: RAT-record_covers_broken_runs
+:status: seed
+:forced: yes
+:follows_from: RAT-recoverable_core, RAT-consolidated_log
+:justifies: RUL-one_photo_failure_contained, RUL-applied_unrecorded_is_recorded, RUL-engine_checked_before_writes
+
+The journal is what later says which run changed which photo. A run that falls over on one photo while others are in flight, or is killed between a write and its record, leaves photos changed and unrecorded; a next run that merely finds them done and moves on leaves them so for good, and the log built from the journals then shows a photo holding a position no pass ever gave it. So one photo's failure stays its own, and what is found done is checked and written down. The image engine is checked first for the same reason: with another one every write would be made and then held as changed, a whole plan of photos half applied.
+:::
+
 
 ## 31. Finalize
 
@@ -491,4 +605,14 @@ The archival package is what outlives the workspace: the account of what geotag 
 from an execution that did not finish, it would record changes the photos lack; made after a decision was edited
 and not executed, it would record a decision they never received. Either way the record would lie about the
 library.
+:::
+
+:::{rat} Finalize is where geotag signs for the photos
+:id: RAT-finalize_signs_for_the_photos
+:status: seed
+:forced: yes
+:follows_from: RAT-safety_not_on_the_plan, CHC-photos_matter
+:justifies: RUL-finalize_checks_photos, RUL-finalize_reports_placement, RUL-unlocated_logged
+
+Merge refuses a photo changed since finalize, on the strength of what finalize recorded. If finalize records whatever it finds, an edit made between execute and finalize becomes the baseline, and the library receives a photo the log describes as something else. Finalize is given once the user judges the work done, so it is also where they are told how done: how many photos have a position and by what means, how many were left without one — each of those by their own recorded answer.
 :::

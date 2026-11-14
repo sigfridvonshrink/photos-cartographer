@@ -79,10 +79,15 @@
         },
         "review_items": [
           {
+            "content_fingerprint": "fp-6-photos-by-dest/Belgium/bel-cam.arw",
             "reason": "no_reliable_gps_source",
             "relative_path": "6-photos-by-dest/Belgium/bel-cam.arw",
             "requires_user_input": true,
             "stale_user_decision": false,
+            "tracks": {
+              "reason": "outside_track",
+              "seconds_from_track": 6600
+            },
             "user_decision": {
               "accept_unlocated": false,
               "manual_lat": "",
@@ -210,10 +215,15 @@
         },
         "review_items": [
           {
+            "content_fingerprint": "fp-6-photos-by-dest/Japan/blocked-a.arw",
             "reason": "no_reliable_gps_source",
             "relative_path": "6-photos-by-dest/Japan/blocked-a.arw",
             "requires_user_input": true,
             "stale_user_decision": false,
+            "tracks": {
+              "reason": "outside_track",
+              "seconds_from_track": 28200
+            },
             "user_decision": {
               "accept_unlocated": false,
               "manual_lat": "",
@@ -221,10 +231,15 @@
             }
           },
           {
+            "content_fingerprint": "fp-6-photos-by-dest/Japan/blocked-b.arw",
             "reason": "no_reliable_gps_source",
             "relative_path": "6-photos-by-dest/Japan/blocked-b.arw",
             "requires_user_input": true,
             "stale_user_decision": false,
+            "tracks": {
+              "reason": "outside_track",
+              "seconds_from_track": 31800
+            },
             "user_decision": {
               "accept_unlocated": false,
               "manual_lat": "",

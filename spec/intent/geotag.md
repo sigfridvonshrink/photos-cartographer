@@ -133,6 +133,28 @@ Every other proposal — a clock offset derived from the destination's timezone,
 from the destination it lies in — SHALL take effect only once the user accepts it.
 :::
 
+:::{rul} An acceptance holds for the proposal it accepted
+:id: RUL-acceptance_holds_for_its_proposal
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-other_proposals_need_acceptance
+
+An acceptance of a proposed clock offset SHALL hold only while the offset proposed is the one that was accepted; a proposal that has become another is asked about again, the acceptance kept as written.
+:::
+
+:::{rul} A written value outranks an accepted proposal
+:id: RUL-written_value_over_acceptance
+:status: seed
+:criticality: med
+:verify: required
+:refines: RUL-other_proposals_need_acceptance
+
+A value the user writes for a decision SHALL take effect over a proposal accepted for the same decision.
+:::
+
+
 ## 10. Per-destination structure
 
 :::{def} A destination
@@ -187,6 +209,18 @@ it.
 A container destination's decisions SHALL never wait for the user.
 :::
 
+:::{rul} An answer follows its day
+:id: RUL-answer_follows_its_day
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-decision_kept
+:uses: DEF-destination
+
+An answer given for a camera's day in a destination SHALL stay that day's answer when photos of another day arrive there or leave.
+:::
+
 
 ## 15. Reading the tracks
 
@@ -211,6 +245,38 @@ with — never guessing the zone of one that states none.
 
 A track point geotag cannot use — no position or one out of range, no time, an unreadable time, or one stating no
 zone — SHALL be skipped and reported to the user, naming its file and point.
+:::
+
+:::{rul} Tracks that are configured and not there stop geotag
+:id: RUL-missing_tracks_stop_geotag
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-tracks
+
+Geotag SHALL NOT plan while the tracks folder the configuration names is not there.
+:::
+
+:::{rul} Geotag runs without tracks
+:id: RUL-no_tracks_no_stop
+:status: seed
+:criticality: med
+:verify: required
+:uses: DEF-tracks
+
+Geotag SHALL proceed where no tracks folder is configured or the folder holds no track, each decision resting on its other sources.
+:::
+
+:::{rul} A track is one device's record
+:id: RUL-tracks_never_joined
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-tracks
+
+Geotag SHALL never join a point of one track file to a point of another — to place a photo between them, or to anchor a clock on the line between them.
 :::
 
 
@@ -248,6 +314,17 @@ group already classed kept as it is.
 
 A file whose metadata names no camera SHALL be solved on its own — by the offset recorded with its time, else its
 destination's timezone — never asked to be classed, nor given a camera's clock offset.
+:::
+
+:::{rul} A group classed both ways is unknown
+:id: RUL-group_classed_twice_is_unknown
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-unknown_group_stops_geotag
+
+A camera group the configuration classes as both a phone and a camera SHALL count as unknown.
 :::
 
 
@@ -336,6 +413,27 @@ Where a camera's photos support two visits equally, its clock offset SHALL NOT t
 
 A clock offset the user sets that the camera's own GPS positions support SHALL count as anchored by them, as an
 accepted proposal does — never asked to be checked against the tracks again.
+:::
+
+:::{rul} Where the tracks stood still, a place says no time
+:id: RUL-stay_fixes_no_clock
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-anchor_consensus
+
+An offset the camera's photos fix only to within a stay of the tracks at their place — longer than offsets are told apart by — SHALL NOT take effect without the user's answer, nor count as anchored once accepted.
+:::
+
+:::{rul} A proposal from GPS is recorded with its evidence
+:id: RUL-anchor_proposal_carries_evidence
+:status: seed
+:criticality: med
+:verify: required
+:refines: RUL-anchor_consensus
+
+A clock offset proposed from a camera's own GPS SHALL be recorded with the photos that support it, the photos that do not, and the track each was matched to.
 :::
 
 
@@ -441,6 +539,102 @@ A destination SHALL never wait on its folder fallback: without one, its photos t
 their own.
 :::
 
+:::{rul} The tracks place a photo only within the configured limits
+:id: RUL-track_placement_bounded
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-placement_order
+:uses: DEF-tracks
+
+A track SHALL place a photo only within the limits the configuration sets — never across a gap in time, a distance or a speed beyond them, and never farther past its end than they allow.
+:::
+
+:::{rul} A track's closest evidence is used first
+:id: RUL-track_evidence_order
+:status: seed
+:criticality: med
+:verify: required
+:refines: RUL-track_placement_bounded
+
+Of the ways a track can place a photo, geotag SHALL take the first that applies: a track point at its time, the place between the two points around it, the place past an end of the track — an end being where that track's own recording starts, stops or breaks off.
+:::
+
+:::{rul} Tracks in two places place nothing
+:id: RUL-disagreeing_tracks_place_nothing
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-track_placement_bounded
+
+Where tracks that cover a photo's time put it in places farther apart than the configuration joins points across, the tracks SHALL NOT place it, and the user is told which tracks disagree.
+:::
+
+:::{rul} A position says how it was found
+:id: RUL-position_carries_its_method
+:status: seed
+:criticality: high
+:verify: required
+
+Every position geotag writes SHALL say, in the photo itself, how it was found: on a track point, between two, past a track's end, set for the photo, or its folder's fallback.
+:::
+
+:::{rul} A position from the tracks is recorded with its track
+:id: RUL-placement_recorded_with_its_track
+:status: seed
+:criticality: med
+:verify: required
+:refines: RUL-cause_locatable
+
+A position the tracks give a photo SHALL be recorded with the track that gave it and the time it was placed at.
+:::
+
+:::{rul} An unplaced photo is listed with why
+:id: RUL-unplaced_photo_listed
+:status: seed
+:criticality: high
+:verify: required
+:refines: RUL-placement_order
+
+Every photo no source places SHALL be listed for the user by itself, with why the tracks did not place it, until a position is set for it or it is left unlocated.
+:::
+
+:::{rul} A photo's decision follows the photo
+:id: RUL-photo_decision_follows_the_photo
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-decision_kept
+
+A decision made for one photo SHALL stay that photo's when geotag renames it or its fingerprint is taken again, and never pass to another photo that takes its name.
+:::
+
+:::{rul} An accepted inherited fallback follows the one above
+:id: RUL-accepted_fallback_follows
+:status: seed
+:criticality: med
+:verify: required
+:refines: RUL-fallback_from_nearest
+
+A destination whose inherited fallback the user accepted SHALL take the fallback then in effect above it, a later change there included.
+:::
+
+
+## 26. The corrected time
+
+:::{rul} The corrected time is written as the destination's local time
+:id: RUL-corrected_time_written_local
+:status: seed
+:criticality: high
+:verify: required
+:uses: DEF-geotag, DEF-destination
+
+Geotag SHALL write each photo's true time into it as its destination's local time, with that time's offset from UTC beside it.
+:::
+
 
 ## 28. The executable plan
 
@@ -464,6 +658,39 @@ one it clears cleared whole.
 
 A camera's clock offset for a day, once resolved, SHALL stay that day's offset for photos of that camera arriving
 later — one found from its own GPS included, though the later photos bring no anchor.
+:::
+
+:::{rul} A kept offset rests on what it was found from
+:id: RUL-kept_offset_rests_on_its_tracks
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-day_offset_kept_for_later_photos
+
+An offset found from a camera's own GPS SHALL be kept for later photos only while every track it was found from is there unchanged and no photo that has arrived since says otherwise.
+:::
+
+:::{rul} No plan while anything waits
+:id: RUL-no_plan_while_a_decision_waits
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-time_before_gps
+:uses: DEF-decision
+
+Geotag SHALL make no executable plan while a decision waits for the user or a photo is neither placed nor left unlocated by the user.
+:::
+
+:::{rul} The plan counts how every photo is placed
+:id: RUL-plan_counts_placement
+:status: seed
+:criticality: med
+:verify: required
+:uses: DEF-geotag
+
+The executable plan SHALL count its photos by how each comes by its position — its own, each way the tracks or the user give one — those left without one among them.
 :::
 
 
@@ -492,6 +719,49 @@ A write after which a photo's decoded content differs SHALL NOT count as done �
 the user accepts the new content.
 :::
 
+:::{rul} One photo's failure is its own
+:id: RUL-one_photo_failure_contained
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-every_change_journaled
+
+A photo that cannot be applied SHALL fail alone, by name: every other photo's result is still recorded.
+:::
+
+:::{rul} What an interrupted run applied is recorded by the next
+:id: RUL-applied_unrecorded_is_recorded
+:status: seed
+:criticality: high
+:verify: required
+:refines: RUL-every_change_journaled
+
+A photo an interrupted execution applied and did not record SHALL be recorded as applied by the next — once seen to be that photo, holding what was planned — and never applied again.
+:::
+
+:::{rul} An acceptance of changed content is of that content
+:id: RUL-content_acceptance_is_of_that_content
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-content_changed_write_held
+
+An acceptance of a photo's changed content SHALL hold only for the content it was given for, under the plan that reported it — and stay open to give until the photo is applied.
+:::
+
+:::{rul} Another image engine stops execution before it writes
+:id: RUL-engine_checked_before_writes
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-content_changed_write_held
+
+Geotag SHALL NOT write to a photo while the image engine is not the one the photos' fingerprints were taken with.
+:::
+
 
 ## 31. Finalize
 
@@ -504,4 +774,37 @@ the user accepts the new content.
 :uses: DEF-finalize
 
 Finalize SHALL refuse unless geotag's current plan was executed successfully and still holds.
+:::
+
+:::{rul} Finalize packages the photos as execution left them
+:id: RUL-finalize_checks_photos
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-finalize_requires_success
+:uses: DEF-finalize
+
+Finalize SHALL refuse while a photo in photos by destination is not as the execution left it — gone, changed since, or never in the plan.
+:::
+
+:::{rul} Finalize reports how every photo was placed
+:id: RUL-finalize_reports_placement
+:status: seed
+:criticality: med
+:verify: required
+:refines: RUL-plan_counts_placement
+:uses: DEF-finalize
+
+Finalize SHALL report the plan's count of how every photo came by its position, and keep it in the package.
+:::
+
+:::{rul} A photo left unlocated is logged as such
+:id: RUL-unlocated_logged
+:status: seed
+:criticality: med
+:verify: required
+:refines: RUL-log_cites_decisions
+
+A photo the user left unlocated SHALL have that in its log, with the decision that left it so.
 :::
