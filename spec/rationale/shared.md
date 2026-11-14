@@ -382,7 +382,7 @@ unchanged re-run means the iterative decision-editing loop does not accumulate r
 
 :::{rat} Set aside by copy, so the record is never absent
 :id: RAT-record_never_absent
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-plain_json_record, RAT-recoverable_core
 :justifies: RUL-record_in_place_while_replaced

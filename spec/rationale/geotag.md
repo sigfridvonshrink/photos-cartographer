@@ -679,7 +679,7 @@ photo's identity is at stake, so only the user can take the new content for it.
 
 :::{rat} The record must cover what a broken run did
 :id: RAT-record_covers_broken_runs
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-recoverable_core, RAT-consolidated_log
 :justifies: RUL-one_photo_failure_contained, RUL-applied_unrecorded_is_recorded, RUL-engine_checked_before_writes

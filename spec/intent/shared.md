@@ -682,7 +682,7 @@ one is first set aside, recoverably, and the user told where.
 
 :::{rul} A record being replaced never leaves its path
 :id: RUL-record_in_place_while_replaced
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required

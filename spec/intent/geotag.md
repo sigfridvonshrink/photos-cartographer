@@ -792,7 +792,7 @@ An offset found from a camera's own GPS SHALL be kept for later photos only whil
 
 :::{rul} No plan while anything waits
 :id: RUL-no_plan_while_a_decision_waits
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
@@ -804,7 +804,7 @@ Geotag SHALL make no executable plan while a decision waits for the user or a ph
 
 :::{rul} The plan counts how every photo is placed
 :id: RUL-plan_counts_placement
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :uses: DEF-geotag
@@ -840,39 +840,41 @@ the user accepts the new content.
 
 :::{rul} One photo's failure is its own
 :id: RUL-one_photo_failure_contained
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
 :refines: RUL-every_change_journaled
 
-A photo that cannot be applied SHALL fail alone, by name: every other photo's result is still recorded.
+A photo whose planned changes cannot be made SHALL fail alone, by name: every other photo's result is still recorded.
 :::
 
-:::{rul} What an interrupted run applied is recorded by the next
+:::{rul} What an interrupted run changed is recorded by the next
 :id: RUL-applied_unrecorded_is_recorded
-:status: seed
+:status: ruled
 :criticality: high
 :verify: required
 :refines: RUL-every_change_journaled
 
-A photo an interrupted execution applied and did not record SHALL be recorded as applied by the next — once seen to be that photo, holding what was planned — and never applied again.
+Changes an interrupted execution made to a photo and did not record SHALL be recorded as made by the next — once the
+photo is seen to be that photo, holding what was planned — and never made again.
 :::
 
 :::{rul} An acceptance of changed content is of that content
 :id: RUL-content_acceptance_is_of_that_content
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
 :refines: RUL-content_changed_write_held
 
-An acceptance of a photo's changed content SHALL hold only for the content it was given for, under the plan that reported it — and stay open to give until the photo is applied.
+An acceptance of a photo's changed content SHALL hold only for the content it was given for, under the plan that reported it — and stay open to give until the
+photo's changes are made.
 :::
 
 :::{rul} Another image engine stops execution before it writes
 :id: RUL-engine_checked_before_writes
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required

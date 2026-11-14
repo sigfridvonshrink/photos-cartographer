@@ -35857,7 +35857,7 @@
       "Geotag — why"
      ],
      "signature": null,
-     "status": "seed",
+     "status": "ruled",
      "style": null,
      "tags": [],
      "template": null,
@@ -36017,7 +36017,7 @@
       "Shared — why"
      ],
      "signature": null,
-     "status": "seed",
+     "status": "ruled",
      "style": null,
      "tags": [],
      "template": null,
@@ -42286,7 +42286,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "A photo an interrupted execution applied and did not record SHALL be recorded as applied by the next — once seen to be that photo, holding what was planned — and never applied again.",
+     "content": "Changes an interrupted execution made to a photo and did not record SHALL be recorded as made by the next — once the\nphoto is seen to be that photo, holding what was planned — and never made again.",
      "criticality": "high",
      "docname": "intent/geotag",
      "doctype": ".md",
@@ -42340,11 +42340,11 @@
       "Geotag — what it guarantees"
      ],
      "signature": null,
-     "status": "seed",
+     "status": "ruled",
      "style": null,
      "tags": [],
      "template": null,
-     "title": "What an interrupted run applied is recorded by the next",
+     "title": "What an interrupted run changed is recorded by the next",
      "type": "rul",
      "type_name": "Rule",
      "upholds": [],
@@ -45319,7 +45319,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "An acceptance of a photo's changed content SHALL hold only for the content it was given for, under the plan that reported it — and stay open to give until the photo is applied.",
+     "content": "An acceptance of a photo's changed content SHALL hold only for the content it was given for, under the plan that reported it — and stay open to give until the\nphoto's changes are made.",
      "criticality": "high",
      "docname": "intent/geotag",
      "doctype": ".md",
@@ -45345,7 +45345,7 @@
       "RAT-acceptance_is_of_what_was_shown"
      ],
      "layout": null,
-     "lineno": 862,
+     "lineno": 863,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -45373,7 +45373,7 @@
       "Geotag — what it guarantees"
      ],
      "signature": null,
-     "status": "seed",
+     "status": "ruled",
      "style": null,
      "tags": [],
      "template": null,
@@ -48575,7 +48575,7 @@
       "RAT-record_covers_broken_runs"
      ],
      "layout": null,
-     "lineno": 873,
+     "lineno": 875,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -48603,7 +48603,7 @@
       "Geotag — what it guarantees"
      ],
      "signature": null,
-     "status": "seed",
+     "status": "ruled",
      "style": null,
      "tags": [],
      "template": null,
@@ -50092,7 +50092,7 @@
       "RAT-finalize_signs_for_the_photos"
      ],
      "layout": null,
-     "lineno": 898,
+     "lineno": 900,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -50422,7 +50422,7 @@
       "RAT-finalize_signs_for_the_photos"
      ],
      "layout": null,
-     "lineno": 910,
+     "lineno": 912,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -50507,7 +50507,7 @@
       "RAT-package_records_what_was_done"
      ],
      "layout": null,
-     "lineno": 887,
+     "lineno": 889,
      "links": [],
      "links_back": [],
      "modifications": 0,
@@ -60456,7 +60456,7 @@
       "Geotag — what it guarantees"
      ],
      "signature": null,
-     "status": "seed",
+     "status": "ruled",
      "style": null,
      "tags": [],
      "template": null,
@@ -61508,7 +61508,7 @@
      "constraints_error": null,
      "constraints_passed": true,
      "constraints_results": {},
-     "content": "A photo that cannot be applied SHALL fail alone, by name: every other photo's result is still recorded.",
+     "content": "A photo whose planned changes cannot be made SHALL fail alone, by name: every other photo's result is still recorded.",
      "criticality": "high",
      "docname": "intent/geotag",
      "doctype": ".md",
@@ -61562,7 +61562,7 @@
       "Geotag — what it guarantees"
      ],
      "signature": null,
-     "status": "seed",
+     "status": "ruled",
      "style": null,
      "tags": [],
      "template": null,
@@ -63342,7 +63342,7 @@
       "Geotag — what it guarantees"
      ],
      "signature": null,
-     "status": "seed",
+     "status": "ruled",
      "style": null,
      "tags": [],
      "template": null,
@@ -65243,7 +65243,7 @@
       "Shared — what every phase guarantees"
      ],
      "signature": null,
-     "status": "seed",
+     "status": "ruled",
      "style": null,
      "tags": [],
      "template": null,
@@ -71570,7 +71570,7 @@
       "RAT-finalize_signs_for_the_photos"
      ],
      "layout": null,
-     "lineno": 921,
+     "lineno": 923,
      "links": [],
      "links_back": [],
      "modifications": 0,
