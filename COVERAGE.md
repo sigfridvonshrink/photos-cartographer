@@ -7,7 +7,7 @@ This pipeline mutates irreplaceable originals, so coverage is tracked on **two a
    build by `tools/spec-build`. Line/branch can't tell you whether a *must-refuse / no-clobber /
    leaves-untouched* obligation is actually asserted; this can.
 
-Figures below are a snapshot; regenerate with the commands shown. The suite has **1275 tests**.
+Figures below are a snapshot; regenerate with the commands shown. The suite has **1278 tests**.
 
 ## Line / branch coverage
 
@@ -37,8 +37,8 @@ tools/coverage          # bootstraps a local .venv, runs the suite, writes htmlc
 
 ## Spec coverage
 
-The specification is one corpus of typed items (`spec/`; see `spec/README.md`): 497 rules and invariants, 274
-rationales, 189 build items, 32 definitions, the philosophy's 3 facts and 4 choices — and the 581 tests that name the
+The specification is one corpus of typed items (`spec/`; see `spec/README.md`): 497 rules and invariants, 275
+rationales, 190 build items, 32 definitions, the philosophy's 3 facts and 4 choices — and the 584 tests that name the
 items they verify, made items of the corpus from their `@pytest.mark.spec(…, test="TST-…")` marks. 998 items are
 ruled; one is at seed: `RUL-disagreeing_tracks_place_nothing`, held for BACKLOG 29.
 

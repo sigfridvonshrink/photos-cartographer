@@ -47,16 +47,10 @@ says it, no item states it; each to be ruled into the corpus or the code dropped
 says a test exists, not how much of the rule it asserts. Known to be asserted in part:
 - `RUL-snapshot_after_validation`, `RUL-snapshot_under_lock`, `RUL-dry_run_validates_saved_plan` — merge only;
 - `RUL-suffix_deterministic` — prep only; `RUL-image_untouched_by_other_phase` — merge and geotag, not prep;
-- `RUL-rewrite_in_place_atomic` — the photo's metadata write and the shared record writers; not prep's own writers
-  of its manifest, log and guard, nor the editor's. Holds against a killed process: nothing syncs a rewrite to disk
-  before its rename, so a power loss is not covered — to be ruled: accept, or sync;
 - `RUL-stale_takeover_conservative` — one host; a second host over a network filesystem is not simulated;
 - `RUL-control_directory_fixed`, `RUL-camera_classes_not_derivation` — prep only;
 - `RUL-filesystem_agnostic` — that no run calls `zfs`; not that nothing else leans on a filesystem feature (file
   locks, atomic rename, directory sync, device ids are used);
-- `RUL-nothing_built_from_merge_records` — the summary record only. Merge's resume is built from its journal and
-  earlier plan (`BLD-merge_journal_resume`): to be ruled whether "merge's records" means those too, and the rule
-  reworded to say which.
 
 **Do:** assert the rest, or rule it out of the rule.
 

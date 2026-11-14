@@ -1135,8 +1135,20 @@ alone does; for prep and geotag the `EXDEV` of a move across filesystems is rais
 :status: ruled
 :realises: RUL-rewrite_in_place_atomic
 
-Geotag SHALL write metadata with `exiftool -overwrite_original`, which writes a temporary file and renames it over the
-original, having first removed a `<file>_exiftool_tmp` an interrupted write left.
+Geotag SHALL write metadata by having `exiftool -o` write the new file beside the photo as `<file>_exiftool_tmp` —
+the photo itself untouched — then giving it the photo's permissions, syncing it to disk, renaming it over the photo
+and syncing the folder, having first removed a `<file>_exiftool_tmp` an interrupted write left.
+:::
+
+:::{bld} A rewritten record is on disk before it replaces the earlier one
+:id: BLD-rewrite_synced_before_rename
+:status: ruled
+:realises: RUL-rewrite_in_place_atomic
+
+Every file cartographer rewrites in the control directory and the quarantine — the configuration's seed, the plans,
+decisions and their backups, the journals, the handoff, the logs, the guard, the quarantine manifest, the database
+images and the archival package — SHALL be written whole to a temporary file in its folder, synced to disk, renamed
+over the earlier one, and the folder then synced.
 :::
 
 :::{bld} The cross-filesystem copy

@@ -269,7 +269,7 @@ def _write_json(path, obj):
     tmp = path + ".tmp"
     with open(tmp, "w") as f:
         json.dump(obj, f, indent=2, sort_keys=True)
-    os.replace(tmp, path)
+    photos_utils.replace_durably(tmp, path)
 
 
 def _apply_edits(art, edits):

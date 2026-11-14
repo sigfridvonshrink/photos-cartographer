@@ -41,7 +41,7 @@ import errno
 # ==============================================================================
 from .photos_utils import CONFIG, CAMERA_IDENTITY_FIELDS, folder_name, managed_folder_names, dedup_priority, is_track_file, missing_managed_folders, misplaced_top_level_entries, FOLDER_ROLES, UNTIMED_PREFIX, untimed_stem, carries_stem, filename_format_changed, code_fingerprint
 from .reporting import get_reporter, emit_next_step
-from .photos_utils import (_move_no_clobber, _move_link_unlink, _get_renameat2,
+from .photos_utils import (replace_durably, _move_no_clobber, _move_link_unlink, _get_renameat2,
                           WorkspaceCache, WorkspaceLock, ContentHasher, PlanFingerprintMemo,
                           CACHE_SCHEMA_VERSION, FINGERPRINT_ALGORITHM_VERSION,
                           allocate_suffix)
@@ -114,7 +114,7 @@ def _append_quarantine_manifest(manifest_dir, entry):
             backup = (f"{manifest_path}.corrupt-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
                       f"-{uuid.uuid4().hex[:6]}")
             try:
-                os.replace(manifest_path, backup)
+                replace_durably(manifest_path, backup)
                 get_reporter().warn(f"Warning: quarantine manifest {manifest_path} was unreadable ({e}); preserved "
                                     f"it as {os.path.basename(backup)} and started a fresh manifest.")
             except OSError:
@@ -125,7 +125,7 @@ def _append_quarantine_manifest(manifest_dir, entry):
     try:
         with os.fdopen(fd, 'w') as mf:
             json.dump(existing, mf, indent=2)
-        os.replace(tmp, manifest_path)
+        replace_durably(tmp, manifest_path)
     except Exception:
         if os.path.exists(tmp):
             try:
@@ -951,7 +951,7 @@ class PlanExecutor:
                     try:
                         with os.fdopen(lfd, 'w') as lf:
                             json.dump(log_obj, lf, indent=2, sort_keys=True)
-                        os.replace(ltmp, plp)
+                        replace_durably(ltmp, plp)
                         if plan.summary and "performance_and_cache" in plan.summary:
                             plan.summary["performance_and_cache"]["prep_log_written"] = True
                         for _w in log_warnings:
@@ -1082,7 +1082,7 @@ class PlanExecutor:
                     with os.fdopen(gfd, 'w') as gf:
                         gf.write(json.dumps({"initialized": True, "tool": "photos-1-prep",
                                              "initialized_by_run": plan.plan_id}))
-                    os.replace(gtmp, guard)
+                    replace_durably(gtmp, guard)
 
             self.coordinator.print_summary(plan_summary=plan.summary)
         finally:

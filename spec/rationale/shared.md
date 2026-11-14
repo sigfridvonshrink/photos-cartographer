@@ -1406,6 +1406,18 @@ safe when it happens. A half-done move, a half-written file, or a failure record
 plan can see it.
 :::
 
+:::{rat} A power cut is an interruption like any other
+:id: RAT-power_loss_is_an_interruption
+:status: ruled
+:forced: yes
+:follows_from: RAT-safe_at_each_change, CHC-photos_matter
+:justifies: RUL-rewrite_in_place_atomic
+
+A rename can reach the disk before the bytes it names; after a power cut the file is then there and empty. A photo
+lost that way is lost as surely as one overwritten, so the new file is made safe on disk before it takes the old
+one's place, whatever that costs in speed: the archive outlives every run by decades.
+:::
+
 :::{rat} Within a workspace, every move is one rename
 :id: RAT-workspace_one_filesystem
 :status: ruled

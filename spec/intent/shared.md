@@ -2748,14 +2748,15 @@ Merge SHALL record, in its own records, where each photo landed in the library, 
 already present, and what blocked the rest.
 :::
 
-:::{rul} Nothing is built from merge's records
+:::{rul} Nothing is built from a finished merge's records
 :id: RUL-nothing_built_from_merge_records
 :status: ruled
 :criticality: low
 :verify: required
 :refines: RUL-merge_records_landing
 
-Nothing SHALL be built from merge's records.
+Nothing SHALL be built from the records a finished merge leaves — its summary, its log, its database image and its
+package. Merge's plan and journal, from which an interrupted merge resumes, are not among these.
 :::
 
 :::{rul} Merge remakes the package as part of its run
@@ -3247,8 +3248,8 @@ A move by prep or geotag that would cross filesystems SHALL fail, never be made 
 :verify: required
 :refines: RUL-operations_atomic
 
-A write that rewrites a file in place SHALL leave, if interrupted, the intact original or the fully written file —
-never a damaged one between them.
+A write that rewrites a file in place SHALL leave, if interrupted — the run stopped or killed, or the power lost — the
+intact original or the fully written file, never a damaged one between them.
 :::
 
 :::{rul} Across filesystems, a placement is still all or nothing

@@ -168,6 +168,30 @@ class _CutOffMidWrite:
         return getattr(self.f, name)
 
 
+@pytest.mark.spec("RUL-rewrite_in_place_atomic", "BLD-rewrite_synced_before_rename",
+                  test="TST-control_dir-a_rewritten_record_is_on_disk_before_it_replaces_the_earlier")
+def test_a_rewritten_record_is_on_disk_before_it_replaces_the_earlier(tmp_path, monkeypatch):
+    """A power cut: the new record is synced to disk whole before the rename that puts it in the earlier one's
+    place, and the folder after."""
+    import json
+    import stat
+    rec = tmp_path / "photos-21-time-decisions.json"
+    utils.write_json_artifact(str(rec), {"v": 1})
+    steps, real_fsync, real_replace = [], os.fsync, os.replace
+    def _fsync(fd):
+        st = os.fstat(fd)
+        steps.append("sync folder" if stat.S_ISDIR(st.st_mode) else ("sync file" if st.st_size else "sync EMPTY file"))
+        return real_fsync(fd)
+    def _replace(a, b):
+        steps.append("rename")
+        return real_replace(a, b)
+    monkeypatch.setattr(os, "fsync", _fsync)
+    monkeypatch.setattr(os, "replace", _replace)
+    utils.write_json_artifact(str(rec), {"v": 2})
+    assert steps == ["sync file", "rename", "sync folder"]
+    assert json.loads(rec.read_text()) == {"v": 2}
+
+
 @pytest.mark.parametrize("rewrite", [utils.write_versioned_json, utils.write_json_artifact],
                          ids=["versioned", "artifact"])
 @pytest.mark.spec("RUL-rewrite_in_place_atomic", test="TST-control_dir-an_interrupted_record_rewrite_leaves_the_record_whole")

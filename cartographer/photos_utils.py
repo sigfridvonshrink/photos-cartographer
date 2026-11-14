@@ -609,7 +609,7 @@ def write_control_archive(ws: str, archive_path: str, members) -> None:
         with tarfile.open(tmp, "w:gz") as tar:
             for rel in members:
                 tar.add(os.path.join(ws, rel), arcname=rel, recursive=False)
-        os.replace(tmp, archive_path)
+        replace_durably(tmp, archive_path)
     finally:
         if os.path.exists(tmp):
             os.remove(tmp)
@@ -633,7 +633,7 @@ def write_db_snapshot(conn, dest_path: str) -> None:
                 raise RuntimeError("snapshot failed its integrity check")
         finally:
             chk.close()
-        os.replace(tmp, dest_path)
+        replace_durably(tmp, dest_path)
     except Exception as e:
         if os.path.exists(tmp):
             try:
@@ -791,7 +791,7 @@ def backup_existing_artifact(path: str):
     backup = os.path.join(d, name)
     tmp = os.path.join(d, ".tmp-" + name)
     shutil.copy2(path, tmp)
-    os.replace(tmp, backup)
+    replace_durably(tmp, backup)
     return backup
 
 def write_versioned_json(path: str, obj: dict):
@@ -1065,7 +1065,7 @@ def _atomic_write_text(path: str, text: str) -> None:
     try:
         with os.fdopen(fd, "w") as f:
             f.write(text)
-        os.replace(tmp, path)
+        replace_durably(tmp, path)
     except Exception:
         try:
             os.unlink(tmp)
@@ -2408,6 +2408,19 @@ def _same_bytes(a: str, b: str, chunk: int = 1 << 20) -> bool:
                 return False
             if not x:
                 return True
+
+
+def replace_durably(tmp: str, path: str):
+    """Put the fully written `tmp` in `path`'s place so that a power cut at any moment leaves the earlier file or
+    the whole new one (RUL-rewrite_in_place_atomic): the new bytes are synced to disk BEFORE the rename — a rename
+    on disk ahead of its data is how a file comes back empty — and the folder after it."""
+    fd = os.open(tmp, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    os.replace(tmp, path)
+    _fsync_dir(os.path.dirname(path) or ".")
 
 
 def _fsync_dir(path: str):

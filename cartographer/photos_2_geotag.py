@@ -40,13 +40,14 @@ import math
 import os
 import shutil
 import sqlite3
+import stat
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
 import zoneinfo
 from datetime import datetime, timedelta, timezone
 
-from .photos_utils import (
+from .photos_utils import (replace_durably,
     country_table,
     code_fingerprint,
     CONFIG, CONTROL_DIR, control_dir, FINALIZED_MEDIA_ARTIFACT, track_memo_db_path, finalized_media_path, workspace_volume_error, config_path, handoff_path, guard_path, is_sealed, likely_new_dump,
@@ -1626,24 +1627,38 @@ class GeotagWorkflow:
                      "gps_marker_write": "gps_marker_writes", "rename_no_clobber": "renames"}
 
     def _exiftool_write(self, abs_path, tags):
-        """Apply a file's batched tag writes atomically (exiftool -overwrite_original = temp + atomic
-        rename). Returns True on success. The single seam the tests mock to avoid invoking exiftool."""
-        # A hard kill (SIGKILL/OOM/power loss) during a prior run can orphan exiftool's
-        # `<file>_exiftool_tmp` intermediate; a clean SIGINT is self-cleaned by exiftool, so this only
-        # matters for the un-graceful case. Geotag re-applies every un-confirmed file on resume,
-        # and the only file that can hold an orphan is the one killed mid-write (never confirmed, so
-        # revisited here) — so removing a stale temp for THIS target right before we rewrite it cleans
-        # exactly the orphan that can exist. Safe: the original is untouched (the atomic rename never
-        # happened) and the temp is a partial exiftool artifact, never user media.
+        """Apply a file's batched tag writes so that an interruption at any moment — a kill or a power cut — leaves
+        the photo as it was or wholly rewritten (BLD-metadata_safe_write): exiftool writes the new file beside the
+        photo as `<file>_exiftool_tmp`, never touching the photo; that file is synced to disk, then renamed over the
+        photo, then the folder synced. Returns True on success. The single seam the tests mock to avoid invoking
+        exiftool."""
+        # An interrupted earlier write can have left `<file>_exiftool_tmp`. Geotag re-applies every un-confirmed
+        # file on resume, and the only file that can hold one is the one interrupted mid-write (never confirmed, so
+        # revisited here) — so removing the leftover for THIS target right before rewriting it cleans exactly the one
+        # that can exist. Safe: the photo is untouched (the rename never happened) and the leftover is a partial
+        # copy, never user media.
+        tmp = abs_path + "_exiftool_tmp"
         try:
-            os.remove(abs_path + "_exiftool_tmp")
+            os.remove(tmp)
         except OSError:
-            pass  # absent (the normal case) or unremovable — exiftool will surface a write error
-        cmd = (["exiftool", "-overwrite_original", "-n"]
-               + [f"-{k}={v}" for k, v in sorted(tags.items())] + [abs_path])
+            pass  # absent (the normal case) or unremovable — exiftool refuses an output that exists
+        cmd = (["exiftool", "-n"] + [f"-{k}={v}" for k, v in sorted(tags.items())] + ["-o", tmp, abs_path])
         try:
-            return subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL).returncode == 0
+            if subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL).returncode != 0:
+                raise OSError("exiftool refused the write")
+            st = os.stat(abs_path)
+            os.chmod(tmp, stat.S_IMODE(st.st_mode))          # the photo keeps the permissions it had
+            try:
+                os.chown(tmp, st.st_uid, st.st_gid)
+            except OSError:
+                pass                                         # not ours to give: the photo becomes the user's own
+            replace_durably(tmp, abs_path)
+            return True
         except Exception:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
             return False
 
     def _exiftool_read(self, abs_path, keys):
@@ -2144,7 +2159,7 @@ class GeotagWorkflow:
                 os.makedirs(keep, exist_ok=True)
                 tmp = os.path.join(keep, ".tmp-" + os.path.basename(src))
                 shutil.copyfile(src, tmp)
-                os.replace(tmp, dst)
+                replace_durably(tmp, dst)
 
     def _earlier_passes(self, current_plan_id):
         """[(plan, confirmed operation ids)] of every geotag pass executed before the current plan,

@@ -20,6 +20,7 @@ import json
 from _zone import answer_root_zone, with_root_zone
 import os
 import shutil
+import stat
 import sys
 from datetime import datetime, timezone
 
@@ -345,69 +346,114 @@ def test_target_occupied_recheck(tmp_path):
 
 # --- unit: _exiftool_write seam --------------------------------------------
 
-@pytest.mark.spec("BLD-metadata_safe_write", test="TST-geotag_execution-exiftool_write_invocation")
-def test_exiftool_write_invocation(tmp_path, monkeypatch):
-    wf = cal.GeotagWorkflow(str(tmp_path))
-    calls = {}
-
+def _fake_exiftool(calls=None, rc=0, new=b"rewritten"):
+    """Stands in for exiftool: writes the new file where `-o` says, as the real one does."""
     class _R:
         def __init__(self, rc): self.returncode = rc
     def _run(cmd, **k):
-        calls["cmd"] = cmd
-        return _R(0)
-    monkeypatch.setattr(cal.subprocess, "run", _run)
-    assert wf._exiftool_write("/x.jpg", {"DateTimeOriginal": "2024:07:03 14:00:00"}) is True
-    assert calls["cmd"][:3] == ["exiftool", "-overwrite_original", "-n"] and calls["cmd"][-1] == "/x.jpg"
-    monkeypatch.setattr(cal.subprocess, "run", lambda cmd, **k: _R(1))
-    assert wf._exiftool_write("/x.jpg", {}) is False                  # non-zero exit
+        if calls is not None:
+            calls.append(cmd)
+        if rc == 0:
+            with open(cmd[cmd.index("-o") + 1], "wb") as f:
+                f.write(new)
+        return _R(rc)
+    return _run
+
+
+@pytest.mark.spec("BLD-metadata_safe_write", test="TST-geotag_execution-exiftool_write_invocation")
+def test_exiftool_write_invocation(tmp_path, monkeypatch):
+    """exiftool is told to write the new file beside the photo, never over it; geotag puts it in the photo's
+    place, with the permissions the photo had."""
+    wf = cal.GeotagWorkflow(str(tmp_path))
+    photo = tmp_path / "x.jpg"; photo.write_bytes(b"orig"); os.chmod(photo, 0o640)
+    calls = []
+    monkeypatch.setattr(cal.subprocess, "run", _fake_exiftool(calls))
+    assert wf._exiftool_write(str(photo), {"DateTimeOriginal": "2024:07:03 14:00:00"}) is True
+    cmd = calls[0]
+    assert cmd[:2] == ["exiftool", "-n"] and cmd[-3:] == ["-o", str(photo) + "_exiftool_tmp", str(photo)]
+    assert not any("overwrite_original" in a for a in cmd)
+    assert photo.read_bytes() == b"rewritten" and not (tmp_path / "x.jpg_exiftool_tmp").exists()
+    assert os.stat(photo).st_mode & 0o777 == 0o640
+    photo.write_bytes(b"orig")
+    monkeypatch.setattr(cal.subprocess, "run", _fake_exiftool(rc=1))
+    assert wf._exiftool_write(str(photo), {}) is False                # non-zero exit
     def _boom(*a, **k): raise OSError("no exiftool")
     monkeypatch.setattr(cal.subprocess, "run", _boom)
-    assert wf._exiftool_write("/x.jpg", {}) is False                  # tool missing
+    assert wf._exiftool_write(str(photo), {}) is False                # tool missing
+    assert photo.read_bytes() == b"orig" and os.listdir(tmp_path) == ["x.jpg"]
 
 
 def test_exiftool_write_unlinks_stale_tmp(tmp_path, monkeypatch):
-    """A hard-killed prior write can orphan `<file>_exiftool_tmp`; the writer removes it for THIS
-    target before re-invoking exiftool, so the resumed write never trips over the leftover."""
+    """An interrupted earlier write can leave `<file>_exiftool_tmp`; the writer removes it for THIS target before
+    it runs exiftool, which refuses an output that exists — so the resumed write never trips over the leftover."""
     wf = cal.GeotagWorkflow(str(tmp_path))
     target = tmp_path / "x.jpg"
     target.write_bytes(b"orig")
     stale = tmp_path / "x.jpg_exiftool_tmp"
     stale.write_bytes(b"partial")
-
-    class _R:
-        returncode = 0
-    monkeypatch.setattr(cal.subprocess, "run", lambda cmd, **k: _R())
+    seen = []
+    def _run(cmd, **k):
+        seen.append(stale.exists())               # what exiftool finds at its output's name
+        return _fake_exiftool()(cmd, **k)
+    monkeypatch.setattr(cal.subprocess, "run", _run)
     assert wf._exiftool_write(str(target), {"DateTimeOriginal": "2024:07:03 14:00:00"}) is True
-    assert not stale.exists()                 # stale temp cleaned before the write
-    assert target.read_bytes() == b"orig"     # the live original is untouched
+    assert seen == [False]                        # the leftover was gone before the write
+    assert target.read_bytes() == b"rewritten" and not stale.exists()
 
 
-# Loaded into the real exiftool (PERL5OPT), it kills exiftool at the worst moment of a rewrite: the new file
-# fully written beside the photo, about to take its place — by rename, or, written in place, half copied over it.
-_KILL_AT_REPLACE = r'''package CartoKillAtReplace;
+@pytest.mark.spec("RUL-rewrite_in_place_atomic", "BLD-metadata_safe_write",
+                  test="TST-geotag_execution-the_new_photo_is_on_disk_before_it_replaces_the_old")
+def test_the_new_photo_is_on_disk_before_it_replaces_the_old(tmp_path, monkeypatch):
+    """A power cut: the new file is synced to disk before the rename that puts it in the photo's place, and the
+    folder after — a rename that reaches the disk ahead of its data is how a photo comes back empty."""
+    wf = cal.GeotagWorkflow(str(tmp_path))
+    photo = tmp_path / "x.jpg"; photo.write_bytes(b"orig")
+    monkeypatch.setattr(cal.subprocess, "run", _fake_exiftool())
+    steps, real_fsync, real_replace = [], os.fsync, os.replace
+    def _fsync(fd):
+        st = os.fstat(fd)
+        steps.append("sync folder" if stat.S_ISDIR(st.st_mode) else f"sync file of {st.st_size}")
+        return real_fsync(fd)
+    def _replace(a, b):
+        steps.append("rename")
+        return real_replace(a, b)
+    monkeypatch.setattr(os, "fsync", _fsync)
+    monkeypatch.setattr(os, "replace", _replace)
+    assert wf._exiftool_write(str(photo), {"DateTimeOriginal": "x"}) is True
+    assert steps == [f"sync file of {len(b'rewritten')}", "rename", "sync folder"]
+
+
+@pytest.mark.spec("RUL-rewrite_in_place_atomic",
+                  test="TST-geotag_execution-a_write_interrupted_at_the_rename_leaves_the_photo_whole")
+def test_a_write_interrupted_at_the_rename_leaves_the_photo_whole(tmp_path, monkeypatch):
+    """Geotag itself stopped at the worst moment — the new file whole beside the photo, about to take its place:
+    the photo is as it was, and the resumed write clears the leftover and puts the new one down."""
+    wf = cal.GeotagWorkflow(str(tmp_path))
+    photo = tmp_path / "x.jpg"; photo.write_bytes(b"orig")
+    monkeypatch.setattr(cal.subprocess, "run", _fake_exiftool())
+    def _stopped(a, b): raise KeyboardInterrupt
+    with monkeypatch.context() as m:
+        m.setattr(os, "replace", _stopped)
+        with pytest.raises(KeyboardInterrupt):
+            wf._exiftool_write(str(photo), {"DateTimeOriginal": "x"})
+    assert photo.read_bytes() == b"orig" and (tmp_path / "x.jpg_exiftool_tmp").exists()
+    assert wf._exiftool_write(str(photo), {"DateTimeOriginal": "x"}) is True
+    assert photo.read_bytes() == b"rewritten" and os.listdir(tmp_path) == ["x.jpg"]
+
+
+# Loaded into the real exiftool (PERL5OPT), it kills exiftool the moment it has opened the new file it writes
+# beside the photo: nothing, or half a file, is there.
+_KILL_AT_OUTPUT = r"""package CartoKillAtOutput;
 require Image::ExifTool;
-require 'Image/ExifTool/Writer.pl';              # where Rename lives, loaded ahead so it is the one replaced
 no warnings 'redefine';
-my $rename = \&Image::ExifTool::Rename;
 my $open = \&Image::ExifTool::Open;
-*Image::ExifTool::Rename = sub {
-    kill 'KILL', $$ if $_[1] =~ /_exiftool_tmp$/;
-    return $rename->(@_);
-};
 *Image::ExifTool::Open = sub {
     my $ok = $open->(@_);
-    if ($ok and defined $_[3] and $_[3] eq '+<') {
-        my $tmp = "$_[2]_exiftool_tmp";
-        open(my $t, '<', $tmp); binmode $t;
-        read($t, my $buf, int((-s $tmp) / 2));
-        my $fh = $_[1]; binmode $fh; select((select($fh), $| = 1)[0]);
-        print {$fh} $buf;
-        kill 'KILL', $$;
-    }
+    kill 'KILL', $$ if $ok and defined $_[2] and $_[2] =~ /_exiftool_tmp$/;
     return $ok;
 };
 1;
-'''
+"""
 
 
 @pytest.mark.skipif(shutil.which("exiftool") is None or shutil.which("magick") is None,
@@ -415,39 +461,38 @@ my $open = \&Image::ExifTool::Open;
 @pytest.mark.spec("RUL-rewrite_in_place_atomic", "BLD-metadata_safe_write",
                   test="TST-geotag_execution-an_interrupted_metadata_write_leaves_the_photo_whole")
 def test_an_interrupted_metadata_write_leaves_the_photo_whole(tmp_path, monkeypatch):
-    """The real exiftool, killed at the worst moment of geotag's write — the new file whole beside the photo,
-    about to replace it — leaves the photo as it was, byte for byte; the resumed write clears the leftover and
-    puts the new tags down whole."""
+    """The real exiftool, killed while it writes the new file beside the photo, leaves the photo as it was, byte
+    for byte; the write done again puts the new tags down whole, the photo keeping its permissions."""
     import subprocess
     photo = tmp_path / "a.jpg"
     subprocess.run(["magick", "-size", "64x64", "plasma:", str(photo)], check=True, stdin=subprocess.DEVNULL,
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    os.chmod(photo, 0o640)
     original = photo.read_bytes()
     tags = {"DateTimeOriginal": "2024:07:03 14:00:00", "OffsetTimeOriginal": "+02:00",
             "GPSLatitude": 50.0, "GPSLatitudeRef": "N", "GPSLongitude": 4.0, "GPSLongitudeRef": "E",
             "GPSProcessingMethod": "interpolated"}
     wf = cal.GeotagWorkflow(str(tmp_path))
-    (tmp_path / "CartoKillAtReplace.pm").write_text(_KILL_AT_REPLACE)
+    (tmp_path / "CartoKillAtOutput.pm").write_text(_KILL_AT_OUTPUT)
     with monkeypatch.context() as m:
         m.setenv("PERL5LIB", str(tmp_path))
-        m.setenv("PERL5OPT", "-MCartoKillAtReplace")
+        m.setenv("PERL5OPT", "-MCartoKillAtOutput")
         assert wf._exiftool_write(str(photo), tags) is False             # killed mid-write
     assert photo.read_bytes() == original                                # the photo, intact
-    assert (tmp_path / "a.jpg_exiftool_tmp").exists()                    # the interrupted write's leftover
-    assert wf._exiftool_write(str(photo), tags) is True                  # the resumed write
+    assert wf._exiftool_write(str(photo), tags) is True                  # the write done again
     assert not (tmp_path / "a.jpg_exiftool_tmp").exists()
+    assert photo.read_bytes() != original and os.stat(photo).st_mode & 0o777 == 0o640
     assert cal._holds_writes(wf._exiftool_read(str(photo), sorted(tags)), tags)
     assert subprocess.run(["magick", "identify", str(photo)], stdin=subprocess.DEVNULL,
                           capture_output=True).returncode == 0           # still a whole image
 
 
 def test_exiftool_write_no_tmp_is_noop(tmp_path, monkeypatch):
-    """The unlink is best-effort: a missing temp (the normal case) is not an error."""
+    """Clearing a leftover is best-effort: none there (the normal case) is not an error."""
     wf = cal.GeotagWorkflow(str(tmp_path))
-    class _R:
-        returncode = 0
-    monkeypatch.setattr(cal.subprocess, "run", lambda cmd, **k: _R())
-    assert wf._exiftool_write(str(tmp_path / "y.jpg"), {}) is True
+    photo = tmp_path / "y.jpg"; photo.write_bytes(b"orig")
+    monkeypatch.setattr(cal.subprocess, "run", _fake_exiftool())
+    assert wf._exiftool_write(str(photo), {}) is True
 
 
 def test_target_occupied_bad_directory(tmp_path):
