@@ -214,7 +214,7 @@ the place's zone, it asks nothing and borrows nothing.
 
 :::{rat} The nearest place says the most
 :id: RAT-nearest_timezone
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-decisions_cascade, RAT-destination_tree_is_a_hierarchy
 :justifies: RUL-timezone_from_nearest
@@ -227,7 +227,7 @@ not one per folder.
 
 :::{rat} The home zone is right for no trip in particular
 :id: RAT-home_zone_offered
-:status: seed
+:status: ruled
 :forced: yes
 :follows_from: RAT-assumptions_need_acceptance
 :justifies: RUL-default_zone_proposed_only

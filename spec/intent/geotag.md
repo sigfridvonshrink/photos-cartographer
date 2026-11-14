@@ -100,7 +100,7 @@ configuration's settings for one anchor and for several allow, and never while i
 
 :::{rul} An inherited timezone applies itself
 :id: RUL-timezone_auto_resolves
-:status: seed
+:status: ruled
 :criticality: med
 :verify: required
 :uses: DEF-geotag, DEF-decision
@@ -111,7 +111,7 @@ timezone the user writes overriding it; a destination with none to inherit waits
 
 :::{rul} The configured default zone is offered, never applied
 :id: RUL-default_zone_proposed_only
-:status: seed
+:status: ruled
 :criticality: high
 :anti: yes
 :verify: required
