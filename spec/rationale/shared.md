@@ -188,6 +188,19 @@ into the dependency cascade, it closes the gap where an ambient config could cha
 archived, it lets a future reader know not only what was decided but **under what configuration**.
 :::
 
+:::{rat} A setting read twice cannot be tuned once
+:id: RAT-setting_read_once
+:status: seed
+:forced: no
+:follows_from: RAT-one_place_for_settings
+:justifies: RUL-setting_bounds_one_thing
+
+A threshold is tuned against one judgement — how close a track must pass to anchor a photo, how far two points may be
+joined across. Read for a second judgement as well, it cannot be moved for the first without moving the second unseen,
+and the user who retunes it for a museum has also changed when two tracks are said to disagree. Each judgement has a
+setting of its own, at the cost of more settings to read.
+:::
+
 :::{rat} Surgical staleness: one hash for everything would restale everything
 :id: RAT-surgical_staleness
 :status: ruled

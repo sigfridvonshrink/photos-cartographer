@@ -398,3 +398,19 @@ def test_a_confirmation_naming_no_offset_confirms_nothing(tmp_path):
     assert drift["status"] == "requires_user_input" and blk == [f"{DEST}: drift_decisions[{CAM}].user_decision.confirmed_offset_seconds must be "
                                      "the offset confirmed — the current one is 0."]
 
+
+
+@pytest.mark.spec("RUL-setting_bounds_one_thing", "BLD-drift_validation",
+                  test="TST-drift_validation-the_track_window_is_its_own_setting")
+def test_how_much_track_the_check_looks_at_is_its_own_setting(tmp_path, monkeypatch):
+    """Which track counts as covering a bucket's photos is the drift check's own setting, not the largest
+    clock error an anchor may imply."""
+    wf = _wf(tmp_path)
+    files = [_file(f"{DEST}/a.arw", "2024:07:03 14:00:00")]
+    gpx = _gpx([(50.0, 4.0, _utc(12, day=13))])                           # ten days after the photo
+    art = _complete_time(wf, files, gpx, {CAM: {"user_decision": {"manual_offset_seconds": 0}}})
+    assert _drift(wf, files, art, gpx)[0]["destinations"] == {}
+    monkeypatch.setitem(utils.CONFIG, "gpx_anchor_max_clock_error_seconds", 30 * 86400.0)
+    assert _drift(wf, files, art, gpx)[0]["destinations"] == {}
+    monkeypatch.setitem(utils.CONFIG, "drift_check_track_window_seconds", 30 * 86400.0)
+    assert DEST in _drift(wf, files, art, gpx)[0]["destinations"]

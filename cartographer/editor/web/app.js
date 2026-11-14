@@ -999,7 +999,7 @@ function acceptHolds(c) {
   const u = c.user_decision || {}, p = c.proposal || {};
   if (!u.accept_proposal || !("proposed_offset_seconds" in p)) return false;
   if (u.accepted_offset_seconds === "" || u.accepted_offset_seconds == null) return false;
-  const slack = p.proposal_source === "gpx_self_anchor" ? (p.agreement_spread_seconds || 0) : 0;
+  const slack = p.proposal_source === "gpx_self_anchor" ? (p.acceptance_tolerance_seconds || 0) : 0;
   return Math.abs(Number(u.accepted_offset_seconds) - p.proposed_offset_seconds) <= slack;
 }
 // The working decision's offset, to mark the group it picks (null while nothing is chosen).

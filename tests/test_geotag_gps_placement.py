@@ -26,7 +26,9 @@ import photos_utils as utils
 
 CFG = {"gpx_direct_match_max_seconds": 60.0, "gpx_interpolation_max_gap_seconds": 120.0,
        "gpx_interpolation_max_distance_meters": 1000.0, "gpx_interpolation_max_speed_kmh": 150.0,
-       "gpx_extrapolation_max_seconds": 120.0}
+       "gpx_extrapolation_max_seconds": 120.0, "gpx_extrapolation_heading_seconds": 60.0,
+       "gpx_extrapolation_max_distance_meters": 1000.0, "gpx_extrapolation_max_speed_kmh": 150.0,
+       "gpx_tracks_agree_max_distance_meters": 1000.0}
 
 
 def _utc(h, m, s):
@@ -226,3 +228,58 @@ def test_why_the_tracks_placed_nothing_is_said():
     assert why == {"reason": "outside_track", "seconds_from_track": 10700}
     why = {}
     assert cal.place_gps(_utc(15, 0, 0), _gpx([]), CFG, why) is None and why == {"reason": "no_tracks"}
+
+
+# --- each setting bounds one thing --------------------------------------------------------------------------
+
+@pytest.mark.spec("RUL-setting_bounds_one_thing", "BLD-track_placement",
+                  test="TST-geotag_gps_placement-the_heading_stretch_is_its_own_setting")
+def test_the_heading_stretch_is_its_own_setting():
+    """How far back a track's heading is read is one setting, and how close a point is the photo's place
+    another: moving either leaves the other's answer where it was."""
+    still = _run_of(50.0, 4.0, 0, 13, 5, "t.gpx")                              # 12:00:00..12:01:00, one place
+    jitter = [cal.GPXPoint(50.00018, 4.0, _utc(12, 1, 1), "t.gpx", 99)]        # 20 m off in the last second
+    g, at = _gpx(still + jitter), _utc(12, 1, 31)                              # 30 s past the end
+    long_stretch = [cal.place_gps(at, g, _cfg(gpx_direct_match_max_seconds=d)) for d in (5.0, 20.0)]
+    assert long_stretch[0] == long_stretch[1] and long_stretch[0]["method"] == "extrapolated"
+    assert cal.haversine(50.00018, 4.0, long_stretch[0]["lat"], 4.0) < 100
+    short = cal.place_gps(at, g, _cfg(gpx_direct_match_max_seconds=5.0, gpx_extrapolation_heading_seconds=1.0))
+    assert cal.haversine(50.00018, 4.0, short["lat"], 4.0) > 500               # the jitter, projected
+    assert cal.place_gps(at, g, CFG)["method"] == "direct_match"               # the place setting, unmoved
+
+
+@pytest.mark.spec("RUL-setting_bounds_one_thing", "RUL-track_placement_bounded", "BLD-track_placement",
+                  test="TST-geotag_gps_placement-a_projection_has_its_own_bounds")
+def test_a_projection_has_its_own_bounds():
+    """How far and how fast a projection past a track's end may go is not what bounds joining two points."""
+    car = _run_of(50.0, 4.0, 0, 7, 10, "car.gpx", dlon=0.005)                  # ~130 km/h, ends 12:01:00
+    at = _utc(12, 2, 50)
+    end = (50.0, 4.03)
+    tight_joining = cal.place_gps(at, _gpx(car), _cfg(gpx_interpolation_max_distance_meters=1.0,
+                                                      gpx_interpolation_max_speed_kmh=1.0))
+    assert (tight_joining["lat"], tight_joining["lon"]) == end                 # as with the defaults
+    far = cal.place_gps(at, _gpx(car), _cfg(gpx_extrapolation_max_distance_meters=10000.0))
+    assert far["lon"] > 4.08                                                   # carried on along the heading
+    slow = cal.place_gps(at, _gpx(car), _cfg(gpx_extrapolation_max_distance_meters=10000.0,
+                                             gpx_extrapolation_max_speed_kmh=100.0))
+    assert (slow["lat"], slow["lon"]) == end
+    # and joining is unmoved by the projection's bounds
+    between = _utc(12, 0, 5)
+    loose = _cfg(gpx_direct_match_max_seconds=1.0)
+    assert cal.place_gps(between, _gpx(car), loose)["method"] == "interpolated"
+    assert cal.place_gps(between, _gpx(car), {**loose, "gpx_extrapolation_max_distance_meters": 1.0,
+                                              "gpx_extrapolation_max_speed_kmh": 1.0})["method"] == "interpolated"
+
+
+@pytest.mark.spec("RUL-setting_bounds_one_thing", "RUL-disagreeing_tracks_place_nothing", "BLD-track_placement",
+                  test="TST-geotag_gps_placement-how_far_apart_tracks_disagree_is_its_own_setting")
+def test_how_far_apart_tracks_disagree_is_its_own_setting():
+    alice = _run_of(48.0, 11.0, 0, 30, 10, "alice.gpx")
+    bob = _run_of(48.05, 11.0, 5, 30, 10, "bob.gpx")                           # 5.5 km away
+    near = _run_of(48.001, 11.0, 5, 30, 10, "bob.gpx")                         # 111 m away
+    at = _utc(12, 1, 43)
+    assert cal.place_gps(at, _gpx(alice + bob), _cfg(gpx_tracks_agree_max_distance_meters=10000.0)) is not None
+    assert cal.place_gps(at, _gpx(alice + near), _cfg(gpx_tracks_agree_max_distance_meters=50.0)) is None
+    # what bounds joining two points of one track says nothing about two tracks
+    assert cal.place_gps(at, _gpx(alice + bob), _cfg(gpx_interpolation_max_distance_meters=10000.0)) is None
+    assert cal.place_gps(at, _gpx(alice + near), _cfg(gpx_interpolation_max_distance_meters=50.0)) is not None

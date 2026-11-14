@@ -243,7 +243,7 @@
             "source": "gpx_anchor_auto"
           },
           "proposal": {
-            "agreement_spread_seconds": 120.0,
+            "acceptance_tolerance_seconds": 120.0,
             "anchor_count": 2,
             "anchors": [
               {

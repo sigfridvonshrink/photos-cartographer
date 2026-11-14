@@ -833,7 +833,8 @@ class GeotagWorkflow:
         has_offset = "proposed_offset_seconds" in proposal
         conflicting = proposal.get("conflicting_count", 0) > 0 or bool(proposal.get("tied"))   # anchors disagree
         imprecise = bool(proposal.get("imprecise_seconds"))    # the tracks stood still: no photo says when
-        spread = CONFIG.get("gpx_anchor_offset_spread_max_seconds") or 0
+        spread = CONFIG["gpx_anchor_offset_spread_max_seconds"]          # anchors this close agree
+        tolerance = CONFIG["gpx_anchor_decision_tolerance_seconds"]      # a proposal this close is the one decided
         policy = CONFIG.get("camera_time_and_timezone_policy") or {}
 
         ud = prior_cell.get("user_decision") or {}
@@ -864,7 +865,7 @@ class GeotagWorkflow:
                                    else "; nothing is proposed now, so clear accept_proposal."))
             elif not _valid_offset(accepted_off):
                 blockers.append(f"{where} must be a whole number of seconds.")
-            elif not has_offset or abs(int(accepted_off) - proposal["proposed_offset_seconds"]) > (spread if is_gpx else 0):
+            elif not has_offset or abs(int(accepted_off) - proposal["proposed_offset_seconds"]) > (tolerance if is_gpx else 0):
                 stale = True                       # accepted a proposal that is no longer the one made
             else:
                 # An offset no photo pins within the tracks' stay is supported by the camera's GPS, not
@@ -899,7 +900,7 @@ class GeotagWorkflow:
                     and all(isinstance(t, dict) and t.get("gpx_file") in gpx.file_sha
                             and gpx.file_sha[t["gpx_file"]] == t.get("sha256") for t in rests_on) \
                     and not (is_gpx and (conflicting or imprecise
-                                         or abs(proposal["proposed_offset_seconds"] - earlier.get("offset_seconds", 0)) > spread)):
+                                         or abs(proposal["proposed_offset_seconds"] - earlier.get("offset_seconds", 0)) > tolerance)):
                 effective, decision_mode, anchored_by = earlier, "kept_from_earlier", rests_on
 
         cell = {
@@ -972,7 +973,7 @@ class GeotagWorkflow:
         if blockers:
             return None, blockers
         cfg = CONFIG
-        window = cfg.get("gpx_anchor_max_clock_error_seconds")
+        window = cfg["drift_check_track_window_seconds"]
         by_dest_group = {}
         for f in files:
             if not f.get("geotag_marker"):                # a corrected time has no drift left to check
@@ -1006,8 +1007,7 @@ class GeotagWorkflow:
                     continue                                  # nothing resolves -> not a drift case
                 lo, hi = min(times), max(times)
                 seg = [p for p in gpx.points
-                       if (window is None or (lo - timedelta(seconds=window)) <= p.time_utc
-                           <= (hi + timedelta(seconds=window)))]
+                       if (lo - timedelta(seconds=window)) <= p.time_utc <= (hi + timedelta(seconds=window))]
                 if not seg:
                     continue                                  # no GPX coverage -> phase 23 fallback/lost
                 cells[bucket] = self._drift_cell(dest, bucket, cell, seg, frames,
@@ -1268,7 +1268,9 @@ class GeotagWorkflow:
         gps_policy = json.dumps({k: CONFIG[k] for k in (
             "gpx_direct_match_max_seconds", "gpx_interpolation_max_gap_seconds",
             "gpx_interpolation_max_distance_meters", "gpx_interpolation_max_speed_kmh",
-            "gpx_extrapolation_max_seconds")}, sort_keys=True)
+            "gpx_extrapolation_max_seconds", "gpx_extrapolation_heading_seconds",
+            "gpx_extrapolation_max_distance_meters", "gpx_extrapolation_max_speed_kmh",
+            "gpx_tracks_agree_max_distance_meters")}, sort_keys=True)
         return {
             # 22 is covered transitively: resolved_fp folds in photos_22_sha256 (§22.1), so a changed
             # drift confirmation already restales this. No separate 22 dep needed here.

@@ -88,7 +88,7 @@ then the proposal evidence last; non-coord cells just show the proposal.
     the last scrub wins). **Confirming without moving** (the pinned checkbox / "clear correction") is a
     **zero scrub** — `confirmed:true` with an empty correction — and must be explicit; inaction never resolves.
   - **No-merry-go-round invariant.** The script extracts the track segment ±2 days
-    (`gpx_anchor_max_clock_error_seconds`) around the bucket. Since valid offsets are capped at ±1 day, any
+    (`drift_check_track_window_seconds`) around the bucket. Since valid offsets are capped at ±1 day, any
     two valid offsets differ by ≤2 days, so **every reachable scrub correction is already inside the loaded
     segment** — a scrub never needs a Re-run to fetch more track. The editor validates the computed offset
     against the ±1-day bound (`validOffset`) and flags a point that falls outside it. Re-extraction happens

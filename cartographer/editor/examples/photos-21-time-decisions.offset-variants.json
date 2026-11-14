@@ -42,7 +42,7 @@
             "source": "gpx_anchor_chosen"
           },
           "proposal": {
-            "agreement_spread_seconds": 120.0,
+            "acceptance_tolerance_seconds": 120.0,
             "anchor_count": 2,
             "anchors": [
               {
@@ -166,7 +166,7 @@
             "source": "gpx_anchor_chosen"
           },
           "proposal": {
-            "agreement_spread_seconds": 120.0,
+            "acceptance_tolerance_seconds": 120.0,
             "anchor_count": 1,
             "anchors": [
               {
@@ -272,7 +272,7 @@
             "source": "gpx_anchor_accepted"
           },
           "proposal": {
-            "agreement_spread_seconds": 120.0,
+            "acceptance_tolerance_seconds": 120.0,
             "anchor_count": 1,
             "anchors": [
               {
@@ -366,7 +366,7 @@
             "source": "gpx_anchor_accepted"
           },
           "proposal": {
-            "agreement_spread_seconds": 120.0,
+            "acceptance_tolerance_seconds": 120.0,
             "anchor_count": 1,
             "anchors": [
               {

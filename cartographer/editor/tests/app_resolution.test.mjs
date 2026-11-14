@@ -40,7 +40,7 @@ test("wouldResolve: each of the two offset modes is independently sufficient", (
   mk({ accept_proposal: true, accepted_offset_seconds: -3600 }, { proposed_offset_seconds: -3600 }); assert.equal(app.wouldResolve(ref), true);
   mk({ accept_proposal: true }, { proposed_offset_seconds: -3600 });            assert.equal(app.wouldResolve(ref), false);  // names no offset: accepts nothing
   mk({ accept_proposal: true, accepted_offset_seconds: -3600 }, { proposed_offset_seconds: -7200 }); assert.equal(app.wouldResolve(ref), false);  // accepted another proposal
-  mk({ accept_proposal: true, accepted_offset_seconds: -3600 }, { proposed_offset_seconds: -3590, proposal_source: "gpx_self_anchor", agreement_spread_seconds: 120 });
+  mk({ accept_proposal: true, accepted_offset_seconds: -3600 }, { proposed_offset_seconds: -3590, proposal_source: "gpx_self_anchor", acceptance_tolerance_seconds: 120 });
   assert.equal(app.wouldResolve(ref), true);                                     // a GPS proposal within its own spread is the one accepted
   mk({ accept_proposal: true }, {});                                            assert.equal(app.wouldResolve(ref), false);  // nothing to accept
   mk({ manual_offset_seconds: 999999 });                                        assert.equal(app.wouldResolve(ref), true);   // any size

@@ -177,7 +177,7 @@ destinations or buckets.
 | `proposal` | object | no | One of three shapes — see below. |
 | `day` | string | no | The naive calendar date this cell's photos are of (`"YYYY-MM-DD"`), on every cell. |
 | **`user_decision.accept_proposal`** | bool | **yes** | Accept the proposal's offset. |
-| **`user_decision.accepted_offset_seconds`** | number \| `""` | **yes** | The `proposed_offset_seconds` being accepted — written together with `accept_proposal: true`, cleared with it. The acceptance holds only while this is what is proposed (within `agreement_spread_seconds` for a GPX proposal): a proposal that became another one was never accepted, and the cell goes `stale_user_decision` and asks. `accept_proposal: true` with this empty is a blocker. |
+| **`user_decision.accepted_offset_seconds`** | number \| `""` | **yes** | The `proposed_offset_seconds` being accepted — written together with `accept_proposal: true`, cleared with it. The acceptance holds only while this is what is proposed (within `acceptance_tolerance_seconds` for a GPX proposal): a proposal that became another one was never accepted, and the cell goes `stale_user_decision` and asks. `accept_proposal: true` with this empty is a blocker. |
 | **`user_decision.manual_offset_seconds`** | number \| `""` | **yes** | A manual clock offset, seconds (camera_time + offset = real UTC). |
 | `effective_time_anchor` | `""` \| object | no | `""` if unresolved; else `{ "offset_seconds": int, "source": … }` where source ∈ `manual` \| `gpx_anchor_accepted` \| `gpx_anchor_chosen` \| `gpx_anchor_imprecise` \| `timezone_accepted` \| `gpx_anchor_auto`. |
 | `anchored_by` | list | no | On a cell whose offset applied itself from GPS: the track files it was found from, each `{ "gpx_file", "sha256" }`. The offset is kept for later photos of the day (`decision_mode: "kept_from_earlier"`) only while each is under `gpx_root` unchanged and no newer GPS proposal says otherwise. |
@@ -203,7 +203,7 @@ destinations or buckets.
     "imprecise_seconds": 0,               // > 0: the tracks STAYED at these photos' place this long — the GPS
                                           // says where, not when; never auto-applied, and once accepted
                                           // (source gpx_anchor_imprecise) still confirmed in photos-22
-    "agreement_spread_seconds": 120,      // offsets this close are the same finding (for accepted_offset_seconds)
+    "acceptance_tolerance_seconds": 120,      // offsets this close are the same finding (for accepted_offset_seconds)
     "anchors": [ { "proposal_id": "anchor-001", "source_file": "…", "camera_source_naive_time": "…",
                    "native_gps": { … }, "gpx_match": { … }, "proposed_offset_seconds": -3600 }, … ],
     // collapsed view: the offset clusters, largest first (the recommended offset = the largest cluster)

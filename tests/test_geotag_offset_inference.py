@@ -28,7 +28,9 @@ import photos_2_geotag as cal
 import photos_utils as utils
 
 CFG = {"gpx_anchor_max_point_distance_meters": 30.0, "gpx_anchor_max_segment_distance_meters": 30.0,
-       "gpx_interpolation_max_gap_seconds": 120.0, "gpx_anchor_offset_spread_max_seconds": 120.0}
+       "gpx_anchor_max_segment_gap_seconds": 120.0, "gpx_anchor_offset_spread_max_seconds": 120.0,
+       "gpx_anchor_same_pass_max_seconds": 120.0, "gpx_anchor_stay_max_seconds": 120.0,
+       "gpx_anchor_stay_distance_meters": 6.0, "gpx_anchor_decision_tolerance_seconds": 120.0}
 CAM = "SONY|ILCE-6400|123"
 
 
@@ -638,3 +640,76 @@ def test_a_kept_offset_rests_on_what_it_was_found_from():
     # ...while one that agrees leaves it kept
     same = [_frame(50.0, 4.0, "2024:07:03 14:00:05", "d")]
     assert wf._offset_cell("D", "K", g, kept, same, gpx, [])["decision_mode"] == "kept_from_earlier"
+
+
+# --- each setting bounds one thing --------------------------------------------------------------------------
+
+@pytest.mark.spec("RUL-setting_bounds_one_thing", "BLD-anchor_matching",
+                  test="TST-geotag_offset_inference-what_is_one_pass_is_its_own_setting")
+def test_what_is_one_pass_is_its_own_setting():
+    """How soon a track must be back to have passed a place once is not how close offsets must be to agree."""
+    out = [_pt(50.0 + t * 1.4 * M, 4.0, _at(t), i=t) for t in range(0, 600, 5)]
+    back = [_pt(50.0 + (1200 - t) * 1.4 * M, 4.0 + 3 * M, _at(t), i=t) for t in range(600, 1200, 5)]
+    frame = _frame(50.0 + 300 * 1.4 * M, 4.0 + 1 * M, _naive(900))
+    two = lambda cfg: len(cal.frame_candidates(frame, _gpx(out + back), cfg))
+    assert two(DCFG) == 2
+    assert two({**DCFG, "gpx_anchor_offset_spread_max_seconds": 3600.0}) == 2
+    assert two({**DCFG, "gpx_anchor_same_pass_max_seconds": 3600.0}) == 1
+
+
+@pytest.mark.spec("RUL-setting_bounds_one_thing", "RUL-stay_fixes_no_clock", "BLD-anchor_matching",
+                  test="TST-geotag_offset_inference-how_long_a_stay_is_imprecise_is_its_own_setting")
+def test_how_long_a_stay_is_imprecise_is_its_own_setting():
+    """How long, and how near, a track must stay for its anchor to be imprecise are settings of their own."""
+    stay = [_pt(50.0 + (i % 3 - 1) * 4 * M, 4.0, _at(i * 5), i=i) for i in range(720)]      # 60 min, ±4 m
+    still = [_frame(50.0, 4.0, _naive(3000), "a"), _frame(50.0, 4.0, _naive(3004), "b")]
+    imprecise = lambda cfg: cal.infer_anchor_proposal(still, _gpx(stay), cfg)["imprecise_seconds"]
+    assert imprecise(DCFG) >= 3000
+    assert imprecise({**DCFG, "gpx_anchor_offset_spread_max_seconds": 7200.0}) >= 3000
+    assert imprecise({**DCFG, "gpx_anchor_same_pass_max_seconds": 7200.0}) >= 3000
+    assert imprecise({**DCFG, "gpx_anchor_max_point_distance_meters": 500.0}) >= 3000
+    assert imprecise({**DCFG, "gpx_anchor_stay_max_seconds": 7200.0}) == 0
+    # a track 8 m off for the hour but for half a minute at the very place: how near counts as staying
+    by = [_pt(50.0 + (0 if 590 <= i < 596 else 8) * M, 4.0, _at(i * 5), i=i) for i in range(720)]
+    near = lambda cfg: cal.infer_anchor_proposal(still[:1], _gpx(by), cfg)["imprecise_seconds"]
+    assert near(DCFG) >= 3000
+    assert near({**DCFG, "gpx_anchor_max_point_distance_meters": 500.0}) >= 3000
+    assert near({**DCFG, "gpx_anchor_stay_distance_meters": 2.0}) == 0
+
+
+@pytest.mark.spec("RUL-setting_bounds_one_thing", "BLD-anchor_matching",
+                  test="TST-geotag_offset_inference-the_segment_gap_is_its_own_setting")
+def test_the_gap_a_segment_may_anchor_across_is_its_own_setting():
+    """A frame beside a segment anchors on it while the segment's two points are no farther apart in time
+    than the anchor's own gap setting — whatever gap a photo may be placed across."""
+    seg = [_pt(50.0, 4.0, _at(0)), _pt(50.0 + 400 * M, 4.0, _at(300))]
+    beside = _frame(50.0 + 200 * M, 4.0, _naive(150))
+    n = lambda cfg: len(cal.frame_candidates(beside, _gpx(seg), cfg))
+    assert n(DCFG) == 1
+    assert n({**DCFG, "gpx_interpolation_max_gap_seconds": 10.0}) == 1
+    assert n({**DCFG, "gpx_anchor_max_segment_gap_seconds": 10.0}) == 0
+
+
+@pytest.mark.spec("RUL-setting_bounds_one_thing", "RUL-acceptance_holds_for_its_proposal", "BLD-offset_acceptance",
+                  test="TST-geotag_offset_inference-how_far_a_proposal_may_move_is_its_own_setting")
+def test_how_far_a_proposal_may_move_under_an_acceptance_is_its_own_setting(monkeypatch):
+    gpx = _gpx([_pt(50.0, 4.0, _utc(13, 0, 0)), _pt(50.001, 4.0, _utc(13, 5, 0))])
+    frames = [_frame(50.0, 4.0, "2024:07:03 14:00:00", "a"), _frame(50.001, 4.0, "2024:07:03 14:05:00", "b")]
+    accepted = {"accept_proposal": True, "accepted_offset_seconds": -3590}      # 10 s from what is proposed
+
+    def source(**over):
+        monkeypatch.setitem(utils.CONFIG, "gpx_anchor_decision_tolerance_seconds", 120.0)
+        wf = cal.GeotagWorkflow("/tmp")
+        utils.CONFIG.update({**CFG, **over})
+        utils.CONFIG["camera_time_and_timezone_policy"]["multi_anchor_auto_apply"] = False
+        cell = wf._offset_cell("6-photos-by-dest/B", "K", {"camera_group_class": "camera"},
+                               {"user_decision": accepted}, frames, gpx, [])
+        return cell["effective_time_anchor"], cell["stale_user_decision"], cell["proposal"]
+
+    eff, stale, proposal = source()
+    assert eff == {"offset_seconds": -3600, "source": "gpx_anchor_accepted"} and not stale
+    assert proposal["acceptance_tolerance_seconds"] == 120.0                    # what the editor judges by
+    eff, stale, _ = source(gpx_anchor_offset_spread_max_seconds=5.0)            # anchors' agreement: another matter
+    assert eff["source"] == "gpx_anchor_accepted" and not stale
+    eff, stale, proposal = source(gpx_anchor_decision_tolerance_seconds=5.0)
+    assert eff == "" and stale and proposal["acceptance_tolerance_seconds"] == 5.0
