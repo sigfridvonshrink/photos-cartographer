@@ -83,7 +83,8 @@ def _seed(ws, n=2):
     prep.CONFIG["jobs"] = 1
 
 
-@pytest.mark.spec("RUL-plan_memo_kept", test="TST-plan_memo-replan_without_execute_reuses_fingerprints")
+@pytest.mark.spec("RUL-plan_memo_kept", "RUL-rehash_memo_count_reported",
+                  test="TST-plan_memo-replan_without_execute_reuses_fingerprints")
 def test_replan_without_execute_reuses_fingerprints(tmp_path, monkeypatch):
     """The point of the memo: plan, do NOT execute, plan again — the second plan decodes nothing.
     Before the memo this re-hashed the whole workspace, because cache rows are written by execute."""
@@ -144,6 +145,31 @@ def test_executed_cache_wins_over_the_memo(tmp_path, monkeypatch):
     reused, _rows, total = _memo_stats(_plan(ws))
     assert hash_calls == []                          # reused, whichever source
     assert (reused, total) == (0, 0)                 # ... and the source was the cache
+
+
+@pytest.mark.spec("RUL-scratch_database_not_journalled", test="TST-plan_memo-the_memo_is_not_journalled")
+def test_the_memo_is_not_journalled(tmp_path, monkeypatch):
+    """Writing the memo is no operation of a plan and leaves no entry in a journal: planning writes it
+    with no journal at all, and executing the plan journals the plan's operations and nothing else."""
+    hash_calls = []
+    _install_mocks(monkeypatch, hash_calls)
+    ws = _ws(tmp_path)
+    _seed(ws, 2)
+    ctl = ws / ".photos-ingest"
+    memo = os.path.basename(utils.plan_memo_db_path(str(ws)))
+
+    plan = _plan(ws)
+    assert os.path.exists(utils.plan_memo_db_path(str(ws)))           # the plan wrote the memo...
+    assert glob.glob(str(ctl / "journal-*.json")) == []                # ...and journalled nothing
+    assert not any(memo in (op.source or "") + (op.destination or "") for op in plan.operations)
+
+    prep.PlanExecutor(str(ws)).execute(plan)
+    _plan(ws)                                                          # the memo written again, after execute
+    journals = glob.glob(str(ctl / "journal-*.json"))
+    assert len(journals) == 1
+    journal = json.loads(open(journals[0]).read())
+    assert sorted(r["operation_id"] for r in journal["operations"]) == sorted(op.operation_id for op in plan.operations)
+    assert memo not in open(journals[0]).read()
 
 
 @pytest.mark.spec("RUL-memo_entry_same_tests", test="TST-plan_memo-changed_file_is_not_reused_from_the_memo")

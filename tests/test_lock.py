@@ -21,6 +21,7 @@ photos_1_prep / photos_utils come from conftest.py.
 """
 import json
 import os
+import socket
 import subprocess
 import sys
 import time
@@ -91,6 +92,64 @@ def test_cross_process_exclusion_and_owner_report(tmp_path):
     lock2 = prep.WorkspaceLock(str(tmp_path))
     assert lock2.acquire() is True
     lock2.release()
+
+
+def _hold_lock(lock_file, record, ready):
+    """A separate process that takes a raw flock on `lock_file`, writes `record` (bytes) as its owner
+    record, signals `ready`, and then runs until it is killed — it never releases the lock itself."""
+    code = (
+        "import fcntl, os, sys, time\n"
+        f"fd = os.open({lock_file!r}, os.O_RDWR | os.O_CREAT, 0o644)\n"
+        "fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)\n"
+        "os.ftruncate(fd, 0)\n"
+        f"os.write(fd, {record!r})\n"
+        f"open({ready!r}, 'w').close()\n"
+        "while True: time.sleep(0.05)\n"
+    )
+    holder = subprocess.Popen([sys.executable, "-c", code])
+    for _ in range(500):
+        if os.path.exists(ready):
+            return holder
+        time.sleep(0.02)
+    holder.kill()
+    raise AssertionError("holder process did not start")
+
+
+def _dead_pid():
+    p = subprocess.Popen([sys.executable, "-c", "pass"])
+    p.wait()
+    return p.pid                                       # reaped: no process of that pid is ours any more
+
+
+@pytest.mark.parametrize("make_lock", [lambda d: prep.WorkspaceLock(d), lambda d: utils.LibraryLock(d)],
+                         ids=["workspace", "library"])
+@pytest.mark.spec("RUL-stale_takeover_conservative", test="TST-lock-only_a_dead_owners_lock_is_taken_over")
+def test_only_a_dead_owners_lock_is_taken_over(tmp_path, make_lock):
+    """A lock is taken over only once its owner is provably gone — the kernel let its lock go when the
+    process died — never on what the owner record says. While the owner runs, a record that would make
+    it look gone (a pid that is dead, another host, a garbled or empty record) leaves the lock alone,
+    record and all; once the owner is killed without releasing, the next run takes the lock over."""
+    utils.ensure_control_dir(str(tmp_path))
+    lock_file = make_lock(str(tmp_path)).lock_path
+    records = [json.dumps({"pid": _dead_pid(), "started_at": "x", "host": socket.gethostname()}).encode(),
+               json.dumps({"pid": 1, "started_at": "x", "host": "another-host.invalid"}).encode(),
+               b"\x00{not json", b""]
+    for i, record in enumerate(records):
+        holder = _hold_lock(lock_file, record, str(tmp_path / f"ready{i}"))
+        try:
+            lock = make_lock(str(tmp_path))
+            assert lock.acquire() is False, record             # its owner may be running: left alone
+            with open(lock_file, "rb") as f:
+                assert f.read() == record                       # ...its owner record untouched
+        finally:
+            holder.kill()                                       # dies holding the lock, never releasing it
+            holder.wait(timeout=10)
+        lock = make_lock(str(tmp_path))
+        assert lock.acquire() is True, record                   # the owner is gone: taken over
+        try:
+            assert lock.read_owner()["pid"] == os.getpid()      # ...and the record is now this run's
+        finally:
+            lock.release()
 
 
 def test_held_owner_distinguishes_live_lock_from_stale_owner_file(tmp_path):

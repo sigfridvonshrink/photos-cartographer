@@ -7,7 +7,7 @@ This pipeline mutates irreplaceable originals, so coverage is tracked on **two a
    build by `tools/spec-build`. Line/branch can't tell you whether a *must-refuse / no-clobber /
    leaves-untouched* obligation is actually asserted; this can.
 
-Figures below are a snapshot; regenerate with the commands shown. The suite has **1255 tests**.
+Figures below are a snapshot; regenerate with the commands shown. The suite has **1275 tests**.
 
 ## Line / branch coverage
 
@@ -38,15 +38,15 @@ tools/coverage          # bootstraps a local .venv, runs the suite, writes htmlc
 ## Spec coverage
 
 The specification is one corpus of typed items (`spec/`; see `spec/README.md`): 497 rules and invariants, 274
-rationales, 189 build items, 32 definitions, the philosophy's 3 facts and 4 choices — and the 563 tests that name the
+rationales, 189 build items, 32 definitions, the philosophy's 3 facts and 4 choices — and the 581 tests that name the
 items they verify, made items of the corpus from their `@pytest.mark.spec(…, test="TST-…")` marks. 998 items are
 ruled; one is at seed: `RUL-disagreeing_tracks_place_nothing`, held for BACKLOG 29.
 
 | Rules and invariants | Count |
 |---|---:|
-| **`verify: required` (gated)** | **469** |
+| **`verify: required` (gated)** | **480** |
 | `verify: incidental` — exercised, not asserted (BACKLOG 4) | 17 |
-| `verify: none` — nothing checks them (BACKLOG 3) | 11 |
+| `verify: none` — nothing checks them | 0 |
 
 `tools/spec-build` fails if any item marked `verify: required` has no test naming it, if a test mark names no item, if
 a rule has no rationale, or if a link dangles; CI and the pre-push hook run it. This is a **map of which specified

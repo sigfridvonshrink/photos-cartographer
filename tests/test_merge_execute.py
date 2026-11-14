@@ -1171,6 +1171,83 @@ def test_merge_leaves_the_other_phases_database_images_as_they_were(tmp_path):
         assert (os.stat(_ctl(ws, name)).st_mtime_ns, os.stat(_ctl(ws, name)).st_ino) == stats[name], name
 
 
+@pytest.mark.spec("RUL-image_never_working_data", test="TST-merge_execute-merge_never_reads_a_database_image_back")
+def test_merge_never_reads_a_database_image_back(tmp_path, monkeypatch):
+    """No database image is read back as working data: with prep's and geotag's images holding no database at
+    all, merge plans, dry-runs and merges whole, opening neither — nor its own, once made, on the runs after."""
+    import sqlite3
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}])
+    images = ("photos-15-prep-ingest.db", "photos-26-geotag-ingest.db", "photos-35-merge-ingest.db")
+    for name in images[:2]:
+        with open(_ctl(ws, name), "wb") as f:
+            f.write(b"not a database")
+    opened, real_connect = [], sqlite3.connect
+    def connect(database, *a, **k):
+        opened.append(os.path.basename(str(database).split("?")[0]))
+        return real_connect(database, *a, **k)
+    monkeypatch.setattr(sqlite3, "connect", connect)
+    for command in ("plan", "dry-run", "execute"):
+        assert merge._run_locked_workflow(command, str(ws)) == 0, command
+    assert _summary(ws)["status"] == "success" and os.path.exists(os.path.join(str(lib), "Trip", "a.jpg"))
+    with open(_ctl(ws, images[2]), "rb") as f:
+        assert f.read(16) == b"SQLite format 3\x00"                    # its own image: made
+    for command in ("plan", "dry-run", "execute"):
+        merge._run_locked_workflow(command, str(ws))
+    assert "photos-00-ingest.db" in opened and not set(images) & set(opened), opened
+
+
+@pytest.mark.spec("RUL-filesystem_agnostic", test="TST-merge_execute-merge_runs_whole_with_no_zfs")
+def test_merge_runs_whole_with_no_zfs(tmp_path, monkeypatch):
+    """With snapshots off, as they are by default, merge never reaches for a ZFS feature: on a machine with no
+    `zfs` at all it plans, dry-runs and merges whole, and seals the workspace."""
+    import subprocess
+    calls, real = [], subprocess.Popen
+    def popen(args, *a, **k):
+        argv = args.split() if isinstance(args, str) else list(args)
+        if argv and os.path.basename(str(argv[0])) == "zfs":
+            calls.append(argv)
+            raise FileNotFoundError(2, "No such file or directory", "zfs")
+        return real(args, *a, **k)
+    monkeypatch.setattr(subprocess, "Popen", popen)
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
+                  library_files=[{"fp": "B", "dest": "Trip", "name": "a.jpg"}])
+    assert utils.CONFIG["zfs"]["enabled"] is False
+    for command in ("plan", "dry-run", "execute"):
+        assert merge._run_locked_workflow(command, str(ws)) == 0, command
+    assert _summary(ws)["status"] == "success" and utils.is_sealed(str(ws)) and calls == []
+
+
+@pytest.mark.spec("RUL-nothing_built_from_merge_records",
+                  test="TST-merge_execute-nothing_is_built_from_merges_records")
+def test_nothing_is_built_from_merges_records(tmp_path):
+    """Nothing is built from merge's records: after a merge that left a photo blocked, the next merge plans and
+    merges the same — the same plan, the same outcome — whether merge's summary stands as written, is garbled or
+    is gone."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
+                             {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
+                  library_files=[{"fp": "FAIL", "dest": "Trip", "name": "b.jpg"}])
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("execute", str(ws)) == 3            # b blocked: not sealed, run again
+    assert _summary(ws)["status"] == "partial" and not utils.is_sealed(str(ws))
+
+    def plan_body():
+        with open(merge.merge_plan_path(str(ws))) as f:
+            p = json.load(f)
+        return {k: p.get(k) for k in ("destinations", "totals", "blockers", "warnings")}
+    runs = []
+    for damage in ("as written", "garbled", "gone"):
+        if damage == "garbled":
+            with open(merge.merge_summary_path(str(ws)), "w") as f:
+                f.write("{not a summary")
+        elif damage == "gone":
+            os.remove(merge.merge_summary_path(str(ws)))
+        assert merge._run_locked_workflow("plan", str(ws)) == 0, damage
+        plan = plan_body()
+        assert merge._run_locked_workflow("execute", str(ws)) == 3, damage
+        runs.append((plan, _comparable(_summary(ws))))
+    assert runs[0][0]["destinations"] and runs[0] == runs[1] == runs[2]
+
+
 @pytest.mark.spec("RUL-merged_batch_no_op", test="TST-merge_execute-merging_a_merged_batch_changes_nothing")
 def test_merging_a_merged_batch_changes_nothing(tmp_path):
     """A batch merged whole, then merged again — plan, dry-run and execute: every file of the workspace, its

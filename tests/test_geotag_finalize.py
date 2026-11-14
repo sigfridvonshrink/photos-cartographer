@@ -475,6 +475,51 @@ def test_finalize_is_idempotent(tmp_path, monkeypatch):
     assert (ctl / "photos-15-prep-log.json").read_bytes() == prep1        # prep untouched
 
 
+@pytest.mark.spec("RUL-image_never_working_data", test="TST-geotag_finalize-geotag_never_reads_a_database_image_back")
+def test_geotag_never_reads_a_database_image_back(tmp_path, monkeypatch):
+    """No database image is read back as working data: with prep's image, and then geotag's own, holding no
+    database at all, geotag plans, executes and finalizes — and finalizes again to the same record — opening
+    neither."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    images = ("photos-15-prep-ingest.db", "photos-26-geotag-ingest.db")
+    (ctl / images[0]).write_bytes(b"not a database")
+    opened, real_connect = [], sqlite3.connect
+    def connect(database, *a, **k):
+        opened.append(os.path.basename(str(database).split("?")[0]))
+        return real_connect(database, *a, **k)
+    monkeypatch.setattr(sqlite3, "connect", connect)
+    _to_executed(monkeypatch, ws, ctl)
+    assert json.load(open(ctl / "photos-25-execution-summary.json"))["status"] == "success"
+    assert _run(monkeypatch, ws, "finalize") == 0
+    record = {n: (ctl / n).read_bytes() for n in ("photos-26-complete-log.json", "photos-26-finalized-media.json")}
+    (ctl / images[1]).write_bytes(b"not a database either")
+    assert _run(monkeypatch, ws, "finalize") == 0
+    assert {n: (ctl / n).read_bytes() for n in record} == record
+    assert (ctl / images[1]).read_bytes().startswith(b"SQLite format 3")      # its own image, made again
+    assert "photos-00-ingest.db" in opened and not set(images) & set(opened), opened
+
+
+@pytest.mark.spec("RUL-filesystem_agnostic", test="TST-geotag_finalize-geotag_runs_whole_with_no_zfs")
+def test_geotag_runs_whole_with_no_zfs(tmp_path, monkeypatch):
+    """With snapshots off, as they are by default, geotag never reaches for a ZFS feature: on a machine with no
+    `zfs` at all it plans, executes and finalizes."""
+    import subprocess
+    calls, real = [], subprocess.Popen
+    def popen(args, *a, **k):
+        argv = args.split() if isinstance(args, str) else list(args)
+        if argv and os.path.basename(str(argv[0])) == "zfs":
+            calls.append(argv)
+            raise FileNotFoundError(2, "No such file or directory", "zfs")
+        return real(args, *a, **k)
+    monkeypatch.setattr(subprocess, "Popen", popen)
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    assert json.load(open(ctl / "photos-00-config.json"))["zfs"]["enabled"] is False
+    _to_executed(monkeypatch, ws, ctl)
+    assert json.load(open(ctl / "photos-25-execution-summary.json"))["status"] == "success"
+    assert _run(monkeypatch, ws, "finalize") == 0
+    assert (ctl / "photos-26-archive-manifest.json").exists() and calls == []
+
+
 @pytest.mark.spec("RUL-finalize_requires_success", "BLD-finalize_preconditions",
                   "RUL-finalize_requires_plan_still_holds", "RUL-dependencies_validated_before_deriving",
                   test="TST-geotag_finalize-a_decision_changed_since_execution_stops_finalize")

@@ -501,6 +501,16 @@ def test_missing_managed_folder_blocks(tmp_path):
     assert any("non-conforming" in b and "4-videos-by-date" in b for b in blockers), blockers
 
 
+@pytest.mark.spec("RUL-empty_folder_restores", test="TST-geotag_preflight-an_empty_folder_put_back_restores_a_missing_one")
+def test_an_empty_folder_put_back_restores_a_missing_one(tmp_path):
+    """An empty folder put back in a missing managed folder's place restores it: geotag's preflight passes."""
+    ws = _ws(tmp_path)
+    (ws / "4-videos-by-date").rmdir()
+    assert any("4-videos-by-date" in b for b in _pf(ws)[0])
+    (ws / "4-videos-by-date").mkdir()                                # put back, empty
+    assert _pf(ws)[0] == []
+
+
 @pytest.mark.spec("RUL-missing_folder_remedy_told",
                   test="TST-geotag_preflight-missing_managed_folder_block_tells_to_restore_and_run_again")
 def test_missing_managed_folder_block_tells_to_restore_and_run_again(tmp_path):

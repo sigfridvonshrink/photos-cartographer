@@ -982,7 +982,7 @@ time it was placed at.
 :id: RUL-track_never_written_in_photo
 :status: ruled
 :criticality: med
-:verify: none
+:verify: required
 :refines: RUL-placement_recorded_with_its_track
 
 The track that gave a photo its position SHALL NOT be written in the photo.

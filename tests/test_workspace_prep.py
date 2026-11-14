@@ -659,6 +659,24 @@ def test_missing_managed_folder_block_tells_to_restore_and_run_again(tmp_path, m
     assert "restore them" in block[0] and "before running" in block[0], block[0]
 
 
+@pytest.mark.spec("RUL-empty_folder_restores", test="TST-workspace_prep-an_empty_folder_put_back_restores_a_missing_one")
+def test_an_empty_folder_put_back_restores_a_missing_one(tmp_path, monkeypatch):
+    """A missing managed folder blocks prep; an empty folder put back in its place restores it, and prep
+    plans as on an intact workspace."""
+    _mock_for_plan(monkeypatch)
+    ws = _empty_initialized_ws(tmp_path)
+
+    def blockers():
+        cache = photos_ingest.WorkspaceCache(str(ws), in_memory=True)
+        plan = photos_ingest.WorkspacePrepWorkflow(str(ws), cache).plan()
+        cache.close()
+        return plan.blockers
+    (ws / "1-strays").rmdir()
+    assert any("1-strays" in b for b in blockers())
+    (ws / "1-strays").mkdir()                                         # put back, empty
+    assert blockers() == []
+
+
 @pytest.mark.spec("RUL-empty_inbox_normal", test="TST-workspace_prep-empty_sources_is_steady_end_state_not_a_missing_folder_block")
 def test_empty_sources_is_steady_end_state_not_a_missing_folder_block(tmp_path, monkeypatch):
     """RUL-empty_inbox_normal: an EMPTY 0-sources is the normal steady end-state,

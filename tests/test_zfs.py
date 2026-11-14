@@ -166,6 +166,36 @@ def test_required_snapshot_with_no_dataset_aborts(tmp_path, monkeypatch, seed_fr
     assert os.path.exists(ws / "0-sources" / "a.jpg")                  # no mutation
 
 
+def _zfs_unreachable(monkeypatch):
+    """No `zfs` on this machine: every attempt to run it fails as a missing program, and is recorded."""
+    calls, real = [], subprocess.Popen
+    def popen(args, *a, **k):
+        argv = args.split() if isinstance(args, str) else list(args)
+        if argv and os.path.basename(str(argv[0])) == "zfs":
+            calls.append(argv)
+            raise FileNotFoundError(2, "No such file or directory", "zfs")
+        return real(args, *a, **k)
+    monkeypatch.setattr(subprocess, "Popen", popen)
+    return calls
+
+
+@pytest.mark.spec("RUL-filesystem_agnostic", test="TST-zfs-prep_runs_whole_with_no_zfs")
+def test_prep_runs_whole_with_no_zfs(tmp_path, monkeypatch):
+    """With snapshots off, as they are by default, prep never reaches for a ZFS feature: on a machine with no
+    `zfs` at all it organizes a dump, and the next, whole."""
+    _mock_media(monkeypatch)
+    calls = _zfs_unreachable(monkeypatch)
+    ws = _ws(tmp_path)
+    for name in ("a.jpg", "b.jpg"):
+        (ws / "0-sources" / name).write_bytes(name.encode())
+        plan = _plan(ws)
+        assert not plan.blockers, plan.blockers
+        prep.PlanExecutor(str(ws)).execute(plan)
+    assert utils.CONFIG["zfs"]["enabled"] is False
+    assert len(glob.glob(str(ws / "5-photos-by-date" / "**" / "*.jpg"), recursive=True)) == 2
+    assert os.path.exists(utils.handoff_path(str(ws))) and calls == []
+
+
 # --- the shared take_zfs_snapshot helper (used by prep + geotag) --------
 
 @pytest.mark.spec("RUL-snapshot_off_by_default", test="TST-zfs-take_zfs_snapshot_disabled")

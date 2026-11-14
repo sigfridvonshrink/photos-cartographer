@@ -41,21 +41,24 @@ says it, no item states it; each to be ruled into the corpus or the code dropped
 
 ---
 
-### 3. The 11 rules no test is asked to verify
+### 3. Rules asserted for part of what they cover
 
-**Why:** eleven rules are marked `verify: none` — specified, and nothing checks them. Two are **high**:
-`RUL-rewrite_in_place_atomic` (an interrupted in-place write leaves the intact original or the whole new file) and
-`RUL-stale_takeover_conservative` (only a lock whose owner is provably gone is reclaimed). The rest:
-`RUL-camera_classes_not_derivation`, `RUL-control_directory_fixed`, `RUL-filesystem_agnostic`,
-`RUL-image_never_working_data`, `RUL-nothing_built_from_merge_records`, and four that item 7's splitting made items of
-their own: `RUL-empty_folder_restores`, `RUL-rehash_memo_count_reported`, `RUL-scratch_database_not_journalled`,
-`RUL-track_never_written_in_photo`. (Twenty more that the splitting brought out have had a test since 2026-11-14.)
+**Why:** every rule now has a test naming it (the last eleven at `verify: none` got one on 2026-11-14), but a mark
+says a test exists, not how much of the rule it asserts. Known to be asserted in part:
+- `RUL-snapshot_after_validation`, `RUL-snapshot_under_lock`, `RUL-dry_run_validates_saved_plan` — merge only;
+- `RUL-suffix_deterministic` — prep only; `RUL-image_untouched_by_other_phase` — merge and geotag, not prep;
+- `RUL-rewrite_in_place_atomic` — the photo's metadata write and the shared record writers; not prep's own writers
+  of its manifest, log and guard, nor the editor's. Holds against a killed process: nothing syncs a rewrite to disk
+  before its rename, so a power loss is not covered — to be ruled: accept, or sync;
+- `RUL-stale_takeover_conservative` — one host; a second host over a network filesystem is not simulated;
+- `RUL-control_directory_fixed`, `RUL-camera_classes_not_derivation` — prep only;
+- `RUL-filesystem_agnostic` — that no run calls `zfs`; not that nothing else leans on a filesystem feature (file
+  locks, atomic rename, directory sync, device ids are used);
+- `RUL-nothing_built_from_merge_records` — the summary record only. Merge's resume is built from its journal and
+  earlier plan (`BLD-merge_journal_resume`): to be ruled whether "merge's records" means those too, and the rule
+  reworded to say which.
 
-**Partly asserted:** `RUL-snapshot_after_validation`, `RUL-snapshot_under_lock` and `RUL-dry_run_validates_saved_plan`
-are asserted for merge only; `RUL-suffix_deterministic` for prep only; `RUL-image_untouched_by_other_phase` for merge
-and geotag, not for prep.
-
-**Do:** a dedicated test for each, marking it `verify: required`, or a ruled reason it needs none.
+**Do:** assert the rest, or rule it out of the rule.
 
 ---
 
@@ -66,7 +69,7 @@ through them, nothing asserting them, so a regression there passes CI. Five are 
 `INV-every_change_from_the_record`, `INV-undisturbed_shape`, `RUL-operations_atomic`, `RUL-split_move_never_lost`;
 `tools/spec-build`'s `needs.json` lists the rest by their `verify` field.
 
-**Do:** as item 3 — a test that asserts each, or a ruled reason.
+**Do:** a test that asserts each, or a ruled reason it needs none.
 
 ---
 

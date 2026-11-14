@@ -219,6 +219,36 @@ def _first_round(tmp_path, monkeypatch):
     return ws
 
 
+@pytest.mark.spec("RUL-track_never_written_in_photo", test="TST-geotag_rerun_markers-the_track_is_not_written_in_the_photo")
+def test_the_track_is_not_written_in_the_photo(tmp_path, monkeypatch):
+    """A photo the track placed is recorded with the track; what execute writes into the photo — its time, its
+    position and how it was found — names no track."""
+    ws = _ws(tmp_path, [lambda ws: _rec(ws, f"{T}/a.arw", "2024:07:03 14:20:00")])
+    os.rename(tmp_path / "gpx" / "t.gpx", tmp_path / "gpx" / "brussels-walk.gpx")
+    _plan(monkeypatch, ws)
+    _set_offset(ws, SLOW)
+    _plan(monkeypatch, ws)
+    _confirm_drift(ws, SLOW)
+    _plan(monkeypatch, ws)
+    plan = json.loads((ws / ".photos-ingest" / "photos-24-executable-plan.json").read_text())
+    gps = [o for d in plan["destinations"].values() for o in d["operations"] if o["type"] == "metadata_gps_write"]
+    assert [o["provenance"]["gpx_file"] for o in gps] == ["brussels-walk.gpx"]     # the record has the track
+
+    written = []
+    fp = json.loads(json.loads((ws / ".photos-ingest" / "photos-11-handoff.json").read_text())
+                    ["files"][0]["content_hash"])["value"]
+    monkeypatch.setattr(cal.GeotagWorkflow, "_exiftool_write", lambda self, p, tags: written.append(tags) or True)
+    monkeypatch.setattr(cal.ContentHasher, "fingerprint_image", staticmethod(lambda p: {"status": "valid", "value": fp}))
+    monkeypatch.chdir(str(ws))
+    monkeypatch.setattr(sys, "argv", ["photos-2-geotag", "execute"])
+    try:
+        cal.main()
+    except SystemExit as e:
+        assert e.code in (0, None), e.code
+    assert len(written) == 1 and written[0]["GPSProcessingMethod"] == "matched"    # placed from the track
+    assert not any("brussels-walk" in f"{k}={v}" for k, v in written[0].items()), written[0]
+
+
 @pytest.mark.spec("RUL-geotag_rerun_keeps_settled", "BLD-marked_file_rerun", "BLD-executable_plan", "RUL-no_op_run",
                   test="TST-geotag_rerun_markers-manual_offset_is_not_applied_twice")
 def test_manual_offset_is_not_applied_twice(tmp_path, monkeypatch):

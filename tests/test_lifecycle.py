@@ -551,3 +551,50 @@ def test_renamed_folders_are_built_and_used_by_role(tmp_path, monkeypatch):
     assert (ws / "0-inbox").is_dir() and list((ws / "0-inbox").iterdir()) == []
     assert len(glob.glob(str(ws / "5-by-date" / "**" / "*.jpg"), recursive=True)) == 1
     assert not (ws / "0-sources").exists() and not (ws / "5-photos-by-date").exists()
+
+
+@pytest.mark.spec("RUL-control_directory_fixed",
+                  test="TST-lifecycle-the_control_directory_is_the_same_whatever_the_configuration")
+def test_the_control_directory_is_the_same_whatever_the_configuration(tmp_path, monkeypatch):
+    """Where a workspace keeps its records does not follow its configuration: seeded with the defaults, or with
+    every folder renamed and the tracks and the library named elsewhere, prep keeps its configuration and its
+    records in `.photos-ingest/`, and nowhere else; a setting naming another place for them is refused, and
+    nothing is written there."""
+    import copy
+    seed = copy.deepcopy(utils.DEFAULT_CONFIG)
+    seed.pop("jobs", None)
+    seed["folders"] = {role: f"x-{name}" for role, name in seed["folders"].items()}
+    for d in ("tracks", "library"):
+        (tmp_path / d).mkdir()
+    seed["gpx_root"], seed["merge"]["library_root"] = str(tmp_path / "tracks"), str(tmp_path / "library")
+    defaults = tmp_path / "defaults.json"
+    defaults.write_text(json.dumps(seed))
+    _install(monkeypatch)
+    records = ("photos-00-config.json", "photos-00-workspace-guard", "photos-00-ingest.db", "photos-11-handoff.json",
+               "photos-15-prep-log.json", "photos-15-prep-ingest.db")
+    for name, folders in (("default", MANAGED), ("renamed", sorted(seed["folders"].values()))):
+        if name == "renamed":
+            monkeypatch.setenv("PHOTOS_CARTOGRAPHER_CONFIG", str(defaults))
+        ws = tmp_path / name
+        ws.mkdir()
+        (ws / "photo.jpg").write_bytes(b"img")
+        plan = _plan(ws)
+        assert not plan.blockers, plan.blockers
+        prep.PlanExecutor(str(ws)).execute(plan)
+        for rec in records:
+            assert (ws / ".photos-ingest" / rec).is_file(), (name, rec)
+        assert (ws / ".photos-ingest" / f"journal-{plan.plan_id}.json").is_file(), name
+        assert sorted(os.listdir(ws)) == sorted([".photos-ingest", *folders]), name
+
+    cfg_p = ws / ".photos-ingest" / "photos-00-config.json"
+    seeded = cfg_p.read_text()
+    for edit, named in ((lambda c: c.__setitem__("control_directory", "x-records"), "control_directory"),
+                        (lambda c: c["folders"].__setitem__("control", "x-records"), "folders.control")):
+        cfg = json.loads(seeded)
+        edit(cfg)
+        cfg_p.write_text(json.dumps(cfg))
+        with pytest.raises(ValueError) as ei:
+            utils.load_or_seed_config(str(ws))
+        assert named in str(ei.value)
+        assert not (ws / "x-records").exists()
+    cfg_p.write_text(seeded)

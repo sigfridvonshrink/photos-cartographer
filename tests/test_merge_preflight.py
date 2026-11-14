@@ -173,6 +173,16 @@ def test_missing_managed_folder_blocks(tmp_path):
     assert any("missing managed folder" in b for b in blockers), blockers
 
 
+@pytest.mark.spec("RUL-empty_folder_restores", test="TST-merge_preflight-an_empty_folder_put_back_restores_a_missing_one")
+def test_an_empty_folder_put_back_restores_a_missing_one(tmp_path):
+    """An empty folder put back in a missing managed folder's place restores it: merge's preflight passes."""
+    ws, _ = _make(tmp_path)
+    os.rmdir(str(ws / "4-videos-by-date"))
+    assert any("4-videos-by-date" in b for b in _pf(ws)[0])
+    os.mkdir(str(ws / "4-videos-by-date"))                           # put back, empty
+    assert _pf(ws)[0] == []
+
+
 @pytest.mark.spec("RUL-missing_folder_remedy_told",
                   test="TST-merge_preflight-missing_managed_folder_block_tells_to_restore_and_run_again")
 def test_missing_managed_folder_block_tells_to_restore_and_run_again(tmp_path):

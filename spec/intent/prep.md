@@ -967,7 +967,7 @@ Each prep plan SHALL report how many media files it fingerprinted again, and why
 :id: RUL-rehash_memo_count_reported
 :status: ruled
 :criticality: low
-:verify: none
+:verify: required
 :refines: RUL-rehash_explained
 
 Each prep plan SHALL report how many fingerprints it took from the plan memo.

@@ -202,6 +202,55 @@ def test_unknown_device_class_when_not_configured(tmp_path, monkeypatch):
     assert g["device_class"] == "unknown"
 
 
+@pytest.mark.spec("RUL-camera_classes_not_derivation",
+                  test="TST-handoff-the_configuration_classes_camera_groups_and_never_derives_them")
+def test_the_configuration_classes_camera_groups_and_never_derives_them(tmp_path, monkeypatch, seed_from_live_config):
+    """Of camera grouping the configuration sets which groups are phones and which have fixed clocks, and nothing
+    more: the same camera classed as a phone, as a fixed-clock camera or as neither is the same group, derived the
+    same way, under the code's version of the derivation; a setting naming how a group is derived, or that
+    derivation's version, is refused."""
+    _mock(monkeypatch)
+    parse = utils.MetadataReader._parse_exiftool_item
+
+    def meta(folders, max_workers=4, progress_coordinator=None):   # the real derivation, from the identity fields
+        return {os.path.join(folder, f): parse({"EXIF:DateTimeOriginal": "2023:01:02 03:04:05", "EXIF:Make": "TestMake",
+                                                "EXIF:Model": "TestModel", "EXIF:SerialNumber": "42"})
+                for folder in folders for f in os.listdir(folder)}, set()
+    monkeypatch.setattr(utils.MetadataReader, "read_metadata_concurrently", meta)
+    key = "42|TestMake|TestModel"
+    derived = {}
+    for cls, groups in (("unknown", {"phones": [], "fixed_clock_cameras": []}),
+                        ("phone", {"phones": [key], "fixed_clock_cameras": []}),
+                        ("fixed_clock", {"phones": [], "fixed_clock_cameras": [key]})):
+        prep.CONFIG["camera_time_and_timezone_policy"]["device_groups"] = groups   # seeded into this workspace
+        (tmp_path / cls).mkdir()
+        ws = _ws(tmp_path / cls)
+        (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+        _run(ws)
+        h = _handoff(ws)
+        assert [(cg["group_key"], cg["device_class"]) for cg in h["camera_groups"]] == [(key, cls)]
+        derived[cls] = [(f["relative_path"], f["metadata_status"]["camera_group_key"],
+                         f["metadata_status"]["camera_group_key_version"]) for f in h["files"]]
+    assert derived["unknown"] and derived["phone"] == derived["fixed_clock"] == derived["unknown"]
+    assert {(k, v) for _, k, v in derived["unknown"]} == {(key, utils.CAMERA_GROUP_KEY_VERSION)}
+
+    cfg_p = ws / ".photos-ingest" / "photos-00-config.json"
+    seeded = cfg_p.read_text()
+    for edit, named in (
+            (lambda c: c["camera_time_and_timezone_policy"]["device_groups"].__setitem__("camera_group_key_version", 2),
+             "camera_time_and_timezone_policy.device_groups.camera_group_key_version"),
+            (lambda c: c["camera_time_and_timezone_policy"]["device_groups"].__setitem__("identity_fields", ["Model"]),
+             "camera_time_and_timezone_policy.device_groups.identity_fields"),
+            (lambda c: c.__setitem__("camera_group_key_version", 2), "camera_group_key_version")):
+        cfg = json.loads(seeded)
+        edit(cfg)
+        cfg_p.write_text(json.dumps(cfg))
+        with pytest.raises(ValueError) as ei:
+            utils.load_or_seed_config(str(ws))
+        assert named in str(ei.value)
+    cfg_p.write_text(seeded)
+
+
 @pytest.mark.spec("RUL-handoff_deterministic")
 def test_handoff_written_sorted_and_deterministic(tmp_path, monkeypatch):
     """The handoff must be byte-deterministic for a given workspace state (RUL-handoff_deterministic):

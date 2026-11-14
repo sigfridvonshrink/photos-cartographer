@@ -153,6 +153,61 @@ def test_write_versioned_json_backs_up_then_writes(tmp_path):
     assert _json.load(open(bak2))["plan"] == "a"              # prior content preserved in the backup
 
 
+class _CutOffMidWrite:
+    """A text file whose first write puts down half of what it was given and is then interrupted."""
+    def __init__(self, f):
+        self.f = f
+    def write(self, s):
+        self.f.write(s[:len(s) // 2]); self.f.flush()
+        raise KeyboardInterrupt
+    def __enter__(self):
+        return self
+    def __exit__(self, *exc):
+        self.f.close()
+    def __getattr__(self, name):
+        return getattr(self.f, name)
+
+
+@pytest.mark.parametrize("rewrite", [utils.write_versioned_json, utils.write_json_artifact],
+                         ids=["versioned", "artifact"])
+@pytest.mark.spec("RUL-rewrite_in_place_atomic", test="TST-control_dir-an_interrupted_record_rewrite_leaves_the_record_whole")
+def test_an_interrupted_record_rewrite_leaves_the_record_whole(tmp_path, monkeypatch, rewrite):
+    """A record rewritten in place and interrupted holds its old content whole — whether the interruption
+    comes while the new text is half written or just before it takes the record's place — and the next
+    write puts the new content down whole."""
+    import builtins
+    import json as _json
+    p = tmp_path / "photos-23-gps-decisions.json"
+    rewrite(str(p), {"plan": "a"})
+    before = p.read_bytes()
+    new = {"plan": "b" * 100_000}
+
+    real_open, real_fdopen = builtins.open, os.fdopen
+    def cut(opener):
+        def _open(file, mode="r", *a, **k):
+            f = opener(file, mode, *a, **k)
+            return _CutOffMidWrite(f) if ("w" in mode and "b" not in mode) else f
+        return _open
+    with monkeypatch.context() as m:                           # interrupted mid-write of the new text
+        m.setattr(builtins, "open", cut(real_open))
+        m.setattr(os, "fdopen", cut(real_fdopen))
+        with pytest.raises(KeyboardInterrupt):
+            rewrite(str(p), new)
+    assert p.read_bytes() == before
+
+    def interrupted_rename(*a, **k):
+        raise KeyboardInterrupt
+    with monkeypatch.context() as m:                           # interrupted with the new text written, not yet in place
+        m.setattr(os, "replace", interrupted_rename)
+        m.setattr(os, "rename", interrupted_rename)
+        with pytest.raises(KeyboardInterrupt):
+            rewrite(str(p), new)
+    assert p.read_bytes() == before
+
+    rewrite(str(p), new)                                       # uninterrupted: the new record, whole
+    assert _json.loads(p.read_text()) == new
+
+
 @pytest.mark.spec("RUL-control_records_never_media", test="TST-control_dir-media_inside_control_dir_is_not_inventoried")
 def test_media_inside_control_dir_is_not_inventoried(tmp_path, monkeypatch):
     _mock(monkeypatch)

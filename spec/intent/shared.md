@@ -157,8 +157,7 @@ workspace locked for good.
 :status: ruled
 :criticality: high
 :anti: yes
-:verify: none
-:omit_reason: no test asserts it (backlog item 3)
+:verify: required
 :refines: RUL-stale_lock_recovered
 
 A stale lock SHALL be taken over only when its owner is provably gone; a lock whose owner may still be running is left
@@ -195,8 +194,7 @@ Snapshots SHALL be off unless the workspace's configuration turns them on.
 :id: RUL-filesystem_agnostic
 :status: ruled
 :criticality: med
-:verify: none
-:omit_reason: a design constraint over the whole code; the gap audit (backlog item 2) checks it
+:verify: required
 
 Nothing in cartographer but the snapshot SHALL depend on a particular filesystem's features, so that cartographer runs
 fully on a filesystem that has none.
@@ -489,8 +487,7 @@ executable plan and merge's plan.
 :status: ruled
 :criticality: med
 :anti: yes
-:verify: none
-:omit_reason: no test asserts it yet
+:verify: required
 
 Where a workspace keeps its control records — its configuration among them — SHALL be fixed, the same in every
 workspace, no setting moving it.
@@ -532,8 +529,7 @@ Every phase SHALL find a managed folder by its role, never by its name.
 :status: ruled
 :criticality: med
 :anti: yes
-:verify: none
-:omit_reason: no test asserts it (backlog item 3)
+:verify: required
 
 Of camera grouping, the configuration SHALL set only which camera groups are phones and which have fixed clocks — never
 how a group is derived, nor the version of that derivation.
@@ -992,7 +988,7 @@ The block of a missing managed folder SHALL tell the user to restore the folders
 :id: RUL-empty_folder_restores
 :status: ruled
 :criticality: med
-:verify: none
+:verify: required
 :refines: RUL-missing_folder_blocks
 
 An empty folder put back in a missing managed folder's place SHALL restore it.
@@ -2290,7 +2286,7 @@ to delete at any time.
 :id: RUL-scratch_database_not_journalled
 :status: ruled
 :criticality: med
-:verify: none
+:verify: required
 :refines: RUL-other_databases_scratch
 
 A scratch database SHALL NOT be journalled.
@@ -2387,8 +2383,7 @@ A phase's database image SHALL be left untouched by a run that does not succeed.
 :status: ruled
 :criticality: med
 :anti: yes
-:verify: none
-:omit_reason: no test asserts it (backlog item 3)
+:verify: required
 :refines: RUL-database_image_each_phase
 
 A database image SHALL never be read back as working data.
@@ -2757,8 +2752,7 @@ already present, and what blocked the rest.
 :id: RUL-nothing_built_from_merge_records
 :status: ruled
 :criticality: low
-:verify: none
-:omit_reason: no test asserts it (backlog item 3)
+:verify: required
 :refines: RUL-merge_records_landing
 
 Nothing SHALL be built from merge's records.
@@ -3250,8 +3244,7 @@ A move by prep or geotag that would cross filesystems SHALL fail, never be made 
 :status: ruled
 :criticality: high
 :anti: yes
-:verify: none
-:omit_reason: crash-injection testing is out of scope; the guarantee rests on how the file is written
+:verify: required
 :refines: RUL-operations_atomic
 
 A write that rewrites a file in place SHALL leave, if interrupted, the intact original or the fully written file —
