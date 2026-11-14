@@ -55,7 +55,7 @@ def test_a_time_the_file_holds_is_not_written_again():
 
 @pytest.mark.parametrize("cat, origin, marker", [
     ("gpx_interpolation", "recompute_automated", "interpolated"),
-    ("gpx_extrapolation", "recompute_automated", "interpolated"),
+    ("gpx_extrapolation", "recompute_automated", "extrapolated"),
     ("manual_locked", "apply_manual", "manual_locked"),
     ("manual_fallback", "apply_manual", "manual_fallback")])
 @pytest.mark.spec("BLD-placement_order")
@@ -67,6 +67,20 @@ def test_gps_write_and_marker(cat, origin, marker):
     assert gw["gps_origin"] == origin
     mk = next(o for o in ops if o["type"] == "gps_marker_write")
     assert mk["writes"]["GPSProcessingMethod"] == marker
+
+
+@pytest.mark.parametrize("method, marker", [("direct_match", "matched"), ("interpolated", "interpolated"),
+                                            ("extrapolated", "extrapolated")])
+@pytest.mark.spec("BLD-rerun_recognition", test="TST-geotag_executable_plan-a_track_position_says_how_it_was_derived")
+def test_a_track_position_says_how_it_was_derived(method, marker):
+    # A position from the tracks is marked as derived on a track point, between two, or past a track's end, so a
+    # rough pin is never taken for a precise one — in the file, and so in the library; a re-run takes every one of
+    # them for geotag's own.
+    cat = "gpx_extrapolation" if method == "extrapolated" else "gpx_interpolation"
+    ops = cal.plan_file_ops(_file(), UTC, "Europe/Brussels", cat, {"lat": 50.0, "lon": 4.0, "method": method}, None)
+    mk = next(o for o in ops if o["type"] == "gps_marker_write")
+    assert mk["writes"]["GPSProcessingMethod"] == marker
+    assert cal.geotag_marker(marker) == marker and marker in cal.POSITION_MARKERS
 
 
 @pytest.mark.parametrize("lat, lon, refs", [

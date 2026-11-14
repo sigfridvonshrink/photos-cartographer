@@ -937,13 +937,17 @@ def plan_renames(files, fmt):
 
 _GPS_OP_ORIGIN = {"gpx_interpolation": "recompute_automated", "gpx_extrapolation": "recompute_automated",
                   "manual_locked": "apply_manual", "manual_fallback": "apply_manual"}
-_GPS_OP_MARKER = {"gpx_interpolation": "interpolated", "gpx_extrapolation": "interpolated",
+_GPS_OP_MARKER = {"gpx_interpolation": "interpolated", "gpx_extrapolation": "extrapolated",
                   "manual_locked": "manual_locked", "manual_fallback": "manual_fallback"}
+# A position from the tracks says how it was derived, so a rough pin is never taken for a precise one, in the
+# workspace or in the library: on a track point (`matched`), between two (`interpolated`), or past a track's end
+# (`extrapolated`). Keyed by place_gps's method.
+_TRACK_MARKER = {"direct_match": "matched", "interpolated": "interpolated", "extrapolated": "extrapolated"}
 # What geotag records in GPSProcessingMethod. A bare position marker means geotag set the position
 # and so fixed the time too; a re-run ignores the position and places the file again. The suffix,
 # appended to whatever the field held (the device's own value, or nothing), means geotag fixed the
 # time and kept the device's GPS or has set none. Anything else is the device's own: GPS native.
-POSITION_MARKERS = ("interpolated", "manual_locked", "manual_fallback")
+POSITION_MARKERS = ("matched", "interpolated", "extrapolated", "manual_locked", "manual_fallback")
 TIME_FIXED_SUFFIX = "+carto-time"   # EXIF sets no length on the field; a JPEG's whole EXIF block is 64 KB
 
 
@@ -1066,7 +1070,7 @@ def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename):
             ops.append(_make_op("metadata_time_write", rel, "corrected capture time", {"writes": writes}, pre))
 
     if gps_category in _GPS_OP_ORIGIN and gps_coord is not None:
-        new_marker = _GPS_OP_MARKER[gps_category]
+        new_marker = _TRACK_MARKER.get(gps_coord.get("method")) or _GPS_OP_MARKER[gps_category]
         same_fix = ((held.get("method") or "").strip() == new_marker
                     and isinstance(held.get("lat"), (int, float)) and isinstance(held.get("lon"), (int, float))
                     and round(held["lat"], 6) == round(gps_coord["lat"], 6)
