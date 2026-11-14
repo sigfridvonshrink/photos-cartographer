@@ -592,7 +592,7 @@ destination holds only photos (merge §3). A development subfolder is one named 
 
 :::{bld} Geotag marks what it wrote
 :id: BLD-rerun_recognition
-:status: seed
+:status: ruled
 :realises: RUL-geotag_rerun_keeps_settled
 
 Geotag SHALL record what it wrote in the file's `GPSProcessingMethod`: the bare value beside each position it writes —
