@@ -4,7 +4,7 @@
 
 - **What this is:** [`README.md`](README.md). **The record:** [`HISTORY.md`](HISTORY.md).
 
-*Open items: **28** — 2, 3, 4, 5, 6, 7 and 11 to 32.* 🛑 Numbers are never reused; the next is **33**.
+*Open items: **42** — 2, 3, 4, 5, 6, 7 and 11 to 46.* 🛑 Numbers are never reused; the next is **47**.
 
 ---
 
@@ -287,6 +287,13 @@ Close to item 6, which checks a phone's time against the tracks where it has its
 read them as local time?"), ride the drift check, or stay as they are with a warning; and what an ambiguous or
 impossible local time does — ask, or block naming the photo. To be ruled before it is specified.
 
+**Added by the time review of 2026-11-14:** the first-occurrence choice in a repeated hour is also made in a
+camera's timezone-derived proposal, with nothing in the proposal marking it ambiguous. A phone time in the hour a
+zone skips (02:30 on a spring-forward night) is moved an hour, silently. An offset tag that is present and is not an
+offset is now read as none — strictly — and the photo then falls to the zone like one with no tag, indistinguishable
+in the plan; the log's `time_written` step now names the rule (`destination_timezone`), which is where the
+assumption can be seen after the fact.
+
 ### 21. Let the user leave one photo unlocated in a folder that has a fallback
 
 **Why:** the placement order puts a destination's fallback above a photo's own `accept_unlocated`, and a photo the
@@ -344,6 +351,10 @@ keep the camera's uncorrected time, so a corrected photo holds times that disagr
 
 **Open:** write them all to the corrected time, leave them (they are the camera's record), or clear the offsets that
 no longer hold. digiKam's reading order decides how much it matters.
+
+**Added by the time review of 2026-11-14:** a real write leaves `XMP:DateCreated` and `IPTC:DateCreated` with the
+old time and old offset, and `SubSecTimeOriginal` attached to the new second, so the composite sub-second time reads
+as the new second with the old fraction.
 
 ### 27. Durability of the control files across a power cut
 
@@ -453,3 +464,149 @@ are kept, so a change to a threshold or to the inference is read as a difference
   for this on purpose. One trip is one sample: thresholds tuned on it alone fit London.
 - What is scored as wrong: a position within the track's own error is right; the bound needs a figure.
 - Whether a threshold change must show its score before it is ruled.
+
+---
+
+*Items 33 to 46 come from the adversarial review of time handling, 2026-11-14. Each is a choice between behaviours:
+none is coded until ruled. What the review found that was plainly wrong was fixed with it.*
+
+### 33. An inherited timezone applies itself against the destination's own photos
+
+**Why:** a zone set on a trip's folder is inherited by every destination under it with no question
+(`RUL-timezone_auto_resolves`). `Trip/{Lisbon, Porto, Madrid}`: Madrid inherits Lisbon's zone though every phone
+photo there records +02:00. The phone's instants stay right; their written local time and name are an hour off the
+wall clock, and a camera's timezone-derived proposal there is built on the wrong zone. The one zone change of a trip
+is the one thing never asked.
+
+**Proposed rule:** an inherited timezone SHALL NOT take effect without the user's answer in a destination holding a
+photo whose own recorded offset differs from that timezone's offset at the photo's time.
+
+**Open:** ask, or propose the zone the photos' offsets imply; how many photos must disagree; relation to item 14.
+
+### 34. One camera's day sorted into several destinations is decided several times
+
+**Why:** an offset is per camera, destination and day, drawn only from that destination's evidence
+(`RUL-offset_from_own_evidence`). The philosophy says the opposite — *"a clock offset is the camera's for that day,
+wherever its photos were sorted"* (`RAT-decisions_cascade`). Museum in the morning, castle in the afternoon: the
+museum's cell is anchored at −3 h 02 min, the castle's has no anchor and proposes −2 h from the zone; both accepted,
+one clock on one day is written two ways an hour apart, and nothing flags it. The same holds for day two proposing a
+value day one's drift check disproved.
+
+**Open:** check only (two offsets of one camera-day farther apart than offsets are told apart may not both take
+effect unasked), or also offer the sibling's offset as the proposal — which reverses a ruled rule and removes most of
+a trip's questions.
+
+### 35. The time a camera's own GPS recorded is not used as evidence of its clock
+
+**Why:** a native-GPS photo carries the fix's UTC (`GPSDateStamp`, `GPSTimeStamp`); prep reads them, geotag does
+not. With no track covering it the cell falls to the zone guess and a question, though the photo states its own
+offset. The same evidence would settle phone photos with no offset tag (item 20) and give item 6 its check.
+
+**Open:** a stale fix (a camera reusing its last fix) gives a wrong time — what bounds it; whether such an offset
+applies itself as one agreed by several anchors does.
+
+### 36. A camera photo's own recorded offset is ignored
+
+**Why:** a recent body left on home time writes `OffsetTimeOriginal` +01:00 in Japan. The timezone-derived proposal
+is built from Japan's zone, eight hours wrong, and offered as the default answer; the tag that says which zone the
+clock was on is read only for phones. `TimeZone` is carried into the file model and read by nothing.
+
+**Open:** derive the unanchored proposal from the recorded offset where the camera's photos carry one; what when they
+disagree with each other or with a GPS anchor.
+
+### 37. A drift confirmation outlives the tracks it was made against
+
+**Why:** an offset that applied itself rests on its tracks (`RUL-kept_offset_rests_on_its_tracks`); one the user
+confirmed by scrubbing a photo along a track does not. That track removed as a companion's and another added, the
+confirmation still stands and the day is placed on a track nobody looked at.
+
+**What to do:** the confirmation names the tracks it was made against, as it names its offset — written by the
+editor with the confirmation — and holds only while each is there unchanged. Not a choice of behaviour; it needs the
+editor to write it, which is why it was not done with the review.
+
+### 38. A time read from the modification or digitisation field is taken for the camera's clock
+
+**Why:** an export whose `DateTimeOriginal` is gone keeps its make and model and a `ModifyDate` written by the
+editing computer. It joins the camera's group, its edit date opens a day of its own — a new question — and the
+camera's offset is applied to a computer's clock.
+
+**Open:** solve such a photo on its own, never by the camera's offset nor counted in its days; or treat it as
+untimed (item 22).
+
+### 39. Two bodies in one camera group
+
+**Why:** two bodies of one model that write no serial are one group. Both with GPS: their anchors disagree for good
+and no one offset is right. Only one with GPS that day: its agreed offset applies itself to the other body's photos.
+Item 16's planned reading of scattered photos as suspect positions would then propose replacing the second body's
+correct ones.
+
+**Open:** a group whose key carries no serial never has an offset from its GPS apply itself; or the user declares a
+group split.
+
+### 40. A destination has one timezone — and where a trip's is asked
+
+**Why:** the corrected time is written, and the file named, in the destination's local time (`RUL-corrected_time_written_local`),
+for the reason that a morning market should read as morning. A phone photo taken at the home airport and filed
+under Japan has a correct local time replaced by Japan's: the rule defeats its own reason. No item says a
+destination has exactly one zone, or what a folder for a drive across a zone line does. Separately: a container
+never waits, so `Japan/{Kyoto, Tokyo, Nara}` asks three times unless the user knows to answer on the folder that asks
+nothing — against *"one answer per trip, at the trip's folder"* (`RAT-home_zone_offered`).
+
+**Open:** one zone per destination whatever a photo records, or a photo with its own offset keeps its own local
+time; ask a missing zone once, at the topmost destination that neither has nor inherits one.
+
+### 41. The same offset is asked twice
+
+**Why:** a camera with no GPS and tracks nearby needs its timezone-derived offset accepted (photos-21) and then
+confirmed against the tracks (photos-22): two stages, two runs, one number. The confirmation is the stronger act and
+names the offset itself. The review counted a typical trip — one camera, one phone, three days, a zone change — at
+eight prompts against a floor of about four; three of the eight are these acceptances.
+
+**Open:** ask once, at the check against the tracks, where tracks cover the photos; keep the acceptance where none do.
+
+### 42. A clock reset to its factory date is proposed like any other
+
+**Why:** battery out, camera at 2000-01-01. No anchor is possible; the cell proposes the timezone-derived offset,
+acceptable in one answer, which writes the year 2000 into the originals as corrected. The drift check now asks where
+tracks lie by the camera's recorded times, which a reset clock's do not. The right answer is a count of seconds over
+26 years, worked out by hand.
+
+**Open:** a proposed offset leaving a cell's photos farther than the largest clock error from every track and every
+other device's photo of the destination does not take effect on acceptance alone; let the user give the true time of
+one photo instead of an offset.
+
+### 43. Videos and set-aside JPEGs keep the uncorrected clock in their names
+
+**Why:** geotag changes photos by destination only, never a video (`RUL-geotag_changes_only_by_dest`). A camera on
+home time: its photos are named in destination-local time, its videos of the same minutes eight hours away, and a
+RAW no longer shares its name with its set-aside JPEG. No item says the provisional name is final for them.
+
+**Open:** say so, or correct those names from the camera-day's settled offset — a rename, no tag written.
+
+### 44. A time corrected by hand after geotag wrote it is planned back
+
+**Why:** geotag decides from the values pinned before its first write. A user who then fixes the photo's time in
+another tool finds, after the next plan, a write putting geotag's value back — now logged with what it replaces, but
+neither asked nor refused.
+
+**Open:** a held time that is neither the pinned original nor what geotag wrote blocks, naming the photo; or is taken
+as the photo's new recorded time.
+
+### 45. Order and pairs among photos of one second
+
+**Why:** suffixes are given in path order, and `-` sorts before `.`: `T.jpg, T-001.jpg, T-002.jpg` become
+`T'-002.jpg, T'.jpg, T'-001.jpg` on geotag's rename, a burst's order rotating, and a RAW can land beside another
+frame's JPEG. Sub-second times are read by prep and used nowhere. Two smaller things of the same kind: a filename
+format holding `%z` reads differently in prep and geotag, and names in the hour a zone repeats sort against true time.
+
+**Open:** order by sub-second then the suffix already held, one suffix across the extensions of a stem; refuse a
+format whose fields read differently with and without a zone.
+
+### 46. Corrected means resolved, so every original is written
+
+**Why:** a phone photo already holding the right local time and its own position gets no time written — and still
+gets geotag's mark in `GPSProcessingMethod`, because a time counts as corrected once resolved. Every original is
+touched; "corrected" is defined nowhere.
+
+**Open:** define it as resolved (state it), or mark only a photo whose time geotag changed and recognise the others
+on a re-run by their unchanged values.

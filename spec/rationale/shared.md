@@ -1105,6 +1105,19 @@ it is what tells a right correction from a mistake; named beside the step, it is
 may be long gone with the workspace.
 :::
 
+:::{rat} The time replaced is the one thing the photo no longer holds
+:id: RAT-time_replaced_is_gone_from_the_photo
+:status: seed
+:forced: yes
+:follows_from: RAT-why_beside_what, RAT-consolidated_log
+:justifies: RUL-log_records_time_replaced
+
+Once geotag has written a time, the photo no longer says what its camera recorded: the log is the only place that can.
+And two photos written alike may have been found differently — one by the offset its phone recorded, one by assuming
+it was taken on the destination's local time. The second is a guess; a reader checking a photo that looks an hour out
+must be able to see which it was, and what stood there before.
+:::
+
 :::{rat} Each phase writes only its own steps
 :id: RAT-each_phase_owns_its_steps
 :status: ruled

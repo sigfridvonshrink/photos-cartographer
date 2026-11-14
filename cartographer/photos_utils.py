@@ -204,6 +204,23 @@ def default_config() -> dict:
     return copy.deepcopy(DEFAULT_CONFIG)
 
 
+# Names a zone database keeps that are no place's zone: `localtime` is the machine's own, the others its
+# defaults — a decision resting on one would change with the host the run happens on.
+_HOST_ZONE_NAMES = ("localtime", "posixrules", "Factory")
+
+
+def valid_iana_timezone(tz) -> bool:
+    """True iff `tz` names a real IANA timezone — one that resolves, and is a place's, not the host's."""
+    import zoneinfo
+    if not isinstance(tz, str) or not tz or tz in _HOST_ZONE_NAMES:
+        return False
+    try:
+        zoneinfo.ZoneInfo(tz)
+        return True
+    except (zoneinfo.ZoneInfoNotFoundError, ValueError, OSError):
+        return False
+
+
 def selected_gpx_root() -> str:
     root = CONFIG.get("gpx_root") or ""
     return os.path.realpath(os.path.abspath(root)) if root else ""
@@ -1274,10 +1291,7 @@ def validate_config(cfg: dict, workspace_root: str = None):
             tz = pol["default_folder_timezone"]
             _check_string("camera_time_and_timezone_policy.default_folder_timezone", tz)
             if tz:
-                try:
-                    from zoneinfo import ZoneInfo
-                    ZoneInfo(tz)
-                except Exception:
+                if not valid_iana_timezone(tz):
                     raise ValueError(f"config: camera_time_and_timezone_policy.default_folder_timezone "
                                      f"{tz!r} is not a valid IANA timezone.")
         dg = pol.get("device_groups")

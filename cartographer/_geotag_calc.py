@@ -26,6 +26,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import sqlite3
 import subprocess
 import sys
@@ -34,6 +35,7 @@ import zoneinfo
 from datetime import datetime, timedelta, timezone
 
 from .photos_utils import (
+    valid_iana_timezone,
     CONFIG, CONTROL_DIR, config_path, handoff_path, guard_path, is_sealed,
     validate_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
     folders_fingerprint, media_extensions_fingerprint,
@@ -92,6 +94,7 @@ __all__ = [
     '_GPS_PLACE_CATEGORY',
     'classify_gps',
     'held_pre_state',
+    'held_time_pre_state',
     '_coordinate_tags',
     '_CLEARED_POSITION',
     '_walk_ancestors',
@@ -342,12 +345,9 @@ class GPXIndex:
 
 
 def _valid_iana(tz):
-    """True iff `tz` resolves to a real IANA timezone (geotag §9.2)."""
-    try:
-        zoneinfo.ZoneInfo(tz)
-        return True
-    except (zoneinfo.ZoneInfoNotFoundError, ValueError, TypeError):
-        return False
+    """True iff `tz` names a real IANA timezone (geotag §9.2): a place's zone, never one of the names a
+    zone database keeps for the machine it is on — `localtime` resolves to wherever the run happens."""
+    return valid_iana_timezone(tz)
 
 
 def _valid_offset(v):
@@ -639,16 +639,22 @@ def infer_anchor_proposal(frames, gpx, cfg):
 # geotag-owned SQLite cache and its deterministic fingerprint (§22.1).
 # ============================================================================
 
+_OFFSET_RE = re.compile(r"^([+-])(\d\d):?([0-5]\d)$")
+
+
 def _parse_iso_offset(s):
-    """A UTC offset like '+02:00' / '-05:30' as seconds, or None if malformed."""
-    if not isinstance(s, str) or len(s) < 6 or s[0] not in "+-":
+    """A UTC offset — '+02:00', '-05:30', '+0200' or 'Z' — as seconds, or None for anything else: a value
+    that is not an offset is no offset, never one read loosely."""
+    if not isinstance(s, str):
         return None
-    try:
-        hh, mm = s[1:].split(":")[:2]
-        secs = int(hh) * 3600 + int(mm) * 60
-    except (ValueError, IndexError):
+    s = s.strip()
+    if s == "Z":
+        return 0
+    m = _OFFSET_RE.match(s)
+    if not m or int(m.group(2)) > 14:
         return None
-    return -secs if s[0] == "-" else secs
+    secs = int(m.group(2)) * 3600 + int(m.group(3)) * 60
+    return -secs if m.group(1) == "-" else secs
 
 
 def _local_to_utc(naive, tz):
@@ -678,6 +684,13 @@ OFFSET_TAG_FOR = {"DateTimeOriginal": "OffsetTimeOriginal", "CreateDate": "Offse
 def _own_offset(f):
     """The offset, in seconds, recorded with the field `f`'s time was read from, or None. Prep names the field
     with its group (`EXIF:DateTimeOriginal`, prep §12); the offset is the paired field's, from its own group."""
+    value = f.get("source_naive_time")
+    if isinstance(value, str) and len(value) > 19:
+        # an offset written in the time's own value (XMP: `…10:00:00+02:00`, `…10:00:00.5Z`) is the one
+        # recorded with it, before any field beside it
+        within = _parse_iso_offset(re.sub(r"^\.\d+", "", value[19:]))
+        if within is not None:
+            return within
     tag = OFFSET_TAG_FOR.get((f.get("source_time_tag") or "").rsplit(":", 1)[-1])
     return _parse_iso_offset((f.get("raw_times") or {}).get(tag)) if tag else None
 
@@ -700,48 +713,11 @@ def compute_resolved_utc(files, groups, artifact, offset_overrides=None):
         naive = _parse_camera_naive(f.get("source_naive_time"))
         resolved, status, rule, offset_used, prov = None, "unresolved", "missing_timestamp", None, None
         scope = key
-        if naive is not None and f.get("geotag_marker"):
-            # geotag corrected this time already: it is destination-local, offset tag beside it
-            own_off = _own_offset(f)
-            if own_off is not None:
-                offset_used, resolved = own_off, naive - timedelta(seconds=own_off)
-                status, rule = "valid", "geotag_corrected"
-            elif tz:
-                resolved = _local_to_utc(naive, tz)
-                status, rule, prov = "valid", "geotag_corrected", tz
-            else:
-                status, rule = "unresolved", "timezone_missing"
-        elif naive is not None:
-            if cls == "camera":
-                # per-date offset bucket: a destination split over >1 naive date keys cells
-                # `group@YYYY-MM-DD`; the single-date common case keeps the bare `group` key.
-                cells = d.get("camera_group_time_decisions") or {}
-                date = _naive_date(f.get("source_naive_time"))
-                bucket_key = f"{key}@{date}" if f"{key}@{date}" in cells else key
-                scope = bucket_key                         # the cell this photo's offset comes from
-                cell = cells.get(bucket_key) or {}
-                eff = cell.get("effective_time_anchor")
-                if (dest, bucket_key) in overrides:        # §22a: operator-validated offset wins
-                    offset_used = overrides[(dest, bucket_key)]
-                    resolved = naive + timedelta(seconds=offset_used)
-                    status, rule, prov = "valid", "camera_group_offset", "gps_drift_validated"
-                elif isinstance(eff, dict) and "offset_seconds" in eff:
-                    offset_used = eff["offset_seconds"]
-                    resolved = naive + timedelta(seconds=offset_used)
-                    status, rule, prov = "valid", "camera_group_offset", eff.get("source")
-                else:
-                    status, rule = "unresolved", "offset_missing"
-            else:   # a phone, or a file naming no camera, each solved on its own (unknown groups were hard-stopped)
-                native_off = _own_offset(f)
-                if native_off is not None:
-                    offset_used, resolved = native_off, naive - timedelta(seconds=native_off)
-                    status = "valid"
-                    rule = "unidentified_native_offset" if cls == "unidentified" else "smartphone_native_offset"
-                elif tz:
-                    resolved = _local_to_utc(naive, tz)
-                    status, rule, prov = "valid", "destination_timezone", tz
-                else:
-                    status, rule = "unresolved", "timezone_missing"
+        try:
+            resolved, status, rule, offset_used, prov, scope = _resolve_one(f, d, cls, naive, tz, key, dest, overrides)
+        except OverflowError:
+            # a time at the edge of the calendar (year 1, year 9999) that its offset carries past it
+            resolved, status, rule = None, "unresolved", "time_out_of_range"
         rows.append({
             "relative_path": f["relative_path"], "destination_path": dest, "destination_timezone": tz,
             "camera_group": key, "time_decision_scope": f"{scope}|{dest}",
@@ -751,6 +727,56 @@ def compute_resolved_utc(files, groups, artifact, offset_overrides=None):
             "resolved_utc_status": status, "resolved_utc_provenance": prov,
         })
     return rows
+
+
+def _resolve_one(f, d, cls, naive, tz, key, dest, overrides):
+    """One photo's (resolved UTC, status, rule, offset used, provenance, decision scope) — see
+    compute_resolved_utc."""
+    resolved, status, rule, offset_used, prov = None, "unresolved", "missing_timestamp", None, None
+    scope = key
+    if naive is not None and f.get("geotag_marker"):
+        # geotag corrected this time already: it is destination-local, offset tag beside it
+        own_off = _own_offset(f)
+        if own_off is not None:
+            offset_used, resolved = own_off, naive - timedelta(seconds=own_off)
+            status, rule = "valid", "geotag_corrected"
+        elif tz:
+            resolved = _local_to_utc(naive, tz)
+            status, rule, prov = "valid", "geotag_corrected", tz
+        else:
+            status, rule = "unresolved", "timezone_missing"
+    elif naive is not None:
+        if cls == "camera":
+            # per-date offset bucket: a destination split over >1 naive date keys cells
+            # `group@YYYY-MM-DD`; the single-date common case keeps the bare `group` key.
+            cells = d.get("camera_group_time_decisions") or {}
+            date = _naive_date(f.get("source_naive_time"))
+            bucket_key = f"{key}@{date}" if f"{key}@{date}" in cells else key
+            scope = bucket_key                         # the cell this photo's offset comes from
+            cell = cells.get(bucket_key) or {}
+            eff = cell.get("effective_time_anchor")
+            if (dest, bucket_key) in overrides:        # §22a: operator-validated offset wins
+                offset_used = overrides[(dest, bucket_key)]
+                resolved = naive + timedelta(seconds=offset_used)
+                status, rule, prov = "valid", "camera_group_offset", "gps_drift_validated"
+            elif isinstance(eff, dict) and "offset_seconds" in eff:
+                offset_used = eff["offset_seconds"]
+                resolved = naive + timedelta(seconds=offset_used)
+                status, rule, prov = "valid", "camera_group_offset", eff.get("source")
+            else:
+                status, rule = "unresolved", "offset_missing"
+        else:   # a phone, or a file naming no camera, each solved on its own (unknown groups were hard-stopped)
+            native_off = _own_offset(f)
+            if native_off is not None:
+                offset_used, resolved = native_off, naive - timedelta(seconds=native_off)
+                status = "valid"
+                rule = "unidentified_native_offset" if cls == "unidentified" else "smartphone_native_offset"
+            elif tz:
+                resolved = _local_to_utc(naive, tz)
+                status, rule, prov = "valid", "destination_timezone", tz
+            else:
+                status, rule = "unresolved", "timezone_missing"
+    return resolved, status, rule, offset_used, prov, scope
 
 
 def resolved_utc_fingerprint(rows, input_fingerprints):
@@ -1115,8 +1141,10 @@ def _local_time_and_offset(resolved_utc, tz):
     if dt is None or not tz:
         return None, None
     local = dt.astimezone(zoneinfo.ZoneInfo(tz))
-    z = local.strftime("%z")
-    return local.strftime("%Y:%m:%d %H:%M:%S"), (z[:3] + ":" + z[3:] if z else "")
+    # The offset field holds hours and minutes. A zone's offset before it kept standard time has seconds
+    # (Amsterdam in 1935: +00:19:32): it is written to the nearest minute, the local time exact.
+    minutes = round(local.utcoffset().total_seconds() / 60)
+    return local.strftime("%Y:%m:%d %H:%M:%S"), f"{'-' if minutes < 0 else '+'}{abs(minutes) // 60:02d}:{abs(minutes) % 60:02d}"
 
 
 def _make_op(typ, rel, reason, semantic, preconditions):
@@ -1244,6 +1272,26 @@ def _with_record_hashes(steps, plan):
     return steps
 
 
+def held_time_pre_state(file):
+    """The time `file` holds now and the offset beside it, in the shape the log records beside the write
+    that replaces them (shared contract §13.3)."""
+    h = held_values(file)
+    return {"DateTimeOriginal": h.get("DateTimeOriginal"), "OffsetTimeOriginal": h.get("OffsetTimeOriginal")}
+
+
+def _time_written_step(time_op):
+    """The log's step for a time geotag wrote: what was written, what it replaced, the field the photo's
+    time was read from and the rule that turned it to UTC — a time taken from the photo's own offset and
+    one assumed from the destination's zone are told apart here, and nowhere else in the record."""
+    prov = time_op.get("provenance") or {}
+    step = {"phase": "geotag", "action": "time_written", "writes": time_op.get("writes")}
+    for k, v in (("pre_state", time_op.get("pre_state")), ("read_from", prov.get("source_time_provenance")),
+                 ("rule", prov.get("time_rule_used"))):
+        if v is not None:
+            step[k] = v
+    return step
+
+
 def _earlier_pass_steps(plan, confirmed):
     """{fingerprint: [steps]} for one earlier executed pass: what its confirmed operations did to each
     photo, matched by the fingerprint the operation was planned against, each step naming the run."""
@@ -1269,7 +1317,7 @@ def _earlier_pass_steps(plan, confirmed):
             if prov.get("destination_timezone"):
                 steps.append({"phase": "geotag", "action": "timezone_resolved", "value": prov["destination_timezone"],
                               **({"because": prov["timezone_because"]} if prov.get("timezone_because") else {})})
-            steps.append({"phase": "geotag", "action": "time_written", "writes": time_op.get("writes")})
+            steps.append(_time_written_step(time_op))
         steps += _gps_and_rename_steps(ops, native=False)
         out[fp] = _with_record_hashes([dict(s, run=run) for s in steps], plan)
     return out
@@ -1362,6 +1410,9 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, e
             steps.append({"phase": "geotag", "action": "timezone_resolved", "value": tz,
                           "because": f"photos-21 destinations.{dest}.destination_timezone"})
 
+        time_op = next((o for o in ops if o["type"] == "metadata_time_write"), None)
+        if time_op is not None:
+            steps.append(_time_written_step(time_op))
         if fp in unlocated:                    # the user's own answer: no position, and where that was decided
             steps.append({"phase": "geotag", "action": "left_unlocated", "because": unlocated[fp]["because"]})
         steps.extend(_gps_and_rename_steps(ops, native=f.get("has_native_gps")))

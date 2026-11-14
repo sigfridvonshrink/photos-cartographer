@@ -7,7 +7,7 @@ This pipeline mutates irreplaceable originals, so coverage is tracked on **two a
    build by `tools/spec-build`. Line/branch can't tell you whether a *must-refuse / no-clobber /
    leaves-untouched* obligation is actually asserted; this can.
 
-Figures below are a snapshot; regenerate with the commands shown. The suite has **1195 tests**.
+Figures below are a snapshot; regenerate with the commands shown. The suite has **1221 tests**.
 
 ## Line / branch coverage
 
@@ -37,14 +37,14 @@ tools/coverage          # bootstraps a local .venv, runs the suite, writes htmlc
 
 ## Spec coverage
 
-The specification is one corpus of typed items (`spec/`; see `spec/README.md`): 366 rules and invariants, 267
-rationales, 187 build items, 31 definitions, the philosophy's 3 facts and 4 choices — and the 492 tests that name the
-items they verify, made items of the corpus from their `@pytest.mark.spec(…, test="TST-…")` marks. 798 items are
-ruled; 60 — the items the geotag review of 2026-11-14 and the one-purpose settings added or changed — are at seed, awaiting a ruling.
+The specification is one corpus of typed items (`spec/`; see `spec/README.md`): 368 rules and invariants, 268
+rationales, 187 build items, 32 definitions, the philosophy's 3 facts and 4 choices — and the 498 tests that name the
+items they verify, made items of the corpus from their `@pytest.mark.spec(…, test="TST-…")` marks. 796 items are
+ruled; 66 — the items the geotag and time reviews of 2026-11-14 and the one-purpose settings added or changed — are at seed, awaiting a ruling.
 
 | Rules and invariants | Count |
 |---|---:|
-| **`verify: required` (gated)** | **342** |
+| **`verify: required` (gated)** | **344** |
 | `verify: incidental` — exercised, not asserted (BACKLOG 4) | 17 |
 | `verify: none` — nothing checks them (BACKLOG 3) | 7 |
 

@@ -1822,6 +1822,17 @@ A manual position applied, changed or withdrawn SHALL appear in the log with the
 that there was none.
 :::
 
+:::{rul} A time written is logged with what it replaced and how it was found
+:id: RUL-log_records_time_replaced
+:status: seed
+:criticality: med
+:verify: required
+:uses: DEF-transformation_log, DEF-recorded_time
+
+A time geotag writes SHALL appear in the log with the time and offset it replaced, the field the photo's time was read
+from and the rule that turned it to UTC.
+:::
+
 :::{rul} The log reads as it stands
 :id: RUL-log_human_readable
 :status: ruled

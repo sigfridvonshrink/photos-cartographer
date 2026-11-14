@@ -109,6 +109,16 @@ def test_valid_iana_true_and_false():
     assert cal._valid_iana("Nowhere/Nope") is False
 
 
+@pytest.mark.spec("RUL-checked_timezones", test="TST-geotag_orchestration-the_host_s_zone_is_no_place_s")
+@pytest.mark.parametrize("name", ["localtime", "posixrules", "Factory", "", None, 5])
+def test_a_name_for_the_host_s_own_zone_is_no_timezone(name):
+    """`localtime` resolves to wherever the run happens: a decision resting on it would change with the host."""
+    assert cal._valid_iana(name) is False
+    if isinstance(name, str) and name:
+        with pytest.raises(ValueError, match="not a valid IANA timezone"):
+            utils.validate_config({"camera_time_and_timezone_policy": {"default_folder_timezone": name}})
+
+
 def test_timezone_manual_valid_and_no_proposal(tmp_path):
     ws, ctl = _init_ws(tmp_path)
     (ctl / "photos-11-handoff.json").write_text("{}")

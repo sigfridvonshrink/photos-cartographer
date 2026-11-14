@@ -451,6 +451,27 @@ A phone's photo SHALL take its true time from the offset recorded with the time 
 destination's timezone.
 :::
 
+:::{rul} An offset inside the time's own value is recorded with it
+:id: RUL-offset_within_time_value
+:status: seed
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-phone_time_from_own_offset
+
+An offset written within the value of a time field itself SHALL count as the offset recorded with that time, before
+one in a field beside it.
+:::
+
+:::{def} A clock offset
+:id: DEF-clock_offset
+:status: seed
+:uses: DEF-recorded_time, DEF-camera_group
+
+A camera's **clock offset** is the whole number of seconds added to its recorded time to give UTC: the timezone its
+clock was set to and the clock's own error, together. A camera keeping exact Brussels summer time has −7200, not 0.
+:::
+
 
 ## 22a. The GPS-drift check
 
