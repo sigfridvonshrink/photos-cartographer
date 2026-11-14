@@ -132,11 +132,8 @@ CONFIG = {
     "gpx_extrapolation_max_distance_meters": 1000.0,
     "gpx_extrapolation_max_speed_kmh": 150.0,
     # The drift check shows, and is offered only where there is, track within this long of the photos it
-    # checks. Two valid offsets differ by at most two days, so at two days or more every correction the
-    # editor can scrub to lies on the track already shown.
+    # checks: a correction is scrubbed along that track, so it reaches no farther than this.
     "drift_check_track_window_seconds": 172800.0,
-    "photo_anchor_interpolation_max_gap_seconds": 1800.0,
-    "photo_anchor_extrapolation_max_seconds": 300.0,
     "camera_time_and_timezone_policy": {
         "default_folder_timezone": "",
         "device_groups": {
@@ -1155,7 +1152,6 @@ _GPX_NUMERIC_KEYS = (
     "gpx_tracks_agree_max_distance_meters", "gpx_anchor_max_segment_gap_seconds",
     "gpx_anchor_same_pass_max_seconds", "gpx_anchor_stay_max_seconds", "gpx_anchor_stay_distance_meters",
     "gpx_anchor_decision_tolerance_seconds", "drift_check_track_window_seconds",
-    "photo_anchor_interpolation_max_gap_seconds", "photo_anchor_extrapolation_max_seconds",
 )
 
 def validate_config(cfg: dict, workspace_root: str = None):
