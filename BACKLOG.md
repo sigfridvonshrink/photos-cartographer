@@ -34,16 +34,6 @@ against the corpus — is still to do.
 
 ---
 
-### 5. The commit-msg hook — publish it, or keep it local
-
-**What:** `.githooks/commit-msg` rejects a commit whose message credits Claude/Anthropic. It is active in this clone,
-kept out of the repo by `.git/info/exclude`; the branch `origin/chore/commit-msg-no-ai-attribution` (2026-06-27, one
-commit) would add it to `main`.
-
-**Question for the owner:** merge the branch (the hook then guards every clone), or keep it local and delete the branch?
-
----
-
 ### 6. Check a phone's time against the tracks
 
 **Why:** geotag trusts a phone's clock — a phone takes its time from the network — and resolves each phone photo from
@@ -198,10 +188,9 @@ interim advice once both items are built.
 
 **When:** any time — the conversion is done; with or after item 15.
 
-### 17. Redo the user docs, the walkthrough and its screenshots
+### 17. Redo the user docs
 
-**Why:** the conversion changed what the user sees and does, and the user docs (`docs/`) and the walkthrough's
-screenshots were left as they were until it finished — the owner: *"I'd just leave it and redo everything that needs
+**Why:** the conversion changed what the user sees and does, and the user docs (`docs/`) were left as they were until it finished — the owner: *"I'd just leave it and redo everything that needs
 changes when I finish the conversion."* Among the changes: geotag stops on an untimed photo in photos by destination,
 and runs prep itself when the inbox is empty; a trip's timezone is answered once, the configured default only offered;
 `accept_proposed_timezone` and `manual_real_utc` are gone; a tie between visits, a picked GPS group and a drift
@@ -213,9 +202,14 @@ to fix no time, and its offset goes through the drift check; a photo the tracks 
 disagree are warned of; a tracks folder that is not there stops `geotag plan`; finalize prints how every photo was
 placed and refuses photos changed since execute.
 
-**What to do:** walk `README.md`, `docs/quickstart.md`, `concepts.md`, `editor.md`, `walkthrough.md` and
-`who-is-this-for.md` against the corpus and the code; retake every screenshot that shows something changed, and the
-hero GIF if it does.
+**Also since (2026-11-14):** a destination is said to be in a country, which gives its timezone; a destination has one
+timezone, and one written against its photos' recorded offsets needs the user's word; an offset the camera's own
+positions gave is shared across the destinations of a day; a timezone's offset is asked about once, at the tracks;
+geotag stops on a link among the photos; prep stops on a disturbed workspace before it scans; settings of one
+purpose each replaced the shared ones, and a configuration lacking them does not load.
+
+**What to do:** walk `README.md`, `docs/quickstart.md`, `concepts.md`, `editor.md` and `who-is-this-for.md` against
+the corpus and the code, and rewrite what no longer holds. The walkthrough and every screenshot are item 49.
 
 **When:** now — the conversion is done.
 
@@ -332,15 +326,15 @@ no longer hold. digiKam's reading order decides how much it matters.
 old time and old offset, and `SubSecTimeOriginal` attached to the new second, so the composite sub-second time reads
 as the new second with the old fraction.
 
-### 27. Durability of the control files across a power cut
+### 27. A torn plan, and the editor's save of three records
 
-**Why:** records and journals are written to a temporary file and renamed into place, without being flushed to the
-disk first. After a power cut a journal can be empty — read as "nothing applied", which the next run now repairs by
-finding the photos done — and a torn `photos-24` is an unhandled error rather than a message. The editor's save of
-the three decision records is not all-or-nothing, and keeps no copy of what it replaces.
+**Why:** every rewrite is now synced to disk before it replaces the earlier file (`BLD-rewrite_synced_before_rename`,
+2026-11-14), which settles the power cut. Two things remain of this item: a `photos-24` that cannot be read is an
+unhandled error rather than a message; and the editor's save of the three decision records is not all-or-nothing
+across the three, and keeps no copy of what it replaces.
 
-**What to do:** flush before the rename where a record is the only copy of a decision; make a torn plan a plain
-"re-run `geotag plan`"; decide whether the editor's save sets the earlier records aside as a re-plan does.
+**What to do:** make an unreadable plan a plain "re-run `geotag plan`"; decide whether the editor's save sets the
+earlier records aside as a re-plan does, and whether the three are saved as one.
 
 ### 28. Finding anchors and placing photos against years of tracks
 
@@ -595,4 +589,19 @@ error and no word of why. The owner, 2026-11-14: backlog it.
 scratch file in the control directory and stop, naming the one that is missing, before anything else is done. To be
 ruled with it: whether a network filesystem, where the lock guards one machine only
 (`RUL-stale_takeover_conservative`), is refused, warned of, or left to the user.
+
+---
+
+### 49. Retake the walkthrough and every screenshot
+
+**Why:** `docs/walkthrough.md` is a real run of v2.0.0 in thirty-nine screenshots, and the hero GIF and the shots in
+`editor.md` and `concepts.md` are of the same version. The editor and the console show other things now (item 17
+lists them), and the walkthrough's "Geotag won't proceed" step predates geotag running prep itself. Split from item 17
+on 2026-11-14; until it is done the walkthrough carries a note saying which version it shows.
+
+**What to do:** run a real trip through the current build and retake the walkthrough end to end, the hero GIF, and
+each shot in the other guides that shows something changed; then take the note off. The London trip (item 32) is the
+natural run to take them from.
+
+**When:** after item 17's text, so the pictures are taken once.
 
