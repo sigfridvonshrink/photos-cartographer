@@ -312,7 +312,8 @@ same on every run.
 :follows_from: RAT-idempotent_reruns
 :justifies: RUL-database_matches_files
 
-The next run reuses the database's fingerprints and metadata for every file whose size and time are unchanged. A row
+The next run reuses the database's fingerprints and metadata for every file whose path, size and time are unchanged
+and whose fingerprint was taken the way this build takes it. A row
 left stale or pointing at a file that is gone would be reused for what it no longer describes; refreshing and pruning at
 each execution keeps reuse safe.
 :::
