@@ -207,7 +207,8 @@ function wouldResolve(ref) {
   const c = workCell(ref); if (!c) return false;
   const u = c.user_decision || {}, p = c.proposal || {};
   if (ref.kind === "timezone")
-    return (!!u.manual_iana_timezone && validTz(u.manual_iana_timezone)) || !!c.proposed_iana_timezone;   // a proposal applies itself
+    return (!!u.manual_iana_timezone && validTz(u.manual_iana_timezone))
+      || (!!c.proposed_iana_timezone && c.proposal_source === "inherited");   // an inherited zone applies itself
   if (ref.kind === "offset")
     return (u.manual_offset_seconds !== "" && u.manual_offset_seconds != null && validOffset(u.manual_offset_seconds))
       || (!!u.accept_proposal && "proposed_offset_seconds" in p);
@@ -302,7 +303,8 @@ function previewEffective(ref) {
     if (u.manual_iana_timezone) return validTz(u.manual_iana_timezone) ? u.manual_iana_timezone : "✗ invalid zone";
     const pv = previewTz(ref.dest);
     if (pv && pv.source === "inherited") return `${pv.tz} (inherited ⟵ ${leaf(pv.from)}, preview)`;
-    if (pv && pv.source === "default") return `${pv.tz} (configured default)`;
+    if (c.proposal_source === "config_default" && c.proposed_iana_timezone)
+      return `— (proposed: ${c.proposed_iana_timezone}, the configured default — use it or pick another)`;
     return "— (needs input)";
   }
   if (ref.kind === "offset") {
@@ -337,9 +339,9 @@ function previewEffective(ref) {
 
 // --- advisory timezone inheritance preview -----------------------------------
 // Mirrors geotag's rule for DISPLAY ONLY: a child timezone with no own decision would, on re-run,
-// inherit from its nearest ancestor that resolves, else take the configured default. Updates live as you
-// edit ancestors; authoritative only after Re-run. A zone written by hand is the one decision a timezone
-// takes — a proposal applies itself — so a destination's own value is its manual zone or nothing.
+// inherit from its nearest ancestor that resolves. Updates live as you edit ancestors; authoritative only
+// after Re-run. A zone written by hand is the one decision a timezone takes; an inherited one applies itself,
+// the configured default is only proposed — so a destination's own value is its manual zone or nothing.
 const leaf = (p) => (p || "").split("/").pop();
 function tzOwnDecision(dest) {
   const c = state.work.time?.destinations?.[dest]?.destination_timezone;
@@ -359,10 +361,7 @@ function previewTz(dest) {
       if (a && a.tz) return { tz: a.tz, source: "inherited", from: anc };
     }
   }
-  const c = state.work.time?.destinations?.[dest]?.destination_timezone;
-  if (c?.proposal_source === "config_default" && c.proposed_iana_timezone)
-    return { tz: c.proposed_iana_timezone, source: "default" };
-  return null;
+  return null;                                       // the configured default is proposed, never in effect
 }
 // Same advisory walk for the GPS folder-fallback: a destination with no own fallback shows the one it
 // would inherit from its nearest resolved ancestor (e.g. a parent/container you just set), updating live.
@@ -706,7 +705,11 @@ function offsetEditor(ref) {
 function controls(ref) {
   const c = workCell(ref), u = c.user_decision, p = c.proposal || {}, wrap = el("div", { class: "ctl-block" });
   if (ref.kind === "timezone") {
-    // A proposal applies itself; the one decision here is a zone written by hand, which overrides it.
+    // An inherited zone applies itself; the configured default is only proposed (§18) — one click takes it as the
+    // user's own. The one decision here is a zone written by hand, which overrides either.
+    if (c.proposal_source === "config_default" && c.proposed_iana_timezone && !u.manual_iana_timezone)
+      wrap.append(el("button", { class: "mini", onclick: () => edit(ref, "manual_iana_timezone", c.proposed_iana_timezone) },
+        `use ${c.proposed_iana_timezone}`));
     const sel = tzSelect(u.manual_iana_timezone, (v) => edit(ref, "manual_iana_timezone", v), false);
     wrap.append(el("label", { class: "ctl-field" }, el("span", {}, "Manual timezone"), sel));
     if (!validTz(u.manual_iana_timezone)) wrap.append(el("div", { class: "err" }, "not a valid IANA timezone"));

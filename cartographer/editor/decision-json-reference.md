@@ -137,7 +137,8 @@ it that propagate **downward** to its children. A container carries timezone and
 inherit), but **no offset cells at all** — `camera_group_time_decisions` is empty, because clock offsets
 neither cascade down nor roll up and a file-less folder has no media to time-correct. Having no media to
 act on, **none of a container's cells ever block**: each `requires_user_input` is `false` and an unset
-timezone cell **auto-resolves by inheritance** (`decision_mode: "auto_resolved"`) while staying editable.
+timezone cell **auto-resolves by inheritance** (`decision_mode: "auto_resolved"`) while staying editable — or, with
+nothing to inherit, is offered the configured default without asking for it.
 The editor badges these destinations as `container` and keeps them off the to-do list.
 
 ### 4.3 `destination_timezone` cell
@@ -150,8 +151,8 @@ The editor badges these destinations as `container` and keeps them off the to-do
 | `inherited_from` | string | no | Present only when `proposal_source == "inherited"`: the ancestor destination. |
 | **`user_decision.manual_iana_timezone`** | string (`""`) | **yes** | A human-entered IANA zone (e.g. `"Asia/Tokyo"`). |
 | `effective_iana_timezone` | string (`""` if unresolved) | no | The resolved zone. |
-| `requires_user_input` | bool | no | `true` ⇔ `effective_iana_timezone == ""` **and** no proposal exists (no ancestor zone and no configured `default_folder_timezone`). **Any** destination — `file_less` container *or* real — that has a proposal auto-adopts it and is `false`; only a destination with no proposal at all blocks for review. |
-| `decision_mode` | `"auto_resolved"` | no | Present on **any** destination (container *or* real) that auto-adopted its inherited or config-default zone. |
+| `requires_user_input` | bool | no | `true` ⇔ `effective_iana_timezone == ""` on a destination that is not a container — no zone written by hand and no ancestor zone to inherit; a configured `default_folder_timezone` is only offered (`proposal_source: "config_default"`), and takes effect once written as `manual_iana_timezone`. |
+| `decision_mode` | `"auto_resolved"` | no | Present on **any** destination (container *or* real) that adopted its inherited zone. Never for the configured default, which is only offered. |
 | `stale_user_decision` | bool | no | Always `false`: a zone written by hand is kept, or refused if invalid. |
 
 Resolution: `manual_iana_timezone` (if valid) wins; else the proposal applies itself; with none, the destination

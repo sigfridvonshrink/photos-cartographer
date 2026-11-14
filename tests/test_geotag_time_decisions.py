@@ -17,6 +17,7 @@ group, destination) offset cells, with the decision-field / rerun-preservation e
 SHA-256 dependency block (spec §17–§21). The GPX offset inference is Phase 3b. From conftest.py.
 """
 import json
+from _zone import answer_root_zone
 from _handoff import match_disk
 import os
 import sys
@@ -57,6 +58,8 @@ def _ws(tmp_path, *, files, device_groups, default_tz=""):
                                                   device_groups=device_groups,
                                                   default_folder_timezone=default_tz)
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
+    if default_tz:
+        answer_root_zone(ctl, default_tz)        # the default only proposes: the zone answered once at the root
     for rec in files:
         p = ws / rec["relative_path"]; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b"img")
     (ctl / "photos-11-handoff.json").write_text(json.dumps({"filename_timestamp_format": utils.CONFIG["filename_timestamp_format"], "files": match_disk(ws, files)}))
@@ -228,8 +231,8 @@ def test_depends_on_reverifies(tmp_path, monkeypatch):
 @pytest.mark.spec("RUL-timezone_auto_resolves", "RUL-timezone_from_nearest", test="TST-geotag_time_decisions-timezone_proposal_inherits_nearest_resolved_ancestor")
 def test_timezone_proposal_inherits_nearest_resolved_ancestor():
     """A destination's timezone proposal prefers the nearest RESOLVED ancestor's timezone over the
-    generic global default; an inherited (or config-default) proposal auto-resolves without per-
-    destination confirmation (nested geography), staying overridable."""
+    generic global default; an inherited proposal auto-resolves without per-destination confirmation
+    (nested geography), staying overridable; the configured default is only proposed."""
     utils.CONFIG["camera_time_and_timezone_policy"]["default_folder_timezone"] = "Europe/Brussels"
     wf = cal.GeotagWorkflow("/tmp/ws")
     blk = []
@@ -248,11 +251,14 @@ def test_timezone_proposal_inherits_nearest_resolved_ancestor():
     overridden = wf._timezone_decision("6-photos-by-dest/Japan/Kyoto",
                                        {"user_decision": {"manual_iana_timezone": "America/New_York"}}, blk, inh)
     assert overridden["effective_iana_timezone"] == "America/New_York" and "decision_mode" not in overridden
-    # no ancestor tz -> the global default proposal, also auto-resolved
+    # no ancestor tz -> the global default, proposed only: the user answers it, here or above
     top = wf._timezone_decision("6-photos-by-dest/Belgium", {}, blk, None)
     assert top["proposed_iana_timezone"] == "Europe/Brussels" and top["proposal_source"] == "config_default"
-    assert top["effective_iana_timezone"] == "Europe/Brussels" and top["requires_user_input"] is False
-    assert "inherited_from" not in top
+    assert top["effective_iana_timezone"] == "" and top["requires_user_input"] is True
+    assert "inherited_from" not in top and "decision_mode" not in top
+    taken = wf._timezone_decision("6-photos-by-dest/Belgium",
+                                  {"user_decision": {"manual_iana_timezone": "Europe/Brussels"}}, blk, None)
+    assert taken["effective_iana_timezone"] == "Europe/Brussels" and taken["requires_user_input"] is False
     # no proposal at all (no ancestor, no default) -> blank, blocks
     utils.CONFIG["camera_time_and_timezone_policy"]["default_folder_timezone"] = None
     blank = wf._timezone_decision("6-photos-by-dest/Belgium", {}, blk, None)

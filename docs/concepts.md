@@ -172,7 +172,7 @@ parent-first, parent→child only (never sibling→sibling):
 
 | Fact | Inherits? | Auto-applied? | Reset on a manual edit? |
 |---|---|---|---|
-| **Civil timezone** | yes, downward | yes (inheritance/default auto-resolve) | a manual zone **re-roots the chain** at that node for its descendants |
+| **Civil timezone** | yes, downward | yes, by inheritance (the configured default is only offered) | a manual zone **re-roots the chain** at that node for its descendants |
 | **Folder GPS fallback** | yes, downward | no — an inherited fallback must be **confirmed** | a manual fallback **re-roots the chain** at that node for its descendants |
 | **Clock offset** | **no** | only a GPX self-anchor auto-applies | n/a — each day's bucket is re-derived from its own evidence |
 

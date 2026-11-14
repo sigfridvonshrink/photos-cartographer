@@ -18,6 +18,7 @@ bad-coord abort), and a few helper edge branches (scans, malformed handoff recor
 stale, _valid_iana). Complements the per-stage suites. From conftest.py.
 """
 import json
+from _zone import answer_root_zone, with_root_zone
 from _handoff import match_disk
 import os
 import sys
@@ -176,6 +177,7 @@ def _completable_ws(tmp_path):
         cfg["camera_time_and_timezone_policy"], device_groups={"fixed_clock_cameras": [CAM], "phones": []},
         default_folder_timezone="Europe/Brussels", multi_anchor_auto_apply=True)
     (ctl / "photos-00-config.json").write_text(json.dumps(cfg))
+    answer_root_zone(ctl)                        # the zone answered once at the root (§18)
 
     def rec(rel, dto, *, gps=None):
         parsed = {"DateTimeOriginal": dto, "selected_source_naive_timestamp": dto,

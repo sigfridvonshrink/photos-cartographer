@@ -214,15 +214,28 @@ the place's zone, it asks nothing and borrows nothing.
 
 :::{rat} The nearest place says the most
 :id: RAT-nearest_timezone
-:status: ruled
+:status: seed
 :forced: yes
 :follows_from: RAT-decisions_cascade, RAT-destination_tree_is_a_hierarchy
 :justifies: RUL-timezone_from_nearest
 
 The destination a place lies in is the most specific word on its timezone: Kyoto inside Japan is in Japan's zone. The
-configured default is the user's usual zone, true of no trip in particular, so it fills in only where the tree says
+configured default is the user's usual zone, true of no trip in particular, so it is offered only where the tree says
 nothing. And a zone the user sets on a trip's folder should hold for everything beneath it — one answer for the trip,
 not one per folder.
+:::
+
+:::{rat} The home zone is right for no trip in particular
+:id: RAT-home_zone_offered
+:status: seed
+:forced: yes
+:follows_from: RAT-assumptions_need_acceptance
+:justifies: RUL-default_zone_proposed_only
+
+The configured default is the zone the user usually lives in, and a trip is where they went. Applied by itself to a
+trip abroad, it would name every photo in home time and turn the times of photos that record no offset by the hours
+between the two zones — written into the originals, with no sign anything is off. Offered instead, it costs one answer
+per trip, at the trip's folder, everything beneath inheriting it; a trip at home takes it in one click.
 :::
 
 :::{rat} The destination is an input to the time

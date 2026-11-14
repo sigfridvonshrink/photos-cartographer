@@ -153,8 +153,9 @@ photos-cartographer edit          # open the browser editor on this workspace
 
 The order is forced (the editor enforces the same gates — **Time → Drift → GPS**):
 
-1. **Resolve timezones** (Time view). Most destinations auto-resolve by inheritance; you only touch the
-   ones with no proposal. Save, then re-run `geotag plan` and reload.
+1. **Resolve timezones** (Time view). Answer each trip's zone once, on its folder: your configured default zone is
+   offered (one click), never assumed, and everything beneath inherits the answer. Save, then re-run `geotag plan`
+   and reload.
 2. **Validate drift** (Drift view). Any clock offset that wasn't measured against the track (manual or
    timezone-derived, no GPS-anchored frame) must be confirmed against the GPX track before placement —
    scrub the photo along its track segment until it lines up. **An untouched at-risk bucket blocks the

@@ -758,11 +758,13 @@ class GeotagWorkflow:
             else:
                 blockers.append(f"{dest}: destination_timezone.user_decision.manual_iana_timezone "
                                 f"{manual!r} is not a valid IANA timezone.")
-        # Any destination with a proposal adopts it (and re-propagates it downward) without the user's
-        # answer — inherited or config-default, container or real — because the nested geography makes
-        # the parent's timezone the right default for the child; a manual entry overrides it, and is the
-        # one decision the user makes here, so there is no acceptance to record (§18).
-        auto = not manual and bool(proposed)
+        # An inherited zone is adopted (and re-propagated downward) without the user's answer — container or
+        # real — because the nested geography makes the parent's timezone the right one for the child. The
+        # configured default is only proposed: it is the user's usual zone, true of no trip in particular, and
+        # applied to a trip abroad it would name and time its photos in the wrong zone; each top-level trip
+        # answers once, everything beneath inheriting. A manual entry overrides either, and is the one decision
+        # the user makes here (§18).
+        auto = not manual and bool(proposed) and source == "inherited"
         if auto:
             effective = proposed
         block = {

@@ -97,6 +97,13 @@ def _copy(art):
     return json.loads(json.dumps(art))
 
 
+def _root_zone(a, tz="Europe/Brussels"):
+    """The zone answered once at the root of photos by destination, as the user answers it: the configured
+    default is only proposed (geotag §18), and every destination beneath inherits the answer."""
+    a["destinations"][BD]["destination_timezone"]["user_decision"]["manual_iana_timezone"] = tz
+    return a
+
+
 def _td(wf, files, groups, gpx, fill, pre=None):
     """Build time decisions twice: a still-undecided "requires-input" state and the filled "complete".
 
@@ -169,10 +176,10 @@ def scenario_trip():
         return a
 
     def pre_time(a):
-        # Mid-workflow state for the requires-input fixture: Brussels' timezone applies itself (so its
+        # Mid-workflow state for the requires-input fixture: the zone answered at the root (so Brussels'
         # per-date offset buckets surface DST-aware timezone_naive proposals to demo §10.2), but every
         # offset is still pending.
-        return a
+        return _root_zone(a)
 
     wf = _wf()
     time_req, time_comp = _td(wf, files, groups, gpx, fill_time, pre=pre_time)
@@ -245,6 +252,7 @@ def scenario_offset_variants():
         d = a["destinations"]
         d[P]["camera_group_time_decisions"][CAM_PT]["user_decision"]["accept_proposal"] = True     # gpx_anchor_accepted (single)
         d[S]["camera_group_time_decisions"][CAM_SEG]["user_decision"]["accept_proposal"] = True     # gpx_anchor_accepted (medium)
+        _root_zone(a)
         d[C]["camera_group_time_decisions"][CAM_CONF]["user_decision"]["manual_offset_seconds"] = -7200  # resolve a conflict manually
         # Revisit: a tie between two days' tracks; the user picks the other day's group -> gpx_anchor_chosen
         rev = d[R]["camera_group_time_decisions"][CAM_REV]
@@ -315,6 +323,7 @@ def scenario_drift_validation():
 
     def fill_time(a):
         d = a["destinations"]
+        _root_zone(a)
         d[DR]["camera_group_time_decisions"][CAM_DR]["user_decision"]["accept_proposal"] = True  # tz-derived
         return a
 

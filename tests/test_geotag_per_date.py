@@ -23,6 +23,7 @@ file's own date bucket. From conftest.py.
 import photos_2_geotag as cal
 import photos_utils as utils
 import pytest
+from _zone import with_root_zone
 
 BYDEST = "6-photos-by-dest"
 CAM = "SONY|ILCE-6400|123"
@@ -55,11 +56,11 @@ def _tz(default="Europe/Brussels"):
 
 
 def _prior(cells=None):
-    # per-bucket offset decisions; the destination's timezone applies itself (needed for tz-derived offsets).
+    # per-bucket offset decisions, the zone answered at the root (needed for tz-derived offsets).
     dest = {}
     if cells:
         dest["camera_group_time_decisions"] = cells
-    return {"destinations": {f"{BYDEST}/D": dest}}
+    return with_root_zone({"destinations": {f"{BYDEST}/D": dest}})
 
 
 @pytest.mark.spec("RUL-offset_per_camera_destination_day", test="TST-geotag_per_date-single_date_keeps_bare_group_key")
