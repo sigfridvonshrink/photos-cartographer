@@ -38,7 +38,7 @@ import os
 import sys
 from datetime import datetime, timezone
 
-from .photos_utils import (
+from .photos_utils import (links_under, 
     CONFIG, CONTROL_DIR, FINALIZED_MEDIA_ARTIFACT, finalized_media_path, config_path, handoff_path, guard_path, is_sealed,
     validate_config, load_config, validate_merge_config, library_place_error, code_fingerprint, sha256_file, sha256_text, media_class_for_ext,
     folder_name, FOLDER_ROLES, missing_managed_folders, top_level_links, misplaced_top_level_entries, handoff_content_fingerprint, handoff_filename_format_blocker,
@@ -371,7 +371,7 @@ class MergeWorkflow:
                              f"{folder_name('videos_by_date')}/)")
             blockers.append(f"{by_dest}/ must contain only photos. Found " + " and ".join(parts) +
                             ". Remove or relocate them before merging.")
-        syms = self._by_dest_symlinks(by_dest)
+        syms = links_under(self.workspace_root, by_dest)
         if syms:
             blockers.append(f"Forbidden symlink under {by_dest}: {syms[0]}. Symlinks are never followed "
                             "into or out of the managed tree; remove it before merging.")
@@ -1196,18 +1196,6 @@ class MergeWorkflow:
                     nonphoto.append((os.path.relpath(os.path.join(root, f), self.workspace_root), mc))
         return sorted(dev_found), nonphoto
 
-    def _by_dest_symlinks(self, by_dest):
-        """File or directory symlinks anywhere under 6-photos-by-dest (barred, never followed)."""
-        base = os.path.join(self.workspace_root, by_dest)
-        found = []
-        if not os.path.isdir(base):
-            return found
-        for root, dirs, files in os.walk(base):
-            for n in list(dirs) + files:
-                p = os.path.join(root, n)
-                if os.path.islink(p):
-                    found.append(os.path.relpath(p, self.workspace_root))
-        return sorted(found)
 
 
 def _json_get(path, *keys):
@@ -1267,11 +1255,23 @@ def _read_checked_config(ws, reporter):
         return None
 
 
+def _shape_refusal(ws, reporter):
+    """True, having said what is wrong, when the workspace's shape is disturbed at its top level
+    (RUL-shape_checked_first) — the configuration already read, so the folders are known by its names."""
+    wrong = ([f"forbidden symlink at the workspace root: {f}" for f in top_level_links(ws)]
+             + [f"missing managed folder: {f}" for f in missing_managed_folders(ws)]
+             + [f"misplaced entry at the workspace root: {f}" for f in misplaced_top_level_entries(ws)])
+    if wrong:
+        reporter.error("Workspace is non-conforming — " + "; ".join(wrong) + ". Nothing was blessed or written; "
+                       "put the workspace right first.")
+    return bool(wrong)
+
+
 def _init_library_from_config(ws, reporter):
     """init-library with no path, in a workspace: bless the library its config already names. The
     caller holds the workspace lock."""
     cfg = _read_checked_config(ws, reporter)
-    if cfg is None:
+    if cfg is None or _shape_refusal(ws, reporter):
         return 2
     library_root = ((cfg.get("merge") or {}).get("library_root") or "")
     if not library_root:
@@ -1369,7 +1369,7 @@ def do_init_library(path_arg, ws):
             return 2
         cfg_p = config_path(ws)
         cfg = _read_checked_config(ws, reporter)
-        if cfg is None:
+        if cfg is None or _shape_refusal(ws, reporter):
             return 2
         # The setup command writes the single library_root key — and ONLY that key
         # (RUL-library_setup_writes_one_setting).

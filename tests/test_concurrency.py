@@ -286,12 +286,14 @@ def test_cli_jobs_argparse(workspace):
         os.makedirs(os.path.join(workspace, _d), exist_ok=True)
 
     # Create dummy exiftool to pass the Popen check
-    exiftool_path = os.path.join(workspace, "exiftool")
+    bin_dir = workspace.rstrip(os.sep) + "-bin"       # beside the workspace: nothing but its folders belongs in it
+    os.makedirs(bin_dir, exist_ok=True)
+    exiftool_path = os.path.join(bin_dir, "exiftool")
     with open(exiftool_path, "w") as f:
         f.write("#!/bin/sh\nexit 0\n")
     os.chmod(exiftool_path, 0o755)
     env = os.environ.copy()
-    env["PATH"] = workspace + os.pathsep + env.get("PATH", "")
+    env["PATH"] = bin_dir + os.pathsep + env.get("PATH", "")
     env["PYTHONPATH"] = repo_root + os.pathsep + env.get("PYTHONPATH", "")
 
     import json

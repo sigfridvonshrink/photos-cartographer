@@ -61,8 +61,10 @@ needs_fields = {
     "criticality": {"nullable": True, "schema": {"type": "string", "enum": ["high", "med", "low"]}},
     # a must-refuse / must-not obligation -- the kind a happy-path test cannot show
     "anti": {"nullable": True, "schema": {"type": "string", "enum": ["yes"]}},
-    # required: a test must verify it (the gate) · incidental: exercised, not asserted · none: no test; `omit_reason` says why
-    "verify": {"nullable": True, "schema": {"type": "string", "enum": ["required", "incidental", "none"]}},
+    # required: a test must verify it (the gate) · by_rules: an invariant, verified by the rules that uphold or refine
+    # it, each of them `required` (the gate too) · incidental: exercised, not asserted · none: no test; `omit_reason`
+    # says why
+    "verify": {"nullable": True, "schema": {"type": "string", "enum": ["required", "by_rules", "incidental", "none"]}},
     "omit_reason": {"nullable": True},
     # the names a user guide gives this item (F1, P1)
     "aliases": {"nullable": True},

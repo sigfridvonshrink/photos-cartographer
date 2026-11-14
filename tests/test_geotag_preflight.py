@@ -127,7 +127,7 @@ def test_every_misplaced_root_entry_named(tmp_path):
     assert hit and all(n in hit[0] for n in ("pipe", "randomdump", "stray.txt")), blockers
 
 
-@pytest.mark.spec("RUL-geotag_merge_check_top_level_links",
+@pytest.mark.spec("RUL-geotag_merge_check_links",
                   test="TST-geotag_preflight-directory_symlink_at_root_blocks")
 def test_directory_symlink_at_root_blocks(tmp_path):
     """A symlink at the root is barred outright as a forbidden symlink (RUL-no_links), never followed —
@@ -593,6 +593,41 @@ def test_auto_reprep_runs_inside_geotags_lock(tmp_path, monkeypatch):
     with pytest.raises(SystemExit):
         cal.run(_t.SimpleNamespace(command="plan", jobs=1))
     assert held == [("plan", True), ("execute", True)], held
+
+
+@pytest.mark.parametrize("kind", ["file", "folder"])
+@pytest.mark.parametrize("command", ["plan", "execute", "finalize"])
+@pytest.mark.spec("RUL-geotag_merge_check_links", "RUL-no_links", "INV-undisturbed_shape",
+                  test="TST-geotag_preflight-a_link_among_the_photos_stops_geotag")
+def test_a_link_among_the_photos_stops_geotag(tmp_path, monkeypatch, capsys, command, kind):
+    """A photo in photos by destination replaced, since prep, by a link to the same file moved outside the workspace
+    — same size, same time, so the handoff's record of it still holds — or a folder of photos linked in: every
+    geotag command stops, naming the link, having changed nothing inside the workspace or outside it."""
+    import types as _t
+    ws = _ws(tmp_path, bydest=("6-photos-by-dest/Trip/a.jpg",))
+    outside = tmp_path / "outside"; outside.mkdir()
+    if kind == "file":
+        os.rename(ws / "6-photos-by-dest" / "Trip" / "a.jpg", outside / "a.jpg")
+        os.symlink(str(outside / "a.jpg"), str(ws / "6-photos-by-dest" / "Trip" / "a.jpg"))
+        link = "6-photos-by-dest/Trip/a.jpg"
+    else:
+        (outside / "more").mkdir(); (outside / "more" / "b.jpg").write_bytes(b"elsewhere")
+        os.symlink(str(outside / "more"), str(ws / "6-photos-by-dest" / "Trip" / "more"))
+        link = "6-photos-by-dest/Trip/more"
+    (ws / ".photos-ingest" / "photos-00-workspace.lock").touch()
+
+    def state(root):
+        return sorted((str(p.relative_to(root)), os.readlink(p) if p.is_symlink() else
+                       (p.read_bytes() if p.is_file() else None))
+                      for p in root.rglob("*") if not p.name.endswith(".lock"))
+    before = state(ws), state(outside)
+    utils.CONFIG.clear(); utils.CONFIG.update(utils.default_config())   # a run of its own: nothing read yet
+    monkeypatch.chdir(ws)
+    with pytest.raises(SystemExit) as ei:
+        cal.run(_t.SimpleNamespace(command=command, jobs=1))
+    said = "".join(capsys.readouterr())
+    assert ei.value.code == 2 and "Forbidden symlink" in said and link in said, said
+    assert (state(ws), state(outside)) == before
 
 
 @pytest.mark.parametrize("defect", ["misplaced", "link", "missing"])

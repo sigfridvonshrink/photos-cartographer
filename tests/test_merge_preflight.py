@@ -157,7 +157,7 @@ def test_uninitialized_blocks(tmp_path):
     assert any("Not an initialized workspace" in b for b in blockers), blockers
 
 
-@pytest.mark.spec("RUL-geotag_merge_check_top_level_links", test="TST-merge_preflight-root_symlink_blocks")
+@pytest.mark.spec("RUL-geotag_merge_check_links", test="TST-merge_preflight-root_symlink_blocks")
 def test_root_symlink_blocks(tmp_path):
     ws, _ = _make(tmp_path)
     os.symlink(str(tmp_path), str(ws / "evil"))
@@ -449,6 +449,8 @@ def test_init_library_in_workspace_with_path_blesses_and_writes_config(tmp_path)
     (ws / ".photos-ingest" / "photos-00-workspace-guard").touch()
     cfg = {k: v for k, v in utils.CONFIG.items() if k != "jobs"}
     (ws / ".photos-ingest" / "photos-00-config.json").write_text(json.dumps(cfg))
+    for role in utils.FOLDER_ROLES:
+        (ws / utils.folder_name(role)).mkdir()
     lib = tmp_path / "lib"
     lib.mkdir()
 
@@ -504,6 +506,26 @@ def test_init_library_refuses_a_library_holding_the_workspace(tmp_path):
     assert merge.do_init_library(str(tmp_path), str(ws)) == 2
     assert not utils.is_library(str(tmp_path))           # nothing blessed
     assert cfg_p.read_bytes() == before                  # nothing written
+
+
+@pytest.mark.parametrize("with_path", [True, False])
+@pytest.mark.parametrize("defect", ["misplaced", "link", "missing"])
+@pytest.mark.spec("RUL-shape_checked_first", "INV-undisturbed_shape",
+                  test="TST-merge_preflight-init_library_refuses_a_disturbed_workspace")
+def test_init_library_refuses_a_disturbed_workspace(tmp_path, with_path, defect):
+    """The library setup, run in a workspace whose shape was disturbed, blesses nothing and writes nothing."""
+    ws, lib = _fresh_ws_and_lib(tmp_path)
+    if defect == "misplaced":
+        (ws / "loose.txt").write_text("dropped at the top level")
+    elif defect == "link":
+        os.symlink(str(tmp_path), str(ws / "elsewhere"))
+    else:
+        os.rmdir(ws / "4-videos-by-date")
+    cfg_before = (ws / ".photos-ingest" / "photos-00-config.json").read_bytes()
+    other = tmp_path / "other-lib"; other.mkdir()
+    assert merge.do_init_library(str(other) if with_path else None, str(ws)) == 2
+    assert not utils.is_library(str(lib)) and not utils.is_library(str(other))
+    assert (ws / ".photos-ingest" / "photos-00-config.json").read_bytes() == cfg_before
 
 
 @pytest.mark.spec("BLD-init_library_cases")

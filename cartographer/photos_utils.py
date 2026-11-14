@@ -2410,6 +2410,21 @@ def _same_bytes(a: str, b: str, chunk: int = 1 << 20) -> bool:
                 return True
 
 
+def links_under(ws: str, folder: str) -> list:
+    """Every symbolic link, to a file or a folder, anywhere under the managed folder `folder` of workspace `ws`, as
+    workspace-relative paths, sorted (RUL-geotag_merge_check_links). Nothing is followed and no file is read."""
+    base = os.path.join(ws, folder)
+    found = []
+    if not os.path.isdir(base):
+        return found
+    for root, dirs, files in os.walk(base):
+        for n in list(dirs) + files:
+            p = os.path.join(root, n)
+            if os.path.islink(p):
+                found.append(os.path.relpath(p, ws))
+    return sorted(found)
+
+
 def replace_durably(tmp: str, path: str):
     """Put the fully written `tmp` in `path`'s place so that a power cut at any moment leaves the earlier file or
     the whole new one (RUL-rewrite_in_place_atomic): the new bytes are synced to disk BEFORE the rename — a rename

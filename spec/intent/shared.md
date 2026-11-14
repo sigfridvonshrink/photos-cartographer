@@ -301,7 +301,9 @@ what is processed under it, and it is an input the user authors.
 :verify: required
 
 All three phases SHALL read their settings from the workspace's one configuration alone, each the settings it needs — no
-phase keeping settings of its own, and no setting that governs a run coming from outside the workspace.
+phase keeping settings of its own, and no setting that bears on what a run produces coming from outside the workspace.
+What a new workspace's configuration starts as is seeded into it once ({need}`RUL-config_seeded_once`) and read from
+there after.
 :::
 
 :::{rul} A configuration missing a setting stops the run
@@ -805,7 +807,7 @@ stale.
 :status: ruled
 :criticality: high
 :anti: yes
-:verify: incidental
+:verify: by_rules
 
 No phase SHALL process an initialized workspace whose shape was disturbed from outside cartographer — an entry at its
 top level that does not belong there, a symbolic link among its files, a managed folder missing — without stopping.
@@ -924,14 +926,15 @@ A phase a link blocks SHALL produce no executable plan and no artifact after it.
 Prep SHALL check for links across the whole tree it walks, the destination tree included though prep never changes it.
 :::
 
-:::{rul} Geotag and merge check the top level for links
-:id: RUL-geotag_merge_check_top_level_links
+:::{rul} Geotag and merge check for links where they work
+:id: RUL-geotag_merge_check_links
 :status: ruled
 :criticality: med
 :verify: required
 :refines: RUL-who_checks_for_links
 
-Geotag and merge SHALL check the top level for links themselves.
+Geotag and merge SHALL check for links themselves, at the top level and throughout photos by destination — a link put
+there since prep is one the handoff cannot know of.
 :::
 
 :::{rul} Geotag and merge take only a handoff built with no link
@@ -939,7 +942,7 @@ Geotag and merge SHALL check the top level for links themselves.
 :status: ruled
 :criticality: med
 :verify: required
-:refines: RUL-geotag_merge_check_top_level_links
+:refines: RUL-geotag_merge_check_links
 
 Geotag and merge SHALL consume only a handoff prep built with no link present.
 :::
@@ -1012,7 +1015,7 @@ An empty inbox SHALL be normal — the steady state, not a missing folder.
 :id: RUL-shape_checked_first
 :status: ruled
 :criticality: med
-:verify: incidental
+:verify: required
 :upholds: INV-undisturbed_shape
 
 Each phase SHALL check the workspace's shape at its start — right after the lock and the seal check, before it scans,
@@ -1800,7 +1803,7 @@ an empty one — stops geotag's planning, execution and finalize, and merge.
 :status: ruled
 :criticality: high
 :anti: yes
-:verify: incidental
+:verify: by_rules
 :uses: DEF-prep, DEF-geotag, DEF-merge
 
 Every phase SHALL change only what its inputs actually require, as far as the work allows — redoing no settled work to
@@ -1902,7 +1905,7 @@ tool *proposes*; the user *decides*.
 :status: ruled
 :criticality: high
 :anti: yes
-:verify: incidental
+:verify: by_rules
 :uses: DEF-decision
 
 Every change a phase makes SHALL follow from a decision the user recorded, or from a fixed rule applied to recorded
@@ -1915,6 +1918,7 @@ inputs — never from a choice the tool makes on its own.
 :criticality: high
 :anti: yes
 :verify: required
+:upholds: INV-every_change_from_the_record
 :uses: DEF-decision, RUL-decision_kept
 
 A decision field SHALL be written by the user alone, no phase ever overwriting what the user wrote.
@@ -1935,6 +1939,7 @@ A phase SHALL create every field a decision needs, so the user fills in values, 
 :status: ruled
 :criticality: med
 :verify: required
+:upholds: INV-every_change_from_the_record
 :uses: DEF-prep
 
 Prep SHALL ask the user for no decision, organizing from the state of the workspace and its configuration alone.
@@ -1945,6 +1950,7 @@ Prep SHALL ask the user for no decision, organizing from the state of the worksp
 :status: ruled
 :criticality: med
 :verify: required
+:upholds: INV-every_change_from_the_record
 :uses: DEF-decision, DEF-dependency_cascade
 
 Every change a phase executes SHALL be traceable in the records, from the decision and the inputs it was made from,
@@ -1957,6 +1963,7 @@ through the plan, to the record of what ran — so a wrong result points at a re
 :criticality: high
 :anti: yes
 :verify: required
+:upholds: INV-every_change_from_the_record
 :uses: DEF-decision, DEF-dependency_cascade
 
 A decision SHALL be revised by changing it in the record and running again, the change reaching everything that depends

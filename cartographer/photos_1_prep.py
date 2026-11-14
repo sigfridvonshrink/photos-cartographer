@@ -2999,6 +2999,29 @@ def run(args):
         reporter.log("Lock released.")
 
 
+def _shape_blockers(workspace_root) -> list:
+    """What is wrong with an initialized workspace's shape, as its top level shows it (RUL-shape_checked_first);
+    [] for one not yet initialized, whose first run builds the shape, or one whose configuration cannot be read —
+    the plan says that."""
+    from .photos_utils import guard_path, config_path, load_config, top_level_links
+    if not (os.path.exists(guard_path(workspace_root)) and os.path.exists(config_path(workspace_root))):
+        return []
+    try:
+        load_config(workspace_root)             # the folders are named by the workspace's configuration
+    except Exception:
+        return []
+    out = [f"Forbidden symlink detected: {f}" for f in top_level_links(workspace_root)]
+    missing = missing_managed_folders(workspace_root)
+    if missing:
+        out.append("Workspace is non-conforming: missing managed folder(s): "
+                   f"{', '.join(missing)}. They were likely removed inadvertently; restore them (or "
+                   "move the remaining media into a fresh workspace) before running — prep will not "
+                   "recreate them.")
+    out.extend(f"Misplaced entry at workspace root (dumps belong in {folder_name('sources')}/): {f}"
+               for f in misplaced_top_level_entries(workspace_root))
+    return out
+
+
 def _run_locked(args, workspace_root, reporter):
     """Prep's command, its workspace lock already held: by `run` above, or by geotag's run when it
     records a sort itself (BLD-geotag_auto_reprep) — one lock for the whole run, taken before anything is read
@@ -3022,6 +3045,18 @@ def _run_locked(args, workspace_root, reporter):
             reporter.log(f"  A likely new dump is present (at the workspace root or in {_folder_name('sources')}). "
                          "A sealed workspace is final — move new media into a fresh workspace.")
         sys.exit(2)
+
+    # The shape of an initialized workspace, checked before anything is scanned, planned or changed
+    # (RUL-shape_checked_first): what the top level alone shows — a link there, a managed folder missing, an
+    # entry that does not belong. A link deeper in the tree is found by the scan, which is what finds it.
+    if args.command in ("plan", "dry-run", "execute"):
+        _shape = _shape_blockers(workspace_root)
+        if _shape:
+            reporter.error("\nPrep cannot proceed:")
+            for b in _shape:
+                reporter.error(f"  - {b}")
+            reporter.log("Nothing was scanned, planned or changed.")
+            sys.exit(2)
 
     if args.command == "plan":
         # External-tool preflight (shared contract: decline cleanly, don't crash mid-scan).

@@ -435,7 +435,7 @@ fingerprint and de-duplication rest on.
 :status: ruled
 :forced: no
 :follows_from: RAT-a_link_escapes_the_tree, RAT-never_behind_prep
-:justifies: RUL-who_checks_for_links, RUL-geotag_merge_check_top_level_links
+:justifies: RUL-who_checks_for_links, RUL-geotag_merge_check_links
 
 The destination tree is read-only for prep yet still scanned by it, so prep is also the gatekeeper for links that
 appear there; and the mandatory re-prep after any change to it means geotag and merge only ever consume a handoff prep

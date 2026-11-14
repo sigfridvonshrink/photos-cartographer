@@ -73,17 +73,37 @@ def test_plan_saves_canonical_and_locks(tmp_path, monkeypatch, capsys):
     assert "Lock acquired" in out.err and "Lock released" in out.err
 
 
-def test_plan_surfaces_blockers_and_exits_nonzero(tmp_path, monkeypatch, capsys):
-    # A stray folder at the root of an initialized workspace is a "misplaced entry" blocker; `plan`
-    # must surface it (not just silently save the plan) and exit non-zero so the operator sees it now.
+@pytest.mark.parametrize("command", ["plan", "dry-run", "execute"])
+@pytest.mark.parametrize("defect", ["misplaced", "link", "missing"])
+@pytest.mark.spec("RUL-shape_checked_first", "INV-undisturbed_shape",
+                  test="TST-cli-prep_stops_on_a_disturbed_shape_before_it_scans")
+def test_prep_stops_on_a_disturbed_shape_before_it_scans(tmp_path, monkeypatch, capsys, command, defect):
+    """An initialized workspace whose top level was disturbed: every prep command stops at once, naming what is
+    wrong, having read no file, written no plan and no memo — even where there would otherwise be nothing to do."""
     ws = _ws(tmp_path)
-    (ws / "test-ingest").mkdir()
-    code = _main(monkeypatch, ws, "plan")
+    (ws / "0-sources" / "note.txt").write_text("work to do")
+    if command != "plan":
+        assert _main(monkeypatch, ws, "plan") == 0            # a plan a dry run or an execute would take up
+    if defect == "misplaced":
+        (ws / "test-ingest").mkdir()
+    elif defect == "link":
+        os.symlink(str(tmp_path), str(ws / "elsewhere"))
+    else:
+        os.rmdir(ws / "4-videos-by-date")
+    read = []
+    monkeypatch.setattr(prep.WorkspacePrepWorkflow, "_scan_inventory", lambda self, *a, **k: read.append("scan"))
+    capsys.readouterr()
+
+    def state():
+        return sorted((str(p.relative_to(ws)), p.read_bytes() if p.is_file() and not p.is_symlink() else None)
+                      for p in ws.rglob("*") if not p.name.endswith(".lock"))
+    before = state()
+    code = _main(monkeypatch, ws, command)
     out = capsys.readouterr()
-    assert code == 2, out.err
-    assert os.path.exists(utils.prep_plan_path(str(ws)))          # plan still saved for inspection
-    assert "CANNOT be executed" in out.err
-    assert "Misplaced entry at workspace root" in out.err and "test-ingest" in out.err
+    named = {"misplaced": "Misplaced entry at workspace root", "link": "Forbidden symlink detected: elsewhere",
+             "missing": "missing managed folder(s): 4-videos-by-date"}[defect]
+    assert code == 2 and named in out.err, out.err
+    assert read == [] and state() == before
 
 
 def test_plan_dryrun_execute_roundtrip(tmp_path, monkeypatch, capsys):

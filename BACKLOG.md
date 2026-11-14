@@ -41,39 +41,6 @@ says it, no item states it; each to be ruled into the corpus or the code dropped
 
 ---
 
-### 4. The four items still only incidentally tested, and what asserting the rest turned up
-
-**Where it stands (2026-11-14):** thirteen of the seventeen have a test that asserts them. Left at
-`verify: incidental`:
-
-- **`RUL-shape_checked_first`** — asserted where the code keeps it; the code does not keep it everywhere. To be
-  ruled, then built:
-  - prep's plan, on a missing managed folder or an entry at the top level that does not belong, records the blocker
-    and still fingerprints every file and writes its plan and memo before stopping. Prep must walk the tree to find a
-    link (`RUL-who_checks_for_links`), so only the top-level defects can stop it before the scan;
-  - prep's dry run and execute take the "nothing to do" shortcut before any shape check, and can end "Nothing to do"
-    on a disturbed workspace;
-  - `merge init-library` checks no shape, and without a path no seal either.
-- **`INV-change_only_what_needs`, `INV-every_change_from_the_record`, `INV-undisturbed_shape`** — no one test can
-  assert an invariant; each is carried out by rules that are tested. To be ruled: an invariant counts as verified
-  when every rule upholding or refining it is `verify: required`, checked by `tools/spec-build`. Four tested rules
-  carry out `INV-every_change_from_the_record` without being linked to it: `RUL-user_writes_decisions`,
-  `RUL-prep_takes_no_decision`, `RUL-cause_locatable`, `RUL-decision_revisable`.
-
-**Found while asserting them, to be ruled:**
-- **A link among the photos is not seen by geotag.** Geotag checks for links at the top level only and trusts the
-  handoff for the rest (`RUL-geotag_merge_check_top_level_links`). A photo in photos by destination replaced, after
-  prep, by a link to the same file elsewhere keeps its size and time: geotag plans and executes through the link.
-  Merge does check photos by destination for links. Against `RUL-no_links` and `INV-undisturbed_shape`.
-- **`RUL-one_configuration` says no setting governing a run comes from outside the workspace.** Two do, by design:
-  the seed of a new workspace's configuration (a defaults file beside the executable, or
-  `$PHOTOS_CARTOGRAPHER_CONFIG`), and the `-j` jobs flag. The rule's wording should except them or speak of a run's
-  outcome.
-- **Filesystems that lack what `RUL-filesystem_agnostic` requires** are not checked for up front; a run fails at its
-  first lock or move.
-
----
-
 ### 5. The commit-msg hook — publish it, or keep it local
 
 **What:** `.githooks/commit-msg` rejects a commit whose message credits Claude/Anthropic. It is active in this clone,
@@ -109,7 +76,7 @@ items had a restating second SHALL reworded into the first, and some of them sti
 SHALL — `RUL-lock_fail_fast`, for one, stops at once, says the workspace is locked and produces nothing;
 `RUL-replanning_keeps_the_prior` sets the saved plan aside and tells the user where; `RUL-no_plan_no_run` stops and
 tells the user to plan first. From §4's structure: `RUL-structure_built_once`, `RUL-top_level_only_managed`,
-`RUL-first_dump_at_top_level`, `RUL-link_named`, `RUL-geotag_merge_check_top_level_links`, `RUL-missing_folder_blocks`,
+`RUL-first_dump_at_top_level`, `RUL-link_named`, `RUL-geotag_merge_check_links`, `RUL-missing_folder_blocks`,
 `RUL-missing_folder_named`, and `RUL-no_links` with its four cases. From §5's camera groups:
 `RUL-prep_derives_camera_group` (derive the group, record it in two places) and `RUL-camera_group_derivation_versioned`
 (carry a version, have it checked). From §6's filename format: `RUL-one_filename_format` (one format, set by the
@@ -621,3 +588,18 @@ spelt as their owner spells them, in any language.
 - Regions that are not countries and span zones (an island group, a cross-border park): nothing to pick them from.
 - A host whose zone database ships without `zone.tab` (some minimal images): the choice is refused there; whether
   the table should travel inside the executable.
+
+---
+
+### 48. Say at the start that a filesystem cannot hold a workspace or a library
+
+**Why:** `RUL-filesystem_agnostic` names what cartographer requires of a filesystem: file locks, an atomic rename, a
+move that fails where its target exists, syncing a file and a folder to disk. A filesystem without them — a FAT or
+exFAT card, some network shares — is not checked for: a run there fails at its first lock or move, with that call's
+error and no word of why. The owner, 2026-11-14: backlog it.
+
+**What:** at a run's start, on the workspace's filesystem and, for merge, the library's: try each requirement on a
+scratch file in the control directory and stop, naming the one that is missing, before anything else is done. To be
+ruled with it: whether a network filesystem, where the lock guards one machine only
+(`RUL-stale_takeover_conservative`), is refused, warned of, or left to the user.
+

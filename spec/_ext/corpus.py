@@ -20,6 +20,9 @@
 - **The checks**, each a warning, which fails the build:
   - a mark naming an id that is no item;
   - an item whose `verify` is `required` that no test verifies;
+  - an item whose `verify` is `by_rules` that is not an invariant, or that no rule upholds or refines, or one of
+    whose upholding or refining rules is not itself `required`: no one test can assert an invariant, so it is
+    verified through the rules that carry it out;
   - a link against the levels' direction: an intent item naming a build item; a rationale named by any link but
     `follows_from` (a rationale is never binding); a `follows_from` from anything but a rationale;
   - a fact or a choice nothing follows from;
@@ -134,6 +137,20 @@ def _required_are_verified(app, env):
     if missing:
         LOG.warning(f"{len(missing)} items must be verified and no test verifies them: {', '.join(missing)}",
                     type="corpus", subtype="verify")
+    bad = []
+    for inv in sorted((n for n in view.values() if n.get("verify") == "by_rules"), key=lambda n: n["id"]):
+        if inv["type"] != "inv":
+            bad.append(f"{inv['id']}: only an invariant is verified by its rules")
+            continue
+        carriers = [n for n in view.values() if n["type"] == "rul"
+                    and inv["id"] in (n.get("upholds") or []) + (n.get("refines") or [])]
+        if not carriers:
+            bad.append(f"{inv['id']}: no rule upholds or refines it")
+        loose = sorted(n["id"] for n in carriers if n.get("verify") != "required")
+        if loose:
+            bad.append(f"{inv['id']}: upheld by rules no test must verify: {', '.join(loose)}")
+    if bad:
+        LOG.warning("invariants verified by their rules, and not so: " + "; ".join(bad), type="corpus", subtype="verify")
 
 
 LINK_TYPES = ("uses", "refines", "excepts", "upholds", "realises", "justifies", "follows_from", "assumes", "illustrates",

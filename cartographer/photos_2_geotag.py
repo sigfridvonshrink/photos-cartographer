@@ -47,7 +47,7 @@ import xml.etree.ElementTree as ET
 import zoneinfo
 from datetime import datetime, timedelta, timezone
 
-from .photos_utils import (replace_durably,
+from .photos_utils import (links_under, replace_durably,
     country_table,
     code_fingerprint,
     CONFIG, CONTROL_DIR, control_dir, FINALIZED_MEDIA_ARTIFACT, track_memo_db_path, finalized_media_path, workspace_volume_error, config_path, handoff_path, guard_path, is_sealed, likely_new_dump,
@@ -392,6 +392,14 @@ class GeotagWorkflow:
             blockers.append(f"Misplaced entry at workspace root (dumps belong in "
                             f"{folder_name('sources')}/): {', '.join(misplaced)}. The top level holds only "
                             "the managed folders and hidden entries.")
+            return blockers, warnings, info
+        # A link among the photos geotag works on (RUL-geotag_merge_check_links): put there since prep, the handoff
+        # cannot know of it, and a write through it would land in a file outside the workspace.
+        linked = links_under(ws, folder_name('photos_by_dest'))
+        if linked:
+            more = f" (and {len(linked) - 1} more)" if len(linked) > 1 else ""
+            blockers.append(f"Forbidden symlink under {folder_name('photos_by_dest')}: {linked[0]}{more}. Symlinks "
+                            "are never followed; put the file itself there, or remove the link, before geotagging.")
             return blockers, warnings, info
 
         cfg = CONFIG
@@ -2322,7 +2330,8 @@ def _auto_reprep_for_clean_move(args, workspace_root, reporter):
     except Exception:
         return                          # missing or invalid — the preflight says so
     if (top_level_links(workspace_root) or missing_managed_folders(workspace_root)
-            or misplaced_top_level_entries(workspace_root)):
+            or misplaced_top_level_entries(workspace_root)
+            or links_under(workspace_root, folder_name('photos_by_dest'))):
         return                          # a disturbed shape stops geotag before anything is scanned or planned
                                         # (RUL-shape_checked_first) — the preflight says which
     sources = folder_name('sources')
