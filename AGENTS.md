@@ -88,6 +88,12 @@ tests. So test files keep `import photos_1_prep` and `@patch("photos_1_prep...."
 alias is the *same module object* as the package module, so every import and patch resolves
 identically. (This replaced the old `SourceFileLoader` hack once the scripts became package modules.)
 
+Every phase command first checks the workspace against the state the last execute left (`BLD-workspace_check`). So a
+test that builds a workspace by hand is recorded as that state by conftest's autouse fixture
+`_hand_built_workspace_recorded` (opt out with the `no_hand_built_record` marker); `tests/_handoff.recorded` does the
+same for a workspace a test has changed, and `match_disk` calls it. A test that means to meet a later check with a
+hand change records the change as the workspace's state first.
+
 There is no build step and no linter config; runtime deps are system tools (`exiftool`, `magick`,
 `ffmpeg`). The only manifest is
 `dev-requirements.txt` — `pytest` + `coverage` for running the suite / measuring coverage (used by
@@ -138,6 +144,9 @@ entry (`python -m cartographer.photos_1_prep …`) sharing the same `add_argumen
 - `photos-cartographer geotag` — `plan` / `execute` / `finalize` (was the `photos-2-geotag` phase, formerly
   named "calibrate"; its `run` subcommand was **renamed to `plan`** so all phases start with `plan`).
 - `photos-cartographer merge` — `init-library` / `plan` / `dry-run` / `execute`.
+- Every phase command but `prune-quarantine` and `init-library` takes `--accept-changes <code>`: a run that finds the
+  workspace changed in a way no hand action allows stops (exit 2), lists the changes and prints the code that
+  accepts exactly that list (`BLD-accept_changes`).
 - `photos-cartographer edit` — the decision editor (a local web server; folded into the package at `cartographer/editor/`, web assets served as package data via importlib.resources, no bundler).
   Like every phase it operates on the **cwd workspace** (no workspace-naming argument) and refuses to
   run if the cwd is not an initialized workspace or is a sealed one (a save takes the workspace lock);
@@ -169,7 +178,8 @@ entry (`python -m cartographer.photos_1_prep …`) sharing the same `add_argumen
   and **full CLI parity** (v2.5 — geotag **`finalize`** as a plain run, enabled only after a successful
   geotag execute and before finalize; prep **`prune-quarantine`** with a dry-run/delete dialog, the
   destructive delete gated by `_prune_guard` and the action kept enabled even on a sealed workspace as
-  the sole sealed-allowed op). **All eleven phase commands are now driveable from the console.** Built
+  the sole sealed-allowed op). **All eleven phase commands are now driveable from the console.** A run that stops on unexpected workspace changes shows them in a dialog whose
+  **Accept these** sends the same command again with its `--accept-changes` code. Built
   on the shared event/sink seam (`cartographer/reporting.py`) and design tokens
   (`cartographer/editor/web/tokens.css`).
 - **Canonical plan persistence (all phases):** each phase's plan/decision artifact lives at a fixed
@@ -202,7 +212,8 @@ The whole design exists to safely mutate **irreplaceable originals**. These rule
 - **No mutation outside a plan.** Every move/rename/quarantine/metadata-write/DB-mutation is a planned
   operation with a plan ID, op ID, explicit preconditions, expected result, and journal entry. Planning
   mutates nothing but the fingerprints it keeps for later runs (prep's plan memo, geotag's track
-  catalogue and the track points of its window in `photos-00-ingest.db`, merge's library cache).
+  catalogue and the track points of its window in `photos-00-ingest.db`, merge's library cache) and, given
+  `--accept-changes`, the record of what was accepted (`photos-01-accepted-changes.json`).
 - **Dry-run is not simulation.** Dry-run validates the *real* serialized plan that execution would
   consume (the persisted canonical plan artifact) and reports a **summary** of it — never a separate
   virtual-filesystem code path. It does not dump every operation: the full exact plan is the saved
@@ -216,6 +227,10 @@ The whole design exists to safely mutate **irreplaceable originals**. These rule
   path; never reintroduce the original monolith's destructive in-place mutation approach.
 - **Idempotent & resumable.** Reruns act on the diff; a crash mid-run is recoverable (prep re-plans from
   the filesystem as truth; geotag resumes its plan and skips applied ops).
+- **The workspace is as the last run left it.** Every execute records the state it leaves (`workspace_record` in
+  `photos-00-ingest.db`); every phase command first compares the workspace with it. Sorting into photos by
+  destination, culling, a new dump in the inbox and the other hand actions `BLD-workspace_check` lists pass, the
+  logged ones named in the run's log; anything else stops until accepted by its code.
 
 ### Pipeline layout (shared contract)
 
@@ -233,7 +248,9 @@ Defined in the shared contract (`spec/intent/shared.md`, `spec/build/shared.md`)
   plan-time decode memo (`BLD-plan_memo`) — re-derivable fingerprints of files at the paths they were read
   from — written outside the plan/execute op model, never journalled or archived, safe to delete. The tracks
   geotag reads are record: a catalogue of every track file and the points of the window its readers reach, in
-  `photos-00-ingest.db`, archived and sealed with it (`BLD-track_catalogue`). Finalize adds
+  `photos-00-ingest.db`, archived and sealed with it (`BLD-track_catalogue`); so is the `workspace_record` table, the state the last
+  execute left (`BLD-workspace_record`), and `photos-01-accepted-changes.json`, the hand changes accepted.
+  Finalize adds
   `photos-26-finalized-media.json` and the archival package (`photos-26-archive-manifest.json` +
   `photos-26-archive.tar.gz`); merge remakes it as `photos-35-*`.
 - `photos-00-config.json` is the **workspace config**: seeded on first prep run from the in-code template
