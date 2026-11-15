@@ -298,7 +298,7 @@ def test_plan_two_incoming_case_variants_resolve_at_plan_time(tmp_path, monkeypa
 
 
 @pytest.mark.parametrize("variant_fp, disposition", [("X", "renamed_incoming"), ("A", "already_present")])
-@pytest.mark.spec("RUL-collision_by_content", "BLD-library_file_fingerprinted",
+@pytest.mark.spec("RUL-collision_by_content", "BLD-library_file_fingerprinted", "BLD-names_case_folded",
                   test="TST-merge_plan-a_case_variant_in_the_library_is_settled_by_content")
 def test_a_case_variant_in_the_library_is_settled_by_content(tmp_path, monkeypatch, variant_fp, disposition):
     """A library file whose name differs from the target's only in case takes the place on a case-insensitive
@@ -320,6 +320,8 @@ def test_a_case_variant_in_the_library_is_settled_by_content(tmp_path, monkeypat
         assert f["library_collision"]["path"] == os.path.join(str(lib), "Trip", "PHOTO.JPG")
 
 
+@pytest.mark.spec("BLD-collision_suffix", "RUL-merge_suffix_above_highest",
+                  test="TST-merge_plan-plan_rename_accounts_for_incoming_suffix")
 def test_plan_rename_accounts_for_incoming_suffix(tmp_path, monkeypatch):
     # Incoming already carries -004; library max is -002 -> max(004,002)+1 = 005.
     ws, lib, fp = _build_ws(
@@ -595,3 +597,34 @@ def test_a_plan_reporting_a_blocker_ends_as_a_refusal(tmp_path, monkeypatch):
     assert merge._run_locked_workflow("plan", str(ws)) == 0
     assert not _plan_of(ws)["blockers"]
     assert merge._run_locked_workflow("dry-run", str(ws)) == 0
+
+
+@pytest.mark.spec("BLD-collision_suffix", "RUL-merge_suffix_above_highest",
+                  test="TST-merge_plan-the_suffix_is_above_the_highest_of_the_library_and_the_batch")
+def test_the_suffix_is_above_the_highest_of_the_library_and_the_batch(tmp_path, monkeypatch):
+    """A photo whose name the library holds for another takes the suffix above the highest its name's root shows
+    among the library folder's names and those of every photo bound for it — here an incoming `ts-007` — not the
+    lowest free one."""
+    ws, lib, fp = _build_ws(tmp_path, [{"fp": "NEW", "dest": "Trip", "final_name": "ts.jpg"},
+                                       {"fp": "SEVEN", "dest": "Trip", "final_name": "ts-007.jpg"}],
+                            library_files=[{"fp": "OLD", "dest": "Trip", "name": "ts.jpg"},
+                                           {"fp": "OLD2", "dest": "Trip", "name": "ts-002.jpg"}])
+    _patch_fp(monkeypatch, fp)
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    names = {f["content_fingerprint"]: f["resolved_name"] for f in _files(_plan_of(ws))}
+    assert names == {"NEW": "ts-008.jpg", "SEVEN": "ts-007.jpg"}
+
+
+@pytest.mark.spec("BLD-one_library_file_compared", "RUL-collision_by_content",
+                  test="TST-merge_plan-one_library_file_is_compared_per_photo")
+def test_one_library_file_is_compared_per_photo(tmp_path, monkeypatch):
+    """With no file at the photo's own name but two whose names differ from it only in case, merge compares the
+    first of them in sorted order alone: the photo, held by the second, is not found there and takes a suffix."""
+    ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
+                            library_files=[{"fp": "OTHER", "dest": "Trip", "name": "A.jpg"},
+                                           {"fp": "A", "dest": "Trip", "name": "a.JPG", "bytes": b"img-0"}])
+    _patch_fp(monkeypatch, fp)
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    [f] = _files(_plan_of(ws))
+    assert f["disposition"] == "renamed_incoming" and f["resolved_name"] == "a-001.jpg"
+    assert f["library_collision"]["path"] == os.path.join(str(lib), "Trip", "A.jpg")

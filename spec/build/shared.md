@@ -988,13 +988,25 @@ whose name differs from the target's only in case is such a file: the same conte
 Only planning writes these rows; execute fingerprints afresh and writes no row.
 :::
 
-:::{bld} A different photo under a taken name takes the next suffix
+:::{bld} A different photo under a taken name takes the suffix above the highest
 :id: BLD-collision_suffix
 :status: ruled
 :realises: RUL-collision_different_content, RUL-merge_suffix_above_highest
 
-An incoming photo whose name is taken by different content SHALL take the shared suffix convention's next free suffix
-({need}`BLD-name_suffix`), the library's own name keeping its bare form.
+An incoming photo whose name is taken by different content SHALL take, in the shared suffix convention
+({need}`BLD-name_suffix`), the suffix one above the highest its name's root carries — the root its own name less any
+`-NNN` it already carries — among the names in its library folder and those of every incoming photo bound for that
+folder, passing over one taken there without regard to case; the library's own name keeps its bare form.
+:::
+
+:::{bld} One library file is compared per photo
+:id: BLD-one_library_file_compared
+:status: ruled
+:realises: RUL-collision_by_content
+
+Merge SHALL compare one library file with each photo: the one under the photo's own name where there is one, otherwise
+the first, in sorted order, of those whose names differ from it only in case — so that a photo the library holds under
+another of those names is not found there, and takes a name of its own beside it.
 :::
 
 :::{bld} The library's mark
@@ -1179,6 +1191,17 @@ across filesystems, for merge alone, `_move_cross_fs_no_clobber`. A refused name
 failed and stops; geotag and merge record a blocker and leave the photo where it is. Merge also tests its target before
 moving, and geotag compares names ignoring case ({need}`BLD-rename_planning`). The rename that completes an operation is
 thus itself the check that its name is free ({need}`RUL-target_free_at_execute`).
+:::
+
+:::{bld} Names that differ only in case are one name, on every filesystem
+:id: BLD-names_case_folded
+:status: ruled
+:realises: RUL-target_free_ignores_case, RUL-suffix_case_insensitive
+
+Every phase SHALL take two names that differ only in case for one, on every filesystem, whether or not it tells them
+apart: prep's execute refuses a move onto a name that differs only in case from one there or planned before it;
+geotag's renames and merge's placements are planned with names compared ignoring case, merge settling a library file
+under such a name by its content ({need}`BLD-library_file_fingerprinted`).
 :::
 
 :::{bld} Each run checks the workspace's devices

@@ -535,7 +535,8 @@ class MergeWorkflow:
             return claimed_lower[lib_dest]
 
         def _case_variant(target):
-            """A library file whose name differs from the target's only in case, or None."""
+            """A library file whose name differs from the target's only in case — the first in sorted order, the one
+            file compared with the photo when none holds its own name (BLD-one_library_file_compared) — or None."""
             d, name = os.path.split(target)
             try:
                 return next((os.path.join(d, n) for n in sorted(os.listdir(d))
