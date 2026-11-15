@@ -531,6 +531,16 @@ Prep SHALL read metadata through persistent `exiftool -stay_open` workers and fi
 starts `ffmpeg` per video. Each tool gets two attempts per file, a dead worker restarted between them.
 :::
 
+:::{bld} A silent `identify` is killed after ten seconds
+:id: BLD-identify_silence_limit
+:status: ruled
+:realises: RUL-tool_failure_retried, RUL-tool_failure_never_valid
+
+Where `magick` is absent, each per-file `identify` attempt SHALL be killed once ten seconds pass with no output from it,
+the attempt counting as failed — so a photo whose decode is slower than that fails both attempts and its fingerprint is
+recorded as failed; the persistent `magick` worker has no such limit.
+:::
+
 :::{bld} Planning in a fixed order
 :id: BLD-planning_order
 :status: ruled

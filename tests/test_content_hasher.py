@@ -35,6 +35,34 @@ def test_fingerprint_image_missing_imagemagick(monkeypatch):
     assert "ImageMagick not found" in r["error"]
 
 
+@pytest.mark.spec("BLD-identify_silence_limit", test="TST-content_hasher-a_silent_identify_is_killed_after_ten_seconds")
+def test_a_silent_identify_is_killed_after_ten_seconds(monkeypatch):
+    """Without `magick`, an `identify` that gives no output for ten seconds is killed; after its two attempts the
+    fingerprint is failed, never valid. The wait is answered at once here, so the test takes no ten seconds."""
+    import types
+    import sys
+    monkeypatch.setattr(utils, "get_magick_command", lambda: [])
+    monkeypatch.setattr(utils, "get_identify_command",
+                        lambda: [sys.executable, "-c", "import time; time.sleep(60)"])
+    waits, procs = [], []
+    real_popen = utils.subprocess.Popen
+
+    def popen(*a, **k):
+        procs.append(real_popen(*a, **k))
+        return procs[-1]
+
+    def select(rlist, wlist, xlist, timeout):
+        waits.append(timeout)
+        return [], [], []                                  # the wait ran out with nothing to read
+    monkeypatch.setattr(utils.subprocess, "Popen", popen)
+    monkeypatch.setattr(utils, "select", types.SimpleNamespace(select=select))
+    r = utils.ContentHasher.fingerprint_image("/slow.cr2")
+    assert r["status"] == "failed" and r["value"] is None and "timed out" in r["error"]
+    assert waits == [10.0, 10.0]                              # two attempts, each waiting ten seconds
+    for p in procs:
+        assert p.wait(timeout=5) is not None                  # each attempt's process was killed
+
+
 @pytest.mark.spec("BLD-tool_workers", test="TST-content_hasher-fingerprint_image_uses_persistent_worker")
 def test_fingerprint_image_uses_persistent_worker(monkeypatch):
     """Default path: the per-thread persistent magick worker returns the signature."""
