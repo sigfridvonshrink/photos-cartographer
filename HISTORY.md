@@ -2,6 +2,16 @@
 
 *What was decided and why, newest first. A record: never corrected forward. Per-commit detail is `git log`.*
 
+## 2026-11-15 — every ruling checked against the corpus
+
+The owner asked: *"all rulings I am making, are they transcribed in the corpus?"* An audit of every ruling since the
+backlog work began found one ruled and never built — a (0,0) left in a photo accepted as unlocated is now cleared,
+the clear logged (*"A-D ok"*; a kept (0,0) shows the photo off Africa in digiKam) — and a few stated only in the build
+or without the owner's reason: an accepted proposal counts as the positions' own (*"keep it automatic"*), the track
+window has no setting of its own (*"aren't you reusing a config value for a different purpose?"*), geotag's summary
+only for an execution, the other time fields logged with what they held. Each is an item now. Track points outside
+the window are pruned, but for those an executed plan used (*"as per recommended"*), as BACKLOG 13 ruled.
+
 ## 2026-11-15 — every run checks the workspace is as the last one left it (BACKLOG 50)
 
 The owner: *"I wonder if before each run, as a rule, there should be a quick check to see if anything unexpected
