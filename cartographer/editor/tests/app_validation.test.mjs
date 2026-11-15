@@ -20,9 +20,16 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as app from "../web/app.js";
 
-test("validTz accepts real IANA zones / empty, rejects bogus", () => {
+test("validTz accepts the host's zones / empty, rejects any other — the browser's own list says nothing", () => {
+  app.setHostZones(["UTC", "Europe/Brussels", "Asia/Tokyo"]);       // as the server sends them
   for (const ok of ["", null, "UTC", "Europe/Brussels", "Asia/Tokyo"]) assert.equal(app.validTz(ok), true);
   for (const bad of ["Nowhere/Nope", "xyz"]) assert.equal(app.validTz(bad), false);
+  // a name the browser knows but the host does not: geotag's plan would refuse it, so the editor does
+  assert.doesNotThrow(() => new Intl.DateTimeFormat("en", { timeZone: "US/Eastern" }));
+  assert.equal(app.validTz("US/Eastern"), false);
+  app.setHostZones(undefined);                                          // nothing sent: no zone is known
+  assert.equal(app.validTz("UTC"), false);
+  assert.equal(app.validTz(""), true);
 });
 
 test("validOffset is empty-or-a-whole-number of seconds, of any size", () => {

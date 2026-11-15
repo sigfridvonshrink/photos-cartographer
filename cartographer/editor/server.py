@@ -229,13 +229,29 @@ def _parse_record(raw, name):
         return {"_error": f"could not read {name}: {e}"}
 
 
+_HOST_ZONES = None
+
+
+def _host_zones():
+    """The timezone names geotag accepts on this host: every zone its zone database holds that
+    `valid_iana_timezone` takes — the very check geotag's plan makes (RUL-checked_timezones). The editor checks a
+    zone against this list, never the browser's own, which may know a name the host does not (`US/Eastern` on a
+    host without the legacy names) and so let a zone be saved that the plan then refuses."""
+    global _HOST_ZONES
+    if _HOST_ZONES is None:
+        import zoneinfo
+        _HOST_ZONES = sorted(z for z in zoneinfo.available_timezones() if photos_utils.valid_iana_timezone(z))
+    return _HOST_ZONES
+
+
 def _load_artifacts(workspace):
-    """Return {workspace, demo, time, drift, gps, hashes}. `hashes` holds the SHA-256 of each record's bytes
+    """Return {workspace, demo, time, drift, gps, hashes, zones}. `hashes` holds the SHA-256 of each record's bytes
     as loaded (None for one absent); a save carries them back, so it is refused when a record has changed
-    since (RUL-save_only_what_was_shown). Demo mode loads requires-input fixtures."""
+    since (RUL-save_only_what_was_shown). `zones` is the host's list of timezones geotag accepts (`_host_zones`).
+    Demo mode loads requires-input fixtures."""
     if workspace:
         cd = os.path.join(workspace, CONTROL)
-        out = {"workspace": os.path.abspath(workspace), "demo": False, "hashes": {}}
+        out = {"workspace": os.path.abspath(workspace), "demo": False, "hashes": {}, "zones": _host_zones()}
         for key, name in _RECORDS:
             try:
                 raw = _read_record(os.path.join(cd, name))
@@ -244,7 +260,7 @@ def _load_artifacts(workspace):
                 continue
             out[key], out["hashes"][key] = _parse_record(raw, name), _record_hash(raw)
         return out
-    return {"workspace": None, "demo": True, "hashes": {},
+    return {"workspace": None, "demo": True, "hashes": {}, "zones": _host_zones(),
             "time": _example_json("photos-21-time-decisions.requires-input.json"),
             "drift": _example_json("photos-22-gps-drift-validation.requires-input.json"),
             "gps": _example_json("photos-23-gps-decisions.requires-input.json")}

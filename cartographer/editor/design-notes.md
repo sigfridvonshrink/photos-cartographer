@@ -108,7 +108,8 @@ then the proposal evidence last; non-coord cells just show the proposal.
   resolve the cell (mirroring the decision-json-reference §6 resolution rules) it shows `resolved` next to the `edited` chip
   rather than the now-stale `needs input` — advisory until Re-run, like the effective-outcome preview.
 - **Specialized controls:**
-  - **Timezone:** a full IANA-zone **drop-down**; accepting the proposal mirrors it into the field and
+  - **Timezone:** a full IANA-zone **drop-down** of the host's zones — those geotag's plan accepts, sent by the
+    server with the decisions (`zones`), never the browser's own list, against which a zone is also checked; accepting the proposal mirrors it into the field and
     **locks** the drop-down (unaccepting frees it). The "accept" box is disabled when there's nothing to accept.
   - **Clock offset:** **three always-visible choices, click-to-activate** — *accept proposal* (the
     automatic offset, never edited → `accept_proposal`), *manual offset* (the **h/m/s spinner**:

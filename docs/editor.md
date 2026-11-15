@@ -136,7 +136,8 @@ beneath inherits it.
 - **The configured default** (`default_folder_timezone`) is only **offered**: a destination with nothing
   to inherit shows it with a **use** button, but it never applies by itself — so a trip abroad is never
   timed in your home zone. Inside a country, it is offered only if it is one of that country's zones.
-- **Manual timezone** — pick an IANA zone from the dropdown. It overrides an inherited one and
+- **Manual timezone** — pick an IANA zone from the dropdown: the zones of the machine geotag runs on, so one
+  your browser knows and that machine does not is never offered. It overrides an inherited one and
   **re-roots the chain**: every destination beneath inherits it (until one of them overrides in turn).
 
 **When the photos disagree with the zone.** Phone photos record the offset from UTC they were taken at.

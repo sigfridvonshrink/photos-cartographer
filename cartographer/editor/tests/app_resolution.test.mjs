@@ -19,6 +19,9 @@ import assert from "node:assert/strict";
 import * as app from "../web/app.js";
 
 const setWork = (work) => { app.state.work = work; app.state.base = work; };
+// The host's zones, as the server sends them with the decisions: a zone is checked against these alone.
+app.setHostZones(["America/New_York", "America/Phoenix", "Asia/Tokyo", "Europe/Brussels", "Europe/Bucharest",
+  "Europe/Lisbon", "Europe/Madrid", "Europe/Paris", "UTC"]);
 
 test("cellStatus maps the system flags", () => {
   assert.deepEqual(app.cellStatus({ requires_user_input: true }), ["needs", "needs input"]);
