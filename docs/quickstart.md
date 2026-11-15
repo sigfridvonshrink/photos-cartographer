@@ -239,7 +239,8 @@ photos-cartographer edit          # open the browser editor on this workspace
 - **Unknown camera groups** — the first time it sees a camera, geotag stops and prints the two
   `device_groups` lists ready to paste into `camera_time_and_timezone_policy` in your config. A new
   camera is printed in **both**: keep it in `phones` if it is a phone (it records its own timezone), or
-  in `fixed_clock_cameras` if it is a camera with a hand-set clock — and delete it from the other.
+  in `fixed_clock_cameras` if it is a camera with a hand-set clock — and delete it from the other. Or
+  open `photos-cartographer edit`: its **Cameras** view asks the same and writes the lists for you.
   Files that name no camera at all are not asked about.
 - A photo with no recorded time, or one prep could not fingerprint, in `6-photos-by-dest/`; a link
   among the photos. Each is named, with what to do;

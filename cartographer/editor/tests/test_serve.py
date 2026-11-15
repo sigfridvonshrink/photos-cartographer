@@ -351,6 +351,87 @@ def test_save_answers_a_fingerprint_mismatch_in_photos_25(tmp_path):
     assert res["ok"] is False and serve.EXECUTION_NAME in res["error"]
 
 
+def _camera_workspace(tmp_path):
+    """A workspace with the default configuration (`Canon|EOS` classed a fixed-clock camera) and a handoff whose photos
+    under photos by destination name one new camera group, `Apple|iPhone 15` — and a video of another, not asked."""
+    from cartographer import photos_utils as utils
+    ws = _workspace_with_fixtures(tmp_path)
+    cfg = copy.deepcopy(utils.DEFAULT_CONFIG)
+    cfg["camera_time_and_timezone_policy"]["device_groups"] = {"phones": [], "fixed_clock_cameras": ["Canon|EOS"]}
+    utils.write_json_artifact(os.path.join(ws, serve.CONTROL, serve.CONFIG_NAME), cfg)
+
+    def rec(rel, key, media="image"):
+        return {"relative_path": rel, "folder_class": "6-photos-by-dest", "media_class": media,
+                "metadata_status": {"camera_group_key": key,
+                                    "parsed_json": json.dumps({"selected_source_timestamp_tag": "EXIF:DateTimeOriginal"})}}
+    handoff = {"files": [rec("6-photos-by-dest/A/2.heic", "Apple|iPhone 15"), rec("6-photos-by-dest/A/1.heic", "Apple|iPhone 15"),
+                         rec("6-photos-by-dest/A/c.cr2", "Canon|EOS", "raw"), rec("6-photos-by-dest/A/v.mov", "GoPro|7", "video")],
+               "camera_groups": [{"group_key": "Apple|iPhone 15", "contributing_identity_fields": {"Make": "Apple"}}]}
+    utils.write_json_artifact(os.path.join(ws, serve.CONTROL, serve.HANDOFF_NAME), handoff)
+    return ws, cfg
+
+
+@pytest.mark.spec("RUL-every_question_in_editor", "RUL-editor_classes_camera_group", "BLD-editor_writes_device_groups", "BLD-editor_lists_new_camera_groups",
+                  "BLD-editor_answers_every_question",
+                  test="TST-serve-classes_a_new_camera_group_into_device_groups")
+def test_save_classes_a_new_camera_group_into_the_configuration(tmp_path):
+    """The editor lists each camera group geotag would stop on — the photos' groups the configuration classes as
+    neither phone nor fixed-clock camera — with a photo of it, and its save writes the class the user gives into
+    `camera_time_and_timezone_policy.device_groups`, under the lock, over the configuration it loaded, every other
+    setting kept."""
+    ws, cfg = _camera_workspace(tmp_path)
+    loaded = serve._load_artifacts(ws)
+    groups = loaded["cameras"]["groups"]
+    assert list(groups) == ["Apple|iPhone 15"]                      # a classed camera and a video's group are not asked
+    g = groups["Apple|iPhone 15"]
+    assert g["files"] == 2 and g["examples"][0] == "6-photos-by-dest/A/1.heic" and g["identity"] == {"Make": "Apple"}
+    assert g["user_decision"] == {"device_class": ""} and g["requires_user_input"] is True
+    edit = {"kind": "camera", "key": "Apple|iPhone 15", "user_decision": {"device_class": "phones"}}
+    # not one of the two arrays: refused, nothing written
+    res = serve._save(ws, {"cameras": [dict(edit, user_decision={"device_class": "phone"})], "hashes": loaded["hashes"]})
+    assert res["ok"] is False
+    res = serve._save(ws, {"cameras": [edit], "hashes": loaded["hashes"]})
+    assert res["ok"] is True and res["written"] == [serve.CONFIG_NAME]
+    after = json.load(open(os.path.join(ws, serve.CONTROL, serve.CONFIG_NAME)))
+    assert after["camera_time_and_timezone_policy"]["device_groups"] == {"phones": ["Apple|iPhone 15"],
+                                                                         "fixed_clock_cameras": ["Canon|EOS"]}
+    after["camera_time_and_timezone_policy"]["device_groups"] = cfg["camera_time_and_timezone_policy"]["device_groups"]
+    assert after == cfg                                                # that setting, and no other
+    assert serve._load_artifacts(ws)["cameras"]["groups"] == {}        # nothing left to ask
+    # a group classed meanwhile is no question to answer; and a configuration changed since is not written over
+    res2 = serve._save(ws, {"cameras": [edit], "hashes": res["hashes"]})
+    assert res2["ok"] is False and "classes no new camera group" in res2["error"]
+    res3 = serve._save(ws, {"cameras": [edit], "hashes": loaded["hashes"]})
+    assert res3["ok"] is False and serve.CONFIG_NAME in res3["error"]
+
+
+@pytest.mark.spec("RUL-editor_classes_camera_group", "BLD-editor_writes_device_groups",
+                  test="TST-serve-a_class_given_moves_a_group_listed_twice_and_is_checked")
+def test_a_class_given_moves_a_group_listed_in_both_arrays_and_the_result_is_checked(tmp_path):
+    """Geotag's snippet lists a new group in both arrays; one left in both is still unclassed, and asked. Answered, it is
+    taken out of the other; a configuration that `load_config` would refuse is not written."""
+    ws, cfg = _camera_workspace(tmp_path)
+    path = os.path.join(ws, serve.CONTROL, serve.CONFIG_NAME)
+    cfg["camera_time_and_timezone_policy"]["device_groups"] = {"phones": ["Apple|iPhone 15"],
+                                                               "fixed_clock_cameras": ["Canon|EOS", "Apple|iPhone 15"]}
+    serve._write_json(path, cfg)
+    loaded = serve._load_artifacts(ws)
+    assert list(loaded["cameras"]["groups"]) == ["Apple|iPhone 15"]
+    edit = {"kind": "camera", "key": "Apple|iPhone 15", "user_decision": {"device_class": "fixed_clock_cameras"}}
+    res = serve._save(ws, {"cameras": [edit], "hashes": loaded["hashes"]})
+    assert res["ok"] is True
+    assert json.load(open(path))["camera_time_and_timezone_policy"]["device_groups"] == {
+        "phones": [], "fixed_clock_cameras": ["Canon|EOS", "Apple|iPhone 15"]}
+    # a configuration lacking a setting is refused as load_config refuses it, and left as it is
+    broken = copy.deepcopy(cfg)
+    del broken["gpx_root"]
+    serve._write_json(path, broken)
+    before = open(path).read()
+    loaded = serve._load_artifacts(ws)
+    res = serve._save(ws, {"cameras": [edit], "hashes": loaded["hashes"]})
+    assert res["ok"] is False and "gpx_root" in res["error"] and open(path).read() == before
+
+
 def test_apply_edits_ignores_unknown_targets():
     art = _time_art()
     n = serve._apply_edits(art, [

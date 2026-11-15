@@ -52,6 +52,24 @@ test("a photos-25 fingerprint mismatch: asked until accepted, saved into photos-
     user_decision: { accept_fingerprint_change: true } }]);
 });
 
+test("a new camera group: asked until classed as one of the two device_groups arrays, saved under cameras by its key", () => {
+  const key = "Apple|iPhone 15", ref = { file: "cameras", kind: "camera", key };
+  const work = { cameras: { groups: { [key]: { files: 3, examples: ["6-photos-by-dest/A/1.heic"], identity: { Make: "Apple" },
+    user_decision: { device_class: "" }, requires_user_input: true } } } };
+  app.state.work = work; app.state.base = JSON.parse(JSON.stringify(work));
+  assert.deepEqual(app.cellStatus(app.cellAt(work, ref)), ["needs", "needs input"]);
+  assert.equal(app.wouldResolve(ref), false);
+  assert.equal(app.refInvalid(ref), false);
+  work.cameras.groups[key].user_decision.device_class = "phones";
+  assert.equal(app.wouldResolve(ref), true);
+  work.cameras.groups[key].user_decision.device_class = "phone";
+  assert.equal(app.refInvalid(ref), true);                          // only the two arrays' names
+  work.cameras.groups[key].user_decision.device_class = "fixed_clock_cameras";
+  assert.deepEqual(app.DEVICE_CLASSES, ["phones", "fixed_clock_cameras"]);
+  const p = app.savePayload([ref], (r) => app.cellAt(app.state.work, r), { cameras: "c1" });
+  assert.deepEqual(p.cameras, [{ dest: undefined, kind: "camera", key, path: undefined, user_decision: { device_class: "fixed_clock_cameras" } }]);
+});
+
 test("recordAbsentText: a record that does not parse is shown as that error, never as no file", () => {
   const err = { _error: "could not read photos-21-time-decisions.json: Expecting value: line 3 column 1 (char 7)" };
   const said = app.recordAbsentText(err, "photos-21-time-decisions.json");

@@ -89,8 +89,9 @@ accept it again (or set the offset yourself), save, and re-plan.
 
 ## The views, and why they're gated
 
-The header toggles between **Time → Drift → GPS**, in that order — and the order is enforced — and
-**Execute**, for what `geotag execute` asks afterwards ([below](#execute-view)):
+The header toggles between **Time → Drift → GPS**, in that order — and the order is enforced — with
+**Cameras** before them, for a camera geotag has not met ([below](#cameras-view)), and **Execute** after,
+for what `geotag execute` asks ([below](#execute-view)):
 
 - **Time gates Drift** — the Drift view waits until every time decision is answered and geotag has been
   re-run (drift checks offsets that must already exist).
@@ -104,6 +105,19 @@ In every view each decision carries a status: **needs input**, **resolved**, **a
 itself), **stale** (your earlier answer no longer fits — see [How edits reset
 things](#how-edits-reset-things)), or **none** (an optional folder fallback left unset). An edit you
 haven't saved is badged **edited**, an invalid one **✗ invalid**.
+
+---
+
+## Cameras view
+
+The first time `geotag plan` meets a camera it stops, before it writes any decision, and prints the two
+`device_groups` lists to paste into `photos-00-config.json`. The editor opens on the **Cameras** view
+while there is such a camera: one row per camera group (its make and model, how many photos, a preview
+on hover), and two choices — **a phone** (its clock is the network's, and it records its offset with each
+photo) or **a camera with a clock set by hand** (its offset is found per day). Save writes your answer
+into `camera_time_and_timezone_policy.device_groups` in `photos-00-config.json` — the same as pasting
+the printed lists, every other setting left as it is — then re-run `geotag plan`. Pasting by hand still
+works as before.
 
 ---
 

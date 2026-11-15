@@ -45,6 +45,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 from .. import photos_utils
+from .. import photos_2_geotag
 
 
 def _bind(host, port, handler):
@@ -80,6 +81,9 @@ TIME_NAME = "photos-21-time-decisions.json"
 DRIFT_NAME = "photos-22-gps-drift-validation.json"
 GPS_NAME = "photos-23-gps-decisions.json"
 EXECUTION_NAME = "photos-25-execution-summary.json"   # its fingerprint_mismatches ask whether a changed photo stands
+CONFIG_NAME = "photos-00-config.json"           # a new camera group's class is written into its device_groups
+HANDOFF_NAME = "photos-11-handoff.json"         # prep's record: the photos whose camera groups geotag classes
+DEVICE_CLASSES = ("phones", "fixed_clock_cameras")   # the two arrays of camera_time_and_timezone_policy.device_groups
 GUARD_NAME = "photos-00-workspace-guard"        # root sentinel written once a workspace is initialized
 EDITOR_LOCK = "photos-00-decision-editor.lock"  # dotfile lives in CONTROL; flock, fail-fast
 
@@ -248,6 +252,37 @@ def _host_zones():
     return _HOST_ZONES
 
 
+def _device_groups(cfg):
+    return ((cfg or {}).get("camera_time_and_timezone_policy") or {}).get("device_groups")
+
+
+def _camera_question(workspace, raw_config):
+    """The camera groups geotag stops on, not classed by the configuration (BLD-editor_lists_new_camera_groups): each with
+    its photos' count, the first three of them and the identity prep found, and a `user_decision.device_class` the
+    editor answers — `phones` or `fixed_clock_cameras`, the array of `device_groups` it is written into. Found from the
+    handoff's photos under photos by destination as geotag finds them (`unclassified_camera_groups`). {_error} when the
+    configuration or the handoff cannot be read; no groups without a handoff."""
+    if raw_config is None:
+        return {"groups": {}}
+    cfg = _parse_record(raw_config, CONFIG_NAME)
+    if not isinstance(cfg, dict) or "_error" in cfg:
+        return cfg if isinstance(cfg, dict) else {"_error": f"{CONFIG_NAME} must be a JSON object"}
+    try:
+        handoff = _parse_record(_read_record(os.path.join(workspace, CONTROL, HANDOFF_NAME)), HANDOFF_NAME)
+    except OSError as e:
+        return {"_error": f"could not read {HANDOFF_NAME}: {e}"}
+    if isinstance(handoff, dict) and "_error" in handoff:
+        return handoff
+    facts = {g.get("group_key"): g for g in ((handoff or {}).get("camera_groups") or []) if isinstance(g, dict)}
+    groups = {}
+    for key, paths in photos_2_geotag.unclassified_camera_groups(handoff, cfg).items():
+        groups[key] = {"files": len(paths), "examples": paths[:3],
+                       "identity": (facts.get(key) or {}).get("contributing_identity_fields") or {},
+                       "user_decision": {"device_class": ""}, "requires_user_input": True,
+                       "stale_user_decision": False}
+    return {"groups": groups}
+
+
 def _load_artifacts(workspace):
     """Return {workspace, demo, time, drift, gps, execution, hashes, zones}. `hashes` holds the SHA-256 of each record's bytes
     as loaded (None for one absent); a save carries them back, so it is refused when a record has changed
@@ -263,12 +298,20 @@ def _load_artifacts(workspace):
                 out[key], out["hashes"][key] = {"_error": f"could not read {name}: {e}"}, None
                 continue
             out[key], out["hashes"][key] = _parse_record(raw, name), _record_hash(raw)
+        # the configuration, as the class of a new camera group is written into it: its hash, like a record's
+        try:
+            raw = _read_record(os.path.join(cd, CONFIG_NAME))
+        except OSError as e:
+            out["cameras"], out["hashes"]["cameras"] = {"_error": f"could not read {CONFIG_NAME}: {e}"}, None
+            return out
+        out["cameras"], out["hashes"]["cameras"] = _camera_question(workspace, raw), _record_hash(raw)
         return out
     return {"workspace": None, "demo": True, "hashes": {}, "zones": _host_zones(),
             "time": _example_json("photos-21-time-decisions.requires-input.json"),
             "drift": _example_json("photos-22-gps-drift-validation.requires-input.json"),
             "gps": _example_json("photos-23-gps-decisions.requires-input.json"),
-            "execution": None}                          # no execution in the demo: nothing has been written
+            "execution": None,                          # no execution in the demo: nothing has been written
+            "cameras": {"groups": {}}}
 
 
 def _write_json(path, obj):
@@ -336,6 +379,37 @@ def _apply_edits(art, edits):
     return applied
 
 
+def _classed_config(workspace, raw, edits):
+    """(the configuration with each named camera group put in the array its edit gives and out of the other, None) — or
+    (None, why it is refused): a configuration that cannot be read, a group it classes already, a class that is not one
+    of the two arrays, or a result `load_config` would refuse (BLD-editor_writes_device_groups). That setting alone
+    changes (RUL-editor_classes_camera_group)."""
+    cfg = _parse_record(raw, CONFIG_NAME)
+    if not isinstance(cfg, dict) or "_error" in cfg:
+        return None, f"cannot read {CONFIG_NAME} to class the camera group(s); nothing was saved"
+    dg = _device_groups(cfg)
+    if not isinstance(dg, dict) or not all(isinstance(dg.get(a), list) for a in DEVICE_CLASSES):
+        return None, f"{CONFIG_NAME} holds no device_groups with its two lists; nothing was saved"
+    unclassed = set(_camera_question(workspace, raw).get("groups") or {})
+    for e in edits:
+        key, cls = e.get("key"), (e.get("user_decision") or {}).get("device_class") \
+            if isinstance(e.get("user_decision"), dict) else None
+        if e.get("kind") != "camera" or key not in unclassed:
+            return None, (f"{CONFIG_NAME} classes no new camera group {key!r} to answer (it may be classed "
+                          "already) — reload the editor; nothing was saved")
+        if cls not in DEVICE_CLASSES:
+            return None, f"the class of camera group {key!r} must be one of {', '.join(DEVICE_CLASSES)}; nothing was saved"
+        other = DEVICE_CLASSES[1 - DEVICE_CLASSES.index(cls)]
+        if key not in dg[cls]:
+            dg[cls].append(key)
+        dg[other] = [k for k in dg[other] if k != key]
+    try:
+        photos_utils.check_config(cfg, workspace)
+    except ValueError as e:
+        return None, f"{e} — nothing was saved"
+    return cfg, None
+
+
 def _save(workspace, payload):
     """Write the posted user_decision edits back into the workspace's decision artifacts."""
     # A save changes the workspace, so it holds the workspace's lock (BLD-editor_save_locks): a geotag plan
@@ -348,13 +422,17 @@ def _save(workspace, payload):
         if photos_utils.is_sealed(workspace):   # read under the lock; the console reaches here without serve()'s check
             return {"ok": False, "error": "workspace is sealed (already merged): decisions can no longer change"}
         cd = os.path.join(workspace, CONTROL)
+        cfg_path = os.path.join(cd, CONFIG_NAME)
         try:
             raws = {key: _read_record(os.path.join(cd, name)) for key, name in _RECORDS}
+            raw_cfg = _read_record(cfg_path)
         except OSError as e:
             return {"ok": False, "error": f"cannot read the decision records ({e}); nothing was saved"}
         current = {key: _record_hash(raw) for key, raw in raws.items()}
+        current["cameras"] = _record_hash(raw_cfg)      # the configuration, a camera group's class written into it
         edits = {key: (payload or {}).get(key) or [] for key, _name in _RECORDS}
-        if not any(edits.values()):
+        cameras = (payload or {}).get("cameras") or []
+        if not any(edits.values()) and not cameras:
             return {"ok": True, "written": [], "hashes": current}
         # Save only what was shown (RUL-save_only_what_was_shown): the edits were made against the records as
         # the editor loaded them. Each of them is compared, under the lock, with the hash the page was
@@ -365,6 +443,10 @@ def _save(workspace, payload):
             return {"ok": False, "error": "this save does not say which decision records it was made from — "
                                           "reload the editor and make your edits again; nothing was saved"}
         changed = [name for key, name in _RECORDS if key not in loaded or loaded[key] != current[key]]
+        # A camera group's class is written into the configuration only over the one the editor showed; a
+        # configuration edited by hand since does not hold back a save of the decisions alone.
+        if cameras and loaded.get("cameras") != current["cameras"]:
+            changed.append(CONFIG_NAME)
         if changed:
             return {"ok": False, "error": f"{', '.join(changed)} changed since the editor loaded it (a geotag "
                                           "plan may have rewritten it) — reload the editor to see the decisions "
@@ -381,6 +463,11 @@ def _save(workspace, payload):
                 return {"ok": False, "error": f"{name} holds no {_edit_label(missing[0])} to save — reload the "
                                               "editor and make your edits again; nothing was saved"}
             arts[key] = art
+        cfg = None
+        if cameras:
+            cfg, why = _classed_config(workspace, raw_cfg, cameras)
+            if cfg is None:
+                return {"ok": False, "error": why}
         written = []
         for key, name in _RECORDS:
             if key in arts:
@@ -388,6 +475,11 @@ def _save(workspace, payload):
                 _write_json(os.path.join(cd, name), arts[key])
                 written.append(name)
                 current[key] = _record_hash(_read_record(os.path.join(cd, name)))
+        if cfg is not None:
+            # the configuration written whole, every other setting keeping its value (BLD-editor_writes_device_groups)
+            photos_utils.write_json_artifact(cfg_path, cfg)
+            written.append(CONFIG_NAME)
+            current["cameras"] = _record_hash(_read_record(cfg_path))
         return {"ok": True, "written": written, "hashes": current}
     finally:
         lock.release()

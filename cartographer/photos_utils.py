@@ -1752,6 +1752,26 @@ def unknown_config_settings(cfg: dict, template: dict = None, prefix: str = "") 
     return out
 
 
+def check_config(loaded, workspace_root: str = None, path: str = None):
+    """Refuse, raising ValueError naming the file and what is wrong, a configuration that `load_config` would refuse:
+    one that is not an object, lacks a setting of the built-in template or holds one it lacks, or does not validate
+    (BLD-config_loader). Shared by `load_config` and by the decision editor's write of a camera group's class
+    (BLD-editor_writes_device_groups), which checks the file it would write without making it this run's."""
+    path = path or (config_path(workspace_root) if workspace_root else "photos-00-config.json")
+    if not isinstance(loaded, dict):
+        raise ValueError(f"Workspace config {path} must be a JSON object.")
+    missing = missing_config_settings(loaded)
+    if missing:
+        listed = "; ".join(f"{k} (the default is {json.dumps(v)})" for k, v in missing)
+        raise ValueError(f"Workspace config {path} is missing setting(s): {listed}. Add each to the file — "
+                         "a workspace's configuration names every setting itself.")
+    unknown = unknown_config_settings(loaded)
+    if unknown:
+        raise ValueError(f"Workspace config {path} holds setting(s) cartographer does not know: "
+                         f"{', '.join(unknown)}. Correct or remove each — an unknown setting would be ignored.")
+    validate_config(loaded, workspace_root)  # human-authored input is validated before it is accepted
+
+
 def load_config(workspace_root: str) -> str:
     """Read the workspace's `photos-00-config.json` as the one configuration of this run — every phase
     reads it through here (BLD-config_loader). It must exist (only prep seeds it, `load_or_seed_config`),
@@ -1767,18 +1787,7 @@ def load_config(workspace_root: str) -> str:
         loaded = json.loads(raw.decode("utf-8"))
     except Exception as e:
         raise ValueError(f"Workspace config {path} is not valid JSON: {e}")
-    if not isinstance(loaded, dict):
-        raise ValueError(f"Workspace config {path} must be a JSON object.")
-    missing = missing_config_settings(loaded)
-    if missing:
-        listed = "; ".join(f"{k} (the default is {json.dumps(v)})" for k, v in missing)
-        raise ValueError(f"Workspace config {path} is missing setting(s): {listed}. Add each to the file — "
-                         "a workspace's configuration names every setting itself.")
-    unknown = unknown_config_settings(loaded)
-    if unknown:
-        raise ValueError(f"Workspace config {path} holds setting(s) cartographer does not know: "
-                         f"{', '.join(unknown)}. Correct or remove each — an unknown setting would be ignored.")
-    validate_config(loaded, workspace_root)  # human-authored input is validated before it is accepted
+    check_config(loaded, workspace_root, path)
     jobs = CONFIG.get("jobs")
     CONFIG.clear()
     CONFIG.update(loaded)

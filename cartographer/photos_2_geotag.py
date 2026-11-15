@@ -730,12 +730,7 @@ class GeotagWorkflow:
             if rec.get("folder_class") != by_dest or rec.get("media_class") not in ("image", "raw"):
                 continue
             md = rec.get("metadata_status") or {}
-            parsed = {}
-            if md.get("parsed_json"):
-                try:
-                    parsed = json.loads(md["parsed_json"])
-                except Exception:
-                    parsed = {}
+            parsed = _parsed_record(rec)
             fp = _recorded_fingerprint(rec)   # the preflight stops on a photo without one
             rel = rec.get("relative_path")
             # its own position, by the one test (BLD-own_position_test): latitude 0 and longitude 0 is none
@@ -866,18 +861,9 @@ class GeotagWorkflow:
         The class is all geotag needs of a group: its facts — files, span, positions — are prep's to report,
         in the handoff's `camera_groups`."""
         dg = (CONFIG.get("camera_time_and_timezone_policy") or {}).get("device_groups") or {}
-        phones = set(dg.get("phones") or [])
-        fixed = set(dg.get("fixed_clock_cameras") or [])
         groups = {}
         for key in sorted({f["camera_group_key"] for f in files}):
-            # A file naming no camera is no group to class: solved on its own, never asked about
-            # (BLD-unidentified_files).
-            # One listed as both is classed as neither: the two are solved in opposite ways, and picking one
-            # here would be geotag's guess (the offered classification lists a new group under both).
-            cls = "unidentified" if key == NO_IDENTITY_KEY else \
-                "unknown" if key in phones and key in fixed else \
-                "smartphone" if key in phones else ("camera" if key in fixed else "unknown")
-            groups[key] = {"camera_group_key": key, "camera_group_class": cls}
+            groups[key] = {"camera_group_key": key, "camera_group_class": camera_group_class(key, dg)}
         unknown = [k for k, g in groups.items() if g["camera_group_class"] == "unknown"]
         return groups, unknown
 
@@ -2913,6 +2899,49 @@ GEOTAG_BLURB = (
 )
 
 
+def camera_group_class(key, device_groups):
+    """The class the configuration's `device_groups` gives camera group `key` (BLD-known_camera_group): `smartphone`
+    (listed in `phones`), `camera` (in `fixed_clock_cameras`), `unidentified` for files naming no camera — solved on
+    their own, never asked about (BLD-unidentified_files) — else `unknown`. One listed as both is classed as neither:
+    the two are solved in opposite ways, and picking one here would be geotag's guess (the offered classification
+    lists a new group under both)."""
+    phones = set(device_groups.get("phones") or [])
+    fixed = set(device_groups.get("fixed_clock_cameras") or [])
+    if key == NO_IDENTITY_KEY:
+        return "unidentified"
+    if key in phones and key in fixed:
+        return "unknown"
+    return "smartphone" if key in phones else ("camera" if key in fixed else "unknown")
+
+
+def _parsed_record(rec):
+    """Prep's parsed metadata of a handoff record, or {} when it holds none that parses."""
+    md = rec.get("metadata_status") or {}
+    try:
+        return json.loads(md["parsed_json"]) if md.get("parsed_json") else {}
+    except Exception:
+        return {}
+
+
+def unclassified_camera_groups(handoff, cfg):
+    """{camera group: its photos' paths} for each group of the handoff's photos under photos by destination that the
+    configuration `cfg` does not class — the groups geotag stops on (BLD-known_camera_group), keyed from prep's record
+    as `build_file_model` keys a photo with no pinned values. What the decision editor asks the class of
+    (BLD-editor_lists_new_camera_groups)."""
+    by_dest = ((cfg or {}).get("folders") or {}).get("photos_by_dest") or folder_name("photos_by_dest")
+    dg = ((cfg or {}).get("camera_time_and_timezone_policy") or {}).get("device_groups") or {}
+    out = {}
+    for rec in ((handoff or {}).get("files") or []):
+        if rec.get("folder_class") != by_dest or rec.get("media_class") not in ("image", "raw"):
+            continue
+        md, parsed = rec.get("metadata_status") or {}, _parsed_record(rec)
+        key = clock_group_key({"camera_group_key": md.get("camera_group_key") or parsed.get("camera_group_key")
+                               or NO_IDENTITY_KEY, "source_time_tag": parsed.get("selected_source_timestamp_tag")})
+        if camera_group_class(key, dg) == "unknown":
+            out.setdefault(key, []).append(rec.get("relative_path"))
+    return {k: sorted(p for p in v if p) for k, v in sorted(out.items())}
+
+
 def _load_prior_decisions(path):
     """The user's prior decision artifact at `path`, as (artifact, problem). (None, None) when there is
     none yet. A file that cannot be read or parsed, or that is not a JSON object, is never ignored or
@@ -3171,9 +3200,10 @@ def run(args):
                         reporter.log(f'  "{label}": [\n{items}\n  ]{tail}')
                     else:
                         reporter.log(f'  "{label}": []{tail}')
-                reporter.log("\nNo geotag JSON was written.")
-                emit_next_step(reporter, "paste the array(s) above into photos-00-config.json, then "
-                                         "re-run `geotag plan`.")
+                reporter.log("\nNo geotag JSON was written. Or class each in the decision editor "
+                             "(`photos-cartographer edit`, its Cameras view), which writes the same arrays.")
+                emit_next_step(reporter, "paste the array(s) above into photos-00-config.json (or class them in "
+                                         "`photos-cartographer edit`), then re-run `geotag plan`.")
                 sys.exit(2)
 
             gpx = wf.load_gpx(files)      # disk-heavy: only after the in-memory checks above have passed

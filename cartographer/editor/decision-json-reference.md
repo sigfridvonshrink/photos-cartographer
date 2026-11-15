@@ -30,6 +30,7 @@ All live in the workspace control directory `.photos-ingest/`:
 | `photos-21-time-decisions.json` | `time_decisions` | Per-destination **country** and **civil timezone**, and per-(camera group, destination, day) **clock offset** for fixed-clock cameras. |
 | `photos-22-gps-drift-validation.json` | `gps_drift_validation` | Per at-risk bucket, **confirm or correct** a clock offset that no photo's own GPS pins (a manual, timezone-derived or imprecise-anchor offset) against the GPX track before it is used to place photos (§5a below). |
 | `photos-23-gps-decisions.json`  | `gps_decisions`  | Per-destination **GPS fallback** coordinate, and per-file **GPS** decisions for files an automatic source could not place. |
+| `photos-00-config.json` (`camera_time_and_timezone_policy.device_groups`) | — | Not a decision record but the workspace's configuration: the **class** of each new camera group — phone or fixed-clock camera — that geotag stops on before it writes any decision (§5c below). |
 | `photos-25-execution-summary.json` | `execution_summary` | Not a decision record but `geotag execute`'s summary: per photo whose content changed when geotag wrote to it, whether that content **stands** (§5b below). |
 
 The editor opens one of these, presents the open decisions, lets the human resolve them, and writes the
@@ -647,6 +648,38 @@ editor: the **Execute** view lists each, with a preview of the photo.
 
 ---
 
+## 5c. A new camera group's class — `photos-00-config.json`
+
+Geotag classes each camera group of the photos under `6-photos-by-dest/` by the configuration's
+`camera_time_and_timezone_policy.device_groups`: a key listed in `phones` is a phone (its clock the network's, its
+offset recorded with each photo, solved photo by photo), one in `fixed_clock_cameras` a camera with a clock set by
+hand (an offset per day). A group listed in **neither, or in both**, stops `geotag plan` before it writes any decision:
+it prints the two arrays — your groups plus the new one(s), each new one under both — ready to paste. Files naming no
+camera are never asked.
+
+```jsonc
+"camera_time_and_timezone_policy": {
+  "device_groups": {
+    "fixed_clock_cameras": [ "Canon|EOS R5|0123" ],
+    "phones": [ "Apple|iPhone 15 Pro|" ]
+  },
+  …
+}
+```
+
+**By hand:** paste the printed arrays over the two in `photos-00-config.json`, keeping each new group in the one array
+it belongs to and deleting it from the other, then re-run `geotag plan`.
+
+**In the editor:** the **Cameras** view lists each such group (its identity as prep found it, how many photos, a preview
+of one) with two choices. The editor's server shows the group as a cell `cameras.groups[<key>]` with
+`user_decision.device_class` — `"phones"` or `"fixed_clock_cameras"`, the array it is written into — found from the
+handoff's photos as geotag finds them. Saving puts the key in that array and takes it out of the other, under the
+workspace lock, only while `photos-00-config.json` is the file the editor loaded (by its SHA-256), and only if the
+configuration then passes every check `load_config` makes; the file is written again whole (sorted keys, two-space
+indent), every other setting keeping its value.
+
+---
+
 ## 6. Within-cell precedence (which `user_decision` field wins)
 
 A cell can carry more than one decision field; geotag applies them in a fixed order. The editor's
@@ -724,9 +757,10 @@ A natural shape that satisfies the contract:
    which regenerates the artifact, reads back the `user_decision` values, recomputes everything, and validates.
 
 **The save contract (this editor's server).** `GET /api/artifacts` returns `{ "workspace", "demo", "time",
-"drift", "gps", "execution", "hashes" }` — the three decision records and photos-25 (`execution`) as loaded, and in
-`hashes` (`{ "time", "drift", "gps", "execution" }`) the SHA-256 of each record's bytes as read (`null` for a record
-that is absent). `POST /api/save` takes:
+"drift", "gps", "execution", "cameras", "hashes" }` — the three decision records and photos-25 (`execution`) as
+loaded, the new camera groups (`cameras`, §5c), and in `hashes` (`{ "time", "drift", "gps", "execution", "cameras" }`)
+the SHA-256 of each record's bytes as read — `cameras` the configuration's — (`null` for a record that is absent).
+`POST /api/save` takes:
 
 ```jsonc
 {
@@ -736,7 +770,8 @@ that is absent). `POST /api/save` takes:
   "gps":   [ { "dest": "…", "kind": "fallback" | "review", "path": "<relative_path, for review>",
                "user_decision": { … } } ],
   "execution": [ { "kind": "fingerprint", "path": "<relative_path of the mismatch>", "user_decision": { … } } ],
-  "hashes": { "time": "…", "drift": "…", "gps": "…", "execution": "…" }   // as the editor loaded them
+  "cameras": [ { "kind": "camera", "key": "<camera group key>", "user_decision": { "device_class": "phones" } } ],
+  "hashes": { "time": "…", "drift": "…", "gps": "…", "execution": "…", "cameras": "…" }   // as the editor loaded them
 }
 ```
 

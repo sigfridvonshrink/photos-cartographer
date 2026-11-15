@@ -234,7 +234,7 @@ timezone-less clock needs a clock offset (next sections). A phone's photo record
 zone unasked only where the phone's tagged photos that day record the zone's offset; else its own GPS reads
 it; with neither, the zone's reading (or its tagged photos' offset) is a guess like a camera's — checked in
 the drift check where tracks lie by it, else accepted. A group not yet classed stops geotag, which
-prints both lists ready to paste. A file whose metadata names no camera is never asked to be classed: it
+prints both lists ready to paste — or class it in the editor's Cameras view, which writes them. A file whose metadata names no camera is never asked to be classed: it
 is solved on its own, by the offset recorded with its time; files recording none are one question for
 their destination — read them as local time in its zone? — answered once and kept. So is a photo
 whose only time is its `ModifyDate` — an export whose capture time is gone, timed by the editing

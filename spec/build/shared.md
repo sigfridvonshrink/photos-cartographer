@@ -79,7 +79,8 @@ editor loads and saves each by its kind: in photos-21, `timezone` (`destination_
 `camera_group_time_decisions`, a phone's among them, by its key), `reading` (an entry of `local_time_readings`, by
 its photo's path) and `unidentified` (`unidentified_files`); in photos-22, `drift`; in photos-23, `fallback` and `review`;
 in `photos-25-execution-summary.json`, which `geotag execute` reads, `fingerprint` (an entry of `fingerprint_mismatches`,
-by its photo's path). The editor writes each answer as geotag takes it: where an offset cell lists `conflicts_with`, a proposal the user takes
+by its photo's path); and a camera group's class, `camera`, in the configuration ({need}`BLD-editor_lists_new_camera_groups`).
+The editor writes each answer as geotag takes it: where an offset cell lists `conflicts_with`, a proposal the user takes
 there is written as `manual_offset_seconds`, the user's own offset, which keeps its effect
 ({need}`RUL-chosen_offset_not_withheld`) — never as an acceptance, which geotag withholds there again.
 :::
@@ -187,6 +188,32 @@ MAY write the `library_root` key into the configuration, and only that key, writ
 indentation, characters beyond ASCII written as escapes — becomes that of the control records. It is not part of
 merge's data path.
 :::
+
+:::{bld} The editor lists the camera groups geotag stops on
+:id: BLD-editor_lists_new_camera_groups
+:status: ruled
+:realises: RUL-every_question_in_editor
+:uses: BLD-known_camera_group
+
+The decision editor SHALL list, as `cameras`, each camera group of the handoff's photos under photos by destination that
+`camera_time_and_timezone_policy.device_groups` lists in neither `phones` nor `fixed_clock_cameras`, or in both — the
+groups geotag stops on, keyed as geotag keys them (`unclassified_camera_groups`) — with its photos' count and three of
+their paths, and a `user_decision.device_class` it answers: `phones` or `fixed_clock_cameras`. Geotag's stop on such a
+group still prints the two arrays, to paste in by hand.
+:::
+
+:::{bld} The editor writes a new camera group's class into `device_groups`
+:id: BLD-editor_writes_device_groups
+:status: ruled
+:realises: RUL-editor_classes_camera_group, RUL-every_question_answerable_by_hand
+:uses: BLD-editor_lists_new_camera_groups, BLD-editor_save_locks
+
+The decision editor's save of a camera group's class SHALL, under the workspace lock and only while the configuration
+is the one it loaded, by its SHA-256, put the group in the array named and take it out of the other, refusing unless the
+group is still unclassed and the configuration then passes the checks `load_config` makes, and write the file again
+whole through `write_json_artifact`, every other setting keeping its value.
+:::
+
 
 :::{bld} Field-scoped fingerprints, and one whole-file SHA-256
 :id: BLD-config_fingerprints
@@ -893,7 +920,8 @@ A phase SHALL write only records in its own number band of the numbering scheme:
 merge `photos-3X`, and on success the seal, `photos-00-sealed.json`, which merge alone writes. The configuration and
 the database are phase-neutral, each with its own writers' rule: prep seeds
 the configuration, which `init-library` may later extend by `library_root` alone
-({need}`BLD-init_library_writes_library_root`), and prep writes the database's cache and identity rows while geotag and
+({need}`BLD-init_library_writes_library_root`) and the decision editor by a camera group's class alone
+({need}`BLD-editor_writes_device_groups`), and prep writes the database's cache and identity rows while geotag and
 merge write only their own regions of it ({need}`BLD-workspace_database`). Bundling copies of every phase's records into
 the archival package reads them, and is no write.
 :::

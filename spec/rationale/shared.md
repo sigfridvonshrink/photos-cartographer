@@ -186,10 +186,11 @@ archived, and from then on the copy governs, not the program.
 :status: ruled
 :forced: yes
 :follows_from: RAT-why_did_this_change, RAT-idempotent_reruns
-:justifies: RUL-config_writers, RUL-library_setup_writes_one_setting
+:justifies: RUL-config_writers, RUL-library_setup_writes_one_setting, RUL-editor_classes_camera_group
 
 Prep's seeding happens once, before anything is made under the configuration; the user's own edits are the intended way
-to change it; the library setup records only the one answer it was asked for. A phase that rewrote the configuration on
+to change it; the library setup records only the one answer it was asked for, and the decision editor only the class
+the user gave a camera group geotag stopped on — the answer the user would otherwise paste in by hand. A phase that rewrote the configuration on
 its own would change what governs the workspace with nobody having decided it, and restale every plan with no cause the
 user can find.
 :::
@@ -1128,8 +1129,9 @@ A question the tool asks and the editor cannot answer sends the user to a text e
 find the field — the work the editor exists to spare — and a question answered only outside the tool is not one the
 tool keeps track of. The owner ruled *"the user should be able to answer all questions in the editor"*, so each
 question gets its view as it is built. The editor is the easier way, never the only one: *"the editor is not the only
-possibility to answer, I need to keep the option to manually give answers"* — every answer is a field of a decision
-record, written there by hand as well, and documented.
+possibility to answer, I need to keep the option to manually give answers, so the snippet added for a new camera needs
+to stay"* — every answer is a field of a record, written there by hand as well, and documented; a new camera's class is
+the one answer kept in the configuration, where geotag's printed lists are pasted and where the editor writes it.
 :::
 
 

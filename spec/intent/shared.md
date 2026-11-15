@@ -398,8 +398,9 @@ become — the defaults serving only to seed a new workspace.
 :anti: yes
 :verify: required
 
-The configuration SHALL be written only when prep seeds it, when the user edits it by hand, and by the library setup
-below — never by geotag, and never by merge's planning, dry run or execution.
+The configuration SHALL be written only when prep seeds it, when the user edits it by hand, by the library setup and by
+the decision editor's classing of a camera group, below — never by geotag, and never by merge's planning, dry run or
+execution.
 :::
 
 :::{rul} The library setup records one setting
@@ -412,6 +413,19 @@ below — never by geotag, and never by merge's planning, dry run or execution.
 
 Merge's one-time library setup, run inside a workspace and given a library, MAY record in the configuration which
 library this workspace merges into — that setting, and no other.
+:::
+
+:::{rul} The decision editor records a camera group's class, and nothing else
+:id: RUL-editor_classes_camera_group
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-config_writers
+:uses: DEF-camera_group, RUL-known_when_classified
+
+The decision editor, given by the user the class of a camera group the configuration does not class — a phone, or a
+camera with a fixed clock — MAY record that class in the configuration: that setting, and no other.
 :::
 
 :::{rul} The configuration is a dependency of what is made under it
@@ -3093,7 +3107,8 @@ Every question geotag asks of the user SHALL be answerable in the decision edito
 :verify: required
 :uses: DEF-decision
 
-Every question geotag asks of the user SHALL be answerable by hand, in a field of its decision record.
+Every question geotag asks of the user SHALL be answerable by hand, in a field of the record it is asked in — a camera
+group's class, in the configuration.
 :::
 
 :::{rul} The decision editor saves nothing into a sealed workspace
