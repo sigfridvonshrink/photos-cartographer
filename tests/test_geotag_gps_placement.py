@@ -369,6 +369,30 @@ def _trk(*segments):
     return "<trk>" + "".join("<trkseg>" + "".join(pt(*p) for p in seg) + "</trkseg>" for seg in segments) + "</trk>"
 
 
+@pytest.mark.spec("BLD-track_time_parser", "RUL-track_time_never_guessed",
+                  test="TST-geotag_gps_placement-track_times_are_read_as_the_host_python_reads_them")
+def test_track_times_are_read_as_the_host_python_reads_them(tmp_path):
+    """A track point's time is what the host Python's `datetime.fromisoformat` reads, a final `Z` taken as
+    `+00:00`: the xsd:dateTime forms on every Python, the other ISO 8601 forms where this one takes them, and a
+    time with no offset never — its point skipped, never read as some zone's."""
+    def host_reads(t):
+        try:
+            return datetime.fromisoformat(t[:-1] + "+00:00" if t[-1:] in "Zz" else t).tzinfo is not None
+        except ValueError:
+            return False
+    times = ["2024-07-03T12:00:00Z", "2024-07-03T14:00:01+02:00", "2024-07-03T12:00:02.000Z",   # xsd:dateTime
+             "2024-07-03T12:00:03.5Z", "2024-07-03 12:00:04+00:00", "20240703T120005Z",       # host-dependent
+             "2024-07-03T12:00:06"]                                                            # no offset
+    body = "<trk><trkseg>" + "".join(f'<trkpt lat="50.0" lon="{4 + i / 1000}"><time>{t}</time></trkpt>'
+                                     for i, t in enumerate(times)) + "</trkseg></trk>"
+    g = _gpx_file(tmp_path, "t.gpx", body)
+    read = {round((p.lon - 4) * 1000) for p in g.points}
+    assert read == {i for i, t in enumerate(times) if host_reads(t)}
+    assert {0, 1, 2} <= read and 6 not in read
+    assert sorted(p.time_utc for p in g.points if round((p.lon - 4) * 1000) < 3) == \
+        [_utc(12, 0, 0), _utc(12, 0, 1), _utc(12, 0, 2)]
+
+
 @pytest.mark.spec("RUL-track_is_one_trk", "RUL-tracks_never_joined", "BLD-track_placement",
                   test="TST-geotag_gps_placement-two_trk_of_one_file_are_never_joined")
 def test_two_trk_of_one_file_are_never_joined(tmp_path):
