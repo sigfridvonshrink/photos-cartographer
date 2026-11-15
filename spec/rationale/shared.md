@@ -894,7 +894,7 @@ recognised as corrected whichever workspace it is in.
 :status: ruled
 :forced: no
 :follows_from: RAT-rerun_is_safe, CHC-ask_only_what_data_cannot_settle, RAT-every_question_answerable
-:justifies: RUL-changed_time_stops_plan, RUL-changed_time_asked, RUL-changed_time_kept_is_own, RUL-changed_time_restored
+:justifies: RUL-changed_time_stops_plan, RUL-changed_time_asked, RUL-changed_time_kept_is_true, RUL-changed_time_restored, RUL-kept_time_not_clock_evidence, RUL-kept_time_tag_disagreement_told, RUL-kept_time_tag_disagreement_recorded
 
 Geotag decides from what a photo held before it first wrote to it. A time the photo holds that is neither that nor
 what geotag wrote was put there since, by someone: a correction made in another tool, or a slip. Geotag cannot tell
@@ -903,10 +903,15 @@ time would turn a camera's clock offset onto a time already corrected, or build 
 the change knows, so geotag does neither unasked: it shows the times and asks which the photo keeps — a question like
 any other the tool asks, and the owner ruled *"the user should be able to answer all questions in the editor"*, so it is
 a decision, answered there or by hand, rather than a stop to be cleared outside the tool. The answer is one of the two
-the user has. A slip, or a change to undo: geotag's time, written again from the photo's own. A time to keep: it
-becomes the photo's own, as though the device had recorded it, and is decided from as every photo's own time is — a
-camera's clock offset applied to it as to its siblings — since one own time per photo, not two, is what keeps every
-later run deciding the same way.
+the user has. A slip, or a change to undo: geotag's time, written again as it was decided before. A time to keep: the
+owner ruled *"“keep” means this is the true local time - ruled"*. Whoever changed it set it to the time the photo was
+taken, there: so it is read by its destination's timezone, the one that reads every local time there, and corrected by
+no camera's clock offset — applied to it, a time already put right would be corrected twice, a wrong value written
+into an original. Being no reading of the camera's clock, it says nothing of that clock's offset, and is kept out of
+the evidence for it. Kept once, it is recorded beside the photo's own values, so every later run reads it the same way
+and does not ask again. An offset tag beside it that the zone does not give at that time is not followed — the ruling
+makes the time local, and the zone says which offset local time there has — but it does not pass in silence: it may be
+the mark of a time set in another zone, which the user, told, can still answer otherwise.
 :::
 
 :::{rat} An empty inbox means nothing is waiting

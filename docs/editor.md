@@ -282,11 +282,14 @@ another tool, or by a slip — gets a row of its own, **Time changed since geota
 with its thumbnail. The panel names the time it holds, the one geotag wrote and the photo's own from
 before geotag. Choose:
 
-- **keep the time it holds** — it becomes the photo's own time, as though the camera had recorded it, and
-  is corrected like any photo's own time (its camera's clock offset applied to it). A time you already
-  corrected to the true time elsewhere would be corrected again: take back geotag's instead, or fix the
-  camera's offset;
-- **take back geotag's time** — geotag writes its time again, from the photo's own time.
+- **keep the time it holds** — this is the true local time. Geotag reads it by the destination's
+  timezone and applies no camera clock offset to it, now or on any later run; the photo is placed and named
+  by it, and its other time fields (`CreateDate`, `XMP:DateCreated`, IPTC) and its offset tag are written to
+  match. It is not used to work out the camera's clock offset. A time the timezone shows twice, or never
+  (at a daylight-saving change), is then asked like any other. If the photo's offset tag says another
+  offset than the timezone's at that time, the panel says so: kept, the timezone wins, so a time set in
+  another zone would be off by the difference — answer otherwise, or fix the time first;
+- **take back geotag's time** — geotag writes its time again, as it decided it before the change.
 
 The answer is for the time the photo holds now: change the photo's time again and it asks again. Until
 answered, the time decisions are not complete. By hand: `keep` (`"new"` or `"geotag"`) and `answered_for`

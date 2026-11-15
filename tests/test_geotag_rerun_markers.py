@@ -842,10 +842,11 @@ def _times_written(ws):
         db.close()
 
 
-def _hand_set_time(ws, dto, off):
-    """The photo's time set in another tool after geotag wrote it, as the next re-prep reads it back."""
+def _hand_set_time(ws, dto, off, name=None):
+    """The photo's time set in another tool after geotag wrote it, as the next re-prep reads it back — the one photo,
+    or the one named."""
     ho = json.loads((ws / ".photos-ingest" / "photos-11-handoff.json").read_text())
-    (f,) = ho["files"]
+    (f,) = [f for f in ho["files"] if name is None or os.path.basename(f["relative_path"]) == name]
     parsed = json.loads(f["metadata_status"]["parsed_json"])
     parsed.update(DateTimeOriginal=dto, OffsetTimeOriginal=off, selected_source_naive_timestamp=dto)
     f["metadata_status"]["parsed_json"] = json.dumps(parsed)
@@ -916,40 +917,187 @@ def test_a_changed_time_restored_has_geotag_s_written_back(tmp_path, monkeypatch
     _, cell = _changed_cell(ws)
     assert cell["effective_answer"] == "geotag" and not cell["requires_user_input"]
     plan = _plan_record(ws)
-    assert plan["status"] == "ready" and plan["own_times_kept"] == {}
+    assert plan["status"] == "ready" and plan["true_times_kept"] == {}
     w = _ops(ws)[f"{T}/{WROTE}"]["writes"]
     assert (w["DateTimeOriginal"], w["OffsetTimeOriginal"]) == ("2024:07:03 14:30:00", "+02:00")
 
 
-@pytest.mark.spec("RUL-changed_time_kept_is_own", "BLD-changed_time_kept", "BLD-changed_time_kept_pinned",
-                  "BLD-changed_time_question",
-                  test="TST-geotag_rerun_markers-a_changed_time_kept_becomes_the_photo_s_own")
-def test_a_changed_time_kept_becomes_the_photo_s_own(tmp_path, monkeypatch):
-    """Answered `new`, the time the photo holds is its own: the plan decides from it as from any photo's own time — the
-    camera's ten minutes slow corrected on it — the executable plan names it, and execution makes it the pin's, so the
-    next plan finds nothing changed and nothing to ask."""
+def _rows(ws):
+    db = cal.GeotagCache(str(ws))
+    try:
+        return {r["relative_path"]: r for r in db.get_rows()}
+    finally:
+        db.close()
+
+
+KEPT = "2024-07-03--14-45-00.arw"        # the name the kept time gives it
+
+
+@pytest.mark.spec("RUL-changed_time_kept_is_true", "BLD-changed_time_kept", "BLD-changed_time_kept_pinned",
+                  "BLD-changed_time_question", "RUL-other_capture_times_corrected", "BLD-resolved_utc",
+                  test="TST-geotag_rerun_markers-a_changed_time_kept_is_the_photo_s_true_local_time")
+def test_a_changed_time_kept_is_the_photo_s_true_local_time(tmp_path, monkeypatch):
+    """Answered `new`, the time the photo holds is its true local time: read by its destination's zone, the camera's
+    ten minutes slow not applied to it again, the photo placed and named by it and its other time fields brought into
+    line; execution records it beside the pin, its own values staying, so the next plan asks nothing and writes
+    nothing — and goes on reading it as the true time."""
+    ws = _executed_round(tmp_path, monkeypatch)
+    ho = json.loads((ws / ".photos-ingest" / "photos-11-handoff.json").read_text())
+    parsed = json.loads(ho["files"][0]["metadata_status"]["parsed_json"])
+    parsed["XMP:DateCreated"] = "2024:07:03 14:30:00+02:00"         # geotag's time, in a field the tool left
+    ho["files"][0]["metadata_status"]["parsed_json"] = json.dumps(parsed)
+    _write_handoff(ws, ho["files"])
+    _hand_set_time(ws, "2024:07:03 14:45:00", "+02:00")
+    _plan(monkeypatch, ws)
+    _answer_changed(ws, "new")
+    _plan(monkeypatch, ws)
+    _, cell = _changed_cell(ws)
+    assert cell["effective_answer"] == "new" and not cell["requires_user_input"]
+    assert "offset_tag_disagrees" not in cell                        # +02:00 is Brussels' then
+    plan = _plan_record(ws)
+    assert plan["status"] == "ready", plan["blockers"]
+    assert plan["true_times_kept"] == {f"{T}/{WROTE}": {
+        "DateTimeOriginal": "2024:07:03 14:45:00", "OffsetTimeOriginal": "+02:00", "content_fingerprint": "fp-a.arw"}}
+    row = _rows(ws)[f"{T}/{WROTE}"]
+    assert (row["time_rule_used"], row["resolved_utc"], row["utc_offset_used"]) == \
+        ("kept_true_time", "2024-07-03T12:45:00Z", None)                # by the zone: no clock offset on it
+    e = _ops(ws)[f"{T}/{WROTE}"]
+    w = e["writes"]
+    assert w["DateTimeOriginal"] == "2024:07:03 14:45:00" and w["OffsetTimeOriginal"] == "+02:00"   # not rewritten
+    assert w["XMP:DateCreated"] == "2024:07:03 14:45:00+02:00"         # the other field in line with it
+    assert w["GPSLatitude"] == pytest.approx(50.0045)                   # placed at 12:45Z, between two points
+    assert e["to"] == KEPT
+    (op,) = [o for d in plan["destinations"].values() for o in d["operations"] if o["type"] == "metadata_time_write"]
+    assert op["provenance"]["because"] == f"photos-21 destinations.{T}.changed_times[{T}/{WROTE}]"
+    _execute(monkeypatch, ws)
+    (pin,) = _originals(ws).values()
+    assert pin["true_time"] == {"DateTimeOriginal": "2024:07:03 14:45:00", "OffsetTimeOriginal": "+02:00"}
+    assert (pin["DateTimeOriginal"], pin["selected_source_naive_timestamp"]) == \
+        ("2024:07:03 14:20:00", "2024:07:03 14:20:00")                  # its own values stay
+    _plan(monkeypatch, ws)
+    art, cell = _changed_cell(ws)
+    assert cell is None and not art["requires_user_input"] and _ops(ws) == {}   # decided: nothing asked or written
+    row = _rows(ws)[f"{T}/{KEPT}"]
+    assert (row["time_rule_used"], row["resolved_utc"]) == ("kept_true_time", "2024-07-03T12:45:00Z")
+
+
+@pytest.mark.spec("RUL-changed_time_restored", "BLD-changed_time_restored_written", "BLD-changed_time_kept_pinned",
+                  "BLD-changed_time_blocks",
+                  test="TST-geotag_rerun_markers-a_time_changed_after_one_was_kept_restores_the_kept_one")
+def test_a_time_changed_after_one_was_kept_restores_the_kept_one(tmp_path, monkeypatch):
+    """A time kept and executed is the one geotag decides from: the photo's time changed by hand again, the question
+    names the kept time as the photo's own, and taking back geotag's writes the kept time back — never the camera's
+    own time corrected again."""
     ws = _executed_round(tmp_path, monkeypatch)
     _hand_set_time(ws, "2024:07:03 14:45:00", "+02:00")
     _plan(monkeypatch, ws)
     _answer_changed(ws, "new")
     _plan(monkeypatch, ws)
-    _plan(monkeypatch, ws)                              # the drift check sees the new time; its confirmation holds
+    _execute(monkeypatch, ws)
+    _hand_set_time(ws, "2024:07:03 16:00:00", "+02:00")
+    _plan(monkeypatch, ws)
     _, cell = _changed_cell(ws)
-    assert cell["effective_answer"] == "new" and not cell["requires_user_input"]
+    assert cell["requires_user_input"]
+    assert cell["own_time"] == {"DateTimeOriginal": "2024:07:03 14:45:00", "OffsetTimeOriginal": "+02:00"}
+    _answer_changed(ws, "geotag")
+    _plan(monkeypatch, ws)
+    w = _ops(ws)[f"{T}/{KEPT}"]["writes"]
+    assert (w["DateTimeOriginal"], w["OffsetTimeOriginal"]) == ("2024:07:03 14:45:00", "+02:00")
+
+
+@pytest.mark.spec("RUL-kept_time_not_clock_evidence", "BLD-changed_time_kept_not_anchor",
+                  test="TST-geotag_rerun_markers-a_kept_time_is_no_anchor_of_its_camera")
+def test_a_kept_time_is_no_anchor_of_its_camera(tmp_path, monkeypatch):
+    """A camera with its own GPS, its clock found from its positions on the track. One photo's time set by hand to the
+    true time and kept: its position, against the kept time, would read the clock two minutes otherwise — it is no
+    reading of the camera's clock, so the cell's offset rests on the other photo alone, and is applied to it alone."""
+    ws = _ws(tmp_path, [lambda ws: _rec(ws, f"{T}/a.arw", "2024:07:03 13:50:00", gps=(50.0, 4.0)),
+                        lambda ws: _rec(ws, f"{T}/b.arw", "2024:07:03 14:40:00", gps=(50.005, 4.0))])
+    _plan(monkeypatch, ws)
+    _execute(monkeypatch, ws)                     # a at 14:00 +02:00, b at 14:50 +02:00, both pinned
+    before = _cell(ws)
+    _hand_set_time(ws, "2024:07:03 14:52:00", "+02:00", name="2024-07-03--14-50-00.arw")
+    _plan(monkeypatch, ws)
+    _answer_changed(ws, "new")
+    _plan(monkeypatch, ws)
     plan = _plan_record(ws)
     assert plan["status"] == "ready", plan["blockers"]
-    assert plan["own_times_kept"] == {f"{T}/{WROTE}": {
-        "DateTimeOriginal": "2024:07:03 14:45:00", "OffsetTimeOriginal": "+02:00",
-        "selected_source_naive_timestamp": "2024:07:03 14:45:00", "selected_source_timestamp_tag": "DateTimeOriginal"}}
-    w = _ops(ws)[f"{T}/{WROTE}"]["writes"]
-    assert w["DateTimeOriginal"] == "2024:07:03 14:55:00"            # 14:45 on the camera's clock, ten minutes slow
-    _execute(monkeypatch, ws)
-    (pin,) = _originals(ws).values()
-    assert (pin["DateTimeOriginal"], pin["OffsetTimeOriginal"], pin["selected_source_naive_timestamp"]) == \
-        ("2024:07:03 14:45:00", "+02:00", "2024:07:03 14:45:00")
+    cell = _cell(ws)
+    assert cell["effective_time_anchor"]["offset_seconds"] == before["effective_time_anchor"]["offset_seconds"] == -6600
+    assert (before["proposal"]["anchor_count"], cell["proposal"]["anchor_count"]) == (2, 1)   # the kept one is none
+    assert "2024-07-03--14-50-00.arw" not in json.dumps(cell["proposal"])
+    rows = _rows(ws)
+    assert rows[f"{T}/2024-07-03--14-50-00.arw"]["time_rule_used"] == "kept_true_time"
+    assert rows[f"{T}/2024-07-03--14-00-00.arw"]["time_rule_used"] == "camera_group_offset"
+    assert _ops(ws) == {f"{T}/2024-07-03--14-50-00.arw": {"writes": {}, "types": ["rename_no_clobber"],
+                                                         "to": "2024-07-03--14-52-00.arw"}}
+
+
+@pytest.mark.spec("RUL-kept_time_tag_disagreement_told", "RUL-kept_time_tag_disagreement_recorded",
+                  "BLD-changed_time_kept_tag_noted", "RUL-changed_time_kept_is_true", "BLD-changed_time_kept",
+                  test="TST-geotag_rerun_markers-a_kept_time_s_offset_tag_its_zone_does_not_give_is_told")
+def test_a_kept_time_s_offset_tag_its_zone_does_not_give_is_told(tmp_path, monkeypatch, capsys):
+    """The time set by hand with an offset tag Brussels did not have then (+09:00): the question records the tag and the
+    zone's offset and the plan says so, naming the photo. Kept, the time is read by the zone, not by the tag, and the
+    tag is written to the zone's."""
+    ws = _executed_round(tmp_path, monkeypatch)
+    _hand_set_time(ws, "2024:07:03 14:45:00", "+09:00")
+    capsys.readouterr()
     _plan(monkeypatch, ws)
-    art, cell = _changed_cell(ws)
-    assert cell is None and _ops(ws) == {}                           # its own now: nothing asked, nothing to write
+    out = capsys.readouterr()
+    said = out.out + out.err
+    _, cell = _changed_cell(ws)
+    assert cell["offset_tag_disagrees"] == {"recorded_offset_seconds": 9 * 3600, "timezone": "Europe/Brussels",
+                                            "timezone_offsets_seconds": [7200]}
+    assert f"{WROTE}: its offset tag says +09:00, but Europe/Brussels is +02:00" in said
+    _answer_changed(ws, "new")
+    _plan(monkeypatch, ws)
+    assert _rows(ws)[f"{T}/{WROTE}"]["resolved_utc"] == "2024-07-03T12:45:00Z"    # by the zone, not 05:45Z
+    w = _ops(ws)[f"{T}/{WROTE}"]["writes"]
+    assert (w["DateTimeOriginal"], w["OffsetTimeOriginal"]) == ("2024:07:03 14:45:00", "+02:00")
+
+
+@pytest.mark.spec("RUL-ambiguous_local_time_answered", "BLD-local_time_readings", "RUL-changed_time_kept_is_true",
+                  "BLD-changed_time_kept",
+                  test="TST-geotag_rerun_markers-a_kept_time_the_zone_repeats_is_asked")
+def test_a_kept_time_the_zone_repeats_is_asked(tmp_path, monkeypatch):
+    """A time kept as the true local time that Brussels shows twice — 02:30 on the night the clocks go back — is asked
+    which of its two readings it is, as any time the zone reads; answered, it is read by that one."""
+    ws = _executed_round(tmp_path, monkeypatch)
+    _hand_set_time(ws, "2024:10:27 02:30:00", "+02:00")
+    _plan(monkeypatch, ws)
+    _answer_changed(ws, "new")
+    _plan(monkeypatch, ws)
+    a = json.loads((ws / ".photos-ingest" / cal.TIME_DECISIONS_ARTIFACT).read_text())
+    reading = a["destinations"][T]["local_time_readings"][f"{T}/{WROTE}"]
+    assert (reading["case"], reading["offsets_seconds"], reading["requires_user_input"]) == ("repeated", [7200, 3600], True)
+    assert a["requires_user_input"] and "offset_tag_disagrees" not in a["destinations"][T]["changed_times"][f"{T}/{WROTE}"]
+    reading["user_decision"]["utc_offset_seconds"] = 3600
+    (ws / ".photos-ingest" / cal.TIME_DECISIONS_ARTIFACT).write_text(json.dumps(a))
+    _plan(monkeypatch, ws)
+    row = _rows(ws)[f"{T}/{WROTE}"]
+    assert (row["time_rule_used"], row["resolved_utc"]) == ("local_time_answered", "2024-10-27T01:30:00Z")
+
+
+@pytest.mark.spec("RUL-log_cites_decisions", "BLD-geotag_log_steps", "BLD-log_format",
+                  test="TST-geotag_rerun_markers-a_kept_time_is_logged_with_its_decision")
+def test_a_kept_time_is_logged_with_its_decision():
+    """The log records a time kept as the photo's true time, naming the photos-21 entry that kept it, for the pass
+    being finalized and for an earlier one alike — and no clock offset applied."""
+    rel = f"{T}/a.arw"
+    kept = {rel: {"DateTimeOriginal": "2024:07:03 14:45:00", "OffsetTimeOriginal": "+02:00", "content_fingerprint": "fp"}}
+    plan = {"plan_id": "p2", "true_times_kept": kept, "destinations": {},
+            "depends_on": {"time_decisions": {"sha256": "abc", "artifact_name": cal.TIME_DECISIONS_ARTIFACT}}}
+    files = [{"relative_path": rel, "destination": T, "camera_group_key": CAM, "content_fingerprint": "fp"}]
+    rows = [{"relative_path": rel, "time_rule_used": "kept_true_time", "resolved_utc": "2024-07-03T12:45:00Z"}]
+    because = f"photos-21 destinations.{T}.changed_times[{rel}]"
+    for earlier, current in (((), plan), (((plan, set()),), dict(plan, plan_id="p3", true_times_kept={}))):
+        log = cal.build_complete_log({}, files, rows, {}, current, earlier_passes=earlier)
+        steps = log["fp"]["journey"]
+        (step,) = [s for s in steps if s["action"] == "true_time_kept"]
+        assert (step["value"], step["because"], step["run"], step["because_record_sha256"]) == \
+            ("2024:07:03 14:45:00", because, "p2", "abc")
+        assert not any(s["action"] == "clock_offset_applied" for s in steps)
 
 
 @pytest.mark.spec("RUL-changed_time_asked", "BLD-changed_time_question",

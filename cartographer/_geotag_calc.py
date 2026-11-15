@@ -63,7 +63,9 @@ __all__ = [
     'held_other_times',
     'changed_time_blocker',
     'changed_time',
-    'keep_changed_time',
+    'keep_true_time',
+    'kept_tag_disagreement',
+    'utc_offset_text',
     'CHANGED_TIME_ANSWERS',
     'POSITION_MARKERS',
     'TIME_FIXED_SUFFIX',
@@ -993,7 +995,9 @@ def _offsets_against_zone(files, groups, tz):
         return None
     zone, out = zoneinfo.ZoneInfo(tz), []
     for f in sorted(files, key=lambda x: x["relative_path"]):
-        if (groups.get(f["camera_group_key"]) or {}).get("camera_group_class") == "camera" or f.get("geotag_marker"):
+        # a kept true time is read by the zone, its tag told apart (BLD-changed_time_kept_not_anchor)
+        if (groups.get(f["camera_group_key"]) or {}).get("camera_group_class") == "camera" or f.get("geotag_marker") \
+                or f.get("true_time"):
             continue
         naive, own = _parse_camera_naive(f.get("source_naive_time")), _own_offset(f)
         if naive is None or own is None:
@@ -1267,7 +1271,15 @@ def _resolve_one(f, d, cls, naive, tz, key, dest, overrides):
     compute_resolved_utc."""
     resolved, status, rule, offset_used, prov = None, "unresolved", "missing_timestamp", None, None
     scope = key
-    if naive is not None and f.get("geotag_marker"):
+    if naive is not None and f.get("true_time"):
+        # the user kept this time as the photo's true one, local to its destination (BLD-changed_time_kept): read by the
+        # zone — a time it skips or repeats as the user answered — never by a clock offset
+        if tz:
+            resolved, status, amb_rule, offset_used = _resolve_by_zone(naive, tz, _reading_answer(f, d))
+            rule, prov = amb_rule or "kept_true_time", tz
+        else:
+            status, rule = "unresolved", "timezone_missing"
+    elif naive is not None and f.get("geotag_marker"):
         # geotag corrected this time already: it is destination-local, offset tag beside it
         own_off = _own_offset(f)
         if own_off is not None:
@@ -1782,50 +1794,70 @@ def _time_text(pair):
     return f"{pair['DateTimeOriginal']} {off}" if off else f"{pair['DateTimeOriginal']} with no offset"
 
 
-# The answers to a time changed since geotag wrote it (BLD-changed_time_question): keep the time the photo holds — it
-# becomes the photo's own — or take back geotag's.
+# The answers to a time changed since geotag wrote it (BLD-changed_time_question): keep the time the photo holds — its
+# true local time (BLD-changed_time_kept) — or take back geotag's.
 CHANGED_TIME_ANSWERS = ("new", "geotag")
 
 
 def changed_time(file):
     """What `file` holds of a time changed since geotag wrote it, or None (BLD-changed_time_blocks): a photo geotag wrote
     to — its own values pinned — holding a time and offset which are neither its own from before geotag's first write
-    nor one geotag wrote. {"held_time", "geotag_wrote" (the last pair geotag wrote, or None), "own_time"}, each a
+    (the true time kept for it, where its pin keeps one: BLD-changed_time_kept_pinned) nor one geotag wrote.
+    {"held_time", "geotag_wrote" (the last pair geotag wrote, or None), "own_time"}, each a
     {DateTimeOriginal, OffsetTimeOriginal}. A photo with no pin was never written by geotag here, and is not concerned."""
     if not file.get("from_originals"):
         return None
     h = held_values(file)
     held = {k: h.get(k) for k in TIME_PAIR}
     written = file.get("times_written") or []
-    own = {k: (file.get("own_time") or {}).get(k) for k in TIME_PAIR}
+    own = {k: (file.get("true_time") or file.get("own_time") or {}).get(k) for k in TIME_PAIR}
     if held == own or held in written:
         return None
     return {"held_time": held, "geotag_wrote": dict(written[-1]) if written else None, "own_time": own}
 
 
-def keep_changed_time(file):
-    """`file` decided from the time it holds, kept by the user as its own (BLD-changed_time_kept): its own
-    DateTimeOriginal and OffsetTimeOriginal become the ones it holds, its recorded time read from DateTimeOriginal —
-    so it is corrected like any photo's own time. `time_kept` carries the values the ledger's pin takes at execution.
-    Pure; returns a new dict."""
-    h = held_values(file)
-    held = {k: h.get(k) for k in TIME_PAIR}
+def keep_true_time(file, pair):
+    """`file` decided from `pair` — a time the user kept as the photo's true time, local to its destination
+    (BLD-changed_time_kept): its recorded time read from that DateTimeOriginal, with that offset tag, and `true_time`
+    set, so it is resolved by its destination's zone, no clock offset applied, and kept out of its camera's evidence
+    (BLD-changed_time_kept_not_anchor). Its own pinned values stay. Pure; returns a new dict."""
+    pair = {k: pair.get(k) for k in TIME_PAIR}
     tag = file.get("source_time_tag") or ""
     tag = tag if tag.rsplit(":", 1)[-1] == "DateTimeOriginal" else "EXIF:DateTimeOriginal"
-    rt = dict(file.get("raw_times") or {}, **{k: v for k, v in held.items() if v is not None})
-    if held.get("OffsetTimeOriginal") is None:
+    rt = dict(file.get("raw_times") or {}, **{k: v for k, v in pair.items() if v is not None})
+    if pair.get("OffsetTimeOriginal") is None:
         rt.pop("OffsetTimeOriginal", None)
-    return dict(file, own_time=held, raw_times=rt, source_naive_time=held["DateTimeOriginal"], source_time_tag=tag,
-                has_timestamp=_parse_camera_naive(held["DateTimeOriginal"]) is not None,
-                time_kept={**held, "selected_source_naive_timestamp": held["DateTimeOriginal"],
-                           "selected_source_timestamp_tag": tag})
+    return dict(file, true_time=pair, raw_times=rt, source_naive_time=pair["DateTimeOriginal"], source_time_tag=tag,
+                has_timestamp=_parse_camera_naive(pair["DateTimeOriginal"]) is not None)
+
+
+def kept_tag_disagreement(pair, tz):
+    """Where `pair` — a time the user is asked whether to keep as the true local time — holds an offset tag that its
+    destination's zone `tz` does not give at that time (BLD-changed_time_kept_tag_noted): {"recorded_offset_seconds",
+    "timezone", "timezone_offsets_seconds"} — the zone's offset there, or its two at a time it skips or repeats —
+    else None. A tag holding no offset, or no time or zone to set it against, disagrees with nothing."""
+    pair = pair or {}
+    naive, own = _parse_camera_naive(pair.get("DateTimeOriginal")), _parse_iso_offset(pair.get("OffsetTimeOriginal"))
+    if naive is None or own is None or not _valid_iana(tz):
+        return None
+    amb = _zone_ambiguity(naive, tz)
+    if amb is not None:
+        offsets = amb["offsets_seconds"]
+    else:
+        try:
+            offsets = [int(_local_to_utc(naive, tz).astimezone(zoneinfo.ZoneInfo(tz)).utcoffset().total_seconds())]
+        except OverflowError:
+            return None
+    if any(round(o / 60) * 60 == own for o in offsets):
+        return None
+    return {"recorded_offset_seconds": own, "timezone": tz, "timezone_offsets_seconds": offsets}
 
 
 def changed_time_blocker(file):
     """Why the plan stops on `file`, or None (BLD-changed_time_blocks): a photo holding a time changed since geotag wrote
     it (`changed_time`) that the user has not answered for in photos-21 (BLD-changed_time_question). Geotag neither
     writes its own time back over it nor takes it as the photo's recorded time unasked. One kept is decided from its
-    new time and holds it as its own; one whose answer is geotag's time is planned to have it written back."""
+    new time as its true local time; one whose answer is geotag's time is planned to have it written back."""
     if (file.get("changed_time") or {}).get("answer") in CHANGED_TIME_ANSWERS:
         return None
     ch = changed_time(file)
@@ -1834,7 +1866,7 @@ def changed_time_blocker(file):
     held, written = ch["held_time"], file.get("times_written") or []
     wrote = _time_text(written[-1]) if written else "no time"
     return (f"{file['relative_path']}: holds the time {_time_text(held)}, but geotag wrote {wrote} to it, and its "
-            f"own time before geotag was {_time_text(file.get('own_time'))}. Its time was changed since geotag "
+            f"own time before geotag was {_time_text(ch['own_time'])}. Its time was changed since geotag "
             "wrote to it: geotag neither writes its time back nor takes this one as the photo's unasked. Say which "
             "it keeps in photos-21 (changed_times, or the decision editor) and run `geotag plan` again — or put "
             "one of those back into the photo, then run `prep plan`, `prep execute` and `geotag plan` again.")
@@ -1850,8 +1882,13 @@ def _local_time_and_offset(resolved_utc, tz):
     local = dt.astimezone(zoneinfo.ZoneInfo(tz))
     # The offset field holds hours and minutes. A zone's offset before it kept standard time has seconds
     # (Amsterdam in 1935: +00:19:32): it is written to the nearest minute, the local time exact.
-    minutes = round(local.utcoffset().total_seconds() / 60)
-    return local.strftime("%Y:%m:%d %H:%M:%S"), f"{'-' if minutes < 0 else '+'}{abs(minutes) // 60:02d}:{abs(minutes) % 60:02d}"
+    return local.strftime("%Y:%m:%d %H:%M:%S"), utc_offset_text(local.utcoffset().total_seconds())
+
+
+def utc_offset_text(seconds):
+    """A UTC offset in seconds as the offset field writes it, '+HH:MM' — to the nearest minute."""
+    minutes = round(seconds / 60)
+    return f"{'-' if minutes < 0 else '+'}{abs(minutes) // 60:02d}:{abs(minutes) % 60:02d}"
 
 
 def _make_op(typ, rel, reason, semantic, preconditions):
@@ -2028,9 +2065,22 @@ def _time_written_step(time_op):
     return step
 
 
+def _true_time_steps(plan):
+    """{fingerprint: step} of the times the user kept as their photos' true times in `plan` (BLD-geotag_log_steps), each
+    naming the photos-21 entry that kept it (BLD-log_format)."""
+    out = {}
+    for rel, kept in sorted((plan.get("true_times_kept") or {}).items()):
+        if isinstance(kept, dict) and kept.get("content_fingerprint"):
+            out[kept["content_fingerprint"]] = {
+                "phase": "geotag", "action": "true_time_kept", "value": kept.get("DateTimeOriginal"),
+                "because": f"photos-21 destinations.{os.path.dirname(rel)}.changed_times[{rel}]"}
+    return out
+
+
 def _earlier_pass_steps(plan, confirmed):
     """{fingerprint: [steps]} for one earlier executed pass: what its confirmed operations did to each
-    photo, matched by the fingerprint the operation was planned against, each step naming the run."""
+    photo, matched by the fingerprint the operation was planned against, and the true times it kept, each step
+    naming the run."""
     run = plan.get("plan_id")
     ops_by_fp = {}
     for dd in (plan.get("destinations") or {}).values():
@@ -2038,9 +2088,11 @@ def _earlier_pass_steps(plan, confirmed):
             fp = (op.get("preconditions") or {}).get("content_fingerprint")
             if fp and op.get("operation_id") in confirmed:
                 ops_by_fp.setdefault(fp, []).append(op)
+    kept = _true_time_steps(plan)
     out = {}
-    for fp, ops in ops_by_fp.items():
-        steps = []
+    for fp in sorted(set(ops_by_fp) | set(kept)):
+        ops = ops_by_fp.get(fp) or []
+        steps = [dict(kept[fp])] if fp in kept else []
         time_op = next((o for o in ops if o["type"] == "metadata_time_write"), None)
         if time_op is not None:
             prov = time_op.get("provenance") or {}
@@ -2117,6 +2169,7 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, e
             fp = (op.get("preconditions") or {}).get("content_fingerprint") or fp_by_rel.get(op["relative_path"])
             ops_by_fp.setdefault(fp, []).append(op)
     earlier = [_earlier_pass_steps(p, confirmed) for p, confirmed in earlier_passes]
+    kept = _true_time_steps(plan)
     run = plan.get("plan_id")
 
     for f in sorted(files, key=lambda x: x["relative_path"]):
@@ -2132,6 +2185,8 @@ def build_complete_log(prep_photos, files, resolved_rows, time_artifact, plan, e
         ops = ops_by_fp.get(fp) or []
         start = len(steps)
 
+        if fp in kept:                          # the user's own answer: this is the photo's true time
+            steps.append(dict(kept[fp]))
         if row.get("time_rule_used") == "camera_group_offset" and row.get("utc_offset_used") is not None:
             cells = (t_dests.get(dest) or {}).get("camera_group_time_decisions") or {}
             steps.append({"phase": "geotag", "action": "clock_offset_applied",
