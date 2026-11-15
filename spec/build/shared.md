@@ -929,7 +929,7 @@ the destination's folder fallback, with the destination it was accepted from.
 :::{bld} Geotag's steps in the log
 :id: BLD-geotag_log_steps
 :status: ruled
-:realises: RUL-log_entry_grows, RUL-log_records_gps_reverts, RUL-log_records_time_replaced, RUL-log_records_null_island_replaced, RUL-log_records_null_island_cleared
+:realises: RUL-log_entry_grows, RUL-log_records_gps_reverts, RUL-log_records_time_replaced, RUL-log_records_other_times_replaced, RUL-log_records_null_island_replaced, RUL-log_records_null_island_cleared
 
 Geotag's steps SHALL be `clock_offset_applied` (its `offset_seconds` with an `offset_description` in words, such as
 "camera clock 1 h 55 min ahead of UTC"), `resolved_utc`, `timezone_resolved`, `time_written` (with its `writes`, the

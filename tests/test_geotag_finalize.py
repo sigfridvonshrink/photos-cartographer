@@ -107,7 +107,7 @@ def test_complete_log_gps_written():
     assert next(s for s in photos2["fpN"]["journey"] if s["action"] == "gps_written")["gps_processing_method"] is None
 
 
-@pytest.mark.spec("RUL-log_records_time_replaced", "BLD-geotag_log_steps",
+@pytest.mark.spec("RUL-log_records_time_replaced", "RUL-log_records_other_times_replaced", "BLD-geotag_log_steps",
                   test="TST-geotag_finalize-a_time_written_is_logged_with_what_it_replaced")
 def test_a_time_written_is_logged_with_what_it_replaced_and_how_it_was_found():
     """Two phone photos written alike: one read by the offset its phone recorded, one by assuming the

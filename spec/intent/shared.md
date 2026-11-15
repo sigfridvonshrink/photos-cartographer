@@ -2352,6 +2352,18 @@ A time geotag writes SHALL appear in the log with the time and offset it replace
 from and the rule that turned it to UTC.
 :::
 
+:::{rul} Every other time field written is logged with what it held
+:id: RUL-log_records_other_times_replaced
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-log_records_time_replaced
+:uses: DEF-transformation_log, RUL-other_capture_times_corrected
+
+A time geotag writes into another field in which the photo records when it was made SHALL appear in the log with the
+value that field held.
+:::
+
 :::{rul} The log reads as it stands
 :id: RUL-log_human_readable
 :status: ruled
