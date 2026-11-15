@@ -207,8 +207,8 @@ leaves the inbox.
 :verify: required
 :uses: DEF-managed_folders
 
-A media file outside the inbox SHALL stay in the folder it is in, unless prep sets it aside as a duplicate or it is a
-dated file outside its day folder.
+A media file outside the inbox SHALL stay in the folder it is in, unless prep sets it aside as a duplicate, it is a
+dated file outside its day folder, or it lies in missing metadata and has gained a recorded time.
 :::
 
 :::{rul} A dated file lies in its day folder
@@ -276,16 +276,15 @@ under the inbox and with its name unchanged.
 A file of no media class in the inbox SHALL NOT block a run.
 :::
 
-:::{rul} A file in missing metadata stays there
-:id: RUL-missing_metadata_stays
+:::{rul} A file given a time in missing metadata is filed on
+:id: RUL-time_given_filed_on
 :status: ruled
-:criticality: low
-:anti: yes
+:criticality: med
 :verify: required
-:uses: DEF-managed_folders, DEF-recorded_time
+:uses: DEF-managed_folders, DEF-recorded_time, DEF-timestamp_name, RUL-photos_by_date, RUL-videos_by_date
 
-Prep SHALL leave a file in missing metadata where it is, though it has since gained a recorded time: only the user
-moving it back into the inbox takes it through prep again.
+Prep SHALL file each media file in missing metadata that has gained a recorded time as it files one of a new dump: a
+photo into photos by date, a video into videos by date, in its day's folder under its timestamp name.
 :::
 
 :::{rul} A media file's extension is lowercase

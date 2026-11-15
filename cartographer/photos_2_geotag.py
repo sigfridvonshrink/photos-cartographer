@@ -625,8 +625,9 @@ class GeotagWorkflow:
         if untimed:
             blockers.append(f"{len(untimed)} photo(s) in {by_dest}/ have no recorded time, so their true "
                             f"time cannot be resolved: {_named(untimed)}. They belong in "
-                            f"{folder_name('missing_metadata')}/ — move them there (or give them a time "
-                            "and re-run prep), then re-run geotag.")
+                            f"{folder_name('missing_metadata')}/ — move them there, then re-run geotag. "
+                            f"Give one a time there and prep files it into {folder_name('photos_by_date')}/, "
+                            "to sort again.")
 
         info["by_dest_photos"] = sum(1 for _, mc in self._scan_media(by_dest) if mc in ("image", "raw"))
         return blockers, warnings, info

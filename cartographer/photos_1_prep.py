@@ -2261,7 +2261,8 @@ class WorkspacePrepWorkflow:
         """Organize pass (RUL-photos_by_date, RUL-by_date_in_day_folder): classify each non-quarantined file
         as already-conforming (no-op) vs to-organize vs non-media stray; move strays into 1-strays/<plan-id>/ and place
         each to-organize file into its date band (`band/YYYY-MM-DD/`, or missing-metadata for the
-        untimestamped) with a collision-suffixed name. Mutates the op-building cluster on `st`.
+        untimestamped) with a collision-suffixed name. A missing-metadata file that has gained a recorded time
+        is to-organize like an inbox file (RUL-time_given_filed_on). Mutates the op-building cluster on `st`.
         Verbatim from plan() with `<cluster> -> st.<cluster>`."""
         global_index = set()
         to_organize = []
@@ -2270,6 +2271,7 @@ class WorkspacePrepWorkflow:
         _sources = folder_name('sources')
         _sources_prefix = _sources + '/'
         _by_date_bands = {folder_name('photos_by_date'), folder_name('videos_by_date')}
+        _missing = folder_name('missing_metadata')
         # The format is fixed once files are named in it (RUL-format_fixed_once_named): a change stops the plan
         # as a whole rather than calling every name it would invalidate misnamed.
         _fmt = CONFIG["filename_timestamp_format"]
@@ -2302,10 +2304,15 @@ class WorkspacePrepWorkflow:
                     blockers.append(self._not_media_blocker(rel_path))
                 continue
             top = rel_path.split('/', 1)[0]
+            if top == _missing and self._file_datetime(f) is not None:
+                # Given a time by hand where it lies: filed on as a file of a new dump is — its day folder, its
+                # timestamp name, a suffix on a clash (RUL-time_given_filed_on). Still untimed, it stays (below).
+                to_organize.append((f, rel_path))
+                continue
             if top != _sources and top in _managed:    # already in a managed band
                 # Outside the inbox every name is one the pipeline gave: one that is not stops the plan.
                 dt_named = self._file_datetime(f)
-                if dt_named is not None and top != folder_name('missing_metadata'):
+                if dt_named is not None:
                     named_in_format += 1
                 expected = None if fmt_changed else self._expected_name(rel_path, top, dt_named)
                 if expected is not None:

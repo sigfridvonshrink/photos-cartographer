@@ -644,7 +644,7 @@ file is.
 :id: RAT-mark_once
 :status: ruled
 :forced: yes
-:follows_from: RAT-idempotent_reruns, RAT-fix_through_inbox
+:follows_from: RAT-idempotent_reruns, RAT-untimed_set_apart
 :justifies: RUL-untimed_mark_once
 
 A file comes in already marked when the user sends it back from missing metadata: they gave it a time, or meant to. If

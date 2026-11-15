@@ -207,6 +207,17 @@ Each stage of prep's planning SHALL work from the path the stages before it gave
 against the names on disk and those already planned.
 :::
 
+:::{bld} A timed file in missing metadata is organized with the inbox's
+:id: BLD-time_given_organized
+:status: ruled
+:realises: RUL-time_given_filed_on, RUL-filed_file_stays
+
+Prep's organization stage SHALL take each file in `2-missing-metadata` whose metadata gives a recorded time with the
+inbox's files to be filed — one `move_no_clobber` of reason `Chronological Organization` into its day folder of
+`5-photos-by-date` or `4-videos-by-date`, its name allocated against the names already planned — after the duplicates
+stage has set aside any copy of it, and leave one with no recorded time where and as it lies.
+:::
+
 :::{bld} A filed file's extension is lowercased in two renames
 :id: BLD-two_step_case_rename
 :status: ruled

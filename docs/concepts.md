@@ -23,7 +23,7 @@ The managed folders, by number:
 ```
 0-sources/           the inbox: a dump lands here; prep empties it after every run
 1-strays/<plan-id>/  non-media set aside per run (structure preserved, inert)
-2-missing-metadata/  media with no recorded time
+2-missing-metadata/  media with no recorded time, until you give it one
 3-redundant-jpgs/    JPEGs that sit beside a RAW of the same name
 4-videos-by-date/    timed videos, in YYYY-MM-DD/ day folders
 5-photos-by-date/    timed photos, in YYYY-MM-DD/ day folders
@@ -56,8 +56,12 @@ is expected to do passes:
 - delete photos — cull — in `5-photos-by-date/`, `6-photos-by-dest/`, `4-videos-by-date/` or
   `3-redundant-jpgs/`;
 - move a photo back from `6-photos-by-dest/` to `5-photos-by-date/`;
-- give a photo in `2-missing-metadata/` a time by hand (with `exiftool -overwrite_original`, or delete the
-  `_original` copy exiftool leaves beside it — that copy is a file appearing);
+- give a photo or video in `2-missing-metadata/` a time by hand, where it lies (with `exiftool
+  -overwrite_original`, or delete the `_original` copy exiftool leaves beside it — that copy is a file
+  appearing). The next `prep plan` and `prep execute` file it on as a file of a new dump: into its day's
+  folder of `5-photos-by-date/` (a video, `4-videos-by-date/`) under its timestamp name, suffixed if
+  another photo already has it, or into the quarantine if it is a copy of one already filed. One still
+  without a time stays;
 - restore a file from a copy or a snapshot: same size and time under a new inode is the same file.
 
 The last four are named in the next run's output and in the record of the execution that follows —
