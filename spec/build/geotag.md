@@ -443,6 +443,17 @@ accepted proposal that does not exist is `stale_user_decision`. Its `requires_us
 `place_gps` SHALL place a photo on each track by itself, taking the first of: the nearer in time of the two points around its resolved time, within `gpx_direct_match_max_seconds` (`direct_match`); the place between those two, linear in time and the short way round in longitude, when they are at most `gpx_interpolation_max_gap_seconds`, `gpx_interpolation_max_distance_meters` and `gpx_interpolation_max_speed_kmh` apart (`interpolated`); past the nearer point when it is within `gpx_extrapolation_max_seconds` and is an end — the track's first or last point, or a side of a gap longer than `gpx_interpolation_max_gap_seconds` (`extrapolated`). The projection follows the heading from the farthest point of the track within `gpx_extrapolation_heading_seconds` of the end, and falls back to the end itself when it lands farther than `gpx_extrapolation_max_distance_meters` from it or the heading is faster than `gpx_extrapolation_max_speed_kmh`. Of the tracks that place the photo, those placing it by a point or between two count, and only where there is none the projections; of those, the tracks of the best rank (`BLD-track_precedence`), of which the best wins — by method in that order, then the nearest in time, then the file name; but when another of that rank lies more than `gpx_tracks_agree_max_distance_meters` from it, none places the photo, the reason `tracks_disagree` naming both files. Each counted track of a lower rank is kept with the placement in `lower_tracks`: its file — with the track's number where the file gives two — and `apart_meters` from the position. Two points either side of a `<trkseg>` break are never interpolated between — each is an end of its segment, the reason `track_gap` carrying `segment_break` — and a heading is taken from the end's own segment; two disagreeing tracks of one file are named by the file and the track's number.
 :::
 
+:::{bld} A projection with no heading lands on the end
+:id: BLD-projection_without_heading
+:status: ruled
+:realises: RUL-track_placement_bounded
+:uses: BLD-track_placement
+
+A photo past a track's end SHALL be placed on the end itself, still `extrapolated`, when no other point of the end's
+own segment lies within `gpx_extrapolation_heading_seconds` of it — a track of one point among them — or the farthest
+that does is at the end's own time: with no stretch to take a heading over, no projection is made.
+:::
+
 :::{bld} A review item is its photo's
 :id: BLD-review_item_identity
 :status: ruled

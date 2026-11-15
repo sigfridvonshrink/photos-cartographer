@@ -104,6 +104,21 @@ def test_extrapolation_past_window_blocked():
     assert cal.place_gps(_utc(12, 0, 0), g, CFG) is None               # 300 s before first > 120 (backward)
 
 
+@pytest.mark.spec("BLD-projection_without_heading", "RUL-track_placement_bounded",
+                  test="TST-geotag_gps_placement-a_projection_with_no_heading_point_lands_on_the_end")
+def test_a_projection_with_no_heading_point_lands_on_the_end():
+    """Past an end whose nearest other point lies outside the heading stretch, there is nothing to take a heading
+    over: the photo is placed on the end itself, still `extrapolated` — never projected from a point that far."""
+    g = _gpx([_pt(50.0, 4.0, 12, 0, 0), _pt(50.0, 4.001, 12, 1, 30)])   # 90 s apart: more than the 60 s stretch
+    r = cal.place_gps(_utc(12, 3, 0), g, CFG)                          # 90 s past the last point
+    assert r["method"] == "extrapolated" and (r["lat"], r["lon"]) == (50.0, 4.001)
+    r = cal.place_gps(_utc(11, 58, 30), g, CFG)                        # 90 s before the first
+    assert r["method"] == "extrapolated" and (r["lat"], r["lon"]) == (50.0, 4.0)
+    near = _gpx([_pt(50.0, 4.0, 12, 0, 40), _pt(50.0, 4.001, 12, 1, 30)])   # 50 s apart: a heading
+    assert cal.place_gps(_utc(12, 3, 0), near, CFG)["lon"] > 4.001
+
+
+@pytest.mark.spec("BLD-projection_without_heading", test="TST-geotag_gps_placement-extrapolation_single_point_uses_endpoint")
 def test_extrapolation_single_point_uses_endpoint():
     g = _gpx([_pt(50.0, 4.0, 12, 0, 0)])
     fwd = cal.place_gps(_utc(12, 1, 30), g, CFG)                       # 90 s after the only point
@@ -112,6 +127,7 @@ def test_extrapolation_single_point_uses_endpoint():
     assert back["method"] == "extrapolated" and (back["lat"], back["lon"]) == (50.0, 4.0)
 
 
+@pytest.mark.spec("BLD-projection_without_heading", test="TST-geotag_gps_placement-extrapolation_zero_span_vector_uses_endpoint")
 def test_extrapolation_zero_span_vector_uses_endpoint():
     # two end points at the same instant -> no velocity vector -> fall back to the endpoint coords
     g = _gpx([_pt(50.0, 4.0, 12, 0, 0), _pt(50.0, 4.0, 12, 0, 0)])
