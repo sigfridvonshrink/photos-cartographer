@@ -96,10 +96,15 @@ with none (`conflicting_files`). Today the editor tells the user to read the pat
 after the change into a sub-folder and re-run prep — changing the folder tree, and so the library, only to work around
 the limit. That advice is a stopgap; this item replaces it.
 
-**What to do:** when the photos disagreeing with the agreed offset form one run in time at the start or end of the
-day, propose splitting that day's cell at the change: two offsets, each anchored from its own photos. The photos
-without GPS between the last of one run and the first of the other are the one ambiguity; the editor asks which was
-the first after the change. Rule the change to the per-day model first.
+**Ruled (2026-11-16)** (*"rest is ok"*; the owner: *"15 can only be detected using GPS, the photos themselves are not
+enough. Correct?"* — yes): the change is seen only from evidence of the photos' true time — the camera's own GPS
+anchors against tracks, its fixes' GPS times (BACKLOG 35). Where the anchored photos, in camera-time order, form two
+consecutive runs, each agreeing within itself on another offset, geotag proposes splitting that day's cell at the
+change, each part anchored by its own photos; accepted once. The photos without GPS between the last of one run and
+the first of the other are asked: which was the first after the change — only where there are such photos. Three or
+more alternating runs are no clock change (a clock does not go back and forth) and fall to items 16 and 39. The model
+changes: a day's cell may be split at a time into consecutive parts. The editor's interim advice (move the photos into
+a sub-folder) goes once 15 and 16 are built.
 
 **When:** any time — the conversion is done.
 
@@ -111,12 +116,12 @@ before, a position another program wrote. Geotag never changes a photo's own pos
 corrects its time and leaves the wrong place in it; the editor can only tell the user to read the pattern and fix it
 by hand elsewhere. Together with item 15, the user would no longer interpret the disagreeing photos at all.
 
-**What to do:** have geotag tell the two cases apart itself — a run at one end of the day is item 15's clock change,
-scattered photos are suspect positions — and for each suspect one, compare its own position with the track's at its
-corrected time; where they differ beyond the anchor distance, raise it as a GPS review item in photos-23, the track's
-position proposed, the photo's own kept unless the user takes the proposal. Rule first that a photo's own position may
-be replaced this way, on the user's answer only — today it never is (`RUL-own_position_kept`) — and drop the editor's
-interim advice once both items are built.
+**Ruled (2026-11-16)** (*"rest is ok"*): a scattered photo whose own position its camera's agreed offset contradicts is
+compared with the track's position at its corrected time; farther apart than the anchor distance, it is a GPS review
+item in photos-23, the track's position proposed, the photo's own kept unless the user takes it — an exception to
+`RUL-own_position_kept`: a photo's own position may be replaced, on the user's answer only. With no track there is
+nothing to propose: the photo keeps its own, noted. Not raised for a group the configuration declares several bodies
+(item 39).
 
 **When:** any time — the conversion is done; with or after item 15.
 
@@ -160,8 +165,9 @@ midnight mid-shoot: the outing becomes two cells, the half without an anchor ask
 drift confirmation, though the other half of the same outing settled both. Close to item 15 (a clock changed
 mid-day), from the other side.
 
-**Open:** whether adjacent days of one camera in one destination with a small gap between their photos are offered
-the neighbour's offset — a proposal, to accept — or decided as one. To be ruled.
+**Ruled (2026-11-16)** (*"rest is ok"*): a day with no anchor of its own is proposed the offset of the day before or
+after of the same camera in the same destination, where that day is anchored — a proposal to accept, then checked on
+the tracks by the drift check as any. No new setting and no gap bound, the user accepting it; the day stays the unit.
 
 ### 25. A photo that cannot be written holds the whole workspace
 
@@ -267,8 +273,12 @@ and no one offset is right. Only one with GPS that day: its agreed offset applie
 Item 16's planned reading of scattered photos as suspect positions would then propose replacing the second body's
 correct ones.
 
-**Open:** a group whose key carries no serial never has an offset from its GPS apply itself; or the user declares a
-group split.
+**Ruled (2026-11-16)** — the owner: *"no, this needs a workspace setting, default being that it's just one camera. If the
+setting says multile cameras, then do the recommended"*: a configuration setting names the camera groups that are
+several bodies (by default none: a group is one camera). For a group so named: an offset from its GPS never applies
+itself — always a proposal, noting that the group may be several bodies; item 16 never reads its disagreeing photos as
+wrong positions; the bodies are split by moving one's photos into a sub-folder (which gives them their own cells).
+Answerable by hand in the configuration and in the editor's camera view (`RUL-every_question_in_editor`).
 
 ### 40. A destination has one timezone — and where a trip's is asked
 
