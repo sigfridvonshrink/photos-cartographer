@@ -855,7 +855,31 @@ The classification geotag offers SHALL keep every group already classed as it is
 :uses: DEF-camera_group
 
 A file whose metadata names no camera SHALL be solved on its own — by the offset recorded with its time, else its
-destination's timezone.
+destination's timezone once accepted ({need}`RUL-camera_less_files_asked_per_destination`).
+:::
+
+:::{rul} Files naming no camera are one question for their destination
+:id: RUL-camera_less_files_asked_per_destination
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-unidentified_files_solved_alone
+:uses: DEF-destination, DEF-decision
+
+Files naming no camera and recording no offset with their time SHALL be read by their destination's timezone only once
+the user, asked once for the destination, accepts it.
+:::
+
+:::{rul} The answer for camera-less files is kept
+:id: RUL-camera_less_answer_kept
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-camera_less_files_asked_per_destination
+
+The user's answer for a destination's files naming no camera SHALL hold for such files arriving later, while the
+timezone it was given for is the destination's.
 :::
 
 :::{rul} A file naming no camera is never asked to be classed
@@ -1205,6 +1229,44 @@ An offset one of a phone's photos gives from its own GPS, disagreeing with the o
 until the user accepts it.
 :::
 
+:::{rul} A phone's photo with no offset is read by the zone only as its tagged ones show
+:id: RUL-untagged_phone_photo_read_as_siblings
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-phone_time_from_own_offset
+:uses: DEF-camera_group
+
+A phone's photo recording no offset with its time SHALL be read by its destination's timezone without the user's answer
+only where the same phone's photos of that day there that record one all record the zone's.
+:::
+
+:::{rul} Else the phone's own GPS reads it
+:id: RUL-untagged_phone_photo_settled_by_evidence
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-untagged_phone_photo_read_as_siblings
+:uses: RUL-phone_anchored_like_camera
+
+Where its tagged photos do not, a phone's photos of a day in a destination recording no offset SHALL be read, without
+the user's answer, by the offset the phone's own GPS gives that day there, where it agrees with how its photos giving it
+are read.
+:::
+
+:::{rul} With neither, the phone's photo is asked about once
+:id: RUL-untagged_phone_photo_asked
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-untagged_phone_photo_read_as_siblings
+:uses: RUL-timezone_offset_asked_once
+
+A phone's photos recording no offset that neither its tagged photos nor its own GPS settle SHALL be asked about once,
+as a camera's guessed offset is: at the check against the tracks where tracks lie by them, by acceptance where none do.
+:::
+
 :::{rul} A phone kept as it records itself
 :id: RUL-phone_kept_as_recorded
 :status: ruled
@@ -1229,8 +1291,8 @@ gives another offset.
 :uses: DEF-camera_group
 
 A phone's photo SHALL take its true time from the offset recorded with the time it was read from, else from its
-destination's timezone — save where its own GPS reads the phone's clock otherwise
-({need}`RUL-phone_disagreeing_anchors_apply`).
+destination's timezone as {need}`RUL-untagged_phone_photo_read_as_siblings` allows — save where its own GPS reads the
+phone's clock otherwise ({need}`RUL-phone_disagreeing_anchors_apply`).
 :::
 
 :::{rul} An offset inside the time's own value is recorded with it

@@ -161,6 +161,7 @@ with its English `name` and its `zones` (sorted).
   "local_time_readings": {                                // optional: a photo's time its zone skips or repeats (§4.6)
     "<relative_path>": { /* §4.6 */ }
   },
+  "unidentified_files": { /* §4.7 */ },                   // optional: its files naming no camera, one question
   "unreadable_offset_tags": [                             // SYSTEM, optional: photos whose offset tag holds no offset
     { "relative_path": "…", "field": "OffsetTimeOriginal", "value": "local" }   // read as no tag; warned of
   ],
@@ -169,7 +170,8 @@ with its English `name` and its `zones` (sorted).
 ```
 
 Note: smartphones are resolved per-file and get an offset cell only for a destination and day where their own
-GPS reads their clock otherwise than their photos are read (§4.5); unidentified and unknown groups have none. A photo whose time was read from `ModifyDate` (no valid
+GPS reads their clock otherwise than their photos are read, or where photos of theirs recording no offset need one
+(§4.5); unidentified and unknown groups have none (files naming no camera have one question per destination, §4.7). A photo whose time was read from `ModifyDate` (no valid
 `DateTimeOriginal` or `CreateDate`: an export, timed by the editing computer) counts under `unknown`, as a file
 naming no camera does — it opens no cell of its camera's and takes no offset from one. A bucket whose photos are all already corrected by
 geotag gets a cell only when it still resolves (its earlier answer, derived again), so that photos of the
@@ -341,16 +343,24 @@ photos record; else the timezone-derived offset; else manual required.
 
 ### 4.5 A phone's day — a `smartphone` offset cell
 
-A phone's photos are read by the offset recorded with their time (else the zone). Where its photos of a day in a
-destination hold their own position, they are anchored on the tracks as a camera's are — else read by their GPS fix
-times (§4.4 `gps_time`) — and the offset found is set against the one each photo that gave it is read by. Agreeing within
-`gpx_anchor_decision_tolerance_seconds`: no cell. Disagreeing: a cell in `camera_group_time_decisions`, keyed as a
-camera's is, with `"camera_group_class": "smartphone"` and
+A phone's photos are read by the offset recorded with their time. Where its photos of a day in a destination hold
+their own position, they are anchored on the tracks as a camera's are — else read by their GPS fix times (§4.4
+`gps_time`) — and the offset found is set against the one each photo that gave it is read by (its own offset tag, else
+the zone's). **Disagreeing** (beyond `gpx_anchor_decision_tolerance_seconds`): a cell for every photo of the phone's
+day there (`applies_to: "every_photo"`). **Agreeing, or nothing found:** the photos recording an offset are read by it;
+those recording none are read by the zone, unasked, only where the phone's photos that day recording one all record
+the zone's offset — else they get a cell of their own (`applies_to: "untagged_photos"`): an offset the phone's own
+GPS found (agreeing) applies itself to them; with none, the proposal is the offset its tagged photos record
+(`recorded_offset`), else the zone's (`timezone_naive`), taking effect as a camera's guess does — sent to photos-22
+where tracks lie by them (`*_unconfirmed`; the drift check holds those photos alone), else accepted here. A zone
+reading accepted (`timezone_accepted`), or confirmed as it stood, reads each photo by the zone at its own time — a
+phone's clock follows a daylight-saving change. The cell is keyed as a camera's is, with
+`"camera_group_class": "smartphone"` and
 
 | Field | Type | Editable | Meaning |
 |-------|------|----------|---------|
-| `phone` | object | no | `{ "applies_to": "every_photo", "photos": int, "read_by_offsets": [int…] }` — the cell's offset reads every photo of the phone's day here (`photos` of them); `read_by_offsets`: each clock offset the photos that gave the finding are read by now. |
-| **`user_decision.keep_as_recorded`** | bool | **yes** | Keep the phone as its photos record themselves (`as_recorded`). |
+| `phone` | object | no | `{ "applies_to": "every_photo" \| "untagged_photos", "photos": int, "read_by_offsets": [int…] }` — the photos the cell's offset reads: every photo of the phone's day here, or those recording no offset (`photos` of them); `read_by_offsets`: each clock offset the photos that gave the GPS finding are read by now (`[]` with none). |
+| **`user_decision.keep_as_recorded`** | bool | **yes** | Keep the phone as its photos record themselves (`as_recorded`) — offered where the proposal is the phone's own GPS. |
 
 Otherwise as a camera's cell (§4.4): two or more photos agreeing apply the offset themselves (`gpx_anchor_auto`,
 `gps_time_auto`); one photo's is a proposal to accept — never applied by itself, whatever `single_anchor_auto_apply`
@@ -379,6 +389,24 @@ on the night they go forward) is never given one reading by guess: it is asked a
 | `stale_user_decision` | bool | no | `true` when a `repeated` time's answer is not one of its readings: kept as written, no effect. |
 
 **By hand:** write `"utc_offset_seconds": 3600` (for `+01:00`) in the photo's `user_decision`.
+
+### 4.7 `unidentified_files` — a destination's files naming no camera
+
+Files with no serial, make, model or owner (screenshots, scans, stripped photos — and a photo whose time was read from
+`ModifyDate`) that record no offset with their time are read by the destination's zone only once the user says so:
+one question for the destination, kept for files arriving later while the zone is the one answered.
+
+| Field | Type | Editable | Meaning |
+|-------|------|----------|---------|
+| `files` / `examples` | int / [string] | no | How many such files, and the first three paths. |
+| `proposed_iana_timezone` | string | no | The destination's zone in effect (`""` with none). |
+| **`user_decision.accept_proposal`** | bool | **yes** | Read them as local time in that zone. |
+| **`user_decision.accepted_timezone`** | string | **yes** | The zone accepted — written with `accept_proposal: true`. The answer holds while this is the destination's zone; another zone later makes it `stale_user_decision`. |
+| `effective_iana_timezone` | string | no | The zone they are read by, or `""` (then each stays unresolved, `local_time_unconfirmed`). |
+| `requires_user_input` / `stale_user_decision` | bool | no | As elsewhere. |
+
+**By hand:** `"user_decision": { "accept_proposal": true, "accepted_timezone": "Europe/Brussels" }`. Not reading them
+so: move them out of `6-photos-by-dest/`, or give them their offset (`OffsetTimeOriginal`) and run prep again.
 
 ---
 
@@ -636,6 +664,7 @@ Mirror these client-side; a value that fails makes geotag reject the whole artif
 | `manual_iana_timezone` | Must resolve as a real IANA zone in the zone database geotag runs with — never a name standing for the host (`localtime`, `posixrules`, `Factory`). With a country in effect (`country_zones` present), it must be one of `country_zones`. `""` allowed (= unset). |
 | `confirmed_despite_recorded_offsets` | A list of whole numbers of seconds; `[]` (or `null`, or the field absent) = not given. |
 | `keep_as_recorded` | `true` or `false` on a phone's cell (absent or `null` reads as `false`); anything else a blocker. |
+| `accepted_timezone` (`unidentified_files`) | Text; required, the zone accepted, whenever `accept_proposal` is `true`. |
 | `utc_offset_seconds` (`local_time_readings`) | `""`, or a whole number of seconds within ±14 hours (not a boolean, not a string such as `"+01:00"`); for a `repeated` time, one of `offsets_seconds` (another is `stale_user_decision`, not a blocker). |
 | `manual_offset_seconds` | A whole number of seconds (an integer, or a float with no fraction), of any size (a clock reset to its factory date is years out). Not a boolean, not a string. `""` allowed. |
 | `accepted_offset_seconds` | Required, as a whole number of seconds, whenever `accept_proposal` is `true` (and no manual offset is set): the `proposed_offset_seconds` accepted. `""` with `accept_proposal: false`. |

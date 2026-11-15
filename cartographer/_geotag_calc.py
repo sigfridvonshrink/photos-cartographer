@@ -1302,11 +1302,19 @@ def _resolve_one(f, d, cls, naive, tz, key, dest, overrides):
             bucket_key = bucket_key if bucket_key in cells else key
             cell = cells.get(bucket_key) or {}
             eff = cell.get("effective_time_anchor")
-            if cell and (cell.get("phone") or {}).get("applies_to") == "every_photo" \
+            applies = (cell.get("phone") or {}).get("applies_to")
+            if cell and (applies == "every_photo" or (applies == "untagged_photos" and native_off is None)) \
                     and not (isinstance(eff, dict) and eff.get("source") == "as_recorded"):
                 # the phone's own GPS says its clock was otherwise that day here (BLD-phone_offset_cell)
                 scope = bucket_key
-                if (dest, bucket_key) in overrides:
+                by_zone = isinstance(eff, dict) and eff.get("source") in ("timezone_accepted", "timezone_unconfirmed")
+                if by_zone and overrides.get((dest, bucket_key), eff.get("offset_seconds")) == eff.get("offset_seconds"):
+                    # the zone's reading accepted, or confirmed as it stood: each photo by the zone at its own time — a
+                    # phone's clock follows a daylight-saving change (BLD-phone_offset_cell)
+                    resolved, status, amb_rule, offset_used = _resolve_by_zone(naive, tz, _reading_answer(f, d)) \
+                        if tz else (None, "unresolved", "timezone_missing", None)
+                    rule, prov = amb_rule or "destination_timezone", eff.get("source")
+                elif (dest, bucket_key) in overrides:
                     offset_used = overrides[(dest, bucket_key)]
                     resolved = naive + timedelta(seconds=offset_used)
                     status, rule, prov = "valid", "camera_group_offset", "gps_drift_validated"
@@ -1320,6 +1328,11 @@ def _resolve_one(f, d, cls, naive, tz, key, dest, overrides):
                 offset_used, resolved = native_off, naive - timedelta(seconds=native_off)
                 status = "valid"
                 rule = "unidentified_native_offset" if cls == "unidentified" else "smartphone_native_offset"
+            elif cls == "unidentified" and not tz:
+                status, rule = "unresolved", "timezone_missing"
+            elif cls == "unidentified" and (d.get("unidentified_files") or {}).get("effective_iana_timezone") != tz:
+                # read as local time only once the user said so for the destination (BLD-unidentified_files_question)
+                status, rule = "unresolved", "local_time_unconfirmed"
             elif tz:
                 resolved, status, amb_rule, offset_used = _resolve_by_zone(naive, tz, _reading_answer(f, d))
                 rule, prov = amb_rule or "destination_timezone", tz

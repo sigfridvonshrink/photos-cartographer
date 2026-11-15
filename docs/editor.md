@@ -235,6 +235,19 @@ What the proposal panel shows depends on where the offset came from:
   photo's waits for **accept proposal**. If the track is someone else's, tick **keep this phone as its
   photos record themselves** — its GPS here is set aside.
 
+- **A phone's photos with no offset tag** — where the phone's tagged photos that day record the zone's
+  offset, they are read by the zone and nothing asks. Else the phone's own GPS reads them (applied by
+  itself), or — with none — the decision proposes the offset its tagged photos record, or the zone's:
+  confirm it in the Drift view where tracks lie by them, or accept it here. The note says which photos.
+
+### Files naming no camera
+
+A destination holding screenshots, scans or stripped photos that record no offset gets one row, **Files
+naming no camera** ("2 files"). Tick **read them as local time in `<zone>`** — the answer names the zone
+and holds for such files arriving later, until the destination's zone changes. Or move them out, or give
+them their offset, and run prep again. By hand: `unidentified_files.user_decision` in photos-21 (see the
+[decision-JSON reference](../cartographer/editor/decision-json-reference.md)).
+
 ### A time at a clock change
 
 A photo read by its destination's zone whose time falls at a **daylight-saving change** — 02:30 on the

@@ -57,6 +57,27 @@ test("a phone's day: kept as it records itself, accepted, or set — each resolv
   assert.equal(app.phoneNote({ proposal: {} }), "");
 });
 
+test("a destination's files naming no camera: read as local time in its zone, the answer naming the zone", () => {
+  const ref = { file: "time", dest: DEST, kind: "unidentified" };
+  const mk = (ud, tz = "Europe/Brussels") => setWork({ time: { destinations: { [DEST]: {
+    destination_timezone: { user_decision: { manual_iana_timezone: tz } },
+    unidentified_files: { files: 2, examples: [`${DEST}/a.png`], proposed_iana_timezone: tz, user_decision: ud } } } } });
+  mk({ accept_proposal: false, accepted_timezone: "" });                    assert.equal(app.wouldResolve(ref), false);
+  mk(app.unidentifiedFields("Europe/Brussels", true));                      assert.equal(app.wouldResolve(ref), true);
+  assert.deepEqual(app.unidentifiedFields("Europe/Brussels", true), { accept_proposal: true, accepted_timezone: "Europe/Brussels" });
+  mk(app.unidentifiedFields("Europe/Brussels", true), "Asia/Tokyo");        assert.equal(app.wouldResolve(ref), false);  // another zone now
+  assert.equal(app.cellAt(app.state.work, ref).files, 2);
+  const p = app.savePayload([ref], (r) => app.cellAt(app.state.work, r), { time: "h" });
+  assert.deepEqual(p.time[0].user_decision, { accept_proposal: true, accepted_timezone: "Europe/Brussels" });
+});
+
+test("a phone's untagged photos: the note says what reads them, or that nothing does", () => {
+  const c = phoneCell({});
+  assert.match(app.phoneNote({ ...c, phone: { applies_to: "untagged_photos", photos: 1, read_by_offsets: [] } }), /record.*no offset.*reads it/);
+  assert.match(app.phoneNote({ ...c, proposal: { proposal_source: "timezone_naive", proposed_offset_seconds: -7200 },
+    phone: { applies_to: "untagged_photos", photos: 2, read_by_offsets: [] } }), /nothing of the phone's own/);
+});
+
 test("a photo's time at a daylight-saving change: one of its two readings, or for a skipped time an offset", () => {
   const rel = `${DEST}/twice.jpg`, ref = { file: "time", dest: DEST, kind: "reading", key: rel };
   const cell = (c, v) => ({ case: c, offsets_seconds: [7200, 3600], camera_time: "2026:10:25 02:30:00", timezone: "Europe/Brussels",

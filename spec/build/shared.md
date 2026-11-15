@@ -76,8 +76,8 @@ the editor's display reads take none, each record being replaced whole. The edit
 Each question geotag asks SHALL be a `user_decision` of a cell of its decision record, its fields documented in
 `cartographer/editor/decision-json-reference.md`, which `geotag plan` reads whether the editor or a hand wrote it. The
 editor loads and saves each by its kind: in photos-21, `timezone` (`destination_timezone`), `offset` (a cell of
-`camera_group_time_decisions`, a phone's among them, by its key) and `reading` (an entry of `local_time_readings`, by
-its photo's path); in photos-22, `drift`; in photos-23, `fallback` and `review`.
+`camera_group_time_decisions`, a phone's among them, by its key), `reading` (an entry of `local_time_readings`, by
+its photo's path) and `unidentified` (`unidentified_files`); in photos-22, `drift`; in photos-23, `fallback` and `review`.
 :::
 
 :::{bld} The editor's own lock, held for its session

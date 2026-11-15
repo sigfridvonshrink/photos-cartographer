@@ -230,9 +230,13 @@ apply it to the phone's photos of that day there (a phone set to the wrong zone,
 one photo's is a proposal to accept, or you keep the phone as its photos record themselves. An offset tag
 holding something that is no offset (`local`, `+25:00`) is read as none: geotag names the photo and lists
 it in `photos-21` under `unreadable_offset_tags`. A camera with a hand-set,
-timezone-less clock needs a clock offset (next sections). A group not yet classed stops geotag, which
-prints both lists ready to paste. A file whose metadata names no camera is never asked about: it is
-solved on its own, by the offset recorded with its time, else its destination's timezone. So is a photo
+timezone-less clock needs a clock offset (next sections). A phone's photo recording no offset is read by the
+zone unasked only where the phone's tagged photos that day record the zone's offset; else its own GPS reads
+it; with neither, the zone's reading (or its tagged photos' offset) is a guess like a camera's — checked in
+the drift check where tracks lie by it, else accepted. A group not yet classed stops geotag, which
+prints both lists ready to paste. A file whose metadata names no camera is never asked to be classed: it
+is solved on its own, by the offset recorded with its time; files recording none are one question for
+their destination — read them as local time in its zone? — answered once and kept. So is a photo
 whose only time is its `ModifyDate` — an export whose capture time is gone, timed by the editing
 computer's clock, not the camera's: it takes no clock offset of its camera's and opens none of its days.
 

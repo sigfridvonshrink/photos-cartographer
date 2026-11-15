@@ -242,6 +242,8 @@ def _decision_shape_blockers(prior, kind):
                 f"{dest}: destination_timezone.user_decision")
             cells(d, "camera_group_time_decisions", dest)
             cells(d, "local_time_readings", dest)
+            obj(obj(d, "unidentified_files", f"{dest}: unidentified_files"), "user_decision",
+                f"{dest}: unidentified_files.user_decision")
         elif kind == "drift":
             cells(d, "drift_decisions", dest)
         else:
@@ -1032,6 +1034,14 @@ class GeotagWorkflow:
                 if bad:
                     destinations[dest]["unreadable_offset_tags"] = bad
                     self.unreadable_offset_tags.extend(bad)
+                # files naming no camera and recording no offset: one question for the destination
+                # (BLD-unidentified_files_question)
+                nameless = [f for f in by_dest[dest] if not f.get("geotag_marker")
+                            and (groups.get(f["camera_group_key"]) or {}).get("camera_group_class") == "unidentified"
+                            and _parse_camera_naive(f.get("source_naive_time")) and _own_offset(f) is None]
+                if nameless:
+                    destinations[dest]["unidentified_files"] = self._unidentified_cell(
+                        dest, nameless, tz, prior_d.get("unidentified_files") or {}, blockers)
             self.coordinator.increment_completed(1)
         self._share_offsets_within_a_day(destinations, recall, gpx, blockers)
         self._withhold_far_offsets(destinations, recall, by_dest, groups, gpx)
@@ -1042,7 +1052,8 @@ class GeotagWorkflow:
                     or any(c["requires_user_input"] for d in destinations.values()
                            for c in d["camera_group_time_decisions"].values())
                     or any(c["requires_user_input"] for d in destinations.values()
-                           for c in (d.get("local_time_readings") or {}).values()))
+                           for c in (d.get("local_time_readings") or {}).values())
+                    or any((d.get("unidentified_files") or {}).get("requires_user_input") for d in destinations.values()))
         artifact = {
             "artifact_type": "time_decisions",
             "artifact_name": TIME_DECISIONS_ARTIFACT,
@@ -1063,35 +1074,81 @@ class GeotagWorkflow:
         """A phone's clock for one destination and day (BLD-phone_offset_cell), as (cell, recall entry), or None
         where nothing asks one. The phone's photos holding their own position are anchored as a camera's are, else
         read by their fixes' times (RUL-phone_anchored_like_camera, RUL-gps_time_checks_phone); that offset is set
-        against the one each of those photos is read by now — its own offset tag, else the zone's. Agreeing within
-        `gpx_anchor_decision_tolerance_seconds`, nothing (RUL-phone_agreeing_anchor_changes_nothing); disagreeing,
-        it is the cell's proposal, for every photo of the day: applying itself as several anchors do, one photo's
-        a proposal to accept (RUL-phone_disagreeing_anchors_apply, RUL-phone_single_anchor_proposed)."""
+        against the one each of those photos is read by now — its own offset tag, else the zone's. Disagreeing, it is
+        the cell's proposal for every photo of the day: applying itself as several anchors do, one photo's a proposal
+        to accept (RUL-phone_disagreeing_anchors_apply, RUL-phone_single_anchor_proposed). Agreeing, the tagged photos
+        are read by their tags (RUL-phone_agreeing_anchor_changes_nothing), and the photos recording no offset —
+        read by the zone unasked only where the tagged ones that day show the zone's offset
+        (RUL-untagged_phone_photo_read_as_siblings) — by that offset (RUL-untagged_phone_photo_settled_by_evidence);
+        with no such evidence they are asked about once, as a camera's guessed offset is
+        (RUL-untagged_phone_photo_asked)."""
         if not sel:
             return None
         frames = [f for f in sel if f.get("has_native_gps")]
         evidence = infer_anchor_proposal(frames, gpx, CONFIG) or gps_time_proposal(frames, CONFIG)[0]
-        if evidence is None:
-            return None
-        tolerance = CONFIG["gpx_anchor_decision_tolerance_seconds"]
-        found = evidence["proposed_offset_seconds"]
-        by_path = {f["relative_path"]: f for f in frames}
-        if evidence["proposal_source"] == "gpx_self_anchor":
-            spread = CONFIG["gpx_anchor_offset_spread_max_seconds"]
-            support = [a["source_file"] for a in evidence["anchors"] if abs(a["proposed_offset_seconds"] - found) <= spread]
+        timed = [f for f in sel if _parse_camera_naive(f.get("source_naive_time"))]
+        tagged = [f for f in timed if _own_offset(f) is not None]
+        untagged = [f for f in timed if _own_offset(f) is None]
+        read = []
+        if evidence is not None:
+            tolerance = CONFIG["gpx_anchor_decision_tolerance_seconds"]
+            found = evidence["proposed_offset_seconds"]
+            by_path = {f["relative_path"]: f for f in frames}
+            if evidence["proposal_source"] == "gpx_self_anchor":
+                spread = CONFIG["gpx_anchor_offset_spread_max_seconds"]
+                support = [a["source_file"] for a in evidence["anchors"]
+                           if abs(a["proposed_offset_seconds"] - found) <= spread]
+            else:
+                support = [r["source_file"] for r in evidence["gps_times"]]
+            read = sorted({r for p in support if p in by_path for r in [_read_offset(by_path[p], tz)]},
+                          key=lambda r: (r is None, r or 0))
+            agrees = bool(read) and all(r is not None and abs(r - found) <= tolerance for r in read)
         else:
-            support = [r["source_file"] for r in evidence["gps_times"]]
-        read = sorted({r for p in support if p in by_path for r in [_read_offset(by_path[p], tz)]},
-                      key=lambda r: (r is None, r or 0))
-        if read and all(r is not None and abs(r - found) <= tolerance for r in read):
-            return None                            # the phone's own reading stands: nothing to ask
-        rep_naive = min((f.get("source_naive_time") for f in sel
+            agrees = True                          # nothing says otherwise of the tagged photos
+        if agrees:
+            # the tagged photos stand; the untagged ones are read by the zone unasked only where the tagged ones that
+            # day show the zone's offset
+            if not untagged or (tagged and _offsets_against_zone(tagged, {}, tz) is None and _valid_iana(tz)):
+                return None
+            applies, covered = "untagged_photos", untagged
+        else:
+            applies, covered = "every_photo", sel
+        rep_naive = min((f.get("source_naive_time") for f in covered
                          if _parse_camera_naive(f.get("source_naive_time"))), default=None)
         cell = self._offset_cell(dest, key, g, prior_cell, frames, gpx, blockers, tz=tz, rep_naive=rep_naive,
-                                 date=date, day=day, photos=sel, phone=True)
-        cell["phone"] = {"applies_to": "every_photo", "photos": len(sel),
+                                 date=date, day=day, photos=covered, phone=True, recorded_from=tagged,
+                                 settles=agrees and evidence is not None)
+        cell["phone"] = {"applies_to": applies, "photos": len(covered),
                          "read_by_offsets": [r for r in read if r is not None]}
-        return cell, None
+        # a guess the far-from-evidence check sets against the destination's other devices (BLD-offset_far_from_evidence)
+        return cell, (key, g, prior_cell, frames, rep_naive, date, day, covered, tz)
+
+    def _unidentified_cell(self, dest, nameless, tz, prior, blockers):
+        """The one question of a destination's files naming no camera and recording no offset
+        (BLD-unidentified_files_question): read them as local time in the destination's zone? The answer names the zone
+        it was given for, and holds for every such file there, later ones too, while that is the zone
+        (RUL-camera_less_files_asked_per_destination, RUL-camera_less_answer_kept)."""
+        where = f"{dest}: unidentified_files.user_decision"
+        ud = prior.get("user_decision") if isinstance(prior.get("user_decision"), dict) else {}
+        accept = _decision_flag(ud, "accept_proposal", where, blockers)
+        named = ud.get("accepted_timezone", "")
+        named = "" if named is None else named
+        effective, stale = "", False
+        if not isinstance(named, str):
+            blockers.append(f"{where}.accepted_timezone must be the timezone accepted, written as text.")
+        elif accept and not named:
+            blockers.append(f"{where}.accepted_timezone must be the timezone accepted"
+                            + (f" — the one now proposed is {tz}." if tz else "; no timezone is in effect here now."))
+        elif accept:
+            if tz and named == tz:
+                effective = tz
+            else:
+                stale = True                       # accepted for another zone than the one now in effect
+        paths = sorted(f["relative_path"] for f in nameless)
+        return {"files": len(paths), "examples": paths[:3], "proposed_iana_timezone": tz or "",
+                "user_decision": {"accept_proposal": accept, "accepted_timezone": named},
+                "effective_iana_timezone": effective, "requires_user_input": effective == "",
+                "stale_user_decision": stale}
 
     def _ask_local_time_readings(self, destinations, by_dest, groups, prior_dests, blockers):
         """Each photo read by its destination's zone at a time the zone skips or repeats is asked about here, alone
@@ -1370,10 +1427,11 @@ class GeotagWorkflow:
         return block
 
     def _offset_cell(self, dest, key, g, prior_cell, frames, gpx, blockers, tz=None, rep_naive=None, date=None,
-                     day=None, photos=(), shared=None, phone=False, recorded_from=None):
+                     day=None, photos=(), shared=None, phone=False, recorded_from=None, settles=False):
         # One (camera group, destination[, date]) clock-offset bucket — a phone's too, where one is asked
         # (`phone`, BLD-phone_offset_cell); `recorded_from` are the photos whose recorded offset is proposed, where
-        # they are not the ones offset. Proposal precedence (BLD-offset_buckets):
+        # they are not the ones offset; `settles`: the phone's own GPS agrees with how its tagged photos are read, and
+        # reads its untagged ones by itself (RUL-untagged_phone_photo_settled_by_evidence). Proposal precedence (BLD-offset_buckets):
         # GPX self-anchor → the times the photos' own fixes recorded (BLD-gps_time_proposal) → the same day's
         # elsewhere → the offset its photos record (BLD-recorded_offset_proposal) →
         # timezone-derived (camera assumed on local time; DST-aware, BLD-timezone_naive_offset) → manual. Clock
@@ -1469,7 +1527,7 @@ class GeotagWorkflow:
                              else "same_day_accepted" if is_shared
                              else "gps_time_accepted" if is_gps_time
                              else "recorded_offset_accepted" if is_recorded else "timezone_accepted"}
-        elif is_gps_time and proposal["gps_time_count"] >= 2 and policy["multi_anchor_auto_apply"]:
+        elif is_gps_time and ((proposal["gps_time_count"] >= 2 and policy["multi_anchor_auto_apply"]) or settles):
             # two fixes or more, their times all different and their offsets agreeing, apply themselves as several
             # anchors do; one is a proposal to accept (RUL-gps_times_agreeing_apply, RUL-single_gps_time_proposed)
             effective = {"offset_seconds": proposal["proposed_offset_seconds"], "source": "gps_time_auto"}
@@ -1478,7 +1536,7 @@ class GeotagWorkflow:
             # auto-resolution under the config flags (RUL-anchor_offset_auto_as_configured) — GPX-self-anchor only; a
             # timezone-derived proposal is confirmable, never auto-applied (the local-clock assumption can be wrong).
             n = proposal["anchor_count"]
-            if (n >= 2 and policy["multi_anchor_auto_apply"]) or \
+            if (n >= 2 and policy["multi_anchor_auto_apply"]) or settles or \
                (n == 1 and policy["single_anchor_auto_apply"] and not phone):   # one phone photo: a proposal
                 effective = {"offset_seconds": proposal["proposed_offset_seconds"], "source": "gpx_anchor_auto"}
                 decision_mode = "auto_resolved"
@@ -1664,6 +1722,8 @@ class GeotagWorkflow:
                 group, date = cell.get("camera_group"), cell.get("date")
                 frames = [f for f in by_dest_group.get((dest, group), [])
                           if date is None or _naive_date(f.get("source_naive_time")) == date]
+                if (cell.get("phone") or {}).get("applies_to") == "untagged_photos":
+                    frames = [f for f in frames if _own_offset(f) is None]     # the photos the cell offsets
                 times = [t for f in frames if (t := _parse_utc(resolved_by_path.get(f["relative_path"])))]
                 yield dest, bucket, cell, frames, times
 

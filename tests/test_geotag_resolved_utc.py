@@ -40,6 +40,8 @@ def _art(*, tz="Europe/Brussels", offset=-7187):
     cell = {} if offset is None else {"effective_time_anchor": {"offset_seconds": offset, "source": "gpx_anchor_auto"}}
     return {"destinations": {"6-photos-by-dest/B": {
         "destination_timezone": {"effective_iana_timezone": tz},
+        # its files naming no camera read as local time there, as the user answered (BLD-unidentified_files_question)
+        "unidentified_files": {"effective_iana_timezone": tz},
         "camera_group_time_decisions": {CAM: cell}}}}
 
 

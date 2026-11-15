@@ -546,8 +546,8 @@ out, so only the judgement is the user's.
 
 Screenshots, scans and photos a messaging app stripped name no camera, and share nothing but that. Taken for one camera,
 they would be asked to be classed as one and, classed a camera, given one clock offset per destination and day — an
-offset no camera of theirs had. Each carries what time it has; read alone, as a phone's photo is, by its own offset or
-the place's zone, it asks nothing and borrows nothing.
+offset no camera of theirs had. Each carries what time it has; read alone, by its own offset, it asks nothing and
+borrows nothing — and where it records none, the place's zone is a guess, asked once for the place.
 :::
 
 :::{rat} A modification time is another clock's
@@ -746,6 +746,25 @@ for the owner ruled *"a phone's error is a whole zone, not drift"*. Agreeing wit
 there is nothing to ask. Several of them agreeing among themselves against it is the evidence a camera's several
 anchors are, and applies itself for that phone and day, the cell showing it; one photo could be a coincidence, and is
 offered. The user, who knows the track was someone else's, can keep the phone as it records itself.
+:::
+
+:::{rat} A time read by the zone is an assumption, asked like one
+:id: RAT-zone_reading_is_an_assumption
+:status: ruled
+:forced: no
+:follows_from: RAT-assumptions_need_acceptance, RAT-phone_error_is_a_zone, RAT-one_number_one_question
+:justifies: RUL-untagged_phone_photo_read_as_siblings, RUL-untagged_phone_photo_settled_by_evidence, RUL-untagged_phone_photo_asked, RUL-camera_less_files_asked_per_destination, RUL-camera_less_answer_kept
+
+A camera's "clock was on local time" is a proposal the user accepts, and is then checked against the tracks. The same
+assumption was applied silently to a phone's photo with no offset tag and to a file naming no camera — and those photos
+were then placed on the tracks by it. The owner ruled the phone's photo *"read as the same phone's tagged photos that
+day show, unasked, where those show the zone's offset; else its GPS time or a track settles it; with neither, it rides
+the drift check where there are tracks, and is asked where there are none"*: the phone's own photos that day are the
+best word on its clock, its own GPS the next, and only then is it the guess a camera's is, asked once. A file naming
+no camera has no siblings to read it by; the owner ruled its question *"one per destination — 'N files name no camera
+and no offset: read them as local time in <zone>?' — answered once, in the editor, and kept"*: a screenshot is made
+at the local time of wherever it was made, which the user knows for the folder as a whole, not file by file. The answer
+names the zone it was given for, so a zone changed later asks again.
 :::
 
 :::{rat} Two readings, answered where the other questions are

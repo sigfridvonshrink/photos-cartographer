@@ -38,9 +38,11 @@ T = "6-photos-by-dest/T"
 SLOW = -6600       # the camera reads local (+02:00) time ten minutes slow: naive + SLOW = UTC
 
 
-def _rec(ws, rel, dto, *, key=CAM, gps=None, method=None):
+def _rec(ws, rel, dto, *, key=CAM, gps=None, method=None, offset=None):
     parsed = {"DateTimeOriginal": dto, "selected_source_naive_timestamp": dto,
               "selected_source_timestamp_tag": "DateTimeOriginal", "camera_group_key": key, "has_timestamp": True}
+    if offset:
+        parsed["OffsetTimeOriginal"] = offset
     if gps:
         parsed.update(GPSLatitude=gps[0], GPSLongitude=gps[1], has_native_gps=True)
     if method:
@@ -339,11 +341,12 @@ def test_a_devices_own_marker_is_native(tmp_path, monkeypatch):
     assert cal.with_time_fixed("fused") == cal.with_time_fixed("fused+carto-time") == "fused+carto-time"
     assert cal.with_time_fixed("") == cal.with_time_fixed(None) == "+carto-time"
     ws = _ws(tmp_path, [lambda ws: _rec(ws, f"{T}/p.jpg", "2024:07:03 14:30:00", key=PHONE,
-                                        gps=(48.0, 2.0), method="fused")])
+                                        gps=(48.0, 2.0), method="fused", offset="+02:00")])
     _plan(monkeypatch, ws)
     p = _ops(ws)[f"{T}/p.jpg"]
     assert "GPSLatitude" not in p["writes"]                                   # native position kept
-    assert p["writes"]["DateTimeOriginal"] == "2024:07:03 14:30:00"
+    # the phone records its offset, the zone's: its time stands as it is, and is marked corrected
+    assert p["writes"].get("DateTimeOriginal", "2024:07:03 14:30:00") == "2024:07:03 14:30:00"
     assert p["writes"]["GPSProcessingMethod"] == "fused+carto-time"
     _executed_and_reprepped(ws)
     wf = cal.GeotagWorkflow(str(ws))

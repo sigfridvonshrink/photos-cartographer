@@ -305,6 +305,19 @@ def test_apply_edits_saves_the_questions_of_a_phone_and_of_a_time_at_a_clock_cha
     assert d["local_time_readings"][rel]["offsets_seconds"] == before["destinations"][dest]["local_time_readings"][rel]["offsets_seconds"]
 
 
+@pytest.mark.spec("RUL-every_question_in_editor", "BLD-editor_answers_every_question",
+                  test="TST-serve-saves_the_camera_less_files_answer")
+def test_apply_edits_saves_the_answer_for_a_destination_s_files_naming_no_camera():
+    dest = "6-photos-by-dest/B"
+    art = {"destinations": {dest: {"unidentified_files": {"files": 2, "proposed_iana_timezone": "Europe/Brussels",
+                                                          "user_decision": {"accept_proposal": False, "accepted_timezone": ""}}}}}
+    edits = [{"dest": dest, "kind": "unidentified",
+              "user_decision": {"accept_proposal": True, "accepted_timezone": "Europe/Brussels"}}]
+    assert serve._unapplicable_edits(art, edits) == [] and serve._apply_edits(art, edits) == 1
+    q = art["destinations"][dest]["unidentified_files"]
+    assert q["user_decision"] == {"accept_proposal": True, "accepted_timezone": "Europe/Brussels"} and q["files"] == 2
+
+
 def test_apply_edits_ignores_unknown_targets():
     art = _time_art()
     n = serve._apply_edits(art, [

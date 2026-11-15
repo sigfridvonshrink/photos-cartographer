@@ -77,6 +77,7 @@ function cellAt(arts, ref) {
   if (ref.file === "time") {
     const d = arts.time?.destinations?.[ref.dest]; if (!d) return null;
     if (ref.kind === "reading") return d.local_time_readings?.[ref.key];
+    if (ref.kind === "unidentified") return d.unidentified_files;
     return ref.kind === "timezone" ? d.destination_timezone : d.camera_group_time_decisions?.[ref.key];
   }
   if (ref.file === "drift") {
@@ -96,6 +97,7 @@ function allRefs() {
     out.push({ file: "time", dest, kind: "timezone" });
     for (const key of Object.keys(d.camera_group_time_decisions || {})) out.push({ file: "time", dest, kind: "offset", key });
     for (const key of Object.keys(d.local_time_readings || {})) out.push({ file: "time", dest, kind: "reading", key });
+    if (d.unidentified_files) out.push({ file: "time", dest, kind: "unidentified" });
   }
   for (const [dest, d] of Object.entries(state.work.drift?.destinations || {})) {
     for (const key of Object.keys(d.drift_decisions || {})) out.push({ file: "drift", dest, kind: "drift", key });
@@ -235,6 +237,7 @@ function wouldResolve(ref) {
       || (acceptHolds(c) && !p.far_from_evidence);              // far from all evidence: acceptance is not enough
   if (ref.kind === "reading")
     return u.utc_offset_seconds !== "" && u.utc_offset_seconds != null && validReading(c, u.utc_offset_seconds);
+  if (ref.kind === "unidentified") return unidentifiedHolds(ref.dest, c);
   if (ref.kind === "drift")                       // confirmed for this offset (zero-scrub or a valid correction)
     return driftConfirmHolds(c) && validOffset(u.corrected_offset_seconds);
   if (ref.kind === "fallback")
@@ -381,6 +384,11 @@ function previewEffective(ref) {
     if (acceptHolds(c)) return `${fmtOffset(p.proposed_offset_seconds)} (accept proposal)`;
     if (u.accept_proposal) return "— (accepted another proposal — accept again)";
     return "— (GPX auto-resolves on re-run, else needs input)";
+  }
+  if (ref.kind === "unidentified") {
+    if (unidentifiedHolds(ref.dest, c)) return `read as local time in ${u.accepted_timezone}`;
+    if (u.accept_proposal) return "— (accepted for another timezone — accept again)";
+    return "— (needs input)";
   }
   if (ref.kind === "reading") {
     const v = u.utc_offset_seconds;
@@ -546,6 +554,11 @@ function renderTreeNode(node, box) {
     const tzpv = previewTz(node.path);
     n.append(row({ file: "time", dest: node.path, kind: "timezone" }, "Timezone", null, tzpv ? tzpv.tz : "—"));
     renderOffsetRows(node.path, node.dest, n);
+    if (node.dest.unidentified_files) {
+      const q = node.dest.unidentified_files;
+      n.append(row({ file: "time", dest: node.path, kind: "unidentified" }, "Files naming no camera",
+        `${q.files} file${q.files === 1 ? "" : "s"}`, q.effective_iana_timezone ? leaf(q.effective_iana_timezone) : "—"));
+    }
     for (const [key, rc] of Object.entries(node.dest.local_time_readings || {}))
       n.append(row({ file: "time", dest: node.path, kind: "reading", key }, "Time at a clock change", leaf(key),
         rc.effective_utc_offset_seconds === "" || rc.effective_utc_offset_seconds == null ? "—" : utcOff(rc.effective_utc_offset_seconds)));
@@ -909,6 +922,8 @@ function controls(ref) {
     wrap.append(offsetEditor(ref));
   } else if (ref.kind === "reading") {
     wrap.append(readingControls(ref));
+  } else if (ref.kind === "unidentified") {
+    wrap.append(unidentifiedControls(ref));
   } else if (ref.kind === "drift") {
     wrap.append(driftControls(ref));
   } else if (ref.kind === "fallback") {
@@ -1325,13 +1340,46 @@ function phoneNote(c) {
   const ph = c && c.phone; if (!ph) return "";
   const p = c.proposal || {}, read = (ph.read_by_offsets || []).map(fmtOffset).join(", ") || "nothing (no offset recorded, no zone)";
   const by = p.proposal_source === "gps_time" ? "the times its own GPS fixes recorded" : "its photos' own positions on the tracks";
+  const n = `${ph.photos} photo${ph.photos === 1 ? "" : "s"}`;
+  if (ph.applies_to === "untagged_photos") {
+    if (keepOffered(c)) return `${n} of this phone here record${ph.photos === 1 ? "s" : ""} no offset with ${ph.photos === 1 ? "its" : "their"} time; ` +
+      `${by} put its clock at ${fmtOffset(p.proposed_offset_seconds)} that day, which reads ${ph.photos === 1 ? "it" : "them"}.`;
+    return `${n} of this phone here record${ph.photos === 1 ? "s" : ""} no offset with ${ph.photos === 1 ? "its" : "their"} time, and nothing ` +
+      "of the phone's own says which: no tagged photo of the day at the zone's offset, no position on a track, no GPS fix time. " +
+      "Accept the reading proposed (the Drift view checks it where tracks lie by), or set the offset.";
+  }
   return `This phone's photos are read by ${read}, but ${by} put its clock at ${fmtOffset(p.proposed_offset_seconds)} — ` +
-    `for all ${ph.photos} of its photos that day here. Accept it, set the offset, or keep the phone as it records itself if the track is not yours.`;
+    `for all ${n} of its day here. Accept it, set the offset, or keep the phone as it records itself if the track is not yours.`;
 }
 // The instant a local camera time names under a UTC offset (seconds east of UTC), as "YYYY-MM-DD HH:MM:SS UTC".
 function trueInstant(camTime, utcOffset) {
   const ms = camNaiveMs(camTime); if (ms == null || !isNum(utcOffset)) return "";
   return new Date(ms - utcOffset * 1000).toISOString().replace("T", " ").replace(/\.\d+Z$/, " UTC");
+}
+// A destination's files naming no camera and recording no offset (photos-21 unidentified_files,
+// BLD-unidentified_files_question): one question — read them as local time in the destination's zone? The answer names
+// the zone it is given for (accepted_timezone) and holds while that is the zone in effect: the one the run checked,
+// or the one the working decisions now give (previewTz), whichever the user is looking at.
+function unidentifiedZone(dest, c) {
+  return previewTz(dest)?.tz || c.proposed_iana_timezone || "";
+}
+function unidentifiedHolds(dest, c) {
+  const u = (c && c.user_decision) || {}, z = unidentifiedZone(dest, c || {});
+  return u.accept_proposal === true && !!z && u.accepted_timezone === z;
+}
+const unidentifiedFields = (zone, on) => on ? { accept_proposal: true, accepted_timezone: zone }
+  : { accept_proposal: false, accepted_timezone: "" };
+function unidentifiedControls(ref) {
+  const c = workCell(ref), u = c.user_decision || {}, zone = unidentifiedZone(ref.dest, c), wrap = el("div", { class: "ctl-block" });
+  wrap.append(el("div", { class: "hint warn" }, `${c.files} file${c.files === 1 ? "" : "s"} here name${c.files === 1 ? "s" : ""} no camera ` +
+    `and record${c.files === 1 ? "s" : ""} no offset with ${c.files === 1 ? "its" : "their"} time (e.g. ${(c.examples || []).map(leaf).join(", ")}). ` +
+    "A screenshot or a stripped photo keeps the local time it was made at, if any; nothing else says when it was."));
+  if (!zone) wrap.append(el("div", { class: "hint" }, "Set this destination's timezone first."));
+  else wrap.append(checkbox(`read them as local time in ${zone}`, unidentifiedHolds(ref.dest, c),
+    (v) => editMany(ref, unidentifiedFields(zone, v))));
+  if (u.accept_proposal && !unidentifiedHolds(ref.dest, c)) wrap.append(el("div", { class: "hint warn" },
+    `Accepted for ${u.accepted_timezone || "no timezone"}; the timezone here is now ${zone || "none"} — accept again, or move the files out.`));
+  return wrap;
 }
 // A photo's time at a daylight-saving change (photos-21 local_time_readings): pick one of its readings — for a time
 // skipped, or type the offset its clock was on. Writes user_decision.utc_offset_seconds.
@@ -1498,6 +1546,7 @@ function renderPanel() {
   const multi = ref.peers && ref.peers.length > 1;
   const title = ref.kind === "offset" ? `Offset · ${c.camera_group || ref.key}${c.phone ? " (phone)" : ""}`
     : ref.kind === "reading" ? "Time at a daylight-saving change"
+    : ref.kind === "unidentified" ? "Files naming no camera"
     : ref.kind === "drift" ? `Drift · ${c.camera_group || ref.key}`
     : ref.kind === "review" ? (multi ? `GPS review · ${ref.peers.length} photos` : "GPS review item")
       : ref.kind === "fallback" ? "Folder fallback" : "Timezone";
@@ -1652,6 +1701,6 @@ export {
   zoneContradiction, offsetCellNotes, zoneSpokenFor, zoneDespiteFields, effectiveCountry, clearCountriesInside,
   scrubOffset, scrubSeedIndex, mapKeyFor, savePayload,
   ambiguousTimeNote, gpsTimeAsideNote, zoneOffer, validReading, keepHolds, keepFields, keepOffered, phoneNote,
-  trueInstant, parseUtcOff, loadRefusal, hasUnsavedEdits, utcOff,
+  trueInstant, parseUtcOff, unidentifiedHolds, unidentifiedFields, loadRefusal, hasUnsavedEdits, utcOff,
   fmtSpan, utcToZonedWallMs, zonedWallToUtcMs, offsetFromTrueTime, trueTimeOf,
 };
