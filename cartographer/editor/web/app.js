@@ -1006,7 +1006,7 @@ function driftStaleReason(c) {
 function driftControls(ref) {
   const c = workCell(ref), u = c.user_decision || {}, p = c.proposal || {}, wrap = el("div", { class: "ctl-block" });
   wrap.append(el("div", { class: "hint" },
-    `Current offset ${fmtOffset(p.current_offset_seconds)} (${p.proposal_source || "?"}). Scroll the photo along the track below to correct it, or confirm it as-is.`));
+    `Current offset ${fmtOffset(p.current_offset_seconds)} (${p.proposal_source || "?"}). Scroll the photo along the track below to correct it, type the correction, or confirm it as-is.`));
   const holds = driftConfirmHolds(c);
   if (u.confirmed && !holds) wrap.append(el("div", { class: "hint warn" }, driftStaleReason(c) === "tracks"
     ? "Confirmed against tracks since removed or changed — check it on the track as it is now and confirm again."
@@ -1020,7 +1020,40 @@ function driftControls(ref) {
       el("button", { class: "mini", onclick: () => editMany(ref, { corrected_offset_seconds: "" }) }, "clear — offset was right")));
   }
   if (!validOffset(corr)) wrap.append(el("div", { class: "err" }, "the correction must be a whole number of seconds"));
+  wrap.append(driftTyped(ref));
   return wrap;
+}
+// What a correction writes, scrubbed or typed: the bucket confirmed against the offset and tracks shown, and corrected.
+const driftCorrectionFields = (c, v) => ({ ...driftConfirmFields(c, true), corrected_offset_seconds: v });
+// A drift correction typed rather than scrubbed: the offset known, or the true time of one of the bucket's photos — the
+// only way to give one where no track lies by the photos. Written as a scrub is: confirmed, with the offset and tracks
+// shown, and the corrected offset (photos-22 corrected_offset_seconds).
+function driftTyped(ref) {
+  const c = workCell(ref), u = c.user_decision || {}, p = c.proposal || {}, frames = p.frames || [];
+  const box = el("div", { class: "ctl-block" });
+  const set = (v) => editMany(ref, driftCorrectionFields(c, v));
+  const corr = u.corrected_offset_seconds, typed = corr !== "" && corr != null;
+  const offI = el("input", { type: "number", step: "1", class: "spin-num", placeholder: String(p.current_offset_seconds ?? ""),
+    value: typed ? corr : "", title: "the corrected clock offset in seconds: camera time + this = UTC" });
+  offI.addEventListener("change", () => set(offI.value === "" ? "" : Number(offI.value)));
+  box.append(el("label", { class: "ctl-field" }, el("span", {}, "corrected offset (seconds)"), offI));
+  const frame = frames[Math.min(_driftFrame, Math.max(0, frames.length - 1))];
+  if (frame && camNaiveMs(frame.camera_naive) != null) {
+    const zone = previewTz(ref.dest)?.tz || "";
+    const shown = typed && validOffset(corr) ? corr : p.current_offset_seconds;
+    const tI = el("input", { type: "datetime-local", step: "1", class: "spin-num utc-pick",
+      value: trueTimeOf(frame.camera_naive, shown, zone) || "",
+      title: `the true time of ${leaf(frame.source_file)}, in ${zone || "UTC"}; offset = that − its camera time` });
+    tI.addEventListener("change", () => {
+      const o = offsetFromTrueTime(frame.camera_naive, tI.value, zone);
+      if (o == null) { state.message = `${(tI.value || "").replace("T", " ")} names no one instant in ${zone || "UTC"} — type another time, or the offset`; render(); return; }
+      set(o);
+    });
+    box.append(el("label", { class: "ctl-field" }, el("span", {}, `true time of ${leaf(frame.source_file)}`), tI));
+    box.append(el("div", { class: "hint" }, `its camera says ${frame.camera_naive}; type when it was really taken` +
+      (zone ? `, ${zone} time` : ", in UTC") + " — or the offset above. Either confirms the bucket with that correction."));
+  }
+  return box;
 }
 
 // The "lat, lon" input lives in the pinned top box; as the map pans below, the live map center is
@@ -1132,7 +1165,7 @@ function mapBlock(ref) {
 function scrubBlock(ref) {
   const c = workCell(ref), p = c.proposal || {}, frames = p.frames || [], track = p.track_segment || [];
   const wrap = el("div", { class: "pblock" });
-  if (!frames.length || !track.length) { teardownMap(); wrap.append(el("div", { class: "placeholder" }, "no frames or track to scrub")); return wrap; }
+  if (!frames.length || !track.length) { teardownMap(); wrap.append(el("div", { class: "placeholder" }, "no track to scrub along — type the correction above, or confirm the offset as it is")); return wrap; }
   const fi = Math.min(_driftFrame, frames.length - 1), frame = frames[fi];
   const tabBtn = (id, label) => el("button", { class: _driftTab === id ? "on" : null, onclick: () => { _driftTab = id; render(); } }, label);
   wrap.append(el("div", { class: "seg subtab" }, tabBtn("photo", "Photo"), tabBtn("map", "Track")));
@@ -1168,7 +1201,7 @@ function driftMap(ref, frame, fi) {
     const p = workCell(ref).proposal || {}, track = p.track_segment || [];
     _map = mapPicker({ track, scrubIndex: scrubSeedIndex(track, frame, p.current_offset_seconds),
       onScrub: (i, pt) => { const off = scrubOffset(pt, frame);
-        if (off != null) editMany(ref, { ...driftConfirmFields(workCell(ref), true), corrected_offset_seconds: off }); } });
+        if (off != null) editMany(ref, driftCorrectionFields(workCell(ref), off)); } });
     _mapKey = key;
   }
   setTimeout(() => _map && _map.refresh(), 0);
@@ -1716,7 +1749,7 @@ export {
   fmtOffset, camNaiveMs, dtLocalToMs, msToDtLocal, utcStrToMs, fmtLocal, fmtDT, offsetImpact,
   cellAt, cellStatus, wouldResolve, previewTz, previewFallback, refInvalid, isDirty, state,
   offsetGroups, dateRange, fmtDate, peerKeys, parseLatLon, coordText, contiguousRange,
-  groupChoice, chosenOffset, inConflict, proposalTaken, proposalNotes, driftConfirmHolds, driftConfirmFields, driftTracksHold, driftStaleReason, acceptFields, acceptHolds, tracksNote,
+  groupChoice, chosenOffset, inConflict, proposalTaken, proposalNotes, driftConfirmHolds, driftConfirmFields, driftCorrectionFields, driftTracksHold, driftStaleReason, acceptFields, acceptHolds, tracksNote,
   zoneContradiction, offsetCellNotes, zoneSpokenFor, zoneDespiteFields, effectiveCountry, clearCountriesInside,
   scrubOffset, scrubSeedIndex, mapKeyFor, savePayload,
   ambiguousTimeNote, gpsTimeAsideNote, zoneOffer, validReading, keepHolds, keepFields, keepOffered, phoneNote,

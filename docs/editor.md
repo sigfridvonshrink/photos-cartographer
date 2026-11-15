@@ -276,6 +276,12 @@ Each row shows the camera group, where its offset came from, the offset and the 
   **scroll the wheel** over the map to step one track point per notch, or press **`[` / `]`** (one point)
   and **`{` / `}`** (ten). Each step sets the corrected offset for every photo in the bucket and
   confirms it; **clear — offset was right** takes the correction back.
+- **corrected offset (seconds)**, or the **true time** of the bucket's photo (the one the Photo tab
+  shows, typed in the destination's local time, UTC while it has none) — the correction typed rather than
+  scrubbed: an offset you know, or the only way to give one where no track lies by the photos. Either
+  confirms the bucket with that correction, as a scrub does. By hand: `corrected_offset_seconds` in the
+  bucket's `user_decision`, with `confirmed`, `confirmed_offset_seconds` and `confirmed_against_tracks`
+  (see the [decision-JSON reference](../cartographer/editor/decision-json-reference.md)).
 - **confirm this bucket (offset is right as shown)** — the "don't move" answer. You **must** actively
   tick it: an untouched bucket **blocks** the run; inaction is never read as "no change."
 

@@ -575,7 +575,9 @@ appear. The `<bucket_key>` matches the photos-21 offset cell it refines — bare
   the segment already, without a re-run to fetch more track.
 - `proposal.frames` is read-only — every photo in the bucket as `{source_file, camera_naive}`,
   earliest first. The editor scrubs one (default the earliest) along the track and **computes** the
-  decision: `corrected_offset_seconds = (chosen track point's time_utc) − (that frame's camera_naive)`.
+  decision: `corrected_offset_seconds = (chosen track point's time_utc) − (that frame's camera_naive)` — or takes
+  it typed: the offset itself, or a frame's true time (true time − its `camera_naive`), the one way where
+  `track_segment` is empty.
   Both `track_segment` and `frames` are re-extracted by the script on every re-run, so a changed
   photos-21 time decision shifts them automatically.
 - `proposal.tracks` is read-only — the track files `track_segment` is drawn from, by their path under

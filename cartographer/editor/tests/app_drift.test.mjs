@@ -120,3 +120,17 @@ test("cellStatus(drift): unconfirmed needs input, confirmed resolves", () => {
   assert.deepEqual(app.cellStatus({ requires_user_input: true }), ["needs", "needs input"]);
   assert.deepEqual(app.cellStatus({ requires_user_input: false }), ["ok", "resolved"]);
 });
+
+test("driftCorrectionFields: a correction typed for a bucket with no track confirms it, and resolves it", () => {
+  // a bucket no track lies by: nothing to scrub along, so the correction is typed (or given as a photo's true time)
+  const dest = "6-photos-by-dest/D", key = "CAM", ref = { file: "drift", dest, kind: "drift", key };
+  const cell = { proposal: { current_offset_seconds: -7200, frames: [{ source_file: "a.arw", camera_naive: "2024:07:03 14:00:00" }],
+    track_segment: [], tracks: [] }, user_decision: { confirmed: false, corrected_offset_seconds: "", confirmed_offset_seconds: "",
+    confirmed_against_tracks: [] } };
+  const typed = app.driftCorrectionFields(cell, -3600);
+  assert.deepEqual(typed, { confirmed: true, confirmed_offset_seconds: -7200, confirmed_against_tracks: [], corrected_offset_seconds: -3600 });
+  setWork({ drift: { destinations: { [dest]: { drift_decisions: { [key]: { ...cell, user_decision: typed } } } } } });
+  assert.equal(app.wouldResolve(ref), true);
+  // the offset a photo's true time gives, as the typed field computes it: true time − camera time
+  assert.equal(app.offsetFromTrueTime("2024:07:03 14:00:00", "2024-07-03T13:00:00", ""), -3600);
+});
