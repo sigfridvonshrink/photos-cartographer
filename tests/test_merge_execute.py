@@ -186,7 +186,7 @@ def test_the_summary_says_where_each_photo_landed_or_why_it_did_not(tmp_path):
                   library_files=[{"fp": "B", "dest": "Trip", "name": "b.jpg"},
                                  {"fp": "X", "dest": "Trip", "name": "c.jpg"},
                                  {"fp": "FAIL", "dest": "Trip", "name": "d.jpg"}])
-    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("plan", str(ws)) == 2   # a blocker: ends as a refusal (RUL-blocked_plan_ends_refused)
     assert merge._run_locked_workflow("execute", str(ws)) == 3
     files = {os.path.basename(f["by_dest_path"]): f for f in _summary(ws)["destinations"]["Trip"]["files"]}
     t = os.path.join(str(lib), "Trip")
@@ -209,7 +209,7 @@ def test_the_run_reports_what_it_placed_and_what_stayed(tmp_path, capsys):
                              {"fp": "C", "dest": "Trip", "final_name": "c.jpg"}],
                   library_files=[{"fp": "B", "dest": "Trip", "name": "b.jpg"},
                                  {"fp": "FAIL", "dest": "Trip", "name": "c.jpg"}])
-    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("plan", str(ws)) == 2   # a blocker: ends as a refusal (RUL-blocked_plan_ends_refused)
     capsys.readouterr()
     assert merge._run_locked_workflow("execute", str(ws)) == 3
     out = capsys.readouterr()
@@ -259,7 +259,7 @@ def test_execute_renamed_incoming_places_under_safe_name(tmp_path):
 def test_execute_unfingerprintable_library_blocks_and_keeps_source(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
                   library_files=[{"fp": "FAIL", "dest": "Trip", "name": "a.jpg"}])
-    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("plan", str(ws)) == 2   # a blocker: ends as a refusal (RUL-blocked_plan_ends_refused)
     assert merge._run_locked_workflow("execute", str(ws)) == 3          # blocked -> rc 3
     assert os.path.exists(_src(ws, "Trip", "a.jpg"))                    # left in by-dest
     s = _summary(ws)
@@ -1000,7 +1000,7 @@ def test_partial_run_journal_holds_only_confirmed_moves(tmp_path):
                   [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
                    {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
                   library_files=[{"fp": "FAIL", "dest": "Trip", "name": "b.jpg"}])  # b's lib file unreadable
-    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("plan", str(ws)) == 2   # a blocker: ends as a refusal (RUL-blocked_plan_ends_refused)
     assert merge._run_locked_workflow("execute", str(ws)) == 3            # partial -> rc 3
     s = _summary(ws)
     assert s["status"] == "partial"
@@ -1070,7 +1070,7 @@ def test_merge_log_copies_photos25_forward_and_appends(tmp_path):
 def test_partial_run_does_not_seal_or_finalize(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
                   library_files=[{"fp": "FAIL", "dest": "Trip", "name": "a.jpg"}])
-    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("plan", str(ws)) == 2   # a blocker: ends as a refusal (RUL-blocked_plan_ends_refused)
     assert merge._run_locked_workflow("execute", str(ws)) == 3          # partial
     assert not utils.is_sealed(str(ws))                                # re-runnable
     for name in ("photos-35-merge-log.json", "photos-35-merge-ingest.db",
@@ -1087,7 +1087,7 @@ def test_a_re_plan_after_a_partial_merge_carries_what_was_moved(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
                              {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
                   library_files=[{"fp": "FAIL", "dest": "Trip", "name": "b.jpg"}])
-    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("plan", str(ws)) == 2   # a blocker: ends as a refusal (RUL-blocked_plan_ends_refused)
     assert merge._run_locked_workflow("execute", str(ws)) == 3          # 1 placed, 1 blocked -> partial
     assert _summary(ws)["status"] == "partial"
     assert not os.path.exists(_src(ws, "Trip", "a.jpg"))               # a.jpg was moved (source gone)
@@ -1112,7 +1112,7 @@ def test_a_carried_photos_merge_step_names_the_plan_that_placed_it(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
                              {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
                   library_files=[{"fp": "FAIL", "dest": "Trip", "name": "b.jpg"}])
-    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("plan", str(ws)) == 2   # a blocker: ends as a refusal (RUL-blocked_plan_ends_refused)
     first = json.load(open(merge.merge_plan_path(str(ws))))["plan_id"]
     assert merge._run_locked_workflow("execute", str(ws)) == 3          # a.jpg placed, b.jpg blocked
     with open(os.path.join(str(lib), "Trip", "b.jpg"), "wb") as f:
@@ -1135,7 +1135,7 @@ def test_a_re_plan_carries_a_photo_moved_but_never_journalled(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
                              {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
                   library_files=[{"fp": "FAIL", "dest": "Trip", "name": "b.jpg"}])
-    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("plan", str(ws)) == 2   # a blocker: ends as a refusal (RUL-blocked_plan_ends_refused)
     pid = json.load(open(merge.merge_plan_path(str(ws))))["plan_id"]
     assert merge._run_locked_workflow("execute", str(ws)) == 3          # a.jpg moved, b.jpg blocked
     os.remove(utils.journal_path(str(ws), pid))                         # the confirmation never written
@@ -1159,7 +1159,7 @@ def test_a_resumed_execute_checks_a_journalled_photo_is_still_in_the_library(tmp
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
                              {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
                   library_files=[{"fp": "FAIL", "dest": "Trip", "name": "b.jpg"}])
-    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("plan", str(ws)) == 2   # a blocker: ends as a refusal (RUL-blocked_plan_ends_refused)
     assert merge._run_locked_workflow("execute", str(ws)) == 3
     with open(os.path.join(str(lib), "Trip", "a.jpg"), "wb") as f:
         f.write(_fp_bytes("X"))                                          # a.jpg's place replaced
@@ -1192,7 +1192,7 @@ def test_a_photo_moved_earlier_but_gone_from_its_place_blocks_the_re_plan(tmp_pa
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
                              {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
                   library_files=[{"fp": "FAIL", "dest": "Trip", "name": "b.jpg"}])
-    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("plan", str(ws)) == 2   # a blocker: ends as a refusal (RUL-blocked_plan_ends_refused)
     assert merge._run_locked_workflow("execute", str(ws)) == 3
     with open(os.path.join(str(lib), "Trip", "a.jpg"), "wb") as f:
         f.write(_fp_bytes("X"))                                          # a.jpg's place no longer holds it
@@ -1220,11 +1220,11 @@ def test_re_plan_after_failed_is_allowed(tmp_path):
     # the re-plan refusal applies only to runs that actually moved files (partial/success).
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
                   library_files=[{"fp": "FAIL", "dest": "Trip", "name": "a.jpg"}])
-    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("plan", str(ws)) == 2   # a blocker: ends as a refusal (RUL-blocked_plan_ends_refused)
     assert merge._run_locked_workflow("execute", str(ws)) == 3          # the only file blocked -> failed
     assert _summary(ws)["status"] == "failed"
     assert os.path.exists(_src(ws, "Trip", "a.jpg"))                    # nothing moved — source remains
-    assert merge._run_locked_workflow("plan", str(ws)) == 0             # re-plan allowed
+    assert merge._run_locked_workflow("plan", str(ws)) == 2             # re-plan allowed
 
 
 def test_re_plan_allowed_when_no_partial(tmp_path):
@@ -1438,7 +1438,7 @@ def test_nothing_is_built_from_merges_records(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
                              {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
                   library_files=[{"fp": "FAIL", "dest": "Trip", "name": "b.jpg"}])
-    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("plan", str(ws)) == 2   # a blocker: ends as a refusal (RUL-blocked_plan_ends_refused)
     assert merge._run_locked_workflow("execute", str(ws)) == 3            # b blocked: not sealed, run again
     assert _summary(ws)["status"] == "partial" and not utils.is_sealed(str(ws))
 
@@ -1453,7 +1453,7 @@ def test_nothing_is_built_from_merges_records(tmp_path):
                 f.write("{not a summary")
         elif damage == "gone":
             os.remove(merge.merge_summary_path(str(ws)))
-        assert merge._run_locked_workflow("plan", str(ws)) == 0, damage
+        assert merge._run_locked_workflow("plan", str(ws)) == 2, damage
         plan = plan_body()
         assert merge._run_locked_workflow("execute", str(ws)) == 3, damage
         runs.append((plan, _comparable(_summary(ws))))
@@ -1718,7 +1718,7 @@ def test_the_same_picture_with_other_metadata_blocks_and_both_stay(tmp_path):
                   library_files=[{"fp": "A", "dest": "Trip", "name": "a.jpg", "meta": b"no time, no position"}])
     src, held = _src(ws, "Trip", "a.jpg"), os.path.join(str(lib), "Trip", "a.jpg")
     src_bytes, held_bytes = open(src, "rb").read(), open(held, "rb").read()
-    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("plan", str(ws)) == 2   # a blocker: ends as a refusal (RUL-blocked_plan_ends_refused)
     plan = json.load(open(merge.merge_plan_path(str(ws))))
     a = next(r for d in plan["destinations"].values() for r in d["files"] if r["by_dest_source"].endswith("a.jpg"))
     same = {"by_dest_path": "6-photos-by-dest/Trip/a.jpg", "by_dest_size": len(src_bytes),
@@ -1823,13 +1823,13 @@ def test_a_photo_placed_in_a_library_since_pointed_away_from_blocks(tmp_path):
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
                              {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
                   library_files=[{"fp": "FAIL", "dest": "Trip", "name": "b.jpg"}])
-    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("plan", str(ws)) == 2   # a blocker: ends as a refusal (RUL-blocked_plan_ends_refused)
     assert merge._run_locked_workflow("execute", str(ws)) == 3          # a.jpg placed, b.jpg blocked
     lib2 = tmp_path / "lib2"
     lib2.mkdir()
     utils.write_library_marker(str(lib2))
     _point_library_at(ws, lib2)
-    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("plan", str(ws)) == 2
     plan = json.load(open(merge.merge_plan_path(str(ws))))
     a = next(r for d in plan["destinations"].values() for r in d["files"] if r["by_dest_source"].endswith("a.jpg"))
     assert a["disposition"] == "blocked" and not a.get("carried_from_plan")
@@ -1851,14 +1851,14 @@ def test_either_way_out_of_a_library_pointed_away_from_finishes_the_merge(tmp_pa
     ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
                              {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
                   library_files=[{"fp": "FAIL", "dest": "Trip", "name": "b.jpg"}])
-    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert merge._run_locked_workflow("plan", str(ws)) == 2   # a blocker: ends as a refusal (RUL-blocked_plan_ends_refused)
     first = json.load(open(merge.merge_plan_path(str(ws))))["plan_id"]
     assert merge._run_locked_workflow("execute", str(ws)) == 3
     lib2 = tmp_path / "lib2"
     lib2.mkdir()
     utils.write_library_marker(str(lib2))
     _point_library_at(ws, lib2)
-    assert merge._run_locked_workflow("plan", str(ws)) == 0               # a.jpg blocked (above)
+    assert merge._run_locked_workflow("plan", str(ws)) == 2               # a.jpg blocked (above)
     if way_out == "library_pointed_back":
         _point_library_at(ws, lib)
         with open(os.path.join(str(lib), "Trip", "b.jpg"), "wb") as f:
@@ -1877,3 +1877,35 @@ def test_either_way_out_of_a_library_pointed_away_from_finishes_the_merge(tmp_pa
     assert utils.is_sealed(str(ws))
     log = json.loads(open(_ctl(ws, "photos-35-merge-log.json")).read())
     assert log["photos"]["A"]["library_path"] == os.path.join(str(home), "Trip", "a.jpg")
+
+
+@pytest.mark.parametrize("end, status", [("done", 0), ("workspace locked", 1), ("library locked", 1),
+                                         ("refused", 2), ("partial", 3), ("interrupted", 130)])
+@pytest.mark.spec("RUL-exit_status_says_how_it_ended", "BLD-exit_statuses",
+                  test="TST-merge_execute-each_end_of_a_merge_has_its_own_exit_status")
+def test_each_end_of_a_merge_has_its_own_exit_status(tmp_path, monkeypatch, end, status):
+    """Merge's execute ends with a status of its own for each way it can end: done 0, the workspace or the library
+    locked 1, refused 2 (here a stale plan), partial 3, interrupted 130."""
+    ws, lib = _ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"},
+                             {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
+                  library_files=[{"fp": "FAIL", "dest": "Trip", "name": "b.jpg"}] if end == "partial" else ())
+    assert merge._run_locked_workflow("plan", str(ws)) == (2 if end == "partial" else 0)
+    held = None
+    if end == "workspace locked":
+        held = utils.WorkspaceLock(str(ws))
+    elif end == "library locked":
+        held = utils.LibraryLock(str(lib))
+    if held:
+        assert held.acquire() is True
+    if end == "refused":
+        with open(_ctl(ws, "photos-25-execution-summary.json"), "w") as f:
+            f.write(json.dumps({"status": "success", "touched": True}))      # the plan is stale now
+    if end == "interrupted":
+        def ctrl_c(self, ws_, library_root, rec):
+            raise KeyboardInterrupt
+        monkeypatch.setattr(merge.MergeWorkflow, "_move_file", ctrl_c)
+    try:
+        assert merge._run_locked_workflow("execute", str(ws)) == status
+    finally:
+        if held:
+            held.release()

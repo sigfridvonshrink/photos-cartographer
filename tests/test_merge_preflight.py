@@ -68,6 +68,8 @@ def _make(tmp_path, *, guard=True, config=True, library_in_config=True, bless_li
           "depends_on": {"cache": {"fingerprint_algorithm_version": fingerprint_method}}}
     if fingerprint_method is None:
         del ho["depends_on"]["cache"]["fingerprint_algorithm_version"]
+    # Prep's ImageMagick the one in use, so a plan takes no fingerprint again (BLD-merge_engine_recheck).
+    ho["depends_on"]["cache"]["image_engine_version"] = utils.get_imagemagick_version()
     if prep_log:
         (ctl / "photos-15-prep-log.json").write_text(json.dumps({"photos": {}}))
         ho["depends_on"]["prep_log"] = {"sha256": utils.sha256_file(str(ctl / "photos-15-prep-log.json"))}

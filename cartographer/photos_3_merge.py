@@ -795,10 +795,12 @@ class MergeWorkflow:
         for b in plan["blockers"]:
             reporter.error(f"  Blocker: {b}")
         if plan["blockers"]:
+            # A plan that reports a blocker ends as a refusal, as every phase's does (RUL-blocked_plan_ends_refused):
+            # it is saved, and execute merges the rest, but it cannot be carried out whole as it stands.
             emit_next_step(reporter, "resolve the blocker(s) above, then re-run `merge plan`.")
-        else:
-            emit_next_step(reporter, "`merge dry-run` to review the plan, or `merge execute` to merge "
-                                     "into the library.")
+            return 2
+        emit_next_step(reporter, "`merge dry-run` to review the plan, or `merge execute` to merge "
+                                 "into the library.")
         return 0
 
     def do_dry_run(self, ws):
@@ -836,8 +838,8 @@ class MergeWorkflow:
         if _bl:
             emit_next_step(reporter, "resolve the blocker(s) shown and re-run `merge plan`, or `merge execute` "
                                      "to merge the rest now.")
-        else:
-            emit_next_step(reporter, "`merge execute` to merge into the library.")
+            return 2                                   # RUL-blocked_plan_ends_refused
+        emit_next_step(reporter, "`merge execute` to merge into the library.")
         return 0
 
     # --- execute: place-then-remove, journal, resume, concurrency (BLD-merge_execute / BLD-merge_move) ---

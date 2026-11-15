@@ -52,6 +52,29 @@ time.
 sorted by destination, into the library.
 :::
 
+:::{rul} A command's exit status says how it ended
+:id: RUL-exit_status_says_how_it_ended
+:status: ruled
+:criticality: med
+:verify: required
+:uses: DEF-geotag, DEF-merge
+
+Each of geotag's and merge's commands SHALL end with an exit status of its own for each way a run can end: having done
+what it was asked; finding the workspace or the library locked; refusing, having changed nothing; executing with work
+left undone; and interrupted.
+:::
+
+:::{rul} A plan that reports a blocker ends as a refusal
+:id: RUL-blocked_plan_ends_refused
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-exit_status_says_how_it_ended
+
+A phase's plan that reports a blocker, and merge's dry run of a plan holding one, SHALL end with the exit status of a
+refusal, never with that of a run that did what it was asked.
+:::
+
 ## 1. One run at a time
 
 :::{inv} One run at a time

@@ -340,7 +340,7 @@ def test_plan_unfingerprintable_library_file_blocks_item(tmp_path, monkeypatch):
                                        {"fp": "B", "dest": "Trip", "final_name": "b.jpg"}],
                             library_files=[{"fp": None, "dest": "Trip", "name": "a.jpg"}])
     _patch_fp(monkeypatch, fp)            # fp None -> mock returns status failed
-    assert merge._run_locked_workflow("plan", str(ws)) == 0   # plan still written
+    assert merge._run_locked_workflow("plan", str(ws)) == 2   # plan still written
     plan = _plan_of(ws)
     assert plan["totals"]["blocked"] == 1 and plan["totals"]["placed_new"] == 1
     assert plan["blockers"]
@@ -469,7 +469,7 @@ def test_dry_run_says_execute_merges_around_blocked_photos(tmp_path, monkeypatch
     with open(merge.merge_plan_path(str(ws)), "w") as f:
         json.dump(plan, f)
     capsys.readouterr()
-    assert merge._run_locked_workflow("dry-run", str(ws)) == 0
+    assert merge._run_locked_workflow("dry-run", str(ws)) == 2   # a blocker: ends as a refusal (RUL-blocked_plan_ends_refused)
     out = "".join(capsys.readouterr())
     assert "merges the rest, and ends partial without sealing" in out and "will refuse" not in out
 
@@ -578,3 +578,20 @@ def test_a_plan_made_under_another_imagemagick_is_stale(tmp_path, monkeypatch):
     assert wf.revalidate_plan_deps(str(ws), _plan_of(ws)) == []
     monkeypatch.setattr(merge, "get_imagemagick_version", lambda: "newer")
     assert "ImageMagick version changed" in wf.revalidate_plan_deps(str(ws), _plan_of(ws))
+
+
+@pytest.mark.spec("RUL-blocked_plan_ends_refused", "BLD-exit_statuses",
+                  test="TST-merge_plan-a_plan_reporting_a_blocker_ends_as_a_refusal")
+def test_a_plan_reporting_a_blocker_ends_as_a_refusal(tmp_path, monkeypatch):
+    """Merge's plan, and its dry run of that plan, end with a refusal's status, 2, while the plan holds a blocker —
+    the plan saved all the same — and with 0 once the blocker is gone."""
+    ws, lib, fp = _build_ws(tmp_path, [{"fp": "A", "dest": "Trip", "final_name": "a.jpg"}],
+                            library_files=[{"fp": None, "dest": "Trip", "name": "a.jpg"}])
+    _patch_fp(monkeypatch, fp)                         # the library's a.jpg cannot be fingerprinted
+    assert merge._run_locked_workflow("plan", str(ws)) == 2
+    assert _plan_of(ws)["blockers"]                    # saved, its blocker in it
+    assert merge._run_locked_workflow("dry-run", str(ws)) == 2
+    fp[os.path.join(str(lib), "Trip", "a.jpg")] = "Z"  # now another photo: a.jpg is placed under a suffix
+    assert merge._run_locked_workflow("plan", str(ws)) == 0
+    assert not _plan_of(ws)["blockers"]
+    assert merge._run_locked_workflow("dry-run", str(ws)) == 0

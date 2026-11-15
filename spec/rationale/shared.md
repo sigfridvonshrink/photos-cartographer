@@ -3,6 +3,21 @@
 **Not normative.** Each item here is the reasoning behind the [intent](../intent/shared.md) or [build](../build/shared.md)
 items it `justifies`, under the same section numbers. Where the two differ, the intent wins and this is stale.
 
+## 0. The pipeline
+
+:::{rat} How a run ended is what runs it next
+:id: RAT-exit_status_decides_next
+:status: ruled
+:forced: no
+:follows_from: RAT-discrete_stages
+:justifies: RUL-exit_status_says_how_it_ended, RUL-blocked_plan_ends_refused
+
+A command is run from a terminal, but also by a script or the console, which see only how it ended. Each end asks for
+something else: nothing; the same command again once the other run is done; a fix, with nothing to undo; a look at the
+summary for what was left; the command again to finish. A plan that reports a blocker cannot be carried out whole as
+it stands, and ended as a success it would let a script go on as if it could.
+:::
+
 ## 1. One run at a time
 
 :::{rat} A plan made beside another run cannot be trusted
