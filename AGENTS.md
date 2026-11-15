@@ -106,6 +106,12 @@ There is no build step and no linter config; runtime deps are system tools (`exi
   `git config core.hooksPath .githooks`; bypass once with `git push --no-verify`. The guard's
   `SRC_FILES` covers the three phase modules, `photos_utils`, `_geotag_calc`, `_prep_models`, `cli` and both
   web servers.
+- **Private words** (`.githooks/check_private_words.py`): a contributor's real name or personal address must never
+  enter the repository — its files, its commit messages, a ref's name. The words are kept outside it, one to a line
+  in `.git/private-words` of the clone (never tracked), and for CI in the repository secret `PRIVATE_WORDS`; the check
+  itself names none. `pre-commit` checks what is staged, `commit-msg` the message, `pre-push` every commit about to
+  be pushed, CI every tracked file. With no word set it checks nothing and says so. People are named by role
+  ("the owner").
 - **Local `pre-commit` hook** (`.githooks/pre-commit`) rebuilds `dist/photos-cartographer` on every
   commit so the local executable is never stale. `dist/` is gitignored — this is a LOCAL build
   only; nothing is committed or pushed. It blocks a commit only if the build itself breaks.

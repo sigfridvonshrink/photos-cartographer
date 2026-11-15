@@ -16,6 +16,13 @@
 # Keep the local photos-cartographer executable current on every commit. dist/ is gitignored, so this
 # only refreshes the LOCAL build — nothing is staged or pushed (official builds come from the release
 # workflow on a tag). Blocks the commit only if the build genuinely breaks; bypass with --no-verify.
+# No private word — a real name, a personal address — in what is about to be committed. The words are kept
+# outside the repository (.git/private-words); with none set, nothing is checked.
+if ! python3 .githooks/check_private_words.py --staged; then
+    echo "pre-commit: a private word is staged — commit aborted (bypass with --no-verify)." >&2
+    exit 1
+fi
+
 if ! python3 tools/build-pyz >/dev/null 2>&1; then
     echo "pre-commit: tools/build-pyz failed — fix the build, or commit with --no-verify." >&2
     exit 1

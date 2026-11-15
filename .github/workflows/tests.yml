@@ -15,6 +15,13 @@ jobs:
         with:
           python-version: "3.13"
 
+      # No private word — a contributor's real name, a personal address — in any tracked file. The words are a
+      # repository secret, never written here; with the secret unset (a fork's pull request) nothing is checked.
+      - name: Check no private word is tracked
+        env:
+          PRIVATE_WORDS: ${{ secrets.PRIVATE_WORDS }}
+        run: python3 .githooks/check_private_words.py --tree
+
       # Most tests mock the external tools, but the real-tool integration tests
       # (test_geotag_execution_real.py, test_merge_exif_preservation.py) drive the actual exiftool +
       # ImageMagick to validate the executor's safety assumption (an EXIF write preserves the
