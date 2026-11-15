@@ -85,6 +85,27 @@ def test_each_end_of_a_geotag_execute_has_its_own_exit_status(tmp_path, monkeypa
     assert code == status
 
 
+@pytest.mark.spec("RUL-every_question_in_editor", "RUL-every_question_answerable_by_hand",
+                  test="TST-exit_status-a_changed_photo_s_execute_names_the_editor_and_the_field")
+def test_a_changed_photo_s_execute_names_the_editor_and_the_field(tmp_path, monkeypatch, capsys):
+    """An execution that found a photo's content changed when written ends partial, and says where its one question is
+    answered: the decision editor, or the field of photos-25 by hand."""
+    ws = _ws(tmp_path)
+    monkeypatch.chdir(ws)
+    monkeypatch.setattr(cal.GeotagWorkflow, "preflight", lambda self, for_execute=False: ([], [], {}))
+    monkeypatch.setattr(cal, "prep_log_blocker", lambda ws, handoff: None)
+    summary = dict(_summary("partial"), fingerprint_mismatches=[{"relative_path": "6-photos-by-dest/A/x.jpg",
+                                                                  "expected_fingerprint": "a", "actual_fingerprint": "b",
+                                                                  "user_decision": {"accept_fingerprint_change": False}}])
+    monkeypatch.setattr(cal.GeotagWorkflow, "execute_plan", lambda self, *a, **k: summary)
+    with pytest.raises(SystemExit) as e:
+        cal.run(types.SimpleNamespace(command="execute", jobs=1))
+    assert e.value.code == 3
+    out = capsys.readouterr()
+    said = out.out + out.err
+    assert "photos-cartographer edit" in said and "accept_fingerprint_change" in said
+
+
 def _prep_ws(tmp_path):
     """An initialized workspace with snapshots off and a stray in 0-sources: a plan with one move to carry out."""
     ws = tmp_path / "ws"

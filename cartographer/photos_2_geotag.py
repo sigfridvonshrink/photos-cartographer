@@ -3413,6 +3413,13 @@ def run(args):
                   f"mismatch(es), {len(summary['failures'])} failure(s)). Wrote {EXECUTION_SUMMARY_ARTIFACT}.",
                   stream="stdout")
             if summary["status"] != "success":
+                if summary["fingerprint_mismatches"]:
+                    # the one question of photos-25, answerable in the editor and by hand (RUL-every_question_in_editor)
+                    reporter.log(f"{len(summary['fingerprint_mismatches'])} photo(s) changed content when written: "
+                                 "look at each and accept the ones right as they are — in the decision editor "
+                                 "(`photos-cartographer edit`, its Execute view), or by hand in "
+                                 f"{EXECUTION_SUMMARY_ARTIFACT}: fingerprint_mismatches[*].user_decision."
+                                 "accept_fingerprint_change = true.")
                 reporter.log(f"Review {EXECUTION_SUMMARY_ARTIFACT} and re-run `execute` once resolved.")
                 emit_next_step(reporter, f"review {EXECUTION_SUMMARY_ARTIFACT}, resolve the issues, then "
                                          "re-run `geotag execute`.")

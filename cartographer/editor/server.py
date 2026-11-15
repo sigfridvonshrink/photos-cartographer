@@ -22,7 +22,8 @@ It launches nothing — it prints a clickable link using the machine's own IP an
 interface (default 0.0.0.0), so you can open the editor in your laptop's browser while SSH'd into the
 machine. Ctrl-C stops it cleanly (releasing the port).
 
-It reads `./.photos-ingest/photos-21*/photos-22*/photos-23*` decision JSON from the current-directory workspace
+It reads `./.photos-ingest/photos-21*/photos-22*/photos-23*` decision JSON, and the fingerprint mismatches of
+`photos-25*` (geotag's execution summary), from the current-directory workspace
 (refusing to run if the cwd is not an initialized workspace); `--demo` runs read-only on the bundled
 example fixtures instead. The app edits `user_decision` and saves it back
 (POST /api/save writes only `user_decision`, round-tripping the rest; disabled in demo). GET
@@ -78,6 +79,7 @@ CONTROL = ".photos-ingest"
 TIME_NAME = "photos-21-time-decisions.json"
 DRIFT_NAME = "photos-22-gps-drift-validation.json"
 GPS_NAME = "photos-23-gps-decisions.json"
+EXECUTION_NAME = "photos-25-execution-summary.json"   # its fingerprint_mismatches ask whether a changed photo stands
 GUARD_NAME = "photos-00-workspace-guard"        # root sentinel written once a workspace is initialized
 EDITOR_LOCK = "photos-00-decision-editor.lock"  # dotfile lives in CONTROL; flock, fail-fast
 
@@ -202,7 +204,9 @@ def _example_json(name):
         return {"_error": f"could not parse {name}: {e}"}
 
 
-_RECORDS = (("time", TIME_NAME), ("drift", DRIFT_NAME), ("gps", GPS_NAME))
+# The records whose `user_decision`s the editor answers (BLD-editor_answers_every_question): the three decision records,
+# and geotag's execution summary, whose fingerprint mismatches each ask whether the photo's changed content stands.
+_RECORDS = (("time", TIME_NAME), ("drift", DRIFT_NAME), ("gps", GPS_NAME), ("execution", EXECUTION_NAME))
 
 
 def _read_record(path):
@@ -245,7 +249,7 @@ def _host_zones():
 
 
 def _load_artifacts(workspace):
-    """Return {workspace, demo, time, drift, gps, hashes, zones}. `hashes` holds the SHA-256 of each record's bytes
+    """Return {workspace, demo, time, drift, gps, execution, hashes, zones}. `hashes` holds the SHA-256 of each record's bytes
     as loaded (None for one absent); a save carries them back, so it is refused when a record has changed
     since (RUL-save_only_what_was_shown). `zones` is the host's list of timezones geotag accepts (`_host_zones`).
     Demo mode loads requires-input fixtures."""
@@ -263,7 +267,8 @@ def _load_artifacts(workspace):
     return {"workspace": None, "demo": True, "hashes": {}, "zones": _host_zones(),
             "time": _example_json("photos-21-time-decisions.requires-input.json"),
             "drift": _example_json("photos-22-gps-drift-validation.requires-input.json"),
-            "gps": _example_json("photos-23-gps-decisions.requires-input.json")}
+            "gps": _example_json("photos-23-gps-decisions.requires-input.json"),
+            "execution": None}                          # no execution in the demo: nothing has been written
 
 
 def _write_json(path, obj):
@@ -276,10 +281,14 @@ def _write_json(path, obj):
 
 def _edit_cell(art, e):
     """The cell of `art` the edit `e` is for, or None when the record holds no such cell."""
+    kind = e.get("kind")
+    if kind == "fingerprint":                   # photos-25: a photo whose content changed after a write, by its path
+        cell = next((m for m in (art or {}).get("fingerprint_mismatches") or []
+                     if isinstance(m, dict) and m.get("relative_path") == e.get("path")), None)
+        return cell if isinstance(cell, dict) else None
     d = ((art or {}).get("destinations") or {}).get(e.get("dest"))
     if not isinstance(d, dict):
         return None
-    kind = e.get("kind")
     if kind == "timezone":
         cell = d.get("destination_timezone")
     elif kind == "offset":
@@ -308,6 +317,8 @@ def _unapplicable_edits(art, edits):
 
 def _edit_label(e):
     what = e.get("path") or e.get("key")
+    if e.get("kind") == "fingerprint":
+        return f"fingerprint mismatch of {what}"
     return f"the {e.get('kind')} decision of {e.get('dest')}" + (f" ({what})" if what else "")
 
 
@@ -346,7 +357,7 @@ def _save(workspace, payload):
         if not any(edits.values()):
             return {"ok": True, "written": [], "hashes": current}
         # Save only what was shown (RUL-save_only_what_was_shown): the edits were made against the records as
-        # the editor loaded them. Each of the three is compared, under the lock, with the hash the page was
+        # the editor loaded them. Each of them is compared, under the lock, with the hash the page was
         # given for it before any is written — a geotag plan may have rewritten one since, and an edit made
         # against the old one would then land on decisions the user never saw.
         loaded = (payload or {}).get("hashes")

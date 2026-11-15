@@ -65,7 +65,7 @@ with exit status 2, having created nothing.
 :realises: RUL-every_command_locks, RUL-save_only_what_was_shown
 
 The decision editor's save SHALL take the workspace lock for the time it writes, refusing at once while a run holds it;
-the editor's display reads take none, each record being replaced whole. The editor is given, with each record it loads, the SHA-256 of its bytes, and sends them back with a save; under the lock the save compares them with the records on disk and checks that every edit names a decision its record holds, writing none of the three otherwise, and returns the hashes of what it leaves.
+the editor's display reads take none, each record being replaced whole. The editor is given, with each record it loads, the SHA-256 of its bytes, and sends them back with a save; under the lock the save compares them with the records on disk and checks that every edit names a decision its record holds, writing none of the records otherwise, and returns the hashes of what it leaves.
 :::
 
 :::{bld} Every question is a decision field the editor answers
@@ -73,12 +73,13 @@ the editor's display reads take none, each record being replaced whole. The edit
 :status: ruled
 :realises: RUL-every_question_in_editor, RUL-every_question_answerable_by_hand
 
-Each question geotag asks SHALL be a `user_decision` of a cell of its decision record, its fields documented in
-`cartographer/editor/decision-json-reference.md`, which `geotag plan` reads whether the editor or a hand wrote it. The
+Each question geotag asks SHALL be a `user_decision` of a cell of its record, its fields documented in
+`cartographer/editor/decision-json-reference.md`, which geotag reads whether the editor or a hand wrote it. The
 editor loads and saves each by its kind: in photos-21, `timezone` (`destination_timezone`), `offset` (a cell of
 `camera_group_time_decisions`, a phone's among them, by its key), `reading` (an entry of `local_time_readings`, by
-its photo's path) and `unidentified` (`unidentified_files`); in photos-22, `drift`; in photos-23, `fallback` and `review`.
-The editor writes each answer as geotag takes it: where an offset cell lists `conflicts_with`, a proposal the user takes
+its photo's path) and `unidentified` (`unidentified_files`); in photos-22, `drift`; in photos-23, `fallback` and `review`;
+in `photos-25-execution-summary.json`, which `geotag execute` reads, `fingerprint` (an entry of `fingerprint_mismatches`,
+by its photo's path). The editor writes each answer as geotag takes it: where an offset cell lists `conflicts_with`, a proposal the user takes
 there is written as `manual_offset_seconds`, the user's own offset, which keeps its effect
 ({need}`RUL-chosen_offset_not_withheld`) — never as an acceptance, which geotag withholds there again.
 :::

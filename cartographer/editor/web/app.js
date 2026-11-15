@@ -84,6 +84,8 @@ function cellAt(arts, ref) {
     const d = arts.drift?.destinations?.[ref.dest]; if (!d) return null;
     return d.drift_decisions?.[ref.key];
   }
+  if (ref.file === "execution")                // photos-25: a photo whose content changed after a write, by its path
+    return (arts.execution?.fingerprint_mismatches || []).find((m) => m && m.relative_path === ref.path) || null;
   const d = arts.gps?.destinations?.[ref.dest]; if (!d) return null;
   if (ref.kind === "fallback") return d.folder_fallback;
   return (d.gps_decisions?.review_items || []).find((r) => r.relative_path === ref.path);
@@ -106,6 +108,8 @@ function allRefs() {
     out.push({ file: "gps", dest, kind: "fallback" });
     for (const ri of d.gps_decisions?.review_items || []) out.push({ file: "gps", dest, kind: "review", path: ri.relative_path });
   }
+  for (const m of state.work.execution?.fingerprint_mismatches || [])
+    if (m && m.relative_path) out.push({ file: "execution", kind: "fingerprint", path: m.relative_path });
   return out;
 }
 function isDirty(ref) {
@@ -121,6 +125,7 @@ function refInvalid(ref) {
   if (ref.kind === "offset") return !validOffset(u.manual_offset_seconds);
   if (ref.kind === "reading") return !validReading(c, u.utc_offset_seconds);
   if (ref.kind === "drift") return !validOffset(u.corrected_offset_seconds);
+  if (ref.kind === "fingerprint") return typeof u.accept_fingerprint_change !== "boolean";
   if (ref.kind === "fallback") return !validLat(u.fallback_lat) || !validLon(u.fallback_lon) || !bothOrNeither(u.fallback_lat, u.fallback_lon);
   return !validLat(u.manual_lat) || !validLon(u.manual_lon) || !bothOrNeither(u.manual_lat, u.manual_lon);
 }
@@ -212,6 +217,8 @@ function resetRef(ref) {
 
 function cellStatus(cell) {
   if (!cell) return null;
+  // a photos-25 fingerprint mismatch carries no flags: it asks until its changed content is accepted
+  if ("actual_fingerprint" in cell) return mismatchAccepted(cell) ? ["ok", "accepted"] : ["needs", "needs input"];
   if (cell.requires_user_input) return ["needs", "needs input"];
   if (cell.stale_user_decision) return ["stale", "stale"];
   if (cell.decision_mode === "auto_resolved") return ["auto", "auto"];
@@ -239,6 +246,7 @@ function wouldResolve(ref) {
   if (ref.kind === "reading")
     return u.utc_offset_seconds !== "" && u.utc_offset_seconds != null && validReading(c, u.utc_offset_seconds);
   if (ref.kind === "unidentified") return unidentifiedHolds(ref.dest, c);
+  if (ref.kind === "fingerprint") return mismatchAccepted(c);
   if (ref.kind === "drift")                       // confirmed for this offset (zero-scrub or a valid correction)
     return driftConfirmHolds(c) && validOffset(u.corrected_offset_seconds);
   if (ref.kind === "fallback")
@@ -407,6 +415,9 @@ function previewEffective(ref) {
     return validOffset(u.corrected_offset_seconds)
       ? `${fmtOffset(u.corrected_offset_seconds)} (corrected)` : "✗ invalid offset";
   }
+  if (ref.kind === "fingerprint") return mismatchAccepted(c)
+    ? "accepted — the next `geotag execute` takes this content as the photo's, and goes on with it"
+    : "— (held: its writes and rename wait for an answer)";
   if (ref.kind === "fallback") {
     if (u.fallback_lat !== "" && u.fallback_lon !== "") return `${u.fallback_lat}, ${u.fallback_lon}`;
     if (u.accept_proposal && p.proposed_fallback) return `${p.proposed_fallback.lat}, ${p.proposed_fallback.lon} (inherited)`;
@@ -700,6 +711,42 @@ function renderDrift(list) {
   }
 }
 
+// photos-25's fingerprint mismatches: a photo whose decoded content was not what the plan expected once geotag wrote to
+// it, its writes unconfirmed and its rename held back until the user accepts the content as it now is
+// (user_decision.accept_fingerprint_change, BLD-execution_summary). The next `geotag execute` of the same plan reads it.
+function mismatchAccepted(c) {
+  return !!c && (c.user_decision || {}).accept_fingerprint_change === true && !!c.actual_fingerprint;
+}
+function renderExecution(list) {
+  const x = state.work.execution;
+  if (!x) return list.append(el("div", { class: "empty" }, "No photos-25-execution-summary.json — geotag has not executed here yet."));
+  if (x._error) return list.append(el("div", { class: "gate warn" }, x._error));
+  const ms = (x.fingerprint_mismatches || []).filter((m) => m && m.relative_path);
+  if (!ms.length) return list.append(el("div", { class: "empty" }, "No photo's content changed when geotag wrote to it."));
+  list.append(el("div", { class: "hint" }, `The last \`geotag execute\` (plan ${x.plan_id || "?"}) found these photos' content ` +
+    "changed when it wrote to them: their writes are not confirmed and their rename waits. Accept each whose content is " +
+    "right as it is now, save, and run `geotag execute` again."));
+  for (const m of ms) {
+    const ref = { file: "execution", kind: "fingerprint", path: m.relative_path };
+    list.append(el("div", { class: "row" + (isSel(ref) ? " sel" : ""), onclick: () => { state.selected = ref; render(); },
+        onmouseenter: (ev) => showHoverPreview(m.relative_path, ev), onmousemove: moveHoverPreview, onmouseleave: hideHoverPreview },
+      el("span", { class: "label" }, leaf(m.relative_path), el("span", { class: "sub" }, "  " + m.relative_path.split("/").slice(0, -1).join("/"))),
+      ...tags(ref), statusChip(ref)));
+  }
+}
+function mismatchControls(ref) {
+  const c = workCell(ref), u = c.user_decision || {}, wrap = el("div", { class: "ctl-block" });
+  const fp = (v) => (v ? String(v).slice(0, 16) + "…" : "none");
+  wrap.append(el("div", { class: "hint warn" }, `Expected fingerprint ${fp(c.expected_fingerprint)}; after geotag wrote to it, ` +
+    `${c.actual_fingerprint ? fp(c.actual_fingerprint) : "none could be taken"}. The photo's pixels are not what the plan pinned: ` +
+    "look at it — if it is right as it is, accept it."));
+  if (!c.actual_fingerprint) wrap.append(el("div", { class: "hint" }, "With no fingerprint taken there is nothing to accept: " +
+    "put the photo right, then run `geotag execute` again."));
+  else wrap.append(checkbox("accept this photo's content as it is now", u.accept_fingerprint_change === true,
+    (v) => edit(ref, "accept_fingerprint_change", v)));
+  return wrap;
+}
+
 // --- editing controls --------------------------------------------------------
 function checkbox(label, checked, onchange, disabled) {
   const cb = el("input", { type: "checkbox", disabled: disabled ? "" : null }); cb.checked = !!checked; cb.addEventListener("change", () => onchange(cb.checked));
@@ -932,6 +979,8 @@ function controls(ref) {
     wrap.append(unidentifiedControls(ref));
   } else if (ref.kind === "drift") {
     wrap.append(driftControls(ref));
+  } else if (ref.kind === "fingerprint") {
+    wrap.append(mismatchControls(ref));
   } else if (ref.kind === "fallback") {
     const hasProp = p.proposal_source === "inherited";
     const cb = checkbox(hasProp ? `accept inherited (${p.proposed_fallback.lat}, ${p.proposed_fallback.lon})` : "accept inherited — none",
@@ -1212,7 +1261,7 @@ function driftMap(ref, frame, fi) {
 // for non-photo cells; for a multi-photo run, `ref.path` is the first photo.
 function decisionThumb(ref) {
   const photo = ref.kind === "reading" ? ref.key : ref.path;
-  if (state.base.demo || (ref.kind !== "review" && ref.kind !== "reading") || !photo) return null;
+  if (state.base.demo || !["review", "reading", "fingerprint"].includes(ref.kind) || !photo) return null;
   const img = el("img", { class: "decision-thumb", alt: photo, title: photo.split("/").pop(),
     src: "/api/photo?path=" + encodeURIComponent(photo) });
   img.addEventListener("error", () => img.remove());
@@ -1600,6 +1649,7 @@ function renderPanel() {
     : ref.kind === "reading" ? "Time at a daylight-saving change"
     : ref.kind === "unidentified" ? "Files naming no camera"
     : ref.kind === "drift" ? `Drift · ${c.camera_group || ref.key}`
+    : ref.kind === "fingerprint" ? "Content changed after a write"
     : ref.kind === "review" ? (multi ? `GPS review · ${ref.peers.length} photos` : "GPS review item")
       : ref.kind === "fallback" ? "Folder fallback" : "Timezone";
   p.append(el("h2", {}, title), el("div", { class: "path" }, ref.path || (ref.kind === "reading" ? ref.key : ref.dest)));
@@ -1631,7 +1681,7 @@ function renderPanel() {
   if (isGpsCoord) scroll.append(mapBlock(ref));   // the review photo is now a thumbnail in "Your decision" + a hover preview in the worklist
   // No raw "Proposal" JSON box for fallback — the inherited proposal is already shown in the
   // "accept inherited (lat, lon)" checkbox label, so the JSON dump was redundant clutter.
-  if (c.proposal && ref.kind !== "drift" && ref.kind !== "fallback" && ref.kind !== "reading")
+  if (c.proposal && ref.kind !== "drift" && ref.kind !== "fallback" && ref.kind !== "reading" && ref.kind !== "fingerprint")
     scroll.append(ref.kind === "offset" ? offsetProposalBlock(ref, c.proposal) : jsonBlock("Proposal", c.proposal));
   p.replaceChildren(top, scroll);
 }
@@ -1641,9 +1691,9 @@ function renderPanel() {
 // refuses the save when a record on disk is not the one loaded (RUL-save_only_what_was_shown), and its refusal
 // shows through the save-error message below.
 function savePayload(refs, cellOf, hashes) {
-  const payload = { time: [], drift: [], gps: [], hashes: { ...(hashes || {}) } };
+  const payload = { time: [], drift: [], gps: [], execution: [], hashes: { ...(hashes || {}) } };
   for (const ref of refs)
-    payload[ref.file].push({ dest: ref.dest, kind: ref.kind, key: ref.key, path: ref.path, user_decision: cellOf(ref).user_decision });
+    (payload[ref.file] = payload[ref.file] || []).push({ dest: ref.dest, kind: ref.kind, key: ref.key, path: ref.path, user_decision: cellOf(ref).user_decision });
   return payload;
 }
 
@@ -1654,7 +1704,12 @@ async function save() {
   try {
     const r = await (await fetch("/api/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })).json();
     // The records now hold what was saved: their new hashes are what the next save is made from.
-    if (r.ok) { state.work.hashes = r.hashes; state.base = clone(state.work); state.message = `saved ${r.written.join(", ")} — run \`photos-cartographer geotag plan\` then reload to apply`; }
+    if (r.ok) {
+      state.work.hashes = r.hashes; state.base = clone(state.work);
+      // an answer in photos-25 is read by the next execution; every other, by the next plan
+      const next = r.written.length && r.written.every((n) => n.startsWith("photos-25")) ? "geotag execute" : "geotag plan";
+      state.message = `saved ${r.written.join(", ")} — run \`photos-cartographer ${next}\` then reload to apply`;
+    }
     else state.message = "save failed: " + (r.error || "unknown");
   } catch (e) { state.message = "save failed: " + e; }
   state.saving = false; render();
@@ -1675,7 +1730,7 @@ function render() {
   save.title = a.demo ? "demo mode is read-only — run `photos-cartographer edit` from inside a workspace to save" : invalid ? "fix invalid fields first" : "";
   $("#reset").disabled = dirty === 0 || busy;
   const list = $("#list"); list.replaceChildren();
-  (state.view === "time" ? renderTime : state.view === "drift" ? renderDrift : renderGps)(list);
+  ({ time: renderTime, drift: renderDrift, gps: renderGps, execution: renderExecution }[state.view] || renderTime)(list);
   renderPanel();
 }
 
@@ -1753,6 +1808,6 @@ export {
   zoneContradiction, offsetCellNotes, zoneSpokenFor, zoneDespiteFields, effectiveCountry, clearCountriesInside,
   scrubOffset, scrubSeedIndex, mapKeyFor, savePayload,
   ambiguousTimeNote, gpsTimeAsideNote, zoneOffer, validReading, keepHolds, keepFields, keepOffered, phoneNote,
-  trueInstant, parseUtcOff, unidentifiedHolds, unidentifiedFields, loadRefusal, hasUnsavedEdits, utcOff,
+  trueInstant, parseUtcOff, mismatchAccepted, unidentifiedHolds, unidentifiedFields, loadRefusal, hasUnsavedEdits, utcOff,
   fmtSpan, utcToZonedWallMs, zonedWallToUtcMs, offsetFromTrueTime, trueTimeOf,
 };

@@ -34,6 +34,24 @@ test("savePayload groups the edits by record and carries the loaded hashes", () 
   assert.equal(p.gps[0].path, "6-photos-by-dest/Japan/x.arw");
 });
 
+test("a photos-25 fingerprint mismatch: asked until accepted, saved into photos-25 by its photo's path", () => {
+  const rel = "6-photos-by-dest/Japan/x.arw", ref = { file: "execution", kind: "fingerprint", path: rel };
+  const m = (ud, actual = "b".repeat(64)) => ({ relative_path: rel, expected_fingerprint: "a".repeat(64), actual_fingerprint: actual, user_decision: ud });
+  const work = { execution: { plan_id: "p1", fingerprint_mismatches: [m({ accept_fingerprint_change: false })] } };
+  app.state.work = work; app.state.base = JSON.parse(JSON.stringify(work));
+  assert.equal(app.cellAt(work, ref).actual_fingerprint, "b".repeat(64));
+  assert.deepEqual(app.cellStatus(app.cellAt(work, ref)), ["needs", "needs input"]);
+  assert.equal(app.wouldResolve(ref), false);
+  work.execution.fingerprint_mismatches[0].user_decision.accept_fingerprint_change = true;
+  assert.equal(app.wouldResolve(ref), true);
+  assert.equal(app.isDirty(ref), true);
+  assert.equal(app.refInvalid(ref), false);
+  assert.equal(app.mismatchAccepted(m({ accept_fingerprint_change: true }, null)), false);   // no fingerprint taken: nothing to accept
+  const p = app.savePayload([ref], (r) => app.cellAt(app.state.work, r), { execution: "e1" });
+  assert.deepEqual(p.execution, [{ dest: undefined, kind: "fingerprint", key: undefined, path: rel,
+    user_decision: { accept_fingerprint_change: true } }]);
+});
+
 test("savePayload with no hashes loaded sends none, which the server refuses", () => {
   assert.deepEqual(app.savePayload([], () => ({}), undefined).hashes, {});
 });

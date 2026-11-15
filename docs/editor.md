@@ -87,9 +87,10 @@ accept it again (or set the offset yourself), save, and re-plan.
 
 ---
 
-## The three views, and why they're gated
+## The views, and why they're gated
 
-The header toggles between **Time → Drift → GPS**, in that order — and the order is enforced:
+The header toggles between **Time → Drift → GPS**, in that order — and the order is enforced — and
+**Execute**, for what `geotag execute` asks afterwards ([below](#execute-view)):
 
 - **Time gates Drift** — the Drift view waits until every time decision is answered and geotag has been
   re-run (drift checks offsets that must already exist).
@@ -355,6 +356,20 @@ name in the worklist for a larger preview):
 **shift-click** another *in the same destination* to select the contiguous run between them. One
 location you set then applies to every photo in the run. (Shift-clicking into a different destination
 starts a fresh selection — runs never cross destinations.)
+
+---
+
+## Execute view
+
+When `geotag execute` writes a photo's tags it takes the photo's content fingerprint again. If the pixels
+are no longer what the plan pinned — or no fingerprint can be taken — the photo's writes are not
+confirmed, its rename waits, and the run ends **partial**. The Execute view lists each such photo from
+`photos-25-execution-summary.json`, with its preview (hover a row, or open it) and the two fingerprints.
+Look at it: if it is right as it is, tick **accept this photo's content as it is now**, save, and run
+`geotag execute` again — that run takes the new content as the photo's and goes on with it. An acceptance
+holds for the content you saw: if the photo changes again, it asks again. By hand, the same answer is
+`"accept_fingerprint_change": true` in the photo's entry of `fingerprint_mismatches` (see the
+[decision-JSON reference](../cartographer/editor/decision-json-reference.md)).
 
 ---
 

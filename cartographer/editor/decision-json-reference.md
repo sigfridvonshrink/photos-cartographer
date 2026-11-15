@@ -30,6 +30,7 @@ All live in the workspace control directory `.photos-ingest/`:
 | `photos-21-time-decisions.json` | `time_decisions` | Per-destination **country** and **civil timezone**, and per-(camera group, destination, day) **clock offset** for fixed-clock cameras. |
 | `photos-22-gps-drift-validation.json` | `gps_drift_validation` | Per at-risk bucket, **confirm or correct** a clock offset that no photo's own GPS pins (a manual, timezone-derived or imprecise-anchor offset) against the GPX track before it is used to place photos (§5a below). |
 | `photos-23-gps-decisions.json`  | `gps_decisions`  | Per-destination **GPS fallback** coordinate, and per-file **GPS** decisions for files an automatic source could not place. |
+| `photos-25-execution-summary.json` | `execution_summary` | Not a decision record but `geotag execute`'s summary: per photo whose content changed when geotag wrote to it, whether that content **stands** (§5b below). |
 
 The editor opens one of these, presents the open decisions, lets the human resolve them, and writes the
 file back. (`photos-22` is produced by the pipeline today and resolvable by hand-editing its
@@ -616,6 +617,36 @@ readable date, whatever its key.
 
 ---
 
+## 5b. `photos-25-execution-summary.json` — a photo whose content changed when written
+
+`geotag execute` takes each photo's content fingerprint again after it writes the photo's tags. One that is not the
+fingerprint the plan pinned — the decoded pixels changed, or none could be taken — is a **mismatch**: the photo's
+writes are not confirmed, its rename is held back, and the execution ends `partial`. Each is listed in the summary's
+`fingerprint_mismatches`, and asks one question: does the photo's content, as it is now, stand?
+
+```jsonc
+"fingerprint_mismatches": [
+  { "relative_path": "6-photos-by-dest/Japan/Kyoto/IMG_1234.jpg",
+    "expected_fingerprint": "3a52…",            // the one the plan pinned
+    "actual_fingerprint": "9c1d…",              // the one taken after the write (null: none could be taken)
+    "user_decision": { "accept_fingerprint_change": false } } ]
+```
+
+| Field | Type | Editable | Meaning |
+|-------|------|----------|---------|
+| `relative_path` | string | no | The photo, at the path it was planned under (its rename held back). |
+| `expected_fingerprint` / `actual_fingerprint` | string / string \| `null` | no | The fingerprint the plan pinned, and the one the photo has now. |
+| **`user_decision.accept_fingerprint_change`** | bool | **yes** | `true`: the content as it is now is the photo's — the next `geotag execute` of the **same plan** (`plan_id`) takes `actual_fingerprint` as the expected one and goes on with the photo (its rename and journal). The acceptance holds for that `actual_fingerprint` only: content that changed again asks again. A mismatch with no `actual_fingerprint` cannot be accepted. |
+
+The summary is otherwise geotag's own record; nothing else in it is yours to write, and a later execution reads only
+these answers, only from the summary of the plan it executes. A mismatch whose photo is still held is carried into the
+next summary with its answer.
+
+**By hand:** set `"accept_fingerprint_change": true` in the photo's entry, then run `geotag execute` again. In the
+editor: the **Execute** view lists each, with a preview of the photo.
+
+---
+
 ## 6. Within-cell precedence (which `user_decision` field wins)
 
 A cell can carry more than one decision field; geotag applies them in a fixed order. The editor's
@@ -693,8 +724,9 @@ A natural shape that satisfies the contract:
    which regenerates the artifact, reads back the `user_decision` values, recomputes everything, and validates.
 
 **The save contract (this editor's server).** `GET /api/artifacts` returns `{ "workspace", "demo", "time",
-"drift", "gps", "hashes" }` — the three records as loaded, and in `hashes` (`{ "time", "drift", "gps" }`) the
-SHA-256 of each record's bytes as read (`null` for a record that is absent). `POST /api/save` takes:
+"drift", "gps", "execution", "hashes" }` — the three decision records and photos-25 (`execution`) as loaded, and in
+`hashes` (`{ "time", "drift", "gps", "execution" }`) the SHA-256 of each record's bytes as read (`null` for a record
+that is absent). `POST /api/save` takes:
 
 ```jsonc
 {
@@ -703,15 +735,16 @@ SHA-256 of each record's bytes as read (`null` for a record that is absent). `PO
   "drift": [ { "dest": "…", "kind": "drift", "key": "<bucket key>", "user_decision": { … } } ],
   "gps":   [ { "dest": "…", "kind": "fallback" | "review", "path": "<relative_path, for review>",
                "user_decision": { … } } ],
-  "hashes": { "time": "…", "drift": "…", "gps": "…" }   // as the editor loaded them
+  "execution": [ { "kind": "fingerprint", "path": "<relative_path of the mismatch>", "user_decision": { … } } ],
+  "hashes": { "time": "…", "drift": "…", "gps": "…", "execution": "…" }   // as the editor loaded them
 }
 ```
 
 The save takes the workspace lock for the time it writes and is refused at once while a run holds it, or
-when the workspace is sealed. Under the lock it is refused — **nothing written, none of the three** — when:
+when the workspace is sealed. Under the lock it is refused — **nothing written, none of the records** — when:
 `hashes` is missing; any record on disk is not the one the editor loaded (its hash differs: a geotag plan
 may have rewritten it — reload and edit again); or an edit names a decision its record does not hold (no such
-destination, cell, bucket key or review item) or carries no `user_decision` object. Otherwise each named
+destination, cell, bucket key, review item or mismatch) or carries no `user_decision` object. Otherwise each named
 cell's `user_decision` is **replaced whole** by the one sent (nothing else in the record is touched), each
 edited record is written atomically (sorted keys, two-space indent), and the reply is
 `{ "ok": true, "written": [<record names>], "hashes": { … } }` — the records' new hashes, which the next save

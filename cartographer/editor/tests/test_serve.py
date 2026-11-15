@@ -318,6 +318,39 @@ def test_apply_edits_saves_the_answer_for_a_destination_s_files_naming_no_camera
     assert q["user_decision"] == {"accept_proposal": True, "accepted_timezone": "Europe/Brussels"} and q["files"] == 2
 
 
+@pytest.mark.spec("RUL-every_question_in_editor", "RUL-every_question_answerable_by_hand",
+                  "BLD-editor_answers_every_question", "BLD-editor_save_locks",
+                  test="TST-serve-saves_a_fingerprint_change_s_answer_into_photos_25")
+def test_save_answers_a_fingerprint_mismatch_in_photos_25(tmp_path):
+    """photos-25's fingerprint mismatches each ask whether the photo's changed content stands: the editor loads the
+    summary with its hash, saves the answer into `user_decision.accept_fingerprint_change` of the mismatch named by its
+    photo's path — nothing else of the summary touched — and refuses, like any record, when the summary changed since."""
+    ws = _workspace_with_fixtures(tmp_path)
+    rel = "6-photos-by-dest/Japan/IMG_1.jpg"
+    summary = {"plan_id": "p1", "status": "partial", "totals": {"renames": 0},
+               "fingerprint_mismatches": [{"relative_path": rel, "expected_fingerprint": "a" * 64,
+                                           "actual_fingerprint": "b" * 64,
+                                           "user_decision": {"accept_fingerprint_change": False}}]}
+    path = os.path.join(ws, serve.CONTROL, serve.EXECUTION_NAME)
+    serve._write_json(path, summary)
+    loaded = serve._load_artifacts(ws)
+    assert loaded["execution"]["fingerprint_mismatches"][0]["relative_path"] == rel
+    edit = {"kind": "fingerprint", "path": rel, "user_decision": {"accept_fingerprint_change": True}}
+    # an edit naming a photo the summary holds no mismatch for is refused, nothing written
+    res = serve._save(ws, {"execution": [dict(edit, path="6-photos-by-dest/Japan/other.jpg")], "hashes": loaded["hashes"]})
+    assert res["ok"] is False and "fingerprint mismatch" in res["error"]
+    res = serve._save(ws, {"execution": [edit], "hashes": loaded["hashes"]})
+    assert res["ok"] is True and res["written"] == [serve.EXECUTION_NAME]
+    after = json.load(open(path))
+    assert after["fingerprint_mismatches"][0]["user_decision"] == {"accept_fingerprint_change": True}
+    assert {k: v for k, v in after.items() if k != "fingerprint_mismatches"} == \
+        {k: v for k, v in summary.items() if k != "fingerprint_mismatches"}
+    # a summary rewritten since the editor loaded it (another execution) is not saved over
+    serve._write_json(path, dict(summary, plan_id="p2"))
+    res = serve._save(ws, {"execution": [edit], "hashes": res["hashes"]})
+    assert res["ok"] is False and serve.EXECUTION_NAME in res["error"]
+
+
 def test_apply_edits_ignores_unknown_targets():
     art = _time_art()
     n = serve._apply_edits(art, [
