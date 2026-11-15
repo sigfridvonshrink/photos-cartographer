@@ -104,6 +104,27 @@ def test_extrapolation_past_window_blocked():
     assert cal.place_gps(_utc(12, 0, 0), g, CFG) is None               # 300 s before first > 120 (backward)
 
 
+@pytest.mark.spec("BLD-coordinate_precision", test="TST-geotag_gps_placement-coordinates_to_six_decimal_places")
+def test_coordinates_to_six_decimal_places():
+    """A position placed between two points, or projected past an end, is rounded to six decimal places; a direct
+    match is the track point as the track gives it; and a photo already holding a position to six places, under the
+    marker the write would carry, is written no position."""
+    g = _gpx([_pt(50.0, 4.0, 12, 0, 0), _pt(50.001, 4.001, 12, 1, 0)])
+    r = cal.place_gps(_utc(12, 0, 20), g, _cfg(gpx_direct_match_max_seconds=5.0))
+    assert r["method"] == "interpolated" and (r["lat"], r["lon"]) == (50.000333, 4.000333)
+    r = cal.place_gps(_utc(12, 1, 20), _gpx([_pt(50.0, 4.0, 12, 0, 0), _pt(50.0, 4.001, 12, 1, 0)]),
+                      _cfg(gpx_direct_match_max_seconds=5.0))
+    assert r["method"] == "extrapolated" and r["lon"] == 4.001333
+    r = cal.place_gps(_utc(12, 0, 0), _gpx([_pt(50.12345678, 4.98765432, 12, 0, 0)]), CFG)
+    assert r["method"] == "direct_match" and (r["lat"], r["lon"]) == (50.12345678, 4.98765432)
+    coord = {"lat": 50.000333, "lon": 4.000333, "method": "interpolated"}
+    f = {"relative_path": "a.jpg", "content_fingerprint": "fp", "size": 1, "mtime_ns": 1,
+         "held": {"lat": 50.0003334, "lon": 4.0003334, "method": "interpolated"}}
+    assert cal.plan_file_ops(f, None, None, "gpx_interpolation", coord, None) == []          # held to six places
+    f["held"]["lat"] = 50.0003336
+    assert "metadata_gps_write" in [o["type"] for o in cal.plan_file_ops(f, None, None, "gpx_interpolation", coord, None)]
+
+
 @pytest.mark.spec("BLD-projection_without_heading", "RUL-track_placement_bounded",
                   test="TST-geotag_gps_placement-a_projection_with_no_heading_point_lands_on_the_end")
 def test_a_projection_with_no_heading_point_lands_on_the_end():

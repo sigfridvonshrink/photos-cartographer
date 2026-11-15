@@ -454,6 +454,17 @@ own segment lies within `gpx_extrapolation_heading_seconds` of it — a track of
 that does is at the end's own time: with no stretch to take a heading over, no projection is made.
 :::
 
+:::{bld} Coordinates to six decimal places
+:id: BLD-coordinate_precision
+:status: ruled
+:realises: RUL-mutate_on_difference, RUL-track_placement_bounded
+
+Geotag SHALL round a position it places between two track points or projects past an end to six decimal places of a
+degree (about 0.1 m), and write a direct match's track point as the track gives it; a photo holds a position already
+when its position marker is the one the write would carry and both its coordinates equal the position's to six
+decimal places, and then no position is written ({need}`BLD-executable_plan`).
+:::
+
 :::{bld} A review item is its photo's
 :id: BLD-review_item_identity
 :status: ruled
