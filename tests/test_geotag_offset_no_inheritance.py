@@ -274,6 +274,23 @@ def test_a_destination_has_one_timezone_for_all_its_photos(tmp_path):
     assert blk and "confirmed_despite_recorded_offsets" in blk[0]
 
 
+@pytest.mark.spec("BLD-timezone_cell", "RUL-zone_against_photos_needs_word",
+                  test="TST-geotag_offset_no_inheritance-a_null_word_for_the_zone_is_no_answer")
+def test_a_null_word_for_the_zone_is_no_answer(tmp_path):
+    """`confirmed_despite_recorded_offsets: null` reads as no answer, as `null` does in every other field: the zone
+    the photos speak against still asks, and nothing blocks."""
+    wf = _wf(tmp_path)
+    dest = f"{BYDEST}/Roadtrip"
+    files = [_phone(f"{dest}/a.jpg", dest, "2024:07:03 10:00:00", "+01:00"),
+             _phone(f"{dest}/b.jpg", dest, "2024:07:05 10:00:00", "+02:00")]
+    ud = {"manual_iana_timezone": "Europe/Lisbon", "confirmed_despite_recorded_offsets": None}
+    art, blk = wf.build_time_decisions(files, BOTH, {"destinations": {dest: {"destination_timezone": {"user_decision": ud}}}}, _gpx([]))
+    assert not blk
+    cell = art["destinations"][dest]["destination_timezone"]
+    assert cell["effective_iana_timezone"] == "" and cell["requires_user_input"] and not cell["stale_user_decision"]
+    assert cell["user_decision"]["confirmed_despite_recorded_offsets"] == []
+
+
 @pytest.mark.spec("RUL-inherited_timezone_yields_to_photos",
                   test="TST-geotag_offset_no_inheritance-a_camera_s_offset_tag_says_nothing_of_the_place")
 def test_what_does_not_speak_against_an_inherited_zone(tmp_path):

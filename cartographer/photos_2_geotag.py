@@ -1053,7 +1053,9 @@ class GeotagWorkflow:
         # The photos here that record another offset than the zone has: the zone stands against them only
         # on the user's explicit word, which names the offsets it was given for — a photo arriving with yet
         # another offset was never spoken for, and asks again.
-        despite = ud.get("confirmed_despite_recorded_offsets", [])
+        despite = ud.get("confirmed_despite_recorded_offsets")
+        if despite is None:                 # absent or null: no answer given, as in every other field
+            despite = []
         if not (isinstance(despite, list) and all(_valid_offset(o) for o in despite)):
             blockers.append(f"{dest}: destination_timezone.user_decision.confirmed_despite_recorded_offsets "
                             "must be a list of whole numbers of seconds.")
