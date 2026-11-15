@@ -216,7 +216,9 @@ archived, it lets a future reader know not only what was decided but **under wha
 A threshold is tuned against one judgement — how close a track must pass to anchor a photo, how far two points may be
 joined across. Read for a second judgement as well, it cannot be moved for the first without moving the second unseen,
 and the user who retunes it for a museum has also changed when two tracks are said to disagree. Each judgement has a
-setting of its own, at the cost of more settings to read.
+setting of its own, at the cost of more settings to read. Reading a setting to gather what its own judgement will
+need — as the tracks' window reads each reader's reach ({need}`RAT-track_window_from_readers`) — is that judgement
+still, not a second one.
 :::
 
 :::{rat} Surgical staleness: one hash for everything would restale everything

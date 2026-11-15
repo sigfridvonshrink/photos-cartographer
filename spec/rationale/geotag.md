@@ -464,6 +464,23 @@ decisions of a holiday three years ago, and every decision asks again for no rea
 decision can reach change it; a track unchanged since it was last read need not be read again.
 :::
 
+:::{rat} The window is what the readers reach, not a setting of its own
+:id: RAT-track_window_from_readers
+:status: ruled
+:forced: no
+:follows_from: RAT-tracks_read_where_reached, RAT-setting_read_once
+:justifies: BLD-track_window
+
+The window bounds which points are read, and every point a reader of the tracks can reach must be in it — so it is
+computed from each reader's own settings, never set by one of its own. The owner asked: *"aren't you reusing a config
+value for a different purpose?"* — the window does read the matching, gap and drift settings. But it reads each as that
+reader's reach, for that reader: the same judgement the setting is tuned for, not a second one beside it. Retuning
+`gpx_interpolation_max_gap_seconds` for a museum widens the window with it, which is what it should do; no other
+judgement moves unseen. A window setting of its own would be the second judgement: set smaller than a reader's reach,
+it would starve that reader unseen — a photo the gap would bridge left unplaced, an anchor never found, with nothing in
+the decisions to say the tracks were cut short — and set larger, it reads what nothing uses.
+:::
+
 :::{rat} A track is taken out because it is someone else's
 :id: RAT-gone_track_withdrawn
 :status: ruled
