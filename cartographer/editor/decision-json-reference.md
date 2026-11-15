@@ -163,7 +163,9 @@ with its English `name` and its `zones` (sorted).
 
 Note: smartphones are resolved per-file and get **no** offset cell — `camera_group_time_decisions` only
 holds `camera`-class groups (those listed under `fixed_clock_cameras`); smartphone, unidentified and
-unknown groups appear in `camera_groups_present` only. A bucket whose photos are all already corrected by
+unknown groups appear in `camera_groups_present` only. A photo whose time was read from `ModifyDate` (no valid
+`DateTimeOriginal` or `CreateDate`: an export, timed by the editing computer) counts under `unknown`, as a file
+naming no camera does — it opens no cell of its camera's and takes no offset from one. A bucket whose photos are all already corrected by
 geotag gets a cell only when it still resolves (its earlier answer, derived again), so that photos of the
 same camera and day arriving later take the same offset; such a cell never asks.
 

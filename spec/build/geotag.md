@@ -164,6 +164,17 @@ unknown groups, given no offset cell, and resolved as a phone's photo is, its ow
 A `camera_group_key` listed in both `phones` and `fixed_clock_cameras` SHALL be classed `unknown`.
 :::
 
+:::{bld} Photos timed by their modification
+:id: BLD-modified_time_files
+:status: ruled
+:realises: RUL-modified_time_solved_alone, RUL-modified_time_no_camera_offset, RUL-modified_time_opens_no_day
+
+`build_file_model` SHALL give a photo whose `source_time_tag` names `ModifyDate` — the pinned one, for a photo with
+pinned values — the `camera_group_key` `NO_IDENTITY_KEY` in place of prep's, so that, as {need}`BLD-unidentified_files`
+has it, it is classed `unidentified`, is in no group's offset cell or drift check, and is resolved by `OffsetTime`
+(`unidentified_native_offset`), else its destination's timezone; prep's camera group and its report are left as derived.
+:::
+
 
 ## 10. Destination civil timezone
 

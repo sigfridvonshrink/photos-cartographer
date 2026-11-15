@@ -40,7 +40,7 @@ from .photos_utils import (
     validate_config, sha256_file, sha256_text, media_class_for_ext, folder_name,
     folders_fingerprint, media_extensions_fingerprint,
     selected_gpx_root, is_gpx_file, FIELD_SET_VERSION, CAMERA_GROUP_KEY_VERSION, FOLDER_ROLES,
-    parse_naive_time, has_own_position,
+    parse_naive_time, has_own_position, NO_IDENTITY_KEY,
     missing_managed_folders, by_dest_reprep_pending,
     json_dependency, verify_json_dependency, handoff_content_fingerprint, write_json_artifact, write_versioned_json, db_path, ensure_control_dir,
     journal_path, ContentHasher, _move_no_clobber, allocate_suffix, carries_stem, track_memo_db_path,
@@ -87,6 +87,7 @@ __all__ = [
     '_local_to_utc',
     'drift_offset_overrides',
     'OFFSET_TAG_FOR',
+    'clock_group_key',
     '_own_offset',
     'compute_resolved_utc',
     'resolved_utc_fingerprint',
@@ -814,6 +815,15 @@ def drift_offset_overrides(drift_artifact):
 # turned to UTC by its own offset, never by another field's.
 OFFSET_TAG_FOR = {"DateTimeOriginal": "OffsetTimeOriginal", "CreateDate": "OffsetTimeDigitized",
                   "ModifyDate": "OffsetTime"}
+
+
+def clock_group_key(f):
+    """The camera group `f`'s time is solved under (BLD-modified_time_files): prep's, unless its time was read from
+    `ModifyDate` — the editing computer's clock, not the camera's — then `NO_IDENTITY_KEY`, solved on its own as a
+    file naming no camera is (RUL-modified_time_solved_alone). `CreateDate` is the camera's clock still."""
+    if (f.get("source_time_tag") or "").rsplit(":", 1)[-1] == "ModifyDate":
+        return NO_IDENTITY_KEY
+    return f["camera_group_key"]
 
 
 def _own_offset(f):

@@ -681,6 +681,8 @@ class GeotagWorkflow:
                 key = None
             if key is not None:                        # decide from the file's own values (BLD-decided_from_own_values)
                 files[-1] = dict(from_originals(files[-1], originals[key]), original_key=key)
+            # a time read from ModifyDate is no camera's clock: solved on its own (BLD-modified_time_files)
+            files[-1]["camera_group_key"] = clock_group_key(files[-1])
         files.sort(key=lambda f: f["relative_path"])
         return files
 

@@ -365,6 +365,22 @@ offset no camera of theirs had. Each carries what time it has; read alone, as a 
 the place's zone, it asks nothing and borrows nothing.
 :::
 
+:::{rat} A modification time is another clock's
+:id: RAT-modified_time_is_another_clock
+:status: ruled
+:forced: no
+:follows_from: RAT-no_identity_no_group, RAT-offset_per_camera_destination_day
+:justifies: RUL-modified_time_solved_alone, RUL-modified_time_no_camera_offset, RUL-modified_time_opens_no_day
+
+A photo's `ModifyDate` is where its time is read from only when neither `DateTimeOriginal` nor `CreateDate` holds one —
+an export whose capture time is gone. It is then the time the photo was last saved, by the editing computer's clock,
+not the camera's; but the export keeps the camera's make and model, so it would join the camera's group, open a day of
+its own on the edit's date — a question about a day the camera never shot — and have the camera's offset applied to a
+computer's clock. Read alone, as a file naming no camera is, it asks nothing and borrows nothing. `CreateDate` is the
+camera's clock still: a camera writes it as it writes the original. Treating such a photo as untimed instead would stop
+geotag on a time that is, at worst, a poor guess the user can see and correct.
+:::
+
 
 ## 10. Destination civil timezone
 

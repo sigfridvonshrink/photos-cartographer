@@ -673,6 +673,43 @@ A file whose metadata names no camera SHALL never be asked to be classed.
 A file whose metadata names no camera SHALL never be given a camera's clock offset.
 :::
 
+:::{rul} A photo timed by its modification is solved on its own
+:id: RUL-modified_time_solved_alone
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-recorded_time, DEF-camera_group, RUL-recorded_time_order
+
+A photo whose recorded time is read from its `ModifyDate` SHALL be solved on its own, as a file naming no camera is,
+whatever camera its metadata names.
+:::
+
+:::{rul} A photo timed by its modification takes no camera's offset
+:id: RUL-modified_time_no_camera_offset
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-modified_time_solved_alone
+:uses: DEF-clock_offset
+
+A photo whose recorded time is read from its `ModifyDate` SHALL never be given its camera's clock offset.
+:::
+
+:::{rul} A photo timed by its modification is in none of its camera's days
+:id: RUL-modified_time_opens_no_day
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:refines: RUL-modified_time_solved_alone
+:uses: RUL-offset_per_camera_destination_day
+
+A photo whose recorded time is read from its `ModifyDate` SHALL never open a day of its camera's clock offsets, nor be
+counted in one.
+:::
+
 :::{rul} A group classed both ways is unknown
 :id: RUL-group_classed_twice_is_unknown
 :status: ruled

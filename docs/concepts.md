@@ -171,7 +171,9 @@ Each group is **classed** in the configuration, under `camera_time_and_timezone_
 their true time from that offset (else from their destination's timezone). A camera with a hand-set,
 timezone-less clock needs a clock offset (next sections). A group not yet classed stops geotag, which
 prints both lists ready to paste. A file whose metadata names no camera is never asked about: it is
-solved on its own, by the offset recorded with its time, else its destination's timezone.
+solved on its own, by the offset recorded with its time, else its destination's timezone. So is a photo
+whose only time is its `ModifyDate` — an export whose capture time is gone, timed by the editing
+computer's clock, not the camera's: it takes no clock offset of its camera's and opens none of its days.
 
 ---
 
