@@ -201,8 +201,8 @@ The whole design exists to safely mutate **irreplaceable originals**. These rule
 
 - **No mutation outside a plan.** Every move/rename/quarantine/metadata-write/DB-mutation is a planned
   operation with a plan ID, op ID, explicit preconditions, expected result, and journal entry. Planning
-  mutates nothing but the fingerprints it keeps for later runs (prep's plan memo, geotag's track memo,
-  merge's library cache).
+  mutates nothing but the fingerprints it keeps for later runs (prep's plan memo, geotag's track
+  catalogue and the track points of its window in `photos-00-ingest.db`, merge's library cache).
 - **Dry-run is not simulation.** Dry-run validates the *real* serialized plan that execution would
   consume (the persisted canonical plan artifact) and reports a **summary** of it — never a separate
   virtual-filesystem code path. It does not dump every operation: the full exact plan is the saved
@@ -229,10 +229,11 @@ Defined in the shared contract (`spec/intent/shared.md`, `spec/build/shared.md`)
 - All control/artifact files live in a single `.photos-ingest/` control directory (config, guard
   sentinel `photos-00-workspace-guard`, handoff manifest, decision JSONs, journals, the SQLite cache
   `photos-00-ingest.db`, and `gpx/` when `gpx_root` is configured to live there). Prep skips this
-  subtree wholesale, so artifacts can never be mistaken for media. Two files there are **scratch, not record**: `photos-00-plan-memo.db`, the
+  subtree wholesale, so artifacts can never be mistaken for media. One file there is **scratch, not record**: `photos-00-plan-memo.db`, the
   plan-time decode memo (`BLD-plan_memo`) — re-derivable fingerprints of files at the paths they were read
-  from — and `photos-00-track-memo.db`, the tracks geotag has parsed; both written outside the
-  plan/execute op model, never journalled or archived, safe to delete. Finalize adds
+  from — written outside the plan/execute op model, never journalled or archived, safe to delete. The tracks
+  geotag reads are record: a catalogue of every track file and the points of the window its readers reach, in
+  `photos-00-ingest.db`, archived and sealed with it (`BLD-track_catalogue`). Finalize adds
   `photos-26-finalized-media.json` and the archival package (`photos-26-archive-manifest.json` +
   `photos-26-archive.tar.gz`); merge remakes it as `photos-35-*`.
 - `photos-00-config.json` is the **workspace config**: seeded on first prep run from the in-code template
