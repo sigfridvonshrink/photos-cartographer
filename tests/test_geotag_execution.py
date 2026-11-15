@@ -626,6 +626,23 @@ def test_an_edit_made_since_the_plan_is_never_overwritten(tmp_path, monkeypatch)
     assert not cal._holds_writes({"GPSLatitude": 33.9}, {"GPSLatitude": 33.865143})
 
 
+@pytest.mark.spec("BLD-own_write_recognised", test="TST-geotag_execution-planned_tags_held_by_magnitude_text_or_absence")
+def test_planned_tags_held_by_magnitude_text_or_absence():
+    """The read-back test that tells geotag's own interrupted write from an edit: a coordinate equal in magnitude to
+    within a millionth of a degree, its sign left to the reference tag; any other tag equal as text; a tag planned
+    empty absent or empty."""
+    lat = {"GPSLatitude": 50.123456}
+    assert cal._holds_writes({"GPSLatitude": 50.1234569}, lat)                   # 0.9e-6 off: held
+    assert cal._holds_writes({"GPSLatitude": "-50.123456"}, lat)                 # sign aside, read as text
+    assert not cal._holds_writes({"GPSLatitude": 50.1234575}, lat)               # 1.5e-6 off: not held
+    assert not cal._holds_writes({"GPSLatitude": "north"}, lat) and not cal._holds_writes({}, lat)
+    t = {"DateTimeOriginal": "2024:07:03 14:00:00", "OffsetTimeOriginal": "+02:00"}
+    assert cal._holds_writes(dict(t), t)
+    assert not cal._holds_writes(dict(t, OffsetTimeOriginal="+0200"), t)          # text, not meaning
+    assert cal._holds_writes({"GPSLatitude": ""}, {"GPSLatitude": ""}) and cal._holds_writes({}, {"GPSLatitude": None})
+    assert not cal._holds_writes({"GPSLatitude": 0}, {"GPSLatitude": ""})         # a value where none was planned
+
+
 def test_apply_file_rename_skip_and_failure(tmp_path, monkeypatch):
     wf = cal.GeotagWorkflow(str(tmp_path))
     p = tmp_path / "a.arw"; p.write_bytes(b"x")
