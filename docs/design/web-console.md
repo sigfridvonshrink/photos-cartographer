@@ -341,6 +341,13 @@ reskinned onto it; the console inherits it. `docs/design/ui-showcase.html` is th
   (the canonical artifact, per the shared contract — not a JS simulation) → explicit confirm →
   execute. Never a one-click execute.
 - Quarantine / merge / execute get confirm dialogs.
+- **A run stopped on changes to the workspace** (the check every checking command makes first —
+  `BLD-workspace_check`) shows the same list it printed, in a dialog, with **Accept these**: the
+  phase's stop emits a `changes` event (`ChangesEvent` — phase, command, code, the printed lines) that
+  the `WebSink` also keeps for a late-joining page until the next run starts; the button sends the same
+  run again — the stopped execute's confirmation and plan id with it — plus `accept_changes: <code>`,
+  which the server passes as `--accept-changes <code>` (refused for a command that does not check). The
+  phase's own check decides what the code accepts; the console decides nothing.
 - Filesystem/journal stays the source of truth; never hold mutable run state in server memory as
   truth (resumability rule).
 

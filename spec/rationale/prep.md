@@ -823,6 +823,19 @@ names, and the photo would start again with no history, marked partial. The file
 value while the old one is nowhere, says it is the same photo.
 :::
 
+:::{rat} A new value at the path is a retake only for the same file
+:id: RAT-retake_needs_same_file
+:status: ruled
+:forced: yes
+:follows_from: RAT-new_fingerprint_same_photo, RAT-entries_tell_enough
+:justifies: RUL-retake_only_unchanged_file
+
+The path alone does not say it is the same photo: prep's log once gave a different photo, put by hand where a removed
+one had been, the removed photo's history under a "retaken fingerprint". Only the file prep left there, unchanged — its
+size, modification time and inode those recorded — taken again by a changed method is the photo whose fingerprint was
+retaken; a different file at the path is a new photo, and the removed one's entry stays a gone one.
+:::
+
 
 ## 15. Concurrency, determinism, and what a run shows
 

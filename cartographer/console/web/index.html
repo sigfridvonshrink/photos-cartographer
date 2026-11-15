@@ -106,6 +106,21 @@
     </div>
   </div>
 
+  <div id="changes-overlay" class="gate-overlay" hidden>
+    <div class="gate gate-wide" role="alertdialog" aria-modal="true" aria-labelledby="changes-title">
+      <p class="gate-title" id="changes-title">The workspace is not as the last run left it</p>
+      <div class="gate-sum">No command made these changes, and none is one a workspace expects by hand. Nothing was
+        planned or changed. Undo them and run again — or, if they are wanted, accept them once: the acceptance is
+        recorded in <code>photos-01-accepted-changes.json</code>, and only this list is accepted.</div>
+      <pre id="changes-list" class="changes-list"></pre>
+      <p class="gate-warn" id="changes-cmd"></p>
+      <div class="gate-act">
+        <button id="changes-close" class="btn">Close</button>
+        <button id="changes-accept" class="btn primary">Accept these</button>
+      </div>
+    </div>
+  </div>
+
   <div id="down-overlay" class="gate-overlay" hidden>
     <div class="gate" role="alertdialog" aria-modal="true" aria-labelledby="down-title">
       <p class="gate-title" id="down-title">Server connection lost</p>

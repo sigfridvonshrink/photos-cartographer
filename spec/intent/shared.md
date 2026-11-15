@@ -2490,7 +2490,9 @@ The workspace database SHALL be archived in the package.
 :uses: DEF-workspace_database
 :refines: RUL-phase_writes_own_records
 
-Each phase SHALL write only its own part of the workspace database, no two phases writing the same rows.
+Each phase SHALL write only its own part of the workspace database, no two phases writing the same rows — but the
+record of the state the last execution left the workspace's files in, which every execution rewrites whole
+({need}`RUL-execution_records_state`).
 :::
 
 :::{rul} Finalize only reads the database
@@ -3571,7 +3573,8 @@ Planning SHALL change no media file.
 :refines: RUL-planning_changes_no_media
 
 Planning SHALL write nothing but its plan, its decision records, what it keeps so that later runs need not compute it
-again, and — on a workspace's first run — the configuration it seeds.
+again, the changes to the workspace the user accepts ({need}`RUL-acceptance_recorded`), and — on a workspace's first
+run — the configuration it seeds.
 :::
 
 :::{rul} Execution carries out the plan, and only the plan
@@ -3615,4 +3618,235 @@ made by other code or recording none.
 :verify: required
 
 Every change an execution makes to a media file SHALL be recorded in that run's journal.
+:::
+
+
+## 17. The workspace as the last execution left it
+
+:::{rul} Every run first checks the workspace is as the last execution left it
+:id: RUL-workspace_checked_first
+:status: ruled
+:criticality: high
+:verify: required
+
+Every plan, dry run, execution and finalize of every phase SHALL first compare the workspace's files with the state the
+last execution left them in, by their file system entries alone and reading no file, before it plans, validates or
+changes anything.
+:::
+
+:::{rul} The comparison covers the media folders and the quarantine
+:id: RUL-check_covers_media_folders
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-workspace_checked_first
+
+The comparison SHALL cover every file of the managed folders but the inbox, and of the quarantine — never the inbox,
+which is the user's to fill, nor the control records, which keep checks of their own.
+:::
+
+:::{rul} A file is told moved, changed or gone by its entry
+:id: RUL-change_told_by_entries
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-workspace_checked_first
+
+The comparison SHALL take a file at a new path with the size, modification time and file identity a recorded file had
+for that file moved, a file at a recorded path whose size or modification time is not the recorded one for that file
+changed in place, a recorded file found nowhere for one deleted, and any other file for one that appeared.
+:::
+
+:::{rul} Sorting passes
+:id: RUL-sorting_passes
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-workspace_checked_first
+
+A photo moved from photos by date into photos by destination, or moved within photos by destination — its folder
+renamed among them — SHALL pass the comparison.
+:::
+
+:::{rul} Culling passes
+:id: RUL-culling_passes
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-workspace_checked_first
+
+A file deleted by hand from photos by date, photos by destination, videos by date or the redundant JPEGs SHALL pass the
+comparison.
+:::
+
+:::{rul} A photo moved back passes
+:id: RUL-moved_back_passes
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-workspace_checked_first
+
+A photo moved back from photos by destination into photos by date SHALL pass the comparison.
+:::
+
+:::{rul} A time given by hand in missing metadata passes
+:id: RUL-hand_time_passes
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-workspace_checked_first
+
+A file in missing metadata changed in place — given a time by hand — SHALL pass the comparison.
+:::
+
+:::{rul} A copy of a file is that file
+:id: RUL-copy_passes
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-change_told_by_entries
+
+A file of a recorded file's size and modification time under a new file identity — at that file's path, or at one a
+move of it would pass to under its name — SHALL pass the comparison as that file.
+:::
+
+:::{rul} What passes, but sorting, is named in the run's log
+:id: RUL-allowed_changes_named
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-workspace_checked_first
+
+Each change the comparison passes, sorting aside, SHALL be named in the log of the run that finds it — the record an
+execution writes, or what a plan, a dry run or a finalize prints.
+:::
+
+:::{rul} Anything else stops the command, naming each file
+:id: RUL-unexpected_change_stops
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-workspace_checked_first
+
+Any other difference from the state the last execution left — a file changed in place or replaced, one appearing
+outside the inbox, one gone from missing metadata, anything in the strays or the quarantine changed, a file moved where
+no sorting goes — SHALL stop the command before it plans, validates or changes anything, naming each file.
+:::
+
+:::{rul} The quarantine changes only by prune
+:id: RUL-quarantine_changed_only_by_prune
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-unexpected_change_stops
+
+What a prune removes from the quarantine SHALL be no difference to the next comparison.
+:::
+
+:::{rul} Every execution records the state it leaves
+:id: RUL-execution_records_state
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-workspace_checked_first
+
+Every execution — prep's, geotag's and merge's alike — SHALL record, at its end, the state it leaves the workspace's
+files in, whether or not each of its operations succeeded.
+:::
+
+:::{rul} Planning leaves the recorded state as it was
+:id: RUL-planning_leaves_record
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-execution_records_state
+
+No plan, dry run or finalize SHALL change the recorded state of the workspace's files.
+:::
+
+:::{rul} Geotag and merge need a recorded state
+:id: RUL-record_needed
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-workspace_checked_first
+
+Geotag and merge SHALL refuse a workspace whose state no execution has recorded.
+:::
+
+:::{rul} Prep with no recorded state compares nothing
+:id: RUL-first_prep_compares_nothing
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-workspace_checked_first
+
+Where no execution has recorded the workspace's state, prep SHALL compare nothing.
+:::
+
+:::{rul} A stop gives the code that accepts its list
+:id: RUL-stop_gives_acceptance_code
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-unexpected_change_stops
+
+A stop SHALL list the changes grouped by kind and by folder, and give the command to run again to accept them once,
+with a code made from the list as printed.
+:::
+
+:::{rul} A code accepts only the list it was made from
+:id: RUL-code_accepts_only_its_list
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:refines: RUL-stop_gives_acceptance_code
+
+A code SHALL accept the changes only where the list the command would print is the one the code was made from; any
+other, the command stops again, listing them anew.
+:::
+
+:::{rul} An acceptance is recorded and kept
+:id: RUL-acceptance_recorded
+:status: ruled
+:criticality: high
+:verify: required
+:refines: RUL-stop_gives_acceptance_code
+:uses: DEF-archival_package
+
+Each acceptance SHALL be kept in a record of the accepted changes that is never written over and goes into the
+archival package with the workspace's other records.
+:::
+
+:::{rul} An accepted change stops no later run
+:id: RUL-accepted_change_not_stopped_again
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-stop_gives_acceptance_code
+
+A change once accepted SHALL stop no later command.
+:::
+
+:::{rul} The changes a run accepts are named in its log
+:id: RUL-accepted_changes_logged
+:status: ruled
+:criticality: med
+:verify: required
+:refines: RUL-allowed_changes_named
+
+The changes a run accepts, and those accepted since the last execution, SHALL be named in its log.
+:::
+
+:::{rul} Pruning, the library's setup and the editor do not compare
+:id: RUL-maintenance_unchecked
+:status: ruled
+:criticality: low
+:verify: required
+:refines: RUL-workspace_checked_first
+
+Pruning the quarantine, setting up the library and editing the decisions SHALL run without the comparison.
 :::

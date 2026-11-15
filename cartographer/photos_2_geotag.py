@@ -61,6 +61,7 @@ from .photos_utils import (fingerprint_method_blocker, links_under, replace_dura
     prep_log_path, prep_log_blocker, entries_not_carried, retaken_fingerprints, write_db_snapshot, take_zfs_snapshot,
     control_archive_members, write_control_archive, workspace_id,
     WorkspaceLock, ProgressCoordinator,
+    add_accept_changes_argument, check_workspace, write_workspace_record,
 )
 from .reporting import get_reporter, emit_next_step, next_steps_muted
 
@@ -2219,7 +2220,7 @@ class GeotagWorkflow:
                     "failed": [o["operation_id"] for o in ops if journal.get(o["operation_id"]) != "confirmed"],
                     "blocker": f"{rel}: could not be applied ({type(e).__name__}: {e})"}
 
-    def execute_plan(self, jobs, now_iso, execution_id):
+    def execute_plan(self, jobs, now_iso, execution_id, workspace_changes=()):
         """Stage 10 (BLD-geotag_execution): apply photos-24 after re-validating every dependency, journaling for
         idempotent resume, verifying content fingerprints, and writing photos-25. now_iso /
         execution_id are injected so the fingerprint-bearing body stays reproducible. Returns the
@@ -2271,6 +2272,22 @@ class GeotagWorkflow:
             for op in dd["operations"]:
                 by_file.setdefault(op["relative_path"], []).append(op)
 
+        results = []
+        try:
+            return self._apply_plan(plan, gpx, journal, media_after, jpath, accepted, by_file, results, snapshot,
+                                    jobs, now_iso, execution_id, workspace_changes)
+        finally:
+            # The state this run leaves, whether or not each photo was applied (RUL-execution_records_state): geotag's
+            # writes give a photo a new inode, size and time, and its renames a new name — recorded, they are no change
+            # to the next check. A photo's fingerprint follows it from the name it was planned under.
+            write_workspace_record(ws, carried={r["after"]["relative_path"]: r["relative_path"]
+                                                for r in results if r.get("after")})
+
+    def _apply_plan(self, plan, gpx, journal, media_after, jpath, accepted, by_file, results, snapshot, jobs,
+                    now_iso, execution_id, workspace_changes):
+        """execute_plan's part that changes the photos — its originals pinned, each photo's operations applied and
+        journaled, the summary written — into `results`, which the caller reads whatever happens here."""
+        ws = self.workspace_root
         cache = GeotagCache(ws)
         try:
             # Capture-before-write (BLD-original_values_pinned): pin each file's own values — prep's record, NOT a
@@ -2291,7 +2308,6 @@ class GeotagWorkflow:
                     if fp and o["type"] == "metadata_time_write" and journal.get(o["operation_id"]) != "confirmed":
                         cache.time_written_record(fp, {k: o["writes"].get(k) for k in TIME_PAIR})
 
-            results = []
             self.coordinator.start_phase("applying calibration", len(by_file))
             with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, jobs)) as ex:
                 futs = [ex.submit(self._apply_file_contained, rel, ops, journal, accepted)
@@ -2331,6 +2347,8 @@ class GeotagWorkflow:
         summary = self._build_summary(plan, results, now_iso, execution_id, jobs,
                                       self._prior_mismatches(ws, plan["plan_id"]))
         summary["snapshot"] = snapshot                                   # the pre-mutation ZFS record (or None)
+        # the changes by hand this run's check named or accepted (BLD-workspace_changes_logged)
+        summary["workspace_changes"] = list(workspace_changes or [])
         write_versioned_json(execution_summary_path(ws), summary)        # the earlier one kept as -NNN
         # (BLD-geotag_records_versioned)
         return summary
@@ -2716,10 +2734,32 @@ def add_arguments(parser):
     parser.add_argument("-j", "--jobs", type=int, default=None,
                         help="Worker threads for execution (default: 4). A setting of the run, recorded nowhere.")
     sub = parser.add_subparsers(dest="command")
-    sub.add_parser("plan", help="Plan the geotag pass: produce photos-21/22/23/24 (no mutation).")
-    sub.add_parser("execute", help="Apply photos-24 to the originals (metadata writes + renames).")
-    sub.add_parser("finalize", help="Bundle the durable archival package (photos-26; non-destructive).")
+    for p in (sub.add_parser("plan", help="Plan the geotag pass: produce photos-21/22/23/24 (no mutation)."),
+              sub.add_parser("execute", help="Apply photos-24 to the originals (metadata writes + renames)."),
+              sub.add_parser("finalize", help="Bundle the durable archival package (photos-26; non-destructive).")):
+        add_accept_changes_argument(p)
     parser.set_defaults(_run=run, _parser=parser)
+
+
+def _check_workspace(args, workspace_root):
+    """Geotag's check of the workspace against the state the last execution left (BLD-workspace_check), before
+    anything is planned or changed — before the automatic re-prep, which runs prep's commands under this run's lock.
+    Made where the preflight would find the workspace initialized, unsealed, its configuration readable and its top
+    level as it should be; otherwise the preflight refuses, naming why. A workspace with no record is refused
+    (RUL-record_needed). Returns the changes this run names; exits 2 on a stop."""
+    if is_sealed(workspace_root) or not os.path.exists(guard_path(workspace_root)):
+        return []
+    try:
+        load_config(workspace_root)
+    except Exception:
+        return []
+    if top_level_links(workspace_root) or missing_managed_folders(workspace_root) \
+            or misplaced_top_level_entries(workspace_root) or links_under(workspace_root, folder_name('photos_by_dest')):
+        return []
+    changes, stop = check_workspace(workspace_root, "geotag", args.command, getattr(args, "accept_changes", None))
+    if stop:
+        sys.exit(stop)
+    return changes
 
 
 def _auto_reprep_for_clean_move(args, workspace_root, reporter):
@@ -2772,7 +2812,8 @@ def _auto_reprep_for_clean_move(args, workspace_root, reporter):
     import types
     from . import photos_1_prep
     for cmd in ("plan", "execute"):
-        prep_args = types.SimpleNamespace(command=cmd, jobs=getattr(args, "jobs", 4))
+        # Geotag's own check has run, and recorded what it accepted: prep's finds the same workspace.
+        prep_args = types.SimpleNamespace(command=cmd, jobs=getattr(args, "jobs", 4), accept_changes=None)
         try:
             # Prep's own closing `Next:` lines are held back: they name prep's next command where geotag goes on
             # (or stops) by itself, so only geotag's says what to do (output affordance;
@@ -2865,6 +2906,9 @@ def run(args):
         if vol_err:
             reporter.error(vol_err)
             sys.exit(2)
+        # The workspace as the last execution left it (RUL-workspace_checked_first), before anything else is read.
+        workspace_changes = _check_workspace(args, workspace_root) if args.command in ("plan", "execute", "finalize") \
+            else []
         # BLD-geotag_auto_reprep: auto re-prep a clean by-dest move so the operator can go straight to geotag — prep's
         # plan and execute run inside this run's lock; the _check_reprep_gate below re-validates after.
         _auto_reprep_for_clean_move(args, workspace_root, reporter)
@@ -3138,7 +3182,7 @@ def run(args):
             execution_id = sha256_text(f"{now_iso}|{os.getpid()}")[:12]
             jobs = args.jobs or CONFIG.get("jobs") or 4
             try:
-                summary = wf.execute_plan(jobs, now_iso, execution_id)
+                summary = wf.execute_plan(jobs, now_iso, execution_id, workspace_changes=workspace_changes)
             except UnreadableRecord as e:
                 reporter.error(f"\nExecution cannot proceed: {e}. Nothing was changed.")
                 emit_next_step(reporter, f"repair it (or move it out of {CONTROL_DIR}/ if it cannot be "

@@ -506,3 +506,29 @@ def test_a_gone_photos_entry_is_carried_as_it_was(tmp_path, monkeypatch):
     assert photos[gone_fp] == entry
     (new_fp,) = set(photos) - {gone_fp}
     assert [s["action"] for s in photos[new_fp]["journey"]] == ["organized", "provisional_rename"]
+
+
+@pytest.mark.spec("RUL-retake_only_unchanged_file", "BLD-retake_same_file", "RUL-gone_photo_entry_carried",
+                  test="TST-prep_log-a_different_file_at_a_freed_path_is_a_new_photo")
+def test_a_different_file_at_a_freed_path_is_a_new_photo(tmp_path, monkeypatch):
+    """The user deletes a filed photo and puts a different one at the path it freed, while ImageMagick changes: the
+    file there is not the one prep left — not its size, time or inode — so its fingerprint is no retake. It is a new
+    photo; the gone one's entry stays as it was."""
+    _install(monkeypatch)
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "t")
+    ws = _ws(tmp_path)
+    (ws / "0-sources" / "a.jpg").write_bytes(b"AAAA")
+    _run(ws)
+    (gone_fp, entry), = _log(ws)["photos"].items()
+    path = ws / entry["prep_path"]
+    os.remove(path)
+    path.write_bytes(b"ZZZZZZZZ another photo")
+    monkeypatch.setattr(prep.ContentHasher, "fingerprint_image", lambda p: {
+        "status": "valid", "strategy": "image-content-hash-v2",
+        "value": "sig2-" + open(p, "rb").read().hex()[:16], "engine_version": "u"})
+    monkeypatch.setattr(utils, "get_imagemagick_version", lambda: "u")
+    _run(ws)
+    photos = _log(ws)["photos"]
+    assert photos[gone_fp] == entry
+    (new_fp,) = set(photos) - {gone_fp}
+    assert not any(s["action"] == "fingerprint_retaken" for s in photos[new_fp]["journey"])

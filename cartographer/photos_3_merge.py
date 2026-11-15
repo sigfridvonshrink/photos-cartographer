@@ -47,7 +47,7 @@ from .photos_utils import (links_under, fingerprint_method_blocker,
     library_marker_path, allocate_suffix, suffix_root, max_suffix, ContentHasher, WorkspaceCache,
     journal_path, take_zfs_snapshot, zfs_dataset, _move_no_clobber, get_imagemagick_version, write_db_snapshot, reseal_archival_package,
     write_sealed_marker, likely_new_dump, entries_not_carried, prep_log_path, prep_log_blocker, WorkspaceLock, LibraryLock, XDEV_TMP_PREFIX, XDEV_TMP_SUFFIX,
-    workspace_volume_error,
+    workspace_volume_error, add_accept_changes_argument, check_workspace, write_workspace_record,
 )
 from .reporting import get_reporter, emit_next_step
 
@@ -1024,7 +1024,7 @@ class MergeWorkflow:
             out["blocker"] = f"{src_rel}: move failed ({e})"
         return out
 
-    def execute_plan(self, ws, library_root, jobs, now_iso, execution_id):
+    def execute_plan(self, ws, library_root, jobs, now_iso, execution_id, workspace_changes=()):
         """Apply photos-30 after revalidating its dependencies, taking the optional snapshots,
         moving each file (concurrent), journaling confirmed completions (single-writer, main thread),
         and writing photos-31-merge-summary.json. Returns the result dict (status no_plan / rejected /
@@ -1101,6 +1101,9 @@ class MergeWorkflow:
         finally:
             from .photos_utils import PersistentMagickWorker
             PersistentMagickWorker.cleanup_all()      # close the per-thread magick workers (verify pass)
+            # The state this run leaves, the photos it moved out gone from it, whether or not each was placed
+            # (RUL-execution_records_state) — before the database's image and the seal.
+            write_workspace_record(ws)
 
         results.sort(key=lambda r: r["by_dest_source"])
         status = merge_execution_status(results)
@@ -1108,6 +1111,8 @@ class MergeWorkflow:
         summary = self._build_summary(ws, plan, library_root, results, snapshot, status,
                                       now_iso, execution_id, jobs, finished_at=finished_at,
                                       orphans_swept=swept)
+        # the changes by hand this run's check named or accepted (BLD-workspace_changes_logged)
+        summary["workspace_changes"] = list(workspace_changes or [])
         write_json_artifact(merge_summary_path(ws), summary)
         finalized = None
         if status == "success":
@@ -1292,12 +1297,12 @@ class MergeWorkflow:
                         pass
         return n
 
-    def do_execute(self, ws, library_root, jobs):
+    def do_execute(self, ws, library_root, jobs, workspace_changes=()):
         reporter = get_reporter()
         now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         execution_id = sha256_text(f"{now_iso}|{os.getpid()}")[:12]
         jobs = jobs or CONFIG.get("jobs") or 4
-        result = self.execute_plan(ws, library_root, jobs, now_iso, execution_id)
+        result = self.execute_plan(ws, library_root, jobs, now_iso, execution_id, workspace_changes)
         st = result["status"]
         if st == "unreadable":
             return _unreadable_refusal(reporter, result["error"], "execute")
@@ -1614,7 +1619,7 @@ def do_init_library(path_arg, ws):
         lock.release()
 
 
-def _run_locked_workflow(command, ws, jobs=None):
+def _run_locked_workflow(command, ws, jobs=None, accept_changes=None):
     """plan / dry-run / execute: acquire the workspace lock, validate config + the library marker via
     preflight, then acquire the library lock, then dispatch."""
     reporter = get_reporter()
@@ -1648,6 +1653,12 @@ def _run_locked_workflow(command, ws, jobs=None):
             emit_next_step(reporter, "resolve the blocker(s) above — usually `geotag finalize`, then "
                                      f"`merge init-library` to bless the library — and re-run `merge {command}`.")
             return 2
+        # The workspace as the last execution left it (RUL-workspace_checked_first): the preflight has found it
+        # initialized, unsealed and its configuration read, so its folders are known; a workspace with no record is
+        # refused (RUL-record_needed).
+        workspace_changes, stop = check_workspace(ws, "merge", command, accept_changes)
+        if stop:
+            return stop
 
         # Preflight confirmed the .photos-library marker — safe to take the library-side lock now
         # (RUL-library_confirmed_before_lock: workspace lock, then config+marker, then library lock).
@@ -1667,7 +1678,7 @@ def _run_locked_workflow(command, ws, jobs=None):
                 return wf.do_plan(ws, library_root)
             if command == "dry-run":
                 return wf.do_dry_run(ws)
-            return wf.do_execute(ws, library_root, jobs)
+            return wf.do_execute(ws, library_root, jobs, workspace_changes)
         finally:
             lib_lock.release()
     except KeyboardInterrupt:
@@ -1701,9 +1712,10 @@ def add_arguments(parser):
                             help="Bless a directory as the permanent library (writes .photos-library).")
     p_init.add_argument("path", nargs="?", default=None,
                         help="Library directory to bless (default: merge.library_root from config).")
-    sub.add_parser("plan", help="Plan the merge: map by-dest photos to library targets (no mutation).")
-    sub.add_parser("dry-run", help="Display the exact placements/collisions the plan would execute.")
-    sub.add_parser("execute", help="Apply the validated plan: move photos into the library.")
+    for p in (sub.add_parser("plan", help="Plan the merge: map by-dest photos to library targets (no mutation)."),
+              sub.add_parser("dry-run", help="Display the exact placements/collisions the plan would execute."),
+              sub.add_parser("execute", help="Apply the validated plan: move photos into the library.")):
+        add_accept_changes_argument(p)
     parser.set_defaults(_run=run, _parser=parser)
 
 
@@ -1711,7 +1723,8 @@ def run(args):
     ws = os.getcwd()
     if args.command == "init-library":
         sys.exit(do_init_library(args.path, ws))
-    sys.exit(_run_locked_workflow(args.command, ws, getattr(args, "jobs", None)))
+    sys.exit(_run_locked_workflow(args.command, ws, getattr(args, "jobs", None),
+                                  accept_changes=getattr(args, "accept_changes", None)))
 
 
 def main(argv=None):

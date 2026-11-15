@@ -18,7 +18,7 @@ The lifecycle guards + by-dest scope/re-prep gates that must pass before geotag 
 JSON artifacts are produced. photos_2_geotag / photos_utils come from conftest.py.
 """
 import json
-from _handoff import match_disk, vouched
+from _handoff import match_disk, recorded, vouched
 import os
 import sys
 
@@ -617,6 +617,9 @@ def test_auto_reprep_with_real_prep_executes_only_a_recorded_sort(tmp_path, monk
     os.rename(day / names[1], ws / "6-photos-by-dest" / "Trip" / names[1])        # another sort ...
     copy = day / (os.path.splitext(names[2])[0] + "-001.jpg")
     copy.write_bytes((day / names[2]).read_bytes())                             # ... and a copy left by mistake
+    # A file put there by hand stops prep's check first (test_workspace_check); taken as the workspace's state here,
+    # what the re-prep does with it is what is under test.
+    recorded(ws)
     before = ho_p.read_bytes()
     rep = _CollectRep()
     with pytest.raises(SystemExit) as ei:

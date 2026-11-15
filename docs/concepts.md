@@ -42,6 +42,44 @@ applies to it, its GPS fallback, and its final library location — so a wrong f
 time or place, not just a misfiled photo. (A `prep` run after sorting records the move before geotag —
 see the [quick start](quickstart.md#then-re-run-prep).)
 
+### What you may change by hand
+
+Every execution records the state it leaves the workspace's files in — each file's path, size,
+modification time and inode, in the workspace database — and every plan, dry run, execute and finalize
+first compares the files with it, by those entries alone (no file is read, so it is quick). What a person
+is expected to do passes:
+
+- put a dump into `0-sources/` (the inbox is never compared);
+- move photos from `5-photos-by-date/` into `6-photos-by-dest/`, move them between destinations, rename a
+  destination's folder;
+- edit the configuration and the decision files (they keep checks of their own);
+- delete photos — cull — in `5-photos-by-date/`, `6-photos-by-dest/`, `4-videos-by-date/` or
+  `3-redundant-jpgs/`;
+- move a photo back from `6-photos-by-dest/` to `5-photos-by-date/`;
+- give a photo in `2-missing-metadata/` a time by hand (with `exiftool -overwrite_original`, or delete the
+  `_original` copy exiftool leaves beside it — that copy is a file appearing);
+- restore a file from a copy or a snapshot: same size and time under a new inode is the same file.
+
+The last four are named in the next run's output and in the record of the execution that follows —
+`workspace_changes` in prep's log (`photos-15-prep-log.json`), geotag's execution summary
+(`photos-25-execution-summary.json`) or merge's (`photos-31-merge-summary.json`).
+
+Anything else stops the command before it plans or changes anything, each file named: a photo changed in
+place, or another put where one was; a file appearing anywhere but the inbox; a file gone from
+`2-missing-metadata/`; anything in `1-strays/` or the quarantine changed other than by `prep
+prune-quarantine`; a photo moved anywhere sorting doesn't go. Undo it and run again — or, if the change is
+wanted, accept it once: the stop prints the command to run again with `--accept-changes <code>`, the code
+made from the list exactly as printed. A list that changed since (one more file) no longer matches and is
+listed anew under a new code. Each acceptance is kept in `.photos-ingest/photos-01-accepted-changes.json`
+(an earlier one kept as `-001`, …, never written over, and archived with the workspace), and an accepted
+change stops nothing again. The console shows the same list with an **Accept these** button that sends the
+same code through the same command.
+
+Geotag and merge refuse a workspace no execution has recorded (run `prep plan` and `prep execute`);
+prep's very first run compares nothing. `prune-quarantine`, `merge init-library` and the editor do not
+compare. A run killed outright mid-execute (power loss, `kill -9`) leaves its own partial work
+unrecorded: the next run lists it, and one acceptance takes it.
+
 ---
 
 ## Plan, dry run, execute
@@ -415,6 +453,10 @@ run the command again.
 
 - *Another run holds the workspace* — wait for it, or stop it.
 - *The workspace is sealed* — it's finished; start a fresh one.
+- *The workspace is not as the last execution left it* — a file changed, put in or removed by hand where no
+  person is expected to (see [what you may change by hand](#what-you-may-change-by-hand)): undo it, or
+  accept it once with the `--accept-changes <code>` the stop prints. Geotag and merge also stop on a
+  workspace no execution has recorded yet.
 - *The workspace was disturbed*: an entry at the top level that doesn't belong there (move it into
   `0-sources/`, or out), a symbolic link among the files (put the file itself there), a managed folder
   missing (put an empty folder back under its name). Prep checks this before it scans anything.

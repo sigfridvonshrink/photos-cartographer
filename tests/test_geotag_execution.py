@@ -17,7 +17,7 @@ fingerprints, journal/resume, write photos-25. exiftool + fingerprint are mocked
 all external tools), so the executor logic is driven deterministically. From conftest.py.
 """
 import json
-from _handoff import vouched
+from _handoff import recorded, vouched
 from _zone import answer_root_zone, with_root_zone
 import os
 import shutil
@@ -249,6 +249,7 @@ def test_execute_j1_and_jN_produce_identical_summary_and_tree(tmp_path, monkeypa
     ws_a, ctl_a = _ready_ws(base, monkeypatch)                   # one fully-planned workspace
     ws_b = tmp_path / "b-ws"
     shutil.copytree(str(ws_a), str(ws_b))                        # exact copy -> same plan_id + artifacts
+    recorded(ws_b)          # the copy's files have inodes of their own: its record, as prep's execution would write it
 
     def run(ws, n):
         _mock_tools(monkeypatch, ws)                             # rebind fingerprint mock to this ws path
@@ -715,6 +716,7 @@ def test_rename_target_occupied_at_execute_blocks(tmp_path, monkeypatch):
     _mock_tools(monkeypatch, ws)
     # occupy a planned rename target AFTER the plan was written -> execute-time no-clobber blocker
     (ws / "6-photos-by-dest" / "T" / "2024-07-03--14-00-00.arw").write_bytes(b"squatter")
+    recorded(ws)            # a file put there stops every command first (test_workspace_check); taken as the state here
     assert _execute(monkeypatch, ws) == 3
     s = _summary(ctl)
     assert s["status"] == "partial" and any("occupied at execute time" in b for b in s["blockers"])

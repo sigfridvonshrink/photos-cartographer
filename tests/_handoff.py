@@ -7,7 +7,9 @@ import os
 
 
 def match_disk(ws, files):
-    """Set each record's `size` and `mtime_ns` to those of its file in `ws`, where the file exists; return `files`."""
+    """Set each record's `size` and `mtime_ns` to those of its file in `ws`, where the file exists; return `files`. The
+    workspace's state is recorded with it, as prep's execution records it with its handoff (`recorded`)."""
+    recorded(ws)
     for rec in files:
         p = os.path.join(str(ws), rec.get("relative_path") or "")
         if os.path.isfile(p):
@@ -39,3 +41,12 @@ def vouch_prep_log(ws):
         ho = json.load(f)
     with open(p, "w") as f:
         json.dump(vouched(ws, ho), f)
+
+
+def recorded(ws):
+    """Record the state of the files in `ws` as an execution records it (BLD-workspace_record): what a hand-built
+    fixture stands for — a workspace as prep's execution left it — or, in a test of a later check, a hand change taken
+    as the workspace's state, so that the check under test is the one that meets it. Returns `ws`."""
+    import photos_utils
+    photos_utils.write_workspace_record(str(ws))
+    return ws

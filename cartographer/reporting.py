@@ -87,6 +87,18 @@ def finished_line(label: str, duration: Optional[float]) -> str:
 
 
 @dataclass
+class ChangesEvent:
+    """A command stopped on changes to the workspace that no command made (RUL-unexpected_change_stops): the list
+    exactly as printed, the code that accepts it, and the command it was printed for — so a sink can offer the
+    acceptance (the console's Accept button sends the same code through the same command). The terminal has the
+    printed lines already and ignores it."""
+    phase: str
+    command: str
+    code: str
+    lines: List[str] = field(default_factory=list)
+
+
+@dataclass
 class SummaryEvent:
     """The end-of-run summary deliverable (rendered even when progress is quiet)."""
     report: Optional[dict] = None
@@ -135,6 +147,9 @@ def event_to_dict(event) -> dict:
     if isinstance(event, SummaryEvent):
         return {"kind": "summary", "report": event.report, "plan_summary": event.plan_summary,
                 "counters": event.counters}
+    if isinstance(event, ChangesEvent):
+        return {"kind": "changes", "phase": event.phase, "command": event.command, "code": event.code,
+                "lines": list(event.lines)}
     return {"kind": "unknown"}
 
 
@@ -151,6 +166,7 @@ class WebSink(Sink):
         self._lock = threading.Lock()
         self._log = deque(maxlen=log_buffer)   # recent LogEvent dicts, for late join
         self._progress: dict = {}              # task_id -> latest progress dict (live tasks only)
+        self._changes = None                   # the last stop on unexpected changes, until the next run starts
         self._queue_max = queue_max
 
     def _fanout_locked(self, msg) -> None:
@@ -171,6 +187,8 @@ class WebSink(Sink):
         with self._lock:
             if msg["kind"] == "log":
                 self._log.append(msg)
+            elif msg["kind"] == "changes":
+                self._changes = msg
             elif msg["kind"] == "progress":
                 tid = msg["task_id"]
                 if msg["state"] == FINISH:
@@ -197,13 +215,19 @@ class WebSink(Sink):
                 self._fanout_locked({**msg, "state": FINISH, "status": "ok"})
             self._progress.clear()
 
+    def clear_changes(self) -> None:
+        """Forget the last stop on unexpected changes — the console calls it as a run starts, so the list (and its
+        Accept button) is offered only for the run that printed it."""
+        with self._lock:
+            self._changes = None
+
     def subscribe(self):
         """Register a subscriber. Returns ``(q, snapshot)`` — a fresh queue of future events and the
         catch-up snapshot (recent log + live progress) to render before draining the queue."""
         q: "queue.Queue" = queue.Queue(maxsize=self._queue_max)
         with self._lock:
             self._subs.add(q)
-            snapshot = {"log": list(self._log), "progress": list(self._progress.values())}
+            snapshot = {"log": list(self._log), "progress": list(self._progress.values()), "changes": self._changes}
         return q, snapshot
 
     def unsubscribe(self, q) -> None:
@@ -212,7 +236,7 @@ class WebSink(Sink):
 
     def snapshot(self) -> dict:
         with self._lock:
-            return {"log": list(self._log), "progress": list(self._progress.values())}
+            return {"log": list(self._log), "progress": list(self._progress.values()), "changes": self._changes}
 
 
 class TtySink(Sink):

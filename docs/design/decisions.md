@@ -86,6 +86,13 @@ event/sink seam.
 - **Stop/interrupt**: async-raise `KeyboardInterrupt` + kill worker children. Safe only because phases
   are crash-safe / idempotent / resumable (#226).
 - Opens on an **uninitialized** workspace (prep `plan` only) (#225).
+- **A stop on changes to the workspace is offered for acceptance in a dialog** (BACKLOG 50): the same
+  list the command printed, grouped as printed, and an **Accept these** button that re-sends the same run
+  (an execute's confirmation and reviewed plan id included) with the stop's code as `--accept-changes`.
+  The list arrives as its own `changes` event — not parsed out of log lines — and is kept for a page
+  that joins late until the next run starts. No per-file picking: the code accepts the whole list or
+  nothing, as on the command line. (Hand-editing a file of acceptances was rejected by the owner as
+  tedious; that is behaviour, in the spec — `RAT-accept_once_by_code`.)
 
 ---
 

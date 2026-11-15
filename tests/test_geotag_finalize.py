@@ -17,6 +17,7 @@ complete log (prep carried forward + geotag steps), the DB snapshot, and the man
 Non-destructive. exiftool-write + fingerprint mocked. From conftest.py.
 """
 import json
+from _handoff import recorded
 from _zone import answer_root_zone, with_root_zone
 import os
 import sqlite3
@@ -682,6 +683,9 @@ def test_a_photo_not_as_execution_left_it_stops_finalize(tmp_path, monkeypatch, 
         photos[0].unlink()
     else:
         (ws / BYDEST / "T" / "dropped-in.jpg").write_bytes(b"new")
+    # An edit or a new file stops every command first, as a change by hand (tests/test_workspace_check.py): taken as
+    # the workspace's state here, finalize's own check of the photos is the one that meets it.
+    recorded(ws)
     capsys.readouterr()
     assert _run(monkeypatch, ws, "finalize") == 2
     said = capsys.readouterr()

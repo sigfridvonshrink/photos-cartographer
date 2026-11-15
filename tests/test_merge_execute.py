@@ -1342,10 +1342,17 @@ def test_merge_writes_only_its_own_part_of_the_database(tmp_path):
     conn.execute("INSERT INTO meta VALUES ('a-prep-row', 'v')")
     conn.commit()
     conn.close()
-    before = _rows(db, skip=("library_fingerprint_cache",))
+    # The record of the workspace's state is every execution's to rewrite (RUL-execution_records_state): left out.
+    skip = ("library_fingerprint_cache", "workspace_record")
+
+    def others():
+        rows = _rows(db, skip=skip)
+        rows["meta"] = [r for r in rows["meta"] if "workspace_record_id" not in r]
+        return rows
+    before = others()
     assert merge._run_locked_workflow("plan", str(ws)) == 0
     assert merge._run_locked_workflow("execute", str(ws)) == 0
-    assert _rows(db, skip=("library_fingerprint_cache",)) == before
+    assert others() == before
     assert _rows(db)["library_fingerprint_cache"]                      # its own part: written
 
 

@@ -20,7 +20,7 @@ Execution is simulated: each plan's writes are folded into the handoff the way a
 them back, so the re-run sees what the files hold. From conftest.py.
 """
 import json
-from _handoff import vouched
+from _handoff import recorded, vouched
 from _zone import answer_root_zone, with_root_zone
 import os
 import sys
@@ -86,6 +86,7 @@ def _write_handoff(ws, files):
           "cache_fingerprint": "pcf", "depends_on": {"cache": {"image_engine_version": utils.get_imagemagick_version(), "fingerprint_algorithm_version": utils.FINGERPRINT_ALGORITHM_VERSION}}}
     ho["content_fingerprint"] = utils.handoff_content_fingerprint(ho)
     (ws / ".photos-ingest" / "photos-11-handoff.json").write_text(json.dumps(vouched(ws, ho)))
+    recorded(ws)                                 # the state prep's execution records with its handoff
 
 
 def _plan(monkeypatch, ws):
@@ -650,7 +651,10 @@ def test_geotag_writes_only_its_own_part_of_the_database(tmp_path, monkeypatch):
     others = ("meta", "file_cache", "metadata_cache", "library_fingerprint_cache")
 
     def rows():
-        return {t: sorted(map(repr, conn.execute(f"SELECT * FROM {t}"))) for t in others}
+        # The record of the workspace's state is every execution's to rewrite (RUL-execution_records_state): left out.
+        return {t: sorted(map(repr, conn.execute(f"SELECT * FROM {t}" + (" WHERE key != 'workspace_record_id'"
+                                                                            if t == "meta" else ""))))
+                for t in others}
     before = rows()
     _plan(monkeypatch, ws)
     _set_offset(ws, SLOW)

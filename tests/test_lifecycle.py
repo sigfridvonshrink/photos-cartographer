@@ -25,6 +25,7 @@ import types
 
 import pytest
 
+from _handoff import recorded
 import photos_1_prep as prep
 import photos_utils as utils
 
@@ -296,6 +297,7 @@ def _stale_plan(ws):
     (ctl / "photos-15-prep-log.json").write_text('{"photos": {}}')
     (ctl / "photos-11-handoff.json").write_text(json.dumps(
         {"files": [], "depends_on": {"prep_log": {"sha256": utils.sha256_file(str(ctl / "photos-15-prep-log.json"))}}}))
+    recorded(ws)                                     # and the state its execution recorded
 
 
 @pytest.mark.spec("RUL-unchecked_counts_as_changed", "BLD-prep_fast_stop_checks_log", test="TST-lifecycle-a_log_the_handoff_does_not_vouch_for_is_rewritten")

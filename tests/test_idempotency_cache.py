@@ -803,9 +803,12 @@ def test_a_failed_execute_leaves_the_database_as_it_was(mock_meta, tmp_path, mon
         photos_ingest.PlanExecutor(str(ws)).execute(plan)
 
     def _db():
+        # The record of the workspace's state is no effect of the plan's: every execution rewrites it with the state it
+        # leaves, a failed one too (RUL-execution_records_state) — left out.
         conn = sqlite3.connect(str(ws / ".photos-ingest" / "photos-00-ingest.db"))
         try:
-            return [sorted(conn.execute(f"SELECT * FROM {t}").fetchall())
+            return [sorted(conn.execute(f"SELECT * FROM {t}" + (" WHERE key != 'workspace_record_id'"
+                                                                 if t == "meta" else "")).fetchall())
                     for t in ("file_cache", "metadata_cache", "meta")]
         finally:
             conn.close()
