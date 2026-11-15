@@ -804,6 +804,22 @@ beside a time stay as they are: a clock offset is a whole number of seconds, so 
 :::
 
 
+## 18. Renames
+
+:::{rat} Geotag finishes the spelling prep could not
+:id: RAT-geotag_finishes_extension_spelling
+:status: ruled
+:forced: no
+:follows_from: RAT-one_extension_spelling, RAT-by_dest_is_the_users
+:justifies: RUL-geotag_extension_lowercase
+
+Prep gives every file it files one spelling of its extension, but photos by destination is the user's sorting, which
+prep leaves as it finds it — so a photo put there by hand keeps the `.JPG` its camera wrote. Geotag renames the
+photos there anyway, and is the last phase to touch them before the library: left to it, the one spelling holds in
+the library too, and a name is the same name on every filesystem and in every tool.
+:::
+
+
 ## 19. The executable plan
 
 :::{rat} Half a position is a wrong one

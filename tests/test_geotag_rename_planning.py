@@ -18,6 +18,8 @@ Destination-local filename computation + the deterministic suffix allocator that
 on-disk and already-planned name as permanently occupied. Safety-critical naming, so full branch
 coverage. Pure functions, unit-tested directly. From conftest.py.
 """
+import os
+
 import pytest
 
 import photos_2_geotag as cal
@@ -154,6 +156,39 @@ def test_case_insensitive_collision_suffixes():
     assert len(targets) == 2                                                          # case-insensitively distinct
 
 
+@pytest.mark.spec("RUL-geotag_extension_lowercase", "BLD-rename_planning", "BLD-case_rename_via",
+                  "RUL-uncorrected_keeps_its_name",
+                  test="TST-geotag_rename_planning-every_planned_name_ends_with_a_lowercase_extension")
+def test_every_planned_name_ends_with_a_lowercase_extension():
+    """A photo put in photos by destination by hand keeps the `.JPG` its camera wrote, prep leaving that folder as it
+    finds it: geotag lowercases it. One whose name already carries its timestamp is renamed for its extension alone —
+    by a temporary name, the change being one of case only — and one whose lowercase name another photo there holds
+    (two names differing in case, on a filesystem that tells them apart) takes the next free suffix."""
+    T = "6-photos-by-dest/T/"
+    rows = {r["relative_path"]: r for r in cal.plan_renames([
+        _f(T + "IMG_1.JPG", "2024-07-03T10:00:00Z"),                 # renamed for its time: lowercase too
+        _f(T + "2024-07-03--14-00-00.JPG", "2024-07-03T12:00:00Z"),  # its time right: the extension alone
+        _f(T + "2024-07-03--15-00-00.jpg", "2024-07-03T13:00:00Z"),  # nothing to do
+        _f(T + "2024-07-03--16-00-00.ARW", "2024-07-03T14:00:00Z"),  # a case twin with...
+        _f(T + "2024-07-03--16-00-00.arw", "2024-07-03T14:00:00Z"),  # ...the lowercase name already
+    ], FMT)}
+    assert rows[T + "IMG_1.JPG"]["planned_name"] == "2024-07-03--12-00-00.jpg" and "via" not in rows[T + "IMG_1.JPG"]
+    own = rows[T + "2024-07-03--14-00-00.JPG"]
+    assert own["rename"] and own["planned_name"] == "2024-07-03--14-00-00.jpg"
+    assert own["via"] == "2024-07-03--14-00-00.carto-case.jpg"
+    assert not rows[T + "2024-07-03--15-00-00.jpg"]["rename"] and not rows[T + "2024-07-03--16-00-00.arw"]["rename"]
+    twin = rows[T + "2024-07-03--16-00-00.ARW"]
+    assert twin["planned_name"] == "2024-07-03--16-00-00-001.arw" and "via" not in twin
+    names = [r["planned_name"] for r in rows.values()] + [own["via"]]
+    assert len({n.lower() for n in names}) == len(names)                             # all distinct, case folded
+    assert all(os.path.splitext(n)[1] == os.path.splitext(n)[1].lower() for n in names)
+    # the change of case alone reaches the plan as one rename by the temporary name
+    f = {"relative_path": T + "2024-07-03--14-00-00.JPG", "content_fingerprint": "fp"}
+    (op,) = [o for o in cal.plan_file_ops(f, None, "Europe/Brussels", None, None, own) if o["type"] == "rename_no_clobber"]
+    assert (op["from"], op["to"], op["via"]) == ("2024-07-03--14-00-00.JPG", "2024-07-03--14-00-00.jpg",
+                                                 "2024-07-03--14-00-00.carto-case.jpg")
+
+
 def test_unpositionable_file_keeps_name():
     rows = cal.plan_renames([_f("6-photos-by-dest/T/x.jpg", None)], FMT)              # no resolved UTC
     assert _names(rows) == [("x.jpg", "x.jpg", False)]
@@ -191,7 +226,7 @@ def test_suffixes_do_not_depend_on_the_order_photos_are_met():
         return {r["relative_path"]: r["planned_name"] for r in cal.plan_renames(list(order), FMT)}
     first = names(files)
     assert first == {"6-photos-by-dest/T/2024-07-03--14-00-00.jpg": "2024-07-03--15-00-00.jpg",
-                     "6-photos-by-dest/T/B.JPG": "2024-07-03--14-00-00-001.JPG",
+                     "6-photos-by-dest/T/B.JPG": "2024-07-03--14-00-00-001.jpg",     # its extension lowercased
                      "6-photos-by-dest/T/a.jpg": "2024-07-03--14-00-00-002.jpg",
                      "6-photos-by-dest/T/c.jpg": "2024-07-03--14-00-00-003.jpg"}
     for order in itertools.permutations(files):

@@ -698,6 +698,47 @@ def test_rename_target_occupied_at_execute_blocks(tmp_path, monkeypatch):
     assert (ws / "6-photos-by-dest" / "T" / "a.arw").exists()      # not clobbered/renamed
 
 
+@pytest.mark.spec("RUL-geotag_extension_lowercase", "BLD-case_rename_via", "RUL-target_free_at_execute",
+                  test="TST-geotag_execution-a_change_of_case_alone_goes_by_a_temporary_name")
+def test_a_change_of_case_alone_goes_by_a_temporary_name(tmp_path, monkeypatch):
+    """`X.JPG` to `X.jpg`: on a filesystem that ignores case the new name is the photo's own, which a no-clobber move
+    refuses. The rename goes by a free temporary name in two no-clobber moves; interrupted between them, the next run
+    finds the photo under the temporary name and completes it, once it is seen to be that photo. A temporary name
+    taken blocks the rename, nothing moved."""
+    real_move = cal._move_no_clobber
+
+    def case_blind_move(src, dst, **kw):          # a filesystem that ignores case: the photo's own name is taken
+        if os.path.basename(src).lower() == os.path.basename(dst).lower() or \
+                any(e.lower() == os.path.basename(dst).lower() for e in os.listdir(os.path.dirname(dst))):
+            raise FileExistsError(dst)
+        return real_move(src, dst, **kw)
+    monkeypatch.setattr(cal, "_move_no_clobber", case_blind_move)
+    monkeypatch.setattr(cal.ContentHasher, "fingerprint_image", staticmethod(lambda path: {"value": "fp"}))
+    wf = cal.GeotagWorkflow(str(tmp_path))
+    ren = _op("oR", "rename_no_clobber", "X.JPG", pre={"content_fingerprint": "fp"},
+              **{"from": "X.JPG", "to": "X.jpg", "via": "X.carto-case.jpg"})
+    (tmp_path / "X.JPG").write_bytes(b"x")
+    r = wf._apply_file("X.JPG", [ren], {}, {})
+    assert r["applied"] == ["oR"] and r["blocker"] is None and os.listdir(tmp_path) == ["X.jpg"]
+    assert r["after"]["relative_path"] == "X.jpg"
+    # interrupted between the two moves: the photo waits under the temporary name
+    os.rename(tmp_path / "X.jpg", tmp_path / "X.carto-case.jpg")
+    r = wf._apply_file("X.JPG", [ren], {}, {})
+    assert r["applied"] == ["oR"] and r["blocker"] is None and os.listdir(tmp_path) == ["X.jpg"]
+    os.rename(tmp_path / "X.jpg", tmp_path / "X.carto-case.jpg")
+    monkeypatch.setattr(cal.ContentHasher, "fingerprint_image", staticmethod(lambda path: {"value": "another"}))
+    r = wf._apply_file("X.JPG", [ren], {}, {})                        # another photo there: not taken for it
+    assert r["blocker"] and "not this photo" in r["blocker"] and not r["applied"]
+    assert os.listdir(tmp_path) == ["X.carto-case.jpg"]
+    # the temporary name taken at execute: blocked, the photo left as it was
+    os.rename(tmp_path / "X.carto-case.jpg", tmp_path / "X.JPG")
+    (tmp_path / "x.CARTO-case.jpg").write_bytes(b"squatter")
+    monkeypatch.setattr(cal.ContentHasher, "fingerprint_image", staticmethod(lambda path: {"value": "fp"}))
+    r = wf._apply_file("X.JPG", [ren], {}, {})
+    assert r["blocker"] and "occupied at execute time" in r["blocker"] and not r["applied"]
+    assert sorted(os.listdir(tmp_path)) == ["X.JPG", "x.CARTO-case.jpg"]
+
+
 @pytest.mark.spec("RUL-geotag_execution_resumable", "RUL-found_applied_never_remade",
                   "RUL-applied_unrecorded_is_recorded",
                   test="TST-geotag_execution-apply_file_already_renamed_resumes_without_journal")

@@ -280,7 +280,9 @@ photos-cartographer merge dry-run     # summarize it
 photos-cartographer merge execute     # move the finished set into the library
 ```
 
-`geotag execute` never writes over a photo you edited since the plan — re-plan instead. `finalize`
+`geotag execute` never writes over a photo you edited since the plan — re-plan instead. Its renames also
+leave every photo's extension in lowercase (a `.JPG` you put in `6-photos-by-dest/` yourself becomes
+`.jpg`, even when its name was already right). `finalize`
 prints how every photo got its position (its own GPS, matched / interpolated / extrapolated along a
 track, set by you, its folder's fallback) and refuses if the plan no longer holds or a photo changed
 since execute.

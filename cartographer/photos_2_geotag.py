@@ -1979,6 +1979,26 @@ class GeotagWorkflow:
                     return res
                 res["skipped"] = res["found"] = [o["operation_id"] for o in ops]   # done before: recorded, not redone
                 return done(final_abs)
+            # A change of case alone interrupted between its two moves: the photo sits under the temporary name.
+            # Once seen to be this photo holding what was planned, the second move completes it (BLD-case_rename_via).
+            via = next((o for o in rename_ops if o.get("via")), None)
+            via_abs = os.path.join(os.path.dirname(abs_path), via["via"]) if via else None
+            if via_abs and os.path.exists(via_abs) and not os.path.exists(final_abs):
+                cur_fp = (ContentHasher.fingerprint_image(via_abs) or {}).get("value")
+                if (cur_fp is None or (cur_fp != pre.get("content_fingerprint") and accepted_mismatches.get(rel) != cur_fp)
+                        or (tags and not _holds_writes(self._exiftool_read(via_abs, sorted(tags)), tags))):
+                    res["blocker"] = (f"{rel}: gone, and {via['via']!r} in its place is not this photo "
+                                      "as planned — re-run `geotag plan`")
+                    return res
+                try:
+                    _move_no_clobber(via_abs, final_abs)
+                except Exception as e:
+                    res["failed"].append(via["operation_id"])
+                    res["blocker"] = f"{rel}: rename failed ({e})"
+                    return res
+                res["found"] = [o["operation_id"] for o in ops if o is not via]
+                res["applied"].append(via["operation_id"])
+                return done(final_abs)
             res["blocker"] = f"{rel}: file is missing at execute time"
             return res
 
@@ -2023,8 +2043,16 @@ class GeotagWorkflow:
             if self._target_occupied(d, o["to"], o["from"]):
                 res["blocker"] = f"{rel}: rename target {o['to']!r} is occupied at execute time"
                 return res
+            if o.get("via") and self._target_occupied(d, o["via"], o["from"]):
+                res["blocker"] = f"{rel}: rename target {o['via']!r} is occupied at execute time"
+                return res
             try:
-                _move_no_clobber(abs_path, os.path.join(d, o["to"]))
+                if o.get("via"):
+                    # a change of case alone, in two no-clobber moves by the free temporary name (BLD-case_rename_via)
+                    _move_no_clobber(abs_path, os.path.join(d, o["via"]))
+                    _move_no_clobber(os.path.join(d, o["via"]), os.path.join(d, o["to"]))
+                else:
+                    _move_no_clobber(abs_path, os.path.join(d, o["to"]))
                 res["applied"].append(o["operation_id"])
             except Exception as e:
                 res["failed"].append(o["operation_id"])

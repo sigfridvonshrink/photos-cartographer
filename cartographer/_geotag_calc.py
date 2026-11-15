@@ -1297,28 +1297,50 @@ def destination_local_basename(resolved_utc, tz, fmt, ext):
     return _parse_utc(resolved_utc).astimezone(zoneinfo.ZoneInfo(tz)).strftime(fmt) + (ext or "")
 
 
+# The mark of the temporary name a rename that changes only the case of a name passes through (BLD-case_rename_via).
+CASE_RENAME_MARK = ".carto-case"
+
+
 def plan_renames(files, fmt):
     """Plan no-clobber timestamp renames for the files of ONE destination (BLD-rename_planning). Returns
-    {relative_path, current_name, planned_name, rename} per file, in relative_path order. EVERY
+    {relative_path, current_name, planned_name, rename[, via]} per file, in relative_path order. EVERY
     file's current name is seeded as permanently occupied and never freed — a name a file will
     vacate is still treated as taken, so two files that would trade timestamps both land on distinct
-    suffixed names rather than risking a clobber. A file with no positionable timestamp keeps its
+    suffixed names rather than risking a clobber. Every planned name ends with its extension in lowercase
+    (RUL-geotag_extension_lowercase): a name already carrying its timestamp keeps it, its extension alone
+    lowercased. A rename that changes only the case of the name carries `via`, a free temporary name it
+    passes through (BLD-case_rename_via). A file with no positionable timestamp keeps its
     name (no rename); the unplaceable case is surfaced as a blocker by the executable-plan stage."""
     occupied = {os.path.basename(f["relative_path"]).lower() for f in files}
+    held = {}                                         # each name, case folded: how many photos hold it
+    for f in files:
+        k = os.path.basename(f["relative_path"]).lower()
+        held[k] = held.get(k, 0) + 1
     out = []
     for f in sorted(files, key=lambda x: x["relative_path"]):
         rel = f["relative_path"]
         name = os.path.basename(rel)
-        ext = os.path.splitext(name)[1]
+        ext = os.path.splitext(name)[1].lower()
         base = destination_local_basename(f.get("resolved_utc"), f.get("destination_timezone"), fmt, ext)
-        # A name already carrying the timestamp keeps its suffix: renaming it to another suffix of the
-        # same time would change nothing, and on the next run back again.
-        if base is None or carries_stem(name, os.path.splitext(base)[0]):
+        stem = None if base is None else os.path.splitext(base)[0]
+        if base is None or (carries_stem(name, stem) and name.endswith(ext)):
+            # A name already carrying the timestamp keeps its suffix: renaming it to another suffix of the
+            # same time would change nothing, and on the next run back again.
             out.append({"relative_path": rel, "current_name": name, "planned_name": name, "rename": False})
             continue
-        # The first free name, by the one rule prep also uses (RUL-suffix_choice_by_phase).
-        planned = allocate_suffix(os.path.splitext(base)[0], ext.lstrip("."), occupied, bare_first=True)
-        out.append({"relative_path": rel, "current_name": name, "planned_name": planned, "rename": True})
+        if carries_stem(name, stem) and held[name.lower()] == 1:
+            planned = os.path.splitext(name)[0] + ext          # its own name, the extension lowercased
+        else:
+            # The first free name, by the one rule prep also uses (RUL-suffix_choice_by_phase); a name carrying the
+            # timestamp whose lowercase form another photo here also holds takes it too.
+            planned = allocate_suffix(stem, ext.lstrip("."), occupied, bare_first=True)
+        row = {"relative_path": rel, "current_name": name, "planned_name": planned, "rename": True}
+        if planned.lower() == name.lower():
+            # Only the case changes: on a filesystem that ignores case the new name is the file's own, and a
+            # no-clobber move refuses it — so it goes by a temporary name free here and in the plan.
+            row["via"] = allocate_suffix(os.path.splitext(planned)[0] + CASE_RENAME_MARK, ext.lstrip("."),
+                                         occupied, bare_first=True)
+        out.append(row)
     return out
 
 
@@ -1547,8 +1569,10 @@ def plan_file_ops(file, resolved_utc, tz, gps_category, gps_coord, rename):
             ops.append(time_fixed_marker_op(file, target))
 
     if rename and rename.get("rename"):
-        ops.append(_make_op("rename_no_clobber", rel, "destination-local timestamp name",
-                            {"from": rename["current_name"], "to": rename["planned_name"]}, pre))
+        semantic = {"from": rename["current_name"], "to": rename["planned_name"]}
+        if rename.get("via"):
+            semantic["via"] = rename["via"]           # a change of case alone: by a temporary name
+        ops.append(_make_op("rename_no_clobber", rel, "destination-local timestamp name", semantic, pre))
     return ops
 
 

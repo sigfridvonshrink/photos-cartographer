@@ -1383,6 +1383,20 @@ photo already records when it was made, adding none it does not hold.
 :::
 
 
+## 18. Renames
+
+:::{rul} Geotag leaves every photo's extension in lowercase
+:id: RUL-geotag_extension_lowercase
+:status: ruled
+:criticality: low
+:verify: required
+:uses: DEF-geotag, DEF-managed_folders, RUL-prep_leaves_by_dest_as_found
+
+Each photo in photos by destination SHALL end with its extension in lowercase once geotag has executed — one whose name
+already carries its timestamp renamed for its extension alone.
+:::
+
+
 ## 19. The executable plan
 
 :::{rul} A position is written whole

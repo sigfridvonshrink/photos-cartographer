@@ -424,13 +424,28 @@ A position write of photos-24 whose placement has `lower_tracks` SHALL carry the
 :::{bld} How renames are planned
 :id: BLD-rename_planning
 :status: ruled
-:realises: RUL-suffix_no_clobber, RUL-uncorrected_keeps_its_name, RUL-geotag_name_final
+:realises: RUL-suffix_no_clobber, RUL-uncorrected_keeps_its_name, RUL-geotag_name_final, RUL-geotag_extension_lowercase
 
 For each destination, `plan_renames` SHALL count every current name of its photos as taken, case folded, and never
 freed by a rename it plans — two photos that would trade names both take a suffix — then, in path order, leave a photo
-whose name already carries its timestamp, suffix and all, as it is, and give any other the first free name of its
-timestamp by `allocate_suffix`, adding it to the names taken. Execution applies these renames and no other, each by a
-no-clobber move.
+whose name already carries its timestamp, suffix and all, and ends with a lowercase extension, as it is; give one whose
+name carries its timestamp but whose extension is not lowercase that name with its extension lowercased, unless
+another photo there holds the name case folded; and give any other the first free name of its timestamp by
+`allocate_suffix`, adding it to the names taken. Every planned name ends with the photo's extension in lowercase.
+Execution applies these renames and no other, each by a no-clobber move.
+:::
+
+:::{bld} A change of case alone goes by a temporary name
+:id: BLD-case_rename_via
+:status: ruled
+:realises: RUL-geotag_extension_lowercase, RUL-suffix_no_clobber, RUL-target_free_at_execute
+
+A rename `plan_renames` plans whose new name differs from the current one only in case SHALL carry `via`: a
+temporary name — the new name's stem with `.carto-case` before its extension, suffixed by `allocate_suffix` — free
+among the destination's names and those planned. Execution moves the photo to it and then to the new name, each by a
+no-clobber move and each name checked free first, so that a filesystem that ignores case, which holds the new name as
+the photo's own, never refuses it nor overwrites anything; a photo found under `via` with its new name free is this
+photo interrupted between the two, completed once it is seen to be the photo as planned.
 :::
 
 
