@@ -1634,3 +1634,14 @@ Finalize SHALL keep the plan's count of how every photo came by its position in 
 
 A photo the user left unlocated SHALL have that in its log, with the decision that left it so.
 :::
+
+:::{rul} Finalize needs no tool it never runs
+:id: RUL-finalize_needs_no_metadata_tool
+:status: ruled
+:criticality: med
+:anti: yes
+:verify: required
+:uses: DEF-finalize
+
+Finalize SHALL NOT refuse for want of the tool geotag reads and writes photos' metadata with, which it never runs.
+:::

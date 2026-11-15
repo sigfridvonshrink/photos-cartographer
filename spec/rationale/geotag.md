@@ -878,3 +878,17 @@ library.
 
 Merge refuses a photo changed since finalize, on the strength of what finalize recorded. If finalize records whatever it finds, an edit made between execute and finalize becomes the baseline, and the library receives a photo the log describes as something else. Finalize is given once the user judges the work done, so it is also where they are told how done: how many photos have a position and by what means, how many were left without one — each of those by their own recorded answer.
 :::
+
+:::{rat} A refusal names what the command needs
+:id: RAT-refusal_for_what_is_needed
+:status: ruled
+:forced: no
+:follows_from: RAT-package_records_what_was_done
+:justifies: RUL-finalize_needs_no_metadata_tool
+
+Finalize reads records and the photos' sizes and times, and writes only into the control folder; it reads and writes
+no photo's metadata. Execution writes every photo's through that tool, and a plan is made to be executed, so those two
+stop without it. Refusing it because the metadata tool is not installed — on a machine the workspace was moved to
+for archiving, say — would stop the one step that packages work already done, for a tool nothing in it would run, and
+send the user to install something they do not need.
+:::

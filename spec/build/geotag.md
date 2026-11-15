@@ -496,6 +496,16 @@ A cell's dates SHALL be counted over all its group's photos in the destination, 
 
 ## 21. Finalize
 
+:::{bld} Where exiftool is needed
+:id: BLD-geotag_exiftool_needed
+:status: ruled
+:realises: RUL-finalize_needs_no_metadata_tool
+
+Geotag's preflight SHALL stop `plan` and `execute`, exit 2, when `exiftool` is not on `PATH` — execution reads and
+writes the photos' tags through it, and a plan is made to be executed — and leave `finalize`, which runs no tool on a
+photo, to proceed without it.
+:::
+
 :::{bld} What finalize checks first
 :id: BLD-finalize_preconditions
 :status: ruled

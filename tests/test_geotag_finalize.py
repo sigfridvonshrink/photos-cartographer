@@ -729,3 +729,29 @@ def test_the_log_says_what_placed_a_photo_or_that_nothing_did():
     steps = {s["action"]: s for s in log["fpT"]["journey"]}
     assert steps["gps_written"]["gpx_file"] == "trip.gpx" and steps["gps_written"]["at_utc"] == "2024-07-03T12:00:00Z"
     assert steps["resolved_utc"]["value"] == "2024-07-03T12:00:00Z"            # found under the old name's row
+
+
+@pytest.mark.spec("RUL-finalize_needs_no_metadata_tool", "BLD-geotag_exiftool_needed",
+                  test="TST-geotag_finalize-finalize_runs_without_exiftool_plan_and_execute_do_not")
+def test_finalize_runs_without_exiftool_plan_and_execute_do_not(tmp_path, monkeypatch, capsys):
+    """Finalize runs no tool on a photo, so it packages an execution with exiftool not installed; plan and
+    execute, whose plan is written through it, stop without it."""
+    ws, ctl = _ready_ws(tmp_path, monkeypatch)
+    real = utils.missing_tools
+    no_exiftool = lambda tools: [t for t in tools if t == "exiftool"] or real(tools)
+    monkeypatch.setattr(utils, "missing_tools", no_exiftool)
+    capsys.readouterr()
+    assert _run(monkeypatch, ws, "plan") == 2
+    out = capsys.readouterr()
+    assert "exiftool not found" in out.out + out.err
+    monkeypatch.setattr(utils, "missing_tools", real)
+    _to_executed(monkeypatch, ws, ctl)
+    monkeypatch.setattr(utils, "missing_tools", no_exiftool)
+    capsys.readouterr()
+    assert _run(monkeypatch, ws, "execute") == 2
+    out = capsys.readouterr()
+    assert "exiftool not found" in out.out + out.err
+    assert _run(monkeypatch, ws, "finalize") == 0
+    out = capsys.readouterr()
+    assert "exiftool not found" not in out.out + out.err
+    assert (ctl / "photos-26-archive-manifest.json").exists()

@@ -360,7 +360,7 @@ class GeotagWorkflow:
 
     # --- preflight (RUL-geotag_gates, BLD-loop_gates) ------------------
 
-    def preflight(self, for_execute=False):
+    def preflight(self, for_execute=False, needs_exiftool=True):
         """Return (blockers, warnings, info). A non-empty `blockers` means geotag cannot
         proceed. Textual only — writes no JSON. The lifecycle guards (sealed / uninitialized /
         loose-root-file) and the development-started gate (RUL-development_after_merge) hard-stop early; the remaining
@@ -369,7 +369,8 @@ class GeotagWorkflow:
         planning-phase scope and re-prep gates: execution validates against the plan's own dependency
         fingerprints + per-op preconditions, and the by-dest filenames it renames would otherwise trip
         the re-prep gate (BLD-loop_gates: it is a planning concern). The development gate is the exception — it is
-        re-checked at execute/finalize too (a breakout begun after planning moves no planned file)."""
+        re-checked at execute/finalize too (a breakout begun after planning moves no planned file). `needs_exiftool`
+        is false for finalize alone, which runs no tool on a photo."""
         blockers, warnings, info = [], [], {}
         ws = self.workspace_root
 
@@ -453,11 +454,12 @@ class GeotagWorkflow:
             blockers.append(fmt_blocker)
             return blockers, warnings, info
 
-        # External-tool preflight: geotag reads existing EXIF GPS/time through exiftool and WRITES the
-        # corrected tags through it at execute/finalize. There is no graceful fallback for the write, so
-        # a missing exiftool is a hard blocker (checked for plan AND execute, before any heavy work).
+        # External-tool preflight (BLD-geotag_exiftool_needed): execute reads and writes the photos' tags through
+        # exiftool, with no fallback, and a plan is made to be executed — so a missing exiftool stops plan and
+        # execute before any heavy work. Finalize runs no tool on a photo and does not look for it
+        # (RUL-finalize_needs_no_metadata_tool).
         from .photos_utils import missing_tools
-        if missing_tools(["exiftool"]):
+        if needs_exiftool and missing_tools(["exiftool"]):
             blockers.append("exiftool not found on PATH — geotag reads and writes EXIF GPS/time "
                             "through it. Install exiftool and re-run.")
             return blockers, warnings, info
@@ -2938,7 +2940,7 @@ def run(args):
 
         elif args.command == "finalize":
             wf = GeotagWorkflow(workspace_root)
-            blockers, warnings, info = wf.preflight(for_execute=True)
+            blockers, warnings, info = wf.preflight(for_execute=True, needs_exiftool=False)
             for w in warnings:
                 reporter.warn(f"  Warning: {w}")
             if blockers:
