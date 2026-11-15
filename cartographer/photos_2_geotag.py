@@ -76,6 +76,7 @@ ARCHIVE_MANIFEST_ARTIFACT = "photos-26-archive-manifest.json"
 ARCHIVE_ARTIFACT = "photos-26-archive.tar.gz"
 EXECUTED_DIR = "executed"            # executed/<plan id>/: the decision records each executed plan ran against
 GPX_WARNINGS_SHOWN = 10     # geotag plan prints at most this many GPX load warnings, then a count
+UNREADABLE_TAGS_SHOWN = 20  # geotag plan names at most this many photos whose offset tag holds no offset, then a count
 
 
 
@@ -240,6 +241,7 @@ def _decision_shape_blockers(prior, kind):
             obj(obj(d, "destination_timezone", f"{dest}: destination_timezone"), "user_decision",
                 f"{dest}: destination_timezone.user_decision")
             cells(d, "camera_group_time_decisions", dest)
+            cells(d, "local_time_readings", dest)
         elif kind == "drift":
             cells(d, "drift_decisions", dest)
         else:
@@ -906,6 +908,7 @@ class GeotagWorkflow:
         # to (code, the destination it was chosen at) for itself and everything inside it.
         eff_country, table = {}, country_table()
         self.country_removals = []
+        self.unreadable_offset_tags = []
         ordered, containers = _expand_destinations(by_dest)
         self.coordinator.start_phase("calibrating clock offsets", len(ordered))
         for dest in ordered:
@@ -972,8 +975,9 @@ class GeotagWorkflow:
             # bucket key is the bare group for a single day, else `<group>@<YYYY-MM-DD>`.
             for group in (sorted({f["camera_group_key"] for f in by_dest[dest]}) if not is_container else []):
                 g = groups.get(group) or {}
-                if g.get("camera_group_class") != "camera":
-                    continue                       # smartphones are solved per-file; no offset cell
+                phone = g.get("camera_group_class") == "smartphone"
+                if g.get("camera_group_class") != "camera" and not phone:
+                    continue                       # a file naming no camera is solved on its own; no offset cell
                 # Days are counted over every photo of the group here, corrected ones too, so a bucket keeps
                 # its key as photos arrive; only the photos not yet corrected are asked about or offset.
                 gframes = [f for f in by_dest[dest] if f["camera_group_key"] == group]
@@ -984,6 +988,15 @@ class GeotagWorkflow:
                     bucket = group if date is None else f"{group}@{date}"
                     day = date or (dates[0] if dates else None)
                     prior_cell = _prior_day_cell(prior_cells, group, bucket, day)
+                    if phone:
+                        # A phone's day here has a cell only where its own GPS, or what it does not record, asks
+                        # one (BLD-phone_offset_cell); its photos are read by their own offsets otherwise.
+                        built = self._phone_cell(dest, group, g, prior_cell, sel, gpx, blockers, tz, date, day)
+                        if built is not None:
+                            cells[bucket], recall_entry = built
+                            if recall_entry is not None:
+                                recall[(dest, bucket)] = recall_entry
+                        continue
                     if not sel:
                         # Every time here is corrected already and none has its own values pinned (a photo
                         # geotag marked elsewhere), so nothing asks. A resolved answer is kept for photos of
@@ -1010,14 +1023,26 @@ class GeotagWorkflow:
             }
             if is_container:
                 destinations[dest]["file_less"] = True
+            else:
+                # an offset tag holding no offset is read as none — named, and kept in the record
+                # (BLD-unreadable_offset_tags)
+                bad = [{"relative_path": f["relative_path"], "field": u[0], "value": u[1]}
+                       for f in sorted(by_dest[dest], key=lambda x: x["relative_path"])
+                       if not f.get("geotag_marker") and (u := unreadable_offset_tag(f))]
+                if bad:
+                    destinations[dest]["unreadable_offset_tags"] = bad
+                    self.unreadable_offset_tags.extend(bad)
             self.coordinator.increment_completed(1)
         self._share_offsets_within_a_day(destinations, recall, gpx, blockers)
         self._withhold_far_offsets(destinations, recall, by_dest, groups, gpx)
+        self._ask_local_time_readings(destinations, by_dest, groups, prior_dests, blockers)
         self.coordinator.finish_phase()
 
         requires = (any(d["destination_timezone"]["requires_user_input"] for d in destinations.values())
                     or any(c["requires_user_input"] for d in destinations.values()
-                           for c in d["camera_group_time_decisions"].values()))
+                           for c in d["camera_group_time_decisions"].values())
+                    or any(c["requires_user_input"] for d in destinations.values()
+                           for c in (d.get("local_time_readings") or {}).values()))
         artifact = {
             "artifact_type": "time_decisions",
             "artifact_name": TIME_DECISIONS_ARTIFACT,
@@ -1033,6 +1058,88 @@ class GeotagWorkflow:
         if not requires:
             artifact["decision_mode"] = "no_op_or_auto_resolved"
         return artifact, blockers
+
+    def _phone_cell(self, dest, key, g, prior_cell, sel, gpx, blockers, tz, date, day):
+        """A phone's clock for one destination and day (BLD-phone_offset_cell), as (cell, recall entry), or None
+        where nothing asks one. The phone's photos holding their own position are anchored as a camera's are, else
+        read by their fixes' times (RUL-phone_anchored_like_camera, RUL-gps_time_checks_phone); that offset is set
+        against the one each of those photos is read by now — its own offset tag, else the zone's. Agreeing within
+        `gpx_anchor_decision_tolerance_seconds`, nothing (RUL-phone_agreeing_anchor_changes_nothing); disagreeing,
+        it is the cell's proposal, for every photo of the day: applying itself as several anchors do, one photo's
+        a proposal to accept (RUL-phone_disagreeing_anchors_apply, RUL-phone_single_anchor_proposed)."""
+        if not sel:
+            return None
+        frames = [f for f in sel if f.get("has_native_gps")]
+        evidence = infer_anchor_proposal(frames, gpx, CONFIG) or gps_time_proposal(frames, CONFIG)[0]
+        if evidence is None:
+            return None
+        tolerance = CONFIG["gpx_anchor_decision_tolerance_seconds"]
+        found = evidence["proposed_offset_seconds"]
+        by_path = {f["relative_path"]: f for f in frames}
+        if evidence["proposal_source"] == "gpx_self_anchor":
+            spread = CONFIG["gpx_anchor_offset_spread_max_seconds"]
+            support = [a["source_file"] for a in evidence["anchors"] if abs(a["proposed_offset_seconds"] - found) <= spread]
+        else:
+            support = [r["source_file"] for r in evidence["gps_times"]]
+        read = sorted({r for p in support if p in by_path for r in [_read_offset(by_path[p], tz)]},
+                      key=lambda r: (r is None, r or 0))
+        if read and all(r is not None and abs(r - found) <= tolerance for r in read):
+            return None                            # the phone's own reading stands: nothing to ask
+        rep_naive = min((f.get("source_naive_time") for f in sel
+                         if _parse_camera_naive(f.get("source_naive_time"))), default=None)
+        cell = self._offset_cell(dest, key, g, prior_cell, frames, gpx, blockers, tz=tz, rep_naive=rep_naive,
+                                 date=date, day=day, photos=sel, phone=True)
+        cell["phone"] = {"applies_to": "every_photo", "photos": len(sel),
+                         "read_by_offsets": [r for r in read if r is not None]}
+        return cell, None
+
+    def _ask_local_time_readings(self, destinations, by_dest, groups, prior_dests, blockers):
+        """Each photo read by its destination's zone at a time the zone skips or repeats is asked about here, alone
+        (BLD-local_time_readings): which of the two readings, for a time shown twice — its UTC offset, one of the
+        two; for a time never shown, its UTC offset, any a time is recorded with. An answer is the photo's: found
+        again by its fingerprint, never by its name. Until answered the photo is unresolved and photos-21 asks."""
+        for dest, d in destinations.items():
+            if d.get("file_less"):
+                continue
+            rows = compute_resolved_utc(by_dest[dest], groups, {"destinations": {dest: d}})
+            asked = [r for r in rows if r["time_rule_used"] in AMBIGUOUS_RULES.values()]
+            if not asked:
+                continue
+            files = {f["relative_path"]: f for f in by_dest[dest]}
+            earlier = {}
+            for cell in ((prior_dests.get(dest) or {}).get("local_time_readings") or {}).values():
+                if isinstance(cell, dict) and isinstance(cell.get("content_fingerprint"), str):
+                    earlier.setdefault(cell["content_fingerprint"], cell)
+            out = {}
+            for r in asked:
+                f = files[r["relative_path"]]
+                tz = r["destination_timezone"]
+                amb = _zone_ambiguity(_parse_camera_naive(f.get("source_naive_time")), tz)
+                prior = earlier.get(f.get("content_fingerprint")) or earlier.get(f.get("original_key")) or {}
+                ud = prior.get("user_decision") if isinstance(prior.get("user_decision"), dict) else {}
+                given = ud.get("utc_offset_seconds", "")
+                given = "" if given is None else given
+                effective, stale = "", False
+                if given != "":
+                    if not _valid_offset(given) or isinstance(given, bool) or abs(int(given)) > 14 * 3600:
+                        blockers.append(f"{dest}: local_time_readings[{f['relative_path']}].user_decision."
+                                        "utc_offset_seconds must be a whole number of seconds within ±14 hours.")
+                    elif amb["case"] == "repeated" and int(given) not in amb["offsets_seconds"]:
+                        stale = True               # a time shown twice is one of its two readings, no other
+                    else:
+                        effective = int(given)
+                out[f["relative_path"]] = {
+                    "content_fingerprint": f.get("content_fingerprint"),
+                    "camera_time": f.get("source_naive_time"), "timezone": tz,
+                    "case": amb["case"], "offsets_seconds": amb["offsets_seconds"],
+                    "readings_utc": [(_parse_camera_naive(f.get("source_naive_time")) - timedelta(seconds=o))
+                                     .strftime("%Y-%m-%dT%H:%M:%SZ") for o in amb["offsets_seconds"]],
+                    "user_decision": {"utc_offset_seconds": given},
+                    "effective_utc_offset_seconds": effective,
+                    "requires_user_input": effective == "",
+                    "stale_user_decision": stale,
+                }
+            d["local_time_readings"] = out
 
     # Offsets a camera's own GPS gave: the only ones another destination's cell of the same day may take.
     _OWN_GPS_SOURCES = ("gpx_anchor_auto", "gpx_anchor_accepted", "gpx_anchor_chosen")
@@ -1052,7 +1159,9 @@ class GeotagWorkflow:
         by_day = {}
         for dest, d in destinations.items():
             for bucket, cell in d["camera_group_time_decisions"].items():
-                if cell.get("day"):
+                # a phone's day is read in each destination on its own: its clock is the network's, set again
+                # wherever it went (BLD-phone_offset_cell)
+                if cell.get("day") and cell.get("camera_group_class") == "camera":
                     by_day.setdefault((cell["camera_group"], cell["day"]), []).append((dest, bucket, cell))
         for (_group, _day), members in sorted(by_day.items()):
             if len(members) < 2:
@@ -1261,8 +1370,10 @@ class GeotagWorkflow:
         return block
 
     def _offset_cell(self, dest, key, g, prior_cell, frames, gpx, blockers, tz=None, rep_naive=None, date=None,
-                     day=None, photos=(), shared=None):
-        # One (camera group, destination[, date]) clock-offset bucket. Proposal precedence (BLD-offset_buckets):
+                     day=None, photos=(), shared=None, phone=False, recorded_from=None):
+        # One (camera group, destination[, date]) clock-offset bucket — a phone's too, where one is asked
+        # (`phone`, BLD-phone_offset_cell); `recorded_from` are the photos whose recorded offset is proposed, where
+        # they are not the ones offset. Proposal precedence (BLD-offset_buckets):
         # GPX self-anchor → the times the photos' own fixes recorded (BLD-gps_time_proposal) → the same day's
         # elsewhere → the offset its photos record (BLD-recorded_offset_proposal) →
         # timezone-derived (camera assumed on local time; DST-aware, BLD-timezone_naive_offset) → manual. Clock
@@ -1283,7 +1394,7 @@ class GeotagWorkflow:
         differ = None
         if proposal is None and photos:
             # the zone the camera's clock was set to, as its photos record it: better than assuming local time
-            proposal, differ = recorded_offset_proposal(photos, rep_naive)
+            proposal, differ = recorded_offset_proposal(photos if recorded_from is None else recorded_from, rep_naive)
         if proposal is None and (tzr := _timezone_naive_offset(rep_naive, tz)) is not None:
             off_s, real_iso = tzr
             proposal = {"proposal_source": "timezone_naive", "proposed_offset_seconds": off_s,
@@ -1311,6 +1422,9 @@ class GeotagWorkflow:
         accept = _decision_flag(ud, "accept_proposal", f"{dest}: camera_group_time_decisions[{loc}].user_decision", blockers)
         manual_off = ud.get("manual_offset_seconds", "")
         accepted_off = ud.get("accepted_offset_seconds", "")
+        # A phone's photos kept as they record themselves, its own GPS set aside (BLD-phone_offset_cell).
+        keep = phone and _decision_flag(ud, "keep_as_recorded",
+                                        f"{dest}: camera_group_time_decisions[{loc}].user_decision", blockers)
         effective, stale, decision_mode = "", False, None
 
         if manual_off != "" and manual_off is not None:
@@ -1324,6 +1438,13 @@ class GeotagWorkflow:
             else:
                 blockers.append(f"{dest}: camera_group_time_decisions[{loc}].user_decision."
                                 "manual_offset_seconds must be a whole number of seconds.")
+        elif keep:
+            # the user's word that the phone's own reading is right and its GPS here is not: what it sets aside is
+            # its GPS's finding, so it holds while there is one (RUL-phone_kept_as_recorded)
+            if is_gpx or is_gps_time:
+                effective = {"source": "as_recorded"}
+            else:
+                stale = True
         elif accept:
             # An acceptance names the offset it accepted, and holds only while that is what is proposed
             # (RUL-acceptance_holds_for_its_proposal): a proposal that has become another one — the timezone changed,
@@ -1358,7 +1479,7 @@ class GeotagWorkflow:
             # timezone-derived proposal is confirmable, never auto-applied (the local-clock assumption can be wrong).
             n = proposal["anchor_count"]
             if (n >= 2 and policy["multi_anchor_auto_apply"]) or \
-               (n == 1 and policy["single_anchor_auto_apply"]):
+               (n == 1 and policy["single_anchor_auto_apply"] and not phone):   # one phone photo: a proposal
                 effective = {"offset_seconds": proposal["proposed_offset_seconds"], "source": "gpx_anchor_auto"}
                 decision_mode = "auto_resolved"
         anchored_by = None
@@ -1367,7 +1488,7 @@ class GeotagWorkflow:
             anchored_by = [{"gpx_file": f, "sha256": gpx.file_sha.get(f)} for f in
                            sorted({a["gpx_match"]["gpx_file"] for a in proposal["anchors"]
                                    if abs(a["proposed_offset_seconds"] - effective["offset_seconds"]) <= spread})]
-        if effective == "" and not stale and manual_off in ("", None) and not accept:
+        if effective == "" and not stale and manual_off in ("", None) and not accept and not keep:
             # An offset found from the camera's own GPS stays this camera's offset for the day when the
             # photos that gave it are corrected and later ones bring no anchor — while what it rested on
             # still stands: every track that anchored it is under gpx_root unchanged, and no photo that has
@@ -1382,7 +1503,7 @@ class GeotagWorkflow:
                     and not (is_gpx and (conflicting or imprecise
                                          or abs(proposal["proposed_offset_seconds"] - earlier.get("offset_seconds", 0)) > tolerance)):
                 effective, decision_mode, anchored_by = earlier, "kept_from_earlier", rests_on
-        if effective != "" or stale or manual_off not in ("", None) or accept:
+        if effective != "" or stale or manual_off not in ("", None) or accept or keep:
             pass                                   # decided above, or the user's to decide
         elif is_shared and shared["applied_itself"]:
             effective = {"offset_seconds": proposal["proposed_offset_seconds"], "source": "same_day_auto"}
@@ -1405,7 +1526,8 @@ class GeotagWorkflow:
             "proposal": proposal,
             "user_decision": {"accept_proposal": accept,
                               "accepted_offset_seconds": accepted_off if accepted_off is not None else "",
-                              "manual_offset_seconds": manual_off if manual_off is not None else ""},
+                              "manual_offset_seconds": manual_off if manual_off is not None else "",
+                              **({"keep_as_recorded": keep} if phone else {})},
             "effective_time_anchor": effective,
             "requires_user_input": effective == "",
             "stale_user_decision": stale,
@@ -3033,6 +3155,14 @@ def run(args):
             _, _td_bak = write_versioned_json(tdp, artifact)
             if _td_bak:
                 reporter.log(f"  Previous {TIME_DECISIONS_ARTIFACT} backed up to {_td_bak}")
+            # an offset tag that holds no offset is read as none, and said (RUL-unreadable_offset_tag_told)
+            for i, u in enumerate(wf.unreadable_offset_tags):
+                if i == UNREADABLE_TAGS_SHOWN:
+                    reporter.warn(f"  ... and {len(wf.unreadable_offset_tags) - i} more photo(s) whose offset tag "
+                                  f"holds no offset (each listed in {TIME_DECISIONS_ARTIFACT}).")
+                    break
+                reporter.warn(f"  Warning: {u['relative_path']}: its {u['field']} holds {u['value']!r}, which is no UTC "
+                              "offset — it is read as no offset tag.")
             for cr in wf.country_removals:
                 reporter.warn(f"  Warning: {cr['destination']}: the country said there ({cr['country']}) was removed — "
                               f"{cr['because']}, which it lies in, is in {cr['country_there']}, and so is everything "
@@ -3052,19 +3182,9 @@ def run(args):
                 # Stage 7: time decisions are complete -> resolve UTC under the CURRENT offsets
                 # (rows0). This drives drift detection (BLD-drift_validation) and, once 22 is clean, is recomputed
                 # with the operator-validated offsets before anything downstream consumes it.
+                # (A photo whose local time its zone repeats or skips is asked about in photos-21 itself, which is
+                # not complete until each is answered: BLD-local_time_readings.)
                 rows0 = compute_resolved_utc(files, groups, artifact)
-                # A photo whose local time its zone repeats or skips is never given one of its two readings
-                # (RUL-ambiguous_local_time_never_guessed): geotag stops, naming each, before anything is built on it.
-                amb = ambiguous_time_blockers(rows0)
-                if amb:
-                    reporter.error("\nGeotag cannot proceed: a photo's time falls at a daylight-saving change, "
-                                   "where its destination's timezone gives it two readings:")
-                    for b in amb:
-                        reporter.log(f"  - {b}")
-                    reporter.log(f"\nNo geotag JSON was written past {TIME_DECISIONS_ARTIFACT}.")
-                    emit_next_step(reporter, "give each photo's time its offset (or move it out), then re-run "
-                                             "`prep plan` + `prep execute` and `geotag plan`.")
-                    sys.exit(2)
                 # the drift check reaches the photos' corrected times (BLD-track_window)
                 wf.widen_tracks(gpx, wf.drift_window(files, artifact, rows0))
                 _stop_on_tracks(reporter, gpx, f"No geotag JSON was written past {TIME_DECISIONS_ARTIFACT}.")

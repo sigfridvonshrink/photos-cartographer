@@ -151,8 +151,8 @@ arriving later with yet another offset asks again.
 ### Clock offset
 
 One offset decision per camera group per destination — per **day** when the group spans more than one
-day there, since a camera reset each morning has a per-day offset. Phones get none: their time is
-resolved per file. Offsets **never inherit** — each day stands alone, so no inherited badge appears on
+day there, since a camera reset each morning has a per-day offset. A phone gets one (its row says
+**phone**) only for a day whose own GPS reads its clock otherwise than its photos are read — see below. Offsets **never inherit** — each day stands alone, so no inherited badge appears on
 them. See [why grouping is per-day](concepts.md#why-grouping-is-per-day-within-a-destination).
 
 Days of one group with the same proposal are collapsed into one row (e.g. "3 Jul 2024 … 9 Jul 2024
@@ -229,8 +229,21 @@ What the proposal panel shows depends on where the offset came from:
   change** in that zone (a time that happened twice, or never): the zone gives two offsets there, and the
   proposal shows `timezone_ambiguous` with both. Set the offset yourself.
 
-(A phone photo or other file whose own time falls at a daylight-saving change stops `geotag plan`
-outright, naming the photo — that is fixed outside the editor; the terminal message says how.)
+- **A phone's day** — the phone's photos with their own position put its clock elsewhere than their
+  offset tags (or the zone) read it: say a phone set by hand an hour wrong. The note names both offsets
+  and how many photos the day holds. Several photos agreeing applied it themselves (**auto**); one
+  photo's waits for **accept proposal**. If the track is someone else's, tick **keep this phone as its
+  photos record themselves** — its GPS here is set aside.
+
+### A time at a clock change
+
+A photo read by its destination's zone whose time falls at a **daylight-saving change** — 02:30 on the
+night the clocks went back (it happened twice) or forward (it never happened) — gets a row of its own,
+**Time at a clock change**, under its destination, with its thumbnail. Pick which of the two readings it
+was (each shown with its UTC instant); for a time that never happened you may type another offset
+(`+01:00`). Until each is answered, the time decisions are not complete. By hand, the same answer is
+`utc_offset_seconds` in the photo's entry of `local_time_readings` (see the
+[decision-JSON reference](../cartographer/editor/decision-json-reference.md)).
 
 ---
 

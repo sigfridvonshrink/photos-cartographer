@@ -88,7 +88,8 @@ __all__ = [
     '_frame_skip_reason',
     '_timezone_naive_offset',
     '_zone_ambiguity',
-    'ambiguous_time_blockers',
+    'unreadable_offset_tag',
+    'AMBIGUOUS_RULES',
     'infer_anchor_proposal',
     '_parse_iso_offset',
     '_local_to_utc',
@@ -96,6 +97,7 @@ __all__ = [
     'OFFSET_TAG_FOR',
     'clock_group_key',
     '_own_offset',
+    '_read_offset',
     'recorded_offset_proposal',
     'gps_fix_utc',
     'gps_time_proposal',
@@ -1015,42 +1017,39 @@ def _local_to_utc(naive, tz):
 
 # The rule of a photo whose local time the zone repeats or skips (RUL-ambiguous_local_time_never_guessed): unresolved.
 _AMBIGUOUS_RULES = {"repeated": "local_time_repeated", "skipped": "local_time_skipped"}
+AMBIGUOUS_RULES = _AMBIGUOUS_RULES
 
 
-def _resolve_by_zone(naive, tz):
-    """A photo's local time read through its destination's zone, as (resolved UTC, status, rule suffix): the one
-    instant it names, or (None, "unresolved", the case's rule) for a time the zone repeats or skips — never one of
-    its two readings guessed (RUL-ambiguous_local_time_never_guessed)."""
+def _resolve_by_zone(naive, tz, answer=None):
+    """A photo's local time read through its destination's zone, as (resolved UTC, status, rule suffix, offset used):
+    the one instant it names; for a time the zone repeats or skips, the reading the user answered for the photo in
+    photos-21 (`answer`, its UTC offset, BLD-local_time_readings: rule `local_time_answered`), else (None,
+    "unresolved", the case's rule) — never one of its readings guessed (RUL-ambiguous_local_time_never_guessed)."""
     amb = _zone_ambiguity(naive, tz)
     if amb is not None:
-        return None, "unresolved", _AMBIGUOUS_RULES[amb["case"]]
-    return _local_to_utc(naive, tz), "valid", None
+        if _valid_offset(answer) and not isinstance(answer, bool):
+            return naive - timedelta(seconds=int(answer)), "valid", "local_time_answered", int(answer)
+        return None, "unresolved", _AMBIGUOUS_RULES[amb["case"]], None
+    return _local_to_utc(naive, tz), "valid", None, None
 
 
-def ambiguous_time_blockers(rows):
-    """One blocker per resolved-UTC row left unresolved because its local time is repeated or skipped by its zone
-    (RUL-ambiguous_local_time_never_guessed): the photo, its time, the zone, the two readings, and the way out."""
-    out = []
-    for r in rows:
-        if r.get("time_rule_used") not in _AMBIGUOUS_RULES.values():
-            continue
-        naive, tz = _parse_camera_naive(r.get("source_naive_time")), r.get("destination_timezone")
-        amb = _zone_ambiguity(naive, tz) or {"case": "", "offsets_seconds": []}
-        readings = " or ".join(
-            f"{_fmt_offset(o)} ({(naive - timedelta(seconds=o)).strftime('%Y-%m-%dT%H:%M:%SZ')})"
-            for o in amb["offsets_seconds"])
-        what = ("happened twice there — the clocks went back" if amb["case"] == "repeated"
-                else "never happened there — the clocks went forward over it")
-        out.append(f"{r['relative_path']}: its time {r.get('source_naive_time')} {what} in {tz}, so it reads as "
-                   f"{readings}, and geotag will not choose. Give the photo's time its offset (e.g. "
-                   "`exiftool -OffsetTimeOriginal=+01:00 <photo>`), then re-run prep and geotag — or move it out "
-                   f"of {folder_name('photos_by_dest')}/.")
-    return out
+def _reading_answer(f, d):
+    """The UTC offset the user answered for photo `f`'s time, which its zone skips or repeats, as photos-21 holds it in
+    effect for its destination `d` (BLD-local_time_readings), or None."""
+    cell = (d.get("local_time_readings") or {}).get(f["relative_path"]) or {}
+    eff = cell.get("effective_utc_offset_seconds")
+    return eff if _valid_offset(eff) and eff != "" else None
 
 
-def _fmt_offset(seconds):
-    minutes = round(seconds / 60)
-    return f"{'-' if minutes < 0 else '+'}{abs(minutes) // 60:02d}:{abs(minutes) % 60:02d}"
+def unreadable_offset_tag(f):
+    """The offset field paired with the one `f`'s time was read from, where it holds something that is no offset
+    (BLD-unreadable_offset_tags): (field, value as text), else None. Read as no tag (`_own_offset`); a blank one is
+    no tag at all."""
+    tag = OFFSET_TAG_FOR.get((f.get("source_time_tag") or "").rsplit(":", 1)[-1])
+    v = (f.get("raw_times") or {}).get(tag) if tag else None
+    if v is None or (isinstance(v, str) and not v.strip()):
+        return None
+    return None if _parse_iso_offset(v) is not None else (tag, str(v))
 
 
 def drift_offset_overrides(drift_artifact):
@@ -1094,6 +1093,17 @@ def _own_offset(f):
             return within
     tag = OFFSET_TAG_FOR.get((f.get("source_time_tag") or "").rsplit(":", 1)[-1])
     return _parse_iso_offset((f.get("raw_times") or {}).get(tag)) if tag else None
+
+
+def _read_offset(f, tz):
+    """The clock offset a phone's photo `f` is read by without a cell of its own (BLD-phone_offset_cell): −(the offset
+    recorded with its time), else −(its destination zone `tz`'s at its time); None with neither, or at a time the zone
+    skips or repeats."""
+    own = _own_offset(f)
+    if own is not None:
+        return -own
+    z = _timezone_naive_offset(f.get("source_naive_time"), tz) if _valid_iana(tz) else None
+    return z[0] if z else None
 
 
 def recorded_offset_proposal(photos, rep_naive):
@@ -1261,7 +1271,7 @@ def _resolve_one(f, d, cls, naive, tz, key, dest, overrides):
             offset_used, resolved = own_off, naive - timedelta(seconds=own_off)
             status, rule = "valid", "geotag_corrected"
         elif tz:
-            resolved, status, amb_rule = _resolve_by_zone(naive, tz)
+            resolved, status, amb_rule, offset_used = _resolve_by_zone(naive, tz, _reading_answer(f, d))
             rule, prov = amb_rule or "geotag_corrected", tz
         else:
             status, rule = "unresolved", "timezone_missing"
@@ -1287,12 +1297,31 @@ def _resolve_one(f, d, cls, naive, tz, key, dest, overrides):
                 status, rule = "unresolved", "offset_missing"
         elif cls in ("smartphone", "unidentified"):   # a phone, or a file naming no camera, each solved on its own
             native_off = _own_offset(f)
-            if native_off is not None:
+            cells = (d.get("camera_group_time_decisions") or {}) if cls == "smartphone" else {}
+            bucket_key = f"{key}@{_naive_date(f.get('source_naive_time'))}"
+            bucket_key = bucket_key if bucket_key in cells else key
+            cell = cells.get(bucket_key) or {}
+            eff = cell.get("effective_time_anchor")
+            if cell and (cell.get("phone") or {}).get("applies_to") == "every_photo" \
+                    and not (isinstance(eff, dict) and eff.get("source") == "as_recorded"):
+                # the phone's own GPS says its clock was otherwise that day here (BLD-phone_offset_cell)
+                scope = bucket_key
+                if (dest, bucket_key) in overrides:
+                    offset_used = overrides[(dest, bucket_key)]
+                    resolved = naive + timedelta(seconds=offset_used)
+                    status, rule, prov = "valid", "camera_group_offset", "gps_drift_validated"
+                elif isinstance(eff, dict) and "offset_seconds" in eff:
+                    offset_used = eff["offset_seconds"]
+                    resolved = naive + timedelta(seconds=offset_used)
+                    status, rule, prov = "valid", "camera_group_offset", eff.get("source")
+                else:
+                    status, rule = "unresolved", "offset_missing"
+            elif native_off is not None:
                 offset_used, resolved = native_off, naive - timedelta(seconds=native_off)
                 status = "valid"
                 rule = "unidentified_native_offset" if cls == "unidentified" else "smartphone_native_offset"
             elif tz:
-                resolved, status, amb_rule = _resolve_by_zone(naive, tz)
+                resolved, status, amb_rule, offset_used = _resolve_by_zone(naive, tz, _reading_answer(f, d))
                 rule, prov = amb_rule or "destination_timezone", tz
             else:
                 status, rule = "unresolved", "timezone_missing"

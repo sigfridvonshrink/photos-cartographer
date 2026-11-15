@@ -75,7 +75,7 @@ and whose `media_class` is `image` or `raw`; every operation of `photos-24-execu
 
 A GPX self-anchor offset SHALL be set as `effective_time_anchor` with `decision_mode: "auto_resolved"` when its
 anchors do not conflict and `camera_time_and_timezone_policy.multi_anchor_auto_apply` holds for two or more anchors,
-or `single_anchor_auto_apply` for one; a destination's `inherited` timezone proposal is set as its
+or `single_anchor_auto_apply` for one — a phone's one anchor never ({need}`BLD-phone_offset_cell`); a destination's `inherited` timezone proposal is set as its
 `effective_iana_timezone` likewise, a `config_default` one never; a `recorded_offset` or `timezone_naive` offset proposal
 and an `inherited` folder fallback become effective only with `accept_proposal: true`.
 :::
@@ -302,10 +302,10 @@ A destination's `destination_timezone.user_decision.country` — the country it 
 :::{bld} The offset derived from the timezone
 :id: BLD-timezone_naive_offset
 :status: ruled
-:realises: RUL-offset_from_own_evidence, RUL-proposals_need_acceptance, RUL-timezone_offset_asked_once, RUL-ambiguous_local_time_never_guessed
+:realises: RUL-offset_from_own_evidence, RUL-proposals_need_acceptance, RUL-timezone_offset_asked_once, RUL-ambiguous_local_time_never_guessed, RUL-camera_zone_offset_for_the_day
 
 A bucket with no anchor and a destination timezone SHALL be proposed the offset −(the timezone's UTC offset at the
-bucket's earliest camera time), daylight saving included, as `proposal_source: "timezone_naive"` with
+bucket's earliest camera time), daylight saving included, one offset for every photo of the bucket, as `proposal_source: "timezone_naive"` with
 `proposed_offset_seconds`, `proposed_real_utc` and `proposed_from_timezone`. Where track points lie within
 `drift_check_track_window_seconds` of the bucket's photos — by the times the offset gives, else by the times the camera
 recorded — and no decision is given, it takes effect as `timezone_unconfirmed`, `decision_mode:
@@ -369,11 +369,13 @@ and `handoff`, the handoff's content fingerprint ({need}`BLD-handoff_content_fin
 :::{bld} How each photo's true time is resolved
 :id: BLD-resolved_utc
 :status: ruled
-:realises: RUL-phone_time_from_own_offset, RUL-offset_within_time_value, RUL-offset_per_camera_destination_day, RUL-time_before_gps, RUL-ambiguous_local_time_never_guessed
+:realises: RUL-phone_time_from_own_offset, RUL-offset_within_time_value, RUL-offset_per_camera_destination_day, RUL-time_before_gps, RUL-ambiguous_local_time_never_guessed, RUL-unreadable_offset_tag_is_none
 
 `compute_resolved_utc` SHALL resolve each photo of photos by destination to UTC: a camera's photo by the offset of its
 cell — `<group>@<date>` where the destination has one for its date, else `<group>` — a corrected offset from
-`photos-22-gps-drift-validation.json` taking its place (`camera_group_offset`); a phone's by the offset recorded with
+`photos-22-gps-drift-validation.json` taking its place (`camera_group_offset`); a phone's, where its day there has a
+cell whose `phone.applies_to` is `every_photo` and whose effective source is not `as_recorded`, likewise by that cell's
+offset ({need}`BLD-phone_offset_cell`); else a phone's by the offset recorded with
 its time — one written within the time's own value, after the seconds and any fraction of them, else its field's:
 `OffsetTimeOriginal` for `DateTimeOriginal`, `OffsetTimeDigitized` for `CreateDate`, `OffsetTime`
 for `ModifyDate` (`smartphone_native_offset`) — else its destination's timezone (`destination_timezone`); and a time
@@ -383,7 +385,31 @@ sign, two digits of hours up to 14 and two of minutes up to 59, with or without 
 `geotag plan` writes the rows — `relative_path`, `destination_path`, `destination_timezone`, `camera_group`,
 `time_decision_scope` (the cell, `<group>[@<date>]|<destination>`), `source_naive_time`, `source_time_provenance`,
 `time_rule_used`, `utc_offset_used`, `resolved_utc`, `resolved_utc_status`, `resolved_utc_provenance` — into the
-`resolved_utc_cache` table once photos-22 is complete, replacing the table whole. A time that must be read by the zone and which the zone skips or repeats is left unresolved — rule `local_time_skipped` or `local_time_repeated` — and `geotag plan` stops on it, naming the photo, the time, the zone and both readings.
+`resolved_utc_cache` table once photos-22 is complete, replacing the table whole. A time that must be read by the zone and which the zone skips or repeats is resolved by the UTC offset photos-21 holds in effect for the photo (`local_time_answered`, {need}`BLD-local_time_readings`), else left unresolved — rule `local_time_skipped` or `local_time_repeated`.
+:::
+
+:::{bld} A phone's day checked against its own GPS
+:id: BLD-phone_offset_cell
+:status: ruled
+:realises: RUL-phone_anchored_like_camera, RUL-gps_time_checks_phone, RUL-phone_agreeing_anchor_changes_nothing, RUL-phone_disagreeing_anchors_apply, RUL-phone_single_anchor_proposed, RUL-phone_kept_as_recorded, RUL-phone_time_from_own_offset
+
+For each `smartphone` group's photos not yet corrected of a destination and day, keyed as a camera's bucket is ({need}`BLD-offset_buckets`), `_phone_cell` SHALL take the GPX self-anchor of those holding their own position ({need}`BLD-anchor_matching`), else the offset their fixes' times give ({need}`BLD-gps_time_proposal`), and set it against `_read_offset` of each photo that gave it — of an anchor, those within `gpx_anchor_offset_spread_max_seconds` of the offset; of fix times, every reading — −(the offset recorded with its time), else −(the zone's at its time): every one within `gpx_anchor_decision_tolerance_seconds` of it, the day has no cell. Otherwise it has an offset cell in `camera_group_time_decisions`, `camera_group_class: "smartphone"`, holding `phone` — `applies_to: "every_photo"`, `photos` (how many), `read_by_offsets` (each distinct offset the photos giving it are read by) — built as a camera's is, but that one anchor never applies itself, and that `user_decision` holds `keep_as_recorded` too: `true` takes effect as `{"source": "as_recorded"}`, after `manual_offset_seconds` and before `accept_proposal`, while the proposal is `gpx_self_anchor` or `gps_time`, else is `stale_user_decision`; not a boolean, a blocker. A phone's cell gives no offset to, and takes none from, another destination's ({need}`BLD-offset_shared_within_day`).
+:::
+
+:::{bld} A time the zone skips or repeats, answered per photo
+:id: BLD-local_time_readings
+:status: ruled
+:realises: RUL-ambiguous_local_time_answered, RUL-repeated_time_answered_by_a_reading, RUL-ambiguous_local_time_never_guessed, RUL-photo_decision_follows_the_photo, RUL-photo_decision_never_passes_by_name
+
+Once its cells are built, `build_time_decisions` SHALL resolve each destination holding photos as `compute_resolved_utc` would, and give each photo left `local_time_skipped` or `local_time_repeated` an entry in the destination's `local_time_readings`, keyed by its path: `content_fingerprint`, `camera_time`, `timezone`, `case` (`repeated` or `skipped`), `offsets_seconds` (the zone's UTC offset before the change and after), `readings_utc` (the instant each gives), `user_decision.utc_offset_seconds` (`""` until answered), `effective_utc_offset_seconds`, `requires_user_input` and `stale_user_decision`. A photo's earlier answer is the entry of its destination's earlier record with its `content_fingerprint`, or with the fingerprint its own values are pinned under — never one by its path alone. An answer is a whole number of seconds within ±14 hours, else a blocker; for a `repeated` time one of `offsets_seconds`, else `stale_user_decision`, kept as written; for a `skipped` time any such. The record is not complete while an entry requires input; `compute_resolved_utc` reads the photo as its time less the answer.
+:::
+
+:::{bld} Offset tags that hold no offset
+:id: BLD-unreadable_offset_tags
+:status: ruled
+:realises: RUL-unreadable_offset_tag_is_none, RUL-unreadable_offset_tag_told, RUL-unreadable_offset_tag_recorded
+
+For each photo not yet corrected whose offset field paired with the one its time was read from ({need}`BLD-resolved_utc`) holds a value that is not blank and is no offset, `build_time_decisions` SHALL list `{relative_path, field, value}` — the value as text — in its destination's `unreadable_offset_tags`, and `geotag plan` warns of each after writing photos-21, the first `UNREADABLE_TAGS_SHOWN` by name and the number of the rest; `_own_offset` reads it as none.
 :::
 
 :::{bld} The resolved-UTC fingerprint

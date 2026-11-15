@@ -156,15 +156,20 @@ with its English `name` and its `zones` (sorted).
   "destination_timezone": { /* §4.3 tz cell */ },
   "camera_group_time_decisions": {                        // one offset cell per FIXED-CLOCK camera group,
     "<camera_group_key>": { /* §4.4 offset cell */ },     //   SPLIT per naive date when the group spans >1
-    "<camera_group_key>@<YYYY-MM-DD>": { /* §4.4 */ }      //   day here (see §4.4 "per-date buckets")
+    "<camera_group_key>@<YYYY-MM-DD>": { /* §4.4 */ }      //   day here (see §4.4 "per-date buckets") — and a
+  },                                                      //   PHONE's day where one is asked (§4.5)
+  "local_time_readings": {                                // optional: a photo's time its zone skips or repeats (§4.6)
+    "<relative_path>": { /* §4.6 */ }
   },
+  "unreadable_offset_tags": [                             // SYSTEM, optional: photos whose offset tag holds no offset
+    { "relative_path": "…", "field": "OffsetTimeOriginal", "value": "local" }   // read as no tag; warned of
+  ],
   "file_less": true                                       // SYSTEM, optional: a CONTAINER destination (see below)
 }
 ```
 
-Note: smartphones are resolved per-file and get **no** offset cell — `camera_group_time_decisions` only
-holds `camera`-class groups (those listed under `fixed_clock_cameras`); smartphone, unidentified and
-unknown groups have none. A photo whose time was read from `ModifyDate` (no valid
+Note: smartphones are resolved per-file and get an offset cell only for a destination and day where their own
+GPS reads their clock otherwise than their photos are read (§4.5); unidentified and unknown groups have none. A photo whose time was read from `ModifyDate` (no valid
 `DateTimeOriginal` or `CreateDate`: an export, timed by the editing computer) counts under `unknown`, as a file
 naming no camera does — it opens no cell of its camera's and takes no offset from one. A bucket whose photos are all already corrected by
 geotag gets a cell only when it still resolves (its earlier answer, derived again), so that photos of the
@@ -217,7 +222,7 @@ destinations or buckets.
 | Field | Type | Editable | Meaning |
 |-------|------|----------|---------|
 | `camera_group` | string | no | The camera-group key (the bare group, even for a dated bucket). |
-| `camera_group_class` | `"camera"` | no | Always `camera` here. |
+| `camera_group_class` | `"camera"` \| `"smartphone"` | no | `camera`, or `smartphone` for a phone's cell (§4.5). |
 | `date` | string | no | Present only on a per-date bucket: the naive calendar date (`"YYYY-MM-DD"`) this bucket covers. |
 | `proposal` | object | no | One of six shapes — see below. |
 | `representative` | object | no | On a cell with photos not yet corrected: the earliest of them, `{ "source_file", "camera_source_naive_time" }` — the photo the editor asks the true time of, to set the offset by. |
@@ -228,7 +233,8 @@ destinations or buckets.
 | **`user_decision.accept_proposal`** | bool | **yes** | Accept the proposal's offset. |
 | **`user_decision.accepted_offset_seconds`** | number \| `""` | **yes** | The `proposed_offset_seconds` being accepted — written together with `accept_proposal: true`, cleared with it. The acceptance holds only while this is what is proposed (within `acceptance_tolerance_seconds` for a GPX or GPS-time proposal): a proposal that became another one was never accepted, and the cell goes `stale_user_decision` and asks. `accept_proposal: true` with this empty is a blocker. |
 | **`user_decision.manual_offset_seconds`** | number \| `""` | **yes** | A manual clock offset, seconds (camera_time + offset = real UTC). |
-| `effective_time_anchor` | `""` \| object | no | `""` if unresolved; else `{ "offset_seconds": int, "source": … }` where source ∈ `manual` (a manual offset) \| `gpx_anchor_chosen` (a manual offset within `gpx_anchor_offset_spread_max_seconds` of one of a precise GPX proposal's `groups`) \| `gpx_anchor_accepted` \| `gpx_anchor_imprecise` (an accepted GPX proposal with `imprecise_seconds > 0`) \| `recorded_offset_accepted` \| `timezone_accepted` \| `same_day_accepted` (an accepted proposal of that kind) \| `gpx_anchor_auto` (a GPX proposal applied by itself, or kept from earlier) \| `gps_time_auto` (two GPS fix times or more, applied by themselves) \| `gps_time_accepted` (an accepted GPS-time proposal) \| `same_day_auto` \| `recorded_offset_unconfirmed` \| `timezone_unconfirmed` (an offset from the photos' recorded offset, or from the timezone, sent to photos-22 to be confirmed). |
+| **`user_decision.keep_as_recorded`** | bool | **yes** | On a phone's cell only (§4.5): keep the phone's photos read as they record themselves — their own offset tag, else the zone — its GPS's finding set aside (the track was someone else's). |
+| `effective_time_anchor` | `""` \| object | no | `""` if unresolved; else `{ "offset_seconds": int, "source": … }` where source ∈ `manual` (a manual offset) \| `gpx_anchor_chosen` (a manual offset within `gpx_anchor_offset_spread_max_seconds` of one of a precise GPX proposal's `groups`) \| `gpx_anchor_accepted` \| `gpx_anchor_imprecise` (an accepted GPX proposal with `imprecise_seconds > 0`) \| `recorded_offset_accepted` \| `timezone_accepted` \| `same_day_accepted` (an accepted proposal of that kind) \| `gpx_anchor_auto` (a GPX proposal applied by itself, or kept from earlier) \| `as_recorded` (a phone's cell kept as its photos record themselves; no `offset_seconds`) \| `gps_time_auto` (two GPS fix times or more, applied by themselves) \| `gps_time_accepted` (an accepted GPS-time proposal) \| `same_day_auto` \| `recorded_offset_unconfirmed` \| `timezone_unconfirmed` (an offset from the photos' recorded offset, or from the timezone, sent to photos-22 to be confirmed). |
 | `conflicts_with` | array | no | Present when the camera's own GPS gave another offset the same day in another destination, farther off than `clock_offset_same_day_max_difference_seconds`, or where one of the two is a group of the camera's GPS the user picked (`gpx_anchor_chosen`): `[{ "destination", "bucket", "offset_seconds", "chosen" }]` — `chosen` is `true` where that other offset is one the user picked (`gpx_anchor_chosen`). An offset the GPS gave by itself (`gpx_anchor_auto`, `gpx_anchor_accepted`) takes no effect and the cell asks; a `gpx_anchor_chosen` one keeps its effect. Write `manual_offset_seconds` in the cell that is wrong. Two `gpx_anchor_chosen` offsets are never held against each other. |
 | `anchored_by` | list | no | On a cell whose offset applied itself from GPS: the track files it was found from, each `{ "gpx_file", "sha256" }`. The offset is kept for later photos of the day (`decision_mode: "kept_from_earlier"`) only while each is under `gpx_root` unchanged and no newer GPS proposal says otherwise. |
 | `requires_user_input` | bool | no | `true` ⇔ `effective_time_anchor == ""`. (Containers carry no offset cells, so this is never softened here.) |
@@ -332,6 +338,47 @@ photos record; else the timezone-derived offset; else manual required.
                             "case": "repeated",               // "repeated" | "skipped"
                             "offsets_seconds": [7200, 3600] } }  // the zone's UTC offset before the change, after it
   ```
+
+### 4.5 A phone's day — a `smartphone` offset cell
+
+A phone's photos are read by the offset recorded with their time (else the zone). Where its photos of a day in a
+destination hold their own position, they are anchored on the tracks as a camera's are — else read by their GPS fix
+times (§4.4 `gps_time`) — and the offset found is set against the one each photo that gave it is read by. Agreeing within
+`gpx_anchor_decision_tolerance_seconds`: no cell. Disagreeing: a cell in `camera_group_time_decisions`, keyed as a
+camera's is, with `"camera_group_class": "smartphone"` and
+
+| Field | Type | Editable | Meaning |
+|-------|------|----------|---------|
+| `phone` | object | no | `{ "applies_to": "every_photo", "photos": int, "read_by_offsets": [int…] }` — the cell's offset reads every photo of the phone's day here (`photos` of them); `read_by_offsets`: each clock offset the photos that gave the finding are read by now. |
+| **`user_decision.keep_as_recorded`** | bool | **yes** | Keep the phone as its photos record themselves (`as_recorded`). |
+
+Otherwise as a camera's cell (§4.4): two or more photos agreeing apply the offset themselves (`gpx_anchor_auto`,
+`gps_time_auto`); one photo's is a proposal to accept — never applied by itself, whatever `single_anchor_auto_apply`
+says. Precedence: `manual_offset_seconds` → `keep_as_recorded` (while the proposal is `gpx_self_anchor` or `gps_time`;
+else `stale_user_decision`) → `accept_proposal`. A phone's cell is never shared with, or held against, another
+destination's. A `manual` offset here goes to photos-22 as a camera's does.
+
+**By hand:** set `keep_as_recorded: true` (the others `false`/`""`), or accept / write the offset as on a camera's cell.
+
+### 4.6 `local_time_readings[<relative_path>]` — a time a daylight-saving change skips or repeats
+
+A photo read by its destination's zone (a phone's or a file naming no camera with no offset recorded, a corrected
+photo whose offset tag is gone) whose local time the zone repeats (02:30 on the night clocks go back) or skips (02:30
+on the night they go forward) is never given one reading by guess: it is asked about here, alone.
+
+| Field | Type | Editable | Meaning |
+|-------|------|----------|---------|
+| `content_fingerprint` | string | no | The photo's fingerprint: its answer is found again by it (a rename keeps it; another photo taking the name does not take it). |
+| `camera_time` / `timezone` | string | no | The photo's recorded local time, and the zone that reads it two ways. |
+| `case` | `"repeated"` \| `"skipped"` | no | Shown twice, or never. |
+| `offsets_seconds` | [int, int] | no | The zone's UTC offset before the change and after it (seconds east of UTC: `3600` = `+01:00`). |
+| `readings_utc` | [string, string] | no | The instant each of the two gives. |
+| **`user_decision.utc_offset_seconds`** | number \| `""` | **yes** | The UTC offset the photo's time was on (seconds east of UTC). For `repeated`, one of `offsets_seconds`; for `skipped`, any whole number of seconds within ±14 h. `""` = not answered. |
+| `effective_utc_offset_seconds` | number \| `""` | no | The answer in effect; the photo resolves to `camera_time` − it (`time_rule_used: "local_time_answered"`). |
+| `requires_user_input` | bool | no | `true` ⇔ not answered. photos-21 is not complete while any is. |
+| `stale_user_decision` | bool | no | `true` when a `repeated` time's answer is not one of its readings: kept as written, no effect. |
+
+**By hand:** write `"utc_offset_seconds": 3600` (for `+01:00`) in the photo's `user_decision`.
 
 ---
 
@@ -562,6 +609,9 @@ UI should make the *effective* choice obvious and ideally offer them as mutually
   withheld — but one picked from the camera's GPS groups (`gpx_anchor_chosen`) is held against a GPS-derived
   one alike, which loses effect while the pick keeps its own. A `recorded_offset`, `timezone_naive` or `gps_time` proposal carrying `far_from_evidence` takes no effect,
   accepted or not: only `manual_offset_seconds` resolves the cell.
+- **A phone's day (§4.5):** `manual_offset_seconds` → `keep_as_recorded` → `accept_proposal` → two or more photos
+  applying their offset themselves; one photo's never applies itself.
+- **A time at a daylight-saving change (§4.6):** `utc_offset_seconds`, one of the two readings for a repeated time.
 - **Drift:** `confirmed` holding for the current offset (`confirmed_offset_seconds` equal to it) and for the
   tracks (`confirmed_against_tracks` each unchanged under `gpx_root`, or `[]` with no track shown) →
   `corrected_offset_seconds` if given, else the current offset; otherwise nothing.
@@ -585,6 +635,8 @@ Mirror these client-side; a value that fails makes geotag reject the whole artif
 | `country` | `""` (= none), or a code that is a key of the top-level `countries` table; any other value is a blocker, as is any value where the host's zone database has no table of countries (`countries` is `{}`). One chosen inside another country's destination is not a blocker: the next run writes it back `""` (`country_removed`). |
 | `manual_iana_timezone` | Must resolve as a real IANA zone in the zone database geotag runs with — never a name standing for the host (`localtime`, `posixrules`, `Factory`). With a country in effect (`country_zones` present), it must be one of `country_zones`. `""` allowed (= unset). |
 | `confirmed_despite_recorded_offsets` | A list of whole numbers of seconds; `[]` (or `null`, or the field absent) = not given. |
+| `keep_as_recorded` | `true` or `false` on a phone's cell (absent or `null` reads as `false`); anything else a blocker. |
+| `utc_offset_seconds` (`local_time_readings`) | `""`, or a whole number of seconds within ±14 hours (not a boolean, not a string such as `"+01:00"`); for a `repeated` time, one of `offsets_seconds` (another is `stale_user_decision`, not a blocker). |
 | `manual_offset_seconds` | A whole number of seconds (an integer, or a float with no fraction), of any size (a clock reset to its factory date is years out). Not a boolean, not a string. `""` allowed. |
 | `accepted_offset_seconds` | Required, as a whole number of seconds, whenever `accept_proposal` is `true` (and no manual offset is set): the `proposed_offset_seconds` accepted. `""` with `accept_proposal: false`. |
 | `confirmed_offset_seconds` (photos-22) | Required, as a whole number of seconds, whenever `confirmed` is `true`: the `current_offset_seconds` confirmed against. `""` with `confirmed: false` — and, if written there all the same, still a whole number of seconds. |

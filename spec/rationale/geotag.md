@@ -731,6 +731,65 @@ taken, digitized, modified — and an offset describes only the time it was writ
 chance. Where the photo records none for its time, the destination's zone is the best guess left.
 :::
 
+:::{rat} A phone's error is a whole zone, and its own GPS shows it
+:id: RAT-phone_error_is_a_zone
+:status: ruled
+:forced: no
+:follows_from: RAT-phone_records_its_offset, RAT-anchor_agreement
+:justifies: RUL-phone_anchored_like_camera, RUL-gps_time_checks_phone, RUL-phone_agreeing_anchor_changes_nothing, RUL-phone_disagreeing_anchors_apply, RUL-phone_single_anchor_proposed, RUL-phone_kept_as_recorded
+
+A phone takes its time from the network and was trusted with nothing checking it: a phone set to the wrong zone, a
+photo whose tag is missing while the phone sat in another zone, a phone set by hand to the wrong hour, would each pass
+unseen and misplace every such photo on the track. Where its photos hold their own position, the tracks — or the
+fixes' own times — say what its clock was, exactly as they do for a camera, and by the same settings: no new setting,
+for the owner ruled *"a phone's error is a whole zone, not drift"*. Agreeing with how the phone's photos are read,
+there is nothing to ask. Several of them agreeing among themselves against it is the evidence a camera's several
+anchors are, and applies itself for that phone and day, the cell showing it; one photo could be a coincidence, and is
+offered. The user, who knows the track was someone else's, can keep the phone as it records itself.
+:::
+
+:::{rat} Two readings, answered where the other questions are
+:id: RAT-two_readings_answered_in_the_record
+:status: ruled
+:forced: no
+:follows_from: RAT-two_readings_no_guess, RAT-every_question_answerable
+:justifies: RUL-ambiguous_local_time_answered, RUL-repeated_time_answered_by_a_reading
+
+A time a daylight-saving change repeats or skips was a stop, mended only outside the tool: an offset written into
+the original with exiftool, prep run again. The photo still says nothing of which reading is right, but the user may
+know — the hour of the party, the flight — and the owner ruled it answered in the time decisions, *"per photo, which
+reading (repeated) or the offset (skipped), instead of only outside the tool"*. A time shown twice is one of its two
+readings and nothing else; a time never shown came from a clock that was not the zone's, so its offset is the user's to
+say.
+:::
+
+:::{rat} A tag that cannot be read is said, not dropped
+:id: RAT-unreadable_tag_said
+:status: ruled
+:forced: no
+:follows_from: RAT-phone_records_its_offset, CHC-photos_matter
+:justifies: RUL-unreadable_offset_tag_is_none, RUL-unreadable_offset_tag_told, RUL-unreadable_offset_tag_recorded
+
+An offset tag reading `local`, or `+25:00`, is no offset; read loosely it would turn a photo's time by a guess.
+Read as none, the photo falls to the next source of its time — and silently, the user would believe it read by the
+offset its device recorded. So it is read as none, and said: named in the run's output and kept in the record, where
+it can be seen later and mended.
+:::
+
+:::{rat} A camera's clock does not change at a daylight-saving switch
+:id: RAT-camera_clock_ignores_dst
+:status: ruled
+:forced: no
+:follows_from: RAT-offset_per_day_and_place
+:justifies: RUL-camera_zone_offset_for_the_day
+
+A camera's clock is set by hand and keeps its setting through the night clocks change; a phone's follows the
+network. So a camera's offset guessed from the zone is the zone's at its day's earliest photo, and holds for the whole
+day — the owner's ruling: *"a camera's clock does not change at a daylight-saving switch, so one offset for the day is
+right for it"*. Reading each of its photos by the zone instead would move the photos after the switch by an hour its
+clock never moved.
+:::
+
 :::{rat} Two readings, and nothing to choose by
 :id: RAT-two_readings_no_guess
 :status: ruled

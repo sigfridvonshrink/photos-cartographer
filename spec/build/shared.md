@@ -68,6 +68,18 @@ The decision editor's save SHALL take the workspace lock for the time it writes,
 the editor's display reads take none, each record being replaced whole. The editor is given, with each record it loads, the SHA-256 of its bytes, and sends them back with a save; under the lock the save compares them with the records on disk and checks that every edit names a decision its record holds, writing none of the three otherwise, and returns the hashes of what it leaves.
 :::
 
+:::{bld} Every question is a decision field the editor answers
+:id: BLD-editor_answers_every_question
+:status: ruled
+:realises: RUL-every_question_in_editor, RUL-every_question_answerable_by_hand
+
+Each question geotag asks SHALL be a `user_decision` of a cell of its decision record, its fields documented in
+`cartographer/editor/decision-json-reference.md`, which `geotag plan` reads whether the editor or a hand wrote it. The
+editor loads and saves each by its kind: in photos-21, `timezone` (`destination_timezone`), `offset` (a cell of
+`camera_group_time_decisions`, a phone's among them, by its key) and `reading` (an entry of `local_time_readings`, by
+its photo's path); in photos-22, `drift`; in photos-23, `fallback` and `review`.
+:::
+
 :::{bld} The editor's own lock, held for its session
 :id: BLD-editor_session_lock
 :status: ruled

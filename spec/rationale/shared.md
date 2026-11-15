@@ -1117,6 +1117,21 @@ the session, and a browser closed tells it nothing. Giving the workspace up betw
 in between two saves of the first, so it is kept until the editor itself is stopped.
 :::
 
+:::{rat} Every question can be answered in the editor, and by hand
+:id: RAT-every_question_answerable
+:status: ruled
+:forced: no
+:follows_from: RAT-save_what_was_seen, RAT-editor_writes_only_decisions
+:justifies: RUL-every_question_in_editor, RUL-every_question_answerable_by_hand
+
+A question the tool asks and the editor cannot answer sends the user to a text editor, a terminal and the reference to
+find the field — the work the editor exists to spare — and a question answered only outside the tool is not one the
+tool keeps track of. The owner ruled *"the user should be able to answer all questions in the editor"*, so each
+question gets its view as it is built. The editor is the easier way, never the only one: *"the editor is not the only
+possibility to answer, I need to keep the option to manually give answers"* — every answer is a field of a decision
+record, written there by hand as well, and documented.
+:::
+
 
 ## 12. The record of what was done, kept beyond the workspace
 
