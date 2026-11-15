@@ -39,8 +39,8 @@ The pipeline shells out to a few standard command-line tools (it doesn't bundle 
 | **ImageMagick** (`magick`, or `identify`) | the photo fingerprint (decoded pixels = stable photo identity) + editor previews |
 | **ffmpeg** | the video fingerprint |
 
-Without ImageMagick or ffmpeg, prep warns and the photos or videos it cannot fingerprint stop it, so
-treat both as required. SQLite comes with Python — nothing to install. **ZFS** is optional (it enables
+Without ImageMagick or ffmpeg, prep warns and the photos or videos it cannot fingerprint stop it, and
+merge refuses to start without ImageMagick, so treat both as required. SQLite comes with Python — nothing to install. **ZFS** is optional (it enables
 snapshots before each change; the safety model stands without it). The decision editor needs only a
 browser; its map tiles and place search use OpenStreetMap at runtime and degrade gracefully offline.
 

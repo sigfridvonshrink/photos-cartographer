@@ -22,12 +22,12 @@ by-dest photo it plans to place, blocking one whose value is not the handoff's; 
 :::{bld} Merge's preflight
 :id: BLD-merge_preflight
 :status: ruled
-:realises: RUL-merge_rechecks_gates, RUL-merge_blocked_changes_nothing, RUL-merge_takes_finalized_current, RUL-merge_refuses_changed_since_finalize, RUL-unfingerprinted_photo_stops_merge, RUL-hidden_among_photos_stops_merge
+:realises: RUL-merge_rechecks_gates, RUL-merge_blocked_changes_nothing, RUL-merge_takes_finalized_current, RUL-merge_refuses_changed_since_finalize, RUL-unfingerprinted_photo_stops_merge, RUL-hidden_among_photos_stops_merge, RUL-imagemagick_absent_stops_merge
 
 Merge's `preflight` SHALL run, under the workspace lock and before the library's, stopping at the first that fails:
 the seal; the initialization mark; a link at the top level; a missing managed folder; a misplaced top-level entry; the
 configuration, read and checked; the library's place and mark; the handoff, read; its filename format. It then gathers
-the rest and reports them together: the inbox empty; `photos-24-executable-plan.json` present with
+the rest and reports them together: ImageMagick on the `PATH`, as `magick` or `identify`; the inbox empty; `photos-24-executable-plan.json` present with
 `photos-25-execution-summary.json` at `success`; the handoff's content fingerprint the one `photos-24` pinned; prep's
 log as the handoff vouches for it ({need}`BLD-prep_log_checked`); `photos-26-complete-log.json` and the archive
 manifest present, the complete log carrying prep's; photos by date holding no photo; photos by destination holding

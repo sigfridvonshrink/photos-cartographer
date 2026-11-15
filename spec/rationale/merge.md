@@ -49,6 +49,19 @@ the first change makes a refusal free — fix the cause, run merge again — and
 merges that ran.
 :::
 
+:::{rat} Without its fingerprints merge can settle nothing
+:id: RAT-merge_needs_its_fingerprints
+:status: ruled
+:forced: yes
+:follows_from: RAT-decoded_pixel_identity, RAT-library_is_evidence_of_move
+:justifies: RUL-imagemagick_absent_stops_merge
+
+A place merge finds taken is settled by fingerprinting the file there, and a photo gone from the workspace counts as
+merged only once its place is fingerprinted again. Without ImageMagick no fingerprint can be taken: every collision
+would block, no photo already moved could be confirmed, and a merge left half done could not be finished. Run so, it
+would turn a merge that could be whole into a partial one; stopped, it changes nothing until the tool is back.
+:::
+
 ## 4. Destination-to-library mapping
 
 :::{rat} The destination tree is the library's organisation

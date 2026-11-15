@@ -146,6 +146,30 @@ def test_clean_workspace_passes(tmp_path):
     assert info["handoff_sha256"]
 
 
+@pytest.mark.parametrize("command", ["plan", "dry-run", "execute"])
+@pytest.mark.parametrize("present", [(), ("identify",), ("magick",)])
+@pytest.mark.spec("RUL-imagemagick_absent_stops_merge", "BLD-merge_preflight",
+                  test="TST-merge_preflight-imagemagick_absent_stops_merge")
+def test_imagemagick_absent_stops_merge(tmp_path, monkeypatch, capsys, command, present):
+    """With neither `magick` nor the older `identify` on the PATH, merge's plan, dry run and execute stop (exit 2) as
+    they start, naming ImageMagick, nothing written and the library not locked; either one of them is enough."""
+    ws, lib = _make(tmp_path)
+    monkeypatch.setattr("photos_utils.missing_tools", lambda tools: [t for t in tools if t not in present])
+    blockers, _, _ = _pf(ws)
+    if present:
+        assert not any("ImageMagick" in b for b in blockers), blockers
+        return
+    assert len(blockers) == 1 and "ImageMagick" in blockers[0], blockers
+    before = sorted(str(p) for p in tmp_path.rglob("*"))
+    assert merge._run_locked_workflow(command, str(ws)) == 2
+    out = capsys.readouterr()
+    assert "ImageMagick" in out.out + out.err
+    assert not os.path.exists(merge.merge_plan_path(str(ws)))
+    assert not os.path.exists(utils.library_lock_path(str(lib)))
+    assert sorted(str(p) for p in tmp_path.rglob("*") if not p.name.endswith(".lock")) == \
+        [p for p in before if not p.endswith(".lock")]
+
+
 # --- lifecycle / structural guards (return early) ----------------------------
 
 @pytest.mark.spec("RUL-seal_is_authority", test="TST-merge_preflight-sealed_blocks_and_warns_on_dump")

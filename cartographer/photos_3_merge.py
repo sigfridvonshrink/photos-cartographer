@@ -232,13 +232,14 @@ class MergeWorkflow:
             return blockers, warnings, info
 
         # ---- Gathered preconditions (report every problem at once) ----------
-        # External-tool preflight: merge fingerprints library targets with ImageMagick (magick) for
-        # de-dup/no-clobber identity. Its absence degrades — affected files report fingerprint-failed —
-        # rather than crashing, so it is a warning, not a blocker.
+        # ImageMagick, `magick` or the older `identify`: merge settles every taken place, and confirms every
+        # photo a run already moved, by a fingerprint it takes. Without it nothing can be settled — every
+        # collision would block and no moved photo be confirmed — so it stops merge (RUL-imagemagick_absent_stops_merge).
         from .photos_utils import missing_tools
-        if missing_tools(["magick"]):
-            warnings.append("magick (ImageMagick v7) not found on PATH — content fingerprinting for "
-                            "de-dup will be degraded (affected files reported as fingerprint-failed).")
+        if missing_tools(["magick"]) and missing_tools(["identify"]):
+            blockers.append("ImageMagick is not installed (neither `magick` nor `identify` is on PATH): merge "
+                            "fingerprints each library file in a photo's place, and each photo an earlier run "
+                            "moved, to tell whether the library holds it. Install ImageMagick, then re-run merge.")
 
         # 0b. 0-sources empty (RUL-merge_rechecks_gates).
         if self._entries(folder_name('sources')):

@@ -88,6 +88,17 @@ Merge SHALL NOT plan or execute while a photo in photos by destination has no fi
 Merge SHALL NOT proceed while photos by destination holds a hidden file or folder.
 :::
 
+:::{rul} Merge stops without ImageMagick
+:id: RUL-imagemagick_absent_stops_merge
+:status: ruled
+:criticality: high
+:anti: yes
+:verify: required
+:uses: DEF-merge, DEF-fingerprint
+
+Merge SHALL NOT plan, dry-run or execute while ImageMagick, by which it fingerprints a file, is absent.
+:::
+
 
 ## 4. Destination-to-library mapping
 
