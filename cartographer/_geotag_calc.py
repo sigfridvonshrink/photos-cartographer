@@ -88,6 +88,7 @@ __all__ = [
     'drift_offset_overrides',
     'OFFSET_TAG_FOR',
     '_own_offset',
+    'recorded_offset_proposal',
     'compute_resolved_utc',
     'resolved_utc_fingerprint',
     '_interp',
@@ -828,6 +829,35 @@ def _own_offset(f):
             return within
     tag = OFFSET_TAG_FOR.get((f.get("source_time_tag") or "").rsplit(":", 1)[-1])
     return _parse_iso_offset((f.get("raw_times") or {}).get(tag)) if tag else None
+
+
+def recorded_offset_proposal(photos, rep_naive):
+    """A camera bucket's offset from the offset its photos record with their times (BLD-recorded_offset_proposal), as
+    (proposal, differ). The offset is the one recorded with the field each photo's time was read from (`_own_offset`;
+    a value that is no offset is none). Every photo recording one recording the same: its clock was on that UTC
+    offset, so the proposal is −(it) — `differ` None. Photos recording different ones propose nothing: `differ` holds
+    each offset recorded, its count and one photo. No photo recording one: (None, None)."""
+    seen = {}
+    for f in sorted(photos, key=lambda x: x["relative_path"]):
+        own = _own_offset(f)
+        if own is not None:
+            seen.setdefault(own, []).append(f["relative_path"])
+    if not seen:
+        return None, None
+    if len(seen) > 1:
+        return None, [{"recorded_offset_seconds": o, "photos": len(seen[o]), "example": seen[o][0]}
+                      for o in sorted(seen)]
+    (own, paths), = seen.items()
+    proposal = {"proposal_source": "recorded_offset", "proposed_offset_seconds": -own,
+                "recorded_offset_seconds": own, "recorded_by": len(paths), "example": paths[0],
+                "confidence": "review_required", "rank": "recorded_offset"}
+    naive = _parse_camera_naive(rep_naive)
+    if naive is not None:
+        try:
+            proposal["proposed_real_utc"] = (naive - timedelta(seconds=own)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        except OverflowError:
+            pass                                # a time at the calendar's edge: no instant to name
+    return proposal, None
 
 
 def compute_resolved_utc(files, groups, artifact, offset_overrides=None):

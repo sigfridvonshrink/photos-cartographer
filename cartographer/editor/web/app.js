@@ -494,7 +494,8 @@ function offsetRow(dest, keys, sub, cell, pr, indent) {
   const e = cell.effective_time_anchor;
   const eff = e && typeof e === "object" ? fmtOffset(e.offset_seconds)
     : "proposed_offset_seconds" in (cell.proposal || {}) ? `${fmtOffset(cell.proposal.proposed_offset_seconds)} proposed` : "—";
-  const s = pr && pr.source === "timezone_naive" && pr.tz ? `${sub} · from ${leaf(pr.tz)}` : sub;
+  const s = pr && pr.source === "timezone_naive" && pr.tz ? `${sub} · from ${leaf(pr.tz)}`
+    : pr && pr.source === "recorded_offset" ? `${sub} · as recorded` : sub;
   const r = row(ref, "Offset", s, eff);
   if (indent) r.classList.add("off-sub");
   return r;
@@ -683,7 +684,8 @@ function offsetEditor(ref) {
   let numI, pickI;
 
   // choice 1 — accept the proposal (automatic; its value is never edited)
-  const src = p.proposal_source === "timezone_naive" ? ` from timezone ${p.proposed_from_timezone}` : "";
+  const src = p.proposal_source === "timezone_naive" ? ` from timezone ${p.proposed_from_timezone}`
+    : p.proposal_source === "recorded_offset" ? " as the photos record it" : "";
   wrap.append(opt(active === "accept",
     el("span", {}, hasProp ? `accept proposal (${fmtOffset(p.proposed_offset_seconds)})${src}` : "accept proposal — none to accept"),
     hasProp ? accept : undefined, hasProp ? "" : " disabled"));
@@ -1118,18 +1120,29 @@ function zoneContradiction(c) {
     `these photos were taken in, move those taken elsewhere to a folder of their own, or keep ${k.timezone} for them below.`;
 }
 // What an offset cell has to say beyond its proposal: where a shared offset came from, that a timezone's
-// guess is checked on the tracks, that the camera's GPS gave another offset elsewhere that day.
+// guess is checked on the tracks, that the camera's GPS gave another offset elsewhere that day, that its photos
+// record different offsets.
 function offsetCellNotes(c) {
   const out = [], p = (c && c.proposal) || {}, eff = (c && c.effective_time_anchor) || {};
   if (p.proposal_source === "same_day_elsewhere" && p.shared_from)
     out.push(`No photo here has its own position. The camera's GPS fixed its clock that day in ${p.shared_from.destination}: ` +
       `${fmtOffset(p.proposed_offset_seconds)}` + (p.confidence === "high" ? ", applied here too." : " — accept it here, or set another."));
-  if (eff.source === "timezone_unconfirmed")
+  if (eff.source === "timezone_unconfirmed" || eff.source === "recorded_offset_unconfirmed")
     out.push("Tracks lie by these photos, so this is checked against them — confirm it in the Drift view; nothing to accept here.");
+  const differ = (c && c.recorded_offsets_differ) || [];
+  if (differ.length)
+    out.push(`These photos record different offsets with their times — ${differ.map((d) => `${utcOff(d.recorded_offset_seconds)} ` +
+      `(${d.photos} photo${d.photos === 1 ? "" : "s"}, e.g. ${leaf(d.example)})`).join(", ")} — so none is proposed from them. ` +
+      "The camera's zone setting changed that day, or the tag is wrong: set the offset, or move the photos of each setting into a sub-folder and re-run.");
   for (const k of (c && c.conflicts_with) || [])
     out.push(`The camera's GPS gives ${fmtOffset(k.offset_seconds)} the same day in ${k.destination} — one clock, two readings. ` +
       "Set the right offset by hand in the one that is wrong.");
   return out;
+}
+// A UTC offset as it is recorded with a time ("+01:00"): the zone a clock is set to, not the clock offset.
+function utcOff(s) {
+  const m = Math.round(Math.abs(s) / 60);
+  return `${s < 0 ? "−" : "+"}${_pad(Math.floor(m / 60))}:${_pad(m % 60)}`;
 }
 // Why an offset cell has no proposal and never will (proposal.timezone_ambiguous): the camera's time is one its
 // zone skipped or repeated at a daylight-saving change, so the zone gives it two offsets and no run picks one
@@ -1167,6 +1180,16 @@ function proposalNotes(p) {
 // "N photos → ±Xh Ym" groups (each with one named photo at its FULL by-dest path and that photo's
 // corrected local time), plus a note for frames skipped (no track / track from another trip).
 function offsetProposalBlock(ref, p) {
+  if (p.proposal_source === "recorded_offset") {
+    // No GPX anchor, but the camera's photos record the UTC offset its clock was set to, all the same one
+    // (BLD-recorded_offset_proposal): the clock offset is its negative.
+    return el("div", { class: "pblock" }, el("h3", {}, "Proposal — the offset the photos record"),
+      el("div", { class: "prop-head" }, fmtOffset(p.proposed_offset_seconds),
+        el("span", { class: "muted" }, ` (${p.recorded_by} photo${p.recorded_by === 1 ? "" : "s"} record${p.recorded_by === 1 ? "s" : ""} ` +
+          `${utcOff(p.recorded_offset_seconds)} from UTC, e.g. ${leaf(p.example)})`)),
+      el("div", { class: "hint" }, (p.proposed_real_utc ? `real UTC ${p.proposed_real_utc} — ` : "") +
+        "the camera says its clock was set to that zone; confirm only if its time was right in it (a clock set to the wrong hour keeps its zone)."));
+  }
   if (p.proposal_source === "timezone_naive") {
     // No GPX anchor: the offset is derived from the destination's local time for this day, assuming the
     // camera clock tracked it (DST-aware, so summer/winter days get different offsets — BLD-timezone_naive_offset).
@@ -1375,5 +1398,5 @@ export {
   groupChoice, chosenOffset, proposalNotes, driftConfirmHolds, driftConfirmFields, acceptFields, acceptHolds, tracksNote,
   zoneContradiction, offsetCellNotes, zoneSpokenFor, zoneDespiteFields, effectiveCountry, clearCountriesInside,
   scrubOffset, scrubSeedIndex, mapKeyFor, savePayload,
-  ambiguousTimeNote, zoneOffer, loadRefusal, hasUnsavedEdits,
+  ambiguousTimeNote, zoneOffer, loadRefusal, hasUnsavedEdits, utcOff,
 };

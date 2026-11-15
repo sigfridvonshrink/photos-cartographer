@@ -171,6 +171,24 @@ test("offsetCellNotes: a shared offset, a guess checked on the tracks, one clock
     /6-photos-by-dest\/Other — one clock, two readings/);
 });
 
+test("offsetCellNotes: a recorded offset checked on the tracks, and photos recording different offsets", () => {
+  assert.match(app.offsetCellNotes({ proposal: { proposal_source: "recorded_offset" },
+    effective_time_anchor: { offset_seconds: -3600, source: "recorded_offset_unconfirmed" } })[0], /Drift view/);
+  const differ = app.offsetCellNotes({ proposal: { proposal_source: "timezone_naive" }, recorded_offsets_differ: [
+    { recorded_offset_seconds: 3600, photos: 1, example: "6-photos-by-dest/Kyoto/a.arw" },
+    { recorded_offset_seconds: -18000, photos: 2, example: "6-photos-by-dest/Kyoto/b.arw" }] });
+  assert.equal(differ.length, 1);
+  assert.match(differ[0], /\+01:00 \(1 photo, e\.g\. a\.arw\), −05:00 \(2 photos, e\.g\. b\.arw\)/);
+  assert.match(differ[0], /none is proposed from them/);
+});
+
+test("utcOff: a recorded UTC offset reads as it is written, sign, hours and minutes", () => {
+  assert.equal(app.utcOff(3600), "+01:00");
+  assert.equal(app.utcOff(-34200), "−09:30");
+  assert.equal(app.utcOff(0), "+00:00");
+  assert.equal(app.utcOff(20700), "+05:45");
+});
+
 
 test("zoneSpokenFor: a zone stands against the photos only on the user's word for every offset they record", () => {
   const k = { photos: 2, example: "x", recorded_offset_seconds: 7200, recorded_offsets: [7200, 32400],

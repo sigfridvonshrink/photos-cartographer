@@ -191,6 +191,13 @@ What the proposal panel shows depends on where the offset came from:
   otherwise accept it here or set another. If the camera's GPS gives two different offsets on one day in
   two destinations, neither takes effect: both are shown, and you set the right offset by hand in the
   one that is wrong.
+- **The offset the photos record** — no GPS evidence, but the camera wrote, with each photo's time, the
+  UTC offset its clock was set to, and they all agree (e.g. "2 photos record +01:00 from UTC"): the clock
+  offset is its negative. Accept it only if the camera's time was right in that zone — a clock set to the
+  wrong hour keeps its zone. Where GPX tracks cover these photos, it goes to the Drift view instead, like a
+  local-time proposal. Where the photos record **different** offsets, none is proposed from them: the
+  decision lists each offset with a photo of it — the camera's zone setting changed that day, or the tag
+  is wrong — and you set the offset, or move the photos of each setting into a sub-folder and re-run.
 - **Derived from the local time** — no GPS evidence, so the offset assumes the camera clock showed the
   destination's local time (daylight-saving aware, so summer and winter days differ). Accept it only if
   the camera really tracked local time — a camera left on home time would be wrong. Where GPX tracks

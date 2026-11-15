@@ -915,13 +915,17 @@ class GeotagWorkflow:
                       "destination": dest0, "bucket": bucket0,
                       "applied_itself": donor["effective_time_anchor"]["source"] == "gpx_anchor_auto"}
             for dest, bucket, c in members:
-                if (c.get("proposal") or {}).get("proposal_source") not in ("timezone_naive", "manual_required") \
+                if (c.get("proposal") or {}).get("proposal_source") not in ("recorded_offset", "timezone_naive",
+                                                                            "manual_required") \
                         or (dest, bucket) not in recall:
                     continue
                 group, g, prior_cell, anchor_frames, rep_naive, date, day, sel, tz = recall[(dest, bucket)]
                 destinations[dest]["camera_group_time_decisions"][bucket] = self._offset_cell(
                     dest, group, g, prior_cell, anchor_frames, gpx, blockers, tz=tz, rep_naive=rep_naive,
                     date=date, day=day, photos=sel, shared=shared)
+
+    # Proposals that guess a camera's clock: from the offset its photos record, or from the destination's zone.
+    _GUESSED_PROPOSALS = ("recorded_offset", "timezone_naive")
 
     def _tracks_by(self, gpx, times, frames):
         """The track points the drift check sets a bucket's photos against: those within
@@ -1025,9 +1029,10 @@ class GeotagWorkflow:
     def _offset_cell(self, dest, key, g, prior_cell, frames, gpx, blockers, tz=None, rep_naive=None, date=None,
                      day=None, photos=(), shared=None):
         # One (camera group, destination[, date]) clock-offset bucket. Proposal precedence (BLD-offset_buckets):
-        # GPX self-anchor → timezone-derived (camera assumed on local time; DST-aware, BLD-timezone_naive_offset) →
-        # manual. Clock offsets do not inherit from the destination above. `date` (YYYY-MM-DD) is set when the group
-        # spans >1 naive day here; the bucket key is `<key>@<date>` and is the blocker location.
+        # GPX self-anchor → the same day's elsewhere → the offset its photos record (BLD-recorded_offset_proposal) →
+        # timezone-derived (camera assumed on local time; DST-aware, BLD-timezone_naive_offset) → manual. Clock
+        # offsets do not inherit from the destination above. `date` (YYYY-MM-DD) is set when the group spans >1
+        # naive day here; the bucket key is `<key>@<date>` and is the blocker location.
         loc = key if date is None else f"{key}@{date}"
         proposal = infer_anchor_proposal(frames, gpx, CONFIG)
         if proposal is None and shared is not None:
@@ -1036,6 +1041,10 @@ class GeotagWorkflow:
                         "shared_from": {"destination": shared["destination"], "bucket": shared["bucket"]},
                         "confidence": "high" if shared["applied_itself"] else "review_required",
                         "rank": "same_day"}
+        differ = None
+        if proposal is None and photos:
+            # the zone the camera's clock was set to, as its photos record it: better than assuming local time
+            proposal, differ = recorded_offset_proposal(photos, rep_naive)
         if proposal is None and (tzr := _timezone_naive_offset(rep_naive, tz)) is not None:
             off_s, real_iso = tzr
             proposal = {"proposal_source": "timezone_naive", "proposed_offset_seconds": off_s,
@@ -1050,6 +1059,7 @@ class GeotagWorkflow:
                 proposal["timezone_ambiguous"] = {"camera_time": rep_naive, "timezone": tz, **amb}
         is_gpx = proposal.get("proposal_source") == "gpx_self_anchor"
         is_shared = proposal.get("proposal_source") == "same_day_elsewhere"
+        is_recorded = proposal.get("proposal_source") == "recorded_offset"
         has_offset = "proposed_offset_seconds" in proposal
         conflicting = proposal.get("conflicting_count", 0) > 0 or bool(proposal.get("tied"))   # anchors disagree
         imprecise = bool(proposal.get("imprecise_seconds"))    # the tracks stood still: no photo says when
@@ -1094,7 +1104,8 @@ class GeotagWorkflow:
                 # the same finding, and no reason to move photos already corrected by the first.
                 effective = {"offset_seconds": int(accepted_off),
                              "source": ("gpx_anchor_imprecise" if imprecise else "gpx_anchor_accepted") if is_gpx
-                             else "same_day_accepted" if is_shared else "timezone_accepted"}
+                             else "same_day_accepted" if is_shared
+                             else "recorded_offset_accepted" if is_recorded else "timezone_accepted"}
         elif is_gpx and not conflicting and not imprecise:
             # auto-resolution under the config flags (RUL-anchor_offset_auto_as_configured) — GPX-self-anchor only; a
             # timezone-derived proposal is confirmable, never auto-applied (the local-clock assumption can be wrong).
@@ -1129,15 +1140,16 @@ class GeotagWorkflow:
         elif is_shared and shared["applied_itself"]:
             effective = {"offset_seconds": proposal["proposed_offset_seconds"], "source": "same_day_auto"}
             decision_mode = "auto_resolved"
-        elif proposal.get("proposal_source") == "timezone_naive" and photos:
-            # A timezone's guess is asked about once, where it can be checked: with tracks by the photos it
-            # goes to the drift check as it stands, and the confirmation there is its acceptance
-            # (BLD-timezone_naive_offset) — nothing is planned until then. With no track to check it against, it is
-            # accepted here.
+        elif proposal.get("proposal_source") in self._GUESSED_PROPOSALS and photos:
+            # A guess — the timezone's, or the offset the photos record — is asked about once, where it can be
+            # checked: with tracks by the photos it goes to the drift check as it stands, and the confirmation
+            # there is its acceptance (BLD-timezone_naive_offset, BLD-recorded_offset_proposal) — nothing is planned
+            # until then. With no track to check it against, it is accepted here.
             times = [t.replace(tzinfo=timezone.utc) + timedelta(seconds=proposal["proposed_offset_seconds"])
                      for f in photos if (t := _parse_camera_naive(f.get("source_naive_time")))]
             if self._tracks_by(gpx, times, photos):
-                effective = {"offset_seconds": proposal["proposed_offset_seconds"], "source": "timezone_unconfirmed"}
+                effective = {"offset_seconds": proposal["proposed_offset_seconds"],
+                             "source": "recorded_offset_unconfirmed" if is_recorded else "timezone_unconfirmed"}
                 decision_mode = "to_be_confirmed_against_tracks"
 
         cell = {
@@ -1153,6 +1165,13 @@ class GeotagWorkflow:
         }
         if anchored_by:
             cell["anchored_by"] = anchored_by
+        if differ:
+            cell["recorded_offsets_differ"] = differ   # the photos record more than one: none is proposed from them
+        rep = min(((f.get("source_naive_time"), f["relative_path"]) for f in photos
+                   if _parse_camera_naive(f.get("source_naive_time"))), default=None)
+        if rep:
+            # the photo a true time can be given for, to set the offset by (the editor's, never a decision field)
+            cell["representative"] = {"source_file": rep[1], "camera_source_naive_time": rep[0]}
         if date is not None:
             cell["date"] = date                    # this bucket covers only that naive calendar date
         if day is not None:
@@ -1197,7 +1216,10 @@ class GeotagWorkflow:
     # confirms each (a zero-scrub "offset was right" must be actively confirmed, never implied), and
     # carries the corrected/validated offset that compute_resolved_utc then re-consumes (BLD-resolved_utc).
 
-    _DRIFT_TRIGGER_SOURCES = ("timezone_accepted", "timezone_unconfirmed", "manual", "gpx_anchor_imprecise")
+    _DRIFT_TRIGGER_SOURCES = ("timezone_accepted", "timezone_unconfirmed", "recorded_offset_accepted",
+                              "recorded_offset_unconfirmed", "manual", "gpx_anchor_imprecise")
+    # A guess nobody has accepted: always given its drift cell, for the confirmation there is its acceptance.
+    _UNCONFIRMED_SOURCES = ("timezone_unconfirmed", "recorded_offset_unconfirmed")
 
     def build_drift_validation(self, files, time_artifact, rows0, gpx, prior):
         """Build/regenerate photos-22 from the COMPLETE photos-21 + the resolved UTC under the
@@ -1238,12 +1260,12 @@ class GeotagWorkflow:
                             cells[bucket] = kept
                     continue
                 times = [t for f in frames if (t := _parse_utc(resolved_by_path.get(f["relative_path"])))]
-                if not times and eff.get("source") != "timezone_unconfirmed":
+                if not times and eff.get("source") not in self._UNCONFIRMED_SOURCES:
                     continue                                  # nothing resolves -> not a drift case
                 seg = self._tracks_by(gpx, times, frames)
                 # An offset nobody has accepted is never passed over: it is here to be confirmed, tracks
                 # or none.
-                if not seg and eff.get("source") != "timezone_unconfirmed":
+                if not seg and eff.get("source") not in self._UNCONFIRMED_SOURCES:
                     continue                                  # no GPX coverage -> phase 23 fallback/lost
                 cells[bucket] = self._drift_cell(dest, bucket, cell, seg, frames,
                                                  prior_drift, blockers, date=date)
